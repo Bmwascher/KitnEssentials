@@ -5,7 +5,7 @@
 
 Standalone combat, quality of life, dungeon, and skinning modules for **KitnUI**.
 
-KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and Blizzard UI skinning through a fully themed settings panel. Every module starts switched off, so a fresh install shows nothing until you turn on what you want, and each one is independently toggleable and repositionable via a built-in edit mode. ElvUI is optional throughout — nothing here requires it.
+KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and Blizzard UI skinning through a fully themed settings panel. Every module starts switched off, so a fresh install shows nothing until you turn on what you want, and each one is independently toggleable and repositionable via a built-in edit mode.
 
 ## Features
 
@@ -96,16 +96,6 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
 | Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, aura, and pet ability IDs including Always-mode Blizzard aura coverage and optional icon IDs, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
 
-## ElvUI Tags
-
-| Tag | Description |
-|---|---|
-| `[kes:name-classcolor]` | Unit name with class or reaction color |
-| `[kes:target:separator]` | White » separator, hidden when no target |
-| `[kes:target:name-classcolor]` | Target name with class or reaction color |
-| `[kes:group]` | Shows "Group: X" only while in a raid |
-| `[kes:mana:percent]` | Unit's mana percentage, hidden at 100% |
-
 ## Slash Commands
 
 `/kes` (also `/kitnessentials` and `/dunnigan`) is the base command for all of the below.
@@ -121,6 +111,10 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | `/kes resetgui` | Reset GUI position and size |
 | `/kes help` or any unrecognized command | List all commands in chat |
 
+## Installing by Hand
+
+The download holds two folders, `KitnEssentials` and `KitnEssentials_Options`. Copy both into `Interface/AddOns`; the second one holds the settings pages.
+
 ## Troubleshooting
 
 If WoW reports that KitnEssentials tried to use a protected function, run `/kes taint` before or after `/reload` and paste the complete report with the steps that triggered it. The addon name in the report is Blizzard attribution, not proof of which addon originally caused the taint.
@@ -131,5 +125,4 @@ Built on the **NorskenUI** framework. Both **NorskenUI** and **AtrocityEssential
 
 ## Related Addons
 
-- **KitnUI** — ElvUI profile installer with Dark and Color variants
-- **KitnUI Lite** — Standalone profile installer for popular addons (no ElvUI required)
+- [**KitnUI**](https://www.curseforge.com/wow/addons/kitnui) — EllesmereUI-based profile installer

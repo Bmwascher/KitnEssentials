@@ -2,536 +2,186 @@
 
 ## v4.9.2
 
-### Settings Window
-
-- Labels and tooltips use American spelling throughout ("Color", "Gray",
-  "Center"); searching the sidebar with the British spellings still finds
-  the same pages
-
----
-
-## v4.9.1
-
-### Dark Theme
-
-- Chat Settings, Merchant, Trade, Mail, the AddOn List, Help, Petition, the
-  expansion landing page, the Clock and the Stopwatch are skinned when first
-  opened instead of at login, which builds about 300 fewer frames at login
-
----
-
-## v4.9.0
-
-### Settings Window
-
-- **NEW:** The settings pages now ship as a second addon folder,
-  KitnEssentials Options, loaded the first time you open settings each
-  session. Login holds about 2.6 MB less memory. Manual installs must copy
-  both folders
-- If that folder is missing, from a different version or cannot load,
-  settings says so in chat and on a "Settings pages not loaded" card; Home
-  and Profiles still work, and each later open retries
-- If KitnEssentials Options is disabled in the addon list, opening settings
-  enables it for this character and loads it, with one chat line
-- A settings link used in combat before the first open of the session opens
-  that page after combat
-
-### Addon List
-
-- Both folders are listed under a Kitn Suite category
-
-### Damage Meter
-
-- Segments settings: Reset on Logout sits beside Reset on Key Start, and the
-  notes are split by a divider with one bullet per setting
-
----
-
-## v4.8.27
-
-### Settings Window
-
-- Switching pages reuses rows and controls instead of leaving the old ones
-  behind, so memory no longer grows as you browse settings
-- Escape in a slider's number box cancels what you typed instead of applying
-  it
-- Enter in a slider's number box applies once; text that is not a number
-  only restores the display
-- Enter in a text box runs its setting once (PI Target prints its line once)
-
-### World Markers
-
-- A key capture left waiting when its page is rebuilt is canceled
-
----
-
-## v4.8.26
-
-### Chat
-
-- Chat history is now saved per character, so one character's history no
-  longer loads on every other character
-- **NEW:** A Clear Other Characters button on the Chat History card removes
-  the saved chat of your other characters
-- Saved chat of a character whose newest line is over 90 days old is removed
-  at login, with one chat line saying how many characters were cleared
-
-### Profiler
-
-- Saved snapshots are capped at 20; saving another drops the oldest
-- **NEW:** /kes profiler census counts frames and tables on demand. It
-  freezes the game for a few seconds while it reads the frame list (longer
-  in a long session) and refuses to start in combat
-
----
-
-## v4.8.25
-
-### Damage Meter
-
-- A stored key now keeps the full spell breakdown for its Run Summary (or
-  its newest pull when the key was not completed) and totals for its other
-  pulls; those pulls show "Detail not kept for this pull"
-- Switching the module off forgets the stored keys and closes an open
-  segment menu
-- Bars and breakdown rows are built as they are needed instead of all at
-  login, which lowers memory use
-
----
-
-## v4.8.24
-
-### Dungeon Trash
-
-- No longer shows its guidance prompt after being switched off when a check
-  was already scheduled
-
-### Group Finder Panel
-
-- Rewrites and saves Blizzard's advanced filter on a roster change only while
-  Party Fit is on
-
-### Combat Potion Ready
-
-- Reads whether you are in combat or in an instance as soon as it is
-  enabled, so a reload mid-fight shows the text at once
-
-### Disintegrate Ticks and No Movement Alert
-
-- Ignore other players' spec changes; your own still refreshes them
-
-### Slash Commands
-
-- The /kitn actioncam command is removed (its camera settings no longer
-  exist)
-
----
-
-## v4.8.23
-
-### Automation
-
-- Auto-Confirm Loot Roll now accepts the "will become soulbound" confirm for
-  you
-- With Omnium Foil off, KE no longer shows the minimap landing-page button
-  where the game hides it
-
-### Skinning
-
-- The Reputation detail pane's three checkboxes, the Talents & Spellbook
-  collapse arrow and the Text to Speech message checkboxes get the house skin
-- Progress bars in tooltips (paragon reputation, world quests, PvP quests)
-  get the same skin as the achievement bar
-
-### Slash Commands
-
-- /kitn friendplates turns friendly player nameplates on and off again
-
-### Character Panel
-
-- Socketing a gem from the character sheet no longer errors when the game's
-  deprecation fallbacks are off
-
-### Dungeon Casts
-
-- Changing a setting while an enemy cast bar sits in the settings preview no
-  longer raises an error
-
----
-
-## v4.8.22
-
-### Hunter's Mark
-
-- Re-enabling reuses its warning and scanner frames instead of building new
-  ones
-
-### Skyriding UI
-
-- Each vigor event redraws once instead of twice
-
-### No Movement Alert
-
-- An idle spell update no longer starts a ticker that cancels itself
-
-### Automation
-
-- The repair report listens for durability and money only while a repair is
-  being measured, and not at all while Automation is off
-- Hide Helptips allocates less each time a panel opens
-
-### Totem Tracker
-
-- The destroy-totem buttons are created when the module is enabled and
-  disarmed when it is disabled, so the macro does nothing while the module
-  is off
-
-### Group Finder
-
-- Category buttons queued during combat are dressed through the shared
-  after-combat queue
-
----
-
-## v4.8.21
-
-### Cursor Effects
-
-- The trail stops its per-frame work once the cursor is hidden and the last
-  dot has faded
-
-### Combat Potion Ready
-
-- Listens for cooldown and bag changes only while its settings allow the text
-  to show
-
-### Recuperate
-
-- Hears only your own health, and only while grouped and out of combat
-
-### Healer Mana
-
-- Runs its timer only while it has something to show, and hears spec changes
-  only while grouped or previewing
-- Settings changes restyle its frames in place instead of building new ones
-
-### Combat Res
-
-- Listens for charge updates only in combat, in an encounter, inside an
-  instance, or while the count shows
-
-### Player Crosshair
-
-- Polls range only while you have a target
-
-### Raid Control
-
-- Counts roles only while its panel is open; its widgets stop listening while
-  it is disabled
-
----
-
-## v4.8.20
-
-### Targeted Spells
-
-- Builds its frames and listens for nameplates only inside the content it is
-  set for
-- Keeps its entry frames across layout changes instead of building new ones
-- No longer switches itself on for fresh installs and new profiles; profiles
-  that already have it on stay on
-
-### Dungeon Casts
-
-- Bars recolor when an enemy cast turns uninterruptible or interruptible
-  mid-cast
-
-### Enemy Counter
-
-- Counts from the nameplates currently on screen instead of scanning every
-  slot on each event
-
-### Keystone Helper
-
-- Sets nothing up until one of its features is on
-- LFG Quick Create repaints its party-key glows only while the Group Finder's
-  entry panel is open
-
-### Mythic+ Timer
-
-- The enemy overlay listens for nameplates only inside a keystone run
-
----
-
-## v4.8.19
-
-### Dungeon Casts
-
-- Listens for enemy casts and nameplates only inside a party dungeon, so it
-  costs nothing in town or the open world
-- A real enemy cast outside a dungeon no longer adds a bar to the settings
-  preview
-- Corrects itself a second after a zone change when the game reports the
-  previous zone late
-
----
-
-## v4.8.18
-
-### Settings Window
-
-- The settings window reuses its cards, rows and controls instead of building
-  new ones on every page change, so its memory no longer grows the longer you
-  browse it
-- Dropdown items hover in the current accent color after a theme change
-- Optimize: setting tooltips open beside the Recommended column, inside the
-  window
-- Sub-tabs no longer jump the first time a tabbed page opens
-
----
-
-## v4.8.17
-
-### Focus Macros
-
-- The Focus Marker page is renamed Focus Macros
-- Class markers are picked from one dropdown with icons; Mage defaults to Moon
-  and Priest to Skull
-- Marker from Class is now on by default. Untick it to keep a single marker
-- The marker and kick macro previews say which /macro tab holds each macro
-- The kick macro's #showtooltip line names your kick
+### Performance
+
+- KitnEssentials holds about 12% less memory at login, and about 15% less
+  once you have opened the usual windows
+- **NEW:** The settings pages ship as a second addon folder, KitnEssentials
+  Options, loaded the first time you open settings each session. Until then
+  they use no memory at all. Manual installs must copy both folders
+- Modules now work only where they apply. Dungeon tools sleep outside
+  dungeons, combat tools outside combat and group tools while you are solo,
+  so an enabled module you are not using costs next to nothing
+- The settings window no longer uses more memory the longer you browse it,
+  and the Dungeon Timers dungeon page redraws about twice as fast
+- Dark Theme skins ten windows the first time you open them instead of at
+  login (Chat Settings, Merchant, Trade, Mail, the AddOn List, Help,
+  Petition, the expansion landing page, the Clock and the Stopwatch), which
+  cuts the frames those windows build at login by about a quarter
+- Damage Meter windows build their bars as they are needed: 9 rows each at
+  login instead of 40
 
 ### Party Buffs
 
+- **NEW:** icons on the party frames show a teammate's cooldown buffs,
+  potions and trinkets while they are up. Off by default
 - **NEW:** timer text with font settings, and category colors as an inner
   ring (off by default)
 - Wider icon size and offset ranges; icons default to 32
-- The preview shows beside four party rows
-- Tracks the Liquid Luster potion
-- Attaches to the party frames after a /reload in a group
+- Tracks the Liquid Luster potion, and attaches to the party frames after a
+  /reload in a group
 
-### Spell History
+### Damage Meter
 
-- **NEW:** anchor it to a chosen frame or any meter edge
-- Shows items and toys you press outside the spellbook
-
-### Kick Tracker
-
-- Synced rows show the spell that was kicked
-- A teammate's row updates after every kick message
-
-### Skinning
-
-- Context menus are skinned by default while Dark Theme is on. If you had
-  unticked them, untick them again
-
-### Move Frames
-
-- The hero talent picker scales with the talent window
-
-### UI Widgets
-
-- Unticking Strip Textures asks for a reload
-
-### CVars
-
-- Dragging a UI Scaling slider is smoother, and skin borders stay crisp
-
----
-
-## v4.8.16
-
-### Kick Tracker
-
-- A talent-added kick is shared with teammates, and changes to it are announced
-- Command Demon's Spell Lock sends one kick message
-
----
-
-## v4.8.15
-
-### Kick Tracker
-
-- A teammate's kick timer can no longer run past their kick's cooldown
-
-### Prompts
-
-- Waiting prompts show in order instead of only the latest
-- Keys work normally again after closing a prompt with Escape
-
-### Settings
-
-- Hover borders reset properly on reused controls, and buttons keep their
-  hover look through a theme change
-- A slider's last step is saved when the page closes
-
-### Fixes
-
-- Fishing's outfit cancel and Stasis Tracker no longer error on hidden combat
-  values
-
----
-
-## v4.8.14
-
-### Party Buffs
-
-- **NEW:** icons on the party frames show a teammate's cooldown buffs, potions
-  and trinkets while they are up. Off by default
-
----
-
-## v4.8.13
-
-### CVars
-
-- **NEW:** a UI Scaling tab to scale Blizzard panels; the World Map card moves
-  there
-- The Optimization group is renamed Gameplay and Interface
-
----
-
-## v4.8.12
-
-### Prompts
-
-- The CPU profiler warning, the advanced combat logging question and the
-  Targeted Spells, Dungeon Trash and Optimize popups use KE's own prompt
-  instead of the game's popups, which could cause blocked-action errors
-- A prompt that arrives in combat waits until combat ends
-
-### Move Frames
-
-- Fixes errors from the hero talent picker after moving the talent window
-
----
-
-## v4.8.11
+- **NEW:** Spell History: a strip of the casts you press, fading out, with
+  its own mover or attached to a chosen frame or any meter edge. It also
+  shows items and toys
+- A stored key now keeps the full spell breakdown for its Run Summary and
+  totals for its other pulls, so stored keys take less space. Those pulls
+  show "Detail not kept for this pull"
+- Switching the module off forgets the stored keys
+- Reset on Instance Entry no longer resets on a difficulty flicker inside
+  the same instance, and forgets the last instance when you leave the group
+- Idle meter windows update when a group member's spec icon changes
+- Reports are refused with a message while the game locks chat
+- Segments settings are tidier: Reset on Logout sits beside Reset on Key
+  Start, with one note per setting
 
 ### Kick Tracker
 
 - Keeps working when a key blocks addon messages: your own row and the kick
   records still show
-- Teammates see your talented kick cooldown and the time left on it
-- Kick records show a star and the target's raid marker
-- Demonology kicks follow the active demon; a Warrior's two kicks share one row
-- Mind Freeze is shortened by Coldthirst after a successful interrupt
-- Bars fill with smoother engine timers
+- Teammates see your talented kick cooldown and the time left on it, and a
+  teammate's timer can no longer run past their kick's cooldown
+- Kick records show a star and the target's raid marker, and synced rows
+  show the spell that was kicked
+- Demonology kicks follow the active demon, a Warrior's two kicks share one
+  row, and Mind Freeze is shortened by Coldthirst after a successful
+  interrupt
+- Bars fill more smoothly
 
----
+### Focus Macros
 
-## v4.8.10
+- The Focus Marker page is renamed Focus Macros
+- **NEW:** Marker from Class: each class gets its own marker, picked from
+  one dropdown with icons, with a per-class override. On by default; untick
+  it to keep a single marker
+- **NEW:** a per-character focus kick macro on its own tab, kept up to date
+  when your spec or pet changes
+- The macro previews say which /macro tab holds each macro
+- The marker announce is skipped while the game locks chat
 
-### Damage Meter
-
-- Reset on Instance Entry no longer resets on a difficulty flicker inside the
-  same instance, and forgets the last instance when you leave the group
-
----
-
-## v4.8.9
-
-### Settings
-
-- Refreshed colors for buttons, fields, sliders, switches, dropdowns and
-  sub-tabs; buttons get hover and pressed looks
-
----
-
-## v4.8.8
-
-### Settings
+### Settings Window
 
 - The sidebar is reorganized: new Group Tools, Dungeon Alerts and Kicks and
-  Casts pages, and the Utilities page is gone
-- Class Tools is split into class tabs and opens on your class
-- Great Vault Alert moves to Quality of Life, Combat Logger to Automation
-
----
-
-## v4.8.7
+  Casts pages, and the Utilities page is gone. Class Tools is split into
+  class tabs and opens on your class. Great Vault Alert moves to Quality of
+  Life and Combat Logger to Automation
+- Refreshed colors for buttons, fields, sliders, switches, dropdowns and
+  sub-tabs, with hover and pressed looks
+- The header menu is replaced by a Toggle Anchors button, tinted while edit
+  mode is on
+- Escape in a slider's number box cancels what you typed instead of
+  applying it, and Enter applies once
+- A slider's last step is saved when the page closes
+- A settings link used in combat opens that page after combat
+- If the KitnEssentials Options folder is missing or from a different
+  version, settings says so and retries on the next open; Home and Profiles
+  still work. If it is only disabled, opening settings enables it for you
+- Labels and tooltips use American spelling throughout; searching the
+  sidebar with the British spellings still finds the same pages
 
 ### Edit Mode
 
 - **NEW:** the selected mover shows a tooltip with its live position
 
-### Settings
+### CVars
 
-- The header menu is replaced by a Toggle Anchors button, tinted while edit
-  mode is on
-
----
-
-## v4.8.6
+- **NEW:** a UI Scaling tab to scale Blizzard panels; the World Map card
+  moves there
+- The Optimization group is renamed Gameplay and Interface
+- Dragging a UI Scaling slider is smoother, and skin borders stay crisp
 
 ### UI Widgets
 
 - **NEW:** bar texture, text centering and icon skin controls
-- Widget text keeps KE's font through the game's refreshes, and text widgets
-  are centered
-- Spell icons in widget containers are cropped and bordered
-- Inspected recipes show the profession art
+- Widget text keeps KE's font through the game's refreshes, and spell icons
+  in widget containers are cropped and bordered
 
----
+### Chat
 
-## v4.8.5
+- Chat history is saved per character, so one character's history no longer
+  loads on all the others
+- **NEW:** A Clear Other Characters button removes the saved chat of your
+  other characters
+- Saved chat of a character you have not played for over 90 days is removed
+  at login
+
+### Skinning
+
+- Context menus are skinned by default while Dark Theme is on. If you had
+  unticked them, untick them again
+- More of the Reputation pane, the Talents & Spellbook collapse arrow, the
+  Text to Speech checkboxes and progress bars in tooltips get the house skin
 
 ### LFG Reminder
 
-- The popup is restyled as a dungeon row with the dungeon's art, a wrapping
-  name and a role line
-- The settings preview shows a current-season dungeon
-- A popup hidden by combat comes back when combat ends; one closed with X
-  stays closed
+- The popup is restyled as a dungeon row with the dungeon's art, and comes
+  back after combat if combat hid it
 
----
+### Prompts
 
-## v4.8.4
+- KE's own prompts replace several game popups that could cause
+  blocked-action errors. Prompts wait until combat ends and show in order
 
-### Damage Meter
+### Dungeon Tools
 
-- **NEW:** Spell History: a strip of the casts you press, fading out, with its
-  own mover or attached to the meter
+- Dungeon Casts bars recolor when a cast turns uninterruptible or
+  interruptible mid-cast
+- Targeted Spells no longer switches itself on for fresh installs and new
+  profiles; profiles that already have it on stay on
+- Changing a Dungeon Casts setting while a cast sits in the preview no
+  longer errors
+- Dungeon Trash no longer shows its prompt after being switched off
 
----
+### Automation
 
-## v4.8.3
+- Auto-Confirm Loot Roll accepts the "will become soulbound" confirm for you
+- With Omnium Foil off, KE no longer shows the minimap landing-page button
+  where the game hides it
+- /kitn friendplates turns friendly player nameplates on and off again
+- The /kitn actioncam command is removed
 
-### Damage Meter
+### Move Frames
 
-- Idle meter windows repaint when a group member's spec icon changes
+- The hero talent picker scales with the talent window and no longer errors
+  after the talent window is moved
 
----
+### Addon List
 
-## v4.8.2
+- KitnEssentials and KitnEssentials Options are listed under a Kitn Suite
+  category
 
-### Focus Marker
+### Fixes
 
-- **NEW:** Marker from Class: each class gets its own marker, with a per-class
-  override
-- **NEW:** a per-character focus kick macro on its own tab, kept up to date
-  when your spec or pet changes
+- Raid Control's ready check, countdown and assistant buttons gray out
+  while the game restricts party actions
+- Mythic+ Timer splits are skipped while the game locks chat
+- Socketing a gem from the character sheet no longer errors
+- Fishing's outfit cancel and Stasis Tracker no longer error in combat
+- Group Finder Panel changes Blizzard's filter only while Party Fit is on
+- Combat Potion Ready shows at once after a reload mid-fight
+- Disintegrate Ticks and No Movement Alert ignore other players' spec
+  changes
+- The Totem Tracker destroy-totem macro does nothing while the module is off
+- A World Markers key capture left waiting is canceled when its page
+  changes
 
----
+### Profiler
 
-## v4.8.1
-
-### Raid Control
-
-- The ready check, countdown and everyone-assistant buttons gray out while the
-  game restricts party actions
-
-### Focus Marker
-
-- The marker announce is skipped while chat is locked
-
-### M+ Timer
-
-- Splits and the reset line are skipped while chat is locked
-
-### Damage Meter
-
-- Reports are refused with a message while chat is locked
+- Saved snapshots are capped at 20
+- **NEW:** /kes profiler census counts frames on demand. It freezes the
+  game for a few seconds and refuses to start in combat
 
 ---
 
