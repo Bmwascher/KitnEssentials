@@ -871,9 +871,6 @@ local function StyleConfigDialog()
             if S.data(pop).acdShown then return end
             S.data(pop).acdShown = true
             S.StripTextures(pop)
-            -- A library frame other addons embed keeps a backdrop frame:
-            -- their code may sweep its regions.
-            S.Backdrop(pop)
             S.Template(pop, "Window")
             local child = pop:GetChildren()
             if child then S.StripTextures(child) end
