@@ -1,6 +1,7 @@
 -- Tier: KE-invented branching only (tiered test policy). The tooltip line match
 -- is ported and covered by the structural diff; what is tested here is the
--- wrapper that stops a shared constant being mutated, the cap predicate, the
+-- wrapper that stops a shared constant being mutated, which of the track's two
+-- sources wins (the game's upgrade data, then the tooltip), the cap predicate, the
 -- span builder's two independent gates, which side the span goes on, and the two
 -- separate things that decide whether a slot repaints at all: the track
 -- indicator's dirty key, and the detail render's pending flag.
@@ -16,7 +17,8 @@ local owned = {}
 -- needed there. The structure around it differs: this one captures the module
 -- registry and seeds KE inline, and it adds the two overrides this file needs --
 -- a tooltip that returns the caller's lines, and the detailed item level lookup
--- the crafted-track fallback calls. Write the block below as it stands; do not
+-- the crafted-track fallback calls. A case that needs the item link or the
+-- game's upgrade data passes them as overrides. Write the block below as it stands; do not
 -- go and copy the other file.
 --
 -- Do NOT hand-minimize this stub set. The module captures several of these as
