@@ -440,7 +440,7 @@ function DC:ConfigureBar(bar)
         bar.raidIcon:SetPoint("RIGHT", bar, "LEFT", -4, 0)
     end
 
-    -- Colours only. The mark is armed and hidden by the cast lifecycle, not
+    -- Colors only. The mark is armed and hidden by the cast lifecycle, not
     -- here: UpdateFrameVisuals re-runs this on live bars.
     local kickDb = db.Kick
     if kickDb then
@@ -528,7 +528,7 @@ end
 -- Bar Visuals
 ---------------------------------------------------------------------------------
 
--- Three states blend into one colour, two of them secret: the cast kind,
+-- Three states blend into one color, two of them secret: the cast kind,
 -- whether the kick is up, and whether the cast can be kicked at all.
 -- kickCd is the pass's shared read; event callers fall back to the cached one.
 function DC:UpdateBarColor(bar, kickCd)
@@ -650,7 +650,7 @@ end
 -- Your own kick
 ---------------------------------------------------------------------------------
 -- Cooldown, remaining and range are secret inside a key; all three still
--- drive colour, alpha and bar fills, which resolve them C-side. One cooldown
+-- drive color, alpha and bar fills, which resolve them C-side. One cooldown
 -- read per pass is shared by every bar; event-driven callers reuse the last
 -- pass's object, at most KICK_PASS_INTERVAL old.
 
@@ -1100,15 +1100,15 @@ end
 function DC:UpdateInterruptible(unit)
     local bar = self.activeFrames[unit]
     if not bar then return end
-    -- A held bar shows the interrupt colour under "Interrupted by X". Recolouring
-    -- it to a live cast colour would contradict its own text.
+    -- A held bar shows the interrupt color under "Interrupted by X". Recoloring
+    -- it to a live cast color would contradict its own text.
     if bar.holdUntil then return end
     -- Cast events stay registered while the preview is up; only a settings
     -- change repaints a bar then.
     if self.isPreview then return end
     if not (bar.casting or bar.channeling) then return end
 
-    -- Secret for hostile casts in restricted content; it only reaches the colour
+    -- Secret for hostile casts in restricted content; it only reaches the color
     -- sinks UpdateBarColor already feeds it to at cast start.
     local notInterruptible
     if bar.casting then
@@ -1211,7 +1211,7 @@ function DC:OnUpdate()
     for unit, bar in pairs(self.activeFrames) do
         -- Interrupt holds expire here rather than on a per-bar timer: one
         -- tick already runs while bars are up, and a timer would have to be
-        -- cancelled on every teardown path. Clears holdUntil BEFORE calling
+        -- canceled on every teardown path. Clears holdUntil BEFORE calling
         -- StopCast -- StopCast refuses to release a bar while it is set.
         if bar.holdUntil and now >= bar.holdUntil then
             bar.holdUntil = nil
@@ -1233,7 +1233,7 @@ function DC:OnUpdate()
             end
         end
 
-        -- A held bar wears the interrupt colour and its cast is over.
+        -- A held bar wears the interrupt color and its cast is over.
         if kickDue and bar:IsShown() and not bar.holdUntil then
             self:UpdateBarColor(bar, kickCd)
             self:RefreshKickMark(bar, kickCd)
@@ -1288,7 +1288,7 @@ function DC:UpdateFrameVisuals()
     for _, bar in pairs(self.activeFrames) do
         self:ConfigureBar(bar)
         -- A held bar shows the interrupt tint; repainting it here would
-        -- overwrite that colour with the cast colour mid-hold.
+        -- overwrite that color with the cast color mid-hold.
         if not bar.holdUntil then
             self:UpdateBarColor(bar)
         end
@@ -1307,7 +1307,7 @@ function DC:UpdateFrameVisuals()
             self:UpdateTargetText(bar, bar.targetName, bar.targetClass)
         end
 
-        -- ConfigureBar only recolours the mark; a live cast is re-armed so a
+        -- ConfigureBar only recolors the mark; a live cast is re-armed so a
         -- toggled Tick or Window shows without waiting for the next cast.
         if self.isPreview then
             self:ArmKickMark(bar, bar.channeling)
@@ -1499,7 +1499,7 @@ function DC:OnEnable()
                 return GetDCSelfPoint(self.db.Frame)
             end,
             -- The raid marker hangs off the outside of each bar's left edge and
-            -- is centred on the bar, so it reaches past the frame on the left
+            -- is centered on the bar, so it reaches past the frame on the left
             -- and, whenever it is taller than a bar, above and below as well.
             -- The gap between marker and bar is a layout literal in this file,
             -- not a setting, so it is repeated here rather than invented into

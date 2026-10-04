@@ -908,7 +908,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- Section: Who Sees It
     local whoHeader = CreateSectionHeader(body, enableToggle, "Who Sees It", 16)
 
-    -- Sub-label for the role toggles (small grey caption, not a section
+    -- Sub-label for the role toggles (small gray caption, not a section
     -- header — the section header above already groups this content).
     local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
@@ -1133,7 +1133,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     resetRow:AddWidget(resetBtn, 1.0, 0)
 
     -- Initial disabled-state propagation. When the spell starts off
-    -- disabled, role toggles + reveal slider are inert — grey them out
+    -- disabled, role toggles + reveal slider are inert — gray them out
     -- so the UX signals that. The Enable toggle's callback handles
     -- subsequent toggles via the same secondaryWidgets list.
     if not enableState then
@@ -1147,7 +1147,7 @@ end
 
 -- Builds the Actions tab body. Two sound dropdowns: "On Show" plays
 -- when the bar becomes visible (after the showAt delay if any); "On
--- Hide" plays when it expires or is cancelled. Selecting a sound also
+-- Hide" plays when it expires or is canceled. Selecting a sound also
 -- previews it so users can hear what they're picking. "None" entry
 -- clears the override.
 local function BuildActionsTabBody(parent, spellId)
@@ -1900,7 +1900,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
 
     -- Initial disabled-state propagation. Mirror the Visibility tab:
     -- when the spell starts disabled, the mode toggle is inert and
-    -- greyed out so the UX signals that overrides won't render.
+    -- grayed out so the UX signals that overrides won't render.
     if DT and DT:IsSpellDisabled(spellId) then
         for _, w in ipairs(secondaryWidgets) do
             if w.SetEnabled then w:SetEnabled(false) end

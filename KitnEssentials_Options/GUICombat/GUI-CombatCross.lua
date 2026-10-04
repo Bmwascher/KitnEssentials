@@ -54,7 +54,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("A crosshair drawn at the centre of your screen. It is a static overlay and does " ..
+    card1:AddLabel("A crosshair drawn at the center of your screen. It is a static overlay and does " ..
         "not turn with the camera.")
 
     yOffset = card1:GetNextOffset()
@@ -193,7 +193,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local hideInRangeCheck = GUIFrame:CreateCheckbox(row4b, "Hide When In Range", {
         value = db.HideWhenInRange == true,
-        tooltip = "Only draw the crosshair while your target is out of range. Works on its own; the range warning colours above are a separate choice.",
+        tooltip = "Only draw the crosshair while your target is out of range. Works on its own; the range warning colors above are a separate choice.",
         callback = function(checked)
             db.HideWhenInRange = checked
             ApplySettings()

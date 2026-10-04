@@ -15,7 +15,7 @@ describe("Tooltips ColorsMatch", function()
     local TT
     before_each(function() TT = L.loadTooltips() end)
 
-    it("matches identical colours", function()
+    it("matches identical colors", function()
         assert.is_true(TT._ColorsMatch({ 1, 0.5, 0, 1 }, { 1, 0.5, 0, 1 }))
     end)
 
@@ -34,13 +34,13 @@ end)
 
 -- The refusal rule. GetPlayerInfoByGUID answers with the FIRST class for a
 -- creature GUID rather than failing, so anything that asks it without checking
--- the GUID paints every hostile NPC in that class's colour instead of its
--- reaction colour.
+-- the GUID paints every hostile NPC in that class's color instead of its
+-- reaction color.
 describe("Tooltips UnitColor", function()
     local PLAYER_GUID = "Player-1234-DEADBEEF"
     local CREATURE_GUID = "Creature-0-1234-5-6-7890-000000"
 
-    it("class-colours a player GUID", function()
+    it("class-colors a player GUID", function()
         local TT = L.loadTooltips()
         local c = TT._UnitColor("target", PLAYER_GUID)
         assert.same({ 0.20, 0.58, 0.50 }, { c:GetRGB() })
@@ -55,13 +55,13 @@ describe("Tooltips UnitColor", function()
         assert.is_false(asked)
     end)
 
-    it("falls through to the reaction colour for a creature GUID", function()
+    it("falls through to the reaction color for a creature GUID", function()
         local TT = L.loadTooltips()
         local c = TT._UnitColor("target", CREATURE_GUID)
         assert.same({ 0.37, 0.87, 0.37 }, { c:GetRGB() })
     end)
 
-    it("reaction-colours a secret-named unit that is not a player", function()
+    it("reaction-colors a secret-named unit that is not a player", function()
         local TT = L.loadTooltips(nil, {
             issecretvalue = function(v) return v == "SECRET" end,
             UnitName = function() return "SECRET" end,
@@ -102,7 +102,7 @@ describe("Tooltips UnitColor", function()
         end
     end)
 
-    it("class-colours a secret-named unit whose GUID says player", function()
+    it("class-colors a secret-named unit whose GUID says player", function()
         local TT = L.loadTooltips({ GetPlayerInfoByGUID = function() return nil end }, {
             issecretvalue = function(v) return v == "SECRET" end,
             UnitName = function() return "SECRET" end,
@@ -113,9 +113,9 @@ describe("Tooltips UnitColor", function()
 end)
 
 describe("Tooltips UnitColor, plain-named player", function()
-    -- Nothing leaves Blizzard's own name colour in place. A reaction colour
+    -- Nothing leaves Blizzard's own name color in place. A reaction color
     -- here would paint a player in an NPC's green or red.
-    it("returns nothing for a plain-named player whose class has no colour", function()
+    it("returns nothing for a plain-named player whose class has no color", function()
         local TT = L.loadTooltips({
             UnitIsPlayer = function() return true end,
             UnitClass = function() return "Monk", "MONK" end,
@@ -125,13 +125,13 @@ describe("Tooltips UnitColor, plain-named player", function()
 end)
 
 describe("Tooltips ReactionColor", function()
-    it("returns the faction bar colour for the unit's reaction", function()
+    it("returns the faction bar color for the unit's reaction", function()
         local TT = L.loadTooltips()
         local r, g, b = TT._ReactionColor("target")
         assert.same({ 0.37, 0.87, 0.37 }, { r, g, b })
     end)
 
-    it("falls back to white when the reaction has no colour", function()
+    it("falls back to white when the reaction has no color", function()
         local TT = L.loadTooltips({ UnitReaction = function() return 99 end })
         local r, g, b = TT._ReactionColor("target")
         assert.same({ 1, 1, 1 }, { r, g, b })
@@ -187,7 +187,7 @@ describe("Tooltips SyncAuraSpellIDCVar", function()
         assert.equal("1", store.tooltipShowAuraSpellIDs)
     end)
 
-    it("leaves it off for MODIFIER, which the engine cannot honour", function()
+    it("leaves it off for MODIFIER, which the engine cannot honor", function()
         local TT, writes, store = load("MODIFIER", true, "1")
         TT:SyncAuraSpellIDCVar()
         assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)

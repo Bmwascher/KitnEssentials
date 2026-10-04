@@ -165,7 +165,7 @@ describe("ReadyCheckConsumables RequestRefresh", function()
         assert.equals(1, seams.counts.scans)
     end)
 
-    it("repaints nothing once the row died before the queued repaint fired, and takes a new request afterwards", function()
+    it("repaints nothing once the row died before the queued repaint fired, and takes a new request afterward", function()
         RCC:RequestRefresh()
         visible = false
         fireTimers()

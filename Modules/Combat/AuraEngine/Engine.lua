@@ -235,7 +235,7 @@ function Engine.ApplyDisplayState(display, settings)
     KE.AuraContainer.ApplyState(display.handle, container, anchor)
 end
 
--- One synchronisation per call, and the only caller of Registry:Sync. It takes
+-- One synchronization per call, and the only caller of Registry:Sync. It takes
 -- the SOUND half of the state rule, which is the half a vehicle does not
 -- suspend.
 function Engine.SyncSound(display, settings)
@@ -347,7 +347,7 @@ end
 -- text inset is one icon square rather than the container.
 --
 -- The dispel term is safe to include even for a display with no DispelPosition
--- setting: with both anchor points absent it centres against itself and nets
+-- setting: with both anchor points absent it centers against itself and nets
 -- to zero, which is what the modules this engine replaces without a dispel
 -- decoration already relied on.
 local function GetOverlayInset(display, settings)

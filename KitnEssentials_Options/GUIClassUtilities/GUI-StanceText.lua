@@ -93,7 +93,7 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     table_insert(allWidgets, alphaSlider)
     card2:AddRow(row2, 40)
 
-    -- No background colour option: the icon texture fills the frame, so a
+    -- No background color option: the icon texture fills the frame, so a
     -- background behind it is never visible. Border only.
     local row2b = GUIFrame:CreateRow(card2.content, 46)
     local borderColor = GUIFrame:CreateColorPicker(row2b, "Border Color", {

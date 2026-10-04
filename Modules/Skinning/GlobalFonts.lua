@@ -154,7 +154,7 @@ local function Apply()
 
     if S.GlobalFontsBlockedBy() then return end
 
-    -- Both switches are honoured here as well as at RegisterEarly: the
+    -- Both switches are honored here as well as at RegisterEarly: the
     -- font-size slider and the face picker call ApplyGlobalFonts directly,
     -- which would otherwise sweep for a user who has turned the frame-skin
     -- module or this row off.

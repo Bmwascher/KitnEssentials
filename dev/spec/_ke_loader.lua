@@ -140,7 +140,7 @@ function L.loadGlobals(overrides, opts)
         return nil
     end
     -- opts.loadedAddOns is a name->true set of addons IsAddOnLoaded reports;
-    -- absent means nothing is loaded, the historical behaviour. It is an opt
+    -- absent means nothing is loaded, the historical behavior. It is an opt
     -- rather than a mock override because Core/Globals.lua localizes C_AddOns
     -- at file scope, so reassigning the namespace after the load is too late.
     local loadedAddOns = opts.loadedAddOns or {}
@@ -521,7 +521,7 @@ end
 -- Modules/Skinning/SkinAPI.lua. Creates frames at file scope (the hidden
 -- parking frame and the edge refresher), so CreateFrame must exist before
 -- the load. GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
--- which would drag in the whole profile stack for two colour lookups.
+-- which would drag in the whole profile stack for two color lookups.
 local SKINAPI_THEME = {
     accent      = { 1.0, 0.0, 0.549, 1 },
     accentHover = { 1.0, 0.0, 0.549, 0.25 },
@@ -574,14 +574,14 @@ function L.loadTooltips(opts, overrides)
     }
     -- ColorMixin entries, as the live table carries -- Blizzard builds these
     -- with CreateColor, so they answer :GetRGB(). A bare {r,g,b} here would let
-    -- a colour-object caller pass headlessly and break in game.
+    -- a color-object caller pass headlessly and break in game.
     _G.RAID_CLASS_COLORS = {
         EVOKER = _G.CreateColor(0.20, 0.58, 0.50),
     }
     _G.UnitReaction = opts.UnitReaction or function() return 5 end
     _G.IsModifierKeyDown = opts.IsModifierKeyDown or function() return false end
     _G.GetPetActionInfo = opts.GetPetActionInfo or function() return nil end
-    -- UnitColor's inputs. The class-colour branches are refusal rules, so they
+    -- UnitColor's inputs. The class-color branches are refusal rules, so they
     -- are driven from here rather than left to the live tooltip.
     _G.UnitIsPlayer = opts.UnitIsPlayer or function() return false end
     _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
@@ -694,7 +694,7 @@ function L.loadAuraEngine()
     }
 
     -- Counted rather than swallowed: whether the container was created, and
-    -- whether it was reconfigured afterwards, is the only thing the engine's
+    -- whether it was reconfigured afterward, is the only thing the engine's
     -- permission rule can be observed by from outside.
     local container = { creates = 0, applyStates = 0, reconfigures = 0 }
 
@@ -719,7 +719,7 @@ function L.loadAuraEngine()
 
     -- Register keys its duplicate check on the owner object and hands it every
     -- event registration, so the owner is real work even where a spec never
-    -- fires an event. Reachable afterwards as display.owner.
+    -- fires an event. Reachable afterward as display.owner.
     local owner = { events = {} }
     owner.RegisterEvent = function(_, event, handler) owner.events[event] = handler end
 
@@ -1260,7 +1260,7 @@ function L.loadCombatCross(overrides)
     -- must say so, either through this override or through Visibility -- it
     -- cannot pass by inheriting a permissive default.
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
-    -- Solo is the only mode that asks, and the module localises this at load,
+    -- Solo is the only mode that asks, and the module localizes this at load,
     -- so a nil here is a throw rather than a wrong answer.
     _G.IsInGroup = overrides.IsInGroup or function() return false end
     _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
@@ -1312,12 +1312,12 @@ function L.loadDungeonCasts(overrides)
     _G.LibStub = function() return nil end
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
     _G.UnitCanAttack = overrides.UnitCanAttack or function() return true end
-    -- The module localises the cast readers at file scope, so a test that
-    -- assigns them afterwards is assigning to globals nothing reads. The
+    -- The module localizes the cast readers at file scope, so a test that
+    -- assigns them afterward is assigning to globals nothing reads. The
     -- default is no cast.
     _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
     _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end
-    -- The module localises C_Spell at file scope, so the override is
+    -- The module localizes C_Spell at file scope, so the override is
     -- assigned before the load, as the cast readers above.
     _G.C_Spell = overrides.C_Spell or {}
     local KE = { Print = function() end, curves = {} }
@@ -1764,7 +1764,7 @@ end
 -- strsplit is a WoW-provided global, not standard Lua, and GetNPCIDFromGUID
 -- calls it directly -- also captured as a file-scope upvalue, so it must
 -- exist on _G before helpers.loadModule. The stand-in treats each character
--- of the delimiter as its own separator (WoW's own documented behaviour),
+-- of the delimiter as its own separator (WoW's own documented behavior),
 -- which is all GetNPCIDFromGUID's single-character "-" delimiter needs.
 local function wowStrsplit(delimiter, str)
     if not str then return end
@@ -2006,7 +2006,7 @@ function L.loadRaidControl(overrides)
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
     _G.IsInGroup = overrides.IsInGroup or function() return false end
     -- Captured as file-scope locals like everything above, so a spec that only
-    -- sets these afterwards leaves the module holding nil. GetInstanceInfo
+    -- sets these afterward leaves the module holding nil. GetInstanceInfo
     -- returns name, instanceType, difficultyID -- MaxRaidGroup reads 2 and 3.
     _G.UnitInRaid = overrides.UnitInRaid or function() return nil end
     _G.GetInstanceInfo = overrides.GetInstanceInfo
@@ -2016,7 +2016,7 @@ function L.loadRaidControl(overrides)
     _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
     _G.GetRaidRosterInfo = overrides.GetRaidRosterInfo or function() return nil end
     -- UIParent is captured as a file-scope local, so it must exist
-    -- on _G BEFORE loadModule. Setting it afterwards has no effect on the
+    -- on _G BEFORE loadModule. Setting it afterward has no effect on the
     -- module's captured upvalue -- ScreenPosition would read a stale table.
     _G.UIParent = overrides.UIParent
         or { GetSize = function() return 1600, 900 end, GetWidth = function() return 1600 end }
@@ -2043,7 +2043,7 @@ end
 
 -- Modules/QoL/GroupSort.lua. The module captures its WoW API functions as
 -- file-scope locals at load, so every mock must be on _G BEFORE
--- helpers.loadModule runs -- setting one afterwards leaves the module
+-- helpers.loadModule runs -- setting one afterward leaves the module
 -- holding a stale upvalue. installMock(overrides, {}) is required to seed
 -- the captured globals; the driver frame itself is created lazily.
 -- Groups (engine state) is reached through GS.GetSortedGroup's upvalues;
@@ -2057,7 +2057,7 @@ function L.loadGroupSort(overrides)
     helpers.installAddonShim()
     _G.KitnEssentials:NewModule("RaidControl").IsEnabled = function() return false end
     -- Every one of these is captured as a file-scope local at load, so it has
-    -- to exist on _G BEFORE loadModule. Setting any of them afterwards leaves
+    -- to exist on _G BEFORE loadModule. Setting any of them afterward leaves
     -- the module holding a stale upvalue.
     _G.GetTime = overrides.GetTime or function() return 1000 end
     _G.UnitExists = overrides.UnitExists or function() return false end
@@ -2174,7 +2174,7 @@ end
 
 -- Modules/QoL/Optimize.lua. The module captures SetCVar/GetCVar as file-scope
 -- locals at load, so the fake cvar store has to exist on _G BEFORE loadModule --
--- assigning it afterwards leaves the module holding a stale upvalue. rec.cvars
+-- assigning it afterward leaves the module holding a stale upvalue. rec.cvars
 -- IS that store: seed a key to set the live value, read a key to see what the
 -- module wrote. rec.difficultyID is the third GetInstanceInfo return, which is
 -- what the Mythic+ override branches on. The AceAddon shim hands back a bare
@@ -2234,7 +2234,7 @@ end
 
 -- Modules/Utilities/NoMovementAlert.lua. Several layers are reachable
 -- headlessly: the PURE resolution layer (data tables, per-spec override rules,
--- alias and category duration lookup), the role-colour resolver, the cooldown
+-- alias and category duration lookup), the role-color resolver, the cooldown
 -- readback, and the buff-readback refusal rules, which are driven directly
 -- rather than through OnEnable. The frames and the event timing are still
 -- verified in game.
@@ -2331,7 +2331,7 @@ end
 -- OnEnable, which this loader never calls -- so the only stubs the spec
 -- needs are KE.ShouldNotLoadModule, driven by overrides.shouldNotLoad, and
 -- the enchant slot table below.
--- overrides.noHelper omits the ShouldNotLoadModule stub entirely, modelling
+-- overrides.noHelper omits the ShouldNotLoadModule stub entirely, modeling
 -- a build where Core/Globals.lua has not defined it. Returns the
 -- BuffTracking module plus KE (the shim's registry also captures
 -- PlayerDebuffTracking, reachable off KitnEssentials:GetModule if a spec
@@ -2468,7 +2468,7 @@ end
 -- Modules/ClassUtilities/HavocTracker.lua. Only the GATE is under test. The
 -- loader replaces the two sinks EvaluateGate can reach and counts which one
 -- fired, so a case reads as a decision rather than as frame state. Nothing here
--- builds a container: the AuraContainer path is engine behaviour, verified in
+-- builds a container: the AuraContainer path is engine behavior, verified in
 -- game.
 --
 -- The spec functions are driven through the bare globals. C_SpecializationInfo
@@ -2506,7 +2506,7 @@ end
 -- Modules/ClassUtilities/PIAssist.lua. Same shape as loadHavocTracker: the
 -- gate's two sinks are replaced by counters, as are Activate's three sinks
 -- and its event registrations, so the real Activate can be driven with
--- overrides.liveActivate = true. The module localises GetSpecializationRole
+-- overrides.liveActivate = true. The module localizes GetSpecializationRole
 -- at file scope, so it is assigned before the load. overrides.role is the
 -- spec role string ("HEALER" / "DAMAGER"); overrides.db is the PIAssist block;
 -- overrides.builder = { enabled = bool, applied = name } stands in for the
@@ -2562,7 +2562,7 @@ function L.loadPIAssist(overrides)
 end
 
 -- Modules/ClassUtilities/PIMacroBuilder.lua, for the SetTarget policy and
--- the notify-on-change rule. The module localises InCombatLockdown at file
+-- the notify-on-change rule. The module localizes InCombatLockdown at file
 -- scope, so it is routed through rec before the load; ApplyMacro is
 -- replaced by a stub that counts its calls and answers rec.writeOk unless
 -- overrides.realApply keeps the real one (the macro API is then inert:
@@ -2745,7 +2745,7 @@ end
 -- the common mock and are set here. `wipe` IS in the mock; it is set again
 -- anyway so this loader reads as a complete list of what the module needs
 -- rather than a diff against another file.
--- IsInInstance honours overrides so an instance can be simulated, and both
+-- IsInInstance honors overrides so an instance can be simulated, and both
 -- clocks accept `false` to remove the global entirely. C_BattleNet and
 -- BNGetNumFriends default to an empty friend list; a spec wanting a match
 -- reassigns them after the loader returns.
@@ -2769,7 +2769,7 @@ function L.loadChatHistory(overrides)
     -- GetServerTime to time, and it also guards each function's EXISTENCE, so
     -- `false` has to mean "this global is not there" rather than "use the
     -- default" -- otherwise those two branches cannot be reached from a spec.
-    -- The module localises both at file scope, so these must be set before it
+    -- The module localizes both at file scope, so these must be set before it
     -- loads, which is where they already are.
     local function clock(override, default)
         if override == false then return nil end
@@ -2959,7 +2959,7 @@ end
 -- Modules/Utilities/WorldMarkerCycler.lua. The module captures its secure-handler
 -- and binding functions as file-scope upvalues, so every stub below must exist
 -- BEFORE loadModule; IsRaidMarkerActive is an override rather than a global a
--- spec reassigns afterwards, for the same reason (see loadDMCore's group
+-- spec reassigns afterward, for the same reason (see loadDMCore's group
 -- predicates). The secure-handler stubs only RECORD what the module emitted:
 -- nothing here models the raid-marker system, and the snippet bodies are never
 -- executed as secure code. Returns WMC, KE, the executed-body list and the
@@ -3047,7 +3047,7 @@ end
 -- Modules/Utilities/ReadyCheckConsumables.lua. The module captures its API
 -- surface as upvalues at load, so every global below exists before
 -- loadModule and InCombatLockdown rides mock.install's override as a closure
--- over seams.combat.inCombat (reassigning _G.InCombatLockdown afterwards
+-- over seams.combat.inCombat (reassigning _G.InCombatLockdown afterward
 -- reaches nothing). BuildFrame is never run: specs assign RCC.frame and
 -- RCC.buttons themselves. KE.RunAfterCombat appends closures to seams.queue
 -- and the spec drains it -- the combat-exit queue is the only thing that

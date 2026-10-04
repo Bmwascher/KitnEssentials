@@ -433,7 +433,7 @@ function DTrash:ShowAlert(key, duration, mode, label, color, iconID, sounds, dec
 end
 
 -- skipLayout: teardown sweeps (HideAllAlerts / HideUnitAlerts) hide in bulk and
--- run ONE layout pass per mode afterwards instead of re-sorting/re-anchoring
+-- run ONE layout pass per mode afterward instead of re-sorting/re-anchoring
 -- the whole stack per key — the boss renderer's StopAllBars pattern.
 function DTrash:HideAlert(key, skipLayout)
     local frame = self.alerts[key]
@@ -561,7 +561,7 @@ end
 local C_Timer = C_Timer
 local C_Spell = C_Spell
 
--- Unified with the GUI/preview path: user colour override → preset colour from
+-- Unified with the GUI/preview path: user color override → preset color from
 -- the effective label → flat default (see TrashConfig:GetSpellEffectiveColor).
 function DTrash:ResolveTrashColor(npcID, spellID)
     return self:GetSpellEffectiveColor(self.currentMapID, npcID, spellID)
@@ -585,7 +585,7 @@ function DTrash:ScheduleAlert(rt, npcID, spellID, spellData, nextStart)
     if self:IsBossOutputSuppressed() then return end
     -- "Who sees it" role gate — skip alerts not curated/overridden for our role.
     if not self:PlayerSeesTrashSpell(self.currentMapID, npcID, spellID) then return end
-    -- Display honours the per-ability override (GUI), falling back to curated.
+    -- Display honors the per-ability override (GUI), falling back to curated.
     local mode = (self:GetSpellDisplay(self.currentMapID, npcID, spellID) == "text") and "text" or "bar"
     -- Reveal window: per-ability override → shared DungeonTimers group default.
     local revealAt = self:GetSpellRevealAt(self.currentMapID, npcID, spellID)

@@ -205,7 +205,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     row4:AddWidget(upgradeCheck, 0.5)
     -- "all", NOT "trackOn". The two toggles are independent by design: letters
     -- off with progress on is a specified state that renders the count without a
-    -- letter. Gating this control on the letters toggle would grey it out in
+    -- letter. Gating this control on the letters toggle would gray it out in
     -- exactly that state, so the player could not leave it without first turning
     -- letters back on.
     manager:Register(upgradeCheck, "all")
@@ -521,7 +521,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             -- live.
             KE:FlagReloadNeeded()
         end,
-        tooltip = "Colours each equipped slot's border by item rarity, the way a bag addon does. Off leaves the standard dark border. Needs a reload, and has no effect while ElvUI is skinning the character sheet.",
+        tooltip = "Colors each equipped slot's border by item rarity, the way a bag addon does. Off leaves the standard dark border. Needs a reload, and has no effect while ElvUI is skinning the character sheet.",
     })
     rowSDQual:AddWidget(qualityBorderCheck, 1)
     -- Set DIRECTLY, not through the widget state manager. Two reasons, and the

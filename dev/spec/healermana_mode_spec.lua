@@ -1,6 +1,6 @@
 -- Tier 2: the mode rule is a guard whose failures are silent. A wrong answer
 -- does not error, it relocates the frame and redraws the wrong layout. The
--- held-value behaviour is as load-bearing as the rule itself.
+-- held-value behavior is as load-bearing as the rule itself.
 local L = require("dev.spec._ke_loader")
 
 describe("HealerMana mode resolution", function()

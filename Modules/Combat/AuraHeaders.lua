@@ -43,7 +43,7 @@ local function MigrateProfile(profile, dbKey)
     end
 
     -- The old switch was a boolean; the engine takes a mode string, and only
-    -- "dispel" turns the school colouring on.
+    -- "dispel" turns the school coloring on.
     if db.ColorByType ~= nil then
         db.BorderColorMode = db.ColorByType and "dispel" or "flat"
         db.ColorByType = nil
@@ -56,13 +56,13 @@ local PREVIEW_BUFF_ICONS   = { 136078, 135932, 135940, 136107, 135953, 132333 }
 local PREVIEW_DEBUFF_ICONS = { 136118, 136182, 136207, 135813, 132090, 136182 }
 
 -- Matched pairwise with PREVIEW_DEBUFF_ICONS: each sample icon stands for a
--- debuff of the type in the same slot, so the preview ring resolves the colour
+-- debuff of the type in the same slot, so the preview ring resolves the color
 -- that type really gets instead of painting black on black. The palette is
 -- borrowed from Advanced Debuffs, the same way the live ring's curve already is.
 local PREVIEW_DEBUFF_TYPES = { "None", "Magic", "Curse", "Disease", "Poison", "Bleed" }
 
 ------------------------------------------------------------------------
--- Shared behaviour
+-- Shared behavior
 ------------------------------------------------------------------------
 
 local function MakeHeaderModule(config)
@@ -108,7 +108,7 @@ local function MakeHeaderModule(config)
                     hasDispelRing = config.dispelRing or false,
                     hasDispelBadge = false,
                     hasGlow       = false,
-                    canCancel     = config.cancellable or false,
+                    canCancel     = config.cancelable or false,
                     borderColorKey = "BorderColor",
                 },
                 getDispelColorCurve = config.dispelRing
@@ -158,9 +158,9 @@ local function MakeHeaderModule(config)
             -- An enchant frame is dressed through the same style path as an
             -- aura button, so it carries a capability table of the same shape
             -- and is passed to that path AS the group. No cancel: an enchant
-            -- is cancelled from the character sheet, not from this display.
-            -- Its border takes its own colour setting, which is the whole
-            -- reason the colour is named per group rather than fixed.
+            -- is canceled from the character sheet, not from this display.
+            -- Its border takes its own color setting, which is the whole
+            -- reason the color is named per group rather than fixed.
             borderColorKey = "EnchantBorderColor",
             capabilities = {
                 hasBorder      = true,
@@ -315,7 +315,7 @@ MakeHeaderModule({
     dbKey         = "BuffTracking",
     filter        = "HELPFUL",
     weapons       = true,
-    cancellable   = true,
+    cancelable    = true,
     previewIcons  = PREVIEW_BUFF_ICONS,
     blizzardFrame = "BuffFrame",
     displayName   = "BUFFS",

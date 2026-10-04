@@ -109,7 +109,7 @@ describe("BlizzardFonts", function()
     end)
 
     describe("restore round-trip", function()
-        it("restores font, shadow colour and offset exactly, twice over", function()
+        it("restores font, shadow color and offset exactly, twice over", function()
             load()
             -- QuestFont { "QuestFont", 13 }: CATEGORY maps it to "QuestText",
             -- but Sizes is empty here, so it scales to its own stock 13 at
@@ -173,7 +173,7 @@ describe("BlizzardFonts", function()
     end)
 
     describe("missing font object", function()
-        it("is skipped, not an error, and its neighbour still gets styled", function()
+        it("is skipped, not an error, and its neighbor still gets styled", function()
             load()
             -- MailTextFontNormal (also in FONT_LIST) is deliberately left
             -- unplanted: its _G slot is nil.

@@ -1,4 +1,4 @@
--- Tier 1: the settings-window colour keys. KE.BlendColor makes the opaque
+-- Tier 1: the settings-window color keys. KE.BlendColor makes the opaque
 -- sub-tab fills, so a wrong mix paints every selected and hovered tab wrong.
 -- The GUI-only keys must stay out of every theme mode's reach: a mode or a
 -- Customize pick that overrode them would re-tint fields the theme does not
@@ -13,7 +13,7 @@ local GUI_KEYS = {
 
 local function Byte(v) return math.floor(v * 255 + 0.5) end
 
-describe("KE settings-window colour keys", function()
+describe("KE settings-window color keys", function()
     local KE
 
     before_each(function()

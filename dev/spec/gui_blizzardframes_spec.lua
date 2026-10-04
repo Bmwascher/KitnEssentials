@@ -38,8 +38,8 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
     -- see nil (falsy) for every key -- indistinguishable from "not
     -- suppressed", which is exactly what several of the assertions below
     -- already expect. That would make a raw-read regression invisible. Real
-    -- shapes make a raw read reproduce the OLD two-state behaviour instead
-    -- (any truthy value, string or table, greys the row out) -- the opposite
+    -- shapes make a raw read reproduce the OLD two-state behavior instead
+    -- (any truthy value, string or table, grays the row out) -- the opposite
     -- of what today's "partial rows stay on" assertions require, so a
     -- regression actually fails them.
     local function seedFull(key, euiKey)
@@ -95,7 +95,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
                 function card:AddRow() end
                 function card:AddLabel(text) labels[#labels + 1] = text end
                 -- The real AddNote (GUI-Core.lua) is AddLabel plus an
-                -- accent-coloured lead-in, so it records the same way.
+                -- accent-colored lead-in, so it records the same way.
                 function card:AddNote(text)
                     return self:AddLabel(KE:ColorTextByTheme("-") .. " " .. text)
                 end
@@ -145,8 +145,8 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             -- GUI-BlizzardMessages.lua gets away with `LSM = {}` because it
             -- never calls HashTable.
             LSM = { HashTable = function() return {} end },
-            -- The accent-coloured lead-in on this page's notes. Identity here:
-            -- the colour is a look, and no assertion reads it.
+            -- The accent-colored lead-in on this page's notes. Identity here:
+            -- the color is a look, and no assertion reads it.
             ColorTextByTheme = function(_, text) return text end,
         }
         -- ContextMenus' onToggle calls KitnEssentials:EnableModule /
@@ -192,7 +192,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             seedFull("Achievement")
             buildFrames()
             -- The marker moved OUT of the label: at three columns a suffix
-            -- clips. Greying plus the note line carry it now.
+            -- clips. Graying plus the note line carry it now.
             assert.equal("Achievements", checkboxes[ACHIEVEMENT_CELL].label)
             assert.equal(
                 "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one.",
@@ -382,9 +382,9 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
     end)
     describe("the EllesmereUI note line", function()
-        local NOTE = "Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail."
+        local NOTE = "Grayed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail."
 
-        -- Substring, not equality: the page's notes carry an accent-coloured
+        -- Substring, not equality: the page's notes carry an accent-colored
         -- lead-in, and asserting the whole decorated string would make this
         -- spec fail on a styling change it has no opinion about.
         local function containsLabel(text)

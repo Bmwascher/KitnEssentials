@@ -16,7 +16,7 @@ local math_max = math.max
 --
 -- `since` names the EllesmereUI version that introduced the window key.
 -- It exists because EllesmereUI.GetBlizzWindowStyle FAILS OPEN: an
--- unrecognised key skips the enable-key test and falls through to "eui"
+-- unrecognized key skips the enable-key test and falls through to "eui"
 -- (EllesmereUIBlizzardSkin.lua). Asking an 8.5.9 client about a key
 -- that only exists from 8.6.4 therefore answers "EllesmereUI owns it" for a
 -- window EllesmereUI does not touch, and our skin would go missing with no

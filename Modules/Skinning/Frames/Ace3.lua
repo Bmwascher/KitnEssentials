@@ -56,7 +56,7 @@ local function SkinTab(tab)
     if tab.SetPushedTextOffset then tab:SetPushedTextOffset(0, 0) end
     -- The label keeps AceGUI's LEFT/RIGHT anchor: that pair is its width
     -- constraint (the resize pass calls SetWidth(0)), so a single CENTER
-    -- point leaves a long label unconstrained across the neighbouring tabs.
+    -- point leaves a long label unconstrained across the neighboring tabs.
     -- The nudge is the offsets above, which PanelTemplates feeds into its
     -- own CENTER point.
 
@@ -98,8 +98,8 @@ local function SkinTab(tab)
     if LevelLock then LevelLock(tab) end
 end
 
--- No font pin on tree buttons: AceGUI colour-codes the sidebar by level
--- through three font objects (gold category, white child, grey disabled),
+-- No font pin on tree buttons: AceGUI color-codes the sidebar by level
+-- through three font objects (gold category, white child, gray disabled),
 -- and a pinned object overrides all three. The global font sweep already
 -- carries the face and size on them.
 local function RefreshTree(self, ...)

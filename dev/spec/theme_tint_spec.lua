@@ -46,7 +46,7 @@ describe("KE skin tint decision", function()
         assert.same(KE:GetThemeColor("accent"), KE:GetSkinBrandColor())
     end)
 
-    it("SetTintSkins flags a reload when the resolved colour moves", function()
+    it("SetTintSkins flags a reload when the resolved color moves", function()
         KE.db = { global = { Theme = {
             Mode = "custom", Custom = { accent = { 0.2, 0.4, 0.6, 1 } }, TintSkins = true,
         } } }
@@ -55,7 +55,7 @@ describe("KE skin tint decision", function()
         assert.equals(1, refreshCalls)
     end)
 
-    it("SetTintSkins does not flag a reload when the colour does not move", function()
+    it("SetTintSkins does not flag a reload when the color does not move", function()
         -- Custom accent set equal to the neutral, so on and off resolve
         -- identically -- the switch itself still has to run through.
         local sameAsNeutral = {
@@ -72,7 +72,7 @@ describe("KE skin tint decision", function()
 
     it("ResetTheme flags a reload only when it starts with tint off", function()
         -- From tint OFF: the reset restores the default ON, and the resolved
-        -- colour actually moves (neutral -> preset accent), so this must
+        -- color actually moves (neutral -> preset accent), so this must
         -- flag.
         KE.db = { global = { Theme = {
             Mode = "custom", Custom = { accent = { 0.2, 0.4, 0.6, 1 } }, TintSkins = false,

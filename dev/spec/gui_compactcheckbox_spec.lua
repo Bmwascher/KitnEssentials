@@ -1,7 +1,7 @@
 -- Tier 2: GUI/GUIWidgets/GUI-KEToggle.lua -- CreateCompactCheckbox's disabled
 -- contract. A disabled cell keeps its saved value on click, so the refusal
 -- lives in OnClick. That makes it plain Lua, and worth pinning: a later edit
--- that deletes the branch leaves a greyed-looking row that still writes the
+-- that deletes the branch leaves a grayed-looking row that still writes the
 -- user's saved skin choice, with no visible symptom.
 local mock = require("dev.spec._wow_mock")
 local helpers = require("dev.spec._helpers")
@@ -21,7 +21,7 @@ describe("GUIFrame:CreateCompactCheckbox", function()
         }
         helpers.loadModule("GUI/GUIWidgets/GUI-KEToggle.lua", {
             GUIFrame = GUIFrame,
-            -- Colour keys answer one triple each; the widget only indexes
+            -- Color keys answer one triple each; the widget only indexes
             -- [1]..[3], so one table serves them all. fontSizeSmall is a real
             -- NUMBER (Core/AddonTheme.lua) and must be seeded explicitly --
             -- the label size is derived from it arithmetically, so the catch-all

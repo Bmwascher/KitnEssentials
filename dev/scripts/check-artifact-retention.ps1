@@ -28,7 +28,7 @@
 #
 # parsec (2026-09-22): feature folders under dev/docs/parsec are named
 # <MM-DD>-<topic> with no year, so rule [B] does not see them; [E] sees the
-# root's direct children. Programme files under dev/docs/parsec/programmes
+# root's direct children. Program files under dev/docs/parsec/programs
 # are date-named, so that folder is a scanned root. The plugin's review
 # worktrees under _worktrees/_review are detached, so rule [D] cannot see
 # them: the plugin's doctor lists them and its `round close` removes them.
@@ -75,7 +75,7 @@ $roots = @(
     'dev/docs/superpowers/plans/rounds', 'dev/docs/superpowers/rounds',
     'dev/docs/superpowers/sdd', 'dev/docs/superpowers/notes',
     'dev/docs/superpowers/brainstorm', 'dev/docs/superpowers/reviews',
-    'dev/docs/handoffs', 'dev/docs/audits', 'dev/docs/parsec', 'dev/docs/parsec/programmes',
+    'dev/docs/handoffs', 'dev/docs/audits', 'dev/docs/parsec', 'dev/docs/parsec/programs',
     '.superpowers/sdd', '.superpowers/review-sources', '.claude/state'
 )
 $roundRoots = @('dev/docs/superpowers/plans/rounds', 'dev/docs/superpowers/rounds', '.superpowers/sdd')

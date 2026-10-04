@@ -4,7 +4,7 @@ local _G = _G
 local gsub = string.gsub
 local hooksecurefunc = hooksecurefunc
 
--- Blizzard bakes dark colour codes into gossip text -- black headers, near
+-- Blizzard bakes dark color codes into gossip text -- black headers, near
 -- black body -- which disappear on a dark backdrop, and it sizes inline icons
 -- without the texcoords that keep them square. Both are fixed in the string
 -- rather than on the fontstring, because Blizzard re-sets the text on every
@@ -14,7 +14,7 @@ local DARK_CODES = {
     ["414141"] = "7b8489",
 }
 
-local COLOUR_CODE  = "|c[fF][fF](%x%x%x%x%x%x)"
+local COLOR_CODE   = "|c[fF][fF](%x%x%x%x%x%x)"
 local ICON_UNSIZED = ":32:32:0:0"
 local ICON_SQUARE  = ":32:32:0:0:64:64:5:59:5:59"
 
@@ -23,17 +23,17 @@ local function Relight(code)
 end
 
 -- Returns the rewritten string, or nil when it was already fine.
-local function Readable(text, colourOnly)
+local function Readable(text, colorOnly)
     if not text or text == "" then return end
 
     local out = text
-    if not colourOnly then out = gsub(out, ICON_UNSIZED, ICON_SQUARE) end
-    out = gsub(out, COLOUR_CODE, Relight)
+    if not colorOnly then out = gsub(out, ICON_UNSIZED, ICON_SQUARE) end
+    out = gsub(out, COLOR_CODE, Relight)
 
     if out ~= text then return out end
 end
 
--- Blizzard hands us its own colour; anything that is not already white is one
+-- Blizzard hands us its own color; anything that is not already white is one
 -- of the dark picks and gets overridden.
 local function WhitenText(text, r, g, b)
     if r ~= 1 or g ~= 1 or b ~= 1 then

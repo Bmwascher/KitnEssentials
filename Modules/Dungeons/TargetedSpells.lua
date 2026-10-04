@@ -121,7 +121,7 @@ TS.pendingCasts = {}
 TS.pendingHead = 1
 TS.pendingTail = 0
 TS.drainScheduled = false
--- C_Timer.After cannot be cancelled, so a drain scheduled before the queue was
+-- C_Timer.After cannot be canceled, so a drain scheduled before the queue was
 -- discarded still runs. It compares this on entry and returns if stale.
 TS.drainEpoch = 0
 -- Reused by RepositionEntries. Never escapes that function.
@@ -191,7 +191,7 @@ end
 -- The set has a single definition, and it is not this function: it is whatever
 -- the settings page routes through QueueRebuild. That is the module's own
 -- statement of "the pooled frames are now stale", it already covers the layout
--- sliders, the whole font card and the countdown colour, and keeping this in
+-- sliders, the whole font card and the countdown color, and keeping this in
 -- step with it is the only rule needed. A term the page rebuilds for but this
 -- omits is a setting that silently stops rebuilding.
 --
@@ -236,9 +236,9 @@ function TS.RebuildKey(db, fontPath, fontOutline)
     parts[#parts + 1] = tostring(fontPath)
     parts[#parts + 1] = tostring(fontOutline)
 
-    local colour = db.FontColor
+    local color = db.FontColor
     for i = 1, 4 do
-        parts[#parts + 1] = tostring(colour and colour[i])
+        parts[#parts + 1] = tostring(color and color[i])
     end
 
     return tconcat(parts, ":")

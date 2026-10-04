@@ -70,7 +70,7 @@ local function SkinRecruitRewards()
                 RecruitRewardBorder(button)
             end
             -- 12.1 made Months a frame wrapping a Text fontstring; Blizzard's
-            -- own code colours Months.Text (RecruitAFriendFrame.lua).
+            -- own code colors Months.Text (RecruitAFriendFrame.lua).
             local months = reward.Months and reward.Months.Text
             if months then months:SetTextColor(1, 1, 1) end
         end
@@ -154,8 +154,8 @@ local function SkinFriendRow(button)
     end
 
     -- Name, note and location. nil size keeps Blizzard's per-line sizing and
-    -- only adds the outline; colours are untouched, so class and status
-    -- colouring still comes through.
+    -- only adds the outline; colors are untouched, so class and status
+    -- coloring still comes through.
     S.FontStringsDeep(button, nil, "OUTLINE")
 
     button:SetHighlightTexture([[Interface\Buttons\WHITE8x8]])

@@ -89,7 +89,7 @@ describe("DamageMeter UpdateDB migration refill (real DM_DEFAULTS)", function()
     it("refills stripped color channels per index", function()
         -- A user color sharing one channel with the default was stored
         -- sparsely; the refilled channel must be the DEFAULT channel value,
-        -- not a reader's fallback grey.
+        -- not a reader's fallback gray.
         local db = seed({ BarColor = { nil, 0.2, 0.2 } })
         assert.equals(0.302, db.BarColor[1])
         assert.equals(0.2, db.BarColor[2])

@@ -319,7 +319,7 @@ end
 -- by MPT:UpdateDB). Flat keys only — no nesting (KE convention). Colors are
 -- {r,g,b} arrays resolved via KE:ResolveColor at render time.
 -- The font face this module used to seed, and every key it seeded it into.
--- Kept only so UpdateDB can recognise and clear the stale seeds; nothing else
+-- Kept only so UpdateDB can recognize and clear the stale seeds; nothing else
 -- may read either.
 local RETIRED_FONT_FACE = "Expressway"
 local RETIRED_FONT_FACE_KEYS = {
@@ -805,7 +805,7 @@ function MPT:UpdateDB()
     -- Retiring the defaults therefore left every existing profile pinned to
     -- the old value while an unset face is supposed to follow KE's global
     -- font. Clear the retired literal once per profile; a face the user picks
-    -- afterwards persists normally. Run-once-stamped because the retired
+    -- afterward persists normally. Run-once-stamped because the retired
     -- literal is also a legitimate choice.
     --
     -- Ordered AFTER the overlay migration on purpose: that migration can copy
@@ -1180,7 +1180,7 @@ end
 -- single Render at most every 50 ms. Flag cleared BEFORE calling Render so a
 -- Render-triggered NotifyRefresh can re-arm without being swallowed.
 -- NOTE: a handle-based guard would be inert here (C_Timer.After returns nil,
--- not a cancellable handle); KE uses the boolean-pending pattern instead.
+-- not a cancelable handle); KE uses the boolean-pending pattern instead.
 function MPT:NotifyRefresh()
     if self._refreshQueued then return end
     self._refreshQueued = true
@@ -1651,7 +1651,7 @@ function MPT:ResetRun(keepCaches)
     self:UnregisterRunEvents()
     self:StopTimerLoop()
     self:ApplyTrackerVisibility()
-    self:SetOverlayActive(false)          -- release nameplate texts; run cancelled/reset
+    self:SetOverlayActive(false)          -- release nameplate texts; run canceled/reset
     if self.ClearPullEstimate then self:ClearPullEstimate() end
     self:NotifyRefresh()
 end

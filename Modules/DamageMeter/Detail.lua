@@ -376,7 +376,7 @@ function DM:OpenDetail(bar, button)
         -- goes STRAIGHT to the message rather than through the renderer, so a prefetch
         -- handed to the renderer can only ever be the success shape and no caller has
         -- to discriminate shapes on a possibly-secret maximum. Only a genuinely absent
-        -- recap declines, which is today's behaviour: a feign or a no-recap death
+        -- recap declines, which is today's behavior: a feign or a no-recap death
         -- simply is not clickable. Compare the second return only INSIDE this branch;
         -- on the success shape it holds the fill maximum, which can be secret, and
         -- comparing a secret throws.
@@ -487,7 +487,7 @@ function DM:RenderWindowAndDetail(W)
         -- already on screen costs a fetch and a full array reversal for no change.
         -- COMBAT only, and never the first paint: out of combat the settle repaints
         -- still run, because nothing documents a recap as final and freezing a partial
-        -- one would be a regression against today's behaviour.
+        -- one would be a regression against today's behavior.
         if DM.DetailCombatActive and DM.DetailCombatActive()
             and W._detailPaintedRecapID ~= nil and W._detailPaintedRecapID == W._detailRecapID then
             return
@@ -860,7 +860,7 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
     row.iconFrame:SetSize(barH, barH)
     row.iconFrame:Show()
 
-    -- Event type decides the fill colour, the sign, the name fallback and the fatal
+    -- Event type decides the fill color, the sign, the name fallback and the fatal
     -- marker, so it is sanitized ONCE here and every test below runs on the result.
     -- nil rather than "" because "" could match an empty-string branch by accident.
     -- The old `or ""` default is deliberately gone: a MISSING type and an UNREADABLE
@@ -893,8 +893,8 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
         row.fill:SetMinMaxValues(0, 1)
         row.fill:SetValue(0)
     end
-    -- Colour is picked AFTER the maximum test, not just on the event type. An empty
-    -- bar left red still reads as a damage row at zero health; grey reads as no data,
+    -- Color is picked AFTER the maximum test, not just on the event type. An empty
+    -- bar left red still reads as a damage row at zero health; gray reads as no data,
     -- which is what an unusable maximum means. Same reasoning as the unknown type:
     -- red with a minus sign is a positive claim, not an absence of information.
     if not haveMax or not typeKnown then
@@ -1721,7 +1721,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
         -- Each repopulate fetches and reverses the whole event array. The poll only
         -- repopulates on a data-change signal rather than every tick, so this is
-        -- defence in depth rather than a per-tick saving -- but a recap is immutable
+        -- defense in depth rather than a per-tick saving -- but a recap is immutable
         -- once the death has happened, so a cursor held on one row never needs one.
         -- COMBAT only: out of combat the repaint still runs, because nothing documents
         -- a recap as final and freezing a partial one would be a regression. The recap
@@ -1736,7 +1736,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         local events, sinkMax, plainMax = self:GetDeathRecap(bar._deathRecapID)
         if not events then
             -- An UNREADABLE recap shows the message; a genuinely absent one keeps
-            -- today's behaviour of leaving the tip hidden. A hover that silently does
+            -- today's behavior of leaving the tip hidden. A hover that silently does
             -- nothing in combat reads as a broken feature, which is why the two are
             -- not treated alike here. Raising the message alone is NOT enough: this
             -- returns before the common tail, so the rows and header the previous

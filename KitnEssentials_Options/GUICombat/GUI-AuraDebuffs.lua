@@ -62,7 +62,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     manager:SetCondition("borderCustom", function() return db.BorderColorMode == "custom" end)
 
     -- "Reverse Cooldown Direction" only matters when Swipe is on, so it's
-    -- greyed out when Swipe is unchecked.
+    -- grayed out when Swipe is unchecked.
     manager:SetCondition("swipeOn", function() return db.Swipe ~= false end)
 
     local function ApplySettings()
@@ -238,7 +238,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Visual Settings
     -- 1x2 grid: BorderColorMode (left) + Custom Border Color (right).
-    -- The custom color picker is greyed out when mode = "dispel" via the
+    -- The custom color picker is grayed out when mode = "dispel" via the
     -- "borderCustom" conditional group.
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Visual Settings", yOffset)
@@ -254,7 +254,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         callback = function(key)
             db.BorderColorMode = key
             -- Refresh the conditional groups so the custom color picker
-            -- shows/greys out immediately.
+            -- shows/grays out immediately.
             RefreshStates()
             ApplySettings()
         end,
@@ -281,8 +281,8 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     --
     -- The per-type palette (db.DispelColors) card lives in a shared builder
     -- (GUI-DispelTypeColorsCard.lua); Aura Debuffs is its only consumer.
-    -- Registered to "all" here, so it greys out with the Aura Debuffs
-    -- master enable (unchanged behaviour).
+    -- Registered to "all" here, so it grays out with the Aura Debuffs
+    -- master enable (unchanged behavior).
     ----------------------------------------------------------------
     yOffset = GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, {
         db         = db,

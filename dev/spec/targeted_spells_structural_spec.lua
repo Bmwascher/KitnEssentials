@@ -19,7 +19,7 @@ local OUTLINE_RESOLVES_TO = {
 
 -- What KE:GetFontPath does with a stored face name: nil means the profile's
 -- global font, a registered name becomes its file, and anything the media
--- library does not know falls back to the default font. Its own behaviour is
+-- library does not know falls back to the default font. Its own behavior is
 -- specced with the Core helpers; here it only has to be a lookup with a
 -- fallback, because the fallback is what collapses distinct names onto one file.
 local FALLBACK_FONT = "Fonts\\FRIZQT__.TTF"
@@ -75,7 +75,7 @@ describe("TS.RebuildKey", function()
         { name = "entry cap",         change = { MaxIcons = 4 } },
         { name = "font size",         change = { FontSize = 20 } },
         { name = "decimals",          change = { Decimals = 0 } },
-        { name = "countdown colour",  change = { FontColor = { 0, 1, 0, 1 } } },
+        { name = "countdown color",  change = { FontColor = { 0, 1, 0, 1 } } },
     }
 
     for _, term in ipairs(TERMS) do
@@ -133,9 +133,9 @@ describe("TS.RebuildKey", function()
         assert.are_not.equals(key(), without("FontSize"))
     end)
 
-    -- A missing colour table must not throw from a lifecycle path, and must
+    -- A missing color table must not throw from a lifecycle path, and must
     -- still differ from a present one.
-    it("survives a missing colour table", function()
+    it("survives a missing color table", function()
         assert.are_not.equals(key(), without("FontColor"))
     end)
 end)
@@ -398,7 +398,7 @@ describe("TS:QueueRebuild invalidation", function()
 
     -- Held rather than run, so the window between queueing and firing is the
     -- thing under test. Installed at LOAD time: the module localizes C_Timer at
-    -- file scope, so a swap afterwards never reaches it.
+    -- file scope, so a swap afterward never reaches it.
     setup(function()
         TS, KE = L.loadTargetedSpells({
             C_Timer = { After = function(_, fn) pending = fn end },
@@ -409,7 +409,7 @@ describe("TS:QueueRebuild invalidation", function()
     end)
 
     -- The real RebuildEntries touches frames; this one keeps the single
-    -- behaviour the timer depends on, which is that a rebuild stamps the key.
+    -- behavior the timer depends on, which is that a rebuild stamps the key.
     before_each(function()
         rebuilt = 0
         pending = nil

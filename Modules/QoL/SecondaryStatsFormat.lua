@@ -36,7 +36,7 @@ local NEEDS = {
 }
 
 -- Text that lands INSIDE a template the engine fills later. A percent sign
--- would be read there as a placeholder and a pipe as the start of a colour
+-- would be read there as a placeholder and a pipe as the start of a color
 -- escape, so both are doubled. Labels are user-typed, so this is reachable.
 local function EscapeText(text)
     if text == nil then return "" end

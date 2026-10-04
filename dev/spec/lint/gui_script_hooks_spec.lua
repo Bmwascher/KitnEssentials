@@ -2,7 +2,7 @@
 --
 -- The GUI reuses its cards, rows and widgets from pools. A hook can never be
 -- taken off, so one installed on a pooled widget keeps running for every page
--- that widget serves afterwards, and the pool's runtime check cannot see it.
+-- that widget serves afterward, and the pool's runtime check cannot see it.
 -- Every HookScript under GUI/ and KitnEssentials_Options/ is listed below
 -- with the frame it lands on: a frame no pool hands out, or a pooled one
 -- hooked once by the constructor

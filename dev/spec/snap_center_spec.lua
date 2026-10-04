@@ -65,13 +65,13 @@ describe("KE:SnapCenter snapping", function()
     end)
 
     it("leaves a value in the dead space alone", function()
-        -- 1296 is 16 from both neighbouring lines; the threshold is 12.
+        -- 1296 is 16 from both neighboring lines; the threshold is 12.
         local x = KE:SnapCenter(1296, 0, ctx(32, 1280))
         assert.equals(1296, x)
     end)
 
-    -- y = 736 sits 16 from both its neighbouring lines, so it is genuinely in
-    -- the dead space. A value merely "far from the centre" is not enough: 900
+    -- y = 736 sits 16 from both its neighboring lines, so it is genuinely in
+    -- the dead space. A value merely "far from the center" is not enough: 900
     -- looks unsnapped but lands exactly on the threshold of another line.
     it("decides the two axes independently", function()
         local x, y, cx, cy = KE:SnapCenter(1280, 736, ctx(32, 1280, 720))
@@ -81,7 +81,7 @@ describe("KE:SnapCenter snapping", function()
         assert.is_false(cy)
     end)
 
-    it("reports the centre only at the origin itself", function()
+    it("reports the center only at the origin itself", function()
         local _, _, cx = KE:SnapCenter(1306, 0, ctx(32, 1280))
         assert.is_false(cx)
     end)
@@ -149,14 +149,14 @@ describe("KE:SnapCenter refusals", function()
 end)
 
 -- Element candidates. The dragged box's three edge offsets are measured from
--- its frame centre, so a symmetric box of width 20 is -10, 0, 10. Every
+-- its frame center, so a symmetric box of width 20 is -10, 0, 10. Every
 -- expected number below was produced by running the arithmetic.
 --
 -- Cases that are purely about elements use a spacing of 1000, which puts the
 -- nearest grid line hundreds of units away. A distant ORIGIN does not do that
 -- job -- the lattice is infinite, so there is always a line nearby -- and an
 -- earlier draft of these cases got that wrong and passed for the wrong reason.
-local function elementCtx(spacing, candidates, near, centre, far, originX)
+local function elementCtx(spacing, candidates, near, center, far, originX)
     return {
         enabled = true,
         spacing = spacing,
@@ -164,7 +164,7 @@ local function elementCtx(spacing, candidates, near, centre, far, originX)
         originY = 0,
         candidatesX = candidates,
         edgeLeft = near,
-        edgeCentreX = centre,
+        edgeCenterX = center,
         edgeRight = far,
     }
 end
@@ -174,16 +174,16 @@ describe("KE:SnapCenter element candidates", function()
     setup(function() KE = L.loadGlobals() end)
 
     -- Each of the three edges gets its own case. A version written against the
-    -- centre alone passes every case that varies the centre and silently never
+    -- center alone passes every case that varies the center and silently never
     -- aligns an edge, which is most of what this feature is for.
     it("aligns the box left edge to a candidate", function()
-        -- Left edge sits 10 left of centre, so centre 210 puts it on 200.
+        -- Left edge sits 10 left of center, so center 210 puts it on 200.
         local x, _, _, _, guideX = KE:SnapCenter(208, 0, elementCtx(1000, { 200 }, -10, 0, 10))
         assert.equals(210, x)
         assert.equals(200, guideX)
     end)
 
-    it("aligns the box centre to a candidate", function()
+    it("aligns the box center to a candidate", function()
         local x, _, _, _, guideX = KE:SnapCenter(202, 0, elementCtx(1000, { 200 }, -10, 0, 10))
         assert.equals(200, x)
         assert.equals(200, guideX)
@@ -245,12 +245,12 @@ describe("KE:SnapCenter element against grid", function()
         assert.equals(204, guideX)
     end)
 
-    -- An element landing on the origin must not light the centre guide as well,
+    -- An element landing on the origin must not light the center guide as well,
     -- or one axis shows two lines.
-    it("reports onCentre false when an element wins at the origin", function()
-        local _, _, onCentreX =
+    it("reports onCenter false when an element wins at the origin", function()
+        local _, _, onCenterX =
             KE:SnapCenter(200, 0, elementCtx(32, { 200 }, 0, 0, 0, 200))
-        assert.is_false(onCentreX)
+        assert.is_false(onCenterX)
     end)
 end)
 
@@ -266,7 +266,7 @@ describe("KE:SnapCenter element tie-breaking", function()
         assert.equals(first, second)
     end)
 
-    it("breaks a same-centre tie on the higher matched coordinate", function()
+    it("breaks a same-center tie on the higher matched coordinate", function()
         -- Offsets -5/0/5 against 200 and 210 at value 205: 200 minus -5 and
         -- 210 minus 5 both give 205, same displacement, so only the drawn
         -- coordinate can separate them.
@@ -292,7 +292,7 @@ describe("KE:SnapCenter suppression and degenerate candidates", function()
         assert.is_nil(guideY)
     end)
 
-    -- One visible element means no neighbours, which is ordinary rather than
+    -- One visible element means no neighbors, which is ordinary rather than
     -- broken. Grid snapping has to survive it, or the feature makes the tool
     -- worse on a sparse screen than it was before.
     it("leaves grid snapping working with no candidates", function()
@@ -322,7 +322,7 @@ describe("KE:SnapCenter element threshold boundary", function()
     -- All three edge offsets are zero, which collapses the box to a point.
     -- A real box has three edges and therefore three ways to reach the same
     -- candidate, so a value 13 from a candidate can still be 3 from one of its
-    -- own edges -- which is correct behaviour and useless for measuring a
+    -- own edges -- which is correct behavior and useless for measuring a
     -- threshold. Collapsed, the distance IS the displacement.
     local function atDistance(d)
         local _, _, _, _, guideX =

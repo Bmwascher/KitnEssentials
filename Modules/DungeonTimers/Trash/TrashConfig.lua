@@ -140,15 +140,15 @@ function DTrash:GetSpellEffectiveColor(mapID, npcID, spellID)
     local ov = self:GetSpellColorOverride(mapID, npcID, spellID)
     if ov then return ov end
     if KE.ResolveTrashPresetColor then
-        -- An explicit colorKey pins the colour to a preset independent of the
-        -- label — used to keep a real spell name yet borrow a preset's colour
+        -- An explicit colorKey pins the color to a preset independent of the
+        -- label — used to keep a real spell name yet borrow a preset's color
         -- (e.g. an interrupt shown as "Fire Spit" in KICK red).
         local o = curatedOverlay(mapID, npcID, spellID)
         if o and o.colorKey then
             local c = KE.ResolveTrashPresetColor(o.colorKey)
             if c then return c end
         end
-        -- Otherwise the colour follows the EFFECTIVE label through the shared boss
+        -- Otherwise the color follows the EFFECTIVE label through the shared boss
         -- preset palette (SOAK→green, DODGE→orange, …); unmatched → flat default.
         local c = KE.ResolveTrashPresetColor(self:GetSpellLabel(mapID, npcID, spellID))
         if c then return c end

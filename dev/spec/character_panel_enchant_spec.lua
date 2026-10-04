@@ -96,7 +96,7 @@ end)
 -- A refusal rule, so it is tested even though the list it guards is a data
 -- table (AGENTS.md: guard rules WIN over the verbatim-port exemption).
 describe("Enchant helper: slots we refuse to offer", function()
-    it("refuses leg armour kits", function()
+    it("refuses leg armor kits", function()
         local CP = loadCP()
         assert.is_true(CP._IsUnofferableEnchant({ 7 }))
     end)
@@ -669,7 +669,7 @@ describe("Enchant auto-apply: the action", function()
     -- UseContainerItem ran but no spell ended up waiting -- a silent failure.
     -- Overriding with a constant false defeats the fixture's transition, which is
     -- exactly the state being tested.
-    it("does not fire when no spell is waiting for a target afterwards", function()
+    it("does not fire when no spell is waiting for a target afterward", function()
         local CP, picked = applyFixture({ SpellIsTargeting = function() return false end })
         CP:ApplyEnchantFromBags(enchantData())
         assert.same({}, picked)
@@ -696,7 +696,7 @@ describe("Enchant auto-apply: the action", function()
         assert.same({}, picked)
     end)
 
-    it("does not fire when the slot is a judgement call", function()
+    it("does not fire when the slot is a judgment call", function()
         local CP, picked = applyFixture({
             GetInventoryItemLink = function() return "link" end,
         })

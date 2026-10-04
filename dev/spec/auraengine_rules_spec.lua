@@ -9,7 +9,7 @@ describe("Advanced Debuffs filter-string construction", function()
     end)
 
     -- The whole point of this file. INCLUDE_NAME_PLATE_ONLY is documented
-    -- non-negatable and inverted relative to its neighbours: its ABSENCE
+    -- non-negatable and inverted relative to its neighbors: its ABSENCE
     -- filters nameplate-only auras out. A spec that only checked "every
     -- enabled filter is negated" would certify the bug.
     it("OMITS the nameplate token when its checkbox is enabled", function()
@@ -36,7 +36,7 @@ describe("Advanced Debuffs filter-string construction", function()
     -- iterated the filters unordered would emit the same string both times and
     -- agree with itself. Restating an implementation's output is normally the
     -- assertion this project rejects -- here the fixed order IS the specified
-    -- behaviour, so pinning it is the point.
+    -- behavior, so pinning it is the point.
     it("emits tokens in a stable order regardless of table iteration", function()
         local R = L.loadAuraRules()
         assert.equals(
@@ -73,7 +73,7 @@ describe("blocklist record conversion", function()
         assert.is_true(set[80354])
     end)
 
-    -- The alias is the ported behaviour, and it is what makes the
+    -- The alias is the ported behavior, and it is what makes the
     -- do-not-mutate invariant necessary. A spec that only checked CONTENTS
     -- would pass just as happily against a defensive copy, which is the
     -- deviation the design forbids.
@@ -116,7 +116,7 @@ describe("preview timing", function()
     -- the same duration would otherwise open in lockstep. Any other pair
     -- carries differing durations, so their offsets differ on their own and
     -- the assertion holds with no phase term at all.
-    it("varies the phase across indices so icons are not synchronised", function()
+    it("varies the phase across indices so icons are not synchronized", function()
         local R = L.loadAuraRules()
         local durationA, offsetA = R.PreviewTiming(1)
         local durationB, offsetB = R.PreviewTiming(7)
@@ -260,7 +260,7 @@ describe("include spell id set", function()
         assert.is_true(set[33206])
     end)
 
-    it("omits a disabled row while keeping its enabled neighbours", function()
+    it("omits a disabled row while keeping its enabled neighbors", function()
         local R = L.loadAuraRules()
         local set = R.BuildIncludeSpellIDs({
             [33206] = { label = "Pain Suppression", enabled = false },

@@ -12,13 +12,13 @@
 -- ║    • label   — the alert text. A DISPLAY_PRESETS name    ║
 -- ║                (SOAK, DODGE, FRONTAL, STACK, SPREAD,     ║
 -- ║                PULL, DANCE, AOE, ADD, …) drives the      ║
--- ║                alert COLOUR automatically, just like a   ║
+-- ║                alert COLOR automatically, just like a    ║
 -- ║                boss timer; any other text renders        ║
--- ║                verbatim in the flat default colour.      ║
+-- ║                verbatim in the flat default color.       ║
 -- ║    • display — "bar" or "text". Omit to inherit the      ║
 -- ║                shipped default (currently "text").       ║
 -- ║                                                          ║
--- ║  Resolution order (renderer + GUI both honour it):       ║
+-- ║  Resolution order (renderer + GUI both honor it):        ║
 -- ║    user GUI override → THIS overlay → shipped default.   ║
 -- ║  A user's own per-spell choices always win over this.    ║
 -- ║                                                          ║
@@ -39,9 +39,9 @@ if not KitnEssentials then return end
 -- role restriction (e.g. healer-only); omit it for the all-roles
 -- default. A user's Visibility-tab role toggles still win over this.
 --
--- `colorKey = "<PRESET>"` pins the alert colour to a preset independent of the
--- label, so a spell can keep its real name yet borrow a preset's colour (e.g. an
--- interrupt kept as "Fire Spit" but coloured KICK red). An explicit user colour
+-- `colorKey = "<PRESET>"` pins the alert color to a preset independent of the
+-- label, so a spell can keep its real name yet borrow a preset's color (e.g. an
+-- interrupt kept as "Fire Spit" but colored KICK red). An explicit user color
 -- override still wins.
 --
 -- `castSound = "<LSM sound name>"` ships a default for the ability's Cast
@@ -233,7 +233,7 @@ KE.TrashCurated = {
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [253683] = {  -- Rokh'zal
-            [1259786] = { display = "bar" },                       -- Ritual Sacrifice (keep name, default colour; no cast sound)
+            [1259786] = { display = "bar" },                       -- Ritual Sacrifice (keep name, default color; no cast sound)
             [1262241] = { label = "BAIT",     display = "text" },  -- Invoke Shadow (→ PULL cyan; no cast sound)
         },
     },

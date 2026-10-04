@@ -108,7 +108,7 @@ local function GetHexColor(box)
     return r / 255, g / 255, b / 255
 end
 
---- Passing nil for r, g and b means "read the current colour from the frame"
+--- Passing nil for r, g and b means "read the current color from the frame"
 ---@param r number?
 ---@param g number?
 ---@param b number?

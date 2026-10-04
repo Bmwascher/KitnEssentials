@@ -185,7 +185,7 @@ local function FillMissing(saved, defaults)
     end
 end
 
--- The font face this module used to seed. Kept only so UpdateDB can recognise
+-- The font face this module used to seed. Kept only so UpdateDB can recognize
 -- and clear the stale seed; nothing else may read it.
 local RETIRED_FONT_FACE = "Expressway"
 
@@ -355,7 +355,7 @@ function DM:UpdateDB()
     -- AceDB defaults, that seed was never stripped on logout. Retiring the
     -- default therefore left every existing profile pinned to the old value
     -- while an unset font is supposed to follow KE's global font. Clear the
-    -- retired literal once per profile; a face the user picks afterwards
+    -- retired literal once per profile; a face the user picks afterward
     -- persists normally. Run-once-stamped because the retired literal is also
     -- a legitimate choice.
     if not self.db.FontFaceCleared then
@@ -1007,11 +1007,11 @@ function DM:BindCombatState()
             -- A fight ended while this module watched, so the next start begins a
             -- fight it sees from the start.
             DM._sawOutOfCombat = true
-            -- A kill authorises a 0.5s delay on the PAINT only (Blizzard needs it to
+            -- A kill authorizes a 0.5s delay on the PAINT only (Blizzard needs it to
             -- finalize the session totals); the clock itself already froze. Every
             -- other reason, "encounterEndDelayed" included, already spent that delay
             -- inside the machine, so the ticker stops at once. The generation guard
-            -- keeps a boss pulled inside the delay from having its ticker cancelled
+            -- keeps a boss pulled inside the delay from having its ticker canceled
             -- out from under it.
             if reason == "encounterEnd" then
                 local gen = KE.CombatState:Generation()
@@ -1158,7 +1158,7 @@ local FEIGN_POLL     = 0.2
 local FEIGN_TICKS    = 15
 
 -- Cancel the bounded watch. The handle may be LIVE or SPENT (a ticker that ran
--- out its iterations leaves itself in the field), and cancelling a spent one is
+-- out its iterations leaves itself in the field), and canceling a spent one is
 -- harmless -- which is why no expiry callback exists.
 function DM:StopFeignWatch()
     if self._feignWatch then
@@ -1221,7 +1221,7 @@ end
 
 -- Tagged ids that appear on MORE THAN ONE own-row in this list. A tag names one
 -- death; if the list holds two rows carrying it, the tag cannot say which, so
--- neither is hidden. Defence in depth, not the primary defence -- it sees one
+-- neither is hidden. Defense in depth, not the primary defense -- it sees one
 -- list at a time and cannot catch a collision that spans two.
 local feignSeen = {}
 function DM.ScanFeignAmbiguity(sources, tags, out)
@@ -1549,7 +1549,7 @@ function DM:OnCombatForceStop(_, isLogin, isReload)
     -- An in-combat reload must leave the live clock alone. Two frames handle
     -- this event and the game promises no order between them, so the gate is
     -- written to be correct either way: reached first, the machine's own
-    -- re-derivation restarts the ticker afterwards; reached second, it is
+    -- re-derivation restarts the ticker afterward; reached second, it is
     -- already live and this is skipped.
     if not KE.CombatState:IsLive() then
         self._clockCleared = true
@@ -1621,7 +1621,7 @@ function DM:OnMeterReset()
     -- History bundles are already-captured data and survive every reset
     -- event (only eviction / HeaderReset / disable / reload clear them). But pending
     -- PROVENANCE does not: an external reset empties the native store, so
-    -- the armed key label would mislabel whatever accumulates afterwards —
+    -- the armed key label would mislabel whatever accumulates afterward —
     -- clear it. EXCEPT for the module's own key-start wipe (one-shot flag
     -- set just before its ResetAllCombatSessions call): consume the flag
     -- and keep pending, which OnChallengeEvent arms right after.
@@ -2654,7 +2654,7 @@ function DM:GetDeathRecap(recapID)
         -- Only a returned, readable false refuses. A secret answer and a failed call
         -- are both "we did not get an answer", and reading that as "no recap" would
         -- hide a recap the fetch below would have returned -- this preflight is an
-        -- optimisation, and the fetch already handles a missing or empty result.
+        -- optimization, and the fetch already handles a missing or empty result.
         -- issecretvalue must stay before the truthiness test: a secret boolean throws.
         if okh and not issecretvalue(has) and not has then return nil end
     end
@@ -3307,7 +3307,7 @@ end
 ---------------------------------------------------------------------------------
 
 -- The scope an entry counts in, or nil outside one. An active Delve is its own
--- scope so that its end can be recognised.
+-- scope so that its end can be recognized.
 function DM.InstanceScope(instanceType, delveActive)
     if delveActive then return "delve" end
     if instanceType == "party" or instanceType == "raid" or instanceType == "scenario" then

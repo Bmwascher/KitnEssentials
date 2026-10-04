@@ -56,9 +56,9 @@ describe("DungeonCasts combat-start rescan", function()
     end)
 end)
 
--- A held bar carries the interrupt colour under "Interrupted by X". An
+-- A held bar carries the interrupt color under "Interrupted by X". An
 -- interruptible event arriving after a refused cast start would repaint it to
--- a live cast colour and contradict its own text.
+-- a live cast color and contradict its own text.
 describe("DungeonCasts interrupt hold vs interruptible repaint", function()
     local function loadWithBar(holdUntil)
         -- The loader's cast readers answer nil, which keeps the bar's last
@@ -83,11 +83,11 @@ describe("DungeonCasts interrupt hold vs interruptible repaint", function()
     end)
 end)
 
--- The preview colour branch truth-tests notInterruptible, which is secret
+-- The preview color branch truth-tests notInterruptible, which is secret
 -- for a live enemy cast. A live bar can sit in the preview stack, so only
 -- bars the preview built may take that branch.
-describe("DungeonCasts preview colour branch", function()
-    it("gives a live bar in the preview stack the live colour path", function()
+describe("DungeonCasts preview color branch", function()
+    it("gives a live bar in the preview stack the live color path", function()
         local DC, KE = L.loadDungeonCasts()
         KE.ResolveColor = function() return 1, 1, 1, 1 end
         DC.isPreview = true

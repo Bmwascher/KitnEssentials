@@ -1,7 +1,7 @@
 -- Modules/Utilities/NoMovementAlert.lua -- the layers a later edit breaks
 -- silently: spell resolution end to end (the exported tables and key format,
 -- which spells count as enabled and for which spec, replacement choices, and
--- alias and category durations), how role colours resolve, how a cooldown reads
+-- alias and category durations), how role colors resolve, how a cooldown reads
 -- back, and whether an unreadable aura is allowed to masquerade as an absent
 -- one. The tracking engine, the frames and the event wiring are a verbatim port
 -- and are verified in game.
@@ -57,7 +57,7 @@ describe("movement alert spell resolution", function()
             assert.is_true(enabled(db, 102401, 103))
         end)
 
-        it("still honours the older account-wide key as a fallback", function()
+        it("still honors the older account-wide key as a fallback", function()
             local db = { Spells = { ["102401"] = { enabled = false } } }
             assert.is_false(enabled(db, 102401, 102))
         end)
@@ -179,7 +179,7 @@ describe("NoMovementAlert RoleColor", function()
         __le = function() error("attempt to compare a secret value") end,
     })
 
-    it("returns the saved colour for each role in custom mode", function()
+    it("returns the saved color for each role in custom mode", function()
         local NMA = L.loadMovementAlert()
         NMA.db = {
             ColorMode = "CUSTOM",
@@ -205,7 +205,7 @@ describe("NoMovementAlert RoleColor", function()
         assert.same({ 0.2, 0.4, 0.6, 1 }, NMA:RoleColor("SeparatorColor"))
     end)
 
-    it("falls back to the saved colour when no theme accent exists", function()
+    it("falls back to the saved color when no theme accent exists", function()
         local NMA, KE = L.loadMovementAlert()
         KE.Theme = nil
         NMA.db = { ColorMode = "THEME", TextColor = { 1, 1, 1, 1 }, TimerColor = { 1, 0, 0, 1 } }
@@ -220,7 +220,7 @@ describe("NoMovementAlert RoleColor", function()
     -- The duration OBJECT is a separate trap and its gate does not move: it
     -- answers even when the spell is ready, which drew a one-second countdown
     -- under a half-minute ability. It stays reachable only on explicit false.
-    -- The behaviour is the same in and out of restricted content.
+    -- The behavior is the same in and out of restricted content.
     describe("what counts as a cooldown worth reporting", function()
         local cooldown, durationRemaining
 
@@ -347,7 +347,7 @@ describe("NoMovementAlert RoleColor", function()
             return NMA
         end
 
-        it("still recognises a charge spell when only the count is secret", function()
+        it("still recognizes a charge spell when only the count is secret", function()
             -- Under cooldown restrictions the count and the recharge length are
             -- secret while maxCharges stays plain; refusing the whole record
             -- sent the spell down the plain-cooldown path.
@@ -440,7 +440,7 @@ describe("NoMovementAlert buff readback", function()
         assert.is_true(NMA.auraActive[BURNING_RUSH])
     end)
 
-    it("honours earned trust while identities are readable", function()
+    it("honors earned trust while identities are readable", function()
         -- Positive control for the fix: trust still works where it was earned.
         -- Without this, deleting the trust path entirely would pass every other
         -- case in this block.

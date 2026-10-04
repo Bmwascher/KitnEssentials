@@ -25,7 +25,7 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
             -- Disabling stops the dragging immediately, but the movable and
             -- mouse flags already written onto Blizzard frames stay until a
             -- reload, so offer one.
-            KE:CreateReloadPrompt("Turning off Move Frames stops the dragging now. A UI reload fully restores Blizzard's own window behaviour.")
+            KE:CreateReloadPrompt("Turning off Move Frames stops the dragging now. A UI reload fully restores Blizzard's own window behavior.")
         end
     end)
 

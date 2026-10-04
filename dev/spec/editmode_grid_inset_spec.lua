@@ -65,9 +65,9 @@ describe("KE:GetGridOverlayInset", function()
     end)
 
     -- A CENTER anchor splits the overhang evenly, because button[1] straddles
-    -- the frame's centre instead of sitting on a corner. Width 158, one icon
+    -- the frame's center instead of sitting on a corner. Width 158, one icon
     -- 52, so 106 of overhang -- 53 to each side depending on growth.
-    it("splits the overhang evenly for a centre anchor", function()
+    it("splits the overhang evenly for a center anchor", function()
         local l, r, t, b = KE:GetGridOverlayInset(3, 2, 52, 1, "CENTER", false, true)
         assert.equals(-53, l)
         assert.equals(53, r)
@@ -105,7 +105,7 @@ describe("KE:GetGridOverlayInset", function()
     end)
 
     -- Called before a db exists, or with a settings table mid-edit, must not
-    -- throw from a layout path. Zero is the plain SetAllPoints behaviour.
+    -- throw from a layout path. Zero is the plain SetAllPoints behavior.
     it("returns zeroes rather than erroring on missing numbers", function()
         local l, r, t, b = KE:GetGridOverlayInset(nil, nil, nil, nil, nil, false, false)
         assert.equals(0, l)

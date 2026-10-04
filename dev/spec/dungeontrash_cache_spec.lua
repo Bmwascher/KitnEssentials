@@ -5,7 +5,7 @@
 -- counting" and "tear down now". Every wrong branch is invisible in-game (a
 -- bar that quietly vanished, or a corpse's countdown living on), so the state
 -- machine is pinned here with a controllable clock and captured timers.
--- Frame/anchor behaviour (markers, alert re-key rendering) stays in-game-only.
+-- Frame/anchor behavior (markers, alert re-key rendering) stays in-game-only.
 
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")

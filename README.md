@@ -11,7 +11,7 @@ KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and 
 
 - **Dozens of modules** — combat HUD, aura tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
-- **Edit mode** — drag any element to reposition, with snapping to a grid and to other elements' edges and centres, centre guides, keyboard nudging, per-category filtering, and anchor and strata controls
+- **Edit mode** — drag any element to reposition, with snapping to a grid and to other elements' edges and centers, center guides, keyboard nudging, per-category filtering, and anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
 - **Global font** — set one font for every module, with per-module overrides still available
 - **Sidebar search** — filter every page by name or keyword as you type

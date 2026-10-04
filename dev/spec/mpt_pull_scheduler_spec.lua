@@ -3,7 +3,7 @@
 -- the rate limit, exclusive batch ownership, stale-delivery refusal and
 -- idempotent teardown.
 --
--- Stateful fake, stated per the project spec policy: these behaviours ARE
+-- Stateful fake, stated per the project spec policy: these behaviors ARE
 -- the ordering of KE's own deferred callbacks relative to events and
 -- lifecycle calls (a request during an owned batch must become exactly one
 -- follow-up after delivery; a delivery must be refused when public state
@@ -32,14 +32,14 @@ describe("MPT pull: scheduler and lifecycle", function()
     end
     local function liveTimers()
         local n = 0
-        for _, t in ipairs(timers) do if not t.cancelled then n = n + 1 end end
+        for _, t in ipairs(timers) do if not t.canceled then n = n + 1 end end
         return n
     end
     local function fireTimers()
         local pending = timers
         timers = {}
         for _, t in ipairs(pending) do
-            if not t.cancelled then t.fn() end
+            if not t.canceled then t.fn() end
         end
     end
     local function cycle()   -- the build timer, then both settle frames
@@ -57,8 +57,8 @@ describe("MPT pull: scheduler and lifecycle", function()
             C_Timer = {
                 After = function(_, fn) afters[#afters + 1] = fn end,
                 NewTimer = function(delay, fn)
-                    local t = { delay = delay, fn = fn, cancelled = false }
-                    function t:Cancel() self.cancelled = true end
+                    local t = { delay = delay, fn = fn, canceled = false }
+                    function t:Cancel() self.canceled = true end
                     timers[#timers + 1] = t
                     return t
                 end,
@@ -258,9 +258,9 @@ describe("MPT pull: scheduler and lifecycle", function()
         MPT:RequestPullEstimate()
         assert.is_true(listener:IsEventRegistered("UNIT_THREAT_LIST_UPDATE"))
         local pending = timers[#timers]
-        assert.is_false(pending.cancelled)
+        assert.is_false(pending.canceled)
         MPT:ClearPullEstimate()
-        assert.is_true(pending.cancelled)
+        assert.is_true(pending.canceled)
         assert.is_false(listener:IsEventRegistered("UNIT_THREAT_LIST_UPDATE"))
         local before = cleared
         MPT:ClearPullEstimate()

@@ -120,7 +120,7 @@ function DM:GetBackdropRectSize()
     h = h + 2 * pad
 
     -- Mirrors UpdateBackdrop exactly, including the enabled half: the flag is
-    -- only honoured while the backdrop is on.
+    -- only honored while the backdrop is on.
     if db.BackdropEnabled ~= false and db.BackdropBehindBarsOnly then
         local headerH = self._dockHeaderH
         if not headerH then return nil end
@@ -139,7 +139,7 @@ end
 -- hides the panel but leaves it allocated, so a panel test alone cannot answer
 -- "is Chat running".
 --
--- The dirty check is NOT an optimisation. The splitter drag path re-lays the
+-- The dirty check is NOT an optimization. The splitter drag path re-lays the
 -- dock out every frame while the user drags, and UpdatePanel walks every chat
 -- frame in the game.
 --
@@ -1387,7 +1387,7 @@ end
 -- the columns identified by `leftRep` (a representative window of the column that
 -- should sit immediately LEFT of the new one) and `rightRep` (immediately RIGHT) --
 -- whichever survives idx's removal decides the insert position, so a gap whose
--- neighbour column WAS idx's own (and thus drops out) still lands the new column in
+-- neighbor column WAS idx's own (and thus drops out) still lands the new column in
 -- the right place. Pass nil for an outer edge (leftRep nil = new leftmost column;
 -- rightRep nil = new rightmost). All plain table edits on db.Dock.Columns -- never
 -- a secret. WidthRatio seeds at 1 (the splitters adjust from there).

@@ -62,17 +62,17 @@ describe("ChatMessageHandler achievement merging", function()
         assert.are.equal("|Tint:14:14|t |Hachievement:123:|h[Thing]|h Earned by Ana, Zed", lines[1])
     end)
 
-    it("keeps the colour the client wrapped the link in", function()
-        local coloured = "%s earned |cffffff00|Hachievement:123:|h[Thing]|h|r!"
-        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, coloured, "Zed")
-        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, coloured, "Ana")
+    it("keeps the color the client wrapped the link in", function()
+        local colored = "%s earned |cffffff00|Hachievement:123:|h[Thing]|h|r!"
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, colored, "Zed")
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, colored, "Ana")
         CMH.FlushAchievements()
         assert.are.equal("|cffffff00|Hachievement:123:|h[Thing]|h|r Earned by Ana, Zed", lines[1])
     end)
 
-    it("keeps the colour around an icon the incoming filter prepended", function()
-        -- The filter inserts the icon INSIDE the colour scope, so a merged line
-        -- that carries only the icon prints the title in the channel's colour.
+    it("keeps the color around an icon the incoming filter prepended", function()
+        -- The filter inserts the icon INSIDE the color scope, so a merged line
+        -- that carries only the icon prints the title in the channel's color.
         local both = "%s earned |cffffff00|Tint:14:14|t |Hachievement:123:|h[Thing]|h|r!"
         CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, both, "Zed")
         CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, both, "Ana")
@@ -92,7 +92,7 @@ describe("ChatMessageHandler achievement merging", function()
         assert.is_nil(CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, broken, "Ana"))
     end)
 
-    it("still pairs a coloured link with its own achievement id", function()
+    it("still pairs a colored link with its own achievement id", function()
         local two = "%s got |cffffff00|Hachievement:111:|h[A]|h|r and " ..
             "|cffffff00|Tint:14:14|t |Hachievement:222:|h[B]|h|r!"
         CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, two, "Zed")
@@ -294,7 +294,7 @@ describe("ChatMessageHandler body highlight", function()
     end)
 
     describe("keywords", function()
-        it("colours a keyword and preserves its casing", function()
+        it("colors a keyword and preserves its casing", function()
             setChat({ HighlightKeywords = "kitn", HighlightColor = { 1, 0, 0 }, HighlightSound = "None" })
             assert.is_truthy(CMH.Highlight("hey Kitn there"):find("|cffff0000Kitn|r", 1, true))
         end)
@@ -316,8 +316,8 @@ describe("ChatMessageHandler body highlight", function()
         end)
     end)
 
-    describe("colour-span protection", function()
-        it("leaves text that is already coloured alone", function()
+    describe("color-span protection", function()
+        it("leaves text that is already colored alone", function()
             setChat({ HighlightKeywords = "ana", HighlightColor = { 1, 0, 0 }, HighlightSound = "None" })
             local text = "|cff00ff00Ana tail|r"
             assert.are.equal(text, CMH.Highlight(text))
@@ -329,15 +329,15 @@ describe("ChatMessageHandler body highlight", function()
             assert.are.equal(text, CMH.Highlight(text))
         end)
 
-        it("still colours a match outside the span", function()
+        it("still colors a match outside the span", function()
             setChat({ HighlightKeywords = "ana", HighlightColor = { 1, 0, 0 }, HighlightSound = "None" })
             assert.is_truthy(CMH.Highlight("|cff00ff00x|r Ana"):find("|cffff0000Ana|r", 1, true))
         end)
 
         -- A boss body becomes a format pattern after highlighting, where a
-        -- colour code inside a %% pair shows two percents and one inside a %s
+        -- color code inside a %% pair shows two percents and one inside a %s
         -- shows the directive instead of the name. Ordinary chat passes the
-        -- body as a format argument, so its %s is text and still colours.
+        -- body as a format argument, so its %s is text and still colors.
         it("refuses a hit splitting a percent pair, or a %s in a boss body", function()
             local cases = {
                 { name = "percent pair", keyword = "50%", text = "the boss is at 50%% health" },
@@ -364,12 +364,12 @@ describe("ChatMessageHandler body highlight", function()
             CMH.ResetHighlight()
         end)
 
-        it("colours a known name", function()
+        it("colors a known name", function()
             setChat({ HighlightKeywords = "", ClassColorMentions = true, ExcludedMentions = "", HighlightSound = "None" })
             assert.is_truthy(CMH.Highlight("ping Ana please"):find("Ana|r", 1, true))
         end)
 
-        it("honours the exclusion list", function()
+        it("honors the exclusion list", function()
             setChat({ HighlightKeywords = "", ClassColorMentions = true, ExcludedMentions = "Ana", HighlightSound = "None" })
             assert.are.equal("ping Ana please", CMH.Highlight("ping Ana please"))
         end)
@@ -452,7 +452,7 @@ describe("ChatMessageHandler body highlight", function()
         -- The two stubs must DISAGREE. Stubbing both to the same realm would
         -- leave this case green even if the code ignored
         -- GetNormalizedRealmName outright, which is a test that cannot fail on
-        -- the behaviour it is named after.
+        -- the behavior it is named after.
         it("prefers GetNormalizedRealmName when the client offers it", function()
             installSound()
             _G.UnitFullName = function() return "Kitn", "Somewhere Else" end
@@ -462,7 +462,7 @@ describe("ChatMessageHandler body highlight", function()
             assert.is_false(played)
         end)
 
-        it("still colours your own message", function()
+        it("still colors your own message", function()
             installSound()
             setChat({ HighlightKeywords = "kitn", HighlightColor = { 1, 0, 0 }, HighlightSound = "Bell" })
             assert.is_truthy(CMH.Highlight("kitn", "Kitn"):find("|cffff0000kitn|r", 1, true))

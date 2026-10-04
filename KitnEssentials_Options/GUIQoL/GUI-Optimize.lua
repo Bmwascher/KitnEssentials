@@ -429,7 +429,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     card1:AddLabel("\226\128\162 " .. KE:ColorTextByTheme("Max FPS") ..
         " gives the highest FPS without sacrificing visual clarity in raids, dungeons and outdoors.")
     card1:AddLabel("\226\128\162 " .. KE:ColorTextByTheme("Balanced") ..
-        " uses the Raid & BG setting for a more immersive world and outdoor experience, while maximising in-raid performance. There is also a Lower View Distance option for Mythic+ to help FPS in some outdoor dungeons.")
+        " uses the Raid & BG setting for a more immersive world and outdoor experience, while maximizing in-raid performance. There is also a Lower View Distance option for Mythic+ to help FPS in some outdoor dungeons.")
     if not selectedPreset then
         card1:AddLabel("Select a preset above to load its recommended values.")
     end

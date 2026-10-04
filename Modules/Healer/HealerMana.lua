@@ -127,7 +127,7 @@ end
 -- Single point of truth for the mana % vs OFFLINE display state. Called from
 -- UpdateHealerFrame (initial draw / healer change) and UpdateMana (1Hz tick).
 -- Connected: restore HighManaColor + full-bright icon, render mana %.
--- Disconnected: grey text + label "OFFLINE", grey icon vertex color.
+-- Disconnected: gray text + label "OFFLINE", gray icon vertex color.
 function HM:UpdateManaDisplay(frame, unit, connected)
     if connected then
         local mc = self:Look("HighManaColor")
@@ -265,9 +265,9 @@ function HM:SeedRaidLook()
         if self.db[raidKey] == nil then
             local value = self.db[key]
             if type(value) == "table" then
-                -- pairs, not ipairs: the colour picker writes { r, g, b, a }
+                -- pairs, not ipairs: the color picker writes { r, g, b, a }
                 -- where alpha can be absent, and ipairs would stop at 3 and
-                -- copy a short colour.
+                -- copy a short color.
                 local copy = {}
                 for k, v in pairs(value) do copy[k] = v end
                 self.db[raidKey] = copy

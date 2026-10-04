@@ -507,8 +507,8 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
         kit.anchorPointWidget.label:SetText(anchorPointLabel)
     end
 
-    -- The kit is pooled across pages: without this, a card one page greyed
-    -- comes back greyed on a page that has no grey-out of its own.
+    -- The kit is pooled across pages: without this, a card one page grayed
+    -- comes back grayed on a page that has no gray-out of its own.
     card:SetEnabled(true)
 
     -- Set widget values. CreateDropdown.SetValue accepts (val, silent),

@@ -21,7 +21,7 @@ KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
 -- Where the icon row anchors on the plate. The row always grows AWAY from the
 -- plate (never inside the bar), so the anchor implies the grow direction:
--- Left/Right grow outward to that side, Top centres a row above. Array form
+-- Left/Right grow outward to that side, Top centers a row above. Array form
 -- preserves dropdown order (hash form is pairs()-iterated and unordered).
 local ANCHOR_SIDE_OPTIONS = {
     { key = "LEFT",  text = "Left" },
@@ -195,7 +195,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
         callback = function(key) npc.AnchorSide = key; RefreshMarkers() end,
         tooltip = "Where the cooldown-icon row attaches to the plate. The row"
             .. " always grows away from the plate, so it never overlaps the bar:"
-            .. " Left/Right grow outward to that side, Top centres a row above.",
+            .. " Left/Right grow outward to that side, Top centers a row above.",
     })
     placeRow1:AddWidget(sideDropdown, 0.5)
     local gapSlider = GUIFrame:CreateSlider(placeRow1, "Icon Gap", {
@@ -248,7 +248,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
             npc.BorderColor = { r, g, b, a or 1 }
             RefreshMarkers()
         end,
-        tooltip = "Colour flashed on an icon's border the moment its predicted"
+        tooltip = "Color flashed on an icon's border the moment its predicted"
             .. " cast is due.",
     })
     appearRow:AddWidget(colorPicker, 0.5)

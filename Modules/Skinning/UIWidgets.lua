@@ -2,7 +2,7 @@
 -- ║  UIWidgets.lua                                           ║
 -- ║  Module: UI Widgets                                      ║
 -- ║  Purpose: Restyles the widgets in the four owned UI      ║
--- ║           widget containers: top-centre, centre-screen,  ║
+-- ║           widget containers: top-center, center-screen,  ║
 -- ║           power bar and below-minimap.                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -48,7 +48,7 @@ local ignoreWidget = {
 -- whatever shows it next.
 local backdrops = setmetatable({}, { __mode = "k" })
 
--- Fill colour per Blizzard fill kit. Only the plain "widgetstatusbar" frame
+-- Fill color per Blizzard fill kit. Only the plain "widgetstatusbar" frame
 -- kit gets one; themed frame kits keep their own art.
 local FILL_COLORS = {
     green  = { 0.30, 0.78, 0.30 },
@@ -221,27 +221,27 @@ local function UpdateFill(bar, record, barDB)
     fill:Show()
 end
 
--- Text widgets KE centres. Setup justifies from the widget's own alignment
--- inside a fixed width, which leaves a short string off-centre; the hook
+-- Text widgets KE centers. Setup justifies from the widget's own alignment
+-- inside a fixed width, which leaves a short string off-center; the hook
 -- turns it back to CENTER, and its own re-entrant call passes CENTER.
-local centred = setmetatable({}, { __mode = "k" })
+local centered = setmetatable({}, { __mode = "k" })
 
-local function CentreNow(fs, justify)
+local function CenterNow(fs, justify)
     if justify ~= "CENTER" and UIW.ShouldCenterText(UIW.db) then
         fs:SetJustifyH("CENTER")
     end
 end
 
-local function ReCentre(fs, justify)
-    pcall(CentreNow, fs, justify)
+local function ReCenter(fs, justify)
+    pcall(CenterNow, fs, justify)
 end
 
-local function ApplyCentre(fs)
+local function ApplyCenter(fs)
     if not UIW.ShouldCenterText(UIW.db) then return end
-    CentreNow(fs, fs:GetJustifyH())
-    if not centred[fs] then
-        centred[fs] = true
-        hooksecurefunc(fs, "SetJustifyH", ReCentre)
+    CenterNow(fs, fs:GetJustifyH())
+    if not centered[fs] then
+        centered[fs] = true
+        hooksecurefunc(fs, "SetJustifyH", ReCenter)
     end
 end
 
@@ -357,7 +357,7 @@ function UIW:StyleTextWidget(widget)
     local text = widget.Text
     if not text then return end
     ApplyFont(text, "Text")
-    if TEXT_WITH_STATE and widget.widgetType == TEXT_WITH_STATE then ApplyCentre(text) end
+    if TEXT_WITH_STATE and widget.widgetType == TEXT_WITH_STATE then ApplyCenter(text) end
 end
 
 function UIW:StyleWidgetByType(widget)
@@ -407,7 +407,7 @@ end
 -- own Setup then throws on a secret. The game's widget events drive the
 -- restyle from KE's own frame instead: one timer tick to sweep after
 -- Blizzard's containers have processed the change, a second to flush.
--- ApplyFont's and ApplyCentre's per-font-string hooks are the exception.
+-- ApplyFont's and ApplyCenter's per-font-string hooks are the exception.
 local restyleScheduled = false
 function UIW:OnWidgetEvent()
     if restyleScheduled or not self.db.Enabled then return end
@@ -437,7 +437,7 @@ function UIW:StyleExistingWidgets()
 end
 
 ---------------------------------------------------------------------------------
--- Top-centre container control
+-- Top-center container control
 ---------------------------------------------------------------------------------
 -- The container is a plain UIParent child anchored once in XML; nothing in
 -- the client re-anchors it and it only shows itself when it registers its
@@ -497,7 +497,7 @@ function UIW:RegisterEditMode()
             return self.db and self.db.TopCenter
                 and self.db.TopCenter.Enabled == true or false
         end,
-        displayName = "Top-Centre Widgets",
+        displayName = "Top-Center Widgets",
         frame = self.topCenterHolder,
         getPosition = function() return self.db.TopCenter.Position end,
         setPosition = function(pos)

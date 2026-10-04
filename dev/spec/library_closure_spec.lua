@@ -10,11 +10,11 @@
 -- function(_, name) and discards the mixin arguments entirely, so every spec in
 -- this suite loads modules whose library requests are never resolved at all.
 --
--- FAIL-CLOSED BY CONSTRUCTION. This does not parse Lua. It recognises ONE
+-- FAIL-CLOSED BY CONSTRUCTION. This does not parse Lua. It recognizes ONE
 -- declaration shape, the single shape all current declarations use, and reports
 -- every other occurrence of NewAddon/NewModule as unreadable, which fails the
 -- suite. A guard test that silently skips what it cannot read buys false
--- confidence, which is worse than no test -- so an unrecognised form must never
+-- confidence, which is worse than no test -- so an unrecognized form must never
 -- pass quietly. Widening the grammar is a deliberate edit with its own review;
 -- an author who hits a false failure here extends CANONICAL below on purpose.
 --
@@ -124,7 +124,7 @@ local function shippedEmbeddableLibraries()
             for _, line in ipairs(readLines(path)) do
                 -- Anchored to the line start so prose can never manufacture the
                 -- capability: isCommentLine is deliberately conservative about
-                -- what it calls a comment, and that judgement must not be what
+                -- what it calls a comment, and that judgment must not be what
                 -- decides whether a vendored library is embeddable.
                 if line:match("^%s*function%s+[%w_]+[:%.]Embed%s*%(")
                     or line:match("^%s*[%w_]+%.Embed%s*=%s*function") then
@@ -155,7 +155,7 @@ local function scanRequests()
                     if occurrences > 1 then
                         refuse(path, lineNo, "more than one declaration on the line")
                     elseif not call then
-                        refuse(path, lineNo, "not a recognised declaration shape")
+                        refuse(path, lineNo, "not a recognized declaration shape")
                     elseif call ~= "NewAddon" and call ~= "NewModule" then
                         refuse(path, lineNo, "unexpected constructor " .. call)
                     elseif argText:match("[%(%)]") then

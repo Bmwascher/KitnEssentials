@@ -79,7 +79,7 @@ local function AddFontCard(scrollChild, yOffset, db, manager, prefix, opts)
     local rowH = opts.note and Theme.rowHeight or Theme.rowHeightLast
     local row = GUIFrame:CreateRow(card.content, rowH)
     -- The HUD elements fall through to the module's own face before the global
-    -- font, so their follow entry is labelled with whatever that resolves to.
+    -- font, so their follow entry is labeled with whatever that resolves to.
     -- The base card has nothing above it, and the nameplate overlay reads its
     -- own key directly, so neither inherits.
     local inherited = (prefix ~= "" and not opts.noBaseFallback)
@@ -462,7 +462,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
                 nil, "Reset", "Cancel")
         end,
     })
-    -- Destructive-action red, the house colour for a bulk clear.
+    -- Destructive-action red, the house color for a bulk clear.
     if resetBtn.text then
         resetBtn.text:SetTextColor(0.9, 0.2, 0.2, 1)
     end

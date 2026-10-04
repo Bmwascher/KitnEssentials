@@ -46,12 +46,12 @@ describe("EUIUnlockBridge position translation", function()
     end)
 end)
 
--- The save branch is a refusal rule: it decides when unlock mode's centre-form
+-- The save branch is a refusal rule: it decides when unlock mode's center-form
 -- result may overwrite the anchor pair the user chose, and it fails silently
 -- when wrong. The arithmetic itself is NOT retested here -- it belongs to
 -- KE:ResolveAnchorOffsets and has its own spec. What is pinned here is which
 -- branch runs, and that the coordinates handed to that helper are lifted out of
--- unlock mode's parent-centre space into the absolute space the helper expects.
+-- unlock mode's parent-center space into the absolute space the helper expects.
 describe("EUIUnlockBridge save branch", function()
     local UI_W, UI_H = 1920, 1080
     local F_W, F_H = 400, 200
@@ -110,7 +110,7 @@ describe("EUIUnlockBridge save branch", function()
 
         assert.equal(1, #r.resolveCalls)
         local call = r.resolveCalls[1]
-        -- unlock mode measures from the parent's centre; the helper wants absolute
+        -- unlock mode measures from the parent's center; the helper wants absolute
         assert.equal(0 + UI_W / 2 + -759, call.cx)
         assert.equal(0 + UI_H / 2 + -439, call.cy)
         assert.equal("BOTTOMLEFT", call.from)

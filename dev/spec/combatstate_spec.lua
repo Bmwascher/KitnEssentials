@@ -13,8 +13,8 @@ local L = require("dev.spec._ke_loader")
 local function newScheduler()
     local sched = { afters = {}, tickers = {} }
     local function makeHandle(list, sec, fn)
-        local h = { sec = sec, fn = fn, cancelled = false }
-        h.Cancel = function() h.cancelled = true end
+        local h = { sec = sec, fn = fn, canceled = false }
+        h.Cancel = function() h.canceled = true end
         list[#list + 1] = h
         return h
     end
@@ -216,10 +216,10 @@ describe("CombatState machine", function()
             assert.is_false(cs.playerCombat)
             local poll = lastPoll(sched)
             assert.is_not_nil(poll)
-            assert.is_false(poll.cancelled)
+            assert.is_false(poll.canceled)
         end)
 
-        it("ENCOUNTER_START with the player in combat asserts playerCombat and clears a previously raised groupOnly, cancelling its poll", function()
+        it("ENCOUNTER_START with the player in combat asserts playerCombat and clears a previously raised groupOnly, canceling its poll", function()
             local cs = newCS()
             deps.playerInCombat = function() return false end
             cs:OnEncounterStart()
@@ -228,7 +228,7 @@ describe("CombatState machine", function()
             cs:OnEncounterStart()
             assert.is_true(cs.playerCombat)
             assert.is_false(cs.groupOnly)
-            assert.is_true(oldPoll.cancelled)
+            assert.is_true(oldPoll.canceled)
         end)
 
         it("a PLAYER_ENTERING_WORLD group-only re-derivation clears a previously raised playerCombat", function()
@@ -455,7 +455,7 @@ describe("CombatState machine", function()
             lastAfter(sched).fn()
             local poll = lastPoll(sched)
             poll.fn()
-            assert.is_true(poll.cancelled)
+            assert.is_true(poll.canceled)
         end)
 
         it("a start arriving during a watch clears watching and produces a live poll", function()
@@ -468,9 +468,9 @@ describe("CombatState machine", function()
             cs:OnUnitFlags("raid1")
             assert.is_false(cs.watching)
             assert.is_true(cs.groupOnly)
-            assert.is_true(watchPoll.cancelled)
+            assert.is_true(watchPoll.canceled)
             local livePoll = lastPoll(sched)
-            assert.is_false(livePoll.cancelled)
+            assert.is_false(livePoll.canceled)
         end)
 
     end)
@@ -573,7 +573,7 @@ describe("CombatState machine", function()
             local clock = lastClock(sched)
             deps.groupInCombat = function() return true end
             cs:OnPvPMatchComplete()
-            assert.is_true(clock.cancelled)
+            assert.is_true(clock.canceled)
 
             local cs2 = newCS()
             cs2:OnRegenDisabled()
@@ -581,7 +581,7 @@ describe("CombatState machine", function()
             deps.playerInCombat = function() return false end
             deps.groupInCombat = function() return false end
             cs2:OnEnteringWorld()
-            assert.is_true(clock2.cancelled)
+            assert.is_true(clock2.canceled)
         end)
 
         it("a freeze fires a final OnClockTick before OnStop", function()
@@ -767,7 +767,7 @@ describe("CombatState machine", function()
                     ended = function(cs) return cs:IsFrozen() and not cs.watching end },
                 { name = "a watch ends", setup = watchHold,
                     held = function(cs) return cs.watching end,
-                    ended = function(cs) return not cs.watching and lastPoll(sched).cancelled end },
+                    ended = function(cs) return not cs.watching and lastPoll(sched).canceled end },
                 { name = "the player's unit flag stays set outside lockdown", setup = flaggedHold,
                     held = function(cs) return cs:IsLive() end,
                     ended = function(cs) return cs:IsFrozen() and not cs.watching end },
@@ -996,7 +996,7 @@ describe("CombatState machine", function()
                 cs:UnregisterListener("spec")
                 assert.same({ true, false }, events, case.name)
                 for _, h in ipairs(sched.tickers) do
-                    assert.is_true(h.cancelled, case.name)
+                    assert.is_true(h.canceled, case.name)
                 end
                 assert.is_false(cs:IsLive(), case.name)
                 assert.is_false(cs:IsFrozen(), case.name)
@@ -1087,7 +1087,7 @@ describe("CombatState machine", function()
                     assert.equals(not lockdown, cs.groupOnly, name)
                     if not lockdown then
                         local poll = lastPoll(sched)
-                        assert.is_true(poll ~= nil and not poll.cancelled, name)
+                        assert.is_true(poll ~= nil and not poll.canceled, name)
                         if site.bound then
                             for _ = 1, 20 do poll.fn() end
                             assert.is_false(cs:IsLive(), name)

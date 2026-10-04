@@ -59,7 +59,7 @@ local function once(cap)
     -- collecting it. Blizzard's own benchmark utility collects and stops the
     -- collector before each measured iteration for the same reason. Collect
     -- first so both caps start clean, stop so no collection lands inside the
-    -- timed window, restart afterwards so the next load is not measuring a
+    -- timed window, restart afterward so the next load is not measuring a
     -- heap this one abandoned.
     collectgarbage("collect")
     collectgarbage("stop")

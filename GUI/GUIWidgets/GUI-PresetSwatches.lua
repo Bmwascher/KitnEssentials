@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PresetSwatches.lua                                  ║
--- ║  Purpose: Theme preset selector — a strip of colour      ║
+-- ║  Purpose: Theme preset selector — a strip of color       ║
 -- ║  chips with the preset name on hover.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -96,7 +96,7 @@ local function ConstructPresetSwatches(parent)
     container.explicitHeight = CHIP
 
     function container:SetEnabled(enabled)
-        -- The swatch fills the chip, so a border colour alone barely reads as
+        -- The swatch fills the chip, so a border color alone barely reads as
         -- disabled. Fading the strip is what makes the state visible.
         self:SetAlpha(enabled and 1 or 0.4)
         for _, btn in ipairs(buttons) do

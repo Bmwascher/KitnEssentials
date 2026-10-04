@@ -377,14 +377,14 @@ local function SkinOrderView(frame)
 
     SkinSchematic(details.SchematicForm)
 
-    local fulfil = details.FulfillmentForm
-    if not fulfil then return end
+    local fulfill = details.FulfillmentForm
+    if not fulfill then return end
 
-    S.EditBox(fulfil.NoteEditBox)
-    TintPanel(S.GetBackdrop(fulfil.NoteEditBox), "panel")
+    S.EditBox(fulfill.NoteEditBox)
+    TintPanel(S.GetBackdrop(fulfill.NoteEditBox), "panel")
 
     if frame.ConcentrationDisplay then S.Icon(frame.ConcentrationDisplay.Icon) end
-    S.Each(fulfil, SkinResultIcon, "ItemIcon")
+    S.Each(fulfill, SkinResultIcon, "ItemIcon")
 end
 
 local GEAR_SLOTS = {

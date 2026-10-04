@@ -41,7 +41,7 @@ local function PaintTab(btn, active)
     local T, a = Theme, Theme.accent
     btn._bar:SetShown(active)
     if active then
-        -- Opaque over the window colour, so a strip on a card panel reads the
+        -- Opaque over the window color, so a strip on a card panel reads the
         -- same as one on the window.
         btn:SetBackdropColor(KE.BlendColor(a, 0.20, T.bgDark))
         btn:SetBackdropBorderColor(a[1], a[2], a[3], 0.8)

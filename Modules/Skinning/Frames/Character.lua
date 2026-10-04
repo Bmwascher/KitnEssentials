@@ -30,7 +30,7 @@ local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 -- frame, which this never did. KE.GetEmptySocketIcons went with them --
 -- nothing in KE called it.
 
--- Two mirrored fades from the row's centre outward, replacing the plate rather
+-- Two mirrored fades from the row's center outward, replacing the plate rather
 -- than merely hiding it.
 --
 -- The alpha is re-asserted on EVERY pass, not once: these rows come from a
@@ -381,8 +381,8 @@ local function EquipmentFlyoutSkin()
             -- gone now.
             if S.data(button).flyoutILvl then S.data(button).flyoutILvl:Hide() end
 
-            -- Blizzard already colours IconBorder by quality, so read that
-            -- colour rather than item data. Buttons are reused across slots,
+            -- Blizzard already colors IconBorder by quality, so read that
+            -- color rather than item data. Buttons are reused across slots,
             -- so every path here writes: a bail would leave the previous
             -- item's rarity sitting on the backdrop.
             local bd = S.GetBackdrop(button)

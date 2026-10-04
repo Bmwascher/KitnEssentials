@@ -19,7 +19,7 @@ local owned = {}
 -- the crafted-track fallback calls. Write the block below as it stands; do not
 -- go and copy the other file.
 --
--- Do NOT hand-minimise this stub set. The module captures several of these as
+-- Do NOT hand-minimize this stub set. The module captures several of these as
 -- file-locals at load, so a stub dropped because "this file does not use it"
 -- fails at load time rather than in the case that needed it.
 local function loadCP(lines, overrides)

@@ -8,7 +8,7 @@
 -- The ORDERING is the reason this spec exists. MigrateLegacyOverlayDB copies a
 -- retired overlay face out of the old forces-overlay table, so the clear has to
 -- run after it. Reorder the two blocks and the face resurrects on exactly one
--- login per un-migrated profile and is unreproducible afterwards -- no error,
+-- login per un-migrated profile and is unreproducible afterward -- no error,
 -- no log line, and the run-once stamp hides it from the next login.
 --
 -- Loads the REAL module headlessly and stubs only the sibling-file migration,

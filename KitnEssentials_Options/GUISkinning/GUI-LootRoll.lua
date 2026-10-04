@@ -60,7 +60,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     -- the controls it enables. The page rebuilds on the Replace toggle, so the
     -- text follows the mode.
     if db.Replace then
-        card1:AddLabel("Slim bars mode. KitnEssentials draws its own roll bars and hides Blizzard's roll windows. Bar size and colour are on the Display Settings card. Turning this off asks for a /reload.")
+        card1:AddLabel("Slim bars mode. KitnEssentials draws its own roll bars and hides Blizzard's roll windows. Bar size and color are on the Display Settings card. Turning this off asks for a /reload.")
     else
         card1:AddLabel("Blizzard mode. Blizzard draws the roll windows. Skin Roll Windows on the Display Settings card styles them, and Move Loot Rolls on the Position card moves them.")
     end
@@ -120,7 +120,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     manager:Register(card3, "all")
 
     -- Same reason as card1's label: this card holds controls for BOTH modes,
-    -- and the greyed-out ones give no clue why. Name which set is live.
+    -- and the grayed-out ones give no clue why. Name which set is live.
     if db.Replace then
         card3:AddLabel("Slim bars mode: the bar size options apply. Skin Roll Windows is for Blizzard mode only.")
     else
@@ -198,7 +198,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     local card2 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
     manager:Register(card2, "all")
 
-    -- Omitted entirely in Replace mode rather than greyed. A greyed row shows a
+    -- Omitted entirely in Replace mode rather than grayed. A grayed row shows a
     -- ticked checkbox the user cannot untick while the X/Y sliders under it stay
     -- live, which reads as "locked on" when the truth is "does not apply".
     -- Reposition only means anything in legacy mode: Replace mode positions

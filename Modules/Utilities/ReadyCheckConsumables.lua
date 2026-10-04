@@ -409,7 +409,7 @@ RCC._hidePending = nil         -- true while a hide deferred by combat waits for
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
 RCC._classCheck = nil          -- the resolved class check for the current repaint (see _ComputeVisibility)
-RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow colour, refilled from db on every warning paint
+RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow color, refilled from db on every warning paint
 RCC._itemLoadRequested = {}    -- [itemID] = true once this session asked the client for the item's data (see SafeItemName)
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
@@ -1143,9 +1143,9 @@ function RCC:_LowDurationSeconds()
 end
 
 --- _PaintTimer
---- The slot's timer text and colour from proven-plain seconds. Under the
+--- The slot's timer text and color from proven-plain seconds. Under the
 --- threshold the text takes LowDurationColor and _lowGlowColor is refilled
---- from it; otherwise the slot's own colour (`baseKey`, default
+--- from it; otherwise the slot's own color (`baseKey`, default
 --- DurationColor). Every timer paint runs through here so a slot that was
 --- low reverts on the next repaint. Returns whether the warning applies
 --- so the caller composes the glow.
@@ -1192,7 +1192,7 @@ RCC._SoulstoneState = SoulstoneState
 
 -- LibCustomGlow rebuilds the glow on every Start call, so a slot already
 -- glowing for the same reason (`key`) is left alone across repaints; a
--- different reason rebuilds it in that reason's colour.
+-- different reason rebuilds it in that reason's color.
 local function StartGlow(btn, color, key)
     if not LCG then return end
     if btn.glowActive and btn.glowKey == key then return end
@@ -1279,7 +1279,7 @@ end
 
 --- _PaintUnavailable
 --- An aura-driven slot while aura identities are hidden: no status mark, a
---- greyed icon, no text, no glow and no armed click, so a slot that cannot
+--- grayed icon, no text, no glow and no armed click, so a slot that cannot
 --- be read never shows a state left over from an earlier check.
 function RCC:_PaintUnavailable(btn)
     if not btn then return end
@@ -1517,7 +1517,7 @@ end
 
 --- UpdateWeaponEnchant
 --- Paints one weapon slot from C_PaperDollInfo.GetTemporaryEnchantmentInfo
---- (oils, stones and ammo mods alike), remembers a recognised active
+--- (oils, stones and ammo mods alike), remembers a recognized active
 --- enchant for this hand, and arms the click with _PickWeaponEnhancement's
 --- choice. The icon always shows the click target, never the active enchant.
 --- slotKey: "oil" (MH) or "oiloh" (OH). invSlot: 16 or 17.
@@ -1771,7 +1771,7 @@ end
 --- _UpdateShieldSlot
 --- The Shaman class slot: the active row's shield aura, asked by id behind
 --- the per-spell gate. While the gate hides it the slot paints unreadable
---- (no mark, greyed, no timer) but the click stays armed, since casting the
+--- (no mark, grayed, no timer) but the click stays armed, since casting the
 --- shield needs nothing the gate protects.
 function RCC:_UpdateShieldSlot(btn)
     local spellID = self._classCheck.shield
@@ -1955,8 +1955,8 @@ function RCC:ApplySettings()
     local db = self.db
     if not db then return end
 
-    -- The base colour only: the repaint below re-applies the hearty and
-    -- low-duration tints, and restarts any glow in its current colour.
+    -- The base color only: the repaint below re-applies the hearty and
+    -- low-duration tints, and restarts any glow in its current color.
     local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, DURATION_COLOR_DEFAULT)
     local function applyFonts(buttons)
         if not buttons then return end
@@ -2167,7 +2167,7 @@ function RCC:ShowFrame(initiatorUnit, duration)
     self.frame:SetAlpha(1)
 
     -- The starter's ReadyCheckFrame is an invisible DIALOG-strata box at
-    -- screen centre; a row parked at UIParent CENTER sits under it and never
+    -- screen center; a row parked at UIParent CENTER sits under it and never
     -- receives the mouse, so the starter parents to it too. Respondents get
     -- the visible listener.
     local popup

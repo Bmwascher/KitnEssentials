@@ -1,5 +1,5 @@
 -- End-of-cast decisions in Modules/Combat/CastbarHelpers.lua, lifted to two
--- pure predicates so the castbar itself is never faked. Colours, the hold
+-- pure predicates so the castbar itself is never faked. Colors, the hold
 -- timer, the frame and the GUI are verified in game.
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")

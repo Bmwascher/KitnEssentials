@@ -239,7 +239,7 @@ local function SkinDashboard()
             if tab.Background then tab.Background:SetAlpha(0) end
 
             -- SelectedTexture is Blizzard's own key on 12.1, carrying the gold
-            -- selected atlas. Recolour theirs; only build ours when absent.
+            -- selected atlas. Recolor theirs; only build ours when absent.
             if tab.SelectedTexture then
                 tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
                 S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)

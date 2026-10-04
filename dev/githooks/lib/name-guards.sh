@@ -115,7 +115,7 @@ ng_load() {
 # bracket level (a --[=[ block ends at ]=], not at a bare ]]), and XML
 # comments. Resuming at the remaining text is what handles several blocks on
 # one line, and code following a block that closes.
-# Added lines are recognised by position inside a hunk, not by their second
+# Added lines are recognized by position inside a hunk, not by their second
 # character: a source line that itself starts with + renders as ++ in the
 # diff, and a filter on that shape skips it.
 # Known limit: a line added INSIDE a block whose opener the hunk does not
@@ -222,7 +222,7 @@ ng_scan_comments() {
     [ -n "$comments" ] || return 0
     # namesCI holds names that are not English or WoW words, so they scan
     # case-insensitively; namesCS holds names that double as plausible WoW
-    # words and only match capitalised.
+    # words and only match capitalized.
     hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
     if [ -n "$hits" ]; then
         echo "[$tag] BLOCKED: $noun — personal/agent/upstream names: $hits" >&2

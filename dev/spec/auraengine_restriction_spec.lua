@@ -97,8 +97,8 @@ describe("restriction drain", function()
     end)
 
     -- The engine passes ONE closure for both kinds, because reapplying
-    -- settings synchronises the sound on its way past. The design requires
-    -- exactly one synchronisation when both debts drain together, and this
+    -- settings synchronizes the sound on its way past. The design requires
+    -- exactly one synchronization when both debts drain together, and this
     -- collapse is what delivers it.
     it("runs a handler shared by both kinds exactly once", function()
         local gate, state = gateWith(true, true)
@@ -161,7 +161,7 @@ describe("cancel", function()
         assert.is_false(gate:IsPending("sound"))
     end)
 
-    it("leaves the gate usable afterwards", function()
+    it("leaves the gate usable afterward", function()
         local gate, state = gateWith(true)
         gate:Request("general")
         gate:Cancel()

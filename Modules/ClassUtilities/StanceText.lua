@@ -172,7 +172,7 @@ function ST:EvaluateSpec(db, specID, entry, ctx)
     if db[key .. "Enabled"] == false then return nil end
 
     -- Out-of-combat suppression is per spec: a Guardian druid out of combat is
-    -- usually travelling, a Balance druid out of combat is usually not.
+    -- usually traveling, a Balance druid out of combat is usually not.
     if db[key .. "CombatOnly"] and not ctx.inCombat then return nil end
 
     local wanted = tonumber(db[key .. "Spell"]) or entry.spellID

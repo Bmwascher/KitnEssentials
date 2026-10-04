@@ -10,7 +10,7 @@
 --
 -- WHY THESE EARN A SPEC: the classifier is invented branching logic whose
 -- mistakes are silent in game -- a channel tick shown as a cast, a pet's
--- autocast filling the strip, a failed cast left grey after it succeeded.
+-- autocast filling the strip, a failed cast left gray after it succeeded.
 -- Every game lookup is injected through `api`, so no Blizzard subsystem is
 -- faked.
 --
@@ -368,7 +368,7 @@ describe("SpellHistory growth shift", function()
         end
     end)
 
-    it("moves an anchor on the centre line by half the change, an odd change included, and reads no anchor as CENTER", function()
+    it("moves an anchor on the center line by half the change, an odd change included, and reads no anchor as CENTER", function()
         for _, row in ipairs({
             { grow = "LEFT",  anchor = "CENTER", want = { -17, 0 } },
             { grow = "RIGHT", anchor = "TOP",    want = { 17, 0 } },

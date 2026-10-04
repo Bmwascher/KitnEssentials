@@ -460,7 +460,7 @@ function DM:CreateWindow(winIdx)
         -- Right edges stay on the 18px step grid, so a 15px icon leaves a 3px
         -- gap. An icon larger than that baseline grows LEFT into its own empty
         -- slot and rises by half the size delta (top -2) so every icon shares one
-        -- vertical center line. Top -2 centres 15px inside the 18px header band.
+        -- vertical center line. Top -2 centers 15px inside the 18px header band.
         b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -2 - ((15 - size) / 2))
         b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
         b.icon = b:CreateTexture(nil, "OVERLAY")
@@ -1410,7 +1410,7 @@ function DM:RenderWindow(W)
     -- Core.lua whitelist (DM.RATE_METER_TYPES) -- never secret.
     W._isRateType = (self.RATE_METER_TYPES and self.RATE_METER_TYPES[meterType]) == true
     -- Enemy Damage Taken: the sources are enemy mobs (no class), so RenderBar tints their
-    -- bars red instead of the classless grey fallback -- it reads as the
+    -- bars red instead of the classless gray fallback -- it reads as the
     -- "enemy" view at a glance. Plain enum compare; stashed for the per-bar color block.
     W._isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
 
@@ -1763,7 +1763,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- mode sentinel ("\1"/"\2", which can't collide with a class filename); for Class it's
     -- the (NEVER-secret) class filename. The Custom color, Theme accent, and BarColorAlpha
     -- all change only via the GUI, where ReapplyBarVisuals nils _cachedColorClass so the next
-    -- tick repaints. Falls back to neutral grey for an unknown/absent class. classFilename
+    -- tick repaints. Falls back to neutral gray for an unknown/absent class. classFilename
     -- is never secret -> taint-safe key + lookup. NOTE: the theme accent MUST be fetched via
     -- KE:GetAccentColor("theme") -- the no-arg call defaults to "custom" mode and returns
     -- white (Core/Colors.lua), which is the bug that made Theme mode paint white bars.

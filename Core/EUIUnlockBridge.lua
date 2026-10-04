@@ -181,7 +181,7 @@ local function BuildElement(config, opts)
                 -- KE:ResolveAnchorOffsets works in absolute screen coordinates
                 -- and rounds, which is what keeps a stored offset a whole number
                 -- for the position card's sliders. Unlock mode measures from the
-                -- parent's centre, so lift its pair into that space first.
+                -- parent's center, so lift its pair into that space first.
                 local pl = uiParent:GetLeft() or 0
                 local pb = uiParent:GetBottom() or 0
                 local ox, oy = KE:ResolveAnchorOffsets(
@@ -330,7 +330,7 @@ end
 
 -- Whether EllesmereUI currently holds an unlock anchor for one of our elements,
 -- named by the element's own key. An anchored element is positioned by its
--- centre, so a module that lays itself out has to know: its own size changes
+-- center, so a module that lays itself out has to know: its own size changes
 -- move both of its edges rather than growing from one. pcall because the query
 -- belongs to another addon and a raise here would take the caller's layout with
 -- it.

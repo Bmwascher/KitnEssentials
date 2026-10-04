@@ -2,7 +2,7 @@
 -- ║  Tooltips.lua                                            ║
 -- ║  Module: Tooltips                                        ║
 -- ║  Purpose: Skins the game tooltips and adds the unit      ║
--- ║           lines: class colours, target, guild, Mythic+   ║
+-- ║           lines: class colors, target, guild, Mythic+    ║
 -- ║           and IDs.                                       ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -108,7 +108,7 @@ local function DebugPetActionPostCall(data)
         .. " idSecret=" .. idSecret .. " enabled=" .. tostring(TT:IsEnabled()))
 end
 
--- Fallback for a unit whose colour cannot be resolved, so a display sink
+-- Fallback for a unit whose color cannot be resolved, so a display sink
 -- always has something with :GetRGB().
 local WHITE_COLOR = CreateColor(1, 1, 1)
 
@@ -207,7 +207,7 @@ end
 -- Styling happens at enable, on OnLoad for new tooltips, and from the
 -- restyle driver.
 --
--- The styling is idempotent -- the same textures with the same colours
+-- The styling is idempotent -- the same textures with the same colors
 -- every time -- so a repeat call after the first is free.
 local function ColorsMatch(a, b)
     if not a or not b then return false end
@@ -366,7 +366,7 @@ end
 -- 12.1 made the class token SECRET for a restricted unit, and
 -- RAID_CLASS_COLORS[class] with a secret key throws -- a table lookup keyed by
 -- a secret is the same banned comparison as `==`. C_ClassColor.GetClassColor
--- accepts a secret token and hands back a colour whose components may
+-- accepts a secret token and hands back a color whose components may
 -- themselves be secret, which is fine: every consumer feeds them to a sink.
 local function ClassColorFor(class)
     if type(class) == "nil" then return nil end
@@ -381,7 +381,7 @@ end
 
 -- GetPlayerInfoByGUID on a CREATURE guid does not fail cleanly -- it answers
 -- with the first class, so every hostile NPC comes back WARRIOR and wears that
--- tan class colour instead of red. Only a Player- GUID may be asked for a
+-- tan class color instead of red. Only a Player- GUID may be asked for a
 -- class. IsSafeValue runs the secrecy check before the string work, so the
 -- guard holds whether or not the field arrives secret.
 local function IsPlayerGUID(guid)
@@ -389,11 +389,11 @@ local function IsPlayerGUID(guid)
     return type(guid) == "string" and guid:sub(1, 7) == "Player-"
 end
 
--- Returns a colour OBJECT, never bare components. A caller handed components
+-- Returns a color OBJECT, never bare components. A caller handed components
 -- would have to work out, per call site, whether this particular value is safe
 -- to test; the object is always a plain table, so the test never touches a
 -- component and they reach nothing but sinks. Nothing returned means "leave
--- Blizzard's own colour alone".
+-- Blizzard's own color alone".
 local function UnitColor(unit, guid)
     -- Preferred: GetPlayerInfoByGUID is AllowedWhenTainted, so it resolves a
     -- class even over a raid frame, where the token is secret but the GUID is
@@ -405,9 +405,9 @@ local function UnitColor(unit, guid)
     end
     if not unit then return end
 
-    -- Midnight secret units. Class-colour ONLY when the GUID says this is a
+    -- Midnight secret units. Class-color ONLY when the GUID says this is a
     -- player: UnitClass answers for an NPC too, so without the GUID test a
-    -- secret-named NPC would wear a class colour.
+    -- secret-named NPC would wear a class color.
     if KE:IsSecretValue(UnitName(unit)) then
         if IsPlayerGUID(guid) then
             local _, class = UnitClass(unit)
@@ -415,12 +415,12 @@ local function UnitColor(unit, guid)
         end
         -- Not declared secret, but this unit's identity is restricted, so test
         -- before branching. A player without a readable GUID gets nothing,
-        -- not a reaction colour.
+        -- not a reaction color.
         local isPlayer = UnitIsPlayer(unit)
         if KE:IsSecretValue(isPlayer) then return end
         if isPlayer then return end
     elseif UnitIsPlayer(unit) then
-        -- Nothing when no class colour resolves, as for the secret branch.
+        -- Nothing when no class color resolves, as for the secret branch.
         local _, class = UnitClass(unit)
         return ClassColorFor(class)
     end
@@ -591,7 +591,7 @@ end
 --
 -- tt:GetUnit() alone is not enough. Over a secure group frame the token comes
 -- back SECRET, and the single-source read below then bailed on the whole
--- handler -- class colour, guild colour, guild rank, level row, M+ score and
+-- handler -- class color, guild color, guild rank, level row, M+ score and
 -- the target line were all skipped, on raid frames and on plenty of ordinary
 -- hovers besides. The tooltip's own data pass still carries a CLEAN guid in
 -- exactly that case, and UnitTokenFromGUID turns it back into a real,
@@ -669,9 +669,9 @@ function TT:OnTooltipSetUnit(tt, data)
     -- none of which Blizzard's own row carries. No addon-version lookup
     -- and no gender prefix.
     --
-    -- Colour is deliberately NOT set here. SetText does not clear a
+    -- Color is deliberately NOT set here. SetText does not clear a
     -- SetTextColor, so the ClassColorNames block above stays the single
-    -- owner of the colour instead of two paths fighting over it.
+    -- owner of the color instead of two paths fighting over it.
     --
     -- CanReadIdentity is the only guard: it is the
     -- documented predicate for exactly these returns, so re-checking each
@@ -736,7 +736,7 @@ function TT:OnTooltipSetUnit(tt, data)
     -- a player title shifts it down, and a cached index would decorate the
     -- wrong row on the next unit. Appending means concatenating the existing
     -- text, which is only safe once it is known not to be a secret value --
-    -- everywhere else this module recolours rather than rewrites for exactly
+    -- everywhere else this module recolors rather than rewrites for exactly
     -- that reason.
     if (db.GuildRankLine or db.HideGuildRealm) and UnitIsPlayer(unit) then
         local guildName, rankName, _, guildRealm = GetGuildInfo(unit)
@@ -839,7 +839,7 @@ function TT:OnTooltipSetUnit(tt, data)
         end
 
         -- The row after the level row is the spec/class row ("Protection
-        -- Paladin"). Rewriting it wrapped in a colour code is one way; a plain
+        -- Paladin"). Rewriting it wrapped in a color code is one way; a plain
         -- SetTextColor gets the same look without reading the text, so no
         -- secret check is needed here.
         if specLine and db.ClassColorNames and unitColor then
@@ -900,15 +900,15 @@ function TT:OnTooltipSetUnit(tt, data)
             -- name, which this deliberately never does.
             local name = UnitName(unitTarget)
             if name then
-                -- AddDoubleLine is a display sink, so secret colour
+                -- AddDoubleLine is a display sink, so secret color
                 -- components pass through it untouched.
                 --
                 -- The target's own GUID is passed as well as its token, so a
-                -- player target still class-colours when the token is secret
+                -- player target still class-colors when the token is secret
                 -- but the GUID is not. UnitGUID is SecretWhenUnitIdentity-
                 -- Restricted, so under a restriction a player target degrades
                 -- to white -- the honest answer, not a guess at the class. An
-                -- NPC target still takes its reaction colour.
+                -- NPC target still takes its reaction color.
                 local c = UnitColor(unitTarget, UnitGUID(unitTarget))
                 tt:AddDoubleLine(format("%s:", _G.TARGET or "Target"),
                     name, 1, 1, 1, (c or WHITE_COLOR):GetRGB())
@@ -1007,7 +1007,7 @@ function TT:SyncAuraSpellIDCVar(forceOff)
 
     -- Engine rendering is unconditional, so it can only stand in for ALWAYS.
     -- Under MODIFIER the line is meant to appear while a key is held, which the
-    -- engine cannot honour -- the Lua hooks keep that mode, and forbidden aura
+    -- engine cannot honor -- the Lua hooks keep that mode, and forbidden aura
     -- tooltips simply have no ID there.
     local db = self.db
     local on = (not forceOff and db and self:IsEnabled() and db.ShowIDs == "ALWAYS")
@@ -1159,7 +1159,7 @@ function TT:ApplySettings()
     self:ApplyPosition()
     self:SyncAuraSpellIDCVar()
     -- Hidden tooltips take the style too: this pass is what styles the
-    -- login-time list, and a colour edit reaches every tooltip live.
+    -- login-time list, and a color edit reaches every tooltip live.
     for _, name in pairs(STYLE_LIST) do
         local tt = _G[name]
         if tt then self:StyleTooltip(tt) end

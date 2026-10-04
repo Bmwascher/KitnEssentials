@@ -49,7 +49,7 @@ local function ConfigurePixel(host, settings, period, width, height)
 
     local w = width or settings.IconSize or 32
     local h = height or settings.IconSize or 32
-    local thickness = GlowRules.NormalisePixelThickness(settings.GlowThickness)
+    local thickness = GlowRules.NormalizePixelThickness(settings.GlowThickness)
     local p = GlowRules.PixelPerimeter(settings.GlowLines, w, h, period)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 0, 1, 0, 1 })
 
@@ -117,7 +117,7 @@ end
 local function ConfigureBorder(host, settings)
     local edges = host.edges
     if not edges then return end
-    local thickness = GlowRules.NormalisePixelThickness(settings.GlowThickness)
+    local thickness = GlowRules.NormalizePixelThickness(settings.GlowThickness)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 1, 0.85, 0.25, 1 })
     edges.top:SetHeight(thickness)
     edges.bottom:SetHeight(thickness)
@@ -128,7 +128,7 @@ local function ConfigureBorder(host, settings)
         edge:SetColorTexture(r, g, b, a)
         edge:Show()
     end
-    -- Restarted only when stopped: a colour or thickness edit must not
+    -- Restarted only when stopped: a color or thickness edit must not
     -- stutter a running pulse.
     if settings.GlowPulse ~= false then
         if not host.pulseGroup:IsPlaying() then host.pulseGroup:Play() end
@@ -174,7 +174,7 @@ local function ConfigureHost(host, settings, width, height)
     local style = GlowRules.STYLES[key] or GlowRules.STYLES.ants
 
     local read = GlowRules.ReadSpeed(settings, SPEED_KEYS)
-    local frequency = GlowRules.NormaliseFrequency(read, MIN_FREQUENCY, MAX_FREQUENCY)
+    local frequency = GlowRules.NormalizeFrequency(read, MIN_FREQUENCY, MAX_FREQUENCY)
     local period = GlowRules.FrequencyToDuration(frequency)
 
     if style.kind == "pixel" then
@@ -234,7 +234,7 @@ local function ConfigureHost(host, settings, width, height)
     -- No in-client case mutates a PLAYING flipbook's grid or duration; every
     -- one sets them on a stopped group and plays it afterward. Restarting
     -- unconditionally on every reconfigure would stutter an unrelated change
-    -- (icon size, colour), so the group is only stopped and replayed when
+    -- (icon size, color), so the group is only stopped and replayed when
     -- something the flipbook itself reads actually differs. The TEXTURE SOURCE
     -- counts: two styles can share a grid, so comparing the grid alone reports
     -- "unchanged" across a sheet swap and the animation is never replayed.
@@ -254,7 +254,7 @@ local function ConfigureHost(host, settings, width, height)
         host.appliedFlip = wanted
     end
 
-    -- Without the desaturate the atlas keeps its own hue and the colour
+    -- Without the desaturate the atlas keeps its own hue and the color
     -- setting appears to do nothing on some sources.
     texture:SetDesaturated(true)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 0, 1, 0, 1 })

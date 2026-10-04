@@ -160,7 +160,7 @@ function Get-FileCodeMask([string]$path) {
 # mask means the line could not be located in the working tree, which is treated
 # as NOT code - unlocatable is never assumed safe.
 function Test-LinePreservesValue($removed, $added, $themeValues, $mask) {
-    # Normalise: strip the leading +/- and collapse nothing else. Whitespace
+    # Normalize: strip the leading +/- and collapse nothing else. Whitespace
     # differences are NOT tolerated - a reflowed line is not a swap.
     $r = $removed.Substring(1)
     $a = $added.Substring(1)
@@ -276,7 +276,7 @@ foreach ($line in $diff) {
     # --unified=0 each hunk emits its own '-' lines then its own '+' lines, so
     # a queue carried across '@@' can pair a deletion in one hunk with an
     # addition hundreds of lines away in the next - two unrelated edits
-    # cancelling out into a false pass.
+    # canceling out into a false pass.
     if ($line -like '@@*') {
         if ($file) { Flush-Leftovers $removedQueue $file $offenders }
         # Capture the NEW-side start line so each '+' line can be located in the

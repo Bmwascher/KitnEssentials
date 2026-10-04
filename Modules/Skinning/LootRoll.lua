@@ -21,7 +21,7 @@ end
 ---@field _bonusWired boolean? true once the Replace-mode BonusRollFrame re-anchor hook is installed; never cleared (hooksecurefunc is permanent)
 ---@field _bonusShowHooked boolean? true once the prompt's OnShow hook is installed; never cleared (HookScript is permanent)
 ---@field _previewBar table? the RollBar table currently showing the GUI preview; nil when no preview is active
----@field _previewTimer table? the C_Timer handle draining the preview; nil once cancelled or fired
+---@field _previewTimer table? the C_Timer handle draining the preview; nil once canceled or fired
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
 
 -- The profile-switch path and the ElvUI startup skip both gate on
@@ -213,7 +213,7 @@ function LR:ApplyPosition(why)
         return
     end
 
-    -- Anchored by its BOTTOM, not its centre.
+    -- Anchored by its BOTTOM, not its center.
     --
     -- GroupLootContainer_Update sets the container's height to
     -- reservedSize * (number of rolls) and anchors each roll frame
@@ -224,7 +224,7 @@ function LR:ApplyPosition(why)
     -- first drops half a row. Anchoring the bottom pins the first roll
     -- and lets the stack grow upward.
     --
-    -- The saved Point is honoured if the user has moved the mover; only
+    -- The saved Point is honored if the user has moved the mover; only
     -- the DEFAULT changes, and a legacy CENTER value is converted so
     -- the stack lands where it used to for one roll.
     local p = self.db.Position or {}
@@ -282,7 +282,7 @@ end
 -- Bonus rolls never become KE roll bars -- they arrive on
 -- SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so SetupRollBars'
 -- unregister does not intercept them. Blizzard hands BonusRollFrame to
--- GroupLootContainer and anchors it at its bottom-centre managed spot while
+-- GroupLootContainer and anchors it at its bottom-center managed spot while
 -- every other roll obeys the user's position.
 --
 -- Re-anchoring the FRAME, never the container, stays out of the

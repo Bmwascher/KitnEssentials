@@ -405,7 +405,7 @@ end
 -- The whole account row hangs off BattlenetFrame: the status dropdown anchors
 -- to its LEFT and the contacts and settings buttons chain off its RIGHT, so one
 -- anchor moves all four. BFL's modern XML gives that anchor x = 10 against the
--- title bar's centre, which widens the left margin by 10 and runs the settings
+-- title bar's center, which widens the left margin by 10 and runs the settings
 -- cog against the frame edge. 0 is BFL's own value for the same row in their
 -- Classic layout.
 --
@@ -735,7 +735,7 @@ local function Skin()
     local BFLNS = _G.BetterFriendlist
     if BFLNS and BFLNS.GetModule then
         -- The muted dark-theme chrome carried the selected-tab cue, an accent
-        -- border; KE's own border carries it now, in the brand colour.
+        -- border; KE's own border carries it now, in the brand color.
         local function PaintTabBorder(tab, selected)
             local bd = S.GetBackdrop(tab)
             if not bd then return end
@@ -750,7 +750,7 @@ local function Skin()
                 if tab and S.data(tab).anchorShim then PaintTabBorder(tab, selected) end
             end)
             -- A palette sweep repaints any border still matching the old default,
-            -- and a brand change leaves the cue in the old colour; both rows
+            -- and a brand change leaves the cue in the old color; both rows
             -- repaint through the addon's own state pass.
             local function RepaintTabs()
                 pcall(BFLNS.RefreshBottomTabVisualState, BFLNS)

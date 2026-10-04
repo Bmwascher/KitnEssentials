@@ -917,7 +917,7 @@ local Defaults = {
         -- module overwrites each of them on every OnEnable (login, reload and
         -- toggle) by design -- filters are meant to start clean each session.
         -- Do not "fix" the values here by deleting the reset; the reset is
-        -- the behaviour.
+        -- the behavior.
         --
         -- SortBy and SortDescending are DEAD -- nothing reads them. They stay
         -- so a saved profile carrying them is still a valid shape.
@@ -1068,7 +1068,7 @@ local Defaults = {
             Position = DefaultPosition(0, 200),
         },
 
-        -- Sized from its own text, so this centre anchor moves both edges by
+        -- Sized from its own text, so this center anchor moves both edges by
         -- half of every width change. Accepted in exchange for the placement.
         SecondaryStats = {
             Enabled = false,
@@ -1670,7 +1670,7 @@ local Defaults = {
             Reverse = false,
             ShowTimer = true,
 
-            -- "dispel" colours the icon ring by school; anything else paints
+            -- "dispel" colors the icon ring by school; anything else paints
             -- the flat BorderColor. This is the switch the settings page shows
             -- as Color By Type.
             BorderColorMode = "dispel",
@@ -1762,7 +1762,7 @@ local Defaults = {
             Enabled = false,
             Position = {               -- Show-button position, saved on right-drag
                 bottom = false,        -- Snapped to the bottom edge instead of the top
-                x = -400,              -- Horizontal offset from screen centre
+                x = -400,              -- Horizontal offset from screen center
             },
         },
 
@@ -1895,7 +1895,7 @@ local Defaults = {
                     Color = { 0.35, 1, 0.35, 1 },
                 },
 
-                -- Your own kick. Tint, mark and fade ride colour curves and
+                -- Your own kick. Tint, mark and fade ride color curves and
                 -- bar values; nothing branches on the cooldown in Lua.
                 Kick = {
                     ReadyTint = true,
@@ -2311,7 +2311,7 @@ local Defaults = {
                 -- circle with a borderless role glyph.
                 --
                 -- Those descriptions are the GROUP FINDER, which also adds a
-                -- class-coloured bar under every art set. Chat reads no class
+                -- class-colored bar under every art set. Chat reads no class
                 -- at all, so it draws the art alone and falls back to the
                 -- Blizzard badge for "circle" -- an icon string cannot
                 -- compose a glyph over a ring. One setting, two surfaces.
@@ -2321,7 +2321,7 @@ local Defaults = {
                 -- Skins[key] ~= false, so the polarity matters.
                 Skins      = {},
             },
-            -- Blizzard's UI widget frames: the top-centre status bars and text
+            -- Blizzard's UI widget frames: the top-center status bars and text
             -- widgets used by M+ timers, event progress, power bars and zone
             -- objectives. Standalone module, not a skin key -- it restyles the
             -- widgets in four Blizzard containers rather than a named window.
@@ -2347,9 +2347,9 @@ local Defaults = {
                     Enabled = true,
                     StyleText = true,
                     Size = 17,
-                    CenterText = true,    -- Centre the fixed-width text Blizzard left-aligns
+                    CenterText = true,    -- Center the fixed-width text Blizzard left-aligns
                 },
-                -- Blizzard's top-centre widget container (M+ objective line,
+                -- Blizzard's top-center widget container (M+ objective line,
                 -- delve and event bars). Off = Blizzard's own placement.
                 TopCenter = {
                     Enabled = false,
@@ -2397,7 +2397,7 @@ local Defaults = {
                 NameFontSize = 13,
                 BarTexture = "KitnUI", -- LSM statusbar name
                 Skin = true,          -- (legacy mode) flatten + border the roll windows
-                QualityBorder = true, -- quality colour: bar/icon border (both modes)
+                QualityBorder = true, -- quality color: bar/icon border (both modes)
                 Reposition = true,    -- (legacy mode) re-anchor the container
                 Position = {
                     -- BOTTOM: the container grows upward as rolls stack,
@@ -2405,7 +2405,7 @@ local Defaults = {
                     Point = "BOTTOM",
                     RelPoint = "CENTER",
                     X = 0,
-                    Y = 205,       -- lift the stack up out of dead centre
+                    Y = 205,       -- lift the stack up out of dead center
                 },
             },
             -- Compact replacement loot window: a slim one-row-per-item list at

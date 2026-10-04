@@ -202,7 +202,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         value = (themeDb and themeDb.Preset) or "KitnUI",
         callback = function(presetName) KE:SetThemePreset(presetName) end,
     })
-    -- Aligned with the dropdown's control box rather than centred in the row:
+    -- Aligned with the dropdown's control box rather than centered in the row:
     -- GUI-KEDropdown.lua drops its button 14 below the row top to clear the
     -- label, and the chips are the same height as that button.
     row4:AddWidget(presetSwatches, 0.42, nil, 0, -14)

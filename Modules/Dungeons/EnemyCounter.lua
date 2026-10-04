@@ -334,7 +334,7 @@ function EC:StopForSpec()
 end
 
 -- Applied now and again once the spec has settled: the immediate read can
--- still report the previous spec. One pending pass at a time, cancelled on
+-- still report the previous spec. One pending pass at a time, canceled on
 -- disable, so a burst of events leaves one timer and a disabled module none.
 function EC:OnSpecChanged(event, unit)
     -- The spec event fires for group members too.

@@ -12,7 +12,7 @@ local math_floor = math.floor
 local Style = {}
 KE.AuraStyle = Style
 
--- Fallback colours, shared because KE:ResolveColor only reads them.
+-- Fallback colors, shared because KE:ResolveColor only reads them.
 local BLACK = { 0, 0, 0, 1 }
 local DEFAULT_RING = { 0.8, 0, 0, 1 }
 
@@ -115,7 +115,7 @@ Style.GetDurationFormatter = GetDurationFormatter
 -- the next reconfiguration. That is the correct side to err on.
 --
 -- Defaults to black, matching the plain border both modules being replaced
--- draw (their dispel-coloured decoration is a SEPARATE region, now the
+-- draw (their dispel-colored decoration is a SEPARATE region, now the
 -- dispel host below). Sized from settings.IconSize at creation; StyleAuraFrame
 -- re-sizes on every reconfiguration the same way, in case IconSize changed.
 function Style.CreateBorderHost(button, settings, color)
@@ -148,7 +148,7 @@ end
 
 -- The dispel decoration: a texture (registered via AddDispelTypeTexture,
 -- Blizzard's own vocabulary calls this the aura's "border" -- see the
--- deprecated SetAuraBorder alias) plus a fontstring (the colourblind-mode
+-- deprecated SetAuraBorder alias) plus a fontstring (the colorblind-mode
 -- symbol, aliased SetAuraSymbol), created only when the badge is requested.
 -- Both live on their own overlay frame so their level can sit above the
 -- cooldown swipe, and both take no mouse input so decoration can
@@ -183,7 +183,7 @@ function Style.CreateDispelHost(button, settings, wantBadge, wantRing)
         return host
     end
 
-    -- The dispel-coloured ring. Parented directly to the BUTTON, not the
+    -- The dispel-colored ring. Parented directly to the BUTTON, not the
     -- overlay host above -- sublevel only orders regions of the same frame,
     -- and this has to sit below CreateBorderHost's plain black edges
     -- (OVERLAY sublevel 7) rather than above them, which a higher frame
@@ -197,9 +197,9 @@ function Style.CreateDispelHost(button, settings, wantBadge, wantRing)
     local function MakeRingEdge()
         local tex = button:CreateTexture(nil, "OVERLAY", nil, 6)
         tex:SetTexelSnappingBias(0)
-        -- White: the dispel-mode repaint tints via vertex colour, which
-        -- multiplies against the texture's own colour, so anything but
-        -- white here would darken or discolour the result.
+        -- White: the dispel-mode repaint tints via vertex color, which
+        -- multiplies against the texture's own color, so anything but
+        -- white here would darken or discolor the result.
         tex:SetColorTexture(1, 1, 1, 1)
         tex:SetSnapToPixelGrid(false)
         return tex
@@ -243,7 +243,7 @@ end
 --
 -- CreateRegions is shared with the PREVIEW path, which cannot register
 -- anything. Keeping creation in one function is what lets both paths use the
--- same dressing function afterwards.
+-- same dressing function afterward.
 function Style.CreateRegions(frame, group, settings)
     local caps = group.capabilities or {}
 
@@ -316,8 +316,8 @@ function Style.InitializeButton(button, display, group, settings)
     button:SetTooltipAnchorPoint("ANCHOR_BOTTOMLEFT")
     button:SetHideTooltipInCombat(false)
 
-    -- Cancelling is a property of what the display SHOWS, not a setting: a
-    -- debuff cannot be cancelled at all, so this is declared per group rather
+    -- Canceling is a property of what the display SHOWS, not a setting: a
+    -- debuff cannot be canceled at all, so this is declared per group rather
     -- than offered as a checkbox.
     if caps.canCancel then
         -- The token is stored verbatim and compared for EXACT equality
@@ -396,7 +396,7 @@ function Style.RegisterRegions(button, _display, group, settings)
         button:ClearDispelTypeTextures()
 
         -- Badge: Blizzard's built-in dispel atlases already carry their own
-        -- colours, so no curve here -- the curve goes to the ring instead.
+        -- colors, so no curve here -- the curve goes to the ring instead.
         if button.keDispel.texture then
             button:AddDispelTypeTexture(button.keDispel.texture, {
                 style = Enum.CustomAuraButtonDispelTypeTextureStyle.Icon,
@@ -432,8 +432,8 @@ end
 -- button; shared by the live and preview paths.
 ---------------------------------------------------------------------------------
 
--- The ring's flat colour outside "dispel" mode, for StyleAuraFrame and the
--- preview's stand-in repaint alike. A display with one ring colour per group
+-- The ring's flat color outside "dispel" mode, for StyleAuraFrame and the
+-- preview's stand-in repaint alike. A display with one ring color per group
 -- names its key in the capabilities, as the border does.
 function Style.FlatRingColor(settings, caps)
     local key = caps and caps.ringColorKey
@@ -483,7 +483,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         if tp then
             frame.keTimer:SetPoint(tp.AnchorFrom, frame, tp.AnchorTo, tp.XOffset, tp.YOffset)
         else
-            -- A display with no configurable timer position keeps it centred,
+            -- A display with no configurable timer position keeps it centered,
             -- which is where the cooldown widget's own countdown draws. Without
             -- a fallback the ClearAllPoints above leaves the text unanchored.
             frame.keTimer:SetPoint("CENTER", frame, "CENTER", 0, 0)
@@ -557,9 +557,9 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         ring.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
         ring.right:SetWidth(innerPx)
 
-        -- Colour: "dispel" mode is Blizzard's to paint, via the vertex
+        -- Color: "dispel" mode is Blizzard's to paint, via the vertex
         -- tint RegisterRegions wires up -- kept white here so that tint
-        -- is never multiplied against a colour of ours. Any other mode
+        -- is never multiplied against a color of ours. Any other mode
         -- paints the flat setting directly, the same final fallback the
         -- module this engine replaces used.
         local r, g, b, a

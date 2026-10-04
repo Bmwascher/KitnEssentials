@@ -373,7 +373,7 @@ end
 
 -- On-demand diagnostic dump (/kes trash). Snapshots what the tracker currently
 -- believes — dungeon resolution, each tracked plate's resolved mob (or candidate
--- count), the behaviour flags it has seen, and its live predictions — so an
+-- count), the behavior flags it has seen, and its live predictions — so an
 -- in-game validation run can be pasted back in one shot instead of scrolling the
 -- combat log. Reads only module runtime state + curated data (no secret values).
 function DTrash:DumpState()
@@ -610,7 +610,7 @@ end
 -- The fingerprint layer cannot tell a boss or its adds from trash (their plate
 -- identity is secret in 12.0), so on a blocklisted encounter we hide and
 -- suppress ALL trash output for its duration. Fingerprinting keeps running
--- underneath; only the display sinks (ShowAlert, UpdateNameplateMarker) honour
+-- underneath; only the display sinks (ShowAlert, UpdateNameplateMarker) honor
 -- this gate.
 
 function DTrash:IsBossOutputSuppressed()
@@ -1297,7 +1297,7 @@ end
 -- sawInterrupted a real kick sets is field-broken (verified in Algeth'ar
 -- Academy) because the Layer1 filter then
 -- hard-rejects cannotInterrupt rows on it: a
--- FAILED proves NOTHING about interruptibility (Riftbreath cancelled by its
+-- FAILED proves NOTHING about interruptibility (Riftbreath canceled by its
 -- target's Shadowmeld cannot be kicked at all), yet one abort permanently
 -- rejected every Academy trait row (all five are cannotInterrupt) on that
 -- plate: unresolved mobs never gained timers, and a resolved Ravager hit the

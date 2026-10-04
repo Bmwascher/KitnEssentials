@@ -120,15 +120,15 @@ function SS:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
--- Colour
+-- Color
 ---------------------------------------------------------------------------------
 local function ToHex(r, g, b)
     return string_format("%02x%02x%02x",
         math_floor((r or 1) * 255), math_floor((g or 1) * 255), math_floor((b or 1) * 255))
 end
 
--- Cache only a RESOLVED class colour. Caching the white fallback leaves the
--- labels white for the session when the first paint beats the colour system.
+-- Cache only a RESOLVED class color. Caching the white fallback leaves the
+-- labels white for the session when the first paint beats the color system.
 -- UnitClass is SecretWhenUnitIdentityRestricted and a secret must not index a
 -- table, so the class is tested before the colors[class] lookup.
 function SS:ClassHex()

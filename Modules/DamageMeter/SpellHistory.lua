@@ -248,13 +248,13 @@ end
 DM.SpellHistoryFitsOutside = FitsOutside
 DM.SpellHistoryAttachPoints = AttachPoints
 
--- The end the newest icon sits at, and the end older icons step towards.
+-- The end the newest icon sits at, and the end older icons step toward.
 local GROW_START = { LEFT = "RIGHT", RIGHT = "LEFT", UP = "BOTTOM", DOWN = "TOP" }
 local GROW_FAR = { LEFT = "LEFT", RIGHT = "RIGHT", UP = "TOP", DOWN = "BOTTOM" }
 
 -- How far to move a free strip's saved offset when its length changes, so the
 -- growth-start end stays put. The anchor's place along the growth axis is read
--- from its name; one naming neither end sits on the centre line.
+-- from its name; one naming neither end sits on the center line.
 local function GrowthShift(anchorFrom, grow, oldLength, newLength)
     if not GROW_START[grow] then grow = "LEFT" end
     anchorFrom = anchorFrom or "CENTER"
@@ -519,7 +519,7 @@ local function Push(tex, kind, status, castGUID)
     ReanchorShown()
 end
 
--- The cast a failure report greyed out succeeded after all: undo the grey in
+-- The cast a failure report grayed out succeeded after all: undo the gray in
 -- place. Its fade keeps running from the failed push.
 local function Restore(castGUID)
     for slot = 1, #icons do

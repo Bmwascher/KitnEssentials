@@ -105,7 +105,7 @@ describe("EUIWindows", function()
             assert.equal("merchant", set.Merchant)
         end)
 
-        it("honours an entry once the installed version reaches it", function()
+        it("honors an entry once the installed version reaches it", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({ version = "8.6.4" }))
             assert.equal("itemupgrade", set.ItemUpgrade)

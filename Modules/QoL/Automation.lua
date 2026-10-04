@@ -356,7 +356,7 @@ local function TutorialHideButton(btn)
     btn:SetAlpha(0)
     -- Recorded BETWEEN the two: after the change that actually needs undoing,
     -- and before the protected EnableMouse, which can fail on a frame this
-    -- addon does not own. Either end records the wrong set -- afterwards
+    -- addon does not own. Either end records the wrong set -- afterward
     -- leaves a transparent button restore cannot find, before leaves an
     -- untouched button restore would alter.
     tutorialsHidden[btn] = true
@@ -615,12 +615,12 @@ local function SetupSkipCinematics()
     if cinematicFrame then return end
     cinematicFrame = CreateFrame("Frame")
     cinematicFrame:RegisterEvent("CINEMATIC_START")
-    cinematicFrame:SetScript("OnEvent", function(_, _, canBeCancelled)
+    cinematicFrame:SetScript("OnEvent", function(_, _, canBeCanceled)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.SkipCinematics then return end
-        -- One that cannot be cancelled is a vehicle or scene sequence, where
+        -- One that cannot be canceled is a vehicle or scene sequence, where
         -- Blizzard's cancel falls through to CancelScene or VehicleExit.
-        if KE:IsFullyRestricted() and not canBeCancelled then return end
+        if KE:IsFullyRestricted() and not canBeCanceled then return end
         CinematicFrame_CancelCinematic()
     end)
 end
@@ -872,7 +872,7 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
 
         -- Resolve ANY pending announcement, including one stamped with an
         -- OLDER generation. That one has no owner left: its own expiry
-        -- self-cancelled the moment this watch armed, and nothing else ever
+        -- self-canceled the moment this watch armed, and nothing else ever
         -- clears repairPending. Left standing it wedges repairPending true
         -- forever, and the durability branch only schedules an announcement
         -- when repairPending is false -- so EVERY later repair in the session
@@ -1027,8 +1027,8 @@ function AU:RepairSplit(paid, ownSpent, guildFunds)
 end
 
 -- Chat money. Three coin textures put a repair line over the panel width; a
--- coloured unit letter is narrower and reads the same. Only the letter is
--- coloured, so the digits take the message colour like the words around them.
+-- colored unit letter is narrower and reads the same. Only the letter is
+-- colored, so the digits take the message color like the words around them.
 --
 -- Cut, not rounded, so the figure never exceeds what was paid. When the bill
 -- is under one unit of the style's smallest denomination the floor steps down
@@ -1091,7 +1091,7 @@ function AnnounceRepair(force)
     -- window landed 50ms outside it. Announcing on schedule would therefore read
     -- a debit that has not landed yet, and call a part-player-funded repair
     -- fully guild-funded -- the one failure this whole task exists to prevent,
-    -- and one that cannot be told apart afterwards.
+    -- and one that cannot be told apart afterward.
     --
     -- Only KE's own guild branch waits. The player branch is unambiguous, and a
     -- repair KE did not start carries no payer to be wrong about.
@@ -1371,7 +1371,7 @@ local function SetupRepairReport()
                     -- only the bill drops seen so far. Announcing here would
                     -- divide the entire player payment across a partial repair
                     -- and print a confident split for it, then print whatever
-                    -- arrived afterwards as a second, unattributed line.
+                    -- arrived afterward as a second, unattributed line.
                     --
                     -- Re-arm the settle window instead and let the remaining
                     -- drops land first. ScheduleAnnounce RETIRES the schedule
@@ -1454,7 +1454,7 @@ local function SetupAutoRoleCheck()
     LFDRoleCheckPopup:HookScript("OnShow", OnRoleCheckShow)
 end
 
--- An unset or unrecognised key reads as not held, which is what makes "NONE"
+-- An unset or unrecognized key reads as not held, which is what makes "NONE"
 -- work for the quest dropdown. The signup dropdown deliberately omits that
 -- option: with no key there would be no way to reach the note box.
 local function IsModifierHeld(mod)
@@ -2590,7 +2590,7 @@ end
 -- teardown can still read a true key while the module is going down. Here that
 -- would leave a disabled module's buttons on screen. Both halves move together:
 -- half a function on the lifecycle predicate would hide one button and leave
--- its neighbour behind.
+-- its neighbor behind.
 local function OmniumRefreshShown()
     if omniCharButton then
         omniCharButton:SetShown(AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed())
@@ -2651,14 +2651,14 @@ local function OmniumCreateButton()
 end
 
 -- Great Vault, in the slot left of the Omnium Foil button. Same max-level gate
--- and same parent as its neighbour, so it inherits the stats-sidebar shown
+-- and same parent as its neighbor, so it inherits the stats-sidebar shown
 -- state instead of tracking it.
 local function VaultCreateButton()
     if vaultCharButton then return vaultCharButton end
     if not _G.PaperDollFrame then return nil end
 
     if InCombatLockdown() then
-        -- Same reason as its neighbour: anchoring onto a Blizzard window
+        -- Same reason as its neighbor: anchoring onto a Blizzard window
         -- mid-fight is not established as safe in this expansion.
         AU:RegisterEvent("PLAYER_REGEN_ENABLED", "RetrySpawnDeferredButtons")
         return
@@ -2797,7 +2797,7 @@ local function SetupOmniumButton()
 
     -- TeardownPorts reaches this function too, so the gate stops two things
     -- happening from inside teardown: creating a button, and installing a hook
-    -- that can never be removed afterwards.
+    -- that can never be removed afterward.
     if AU:IsEnabled() then
         if AU.db.VaultCharButton and OmniumAllowed() then
             VaultCreateButton()
@@ -2948,7 +2948,7 @@ end
 -- Auto-cancels cosmetic transform auras (profession gear, holiday costumes,
 -- prank toys) with a per-item include/exclude picker. Zero cost when idle:
 -- events only registered while the master is on AND at least one transform
--- is included. Two separate defences, in this order: the UNIT_AURA handler
+-- is included. Two separate defenses, in this order: the UNIT_AURA handler
 -- refuses an unreadable payload through the shared gate before it reads any
 -- field, the added-aura list included, and the sweep then asks the
 -- aura-secrecy predicate before touching the aura index. The handler's

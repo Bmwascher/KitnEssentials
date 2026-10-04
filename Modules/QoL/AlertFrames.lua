@@ -100,14 +100,14 @@ local function GetPerksAnchor()
 end
 
 -- Pure grow-direction decision, extracted out of PostAlertMove so it is
--- directly unit-testable. centreY can be nil pre-layout (a frame not yet measured
+-- directly unit-testable. centerY can be nil pre-layout (a frame not yet measured
 -- reports 1x1/nil, feedback_prelayout_measurement.md); screenTop can be nil
 -- for the same reason. Either nil fails safe to "grow down". hasPerksAnchor
 -- always wins: Trading Post re-basing always grows up.
-local function ShouldGrowUp(centreY, screenTop, hasPerksAnchor)
+local function ShouldGrowUp(centerY, screenTop, hasPerksAnchor)
     if hasPerksAnchor then return true end
-    if not centreY or not screenTop then return false end
-    return centreY < (screenTop * 0.5)
+    if not centerY or not screenTop then return false end
+    return centerY < (screenTop * 0.5)
 end
 
 function AF:PostAlertMove()
@@ -116,9 +116,9 @@ function AF:PostAlertMove()
     if not af then return end
 
     local perksAnchor = GetPerksAnchor()
-    local _, centreY = self.holder:GetCenter()
+    local _, centerY = self.holder:GetCenter()
     local screenTop = UIParent and UIParent:GetTop()
-    local growUp = ShouldGrowUp(centreY, screenTop, perksAnchor ~= nil)
+    local growUp = ShouldGrowUp(centerY, screenTop, perksAnchor ~= nil)
 
     -- Edit Mode has to know when the stack stops being ours to move, and this
     -- is the only place that decision is made. Refresh only on a change: this

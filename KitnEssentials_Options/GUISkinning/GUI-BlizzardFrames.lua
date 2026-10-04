@@ -168,7 +168,7 @@ local FRAME_SKINS = {
 }
 
 -- Skins for other addons. Each runs only when its addon is installed.
--- An entry with an `addon` field greys out when that addon is missing.
+-- An entry with an `addon` field grays out when that addon is missing.
 -- Ace3 carries none -- it is a library skin covering any AceGUI window,
 -- not one addon's, which is why its file lives under Frames/ while its
 -- row lives here. Presentation only: the skins never run for a missing
@@ -228,10 +228,10 @@ end
 SortByText(FRAME_SKINS)
 SortByText(ADDON_SKINS)
 
--- An ADDON_SKINS row for an addon the user does not have is shown greyed
+-- An ADDON_SKINS row for an addon the user does not have is shown grayed
 -- rather than hidden, so the list reads the same on every machine and a
 -- user can see what installing that addon would get them. FRAME_SKINS
--- rows have no `addon` field and are never greyed by this.
+-- rows have no `addon` field and are never grayed by this.
 local function AddonInstalled(entry)
     if not entry.addon then return true end
     if not (C_AddOns and C_AddOns.DoesAddOnExist) then return true end
@@ -263,7 +263,7 @@ end
 --
 -- S.GetSuppressionState answers one of three states per key:
 --   "full"    -- EllesmereUI covers every registration behind this key. The
---               row is greyed and made unclickable rather than hidden: the
+--               row is grayed and made unclickable rather than hidden: the
 --               user chose to turn it on, and silently dropping it from the
 --               list reads as a missing feature. Their saved choice is left
 --               untouched, so it comes back by itself if EllesmereUI stops
@@ -271,14 +271,14 @@ end
 --   "partial" -- EllesmereUI covers SOME of the registrations behind this
 --               key and not others. The toggle still genuinely controls the
 --               registrations EllesmereUI does not touch, so the row stays
---               full opacity and clickable -- greying it would take away the
+--               full opacity and clickable -- graying it would take away the
 --               off-switch for the working skins to describe one overlap.
 --               It is marked with a trailing " *", and the map row's own
 --               description of what is and is not covered becomes its tooltip.
 --               The description is NOT used as the label: it runs to 37
 --               characters and cannot fit a three-column cell.
 --   "none"    -- unchanged: falls through to the not-installed check below.
--- An uninstalled addon row is greyed the same way as "full", but "full" wins
+-- An uninstalled addon row is grayed the same way as "full", but "full" wins
 -- when a row is both suppressed and not-installed -- a row can only show one
 -- reason at a time, and suppression is the one the user can act on today.
 -- Not-installed is checked before "partial": a row whose addon is missing has
@@ -288,7 +288,7 @@ end
 -- returns true for them -- but the branch order below is written explicitly
 -- rather than relying on that.
 -- Resolves one row's rendering: what it says, whether it tips, whether it is
--- greyed. Shared by the grid and the solo rows so the two cannot drift.
+-- grayed. Shared by the grid and the solo rows so the two cannot drift.
 local function ResolveRow(entry)
     local state = "none"
     local partialTooltip
@@ -307,7 +307,7 @@ local function ResolveRow(entry)
     if state == "full" then
         -- No text marker. At three columns a suffix pushes long names past the
         -- cell, and the two partial rows' custom labels run to 37 characters and
-        -- clip in every case. The greying plus the note line above the grid
+        -- clip in every case. The graying plus the note line above the grid
         -- carry the meaning instead.
         tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
         disabled = true
@@ -323,8 +323,8 @@ local function ResolveRow(entry)
         tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
         disabled = true
     elseif state == "partial" then
-        -- A partial row must NOT be greyed: the toggle still controls the
-        -- registrations EllesmereUI does not cover, and greying would take away
+        -- A partial row must NOT be grayed: the toggle still controls the
+        -- registrations EllesmereUI does not cover, and graying would take away
         -- a working off-switch to describe an overlap. It gets an asterisk
         -- instead, explained by the same note line.
         label = label .. " *"
@@ -406,7 +406,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
     --
     -- Window Colors leads rather than owning a tab of its own -- two pickers and
     -- a reset never filled one. Gated on the ElvUI check the tab strip used to
-    -- apply for it: the windows it colours are not drawn while ElvUI has the
+    -- apply for it: the windows it colors are not drawn while ElvUI has the
     -- skinning.
     if not (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()) then
         local colors = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesColors"]
@@ -515,12 +515,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     card:AddLabel("Untick a window to keep Blizzard's original look there. Changes apply after a /reload.")
 
     if AnySuppressed(FRAME_SKINS) then
-        card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+        card:AddNote("Grayed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
     for _, entry in ipairs(FRAME_SKINS) do
         local blocker, why = BlockedBy(entry)
         if blocker then
-            card:AddNote(entry.text .. " is greyed: " .. blocker .. " " .. why)
+            card:AddNote(entry.text .. " is grayed: " .. blocker .. " " .. why)
         end
     end
 
@@ -659,7 +659,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     db.BorderColor = db.BorderColor or { 0, 0, 0, 1 }
 
     local card = GUIFrame:CreateCard(scrollChild, "Window Colors", yOffset)
-    card:AddLabel("Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
+    card:AddLabel("Both pickers repaint every skinned window that is already open. Frames that carry a color of their own, such as controls and panels, keep it.")
 
     local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     row:AddWidget(GUIFrame:CreateColorPicker(row, "Background Color", {
@@ -681,7 +681,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     local rowR = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     rowR:AddWidget(GUIFrame:CreateButton(rowR, "Reset to Default", {
         width = 150,
-        tooltip = "Restore the designed window colours.",
+        tooltip = "Restore the designed window colors.",
         callback = function()
             if not (S and S.SetSkinColors) then return end
             db.BackdropColor = { unpack(S.DEFAULT_BG) }
@@ -819,7 +819,7 @@ end, {
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         -- Say WHY the engine's own tabs are absent. Hiding them is right --
-        -- greyed controls read as "locked on" rather than "does not apply" (the
+        -- grayed controls read as "locked on" rather than "does not apply" (the
         -- A6.3b Move Loot Rolls ruling) -- but hiding alone leaves a user unable
         -- to tell those settings exist at all. AddLabel bumps the card off its
         -- lone-header-bar height, which is the intended look here.

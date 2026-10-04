@@ -199,7 +199,7 @@ end
 
 -- The container cannot be the positioned frame: the first AddAuraGroup adds
 -- UntrustedLayoutScriptExecution to its forbidden aspects, so KE frames
--- cannot anchor to it afterwards, and it calls SetSize on itself so its size
+-- cannot anchor to it afterward, and it calls SetSize on itself so its size
 -- is not ours to reason about. Parenting it to the anchor is also what makes
 -- hiding the anchor hide the display.
 function Container.Create(display, settings)

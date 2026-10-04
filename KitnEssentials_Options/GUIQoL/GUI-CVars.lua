@@ -19,7 +19,7 @@ local function GetAutomationModule()
     return nil
 end
 
--- Both tabs draw CVar checkboxes and both grey out under the same master
+-- Both tabs draw CVar checkboxes and both gray out under the same master
 -- toggle, so the shared pieces take a context table rather than closing over
 -- one builder's locals.
 local function NewContext()
@@ -48,7 +48,7 @@ local function AddCVarCheckbox(ctx, card, def, existingRow, widthPct)
         value = AU and AU:GetLiveCVar(def) or false,
         callback = function(checked)
             -- The write still goes through the profile as well as the
-            -- client, so the value keeps travelling with the profile and
+            -- client, so the value keeps traveling with the profile and
             -- "Apply CVars on Login" keeps working. Only the display source
             -- changed.
             db[key] = checked

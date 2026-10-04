@@ -52,7 +52,7 @@ local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local UIParent = UIParent
 local C_Spell = C_Spell
--- Indexed off _G, unlike its neighbours: C_LFGList is the one API this file
+-- Indexed off _G, unlike its neighbors: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
 -- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
@@ -73,9 +73,9 @@ local issecrettable = issecrettable or function() return false end
 -- English keys only. Cyrillic keys were dropped deliberately: they cannot
 -- ever match. The lookup lowercases
 -- with Lua's string.lower, which is byte-wise and ASCII-only, so a
--- capitalised Cyrillic name ("Небесный путь") never folds to the lowercase
+-- capitalized Cyrillic name ("Небесный путь") never folds to the lowercase
 -- key ("небесный путь") -- measured in this project's Lua 5.1.
--- KE ships no localisation, so
+-- KE ships no localization, so
 -- carrying them would imply support that does not exist. Adding real
 -- Russian support means Cyrillic-aware case folding, not these keys.
 -- Note the apostrophe in "kings' rest": it follows the s, and a key with it
@@ -120,7 +120,7 @@ end
 
 LR._PickRole = PickRole
 
--- Row geometry: the name block and a 14 px role line, centred in a row at
+-- Row geometry: the name block and a 14 px role line, centered in a row at
 -- least 56 px tall.
 local ROW_MIN_H = 56
 local ROW_PAD   = 8
@@ -627,7 +627,7 @@ end
 -- who made the group never got the prompt. Arm while our own listing is up,
 -- and fire when that listing ends WITH a full group: the game delists
 -- automatically at that point, which is when the group is actually ready to
--- move. A listing that ends any other way -- cancelled by hand, group broke
+-- move. A listing that ends any other way -- canceled by hand, group broke
 -- up -- leaves the group short and prompts nothing.
 local armedSpellID, armedName, armedPending
 

@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-ThemePopup.lua                                      ║
 -- ║  GUI: Customize Theme popup                              ║
--- ║  Purpose: Custom theme colours, the skin tint switch and  ║
+-- ║  Purpose: Custom theme colors, the skin tint switch and  ║
 -- ║  the theme actions, in a dialog over the settings window. ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -65,9 +65,9 @@ end)
 -- Silent resync helpers
 ---------------------------------------------------------------------------------
 
--- Pushes a saved colour into a picker row without firing its callback, which
+-- Pushes a saved color into a picker row without firing its callback, which
 -- writes to Theme.Custom and calls KE:RefreshTheme. Without this, opening the
--- popup or resyncing it after Reset Theme would rewrite the colours it is
+-- popup or resyncing it after Reset Theme would rewrite the colors it is
 -- only meant to display.
 local function SilentSetColor(row, color, default)
     if not row then return end
@@ -113,7 +113,7 @@ local function BuildThemePopup()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = T.borderSize,
     })
-    -- Opaque, unlike the shared window colour: this sits over a busy page
+    -- Opaque, unlike the shared window color: this sits over a busy page
     -- rather than over the game world.
     popup:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
     popup:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4])

@@ -1,4 +1,4 @@
--- Tier 2: a fixed-size decoration hung off one edge of a host and centred on
+-- Tier 2: a fixed-size decoration hung off one edge of a host and centered on
 -- the other axis. Two terms, one of which is a max() guard that only fires
 -- once the decoration outgrows its host -- a combination the GUI sliders allow
 -- and nobody would think to smoke. The REAL Core/Globals.lua loads headless

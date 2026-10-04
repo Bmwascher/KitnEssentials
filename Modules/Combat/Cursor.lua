@@ -240,8 +240,8 @@ local function _makeFollowCursorOnUpdate()
 end
 
 -- Border: the ring art drawn twice more in black, one copy a little larger
--- and one a little smaller, behind the coloured ring. Each copy shows only
--- where it reaches past the colour, so no new art is needed, every ring
+-- and one a little smaller, behind the colored ring. Each copy shows only
+-- where it reaches past the color, so no new art is needed, every ring
 -- style gets one, and the edge matches the ring's own antialiasing. The
 -- copies are textures on the ring's frame, so the frame alpha the mouse-held
 -- mode writes reaches them with no per-frame work.
@@ -334,7 +334,7 @@ local function _gcdOnEvent(self, event, unit, _, _)
     if event == "UNIT_SPELLCAST_FAILED"
        or event == "UNIT_SPELLCAST_INTERRUPTED"
        or event == "UNIT_SPELLCAST_STOP" then
-        -- A cancelled cast may not have triggered the GCD, so clear if no active GCD.
+        -- A canceled cast may not have triggered the GCD, so clear if no active GCD.
         -- Wrap in pcall: C_Spell.GetSpellCooldown.duration is SecretWhenSpellCooldownRestricted
         -- in 12.0; truthiness / comparison on a secret number throws.
         local cd = _getActiveGCDCooldown()
@@ -1308,7 +1308,7 @@ function C:TauntPreview()
     self.tauntFrame:Show()
     self.tauntFrame.cooldown:SetCooldown(GetTime(), 7)
 
-    -- Generation token: C_Timer.After hands back nothing cancellable, so a
+    -- Generation token: C_Timer.After hands back nothing cancelable, so a
     -- second Test click (or a disable) would otherwise leave the first
     -- callback live and let it clear the flag out from under the new preview.
     -- Bumping the token orphans every earlier callback.

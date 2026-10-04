@@ -1,7 +1,7 @@
 -- The low-duration warning and the class checks. The warning predicate is
 -- strictly under a threshold and never fires on a nil remaining or a nil
 -- threshold; a slot whose aura expiry is secret paints no timer, no warning
--- colour and no glow; the class check owns exactly the hands a row's
+-- color and no glow; the class check owns exactly the hands a row's
 -- requirements cover, gated on the spell being known and the hand holding
 -- what the imbue needs; the class slot shows for a class with an entry whose
 -- predicate holds and the off-hand slot shows for a shield the check owns;
@@ -77,7 +77,7 @@ describe("ReadyCheckConsumables timer bar seconds", function()
 end)
 
 describe("ReadyCheckConsumables low-duration paint", function()
-    it("paints no timer, no warning colour and no glow when the aura's expiry is secret", function()
+    it("paints no timer, no warning color and no glow when the aura's expiry is secret", function()
         local RCC, _, seams = L.loadReadyCheckConsumables({ GetTime = function() return 1000 end })
         RCC.db.LowDurationWarning = true
         RCC.db.LowDurationMinutes = 10

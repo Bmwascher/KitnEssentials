@@ -147,7 +147,7 @@ local function KeyIconSize()
     return KE:PixelSnap(math.floor(fontSize * KEY_ICON_SCALE + 0.5))
 end
 
--- Icon and text laid out as one centred pair under the frame. The icon is
+-- Icon and text laid out as one centered pair under the frame. The icon is
 -- anchored to the frame, never to the text: a fontstring's edge lands on a
 -- fraction of a pixel, and a 1 px border on a fractional edge splits across
 -- two rows. Anchoring from BOTTOMLEFT with a snapped offset keeps the icon's
@@ -227,7 +227,7 @@ local function StopGlow(frame)
     frame.glowActive = false
 end
 
--- A glow that is up restarts so colour and speed edits show at once.
+-- A glow that is up restarts so color and speed edits show at once.
 local function ApplyReminder(frame)
     if not frame then return end
     ApplyReminderFrame(frame)

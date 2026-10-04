@@ -62,7 +62,7 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
 
     card1:AddLabel("|cffffd100For Hunters, Warlocks, Death Knights and Mages.|r Shows a warning text " ..
         "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
-        "its own text and colour below.")
+        "its own text and color below.")
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
