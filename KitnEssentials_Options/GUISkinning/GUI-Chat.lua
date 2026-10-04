@@ -68,6 +68,31 @@ local TAB_SELECTOR_STYLES = {
 
 local TAB_FONT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
+-- One group per row: its name in the first column, then a fixed cell share so
+-- the boxes line up down the card whatever the group's size.
+local HISTORY_TYPE_GROUPS = {
+    { header = "Local", types = {
+        { key = "SAY",   label = "Say" },
+        { key = "YELL",  label = "Yell" },
+        { key = "EMOTE", label = "Emote" },
+    } },
+    { header = "Social", types = {
+        { key = "WHISPER", label = "Whisper" },
+        { key = "GUILD",   label = "Guild" },
+        { key = "OFFICER", label = "Officer" },
+        { key = "CHANNEL", label = "Channel" },
+    } },
+    { header = "Group", types = {
+        { key = "PARTY",    label = "Party" },
+        { key = "RAID",     label = "Raid" },
+        { key = "INSTANCE", label = "Instance" },
+    } },
+}
+local HISTORY_LABEL_W = 0.18
+local HISTORY_CELL_W = 0.205
+local HISTORY_CELL_H = 24
+local HISTORY_CELL_SPACING = 2
+
 -- Sorted LSM sound list for the whisper dropdowns.
 local function BuildWhisperSoundOptions()
     local opts = { { value = "None", text = "None" } }
@@ -130,8 +155,28 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return yOffset end
+    local historyDb = KE.db and KE.db.profile.Skinning.ChatHistory
+    local function OnHistoryToggled(checked)
+        if not historyDb then return end
+        historyDb.Enabled = checked
+        if checked then
+            KitnEssentials:EnableModule("ChatHistory")
+        else
+            KitnEssentials:DisableModule("ChatHistory")
+        end
+    end
+
+    -- With the skin off the page is the Chat switch plus Chat History's, which
+    -- saves nothing until the skin is on and says so.
+    if db.Enabled ~= true then
+        if historyDb then
+            local historyStub = GUIFrame:CreateCard(scrollChild, "Chat History", yOffset)
+            historyStub:AddHeaderToggle(historyDb.Enabled == true, OnHistoryToggled)
+            historyStub:AddNote("Needs the chat skin: switch on Chat at the top of this page. Nothing is saved while it is off.")
+            yOffset = historyStub:GetNextOffset()
+        end
+        return yOffset
+    end
 
     ----------------------------------------------------------------
     -- Card 2: Chat Colors
@@ -776,51 +821,52 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     yOffset = card12:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 13: Chat History
+    -- Cards 13 and 14: Chat History, Saved Chat Types
     ----------------------------------------------------------------
-    -- A separate module with its own enable flag, so it is deliberately NOT
-    -- registered with the state manager. It does depend on the chat skin
-    -- being on, which the label says rather than the widget state, because
-    -- graying it out would hide the reason.
-    --
-    -- This sits after the page's chat-skin early return, so with the skin off
-    -- the card is not built at all. That is deliberate and matches the sibling
-    -- link card: with the skin off the whole page collapses to its master
-    -- switch, so the only useful next action is already the only thing on
-    -- screen.
-    local historyDb = KE.db and KE.db.profile.Skinning.ChatHistory
+    -- Grayed by History's own switch through the "history" group. History
+    -- saves nothing while the chat skin is off (CH:IsPersistenceActive), which
+    -- is why the skin-off page keeps its switch: see the stub above the early
+    -- return.
     if historyDb then
-        local card13 = GUIFrame:CreateCard(scrollChild, "Chat History", yOffset)
-        card13:AddHeaderToggle(historyDb.Enabled == true, function(checked)
-            historyDb.Enabled = checked
-            if checked then
-                KitnEssentials:EnableModule("ChatHistory")
-            else
-                KitnEssentials:DisableModule("ChatHistory")
-            end
-        end)
+        manager:SetCondition("history", function() return historyDb.Enabled == true end)
 
-        card13:AddLabel("Keeps your chat per character so it comes back after a reload, with the time each line arrived. Needs the chat skin above to be on. Messages received while you are inside a dungeon, raid or battleground are never saved.")
+        local card13 = GUIFrame:CreateCard(scrollChild, "Chat History", yOffset)
+        card13:AddHeaderToggle(historyDb.Enabled == true, OnHistoryToggled)
+
+        card13:AddLabel("Saves your chat per character, so it comes back after a reload with the time each line arrived.")
 
         local row13a = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
-        row13a:AddWidget(GUIFrame:CreateSlider(row13a, "Lines To Keep", {
+        local savedLines = GUIFrame:CreateSlider(row13a, "Saved Lines", {
             min = 50, max = 500, step = 10, value = historyDb.Size or 100,
+            tooltip = "How many lines are kept per character, across every type below. The oldest goes first.",
             callback = function(val) historyDb.Size = val end,
-        }), 0.5)
-        row13a:AddWidget(GUIFrame:CreateButton(row13a, "Clear History", {
-            width = 150,
-            tooltip = "Throws away every stored line and everything you have typed.",
-            callback = function()
-                local history = KitnEssentials:GetModule("ChatHistory", true)
-                if history and history.ClearHistory then history:ClearHistory() end
-                KE:Print("Chat history cleared.")
-            end,
-        }), 0.5)
+        })
+        row13a:AddWidget(savedLines, 0.5)
+        manager:Register(savedLines, "history")
         card13:AddRow(row13a, Theme.rowHeight)
 
-        local row13e = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
-        row13e:AddWidget(GUIFrame:CreateButton(row13e, "Clear Other Characters", {
-            width = 180,
+        card13:AddSeparator()
+
+        local row13b = GUIFrame:CreateRow(card13.content, Theme.rowHeightLast)
+        local clearHistory = GUIFrame:CreateButton(row13b, "Clear History", {
+            height = 28,
+            tooltip = "Deletes this character's saved chat and the lines you have typed (Up / Down recall).",
+            callback = function()
+                KE:CreatePrompt("Clear History",
+                    "Delete this character's saved chat and the lines you have typed? This cannot be undone.",
+                    false, nil, false, nil, nil, nil, nil,
+                    function()
+                        local history = KitnEssentials:GetModule("ChatHistory", true)
+                        if history and history.ClearHistory then history:ClearHistory() end
+                        KE:Print("Chat history cleared.")
+                    end, nil, "Clear", "Cancel")
+            end,
+        })
+        row13b:AddWidget(clearHistory, 0.33)
+        manager:Register(clearHistory, "history")
+
+        local clearOthers = GUIFrame:CreateButton(row13b, "Clear Other Characters", {
+            height = 28,
             tooltip = "Deletes the chat older versions saved in the shared account file for your other characters. A character that has logged in since this update keeps its own saved chat, which this cannot reach.",
             callback = function()
                 KE:CreatePrompt("Clear Other Characters",
@@ -835,43 +881,46 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
                         end
                     end, nil, "Clear", "Cancel")
             end,
-        }), 0.5)
-        card13:AddRow(row13e, Theme.rowHeight)
+        })
+        row13b:AddWidget(clearOthers, 0.33)
+        manager:Register(clearOthers, "history")
+        card13:AddRow(row13b, Theme.rowHeightLast, 0)
+
+        yOffset = card13:GetNextOffset()
+
+        local card14 = GUIFrame:CreateCard(scrollChild, "Saved Chat Types", yOffset)
+        -- The card alone is registered: its blocker refuses the cells' clicks,
+        -- and registering the cells too would dim them twice.
+        manager:Register(card14, "history")
 
         -- A type switched off is UNREGISTERED, not filtered per message, so a
         -- toggle has to tell the module to rebuild its registrations.
         local types = historyDb.ShowTypes
-        local function TypeBox(row, label, key, weight)
-            row:AddWidget(GUIFrame:CreateCheckbox(row, label, {
-                value = types[key] ~= false,
-                callback = function(checked)
-                    types[key] = checked
-                    local history = KitnEssentials:GetModule("ChatHistory", true)
-                    if history and history.RefreshEvents then history:RefreshEvents() end
-                end,
-            }), weight)
+        for g, group in ipairs(HISTORY_TYPE_GROUPS) do
+            local row = GUIFrame:CreateRow(card14.content, HISTORY_CELL_H)
+            local label = row:GetLabel("normal")
+            label:SetJustifyH("LEFT")
+            label:SetWordWrap(false)
+            label:SetText(group.header)
+            label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            row:AddWidget(label, HISTORY_LABEL_W, nil, 2)
+            for _, entry in ipairs(group.types) do
+                local key = entry.key
+                row:AddWidget(GUIFrame:CreateCompactCheckbox(row, entry.label, {
+                    value = types[key] ~= false,
+                    callback = function(checked)
+                        types[key] = checked
+                        local history = KitnEssentials:GetModule("ChatHistory", true)
+                        if history and history.RefreshEvents then history:RefreshEvents() end
+                    end,
+                }), HISTORY_CELL_W)
+            end
+            card14:AddRow(row, HISTORY_CELL_H,
+                g == #HISTORY_TYPE_GROUPS and Theme.paddingSmall or HISTORY_CELL_SPACING)
         end
+        card14:AddNote("Nothing received inside a dungeon, raid or battleground is saved.")
 
-        local row13b = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
-        TypeBox(row13b, "Say", "SAY", 0.25)
-        TypeBox(row13b, "Yell", "YELL", 0.25)
-        TypeBox(row13b, "Emote", "EMOTE", 0.25)
-        TypeBox(row13b, "Whisper", "WHISPER", 0.25)
-        card13:AddRow(row13b, Theme.rowHeight)
-
-        local row13c = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
-        TypeBox(row13c, "Party", "PARTY", 0.25)
-        TypeBox(row13c, "Raid", "RAID", 0.25)
-        TypeBox(row13c, "Instance", "INSTANCE", 0.25)
-        TypeBox(row13c, "Channel", "CHANNEL", 0.25)
-        card13:AddRow(row13c, Theme.rowHeight)
-
-        local row13d = GUIFrame:CreateRow(card13.content, Theme.rowHeightLast)
-        TypeBox(row13d, "Guild", "GUILD", 0.5)
-        TypeBox(row13d, "Officer", "OFFICER", 0.5)
-        card13:AddRow(row13d, Theme.rowHeightLast, 0)
-
-        yOffset = card13:GetNextOffset()
+        yOffset = card14:GetNextOffset()
     end
 
     manager:UpdateAll(db.Enabled == true)
