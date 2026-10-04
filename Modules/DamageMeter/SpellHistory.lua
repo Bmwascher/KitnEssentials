@@ -2,7 +2,7 @@
 -- ║  DamageMeter/SpellHistory.lua                            ║
 -- ║  Module: Damage Meter                                    ║
 -- ║  Purpose: A strip of the player's recent casts, newest   ║
--- ║           first, each icon fading after a delay.         ║
+-- ║           first, fading after a delay.                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -19,6 +19,7 @@ local floor = math.floor
 local wipe = wipe
 local issecretvalue = issecretvalue
 local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
 local GetInventoryItemID = GetInventoryItemID
 local C_Spell = C_Spell
@@ -388,8 +389,8 @@ local castState = { items = false }
 -- Strip
 --
 -- A fixed ring of icons built once, parented to the dock so the strip shows
--- exactly when the meter does. Each icon fades with its own C-side animation;
--- no Lua runs per frame.
+-- exactly when the meter does. The push, each icon's fade and the whole row's
+-- fade are C-side animations; no Lua runs per frame.
 ---------------------------------------------------------------------------------
 
 local MAX_ICONS = 10
@@ -422,6 +423,13 @@ local icons = {}
 local ringSize = 0
 local head = 0
 local fadeDelay = 0
+local fadeMode, holdInCombat = "STRIP", true
+-- Owned by the regen events while registered; RegisterEvents seeds it.
+local inCombat = false
+-- The fade settings last applied: only a change to them restarts the fades.
+local appliedMode, appliedHold, appliedDelay
+local stripFade, stripFadeAnim
+local stripHeld = false
 local growPoint, stepX, stepY = "TOPRIGHT", 0, 0
 -- The strip's size from the last Layout, and the attached anchor last applied,
 -- so a dock layout that changes nothing re-anchors nothing.
@@ -469,6 +477,7 @@ local function ShowPlaceholder(icon)
     icon.tex:SetDesaturated(false)
     icon.mark:Hide()
     if icon.pet then SetBorderPet(icon, false) end
+    icon.held = false
     icon:SetAlpha(1)
     icon:Show()
 end
@@ -482,6 +491,23 @@ local function OnIconFaded(icon)
     end
 end
 
+local function ResetStripFade()
+    local frame, group = strip, stripFade
+    if not (frame and group) then return end
+    group:Stop()
+    frame:SetAlpha(1)
+end
+
+-- SetToFinalAlpha leaves the strip at 0, and the next cast needs it opaque.
+local function OnStripFaded()
+    for slot = 1, #icons do
+        local icon = icons[slot]
+        if icon.live then OnIconFaded(icon) end
+    end
+    local frame = strip
+    if frame then frame:SetAlpha(1) end
+end
+
 local function ClearRing()
     for slot = 1, #icons do
         local icon = icons[slot]
@@ -489,8 +515,11 @@ local function ClearRing()
         icon.entry:Stop()
         icon.appear:Stop()
         icon.live = false
+        icon.held = false
         icon:Hide()
     end
+    ResetStripFade()
+    stripHeld = false
     head = 0
 end
 
@@ -542,7 +571,78 @@ local function CreateIcon(parent)
     fadeIn:SetSmoothing("OUT")
     icon.appear = appear
     icon.live = false
+    icon.held = false
     return icon
+end
+
+-- A held fade gets its delay now; ReleaseFades plays it.
+local function StartFade(icon)
+    local plan = FadePlan(fadeMode, holdInCombat, inCombat, fadeDelay)
+    if plan == "none" then return end
+    if fadeMode == "ICON" then
+        icon.fade:SetStartDelay(fadeDelay)
+        if plan == "held" then
+            icon.held = true
+        else
+            icon.group:Play()
+        end
+        return
+    end
+    ResetStripFade()
+    local group, anim = stripFade, stripFadeAnim
+    if not (group and anim) then return end
+    anim:SetStartDelay(fadeDelay)
+    if plan == "held" then
+        stripHeld = true
+    else
+        group:Play()
+    end
+end
+
+-- Only a fade still in its delay waits; one already under way finishes.
+local function HoldFades()
+    inCombat = true
+    for slot = 1, ringSize do
+        local icon = icons[slot]
+        if icon.group:IsPlaying() and icon.fade:IsDelaying() then icon.group:Pause() end
+    end
+    local group, anim = stripFade, stripFadeAnim
+    if group and anim and group:IsPlaying() and anim:IsDelaying() then group:Pause() end
+end
+
+-- Play resumes a paused fade's remaining delay and starts a held one's full
+-- delay.
+local function ReleaseFades()
+    inCombat = false
+    for slot = 1, ringSize do
+        local icon = icons[slot]
+        if icon.held or icon.group:IsPaused() then
+            icon.held = false
+            icon.group:Play()
+        end
+    end
+    local group = stripFade
+    if group and (stripHeld or group:IsPaused()) then
+        stripHeld = false
+        group:Play()
+    end
+end
+
+local function RestartFades()
+    ResetStripFade()
+    stripHeld = false
+    local anyLive
+    for slot = 1, ringSize do
+        local icon = icons[slot]
+        icon.group:Stop()
+        icon.held = false
+        if icon.live then
+            icon:SetAlpha(1)
+            anyLive = icon
+            if fadeMode == "ICON" then StartFade(icon) end
+        end
+    end
+    if anyLive and fadeMode ~= "ICON" then StartFade(anyLive) end
 end
 
 local function Push(tex, kind, status, castGUID)
@@ -559,13 +659,11 @@ local function Push(tex, kind, status, castGUID)
     local pet = kind == KIND_PET
     if icon.pet ~= pet then SetBorderPet(icon, pet) end
     icon.live = true
+    icon.held = false
     icon.group:Stop()
     icon:SetAlpha(1)
     icon:Show()
-    if fadeDelay > 0 then
-        icon.fade:SetStartDelay(fadeDelay)
-        icon.group:Play()
-    end
+    StartFade(icon)
     ReanchorShown(true)
 end
 
@@ -602,6 +700,10 @@ local function OnStripEvent(_, event, ...)
         -- A pet dismissed or replaced mid-channel may never send its stop.
         castState.curPet = nil
         SetChannel(castState, true, nil, nil)
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        HoldFades()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        ReleaseFades()
     elseif event == "UNIT_SPELLCAST_SENT" then
         -- unitTarget, target, castGUID, spellID: the target is never read.
         local castGUID, spellID = select(3, ...)
@@ -650,6 +752,14 @@ local function Build()
     end
     frame:SetScript("OnEvent", OnStripEvent)
     frame:SetScript("OnHide", OnStripHide)
+    local fadeGroup = frame:CreateAnimationGroup()
+    fadeGroup:SetToFinalAlpha(true)
+    local fadeAnim = fadeGroup:CreateAnimation("Alpha")
+    fadeAnim:SetFromAlpha(1)
+    fadeAnim:SetToAlpha(0)
+    fadeAnim:SetDuration(FADE_DURATION)
+    fadeGroup:SetScript("OnFinished", OnStripFaded)
+    stripFade, stripFadeAnim = fadeGroup, fadeAnim
     strip = frame
 
     local pets = CreateFrame("Frame")
@@ -711,6 +821,19 @@ local function RegisterEvents(frame, pets, sh)
     if not failed then
         castState.curPlayer, castState.curPet = nil, nil
         castState.failedPlayer, castState.failedPet = nil, nil
+    end
+
+    -- Registered only while a fade can be held. Lockdown seeds the flag only on
+    -- registering: the settings window's close at combat start reaches this
+    -- from inside PLAYER_REGEN_DISABLED, where lockdown still reads false.
+    if not (holdInCombat and fadeDelay > 0) then
+        frame:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        inCombat = false
+    elseif not frame:IsEventRegistered("PLAYER_REGEN_DISABLED") then
+        frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+        frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        inCombat = InCombatLockdown() == true
     end
 end
 
@@ -775,6 +898,8 @@ local function Layout(sh)
         icon.mark:SetSize(markSize, markSize)
     end
     fadeDelay = tonumber(sh.FadeDelay) or 5
+    fadeMode = sh.FadeMode
+    holdInCombat = sh.HoldInCombat ~= false
 end
 
 -- Attached, the strip sits outside the dock's chosen edge when it fits on
@@ -869,6 +994,8 @@ local function TearDown()
     if not frame then return end
     frame:UnregisterAllEvents()
     SyncMover(false)
+    inCombat = false
+    appliedMode, appliedHold, appliedDelay = nil, nil, nil
     if petFrame then petFrame:UnregisterAllEvents() end
     -- Hidden before the clear: in a preview, OnStripHide shows the
     -- placeholders again.
@@ -897,8 +1024,13 @@ function DM:ApplySpellHistory()
     if not strip then Build() end
     local frame, pets = strip, petFrame
     if not (frame and pets) then return end
-    RegisterEvents(frame, pets, sh)
+    -- Before RegisterEvents, which reads the fade settings Layout sets.
     Layout(sh)
+    RegisterEvents(frame, pets, sh)
+    if fadeMode ~= appliedMode or holdInCombat ~= appliedHold or fadeDelay ~= appliedDelay then
+        appliedMode, appliedHold, appliedDelay = fadeMode, holdInCombat, fadeDelay
+        RestartFades()
+    end
     -- Layout may have resized the strip, which needs a fresh snap.
     placedPoint = nil
     Place(db, sh)
