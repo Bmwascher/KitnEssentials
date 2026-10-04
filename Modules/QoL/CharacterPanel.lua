@@ -136,205 +136,130 @@ function CP:IsSocketableSlot(slotID)
     return socketableSlotSet[slotID] or false
 end
 
--- Enchant label processing: map full effect names to short stat-based labels,
--- strip the "Enchant <Slot> - " prefixes, then abbreviate stat words. Anything
--- not in the tables falls through to a length-truncated raw name.
-local enchantStripPrefixes = {
-    ["Enchant "]      = "",
-    ["Weapon %- "]    = "",
-    ["Shoulders %- "] = "",
-    ["Chest %- "]     = "",
-    ["Ring %- "]      = "",
-    ["Boots %- "]     = "",
-    ["Helm %- "]      = "",
+-- Enchant labels. Short and Verbose look an enchant up by its exact name; a
+-- stat line with no name (leg spellthreads, armor kits) joins its stat words;
+-- any other text shows as Full shows it. Exact names only: a partial match lets
+-- a shorter name rewrite part of a longer one.
+local ENCHANT_LABELS = {
+    ["Mark of the Worldsoul"]          = { short = "Primary Stat",    verbose = "Primary Stat" },
+    ["Mark of the Magister"]           = { short = "Int & Mana",      verbose = "Intellect & Mana" },
+    ["Mark of Nalorakk"]               = { short = "Str & Stam",      verbose = "Strength & Stamina" },
+    ["Mark of the Rootwarden"]         = { short = "Agi & Speed",     verbose = "Agility & Speed" },
+    ["Empowered Hex of Leeching"]      = { short = "Leech",           verbose = "Empowered Leech" },
+    ["Hex of Leeching"]                = { short = "Minor Leech",     verbose = "Minor Leech" },
+    ["Empowered Blessing of Speed"]    = { short = "Speed",           verbose = "Empowered Speed" },
+    ["Blessing of Speed"]              = { short = "Minor Speed",     verbose = "Minor Speed" },
+    ["Empowered Rune of Avoidance"]    = { short = "Avoid",           verbose = "Empowered Avoidance" },
+    ["Rune of Avoidance"]              = { short = "Minor Avoid",     verbose = "Minor Avoidance" },
+    ["Akil'zon's Swiftness"]           = { short = "Speed",           verbose = "Speed" },
+    ["Flight of the Eagle"]            = { short = "Minor Speed",     verbose = "Minor Speed" },
+    ["Amirdrassil's Grace"]            = { short = "Avoid",           verbose = "Avoidance" },
+    ["Nature's Grace"]                 = { short = "Minor Avoid",     verbose = "Minor Avoidance" },
+    ["Silvermoon's Mending"]           = { short = "Leech",           verbose = "Leech" },
+    ["Thalassian Recovery"]            = { short = "Minor Leech",     verbose = "Minor Leech" },
+    ["Farstrider's Hunt"]              = { short = "Speed",           verbose = "Speed & Stamina" },
+    ["Lynx's Dexterity"]               = { short = "Avoid",           verbose = "Avoidance & Stamina" },
+    ["Shaladrassil's Roots"]           = { short = "Leech",           verbose = "Leech & Stamina" },
+    ["Eyes of the Eagle"]              = { short = "Crit Effect",     verbose = "Crit Effectiveness" },
+    ["Nature's Fury"]                  = { short = "Crit",            verbose = "Critical Strike" },
+    ["Nature's Wrath"]                 = { short = "Minor Crit",      verbose = "Minor Critical Strike" },
+    ["Silvermoon's Alacrity"]          = { short = "Haste",           verbose = "Haste" },
+    ["Thalassian Haste"]               = { short = "Minor Haste",     verbose = "Minor Haste" },
+    ["Zul'jin's Mastery"]              = { short = "Mast",            verbose = "Mastery" },
+    ["Amani Mastery"]                  = { short = "Minor Mast",      verbose = "Minor Mastery" },
+    ["Silvermoon's Tenacity"]          = { short = "Vers",            verbose = "Versatility" },
+    ["Thalassian Versatility"]         = { short = "Minor Vers",      verbose = "Minor Versatility" },
+    ["Acuity of the Ren'dorei"]        = { short = "Primary Stat",    verbose = "Primary Stat Proc" },
+    ["Arcane Mastery"]                 = { short = "Mast",            verbose = "Mastery Proc" },
+    ["Berserker's Rage"]               = { short = "Haste",           verbose = "Haste Proc" },
+    ["Jan'alai's Precision"]           = { short = "Crit",            verbose = "Critical Strike Proc" },
+    ["Worldsoul Tenacity"]             = { short = "Vers",            verbose = "Versatility Proc" },
+    ["Rite of the Hash'ey"]            = { short = "Secondary",       verbose = "Random Stat Proc" },
+    ["Flames of the Sin'dorei"]        = { short = "Fire DoT",        verbose = "Fire Damage" },
+    ["Strength of Halazzi"]            = { short = "Bleed",           verbose = "Bleed Damage" },
+    ["Worldsoul Aegis"]                = { short = "Shield",          verbose = "Absorb Shield" },
+    ["Blood Knight's Armor Kit"]       = { short = "Agi/Str & Armor", verbose = "Primary & Armor" },
+    ["Forest Hunter's Armor Kit"]      = { short = "Agi/Str & Stam",  verbose = "Primary & Stamina" },
+    ["Thalassian Scout Armor Kit"]     = { short = "Minor Agi/Str",   verbose = "Minor Primary" },
+    ["Bright Linen Spellthread"]       = { short = "Minor Int",       verbose = "Minor Intellect" },
+    ["Sunfire Silk Spellthread"]       = { short = "Int & Stam",      verbose = "Intellect & Stamina" },
+    ["Arcanoweave Spellthread"]        = { short = "Int & Mana",      verbose = "Intellect & Mana" },
+    ["Rune of the Fallen Crusader"]    = { short = "Crusader",        verbose = "Crusader" },
+    ["Rune of the Apocalypse"]         = { short = "Apocalypse",      verbose = "Apocalypse" },
+    ["Rune of Razorice"]               = { short = "Razorice",        verbose = "Razorice" },
+    ["Rune of Sanguination"]           = { short = "Sanguination",    verbose = "Sanguination" },
+    ["Rune of the Stoneskin Gargoyle"] = { short = "Gargoyle",        verbose = "Gargoyle" },
+    ["Rune of Unending Thirst"]        = { short = "Unend Thirst",    verbose = "Thirst" },
+    ["Rune of Spellwarding"]           = { short = "Spellwarding",    verbose = "Spellwarding" },
 }
 
-local enchantStatAbbrev = {
-    ["Stamina"]         = "Stam",
-    ["Intellect"]       = "Int",
-    ["Agility"]         = "Agi",
-    ["Strength"]        = "Str",
-    ["Mastery"]         = "Mast",
-    ["Versatility"]     = "Vers",
-    ["Critical Strike"] = "Crit",
-    ["Haste"]           = "Haste",
-    ["Avoidance"]       = "Avoid",
+-- The tooltip's word, then Short's; Verbose shows the tooltip's word.
+local ENCHANT_STAT_WORDS = {
+    { "Critical Strike", "Crit" },
+    { "Versatility",     "Vers" },
+    { "Intellect",       "Int" },
+    { "Agility",         "Agi" },
+    { "Strength",        "Str" },
+    { "Stamina",         "Stam" },
+    { "Avoidance",       "Avoid" },
+    { "Mastery",         "Mast" },
+    { "Haste",           "Haste" },
+    { "Leech",           "Leech" },
+    { "Speed",           "Speed" },
+    { "Armor",           "Armor" },
+    { "Mana",            "Mana" },
 }
 
-local enchantNicknames = {
-    ["Minor Speed Increase"] = "Speed",
-    ["Homebound Speed"]      = "Speed & HS Red.",
-    ["Plainsrunner's Breeze"] = "Speed",
-    ["Graceful Avoidance"]   = "Avoid",
-    ["Regenerative Leech"]   = "Leech",
-    ["Watcher's Loam"]       = "Stam",
-    ["Rider's Reassurance"]  = "Mount Speed",
-    ["Accelerated Agility"]  = "Speed & Agi",
-    ["Reserve of Int"]       = "Mana & Int",
-    ["Sustained Str"]        = "Stam & Str",
-    ["Waking Stats"]         = "Primary Stat",
-    ["Cavalry's March"]      = "Mount Speed",
-    ["Scout's March"]        = "Speed",
-    ["Defender's March"]     = "Stam",
-    ["Stormrider's Agi"]     = "Agi & Speed",
-    ["Council's Intellect"]  = "Int & Mana",
-    ["Crystalline Radiance"] = "Primary Stat",
-    ["Oathsworn's Strength"] = "Str & Stam",
-    ["Chant of Armored Avoidance"] = "Avoid",
-    ["Chant of Armored Leech"]     = "Leech",
-    ["Chant of Armored Speed"]     = "Speed",
-    ["Chant of Winged Grace"]      = "Avoid & FallDmg",
-    ["Chant of Leeching Fangs"]    = "Leech & Recup",
-    ["Chant of Burrowing Rapidity"] = "Speed & HScd",
-    ["Cursed Haste"]       = "Haste & |cffcc0000-Vers|r",
-    ["Cursed Crit"]        = "Crit & |cffcc0000-Haste|r",
-    ["Cursed Mastery"]     = "Mast & |cffcc0000-Crit|r",
-    ["Cursed Versatility"] = "Vers & |cffcc0000-Mast|r",
-    ["Shadowed Belt Clasp"] = "Stamina",
-    ["Incandescent Essence"] = "Essence",
-    ["Acuity of the Ren'dorei"] = "Proc Prim",
-    ["Arcane Mastery"]          = "Proc Mast",
-    ["Berserker's Rage"]        = "Proc Haste",
-    ["Flames of the Sin'dorei"] = "Dot->AoE",
-    ["Jan'alai's Precision"]    = "Proc Crit",
-    ["Strength of Halazzi"]     = "Bleed",
-    ["Worldsoul Aegis"]         = "Shield->AoE",
-    ["Worldsoul Tenacity"]      = "Proc Vers",
-    ["Rite of the Hash'ey"]      = "Proc Sec",
-    ["Empowered Blessing of Speed"] = "Speed+Vigor",
-    ["Blessing of Speed"]           = "Speed",
-    ["Empowered Rune of Avoidance"] = "Avoid+MS",
-    ["Rune of Avoidance"]           = "Avoid",
-    ["Empowered Hex of Leeching"]   = "Empowered Leech",
-    ["Hex of Leeching"]             = "Leech",
-    ["Akil'zon's Swiftness"] = "Speed",
-    ["Flight of the Eagle"]  = "Speed",
-    ["Amirdrassil's Grace"]  = "Avoid",
-    ["Nature's Grace"]       = "Avoid",
-    ["Thalassian Recovery"]  = "Leech",
-    ["Mark of Nalorakk"]       = "Str & Stam",
-    ["Mark of the Magister"]   = "Int & Mana",
-    ["Mark of the Rootwarden"] = "Agi & Speed",
-    ["Mark of the Worldsoul"]  = "Primary Stat",
-    ["Blood Knight's Armor Kit"]   = "Agi/Str & Armor",
-    ["Forest Hunter's Armor Kit"]  = "Ag/Str & Stam",
-    ["Thalassian Scout Armor Kit"] = "Agi/Str",
-    ["Shaladrassil's Roots"] = "Leech & Stam",
-    ["Silvermoon's Mending"] = "Leech",
-    ["Farstrider's Hunt"]    = "Speed & Stam",
-    ["Lynx's Dexterity"]     = "Avoid & Stam",
-    ["Eyes of the Eagle"]    = "Crit%+",
-    ["Nature's Fury"]        = "Crit",
-    ["Nature's Wrath"]       = "Crit",
-    ["Silvermoon's Alacrity"] = "Haste%",
-    ["Thalassian Haste"]     = "Haste",
-    ["Zul'jin's Mastery"]    = "Mast",
-    ["Amani Mastery"]        = "Mast",
-    ["Silvermoon's Tenacity"] = "Vers",
-    ["Thalassian Versatility"] = "Vers",
-    ["Rune of the Fallen Crusader"] = "Crusader",
-    ["Rune of the Apocalypse"] = "Apocalypse",
-    ["Rune of Razorice"] = "Razorice",
-    ["Rune of Sanguination"] = "Sanguination",
-    ["Rune of the Stoneskin Gargoyle"] = "Gargoyle",
-    ["Rune of Unending Thirst"] = "Unend Thirst",
-    ["Rune of Spellwarding"] = "Spellwarding",
-}
-
--- Nickname keys sorted longest-first. Matching the most specific entry before its
--- base (e.g. "Empowered Hex of Leeching" before "Hex of Leeching") makes the label
--- deterministic regardless of pairs() order, so the empowered variants keep their
--- distinct labels instead of accidentally falling back to the base.
-local enchantNicknameOrder = {}
-for seek in pairs(enchantNicknames) do
-    enchantNicknameOrder[#enchantNicknameOrder + 1] = seek
+-- Cutting at the separator rather than at listed slot words also removes slot
+-- words no list names ("2H Weapon").
+local function StripEnchantPreamble(text)
+    if text:sub(1, 8) ~= "Enchant " then return text end
+    local cut = text:find(" - ", 8, true)
+    if not cut then return text end
+    return text:sub(cut + 3)
 end
-table.sort(enchantNicknameOrder, function(a, b) return #a > #b end)
 
--- The style decides which pipeline a label takes, and they diverge rather than
--- nest. Every style strips the "Enchant <Slot> - " prefix; "full" is then done.
--- "verbose" reduces what is left to its keyword. "short" skips the keyword step
--- and instead maps through the nickname table, then abbreviates stat words.
--- Memoized because that last path walks the nickname and stat-abbreviation tables
--- entry by entry -- one gsub each, so the cost is their combined size and grows
--- whenever either does -- while the same handful of equipped enchant names
--- re-resolve on every slot render, including inspect gem-race retries.
--- ProcessEnchantText owns the cache key; a pure function of its inputs and the
--- load-time constant tables, so entries never invalidate.
--- Words that never carry the meaning of an enchant name, so the keyword walk
--- below skips them rather than returning one.
-local ENCHANT_FILLER = { ["of"] = true, ["the"] = true, ["and"] = true, ["a"] = true }
-
--- The last word that is not filler. Splits by EXCLUSION on ASCII separators
--- rather than with %w: Lua's character classes are ASCII-only, so %w matches no
--- multi-byte byte at all and a non-Latin name would reduce to nothing.
-local function EnchantKeyword(name)
-    if not name or name == "" then return name end
-    local keyword
-    for word in name:gmatch("[^%s,:;/%.%(%)]+") do
-        if not ENCHANT_FILLER[word:lower()] then keyword = word end
+-- The numbers change with the rank, so only the stat words are kept.
+local function EffectLineLabel(text, style)
+    local found = {}
+    for _, pair in ipairs(ENCHANT_STAT_WORDS) do
+        local at = text:find(pair[1], 1, true)
+        if at then
+            found[#found + 1] = { at = at, word = style == "verbose" and pair[1] or pair[2] }
+        end
     end
-    return keyword or name
+    if #found == 0 then return nil end
+    table.sort(found, function(a, b) return a.at < b.at end)
+    local words = {}
+    for i, f in ipairs(found) do words[i] = f.word end
+    return table.concat(words, " & ")
 end
 
+-- Memoized: the same few equipped enchant lines resolve again on every slot
+-- render, inspect retries included, and the effect-line join allocates. Keyed
+-- on style AND text, since one text gives a different label per style. The
+-- result depends only on its inputs and load-time tables, so entries never
+-- invalidate.
 local _enchantLabelCache = {}
 local function ProcessEnchantText(text, style)
     if not text or text == "" then return text end
     if style ~= "verbose" and style ~= "full" then style = "short" end
 
-    -- Keyed on style AND raw text. Keying on the raw text alone would serve
-    -- one style's label to another, and the entries never expire.
     local cacheKey = style .. "\0" .. text
     local cached = _enchantLabelCache[cacheKey]
     if cached then return cached end
 
-    -- Strip the "Enchant <Slot> - " preamble FIRST, so nickname lookups match the
-    -- bare effect name. Every style wants it gone -- naming the slot beside the
-    -- slot says nothing.
-    for prefix, replacement in pairs(enchantStripPrefixes) do
-        text = text:gsub(prefix, replacement)
+    local label = StripEnchantPreamble(text)
+    if style ~= "full" then
+        local entry = ENCHANT_LABELS[label]
+        if entry then
+            label = entry[style] or label
+        elseif label:find("%+%d") then
+            label = EffectLineLabel(label, style) or label
+        end
     end
-
-    -- "full" is the effect name as the tooltip gives it, so it stops here and
-    -- KEEPS a leading "+": an enchant reading "+10 Stats" must not render as
-    -- "10 Stats".
-    if style == "full" then
-        _enchantLabelCache[cacheKey] = text
-        return text
-    end
-
-    -- The "+" strip is NOT a prefix -- it is unanchored and removes the sign
-    -- wherever it appears -- so it lives here rather than in the table above:
-    -- after the "full" exit, and before the nickname pass, where a value may
-    -- deliberately reintroduce one (e.g. "Crit%+").
-    text = text:gsub("%+", "")
-
-    if style == "verbose" then
-        text = EnchantKeyword(text)
-        _enchantLabelCache[cacheKey] = text
-        return text
-    end
-
-    -- An effect line ("+41 Intellect & +115 Stamina": spellthreads, armor
-    -- kits) starts with a number once the signs are gone; the numbers change
-    -- with the rank, so the stat words alone carry the label.
-    if text:find("^%d") then
-        text = text:gsub("%d+%%?%s*", "")
-    end
-
-    -- Nickname values are literal display labels. Iterate longest-key-first (see
-    -- enchantNicknameOrder) and use a FUNCTION replacement so a "%" in the value
-    -- (e.g. "Crit%+", "Haste%") is emitted verbatim instead of being treated as a
-    -- gsub replacement escape (Lua 5.1 silently drops a lone %).
-    for _, seek in ipairs(enchantNicknameOrder) do
-        local replacement = enchantNicknames[seek]
-        text = text:gsub(seek, function() return replacement end)
-    end
-    for word, abbrev in pairs(enchantStatAbbrev) do
-        text = text:gsub(word, abbrev)
-    end
-    _enchantLabelCache[cacheKey] = text
-    return text
+    _enchantLabelCache[cacheKey] = label
+    return label
 end
 CP._ProcessEnchantText = ProcessEnchantText
 
@@ -546,9 +471,9 @@ local function GetSlotEnchantName(unit, slot, data)
     return nil
 end
 
--- Fixed (non-configurable): the nickname table keeps labels short, so the
--- truncation cap and gem icon size are constants rather than user sliders.
-local SLOT_ENCHANT_MAX_LEN = 18
+-- Fixed, not user sliders. The cap only guards against an unexpected long
+-- string: every known label is shorter.
+local SLOT_ENCHANT_MAX_LEN = 32
 local SLOT_GEM_ICON_SIZE   = 14
 
 -- Cut first, then append, so the digit is never the part that is cut.
@@ -3334,7 +3259,6 @@ local ENCHANT_SLOT_KEYWORDS = {
 -- "Enchant 2H Weapon - ..." contains BOTH "2h weapon"
 -- ({16}) and "weapon" ({16, 17}), and which one wins can differ between
 -- sessions. Longest key first makes the most specific match win every time.
--- Same fix, same reason as enchantNicknameOrder above.
 local enchantKeywordOrder = {}
 for keyword in pairs(ENCHANT_SLOT_KEYWORDS) do
     enchantKeywordOrder[#enchantKeywordOrder + 1] = keyword

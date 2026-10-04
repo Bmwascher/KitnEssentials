@@ -307,7 +307,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             ApplySettings()
             if CP then CP:RefreshSlotDisplays() end
         end,
-        tooltip = "For Hex of Leeching: Short reads \"Leech\", Verbose reads \"Leeching\", Full reads \"Hex of Leeching\". Long names are shortened to fit beside the slot whichever style you pick.",
+        tooltip = "For Mark of the Magister: Short reads \"Int & Mana\", Verbose reads \"Intellect & Mana\", Full reads \"Mark of the Magister\". Enchants that give less than their full version read \"Minor\".",
     })
     rowSDStyle:AddWidget(enchantStyleDrop, 0.5)
     manager:Register(enchantStyleDrop, "all")

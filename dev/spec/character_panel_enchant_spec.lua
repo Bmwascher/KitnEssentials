@@ -412,28 +412,37 @@ end)
 -- Item A: enchant name style
 ---------------------------------------------------------------------------------
 describe("Enchant name style", function()
-    local RAW = "Enchant Ring - Radiant Critical Strike"
+    -- Short, Verbose and Full all differ for this one, so a style served in
+    -- place of another shows.
+    local RAW = "Enchant Ring - Nature's Fury"
 
-    it("gives three DIFFERENT labels for one input", function()
+    it("labels a name by exact key, an effect line by its stats, anything else by itself", function()
         local CP = loadCP()
-        local short = CP._ProcessEnchantText(RAW, "short")
-        local verbose = CP._ProcessEnchantText(RAW, "verbose")
-        local full = CP._ProcessEnchantText(RAW, "full")
-        -- If any two agree, the styles have not been distinguished and this
-        -- test has proved nothing.
-        assert.are_not.equal(short, verbose)
-        assert.are_not.equal(verbose, full)
-        assert.are_not.equal(short, full)
-    end)
-
-    it("full keeps the effect name and drops only the slot preamble", function()
-        local CP = loadCP()
-        assert.equals("Radiant Critical Strike", CP._ProcessEnchantText(RAW, "full"))
-    end)
-
-    it("verbose reduces to the last non-filler word", function()
-        local CP = loadCP()
-        assert.equals("Strike", CP._ProcessEnchantText(RAW, "verbose"))
+        local cases = {
+            { name = "exact key, not the shorter key inside it",
+              line = "Enchant Helm - Empowered Hex of Leeching",
+              short = "Leech", verbose = "Empowered Leech", full = "Empowered Hex of Leeching" },
+            -- Stamina before Intellect, the reverse of the word table's order.
+            { name = "effect line, stats in order of appearance",
+              line = "+115 Stamina & +41 Intellect",
+              short = "Stam & Int", verbose = "Stamina & Intellect", full = "+115 Stamina & +41 Intellect" },
+            { name = "unknown name",
+              line = "Enchant Cloak - Chant of Winged Grace",
+              short = "Chant of Winged Grace", verbose = "Chant of Winged Grace",
+              full = "Chant of Winged Grace" },
+            -- Reaches the stat-word join, which finds nothing.
+            { name = "effect line with no known stat word",
+              line = "+10 Stats",
+              short = "+10 Stats", verbose = "+10 Stats", full = "+10 Stats" },
+            { name = "preamble cut at the first separator",
+              line = "Enchant 2H Weapon - Berserker's Rage",
+              short = "Haste", verbose = "Haste Proc", full = "Berserker's Rage" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.short, CP._ProcessEnchantText(c.line, "short"), c.name .. ", short")
+            assert.equals(c.verbose, CP._ProcessEnchantText(c.line, "verbose"), c.name .. ", verbose")
+            assert.equals(c.full, CP._ProcessEnchantText(c.line, "full"), c.name .. ", full")
+        end
     end)
 
     it("an unknown or absent style resolves as short", function()
@@ -443,28 +452,6 @@ describe("Enchant name style", function()
         assert.equals(short, CP._ProcessEnchantText(RAW, "nonsense"))
     end)
 
-    -- The "+" strip is unanchored, so leaving it in the prefix table would eat
-    -- the sign under every style. "full" is defined as the tooltip's own text,
-    -- so it must keep it; short must still drop it.
-    it("full keeps a leading + that short drops", function()
-        local CP = loadCP()
-        local raw = "Enchant Ring - +10 Stats"
-        assert.equals("+10 Stats", CP._ProcessEnchantText(raw, "full"))
-        assert.is_nil(CP._ProcessEnchantText(raw, "short"):find("+", 1, true))
-    end)
-
-    it("reduces an effect line to its stat words with the numbers dropped, short style only", function()
-        local CP = loadCP()
-        local cases = {
-            { line = "+41 Intellect & +115 Stamina", style = "short",   label = "Int & Stam" },
-            { line = "+41 Intellect & +4% Mana",     style = "short",   label = "Int & Mana" },
-            { line = "+10 Stats 2",                  style = "verbose", label = "2" },
-        }
-        for _, c in ipairs(cases) do
-            assert.equals(c.label, CP._ProcessEnchantText(c.line, c.style), c.style .. " " .. c.line)
-        end
-    end)
-
     -- The cache defect. This case MUST be seen to fail against a cache keyed
     -- on the raw text alone: that is what proves it tests the key and not
     -- merely the resolver.
@@ -472,10 +459,10 @@ describe("Enchant name style", function()
         local CP = loadCP()
         local first = CP._ProcessEnchantText(RAW, "full")
         local second = CP._ProcessEnchantText(RAW, "verbose")
-        assert.equals("Radiant Critical Strike", first)
-        assert.equals("Strike", second)
+        assert.equals("Nature's Fury", first)
+        assert.equals("Critical Strike", second)
         -- And back again, to catch a cache that only breaks in one direction.
-        assert.equals("Radiant Critical Strike", CP._ProcessEnchantText(RAW, "full"))
+        assert.equals("Nature's Fury", CP._ProcessEnchantText(RAW, "full"))
     end)
 end)
 
@@ -509,7 +496,8 @@ describe("Enchant rank", function()
             { label = "Leech", rank = 2,   show = true,  want = "Leech 2" },
             { label = "Leech", rank = 2,   show = false, want = "Leech" },
             { label = "Leech", rank = nil, show = true,  want = "Leech" },
-            { label = "abcdefghijklmnopqrstu", rank = 3, show = true, want = "abcdefghijklmnopqr 3" },
+            { label = "abcdefghijklmnopqrstuvwxyzABCDEFGH", rank = 3, show = true,
+              want = "abcdefghijklmnopqrstuvwxyzABCDEF 3" },
         }
         for _, c in ipairs(cases) do
             assert.equals(c.want, CP._FinishEnchantLabel(c.label, c.rank, c.show), c.label)
