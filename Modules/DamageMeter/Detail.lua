@@ -40,6 +40,9 @@ local REFUSAL_MSG = "Detailed information is\nsecret while in combat"
 local RECAP_UNREADABLE_MSG = "Death recap data is\nunreadable in combat"
 local RECAP_ABSENT_MSG = "No death recap available"
 
+-- A stored pull that kept totals only.
+local DETAIL_NOT_KEPT_MSG = "Detail not kept\nfor this pull"
+
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 
@@ -246,8 +249,19 @@ local function MakeDetailRow(parent)
     return bar
 end
 
--- Lazily builds W.detail (ScrollFrame viewport + content child + a create-once
--- spell-row pool) once, parented to W.frame and anchored over the same area as
+-- Builds detail rows up to n, capped at the pool size; rows are never destroyed.
+local function EnsureDetailRows(W, n)
+    local rows = W.detail.rows
+    if n > DETAIL_POOL_SIZE then n = DETAIL_POOL_SIZE end
+    for i = #rows + 1, n do
+        local bar = MakeDetailRow(W.detail.content)
+        bar.win = W
+        rows[i] = bar
+    end
+end
+
+-- Lazily builds W.detail (ScrollFrame viewport + content child; rows are built
+-- on demand) once, parented to W.frame and anchored over the same area as
 -- W.body. Idempotent. Background click on the content closes the panel.
 function DM:EnsureDetail(W)
     if W.detail then return W.detail end
@@ -288,11 +302,6 @@ function DM:EnsureDetail(W)
     end)
 
     d.rows = {}
-    for i = 1, DETAIL_POOL_SIZE do
-        local bar = MakeDetailRow(d.content)
-        bar.win = W
-        d.rows[i] = bar
-    end
     W.detail = d
     return d
 end
@@ -512,7 +521,7 @@ function DM:CloseDetail(W)
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
 end
 
--- Reuses detail-row 1 as a centered message line (in-combat / no-recap states).
+-- Shows a centered message line (in-combat / no-recap states).
 function DM:ShowDetailMessage(W, msg)
     -- Clear the hover tip before the detail message takes over (see OpenDetail):
     -- this sets W._detailOpen = true with no preceding OnLeave, so HideHoverTip
@@ -534,7 +543,7 @@ function DM:ShowDetailMessage(W, msg)
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
     if W.body then W.body:Hide() end
     W.detail:Show()
-    for i = 1, DETAIL_POOL_SIZE do W.detail.rows[i].row:Hide() end
+    for i = 1, #W.detail.rows do W.detail.rows[i].row:Hide() end
     if not W.detail.msg then
         W.detail.msg = W.detail.content:CreateFontString(nil, "OVERLAY")
         W.detail.msg:SetPoint("TOP", W.detail.content, "TOP", 0, -8)
@@ -564,6 +573,12 @@ function DM:RenderBreakdown(W)
     -- Honor a live in-world view override (Selector.lua) so the breakdown matches the
     -- bars; EffectiveMeterType falls back to cfg.MeterType when no override is active.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
+    if self.HistoryDetailDropped and self:HistoryDetailDropped(sessionID) then
+        self:ShowDetailMessage(W, DETAIL_NOT_KEPT_MSG)
+        -- An earlier long breakdown can leave the panel scrolled past the line.
+        W.detail.view:SetVerticalScroll(0)
+        return
+    end
     -- The own-row answer comes from the snapshot OpenDetail took, not from a fresh
     -- read: the bar is not available here. A "refused" second return means the
     -- identity was secret and could not legally be substituted -- distinct from an
@@ -607,7 +622,7 @@ function DM:RenderBreakdown(W)
             self:ShowDetailMessage(W, REFUSAL_MSG)
             return
         end
-        for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
+        for i = 1, #d.rows do d.rows[i].row:Hide() end
         return
     end
 
@@ -626,7 +641,8 @@ function DM:RenderBreakdown(W)
     -- a death recap should show every event leading to the death.
     local maxRows = (self.db and self.db.DetailMaxRows) or DETAIL_POOL_SIZE
     local count = math_min(#spells, DETAIL_POOL_SIZE, maxRows)
-    for i = 1, DETAIL_POOL_SIZE do
+    EnsureDetailRows(W, count)
+    for i = 1, #d.rows do
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
@@ -727,7 +743,7 @@ function DM:RenderEnemyBreakdown(W, src)
     local d = W.detail
     local players = AggregateEnemyPlayers(src)
     if not players then
-        for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
+        for i = 1, #d.rows do d.rows[i].row:Hide() end
         return
     end
 
@@ -743,7 +759,8 @@ function DM:RenderEnemyBreakdown(W, src)
 
     local maxRows = (self.db and self.db.DetailMaxRows) or DETAIL_POOL_SIZE
     local count = math_min(#players, DETAIL_POOL_SIZE, maxRows)
-    for i = 1, DETAIL_POOL_SIZE do
+    EnsureDetailRows(W, count)
+    for i = 1, #d.rows do
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
@@ -979,8 +996,9 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
     local barH = W._snapHeight or 16
     local deathTime = events[#events] and events[#events].timestamp
     local count = math_min(#events, DETAIL_POOL_SIZE)
+    EnsureDetailRows(W, count)
 
-    for i = 1, DETAIL_POOL_SIZE do
+    for i = 1, #d.rows do
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
@@ -1600,17 +1618,17 @@ local function SetTipHeader(self, bar, label, resolvedGUID, face, size, outline)
     KE:ApplyFontToText(_tip.header, face, size, outline)
 end
 
--- Put the tip into a MESSAGE state and size it for the message alone. Three
+-- Put the tip into a MESSAGE state and size it for the message alone. Four
 -- separate paths raise one -- the eligibility gate at the top of PopulateHoverTip,
--- a fetch that could not legally substitute an identity partway down, and a death
--- recap the client would not let us read -- and all three must leave the same tip
--- behind. One of them used to only raise the message, so a tip already carrying
+-- a stored pull that kept no detail, a fetch that could not legally substitute an
+-- identity partway down, and a death recap the client would not let us read -- and
+-- all four must leave the same tip behind. One of them used to only raise the message, so a tip already carrying
 -- rows, column headers and a Targets block kept all of it under a three-line frame.
 --
 -- Everything a data render can turn on is turned off here. PopulateHoverTip set
 -- the header before any branch.
 --
--- msg defaults to the in-combat refusal, which is what two of the three callers want.
+-- msg defaults to the in-combat refusal, which is what two of the four callers want.
 local function ShowTipRefusal(headerH, size, msg)
     for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
     if _tip.colHdr then
@@ -1671,6 +1689,11 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     -- survive secret values.
     if not self:DetailEligible(bar._isLocalPlayer, meterType, tipResolvedGUID) then
         return ShowTipRefusal(headerH, size)
+    end
+    -- Deaths reads the recap by id and never needs per-source detail.
+    if not isDeaths and self.HistoryDetailDropped
+        and self:HistoryDetailDropped(self:EffectiveSessionID(W)) then
+        return ShowTipRefusal(headerH, size, DETAIL_NOT_KEPT_MSG)
     end
     _tip.msg:Hide()
 

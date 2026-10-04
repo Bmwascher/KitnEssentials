@@ -3,8 +3,8 @@
 -- ║  Module: Damage Meter                                    ║
 -- ║  Purpose: Runtime-only key-history snapshot store. At    ║
 -- ║          CHALLENGE_MODE_START (before KE's wipe) every   ║
--- ║          stored session × 11 meter types (+ per-source   ║
--- ║          details) is RETAINED verbatim as one bundle;    ║
+-- ║          stored session × 11 meter types (+ one pull's   ║
+-- ║          source details) is RETAINED as one bundle;      ║
 -- ║          Core.lua's GetSession/GetSource serve entries   ║
 -- ║          by NEGATIVE session id.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -40,7 +40,7 @@ end
 
 -- Shared nil-safe source key — capture and lookup MUST use the same mapping
 -- [C3]. Both fields are Nilable in the API contract; a source with neither
--- is skipped by the deep pass (its bar row still renders from byType).
+-- is skipped by the detail pass (its bar row still renders from byType).
 -- Secret guard mirrors Detail.lua's enemy-key idiom (never key a table on a
 -- possibly-secret value); capture runs OOC where these are plain, so a
 -- secret here is a contract surprise and the source is simply skipped.
@@ -69,8 +69,26 @@ function DM:HistorySource(sessionID, dmType, sourceGUID, sourceCreatureID)
     local entry = h and h.byID[sessionID]
     if not entry then return nil end
     local key = DM.HistorySourceKey(sourceGUID, sourceCreatureID)
-    local perSource = key ~= nil and entry.sources[key] or nil
+    local sources = entry.sources
+    local perSource = key ~= nil and sources and sources[key] or nil
     return perSource and perSource[dmType] or nil
+end
+
+-- The one pull of a bundle that keeps per-source detail: the run summary,
+-- else the newest stored pull. Capture and the segment menu both read it.
+function DM.HistoryDetailEntry(sessions)
+    for i = 1, #sessions do
+        if sessions[i].isSummary then return sessions[i] end
+    end
+    return sessions[#sessions]
+end
+
+-- True for a stored pull that kept totals only. An unknown id is false.
+function DM:HistoryDetailDropped(sessionID)
+    if type(sessionID) ~= "number" or sessionID >= 0 then return false end
+    local h = self._history
+    local entry = h and h.byID[sessionID]
+    return entry ~= nil and entry.hasDetail ~= true
 end
 
 -- Newest-first bundle list for the segment menu. nil = no history yet.
@@ -80,16 +98,58 @@ function DM:HistoryBundles()
     return h.bundles
 end
 
--- Full clear: header reset only (plus /reload implicitly). The
+-- Full clear: header reset and module disable (plus /reload implicitly). The
 -- DAMAGE_METER_RESET event handler must NOT call this — our own key-start
 -- wipe fires that event right after capture, and external resets must not
--- erase captured history either (spec: store clears only on eviction,
--- header reset, /reload).
+-- erase captured history either.
 function DM:HistoryClear()
     local h = self._history
     if not h then return end
     wipe(h.bundles)
     wipe(h.byID)
+    self:HistoryReleaseRefs()
+end
+
+-- Drops references to bundles held outside the store, so a dropped bundle
+-- can be collected. Pins and plain names are the caller's business. The
+-- menu rebuilds its rows on every open and the caches refill on the next
+-- render, so clearing refs to bundles that survive costs nothing.
+-- keepOpenMenus (eviction): an open menu is using its rows' refs, so they
+-- stay; its next open re-stamps or clears every row. No menu is closed here.
+function DM:HistoryReleaseRefs(keepOpenMenus)
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            if not (keepOpenMenus and W._segMenuOpen) then
+                local rows = W.segMenu and W.segMenu.rows
+                if rows then
+                    for i = 1, #rows do rows[i]._bundle = nil end
+                end
+                if W.segFlyout then W.segFlyout._bundle = nil end
+            end
+            if W._deathScratch then wipe(W._deathScratch) end
+        end
+    end
+    if self._sessionCache then wipe(self._sessionCache) end
+end
+
+-- Module disable: closes open segment menus, releases the store and the
+-- plain-name memo, and unpins any window from a stored pull. nextID
+-- survives, so an id is never reused. The guarded methods live in files
+-- that load after this one.
+function DM:HistoryFree()
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            local pin = W._curSessionID
+            if type(pin) == "number" and pin < 0 then
+                if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+                W._curSessionID = nil
+            end
+        end
+    end
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+    self:HistoryClear()
+    self._plainNames = nil
 end
 
 ---------------------------------------------------------------------------------
@@ -101,11 +161,11 @@ end
 -- enemy-side attribution (combatSpellDetails.unitName — not conditional)
 -- stays plain (in-game probe: 7/7 attackers plain, 0 secret).
 -- Learned wherever a source name renders/marshals plain (RenderBar's plain
--- ticks + the capture deep pass); Detail.lua falls back to it for the tip
+-- ticks + every captured pull); Detail.lua falls back to it for the tip
 -- header and the Targets lookup when a bar's name is secret. Player GUIDs
--- only — identity restriction never applies to creatures. Runtime lifetime,
--- exactly matching the store it backs; survives HeaderReset (identity is not
--- meter data).
+-- only — identity restriction never applies to creatures. Runtime only:
+-- dropped with the store on module disable, kept across HeaderReset
+-- (identity is not meter data).
 ---------------------------------------------------------------------------------
 
 function DM:NotePlainName(guid, name)
@@ -312,22 +372,24 @@ local METER_TYPE_MIN, METER_TYPE_MAX = 0, 10   -- Enum.DamageMeterType range
 
 -- Whole-bundle eviction, oldest first. HistoryRetain is clamped at READ so
 -- a legacy stored value (old slider max 10, older default 20) needs no
--- migration. Max 5: a deep bundle measured ~2.9MB live (smoke),
--- so 5 keys ≈ 15MB runtime ceiling — 10 was ruled too heavy.
+-- migration.
 local function evictOverCap(self, h)
     local cap = self.db and self.db.HistoryRetain
     if type(cap) ~= "number" then cap = 5 end
     if cap < 1 then cap = 1 elseif cap > 5 then cap = 5 end
+    local evicted = false
     while #h.bundles > cap do
         local old = tremove(h.bundles)   -- bundles is newest-first: tail = oldest
         for _, entry in ipairs(old.sessions) do
             h.byID[entry.id] = nil
         end
+        evicted = true
     end
+    if evicted then self:HistoryReleaseRefs(true) end
 end
 
--- Snapshot every stored session × all 11 meter types (+ per-source deep
--- pass) into one sealed bundle. Reads go through the module's own pcall'd
+-- Snapshot every stored session × all 11 meter types into one sealed bundle;
+-- one pull also keeps per-source detail. Reads go through the module's own pcall'd
 -- getters with POSITIVE ids (the API path). Returns the bundle, or nil when
 -- the store was empty/unreadable. ALWAYS consumes the pending metadata —
 -- BOTH copies, even on the early returns.
@@ -377,6 +439,7 @@ function DM:HistoryCapture()
     local h = store(self)
     local outcomes = self._sessionOutcomes
     local startT = debugprofilestop()
+    local nativeIDs = {}   -- entry -> native session id, for the detail pass
 
     local bundle = {
         label = pending and pending.label or nil,   -- nil = "Earlier runs" row [C2]
@@ -401,7 +464,6 @@ function DM:HistoryCapture()
                 outcome = outcomes and outcomes[oldID],
                 isSummary = (pending and pending.summarySessionID == oldID) or nil,
                 byType = {},
-                sources = {},
             }
             h.nextID = h.nextID - 1
             for dmType = METER_TYPE_MIN, METER_TYPE_MAX do
@@ -415,29 +477,45 @@ function DM:HistoryCapture()
                             -- Current members marshal plain here — feed the
                             -- identity memo (self-filters secrets/creatures).
                             self:NotePlainName(src.sourceGUID, src.name)
-                            local key = DM.HistorySourceKey(src.sourceGUID, src.sourceCreatureID)
-                            if key ~= nil then
-                                local detail = self:GetSource(nil, dmType,
-                                    src.sourceGUID, src.sourceCreatureID, oldID)
-                                if detail then
-                                    local perSource = entry.sources[key]
-                                    if not perSource then
-                                        perSource = {}
-                                        entry.sources[key] = perSource
-                                    end
-                                    perSource[dmType] = detail
-                                end
-                            end
                         end
                     end
                 end
             end
             bundle.sessions[#bundle.sessions + 1] = entry
             h.byID[entry.id] = entry
+            nativeIDs[entry] = oldID
         end
     end
 
     if #bundle.sessions == 0 then return nil end
+
+    -- Per-source detail for one pull only; every other pull keeps totals.
+    local detailEntry = DM.HistoryDetailEntry(bundle.sessions)
+    local detailID = nativeIDs[detailEntry]
+    detailEntry.sources = {}
+    detailEntry.hasDetail = true
+    for dmType = METER_TYPE_MIN, METER_TYPE_MAX do
+        local session = detailEntry.byType[dmType]
+        local srcs = session and session.combatSources
+        if srcs then
+            for si = 1, #srcs do
+                local src = srcs[si]
+                local key = DM.HistorySourceKey(src.sourceGUID, src.sourceCreatureID)
+                if key ~= nil then
+                    local detail = self:GetSource(nil, dmType,
+                        src.sourceGUID, src.sourceCreatureID, detailID)
+                    if detail then
+                        local perSource = detailEntry.sources[key]
+                        if not perSource then
+                            perSource = {}
+                            detailEntry.sources[key] = perSource
+                        end
+                        perSource[dmType] = detail
+                    end
+                end
+            end
+        end
+    end
     tinsert(h.bundles, 1, bundle)   -- newest first
     evictOverCap(self, h)
     if DEBUG_DMH then
