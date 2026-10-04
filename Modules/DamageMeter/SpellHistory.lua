@@ -394,6 +394,7 @@ local castState = { items = false }
 
 local MAX_ICONS = 10
 local FADE_DURATION = 1
+local PUSH_DURATION = 0.25
 local FAILED_MARK_SCALE = 0.7
 local FAILED_ATLAS = "common-icon-redx"
 local PLACEHOLDER_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -439,7 +440,9 @@ local function SetBorderPet(icon, pet)
     icon.pet = pet
 end
 
-local function ReanchorShown()
+-- A push still running is stopped first, so it restarts from the new anchor
+-- instead of finishing from the old one.
+local function ReanchorShown(push)
     local frame = strip
     if not frame then return end
     for slot = 1, ringSize do
@@ -448,6 +451,14 @@ local function ReanchorShown()
             local pos = SlotPosition(slot, head, ringSize)
             icon:ClearAllPoints()
             icon:SetPoint(growPoint, frame, growPoint, pos * stepX, pos * stepY)
+            if push then
+                icon.entry:Stop()
+                icon.entry:Play()
+                if pos == 0 then
+                    icon.appear:Stop()
+                    icon.appear:Play()
+                end
+            end
         end
     end
 end
@@ -475,6 +486,8 @@ local function ClearRing()
     for slot = 1, #icons do
         local icon = icons[slot]
         icon.group:Stop()
+        icon.entry:Stop()
+        icon.appear:Stop()
         icon.live = false
         icon:Hide()
     end
@@ -506,6 +519,28 @@ local function CreateIcon(parent)
     fade:SetDuration(FADE_DURATION)
     group:SetScript("OnFinished", function() OnIconFaded(icon) end)
     icon.group, icon.fade = group, fade
+
+    -- Translation takes only an offset, so the push is a zero-length step back
+    -- toward the newest end, then the glide forward. ApplyGrowth sets both.
+    local entry = icon:CreateAnimationGroup()
+    local slideBack = entry:CreateAnimation("Translation")
+    slideBack:SetOrder(1)
+    slideBack:SetDuration(0)
+    local slideIn = entry:CreateAnimation("Translation")
+    slideIn:SetOrder(2)
+    slideIn:SetDuration(PUSH_DURATION)
+    slideIn:SetSmoothing("OUT")
+    icon.entry, icon.slideBack, icon.slideIn = entry, slideBack, slideIn
+
+    -- Its own group: an alpha change in the entry group would play over an
+    -- older icon's running fade.
+    local appear = icon:CreateAnimationGroup()
+    local fadeIn = appear:CreateAnimation("Alpha")
+    fadeIn:SetFromAlpha(0)
+    fadeIn:SetToAlpha(1)
+    fadeIn:SetDuration(PUSH_DURATION)
+    fadeIn:SetSmoothing("OUT")
+    icon.appear = appear
     icon.live = false
     return icon
 end
@@ -531,7 +566,7 @@ local function Push(tex, kind, status, castGUID)
         icon.fade:SetStartDelay(fadeDelay)
         icon.group:Play()
     end
-    ReanchorShown()
+    ReanchorShown(true)
 end
 
 -- The cast a failure report grayed out succeeded after all: undo the gray in
@@ -686,6 +721,13 @@ local function ApplyGrowth(grow)
     local x, y = GROW_X[grow] * stripStep, GROW_Y[grow] * stripStep
     if point == growPoint and x == stepX and y == stepY then return end
     growPoint, stepX, stepY = point, x, y
+    -- A push in flight would glide by the old step, so it lands at once.
+    for slot = 1, #icons do
+        local icon = icons[slot]
+        icon.entry:Stop()
+        icon.slideBack:SetOffset(-x, -y)
+        icon.slideIn:SetOffset(x, y)
+    end
     ReanchorShown()
 end
 
