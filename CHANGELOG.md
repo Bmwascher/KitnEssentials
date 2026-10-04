@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.2
+
+### Settings Window
+
+- Labels and tooltips use American spelling throughout ("Color", "Gray",
+  "Center"); searching the sidebar with the British spellings still finds
+  the same pages
+
+---
+
 ## v4.9.1
 
 ### Dark Theme
