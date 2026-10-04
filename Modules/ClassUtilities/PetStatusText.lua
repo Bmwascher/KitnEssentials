@@ -197,6 +197,19 @@ local function CheckPetStatus()
         return PET_STATUS.WRONG, PS.db.PetWrong, PS.db.WrongColor
     end
 
+    -- The sacrifice kills the demon, which would be remembered as a death. A
+    -- readable buff proves the sacrifice (summoning removes it), including
+    -- while the corpse still exists.
+    if isGrimoireClass and C_SpellBook.IsSpellKnown(108503, SpellBookBank_Player) then
+        local hasPet = UnitExists("pet")
+        local hidden = KE:IsAuraHiddenForSpell(196099)
+        if (not hasPet or UnitIsDeadOrGhost("pet")) and not hidden
+            and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(196099) then
+            petDeathTracked = false
+            return PET_STATUS.NONE, nil, nil
+        end
+    end
+
     -- Remaining priority: Dead > Passive > Missing
     if CheckAndUpdatePetDeathState() then
         return PET_STATUS.DEAD, PS.db.PetDead, PS.db.DeadColor

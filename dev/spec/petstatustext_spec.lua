@@ -85,6 +85,45 @@ describe("pet status per-spell secrecy", function()
     end)
 end)
 
+describe("PetStatusText Grimoire of Sacrifice after a death", function()
+    it("silences a remembered death only where the sacrifice explains it", function()
+        local rows = {
+            { name = "buff present after the sacrifice, no pet",
+              state = { hasPet = false, petDead = false, aura = { spellId = GRIMOIRE } }, expect = nil },
+            { name = "buff present while the dead pet still exists",
+              state = { hasPet = true, petDead = true, aura = { spellId = GRIMOIRE } }, expect = nil },
+            { name = "buff hidden, no pet, after the death",
+              state = { hasPet = false, petDead = false, aurasHidden = true }, expect = "PET DEAD" },
+            { name = "buff hidden while the dead pet still exists",
+              state = { hasPet = true, petDead = true, aurasHidden = true }, expect = "PET DEAD" },
+            { name = "buff absent after a real death",
+              state = { hasPet = false, petDead = false }, expect = "PET DEAD" },
+            { name = "talent not known, buff hidden, no pet, after the death",
+              state = { hasPet = false, petDead = false, aurasHidden = true, unknownSpells = { [108503] = true } },
+              expect = "PET DEAD" },
+        }
+        for _, row in ipairs(rows) do
+            local overrides = {
+                class = "WARLOCK", specID = AFFLICTION, hasPet = true, petDead = true,
+                db = {
+                    Enabled = true,
+                    PetMissing = "PET MISSING", MissingColor = { 1, 1, 1, 1 },
+                    PetDead = "PET DEAD", DeadColor = { 1, 1, 1, 1 },
+                },
+            }
+            local PS, rec = L.loadPetStatusText(overrides)
+            PS:UpdatePetText()
+            assert.equal("PET DEAD", rec.text, row.name .. ": the real death is painted first")
+
+            for key, value in pairs(row.state) do overrides[key] = value end
+            rec.text = nil
+            PS:UpdatePetText()
+            assert.equal(row.expect, rec.text, row.name)
+            assert.equal(row.expect ~= nil, rec.shown, row.name)
+        end
+    end)
+end)
+
 describe("Demonology expected pet", function()
     it("expects the pet each context calls for", function()
         local PS = L.loadPetStatusText()

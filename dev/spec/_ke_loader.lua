@@ -2420,9 +2420,11 @@ function L.loadPetStatusText(overrides)
     _G.UnitHasVehicleUI    = function() return false end
     _G.GetSpecialization   = function() return 1 end
     _G.GetSpecializationInfo = function() return overrides.specID or 265 end
-    _G.C_SpellBook         = { IsSpellKnown = function() return true end }
+    _G.C_SpellBook         = { IsSpellKnown = function(spellID)
+        return not (overrides.unknownSpells and overrides.unknownSpells[spellID])
+    end }
     _G.UnitExists          = function(unit) return unit == "pet" and overrides.hasPet == true end
-    _G.UnitIsDeadOrGhost   = function() return false end
+    _G.UnitIsDeadOrGhost   = function(unit) return unit == "pet" and overrides.petDead == true end
     _G.PetHasActionBar     = function() return false end
     _G.GetPetActionInfo    = function() return nil end
     _G.C_UnitAuras         = { GetPlayerAuraBySpellID = function() return overrides.aura end }
