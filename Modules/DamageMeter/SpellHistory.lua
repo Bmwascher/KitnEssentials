@@ -211,6 +211,21 @@ DM.SpellHistoryNextHead = NextHead
 DM.SpellHistorySlotPosition = SlotPosition
 
 ---------------------------------------------------------------------------------
+-- Fade plan
+---------------------------------------------------------------------------------
+
+-- "held" waits for combat to end. Any mode but "ICON" is the whole row, the
+-- default, so a missing setting reads as it.
+local function FadePlan(mode, hold, inCombat, delay)
+    if delay <= 0 then return "none" end
+    if hold and inCombat then return "held" end
+    if mode == "ICON" then return "icon" end
+    return "strip"
+end
+
+DM.SpellHistoryFadePlan = FadePlan
+
+---------------------------------------------------------------------------------
 -- Attached placement
 ---------------------------------------------------------------------------------
 

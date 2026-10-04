@@ -14,8 +14,8 @@
 -- Every game lookup is injected through `api`, so no Blizzard subsystem is
 -- faked.
 --
--- NOT tested here, per the project's tiered policy: the frames, the fade, the
--- event wiring and the item scan. Those are smoke.
+-- NOT tested here, per the project's tiered policy: the frames, the push, the
+-- fades, the event wiring and the item scan. Those are smoke.
 local L = require("dev.spec._ke_loader")
 
 local SUCCEEDED = "UNIT_SPELLCAST_SUCCEEDED"
@@ -492,6 +492,27 @@ describe("SpellHistory resize offset", function()
                 dm:ResizeSpellHistory("Count", count)
             end
             assert.equals(row.want, sh.Position.XOffset, row.name)
+        end
+    end)
+end)
+
+describe("SpellHistory fade plan", function()
+    it("starts no fade at delay 0, holds in combat with Hold on, and otherwise fades the icon for ICON and the row for any other mode", function()
+        for _, row in ipairs({
+            { mode = "ICON",  hold = true,  combat = true,  delay = 0, want = "none" },
+            { mode = "STRIP", hold = false, combat = false, delay = 0, want = "none" },
+            { mode = "ICON",  hold = false, combat = true,  delay = 5, want = "icon" },
+            { mode = "ICON",  hold = true,  combat = false, delay = 5, want = "icon" },
+            { mode = "STRIP", hold = false, combat = true,  delay = 5, want = "strip" },
+            { mode = "STRIP", hold = true,  combat = false, delay = 5, want = "strip" },
+            { mode = "ICON",  hold = true,  combat = true,  delay = 5, want = "held" },
+            { mode = "STRIP", hold = true,  combat = true,  delay = 5, want = "held" },
+            { mode = nil,     hold = false, combat = false, delay = 5, want = "strip" },
+            { mode = "OTHER", hold = false, combat = false, delay = 5, want = "strip" },
+        }) do
+            local name = tostring(row.mode) .. " hold=" .. tostring(row.hold) .. " combat=" .. tostring(row.combat)
+                .. " delay=" .. row.delay
+            assert.equals(row.want, DM.SpellHistoryFadePlan(row.mode, row.hold, row.combat, row.delay), name)
         end
     end)
 end)

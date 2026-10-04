@@ -311,6 +311,8 @@ local DM_DEFAULTS = {
         Spacing = 2,
         Grow = "LEFT",          -- the direction older icons move
         FadeDelay = 5,          -- seconds; 0 = never fade
+        FadeMode = "STRIP",     -- "STRIP" fades the row together, "ICON" each icon alone
+        HoldInCombat = true,    -- the fade clock waits while the player is in combat
         Attach = false,
         AttachEdge = "TOP",
         AttachGap = 2,
