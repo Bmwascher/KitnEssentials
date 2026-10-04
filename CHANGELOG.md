@@ -1,5 +1,32 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.0
+
+### Settings Window
+
+- **NEW:** The settings pages now ship as a second addon folder,
+  KitnEssentials Options, loaded the first time you open settings each
+  session. Login holds about 2.6 MB less memory. Manual installs must copy
+  both folders
+- If that folder is missing, from a different version or cannot load,
+  settings says so in chat and on a "Settings pages not loaded" card; Home
+  and Profiles still work, and each later open retries
+- If KitnEssentials Options is disabled in the addon list, opening settings
+  enables it for this character and loads it, with one chat line
+- A settings link used in combat before the first open of the session opens
+  that page after combat
+
+### Addon List
+
+- Both folders are listed under a Kitn Suite category
+
+### Damage Meter
+
+- Segments settings: Reset on Logout sits beside Reset on Key Start, and the
+  notes are split by a divider with one bullet per setting
+
+---
+
 ## v4.8.27
 
 ### Settings Window
