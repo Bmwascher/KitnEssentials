@@ -1541,8 +1541,21 @@ end
 -- Returns a WRAPPER, never an ITEM_TRACKS entry: the entries are a shared
 -- constant, and writing the per-slot count onto one would leak that count onto
 -- every other slot of the same track.
+-- The game's upgrade data comes first: it names the track even on an item whose
+-- tooltip prints no upgrade line.
 function CP:GetItemTrack(unit, slotID, data)
     unit = unit or "player"
+    local link = GetInventoryItemLink(unit, slotID)
+    local info = link and C_Item.GetItemUpgradeInfo(link)
+    local trackName = info and info.trackString
+    if trackName then
+        for _, track in ipairs(ITEM_TRACKS) do
+            if trackName:find(track.keyword, 1, true) then
+                return { track = track, cur = info.currentLevel, max = info.maxLevel }
+            end
+        end
+    end
+
     if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
     if not data or not data.lines then return nil end
 
@@ -1562,16 +1575,13 @@ function CP:GetItemTrack(unit, slotID, data)
         end
     end
 
-    if isCrafted then
-        local itemLink = GetInventoryItemLink(unit, slotID)
-        if itemLink then
-            local ilvl = C_Item.GetDetailedItemLevelInfo(itemLink)
-            if ilvl then
-                local isWeapon = slotID == 16 or slotID == 17
-                for _, track in ipairs(CRAFTED_TRACKS) do
-                    if ilvl >= track.minIlvl and (not track.weaponOnly or isWeapon) then
-                        return { track = track }
-                    end
+    if isCrafted and link then
+        local ilvl = C_Item.GetDetailedItemLevelInfo(link)
+        if ilvl then
+            local isWeapon = slotID == 16 or slotID == 17
+            for _, track in ipairs(CRAFTED_TRACKS) do
+                if ilvl >= track.minIlvl and (not track.weaponOnly or isWeapon) then
+                    return { track = track }
                 end
             end
         end

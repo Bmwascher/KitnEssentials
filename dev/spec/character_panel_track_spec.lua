@@ -94,6 +94,52 @@ describe("Item track extraction", function()
     end)
 end)
 
+describe("Item track source order", function()
+    local LINK = "|cffa335ee|Hitem:1|h[x]|h|r"
+
+    -- The override survives the file's later loads, which only stub the link
+    -- lookup when it is absent.
+    after_each(function()
+        _G.GetInventoryItemLink = nil
+    end)
+
+    local function trackFor(info, tooltipLine)
+        local CP = loadCP(upgradeLine(tooltipLine), {
+            GetInventoryItemLink = function() return LINK end,
+            C_Item = {
+                GetItemInfoInstant = function() return nil end,
+                GetDetailedItemLevelInfo = function() return nil end,
+                GetItemUpgradeInfo = function() return info end,
+            },
+        })
+        return CP, CP:GetItemTrack("player", 5)
+    end
+
+    it("reads the game's track first and falls back to the tooltip when it names none KE knows", function()
+        local cases = {
+            { name = "API track wins over the tooltip's, and 9 of 6 is capped",
+              info = { trackString = "Myth", currentLevel = 9, maxLevel = 6 },
+              line = "Upgrade Level: Hero 2/6",
+              letter = "M", cur = 9, max = 6, capped = true },
+            { name = "API info without a track name falls back to the tooltip",
+              info = { currentLevel = 0, maxLevel = 0 },
+              line = "Upgrade Level: Hero 4/6",
+              letter = "H", cur = "4", max = "6", capped = false },
+            { name = "API track name matching no keyword falls back to the tooltip",
+              info = { trackString = "Gladiator", currentLevel = 1, maxLevel = 6 },
+              line = "Upgrade Level: Champion 3/8",
+              letter = "C", cur = "3", max = "8", capped = false },
+        }
+        for _, c in ipairs(cases) do
+            local CP, w = trackFor(c.info, c.line)
+            assert.equals(c.letter, w.track.letter, c.name)
+            assert.equals(c.cur, w.cur, c.name)
+            assert.equals(c.max, w.max, c.name)
+            assert.equals(c.capped, CP._IsUpgradeCapped(w), c.name)
+        end
+    end)
+end)
+
 describe("Upgrade cap predicate", function()
     it("is uncapped below the maximum", function()
         local CP = loadCP()
