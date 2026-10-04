@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.25
+
+### Damage Meter
+
+- A stored key now keeps the full spell breakdown for its Run Summary (or
+  its newest pull when the key was not completed) and totals for its other
+  pulls; those pulls show "Detail not kept for this pull"
+- Switching the module off forgets the stored keys and closes an open
+  segment menu
+- Bars and breakdown rows are built as they are needed instead of all at
+  login, which lowers memory use
+
+---
+
 ## v4.8.24
 
 ### Dungeon Trash
