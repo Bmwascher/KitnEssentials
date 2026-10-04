@@ -293,8 +293,6 @@ local function SkinLegacySettings()
     local f = _G.BetterFriendlistSettingsFrame
     if not f or S.data(f).bflSkinned then return end
     S.data(f).bflSkinned = true
-    -- StripPanelShell re-shows and recolours the backdrop frame.
-    S.Backdrop(f)
     S.Frame(f)
     S.Tabs("BetterFriendlistSettingsFrameTab", 10)
     SkinInset(f.MainInset)
@@ -452,8 +450,6 @@ local function Skin()
     if not frame or S.data(frame).bflSkinned then return end
     S.data(frame).bflSkinned = true
 
-    -- StripPanelShell re-shows and recolours the backdrop frame.
-    S.Backdrop(frame)
     S.Frame(frame)
     StripPanelShell(frame)
 
@@ -839,9 +835,6 @@ local function SkinAddFriendDialog()
     S.data(af).skinned = true
     if af.Border then af.Border:Hide() end
     S.StripTextures(af)
-    -- S.FixSubPixelEdge below repositions a backdrop frame, so this
-    -- window asks for one.
-    S.Backdrop(af)
     S.Template(af, "Window")
     local entry = _G.AddFriendEntryFrame
     if entry then

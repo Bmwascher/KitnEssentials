@@ -477,9 +477,6 @@ local function Skin()
     if detail then
         if detail.Border then detail.Border:Hide() end
         S.StripTextures(detail)
-        -- S.FixSubPixelEdge below repositions a backdrop frame, so this
-        -- window asks for one.
-        S.Backdrop(detail)
         S.Template(detail, "Window")
 
         S.FontStringsDeep(detail, 12, "OUTLINE", 2)

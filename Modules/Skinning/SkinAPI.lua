@@ -86,129 +86,6 @@ function S.GetBackdrop(frame)
     return backdropCache[frame]
 end
 
--- A plain window rectangle drawn on the frame itself: a fill and four edge
--- strips. It replaces a child backdrop frame where no caller needs the
--- backdrop object. Indices: 1 fill, 2 top, 3 bottom, 4 left, 5 right.
-local plateCache = setmetatable({}, { __mode = "k" })
-
--- Every texture a plate owns. They are regions of the skinned frame, so the
--- strip and kill sweeps over that frame's regions must leave them alone.
-local plateTextures = setmetatable({}, { __mode = "k" })
-
-local function SizePlate(plate, frame)
-    local e = EdgeFor(frame)
-    plate[2]:SetHeight(e)
-    plate[3]:SetHeight(e)
-    plate[4]:SetWidth(e)
-    plate[5]:SetWidth(e)
-end
-
-local function PaintPlate(plate)
-    local bg, border = S.bgColor, S.borderColor
-    plate[1]:SetColorTexture(bg[1], bg[2], bg[3], bg[4])
-    for i = 2, 5 do
-        plate[i]:SetColorTexture(border[1], border[2], border[3], border[4])
-    end
-end
-
--- A plate lives on the BACKGROUND layer, so a frame with that layer disabled
--- would draw nothing; it keeps a real backdrop, which is a child frame.
-local function BackgroundLayerOn(frame)
-    if not frame.IsDrawLayerEnabled then return false end
-    local on = frame:IsDrawLayerEnabled("BACKGROUND")
-    if issecretvalue(on) then return false end
-    return on and true or false
-end
-
-local function CanPlate(frame)
-    return frame and not backdropCache[frame]
-        and frame.IsObjectType and frame:IsObjectType("Frame")
-        and frame.CreateTexture and BackgroundLayerOn(frame) or false
-end
-
-local function Plate(frame)
-    local plate = plateCache[frame]
-    if plate then
-        -- A second skin pass over the frame: put the plate back as it was.
-        SizePlate(plate, frame)
-        PaintPlate(plate)
-        for i = 1, 5 do plate[i]:Show() end
-        return plate
-    end
-
-    plate = {}
-    plate[1] = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    for i = 2, 5 do
-        plate[i] = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
-    end
-    -- Snapping off, or a 1 px strip can round to nothing.
-    for i = 1, 5 do
-        plateTextures[plate[i]] = true
-        plate[i]:SetSnapToPixelGrid(false)
-        plate[i]:SetTexelSnappingBias(0)
-    end
-
-    plate[1]:SetAllPoints(frame)
-    plate[2]:SetPoint("TOPLEFT", frame, "TOPLEFT")
-    plate[2]:SetPoint("TOPRIGHT", frame, "TOPRIGHT")
-    plate[3]:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT")
-    plate[3]:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT")
-    -- The side strips stop at the top and bottom strips so no corner is
-    -- painted twice.
-    plate[4]:SetPoint("TOPLEFT", plate[2], "BOTTOMLEFT")
-    plate[4]:SetPoint("BOTTOMLEFT", plate[3], "TOPLEFT")
-    plate[5]:SetPoint("TOPRIGHT", plate[2], "BOTTOMRIGHT")
-    plate[5]:SetPoint("BOTTOMRIGHT", plate[3], "TOPRIGHT")
-
-    SizePlate(plate, frame)
-    plateCache[frame] = plate
-    PaintPlate(plate)
-    return plate
-end
-
-local function DropPlate(frame)
-    local plate = plateCache[frame]
-    if not plate then return end
-    for i = 1, 5 do plate[i]:Hide() end
-    plateCache[frame] = nil
-end
-
-local function PlateOrBackdrop(frame)
-    if CanPlate(frame) then
-        Plate(frame)
-        return nil
-    end
-    return S.Backdrop(frame)
-end
-
--- True when the frame sits under the root, or under any of the roots.
-local function PlateUnder(frame, root, roots)
-    local p = frame
-    while p do
-        if p == root or (roots and roots[p]) then return true end
-        if not p.GetParent then return false end
-        local parent = p:GetParent()
-        if issecretvalue(parent) then return true end
-        p = parent
-    end
-    return false
-end
-
--- False when any plate could not be reached or sized, so the caller keeps
--- its retry.
-local function SizePlatesUnder(root, roots)
-    local settled = true
-    for frame, plate in pairs(plateCache) do
-        local ok, under = pcall(PlateUnder, frame, root, roots)
-        if not ok then
-            settled = false
-        elseif under and not pcall(SizePlate, plate, frame) then
-            settled = false
-        end
-    end
-    return settled
-end
-
 -- Test seam. The repaint rule below is the only piece of the backdrop layer
 -- that decides anything, and it cannot be reached without entries in the cache.
 function S._RegisterBackdropForTest(bd)
@@ -337,10 +214,6 @@ function S.SetSkinColors(bg, border)
             end
         end
     end
-
-    -- A plate has no handle a caller could have recoloured, so every plate
-    -- follows the palette.
-    for _, plate in pairs(plateCache) do PaintPlate(plate) end
 end
 
 S.bgColor = S.palette.window
@@ -407,7 +280,7 @@ end
 local function ClearRegions(...)
     for i = 1, select("#", ...) do
         local r = (select(i, ...))
-        if not plateTextures[r] and r.GetObjectType and r:GetObjectType() == "Texture" then
+        if r.GetObjectType and r:GetObjectType() == "Texture" then
             if r.SetTexture then r:SetTexture(S.ClearTexture) end
             if r.SetAtlas then r:SetAtlas("") end
         end
@@ -417,7 +290,7 @@ end
 local function StripRegions(kill, ...)
     for i = 1, select("#", ...) do
         local region = (select(i, ...))
-        if not plateTextures[region] and region.GetObjectType and region:GetObjectType() == "Texture" then
+        if region.GetObjectType and region:GetObjectType() == "Texture" then
             region:SetTexture(S.ClearTexture)
             if region.SetAtlas then region:SetAtlas("") end
             if kill and region.Hide then region:Hide() end
@@ -522,10 +395,6 @@ function S.StripKeepingIcon(frame, icon, kill)
 end
 
 function S.Template(frame, kind, inset)
-    if kind == "Window" and not inset and CanPlate(frame) then
-        Plate(frame)
-        return nil
-    end
     local bd = S.Backdrop(frame, inset)
     if bd then
         local c = (kind == "Default" and S.palette.control)
@@ -624,7 +493,6 @@ function S.Backdrop(frame, inset, borderOnly)
         S.PixelSnap(bd)
         bd:SetBackdropBorderColor(unpack(S.borderColor))
         backdropCache[frame] = bd
-        DropPlate(frame)
     end
 
     bd:SetBackdropColor(S.bgColor[1], S.bgColor[2], S.bgColor[3], borderOnly and 0 or S.bgColor[4])
@@ -720,7 +588,6 @@ edgeRefresher:SetScript("OnEvent", function()
     -- stale, and pairs order is arbitrary, so the damage would move
     -- around between sessions.
     for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
-    for frame, plate in pairs(plateCache) do pcall(SizePlate, plate, frame) end
 end)
 
 -- True when this backdrop owes nothing to the roots. The climb shares the
@@ -760,16 +627,12 @@ S._WalkEdges = WalkEdges
 -- OnSizeChanged on descendants, so callers hook the root's resize).
 function S.RefreshEdgesUnder(root)
     if not root then return true end
-    local plates = SizePlatesUnder(root, nil)
-    local edges = WalkEdges(root, nil, RefreshEdge)
-    return plates and edges
+    return WalkEdges(root, nil, RefreshEdge)
 end
 
 function S.RefreshEdgesUnderRoots(roots)
     if not roots then return true end
-    local plates = SizePlatesUnder(nil, roots)
-    local edges = WalkEdges(nil, roots, RefreshEdge)
-    return plates and edges
+    return WalkEdges(nil, roots, RefreshEdge)
 end
 
 -- Re-measure ONE frame's border. For hosts that scale each element
@@ -780,8 +643,6 @@ end
 function S.RefreshFrameEdge(frame)
     local bd = frame and backdropCache[frame]
     if bd then RefreshEdge(bd) end
-    local plate = frame and plateCache[frame]
-    if plate then SizePlate(plate, frame) end
 end
 
 function S.FixSubPixelEdge(frame, outsetPx)
@@ -1091,7 +952,7 @@ function S.KillTexture(t)
     -- Blizzard re-dresses. killedTextures (external, weak) lets
     -- re-assertion stay cheap.
     if not t then return end
-    if protectedTextures[t] or plateTextures[t] then return end
+    if protectedTextures[t] then return end
     -- One tool for "stay dead" regions: a single Show->Hide redirect,
     -- not our old four-method NOOP. State-only was the
     -- other extreme and let Blizzard re-dress everything (BigWigs
@@ -3302,7 +3163,7 @@ function S.StaticPopup(popup)
     if not popup then return end
     if not S.data(popup).skinned then
         S.StripTextures(popup)
-        PlateOrBackdrop(popup)
+        S.Backdrop(popup)
         S.data(popup).skinned = true
     end
 
@@ -3341,7 +3202,7 @@ function S.Frame(frame, keepChildArt)
 
     S.StripParchment(frame, keepChildArt)
 
-    PlateOrBackdrop(frame)
+    S.Backdrop(frame)
 
     local name = frame.GetName and frame:GetName()
     local close = frame.CloseButton or (name and _G[name .. "CloseButton"])
