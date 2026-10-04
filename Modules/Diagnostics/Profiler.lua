@@ -1017,11 +1017,17 @@ local function CensusReport(run, started)
     censusFirst = censusFirst or summary
 end
 
+-- InCombatLockdown() turns false when the player dies mid-pull; the unit
+-- still reports the fight.
+local function InFight()
+    return InCombatLockdown() or UnitAffectingCombat("player")
+end
+
 -- One unbudgeted step that freezes the game for seconds, so it runs after the
 -- warning line has been drawn and never in combat. It calls nothing on a
 -- frame: a handle kept into a later game frame ends the walk early.
 local function CensusCollect(run)
-    if InCombatLockdown() then error("combat started before the frame list was read", 0) end
+    if InFight() then error("combat started before the frame list was read", 0) end
     local list, n, frame = run.frameList, 0, EnumerateFrames()
     while frame do
         n = n + 1
@@ -1165,7 +1171,7 @@ local function RunCensus()
         p("Census already running.")
         return
     end
-    if InCombatLockdown() then
+    if InFight() then
         p("Census refused in combat.")
         return
     end
@@ -1194,7 +1200,7 @@ local function RunCensus()
     -- Printed before the flag goes up: a throw here must not leave every later
     -- start refused. Nothing runs between the flag and the protected step.
     p("Census started.")
-    p("The game will freeze for a few seconds while the frame list is read.")
+    p("The game will freeze while the frame list is read: a few seconds after login, 10 or more in a long session.")
     censusRunning = true
     CensusStep(run)
 end

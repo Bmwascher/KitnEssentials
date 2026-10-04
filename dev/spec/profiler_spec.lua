@@ -1287,8 +1287,8 @@ end)
 -- EnumerateFrames(handle) ends the walk when the handle was read in an earlier
 -- game frame. No pure predicate covers when the census reads its handles.
 describe("Profiler census walk", function()
-    local STUBBED = { "EnumerateFrames", "debugprofilestop", "C_Timer" }
-    local saved, queue, gameFrame, walks
+    local STUBBED = { "EnumerateFrames", "debugprofilestop", "C_Timer", "UnitAffectingCombat" }
+    local saved, queue, gameFrame, walks, affecting
 
     before_each(function()
         saved = {}
@@ -1320,6 +1320,8 @@ describe("Profiler census walk", function()
             clock = clock + 1
             return clock
         end
+        affecting = false
+        _G.UnitAffectingCombat = function() return affecting end
         queue = {}
         _G.C_Timer = {
             After = function(_, callback) queue[#queue + 1] = callback end,
@@ -1350,20 +1352,30 @@ describe("Profiler census walk", function()
         assert.truthy(output:find("Census: 10 frames, 0 forbidden, 0 unreadable.", 1, true), output)
     end)
 
-    it("refuses to start in combat and reads no frame", function()
-        local state = loadProfiler({ inCombat = true })
-        state.profiler.RunCommand("census")
+    -- The second row is a player who died mid-pull: no lockdown, still in the fight.
+    local FIGHTS = {
+        { name = "in combat", lockdown = true, affecting = true },
+        { name = "dead in the fight", lockdown = false, affecting = true },
+    }
 
-        local output = table.concat(state.printed, "\n")
-        assert.truthy(output:find("Census refused in combat.", 1, true), output)
-        assert.falsy(output:find("Census started.", 1, true))
-        assert.equals(0, walks)
-        assert.equals(0, #queue)
+    it("refuses to start in a fight and reads no frame", function()
+        for _, fight in ipairs(FIGHTS) do
+            local state = loadProfiler({ inCombat = fight.lockdown })
+            affecting = fight.affecting
+            local walksAtStart = walks
+            state.profiler.RunCommand("census")
+
+            local output = table.concat(state.printed, "\n")
+            assert.truthy(output:find("Census refused in combat.", 1, true), fight.name)
+            assert.falsy(output:find("Census started.", 1, true), fight.name)
+            assert.equals(walksAtStart, walks, fight.name)
+            assert.equals(0, #queue, fight.name)
+        end
     end)
 
-    it("aborts when combat starts just before the frame list step, and starts again after", function()
-        -- A clean run finds the step that reads the frame list; the second run
-        -- enters combat right before that step, after the globals walk ended.
+    it("aborts when a fight starts just before the frame list step, and starts again after", function()
+        -- A clean run finds the step that reads the frame list; each later run
+        -- enters the fight right before that step, after the globals walk ended.
         local state = loadProfiler()
         state.profiler.RunCommand("census")
         local walksBefore, collectAt = {}, nil
@@ -1373,18 +1385,27 @@ describe("Profiler census walk", function()
         end
         assert.truthy(collectAt and collectAt > 1)
 
-        state = loadProfiler()
-        state.profiler.RunCommand("census")
-        local walksAtStart = walks
-        drain(function(step) if step == collectAt then state.setCombat(true) end end)
-        local output = table.concat(state.printed, "\n")
-        assert.truthy(output:find("Census aborted: combat started before the frame list was read", 1, true), output)
-        assert.equals(walksAtStart, walks)
+        for _, fight in ipairs(FIGHTS) do
+            state = loadProfiler()
+            state.profiler.RunCommand("census")
+            local walksAtStart = walks
+            drain(function(step)
+                if step == collectAt then
+                    state.setCombat(fight.lockdown)
+                    affecting = fight.affecting
+                end
+            end)
+            local output = table.concat(state.printed, "\n")
+            assert.truthy(output:find("Census aborted: combat started before the frame list was read", 1, true),
+                fight.name)
+            assert.equals(walksAtStart, walks, fight.name)
 
-        state.setCombat(false)
-        state.profiler.RunCommand("census")
-        drain()
-        output = table.concat(state.printed, "\n")
-        assert.truthy(output:find("Census: 10 frames", 1, true), output)
+            state.setCombat(false)
+            affecting = false
+            state.profiler.RunCommand("census")
+            drain()
+            output = table.concat(state.printed, "\n")
+            assert.truthy(output:find("Census: 10 frames", 1, true), fight.name)
+        end
     end)
 end)
