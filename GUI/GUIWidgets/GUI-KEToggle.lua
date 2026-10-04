@@ -399,8 +399,7 @@ local CELL = 22
 local LABEL_GAP = 8
 
 -- Right inset that ends the hit rect at the end of the label text, so the
--- blank rest of the column takes no click, hover or tooltip. A label that
--- fills or overflows the cell keeps the whole cell.
+-- blank rest of the column takes no click, hover or tooltip.
 ---@param cellWidth number?
 ---@param textWidth number?
 ---@return number
