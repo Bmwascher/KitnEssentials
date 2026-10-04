@@ -448,8 +448,8 @@ local function SetBorderPet(icon, pet)
     icon.pet = pet
 end
 
--- A push still running is stopped first, so it restarts from the new anchor
--- instead of finishing from the old one.
+-- With push, a push still running is stopped first, so it restarts from the
+-- new anchor instead of finishing from the old one.
 local function ReanchorShown(push)
     local frame = strip
     if not frame then return end
