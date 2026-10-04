@@ -9,7 +9,6 @@ local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collap
 local BUTTON_SIZE = 40
 -- MDT creates its window in a build coroutine after its window addon loads
 -- and offers no callback for it; the skin only has to catch the window once.
--- A window already shown when the tick finds it is skinned on the spot.
 local LOOK_INTERVAL = 0.25
 
 local function ReskinTooltip(tt)
