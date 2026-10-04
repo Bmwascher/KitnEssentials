@@ -5,7 +5,7 @@
 -- ║  filter names an addon a real registration actually uses. ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- The gate this closes: GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua reads
+-- The gate this closes: KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua reads
 -- `Skins[key] ~= false`, so a key nothing registers is always "on" and a
 -- misspelt row controls nothing. Neither direction of that typo shows up any
 -- other way -- it is silent in-game and silent in luacheck.
@@ -20,7 +20,7 @@
 local lfs = require("lfs")
 local L = require("dev.spec._ke_loader")
 
-local GUI_FILE = "GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua"
+local GUI_FILE = "KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua"
 local SKINNING_ROOT = "Modules/Skinning"
 
 -- Keys that always dispatch with no grid row, cited at

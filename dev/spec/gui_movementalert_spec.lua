@@ -1,4 +1,4 @@
--- GUI/GUITabs/GUIUtilities/GUI-NoMovementAlert.lua -- which class card 7 draws.
+-- KitnEssentials_Options/GUIUtilities/GUI-NoMovementAlert.lua -- which class card 7 draws.
 --
 -- Moving the card onto the shared spec picker changed one thing a player can
 -- see: the class used to come from db.SpellEditorClass, a pick stored in the
@@ -65,7 +65,7 @@ describe("GUI-NoMovementAlert tracked spells card", function()
             CreateClassPickerRow = function() return noopRow(), "DRUID" end,
         }
 
-        local KE = helpers.loadModule("GUI/GUITabs/GUIUtilities/GUI-NoMovementAlert.lua", {
+        local KE = helpers.loadModule("KitnEssentials_Options/GUIUtilities/GUI-NoMovementAlert.lua", {
             GUIFrame = GUIFrame,
             GetPlayerSpecId = function() return nil end,
             Theme = { paddingSmall = 4, paddingMedium = 8 },

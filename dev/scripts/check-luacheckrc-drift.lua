@@ -13,7 +13,8 @@
 --           (XML name="X", line-start `X =`, `_G.X =`, `function X(`)
 --           and loose identifier mentions — verifies frame globals and
 --           FrameXML symbols the docs never cover
--- Usage axis: bare identifiers + _G.X forms across Core/ Modules/ GUI/.
+-- Usage axis: bare identifiers + _G.X forms across Core/ Modules/ GUI/
+-- KitnEssentials_Options/.
 --
 -- Report groups (allowlist: dev/scripts/luacheckrc-drift-allow.lua):
 --   [A] rc entries not in the reference   — non-allowlisted = failure
@@ -156,7 +157,7 @@ end
 -- ---- usage axis: KE code + event literals -----------------------------------
 local usedIds, keEvents = {}, {}
 local nKeFiles = 0
-for _, sub in ipairs({ "Core", "Modules", "GUI" }) do
+for _, sub in ipairs({ "Core", "Modules", "GUI", "KitnEssentials_Options" }) do
     for _, f in ipairs(listFiles(ROOT .. "\\" .. sub, "*.lua")) do
         local src = readAll(f)
         if src then
@@ -216,7 +217,7 @@ else
     print(("  Blizzard source: NOT materialized (%d addon dirs -- sparse checkout); tier-1-only mode"):format(#addonDirs))
     print('  fix once: git -C "' .. REF .. '" sparse-checkout set Interface/AddOns   (~26 MB)')
 end
-print(("  KE code: %d lua files (Core/ Modules/ GUI/)"):format(nKeFiles))
+print(("  KE code: %d lua files (Core/ Modules/ GUI/ KitnEssentials_Options/)"):format(nKeFiles))
 for _, e in ipairs(parseErrors) do
     print("  NOTE docs parse error: " .. e)
 end

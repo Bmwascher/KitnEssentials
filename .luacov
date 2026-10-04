@@ -9,6 +9,7 @@ return {
 		"^Core",
 		"^Modules",
 		"^GUI",
+		"^KitnEssentials_Options",
 	},
 	exclude = {
 		"^Libs",

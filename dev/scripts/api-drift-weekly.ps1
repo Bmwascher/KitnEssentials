@@ -111,8 +111,8 @@ week's diff).
 $reportText
 --- END REPORT ---
 
-For each [BREAKING-USED] line: grep the symbol under Core/, Modules/, and
-GUI/ to list every KE call site; read the symbol's entry under
+For each [BREAKING-USED] line: grep the symbol under Core/, Modules/, GUI/
+and KitnEssentials_Options/ to list every KE call site; read the symbol's entry under
 .wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/ to
 see exactly what changed (signature, SecretReturns flags, removal); assess
 severity. For secret-flag changes consult the wow-midnight-api skill - do

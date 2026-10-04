@@ -5,6 +5,8 @@
 
 local M = {}
 
+local PAGES_ROOT = "KitnEssentials_Options/"
+
 -- WoW loads each addon Lua file as a chunk whose vararg is
 -- (addonName, privateNamespace). We replicate that exactly so a file's
 -- top-level `local KE = select(2, ...)` resolves to our table.
@@ -14,12 +16,30 @@ local M = {}
 --
 -- Pass an existing KE table to accumulate across several files, or a seed
 -- (e.g. { Print = function() end }) for files that call KE:Print at load.
+--
+-- A page path also gets GetNamespace answered with KE. With no
+-- KitnEssentials global the page borrows one for its load only; its
+-- GetModule finds nothing, which is what a page's file-scope
+-- `KitnEssentials and KitnEssentials:GetModule(...)` saw with no global.
 function M.loadModule(relpath, KE, addonName)
     KE = KE or {}
     addonName = addonName or "KitnEssentials"
     local chunk, err = loadfile(relpath)
     if not chunk then error("loadfile failed for " .. relpath .. ": " .. tostring(err), 2) end
-    chunk(addonName, KE)
+    if relpath:sub(1, #PAGES_ROOT) ~= PAGES_ROOT then
+        chunk(addonName, KE)
+        return KE
+    end
+    local function getNamespace() return KE end
+    if _G.KitnEssentials then
+        _G.KitnEssentials.GetNamespace = getNamespace
+        chunk(addonName, KE)
+        return KE
+    end
+    _G.KitnEssentials = { GetNamespace = getNamespace, GetModule = function() return nil end }
+    local ok, runErr = pcall(chunk, addonName, KE)
+    _G.KitnEssentials = nil
+    if not ok then error(runErr, 0) end
     return KE
 end
 

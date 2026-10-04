@@ -364,6 +364,7 @@ function GUIFrame:CreateStaticSidebarItem()
     -- Click
     item:SetScript("OnClick", function(self, button)
         if button == "LeftButton" then
+            GUIFrame:DropQueuedPage()
             GUIFrame:SelectSidebarItem(self.id)
         end
     end)
@@ -891,8 +892,21 @@ end
 -- OpenPage
 ---------------------------------------------------------------------------------
 function GUIFrame:OpenPage(itemId, sectionId, context)
-    self.pendingContext = context
+    -- Recorded before Show and selected only by Show's tail, so the newest
+    -- request wins: a link made inside Show (a handler running in the pages'
+    -- load) replaces this one, and a link Show cannot select yet waits for
+    -- the Show that builds or reopens the window.
+    self._pendingPage = { itemId = itemId, sectionId = sectionId, context = context }
     self:Show()
+end
+
+-- A click in the window is newer than a waiting page link, so the link is
+-- dropped instead of replacing the clicked page at the next Show.
+function GUIFrame:DropQueuedPage()
+    self._pendingPage = nil
+end
+
+function GUIFrame:ShowPage(itemId, sectionId)
     if sectionId then
         self.sidebarExpanded[sectionId] = true
         self:RefreshSidebar()

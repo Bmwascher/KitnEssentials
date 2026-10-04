@@ -6,8 +6,8 @@
 --     undocumented C-side APIs, removed APIs kept behind deliberate
 --     nil-checks, forward-compat guards. Value = rationale string,
 --     printed in the report next to the entry.
---   unused_ok — entries with zero bare-global uses in Core/Modules/GUI
---     that should stay in .luacheckrc regardless. The unused group is
+--   unused_ok — entries with zero bare-global uses in Core/Modules/GUI/
+--     KitnEssentials_Options that should stay in .luacheckrc regardless. The unused group is
 --     always advisory; listing an entry here just silences its line.
 --
 -- Add an entry ONLY after verifying the global in-game (/run probe) or

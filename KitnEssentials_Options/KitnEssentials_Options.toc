@@ -1,0 +1,12 @@
+## Title: |cffFF008CKitn|r|cffffffffEssentials Options|r
+## Notes: Settings pages for KitnEssentials. Loads when you open the settings window.
+## Author: Bitebtw
+## Version: @project-version@
+## Interface: 120100
+## Dependencies: KitnEssentials
+## LoadOnDemand: 1
+## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
+## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r
+## Group: KitnEssentials
+
+Pages.xml

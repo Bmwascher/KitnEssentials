@@ -56,12 +56,12 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             ColorTextByTheme = function(_, text) return text end,
         }
 
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootRoll.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootFrame.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-VehicleExit.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardMessages.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-UIWidgets.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-LootRoll.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-LootFrame.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-VehicleExit.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-BlizzardMessages.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
     -- The strip is declared as a function, evaluated per build, so the list

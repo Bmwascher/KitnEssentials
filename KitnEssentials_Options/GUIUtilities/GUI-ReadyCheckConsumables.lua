@@ -1,0 +1,376 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-ReadyCheckConsumables.lua                           ║
+-- ║  GUI: Ready Check Consumables                            ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           ReadyCheckConsumables module.                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+---@class KE
+local KE = KitnEssentials:GetNamespace()
+local GUIFrame = KE.GUIFrame
+local Theme = KE.Theme
+local UnitClass = UnitClass
+
+local function GetModule()
+    if KitnEssentials then
+        return KitnEssentials:GetModule("ReadyCheckConsumables", true)
+    end
+    return nil
+end
+
+GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.ReadyCheckConsumables
+    if not db then
+        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+        errorCard:AddLabel("Database not available")
+        return errorCard:GetNextOffset()
+    end
+
+    local mod = GetModule()
+    local _, playerClass = UnitClass("player")
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("customPosition", function() return db.PositionMode == "custom" end)
+    manager:SetCondition("lowWarning", function() return db.LowDurationWarning ~= false end)
+
+    local function ApplySettings()
+        if mod and mod.ApplySettings then mod:ApplySettings() end
+    end
+
+    local function ApplyModuleState(enabled)
+        if not mod then return end
+        mod.db.Enabled = enabled
+        if enabled then
+            KitnEssentials:EnableModule("ReadyCheckConsumables")
+        else
+            KitnEssentials:DisableModule("ReadyCheckConsumables")
+        end
+    end
+
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
+    end
+
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Ready Check Consumables", yOffset)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+    end)
+
+    card1:AddLabel("Attaches a row of consumable icons to the ready check popup: food, flask, weapon " ..
+        "enhancements, augment rune, healthstone and, for Warlocks, Soulstone. Each shows whether it " ..
+        "is up and for how long; click one to use the matching item from your bags.")
+
+    yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    ----------------------------------------------------------------
+    -- Card 2: General Settings
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    manager:Register(card2, "all")
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local iconSizeSlider = GUIFrame:CreateSlider(row2a, "Icon Size", {
+        min = 16, max = 64, step = 1,
+        value = db.IconSize or 32,
+        callback = function(val) db.IconSize = val; ApplySettings() end,
+    })
+    row2a:AddWidget(iconSizeSlider, 0.5)
+    manager:Register(iconSizeSlider, "all")
+
+    local iconSpacingSlider = GUIFrame:CreateSlider(row2a, "Icon Spacing", {
+        min = 0, max = 16, step = 1,
+        value = db.IconSpacing or 4,
+        callback = function(val) db.IconSpacing = val; ApplySettings() end,
+    })
+    row2a:AddWidget(iconSpacingSlider, 0.5)
+    manager:Register(iconSpacingSlider, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2sep1 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2a = GUIFrame:CreateSeparator(row2sep1)
+    row2sep1:AddWidget(sep2a, 1)
+    manager:Register(sep2a, "all")
+    card2:AddRow(row2sep1, Theme.rowHeightSeparator)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local lowWarningCheck = GUIFrame:CreateCheckbox(row2b, "Warn when a buff runs low", {
+        value = db.LowDurationWarning ~= false,
+        callback = function(checked)
+            db.LowDurationWarning = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row2b:AddWidget(lowWarningCheck, 0.5)
+    manager:Register(lowWarningCheck, "all")
+
+    local lowMinutesSlider = GUIFrame:CreateSlider(row2b, "Low Buff Threshold (minutes)", {
+        min = 1, max = 15, step = 1,
+        value = db.LowDurationMinutes or 10,
+        callback = function(val) db.LowDurationMinutes = val; ApplySettings() end,
+    })
+    row2b:AddWidget(lowMinutesSlider, 0.5)
+    manager:Register(lowMinutesSlider, "lowWarning")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Flasks: cauldron only", {
+        value = db.CauldronFlasksOnly,
+        callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
+    })
+    row2c:AddWidget(cauldronOnlyCheck, 0.5)
+    manager:Register(cauldronOnlyCheck, "all")
+
+    local unlimitedRuneCheck = GUIFrame:CreateCheckbox(row2c, "Runes: unlimited only", {
+        value = db.UnlimitedRunesOnly,
+        callback = function(checked) db.UnlimitedRunesOnly = checked; ApplySettings() end,
+    })
+    row2c:AddWidget(unlimitedRuneCheck, 0.5)
+    manager:Register(unlimitedRuneCheck, "all")
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2sep2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2b = GUIFrame:CreateSeparator(row2sep2)
+    row2sep2:AddWidget(sep2b, 1)
+    manager:Register(sep2b, "all")
+    card2:AddRow(row2sep2, Theme.rowHeightSeparator)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local hideStarterCheck = GUIFrame:CreateCheckbox(row2d, "Hide when I start the check", {
+        value = db.HideForStarter,
+        callback = function(checked) db.HideForStarter = checked; ApplySettings() end,
+    })
+    row2d:AddWidget(hideStarterCheck, 0.5)
+    manager:Register(hideStarterCheck, "all")
+
+    local tooltipCheck = GUIFrame:CreateCheckbox(row2d, "Show tooltips on hover", {
+        value = db.ShowTooltips ~= false,
+        callback = function(checked) db.ShowTooltips = checked; ApplySettings() end,
+    })
+    row2d:AddWidget(tooltipCheck, 0.5)
+    manager:Register(tooltipCheck, "all")
+    card2:AddRow(row2d, Theme.rowHeight)
+
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local timerBarCheck = GUIFrame:CreateCheckbox(row2e, "Show a timer bar under the popup", {
+        value = db.ShowTimerBar ~= false,
+        callback = function(checked) db.ShowTimerBar = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(timerBarCheck, 0.5)
+    manager:Register(timerBarCheck, "all")
+
+    local hideMockCheck = GUIFrame:CreateCheckbox(row2e, "Hide the preview box", {
+        value = db.HidePreviewMock,
+        callback = function(checked) db.HidePreviewMock = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(hideMockCheck, 0.5)
+    manager:Register(hideMockCheck, "all")
+    card2:AddRow(row2e, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Visible Consumables
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Visible Consumables", yOffset)
+    manager:Register(card3, "all")
+
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local foodCheck = GUIFrame:CreateCheckbox(row3a, "Food", {
+        value = db.ShowFood ~= false,
+        callback = function(checked) db.ShowFood = checked; ApplySettings() end,
+    })
+    row3a:AddWidget(foodCheck, 1/3)
+    manager:Register(foodCheck, "all")
+
+    local flaskCheck = GUIFrame:CreateCheckbox(row3a, "Flask", {
+        value = db.ShowFlask ~= false,
+        callback = function(checked) db.ShowFlask = checked; ApplySettings() end,
+    })
+    row3a:AddWidget(flaskCheck, 1/3)
+    manager:Register(flaskCheck, "all")
+
+    local runeCheck = GUIFrame:CreateCheckbox(row3a, "Augment Rune", {
+        value = db.ShowAugmentRune ~= false,
+        callback = function(checked) db.ShowAugmentRune = checked; ApplySettings() end,
+    })
+    row3a:AddWidget(runeCheck, 1/3)
+    manager:Register(runeCheck, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    -- One class row per class with a class slot or a class check; every
+    -- other class ends the card on the weapon row.
+    local lastConsumableRowIsClass = playerClass == "WARLOCK" or playerClass == "SHAMAN" or playerClass == "PALADIN"
+    local row3b = GUIFrame:CreateRow(card3.content, lastConsumableRowIsClass and Theme.rowHeight or Theme.rowHeightLast)
+    local oilCheck = GUIFrame:CreateCheckbox(row3b, "Weapon Enchant (MH)", {
+        value = db.ShowWeaponOil ~= false,
+        callback = function(checked) db.ShowWeaponOil = checked; ApplySettings() end,
+    })
+    row3b:AddWidget(oilCheck, 1/3)
+    manager:Register(oilCheck, "all")
+
+    local oilOHCheck = GUIFrame:CreateCheckbox(row3b, "Weapon Enchant (OH)", {
+        value = db.ShowOffHandOil ~= false,
+        callback = function(checked) db.ShowOffHandOil = checked; ApplySettings() end,
+    })
+    row3b:AddWidget(oilOHCheck, 1/3)
+    manager:Register(oilOHCheck, "all")
+
+    local hsCheck = GUIFrame:CreateCheckbox(row3b, "Healthstone", {
+        value = db.ShowHealthstone ~= false,
+        callback = function(checked) db.ShowHealthstone = checked; ApplySettings() end,
+        tooltip = "Needs a Warlock in your group.",
+    })
+    row3b:AddWidget(hsCheck, 1/3)
+    manager:Register(hsCheck, "all")
+    if lastConsumableRowIsClass then
+        card3:AddRow(row3b, Theme.rowHeight)
+
+        local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+        if playerClass ~= "PALADIN" then
+            local classCheck = GUIFrame:CreateCheckbox(row3c,
+                playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", {
+                value = db.ShowClassItem ~= false,
+                callback = function(checked) db.ShowClassItem = checked; ApplySettings() end,
+            })
+            row3c:AddWidget(classCheck, 0.5)
+            manager:Register(classCheck, "all")
+        end
+        if playerClass ~= "WARLOCK" then
+            local classChecksCheck = GUIFrame:CreateCheckbox(row3c,
+                playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", {
+                value = db.ClassChecks ~= false,
+                callback = function(checked) db.ClassChecks = checked; ApplySettings() end,
+            })
+            row3c:AddWidget(classChecksCheck, 0.5)
+            manager:Register(classChecksCheck, "all")
+        end
+        card3:AddRow(row3c, Theme.rowHeightLast, 0)
+    else
+        card3:AddRow(row3b, Theme.rowHeightLast, 0)
+    end
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Position Settings (custom auto/custom mode — manual)
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
+    manager:Register(card4, "all")
+
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local posModeDropdown = GUIFrame:CreateDropdown(row4a, "Position Mode", {
+        options = {
+            { key = "auto",   text = "Auto (anchor to ready check popup)" },
+            { key = "custom", text = "Custom (manual position)" },
+        },
+        value = db.PositionMode or "auto",
+        callback = function(key)
+            db.PositionMode = key
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row4a:AddWidget(posModeDropdown, 1)
+    manager:Register(posModeDropdown, "all")
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    local anchorPoints = {
+        { key = "TOP",         text = "Top" },
+        { key = "TOPLEFT",     text = "Top Left" },
+        { key = "TOPRIGHT",    text = "Top Right" },
+        { key = "BOTTOM",      text = "Bottom" },
+        { key = "BOTTOMLEFT",  text = "Bottom Left" },
+        { key = "BOTTOMRIGHT", text = "Bottom Right" },
+        { key = "LEFT",        text = "Left" },
+        { key = "RIGHT",       text = "Right" },
+        { key = "CENTER",      text = "Center" },
+    }
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local selfPointDropdown = GUIFrame:CreateDropdown(row4b, "Self Point", {
+        options = anchorPoints,
+        value = db.SelfPoint or "BOTTOM",
+        callback = function(key) db.SelfPoint = key; ApplySettings() end,
+    })
+    row4b:AddWidget(selfPointDropdown, 0.5)
+    manager:Register(selfPointDropdown, "customPosition")
+
+    local anchorPointDropdown = GUIFrame:CreateDropdown(row4b, "Anchor Point", {
+        options = anchorPoints,
+        value = db.AnchorPoint or "CENTER",
+        callback = function(key) db.AnchorPoint = key; ApplySettings() end,
+    })
+    row4b:AddWidget(anchorPointDropdown, 0.5)
+    manager:Register(anchorPointDropdown, "customPosition")
+    card4:AddRow(row4b, Theme.rowHeight)
+
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local xOffsetSlider = GUIFrame:CreateSlider(row4c, "X Offset", {
+        min = -1000, max = 1000, step = 1,
+        value = db.XOffset or 0,
+        callback = function(val) db.XOffset = val; ApplySettings() end,
+    })
+    row4c:AddWidget(xOffsetSlider, 0.5)
+    manager:Register(xOffsetSlider, "customPosition")
+
+    local yOffsetSlider = GUIFrame:CreateSlider(row4c, "Y Offset", {
+        min = -1000, max = 1000, step = 1,
+        value = db.YOffset or 100,
+        callback = function(val) db.YOffset = val; ApplySettings() end,
+    })
+    row4c:AddWidget(yOffsetSlider, 0.5)
+    manager:Register(yOffsetSlider, "customPosition")
+    card4:AddRow(row4c, Theme.rowHeightLast, 0)
+
+    yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 6, 32 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Colors
+    ----------------------------------------------------------------
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        isLast = true,
+        perRow = 3,
+        noteHeight = 74,
+        note = KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
+            KE:ColorTextByTheme("-") .. " Low Duration Text replaces the other two, and colors the glow, when a buff is under the warning threshold.\n" ..
+            KE:ColorTextByTheme("-") .. " Hearty Food Text replaces the base color on the food slot when your active food persists through death.",
+        colors = {
+            { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
+            { label = "Low Duration Text", key = "LowDurationColor", default = { 1.0, 0.3, 0.3, 1.0 } },
+            { label = "Hearty Food Text", key = "HeartyFoodColor", default = { 0.2, 1.0, 0.2, 1.0 } },
+        },
+    })
+
+    RefreshStates()
+    return yOffset
+end)

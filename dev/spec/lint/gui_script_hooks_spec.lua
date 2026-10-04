@@ -3,8 +3,9 @@
 -- The GUI reuses its cards, rows and widgets from pools. A hook can never be
 -- taken off, so one installed on a pooled widget keeps running for every page
 -- that widget serves afterwards, and the pool's runtime check cannot see it.
--- Every HookScript under GUI/ is listed below with the frame it lands on: a
--- frame no pool hands out, or a pooled one hooked once by the constructor
+-- Every HookScript under GUI/ and KitnEssentials_Options/ is listed below
+-- with the frame it lands on: a frame no pool hands out, or a pooled one
+-- hooked once by the constructor
 -- that has just made it. A SetScript is held to a receiver whose nearest
 -- assignment above the call takes it from CreateFrame or CreateAnimationGroup:
 -- a script replaced on a pooled widget is the same defect and just as
@@ -35,10 +36,10 @@ local HOOKS_ALLOWED = {
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnShow"] = 1,
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnHide"] = 1,
     -- The main window's close hook, installed once per session.
-    ["GUI/GUITabs/GUIQoL/GUI-Optimize.lua|frame|OnHide"] = 1,
+    ["KitnEssentials_Options/GUIQoL/GUI-Optimize.lua|frame|OnHide"] = 1,
     -- Installed once by the keybind button's constructor, on the button it
     -- has just made.
-    ["GUI/GUITabs/GUIUtilities/GUI-WorldMarkerCycler.lua|btn|OnClick"] = 1,
+    ["KitnEssentials_Options/GUIUtilities/GUI-WorldMarkerCycler.lua|btn|OnClick"] = 1,
 }
 
 -- "file|receiver" for a SetScript whose receiver is not taken from
@@ -47,7 +48,7 @@ local HOOKS_ALLOWED = {
 local SETSCRIPT_ALLOWED = {
     -- SetupHover(btn): both callers pass buttons the page made with
     -- CreateFrame (applyBtn, revertBtnSmall).
-    ["GUI/GUITabs/GUIQoL/GUI-Optimize.lua|btn"] = true,
+    ["KitnEssentials_Options/GUIQoL/GUI-Optimize.lua|btn"] = true,
     -- The dropdown's own list buttons: it makes them, keeps them on its own
     -- reuse list and never hands one to a page.
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|btn"] = true,
@@ -56,7 +57,7 @@ local SETSCRIPT_ALLOWED = {
     ["GUI/GUIMain/GUI-KEScrollbar.lua|scrollFrame"] = true,
 }
 
-local SETSCRIPT_DIRS = { "GUI/GUITabs", "GUI/GUIWidgets", "GUI/GUIMain", "GUI/GUIHelpers" }
+local SETSCRIPT_DIRS = { "KitnEssentials_Options", "GUI/GUIWidgets", "GUI/GUIMain", "GUI/GUIHelpers" }
 
 -- True when the nearest assignment to receiver above pos takes its value from
 -- CreateFrame or CreateAnimationGroup. The frontier keeps `x.btn = ...` from
@@ -129,7 +130,7 @@ end
 
 describe("script hooks in the settings GUI", function()
     it("hooks only the listed frames: built once, or hooked once by their own constructor", function()
-        local files = walkLuaFiles("GUI", {})
+        local files = walkLuaFiles("KitnEssentials_Options", walkLuaFiles("GUI", {}))
         assert.is_true(#files > 50, "positive control: the GUI tree was found")
         local found = {}
         for _, path in ipairs(files) do

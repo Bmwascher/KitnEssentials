@@ -25,8 +25,8 @@ describe("GUI-Automation: subtab id coverage", function()
             db = { profile = { Automation = { Enabled = true } } },
         }
 
-        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-Automation.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CombatLogger.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUIQoL/GUI-Automation.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUIQoL/GUI-CombatLogger.lua", KE)
     end)
 
     -- The strip is declared as a function, evaluated per build, so the list

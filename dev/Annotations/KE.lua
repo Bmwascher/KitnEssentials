@@ -836,6 +836,9 @@ function KitnEssentials:EnableModule(name) end
 ---@param name string
 function KitnEssentials:DisableModule(name) end
 
+---@return KE
+function KitnEssentials:GetNamespace() end
+
 -- AceModule shape (what every KE:NewModule() returns).
 -- Module-specific methods (function MOD:UpdateTicks() etc.) are not
 -- declared here; `undefined-field` is disabled in .wowluarc.json so the

@@ -146,7 +146,7 @@ local function scanRequests()
         unreadable[#unreadable + 1] = path .. ":" .. lineNo .. " " .. why
     end
 
-    for _, root in ipairs({ "Core", "GUI", "Modules" }) do
+    for _, root in ipairs({ "Core", "GUI", "KitnEssentials_Options", "Modules" }) do
         for _, path in ipairs(luaFilesUnder(root)) do
             for lineNo, line in ipairs(readLines(path)) do
                 local occurrences = isCommentLine(line) and 0 or countTriggers(line)
