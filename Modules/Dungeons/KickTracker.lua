@@ -503,12 +503,12 @@ end
 ---------------------------------------------------------------------------------
 -- Teammate kicks: rows, records and the Damage Meter
 ---------------------------------------------------------------------------------
--- Two lists. kickRecords works as it always has: every named interrupt that
+-- Two lists. kickRecords: every named interrupt that
 -- is not the player's own joins it on arrival, capped at Max Records, and
 -- only a claim (a KICK, the player's cast) removes one. Sync pairing runs on
 -- it alone. recentKicks is the Damage Meter's history. A claim marks the
 -- claimed record's history entry taken; nothing on the meter side writes to
--- kickRecords. A record draws after today's grace unless a readable kicker's
+-- kickRecords. A record draws after KICK_RECORD_GRACE unless a readable kicker's
 -- row took its kick at once; a hidden kicker's drawn record goes when the
 -- meter later moves the kick onto a row.
 
@@ -536,10 +536,10 @@ end
 -- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
 -- truth that someone's kick landed. Each one joins recentKicks, where the
 -- meter windows count it, and each that is not the player's own goes through
--- the record list as it always has (KT:ProcessTeammateKick). A teammate the
--- game names plainly then takes it on their row; every other record draws as
--- it always has, and a hidden kicker's may move onto a row once the Damage
--- Meter names the kicker (KT:ResolvePending).
+-- the record list (KT:ProcessTeammateKick). A teammate the game names plainly
+-- then takes it on their row; every other record draws, and a hidden kicker's
+-- may move onto a row once the Damage Meter names the kicker
+-- (KT:ResolvePending).
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     -- The payload may be secret while unit spellcasts are restricted; a
@@ -625,7 +625,7 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         entry.state = "record"
     end
 
-    -- Every other record draws after a grace, as it always has, so a KICK
+    -- Every other record draws after a grace, so a KICK
     -- that claims it first leaves no trace: the local event always beats the
     -- network. A hidden kicker's record moves onto a row if the meter later
     -- names the kicker (KT:ResolvePending).
@@ -665,7 +665,7 @@ function KT:RosterKicker(interrupterGuid)
     return nil
 end
 
--- The record list's intake, unchanged in what it takes: an open KICK claim
+-- The record list's intake: an open KICK claim
 -- takes the interrupt first, else it becomes a record, capped at Max Records.
 -- Returns the record; nothing and true when an open claim took it; nothing
 -- when the game gives no name. The caller draws the record or not.
