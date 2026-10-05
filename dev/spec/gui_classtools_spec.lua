@@ -18,15 +18,16 @@ describe("GUI-ClassTools: own-class tab", function()
     it("picks a tab of its own, on the strip, for each class with a tool", function()
         local onStrip = {}
         for _, tab in ipairs(GUIFrame.tabStrips["ClassTools"]) do onStrip[tab.id] = true end
-        for _, class in ipairs({ "EVOKER", "HUNTER", "PRIEST", "WARLOCK" }) do
+        for _, class in ipairs({ "EVOKER", "HUNTER", "MAGE", "PRIEST", "WARLOCK" }) do
             local pick = GUIFrame.ClassToolsTabForClass(class)
             assert.is_true(onStrip[pick] == true, class .. " picks " .. tostring(pick) .. ", which is not on the strip")
             assert.are_not.equals("ClassToolsAllClasses", pick, class)
         end
     end)
 
-    it("falls back to All Classes for a class with no tab, or none", function()
-        assert.equals("ClassToolsAllClasses", GUIFrame.ClassToolsTabForClass("MAGE"))
+    -- Not a real class, so giving another class a tab never breaks this case.
+    it("falls back to All Classes for a class token with no tab, or none", function()
+        assert.equals("ClassToolsAllClasses", GUIFrame.ClassToolsTabForClass("NOTACLASS"))
         assert.equals("ClassToolsAllClasses", GUIFrame.ClassToolsTabForClass(nil))
     end)
 end)
