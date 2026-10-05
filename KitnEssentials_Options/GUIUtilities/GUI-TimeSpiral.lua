@@ -34,10 +34,6 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         if TSP and TSP.ApplySettings then TSP:ApplySettings() end
     end
 
-    local function ApplyPosition()
-        if TSP and TSP.ApplyPosition then TSP:ApplyPosition() end
-    end
-
     local function ApplyModuleState(enabled)
         if not TSP then return end
         TSP.db.Enabled = enabled
@@ -105,15 +101,21 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     card2:AddRow(row2b, Theme.rowHeight)
 
     local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    -- SetType, not a plain write: a stored "proc" keeps its loop speed in
+    -- GlowDuration, and a plain write would drop it.
     local glowTypeDropdown = GUIFrame:CreateDropdown(row2c, "Glow Type", {
         options = {
-            { key = "pixel",    text = "Pixel Border" },
-            { key = "autocast", text = "Auto Cast" },
-            { key = "button",   text = "Button Glow" },
-            { key = "proc",     text = "Proc Glow" },
+            { key = "pixel",    text = "Pixel" },
+            { key = "ants",     text = "Ants" },
+            { key = "procloop", text = "Proc Loop" },
+            { key = "alert",    text = "Alert" },
         },
-        value = db.GlowType or "proc",
-        callback = function(key) db.GlowType = key; ApplySettings() end,
+        value = KE.AuraGlowRules.ResolveType(db.GlowType),
+        callback = function(key)
+            KE.AuraGlowRules.SetType(db,
+                { type = "GlowType", frequency = "GlowFrequency", duration = "GlowDuration" }, key)
+            ApplySettings()
+        end,
     })
     row2c:AddWidget(glowTypeDropdown, 0.5)
     manager:Register(glowTypeDropdown, "glow")
@@ -147,7 +149,7 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         },
         showAnchorFrameType = true,
         showStrata = true,
-        onChangeCallback = ApplyPosition,
+        onChangeCallback = ApplySettings,
     })
 
     if posCard.positionWidgets then
@@ -277,6 +279,7 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         soundLabel = "Buff Sound",
         testChannel = "Master",
         notes = { "Plays once when you receive the Time Spiral buff, on the Master channel." },
+        onChangeCallback = ApplySettings,
     })
     manager:Register(soundCard, "all")
     yOffset = soundOffset
