@@ -36,9 +36,7 @@ local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local pcall = pcall
 local unpack = unpack
 
--- Flip to true, /reload, repro, read the log. The slot-anchoring line is the
--- one that matters: a refusal there means the bound unit is identity-restricted
--- and no amount of layout work will make this display appear.
+-- Flip to true, /reload, repro, read the log.
 local DEBUG_HT = false
 
 ---------------------------------------------------------------------------------
@@ -142,6 +140,15 @@ end
 function HT:InitWarningButton(button)
     local db = self.db
 
+    -- A slot takes no part in the flow layout, so it is placed by hand: an
+    -- unplaced button is matched and drawn nowhere, with no error.
+    button:ClearAllPoints()
+    button:SetPoint("CENTER", self.anchor, "CENTER", 0, 0)
+    button:SetSize(ANCHOR_WIDTH, AnchorHeight(db))
+    -- Display only: no aura tooltip, and clicks reach the world.
+    pcall(button.SetMouseClickEnabled, button, false)
+    pcall(button.SetMouseMotionEnabled, button, false)
+
     local text = button:CreateFontString(nil, "OVERLAY")
     -- One anchor point, deliberately. SetAllPoints would tie the string to a
     -- button whose size we cannot know.
@@ -174,26 +181,9 @@ function HT:BuildContainer()
         candidateFilters = { includeSpellIDs = HAVOC_IDS },
     }
 
-    local added, slot = pcall(container.AddAuraSlot, container, "havoctarget", "HARMFUL|PLAYER", options)
+    local added = pcall(container.AddAuraSlot, container, "havoctarget", "HARMFUL|PLAYER", options)
     if DEBUG_HT then KE:Print("[HT] slot added=" .. tostring(added)) end
     if not added then return end
-
-    -- A slot takes no part in the flow layout and MUST be anchored by hand. An
-    -- unanchored frame has no position, so the engine matches the aura, builds
-    -- the button, and draws it nowhere with no error to show for it.
-    --
-    -- pcall'd because these are refused outright on a container bound to an
-    -- identity-restricted unit.
-    if slot then
-        local anchored = pcall(function()
-            slot:ClearAllPoints()
-            slot:SetPoint("CENTER", self.anchor, "CENTER", 0, 0)
-            slot:SetSize(ANCHOR_WIDTH, AnchorHeight(self.db))
-        end)
-        if DEBUG_HT then
-            KE:Print("[HT] slot anchoring " .. (anchored and "allowed" or "REFUSED"))
-        end
-    end
 
     pcall(container.SetUnit, container, "target")
     pcall(container.UpdateAllAuras, container)
