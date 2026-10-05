@@ -354,8 +354,17 @@ end
 ---------------------------------------------------------------------------------
 
 function Style.RegisterRegions(button, _display, group, settings)
+    -- A fixed icon is painted by KE and never registered, so the game's aura
+    -- repaint leaves it alone. Writes to it are denied while auras are
+    -- secret; both callers run before the restriction attaches or behind the
+    -- reconfigure gate.
     if button.keIcon then
-        button:SetIcon(button.keIcon)
+        local caps = group.capabilities or {}
+        if caps.fixedIcon then
+            button.keIcon:SetTexture(caps.fixedIcon(settings))
+        else
+            button:SetIcon(button.keIcon)
+        end
     end
 
     -- Tooltips are a live toggle, so the policy is re-applied here rather

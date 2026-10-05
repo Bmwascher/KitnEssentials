@@ -167,6 +167,7 @@ local DECLARATION = {
                 hasGlow = true,
                 hasLabel = true,
                 hasTimerFont = true,
+                fixedIcon = function() return TSP:GetDisplayIcon() end,
             },
         },
     },
