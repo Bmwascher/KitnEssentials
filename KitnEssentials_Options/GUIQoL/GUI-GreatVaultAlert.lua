@@ -205,6 +205,7 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
 
     local revealSoundDropdown = GUIFrame:CreateDropdown(row3b, "Reveal Sound", {
         options = coverSounds,
+        searchable = true,
         value = db.CoverSound or "Blizzard - Epic Loot",
         callback = function(key)
             db.CoverSound = key

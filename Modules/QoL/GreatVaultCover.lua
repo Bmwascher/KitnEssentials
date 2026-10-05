@@ -216,29 +216,32 @@ local function SetMasked(cover, masked)
     end
 end
 
--- A skin that hides the card art leaves the whole card as a flat panel, so
--- the cover fills it with a 1 px edge; otherwise it takes the art's shape.
+-- The button always spans the whole card, so no edge of a covered card can
+-- be clicked through to select it; only the face takes the card's shape. A
+-- skin that hides the card art leaves a flat panel, so the face fills it
+-- inside a 1 px edge.
 local function PlaceCover(cover, card)
     local art = card.Background
+    local face = cover.face
     cover:ClearAllPoints()
-    cover.face:ClearAllPoints()
+    cover:SetAllPoints(card)
+    face:ClearAllPoints()
     if not ArtVisible(art) then
         local px = KE:GetPixelSize()
-        cover:SetAllPoints(card)
-        cover.face:SetPoint("TOPLEFT", cover, "TOPLEFT", px, -px)
-        cover.face:SetPoint("BOTTOMRIGHT", cover, "BOTTOMRIGHT", -px, px)
+        face:SetPoint("TOPLEFT", cover, "TOPLEFT", px, -px)
+        face:SetPoint("BOTTOMRIGHT", cover, "BOTTOMRIGHT", -px, px)
         cover.edge:Show()
         SetMasked(cover, false)
     elseif MASK_TO_CARD_ART then
-        cover:SetAllPoints(art)
-        cover.face:SetAllPoints(cover)
+        face:SetAllPoints(art)
         cover.edge:Hide()
+        cover.mask:ClearAllPoints()
+        cover.mask:SetAllPoints(art)
         cover.mask:SetAtlas(art:GetAtlas())
         SetMasked(cover, true)
     else
-        cover:SetPoint("TOPLEFT", art, "TOPLEFT", 1, -1)
-        cover:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", -3, 3)
-        cover.face:SetAllPoints(cover)
+        face:SetPoint("TOPLEFT", art, "TOPLEFT", 1, -1)
+        face:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", -3, 3)
         cover.edge:Hide()
         SetMasked(cover, false)
     end
@@ -349,9 +352,6 @@ function GVA:CreateCover(card)
 
     local tease = cover:CreateFontString(nil, "OVERLAY")
     tease:SetPoint("BOTTOM", cover, "BOTTOM", 0, 12)
-    KE:ApplyFontToText(tease, self.db.FontFace, 14, "OUTLINE")
-    tease:SetTextColor(1, 1, 1)
-    tease:SetText("Last one...")
     tease:Hide()
     cover.tease = tease
 
@@ -495,7 +495,13 @@ function GVA:AfterReveal(clicked)
     if flavor then
         if clickedIndex and GVA.IsJackpot(levels, clickedIndex) then self:ShowJackpot(clicked) end
         local last = GVA.TeaseTarget(waiting)
-        if last then last.tease:Show() end
+        if last then
+            local tease = last.tease
+            KE:ApplyFontToText(tease, self.db.FontFace, 14, "OUTLINE")
+            tease:SetTextColor(1, 1, 1)
+            tease:SetText("Last one...")
+            tease:Show()
+        end
     end
     if recap and self:PrintCoverRecap() then
         self._coverRecapDone = true
