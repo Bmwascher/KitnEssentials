@@ -169,7 +169,8 @@ function Rules.CanAdd(text, seeds, customIDs, getName)
     if not getName(id) then return nil, MSG_NO_SPELL end
     for _, seed in ipairs(seeds) do
         for _, seedID in ipairs(seed.ids) do
-            if seedID == id then return nil, "Already tracked as " .. seed.label .. "." end
+            -- Ticked or not: the seed's checkbox is where it is turned on.
+            if seedID == id then return nil, "Already in the list as " .. seed.label .. "." end
         end
     end
     if type(customIDs) == "table" and customIDs[id] then return nil, MSG_ADDED end

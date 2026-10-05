@@ -76,6 +76,7 @@ CC.active = false
 CC.previewing = false
 CC.applyQueued = false
 CC.editModeRegistered = false
+CC.buildTarget = 0
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -333,8 +334,13 @@ function CC:Take(slot, unit)
     if not row then return end
     local container = row.container
     -- Unit before enable: enabling registers the unit's aura events, and the
-    -- off-to-on switch makes the container read the unit afresh.
-    pcall(container.SetUnit, container, unit)
+    -- off-to-on switch makes the container read the unit afresh. A refused
+    -- bind leaves the row disabled and unnamed rather than showing the last
+    -- enemy's auras under this one's name.
+    if not pcall(container.SetUnit, container, unit) then
+        if DEBUG_CC then KE:Print("[CC] slot " .. slot .. " bind refused (" .. unit .. ")") end
+        return
+    end
     pcall(container.SetEnabled, container, true)
     if self.db.NameEnabled ~= false then
         WriteName(row, unit)
@@ -351,7 +357,11 @@ function CC:Release(slot, unit)
     pcall(row.container.SetEnabled, row.container, false)
     row.window:Hide()
     row.name:SetText("")
-    if DEBUG_CC then KE:Print("[CC] slot " .. slot .. " released (" .. tostring(unit) .. ")") end
+    if DEBUG_CC then
+        -- nil: the unit still counts, so a cap lower, a stop or the plate going.
+        local reason = unit and Verdict(unit)
+        KE:Print("[CC] slot " .. slot .. " released (" .. tostring(unit) .. ", " .. tostring(reason) .. ")")
+    end
 end
 
 -- A faction change can turn a held mob assistable, and the game skips the
@@ -491,10 +501,21 @@ function CC:Apply()
     elseif self.gate:Request("general") then
         self:TakeApplied()
         self:RestyleRows()
+    elseif DEBUG_CC then
+        KE:Print("[CC] auras restricted: row changes wait for the drain")
     end
     self:UpdateCap()
-    self.runner:Run(db.MaxEnemies or 15)
+    self:RunBuild(db.MaxEnemies or 15)
     self:UpdateLive()
+end
+
+-- The runner only raises its target, so a lower cap restarts the walk: it
+-- passes the rows already built in one frame and stops at the new cap. Rows
+-- above it stay, released and unused, until /reload.
+function CC:RunBuild(target)
+    if target < self.buildTarget then self.runner:Cancel() end
+    self.buildTarget = target
+    self.runner:Run(target)
 end
 
 function CC:UpdateLive()
@@ -550,6 +571,7 @@ function CC:Deactivate()
     local wasActive = self.active
     self.active = false
     if self.runner then self.runner:Cancel() end
+    self.buildTarget = 0
     if self.slots then self.slots:Stop() end
     if self.gate then self.gate:Cancel() end
     if wasActive then

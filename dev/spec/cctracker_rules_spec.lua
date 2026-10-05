@@ -200,8 +200,8 @@ describe("cc tracker rules", function()
             { "0", nil, "Enter a whole positive number." },
             { "-4", nil, "Enter a whole positive number." },
             { "777", nil, "No spell with that id." },
-            { "4", nil, "Already tracked as Single." },
-            { "5", nil, "Already tracked as Off One." },
+            { "4", nil, "Already in the list as Single." },
+            { "5", nil, "Already in the list as Off One." },
             { "99", nil, "Already added." },
             { "500", 500, nil },
         }
