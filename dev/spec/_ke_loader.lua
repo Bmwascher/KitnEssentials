@@ -3294,4 +3294,14 @@ function L.loadRCLootCouncilSkin(overrides)
     return findUpvalue(findUpvalue(captured, "ensureSkinEntry"), "ensurePlan")
 end
 
+-- Core/PlateSlots.lua. CreateFrame comes from _wow_mock, so the event frame the
+-- builder makes on Start is the last entry of the returned frames list, and a
+-- spec fires plate events at it. C_Timer is inert unless the spec passes its
+-- own, so scans run only through ScanNow. Returns KE, frames.
+function L.loadPlateSlots(overrides)
+    local frames = installMock(overrides, { C_Timer = inertTimer() })
+    local KE = helpers.loadModule("Core/PlateSlots.lua", {})
+    return KE, frames
+end
+
 return L

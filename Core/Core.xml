@@ -10,6 +10,7 @@
     <Script file="TextureSnap.lua" />
     <Script file="Widgets.lua" />
     <Script file="FramePool.lua" />
+    <Script file="PlateSlots.lua" />
     <Script file="Defaults.lua"/>
     <Script file="Globals.lua" />
     <Script file="Conflicts.lua" />
