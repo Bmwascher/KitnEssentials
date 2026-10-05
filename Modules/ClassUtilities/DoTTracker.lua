@@ -612,10 +612,10 @@ function DT:UpdateTimers()
     if DEBUG_DOT then KE:Print("[DOT] timers shown=" .. tostring(shown) .. " target=" .. tostring(want)) end
 end
 
--- A target can change sides while it stays targeted, and whether the game
--- applies the timer's spell-id filter changes with it.
+-- Whether the game applies the timer's spell-id filter depends on the sides
+-- of both the target and the player, and either can change while targeted.
 function DT:OnUnitFaction(_, unit)
-    if unit == "target" then self:UpdateTimers() end
+    if unit == "target" or unit == "player" then self:UpdateTimers() end
 end
 
 ---------------------------------------------------------------------------------
