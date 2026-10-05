@@ -57,6 +57,7 @@ local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_THREAT_LIST_UPDATE" }
 local DEFAULT_SOME = { 1, 1, 1, 1 }
 local DEFAULT_ALL = { 0.35, 1, 0.35, 1 }
 local DEFAULT_TIMER = { 1, 1, 1, 1 }
+local GLOW_OFF = { GlowEnabled = false }
 local NONE = {}
 
 DT.root = nil
@@ -250,6 +251,29 @@ local function PaintAnswers(cell, total)
 end
 
 ---------------------------------------------------------------------------------
+-- Glow
+---------------------------------------------------------------------------------
+-- Drawn at answer `total`'s icon, so the window shows it only while every
+-- counted enemy carries the DoT. A repaint or a new sensor only moves it; a
+-- restyle restarts its animations, so it waits for an on/off change or Apply.
+-- Off goes through Configure, not Hide: a hidden animation still costs.
+local function PlaceGlow(cell, total)
+    local host, geo = cell.glow, cell.geo
+    if not host or not geo then return end
+    local on = DT.db.GlowEnabled == true and total > 0
+    if on then
+        host:SetPoint("TOPLEFT", cell.tail, "TOPLEFT", AnswerX(cell, total) + geo.iconX, -geo.iconY)
+    end
+    if on == cell.glowOn then return end
+    cell.glowOn = on
+    if on then
+        KE.AuraGlow.Configure(host, DT.db, geo.size, geo.size)
+    else
+        KE.AuraGlow.Configure(host, GLOW_OFF)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Cells and sensors
 ---------------------------------------------------------------------------------
 local function InitSensorButton(button)
@@ -331,6 +355,12 @@ local function NewCell(index)
     cell.tail = CreateFrame("Frame", nil, cell.view, TAIL_TEMPLATE)
     cell.tail:SetPoint("TOPLEFT", cell.view, "TOPLEFT", 0, 0)
     BuildAnswer(cell, 0)
+    cell.glow = KE.AuraGlow.CreateHost(cell.tail, DT.db, TAIL_TEMPLATE)
+    -- CreateHost fills its parent; from here on the host keeps one TOPLEFT
+    -- point, which PlaceGlow replaces in place.
+    cell.glow:ClearAllPoints()
+    KE.AuraGlow.Configure(cell.glow, GLOW_OFF)
+    cell.glowOn = false
 
     DT.cells[index] = cell
     return cell
@@ -371,6 +401,9 @@ local function StyleCell(cell, geo)
     cell.view:SetPoint("TOPLEFT", cell.frame, "TOPLEFT", geo.viewX, -geo.viewY)
     cell.view:SetSize(geo.viewW, geo.viewH)
     cell.tail:SetSize(geo.viewW, geo.viewH)
+    cell.glow:SetSize(geo.size, geo.size)
+    -- Restyled by the next placement, which Apply forces.
+    cell.glowOn = nil
     for k = 0, #cell.sensors do StyleAnswer(cell, k, cell.answers[k]) end
 end
 
@@ -396,6 +429,10 @@ end
 local function RetireCell(cell)
     cell.frame:Hide()
     if cell.timer then pcall(cell.timer.SetEnabled, cell.timer, false) end
+    if cell.glowOn ~= false then
+        KE.AuraGlow.Configure(cell.glow, GLOW_OFF)
+        cell.glowOn = false
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -551,6 +588,9 @@ function DT:BuildSlot(slot)
             end
         end
     end
+    if didWork then
+        for i = 1, #self.list do PlaceGlow(self.cells[i], self.paintedTotal) end
+    end
     if DEBUG_DOT and didWork then KE:Print("[DOT] built slot " .. slot) end
     return didWork
 end
@@ -560,6 +600,7 @@ function DT:OnScanDone(total)
         self.paintedTotal = total
         for i = 1, #self.list do
             PaintAnswers(self.cells[i], total)
+            PlaceGlow(self.cells[i], total)
         end
         if DEBUG_DOT then
             local relaxed = self.slots and self.slots.strict == false

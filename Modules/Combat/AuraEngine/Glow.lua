@@ -309,8 +309,10 @@ Glow.Configure = ConfigureHost
 -- reason is where it touches the button rather than how it animates: its
 -- entry point lazily reparents a pooled frame to the target and reads the
 -- target's frame level and size, long after this window has closed.
-function Glow.CreateHost(button, settings)
-    local host = CreateFrame("Frame", nil, button)
+-- `template` is optional: a host hung off a frame whose geometry is secret
+-- passes DisableUntrustedLayoutScriptsTemplate.
+function Glow.CreateHost(button, settings, template)
+    local host = CreateFrame("Frame", nil, button, template)
     host:SetAllPoints(button)
     host:SetFrameLevel(button:GetFrameLevel() + 3)
     host:EnableMouse(false)
