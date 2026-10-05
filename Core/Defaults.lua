@@ -1173,6 +1173,11 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 200),
+            CoverEnabled = true,
+            CoverBadLoot = true,
+            CoverFlavor = true,
+            CoverChatRecap = false,
+            CoverSound = "Blizzard - Epic Loot",
         },
 
         -- Sized from its own text, so this center anchor moves both edges by
