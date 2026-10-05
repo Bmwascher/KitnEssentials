@@ -39,6 +39,7 @@ local INTERRUPT_ICON_GAP = 4
 local INTERRUPT_FONT_EMPHASIS = 2
 local REVERSE_EVENT_WINDOW = 0.05
 local SPELL_LINK_BLUE = { 127 / 255, 207 / 255, 241 / 255 }
+local AGGRO_MIN_STATUS = 2
 
 local MESSAGE_TYPES = {
     "enterCombat",
@@ -396,6 +397,20 @@ function CM:CheckNoTarget()
     else
         self:HidePersistentMessage("noTarget")
     end
+end
+
+---------------------------------------------------------------------------------
+-- Aggro Warning
+---------------------------------------------------------------------------------
+-- Pure, so the rule is spec-covered. A secret reading hides the line: a warning
+-- that fails open would claim aggro the player does not have.
+function CM.ShouldShowAggro(db, inCombat, isTank, inInstance, threat, threatSecret)
+    if db.AggroEnabled == false then return false end
+    if not inCombat then return false end
+    if isTank then return false end
+    if db.AggroInstanceOnly ~= false and not inInstance then return false end
+    if threatSecret then return false end
+    return type(threat) == "number" and threat >= AGGRO_MIN_STATUS
 end
 
 ---------------------------------------------------------------------------------
