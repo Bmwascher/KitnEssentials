@@ -99,10 +99,16 @@ end
 ---------------------------------------------------------------------------------
 -- Reads
 ---------------------------------------------------------------------------------
+-- The game's spell-id filter guard counts immune and uninteractable units as
+-- assistable; asked any other way, a unit it treats as friendly would pass.
+local function CanAssist(unit)
+    return Ask(UnitCanAssist, "player", unit, true, true)
+end
+
 local unitApi = {
     exists    = function(unit) return Ask(UnitExists, unit) end,
     canAttack = function(unit) return Ask(UnitCanAttack, "player", unit) end,
-    canAssist = function(unit) return Ask(UnitCanAssist, "player", unit) end,
+    canAssist = CanAssist,
     isDead    = function(unit) return Ask(UnitIsDead, unit) end,
     inCombat  = function(unit) return Ask(UnitAffectingCombat, unit) end,
 }
@@ -558,7 +564,7 @@ local function EnsureTimer(cell)
 end
 
 local function TargetWanted()
-    return Rules.TimerWanted(Ask(UnitExists, "target"), Ask(UnitCanAssist, "player", "target"))
+    return Rules.TimerWanted(Ask(UnitExists, "target"), CanAssist("target"))
 end
 
 -- Timer work only the gate may allow: a shown cell still without its timer, or
