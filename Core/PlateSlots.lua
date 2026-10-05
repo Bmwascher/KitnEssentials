@@ -224,9 +224,10 @@ function Slots:Recheck(unit)
         if free then Take(self, free, unit) end
     end
     ScanDone(self)
-    -- A freed slot belongs to the next plate waiting past the cap, and with
-    -- relaxing on, one plate can flip the strict rule for all of them. Only
-    -- a full scan settles either.
+    -- A freed slot belongs to the next plate waiting past the cap. With a
+    -- relax rule, one plate can change the strictness for all of them, and
+    -- the last scan's may be stale even while relaxing is off now. Only a
+    -- full scan settles either.
     if released or self.relax then self:QueueScan() end
 end
 

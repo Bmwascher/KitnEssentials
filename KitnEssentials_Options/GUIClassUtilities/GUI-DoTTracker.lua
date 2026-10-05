@@ -114,7 +114,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     end
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
