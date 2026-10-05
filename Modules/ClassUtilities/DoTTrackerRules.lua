@@ -236,8 +236,7 @@ function Rules.BuildTarget(maxEnemies, highestTaken)
     return math_min(maxEnemies, math_max(Rules.BUILD_BASE, highestTaken + Rules.BUILD_AHEAD))
 end
 
--- On a unit the player can assist, the game ignores the spell-id filter for
--- harmful auras, so the timer would show any of the player's debuffs there.
+-- The same filter gap as the assistable refusal in Rules.Verdict.
 function Rules.TimerWanted(exists, canAssist)
     return exists == true and canAssist ~= true
 end

@@ -847,7 +847,6 @@ function DT:Activate(list, allowed)
         self:UnregisterEvent("PLAYER_TARGET_CHANGED")
     end
     self:Apply(list, allowed)
-    -- Liveness changed: the Edit Mode box and its category count follow.
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 

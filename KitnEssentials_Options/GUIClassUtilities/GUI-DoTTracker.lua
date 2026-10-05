@@ -166,7 +166,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             return
         end
 
-        -- Three per row: these are short labels and the card is wide.
         local pending, PER_ROW = nil, 3
         for index, entry in ipairs(entries) do
             local key = Rules.SpellKey(specId, entry.id)
