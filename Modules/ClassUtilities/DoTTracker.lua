@@ -514,39 +514,47 @@ local function PlaceTimerContainer(container, frame)
     container:SetSize(1, 1)
 end
 
+-- True only for a new timer whose text took its style. A container that
+-- cannot take its slot is hidden, as a refused sensor is.
 local function EnsureTimer(cell)
-    if cell.timer or cell.timerFailed then return end
+    if cell.timer or cell.timerFailed then return false end
     local ok, container = pcall(CreateFrame, "AuraContainer", nil, cell.frame, "CustomAuraContainerTemplate")
-    if not ok or not container or not pcall(PlaceTimerContainer, container, cell.frame) then
+    if not ok or not container then
         cell.timerFailed = true
-        return
+        return false
     end
-    local added, slot = pcall(container.AddAuraSlot, container, TIMER_SLOT, AURA_FILTER, {
-        candidateFilters = { includeSpellIDs = { [cell.id] = true } },
-        initializeFrame = function(button)
-            -- A slot takes no part in the flow layout, so it is anchored by hand.
-            local db = DT.db
-            local size = db.IconSize or 40
-            button:ClearAllPoints()
-            button:SetPoint("CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
-            button:SetSize(size, size)
-            -- Display only: no aura tooltip, and clicks reach the world.
-            pcall(button.SetMouseClickEnabled, button, false)
-            pcall(button.SetMouseMotionEnabled, button, false)
-            local fontString = button:CreateFontString(nil, "OVERLAY")
-            fontString:SetPoint("CENTER", button, "CENTER", 0, 0)
-            StyleTimerText(fontString)
-            button:SetDurationText(fontString, {})
-            cell.timerText = fontString
-        end,
-    })
+    local styled = false
+    local added, slot
+    if pcall(PlaceTimerContainer, container, cell.frame) then
+        added, slot = pcall(container.AddAuraSlot, container, TIMER_SLOT, AURA_FILTER, {
+            candidateFilters = { includeSpellIDs = { [cell.id] = true } },
+            initializeFrame = function(button)
+                -- A slot takes no part in the flow layout, so it is anchored by hand.
+                local db = DT.db
+                local size = db.IconSize or 40
+                button:ClearAllPoints()
+                button:SetPoint("CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
+                button:SetSize(size, size)
+                -- Display only: no aura tooltip, and clicks reach the world.
+                pcall(button.SetMouseClickEnabled, button, false)
+                pcall(button.SetMouseMotionEnabled, button, false)
+                local fontString = button:CreateFontString(nil, "OVERLAY")
+                fontString:SetPoint("CENTER", button, "CENTER", 0, 0)
+                styled = StyleTimerText(fontString)
+                button:SetDurationText(fontString, {})
+                cell.timerText = fontString
+            end,
+        })
+    end
     if DEBUG_DOT then KE:Print("[DOT] timer for " .. tostring(cell.id) .. " added=" .. tostring(added)) end
     if not added then
         cell.timerFailed = true
-        return
+        pcall(container.Hide, container)
+        return false
     end
     cell.timer, cell.timerSlot = container, slot
     pcall(container.SetUnit, container, "target")
+    return styled
 end
 
 local function TargetWanted()
@@ -570,8 +578,9 @@ function DT:StyleTimers(list, key, allowed)
     for i = 1, #list do
         local cell = self.cells[i]
         if not cell.timer then
-            EnsureTimer(cell)
-            cell.timerStyle = key
+            -- Unrecorded, a new timer stays owed and the next yes restyles
+            -- it; a failed one is never owed again.
+            if EnsureTimer(cell) then cell.timerStyle = key end
         elseif cell.timerStyle ~= key then
             local styled = not cell.timerText or StyleTimerText(cell.timerText)
             -- Recorded only when every write went through; otherwise the
