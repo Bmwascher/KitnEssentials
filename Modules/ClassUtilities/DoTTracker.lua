@@ -56,6 +56,7 @@ local TIMER_SLOT = "t"
 local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_THREAT_LIST_UPDATE" }
 local DEFAULT_SOME = { 1, 1, 1, 1 }
 local DEFAULT_ALL = { 0.35, 1, 0.35, 1 }
+local DEFAULT_TIMER = { 1, 1, 1, 1 }
 local NONE = {}
 
 DT.root = nil
@@ -394,6 +395,123 @@ end
 -- for the next DoT, with nothing left running on it.
 local function RetireCell(cell)
     cell.frame:Hide()
+    if cell.timer then pcall(cell.timer.SetEnabled, cell.timer, false) end
+end
+
+---------------------------------------------------------------------------------
+-- Target timer
+---------------------------------------------------------------------------------
+-- The countdown is the game's own, drawn into a fontstring registered on the
+-- aura button. That button refuses addon writes while auras are secret, so its
+-- place and look are set in initializeFrame, before the restriction attaches,
+-- and otherwise only behind the gate.
+
+local function TimerStyleKey(db)
+    local color = db.TimerColor or DEFAULT_TIMER
+    return table_concat({
+        tostring(db.FontFace), tostring(db.TimerFontSize), tostring(db.FontOutline),
+        tostring(color[1]), tostring(color[2]), tostring(color[3]), tostring(color[4]),
+        tostring(db.TimerX), tostring(db.TimerY), tostring(db.IconSize),
+    }, ":")
+end
+
+-- Behind the gate only: a write to the restricted slot button. Its one CENTER
+-- point is replaced in place, so a refused move leaves it where it was.
+local function PlaceTimerSlot(cell)
+    local slot, db = cell.timerSlot, DT.db
+    if not slot then return end
+    local size = db.IconSize or 40
+    pcall(slot.SetPoint, slot, "CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
+    pcall(slot.SetSize, slot, size, size)
+end
+
+local function StyleTimerText(fontString)
+    local db = DT.db
+    pcall(KE.ApplyFontToText, KE, fontString, db.FontFace, db.TimerFontSize, db.FontOutline)
+    local r, g, b, a = KE:ResolveColor(db.TimerColor, DEFAULT_TIMER)
+    pcall(fontString.SetTextColor, fontString, r, g, b, a)
+end
+
+local function EnsureTimer(cell)
+    if cell.timer or cell.timerFailed then return end
+    local ok, container = pcall(CreateFrame, "AuraContainer", nil, cell.frame, "CustomAuraContainerTemplate")
+    if not ok or not container then
+        cell.timerFailed = true
+        return
+    end
+    container:SetFrameLevel(cell.frame:GetFrameLevel() + 7)
+    container:SetPoint("CENTER", cell.frame, "CENTER", 0, 0)
+    container:SetSize(1, 1)
+    local added, slot = pcall(container.AddAuraSlot, container, TIMER_SLOT, AURA_FILTER, {
+        candidateFilters = { includeSpellIDs = { [cell.id] = true } },
+        initializeFrame = function(button)
+            -- A slot takes no part in the flow layout, so it is anchored by hand.
+            local db = DT.db
+            local size = db.IconSize or 40
+            button:ClearAllPoints()
+            button:SetPoint("CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
+            button:SetSize(size, size)
+            local fontString = button:CreateFontString(nil, "OVERLAY")
+            fontString:SetPoint("CENTER", button, "CENTER", 0, 0)
+            StyleTimerText(fontString)
+            button:SetDurationText(fontString, {})
+            cell.timerText = fontString
+        end,
+    })
+    if DEBUG_DOT then KE:Print("[DOT] timer for " .. tostring(cell.id) .. " added=" .. tostring(added)) end
+    if not added then
+        cell.timerFailed = true
+        return
+    end
+    cell.timer, cell.timerSlot = container, slot
+    pcall(container.SetUnit, container, "target")
+end
+
+local function TargetWanted()
+    return Rules.TimerWanted(Ask(UnitExists, "target"), Ask(UnitCanAssist, "player", "target"))
+end
+
+-- Timer work only the gate may allow: a shown cell still without its timer, or
+-- a timer whose look is out of date.
+function DT:TimersOwed(list, key)
+    for i = 1, #list do
+        local cell = self.cells[i]
+        if not cell then return true end
+        if not cell.timer and not cell.timerFailed then return true end
+        if cell.timer and cell.timerStyle ~= key then return true end
+    end
+    return false
+end
+
+function DT:StyleTimers(list, key, allowed)
+    if not self.active or not allowed then return end
+    for i = 1, #list do
+        local cell = self.cells[i]
+        if not cell.timer then
+            EnsureTimer(cell)
+            cell.timerStyle = key
+        elseif cell.timerStyle ~= key then
+            if cell.timerText then StyleTimerText(cell.timerText) end
+            PlaceTimerSlot(cell)
+            cell.timerStyle = key
+        end
+    end
+end
+
+-- The same token string is a no-op for SetUnit, so a new target is picked up
+-- through UpdateAllAuras.
+function DT:UpdateTimers()
+    local shown = self.active and not self.previewing and self.db.TimerEnabled ~= false
+    local want = shown and TargetWanted()
+    for i = 1, #self.list do
+        local timer = self.cells[i].timer
+        if timer then
+            pcall(timer.SetShown, timer, shown)
+            pcall(timer.SetEnabled, timer, want)
+            if want then pcall(timer.UpdateAllAuras, timer) end
+        end
+    end
+    if DEBUG_DOT then KE:Print("[DOT] timers shown=" .. tostring(shown) .. " target=" .. tostring(want)) end
 end
 
 ---------------------------------------------------------------------------------
@@ -524,7 +642,7 @@ end
 
 -- `list` comes from Rules.PlanApply, so a changed id reaches Refilter only with
 -- the gate's yes.
-function DT:Apply(list)
+function DT:Apply(list, allowed)
     local db = self.db
     self.applying = true
     -- A changed list starts with every slot retaken; a look-only change keeps
@@ -552,6 +670,7 @@ function DT:Apply(list)
     local geo = Geometry(db)
     for i = 1, #list do StyleCell(self.cells[i], geo) end
     LayoutCells()
+    self:StyleTimers(list, TimerStyleKey(db), allowed)
 
     local listKey = table_concat(list, ",") .. "@" .. tostring(db.MaxEnemies)
     if self.active and listKey ~= self.listKey then
@@ -582,6 +701,7 @@ function DT:UpdateLive()
         cell.view:SetShown(not self.previewing)
     end
     self.root:SetShown(live or (self.previewing and #self.list > 0))
+    self:UpdateTimers()
     if self.slots then
         if live then self.slots:Start() else self.slots:Stop() end
     end
@@ -633,7 +753,7 @@ function DT:Reconcile()
         return self:Deactivate()
     end
     local list, allowed = Rules.PlanApply(self.active and self.list or NONE, wanted,
-        self:NeedsRefilter(wanted), false, self.requestGate)
+        self:NeedsRefilter(wanted), self:TimersOwed(wanted, TimerStyleKey(self.db)), self.requestGate)
     -- A yes, or nothing gated owed, means this pass applies the settings as
     -- they are: an earlier refusal (a DoT since removed, say) is moot.
     if allowed then self.gate:Cancel() end
@@ -643,10 +763,10 @@ function DT:Reconcile()
     end
     if not list then return end
     if #list == 0 then return self:Deactivate() end
-    self:Activate(list)
+    self:Activate(list, allowed)
 end
 
-function DT:Activate(list)
+function DT:Activate(list, allowed)
     self:CreateRoot()
     self:EnsureCounting()
     local starting = not self.active
@@ -654,7 +774,12 @@ function DT:Activate(list)
         self.active = true
         self.inCombat = Ask(UnitAffectingCombat, "player") == true
     end
-    self:Apply(list)
+    if self.db.TimerEnabled ~= false then
+        self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTimers")
+    else
+        self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+    end
+    self:Apply(list, allowed)
     -- Liveness changed: the Edit Mode box and its category count follow.
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
@@ -664,6 +789,7 @@ end
 function DT:Deactivate()
     local wasActive = self.active
     self.active = false
+    self:UnregisterEvent("PLAYER_TARGET_CHANGED")
     if self.runner then self.runner:Cancel() end
     if self.slots then self.slots:Stop() end
     self.buildTarget = 0
