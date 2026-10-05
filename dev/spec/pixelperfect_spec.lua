@@ -276,4 +276,25 @@ describe("SnapFrameToPixels", function()
         assert.equals(0, #f.setCalls)
         KE:SnapFrameToPixels(nil)                          -- :234
     end)
+
+    -- A frame under a parent with secret anchoring: each value the snap adds
+    -- to is checked before the arithmetic, and the frame is left as placed.
+    -- The mock's issecretvalue is reinstalled by every load, so no restore.
+    it("leaves a frame alone when any position it would add to is secret", function()
+        local cases = {
+            { name = "left secret",   secret = 10.2 },
+            { name = "bottom secret", secret = 20.3 },
+            { name = "x secret",      secret = 3 },
+            { name = "y secret",      secret = -5 },
+        }
+        for _, c in ipairs(cases) do
+            KE = L.loadPixelPerfect({ physicalHeight = 1536, effectiveScale = 1.0 }, {
+                issecretvalue = function(v) return v == c.secret end,
+            })
+            local f = makeFrame(10.2, 20.3, { "TOPLEFT", "REL", "BOTTOMLEFT", 3, -5 })
+            KE:SnapFrameToPixels(f)
+            assert.equals(0, f.clearCalls, c.name)
+            assert.equals(0, #f.setCalls, c.name)
+        end
+    end)
 end)
