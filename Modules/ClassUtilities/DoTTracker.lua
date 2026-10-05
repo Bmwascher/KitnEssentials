@@ -53,7 +53,7 @@ local TAIL_TEMPLATE = "DisableUntrustedLayoutScriptsTemplate"
 local AURA_FILTER = "HARMFUL|PLAYER"
 local SENSOR_GROUP = "dot"
 local TIMER_SLOT = "t"
-local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_THREAT_LIST_UPDATE" }
+local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_THREAT_LIST_UPDATE", "UNIT_FACTION" }
 local DEFAULT_SOME = { 1, 1, 1, 1 }
 local DEFAULT_ALL = { 0.35, 1, 0.35, 1 }
 local DEFAULT_TIMER = { 1, 1, 1, 1 }
@@ -612,6 +612,12 @@ function DT:UpdateTimers()
     if DEBUG_DOT then KE:Print("[DOT] timers shown=" .. tostring(shown) .. " target=" .. tostring(want)) end
 end
 
+-- A target can change sides while it stays targeted, and whether the game
+-- applies the timer's spell-id filter changes with it.
+function DT:OnUnitFaction(_, unit)
+    if unit == "target" then self:UpdateTimers() end
+end
+
 ---------------------------------------------------------------------------------
 -- Counting
 ---------------------------------------------------------------------------------
@@ -894,8 +900,10 @@ function DT:Activate(list, allowed)
     end
     if self.db.TimerEnabled ~= false then
         self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTimers")
+        self:RegisterEvent("UNIT_FACTION", "OnUnitFaction")
     else
         self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+        self:UnregisterEvent("UNIT_FACTION")
     end
     self:Apply(list, allowed)
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
@@ -907,6 +915,7 @@ function DT:Deactivate()
     local wasActive = self.active
     self.active = false
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+    self:UnregisterEvent("UNIT_FACTION")
     if self.runner then self.runner:Cancel() end
     if self.slots then self.slots:Stop() end
     self.buildTarget = 0
