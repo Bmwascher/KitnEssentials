@@ -45,6 +45,7 @@
 
     <!-- Dungeons tabs -->
     <Script file="GUIDungeons\GUI-DungeonCasts.lua" />
+    <Script file="GUIDungeons\GUI-CCTracker.lua" />
     <Script file="GUIDungeons\GUI-TargetedSpells.lua" />
     <Script file="GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUIDungeons\GUI-FocusMarker.lua" />

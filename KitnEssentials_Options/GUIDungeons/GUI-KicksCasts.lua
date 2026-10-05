@@ -13,4 +13,5 @@ GUIFrame:RegisterTabbedContent("KicksCasts", {
     { id = "FocusMarker",  label = "Focus Macros" },
     { id = "KickTracker",  label = "Interrupt Tracker" },
     { id = "DungeonCasts", label = "Dungeon Casts" },
+    { id = "CCTracker",    label = "CC Tracker" },
 })
