@@ -76,3 +76,50 @@ describe("LFGReminder party scope and send gate", function()
         end
     end)
 end)
+
+describe("LFGReminder party prompt", function()
+    local LR
+    before_each(function()
+        LR = loader.loadLFGReminder()
+    end)
+
+    it("reads the spell ID from a teleport message and nothing else", function()
+        local cases = {
+            { name = "valid, spaced realm", text = "BV1_Bitesp-Area 52\0301286809", want = 1286809 },
+            { name = "other version",       text = "BV2_Bitesp-Area 52\0301286809", want = nil },
+            { name = "no separator",        text = "BV1_Bitesp-Area 521286809",     want = nil },
+            { name = "non-numeric id",      text = "BV1_Bitesp-Area 52\030abc",     want = nil },
+            { name = "not a string",        text = 42,                              want = nil },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, LR._ParsePortalMessage(c.text), c.name)
+        end
+    end)
+
+    it("holds a dungeon until its hold is released, one dungeon at a time", function()
+        LR._HoldThrottle(587)
+        assert.is_true(LR._ThrottleHeld(587))
+        assert.is_false(LR._ThrottleHeld(399))
+        LR._ReleaseThrottle(587)
+        assert.is_false(LR._ThrottleHeld(587))
+    end)
+
+    it("refuses a party prompt for each failed gate, and lets the rest through", function()
+        local function gate(over)
+            local s = { scopeOpen = true, unit = "party1", mapID = 587, throttled = false, lfgLive = false }
+            for k, v in pairs(over) do s[k] = v end
+            return LR._PartyPromptRefusal(s)
+        end
+        local cases = {
+            { name = "all clear",                over = {},                    want = nil },
+            { name = "scope closed",             over = { scopeOpen = false }, want = "scope" },
+            { name = "sender not in party",      over = { unit = false },      want = "not in party" },
+            { name = "not a teleport",           over = { mapID = false },     want = "not a portal" },
+            { name = "dungeon held",             over = { throttled = true },  want = "throttled" },
+            { name = "Group Finder prompt live", over = { lfgLive = true },    want = "group finder" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, gate(c.over), c.name)
+        end
+    end)
+end)

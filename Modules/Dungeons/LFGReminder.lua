@@ -7,6 +7,9 @@
 -- ║           teleport button. Hides on entering the         ║
 -- ║           dungeon, leaving the group, or entering        ║
 -- ║           combat.                                        ║
+-- ║           Party members who share their dungeon          ║
+-- ║           teleports raise the same popup, and the        ║
+-- ║           player's own are shared with the party.        ║
 -- ║                                                          ║
 -- ║  Taint / secret-value safety -- critical, read before    ║
 -- ║  editing:                                                ║
@@ -66,6 +69,9 @@ local C_Timer = C_Timer
 local GetInstanceInfo = GetInstanceInfo
 local UnitNameUnmodified = UnitNameUnmodified
 local GetRealmName = GetRealmName
+local UnitFullName = UnitFullName
+local UnitClass = UnitClass
+local GetNormalizedRealmName = GetNormalizedRealmName
 -- Both secret predicates get the same fallback: an environment missing one
 -- would be missing both, and a bare call to either throws.
 local issecretvalue = issecretvalue or function() return false end
@@ -189,6 +195,19 @@ local function MapForPortalSpell(spellID, inSeason)
         end
     end
     return maps[1]
+end
+
+-- This season's maps as a set. Not kept while empty: the map data may not
+-- have loaded yet.
+local seasonMaps
+local function SeasonMaps()
+    if seasonMaps then return seasonMaps end
+    local ok, maps = pcall(function() return C_ChallengeMode.GetMapTable() end)
+    if not ok or type(maps) ~= "table" or #maps == 0 then return nil end
+    local set = {}
+    for _, mapID in ipairs(maps) do set[mapID] = true end
+    seasonMaps = set
+    return set
 end
 
 -- The player's own teleport for a map: the first of its spells isKnown
@@ -349,6 +368,8 @@ local popup, secureBtn
 local pendingSpellID       -- resolved teleport spell (static integer)
 local pendingName          -- dungeon display name (clean)
 local pendingMapID         -- challenge-mode map of the pending prompt
+local pendingSource        -- "lfg" (Group Finder) or "party" (a party member's teleport)
+local pendingLine2         -- the party prompt's "<Name> teleported", already colored
 local pendingShow          -- join landed in combat; show on REGEN_ENABLED
 local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
 local combatHidden         -- the hide came from combat, not from the user
@@ -357,7 +378,7 @@ local shownRole            -- role the popup is drawing, or nil
 local previewState         -- settings preview: nil, "empty", or "prompt" (a live prompt waits behind it)
 
 
-local BuildPopup, ShowPrompt, HidePrompt, ClearPending, ReadPartyScope
+local BuildPopup, ShowPrompt, HidePrompt, ClearPending, ReadPartyScope, DropPrompt
 local UpdateButtonVisuals, ResolveDungeon
 local SavePosition, ApplySavedPosition, ApplyPopupLayout
 
@@ -437,6 +458,10 @@ local DISABLE_W   = 90  -- used when the label reports no width
 ---@type string?
 local shownName = nil
 
+-- Party line the popup is drawing, or nil for a Group Finder prompt.
+---@type string?
+local shownLine2 = nil
+
 local function MeasureName(s)
     return secureBtn._name:GetUnboundedStringWidthForText(s)
 end
@@ -448,6 +473,8 @@ ApplyPopupLayout = function()
     if not popup then return end
     local showDisable = not LR.db or LR.db.ShowDisable ~= false
     local showRole = shownRole ~= nil and (not LR.db or LR.db.ShowRole ~= false)
+    -- The party line takes the role line's place and ignores Show Role.
+    local showLine2 = shownLine2 ~= nil or showRole
 
     local nameFS = secureBtn._name
     nameFS:SetText(shownName or "")
@@ -463,7 +490,9 @@ ApplyPopupLayout = function()
     nameFS:SetPoint("TOPRIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, -nameTop)
 
     local roleFS = secureBtn._role
-    if showRole then
+    if shownLine2 then
+        roleFS:SetText(shownLine2)
+    elseif showRole then
         local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
         local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
         local icon = icons and icons[shownRole]
@@ -472,18 +501,20 @@ ApplyPopupLayout = function()
     end
     roleFS:ClearAllPoints()
     roleFS:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
-    roleFS:SetShown(showRole)
+    roleFS:SetShown(showLine2)
 
-    -- "Teleport" ends the role line, or starts it when no role shows.
+    -- "Teleport" ends the second line, or starts it when none shows.
     local label = secureBtn._label
     label:ClearAllPoints()
-    if showRole then
+    if showLine2 then
         label:SetPoint("RIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, line2Y)
         label:SetJustifyH("RIGHT")
     else
         label:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
         label:SetJustifyH("LEFT")
     end
+    -- A long party name stops short of "Teleport" instead of running under it.
+    if shownLine2 then roleFS:SetPoint("RIGHT", label, "LEFT", -4, 0) end
 
     local footTop = BTN_TOP + rowH + FOOT_GAP
     local disableBtn = popup._disableBtn
@@ -511,6 +542,7 @@ BuildPopup = function()
     popup:SetWidth(POPUP_W)
     popup:SetFrameStrata("DIALOG")
     popup:SetMovable(true)
+    popup:SetClampedToScreen(true)
     popup:EnableMouse(true)
     popup:RegisterForDrag("LeftButton")
     popup:SetScript("OnDragStart", function(s) s:StartMoving() end)
@@ -530,6 +562,7 @@ BuildPopup = function()
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     title:SetText("LFG Reminder")
+    popup._title = title
 
     -- Close (X) in the header
     local xBtn = CreateFrame("Button", nil, popup)
@@ -730,6 +763,7 @@ ResolveDungeon = function(resultID)
         local spellID, name, mapID = ResolveGroupFinderPortal(fullName)
         if spellID then
             pendingSpellID, pendingName, pendingMapID = spellID, name, mapID
+            pendingSource = "lfg"
             -- Last, so an error here can cost the role but never the prompt.
             if wantRole and C_LFGList.GetApplicationInfo then
                 applicationRole = select(5, C_LFGList.GetApplicationInfo(resultID))
@@ -798,6 +832,8 @@ end
 
 ShowPrompt = function()
     if not (LR.db and LR.db.Enabled ~= false) or not pendingSpellID then return end
+    -- Every show path, deferred ones included, re-reads the party scope.
+    if pendingSource == "party" and not ReadPartyScope() then ClearPending() return end
     if TeleportOnCooldown(pendingSpellID) then return end
     if InCombatLockdown() then
         -- Deferral comes BEFORE BuildPopup, because BuildPopup calls
@@ -819,6 +855,8 @@ ShowPrompt = function()
     BuildPopup()
     shownName = pendingName
     shownRole = pendingRole
+    shownLine2 = pendingLine2
+    popup._title:SetText(pendingSource == "party" and "Teleport Reminder" or "LFG Reminder")
     ApplyPopupLayout()
     -- The only write that arms the button, so the preview hold above covers
     -- every path that arms it.
@@ -843,6 +881,8 @@ ClearPending = function()
     pendingSpellID     = nil
     pendingName        = nil
     pendingMapID       = nil
+    pendingSource      = nil
+    pendingLine2       = nil
     pendingRole        = nil
     -- A combat join sets pendingShow; a group that breaks before combat ends
     -- must leave PLAYER_REGEN_ENABLED nothing to build or arm.
@@ -875,7 +915,9 @@ function LR:LFG_LIST_JOINED_GROUP(_, resultID)
     -- Fires the moment the player joins a Group Finder group; unlike
     -- browse/apply, the search result is readable here. Capture
     -- immediately -- the result can expire shortly after joining.
-    ClearPending()
+    -- A new prompt replaces the old one even when it resolves to nothing,
+    -- so a party popup never stays up unowned.
+    ClearPending(); DropPrompt()
     ResolveDungeon(resultID)
     if pendingSpellID then ShowPrompt() end
 end
@@ -898,7 +940,9 @@ end
 function LR:TryLeaderPrompt()
     if not (armedPending and armedSpellID) then return end
     if not GroupIsFull() then return end
+    ClearPending(); DropPrompt()
     pendingSpellID, pendingName, pendingMapID = armedSpellID, armedName, armedMapID
+    pendingSource = "lfg"
     pendingRole = nil
     if self.db and self.db.ShowRole ~= false then
         pendingRole = PickRole(nil, UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
@@ -910,7 +954,7 @@ end
 -- The live prompt is no longer wanted. While the settings preview is up the
 -- popup is the preview's and the page still shows it, so only the prompt
 -- waiting behind it is dropped.
-local function DropPrompt()
+DropPrompt = function()
     if previewState then
         previewState = "empty"
         return
@@ -930,6 +974,7 @@ local PORTAL_MSG    = "BV1_%s\030%d"
 local moduleOn          -- OnEnable passed its Enabled gate; OnDisable clears it
 local partyAttached     -- the completion and restriction events are registered
 local partyListening = false -- the party listeners are registered
+local prefixRegistered
 local castFrame
 local completedInstance -- instance ID of the dungeon whose key was finished
 local recheckQueued     -- a scope recheck waits for the next frame
@@ -1008,16 +1053,26 @@ end
 -- otherwise. Re-run on every input the scope reads.
 function LR:UpdatePartyListeners()
     local open = ReadPartyScope()
+    -- A party prompt lives only inside the scope that raised it.
+    if not open and pendingSource == "party" then
+        ClearPending(); DropPrompt()
+    end
     if open == partyListening then return end
     partyListening = open
     if open then
+        if not prefixRegistered then
+            prefixRegistered = true
+            pcall(C_ChatInfo.RegisterAddonMessagePrefix, PORTAL_PREFIX)
+        end
         if not castFrame then
             castFrame = CreateFrame("Frame")
             castFrame:SetScript("OnEvent", OnOwnCast)
         end
         castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-    elseif castFrame then
-        castFrame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        self:RegisterEvent("CHAT_MSG_ADDON")
+    else
+        if castFrame then castFrame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED") end
+        self:UnregisterEvent("CHAT_MSG_ADDON")
     end
 end
 
@@ -1065,6 +1120,111 @@ function LR:CHALLENGE_MODE_COMPLETED()
     RequestPartyRecheck()
 end
 
+-- "BV1_<Name-Realm>\030<spellID>". Only the spell ID is used: the event's
+-- sender field names the caster.
+local function ParsePortalMessage(text)
+    if type(text) ~= "string" then return nil end
+    local _, spell = text:match("^BV1_(.+)\030(.+)$")
+    return tonumber(spell)
+end
+
+-- One prompt per dungeon a minute, however many members port there. Each
+-- hold clears on its own timer, so toggling the setting cannot cut one short.
+local PARTY_THROTTLE_S = 60
+local heldMaps = {}
+
+local function ThrottleHeld(mapID)
+    return heldMaps[mapID] == true
+end
+
+local function ReleaseThrottle(mapID)
+    heldMaps[mapID] = nil
+end
+
+local function HoldThrottle(mapID)
+    heldMaps[mapID] = true
+    C_Timer.After(PARTY_THROTTLE_S, function() ReleaseThrottle(mapID) end)
+end
+
+-- nil means prompt. A live Group Finder prompt always wins over a party one.
+local function PartyPromptRefusal(s)
+    if not s.scopeOpen then return "scope" end
+    if not s.unit then return "not in party" end
+    if not s.mapID then return "not a portal" end
+    if s.throttled then return "throttled" end
+    if s.lfgLive then return "group finder" end
+    return nil
+end
+
+LR._ParsePortalMessage = ParsePortalMessage
+LR._ThrottleHeld = ThrottleHeld
+LR._HoldThrottle = HoldThrottle
+LR._ReleaseThrottle = ReleaseThrottle
+LR._PartyPromptRefusal = PartyPromptRefusal
+
+local PARTY_UNITS = { "party1", "party2", "party3", "party4" }
+
+-- The party unit a "Name-Realm" sender is, and its plain character name.
+local function MatchPartyUnit(sender)
+    local myRealm = GetNormalizedRealmName()
+    local key = KE:BuildNicknameKey(sender, myRealm)
+    if not key then return nil end
+    for _, unit in ipairs(PARTY_UNITS) do
+        local name, realm = UnitFullName(unit)
+        if not issecretvalue(name) and not issecretvalue(realm)
+            and type(name) == "string" and name ~= "" then
+            local raw = (type(realm) == "string" and realm ~= "") and (name .. "-" .. realm) or name
+            if KE:BuildNicknameKey(raw, myRealm) == key then return unit, name end
+        end
+    end
+    return nil
+end
+
+local function DungeonName(mapID)
+    if not (C_ChallengeMode and C_ChallengeMode.GetMapUIInfo) then return nil end
+    local ok, name = pcall(C_ChallengeMode.GetMapUIInfo, mapID)
+    if not ok or issecretvalue(name) or type(name) ~= "string" or name == "" then return nil end
+    return name
+end
+
+-- "<Name> teleported": the NSRT nickname, else the character name, never the
+-- realm, in the unit's class color when the class reads plain.
+local function PartyLine(unit, realName)
+    local name = KE:ResolveNicknamePrecedence(nil, KE:GetNSRTNickname(unit), realName) or realName
+    local _, class = UnitClass(unit)
+    if issecretvalue(class) or type(class) ~= "string" then
+        return name .. " teleported"
+    end
+    return KE:ColorTextByClass(name, class) .. " teleported"
+end
+
+-- This event carries every registered addon's traffic, so the prefix test
+-- comes first and nothing is built before it passes.
+function LR:CHAT_MSG_ADDON(_, prefix, text, channel, sender)
+    if issecretvalue(prefix) or prefix ~= PORTAL_PREFIX then return end
+    if issecretvalue(text) or issecretvalue(channel) or issecretvalue(sender) then return end
+    if channel ~= "PARTY" then return end
+    local spellID = ParsePortalMessage(text)
+    local mapID = spellID and MapForPortalSpell(spellID, SeasonMaps()) or nil
+    local unit, realName
+    if mapID then unit, realName = MatchPartyUnit(sender) end
+    if PartyPromptRefusal({
+        scopeOpen = ReadPartyScope(),
+        unit      = unit,
+        mapID     = mapID,
+        throttled = mapID ~= nil and ThrottleHeld(mapID),
+        lfgLive   = pendingSource == "lfg" and pendingSpellID ~= nil,
+    }) then return end
+    local name = DungeonName(mapID)
+    if not name then return end
+    HoldThrottle(mapID)
+    ClearPending(); DropPrompt()
+    pendingSpellID = PickOwnPortal(mapID, KnowsSpell)
+    pendingName, pendingMapID, pendingSource = name, mapID, "party"
+    pendingLine2 = PartyLine(unit, realName)
+    ShowPrompt()
+end
+
 function LR:SPELL_UPDATE_COOLDOWN()
     if not (popup and popup:IsShown()) then return end
     if TeleportOnCooldown(pendingSpellID) then DropPrompt() end
@@ -1084,7 +1244,9 @@ function LR:CheckInstance()
     local inInstance, instanceType = IsInInstance()
     if not inInstance then
         completedInstance = nil
-    elseif instanceType == "party" then
+    -- A party prompt raised inside a finished key leads to the next dungeon.
+    elseif instanceType == "party"
+        and not (pendingSource == "party" and InCompletedInstance()) then
         ClearPending(); DropPrompt()
     end
     RequestPartyRecheck()
@@ -1206,6 +1368,8 @@ function LR:ShowPreview()
     local specRole = specIndex and specIndex > 0 and GetSpecializationRole
         and GetSpecializationRole(specIndex)
     shownRole = PickRole(specRole, nil) or "DAMAGER"
+    shownLine2 = nil
+    popup._title:SetText("LFG Reminder")
     ApplyPopupLayout()
     SetRowIcon(mapID, PickOwnPortal(mapID, KnowsSpell))
     SetRowKnown(true)
@@ -1216,7 +1380,7 @@ function LR:HidePreview()
     if not previewState then return end
     local restore = previewState == "prompt"
     previewState = nil
-    shownName, shownRole = nil, nil
+    shownName, shownRole, shownLine2 = nil, nil, nil
     if InCombatLockdown() then
         -- The popup parents a secure button: hide it when combat ends, and
         -- let the combat re-show bring back a prompt that was waiting.
