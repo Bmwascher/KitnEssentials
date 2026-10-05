@@ -660,8 +660,16 @@ BuildPopup = function()
     disableBtn:SetScript("OnLeave", function() disableLbl:SetTextColor(0.6, 0.6, 0.6, 1) end)
     disableBtn._label = disableLbl
     disableBtn:SetScript("OnClick", function()
-        if LR.db then LR.db.Enabled = false end
-        KitnEssentials:DisableModule("LFGReminder")
+        -- A live party prompt turns off only its own switch, so Group Finder
+        -- prompts keep running. The preview stands for the whole module.
+        if not previewState and pendingSource == "party" then
+            if LR.db then LR.db.PartyTeleports = false end
+            LR:ApplyPartyTeleports()
+            ClosePrompt()
+        else
+            if LR.db then LR.db.Enabled = false end
+            KitnEssentials:DisableModule("LFGReminder")
+        end
         -- The DB write and the disable both land, but nothing redraws an
         -- open config page, so its master toggle kept showing ON until a
         -- reload. EnableModule/DisableModule's posthook only refreshes
