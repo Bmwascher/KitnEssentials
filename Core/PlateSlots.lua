@@ -258,7 +258,6 @@ Runner.__index = Runner
 function PlateSlots.NewBuildRunner(opts)
     local self = setmetatable({
         buildSlot = opts.buildSlot,
-        paused = opts.paused,
         onProgress = opts.onProgress,
         target = 0,
         step = 0,
@@ -273,10 +272,9 @@ function PlateSlots.NewBuildRunner(opts)
 end
 
 -- A step that built something ends the frame; a step with nothing to build goes
--- on in the same one. A pause stops the walk without polling; Resume restarts it.
+-- on in the same one.
 function Runner:Advance()
     while self.running and self.step < self.target do
-        if self.paused and self.paused() then return end
         local slot = self.step + 1
         local didWork = self.buildSlot(slot)
         self.step = slot
@@ -296,10 +294,6 @@ function Runner:Run(target)
     if self.running or self.step >= self.target then return end
     self.running = true
     if not self.waiting then self:Advance() end
-end
-
-function Runner:Resume()
-    if self.running and not self.waiting then self:Advance() end
 end
 
 function Runner:Cancel()

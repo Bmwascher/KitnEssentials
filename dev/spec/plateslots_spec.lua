@@ -161,14 +161,13 @@ describe("plate build runner", function()
         fn()
     end
 
-    local function newRunner(workOn, paused)
+    local function newRunner(workOn)
         built = {}
         return NewBuildRunner({
             buildSlot = function(slot)
                 built[#built + 1] = slot
                 return workOn[slot] == true
             end,
-            paused = paused,
         })
     end
 
@@ -208,16 +207,5 @@ describe("plate build runner", function()
         assert.equals(0, runner:Built())
         runner:Run(2)
         assert.same({ 1, 2, 3, 4, 5, 1, 2 }, built)
-    end)
-
-    it("stops while paused and goes on from Resume", function()
-        local paused = true
-        local runner = newRunner({}, function() return paused end)
-        runner:Run(2)
-        assert.same({}, built)
-
-        paused = false
-        runner:Resume()
-        assert.same({ 1, 2 }, built)
     end)
 end)
