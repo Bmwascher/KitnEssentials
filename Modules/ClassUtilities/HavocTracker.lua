@@ -35,6 +35,9 @@ local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local pcall = pcall
 local unpack = unpack
+local UnitExists = UnitExists
+local UnitCanAssist = UnitCanAssist
+local Ask = KE.PlateSlots.Ask
 
 -- Flip to true, /reload, repro, read the log.
 local DEBUG_HT = false
@@ -58,6 +61,8 @@ HT.previewText = nil
 HT.active = false
 HT.previewing = false
 HT.editModeRegistered = false
+HT.bound = false
+HT.targetWanted = nil
 
 local function WarningText(db)
     local text = db.WarningText
@@ -185,9 +190,8 @@ function HT:BuildContainer()
     if DEBUG_HT then KE:Print("[HT] slot added=" .. tostring(added)) end
     if not added then return end
 
-    pcall(container.SetUnit, container, "target")
-    pcall(container.UpdateAllAuras, container)
-    if container.SetEnabled then pcall(container.SetEnabled, container, true) end
+    -- Bound and enabled by UpdateTarget, which also decides whether the
+    -- target is one the spell-id filter can be trusted on.
     container:Show()
 
     self.container = container
@@ -196,12 +200,36 @@ end
 ---------------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------------
-function HT:PLAYER_TARGET_CHANGED()
-    if not self.container then return end
-    -- Re-pointed rather than left to follow.
-    local ok = pcall(self.container.SetUnit, self.container, "target")
-    pcall(self.container.UpdateAllAuras, self.container)
-    if DEBUG_HT then KE:Print("[HT] retargeted ok=" .. tostring(ok)) end
+-- The game ignores a spell-id filter for harmful auras on a unit the player
+-- can assist, so there the slot would light for any of the player's debuffs.
+-- Immune and uninteractable units count as assistable, as the filter's guard
+-- counts them.
+local function CanAssist(unit)
+    return Ask(UnitCanAssist, "player", unit, true, true)
+end
+
+-- Bound once, then enabled only while the target is one the filter holds on.
+-- The same token is a no-op for SetUnit, so a new target is read through
+-- UpdateAllAuras.
+function HT:UpdateTarget()
+    local container = self.container
+    if not container then return end
+    if not self.bound then
+        self.bound = pcall(container.SetUnit, container, "target")
+    end
+    local want = self.bound
+        and KE.DoTTrackerRules.TimerWanted(Ask(UnitExists, "target"), CanAssist("target"))
+    self.targetWanted = want
+    pcall(container.SetEnabled, container, want)
+    if want then pcall(container.UpdateAllAuras, container) end
+    if DEBUG_HT then
+        KE:Print("[HT] target bound=" .. tostring(self.bound) .. " wanted=" .. tostring(want))
+    end
+end
+
+-- Either side's faction can change while targeted.
+function HT:OnUnitFaction(_, unit)
+    if unit == "target" or unit == "player" then self:UpdateTarget() end
 end
 
 function HT:Activate()
@@ -217,15 +245,18 @@ function HT:Activate()
     self.container:Show()
 
     self.active = true
-    self:RegisterEvent("PLAYER_TARGET_CHANGED")
-    self:PLAYER_TARGET_CHANGED()
+    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTarget")
+    self:RegisterEvent("UNIT_FACTION", "OnUnitFaction")
+    self:UpdateTarget()
 end
 
 function HT:Deactivate()
     if not self.active then return end
     self.active = false
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+    self:UnregisterEvent("UNIT_FACTION")
     if self.container then
+        pcall(self.container.SetEnabled, self.container, false)
         self.container:Hide()
     end
 end

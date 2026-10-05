@@ -2508,6 +2508,8 @@ function L.loadHavocTracker(overrides)
     local KE = {
         db = { profile = { HavocTracker = overrides.db or { Enabled = true } } },
         Print = function() end,
+        -- Captured at file scope by the target guard.
+        PlateSlots = { Ask = function() return nil end },
     }
     helpers.loadModule("Modules/ClassUtilities/HavocTracker.lua", KE)
 
