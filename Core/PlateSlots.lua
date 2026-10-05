@@ -271,14 +271,23 @@ function PlateSlots.NewBuildRunner(opts)
     return self
 end
 
+local function Step(self, slot)
+    local didWork = self.buildSlot(slot)
+    self.step = slot
+    if self.onProgress then self.onProgress(slot) end
+    return didWork
+end
+
 -- A step that built something ends the frame; a step with nothing to build goes
--- on in the same one.
+-- on in the same one. A step that raises stops the walk rather than leave it
+-- marked running, and the next Run picks up where it stopped.
 function Runner:Advance()
     while self.running and self.step < self.target do
-        local slot = self.step + 1
-        local didWork = self.buildSlot(slot)
-        self.step = slot
-        if self.onProgress then self.onProgress(slot) end
+        local ok, didWork = pcall(Step, self, self.step + 1)
+        if not ok then
+            self.running = false
+            error(didWork, 0)
+        end
         if didWork and self.step < self.target then
             self.waiting = true
             C_Timer.After(0, self.resumeNext)

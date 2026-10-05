@@ -208,4 +208,22 @@ describe("plate build runner", function()
         runner:Run(2)
         assert.same({ 1, 2, 3, 4, 5, 1, 2 }, built)
     end)
+
+    it("stops a walk whose step raises, and the next Run retries that step", function()
+        local fail = true
+        built = {}
+        local runner = NewBuildRunner({
+            buildSlot = function(slot)
+                built[#built + 1] = slot
+                if fail then error("refused") end
+                return false
+            end,
+        })
+        assert.has_error(function() runner:Run(2) end)
+
+        fail = false
+        runner:Run(2)
+        assert.same({ 1, 1, 2 }, built)
+        assert.equals(2, runner:Built())
+    end)
 end)
