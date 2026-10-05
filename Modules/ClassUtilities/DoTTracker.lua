@@ -268,12 +268,13 @@ local function PlaceGlow(cell, total)
         host:SetPoint("TOPLEFT", cell.tail, "TOPLEFT", AnswerX(cell, total) + geo.iconX, -geo.iconY)
     end
     if on == cell.glowOn then return end
-    cell.glowOn = on
     if on then
         KE.AuraGlow.Configure(host, DT.db, geo.size, geo.size)
     else
         KE.AuraGlow.Configure(host, GLOW_OFF)
     end
+    -- Recorded after the write, so a refused one is tried again.
+    cell.glowOn = on
 end
 
 ---------------------------------------------------------------------------------
@@ -287,28 +288,45 @@ local function InitSensorButton(button)
     pcall(button.SetMouseMotionEnabled, button, false)
 end
 
+local function PlaceAllAnswers(cell, count)
+    StyleAnswer(cell, count, cell.answers[count])
+    for k = 0, count - 1 do PlaceAnswer(cell, k, cell.answers[k]) end
+end
+
+-- A sensor that cannot join the chain is hidden, and the cell stops growing at
+-- the sensors it has.
+local function Discard(cell, sensor, reason)
+    cell.failed = reason
+    pcall(sensor.Hide, sensor)
+    return false
+end
+
 -- In the order the client allows: the group goes on before anything hangs off
 -- the newcomer, then the newcomer is linked, then the tail moves onto it.
 local function AddSensor(cell)
+    local count = #cell.sensors + 1
+    -- The answer comes first, so no sensor is ever counted without one.
+    if not cell.answers[count] then
+        local built, buildErr = pcall(BuildAnswer, cell, count)
+        if not built then
+            cell.failed = tostring(buildErr)
+            return false
+        end
+    end
     local ok, sensor = pcall(CreateFrame, "AuraContainer", nil, cell.view, "CustomAuraContainerTemplate")
     if not ok or not sensor then
         cell.failed = "container refused"
         return false
     end
-    sensor:SetSize(1, 1)
+    if not pcall(sensor.SetSize, sensor, 1, 1) then return Discard(cell, sensor, "size refused") end
     local grouped, groupErr = pcall(sensor.AddAuraGroup, sensor, SENSOR_GROUP, AURA_FILTER, {
         maxFrameCount = 1,
         candidateFilters = { includeSpellIDs = { [cell.id] = true } },
         initializeFrame = InitSensorButton,
         layout = { elementWidth = STRIDE, elementHeight = 1, elementSpacing = 0, lineSpacing = 0 },
     })
-    -- A sensor without its group would never light. It stays out of the chain,
-    -- and the cell stops growing at the sensors it has.
-    if not grouped then
-        cell.failed = tostring(groupErr)
-        sensor:Hide()
-        return false
-    end
+    -- A sensor without its group would never light.
+    if not grouped then return Discard(cell, sensor, tostring(groupErr)) end
     pcall(sensor.SetEnabled, sensor, false)
 
     -- The tail only ever has its TOPLEFT point, and SetPoint replaces it in
@@ -324,16 +342,13 @@ local function AddSensor(cell)
         end
         cell.tail:SetPoint("TOPLEFT", sensor, "TOPRIGHT", 0, 0)
     end)
-    if not linked then
-        cell.failed = tostring(linkErr)
-        sensor:Hide()
-        return false
-    end
+    if not linked then return Discard(cell, sensor, tostring(linkErr)) end
 
-    cell.sensors[#cell.sensors + 1] = sensor
-    local count = #cell.sensors
-    StyleAnswer(cell, count, BuildAnswer(cell, count))
-    for k = 0, count - 1 do PlaceAnswer(cell, k, cell.answers[k]) end
+    cell.sensors[count] = sensor
+    -- Every answer's offset counts the sensors. The sensor is linked, so it
+    -- counts either way; a refused placement stops the cell growing.
+    local placed, placeErr = pcall(PlaceAllAnswers, cell, count)
+    if not placed then cell.failed = tostring(placeErr) end
     return true
 end
 
@@ -451,8 +466,7 @@ end
 local function RetireCell(cell)
     cell.frame:Hide()
     if cell.timer then pcall(cell.timer.SetEnabled, cell.timer, false) end
-    if cell.glowOn ~= false then
-        KE.AuraGlow.Configure(cell.glow, GLOW_OFF)
+    if cell.glowOn ~= false and pcall(KE.AuraGlow.Configure, cell.glow, GLOW_OFF) then
         cell.glowOn = false
     end
     KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
@@ -479,29 +493,34 @@ end
 -- point is replaced in place, so a refused move leaves it where it was.
 local function PlaceTimerSlot(cell)
     local slot, db = cell.timerSlot, DT.db
-    if not slot then return end
+    if not slot then return true end
     local size = db.IconSize or 40
-    pcall(slot.SetPoint, slot, "CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
-    pcall(slot.SetSize, slot, size, size)
+    local moved = pcall(slot.SetPoint, slot, "CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
+    local sized = pcall(slot.SetSize, slot, size, size)
+    return moved and sized
 end
 
 local function StyleTimerText(fontString)
     local db = DT.db
-    pcall(KE.ApplyFontToText, KE, fontString, db.FontFace, db.TimerFontSize, db.FontOutline)
+    local fonted = pcall(KE.ApplyFontToText, KE, fontString, db.FontFace, db.TimerFontSize, db.FontOutline)
     local r, g, b, a = KE:ResolveColor(db.TimerColor, DEFAULT_TIMER)
-    pcall(fontString.SetTextColor, fontString, r, g, b, a)
+    local colored = pcall(fontString.SetTextColor, fontString, r, g, b, a)
+    return fonted and colored
+end
+
+local function PlaceTimerContainer(container, frame)
+    container:SetFrameLevel(frame:GetFrameLevel() + 7)
+    container:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    container:SetSize(1, 1)
 end
 
 local function EnsureTimer(cell)
     if cell.timer or cell.timerFailed then return end
     local ok, container = pcall(CreateFrame, "AuraContainer", nil, cell.frame, "CustomAuraContainerTemplate")
-    if not ok or not container then
+    if not ok or not container or not pcall(PlaceTimerContainer, container, cell.frame) then
         cell.timerFailed = true
         return
     end
-    container:SetFrameLevel(cell.frame:GetFrameLevel() + 7)
-    container:SetPoint("CENTER", cell.frame, "CENTER", 0, 0)
-    container:SetSize(1, 1)
     local added, slot = pcall(container.AddAuraSlot, container, TIMER_SLOT, AURA_FILTER, {
         candidateFilters = { includeSpellIDs = { [cell.id] = true } },
         initializeFrame = function(button)
@@ -551,9 +570,10 @@ function DT:StyleTimers(list, key, allowed)
             EnsureTimer(cell)
             cell.timerStyle = key
         elseif cell.timerStyle ~= key then
-            if cell.timerText then StyleTimerText(cell.timerText) end
-            PlaceTimerSlot(cell)
-            cell.timerStyle = key
+            local styled = not cell.timerText or StyleTimerText(cell.timerText)
+            -- Recorded only when every write went through; otherwise the
+            -- timer stays owed and the next yes retries it.
+            if PlaceTimerSlot(cell) and styled then cell.timerStyle = key end
         end
     end
 end
@@ -612,7 +632,7 @@ function DT:BuildSlot(slot)
         end
     end
     if didWork then
-        for i = 1, #self.list do PlaceGlow(self.cells[i], self.paintedTotal) end
+        for i = 1, #self.list do pcall(PlaceGlow, self.cells[i], self.paintedTotal) end
     end
     if DEBUG_DOT and didWork then KE:Print("[DOT] built slot " .. slot) end
     return didWork
@@ -622,8 +642,12 @@ function DT:OnScanDone(total)
     if total ~= self.paintedTotal then
         self.paintedTotal = total
         for i = 1, #self.list do
-            PaintAnswers(self.cells[i], total)
-            PlaceGlow(self.cells[i], total)
+            local cell = self.cells[i]
+            -- A refused write is repainted on the next scan, not taken as done.
+            if not (pcall(PaintAnswers, cell, total) and pcall(PlaceGlow, cell, total)) then
+                self.paintedTotal = -1
+                if DEBUG_DOT then KE:Print("[DOT] repaint refused for " .. tostring(cell.id)) end
+            end
         end
         if DEBUG_DOT then
             local relaxed = self.slots and self.slots.strict == false
@@ -708,10 +732,14 @@ end
 -- the gate's yes.
 function DT:Apply(list, allowed)
     local db = self.db
-    self.applying = true
     -- A changed list starts with every slot retaken; a look-only change keeps
-    -- the sensors bound.
-    if self.slots and not Rules.SameList(list, self.list) then self.slots:Stop() end
+    -- the sensors bound. The scan Stop reports must not raise the build target
+    -- for the list being replaced.
+    if self.slots and not Rules.SameList(list, self.list) then
+        self.applying = true
+        self.slots:Stop()
+        self.applying = false
+    end
 
     for i = 1, #list do
         local cell = self.cells[i] or NewCell(i)
@@ -732,7 +760,11 @@ function DT:Apply(list, allowed)
     self.root:SetFrameStrata(db.Strata or "MEDIUM")
     KE:ApplyFramePosition(self.root, db.Position, db)
     local geo = Geometry(db)
-    for i = 1, #list do StyleCell(self.cells[i], geo) end
+    for i = 1, #list do
+        if not pcall(StyleCell, self.cells[i], geo) and DEBUG_DOT then
+            KE:Print("[DOT] style refused for " .. tostring(self.cells[i].id))
+        end
+    end
     LayoutCells()
     self:StyleTimers(list, TimerStyleKey(db), allowed)
 
@@ -743,9 +775,10 @@ function DT:Apply(list, allowed)
         self.listKey = listKey
         self.runner:Cancel()
         self.buildTarget = 0
+        self.applying = true
         self.slots:SetCap(0)
+        self.applying = false
     end
-    self.applying = false
     self.paintedTotal = -1
     self:OnScanDone(self.slots and self.slots:Total() or 0)
     if self.previewing then self:PaintPreview() end
