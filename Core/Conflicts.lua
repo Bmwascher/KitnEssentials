@@ -142,9 +142,14 @@ local CONFLICTS = {
                     return true
                 end,
                 -- Stateless companion to apply(). Its defaults fill only nil
-                -- values, so an absent switch is on.
+                -- values, so an absent switch is on. Its module switch turns
+                -- the whole teleport module off, popups included.
                 isActive = function()
                     local db = _G.MythicPlusTweaksDB
+                    if type(db) == "table" and type(db.modules) == "table"
+                        and db.modules.DungeonTeleports == false then
+                        return false
+                    end
                     local cfg = type(db) == "table" and type(db.moduleDb) == "table"
                         and db.moduleDb.DungeonTeleports
                     if type(cfg) ~= "table" then return true end

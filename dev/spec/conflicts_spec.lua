@@ -223,10 +223,14 @@ describe("Core/Conflicts.lua decision layer", function()
                 assert.same({ popupOnGroupCast = false, groupFormedPopup = false, chatMessage = true }, held)
             end)
 
-            it("isActive is false only once both popups are literally off", function()
+            it("isActive is false once both popups are off or its teleport module is off", function()
                 for _, case in ipairs({
                     { name = "both popups off",
                       db = { moduleDb = { DungeonTeleports = { popupOnGroupCast = false, groupFormedPopup = false } } },
+                      active = false },
+                    { name = "its teleport module off, popups on",
+                      db = { modules = { DungeonTeleports = false },
+                             moduleDb = { DungeonTeleports = { popupOnGroupCast = true } } },
                       active = false },
                     { name = "one popup unset",
                       db = { moduleDb = { DungeonTeleports = { popupOnGroupCast = false } } }, active = true },

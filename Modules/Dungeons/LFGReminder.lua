@@ -647,7 +647,8 @@ BuildPopup = function()
     end)
     secureBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- "Disable Feature" text: turns the whole feature off immediately
+    -- "Disable Feature" text: turns the module off, or only Party Teleports
+    -- on a party popup
     local disableBtn = CreateFrame("Button", nil, popup)
     local disableLbl = disableBtn:CreateFontString(nil, "OVERLAY")
     if S and S.SetFont then S.SetFont(disableLbl, 10, "") end
@@ -660,11 +661,11 @@ BuildPopup = function()
     disableBtn._label = disableLbl
     disableBtn:SetScript("OnClick", function()
         -- A live party prompt turns off only its own switch, so Group Finder
-        -- prompts keep running. The preview stands for the whole module.
+        -- prompts keep running; switching it off closes the party scope,
+        -- which ends the prompt. The preview stands for the whole module.
         if not previewState and pendingSource == "party" then
             if LR.db then LR.db.PartyTeleports = false end
             LR:ApplyPartyTeleports()
-            ClosePrompt()
         else
             if LR.db then LR.db.Enabled = false end
             KitnEssentials:DisableModule("LFGReminder")
@@ -793,16 +794,16 @@ local function ClearArmed()
 end
 
 -- Same clean-string chain as ResolveDungeon, against our own active entry.
--- Returns whether an entry exists, then its teleport, name and map. The
--- active-entry read can return secret data in chat-messaging lockdown, so the
--- guards are not optional.
+-- Returns whether the entry's dungeon name could be read, then its teleport,
+-- name and map. The active-entry read can return secret data in
+-- chat-messaging lockdown, so the guards are not optional, and an entry that
+-- is gone or unreadable both read false.
 local function ResolveListing()
     if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return false end
-    local present, spellID, name, mapID = false, nil, nil, nil
+    local readable, spellID, name, mapID = false, nil, nil, nil
     pcall(function()
         local info = C_LFGList.GetActiveEntryInfo()
         if type(info) ~= "table" then return end
-        present = true
         local activityID = info.activityID
         if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
             activityID = info.activityIDs[1]
@@ -812,9 +813,10 @@ local function ResolveListing()
         if type(act) ~= "table" then return end
         local fullName = act.fullName
         if type(fullName) ~= "string" or issecretvalue(fullName) then return end
+        readable = true
         spellID, name, mapID = ResolveGroupFinderPortal(fullName)
     end)
-    return present, spellID, name, mapID
+    return readable, spellID, name, mapID
 end
 
 -- Every popup:Show() pairs with registering SPELL_UPDATE_COOLDOWN, and every
@@ -924,10 +926,11 @@ function LR:LFG_LIST_JOINED_GROUP(_, resultID)
 end
 
 function LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-    local present, spellID, name, mapID = ResolveListing()
-    -- A listing that is gone keeps what it listed: the game can clear the
-    -- entry before it reports the listing full.
-    if present then
+    local readable, spellID, name, mapID = ResolveListing()
+    -- A listing that is gone or unreadable keeps what it listed: the game can
+    -- clear the entry before it reports the listing full, and chat lockdown
+    -- can hide it.
+    if readable then
         armedSpellID, armedName, armedMapID = spellID, name, mapID
     end
 end
@@ -965,6 +968,11 @@ end
 -- ours hear each other: "BV1_<Name-Realm>\030<spellID>" on the party channel.
 local PORTAL_PREFIX = "LKeystonePortal"
 local PORTAL_MSG    = "BV1_%s\030%d"
+-- Both leave the prefix registered; any other result is tried again the next
+-- time the scope opens.
+local PREFIX_RESULT    = Enum and Enum.RegisterAddonMessagePrefixResult
+local PREFIX_SUCCESS   = PREFIX_RESULT and PREFIX_RESULT.Success or 0
+local PREFIX_DUPLICATE = PREFIX_RESULT and PREFIX_RESULT.DuplicatePrefix or 1
 
 local moduleOn          -- OnEnable passed its Enabled gate; OnDisable clears it
 local partyAttached     -- the completion and restriction events are registered
@@ -1056,8 +1064,8 @@ function LR:UpdatePartyListeners()
     partyListening = open
     if open then
         if not prefixRegistered then
-            prefixRegistered = true
-            pcall(C_ChatInfo.RegisterAddonMessagePrefix, PORTAL_PREFIX)
+            local ok, result = pcall(C_ChatInfo.RegisterAddonMessagePrefix, PORTAL_PREFIX)
+            prefixRegistered = ok and (result == PREFIX_SUCCESS or result == PREFIX_DUPLICATE) or nil
         end
         if not castFrame then
             castFrame = CreateFrame("Frame")
@@ -1102,7 +1110,11 @@ function LR:ApplyPartyTeleports()
         self:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
         self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     end
-    self:UpdatePartyListeners()
+    -- Off, not listening and holding no party prompt: nothing to read or
+    -- tear down. ApplySettings reaches here on every loading screen.
+    if on or partyListening or pendingSource == "party" then
+        self:UpdatePartyListeners()
+    end
 end
 
 -- Every restriction type, Chat included: the scope reads the chat lock.

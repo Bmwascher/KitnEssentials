@@ -201,27 +201,33 @@ describe("LFGReminder module", function()
 
         -- LFG_LIST_JOINED_GROUP only fires for someone who applied, so the
         -- leader's prompt comes from the game's listing-full event, for the
-        -- dungeon their own listing named. The game may clear the entry
-        -- before the event. A full raid listing reports the same event and
-        -- never prompts.
-        it("prompts the leader when the game reports their listing full, never in a raid", function()
+        -- dungeon their own listing last read as. The game may clear the
+        -- entry before the event, and chat lockdown can make it unreadable;
+        -- both keep the remembered dungeon. A full raid listing reports the
+        -- same event and never prompts.
+        it("prompts the leader for the last readable listing when it fills, never in a raid", function()
             for _, c in ipairs({
-                { name = "party", raid = false, want = 1286809 },
-                { name = "raid",  raid = true,  want = nil },
+                { name = "party, entry gone",                  raid = false, last = "gone",       want = 1286809 },
+                { name = "raid, entry gone",                   raid = true,  last = "gone",       want = nil },
+                { name = "party, entry unreadable",            raid = false, last = "unreadable", want = 1286809 },
+                { name = "party, relisted with no teleport",   raid = false, last = "other",      want = nil },
             }) do
-                local entryPresent = true
+                local entry = "readable"
                 local LR = loader.loadLFGReminder({
                     C_LFGList = {
                         GetActiveEntryInfo = function()
-                            if entryPresent then return { activityID = 7 } end
-                            return nil
+                            if entry == "gone" then return nil end
+                            return { activityID = entry == "other" and 8 or 7 }
                         end,
-                        GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+                        GetActivityInfoTable = function(id)
+                            if entry == "unreadable" then return nil end
+                            return { fullName = id == 8 and "Not A Dungeon" or "Murder Row" }
+                        end,
                     },
                     IsInRaid = function() return c.raid end,
                 })
                 LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-                entryPresent = false
+                entry = c.last
                 LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
                 LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
                 assert.equals(c.want, LR:_GetPendingSpellID(), c.name)
