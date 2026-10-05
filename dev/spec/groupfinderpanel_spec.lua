@@ -22,15 +22,6 @@ describe("GroupFinderPanel pure helpers", function()
             assert.equals(1, seams.getPartyRoles().DAMAGER)
         end)
     end)
-
-    describe("PlayerSpecRole", function()
-        it("returns nil rather than calling a deprecated global when the API is absent", function()
-            local _, _, seams = loader.loadGroupFinderPanel({
-                C_SpecializationInfo = {},
-            })
-            assert.is_nil(seams.playerSpecRole())
-        end)
-    end)
 end)
 
 describe("GroupFinderPanel SanitizeScore", function()

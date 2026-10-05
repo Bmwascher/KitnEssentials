@@ -1106,6 +1106,9 @@ function KE:EUISheetActive(unit) end
 ---@return boolean
 function KE:EUIDrawsSlotElement(unit, element) end
 
+---@return string? role "TANK", "HEALER" or "DAMAGER"; nil with no spec
+function KE:GetPlayerSpecRole() end
+
 ---@return boolean
 function KE:IsPlayerHealerSpec() end
 

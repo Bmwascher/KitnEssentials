@@ -62,7 +62,6 @@ local C_Spell = C_Spell
 local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
-local GetSpecializationRole = GetSpecializationRole
 local C_ChatInfo = C_ChatInfo
 local C_Timer = C_Timer
 local GetInstanceInfo = GetInstanceInfo
@@ -1372,10 +1371,7 @@ function LR:ShowPreview()
     shownName = dungeon
     -- Read whether or not Show Role is on, so ticking it with the preview open
     -- shows the row through the page's refresh.
-    local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization()
-    local specRole = specIndex and specIndex > 0 and GetSpecializationRole
-        and GetSpecializationRole(specIndex)
-    shownRole = PickRole(specRole, nil) or "DAMAGER"
+    shownRole = PickRole(KE:GetPlayerSpecRole(), nil) or "DAMAGER"
     shownLine2 = nil
     popup._title:SetText("LFG Reminder")
     ApplyPopupLayout()

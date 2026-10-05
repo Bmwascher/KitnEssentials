@@ -110,21 +110,11 @@ local panel
 -- at call time. Declare where the readers are.
 local IsActive
 
--- 12.0.7 spec mapping. NO fallback to the deprecated globals -- they live in
--- Blizzard_DeprecatedSpecialization and must not be called from new code.
-local function PlayerSpecRole()
-    local CSI = _G.C_SpecializationInfo
-    if not (CSI and CSI.GetSpecialization and CSI.GetSpecializationInfo) then return nil end
-    local spec = CSI.GetSpecialization()
-    if not spec then return nil end
-    return select(5, CSI.GetSpecializationInfo(spec))
-end
-
 local function GetPartyRoles()
     local roles = { TANK = 0, HEALER = 0, DAMAGER = 0 }
     if IsInGroup() then
         local r = UnitGroupRolesAssigned("player")
-        if r == "NONE" or not roles[r] then r = PlayerSpecRole() end
+        if r == "NONE" or not roles[r] then r = KE:GetPlayerSpecRole() end
         if r and roles[r] then roles[r] = roles[r] + 1 end
         for i = 1, GetNumGroupMembers() - 1 do
             r = UnitGroupRolesAssigned("party" .. i)
@@ -135,7 +125,7 @@ local function GetPartyRoles()
         -- Solo: your role comes from your spec. UnitGroupRolesAssigned is
         -- NONE outside a group, which silently no-op'd Needs Role for solo
         -- players (the "healer sees healer groups" report).
-        local r = PlayerSpecRole()
+        local r = KE:GetPlayerSpecRole()
         if r and roles[r] then roles[r] = roles[r] + 1 end
     end
     return roles
@@ -159,7 +149,6 @@ end
 
 -- Test seams. Nothing in the module reads these; they exist so the spec can
 -- reach file-locals without exporting them into the module's real surface.
-GFP._PlayerSpecRole      = PlayerSpecRole
 GFP._GetPartyRoles       = GetPartyRoles
 GFP._SeasonGroups        = SeasonGroups
 GFP._IsDungeonSearchMode = IsDungeonSearchMode

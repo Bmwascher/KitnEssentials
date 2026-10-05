@@ -1852,18 +1852,21 @@ end
 -- Spec role
 ---------------------------------------------------------------------------------
 
-local function PlayerSpecRole()
+-- Your own spec is never secret. Index 0 is a character with no spec yet.
+function KE:GetPlayerSpecRole()
     local specIndex = C_SpecializationInfo.GetSpecialization()
-    if not specIndex then return nil end
-    return _G.GetSpecializationRole(specIndex)
+    if not specIndex or specIndex == 0 then return nil end
+    local getRole = _G.GetSpecializationRole
+    if not getRole then return nil end
+    return getRole(specIndex)
 end
 
 function KE:IsPlayerHealerSpec()
-    return PlayerSpecRole() == "HEALER"
+    return self:GetPlayerSpecRole() == "HEALER"
 end
 
 function KE:IsPlayerTankSpec()
-    return PlayerSpecRole() == "TANK"
+    return self:GetPlayerSpecRole() == "TANK"
 end
 
 ---------------------------------------------------------------------------------

@@ -870,3 +870,33 @@ describe("KE:InRealInstancedContent", function()
     end)
 end)
 
+-- The role string every reader takes from Core. Index 0 is a character with
+-- no specialization yet.
+describe("KE:GetPlayerSpecRole", function()
+    local KE, saved
+    local STUBBED = { "GetSpecialization", "GetSpecializationRole" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("returns the current spec's role, or nil with no spec or no role API", function()
+        local healer = function() return "HEALER" end
+        local cases = {
+            { name = "no spec index", index = nil, getRole = healer, want = nil },
+            { name = "spec index 0",  index = 0,   getRole = healer, want = nil },
+            { name = "a spec",        index = 2,   getRole = healer, want = "HEALER" },
+            { name = "no role API",   index = 2,   getRole = nil,    want = nil },
+        }
+        for _, c in ipairs(cases) do
+            _G.GetSpecialization = function() return c.index end
+            _G.GetSpecializationRole = c.getRole
+            assert.equals(c.want, KE:GetPlayerSpecRole(), c.name)
+        end
+    end)
+end)
+

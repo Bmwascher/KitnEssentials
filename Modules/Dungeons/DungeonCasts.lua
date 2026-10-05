@@ -29,8 +29,6 @@ local C_Timer = C_Timer
 local C_DurationUtil = C_DurationUtil
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationRole = GetSpecializationRole
 local UnitIsUnit = UnitIsUnit
 local pcall = pcall
 local issecretvalue = issecretvalue
@@ -662,10 +660,9 @@ end
 
 function DC:CacheKickSpell()
     H.CacheInterruptId(self)
-    -- Own spec, never secret. Tanks get no targeting glow: every trash cast
-    -- is aimed at them, so it would never go out.
-    local specIndex = GetSpecialization()
-    self.isTank = (specIndex and GetSpecializationRole(specIndex) == "TANK") or false
+    -- Tanks get no targeting glow: every trash cast is aimed at them, so it
+    -- would never go out.
+    self.isTank = KE:IsPlayerTankSpec()
     for _, bar in pairs(self.activeFrames) do
         self:ApplyTargetGlowHost(bar)
     end

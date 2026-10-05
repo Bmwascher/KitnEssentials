@@ -30,8 +30,6 @@ local UnitIsUnit = UnitIsUnit
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local GetNumGroupMembers = GetNumGroupMembers
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationRole = GetSpecializationRole
 local GetTime = GetTime
 local pcall = pcall
 local pairs = pairs
@@ -99,12 +97,7 @@ end
 -- Reading your own class and spec is never restricted.
 local function ReadSpecIdentity()
     local _, class = UnitClass("player")
-    local specIndex = GetSpecialization and GetSpecialization()
-    local role = nil
-    if specIndex and specIndex > 0 and GetSpecializationRole then
-        role = GetSpecializationRole(specIndex)
-    end
-    return class, role
+    return class, KE:GetPlayerSpecRole()
 end
 
 local function WantsSpec(class, role, healersOnly)

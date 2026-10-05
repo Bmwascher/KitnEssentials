@@ -17,8 +17,6 @@ local C_Item           = C_Item
 local C_Container      = C_Container
 local C_Timer          = C_Timer
 local CreateFrame      = CreateFrame
-local GetSpecialization     = C_SpecializationInfo.GetSpecialization
-local GetSpecializationRole = GetSpecializationRole
 local IsInInstance     = IsInInstance
 local UIParent         = UIParent
 
@@ -76,13 +74,6 @@ end
 ---------------------------------------------------------------------------------
 -- Visibility Checks
 ---------------------------------------------------------------------------------
-local function IsHealer()
-    local specIndex = GetSpecialization()
-    if not specIndex then return false end
-    local role = GetSpecializationRole(specIndex)
-    return role == "HEALER"
-end
-
 -- Pure, so the rule is spec-covered; the caller supplies the three reads.
 function PR.PassesGates(db, inInstance, inCombat, isHealer)
     if db.InstanceOnly and not inInstance then return false end
@@ -93,7 +84,7 @@ end
 
 function PR:PassesVisibility()
     local db = self.db
-    return PR.PassesGates(db, self.inInstance, self.inCombat, db.DisableOnHealer and IsHealer())
+    return PR.PassesGates(db, self.inInstance, self.inCombat, db.DisableOnHealer and KE:IsPlayerHealerSpec())
 end
 
 -- The cooldown and bag events only matter while the text may show. Only
