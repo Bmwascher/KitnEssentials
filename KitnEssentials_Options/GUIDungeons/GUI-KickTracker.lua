@@ -97,7 +97,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local rowSync = GUIFrame:CreateRow(cardSync.content, Theme.rowHeightLast)
     local syncCheck = GUIFrame:CreateCheckbox(rowSync, "Sync Kicks with Party Addon Users", {
         value = db.KickSync ~= false,
-        callback = function(checked) db.KickSync = checked end,
+        callback = function(checked) db.KickSync = checked; ApplySettings() end,
     })
     rowSync:AddWidget(syncCheck, 1)
     manager:Register(syncCheck, "all")

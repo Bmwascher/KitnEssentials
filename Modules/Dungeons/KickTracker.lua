@@ -644,8 +644,8 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     self:ResolveLater(entry, METER_PAIR_WINDOW + METER_SETTLE)
 end
 
--- Teammates' messages can arrive: chat is open and the player syncs kicks
--- (with Kick Sync off, KT:OnCommReceived drops every message).
+-- Teammates' messages can arrive: chat is open and the player syncs kicks.
+-- KT:OnCommReceived drops every message while they cannot.
 function KT:MessagesHeard()
     return self.commMode ~= "feed" and self.db.KickSync ~= false
 end
@@ -859,6 +859,13 @@ end
 function KT:ClearPairing()
     wipe(self.kickPairing.claims)
     wipe(self.kickPairing.paired)
+end
+
+-- Everything teammates' messages taught, dropped together whenever those
+-- messages cannot arrive (the chat lock, Kick Sync off).
+function KT:DropTeammateMessageState()
+    KT.DropMessageState(self.partyMembers)
+    self:ClearPairing()
 end
 
 function KT:PruneKicks(now)
@@ -1088,7 +1095,9 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
     local isKE = prefix == COMM_PREFIX
     if not isKE and prefix ~= BLIZZI_PREFIX then return end
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not self.db.KickSync then return end
+    -- A message sent before the chat lock can arrive after it; it must not
+    -- re-teach what the lock dropped.
+    if not self:MessagesHeard() then return end
     if not KE:IsSafeValue(sender) then return end
 
     -- Wire input is untrusted; one pcall wraps parse + attribution so bad
@@ -1458,14 +1467,7 @@ function KT:UpdateCommMode()
     local mode, action = KT.CommModeStep(self.commMode, KE:IsChatMessagingLocked())
     self.commMode = mode
     if action == "enter-feed" then
-        for _, member in pairs(self.partyMembers) do
-            if member.unit ~= "player" then
-                member.kickVerified = nil
-                member.extraKicks = nil
-                member.reducedAt = nil
-            end
-        end
-        self:ClearPairing()
+        self:DropTeammateMessageState()
         self:UpdateBars()
         self:LayoutBars()
     elseif action == "enter-sync" then
@@ -2529,6 +2531,9 @@ end
 
 function KT:ApplySettings()
     self:UpdateDB()
+    -- Kick Sync off (the page or a profile change) drops what messages
+    -- taught, as the chat lock does; the redraw below shows it.
+    if not self:MessagesHeard() then self:DropTeammateMessageState() end
     if not self.containerFrame then return end
 
     self:ApplyContainerPosition()

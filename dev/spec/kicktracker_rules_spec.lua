@@ -893,3 +893,25 @@ describe("KickTracker uncertain kick", function()
         end
     end)
 end)
+
+describe("KickTracker message state drop", function()
+    it("drops what only a teammate's messages keep true, so a credited cooldown drives their row", function()
+        local KT = L.loadKickTrackerRules()
+        local members = {
+            me = { unit = "player", kickVerified = true, extraKicks = { { id = 100, cd = 30 } } },
+            ann = { unit = "party1", kickVerified = true, reducedAt = 9, kickStart = 10, kickDuration = 15,
+                    extraKicks = { { id = 100, cd = 30 } } },
+        }
+        local before = KT.PickRowKick(members.ann, 11)
+        KT.DropMessageState(members)
+        local rowKick, isReady = KT.PickRowKick(members.ann, 11)
+        assert.is_not_nil(before)
+        assert.is_nil(members.ann.kickVerified)
+        assert.is_nil(members.ann.extraKicks)
+        assert.is_nil(members.ann.reducedAt)
+        assert.is_nil(rowKick)
+        assert.is_false(isReady)
+        assert.is_true(members.me.kickVerified)
+        assert.equals(1, #members.me.extraKicks)
+    end)
+end)

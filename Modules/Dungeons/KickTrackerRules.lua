@@ -382,6 +382,20 @@ function KT.WantedExtraKicks(list, isKnown)
     return wanted
 end
 
+-- What only a teammate's messages keep true: verification, talent-added
+-- kicks and reduction stamps. Dropped whenever their messages cannot
+-- arrive: a ready talent-added kick kept past them would read Ready over a
+-- cooldown the game credited (KT.PickRowKick). The player's own stay.
+function KT.DropMessageState(members)
+    for _, member in pairs(members) do
+        if member.unit ~= "player" then
+            member.kickVerified = nil
+            member.extraKicks = nil
+            member.reducedAt = nil
+        end
+    end
+end
+
 -- The kick that drives the row, and whether the row reads Ready: the first
 -- ready kick (main first), else the kick back soonest. nil means the main
 -- kick. A start without a duration (the preview's mocks) counts as cooling.
