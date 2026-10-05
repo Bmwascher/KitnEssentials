@@ -16,13 +16,17 @@
 --                    interrupts for announce purposes but not CD tracking.
 --   tracked        - optional candidate id a cooldown tracker shows for a
 --                    teammate, whose pet it cannot see.
+--   trackerKick    - optional { id, cd } a cooldown tracker shows for a spec
+--                    with no candidate. It is no candidate, so castbars give
+--                    the spec no kick indicator.
 --
 -- Accessors:
 --   KE:GetInterruptCandidatesForSpec(specID) -> list of { id, cd } in priority
 --                                              order, or nil.
 --   KE:GetInterruptSpellSet(specID) -> { [id]=true, ... } or nil.
 --   KE:GetTrackedKickForSpec(specID) -> { id, cd } or nil.
---   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate.
+--   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate and
+--                                    tracker kick.
 
 ---@class KE
 local KE = select(2, ...)
@@ -97,9 +101,9 @@ local INTERRUPTS = {
     -- Monk: Spear Hand Strike 15s (Brew/WW only)
     [268]  = { primary = { id = 116705, cd = 15 } },
     [269]  = { primary = { id = 116705, cd = 15 } },
-    -- Druid: Skull Bash 15s (Feral/Guardian). Balance has no single-target
-    -- interrupt; Solar Beam is their only kick and is announce-worthy.
-    [102]  = { primary = nil, announceExtras = { 78675 } },
+    -- Druid: Skull Bash 15s (Feral/Guardian). Balance's only kick is Solar
+    -- Beam 60s, an area silence with no castbar kick indicator.
+    [102]  = { trackerKick = { id = 78675, cd = 60 } },
     [103]  = { primary = { id = 106839, cd = 15 } },
     [104]  = { primary = { id = 106839, cd = 15 } },
     -- Demon Hunter: Disrupt 15s
@@ -141,7 +145,8 @@ end
 
 -- Precompute per-spec:
 --   entry.candidateList: normalized list of { id, cd } (primary becomes 1-entry list).
---   entry.announceSet:   { [spellID] = true } union of all candidate IDs + announceExtras.
+--   entry.announceSet:   { [spellID] = true } union of all candidate IDs, the
+--                        tracker kick and announceExtras.
 for _, entry in pairs(INTERRUPTS) do
     local list
     if entry.candidates then
@@ -163,6 +168,13 @@ for _, entry in pairs(INTERRUPTS) do
             if (KICK_CD_CAP[canon] or 0) < c.cd then KICK_CD_CAP[canon] = c.cd end
         end
     end
+    local tk = entry.trackerKick
+    if tk then
+        set[tk.id] = true
+        INTERRUPT_ANNOUNCE_SET[tk.id] = true
+        KICK_SPELL_SET[tk.id] = true
+        if (KICK_CD_CAP[tk.id] or 0) < tk.cd then KICK_CD_CAP[tk.id] = tk.cd end
+    end
     if entry.announceExtras then
         for _, id in ipairs(entry.announceExtras) do
             set[id] = true
@@ -178,7 +190,8 @@ end
 
 -- Returns an ordered list of { id, cd } entries to try in priority order.
 -- Caller iterates and picks the first entry whose id is actually known in the
--- player's or pet's spellbook. Returns nil if spec is unknown or has no kick.
+-- player's or pet's spellbook. Returns nil if spec is unknown or has no
+-- candidate (a tracker kick is none).
 function KE:GetInterruptCandidatesForSpec(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end
@@ -187,7 +200,8 @@ function KE:GetInterruptCandidatesForSpec(specID)
     return list
 end
 
--- Returns { [spellID] = true, ... } — union of all candidate IDs + announce extras.
+-- Returns { [spellID] = true, ... } — union of all candidate IDs, the tracker
+-- kick and announce extras.
 -- Nil if spec unknown.
 function KE:GetInterruptSpellSet(specID)
     local d = INTERRUPTS[specID]
@@ -209,17 +223,18 @@ function KE:PickTrackedKick(candidates, trackedID)
     return candidates[1]
 end
 
--- The kick a cooldown tracker shows for a spec when it cannot see the pet.
+-- The kick a cooldown tracker shows for a spec when it cannot see the pet,
+-- or the spec's tracker kick when it has no candidate.
 function KE:GetTrackedKickForSpec(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end
     local list = d.candidateList
-    if not list or #list == 0 then return nil end
+    if not list or #list == 0 then return d.trackerKick end
     return self:PickTrackedKick(list, d.tracked)
 end
 
--- Every spell that starts a kick cooldown: candidate ids only, never the
--- announce extras, which are not kicks.
+-- Every spell that starts a kick cooldown: candidate and tracker-kick ids,
+-- never the announce extras, which are not kicks.
 function KE:GetInterruptKickSpellSet()
     return KICK_SPELL_SET
 end
@@ -248,6 +263,8 @@ function KE:GetKickCooldownForSpec(specID, kickID)
     for _, c in ipairs(list) do
         if (KICK_ALIASES[c.id] or c.id) == kickID then return c.cd end
     end
+    local tk = d and d.trackerKick
+    if tk and tk.id == kickID then return tk.cd end
     return nil
 end
 

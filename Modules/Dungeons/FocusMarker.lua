@@ -58,7 +58,7 @@ local KICK_MACRO_NAME = "!FocusKick"
 local KICK_MACRO_ICON = 134400
 local MACRO_BODY_MAX = 255
 
--- Kept out of the shared interrupt table: an entry there would also give the
+-- Kept out of the shared candidates: a candidate there would also give the
 -- spec a castbar kick bar.
 local KICK_OVERRIDES = {
     [102] = { 78675 }, -- Balance Druid: Solar Beam
