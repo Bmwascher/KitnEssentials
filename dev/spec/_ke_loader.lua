@@ -3304,4 +3304,13 @@ function L.loadPlateSlots(overrides)
     return KE, frames
 end
 
+-- Modules/ClassUtilities/DoTTrackerRules.lua on top of Core/PlateSlots.lua, in
+-- one KE table. Pure logic: nothing to stub beyond the mock. Returns KE.
+function L.loadDoTTrackerRules(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local KE = helpers.loadModule("Core/PlateSlots.lua", {})
+    helpers.loadModule("Modules/ClassUtilities/DoTTrackerRules.lua", KE)
+    return KE
+end
+
 return L

@@ -190,6 +190,8 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field PlateSlots table
+---@field DoTTrackerRules table
+---@field DOT_TRACKER_SEEDS table
 ---@field CombatState KE.CombatState
 ---@field Context KE.Context
 ---@field curves KE.Curves
