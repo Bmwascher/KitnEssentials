@@ -1467,7 +1467,6 @@ function L.loadLFGReminder(overrides)
     _G.GetNormalizedRealmName = overrides.GetNormalizedRealmName or function() return "Area52" end
     _G.GetInstanceInfo = overrides.GetInstanceInfo or function() return nil end
     _G.LE_PARTY_CATEGORY_HOME = 1
-    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
 
     local profile = {
         LFGReminder = {
