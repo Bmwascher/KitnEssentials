@@ -97,6 +97,7 @@ local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
 local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
 local HELLO_REPLY_JITTER = 0.6
+local ROW_SLOTS = 5  -- a party's rows, which Max Records never limits
 local RAID_MARK_SHEET = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local OWN_KICK_MATCH_WINDOW = 0.5
 
@@ -1787,30 +1788,35 @@ function KT:LayoutBars()
         table_insert(self.sortedBars, entry)
     end
 
-    -- Position bars
+    -- Every row shows. Records past Max Records (MaxBars) hide, those with
+    -- the most time left first; that happens only after the slider is lowered,
+    -- since KT:ProcessTeammateKick already trims the list.
     local growUp = db.GrowthDirection == "UP"
-    local maxBars = db.MaxBars or 5
+    local maxRecords = db.MaxBars or 5
     local spacing = db.BarSpacing or 2
     local barHeight = db.BarHeight or 20
 
     -- Bars pin to the container's self-point (growth vertical edge + user
     -- horizontal edge) and stack inward, exactly filling the full-height container.
     local selfPoint = self:GetSelfPoint(self:ResolvePositionConfig())
-    for i, entry in ipairs(self.sortedBars) do
+    local slot, records = 0, 0
+    for _, entry in ipairs(self.sortedBars) do
         local bar = entry.bar
-        if i <= maxBars then
+        if entry.record then records = records + 1 end
+        if entry.record and records > maxRecords then
+            bar:Hide()
+        else
             bar:ClearAllPoints()
-            local offset = (i - 1) * (barHeight + spacing)
+            local offset = slot * (barHeight + spacing)
             bar:SetPoint(selfPoint, self.containerFrame, selfPoint, 0, growUp and offset or -offset)
             bar:Show()
-        else
-            bar:Hide()
+            slot = slot + 1
         end
     end
 
-    -- Size container to the full max-bar stack so the EditMode overlay spans the
-    -- whole group (not just one bar).
-    local n = db.MaxBars or 5
+    -- Size the container for every row plus Max Records, so the EditMode
+    -- overlay spans the whole group.
+    local n = ROW_SLOTS + maxRecords
     self.containerFrame:SetSize(db.BarWidth, barHeight * n + math_max(n - 1, 0) * spacing)
 end
 
@@ -1979,9 +1985,8 @@ function KT:ShowPreview()
     local barHeight = db.BarHeight or 20
     local previewSelfPoint = self:GetSelfPoint(self:ResolvePositionConfig())
 
+    -- The mocks are rows, which Max Records never limits.
     for i, data in ipairs(previewData) do
-        if i > (db.MaxBars or 5) then break end
-
         -- Reuse via the pool (keyed like live bars) — direct CreateBar here
         -- stranded 5 frames per preview cycle since HideAllBars had just
         -- pooled the previous set.
@@ -2077,9 +2082,8 @@ function KT:ShowPreview()
         bar:Show()
     end
 
-    -- Size container to the full max-bar stack so the EditMode overlay spans the
-    -- whole group (not just one bar).
-    local nPrev = db.MaxBars or 5
+    -- Size the container as KT:LayoutBars does: every row plus Max Records.
+    local nPrev = ROW_SLOTS + (db.MaxBars or 5)
     self.containerFrame:SetSize(db.BarWidth, barHeight * nPrev + math_max(nPrev - 1, 0) * spacing)
     self.containerFrame:Show()
     self:_RefreshOnUpdate()
