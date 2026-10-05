@@ -669,3 +669,205 @@ describe("KickTracker own kick with a hidden kicker", function()
         end
     end)
 end)
+
+describe("KickTracker friendly-unit refusal", function()
+    it("refuses only an answer read plainly as false", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "a plain false refuses", ok = true, answer = false, secret = false, want = true },
+            { name = "a plain true passes", ok = true, answer = true, secret = false, want = false },
+            { name = "a failed call passes", ok = false, answer = "error text", secret = false, want = false },
+            { name = "a secret answer passes", ok = true, answer = false, secret = true, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.RefusesInterruptUnit(row.ok, row.answer, row.secret), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker same-frame duplicate", function()
+    it("takes a second event on the same nameplate inside the window as the same interrupt", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "no earlier event on this nameplate, another nameplate's just before",
+              last = { nameplate2 = 10 }, unit = "nameplate1", now = 10.01, want = false },
+            { name = "the same nameplate inside the window, another nameplate's event between",
+              last = { nameplate1 = 10, nameplate2 = 10.005 }, unit = "nameplate1", now = 10.01, want = true },
+            { name = "the same nameplate past the window", last = { nameplate1 = 10 },
+              unit = "nameplate1", now = 10.05, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.SameInterrupt(row.last, row.unit, row.now, 0.02), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter list keys", function()
+    it("keys apart entries that share class, spec icon and local flag, and marks them shared", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the same class, icon and flag share", shared = { true, true },
+              list = { { class = "DEATHKNIGHT", icon = 135770 }, { class = "DEATHKNIGHT", icon = 135770 } } },
+            { name = "another spec icon does not share", shared = { false, false },
+              list = { { class = "DEATHKNIGHT", icon = 135770 }, { class = "DEATHKNIGHT", icon = 135773 } } },
+            { name = "the local flag does not share", shared = { false, false },
+              list = { { class = "DEATHKNIGHT", me = true }, { class = "DEATHKNIGHT", me = false } } },
+            { name = "a different name still shares", shared = { true, true },
+              list = { { class = "MAGE", name = "Dee" }, { class = "MAGE", name = "Eve" } } },
+        }
+        for _, row in ipairs(rows) do
+            local list = KT.KeyMeterEntries(row.list)
+            assert.are_not.equal(list[1].key, list[2].key, row.name)
+            assert.same(row.shared, { list[1].shared, list[2].shared }, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter list diff", function()
+    it("names a lone entry, or the one entry added with none removed, and nothing else", function()
+        local KT = L.loadKickTrackerRules()
+        local function list(...)
+            local out = {}
+            for i, key in ipairs({ ... }) do out[i] = { key = key } end
+            return out
+        end
+        local shared = { { key = "DK:250", shared = true }, { key = "DK:250#2", shared = true } }
+        local rows = {
+            { name = "a one-entry list names its entry", old = nil, new = list("DK"), want = "DK" },
+            { name = "no earlier read names nothing", old = nil, new = list("DK", "MAGE"), want = nil },
+            { name = "the one added entry is named", old = list("DK"), new = list("DK", "MAGE"), want = "MAGE" },
+            { name = "two added entries name nothing", old = list("DK"), new = list("DK", "MAGE", "ROGUE"), want = nil },
+            { name = "a list one longer with an old entry gone names nothing", old = list("DK", "MAGE"),
+              new = list("DK", "ROGUE", "HUNTER"), want = nil },
+            { name = "an entry that moved up is not trusted", old = list("DK", "MAGE"),
+              new = list("MAGE", "DK"), want = nil },
+            { name = "an added entry sharing its class, spec and flag names nothing",
+              old = list("DK:250"), new = shared, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            local entry = KT.DiffMeterList(row.old, row.new)
+            assert.equals(row.want, entry and entry.key, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter entry to member", function()
+    it("matches by class and rules members out by the local flag and a plain name only", function()
+        local KT = L.loadKickTrackerRules()
+        local members = {
+            me = { unit = "player", matchClass = "DEATHKNIGHT", shortName = "Bob", specID = 250 },
+            ann = { unit = "party1", matchClass = "DEATHKNIGHT", shortName = "Ann", specID = 251 },
+            cal = { unit = "party2", matchClass = "DEATHKNIGHT", shortName = "Cal", specID = 0 },
+            dee = { unit = "party3", matchClass = "MAGE", shortName = "Dee", specID = 0 },
+        }
+        local rows = {
+            { name = "the local-player flag matches only the player", entry = { class = "MAGE", me = true },
+              count = 1, guid = "me" },
+            { name = "a class matches its members, not the player when the flag says not",
+              entry = { class = "DEATHKNIGHT", me = false }, count = 2 },
+            { name = "an unreadable flag keeps the player in", entry = { class = "DEATHKNIGHT" }, count = 3 },
+            { name = "a spec icon rules nobody out, though one member's known spec differs",
+              entry = { class = "DEATHKNIGHT", me = false, icon = 135770 }, count = 2 },
+            { name = "a plain name, realm stripped, picks one",
+              entry = { class = "DEATHKNIGHT", me = false, name = "Cal-Home" }, count = 1, guid = "cal" },
+        }
+        for _, row in ipairs(rows) do
+            local count, guid = KT.MatchMeterEntry(row.entry, members)
+            assert.equals(row.count, count, row.name)
+            if row.count == 1 then assert.equals(row.guid, guid, row.name) end
+        end
+    end)
+end)
+
+describe("KickTracker meter burst sessions", function()
+    it("marks a burst shared only when one session updates twice in it", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "Current and Overall once each", updates = { { id = 1 }, { id = 2 } }, want = false },
+            { name = "the same session twice", updates = { { id = 1 }, { id = 2 }, { id = 1 } }, want = true },
+            { name = "two unreadable IDs count as one session twice",
+              updates = { { secret = true }, { secret = true } }, want = true },
+        }
+        for _, row in ipairs(rows) do
+            local seen, shared = {}, false
+            for _, update in ipairs(row.updates) do
+                if KT.SessionRepeats(seen, update.id, update.secret == true) then shared = true end
+            end
+            assert.equals(row.want, shared, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter report owner", function()
+    it("names the member every naming list agrees on, unless the burst was shared", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "one list names a member", named = { "ann" }, want = "ann" },
+            { name = "both lists name the same member", named = { "ann", "ann" }, want = "ann" },
+            { name = "two lists name different members", named = { "ann", "cal" }, want = nil },
+            { name = "a shared burst names nobody, though the lists agree", named = { "ann", "ann" },
+              shared = true, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.MeterReportOwner(row.named, row.shared == true), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker hidden-kicker resolution", function()
+    it("folds only a lone interrupt with one report naming one member, else records it", function()
+        local KT = L.loadKickTrackerRules()
+        local kick = { id = 1766, cd = 15 }
+        local members = {
+            me = { unit = "player", interruptData = kick },
+            ann = { unit = "party1", interruptData = kick },
+            syn = { unit = "party2", interruptData = kick, kickVerified = true },
+            hea = { unit = "party3" },
+        }
+        local rows = {
+            { name = "one interrupt, one report naming a teammate: fold",
+              hits = { { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
+            { name = "no report: record", hits = {}, want = "record" },
+            { name = "an unnamed report: record", hits = { { at = 10.1 } }, want = "record" },
+            { name = "two reports: record", hits = { { at = 9.6 }, { at = 10.1, owner = "ann" } }, want = "record" },
+            { name = "another interrupt in the window: record", others = { { startTime = 10.7, state = "own" } },
+              hits = { { at = 10.1, owner = "ann" } }, want = "record" },
+            { name = "an echo of the same member counts once: fold",
+              hits = { { at = 10.1, owner = "ann" }, { at = 10.4, owner = "ann" } }, want = "fold", guid = "ann" },
+            { name = "an interrupt and a report outside the window do not count: fold",
+              others = { { startTime = 8.8, state = "record" } },
+              hits = { { at = 8.7 }, { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
+            { name = "another interrupt near the report, not near this one: record",
+              others = { { startTime = 11.1, state = "pending" } },
+              hits = { { at = 10.8, owner = "ann" } }, want = "record" },
+            { name = "a report whose window is still open: wait until it closes",
+              hits = { { at = 10.5, owner = "ann" } }, want = "wait", untilAt = 11.5 },
+            { name = "a report burst whose later end lies near another interrupt: record",
+              others = { { startTime = 11.6, state = "pending" } },
+              hits = { { at = 10.5, last = 10.7, owner = "ann" } }, want = "record" },
+            { name = "the player named while the own kick cools: own", meCooling = true,
+              hits = { { at = 10.1, owner = "me" } }, want = "own" },
+            { name = "the player named while the own kick is ready: record",
+              hits = { { at = 10.1, owner = "me" } }, want = "record" },
+            { name = "a synced teammate whose messages can arrive: record", heard = true,
+              hits = { { at = 10.1, owner = "syn" } }, want = "record" },
+            { name = "a synced teammate whose messages cannot arrive: fold", heard = false,
+              hits = { { at = 10.1, owner = "syn" } }, want = "fold", guid = "syn" },
+            { name = "a named member with no kick: record", hits = { { at = 10.1, owner = "hea" } }, want = "record" },
+            { name = "an interrupt something already took: nil", state = "claimed",
+              hits = { { at = 10.1, owner = "ann" } }, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            members.me.kickStart = row.meCooling and 9.5 or nil
+            members.me.kickDuration = row.meCooling and 15 or nil
+            local entry = { startTime = 10, state = row.state or "pending" }
+            local entries = { entry }
+            for _, other in ipairs(row.others or {}) do entries[#entries + 1] = other end
+            local outcome, guid, untilAt = KT.ResolveInterrupt(entry, entries, row.hits, members,
+                row.heard == true, 11.2, 1, 0.5)
+            assert.equals(row.want, outcome, row.name)
+            assert.equals(row.guid, guid, row.name)
+            assert.equals(row.untilAt, untilAt, row.name)
+        end
+    end)
+end)
