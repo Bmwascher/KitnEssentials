@@ -210,7 +210,7 @@ describe("LFGReminder module", function()
                 { name = "party, entry gone",                  raid = false, last = "gone",       want = 1286809 },
                 { name = "raid, entry gone",                   raid = true,  last = "gone",       want = nil },
                 { name = "party, entry unreadable",            raid = false, last = "unreadable", want = 1286809 },
-                { name = "party, relisted with no teleport",   raid = false, last = "other",      want = nil },
+                { name = "party, prompt up, relisted with no teleport", raid = false, last = "other", prior = true, want = nil },
             }) do
                 local entry = "readable"
                 local LR = loader.loadLFGReminder({
@@ -227,6 +227,12 @@ describe("LFGReminder module", function()
                     IsInRaid = function() return c.raid end,
                 })
                 LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                if c.prior then
+                    -- An earlier full listing leaves its prompt up; the same
+                    -- listing is read again before it changes.
+                    LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
+                    LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                end
                 entry = c.last
                 LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
                 LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()

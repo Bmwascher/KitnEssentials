@@ -936,10 +936,12 @@ function LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
 end
 
 -- The game delists a group the moment it fills and reports it here. A full
--- raid listing reports here too, and never prompts.
+-- raid listing reports here too, and never prompts. The full group replaces
+-- any older prompt even when its listing named no teleport.
 function LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
-    if not armedSpellID or IsInRaid() then return end
+    if IsInRaid() then return end
     ClearPending(); DropPrompt()
+    if not armedSpellID then return end
     pendingSpellID, pendingName, pendingMapID = armedSpellID, armedName, armedMapID
     pendingSource = "lfg"
     if self.db and self.db.ShowRole ~= false then
