@@ -3,7 +3,7 @@
 -- ║  GUI: LFG Reminder                                       ║
 -- ║  Purpose: Configuration panel for the LFGReminder module ║
 -- ║           (teleport popup shown after joining a Group    ║
--- ║           Finder dungeon group).                         ║
+-- ║           Finder dungeon group or a party teleport).     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -49,7 +49,7 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- One card: the switch plus the popup settings it governs
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "LFG Reminder", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Teleport Reminder", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyModuleState(checked)
@@ -58,7 +58,10 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return card1:GetNextOffset() end
 
-    card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat. Also prompts the group leader once their own listing fills. With Show Role on, the popup also shows the role you were accepted as, in the Role Icon Style set on the Group Finder card under Skinning > Blizzard Frames.")
+    card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat. Also prompts the group leader once their own listing fills. With Show Role on, the popup also shows the role you were accepted as, in the Role Icon Style set on the Group Finder card under Skinning > Blizzard Frames.\n\n" ..
+        "With Party Teleports on, it also pops up when a party member uses a dungeon teleport, if their " ..
+        "addons share it (KitnEssentials with this on, or |cffffd100Mythic+ Tweaks|r). Your own dungeon " ..
+        "teleports are shared with your party the same way.")
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local scale = GUIFrame:CreateSlider(row1, "Scale", {
@@ -75,15 +78,26 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
         value = db.ShowDisable ~= false,
         callback = function(checked) db.ShowDisable = checked; RefreshModule() end,
     })
-    row2:AddWidget(showDisable, 0.5)
+    row2:AddWidget(showDisable, 0.33)
     manager:Register(showDisable, "all")
 
     local showRole = GUIFrame:CreateCheckbox(row2, "Show Role", {
         value = db.ShowRole ~= false,
         callback = function(checked) db.ShowRole = checked; RefreshModule() end,
     })
-    row2:AddWidget(showRole, 0.5)
+    row2:AddWidget(showRole, 0.33)
     manager:Register(showRole, "all")
+
+    local partyTeleports = GUIFrame:CreateCheckbox(row2, "Party Teleports", {
+        value = db.PartyTeleports ~= false,
+        callback = function(checked)
+            db.PartyTeleports = checked
+            local LR = GetModule()
+            if LR and LR.ApplyPartyTeleports then LR:ApplyPartyTeleports() end
+        end,
+    })
+    row2:AddWidget(partyTeleports, 0.33)
+    manager:Register(partyTeleports, "all")
     card1:AddRow(row2, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
