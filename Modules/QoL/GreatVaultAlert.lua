@@ -186,6 +186,8 @@ end
 -- Settings
 ---------------------------------------------------------------------------------
 function GVA:ApplySettings()
+    -- A profile change reaches a module that stays enabled only through here.
+    self:ApplyCover()
     if not self.alertFrame then return end
 
     KE:ApplyFramePosition(self.alertFrame, self.db.Position, self.db)
@@ -280,6 +282,8 @@ function GVA:ApplyGate()
             self.castFrame:UnregisterEvent(event)
         end
     end
+
+    self:ApplyCover()
 end
 
 ---------------------------------------------------------------------------------
@@ -310,6 +314,8 @@ function GVA:OnDisable()
     self:UnregisterAllEvents()
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self._listening = false
+    self._coverWaiting = false
     self:HideAlert()
+    self:HideCovers()
     self.isPreview = false
 end
