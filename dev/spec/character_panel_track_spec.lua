@@ -1,7 +1,8 @@
 -- Tier: KE-invented branching only (tiered test policy). The tooltip line match
 -- is ported and covered by the structural diff; what is tested here is the
--- wrapper that stops a shared constant being mutated, which of the track's two
--- sources wins (the game's upgrade data, then the tooltip), the cap predicate, the
+-- wrapper that stops a shared constant being mutated, the crafted crest lookup,
+-- which of the track's three sources wins (the game's upgrade data, then the
+-- crest bonus id, then the tooltip), the cap predicate, the
 -- span builder's two independent gates, which side the span goes on, and the two
 -- separate things that decide whether a slot repaints at all: the track
 -- indicator's dirty key, and the detail render's pending flag.
@@ -17,7 +18,7 @@ local owned = {}
 -- needed there. The structure around it differs: this one captures the module
 -- registry and seeds KE inline, and it adds the two overrides this file needs --
 -- a tooltip that returns the caller's lines, and the detailed item level lookup
--- the crafted-track fallback calls. A case that needs the item link or the
+-- the slot item level reads. A case that needs the item link or the
 -- game's upgrade data passes them as overrides. Write the block below as it stands; do not
 -- go and copy the other file.
 --
@@ -82,32 +83,99 @@ end
 -- catches transcription slips. What IS invented is returning a fresh wrapper
 -- instead of the shared constant, and that has an invariant worth pinning.
 describe("Item track extraction", function()
+    -- loadCP stubs a global only when it is absent, so an override left behind
+    -- would reach the file's later loads.
+    local STUBBED = { "GetInventoryItemLink" }
+    local saved
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
     -- The mutation trap. Two slots on the same track must not see each other's
     -- numbers; if the shared ITEM_TRACKS entry were written to, they would.
+    -- The slot holds an item: an empty one returns before any read.
     it("never writes the count onto the shared track constant", function()
-        local CP = loadCP(upgradeLine("Upgrade Level: Myth 4/6"))
+        local held = {
+            GetInventoryItemLink = function() return "|cffa335ee|Hitem:1|h[x]|h|r" end,
+            C_Item = {
+                GetItemInfoInstant = function() return nil end,
+                GetDetailedItemLevelInfo = function() return nil end,
+                GetItemUpgradeInfo = function() return nil end,
+            },
+        }
+        local CP = loadCP(upgradeLine("Upgrade Level: Myth 4/6"), held)
         local first = CP:GetItemTrack("player", 1)
         assert.is_nil(first.track.cur)
         assert.is_nil(first.track.max)
-        local CP2 = loadCP(upgradeLine("Upgrade Level: Myth 2/6"))
+        local CP2 = loadCP(upgradeLine("Upgrade Level: Myth 2/6"), held)
         local second = CP2:GetItemTrack("player", 1)
         assert.equals("4", first.cur)
         assert.equals("2", second.cur)
     end)
 end)
 
+-- A link payload with its bonus list at field 13: the item id, eleven empty
+-- fields, then the count and the ids.
+local function crestPayload(...)
+    local ids = { ... }
+    local tail = #ids > 0 and (":" .. table.concat(ids, ":")) or ""
+    return "item:1" .. string.rep(":", 12) .. #ids .. tail
+end
+
+local MYTH_COLOR = { 1.00, 0.50, 0.00 }
+local HERO_COLOR = { 0.78, 0.30, 0.78 }
+
+describe("Crafted crest lookup", function()
+    it("reads the tier from the first crest id in the bonus list", function()
+        local CP = loadCP({})
+        local cases = {
+            { name = "Myth crest",              link = crestPayload(13836),       color = MYTH_COLOR },
+            { name = "Hero crest",              link = crestPayload(13835),       color = HERO_COLOR },
+            { name = "crest as second bonus",   link = crestPayload(1234, 13836), color = MYTH_COLOR },
+            { name = "inside a full hyperlink", link = "|cffa335ee|H" .. crestPayload(13835) .. "|h[x]|h|r",
+              color = HERO_COLOR },
+            { name = "bonus ids, no crest",     link = crestPayload(1234, 5678) },
+            { name = "no bonus ids",            link = crestPayload() },
+            { name = "empty count",             link = "item:1" .. string.rep(":", 12) .. ":13836" },
+            { name = "count past the list",     link = "item:1" .. string.rep(":", 12) .. "3:1234" },
+            { name = "not a string",            link = 42 },
+            { name = "no link",                 link = nil },
+        }
+        for _, c in ipairs(cases) do
+            local entry = CP._CraftedCrestTrack(c.link)
+            if c.color then
+                assert.equals("CR", entry.letter, c.name)
+                assert.same(c.color, entry.color, c.name)
+            else
+                assert.is_nil(entry, c.name)
+            end
+        end
+    end)
+end)
+
 describe("Item track source order", function()
     local LINK = "|cffa335ee|Hitem:1|h[x]|h|r"
+    local CREST_LINK = "|cffa335ee|H" .. crestPayload(13836) .. "|h[x]|h|r"
 
-    -- The override survives the file's later loads, which only stub the link
-    -- lookup when it is absent.
+    -- The override would survive the file's later loads, which only stub the
+    -- link lookup when it is absent.
+    local STUBBED = { "GetInventoryItemLink" }
+    local saved
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+    end)
     after_each(function()
-        _G.GetInventoryItemLink = nil
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
     end)
 
-    local function trackFor(info, tooltipLine)
+    local function trackFor(info, tooltipLine, link)
         local CP = loadCP(upgradeLine(tooltipLine), {
-            GetInventoryItemLink = function() return LINK end,
+            GetInventoryItemLink = function() return link or LINK end,
             C_Item = {
                 GetItemInfoInstant = function() return nil end,
                 GetDetailedItemLevelInfo = function() return nil end,
@@ -117,7 +185,7 @@ describe("Item track source order", function()
         return CP, CP:GetItemTrack("player", 5)
     end
 
-    it("reads the game's track first and falls back to the tooltip when it names none KE knows", function()
+    it("reads the game's track first, then the crest id, then the tooltip", function()
         local cases = {
             { name = "API track wins over the tooltip's, and 9 of 6 is capped",
               info = { trackString = "Myth", currentLevel = 9, maxLevel = 6 },
@@ -131,13 +199,25 @@ describe("Item track source order", function()
               info = { trackString = "Gladiator", currentLevel = 1, maxLevel = 6 },
               line = "Upgrade Level: Champion 3/8",
               letter = "C", cur = "3", max = "8", capped = false },
+            { name = "no API track: the crest id wins over the tooltip's line",
+              link = CREST_LINK, line = "Upgrade Level: Hero 2/6",
+              letter = "CR", color = MYTH_COLOR, capped = true },
+            { name = "no API track, no crest: the Crafted line gives a white CR",
+              line = "Crafted", letter = "CR", color = { 1, 1, 1 }, capped = true },
+            { name = "no API track, no crest, nothing in the tooltip",
+              line = "Item Level 300" },
         }
         for _, c in ipairs(cases) do
-            local CP, w = trackFor(c.info, c.line)
-            assert.equals(c.letter, w.track.letter, c.name)
-            assert.equals(c.cur, w.cur, c.name)
-            assert.equals(c.max, w.max, c.name)
-            assert.equals(c.capped, CP._IsUpgradeCapped(w), c.name)
+            local CP, w = trackFor(c.info, c.line, c.link)
+            if c.letter == nil then
+                assert.is_nil(w, c.name)
+            else
+                assert.equals(c.letter, w.track.letter, c.name)
+                assert.equals(c.cur, w.cur, c.name)
+                assert.equals(c.max, w.max, c.name)
+                assert.equals(c.capped, CP._IsUpgradeCapped(w), c.name)
+                if c.color then assert.same(c.color, w.track.color, c.name) end
+            end
         end
     end)
 end)
