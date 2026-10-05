@@ -130,8 +130,20 @@ local MYTH_COLOR = { 1.00, 0.50, 0.00 }
 local HERO_COLOR = { 0.78, 0.30, 0.78 }
 
 describe("Crafted crest lookup", function()
+    -- The secret row swaps the predicate, which the module reads at call time.
+    local STUBBED = { "issecretvalue" }
+    local saved
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
     it("reads the tier from the first crest id in the bonus list", function()
         local CP = loadCP({})
+        -- Each refusal row carries a crest id that only its own guard keeps out.
         local cases = {
             { name = "Myth crest",              link = crestPayload(13836),       color = MYTH_COLOR },
             { name = "Hero crest",              link = crestPayload(13835),       color = HERO_COLOR },
@@ -139,13 +151,16 @@ describe("Crafted crest lookup", function()
             { name = "inside a full hyperlink", link = "|cffa335ee|H" .. crestPayload(13835) .. "|h[x]|h|r",
               color = HERO_COLOR },
             { name = "bonus ids, no crest",     link = crestPayload(1234, 5678) },
-            { name = "no bonus ids",            link = crestPayload() },
+            { name = "zero count, crest after", link = "item:1" .. string.rep(":", 12) .. "0:13836" },
             { name = "empty count",             link = "item:1" .. string.rep(":", 12) .. ":13836" },
-            { name = "count past the list",     link = "item:1" .. string.rep(":", 12) .. "3:1234" },
+            { name = "crest after the list",    link = "item:1" .. string.rep(":", 12) .. "1:1234:13836" },
+            { name = "not an item link",        link = "|cffa335ee|Hcurrency:13836|h[x]|h|r" },
+            { name = "secret link",             link = crestPayload(13836), secret = true },
             { name = "not a string",            link = 42 },
             { name = "no link",                 link = nil },
         }
         for _, c in ipairs(cases) do
+            _G.issecretvalue = function() return c.secret == true end
             local entry = CP._CraftedCrestTrack(c.link)
             if c.color then
                 assert.equals("CR", entry.letter, c.name)
