@@ -61,6 +61,11 @@ local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationRole = GetSpecializationRole
+local C_ChatInfo = C_ChatInfo
+local C_Timer = C_Timer
+local GetInstanceInfo = GetInstanceInfo
+local UnitNameUnmodified = UnitNameUnmodified
+local GetRealmName = GetRealmName
 -- Both secret predicates get the same fallback: an environment missing one
 -- would be missing both, and a bare call to either throws.
 local issecretvalue = issecretvalue or function() return false end
@@ -352,7 +357,7 @@ local shownRole            -- role the popup is drawing, or nil
 local previewState         -- settings preview: nil, "empty", or "prompt" (a live prompt waits behind it)
 
 
-local BuildPopup, ShowPrompt, HidePrompt, ClearPending
+local BuildPopup, ShowPrompt, HidePrompt, ClearPending, ReadPartyScope
 local UpdateButtonVisuals, ResolveDungeon
 local SavePosition, ApplySavedPosition, ApplyPopupLayout
 
@@ -860,6 +865,7 @@ end
 -- ApplySettings for modules it just enabled. The popup parents a secure
 -- button, so its anchors and scale are protected in combat.
 function LR:ApplySettings()
+    self:ApplyPartyTeleports()
     if not popup or InCombatLockdown() then return end
     self:RefreshVisuals()
     ApplySavedPosition()
@@ -912,6 +918,153 @@ local function DropPrompt()
     HidePrompt()
 end
 
+---------------------------------------------------------------------------------
+-- Party teleports
+---------------------------------------------------------------------------------
+
+-- The message format other teleport-sharing addons use, so their players and
+-- ours hear each other: "BV1_<Name-Realm>\030<spellID>" on the party channel.
+local PORTAL_PREFIX = "LKeystonePortal"
+local PORTAL_MSG    = "BV1_%s\030%d"
+
+local moduleOn          -- OnEnable passed its Enabled gate; OnDisable clears it
+local partyAttached     -- the completion and restriction events are registered
+local partyListening = false -- the party listeners are registered
+local castFrame
+local completedInstance -- instance ID of the dungeon whose key was finished
+local recheckQueued     -- a scope recheck waits for the next frame
+local sendName          -- "Name-Realm" for the payload, read on first send
+
+-- Where party teleports are heard, sent and shown: a home party, never a
+-- raid; outside instances, or inside a dungeon whose key was finished once
+-- chat messaging is unlocked. A running key is always closed.
+local function PartyScopeOpen(s)
+    if not (s.on and s.homeParty) or s.inRaid then return false end
+    if not s.inInstance then return true end
+    return s.instanceType == "party" and s.keyCompleted == true and not s.chatLocked
+end
+
+local function PartyTeleportsOn()
+    return moduleOn == true and LR.db ~= nil and LR.db.PartyTeleports ~= false
+end
+
+local function CurrentInstanceID()
+    local _, _, _, _, _, _, _, instanceID = GetInstanceInfo()
+    if issecretvalue(instanceID) or type(instanceID) ~= "number" then return nil end
+    return instanceID
+end
+
+-- A finished key counts only inside the dungeon it was finished in.
+local function InCompletedInstance()
+    return completedInstance ~= nil and completedInstance == CurrentInstanceID()
+end
+
+ReadPartyScope = function()
+    local inInstance, instanceType = IsInInstance()
+    return PartyScopeOpen({
+        on           = PartyTeleportsOn(),
+        homeParty    = IsInGroup(LE_PARTY_CATEGORY_HOME),
+        inRaid       = IsInRaid(),
+        inInstance   = inInstance,
+        instanceType = instanceType,
+        keyCompleted = InCompletedInstance(),
+        chatLocked   = KE:IsChatMessagingLocked(),
+    })
+end
+
+-- The scope ignores the chat lock outside instances, so a send checks it too.
+local function SendRefusal(scopeOpen, chatLocked)
+    if not scopeOpen then return "scope" end
+    if chatLocked then return "locked" end
+    return nil
+end
+
+LR._PartyScopeOpen = PartyScopeOpen
+LR._SendRefusal = SendRefusal
+
+local function OwnPayloadName()
+    if sendName then return sendName end
+    local name, realm = UnitNameUnmodified("player"), GetRealmName()
+    if issecretvalue(name) or issecretvalue(realm) then return nil end
+    if type(name) ~= "string" or name == "" or type(realm) ~= "string" or realm == "" then
+        return nil
+    end
+    sendName = name .. "-" .. realm
+    return sendName
+end
+
+-- Every other cast leaves after one secret test and one lookup. The send is
+-- pcall'd and its result unread: a send the game refuses returns a code.
+local function OnOwnCast(_, _, _, _, spellID)
+    if issecretvalue(spellID) or type(spellID) ~= "number" then return end
+    if not MapForPortalSpell(spellID) then return end
+    if SendRefusal(ReadPartyScope(), KE:IsChatMessagingLocked()) then return end
+    local who = OwnPayloadName()
+    if not who then return end
+    pcall(C_ChatInfo.SendAddonMessage, PORTAL_PREFIX, PORTAL_MSG:format(who, spellID), "PARTY")
+end
+
+-- Registers the party listeners while the scope is open and drops them
+-- otherwise. Re-run on every input the scope reads.
+function LR:UpdatePartyListeners()
+    local open = ReadPartyScope()
+    if open == partyListening then return end
+    partyListening = open
+    if open then
+        if not castFrame then
+            castFrame = CreateFrame("Frame")
+            castFrame:SetScript("OnEvent", OnOwnCast)
+        end
+        castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    elseif castFrame then
+        castFrame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    end
+end
+
+function LR:_IsPartyListening() return partyListening == true end
+
+local function RecheckParty()
+    recheckQueued = nil
+    LR:UpdatePartyListeners()
+end
+
+-- Core/Secret.lua records restriction changes in its own handlers for the
+-- same events, which may run after these, so the scope is read a frame later.
+-- Nothing is queued while the party path is detached.
+local function RequestPartyRecheck()
+    if recheckQueued or not partyAttached then return end
+    recheckQueued = true
+    C_Timer.After(0, RecheckParty)
+end
+
+-- Attaches what the party path watches while Party Teleports and the module
+-- are both on, and detaches all of it otherwise. A detached completion
+-- event cannot see a dungeon change, so the finished key goes with it.
+function LR:ApplyPartyTeleports()
+    local on = PartyTeleportsOn()
+    if on and not partyAttached then
+        partyAttached = true
+        self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+        self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    elseif not on and partyAttached then
+        partyAttached = nil
+        completedInstance = nil
+        self:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
+        self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    end
+    self:UpdatePartyListeners()
+end
+
+-- Every restriction type, Chat included: the scope reads the chat lock.
+function LR:ADDON_RESTRICTION_STATE_CHANGED()
+    RequestPartyRecheck()
+end
+
+function LR:CHALLENGE_MODE_COMPLETED()
+    completedInstance = CurrentInstanceID()
+    RequestPartyRecheck()
+end
+
 function LR:SPELL_UPDATE_COOLDOWN()
     if not (popup and popup:IsShown()) then return end
     if TeleportOnCooldown(pendingSpellID) then DropPrompt() end
@@ -921,16 +1074,20 @@ function LR:GROUP_ROSTER_UPDATE()
     if not IsInGroup() then
         ClearArmed()
         ClearPending(); DropPrompt()
-        return
+    else
+        self:TryLeaderPrompt()
     end
-    self:TryLeaderPrompt()
+    if partyAttached then self:UpdatePartyListeners() end
 end
 
 function LR:CheckInstance()
     local inInstance, instanceType = IsInInstance()
-    if inInstance and instanceType == "party" then
+    if not inInstance then
+        completedInstance = nil
+    elseif instanceType == "party" then
         ClearPending(); DropPrompt()
     end
+    RequestPartyRecheck()
 end
 
 function LR:PLAYER_REGEN_DISABLED()
@@ -973,6 +1130,7 @@ function LR:OnEnable()
     if not InCombatLockdown() then
         BuildPopup()  -- secure button needs out-of-combat creation
     end
+    moduleOn = true
     self:ApplySettings()
     self:RegisterEvent("LFG_LIST_JOINED_GROUP")
     self:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
@@ -1009,6 +1167,8 @@ function LR:OnDisable()
             if popup and popup:IsShown() then HidePopup() end
         end)
     end
+    moduleOn = nil
+    self:ApplyPartyTeleports()
 end
 
 ---------------------------------------------------------------------------------

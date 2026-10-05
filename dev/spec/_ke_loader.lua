@@ -1455,6 +1455,18 @@ function L.loadLFGReminder(overrides)
     _G.IsInGroup = overrides.IsInGroup or function() return true end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
     _G.IsInRaid = overrides.IsInRaid or function() return false end
+    -- The party path's file-scope captures; nothing here is secret.
+    _G.C_ChatInfo = overrides.C_ChatInfo or {
+        RegisterAddonMessagePrefix = function() return 0 end,
+        SendAddonMessage = function() return 0 end,
+    }
+    _G.UnitNameUnmodified = overrides.UnitNameUnmodified or function() return "Tester" end
+    _G.GetRealmName = overrides.GetRealmName or function() return "Area 52" end
+    _G.UnitFullName = overrides.UnitFullName or function() return nil end
+    _G.UnitClass = overrides.UnitClass or function() return nil end
+    _G.GetNormalizedRealmName = overrides.GetNormalizedRealmName or function() return "Area52" end
+    _G.GetInstanceInfo = overrides.GetInstanceInfo or function() return nil end
+    _G.LE_PARTY_CATEGORY_HOME = 1
     _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
 
     local profile = {
@@ -1481,6 +1493,8 @@ function L.loadLFGReminder(overrides)
         -- creates two frames at file scope, which would pollute this
         -- loader's onCreateFrame spy (used to count BuildPopup's frames).
         IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
+        -- Core/Secret.lua's chat lock, unlocked.
+        IsChatMessagingLocked = function() return false end,
     }
     -- Core/Globals.lua's lookup over the dungeons the specs name. The row's
     -- art still falls back to the teleport icon: the default C_ChallengeMode

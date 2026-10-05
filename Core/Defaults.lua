@@ -1050,13 +1050,14 @@ local Defaults = {
         },
 
         -- Popup with a one-click dungeon teleport when you join a Group
-        -- Finder group. Hides on entering the dungeon, leaving the group,
-        -- or entering combat.
+        -- Finder group or a party member teleports. Hides on entering the
+        -- dungeon, leaving the group, or entering combat.
         LFGReminder = {
-            Enabled     = false,
-            Scale       = 1.05,
-            ShowDisable = true,
-            ShowRole    = true,
+            Enabled        = false,
+            Scale          = 1.05,
+            ShowDisable    = true,
+            ShowRole       = true,
+            PartyTeleports = true,
         },
 
         PIMacroBuilder = {

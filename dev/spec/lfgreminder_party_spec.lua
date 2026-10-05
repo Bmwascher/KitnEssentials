@@ -36,3 +36,43 @@ describe("LFGReminder teleport lookups", function()
         end
     end)
 end)
+
+describe("LFGReminder party scope and send gate", function()
+    local LR
+    before_each(function()
+        LR = loader.loadLFGReminder()
+    end)
+
+    it("opens only in a home party outside instances, or in a finished key with chat unlocked", function()
+        local function scope(over)
+            local s = { on = true, homeParty = true, inRaid = false, inInstance = false,
+                        instanceType = "none", keyCompleted = false, chatLocked = false }
+            for k, v in pairs(over) do s[k] = v end
+            return LR._PartyScopeOpen(s)
+        end
+        local cases = {
+            { name = "open world",                  over = {},                    want = true },
+            { name = "off",                         over = { on = false },        want = false },
+            { name = "not in a home party",         over = { homeParty = false }, want = false },
+            { name = "raid",                        over = { inRaid = true },     want = false },
+            { name = "dungeon, key running",        over = { inInstance = true, instanceType = "party" }, want = false },
+            { name = "finished key, unlocked",      over = { inInstance = true, instanceType = "party", keyCompleted = true }, want = true },
+            { name = "finished key, chat locked",   over = { inInstance = true, instanceType = "party", keyCompleted = true, chatLocked = true }, want = false },
+            { name = "raid instance with the flag", over = { inInstance = true, instanceType = "raid", keyCompleted = true }, want = false },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, scope(c.over), c.name)
+        end
+    end)
+
+    it("refuses an own-cast send when the scope is closed or chat is locked", function()
+        local cases = {
+            { name = "all clear",    scope = true,  locked = false, want = nil },
+            { name = "scope closed", scope = false, locked = false, want = "scope" },
+            { name = "chat locked",  scope = true,  locked = true,  want = "locked" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, LR._SendRefusal(c.scope, c.locked), c.name)
+        end
+    end)
+end)
