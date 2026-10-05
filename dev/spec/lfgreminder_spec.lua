@@ -200,45 +200,32 @@ describe("LFGReminder module", function()
         end)
 
         -- LFG_LIST_JOINED_GROUP only fires for someone who applied, so the
-        -- person who made the group (the leader) never gets a prompt through
-        -- that path. The leader arms off their own active listing instead,
-        -- and only fires once that listing drops WITH a full group.
-        it("arms and prompts the leader when their full-group listing drops", function()
-            local entryPresent = true
-            local LR = loader.loadLFGReminder({
-                C_LFGList = {
-                    GetActiveEntryInfo = function()
-                        if entryPresent then return { activityID = 7 } end
-                        return nil
-                    end,
-                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
-                },
-                GetNumGroupMembers = function() return 5 end,
-                IsInRaid = function() return false end,
-            })
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing up: arms
-            entryPresent = false
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing gone, group full: prompts
-            assert.equals(1286809, LR:_GetPendingSpellID())
-        end)
-
-        it("does not prompt the leader when the listing drops short-handed", function()
-            local entryPresent = true
-            local LR = loader.loadLFGReminder({
-                C_LFGList = {
-                    GetActiveEntryInfo = function()
-                        if entryPresent then return { activityID = 7 } end
-                        return nil
-                    end,
-                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
-                },
-                GetNumGroupMembers = function() return 3 end,
-                IsInRaid = function() return false end,
-            })
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-            entryPresent = false
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-            assert.is_nil(LR:_GetPendingSpellID())
+        -- leader's prompt comes from the game's listing-full event, for the
+        -- dungeon their own listing named. The game may clear the entry
+        -- before the event. A full raid listing reports the same event and
+        -- never prompts.
+        it("prompts the leader when the game reports their listing full, never in a raid", function()
+            for _, c in ipairs({
+                { name = "party", raid = false, want = 1286809 },
+                { name = "raid",  raid = true,  want = nil },
+            }) do
+                local entryPresent = true
+                local LR = loader.loadLFGReminder({
+                    C_LFGList = {
+                        GetActiveEntryInfo = function()
+                            if entryPresent then return { activityID = 7 } end
+                            return nil
+                        end,
+                        GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+                    },
+                    IsInRaid = function() return c.raid end,
+                })
+                LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                entryPresent = false
+                LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
+                assert.equals(c.want, LR:_GetPendingSpellID(), c.name)
+            end
         end)
 
         it("refuses to open the prompt while the teleport is on cooldown", function()

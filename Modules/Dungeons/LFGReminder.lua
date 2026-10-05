@@ -51,7 +51,6 @@ local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
-local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local UIParent = UIParent
 local C_Spell = C_Spell
@@ -785,31 +784,25 @@ ResolveDungeon = function(resultID)
 end
 
 -- LFG_LIST_JOINED_GROUP only fires for someone who APPLIED, so the person
--- who made the group never got the prompt. Arm while our own listing is up,
--- and fire when that listing ends WITH a full group: the game delists
--- automatically at that point, which is when the group is actually ready to
--- move. A listing that ends any other way -- canceled by hand, group broke
--- up -- leaves the group short and prompts nothing.
-local armedSpellID, armedName, armedMapID, armedPending
-
-local function GroupIsFull()
-    if IsInRaid() then return false end
-    return GetNumGroupMembers() >= 5
-end
+-- who made the group never got the prompt. Remember the dungeon while our own
+-- listing is up, and prompt when the game delists it for being full.
+local armedSpellID, armedName, armedMapID
 
 local function ClearArmed()
-    armedSpellID, armedName, armedMapID, armedPending = nil, nil, nil, nil
+    armedSpellID, armedName, armedMapID = nil, nil, nil
 end
 
 -- Same clean-string chain as ResolveDungeon, against our own active entry.
--- The active-entry read can return secret data in chat-messaging lockdown,
--- so the guards are not optional.
+-- Returns whether an entry exists, then its teleport, name and map. The
+-- active-entry read can return secret data in chat-messaging lockdown, so the
+-- guards are not optional.
 local function ResolveListing()
-    if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return nil end
-    local spellID, name, mapID
+    if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return false end
+    local present, spellID, name, mapID = false, nil, nil, nil
     pcall(function()
         local info = C_LFGList.GetActiveEntryInfo()
         if type(info) ~= "table" then return end
+        present = true
         local activityID = info.activityID
         if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
             activityID = info.activityIDs[1]
@@ -821,7 +814,7 @@ local function ResolveListing()
         if type(fullName) ~= "string" or issecretvalue(fullName) then return end
         spellID, name, mapID = ResolveGroupFinderPortal(fullName)
     end)
-    return spellID, name, mapID
+    return present, spellID, name, mapID
 end
 
 -- Every popup:Show() pairs with registering SPELL_UPDATE_COOLDOWN, and every
@@ -931,27 +924,21 @@ function LR:LFG_LIST_JOINED_GROUP(_, resultID)
 end
 
 function LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-    local spellID, name, mapID = ResolveListing()
-    if spellID then
-        armedSpellID, armedName, armedMapID, armedPending = spellID, name, mapID, nil
-        return
-    end
-    -- Entry gone. Arm the check rather than deciding here: the fifth player
-    -- joining can update the listing before the roster, so the member count
-    -- may still read four at this instant. GROUP_ROSTER_UPDATE retries it.
-    if armedSpellID then
-        armedPending = true
-        self:TryLeaderPrompt()
+    local present, spellID, name, mapID = ResolveListing()
+    -- A listing that is gone keeps what it listed: the game can clear the
+    -- entry before it reports the listing full.
+    if present then
+        armedSpellID, armedName, armedMapID = spellID, name, mapID
     end
 end
 
-function LR:TryLeaderPrompt()
-    if not (armedPending and armedSpellID) then return end
-    if not GroupIsFull() then return end
+-- The game delists a group the moment it fills and reports it here. A full
+-- raid listing reports here too, and never prompts.
+function LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
+    if not armedSpellID or IsInRaid() then return end
     ClearPending(); DropPrompt()
     pendingSpellID, pendingName, pendingMapID = armedSpellID, armedName, armedMapID
     pendingSource = "lfg"
-    pendingRole = nil
     if self.db and self.db.ShowRole ~= false then
         pendingRole = PickRole(nil, UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
     end
@@ -1242,8 +1229,6 @@ function LR:GROUP_ROSTER_UPDATE()
     if not IsInGroup() then
         ClearArmed()
         ClearPending(); DropPrompt()
-    else
-        self:TryLeaderPrompt()
     end
     if partyAttached then self:UpdatePartyListeners() end
 end
@@ -1304,6 +1289,7 @@ function LR:OnEnable()
     self:ApplySettings()
     self:RegisterEvent("LFG_LIST_JOINED_GROUP")
     self:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+    self:RegisterEvent("LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS")
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckInstance")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckInstance")
