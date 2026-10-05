@@ -1834,6 +1834,21 @@ function KE:AuraContainersAvailable(template)
 end
 
 ---------------------------------------------------------------------------------
+-- Instanced content
+---------------------------------------------------------------------------------
+-- A dungeon or raid with a real difficulty. Difficulty 0 is the open world,
+-- and a garrison reports itself as an instance.
+function KE:InRealInstancedContent()
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    difficultyID = tonumber(difficultyID) or 0
+    if difficultyID == 0 then return false end
+    if C_Garrison and C_Garrison.IsOnGarrisonMap and C_Garrison.IsOnGarrisonMap() then
+        return false
+    end
+    return instanceType == "party" or instanceType == "raid"
+end
+
+---------------------------------------------------------------------------------
 -- Spec role
 ---------------------------------------------------------------------------------
 

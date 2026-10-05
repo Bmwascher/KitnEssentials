@@ -1215,6 +1215,8 @@ function L.loadCursor(overrides)
             SubscribeSpec = function() return true end,
             UnsubscribeSpec = function() end,
         },
+        -- Core/Globals.lua's instance check, answering as the open world.
+        InRealInstancedContent = function() return false end,
     }
     helpers.loadModule("Modules/Combat/Cursor.lua", KE)
     local C = modules["Cursor"]
@@ -1291,6 +1293,8 @@ function L.loadCombatCross(overrides)
         GetFontPath = function() return "Fonts\\Expressway.TTF" end,
         GetAccentColor = function() return 1, 1, 1, 1 end,
         ApplyFramePosition = function() end,
+        -- Core/Globals.lua's instance check, answering as the open world.
+        InRealInstancedContent = function() return false end,
     }
     helpers.loadModule("Modules/Combat/CombatCross.lua", KE)
     local CC = modules["CombatCross"]

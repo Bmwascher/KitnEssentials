@@ -53,21 +53,13 @@ CC.VISIBILITY_MODES = {
 -- Combat state is PASSED IN, never read here: PLAYER_REGEN_DISABLED knows the
 -- transition before UnitAffectingCombat agrees with it, and the caller is what
 -- resolves that.
---
--- The instance test is Cursor's, resolved per call rather than cached: this
--- file parses before Cursor.lua, so the module does not exist yet at file
--- scope. It is a plain GetInstanceInfo read, so it answers whether or not that
--- module is switched on.
 local function ShouldShowByMode(mode, inCombat)
     if mode == "always"        then return true end
     if mode == "never"         then return false end
     if mode == "in_combat"     then return inCombat end
     if mode == "out_of_combat" then return not inCombat end
     if mode == "solo"          then return not IsInGroup() end
-    if mode == "in_instance"   then
-        local cursor = KitnEssentials:GetModule("Cursor", true)
-        return (cursor and cursor:InRealInstancedContent()) or false
-    end
+    if mode == "in_instance"   then return KE:InRealInstancedContent() end
     -- An unknown mode shows the cross. A crosshair nobody asked for is a
     -- smaller failure than one that silently will not appear.
     return true

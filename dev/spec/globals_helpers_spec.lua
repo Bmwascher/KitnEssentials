@@ -841,3 +841,32 @@ describe("KE:AuraContainersAvailable", function()
     end)
 end)
 
+-- The dungeon/raid gate Cursor, Combat Cross and the aggro line share.
+describe("KE:InRealInstancedContent", function()
+    local KE, saved
+    local STUBBED = { "GetInstanceInfo", "C_Garrison" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("is true only in a party or raid instance with a difficulty, outside a garrison", function()
+        local cases = {
+            { name = "open world", kind = "none",     difficulty = 0,  want = false },
+            { name = "garrison",   kind = "party",    difficulty = 1,  garrison = true, want = false },
+            { name = "dungeon",    kind = "party",    difficulty = 8,  want = true },
+            { name = "raid",       kind = "raid",     difficulty = 16, want = true },
+            { name = "scenario",   kind = "scenario", difficulty = 12, want = false },
+        }
+        for _, c in ipairs(cases) do
+            _G.GetInstanceInfo = function() return "Somewhere", c.kind, c.difficulty end
+            _G.C_Garrison = { IsOnGarrisonMap = function() return c.garrison == true end }
+            assert.equals(c.want, KE:InRealInstancedContent(), c.name)
+        end
+    end)
+end)
+

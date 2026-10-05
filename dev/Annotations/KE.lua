@@ -1124,6 +1124,9 @@ function KE:GetPlayerSpecId() end
 ---@return boolean
 function KE:AuraContainersAvailable(template) end
 
+---@return boolean
+function KE:InRealInstancedContent() end
+
 --- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
 --- resolution; nil resolves live (UseHealerPosition + current spec).
 ---@param db table
