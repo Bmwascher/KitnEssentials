@@ -892,8 +892,8 @@ function DT:OnRegenDisabled()
     self:UpdateLive()
 end
 
--- Combat ending without a key or encounter ending is a second chance for owed
--- work, never the only one.
+-- Leaving combat is a second chance to drain owed work; the restriction event
+-- is the first.
 function DT:OnRegenEnabled()
     self.inCombat = false
     self:UpdateLive()
