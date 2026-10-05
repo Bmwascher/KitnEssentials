@@ -58,6 +58,9 @@ local DEFAULT_SOME = { 1, 1, 1, 1 }
 local DEFAULT_ALL = { 0.35, 1, 0.35, 1 }
 local DEFAULT_TIMER = { 1, 1, 1, 1 }
 local GLOW_OFF = { GlowEnabled = false }
+local SAMPLE_LIT = { 3, 6, 2, 5 }
+local SAMPLE_TIMERS = { "16", "23", "9", "12" }
+local SAMPLE_TOTAL = 6
 local NONE = {}
 
 DT.root = nil
@@ -362,6 +365,17 @@ local function NewCell(index)
     KE.AuraGlow.Configure(cell.glow, GLOW_OFF)
     cell.glowOn = false
 
+    -- The preview's stand-ins, plain frames off the tail: the real labels line
+    -- up only while the game has something to count.
+    cell.over = CreateFrame("Frame", nil, frame)
+    cell.over:SetAllPoints(frame)
+    cell.over:SetFrameLevel(frame:GetFrameLevel() + 6)
+    cell.over:Hide()
+    cell.sample = cell.over:CreateFontString(nil, "OVERLAY")
+    cell.sampleTimer = cell.over:CreateFontString(nil, "OVERLAY")
+    cell.previewGlow = KE.AuraGlow.CreateHost(cell.over, DT.db)
+    KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
+
     DT.cells[index] = cell
     return cell
 end
@@ -405,6 +419,14 @@ local function StyleCell(cell, geo)
     -- Restyled by the next placement, which Apply forces.
     cell.glowOn = nil
     for k = 0, #cell.sensors do StyleAnswer(cell, k, cell.answers[k]) end
+    KE:ApplyFontToText(cell.sample, db.FontFace, db.FontSize, db.FontOutline)
+    cell.sample:ClearAllPoints()
+    cell.sample:SetPoint("CENTER", cell.frame, "TOPLEFT", geo.viewX + geo.labelX, -(geo.viewY + geo.labelY))
+    KE:ApplyFontToText(cell.sampleTimer, db.FontFace, db.TimerFontSize, db.FontOutline)
+    local tr, tg, tb, ta = KE:ResolveColor(db.TimerColor, DEFAULT_TIMER)
+    cell.sampleTimer:SetTextColor(tr, tg, tb, ta)
+    cell.sampleTimer:ClearAllPoints()
+    cell.sampleTimer:SetPoint("CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
 end
 
 -- The root is the first icon, not the row, so the row grows from where it was
@@ -433,6 +455,7 @@ local function RetireCell(cell)
         KE.AuraGlow.Configure(cell.glow, GLOW_OFF)
         cell.glowOn = false
     end
+    KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
 end
 
 ---------------------------------------------------------------------------------
@@ -725,6 +748,7 @@ function DT:Apply(list, allowed)
     self.applying = false
     self.paintedTotal = -1
     self:OnScanDone(self.slots and self.slots:Total() or 0)
+    if self.previewing then self:PaintPreview() end
     self:UpdateLive()
 end
 
@@ -740,6 +764,7 @@ function DT:UpdateLive()
         -- A hidden window switches its sensors off: a container that is not
         -- visible drops its aura events.
         cell.view:SetShown(not self.previewing)
+        cell.over:SetShown(self.previewing)
     end
     self.root:SetShown(live or (self.previewing and #self.list > 0))
     self:UpdateTimers()
@@ -809,6 +834,7 @@ end
 
 function DT:Activate(list, allowed)
     self:CreateRoot()
+    self:RegWithEditMode()
     self:EnsureCounting()
     local starting = not self.active
     if starting then
@@ -942,4 +968,81 @@ function DT:OnDisable()
         self.specTimer = nil
     end
     if self.gate then self.gate:Cancel() end
+    self:HidePreview()
+    -- Clearing the guard is what lets a later enable register again.
+    if KE.EditMode then KE.EditMode:UnregisterElement("DoTTracker") end
+    self.editModeRegistered = false
+end
+
+---------------------------------------------------------------------------------
+-- Edit Mode and preview
+---------------------------------------------------------------------------------
+function DT:RegWithEditMode()
+    if not KE.EditMode or self.editModeRegistered then return end
+    self:CreateRoot()
+    KE.EditMode:RegisterElement({
+        key = "DoTTracker",
+        displayName = "DoT Tracker",
+        frame = self.root,
+        module = self,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos)
+            self.db.Position = pos
+            KE:ApplyFramePosition(self.root, self.db.Position, self.db)
+        end,
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+        end,
+        guiPath = "ClassTools",
+        guiTab = "DoTTracker",
+        isEligible = function() return #self.list > 0 end,
+    })
+    self.editModeRegistered = true
+end
+
+function DT:PaintPreview()
+    local db = self.db
+    for i = 1, #self.list do
+        local cell = self.cells[i]
+        local k = SAMPLE_LIT[((i - 1) % #SAMPLE_LIT) + 1]
+        local color = Rules.LabelColorKey(k, SAMPLE_TOTAL) == "all" and self.allColor or self.someColor
+        cell.sample:SetTextColor(color[1], color[2], color[3], color[4])
+        cell.sample:SetText(Rules.Label(k, SAMPLE_TOTAL, db.CountFormat))
+        cell.sample:Show()
+        cell.sampleTimer:SetText(SAMPLE_TIMERS[((i - 1) % #SAMPLE_TIMERS) + 1])
+        cell.sampleTimer:SetShown(db.TimerEnabled ~= false)
+        if db.GlowEnabled and k == SAMPLE_TOTAL then
+            KE.AuraGlow.Configure(cell.previewGlow, db, cell.geo.size, cell.geo.size)
+        else
+            KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
+        end
+    end
+end
+
+-- Set even with nothing to show: the manager does not ask again while the page
+-- stays open, so a DoT added there has to find the preview already on.
+function DT:ShowPreview()
+    if not self:IsEnabled() then return end
+    self.previewing = true
+    if self.active then
+        self:PaintPreview()
+        self:UpdateLive()
+    else
+        self:Evaluate()
+    end
+end
+
+function DT:HidePreview()
+    if not self.previewing then return end
+    self.previewing = false
+    for _, cell in ipairs(self.cells) do
+        cell.sample:Hide()
+        cell.sampleTimer:Hide()
+        KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
+    end
+    if self.active then
+        self:UpdateLive()
+    elseif self.root then
+        self.root:Hide()
+    end
 end
