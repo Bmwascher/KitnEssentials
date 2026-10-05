@@ -238,7 +238,7 @@ function AT:OnEvent(event, spellID)
     end
 end
 
--- AceEvent has no unit filter, so the player-only cast event lives on an own
+-- AceEvent has no unit filter, so the player-only cast event lives on its own
 -- frame.
 function AT:EnsureCastFrame()
     if self.castFrame then return self.castFrame end

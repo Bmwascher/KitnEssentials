@@ -906,7 +906,6 @@ local Defaults = {
             AttachTo = "ICON",
             IconPosition = "ABOVE",
             IconX = 0,
-            -- The gap away from the icon for ABOVE and BELOW, upward for CENTER.
             IconY = 2,
             FontFace = nil,
             FontSize = 16,
