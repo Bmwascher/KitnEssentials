@@ -1,5 +1,5 @@
--- Which states let the aggro line show. The combat, spec, instance and threat
--- reads that feed it are WoW calls and stay an in-game check.
+-- The aggro line's show rule and its sound re-arm guard. The combat, spec,
+-- instance and threat reads, and the real sound gap, stay an in-game check.
 local L = require("dev.spec._ke_loader")
 
 describe("Combat Texts aggro rule", function()

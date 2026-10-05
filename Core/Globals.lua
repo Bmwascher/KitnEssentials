@@ -1813,7 +1813,7 @@ function KE:EUIDrawsSlotElement(unit, element)
 end
 
 ---------------------------------------------------------------------------------
--- Healer Position Override
+-- Spec role
 ---------------------------------------------------------------------------------
 
 local function PlayerSpecRole()
