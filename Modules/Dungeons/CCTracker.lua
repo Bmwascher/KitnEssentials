@@ -256,9 +256,8 @@ function CC:GeometrySource()
     return self.applied
 end
 
--- The cap, the name, the position and strata are always current: a cap change builds
--- or releases rows at once, and the name window and the anchor are ours.
--- The screen height is read in the anchor's current parent.
+-- The cap, the name, the position and strata are always current: a cap change
+-- builds or releases rows at once, and the name window and the anchor are ours.
 function CC:Box(src)
     local db = self.db
     boxInput.MaxHeight = ScreenHeight()
