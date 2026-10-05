@@ -50,7 +50,7 @@ local DEBUG_CC = false
 local GROUP_KEY = "cc"
 local LAYOUT_TEMPLATE = "DisableUntrustedLayoutScriptsTemplate"
 local ROW_TEMPLATE = "CustomAuraContainerTemplate," .. LAYOUT_TEMPLATE
-local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_NAME_UPDATE" }
+local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_FACTION", "UNIT_NAME_UPDATE" }
 local CC_GROUP = { capabilities = { hasBorder = true, hasTimerFont = true, durationRoundUp = true } }
 local DEFAULT_NAME_COLOR = { 1, 1, 1, 1 }
 local SAMPLES = {
@@ -106,8 +106,9 @@ local function Verdict(unit)
     return Rules.Verdict(unit, unitApi)
 end
 
--- Load-on-demand. Without the layout-script template a container cannot hang
--- off one that has a group, so the chain would not form.
+-- Loaded with the game; the load call only covers it not being up yet.
+-- Without the layout-script template a container cannot hang off one that
+-- has a group, so the chain would not form.
 local function ContainersAvailable()
     if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
         and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
@@ -354,8 +355,10 @@ function CC:Release(slot, unit)
     if DEBUG_CC then KE:Print("[CC] slot " .. slot .. " released (" .. tostring(unit) .. ")") end
 end
 
+-- A faction change can turn a held mob assistable, and the game skips the
+-- spell-id filter on an assistable unit, so it is rechecked like a flag change.
 function CC:OnPlateUnitEvent(slots, event, unit)
-    if event == "UNIT_FLAGS" then
+    if event == "UNIT_FLAGS" or event == "UNIT_FACTION" then
         slots:Recheck(unit)
         return
     end
