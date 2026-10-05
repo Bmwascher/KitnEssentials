@@ -763,9 +763,11 @@ describe("KickTracker meter entry to member", function()
               entry = { class = "DEATHKNIGHT", me = false, icon = 135770 }, count = 2 },
             { name = "a plain name, realm stripped, picks one",
               entry = { class = "DEATHKNIGHT", me = false, name = "Cal-Home" }, count = 1, guid = "cal" },
+            { name = "an unreadable class rules no one out", entry = { class = "MAGE", me = false },
+              members = { ann = { unit = "party1", matchClass = "MAGE" }, dee = { unit = "party3" } }, count = 2 },
         }
         for _, row in ipairs(rows) do
-            local count, guid = KT.MatchMeterEntry(row.entry, members)
+            local count, guid = KT.MatchMeterEntry(row.entry, row.members or members)
             assert.equals(row.count, count, row.name)
             if row.count == 1 then assert.equals(row.guid, guid, row.name) end
         end

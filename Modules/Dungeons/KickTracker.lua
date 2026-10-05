@@ -503,14 +503,14 @@ end
 ---------------------------------------------------------------------------------
 -- Teammate kicks: rows, records and the Damage Meter
 ---------------------------------------------------------------------------------
--- Two lists. kickRecords: every named interrupt that
--- is not the player's own joins it on arrival, capped at Max Records, and
--- only a claim (a KICK, the player's cast) removes one. Sync pairing runs on
--- it alone. recentKicks is the Damage Meter's history. A claim marks the
--- claimed record's history entry taken; nothing on the meter side writes to
--- kickRecords. A record draws after KICK_RECORD_GRACE unless a readable kicker's
--- row took its kick at once; a hidden kicker's drawn record goes when the
--- meter later moves the kick onto a row.
+-- Two lists. kickRecords: every named interrupt that is not the player's own
+-- joins it on arrival, capped at Max Records, and only a claim (a KICK, the
+-- player's cast) removes one. Sync pairing runs on it alone. recentKicks is
+-- the Damage Meter's history. A claim marks the claimed record's history
+-- entry taken; nothing on the meter side writes to kickRecords. A record
+-- draws after KICK_RECORD_GRACE unless a readable kicker's row took its kick
+-- at once; a hidden kicker's drawn record goes when the meter later moves the
+-- kick onto a row.
 
 -- Display-only values of a kicked cast; each may be secret.
 local function InterruptedSpellIcon(spellID)
@@ -625,10 +625,10 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         entry.state = "record"
     end
 
-    -- Every other record draws after a grace, so a KICK
-    -- that claims it first leaves no trace: the local event always beats the
-    -- network. A hidden kicker's record moves onto a row if the meter later
-    -- names the kicker (KT:ResolvePending).
+    -- Every other record draws after a grace, so a KICK that claims it first
+    -- leaves no trace: the local event always beats the network. A hidden
+    -- kicker's record moves onto a row if the meter later names the kicker
+    -- (KT:ResolvePending).
     local recordID = record.id
     C_Timer.After(KICK_RECORD_GRACE, function()
         self:ShowKickRecord(recordID)
@@ -665,14 +665,14 @@ function KT:RosterKicker(interrupterGuid)
     return nil
 end
 
--- The record list's intake: an open KICK claim
--- takes the interrupt first, else it becomes a record, capped at Max Records.
--- Returns the record; nothing and true when an open claim took it; nothing
--- when the game gives no name. The caller draws the record or not.
--- hiddenKicker: the game hid who kicked, so the player's own cast arriving
--- just after may still claim the record (KT:ClaimOwnKick). entry: the
--- interrupt's meter history entry, which gives the record its kicked spell
--- and marker and which a claim marks taken (KT:RemoveKickRecordAt).
+-- The record list's intake: an open KICK claim takes the interrupt first,
+-- else it becomes a record, capped at Max Records. Returns the record; nothing
+-- and true when an open claim took it; nothing when the game gives no name.
+-- The caller draws the record or not. hiddenKicker: the game hid who kicked,
+-- so the player's own cast arriving just after may still claim the record
+-- (KT:ClaimOwnKick). entry: the interrupt's meter history entry, which gives
+-- the record its kicked spell and marker and which a claim marks taken
+-- (KT:RemoveKickRecordAt).
 function KT:ProcessTeammateKick(interrupterGuid, hiddenKicker, entry)
     -- What the game lets us see about the kicker, for display only: the name
     -- and class may be secret, so neither is compared.
@@ -727,6 +727,8 @@ function KT:ProcessTeammateKick(interrupterGuid, hiddenKicker, entry)
         entry = entry,
     }
     table_insert(self.kickRecords, record)
+    -- An undrawn record still expires in the container pass.
+    self:StartOnUpdate()
 
     -- Bound the list: oldest records fall off past MaxBars.
     while #self.kickRecords > (self.db.MaxBars or 5) do
@@ -1684,6 +1686,8 @@ function KT:StartBarTimer(bar, startTime, duration)
     local direction = (self.db.ColorMode == "dark") and Enum.StatusBarTimerDirection.RemainingTime
         or Enum.StatusBarTimerDirection.ElapsedTime
     bar.statusBar:SetTimerDuration(d, Enum.StatusBarInterpolation.Immediate, direction)
+    -- A countdown needs the container pass, which detaches when idle.
+    self:StartOnUpdate()
 end
 
 -- A zero duration stops the engine drive; the bar then holds `value`.
@@ -2130,9 +2134,9 @@ function KT:StopOnUpdate()
     self._onUpdateActive = false
 end
 
--- Attach OnUpdate while there is at least one active/preview bar; detach
--- otherwise. Out-of-combat with no group, no kicks → script detached, zero
--- per-frame dispatch cost. Call after every mutation of activeBars.
+-- A new bar attaches the pass, whose first run decides whether it is needed;
+-- no bar detaches it. KT:OnUpdateBars also detaches it when idle. Call after
+-- every mutation of activeBars.
 function KT:_RefreshOnUpdate()
     if next(self.activeBars) then
         self:StartOnUpdate()
@@ -2150,6 +2154,7 @@ function KT:OnUpdateBars(elapsed)
     local now = GetTime()
     local needsRelayout = false
     local anyCooling = false
+    local busy = false  -- a row's main kick runs: its row can still change
 
     if DEBUG_KT_TICKS then
         _ktContainerTickCounter = _ktContainerTickCounter + 1
@@ -2169,6 +2174,9 @@ function KT:OnUpdateBars(elapsed)
         local member = self.partyMembers[guid]
         if member and member.interruptData then
             local rowKick, isReady = KT.PickRowKick(member, now)
+            if member.kickStart and member.kickDuration and now - member.kickStart < member.kickDuration then
+                busy = true
+            end
             if isReady ~= bar.rowReady or rowKick ~= bar.rowKick then
                 self:UpdateBarVisuals(bar, member)
                 needsRelayout = true
@@ -2213,6 +2221,11 @@ function KT:OnUpdateBars(elapsed)
     if needsRelayout then
         self:LayoutBars()
     end
+
+    -- Idle: no main kick running and no record listed, so nothing can change
+    -- until a countdown starts, a record joins the list or a bar is made, and
+    -- each of those attaches this again.
+    if not busy and #self.kickRecords == 0 then self:StopOnUpdate() end
 end
 
 ---------------------------------------------------------------------------------

@@ -552,7 +552,8 @@ function KT.MatchMeterEntry(entry, members)
         if entry.me == true then
             ok = isPlayer
         else
-            ok = member.matchClass == entry.class and not (entry.me == false and isPlayer)
+            ok = (member.matchClass == nil or member.matchClass == entry.class)
+                and not (entry.me == false and isPlayer)
             if ok and entry.name and member.shortName then
                 ok = (entry.name:gsub("%-.*$", "")) == member.shortName
             end
