@@ -154,11 +154,9 @@ function KT.CommModeStep(oldMode, locked)
     return mode, (mode == "feed") and "enter-feed" or "enter-sync"
 end
 
--- A teammate row needs messages to stay true, so feed mode keeps only the
--- player's own row.
-function KT.RowShown(member, mode)
-    if not member.interruptData or not member.kickVerified then return false end
-    return member.unit == "player" or mode ~= "feed"
+-- Every member with a kick has a row, in either mode.
+function KT.RowShown(member)
+    return member.interruptData ~= nil
 end
 
 ---------------------------------------------------------------------------------

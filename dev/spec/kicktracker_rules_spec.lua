@@ -148,25 +148,18 @@ describe("KickTracker mode choice", function()
 end)
 
 describe("KickTracker row visibility", function()
-    it("keeps the own row in both modes and teammate rows in sync mode only", function()
+    it("shows every member with a kick and no member without one", function()
         local KT = L.loadKickTrackerRules()
         local kick = { id = 1766, cd = 15 }
         local rows = {
-            { name = "own row, feed", mode = "feed", shown = true,
-              member = { unit = "player", interruptData = kick, kickVerified = true } },
-            { name = "verified teammate, sync", mode = "sync", shown = true,
+            { name = "own row", shown = true, member = { unit = "player", interruptData = kick } },
+            { name = "unverified teammate", shown = true, member = { unit = "party1", interruptData = kick } },
+            { name = "verified teammate", shown = true,
               member = { unit = "party1", interruptData = kick, kickVerified = true } },
-            { name = "verified teammate, before the first evaluation", mode = nil, shown = true,
-              member = { unit = "party1", interruptData = kick, kickVerified = true } },
-            { name = "verified teammate, feed", mode = "feed", shown = false,
-              member = { unit = "party1", interruptData = kick, kickVerified = true } },
-            { name = "unverified teammate, sync", mode = "sync", shown = false,
-              member = { unit = "party1", interruptData = kick } },
-            { name = "no kick", mode = "sync", shown = false,
-              member = { unit = "player", kickVerified = true } },
+            { name = "no kick", shown = false, member = { unit = "party1", kickVerified = true } },
         }
         for _, row in ipairs(rows) do
-            assert.equals(row.shown, KT.RowShown(row.member, row.mode), row.name)
+            assert.equals(row.shown, KT.RowShown(row.member), row.name)
         end
     end)
 end)

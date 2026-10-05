@@ -333,8 +333,6 @@ function KT:RefreshPartyRoster()
                 local specID = 0
                 if unit == "player" then
                     specID = GetPlayerSpecID() or 0
-                    -- Own kicks are always tracked — the bar may claim Ready
-                    member.kickVerified = true
                 elseif name and KE:IsSafeValue(name) then
                     specID = self.nameSpecCache[name] or 0
                 end
@@ -870,7 +868,7 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         local extrasTouched = verb == "HELLO" and isKE
             and KT.HelloExtras(member, extraField, extraRemField, getExtraKick, now)
         if not member.interruptData then return end
-        self:UpdateBars()  -- materialize the bar (verified-only roster)
+        self:UpdateBars()
         if extrasTouched then self:RefreshMemberRow(guid) end
 
         if verb == "KICK" and self.commMode ~= "feed" then
@@ -1147,8 +1145,9 @@ function KT:OnRosterUpdate()
     end
 end
 
--- Locked chat means teammates' messages cannot arrive, so their rows cannot
--- stay true: feed mode drops them and shows every teammate kick as a record.
+-- Locked chat means teammates' messages cannot arrive: feed mode keeps each
+-- teammate's row and running cooldown, and drops what only their messages
+-- keep true (verification, talent-added kicks, reduction stamps, pairings).
 function KT:UpdateCommMode()
     local mode, action = KT.CommModeStep(self.commMode, KE:IsChatMessagingLocked())
     self.commMode = mode
@@ -1156,11 +1155,8 @@ function KT:UpdateCommMode()
         for _, member in pairs(self.partyMembers) do
             if member.unit ~= "player" then
                 member.kickVerified = nil
-                member.kickStart = nil
-                member.kickDuration = nil
                 member.extraKicks = nil
                 member.reducedAt = nil
-                member.kicked = nil
             end
         end
         self:ClearPairing()
@@ -1560,11 +1556,7 @@ function KT:UpdateBarVisuals(bar, member)
         -- Dark mode: no fill visible (just dark background). Class mode: full bar.
         self:StopBarTimer(bar, isDarkMode and 0 or 1)
         if db.ShowTimer then
-            -- "Ready" is a claim — only bars we can actually track make it
-            -- (self and comm-verified members).
-            -- Unverified members' timer area stays blank: 12.0.5 hides
-            -- their kicks, so Ready would be a guess.
-            if db.ShowReadyText and member and member.kickVerified then
+            if db.ShowReadyText and member then
                 SetTimerText(bar, db.ReadyText or "Ready")
             else
                 SetTimerText(bar, "")
@@ -1632,11 +1624,10 @@ end
 function KT:UpdateBars()
     if self.isPreview then return end
 
-    -- Collect eligible members: has a kick AND we can actually track it
-    -- (self and comm users; KT.RowShown). Everyone else's kicks are records.
+    -- Every member with a kick has a row (KT.RowShown).
     local needsBars = {}
     for guid, member in pairs(self.partyMembers) do
-        if KT.RowShown(member, self.commMode) then
+        if KT.RowShown(member) then
             needsBars[guid] = true
         end
     end
@@ -2000,7 +1991,6 @@ function KT:ShowPreview()
             classToken = data.classToken,
             interruptData = { id = data.spellID, cd = data.cd or 15, role = "DAMAGER" },
             kickStart = (not data.ready) and GetTime() or nil,
-            kickVerified = true,  -- preview mocks show the verified look
         }
         self:UpdateBarVisuals(bar, fakeMember)
 
