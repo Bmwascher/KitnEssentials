@@ -216,13 +216,18 @@ function Slots:Recheck(unit)
     if not self.started or not index or not self.up[index] then return end
     local slot = self.slotOf[unit]
     local counts = Counts(self, unit, self.strict)
+    local released = false
     if slot and not counts then
-        Release(self, slot)
+        released = Release(self, slot)
     elseif not slot and counts then
         local free = FirstFree(self)
         if free then Take(self, free, unit) end
     end
     ScanDone(self)
+    -- A freed slot belongs to the next plate waiting past the cap, and with
+    -- relaxing on, one plate can flip the strict rule for all of them. Only
+    -- a full scan settles either.
+    if released or self.relax then self:QueueScan() end
 end
 
 function Slots:SetCap(n)

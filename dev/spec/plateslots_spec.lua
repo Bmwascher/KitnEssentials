@@ -92,6 +92,67 @@ describe("plate slots", function()
     end)
 end)
 
+describe("plate slots after a recheck", function()
+    local KE, up, reasons, queue
+
+    local function nextFrames()
+        while #queue > 0 do
+            local fn = table.remove(queue, 1)
+            fn()
+        end
+    end
+
+    before_each(function()
+        up, reasons, queue = {}, {}, {}
+        KE = L.loadPlateSlots({
+            UnitExists = function(unit) return up[unit] == true end,
+            C_Timer = {
+                After = function(_, fn) queue[#queue + 1] = fn end,
+                NewTicker = function() return { Cancel = function() end } end,
+                NewTimer = function() return { Cancel = function() end } end,
+            },
+        })
+    end)
+
+    it("rescans after a recheck frees a slot, so a plate waiting past the cap takes it", function()
+        up.nameplate1, up.nameplate2 = true, true
+        local slots = KE.PlateSlots.New({
+            verdict = function(unit) return reasons[unit] end,
+            cap = 1,
+        })
+        slots:Start()
+        nextFrames()
+        assert.equals("nameplate1", slots:UnitOf(1))
+
+        reasons.nameplate1 = "dead"
+        slots:Recheck("nameplate1")
+        nextFrames()
+        assert.equals("nameplate2", slots:UnitOf(1))
+    end)
+
+    it("rescans after any recheck while relaxing is on, so one plate passing the strict rule ends the relaxed count", function()
+        up.nameplate1, up.nameplate2 = true, true
+        reasons.nameplate1, reasons.nameplate2 = "not in combat", "not in combat"
+        local slots = KE.PlateSlots.New({
+            verdict = function(unit, strict)
+                if strict then return reasons[unit] end
+                return nil
+            end,
+            relax = function() return true end,
+            cap = 40,
+        })
+        slots:Start()
+        nextFrames()
+        assert.equals(2, slots:Total())
+
+        reasons.nameplate2 = nil
+        slots:Recheck("nameplate2")
+        nextFrames()
+        assert.is_nil(slots:SlotOf("nameplate1"))
+        assert.equals(2, slots:SlotOf("nameplate2"))
+    end)
+end)
+
 describe("plate build runner", function()
     local NewBuildRunner, queue, built
 
