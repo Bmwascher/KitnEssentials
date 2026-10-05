@@ -92,8 +92,8 @@ describe("plate slots", function()
     end)
 end)
 
-describe("plate slots after a recheck", function()
-    local KE, up, reasons, queue
+describe("plate slots with the next frame queued", function()
+    local KE, frames, up, reasons, queue
 
     local function nextFrames()
         while #queue > 0 do
@@ -104,7 +104,7 @@ describe("plate slots after a recheck", function()
 
     before_each(function()
         up, reasons, queue = {}, {}, {}
-        KE = L.loadPlateSlots({
+        KE, frames = L.loadPlateSlots({
             UnitExists = function(unit) return up[unit] == true end,
             C_Timer = {
                 After = function(_, fn) queue[#queue + 1] = fn end,
@@ -150,6 +150,25 @@ describe("plate slots after a recheck", function()
         nextFrames()
         assert.is_nil(slots:SlotOf("nameplate1"))
         assert.equals(2, slots:SlotOf("nameplate2"))
+    end)
+
+    it("rescans every plate when a unit event the consumer asked for names the player", function()
+        up.nameplate1 = true
+        reasons.nameplate1 = "assistable"
+        local slots = KE.PlateSlots.New({
+            verdict = function(unit) return reasons[unit] end,
+            cap = 40,
+            unitEvents = { "UNIT_FACTION" },
+            onUnitEvent = function() end,
+        })
+        slots:Start()
+        nextFrames()
+        assert.equals(0, slots:Total())
+
+        reasons.nameplate1 = nil
+        frames[#frames]:Fire("UNIT_FACTION", "player")
+        nextFrames()
+        assert.equals("nameplate1", slots:UnitOf(1))
     end)
 end)
 

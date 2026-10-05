@@ -89,7 +89,11 @@ end
 local function OnEvent(frame, event, unit)
     local self = frame.owner
     local index = plateIndex[unit]
-    if not index then return end
+    if not index then
+        -- The player's side or flags enter every plate's verdict.
+        if unit == "player" then self:QueueScan() end
+        return
+    end
     if event == "NAME_PLATE_UNIT_REMOVED" then
         -- Let go now, not on the next frame: within this one the token can pass
         -- to another mob, and a later scan would find "the same unit" standing.
