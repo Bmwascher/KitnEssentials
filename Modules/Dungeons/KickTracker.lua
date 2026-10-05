@@ -461,6 +461,9 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
     if not member or not member.interruptData then return end
 
     local duration = durationOverride or member.interruptData.cd
+    -- Every main cooldown starts here; a confirmed one drops the "*".
+    local wasUnconfirmed = member.unconfirmed
+    member.unconfirmed = nil
     member.kickDuration = duration
     member.kickStart = GetTime() - (remaining and (duration - remaining) or 0)
 
@@ -480,6 +483,7 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
         if self.db.ShowTimer and bar.timerText then
             SetTimerText(bar, FormatRemaining(remaining or member.kickDuration))
         end
+        if wasUnconfirmed then self:UpdateBarVisuals(bar, member) end
     end
 
     self:LayoutBars()
@@ -738,14 +742,23 @@ function KT:ProcessTeammateKick(interrupterGuid, hiddenKicker, entry)
     return record
 end
 
--- A teammate's kick on their own row, timed from the interrupt.
+-- A teammate's kick on their own row, timed from the interrupt. Every
+-- credited interrupt comes here (readable kicker, pet owner, meter fold).
+-- One that may be another spell than their kick (KT.UncertainKick) cools the
+-- row for the record duration, marked unconfirmed.
 function KT:ChargeKick(entry, guid)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
+    local role
+    local okRole, assigned = pcall(UnitGroupRolesAssigned, member.unit)
+    if okRole and not issecretvalue(assigned) then role = assigned end
+    local unconfirmed = KT.UncertainKick(member, role)
     local cd = member.interruptData.cd
+    if unconfirmed then cd = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION end
     local remaining = cd - (GetTime() - entry.startTime)
     if remaining <= 0 then return end
     self:ConfirmKick(guid, cd, remaining)
+    member.unconfirmed = unconfirmed or nil
     self:ShowKicked(guid, KickedFromRecord(entry))
 end
 
@@ -1831,10 +1844,12 @@ function KT:UpdateBarVisuals(bar, member)
         end
     end
 
+    -- An unconfirmed cooldown carries a record's "*" while it drives the row.
+    local unconfirmed = member ~= nil and member.unconfirmed == true and not isReady and rowKick == nil
     if kicked then
-        self:ApplyNameMarks(bar, false, kicked.mark, kicked.hasMark)
+        self:ApplyNameMarks(bar, unconfirmed, kicked.mark, kicked.hasMark)
     else
-        self:ApplyNameMarks(bar, false)
+        self:ApplyNameMarks(bar, unconfirmed)
     end
 
     -- Timer text

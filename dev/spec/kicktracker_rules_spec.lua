@@ -866,3 +866,30 @@ describe("KickTracker hidden-kicker resolution", function()
         end
     end)
 end)
+
+describe("KickTracker uncertain kick", function()
+    it("counts a Warrior and a Protection Paladin, and no other member", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "a Warrior of any spec counts",
+              member = { matchClass = "WARRIOR", specID = 72 }, role = "DAMAGER", want = true },
+            { name = "a Protection Paladin counts",
+              member = { matchClass = "PALADIN", specID = 66 }, role = "NONE", want = true },
+            { name = "a Paladin held as Retribution whose role is tank counts",
+              member = { matchClass = "PALADIN", specID = 70 }, role = "TANK", want = true },
+            { name = "a Retribution Paladin with a damage role does not",
+              member = { matchClass = "PALADIN", specID = 70 }, role = "DAMAGER", want = false },
+            { name = "a Paladin of unknown spec with a damage role does not",
+              member = { matchClass = "PALADIN", specID = 0 }, role = "DAMAGER", want = false },
+            { name = "a Paladin of unknown spec with no role counts",
+              member = { matchClass = "PALADIN", specID = 0 }, role = "NONE", want = true },
+            { name = "another class does not",
+              member = { matchClass = "ROGUE", specID = 0 }, role = "NONE", want = false },
+            { name = "an unreadable class counts",
+              member = { specID = 0 }, role = "DAMAGER", want = true },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.UncertainKick(row.member, row.role), row.name)
+        end
+    end)
+end)

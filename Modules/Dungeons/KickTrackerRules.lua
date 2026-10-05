@@ -270,8 +270,10 @@ end
 ---------------------------------------------------------------------------------
 -- Record marker
 ---------------------------------------------------------------------------------
--- A record is a kick no synced teammate claimed. The mark is its own text
--- after the name, so no string is built from a name that may be secret.
+-- A record is a kick no synced teammate claimed; a row cooling for an
+-- unconfirmed interrupt (KT:ChargeKick) carries the same mark. The mark is
+-- its own text after the name, so no string is built from a name that may
+-- be secret.
 function KT.MarkerFor(isRecord, showName)
     if isRecord and showName then return "*" end
     return ""
@@ -593,6 +595,22 @@ end
 -- KICK then claims the record instead.
 function KT.RowTakesKick(member, messagesHeard)
     return member.interruptData ~= nil and not (member.kickVerified and messagesHeard)
+end
+
+-- A teammate whose interrupt may be another spell than their row's kick:
+-- a Warrior's thrown-weapon talents (a teammate's talents cannot be seen) or
+-- a Protection Paladin's Avenger's Shield. Protection is the only Paladin
+-- tank spec, and the group role is current where a held spec can be stale,
+-- so a tank role counts; a Paladin of unknown spec counts unless the role
+-- rules Protection out. An unreadable class counts. role: the member's
+-- assigned group role, nil when unknown.
+function KT.UncertainKick(member, role)
+    local class = member.matchClass
+    if class == nil or class == "WARRIOR" then return true end
+    if class ~= "PALADIN" then return false end
+    local specID = member.specID or 0
+    if specID == 66 or role == "TANK" then return true end
+    return specID == 0 and role ~= "DAMAGER" and role ~= "HEALER"
 end
 
 -- A report repeating the member a report named less than echoWindow before it
