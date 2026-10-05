@@ -356,8 +356,8 @@ end
 function Style.RegisterRegions(button, _display, group, settings)
     -- A fixed icon is painted by KE and never registered, so the game's aura
     -- repaint leaves it alone. Writes to it are denied while auras are
-    -- secret; both callers run before the restriction attaches or behind the
-    -- reconfigure gate.
+    -- secret; the engine reaches this only before the restriction attaches or
+    -- behind the reconfigure gate.
     if button.keIcon then
         local caps = group.capabilities or {}
         if caps.fixedIcon then
