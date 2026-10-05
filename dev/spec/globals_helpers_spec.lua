@@ -803,3 +803,41 @@ describe("KE:GetChallengeMapIDByName", function()
     end)
 end)
 
+-- The free-containers check every aura-container consumer asks before it
+-- builds. The template is optional, so both the plain and the layout-script
+-- forms are one decision.
+describe("KE:AuraContainersAvailable", function()
+    local KE, saved
+    local STUBBED = { "AuraContainerSortMethod", "C_XMLUtil" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("answers from the sort-method global, the load call and the template", function()
+        local found = function() return {} end
+        local cases = {
+            { name = "global up, no template asked", sort = true, want = true },
+            { name = "global absent, the addon cannot be loaded", sort = false, want = false },
+            { name = "global absent, the load call brings it up", sort = false, loads = true, want = true },
+            { name = "template found", sort = true, template = "T",
+              xml = { GetTemplateInfo = found }, want = true },
+            { name = "template missing", sort = true, template = "T",
+              xml = { GetTemplateInfo = function() return nil end }, want = false },
+            { name = "template lookup throws", sort = true, template = "T",
+              xml = { GetTemplateInfo = function() error("no template") end }, want = false },
+            { name = "no template API", sort = true, template = "T", want = false },
+        }
+        for _, c in ipairs(cases) do
+            _G.AuraContainerSortMethod = c.sort and {} or nil
+            _G.C_XMLUtil = c.xml
+            _G.C_AddOns.LoadAddOn = c.loads and function() _G.AuraContainerSortMethod = {} end or nil
+            assert.equals(c.want, KE:AuraContainersAvailable(c.template), c.name)
+        end
+    end)
+end)
+

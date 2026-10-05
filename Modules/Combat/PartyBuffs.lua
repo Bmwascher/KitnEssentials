@@ -22,7 +22,6 @@ local _G = _G
 local AnchorUtil = AnchorUtil
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local C_AddOns = C_AddOns
 local C_ChallengeMode = C_ChallengeMode
 local C_DelvesUI = C_DelvesUI
 local C_PvP = C_PvP
@@ -300,14 +299,6 @@ end
 ---------------------------------------------------------------------------------
 -- Slots and the build queue
 ---------------------------------------------------------------------------------
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    return _G.AuraContainerSortMethod ~= nil
-end
-
 local function RowWidth(db)
     local count = KE.PartyBuffsRules.IconCount(db)
     return count * db.IconSize + (count - 1) * db.IconSpacing
@@ -506,7 +497,7 @@ end
 function PB:BuildSlot(k)
     local binding = self.bindings[k]
     if not binding then return true end
-    if not ContainersAvailable() then
+    if not KE:AuraContainersAvailable() then
         Debug("slot %d: aura containers unavailable", k)
         self.buildPending = true
         return true

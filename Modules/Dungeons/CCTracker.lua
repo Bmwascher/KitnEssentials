@@ -26,7 +26,6 @@ local CC = KitnEssentials:NewModule("CCTracker", "AceEvent-3.0")
 local _G = _G
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local C_AddOns = C_AddOns
 local C_Spell = C_Spell
 local C_Timer = C_Timer
 local UnitExists = UnitExists
@@ -105,21 +104,6 @@ local unitApi = {
 
 local function Verdict(unit)
     return Rules.Verdict(unit, unitApi)
-end
-
--- Loaded with the game; the load call only covers it not being up yet.
--- Without the layout-script template a container cannot hang off one that
--- has a group, so the chain would not form.
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    if _G.AuraContainerSortMethod == nil then return false end
-    local xml = _G.C_XMLUtil
-    if not (xml and xml.GetTemplateInfo) then return false end
-    local ok, info = pcall(xml.GetTemplateInfo, LAYOUT_TEMPLATE)
-    return ok and info ~= nil
 end
 
 local function SpellTexture(id)
@@ -539,7 +523,7 @@ function CC:Evaluate()
         if DEBUG_CC then KE:Print("[CC] nothing tracked") end
         return self:Deactivate()
     end
-    if not ContainersAvailable() then
+    if not KE:AuraContainersAvailable(LAYOUT_TEMPLATE) then
         if DEBUG_CC then KE:Print("[CC] aura containers unavailable") end
         return self:Deactivate()
     end

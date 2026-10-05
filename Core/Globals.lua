@@ -1815,6 +1815,25 @@ function KE:EUIDrawsSlotElement(unit, element)
 end
 
 ---------------------------------------------------------------------------------
+-- Aura containers
+---------------------------------------------------------------------------------
+-- Loaded with the game; the load call only covers it not being up yet. A
+-- consumer whose own frames hang off a container with a group also needs the
+-- layout-script template, and passes its name.
+function KE:AuraContainersAvailable(template)
+    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
+        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
+    end
+    if _G.AuraContainerSortMethod == nil then return false end
+    if not template then return true end
+    local xml = _G.C_XMLUtil
+    if not (xml and xml.GetTemplateInfo) then return false end
+    local ok, info = pcall(xml.GetTemplateInfo, template)
+    return ok and info ~= nil
+end
+
+---------------------------------------------------------------------------------
 -- Spec role
 ---------------------------------------------------------------------------------
 

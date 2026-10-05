@@ -28,9 +28,7 @@ if not KitnEssentials then return end
 local HT = KitnEssentials:NewModule("HavocTracker", "AceEvent-3.0")
 HT.classRestriction = "WARLOCK"
 
-local _G = _G
 local CreateFrame = CreateFrame
-local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local UnitClass = UnitClass
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
@@ -126,15 +124,6 @@ end
 ---------------------------------------------------------------------------------
 -- Display
 ---------------------------------------------------------------------------------
--- Load-on-demand. Testing the global alone lets addon load order decide whether
--- this feature exists at all.
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    return _G.AuraContainerSortMethod ~= nil
-end
 
 function HT:CreateAnchor()
     if self.anchor then return end
@@ -165,7 +154,7 @@ end
 
 function HT:BuildContainer()
     if self.container then return end
-    if not ContainersAvailable() then
+    if not KE:AuraContainersAvailable() then
         if DEBUG_HT then KE:Print("[HT] build skipped: aura containers unavailable") end
         return
     end

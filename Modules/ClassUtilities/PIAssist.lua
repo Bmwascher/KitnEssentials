@@ -22,7 +22,6 @@ PA.classRestriction = "PRIEST"
 
 local _G = _G
 local CreateFrame = CreateFrame
-local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
 local UnitClass = UnitClass
@@ -286,14 +285,6 @@ end
 -- Holder + container. The holder is ours and sits over the unit frame; the
 -- container is bound to the unit.
 ---------------------------------------------------------------------------------
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    return _G.AuraContainerSortMethod ~= nil
-end
-
 function PA:EnsureHolder()
     if self.holder then return self.holder end
     local h = CreateFrame("Frame", "KE_PIAssistHolder", UIParent)
@@ -328,7 +319,7 @@ function PA:InitSlotButton(button)
 end
 
 function PA:BuildContainer()
-    if self.container or not ContainersAvailable() then return end
+    if self.container or not KE:AuraContainersAvailable() then return end
     local holder = self:EnsureHolder()
 
     local ok, container = pcall(CreateFrame, "AuraContainer", nil, holder, "CustomAuraContainerTemplate")

@@ -21,10 +21,8 @@ if not KitnEssentials then return end
 ---@class DoTTracker: AceModule
 local DT = KitnEssentials:NewModule("DoTTracker", "AceEvent-3.0")
 
-local _G = _G
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local C_AddOns = C_AddOns
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
 local C_Timer = C_Timer
@@ -119,20 +117,6 @@ end
 
 local function IsKnown(spellID)
     return Ask(C_SpellBook and C_SpellBook.IsSpellKnown, spellID, Enum.SpellBookSpellBank.Player)
-end
-
--- Load-on-demand, and the tail template is the feature: without it nothing of
--- ours may hang off a container that has a group.
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    if _G.AuraContainerSortMethod == nil then return false end
-    local xml = _G.C_XMLUtil
-    if not (xml and xml.GetTemplateInfo) then return false end
-    local ok, info = pcall(xml.GetTemplateInfo, TAIL_TEMPLATE)
-    return ok and info ~= nil
 end
 
 ---------------------------------------------------------------------------------
@@ -869,7 +853,7 @@ end
 
 function DT:Reconcile()
     local wanted, class, specID = self:ResolveList()
-    if #wanted > 0 and not ContainersAvailable() then
+    if #wanted > 0 and not KE:AuraContainersAvailable(TAIL_TEMPLATE) then
         if DEBUG_DOT then KE:Print("[DOT] aura containers unavailable") end
         -- Nothing can be built, so an earlier refusal has nothing left to drain.
         self.gate:Cancel()

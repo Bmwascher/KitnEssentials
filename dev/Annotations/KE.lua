@@ -1120,6 +1120,10 @@ function KE:IsSpecEnabled(enabledSpecs, specId) end
 ---@return number?
 function KE:GetPlayerSpecId() end
 
+---@param template string? XML template the caller's frames also need
+---@return boolean
+function KE:AuraContainersAvailable(template) end
+
 --- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
 --- resolution; nil resolves live (UseHealerPosition + current spec).
 ---@param db table
