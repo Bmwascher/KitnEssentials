@@ -3,7 +3,7 @@
 -- ║  Module: Combat Texts                                    ║
 -- ║  Purpose: Floating text notifications for combat enter/  ║
 -- ║           exit, interrupt announce with spell icon,      ║
--- ║           and low durability warnings.                   ║
+-- ║           low durability and aggro warnings.             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -25,6 +25,8 @@ local GetInventoryItemDurability = GetInventoryItemDurability
 local GetTime = GetTime
 local UnitGUID = UnitGUID
 local UnitCanAttack = UnitCanAttack
+local UnitThreatSituation = UnitThreatSituation
+local PlaySoundFile = PlaySoundFile
 local C_Spell_GetSpellName = C_Spell.GetSpellName
 local C_Spell_GetSpellTexture = C_Spell.GetSpellTexture
 local ipairs, pairs = ipairs, pairs
@@ -40,6 +42,9 @@ local INTERRUPT_FONT_EMPHASIS = 2
 local REVERSE_EVENT_WINDOW = 0.05
 local SPELL_LINK_BLUE = { 127 / 255, 207 / 255, 241 / 255 }
 local AGGRO_MIN_STATUS = 2
+local AGGRO_SOUND_GAP = 2
+local AGGRO_PULSE_ALPHA = 0.35
+local AGGRO_PULSE_DURATION = 0.45
 
 local MESSAGE_TYPES = {
     "enterCombat",
@@ -47,6 +52,7 @@ local MESSAGE_TYPES = {
     "noTarget",
     "lowDurability",
     "interrupt",
+    "aggro",
 }
 
 local EXTERNAL_LINE_TYPES = {
@@ -71,6 +77,10 @@ CM.lastAcceptedCastGUID = nil
 CM.lastUnkeyedAcceptAt = nil
 CM.reverseInterruptAt = nil
 CM.reverseInterruptSuccessSpellID = nil
+CM.aggroEventFrame = nil
+CM.aggroEventsRegistered = false
+CM.aggroSoundBlocked = false
+CM.aggroPulse = nil
 -- Sent on enable and disable, so an external line's owner can move its text
 -- between its own frame and this stack.
 CM.CHANGED_MESSAGE = "KitnEssentials_CombatTextsChanged"
@@ -108,6 +118,10 @@ local function GetMessageConfig(db, msgType)
         return db.InterruptEnabled ~= false,
             (db.InterruptText or "Interrupted") .. " [Spell Name]",
             db.InterruptColor or { 1, 1, 1, 1 }
+    elseif msgType == "aggro" then
+        return db.AggroEnabled ~= false,
+            db.AggroText or "AGGRO",
+            db.AggroColor or { 1, 0.15, 0.15, 1 }
     end
     return false, "", { 1, 1, 1, 1 }
 end
@@ -413,6 +427,97 @@ function CM.ShouldShowAggro(db, inCombat, isTank, inInstance, threat, threatSecr
     return type(threat) == "number" and threat >= AGGRO_MIN_STATUS
 end
 
+-- Built on first use, so a player who never turns Pulse on never gets one.
+-- Held on the module, not the frame: spec mock frames answer every field.
+local function SetAggroPulse(frame, on)
+    if not frame then return end
+    local pulse = CM.aggroPulse
+    if on then
+        if not pulse then
+            pulse = frame:CreateAnimationGroup()
+            pulse:SetLooping("BOUNCE")
+            local fade = pulse:CreateAnimation("Alpha")
+            fade:SetFromAlpha(1)
+            fade:SetToAlpha(AGGRO_PULSE_ALPHA)
+            fade:SetDuration(AGGRO_PULSE_DURATION)
+            fade:SetSmoothing("IN_OUT")
+            CM.aggroPulse = pulse
+        end
+        if not pulse:IsPlaying() then pulse:Play() end
+    elseif pulse and pulse:IsPlaying() then
+        pulse:Stop()
+        if frame:IsShown() then frame:SetAlpha(1) end
+    end
+end
+
+-- A one-shot timer re-arms the sound, so threat bouncing between the player
+-- and the tank cannot stack plays.
+function CM:PlayAggroSound()
+    local db = self.db
+    if not db.AggroSoundEnabled or self.aggroSoundBlocked then return end
+    local file = db.AggroSoundFile
+    if not file or file == "None" or not KE.LSM then return end
+    local path = KE.LSM:Fetch("sound", file, true)
+    if not path then return end
+    PlaySoundFile(path, db.AggroSoundChannel or "Master")
+    self.aggroSoundBlocked = true
+    C_Timer.After(AGGRO_SOUND_GAP, function() self.aggroSoundBlocked = false end)
+end
+
+function CM:CheckAggro()
+    if not self.db or self.db.Enabled == false then return end
+    if self.isPreview then return end
+
+    local ok, status = pcall(UnitThreatSituation, "player")
+    local threat, threatSecret = nil, false
+    if ok then
+        threat = status
+        threatSecret = KE:IsSecretValue(status)
+    end
+    -- Resolved per call: this file parses before Cursor.lua. The test is a
+    -- plain GetInstanceInfo read, live whether or not that module is on.
+    local cursor = KitnEssentials:GetModule("Cursor", true)
+    local inInstance = (cursor and cursor:InRealInstancedContent()) or false
+
+    local frame = self.messageFrames.aggro
+    if CM.ShouldShowAggro(self.db, self.inCombat, KE:IsPlayerTankSpec(), inInstance, threat, threatSecret) then
+        if not (frame and frame:IsShown()) then
+            self:ShowPersistentMessage("aggro")
+            frame = self.messageFrames.aggro
+            if frame and frame:IsShown() then self:PlayAggroSound() end
+        end
+        SetAggroPulse(frame, self.db.AggroPulse == true)
+    elseif frame and frame:IsShown() then
+        self:HidePersistentMessage("aggro")
+        SetAggroPulse(frame, false)
+    end
+end
+
+function CM:UpdateAggroEventRegistration(forceDisabled)
+    local enabled = not forceDisabled
+        and self:IsEnabled()
+        and self.db
+        and self.db.Enabled ~= false
+        and self.db.AggroEnabled ~= false
+
+    if enabled and not self.aggroEventsRegistered then
+        if not self.aggroEventFrame then
+            local frame = CreateFrame("Frame")
+            frame:SetScript("OnEvent", function() self:CheckAggro() end)
+            self.aggroEventFrame = frame
+        end
+        self.aggroEventFrame:RegisterUnitEvent("UNIT_THREAT_SITUATION_UPDATE", "player")
+        -- A loading screen mid-combat can change the instance test with no
+        -- threat change.
+        self.aggroEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        self.aggroEventsRegistered = true
+    elseif not enabled and self.aggroEventsRegistered then
+        self.aggroEventFrame:UnregisterEvent("UNIT_THREAT_SITUATION_UPDATE")
+        self.aggroEventFrame:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        self.aggroEventsRegistered = false
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
@@ -421,6 +526,7 @@ function CM:OnEnterCombat()
     self:HidePersistentMessage("lowDurability")
     self:ShowFlashMessage("enterCombat")
     self:CheckNoTarget()
+    self:CheckAggro()
 end
 
 function CM:OnExitCombat()
@@ -429,6 +535,7 @@ function CM:OnExitCombat()
     self:HidePersistentMessage("noTarget")
     self:ShowFlashMessage("exitCombat")
     self:CheckDurability()
+    self:CheckAggro()
 end
 
 function CM:OnTargetChanged()
@@ -479,6 +586,7 @@ end
 ---------------------------------------------------------------------------------
 function CM:ApplySettings()
     self:UpdateInterruptEventRegistration()
+    self:UpdateAggroEventRegistration()
     if not self.container then return end
     KE:ApplyFramePosition(self.container, self.db.Position, self.db)
 
@@ -523,9 +631,11 @@ function CM:ApplySettings()
                 end
             end
         end
+        SetAggroPulse(self.messageFrames.aggro, self.db.AggroPulse == true)
         self:ArrangeMessages()
     else
         self:CheckNoTarget()
+        self:CheckAggro()
     end
 end
 
@@ -613,9 +723,12 @@ function CM:HidePreview()
         end
     end
 
+    SetAggroPulse(self.messageFrames.aggro, false)
+
     -- Re-check actual state
     if self.inCombat then
         self:CheckNoTarget()
+        self:CheckAggro()
     end
 end
 
@@ -879,6 +992,7 @@ function CM:OnEnable()
     self:RegisterEvent("UPDATE_INVENTORY_DURABILITY", "CheckDurability")
 
     self:UpdateInterruptEventRegistration()
+    self:UpdateAggroEventRegistration()
 
     -- Track initial combat state
     self.inCombat = InCombatLockdown()
@@ -886,6 +1000,7 @@ function CM:OnEnable()
     -- Initial checks (delayed to ensure frames exist)
     if self.inCombat then
         self:CheckNoTarget()
+        self:CheckAggro()
     else
         C_Timer.After(1, function() self:CheckDurability() end)
     end
@@ -901,6 +1016,8 @@ function CM:OnDisable()
     self.isPreview = false
     self.inCombat = false
     self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
+    SetAggroPulse(self.messageFrames.aggro, false)
+    self:UpdateAggroEventRegistration(true)
     self:UpdateInterruptEventRegistration(true)
     self.interruptAnnounceSpells = nil
     self:UnregisterAllEvents()

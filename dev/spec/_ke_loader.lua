@@ -2916,6 +2916,8 @@ function L.loadCombatTexts(overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.C_Spell = {}
+    -- Captured at load, so it is installed first.
+    _G.PlaySoundFile = overrides and overrides.PlaySoundFile
     local KE = { Print = function() end }
     helpers.loadModule("Modules/Combat/CombatTexts.lua", KE)
     return modules["CombatTexts"], KE

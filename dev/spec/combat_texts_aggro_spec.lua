@@ -31,3 +31,28 @@ describe("Combat Texts aggro rule", function()
         end
     end)
 end)
+
+describe("Combat Texts aggro sound", function()
+    it("plays once, refuses while blocked without scheduling, and plays again after the re-arm", function()
+        local plays, timers = {}, {}
+        local CM, KE = L.loadCombatTexts({
+            C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end },
+            PlaySoundFile = function(path) plays[#plays + 1] = path end,
+        })
+        KE.LSM = { Fetch = function(_, _, name) return "sound/" .. name end }
+        CM.db = { AggroSoundEnabled = true, AggroSoundFile = "Alarm", AggroSoundChannel = "SFX" }
+
+        CM:PlayAggroSound()
+        assert.are.equal(1, #plays, "first attempt plays")
+        assert.are.equal(1, #timers, "first attempt schedules the re-arm")
+
+        CM:PlayAggroSound()
+        assert.are.equal(1, #plays, "blocked attempt does not play")
+        assert.are.equal(1, #timers, "blocked attempt does not schedule")
+
+        timers[1]()
+        CM:PlayAggroSound()
+        assert.are.equal(2, #plays, "re-armed attempt plays")
+        assert.are.equal(2, #timers, "re-armed attempt schedules again")
+    end)
+end)
