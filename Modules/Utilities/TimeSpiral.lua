@@ -143,6 +143,14 @@ local function BuildPreview()
     }
 end
 
+-- Every live paint goes through here, so paintedIcon is what the buttons
+-- show. The cached pick is not: the preview caches one without painting them.
+local function LiveIcon()
+    local icon = TSP:GetDisplayIcon()
+    TSP.paintedIcon = icon
+    return icon
+end
+
 -- No vehiclePolicy: the default hides the display in a vehicle seat, where a
 -- movement ability cannot be used. "follow" would watch the vehicle unit,
 -- which never carries the buff.
@@ -167,7 +175,7 @@ local DECLARATION = {
                 hasGlow = true,
                 hasLabel = true,
                 hasTimerFont = true,
-                fixedIcon = function() return TSP:GetDisplayIcon() end,
+                fixedIcon = LiveIcon,
             },
         },
     },
@@ -225,13 +233,12 @@ function TSP:OnEnable()
     self:RegisterEvent("SPELLS_CHANGED", "RepickIcon")
 end
 
--- Reconfigures only when the pick changed. The engine defers it while auras
--- are restricted, so a pick that fell back at login is repainted once spell
--- data lands outside a restricted window.
+-- Reconfigures only when the new pick differs from the painted icon. The
+-- engine defers that while auras are restricted, so a pick that fell back at
+-- login is repainted once spell data lands outside a restricted window.
 function TSP:RepickIcon()
-    local shown = self.iconID or TIME_SPIRAL_ICON
     self.iconID = nil
-    if self:GetDisplayIcon() ~= shown then
+    if self:GetDisplayIcon() ~= self.paintedIcon then
         KE.AuraEngine.ApplySettings(self.display)
     end
 end

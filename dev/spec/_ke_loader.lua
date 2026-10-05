@@ -2379,7 +2379,6 @@ end
 function L.loadTimeSpiral(overrides)
     overrides = overrides or {}
     installMock(overrides, {
-        C_Timer = inertTimer(),
         Enum = { SpellBookSpellBank = { Player = "Player" } },
     })
     local modules = helpers.installAddonShim()
