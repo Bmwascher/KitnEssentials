@@ -10,6 +10,7 @@
     <Script file="HavocTracker.lua" />
     <Script file="DoTTrackerRules.lua" />
     <Script file="DoTTracker.lua" />
+    <Script file="AlterTime.lua" />
     <Script file="SpellAlerts.lua" />
     <Script file="PIMacroBuilder.lua" />
     <Script file="PIAssist.lua" />

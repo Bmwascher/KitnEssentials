@@ -83,7 +83,10 @@ end
 function CDMIcons.Find(viewerKey, ids)
     local name = CDMIcons.VIEWERS[viewerKey]
     local viewer = name and _G[name]
-    if not viewer or not viewer:IsShown() then return nil end
+    if not viewer then return nil end
+    -- Shown is a secret aspect; a secret answer counts as not shown.
+    local shown = viewer:IsShown()
+    if issecretvalue(shown) or not shown then return nil end
     local pool = viewer.itemFramePool
     if not pool then return nil end
     local best, bestRank, bestSlot

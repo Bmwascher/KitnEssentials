@@ -901,6 +901,24 @@ local Defaults = {
             Spells = {},
         },
 
+        AlterTime = {
+            Enabled = false,
+            AttachTo = "ICON",
+            IconPosition = "ABOVE",
+            IconX = 0,
+            -- The gap away from the icon for ABOVE and BELOW, upward for CENTER.
+            IconY = 2,
+            FontFace = nil,
+            FontSize = 16,
+            FontOutline = "OUTLINE",
+            ColorMode = "class",
+            Color = { 0.25, 0.78, 0.92, 1 },
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -180),
+        },
+
         PotionReady = {
             Enabled = false,
             InstanceOnly = true,
