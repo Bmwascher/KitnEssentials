@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-GlowSettingsCard.lua                                ║
 -- ║  Purpose: LibCustomGlow settings (type, color, speed,    ║
--- ║  per-type controls). Used by TimeSpiral and any glow     ║
--- ║  feature that exposes its config.                        ║
+-- ║  per-type controls) for any glow feature that exposes    ║
+-- ║  its config.                                             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

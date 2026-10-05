@@ -974,9 +974,9 @@ end
 ---------------------------------------------------------------------------------
 -- Party members also running KitnEssentials broadcast their own kicks, letting
 -- receivers flip the sender's roster bar with the exact CD. Other teammates'
--- kicks come from nameplate interrupts (KT:HandleNameplateInterrupt). Comms
--- over INSTANCE_CHAT probe-verified working (family rule); every send/parse
--- is pcall'd, so a blocked context loses only the sync.
+-- kicks come from nameplate interrupts (KT:HandleNameplateInterrupt). Sends
+-- are refused inside a running key, and every send and parse is pcall'd, so a
+-- blocked context loses only the sync.
 local COMM_PREFIX = "KEKick"
 -- BliZzi Party Tools interop: their dispatcher accepts
 -- KICK from any class-auto-registered party member — no HELLO handshake

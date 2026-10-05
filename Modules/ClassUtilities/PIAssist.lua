@@ -539,7 +539,7 @@ function PA:Activate()
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRelease")
         self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
         -- AceEvent has no unit filter, so the player-only cast event lives on
-        -- an own frame.
+        -- its own frame.
         self:EnsureCastFrame():RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     end
     self:ResolveTarget()

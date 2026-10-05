@@ -87,8 +87,8 @@ local function GroupsByKey(display)
 end
 
 -- One pool per GROUP KEY, never one for the whole display. A group's
--- capabilities (hasGlow, hasBorder, hasDispelBadge, hasDispelRing) come from its declaration and
--- never change at runtime, so keying purely on groupKey is enough.
+-- capabilities come from its declaration and never change at runtime, so
+-- keying purely on groupKey is enough.
 local function EnsurePool(state, groupKey, display, group, settings)
     state.pools = state.pools or {}
     local pool = state.pools[groupKey]
