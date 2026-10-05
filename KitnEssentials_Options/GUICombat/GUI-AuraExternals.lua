@@ -12,6 +12,10 @@ local Theme    = KE.Theme
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("AuraExternals", true) end
 
+local function RefreshPage()
+    GUIFrame:RefreshContent()
+end
+
 GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.AuraExternals
     if not db then
@@ -284,6 +288,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             max     = 2, -- keeps the old 0.5s proc period reachable
         },
         onChangeCallback = ApplySettings,
+        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
     })
     manager:Register(glowCard, "all")
     yOffset = glowOffset

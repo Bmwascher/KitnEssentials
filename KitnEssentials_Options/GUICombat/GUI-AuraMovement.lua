@@ -12,6 +12,10 @@ local Theme    = KE.Theme
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("AuraMovement", true) end
 
+local function RefreshPage()
+    GUIFrame:RefreshContent()
+end
+
 GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.AuraMovement
     if not db then
@@ -266,6 +270,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
             max     = 2,
         },
         onChangeCallback = ApplySettings,
+        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
     })
     manager:Register(glowCard, "all")
     yOffset = glowOffset
