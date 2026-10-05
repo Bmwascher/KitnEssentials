@@ -190,8 +190,7 @@ function HT:BuildContainer()
     if DEBUG_HT then KE:Print("[HT] slot added=" .. tostring(added)) end
     if not added then return end
 
-    -- Bound and enabled by UpdateTarget, which also decides whether the
-    -- target is one the spell-id filter can be trusted on.
+    -- Bound and enabled by UpdateTarget.
     container:Show()
 
     self.container = container
@@ -208,7 +207,6 @@ local function CanAssist(unit)
     return Ask(UnitCanAssist, "player", unit, true, true)
 end
 
--- Bound once, then enabled only while the target is one the filter holds on.
 -- The same token is a no-op for SetUnit, so a new target is read through
 -- UpdateAllAuras.
 function HT:UpdateTarget()
