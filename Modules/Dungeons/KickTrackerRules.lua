@@ -622,8 +622,9 @@ end
 
 -- The member one read names, and true when only a climb named them. Lists
 -- that name someone by a newcomer or a one-entry list (sure) outrank lists
--- that name someone by a climb, since a tie can re-sort without a kick; the
--- named lists must agree. Nobody when they disagree or the burst was shared.
+-- that name someone by a climb, since a tie can re-sort without the climber
+-- kicking. Names of the winning kind must agree; nobody when they disagree
+-- or the burst was shared.
 function KT.MeterReportOwner(sure, climbs, shared)
     if shared then return nil end
     if #sure > 0 then return agreedName(sure) end
@@ -688,7 +689,8 @@ end
 -- one. A synced teammate's kick stays on the record path their KICK claims
 -- while their messages can arrive (messagesHeard), a name for the player
 -- counts only while the player's kick cools, and a climb-only name for a
--- teammate only while their kick was ready when the interrupt landed.
+-- teammate only while their kick was ready when the interrupt landed and has
+-- not started since.
 function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, window, echoWindow)
     if entry.state ~= "pending" then return nil end
     local t = entry.startTime

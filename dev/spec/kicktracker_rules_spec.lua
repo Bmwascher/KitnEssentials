@@ -839,9 +839,11 @@ describe("KickTracker hidden-kicker resolution", function()
               hits = { { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
             { name = "a report named only by a climb: fold, unsure",
               hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
-            { name = "a teammate named only by a climb while their kick cools: record", annCooling = true,
+            { name = "a teammate named only by a climb, kick cooling at the interrupt: record", annStart = -4,
               hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "record" },
-            { name = "a teammate named for certain while their kick cools: fold", annCooling = true,
+            { name = "a teammate named only by a climb, kick cooled before it: fold, unsure", annStart = -10,
+              hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
+            { name = "a teammate named for certain while their kick cools: fold", annStart = -4,
               hits = { { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
             { name = "no report: record", hits = {}, want = "record" },
             { name = "an unnamed report: record", hits = { { at = 10.1 } }, want = "record" },
@@ -878,8 +880,8 @@ describe("KickTracker hidden-kicker resolution", function()
         for _, row in ipairs(rows) do
             members.me.kickStart = row.meCooling and 9.5 or nil
             members.me.kickDuration = row.meCooling and 15 or nil
-            members.ann.kickStart = row.annCooling and 9.5 or nil
-            members.ann.kickDuration = row.annCooling and 15 or nil
+            members.ann.kickStart = row.annStart
+            members.ann.kickDuration = row.annStart and 15 or nil
             local entry = { startTime = 10, state = row.state or "pending" }
             local entries = { entry }
             for _, other in ipairs(row.others or {}) do entries[#entries + 1] = other end
