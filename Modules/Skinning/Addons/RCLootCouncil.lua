@@ -311,13 +311,14 @@ local function Sync_Spawn()
 end
 
 -- RC gives only the player's own items a row border; the skin swaps it for a
--- thin accent one. backdropInfo is read directly because GetBackdrop copies a
--- table on every call, and this runs on every row update.
+-- thin one in the skin's border color. backdropInfo is read directly because
+-- GetBackdrop copies a table on every call, and this runs on every row update.
 local function LootEntry_Update(entry)
     local frame = entry and entry.frame
     if not (frame and frame.backdropInfo) then return end
     frame:SetBackdrop(EDGE_ONLY)
-    S.PaintBrand(frame, "SetBackdropBorderColor")
+    local border = S.palette.border
+    frame:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
 end
 
 -- RC re-points and re-sizes the bar on every relayout, with insets sized for
