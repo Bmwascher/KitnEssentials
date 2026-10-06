@@ -180,23 +180,31 @@ local function HookNewLevels()
     msaLevels = maxLevels
 end
 
+-- RC's page paths name the arrow's direction. Anything else, the clear value
+-- included, says nothing about it.
 local function PageDirection(texture)
-    if type(texture) == "string" and texture:find("PrevPage", 1, true) then return "left" end
-    return "right"
+    if type(texture) ~= "string" then return nil end
+    if texture:find("PrevPage", 1, true) then return "left" end
+    if texture:find("NextPage", 1, true) then return "right" end
+    return nil
 end
 
 -- RC flips the arrow by swapping its page textures; the skin's arrow follows.
 local function PageButton_SetNormalTexture(button, texture)
     local arrow = S.data(button).arrow
-    if arrow then S.ArrowTexture(arrow, PageDirection(texture)) end
+    local direction = PageDirection(texture)
+    if arrow and direction then S.ArrowTexture(arrow, direction) end
 end
 
 -- No plate: the arrow helper re-kills the textures of every child frame on
--- hover, show and each state change, a backdrop child included.
+-- hover, show and each state change, a backdrop child included. The engine
+-- shows the normal texture itself after a click, past any hide, so its art is
+-- cleared instead.
 local function SkinPageButton(button, direction)
     if not button or S.data(button).rcSkinned then return end
     S.data(button).rcSkinned = true
     S.ArrowButton(button, direction)
+    S.ClearButtonArt(button)
     hooksecurefunc(button, "SetNormalTexture", PageButton_SetNormalTexture)
 end
 
