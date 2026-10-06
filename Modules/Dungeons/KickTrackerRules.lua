@@ -699,6 +699,9 @@ function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, 
     local member = members[hit.owner]
     if not member then return "record" end
     if member.unit == "player" then
+        -- The player's own kick never reaches a climb (its entry is always
+        -- near), so a climb naming the player is another kicker's re-sort.
+        if hit.uncertain then return "record" end
         local start, duration = member.kickStart, member.kickDuration
         if member.interruptData and start and duration and now - start < duration then return "own" end
         return "record"

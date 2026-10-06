@@ -962,6 +962,9 @@ end
 -- session repeats is shared (KT.SessionRepeats).
 function KT:OnMeterUpdate(_, meterType, sessionID)
     if not METER_INTERRUPTS or issecretvalue(meterType) or meterType ~= METER_INTERRUPTS then return end
+    if DEBUG_KT then
+        KE:Print("[KT] meter update session=" .. (issecretvalue(sessionID) and "secret" or tostring(sessionID)))
+    end
     local now = GetTime()
     self._meterReadLast = now
     if KT.SessionRepeats(self.meterBurstSessions, sessionID, issecretvalue(sessionID)) then
