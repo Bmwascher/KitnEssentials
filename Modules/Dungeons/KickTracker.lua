@@ -583,6 +583,7 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         raidMark = mark,                          -- possibly secret; SetSpriteSheetCell-only
         hasRaidMark = hasMark,
         state = "pending",
+        cooling = hidden and self:CoolingTeammates(now) or nil,
     }
     table_insert(self.recentKicks, entry)
 
@@ -761,6 +762,21 @@ function KT:ChargeKick(entry, guid, unsure)
     self:ConfirmKick(guid, cd, remaining)
     member.unconfirmed = (unconfirmed or unsure) or nil
     self:ShowKicked(guid, KickedFromRecord(entry))
+end
+
+-- The teammates whose kick cools at now, or nil. A cooldown that ends before
+-- a hidden kicker's interrupt resolves clears kickStart, so the interrupt
+-- keeps this set for KT.ResolveInterrupt.
+function KT:CoolingTeammates(now)
+    local cooling
+    for guid, member in pairs(self.partyMembers) do
+        local start, duration = member.kickStart, member.kickDuration
+        if member.unit ~= "player" and start and duration and now - start < duration then
+            cooling = cooling or {}
+            cooling[guid] = true
+        end
+    end
+    return cooling
 end
 
 -- A hidden kicker's interrupt once every input in its windows is in: the

@@ -841,6 +841,8 @@ describe("KickTracker hidden-kicker resolution", function()
               hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
             { name = "a teammate named only by a climb, kick cooling at the interrupt: record", annStart = -4,
               hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "record" },
+            { name = "a teammate named only by a climb, cooling at the interrupt, cleared since: record",
+              cooling = { ann = true }, hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "record" },
             { name = "a teammate named only by a climb, kick cooled before it: fold, unsure", annStart = -10,
               hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
             { name = "a teammate named for certain while their kick cools: fold", annStart = -4,
@@ -882,7 +884,7 @@ describe("KickTracker hidden-kicker resolution", function()
             members.me.kickDuration = row.meCooling and 15 or nil
             members.ann.kickStart = row.annStart
             members.ann.kickDuration = row.annStart and 15 or nil
-            local entry = { startTime = 10, state = row.state or "pending" }
+            local entry = { startTime = 10, state = row.state or "pending", cooling = row.cooling }
             local entries = { entry }
             for _, other in ipairs(row.others or {}) do entries[#entries + 1] = other end
             local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, entries, row.hits, members,

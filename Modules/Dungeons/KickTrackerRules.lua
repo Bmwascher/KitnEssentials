@@ -689,8 +689,8 @@ end
 -- one. A synced teammate's kick stays on the record path their KICK claims
 -- while their messages can arrive (messagesHeard), a name for the player
 -- counts only while the player's kick cools, and a climb-only name for a
--- teammate only while their kick was ready when the interrupt landed and has
--- not started since.
+-- teammate only while their kick was ready when the interrupt landed (the
+-- entry's cooling set) and has not started since.
 function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, window, echoWindow)
     if entry.state ~= "pending" then return nil end
     local t = entry.startTime
@@ -718,6 +718,7 @@ function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, 
     end
     if not KT.RowTakesKick(member, messagesHeard) then return "record" end
     if hit.uncertain then
+        if entry.cooling and entry.cooling[hit.owner] then return "record" end
         local start, duration = member.kickStart, member.kickDuration
         if start and duration and t - start < duration then return "record" end
     end
