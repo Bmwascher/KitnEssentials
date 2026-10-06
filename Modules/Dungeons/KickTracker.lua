@@ -745,8 +745,9 @@ end
 -- A teammate's kick on their own row, timed from the interrupt. Every
 -- credited interrupt comes here (readable kicker, pet owner, meter fold).
 -- One that may be another spell than their kick (KT.UncertainKick) cools the
--- row for the record duration, marked unconfirmed.
-function KT:ChargeKick(entry, guid)
+-- row for the record duration, marked unconfirmed. unsure: only a meter
+-- climb named the kicker, so the row cools for their kick, marked unconfirmed.
+function KT:ChargeKick(entry, guid, unsure)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
     local role
@@ -758,7 +759,7 @@ function KT:ChargeKick(entry, guid)
     local remaining = cd - (GetTime() - entry.startTime)
     if remaining <= 0 then return end
     self:ConfirmKick(guid, cd, remaining)
-    member.unconfirmed = unconfirmed or nil
+    member.unconfirmed = (unconfirmed or unsure) or nil
     self:ShowKicked(guid, KickedFromRecord(entry))
 end
 
@@ -775,7 +776,7 @@ function KT:ResolvePending(entry)
         return
     end
     local now = GetTime()
-    local outcome, guid, untilAt = KT.ResolveInterrupt(entry, self.recentKicks, self.meterHits,
+    local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, self.recentKicks, self.meterHits,
         self.partyMembers, self:MessagesHeard(), now, METER_PAIR_WINDOW, METER_ECHO_WINDOW)
     if DEBUG_KT then KE:Print("[KT] hidden kicker resolved: " .. tostring(outcome)) end
     if outcome == "wait" and untilAt then
@@ -787,7 +788,7 @@ function KT:ResolvePending(entry)
     elseif outcome == "fold" and guid then
         entry.state = "fold"
         self:UndrawRecord(entry)
-        self:ChargeKick(entry, guid)
+        self:ChargeKick(entry, guid, unsure)
     elseif outcome then
         entry.state = "record"
     end
@@ -919,24 +920,38 @@ function KT:ReadMeterList(sessionType)
 end
 
 -- One read of both lists, each diffed against its last read and kept; the
--- report's owner is KT.MeterReportOwner's. A failed read drops that list's
--- last read: the next diff would otherwise span the gap and show a kick from
--- inside it as this report's. The report covers the burst of updates from at
--- to last; a shared burst's lists are still kept.
+-- report's owner is KT.MeterReportOwner's, uncertain when no list named them
+-- by more than a climb. A failed read drops that list's last read: the next
+-- diff would otherwise span the gap and show a kick from inside it as this
+-- report's. The report covers the burst of updates from at to last; a shared
+-- burst's lists are still kept.
 function KT:ReadMeter(at, last, shared)
-    local named = {}
+    local named, certain = {}, false
     for _, sessionType in ipairs(METER_SESSIONS) do
         local list = self:ReadMeterList(sessionType)
-        local entry = list and KT.DiffMeterList(self.meterSnap[sessionType], list)
+        local entry, climbed
+        if list then entry, climbed = KT.DiffMeterList(self.meterSnap[sessionType], list) end
         self.meterSnap[sessionType] = list
         if entry then
             local count, guid = KT.MatchMeterEntry(entry, self.partyMembers)
-            if count == 1 then named[#named + 1] = guid end
+            if DEBUG_KT then
+                KE:Print(string_format("[KT] meter entry s=%s key=%s name=%s climbed=%s count=%s",
+                    tostring(sessionType), tostring(entry.key), tostring(entry.name),
+                    tostring(climbed == true), tostring(count)))
+            end
+            if count == 1 then
+                named[#named + 1] = guid
+                if not climbed then certain = true end
+            end
         end
     end
     local owner = KT.MeterReportOwner(named, shared == true)
+    if DEBUG_KT then
+        KE:Print(string_format("[KT] meter owner named=%d shared=%s", #named, tostring(shared == true)))
+    end
     self:PruneKicks(GetTime())
-    table_insert(self.meterHits, { at = at, last = last, owner = owner })
+    table_insert(self.meterHits, { at = at, last = last, owner = owner,
+        uncertain = (owner ~= nil and not certain) or nil })
     if DEBUG_KT then KE:Print("[KT] meter report named=" .. tostring(owner ~= nil)) end
 end
 
