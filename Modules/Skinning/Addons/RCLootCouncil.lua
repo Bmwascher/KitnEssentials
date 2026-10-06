@@ -86,9 +86,6 @@ local HEADER_FLOOR = 8
 -- each side.
 local HEADER_PADDING = 2.5
 
--- The current size when every header fits at it, else the largest whole size
--- below it that fits, else the floor. A size at or below the floor is never
--- raised.
 local function headerSize(current, fits)
     if current <= HEADER_FLOOR or fits(current) then return current end
     local size = math_floor(current)
