@@ -224,6 +224,12 @@ local function LootEntry_Update(entry)
     S.PaintBrand(frame, "SetBackdropBorderColor")
 end
 
+-- RC re-points and re-sizes the bar on every relayout, with insets sized for
+-- its thick tooltip border, so the fit is re-applied after each one.
+local function LootEntry_FitBar(entry)
+    if entry.timeoutBar and entry.frame then S.InsetToEdge(entry.timeoutBar, entry.frame) end
+end
+
 local function SkinLootEntry(entry)
     local d = S.data(entry)
     if d.rcSkinned then return end
@@ -231,6 +237,8 @@ local function SkinLootEntry(entry)
     if entry.timeoutBar then
         entry.timeoutBar:SetStatusBarTexture(KE:GetStatusbarPath("KitnUI"))
     end
+    LootEntry_FitBar(entry)
+    if entry.UpdatePosition then hooksecurefunc(entry, "UpdatePosition", LootEntry_FitBar) end
     if entry.noteEditbox then
         ClearOwnBackdrop(entry.noteEditbox)
         S.EditBox(entry.noteEditbox)
