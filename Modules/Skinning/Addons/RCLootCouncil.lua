@@ -33,6 +33,10 @@ local function SkinFrame(frame)
         ClearOwnBackdrop(title)
         S.Template(title, "Default")
         if title.Update then hooksecurefunc(title, "Update", ClearOwnBackdrop) end
+        -- RC centers the title on the window's top edge, so half of its opaque
+        -- plate would cover the window's first row.
+        title:ClearAllPoints()
+        title:SetPoint("BOTTOM", frame, "TOP", 0, 0)
     end
 end
 
