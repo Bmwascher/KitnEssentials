@@ -7,6 +7,7 @@ local pcall = pcall
 local type = type
 local hooksecurefunc = hooksecurefunc
 local math_max = math.max
+local math_floor = math.floor
 
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local SKIN_KEY = "kitnui"
@@ -91,7 +92,72 @@ local function UI_New(ui, elementType)
     SkinElement(skin, frames[#frames])
 end
 
-local function SkinScrollTable(lib, _, _, _, _, parent)
+local HEADER_FLOOR = 8
+-- The table library draws each header inside its column less this much on
+-- each side.
+local HEADER_PADDING = 2.5
+
+-- The current size when every header fits at it, else the largest whole size
+-- below it that fits, else the floor. A size at or below the floor is never
+-- raised.
+local function headerSize(current, fits)
+    if current <= HEADER_FLOOR or fits(current) then return current end
+    local size = math_floor(current)
+    if size == current then size = size - 1 end
+    while size > HEADER_FLOOR do
+        if fits(size) then return size end
+        size = size - 1
+    end
+    return HEADER_FLOOR
+end
+
+-- A header string is anchored to both sides of its column, so its string width
+-- stops at the column; the unbounded width is the whole text's.
+local function HeaderTextWidth(fs)
+    if fs.GetUnboundedStringWidth then return fs:GetUnboundedStringWidth() end
+    return fs:GetStringWidth()
+end
+
+-- A header wider than its column is cut, and the library re-anchors every
+-- header on each column change, so headers are fitted by size instead: one
+-- size for the whole table. The library keeps these strings for the columns'
+-- life, so the size holds.
+local function FitHeaders(name, cols)
+    if type(cols) ~= "table" then return end
+    local strings, widths = {}, {}
+    for i, col in ipairs(cols) do
+        local header = _G[name .. "HeadCol" .. i]
+        local fs = header and header.GetFontString and header:GetFontString()
+        if fs and type(col) == "table" and type(col.width) == "number" then
+            strings[#strings + 1] = fs
+            widths[#widths + 1] = col.width - 2 * HEADER_PADDING
+        end
+    end
+    local first = strings[1]
+    if not first then return end
+    local _, current = first:GetFont()
+    if not current then return end
+    local function setSize(size)
+        for _, fs in ipairs(strings) do
+            local face, _, flags = fs:GetFont()
+            if face then fs:SetFont(face, size, flags or "") end
+        end
+    end
+    local function fits(size)
+        if size ~= current then setSize(size) end
+        for i, fs in ipairs(strings) do
+            local w = HeaderTextWidth(fs)
+            if type(w) == "number" and not issecretvalue(w) and w > widths[i] then
+                return false
+            end
+        end
+        return true
+    end
+    local size = headerSize(current, fits)
+    if size ~= current then setSize(size) end
+end
+
+local function SkinScrollTable(lib, cols, _, _, _, parent)
     local parentName = parent and parent.GetName and parent:GetName()
     if not (parentName and parentName:find("^RC")) then return end
     local frame = _G["ScrollTable" .. ((lib.framecount or 1) - 1)]
@@ -104,6 +170,7 @@ local function SkinScrollTable(lib, _, _, _, _, parent)
     local trough, troughBorder = _G[name .. "ScrollTrough"], _G[name .. "ScrollTroughBorder"]
     if trough then trough:Hide() end
     if troughBorder then troughBorder:Hide() end
+    FitHeaders(name, cols)
 end
 
 -- The library parks released controls on a nil parent. Across that round trip
