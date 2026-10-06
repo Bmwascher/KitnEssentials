@@ -82,8 +82,9 @@ local function UI_New(ui, elementType)
 end
 
 local HEADER_FLOOR = 8
--- The table library draws each header inside its column less this much on
--- each side.
+-- The table library anchors each header string to its whole column and to
+-- this much inside each edge; the string's box comes out this much narrower
+-- than the column, not twice this much.
 local HEADER_PADDING = 2.5
 
 local function headerSize(current, fits)
@@ -95,13 +96,6 @@ local function headerSize(current, fits)
         size = size - 1
     end
     return HEADER_FLOOR
-end
-
--- A header string is anchored to both sides of its column, so its string width
--- stops at the column; the unbounded width is the whole text's.
-local function HeaderTextWidth(fs)
-    if fs.GetUnboundedStringWidth then return fs:GetUnboundedStringWidth() end
-    return fs:GetStringWidth()
 end
 
 -- A header wider than its column is cut, and the library re-anchors every
@@ -116,7 +110,7 @@ local function FitHeaders(name, cols)
         local fs = header and header.GetFontString and header:GetFontString()
         if fs and type(col) == "table" and type(col.width) == "number" then
             strings[#strings + 1] = fs
-            widths[#widths + 1] = col.width - 2 * HEADER_PADDING
+            widths[#widths + 1] = col.width - HEADER_PADDING
         end
     end
     local first = strings[1]
@@ -132,7 +126,9 @@ local function FitHeaders(name, cols)
     local function fits(size)
         if size ~= current then setSize(size) end
         for i, fs in ipairs(strings) do
-            local w = HeaderTextWidth(fs)
+            -- The string is bounded by its column, so its plain string width
+            -- never exceeds the box; the unbounded width is the whole text's.
+            local w = fs:GetUnboundedStringWidth()
             if type(w) == "number" and not issecretvalue(w) and w > widths[i] then
                 return false
             end
