@@ -331,6 +331,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             step = 1,
             value = textDB.Size or 14,
             labelWidth = 60,
+            tooltip = "Smallest size for text widgets. Text Blizzard draws larger keeps its own size, and any icon in it keeps its size too.",
             callback = function(val)
                 textDB.Size = val
                 ApplySettings()

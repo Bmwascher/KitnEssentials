@@ -72,18 +72,23 @@ end
 local FONT_ROLES = {
     Label   = { group = "StatusBar",  flag = "StyleLabel",   size = "LabelSize" },
     BarText = { group = "StatusBar",  flag = "StyleBarText", size = "BarTextSize" },
-    Text    = { group = "TextWidget", flag = "StyleText",    size = "Size" },
+    Text    = { group = "TextWidget", flag = "StyleText",    size = "Size", floor = true },
 }
 
 -- The sweep and the SetFontObject hook share this rule. nil leaves
 -- Blizzard's font; it is also the hook's off switch, since a hook cannot be
--- removed.
-function UIW.FontSizeForRole(db, role)
+-- removed. A floor role never goes below Blizzard's size: an inline icon
+-- scales with its font, even at a fixed size in its markup.
+function UIW.FontSizeForRole(db, role, blizzardSize)
     local spec = FONT_ROLES[role]
     if not (spec and db and db.Enabled) then return nil end
     local group = db[spec.group]
     if not (group and group.Enabled and group[spec.flag]) then return nil end
-    return group[spec.size]
+    local size = group[spec.size]
+    if spec.floor and type(size) == "number" and type(blizzardSize) == "number" then
+        return math_max(size, blizzardSize)
+    end
+    return size
 end
 
 function UIW.ShouldCenterText(db)
@@ -141,8 +146,18 @@ end
 -- puts KE's font back before Setup justifies and measures the text.
 local fontRoles = setmetatable({}, { __mode = "k" })
 
+-- Blizzard's size per font string, for roles with a floor.
+local blizzardSize = setmetatable({}, { __mode = "k" })
+
+-- Setup passes a font object's global name; other callers may pass the object.
+local function FontObjectSize(font)
+    if type(font) == "string" then font = _G[font] end
+    if type(font) ~= "table" or not font.GetFont then return nil end
+    return (select(2, font:GetFont()))
+end
+
 local function StyleFont(fs, role)
-    local size = UIW.FontSizeForRole(UIW.db, role)
+    local size = UIW.FontSizeForRole(UIW.db, role, blizzardSize[fs])
     if not size then return false end
     local fontPath, outline = UIW:GetFontSettings()
     SetFontIfChanged(fs, fontPath, size, outline)
@@ -150,14 +165,24 @@ local function StyleFont(fs, role)
     return true
 end
 
+local function RestyleFromSetup(fs, font)
+    local role = fontRoles[fs]
+    if FONT_ROLES[role].floor then blizzardSize[fs] = FontObjectSize(font) end
+    StyleFont(fs, role)
+end
+
 -- Runs inside Blizzard's widget pass, so nothing KE does may stop it.
-local function ReapplyFont(fs)
-    pcall(StyleFont, fs, fontRoles[fs])
+local function ReapplyFont(fs, font)
+    pcall(RestyleFromSetup, fs, font)
 end
 
 -- Per font string, never on a mixin: these pools belong to the four owned
 -- containers and never lend a frame to a tooltip.
 local function ApplyFont(fs, role)
+    -- Unhooked means KE has never written a font here, so Blizzard's is on it.
+    if FONT_ROLES[role].floor and not fontRoles[fs] and UIW.FontSizeForRole(UIW.db, role) then
+        blizzardSize[fs] = select(2, fs:GetFont())
+    end
     if StyleFont(fs, role) and not fontRoles[fs] then
         fontRoles[fs] = role
         hooksecurefunc(fs, "SetFontObject", ReapplyFont)
