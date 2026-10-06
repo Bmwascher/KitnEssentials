@@ -611,16 +611,24 @@ function KT.SessionRepeats(seen, sessionID, idSecret)
     return repeated
 end
 
--- The member one read names: the one every list that names someone agrees
--- on, and nobody when two lists disagree or the burst was shared.
-function KT.MeterReportOwner(named, shared)
-    if shared then return nil end
+local function agreedName(named)
     local owner = nil
     for i = 1, #named do
         if owner and named[i] ~= owner then return nil end
         owner = named[i]
     end
     return owner
+end
+
+-- The member one read names, and true when only a climb named them. Lists
+-- that name someone by a newcomer or a one-entry list (sure) outrank lists
+-- that name someone by a climb, since a tie can re-sort without a kick; the
+-- named lists must agree. Nobody when they disagree or the burst was shared.
+function KT.MeterReportOwner(sure, climbs, shared)
+    if shared then return nil end
+    if #sure > 0 then return agreedName(sure) end
+    local owner = agreedName(climbs)
+    return owner, (owner ~= nil) or nil
 end
 
 -- A teammate's row takes a kick the game or the meter credits to them when
@@ -678,8 +686,9 @@ end
 -- near the report can still arrive until the report's window closes, so a
 -- fold waits for it; a record never waits, since more arrivals cannot undo
 -- one. A synced teammate's kick stays on the record path their KICK claims
--- while their messages can arrive (messagesHeard), and a name for the player
--- counts only while the player's kick cools.
+-- while their messages can arrive (messagesHeard), a name for the player
+-- counts only while the player's kick cools, and a climb-only name for a
+-- teammate only while their kick was ready when the interrupt landed.
 function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, window, echoWindow)
     if entry.state ~= "pending" then return nil end
     local t = entry.startTime
@@ -698,14 +707,18 @@ function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, 
     local member = members[hit.owner]
     if not member then return "record" end
     if member.unit == "player" then
-        -- The player's own kick never reaches a climb (its entry is always
-        -- near), so a climb naming the player is another kicker's re-sort.
+        -- The player's row already cools from the cast, so a climb-only name,
+        -- which may be another kicker's re-sort, adds nothing.
         if hit.uncertain then return "record" end
         local start, duration = member.kickStart, member.kickDuration
         if member.interruptData and start and duration and now - start < duration then return "own" end
         return "record"
     end
     if not KT.RowTakesKick(member, messagesHeard) then return "record" end
+    if hit.uncertain then
+        local start, duration = member.kickStart, member.kickDuration
+        if start and duration and t - start < duration then return "record" end
+    end
     return "fold", hit.owner, nil, hit.uncertain
 end
 
