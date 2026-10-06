@@ -958,8 +958,8 @@ end
 -- The meter event fires for every meter type, hundreds of times a second in a
 -- big pull; any other type is one check and a return. The first Interrupts
 -- update starts one read METER_SETTLE later; later updates before it only move
--- the burst's end, since the read may reflect any of them. A burst in which a
--- session repeats is shared (KT.SessionRepeats).
+-- the burst's end, since the read may reflect any of them. A burst with two
+-- Current updates is shared (KT.SessionRepeats).
 function KT:OnMeterUpdate(_, meterType, sessionID)
     if not METER_INTERRUPTS or issecretvalue(meterType) or meterType ~= METER_INTERRUPTS then return end
     if DEBUG_KT then

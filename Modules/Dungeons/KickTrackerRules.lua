@@ -599,16 +599,15 @@ function KT.MatchMeterEntry(entry, members)
     return count, found
 end
 
--- One kick updates each meter session once, so a session updated twice in
--- one burst means more than one kick, and one read cannot tell which added
--- the new entry. seen holds the burst's sessions so far and takes this one;
--- every unreadable ID counts as the same session. The Overall session (ID 0)
--- updates with every Current update, so it never counts.
+-- One kick updates the Current session once, so a second Current update in
+-- one burst means more than one kick, even when a rollover gives it a new ID,
+-- and one read cannot tell which added the new entry. seen holds the burst's
+-- state. The Overall session (ID 0) updates beside every Current update, so
+-- it never counts; an unreadable ID may be either, so it counts.
 function KT.SessionRepeats(seen, sessionID, idSecret)
     if not idSecret and sessionID == 0 then return false end
-    local key = idSecret and "?" or tostring(sessionID)
-    local repeated = seen[key] == true
-    seen[key] = true
+    local repeated = seen.current == true
+    seen.current = true
     return repeated
 end
 

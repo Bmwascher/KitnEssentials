@@ -785,14 +785,13 @@ describe("KickTracker meter entry to member", function()
 end)
 
 describe("KickTracker meter burst sessions", function()
-    it("marks a burst shared only when one Current session updates twice in it", function()
+    it("marks a burst shared only when the Current session updates twice in it", function()
         local KT = L.loadKickTrackerRules()
         local rows = {
-            { name = "Current and Overall once each", updates = { { id = 1 }, { id = 2 } }, want = false },
-            { name = "the same session twice", updates = { { id = 1 }, { id = 2 }, { id = 1 } }, want = true },
-            { name = "Overall's ID 0 beside each Current update never repeats",
-              updates = { { id = 4 }, { id = 0 }, { id = 5 }, { id = 0 } }, want = false },
-            { name = "two unreadable IDs count as one session twice",
+            { name = "Current and Overall's ID 0 once each", updates = { { id = 1 }, { id = 0 } }, want = false },
+            { name = "two Current updates across a rollover repeat",
+              updates = { { id = 4 }, { id = 0 }, { id = 5 }, { id = 0 } }, want = true },
+            { name = "two unreadable IDs count as two Current updates",
               updates = { { secret = true }, { secret = true } }, want = true },
         }
         for _, row in ipairs(rows) do
