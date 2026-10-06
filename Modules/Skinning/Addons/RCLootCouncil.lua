@@ -310,7 +310,7 @@ end
 -- RC re-points and re-sizes the bar on every relayout, with insets sized for
 -- its thick tooltip border, so the fit is re-applied after each one.
 local function LootEntry_FitBar(entry)
-    if entry.timeoutBar and entry.frame then S.InsetToEdge(entry.timeoutBar, entry.frame) end
+    S.InsetToEdge(entry.timeoutBar, entry.frame)
 end
 
 local function SkinLootEntry(entry)
@@ -322,7 +322,7 @@ local function SkinLootEntry(entry)
     end
     -- Rows of other players' items wear no KE edge, so the row is tracked for
     -- its bar alone.
-    if entry.frame then S.TrackEdgeClients(entry.frame) end
+    S.TrackEdgeClients(entry.frame)
     LootEntry_FitBar(entry)
     if entry.UpdatePosition then hooksecurefunc(entry, "UpdatePosition", LootEntry_FitBar) end
     if entry.noteEditbox then
