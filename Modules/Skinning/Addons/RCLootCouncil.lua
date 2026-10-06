@@ -6,6 +6,7 @@ local pairs = pairs
 local pcall = pcall
 local type = type
 local hooksecurefunc = hooksecurefunc
+local math_max = math.max
 
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local SKIN_KEY = "kitnui"
@@ -105,6 +106,16 @@ local function SkinScrollTable(lib, _, _, _, _, parent)
     if troughBorder then troughBorder:Hide() end
 end
 
+-- The library parks released controls on a nil parent. Across that round trip
+-- a plate can come back far above its control and cover the label, so every
+-- plate goes back under its owner on each spawn.
+local function RelevelPlate(owner)
+    local bd = S.GetBackdrop(owner)
+    if not bd then return end
+    local target = math_max(owner:GetFrameLevel() - 1, 0)
+    if bd:GetFrameLevel() ~= target then bd:SetFrameLevel(target) end
+end
+
 -- Every dialog of this library instance is styled: the library pools dialogs
 -- and their controls across popups, so styling one popup styles the pool.
 local function SkinDialogs(lib)
@@ -118,14 +129,24 @@ local function SkinDialogs(lib)
             hooksecurefunc(dialog, "Reset", ClearOwnBackdrop)
             S.CloseButton(dialog.close_button)
         end
+        RelevelPlate(dialog)
         if dialog.buttons then
-            for _, button in ipairs(dialog.buttons) do S.Button(button) end
+            for _, button in ipairs(dialog.buttons) do
+                S.Button(button)
+                RelevelPlate(button)
+            end
         end
         if dialog.editboxes then
-            for _, editBox in ipairs(dialog.editboxes) do S.EditBox(editBox) end
+            for _, editBox in ipairs(dialog.editboxes) do
+                S.EditBox(editBox)
+                RelevelPlate(editBox)
+            end
         end
         if dialog.checkboxes then
-            for _, checkBox in ipairs(dialog.checkboxes) do S.CheckBox(checkBox) end
+            for _, checkBox in ipairs(dialog.checkboxes) do
+                S.CheckBox(checkBox)
+                RelevelPlate(checkBox)
+            end
         end
     end
 end
