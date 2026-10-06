@@ -809,6 +809,7 @@ describe("KickTracker meter report owner", function()
         local KT = L.loadKickTrackerRules()
         local rows = {
             { name = "a sure list names a member", sure = { "ann" }, want = "ann" },
+            { name = "two sure lists name the same member", sure = { "ann", "ann" }, want = "ann" },
             { name = "two sure lists name different members", sure = { "ann", "cal" }, want = nil },
             { name = "a sure name outranks a climb naming someone else", sure = { "ann" }, climbs = { "cal" },
               want = "ann" },
