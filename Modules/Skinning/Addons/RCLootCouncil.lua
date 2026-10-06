@@ -9,14 +9,8 @@ local hooksecurefunc = hooksecurefunc
 local math_max = math.max
 local math_floor = math.floor
 
-local WHITE = "Interface\\Buttons\\WHITE8x8"
 local SKIN_KEY = "kitnui"
 local MSA_BACKDROPS = { "Backdrop", "MenuBackdrop" }
-
--- RC recolors these borders itself (icon state, own-item rows), so they stay
--- on RC's own frame: a backdrop drawn below it would never get the color.
-local PLATE_EDGE = { bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 }
-local EDGE_ONLY = { edgeFile = WHITE, edgeSize = 1 }
 
 local function ClearOwnBackdrop(frame)
     if frame and frame.SetBackdrop then frame:SetBackdrop(nil) end
@@ -46,16 +40,11 @@ local function SkinButton(button)
     S.Button(button)
 end
 
-local function InsetByEdge(region, frame)
-    local px = PLATE_EDGE.edgeSize
-    region:ClearAllPoints()
-    region:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
-    region:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
-end
-
+-- RC recolors this border itself (item state), so it stays on RC's own frame:
+-- a backdrop drawn below it would never get the color.
 local function SkinIconBordered(button)
     if not button.SetBackdrop then return end
-    button:SetBackdrop(PLATE_EDGE)
+    S.OwnBackdrop(button)
     local bg, border = S.palette.control, S.palette.border
     button:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
     button:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
@@ -64,12 +53,12 @@ local function SkinIconBordered(button)
     local normal = button.GetNormalTexture and button:GetNormalTexture()
     if normal then
         S.Icon(normal)
-        InsetByEdge(normal, button)
+        S.InsetToEdge(normal, button)
     end
     local highlight = button.GetHighlightTexture and button:GetHighlightTexture()
     if highlight then
         highlight:SetColorTexture(1, 1, 1, 0.3)
-        InsetByEdge(highlight, button)
+        S.InsetToEdge(highlight, button)
     end
 end
 
@@ -316,7 +305,7 @@ end
 local function LootEntry_Update(entry)
     local frame = entry and entry.frame
     if not (frame and frame.backdropInfo) then return end
-    frame:SetBackdrop(EDGE_ONLY)
+    S.OwnBackdrop(frame, true)
     local border = S.palette.border
     frame:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
 end
@@ -334,6 +323,9 @@ local function SkinLootEntry(entry)
     if entry.timeoutBar then
         entry.timeoutBar:SetStatusBarTexture(KE:GetStatusbarPath("KitnUI"))
     end
+    -- Rows of other players' items wear no KE edge, so the row is tracked for
+    -- its bar alone.
+    if entry.frame then S.TrackEdgeClients(entry.frame) end
     LootEntry_FitBar(entry)
     if entry.UpdatePosition then hooksecurefunc(entry, "UpdatePosition", LootEntry_FitBar) end
     if entry.noteEditbox then
@@ -417,9 +409,6 @@ end
 local function Skin()
     local addon = _G.RCLootCouncil
     if not (addon and addon.UI and addon.GetModule) then return end
-
-    local px = KE:GetPixelSize()
-    if px then PLATE_EDGE.edgeSize, EDGE_ONLY.edgeSize = px, px end
 
     hooksecurefunc(addon.UI, "New", UI_New)
     hooksecurefunc(addon.UI, "NewNamed", UI_New)

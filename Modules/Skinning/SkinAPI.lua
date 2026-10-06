@@ -545,8 +545,7 @@ local function Relayout(bd, info, px)
     bd:SetBackdrop(fresh)
 end
 
-local function FinishEdge(bd)
-    S.PixelSnap(bd)
+local function RefitEdgeClients(bd)
     local state = skinState[bd]
     local clients = state and state.edgeClients
     if not clients then return end
@@ -558,10 +557,17 @@ local function FinishEdge(bd)
     end
 end
 
+local function FinishEdge(bd)
+    S.PixelSnap(bd)
+    RefitEdgeClients(bd)
+end
+
 -- True once the border is fully laid for the backdrop's current scale. The
 -- flag goes up before the first write and comes down only after the last, so
 -- a stop anywhere in between leaves the refresh owed whatever the stored size.
-local function RefreshEdge(bd)
+-- finish defaults to FinishEdge; an edge on someone else's frame passes one
+-- that leaves that frame's pixel snapping alone.
+local function RefreshEdge(bd, finish)
     local info = bd.backdropInfo
     if not (info and info.edgeSize) then return true end
     local px = EdgeFor(bd)
@@ -580,9 +586,59 @@ local function RefreshEdge(bd)
     local laid = pcall(Relayout, bd, info, px)
     bd:SetBackdropColor(r, g, b, a)
     bd:SetBackdropBorderColor(br, bg, bb, ba)
-    if not (laid and pcall(FinishEdge, bd)) then return false end
+    if not (laid and pcall(finish or FinishEdge, bd)) then return false end
     unsettled[bd] = nil
     return true
+end
+
+-- Frames whose KE edge or inset regions follow scale changes. The value is the
+-- table S.OwnBackdrop made for the frame, or false for a frame tracked only for
+-- its inset regions. The owner can put its own table back at any time;
+-- identity tells the two apart.
+local ownEdges = setmetatable({}, { __mode = "k" })
+
+-- Only a frame still wearing KE's table is re-laid: Relayout would replace an
+-- owner's table with a filled one, and the owner's skin path puts KE's back.
+-- Inset regions follow the scale either way.
+local function RefreshOwnEdge(frame)
+    local info = ownEdges[frame]
+    if info and frame.backdropInfo == info then
+        return RefreshEdge(frame, RefitEdgeClients)
+    end
+    RefitEdgeClients(frame)
+    return true
+end
+
+-- Test seam: the refresh guard, driven with a plain-table frame.
+S._RefreshOwnEdge = RefreshOwnEdge
+
+-- For a frame that hosts S.InsetToEdge regions but wears no KE edge: no
+-- refresher walks it otherwise, so its regions would keep an old edge size.
+function S.TrackEdgeClients(frame)
+    if frame and ownEdges[frame] == nil then ownEdges[frame] = false end
+end
+
+-- A 1 px KE edge on the frame itself, for frames whose owner colors their own
+-- border, so a plate drawn below would never get the color. Not a
+-- backdropCache entry: S.GetBackdrop(frame) stays nil, and S.Backdrop never
+-- treats the frame as its own plate. SetBackdrop paints both colors white, so
+-- the caller paints after.
+function S.OwnBackdrop(frame, edgeOnly)
+    if not (frame and frame.SetBackdrop) then return end
+    local info = ownEdges[frame]
+    if not info then
+        info = { edgeFile = BG_TEX, bgFile = (not edgeOnly) and BG_TEX or nil }
+        ownedInfo[info] = true
+        ownEdges[frame] = info
+    end
+    if frame.backdropInfo == info then
+        RefreshOwnEdge(frame)
+        return
+    end
+    info.edgeSize = EdgeFor(frame)
+    frame:SetBackdrop(info)
+    unsettled[frame] = nil
+    RefitEdgeClients(frame)
 end
 
 edgeRefresher:SetScript("OnEvent", function()
@@ -591,6 +647,7 @@ edgeRefresher:SetScript("OnEvent", function()
     -- stale, and pairs order is arbitrary, so the damage would move
     -- around between sessions.
     for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
+    for frame in pairs(ownEdges) do pcall(RefreshOwnEdge, frame) end
 end)
 
 -- True when this backdrop owes nothing to the roots. The climb shares the

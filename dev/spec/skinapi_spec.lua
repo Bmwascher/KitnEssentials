@@ -1519,6 +1519,52 @@ describe("SkinAPI edge refresh", function()
             end
         end
     end)
+
+    -- An own edge sits on a frame whose owner may put its own table back at
+    -- any time. Refitting that table would replace it with a filled one, but
+    -- the frame's inset regions must follow the scale either way.
+    it("refits an own edge still wearing its KE table in place by either way in, leaves any other table alone, and refits inset regions in every case", function()
+        local function region()
+            local r = { points = {} }
+            function r:ClearAllPoints() self.points = {} end
+            function r:SetPoint(point, _, _, x, y) self.points[point] = { x, y } end
+            return r
+        end
+        -- way in, what the frame wears
+        local cases = {
+            { "refresh", "ke" }, { "repeat", "ke" }, { "refresh", "owner" }, { "refresh", "tracked" },
+        }
+        for _, c in ipairs(cases) do
+            local label = c[1] .. " " .. c[2]
+            local S = L.loadSkinAPI().Skins
+            local bd = backdrop()
+            if c[2] == "tracked" then S.TrackEdgeClients(bd) else S.OwnBackdrop(bd, true) end
+            local info = bd.backdropInfo
+            if c[2] == "owner" then
+                info = { edgeFile = "owner", edgeSize = 8 }
+                bd:SetBackdrop(info)
+            end
+            local inset = region()
+            S.InsetToEdge(inset, bd)
+            bd:SetBackdropColor(0.1, 0.2, 0.3, 0.4)
+            bd:SetBackdropBorderColor(0.5, 0.6, 0.7, 0.8)
+            local layouts, size = bd.layouts, info.edgeSize
+            bd.scale = 1.1
+            if c[1] == "refresh" then S._RefreshOwnEdge(bd) else S.OwnBackdrop(bd, true) end
+            assert.equals(info, bd.backdropInfo, label)
+            assert.same({ UNIT / 1.1, -UNIT / 1.1 }, inset.points.TOPLEFT, label)
+            assert.same({ 0.1, 0.2, 0.3, 0.4 }, bd.bg, label)
+            assert.same({ 0.5, 0.6, 0.7, 0.8 }, bd.border, label)
+            if c[2] == "ke" then
+                assert.equals(layouts + 1, bd.layouts, label)
+                assert.equals(UNIT / 1.1, info.edgeSize, label)
+                assert.is_nil(info.bgFile, label)
+            else
+                assert.equals(layouts, bd.layouts, label)
+                assert.equals(size, info.edgeSize, label)
+            end
+        end
+    end)
 end)
 
 -- The walk's membership and its per-backdrop raise isolation, through the
