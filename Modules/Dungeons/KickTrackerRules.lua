@@ -454,12 +454,14 @@ function KT.TakeOwnClaim(claim, now, window)
 end
 
 -- The interrupt came first: the newest record with a hidden kicker made
--- inside the window is the player's own kick. Records are in time order.
+-- inside the window is the player's own kick, unless the meter already put
+-- its kick on a teammate's row. Records are in time order.
 function KT.OwnRecordIndex(records, now, window)
     for i = #records, 1, -1 do
         local record = records[i]
         if now - record.startTime > window then return nil end
-        if record.hiddenKicker then return i end
+        local folded = record.entry ~= nil and record.entry.state == "fold"
+        if record.hiddenKicker and not folded then return i end
     end
     return nil
 end

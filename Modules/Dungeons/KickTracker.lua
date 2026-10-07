@@ -107,10 +107,12 @@ local OWN_KICK_MATCH_WINDOW = 0.5
 local METER_PAIR_WINDOW = 1    -- a kick and its meter report land this close
 local METER_SETTLE = 0         -- a read waits a frame, so it covers that frame's reports
 local METER_ECHO_WINDOW = 0.5  -- the same member named twice this close is one kick
--- What a resolution still reads. It runs by a frame past METER_PAIR_WINDOW
--- after its interrupt and looks back at most twice that window before it.
+-- What a resolution still reads. It runs at most about two METER_PAIR_WINDOWs
+-- after its interrupt (a report late in the window) and looks back at most
+-- about three. Both stay under this.
 local METER_KEEP = 4
 local SAME_FRAME = 0.02
+local METER_SAME_FRAME = 0.001  -- GetTime is fixed within a frame
 local METER_INTERRUPTS = Enum and Enum.DamageMeterType and Enum.DamageMeterType.Interrupts
 local METER_SESSIONS = {}
 if Enum and Enum.DamageMeterSessionType then
@@ -511,8 +513,7 @@ end
 -- the Damage Meter's history. A claim marks the claimed record's history
 -- entry taken; nothing on the meter side writes to kickRecords. A record
 -- draws after KICK_RECORD_GRACE unless a readable kicker's row took its kick
--- at once; a hidden kicker's drawn record goes when the meter later moves the
--- kick onto a row.
+-- at once; a hidden kicker's draws only if the meter puts the kick on no row.
 
 -- Display-only values of a kicked cast; each may be secret.
 local function InterruptedSpellIcon(spellID)
@@ -539,9 +540,9 @@ end
 -- truth that someone's kick landed. Each one joins recentKicks, where the
 -- meter windows count it, and each that is not the player's own goes through
 -- the record list (KT:ProcessTeammateKick). A teammate the game names plainly
--- then takes it on their row; every other record draws, and a hidden kicker's
--- may move onto a row once the Damage Meter names the kicker
--- (KT:ResolvePending).
+-- then takes it on their row; a hidden kicker's goes on the row the Damage
+-- Meter names, or draws as a record (KT:ResolvePending); every other record
+-- draws.
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     -- The payload may be secret while unit spellcasts are restricted; a
@@ -795,7 +796,7 @@ function KT:ResolvePending(entry, early)
     end
     local now = GetTime()
     local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, self.recentKicks, self.meterHits,
-        self.partyMembers, self:MessagesHeard(), now, METER_PAIR_WINDOW, METER_ECHO_WINDOW, SAME_FRAME)
+        self.partyMembers, self:MessagesHeard(), now, METER_PAIR_WINDOW, METER_ECHO_WINDOW, METER_SAME_FRAME)
     if DEBUG_KT then KE:Print("[KT] hidden kicker resolved: " .. tostring(outcome)) end
     if outcome == "wait" then
         if untilAt and not early then self:ResolveLater(entry, untilAt - now + METER_SETTLE) end
