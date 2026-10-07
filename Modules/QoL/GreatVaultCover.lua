@@ -26,7 +26,7 @@ local string_format = string.format
 ---------------------------------------------------------------------------------
 local VAULT_ADDON = "Blizzard_WeeklyRewards"
 local STORE_KEY = "GreatVaultRevealed"
-local ART = "Interface\\AddOns\\KitnEssentials\\Media\\Vault\\VaultCover"
+local ART = "Interface\\AddOns\\KitnEssentials\\Media\\Vault\\VaultCover.png"
 local ART_RIGHT, ART_BOTTOM = 438 / 512, 252 / 256
 local SKULL = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:16|t"
 local BAD_LOOT_TEXT = "GG, Fuggin Easy"
