@@ -861,8 +861,12 @@ describe("KickTracker hidden-kicker resolution", function()
             { name = "another interrupt near the report, not near this one: record",
               others = { { startTime = 11.1, state = "pending" } },
               hits = { { at = 10.8, owner = "ann" } }, want = "record" },
-            { name = "a report whose window is still open: wait until it closes",
-              hits = { { at = 10.5, owner = "ann" } }, want = "wait", untilAt = 11.5 },
+            { name = "a named report in the interrupt's frame folds at once", now = 10.02,
+              hits = { { at = 10, owner = "ann" } }, want = "fold", guid = "ann" },
+            { name = "a named report outside the interrupt's frame waits until its window closes", now = 10.2,
+              hits = { { at = 10.1, owner = "ann" } }, want = "wait", untilAt = 11.1 },
+            { name = "no report while the window is open: wait until it closes", now = 10.5,
+              hits = {}, want = "wait", untilAt = 11 },
             { name = "a report burst whose later end lies near another interrupt: record",
               others = { { startTime = 11.6, state = "pending" } },
               hits = { { at = 10.5, last = 10.7, owner = "ann" } }, want = "record" },
@@ -889,7 +893,7 @@ describe("KickTracker hidden-kicker resolution", function()
             local entries = { entry }
             for _, other in ipairs(row.others or {}) do entries[#entries + 1] = other end
             local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, entries, row.hits, members,
-                row.heard == true, 11.2, 1, 0.5)
+                row.heard == true, row.now or 11.2, 1, 0.5, 0.02)
             assert.equals(row.want, outcome, row.name)
             assert.equals(row.guid, guid, row.name)
             assert.equals(row.untilAt, untilAt, row.name)

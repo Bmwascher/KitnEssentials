@@ -105,12 +105,10 @@ local OWN_KICK_MATCH_WINDOW = 0.5
 
 -- Who kicked, from the Damage Meter (KT:ReadMeter, KT.ResolveInterrupt).
 local METER_PAIR_WINDOW = 1    -- a kick and its meter report land this close
-local METER_SETTLE = 0.2       -- one read covers a burst of reports (Current, Overall)
+local METER_SETTLE = 0         -- a read waits a frame, so it covers that frame's reports
 local METER_ECHO_WINDOW = 0.5  -- the same member named twice this close is one kick
--- What a resolution still reads. It runs at most 2.4 s after its interrupt
--- (waiting on a report burst late in the window) and then looks back at most
--- 1 s before it; one that does not wait runs by 1.4 s and looks back at most
--- 2.2 s (a burst early in the window). Both stay under this.
+-- What a resolution still reads. It runs by a frame past METER_PAIR_WINDOW
+-- after its interrupt and looks back at most twice that window before it.
 local METER_KEEP = 4
 local SAME_FRAME = 0.02
 local METER_INTERRUPTS = Enum and Enum.DamageMeterType and Enum.DamageMeterType.Interrupts
@@ -632,16 +630,19 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 
     -- Every other record draws after a grace, so a KICK that claims it first
     -- leaves no trace: the local event always beats the network. A hidden
-    -- kicker's record moves onto a row if the meter later names the kicker
-    -- (KT:ResolvePending).
-    local recordID = record.id
-    C_Timer.After(KICK_RECORD_GRACE, function()
-        self:ShowKickRecord(recordID)
-    end)
-    if not hidden then return end
+    -- kicker's record draws only if the meter cannot name the kicker
+    -- (KT:ResolvePending), so a kick the meter names shows on its row alone.
+    if not hidden then
+        local recordID = record.id
+        C_Timer.After(KICK_RECORD_GRACE, function()
+            self:ShowKickRecord(recordID)
+        end)
+        return
+    end
 
-    -- Every meter report within METER_PAIR_WINDOW of the kick has been read
-    -- METER_SETTLE after that window closes.
+    -- A report read before this interrupt may already name the kicker; a later
+    -- one is tried by its read; the last try is when the window closes.
+    self:ResolvePending(entry, true)
     self:ResolveLater(entry, METER_PAIR_WINDOW + METER_SETTLE)
 end
 
@@ -779,44 +780,42 @@ function KT:CoolingTeammates(now)
     return cooling
 end
 
--- A hidden kicker's interrupt once every input in its windows is in: the
--- member the meter names takes it on their row (KT.ResolveInterrupt), and its
--- drawn record goes; otherwise the record stays as drawn.
-function KT:ResolvePending(entry)
+-- A hidden kicker's interrupt, tried at intake and after each meter read
+-- (early) and once its window closes: the member the meter names takes it on
+-- their row (KT.ResolveInterrupt). Its record stays listed, undrawn, so sync
+-- pairing still sees it, and is drawn only when nobody takes the kick.
+function KT:ResolvePending(entry, early)
     if entry.state ~= "pending" or not self.isActive or self.isPreview then return end
     -- A report already fired but not yet read may fall inside this interrupt's
-    -- window; its read and this timer can land in the same frame either way.
+    -- window; its read tries this interrupt again.
     if self._meterReadPending and self._meterReadAt
         and self._meterReadAt <= entry.startTime + METER_PAIR_WINDOW then
-        self:ResolveLater(entry, METER_SETTLE)
+        if not early then self:ResolveLater(entry, METER_SETTLE) end
         return
     end
     local now = GetTime()
     local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, self.recentKicks, self.meterHits,
-        self.partyMembers, self:MessagesHeard(), now, METER_PAIR_WINDOW, METER_ECHO_WINDOW)
+        self.partyMembers, self:MessagesHeard(), now, METER_PAIR_WINDOW, METER_ECHO_WINDOW, SAME_FRAME)
     if DEBUG_KT then KE:Print("[KT] hidden kicker resolved: " .. tostring(outcome)) end
-    if outcome == "wait" and untilAt then
-        self:ResolveLater(entry, untilAt - now + METER_SETTLE)
+    if outcome == "wait" then
+        if untilAt and not early then self:ResolveLater(entry, untilAt - now + METER_SETTLE) end
     elseif outcome == "own" then
         entry.state = "own"
-        self:UndrawRecord(entry)
         self:ShowKicked(UnitGUID("player"), KickedFromRecord(entry))
     elseif outcome == "fold" and guid then
         entry.state = "fold"
-        self:UndrawRecord(entry)
         self:ChargeKick(entry, guid, unsure)
     elseif outcome then
         entry.state = "record"
+        local recordID = entry.record and entry.record.id
+        if not recordID then return end
+        local delay = entry.startTime + KICK_RECORD_GRACE - now
+        if delay > 0 then
+            C_Timer.After(delay, function() self:ShowKickRecord(recordID) end)
+        else
+            self:ShowKickRecord(recordID)
+        end
     end
-end
-
--- The kick went on a row: its record stops being drawn but stays listed, so
--- sync pairing still sees it.
-function KT:UndrawRecord(entry)
-    local record = entry.record
-    if not (record and self.activeBars["record" .. record.id]) then return end
-    self:ReleaseBar("record" .. record.id)
-    self:LayoutBars()
 end
 
 -- The one resolution timer, dropped when the tracker deactivates or restarts.
@@ -969,13 +968,17 @@ function KT:ReadMeter(at, last, shared)
     self:PruneKicks(GetTime())
     table_insert(self.meterHits, { at = at, last = last, owner = owner, uncertain = unsure })
     if DEBUG_KT then KE:Print("[KT] meter report named=" .. tostring(owner ~= nil)) end
+    for _, entry in ipairs(self.recentKicks) do
+        if entry.state == "pending" then self:ResolvePending(entry, true) end
+    end
 end
 
 -- The meter event fires for every meter type, hundreds of times a second in a
 -- big pull; any other type is one check and a return. The first Interrupts
--- update starts one read METER_SETTLE later; later updates before it only move
--- the burst's end, since the read may reflect any of them. A burst with two
--- Current updates is shared (KT.SessionRepeats).
+-- update starts one read a frame later (METER_SETTLE), after the frame's other
+-- updates; later updates before it only move the burst's end, since the read
+-- may reflect any of them. A burst with two Current updates is shared
+-- (KT.SessionRepeats).
 function KT:OnMeterUpdate(_, meterType, sessionID)
     if not METER_INTERRUPTS or issecretvalue(meterType) or meterType ~= METER_INTERRUPTS then return end
     if DEBUG_KT then
