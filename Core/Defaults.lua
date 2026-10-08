@@ -867,7 +867,6 @@ local Defaults = {
         DoTTracker = {
             Enabled = false,
             OnlyInCombat = true,
-            HideEmpty = true,
             OnlyEnemiesInCombat = true,
             MaxEnemies = 20,
             IconSize = 40,

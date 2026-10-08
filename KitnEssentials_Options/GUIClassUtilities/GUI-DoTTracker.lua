@@ -97,13 +97,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
                 ApplySettings()
             end,
         }), 1 / 3)
-        row1:AddWidget(GUIFrame:CreateCheckbox(row1, "Hide A DoT Nobody Has", {
-            value = db.HideEmpty ~= false,
-            callback = function(checked)
-                db.HideEmpty = checked
-                ApplySettings()
-            end,
-        }), 1 / 3)
         card1:AddRow(row1, Theme.rowHeight)
     end
     yOffset = card1:GetNextOffset()
