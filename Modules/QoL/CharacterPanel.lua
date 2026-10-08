@@ -219,20 +219,31 @@ local function StripEnchantPreamble(text)
     return text:sub(cut + 3)
 end
 
--- The numbers change with the rank, so only the stat words are kept.
+-- The numbers change with the rank, so only the stat words are kept. Two
+-- words joined by a bare slash ("Agility/Strength") are one stat either way,
+-- so they keep the slash.
 local function EffectLineLabel(text, style)
     local found = {}
     for _, pair in ipairs(ENCHANT_STAT_WORDS) do
         local at = text:find(pair[1], 1, true)
         if at then
-            found[#found + 1] = { at = at, word = style == "verbose" and pair[1] or pair[2] }
+            found[#found + 1] = {
+                at = at,
+                stop = at + #pair[1],
+                word = style == "verbose" and pair[1] or pair[2],
+            }
         end
     end
     if #found == 0 then return nil end
     table.sort(found, function(a, b) return a.at < b.at end)
-    local words = {}
-    for i, f in ipairs(found) do words[i] = f.word end
-    return table.concat(words, " & ")
+    local parts = {}
+    for i, f in ipairs(found) do
+        if i > 1 then
+            parts[#parts + 1] = text:sub(found[i - 1].stop, f.at - 1) == "/" and "/" or " & "
+        end
+        parts[#parts + 1] = f.word
+    end
+    return table.concat(parts)
 end
 
 -- Memoized: the same few equipped enchant lines resolve again on every slot

@@ -426,6 +426,11 @@ describe("Enchant name style", function()
             { name = "effect line, stats in order of appearance",
               line = "+115 Stamina & +41 Intellect",
               short = "Stam & Int", verbose = "Stamina & Intellect", full = "+115 Stamina & +41 Intellect" },
+            -- One stat either way, so the slash between the two words stays.
+            { name = "effect line, a slash pair joined by its slash",
+              line = "+41 Agility/Strength & +115 Stamina",
+              short = "Agi/Str & Stam", verbose = "Agility/Strength & Stamina",
+              full = "+41 Agility/Strength & +115 Stamina" },
             { name = "unknown name",
               line = "Enchant Cloak - Chant of Winged Grace",
               short = "Chant of Winged Grace", verbose = "Chant of Winged Grace",
