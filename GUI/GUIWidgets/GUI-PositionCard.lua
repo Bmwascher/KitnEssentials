@@ -22,30 +22,23 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local CreateFrame = CreateFrame
 local ipairs = ipairs
-local pairs = pairs
 
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
 
-local ANCHOR_DIRECTIONS = {
-    "TOPLEFT", "TOP", "TOPRIGHT",
-    "LEFT", "CENTER", "RIGHT",
-    "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"
-}
-
-local DIRECTION_NAMES = {
-    TOPLEFT = "Top Left",
-    TOP = "Top",
-    TOPRIGHT = "Top Right",
-    LEFT = "Left",
-    CENTER = "Center",
-    RIGHT = "Right",
-    BOTTOMLEFT = "Bottom Left",
-    BOTTOM = "Bottom",
-    BOTTOMRIGHT = "Bottom Right",
+-- In screen order; the dropdown keeps an ordered list's order.
+local ANCHOR_POINT_OPTIONS = {
+    { key = "TOPLEFT",     text = "Top Left" },
+    { key = "TOP",         text = "Top" },
+    { key = "TOPRIGHT",    text = "Top Right" },
+    { key = "LEFT",        text = "Left" },
+    { key = "CENTER",      text = "Center" },
+    { key = "RIGHT",       text = "Right" },
+    { key = "BOTTOMLEFT",  text = "Bottom Left" },
+    { key = "BOTTOM",      text = "Bottom" },
+    { key = "BOTTOMRIGHT", text = "Bottom Right" },
 }
 
 local ANCHOR_FRAME_TYPES = {
@@ -65,148 +58,6 @@ local STRATA_LIST = {
     { key = "LOW",               text = "Low" },
     { key = "BACKGROUND",        text = "Background" },
 }
-
----------------------------------------------------------------------------------
--- Anchor Buttons widget — kit-bound callback variant
---
--- Accepts the OUTER kit + a slot name. OnClick fires kit[slotName] which
--- Configure swaps per render (e.g. kit._selfPointCallback,
--- kit._anchorPointCallback). Internal "selected" highlighting still works
--- because container.value is updated locally and SetValue swaps it on
--- Configure.
----------------------------------------------------------------------------------
-
-local function CreateAnchorButtons(parent, labelText, outerKit, callbackSlot)
-    local buttonSize = 10
-    local frameWidth = 101
-    local frameHeight = 53
-    local titleHeight = 18
-    local spacing = 2
-
-    local container = CreateFrame("Frame", nil, parent)
-    container:SetSize(frameWidth + buttonSize, frameHeight + buttonSize + titleHeight + spacing + 4)
-
-    local label = container:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("TOP", container, "TOP", 0, 2)
-    label:SetHeight(titleHeight)
-    label:SetJustifyH("CENTER")
-    if KE.ApplyThemeFont then
-        KE:ApplyThemeFont(label, "small")
-    else
-        label:SetFontObject("GameFontNormalSmall")
-    end
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-    container.label = label
-
-    local background = CreateFrame("Frame", nil, container, "BackdropTemplate")
-    background:SetSize(frameWidth, frameHeight)
-    background:SetPoint("TOP", container, "TOP", 0, -(titleHeight + spacing))
-    background:SetBackdrop({
-        bgFile = "Interface\\BUTTONS\\WHITE8X8",
-        edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-        edgeSize = 1,
-    })
-    background:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-    background:SetBackdropBorderColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
-    container.background = background
-
-    container.value = "CENTER"
-
-    local buttons = {}
-    for _, direction in ipairs(ANCHOR_DIRECTIONS) do
-        local button = CreateFrame("Button", nil, container)
-        button:SetSize(buttonSize, buttonSize)
-        button:SetPoint("CENTER", background, direction)
-
-        local tex = button:CreateTexture(nil, "ARTWORK")
-        tex:SetAllPoints()
-        tex:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-        tex:SetTexelSnappingBias(0)
-        tex:SetSnapToPixelGrid(false)
-        button.tex = tex
-        button.value = direction
-
-        button:SetScript("OnClick", function()
-            container.value = direction
-            for _, btn in pairs(buttons) do
-                if container.value == btn.value then
-                    btn.tex:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-                else
-                    btn.tex:SetVertexColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
-                end
-            end
-            local cb = outerKit[callbackSlot]
-            if cb then cb(direction) end
-        end)
-
-        button:SetScript("OnEnter", function(self)
-            if not container.disabled then
-                self.tex:SetVertexColor(Theme.accentHover[1], Theme.accentHover[2], Theme.accentHover[3], 1)
-            end
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(DIRECTION_NAMES[direction] or direction, 1, 0.82, 0)
-            GameTooltip:Show()
-        end)
-
-        button:SetScript("OnLeave", function(self)
-            if not container.disabled then
-                if container.value == direction then
-                    self.tex:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-                else
-                    self.tex:SetVertexColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
-                end
-            end
-            GameTooltip:Hide()
-        end)
-
-        -- Initial color
-        tex:SetVertexColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
-        buttons[direction] = button
-    end
-    container.buttons = buttons
-
-    function container:SetValue(val)
-        self.value = val
-        for direction, btn in pairs(self.buttons) do
-            if val == direction then
-                btn.tex:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            else
-                btn.tex:SetVertexColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
-            end
-        end
-    end
-
-    function container:GetValue() return self.value end
-
-    function container:SetEnabled(enabled)
-        self.disabled = not enabled
-        if enabled then
-            self:SetAlpha(1)
-            for _, btn in pairs(self.buttons) do
-                btn:EnableMouse(true)
-            end
-        else
-            self:SetAlpha(0.4)
-            for _, btn in pairs(self.buttons) do
-                btn:EnableMouse(false)
-            end
-        end
-    end
-
-    -- Re-apply theme-tied state. Label (accent), background bg/border, and
-    -- button vertex colors all set at construction; the selected button's
-    -- accent gets refreshed when SetValue() runs (which Configure calls
-    -- after this), so we just refresh static chrome here.
-    function container:ApplyThemeColors()
-        local TT = Theme
-        label:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
-        background:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
-        background:SetBackdropBorderColor(TT.textMuted[1], TT.textMuted[2], TT.textMuted[3], 1)
-    end
-
-    return container
-end
 
 ---------------------------------------------------------------------------------
 -- Kit factory — maximal shape: every possible widget for every config combo
@@ -317,16 +168,31 @@ local function CreatePositionCardKit(holder)
     kit.frameInput = frameInput
     kit.selectFrameBtn = selectFrameBtn
 
-    -- Row 3: Anchor point selectors (always shown)
-    local anchorButtonRow = GUIFrame:CreateRow(card.content, 80)
-    local selfPointWidget = CreateAnchorButtons(anchorButtonRow, "Anchor From", kit, "_selfPointCallback")
-    anchorButtonRow:AddWidget(selfPointWidget, 0.5)
-    local anchorPointWidget = CreateAnchorButtons(anchorButtonRow, "To Frame's", kit, "_anchorPointCallback")
-    anchorButtonRow:AddWidget(anchorPointWidget, 0.5)
-    card:AddRow(anchorButtonRow, 80)
-    kit.anchorButtonRow = anchorButtonRow
-    kit.selfPointWidget = selfPointWidget
-    kit.anchorPointWidget = anchorPointWidget
+    -- Row 3: anchor point dropdowns (always shown)
+    local anchorPointRow = GUIFrame:CreateRow(card.content, 36)
+    local selfPointDropdown = GUIFrame:CreateDropdown(anchorPointRow, "Anchor From", {
+        options = ANCHOR_POINT_OPTIONS,
+        value = "CENTER",
+        callback = function(key)
+            if not kit._db or not kit._keys then return end
+            kitSetValue(kit, kit._keys.selfPoint, key)
+        end,
+    })
+    anchorPointRow:AddWidget(selfPointDropdown, 0.5)
+    -- Configure relabels this one per render; the text follows the anchor type.
+    local anchorPointDropdown = GUIFrame:CreateDropdown(anchorPointRow, "To Screen's", {
+        options = ANCHOR_POINT_OPTIONS,
+        value = "CENTER",
+        callback = function(key)
+            if not kit._db or not kit._keys then return end
+            kitSetValue(kit, kit._keys.anchorPoint, key)
+        end,
+    })
+    anchorPointRow:AddWidget(anchorPointDropdown, 0.5)
+    card:AddRow(anchorPointRow, 36)
+    kit.anchorPointRow = anchorPointRow
+    kit.selfPointDropdown = selfPointDropdown
+    kit.anchorPointDropdown = anchorPointDropdown
 
     -- Row 4: X/Y offset sliders (always shown)
     local offsetRow = GUIFrame:CreateRow(card.content, 36)
@@ -377,11 +243,11 @@ local function CreatePositionCardKit(holder)
     -- WidgetStateManager pass these to RegisterGroup).
     kit.allWidgets = {
         anchorTypeDropdown, frameInput, selectFrameBtn,
-        selfPointWidget, anchorPointWidget,
+        selfPointDropdown, anchorPointDropdown,
         xSlider, ySlider,
         strataOnlyDropdown,
     }
-    kit.anchorButtonWidgets = { selfPointWidget, anchorPointWidget }
+    kit.anchorButtonWidgets = { selfPointDropdown, anchorPointDropdown }
 
     -- Override card:SetEnabled to also walk the kit's widgets. Default
     -- card:SetEnabled (from GUI-Core) only does alpha + the click-blocker
@@ -480,12 +346,6 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit._config = config
     kit._positionKey = config.positionKey or "Position"
 
-    -- Anchor button callbacks read kit._selfPointCallback / _anchorPointCallback
-    -- on click. Closures here are minimal — they just call kitSetValue with
-    -- the resolved key.
-    kit._selfPointCallback = function(val) kitSetValue(kit, keys.selfPoint, val) end
-    kit._anchorPointCallback = function(val) kitSetValue(kit, keys.anchorPoint, val) end
-
     -- Re-anchor card to the scrollChild + yOffset. FramePool.Acquire already
     -- reparented kit.row (the card) to scrollChild but the SetPoint anchors
     -- still point at the pool's hidden holder.
@@ -503,9 +363,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     local anchorPointLabel = showAnchorFrameType and
         (currentType == "SELECTFRAME" and "To Frame's" or "To Screen's") or
         "To Frame's"
-    if kit.anchorPointWidget and kit.anchorPointWidget.label then
-        kit.anchorPointWidget.label:SetText(anchorPointLabel)
-    end
+    kit.anchorPointDropdown.label:SetText(anchorPointLabel)
 
     -- The kit is pooled across pages: without this, a card one page grayed
     -- comes back grayed on a page that has no gray-out of its own.
@@ -513,12 +371,12 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
 
     -- Set widget values. CreateDropdown.SetValue accepts (val, silent),
     -- CreateSlider.SetValue accepts (val, silent), CreateCheckbox.toggle
-    -- :SetValue accepts (val, instant=true), AnchorButton:SetValue + EditBox
-    -- :SetValue don't fire callbacks via OnEnterPressed/OnEditFocusLost.
+    -- :SetValue accepts (val, instant=true), and EditBox:SetValue doesn't
+    -- fire callbacks via OnEnterPressed/OnEditFocusLost.
     kit.anchorTypeDropdown:SetValue(currentType, true)
     kit.frameInput:SetValue(kitGetValue(kit, keys.anchorFrameFrame, ""))
-    kit.selfPointWidget:SetValue(kitGetValue(kit, keys.selfPoint, defaults.selfPoint or "CENTER"))
-    kit.anchorPointWidget:SetValue(kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER"))
+    kit.selfPointDropdown:SetValue(kitGetValue(kit, keys.selfPoint, defaults.selfPoint or "CENTER"), true)
+    kit.anchorPointDropdown:SetValue(kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER"), true)
 
     -- Slider range may be overridden per consumer (DungeonTimersBars/Texts
     -- use ±800 instead of the default ±1000). Apply per render before
@@ -566,7 +424,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     else
         kit.selectFrameRow:Hide()
     end
-    showRow(kit.anchorButtonRow, 80)
+    showRow(kit.anchorPointRow, 36)
     showRow(kit.offsetRow, 36)
     if showStrataRow then
         showRow(kit.strataOnlyRow, T.rowHeightLast)
