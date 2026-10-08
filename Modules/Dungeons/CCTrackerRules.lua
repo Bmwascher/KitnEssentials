@@ -19,33 +19,34 @@ Rules.CC_PER_ROW = 3
 Rules.ICON_GAP = 2
 
 -- Debuff ids, which for several spells differ from the cast's id. `group` is
--- the row the settings page lists the spell under. Mind Control is left out:
--- the controlled mob turns assistable, and an assistable unit never gets a row.
+-- the class token the settings page lists the spell under. Mind Control is
+-- left out: the controlled mob turns assistable, and an assistable unit never
+-- gets a row.
 KE.CC_TRACKER_SEEDS = {
-    { key = "POLYMORPH", label = "Polymorph (all)", group = "Mage", default = true, ids = {
+    { key = "POLYMORPH", label = "Polymorph (all)", group = "MAGE", default = true, ids = {
         118, 28272, 28271, 61305, 61721, 61780, 126819, 161353,
         161354, 161355, 161372, 277787, 277792, 321395, 391622, 383121,
     } },
-    { key = "RING_OF_FROST", label = "Ring of Frost", group = "Mage", default = false, ids = { 82691 } },
-    { key = "HEX", label = "Hex (all)", group = "Shaman", default = true, ids = {
+    { key = "RING_OF_FROST", label = "Ring of Frost", group = "MAGE", default = false, ids = { 82691 } },
+    { key = "HEX", label = "Hex (all)", group = "SHAMAN", default = true, ids = {
         51514, 210873, 211004, 211010, 211015, 269352, 277778, 277784, 309328,
     } },
-    { key = "REPENTANCE", label = "Repentance", group = "Paladin", default = true, ids = { 20066 } },
-    { key = "TURN_EVIL", label = "Turn Evil", group = "Paladin", default = true, ids = { 10326 } },
-    { key = "FREEZING_TRAP", label = "Freezing Trap", group = "Hunter", default = true, ids = { 3355 } },
-    { key = "SCARE_BEAST", label = "Scare Beast", group = "Hunter", default = true, ids = { 1513 } },
-    { key = "SAP", label = "Sap", group = "Rogue", default = true, ids = { 6770 } },
-    { key = "BLIND", label = "Blind", group = "Rogue", default = true, ids = { 2094 } },
-    { key = "BANISH", label = "Banish", group = "Warlock", default = true, ids = { 710 } },
-    { key = "FEAR", label = "Fear", group = "Warlock", default = true, ids = { 118699 } },
-    { key = "SEDUCTION", label = "Seduction", group = "Warlock", default = true, ids = { 6358 } },
-    { key = "MESMERIZE", label = "Mesmerize", group = "Warlock", default = true, ids = { 115268 } },
-    { key = "HIBERNATE", label = "Hibernate", group = "Druid", default = true, ids = { 2637 } },
-    { key = "ENTANGLING_ROOTS", label = "Entangling Roots", group = "Druid", default = false, ids = { 339 } },
-    { key = "IMPRISON", label = "Imprison", group = "Others", default = true, ids = { 217832 } },
-    { key = "SLEEP_WALK", label = "Sleep Walk", group = "Others", default = true, ids = { 360806 } },
-    { key = "PARALYSIS", label = "Paralysis", group = "Others", default = true, ids = { 115078 } },
-    { key = "SHACKLE_HORROR", label = "Shackle Horror", group = "Others", default = true, ids = { 9484 } },
+    { key = "REPENTANCE", label = "Repentance", group = "PALADIN", default = true, ids = { 20066 } },
+    { key = "TURN_EVIL", label = "Turn Evil", group = "PALADIN", default = true, ids = { 10326 } },
+    { key = "FREEZING_TRAP", label = "Freezing Trap", group = "HUNTER", default = true, ids = { 3355 } },
+    { key = "SCARE_BEAST", label = "Scare Beast", group = "HUNTER", default = true, ids = { 1513 } },
+    { key = "SAP", label = "Sap", group = "ROGUE", default = true, ids = { 6770 } },
+    { key = "BLIND", label = "Blind", group = "ROGUE", default = true, ids = { 2094 } },
+    { key = "BANISH", label = "Banish", group = "WARLOCK", default = true, ids = { 710 } },
+    { key = "FEAR", label = "Fear", group = "WARLOCK", default = true, ids = { 118699 } },
+    { key = "SEDUCTION", label = "Seduction", group = "WARLOCK", default = true, ids = { 6358 } },
+    { key = "MESMERIZE", label = "Mesmerize", group = "WARLOCK", default = true, ids = { 115268 } },
+    { key = "HIBERNATE", label = "Hibernate", group = "DRUID", default = true, ids = { 2637 } },
+    { key = "ENTANGLING_ROOTS", label = "Entangling Roots", group = "DRUID", default = false, ids = { 339 } },
+    { key = "IMPRISON", label = "Imprison", group = "DEMONHUNTER", default = true, ids = { 217832 } },
+    { key = "SLEEP_WALK", label = "Sleep Walk", group = "EVOKER", default = true, ids = { 360806 } },
+    { key = "PARALYSIS", label = "Paralysis", group = "MONK", default = true, ids = { 115078 } },
+    { key = "SHACKLE_HORROR", label = "Shackle Horror", group = "PRIEST", default = true, ids = { 9484 } },
 }
 
 local MSG_NOT_ID = "Enter a whole positive number."

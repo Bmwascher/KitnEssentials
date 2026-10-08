@@ -30,11 +30,7 @@ local GROW_OPTIONS = {
     { key = "UP",   text = "Up" },
 }
 
--- "Others" holds the classes with one seed and no row of their own.
-local GROUP_ORDER = { "Mage", "Shaman", "Paladin", "Hunter", "Rogue", "Warlock", "Druid", "Others" }
-
-local GROUP_LABEL_W = 0.18
-local SEED_CELL_W = 0.205
+local SEEDS_PER_ROW = 3
 local SEED_CELL_H = 24
 local SEED_CELL_SPACING = 2
 local ADDED_PER_ROW = 3
@@ -58,7 +54,6 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         if CC then CC:ApplySettings() end
     end
 
-    manager:SetCondition("seeds", function() return db.EveryCC ~= true end)
     manager:SetCondition("name", function() return db.NameEnabled ~= false end)
 
     ----------------------------------------------------------------
@@ -86,6 +81,10 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     db.CustomIDs = db.CustomIDs or {}
 
     local card2 = GUIFrame:CreateCard(scrollChild, "Tracked Crowd Control", yOffset)
+    -- A class pick releases the seed checkboxes, so they have a manager of
+    -- their own, cleared with them; the page's manager never drives a released one.
+    local seedManager = GUIFrame:CreateWidgetStateManager()
+
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     row2a:AddWidget(GUIFrame:CreateDropdown(row2a, "Count Crowd Control From", {
         options = SOURCE_OPTIONS,
@@ -101,85 +100,117 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
             "and ignores the list below.",
         callback = function(checked)
             db.EveryCC = checked
-            manager:UpdateAll(true)
+            seedManager:UpdateAll(true)
             ApplySettings()
         end,
     }), 0.5)
     card2:AddRow(row2a, Theme.rowHeight)
     card2:AddSeparator()
 
-    for g, group in ipairs(GROUP_ORDER) do
-        local row = GUIFrame:CreateRow(card2.content, SEED_CELL_H)
-        local label = row:GetLabel("normal")
-        label:SetJustifyH("LEFT")
-        label:SetWordWrap(false)
-        label:SetText(group)
-        label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-        row:AddWidget(label, GROUP_LABEL_W, nil, 2)
+    local classTokens, listed = {}, {}
+    for _, seed in ipairs(seeds) do
+        if not listed[seed.group] then
+            listed[seed.group] = true
+            classTokens[#classTokens + 1] = seed.group
+        end
+    end
+
+    local mark
+    local DrawClass
+
+    local function Redraw(classToken)
+        local oldHeight = card2:GetContentHeight()
+        card2:TruncateBody(mark)
+        DrawClass(classToken)
+        GUIFrame:ResizeCardInPlace(card2, oldHeight)
+    end
+
+    DrawClass = function(classToken)
+        seedManager:Clear()
+        seedManager:SetCondition("seeds", function() return db.EveryCC ~= true end)
+        local classSeeds = {}
         for _, seed in ipairs(seeds) do
-            if seed.group == group then
-                local key = seed.key
-                local cell = GUIFrame:CreateCompactCheckbox(row, seed.label, {
-                    value = Rules.SeedEnabled(seed, db.Groups),
-                    callback = function(checked)
-                        db.Groups[key] = { enabled = checked }
-                        ApplySettings()
-                    end,
-                })
-                row:AddWidget(cell, SEED_CELL_W)
-                manager:Register(cell, "seeds")
-            end
+            if seed.group == classToken then classSeeds[#classSeeds + 1] = seed end
         end
-        card2:AddRow(row, SEED_CELL_H, g == #GROUP_ORDER and Theme.paddingSmall or SEED_CELL_SPACING)
-    end
-    card2:AddSeparator()
-
-    local addRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local idBox = GUIFrame:CreateEditBox(addRow, "Add Spell ID (the debuff's ID)", { value = "" })
-    addRow:AddWidget(idBox, 0.5)
-    addRow:AddWidget(GUIFrame:CreateButton(addRow, "Add", {
-        height = 24,
-        callback = function()
-            local id, reason = Rules.CanAdd(idBox:GetValue(), seeds, db.CustomIDs, SpellName)
-            if not id then
-                KE:Print(reason)
-                return
-            end
-            db.CustomIDs[id] = true
-            ApplySettings()
-            GUIFrame:RefreshContent()
-        end,
-    }), 0.25)
-    card2:AddRow(addRow, Theme.rowHeight)
-
-    local added = {}
-    for id, on in pairs(db.CustomIDs) do
-        if on == true and type(id) == "number" then added[#added + 1] = id end
-    end
-    table_sort(added)
-    if #added == 0 then
-        card2:AddNote("Added: none.")
-    else
-        card2:AddNote("Click an added spell to remove it.")
-        local pending
-        for index, id in ipairs(added) do
-            if not pending then pending = GUIFrame:CreateRow(card2.content, Theme.rowHeight) end
-            local name = SpellName(id)
-            local text = name and (name .. " (" .. id .. ")") or ("Spell " .. id)
-            pending:AddWidget(GUIFrame:CreateButton(pending, text, {
-                height = 24,
-                callback = function()
-                    db.CustomIDs[id] = nil
+        local seedRow
+        for index, seed in ipairs(classSeeds) do
+            local key = seed.key
+            local texture = C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(seed.ids[1])
+            if not seedRow then seedRow = GUIFrame:CreateRow(card2.content, SEED_CELL_H) end
+            local cell = GUIFrame:CreateCompactCheckbox(seedRow, GUIFrame.IconText(texture) .. seed.label, {
+                value = Rules.SeedEnabled(seed, db.Groups),
+                callback = function(checked)
+                    db.Groups[key] = { enabled = checked }
                     ApplySettings()
-                    GUIFrame:RefreshContent()
                 end,
-            }), 1 / ADDED_PER_ROW)
-            if index % ADDED_PER_ROW == 0 or index == #added then
-                card2:AddRow(pending, Theme.rowHeight)
-                pending = nil
+            })
+            seedRow:AddWidget(cell, 1 / SEEDS_PER_ROW)
+            seedManager:Register(cell, "seeds")
+            if index % SEEDS_PER_ROW == 0 or index == #classSeeds then
+                card2:AddRow(seedRow, SEED_CELL_H,
+                    index == #classSeeds and Theme.paddingSmall or SEED_CELL_SPACING)
+                seedRow = nil
+            end
+        end
+        seedManager:UpdateAll(true)
+        card2:AddSeparator()
+
+        local addRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+        local idBox = GUIFrame:CreateEditBox(addRow, "Add Spell ID (the debuff's ID)", { value = "" })
+        addRow:AddWidget(idBox, 0.5)
+        addRow:AddWidget(GUIFrame:CreateButton(addRow, "Add", {
+            height = 24,
+            callback = function()
+                local id, reason = Rules.CanAdd(idBox:GetValue(), seeds, db.CustomIDs, SpellName)
+                if not id then
+                    KE:Print(reason)
+                    return
+                end
+                db.CustomIDs[id] = true
+                ApplySettings()
+                GUIFrame:RefreshContent()
+            end,
+        }), 0.25)
+        card2:AddRow(addRow, Theme.rowHeight)
+
+        local added = {}
+        for id, on in pairs(db.CustomIDs) do
+            if on == true and type(id) == "number" then added[#added + 1] = id end
+        end
+        table_sort(added)
+        if #added == 0 then
+            card2:AddNote("Added: none.")
+        else
+            card2:AddNote("Click an added spell to remove it.")
+            local pending
+            for index, id in ipairs(added) do
+                if not pending then pending = GUIFrame:CreateRow(card2.content, Theme.rowHeight) end
+                local name = SpellName(id)
+                local text = name and (name .. " (" .. id .. ")") or ("Spell " .. id)
+                pending:AddWidget(GUIFrame:CreateButton(pending, text, {
+                    height = 24,
+                    callback = function()
+                        db.CustomIDs[id] = nil
+                        ApplySettings()
+                        GUIFrame:RefreshContent()
+                    end,
+                }), 1 / ADDED_PER_ROW)
+                if index % ADDED_PER_ROW == 0 or index == #added then
+                    card2:AddRow(pending, Theme.rowHeight)
+                    pending = nil
+                end
             end
         end
     end
+
+    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card2.content, {
+        scope = "CCTracker",
+        classTokens = classTokens,
+        onPick = function(key) Redraw(key) end,
+    })
+    card2:AddRow(classRow, 36)
+    mark = card2:MarkBody()
+    DrawClass(shownClass)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
