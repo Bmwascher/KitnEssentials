@@ -98,6 +98,16 @@ CM.attachedFrames = {}
 CM.attachedInsets = {}
 CM.arrangedShown = {}
 CM.arrangedHeight = {}
+-- Per attached key: the KE spacer the frame hangs under, whether the frame is
+-- seated on it, and the spacer height last applied.
+CM.attachSpacers = {}
+CM.attachSeated = {}
+CM.attachTop = {}
+-- Per line: the last readable shown state and height, and the top it was
+-- last placed at.
+CM.lineShown = {}
+CM.lineHeight = {}
+CM.lineTop = {}
 -- Sent on enable and disable, and from ApplySettings once the container
 -- exists, so an attached module can move between its own anchor and this
 -- stack and pick up the font.
@@ -214,59 +224,90 @@ end
 ---------------------------------------------------------------------------------
 -- Layout
 ---------------------------------------------------------------------------------
--- Every arrange SetPoint goes through here. The engine's Havoc aura button
--- hangs on an attached frame, so the game may refuse a re-anchor; a refused
--- frame keeps its place and room, and the next allowed arrange seats it.
-local function CanPlace(frame)
-    if not KE:CanReanchorNow(frame) then return false end
-    if not frame.IsAnchoringRestricted then return true end
-    local restricted = frame:IsAnchoringRestricted()
-    if KE:IsSecretValue(restricted) or restricted == true then return false end
-    return true
+-- In combat the game can refuse a layout write. The engine's Havoc aura button
+-- hangs on an attached frame, so the container is asked as well as the frame.
+local function CanMove(self, frame)
+    return KE:CanReanchorNow(frame) and KE:CanReanchorNow(self.container)
 end
 
-local function PlaceAt(self, frame, yOffset)
-    if not CanPlace(frame) then return end
-    frame:ClearAllPoints()
-    frame:SetPoint("TOP", self.container, "TOP", 0, -yOffset)
+-- A secret read returns the last recorded answer; arithmetic on it would error.
+local function ReadShownHeight(frame, shownCache, heightCache, key)
+    local shown, height = frame:IsShown(), frame:GetHeight()
+    if KE:IsSecretValue(shown) or KE:IsSecretValue(height) then
+        return shownCache[key], heightCache[key]
+    end
+    shownCache[key], heightCache[key] = shown, height
+    return shown, height
 end
 
+-- A refused move leaves a line where it was; what follows starts below both
+-- its old and its new place.
 local function StackFrames(self, types, yOffset, spacing)
     for _, msgType in ipairs(types) do
         local frame = self.messageFrames[msgType]
-        if frame and frame:IsShown() then
-            PlaceAt(self, frame, yOffset)
-            yOffset = yOffset + frame:GetHeight() + spacing
+        if frame then
+            local shown, height = ReadShownHeight(frame, self.lineShown, self.lineHeight, msgType)
+            if shown and height then
+                local top = self.lineTop[msgType]
+                if top ~= yOffset and CanMove(self, frame) then
+                    frame:ClearAllPoints()
+                    frame:SetPoint("TOP", self.container, "TOP", 0, -yOffset)
+                    top = yOffset
+                    self.lineTop[msgType] = top
+                end
+                yOffset = math_max(yOffset, top or yOffset) + height + spacing
+            end
         end
     end
     return yOffset
 end
 
+-- Seated once, by SetPoint, under a KE spacer anchored to the container top.
+-- Later moves only resize the spacer, so no arrange re-anchors a frame the
+-- engine's aura button hangs on.
+local function SeatAttached(self, key, frame)
+    if self.attachSeated[key] then return true end
+    local spacer = self.attachSpacers[key]
+    if not CanMove(self, frame) or (spacer and not CanMove(self, spacer)) then return false end
+    if not spacer then
+        spacer = CreateFrame("Frame", nil, self.container)
+        spacer:SetWidth(1)
+        spacer:SetPoint("TOP", self.container, "TOP", 0, 0)
+        self.attachSpacers[key] = spacer
+    end
+    frame:ClearAllPoints()
+    frame:SetPoint("TOP", spacer, "BOTTOM", 0, 0)
+    self.attachSeated[key] = true
+    self.attachTop[key] = nil
+    return true
+end
+
 function CM:ArrangeMessages()
+    if not self.container then return end
     local spacing = self.db.Spacing or 4
     local yOffset = StackFrames(self, MESSAGE_TYPES, 0, spacing)
     yOffset = StackFrames(self, EXTERNAL_LINE_TYPES, yOffset, spacing)
 
-    if not self.container then return end
     -- Lines only: the container can be anchored at its center, so counting
     -- attached frames would move the lines every time one shows.
-    self.container:SetHeight(math_max(30, yOffset - spacing))
+    if KE:CanReanchorNow(self.container) then
+        self.container:SetHeight(math_max(30, yOffset - spacing))
+    end
 
     for _, key in ipairs(ATTACHED_FRAME_TYPES) do
         local frame = self.attachedFrames[key]
         if frame then
-            local shown, height = frame:IsShown(), frame:GetHeight()
-            -- A secret read keeps the last recorded answer; arithmetic on it
-            -- would error.
-            if KE:IsSecretValue(shown) or KE:IsSecretValue(height) then
-                shown, height = self.arrangedShown[key], self.arrangedHeight[key]
-            else
-                self.arrangedShown[key], self.arrangedHeight[key] = shown, height
-            end
+            local shown, height = ReadShownHeight(frame, self.arrangedShown, self.arrangedHeight, key)
             if shown and height then
-                local inset = self.attachedInsets[key] or 0
-                PlaceAt(self, frame, yOffset + inset)
-                yOffset = yOffset + inset + height + spacing
+                local top = yOffset + (self.attachedInsets[key] or 0)
+                local placed = self.attachTop[key]
+                if placed ~= top and SeatAttached(self, key, frame)
+                    and CanMove(self, self.attachSpacers[key]) then
+                    self.attachSpacers[key]:SetHeight(top)
+                    placed = top
+                    self.attachTop[key] = top
+                end
+                yOffset = math_max(top, placed or top) + height + spacing
             end
         end
     end
@@ -449,7 +490,9 @@ end
 function CM:HideExternalLine(key)
     if not IS_EXTERNAL_LINE[key] then return end
     local frame = self.messageFrames[key]
-    if not (frame and frame:IsShown()) then return end
+    if not frame then return end
+    local shown = frame:IsShown()
+    if not KE:IsSecretValue(shown) and not shown then return end
     frame:Hide()
     self:ArrangeMessages()
 end
@@ -464,10 +507,17 @@ function CM:SetAttachedFrame(key, frame, topInset)
         self.attachedInsets[key] = nil
         self.arrangedShown[key] = nil
         self.arrangedHeight[key] = nil
+        self.attachSeated[key] = nil
+        self.attachTop[key] = nil
         if self.container then self:ArrangeMessages() end
         return false
     end
     if not self:AcceptsAttach(true) then return false end
+    -- A different frame for the same slot is seated afresh.
+    if self.attachedFrames[key] ~= frame then
+        self.attachSeated[key] = nil
+        self.attachTop[key] = nil
+    end
     self.attachedFrames[key] = frame
     self.attachedInsets[key] = topInset or 0
     self:ArrangeMessages()
@@ -837,7 +887,10 @@ function CM:HidePreview()
     local rearrange = next(self.attachedFrames) ~= nil
     for _, key in ipairs(EXTERNAL_LINE_TYPES) do
         local frame = self.messageFrames[key]
-        if frame and frame:IsShown() then rearrange = true end
+        if frame then
+            local shown = frame:IsShown()
+            if KE:IsSecretValue(shown) or shown then rearrange = true end
+        end
     end
     if rearrange then self:ArrangeMessages() end
 
@@ -1144,6 +1197,8 @@ function CM:OnDisable()
         self.attachedInsets[key] = nil
         self.arrangedShown[key] = nil
         self.arrangedHeight[key] = nil
+        self.attachSeated[key] = nil
+        self.attachTop[key] = nil
     end
     self:SendMessage(self.CHANGED_MESSAGE)
 end
