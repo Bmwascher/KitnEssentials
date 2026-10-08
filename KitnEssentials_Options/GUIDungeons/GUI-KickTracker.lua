@@ -76,10 +76,15 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Tracks your party's interrupts as cooldown bars. Teammates running a kick-sync " ..
-        "addon get live bars; other kicks show as temporary class-colored records marked *. " ..
-        "Inside a running keystone the game blocks addon messages, so every teammate kick shows " ..
-        "as a record there. Only active in 5-player dungeons.")
+    card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick.\n\n" ..
+        "Teammates running a kick-sync addon get exact cooldowns outside a running keystone. " ..
+        "Other kicks go on the kicker's bar when the game names the kicker, or when the Damage " ..
+        "Meter's interrupt list shows who kicked. When the kicker cannot be told, the kick shows " ..
+        "as a temporary class-colored record marked *. A Warrior's or Protection Paladin's bar " ..
+        "marked * is cooling for an interrupt that may have come from another spell, such as a " ..
+        "thrown weapon or Avenger's Shield.\n\n" ..
+        "A teammate's kick that interrupts nothing shows only through a kick-sync addon, " ..
+        "outside a running keystone. Only active in 5-player dungeons.")
 
     yOffset = card1:GetNextOffset()
 
@@ -92,7 +97,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local rowSync = GUIFrame:CreateRow(cardSync.content, Theme.rowHeightLast)
     local syncCheck = GUIFrame:CreateCheckbox(rowSync, "Sync Kicks with Party Addon Users", {
         value = db.KickSync ~= false,
-        callback = function(checked) db.KickSync = checked end,
+        callback = function(checked) db.KickSync = checked; ApplySettings() end,
     })
     rowSync:AddWidget(syncCheck, 1)
     manager:Register(syncCheck, "all")
@@ -242,7 +247,8 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     card3:AddRow(row3a, Theme.rowHeight)
 
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Bars", {
+    -- Rows always show; this limits the records beside them.
+    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Records", {
         min = 1, max = 5, step = 1,
         value = db.MaxBars or 5,
         callback = function(val) db.MaxBars = val; ApplySettings() end,

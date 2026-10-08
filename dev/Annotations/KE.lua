@@ -1137,12 +1137,13 @@ function KE:ApplyActivePosition(frame, db, setParent) end
 
 -- Core/Interrupts.lua
 --- Ordered list of { id, cd } entries to try in priority order, or nil when
---- the spec is unknown or has no kick.
+--- the spec is unknown or has no candidate (a tracker kick is none).
 ---@param specID number
 ---@return { id: number, cd: number }[]?
 function KE:GetInterruptCandidatesForSpec(specID) end
 
---- Union of all candidate IDs + announce extras for one spec, or nil when unknown.
+--- Union of all candidate IDs, the tracker kick and announce extras for one
+--- spec, or nil when unknown.
 ---@param specID number
 ---@return table<number, true>?
 function KE:GetInterruptSpellSet(specID) end
@@ -1154,12 +1155,13 @@ function KE:GetInterruptSpellSet(specID) end
 function KE:PickTrackedKick(candidates, trackedID) end
 
 --- The kick a cooldown tracker shows for a spec whose pet it cannot see: the
---- `tracked` candidate, else the first; nil when the spec has no kick.
+--- `tracked` candidate, else the first; the spec's tracker kick when it has
+--- no candidate; nil when the spec has no kick.
 ---@param specID number
 ---@return { id: number, cd: number }?
 function KE:GetTrackedKickForSpec(specID) end
 
---- Every candidate kick ID across specs (announce extras excluded).
+--- Every candidate and tracker kick ID across specs (announce extras excluded).
 --- Callers treat the returned table as read-only.
 ---@return table<number, true>
 function KE:GetInterruptKickSpellSet() end

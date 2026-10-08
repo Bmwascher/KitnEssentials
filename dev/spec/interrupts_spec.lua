@@ -14,14 +14,19 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         assert.is_true(set[375576])
     end)
 
-    it("handles a spec with no single-target kick (Balance Druid 102)", function()
-        -- primary = nil, only an announce extra (Solar Beam) -> empty candidate list
+    it("gives a tracker-only kick to the tracker, never the castbar candidates (Balance Druid 102)", function()
+        -- Expected values are read through the accessors, so no data cell is
+        -- pinned.
         assert.is_nil(KE:GetInterruptCandidatesForSpec(102))
-        local set = KE:GetInterruptSpellSet(102)
-        assert.is_true(set[78675])
+        local kick = KE:GetTrackedKickForSpec(102)
+        assert.is_not_nil(kick)
+        assert.equals(kick.cd, KE:GetKickCooldownForSpec(102, kick.id))
+        assert.equals(kick.cd, KE:GetKickCooldownCap(kick.id))
+        assert.is_true(KE:GetInterruptKickSpellSet()[kick.id])
+        assert.is_true(KE:GetInterruptSpellSet(102)[kick.id])
     end)
 
-    it("builds the kick set from candidates only", function()
+    it("builds the kick set from kicks, never announce extras", function()
         local kicks = KE:GetInterruptKickSpellSet()
         assert.is_true(kicks[96231])   -- Rebuke, a candidate
         assert.is_nil(kicks[31935])    -- Avenger's Shield, an announce extra

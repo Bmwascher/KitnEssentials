@@ -41,6 +41,8 @@ local UnitClassFromGUID = UnitClassFromGUID
 local UnitTokenFromGUID = UnitTokenFromGUID
 local GetRaidTargetIndex = GetRaidTargetIndex
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
+local UnitCanAttack = UnitCanAttack
+local C_DamageMeter = C_DamageMeter
 local issecretvalue = issecretvalue
 local GetNormalizedRealmName = GetNormalizedRealmName
 local string_find = string.find
@@ -97,8 +99,25 @@ local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
 local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
 local HELLO_REPLY_JITTER = 0.6
+local ROW_SLOTS = 5  -- a party's rows, which Max Records never limits
 local RAID_MARK_SHEET = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local OWN_KICK_MATCH_WINDOW = 0.5
+
+-- Who kicked, from the Damage Meter (KT:ReadMeter, KT.ResolveInterrupt).
+local METER_PAIR_WINDOW = 1    -- a kick and its meter report land this close
+local METER_SETTLE = 0.2       -- one read covers a burst of reports (Current, Overall)
+local METER_ECHO_WINDOW = 0.5  -- the same member named twice this close is one kick
+-- What a resolution still reads. It runs at most 2.4 s after its interrupt
+-- (waiting on a report burst late in the window) and then looks back at most
+-- 1 s before it; one that does not wait runs by 1.4 s and looks back at most
+-- 2.2 s (a burst early in the window). Both stay under this.
+local METER_KEEP = 4
+local SAME_FRAME = 0.02
+local METER_INTERRUPTS = Enum and Enum.DamageMeterType and Enum.DamageMeterType.Interrupts
+local METER_SESSIONS = {}
+if Enum and Enum.DamageMeterSessionType then
+    METER_SESSIONS = { Enum.DamageMeterSessionType.Current, Enum.DamageMeterSessionType.Overall }
+end
 
 local function FormatRemaining(remaining)
     if remaining > 6 then return string_format("%d", math_floor(remaining)) end
@@ -149,6 +168,11 @@ KT.combatEventsRegistered = false
 KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful send
 KT.kickPairing = { claims = {}, paired = {} }  -- keyed guid..":"..kickID; see KT.PairComm
 KT.ownClaim = {}  -- at: the player's last kick cast; see KT:ClaimOwnKick
+KT.recentKicks = {}  -- accepted interrupts, oldest first; see KT:HandleNameplateInterrupt
+KT.meterHits = {}    -- meter reports { at, last, owner }, oldest first; see KT:ReadMeter
+KT.meterSnap = {}    -- [sessionType] = the last read of that interrupt list
+KT.lastEventAt = {}  -- [nameplate token] = its last accepted interrupt time
+KT.meterBurstSessions = {}  -- the sessions the gathering burst updated; see KT.SessionRepeats
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -286,6 +310,17 @@ function KT:GuessClassInterrupt(unit, classToken)
     }
 end
 
+-- classToken is for display: the C-side class color takes it secret or not.
+-- KT.MatchMeterEntry compares the class in Lua, so its copy is kept plain only.
+local function SetMemberClass(member, classToken)
+    member.classToken = classToken
+    if KE:IsSafeValue(classToken) then
+        member.matchClass = classToken
+    else
+        member.matchClass = nil
+    end
+end
+
 function KT:RefreshPartyRoster()
     if not self.db or not self.db.Enabled then return end
 
@@ -309,7 +344,7 @@ function KT:RefreshPartyRoster()
                 local member = self.partyMembers[guid]
                 member.unit = unit
                 member.name = name
-                member.classToken = classToken
+                SetMemberClass(member, classToken)
                 -- Identity is compared only through these plain fields;
                 -- member.name is for display. The realm-qualified key keeps two
                 -- teammates sharing a name apart when messages are matched.
@@ -333,8 +368,6 @@ function KT:RefreshPartyRoster()
                 local specID = 0
                 if unit == "player" then
                     specID = GetPlayerSpecID() or 0
-                    -- Own kicks are always tracked — the bar may claim Ready
-                    member.kickVerified = true
                 elseif name and KE:IsSafeValue(name) then
                     specID = self.nameSpecCache[name] or 0
                 end
@@ -373,7 +406,7 @@ function KT:ApplySpecData(guid, unit, specID)
     local _, classToken = UnitClass(unit)
     local member = self.partyMembers[guid]
     if member then
-        member.classToken = classToken
+        SetMemberClass(member, classToken)
         if unit == "player" then
             member.specID = specID
             self:ApplyOwnKicks(member, specID)
@@ -428,6 +461,9 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
     if not member or not member.interruptData then return end
 
     local duration = durationOverride or member.interruptData.cd
+    -- Every main cooldown starts here; a confirmed one drops the "*".
+    local wasUnconfirmed = member.unconfirmed
+    member.unconfirmed = nil
     member.kickDuration = duration
     member.kickStart = GetTime() - (remaining and (duration - remaining) or 0)
 
@@ -447,6 +483,7 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
         if self.db.ShowTimer and bar.timerText then
             SetTimerText(bar, FormatRemaining(remaining or member.kickDuration))
         end
+        if wasUnconfirmed then self:UpdateBarVisuals(bar, member) end
     end
 
     self:LayoutBars()
@@ -468,8 +505,17 @@ function KT:ClearKick(guid)
 end
 
 ---------------------------------------------------------------------------------
--- Teammate Kick Records (12.0.5 secret-safe)
+-- Teammate kicks: rows, records and the Damage Meter
 ---------------------------------------------------------------------------------
+-- Two lists. kickRecords: every named interrupt that is not the player's own
+-- joins it on arrival, capped at Max Records, and only a claim (a KICK, the
+-- player's cast) removes one. Sync pairing runs on it alone. recentKicks is
+-- the Damage Meter's history. A claim marks the claimed record's history
+-- entry taken; nothing on the meter side writes to kickRecords. A record
+-- draws after KICK_RECORD_GRACE unless a readable kicker's row took its kick
+-- at once; a hidden kicker's drawn record goes when the meter later moves the
+-- kick onto a row.
+
 -- Display-only values of a kicked cast; each may be secret.
 local function InterruptedSpellIcon(spellID)
     if not (issecretvalue(spellID) or spellID ~= nil) then return nil end
@@ -485,23 +531,34 @@ local function RaidMarkOf(unit)
     return nil, false
 end
 
--- A record's kicked spell, for the row of the kicker who claims it.
+-- The kicked spell of a record or of its interrupt's meter entry (both carry
+-- the same three fields), for the row that takes the kick.
 local function KickedFromRecord(record)
     return { icon = record.iconID, mark = record.raidMark, hasMark = record.hasRaidMark }
 end
 
 -- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
--- truth that someone's kick landed. The GUID is secret for teammates: the game
--- will render the name/icon we derive from it, but our code can never read or
--- compare them. So teammate kicks become transient cooling-style records — we
--- cannot know WHICH roster bar to flip (per-teammate CDs are unrecoverable,
--- probe-confirmed).
+-- truth that someone's kick landed. Each one joins recentKicks, where the
+-- meter windows count it, and each that is not the player's own goes through
+-- the record list (KT:ProcessTeammateKick). A teammate the game names plainly
+-- then takes it on their row; every other record draws, and a hidden kicker's
+-- may move onto a row once the Damage Meter names the kicker
+-- (KT:ResolvePending).
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     -- The payload may be secret while unit spellcasts are restricted; a
     -- secret unit is never tested.
     if issecretvalue(unit) or not unit or not string_find(unit, "^nameplate") then return end
     if not (issecretvalue(interruptedBy) or interruptedBy ~= nil) then return end  -- channel ended naturally, not kicked
+
+    -- A friendly nameplate's cast stopped by an enemy is no party kick.
+    local okAttack, canAttack = pcall(UnitCanAttack, "player", unit)
+    if KT.RefusesInterruptUnit(okAttack, canAttack, issecretvalue(canAttack)) then return end
+
+    local now = GetTime()
+    if KT.SameInterrupt(self.lastEventAt, unit, now, SAME_FRAME) then return end
+    self.lastEventAt[unit] = now
+    self:PruneKicks(now)
 
     -- Self/teammate split without touching the (possibly secret) GUID: the
     -- token is secret or nil for most teammates but can be plain ("party1"),
@@ -516,13 +573,22 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     -- A hidden kicker (as in a running key) is the player's own kick when the
     -- player just cast one (KT:ClaimOwnKick). No token with a plain GUID is a
     -- kicker outside the group, such as a totem, and is not hidden.
-    local now = GetTime()
     local own = ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token)
     local hidden = not ok or issecretvalue(token) or (token == nil and issecretvalue(interruptedBy))
     local claimed = (own or hidden) and KT.TakeOwnClaim(self.ownClaim, now, OWN_KICK_MATCH_WINDOW)
+    local mark, hasMark = RaidMarkOf(unit)
+    local entry = {
+        startTime = now,
+        iconID = InterruptedSpellIcon(spellID),  -- possibly secret; SetTexture-only
+        raidMark = mark,                          -- possibly secret; SetSpriteSheetCell-only
+        hasRaidMark = hasMark,
+        state = "pending",
+    }
+    table_insert(self.recentKicks, entry)
+
     if own or claimed then
-        local mark, hasMark = RaidMarkOf(unit)
-        local kicked = { icon = InterruptedSpellIcon(spellID), mark = mark, hasMark = hasMark }
+        entry.state = "own"
+        local kicked = KickedFromRecord(entry)
         if claimed then
             self:ShowKicked(UnitGUID("player"), kicked)
         else
@@ -535,8 +601,214 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         return
     end
 
-    local raidMark, hasRaidMark = RaidMarkOf(unit)
-    self:ProcessTeammateKick(interruptedBy, spellID, raidMark, hasRaidMark, hidden)
+    -- The record list takes the interrupt first, whatever row later takes it,
+    -- so sync pairing sees what it always saw.
+    local record, paired = self:ProcessTeammateKick(interruptedBy, hidden, entry)
+    if paired then
+        entry.state = "claimed"
+        return
+    end
+    if not record then
+        entry.state = "dropped"
+        return
+    end
+    entry.record = record
+
+    -- A teammate the game names plainly takes the kick on their own row, as
+    -- does a party pet's owner. A synced teammate's row follows their
+    -- messages while those can arrive, so their kick then stays the record
+    -- their KICK claims.
+    if not hidden then
+        local guid = self:RosterKicker(interruptedBy)
+        local member = guid and self.partyMembers[guid]
+        if member and KT.RowTakesKick(member, self:MessagesHeard()) then
+            entry.state = "exact"
+            self:ChargeKick(entry, guid)
+            return
+        end
+        entry.state = "record"
+    end
+
+    -- Every other record draws after a grace, so a KICK that claims it first
+    -- leaves no trace: the local event always beats the network. A hidden
+    -- kicker's record moves onto a row if the meter later names the kicker
+    -- (KT:ResolvePending).
+    local recordID = record.id
+    C_Timer.After(KICK_RECORD_GRACE, function()
+        self:ShowKickRecord(recordID)
+    end)
+    if not hidden then return end
+
+    -- Every meter report within METER_PAIR_WINDOW of the kick has been read
+    -- METER_SETTLE after that window closes.
+    self:ResolveLater(entry, METER_PAIR_WINDOW + METER_SETTLE)
+end
+
+-- Teammates' messages can arrive: chat is open and the player syncs kicks.
+-- KT:OnCommReceived drops every message while they cannot.
+function KT:MessagesHeard()
+    return self.commMode ~= "feed" and self.db.KickSync ~= false
+end
+
+-- The roster member a plain kicker GUID belongs to: a teammate, or the owner
+-- of a party pet. Only plain GUIDs are compared.
+function KT:RosterKicker(interrupterGuid)
+    if not KE:IsSafeValue(interrupterGuid) then return nil end
+    local member = self.partyMembers[interrupterGuid]
+    if member then
+        if member.unit == "player" then return nil end
+        return interrupterGuid
+    end
+    for i = 1, 4 do
+        local petGuid = UnitGUID("partypet" .. i)
+        if KE:IsSafeValue(petGuid) and petGuid == interrupterGuid then
+            local ownerGuid = UnitGUID("party" .. i)
+            if ownerGuid and self.partyMembers[ownerGuid] then return ownerGuid end
+        end
+    end
+    return nil
+end
+
+-- The record list's intake: an open KICK claim takes the interrupt first,
+-- else it becomes a record, capped at Max Records. Returns the record; nothing
+-- and true when an open claim took it; nothing when the game gives no name.
+-- The caller draws the record or not. hiddenKicker: the game hid who kicked,
+-- so the player's own cast arriving just after may still claim the record
+-- (KT:ClaimOwnKick). entry: the interrupt's meter history entry, which gives
+-- the record its kicked spell and marker and which a claim marks taken
+-- (KT:RemoveKickRecordAt).
+function KT:ProcessTeammateKick(interrupterGuid, hiddenKicker, entry)
+    -- What the game lets us see about the kicker, for display only: the name
+    -- and class may be secret, so neither is compared.
+    local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
+    if not ok or not (issecretvalue(name) or name ~= nil) then return nil end
+
+    -- classToken may be SECRET: it is only handed to the C-side GetClassColor
+    -- (AllowedWhenTainted) for the record's color.
+    local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
+    local classToken
+    if okClass and (issecretvalue(cf) or cf ~= nil) then classToken = cf end
+
+    if DEBUG_KT then
+        KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s",
+            tostring(KE:IsSafeValue(name)), tostring(KE:IsSafeValue(classToken))))
+    end
+
+    -- A synced teammate's KICK that arrived first claims this record, and
+    -- the kicked spell goes to that teammate's row.
+    if self.commMode ~= "feed" then
+        local paired, key = KT.PairRecord(self.kickPairing, GetTime(), KICK_PAIR_WINDOW)
+        if paired then
+            self:ShowKicked(KT.PairKeyGuid(key), KickedFromRecord(entry))
+            return nil, true
+        end
+    end
+
+    -- Class color for the record: pass the (possibly secret) token to the
+    -- C-side GetClassColor and apply r/g/b VERBATIM — storing/applying
+    -- secrets is legal, any math or comparison on them is not.
+    local colorR, colorG, colorB
+    if issecretvalue(classToken) or classToken ~= nil then
+        local okColor, col = pcall(C_ClassColor.GetClassColor, classToken)
+        if okColor and col then
+            colorR, colorG, colorB = col.r, col.g, col.b
+        end
+    end
+
+    self.nextRecordID = self.nextRecordID + 1
+    local record = {
+        id = self.nextRecordID,
+        name = name,          -- possibly secret; SetText-only
+        iconID = entry.iconID,  -- possibly secret; SetTexture-only
+        colorR = colorR,      -- class color; possibly secret — apply verbatim,
+        colorG = colorG,      -- never do math or comparisons on these
+        colorB = colorB,
+        startTime = GetTime(),
+        duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
+        raidMark = entry.raidMark,  -- possibly secret; SetSpriteSheetCell-only
+        hasRaidMark = entry.hasRaidMark,
+        hiddenKicker = hiddenKicker,
+        entry = entry,
+    }
+    table_insert(self.kickRecords, record)
+    -- An undrawn record still expires in the container pass.
+    self:StartOnUpdate()
+
+    -- Bound the list: oldest records fall off past MaxBars.
+    while #self.kickRecords > (self.db.MaxBars or 5) do
+        local old = table.remove(self.kickRecords, 1)
+        self:ReleaseBar("record" .. old.id)
+    end
+    return record
+end
+
+-- A teammate's kick on their own row, timed from the interrupt. Every
+-- credited interrupt comes here (readable kicker, pet owner, meter fold).
+-- One that may be another spell than their kick (KT.UncertainKick) cools the
+-- row for the record duration, marked unconfirmed.
+function KT:ChargeKick(entry, guid)
+    local member = self.partyMembers[guid]
+    if not member or not member.interruptData then return end
+    local role
+    local okRole, assigned = pcall(UnitGroupRolesAssigned, member.unit)
+    if okRole and not issecretvalue(assigned) then role = assigned end
+    local unconfirmed = KT.UncertainKick(member, role)
+    local cd = member.interruptData.cd
+    if unconfirmed then cd = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION end
+    local remaining = cd - (GetTime() - entry.startTime)
+    if remaining <= 0 then return end
+    self:ConfirmKick(guid, cd, remaining)
+    member.unconfirmed = unconfirmed or nil
+    self:ShowKicked(guid, KickedFromRecord(entry))
+end
+
+-- A hidden kicker's interrupt once every input in its windows is in: the
+-- member the meter names takes it on their row (KT.ResolveInterrupt), and its
+-- drawn record goes; otherwise the record stays as drawn.
+function KT:ResolvePending(entry)
+    if entry.state ~= "pending" or not self.isActive or self.isPreview then return end
+    -- A report already fired but not yet read may fall inside this interrupt's
+    -- window; its read and this timer can land in the same frame either way.
+    if self._meterReadPending and self._meterReadAt
+        and self._meterReadAt <= entry.startTime + METER_PAIR_WINDOW then
+        self:ResolveLater(entry, METER_SETTLE)
+        return
+    end
+    local now = GetTime()
+    local outcome, guid, untilAt = KT.ResolveInterrupt(entry, self.recentKicks, self.meterHits,
+        self.partyMembers, self:MessagesHeard(), now, METER_PAIR_WINDOW, METER_ECHO_WINDOW)
+    if DEBUG_KT then KE:Print("[KT] hidden kicker resolved: " .. tostring(outcome)) end
+    if outcome == "wait" and untilAt then
+        self:ResolveLater(entry, untilAt - now + METER_SETTLE)
+    elseif outcome == "own" then
+        entry.state = "own"
+        self:UndrawRecord(entry)
+        self:ShowKicked(UnitGUID("player"), KickedFromRecord(entry))
+    elseif outcome == "fold" and guid then
+        entry.state = "fold"
+        self:UndrawRecord(entry)
+        self:ChargeKick(entry, guid)
+    elseif outcome then
+        entry.state = "record"
+    end
+end
+
+-- The kick went on a row: its record stops being drawn but stays listed, so
+-- sync pairing still sees it.
+function KT:UndrawRecord(entry)
+    local record = entry.record
+    if not (record and self.activeBars["record" .. record.id]) then return end
+    self:ReleaseBar("record" .. record.id)
+    self:LayoutBars()
+end
+
+-- The one resolution timer, dropped when the tracker deactivates or restarts.
+function KT:ResolveLater(entry, delay)
+    local activation = self.activationID
+    C_Timer.After(delay, function()
+        if self.activationID ~= activation then return end
+        self:ResolvePending(entry)
+    end)
 end
 
 -- A row shows the spell its kick interrupted, and its marker, while the kick
@@ -554,83 +826,6 @@ function KT:RedrawKicked(guid)
     if member and (member.kicked or (bar and bar.kickedShown)) then self:RefreshMemberRow(guid) end
 end
 
--- hiddenKicker: the game hid who kicked, so the player's own cast arriving
--- just after may still claim the record (KT:ClaimOwnKick).
-function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, hasRaidMark, hiddenKicker)
-    -- What the game lets us see about the kicker, for display only: the name
-    -- and class may be secret, so neither is compared.
-    local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
-    if not ok or not (issecretvalue(name) or name ~= nil) then return end
-
-    -- classToken may be SECRET: it is only handed to the C-side GetClassColor
-    -- (AllowedWhenTainted) for the record's color.
-    local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
-    local classToken
-    if okClass and (issecretvalue(cf) or cf ~= nil) then classToken = cf end
-
-    -- A teammate row comes only from that teammate's own messages; every
-    -- other kick is a record, even when the kicker's identity is readable.
-    if DEBUG_KT then
-        KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s",
-            tostring(KE:IsSafeValue(name)), tostring(KE:IsSafeValue(classToken))))
-    end
-
-    -- A synced teammate's KICK that arrived first claims this record, and
-    -- the kicked spell goes to that teammate's row.
-    if self.commMode ~= "feed" then
-        local paired, key = KT.PairRecord(self.kickPairing, GetTime(), KICK_PAIR_WINDOW)
-        if paired then
-            self:ShowKicked(KT.PairKeyGuid(key),
-                { icon = InterruptedSpellIcon(interruptedSpellID), mark = raidMark, hasMark = hasRaidMark })
-            return
-        end
-    end
-
-    -- Class color for the record: pass the (possibly secret) token to the
-    -- C-side GetClassColor and apply r/g/b VERBATIM — storing/applying
-    -- secrets is legal, any math or comparison on them is not.
-    local colorR, colorG, colorB
-    if issecretvalue(classToken) or classToken ~= nil then
-        local okColor, col = pcall(C_ClassColor.GetClassColor, classToken)
-        if okColor and col then
-            colorR, colorG, colorB = col.r, col.g, col.b
-        end
-    end
-
-    local iconID = InterruptedSpellIcon(interruptedSpellID)
-
-    self.nextRecordID = self.nextRecordID + 1
-    local record = {
-        id = self.nextRecordID,
-        name = name,          -- possibly secret; SetText-only
-        iconID = iconID,      -- possibly secret; SetTexture-only
-        colorR = colorR,      -- class color; possibly secret — apply verbatim,
-        colorG = colorG,      -- never do math or comparisons on these
-        colorB = colorB,
-        startTime = GetTime(),
-        duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
-        raidMark = raidMark,  -- possibly secret; SetSpriteSheetCell-only
-        hasRaidMark = hasRaidMark,
-        hiddenKicker = hiddenKicker,
-    }
-    table_insert(self.kickRecords, record)
-
-    -- Bound the list: oldest records fall off past MaxBars.
-    while #self.kickRecords > (self.db.MaxBars or 5) do
-        local old = table.remove(self.kickRecords, 1)
-        self:ReleaseBar("record" .. old.id)
-    end
-
-    -- Stash grace: the local nameplate event always
-    -- beats the network, so a comm user's kick would blink a record before
-    -- the comm claims it. Hold the record invisible for the grace window —
-    -- claimed records die unseen; unclaimed ones render 0.4s late.
-    local recordID = record.id
-    C_Timer.After(KICK_RECORD_GRACE, function()
-        self:ShowKickRecord(recordID)
-    end)
-end
-
 -- Render a stashed record if it survived the grace window (a comm claim or
 -- eviction during the grace removes it from kickRecords — never rendered).
 function KT:ShowKickRecord(recordID)
@@ -646,11 +841,18 @@ function KT:ShowKickRecord(recordID)
     end
 end
 
+-- Every wipe of the record list comes here, so the meter history and the
+-- record list always go together.
 function KT:ClearKickRecords()
     for _, record in ipairs(self.kickRecords) do
         self:ReleaseBar("record" .. record.id)
     end
     wipe(self.kickRecords)
+    -- An interrupt still waiting for the meter is let go with its timer.
+    for _, entry in ipairs(self.recentKicks) do entry.state = "dropped" end
+    wipe(self.recentKicks)
+    wipe(self.meterHits)
+    wipe(self.lastEventAt)
     self:ClearPairing()
 end
 
@@ -659,23 +861,122 @@ function KT:ClearPairing()
     wipe(self.kickPairing.paired)
 end
 
--- Drops the record a KICK message just claimed.
+-- Everything teammates' messages taught, dropped together whenever those
+-- messages cannot arrive (the chat lock, Kick Sync off).
+function KT:DropTeammateMessageState()
+    KT.DropMessageState(self.partyMembers)
+    self:ClearPairing()
+end
+
+function KT:PruneKicks(now)
+    local list = self.recentKicks
+    while list[1] and now - list[1].startTime > METER_KEEP do table.remove(list, 1) end
+    local hits = self.meterHits
+    while hits[1] and now - hits[1].at > METER_KEEP do table.remove(hits, 1) end
+end
+
+-- Drops the record a KICK message or the player's cast just claimed. Its
+-- interrupt, if still waiting for the meter, is taken with it, so no row is
+-- also credited.
 function KT:RemoveKickRecordAt(index)
     local record = table.remove(self.kickRecords, index)
     if not record then return end
+    local entry = record.entry
+    if entry and entry.state == "pending" then entry.state = "claimed" end
     self:ReleaseBar("record" .. record.id)
     self:LayoutBars()
+end
+
+---------------------------------------------------------------------------------
+-- Damage Meter reports
+---------------------------------------------------------------------------------
+-- One interrupt list in the client's order, keyed by KT.KeyMeterEntries. Only
+-- the class, the spec icon, the local-player flag and a plain name are read,
+-- each checked even where the API marks it never secret: the icon only keys
+-- the entry, and an unreadable flag or name only widens a match. A source with
+-- no readable class fails the whole read: a list missing one entry would show
+-- it as added once it reads, long after its kick.
+function KT:ReadMeterList(sessionType)
+    if not (C_DamageMeter and C_DamageMeter.GetCombatSessionFromType) then return nil end
+    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, sessionType, METER_INTERRUPTS)
+    if not ok or issecretvalue(session) or type(session) ~= "table" then return nil end
+    local sources = session.combatSources
+    if issecretvalue(sources) or type(sources) ~= "table" then return nil end
+    local list = {}
+    for _, src in ipairs(sources) do
+        if type(src) ~= "table" then return nil end
+        local class = src.classFilename
+        if issecretvalue(class) or type(class) ~= "string" or class == "" then return nil end
+        local me = src.isLocalPlayer
+        if issecretvalue(me) or type(me) ~= "boolean" then me = nil end
+        local icon = src.specIconID
+        if issecretvalue(icon) or type(icon) ~= "number" then icon = nil end
+        local name = src.name
+        if issecretvalue(name) or type(name) ~= "string" or name == "" then name = nil end
+        list[#list + 1] = { class = class, icon = icon, me = me, name = name }
+    end
+    return KT.KeyMeterEntries(list)
+end
+
+-- One read of both lists, each diffed against its last read and kept; the
+-- report's owner is KT.MeterReportOwner's. A failed read drops that list's
+-- last read: the next diff would otherwise span the gap and show a kick from
+-- inside it as this report's. The report covers the burst of updates from at
+-- to last; a shared burst's lists are still kept.
+function KT:ReadMeter(at, last, shared)
+    local named = {}
+    for _, sessionType in ipairs(METER_SESSIONS) do
+        local list = self:ReadMeterList(sessionType)
+        local entry = list and KT.DiffMeterList(self.meterSnap[sessionType], list)
+        self.meterSnap[sessionType] = list
+        if entry then
+            local count, guid = KT.MatchMeterEntry(entry, self.partyMembers)
+            if count == 1 then named[#named + 1] = guid end
+        end
+    end
+    local owner = KT.MeterReportOwner(named, shared == true)
+    self:PruneKicks(GetTime())
+    table_insert(self.meterHits, { at = at, last = last, owner = owner })
+    if DEBUG_KT then KE:Print("[KT] meter report named=" .. tostring(owner ~= nil)) end
+end
+
+-- The meter event fires for every meter type, hundreds of times a second in a
+-- big pull; any other type is one check and a return. The first Interrupts
+-- update starts one read METER_SETTLE later; later updates before it only move
+-- the burst's end, since the read may reflect any of them. A burst in which a
+-- session repeats is shared (KT.SessionRepeats).
+function KT:OnMeterUpdate(_, meterType, sessionID)
+    if not METER_INTERRUPTS or issecretvalue(meterType) or meterType ~= METER_INTERRUPTS then return end
+    local now = GetTime()
+    self._meterReadLast = now
+    if KT.SessionRepeats(self.meterBurstSessions, sessionID, issecretvalue(sessionID)) then
+        self._meterBurstShared = true
+    end
+    if self._meterReadPending then return end
+    self._meterReadPending = true
+    local activation = self.activationID
+    self._meterReadAt = now  -- KT:ResolvePending waits for this read
+    C_Timer.After(METER_SETTLE, function()
+        if self.activationID ~= activation then return end
+        local shared = self._meterBurstShared
+        self._meterReadPending, self._meterBurstShared = false, false
+        wipe(self.meterBurstSessions)
+        if self.isActive then self:ReadMeter(self._meterReadAt, self._meterReadLast, shared) end
+    end)
+end
+
+function KT:OnMeterReset()
+    wipe(self.meterSnap)
 end
 
 ---------------------------------------------------------------------------------
 -- KE-to-KE Kick Sync (addon comm)
 ---------------------------------------------------------------------------------
 -- Party members also running KitnEssentials broadcast their own kicks, letting
--- receivers flip the sender's REAL roster bar with the exact CD — full
--- per-member tracking among KE users. Non-KE teammates keep the record
--- fallback. Comms over INSTANCE_CHAT probe-verified working
--- (family rule); every send/parse is pcall'd so blocked contexts degrade
--- silently to records.
+-- receivers flip the sender's roster bar with the exact CD. Other teammates'
+-- kicks come from nameplate interrupts (KT:HandleNameplateInterrupt). Comms
+-- over INSTANCE_CHAT probe-verified working (family rule); every send/parse
+-- is pcall'd, so a blocked context loses only the sync.
 local COMM_PREFIX = "KEKick"
 -- BliZzi Party Tools interop: their dispatcher accepts
 -- KICK from any class-auto-registered party member — no HELLO handshake
@@ -794,7 +1095,9 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
     local isKE = prefix == COMM_PREFIX
     if not isKE and prefix ~= BLIZZI_PREFIX then return end
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not self.db.KickSync then return end
+    -- A message sent before the chat lock can arrive after it; it must not
+    -- re-teach what the lock dropped.
+    if not self:MessagesHeard() then return end
     if not KE:IsSafeValue(sender) then return end
 
     -- Wire input is untrusted; one pcall wraps parse + attribution so bad
@@ -870,7 +1173,7 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         local extrasTouched = verb == "HELLO" and isKE
             and KT.HelloExtras(member, extraField, extraRemField, getExtraKick, now)
         if not member.interruptData then return end
-        self:UpdateBars()  -- materialize the bar (verified-only roster)
+        self:UpdateBars()
         if extrasTouched then self:RefreshMemberRow(guid) end
 
         if verb == "KICK" and self.commMode ~= "feed" then
@@ -1075,6 +1378,10 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
     self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
     self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
+    -- The first read after a gap must not be diffed against a list from before it.
+    wipe(self.meterSnap)
+    self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnMeterUpdate")
+    self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
     self.combatEventsRegistered = true
 end
 
@@ -1086,6 +1393,9 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("CHAT_MSG_ADDON")
     self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     self:UnregisterEvent("SPELLS_CHANGED")
+    self:UnregisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
+    self:UnregisterEvent("DAMAGE_METER_RESET")
+    wipe(self.meterSnap)
     self.combatEventsRegistered = false
     self.commMode = nil
     self._lastHelloSent = nil
@@ -1114,6 +1424,9 @@ function KT:CheckActivation()
         self.activationID = self.activationID + 1
         self._helloReplyPending, self._helloReplyForce = false, false
         self._modeCheckPending, self._ownKickCheckPending = false, false
+        -- A burst cut off by a deactivation must not carry into this one.
+        self._meterReadPending, self._meterBurstShared = false, false
+        wipe(self.meterBurstSessions)
         self:RegisterCombatEvents()
         if self.containerFrame then
             self:ApplyContainerPosition()
@@ -1147,23 +1460,14 @@ function KT:OnRosterUpdate()
     end
 end
 
--- Locked chat means teammates' messages cannot arrive, so their rows cannot
--- stay true: feed mode drops them and shows every teammate kick as a record.
+-- Locked chat means teammates' messages cannot arrive: feed mode keeps each
+-- teammate's row and running cooldown, and drops what only their messages
+-- keep true (verification, talent-added kicks, reduction stamps, pairings).
 function KT:UpdateCommMode()
     local mode, action = KT.CommModeStep(self.commMode, KE:IsChatMessagingLocked())
     self.commMode = mode
     if action == "enter-feed" then
-        for _, member in pairs(self.partyMembers) do
-            if member.unit ~= "player" then
-                member.kickVerified = nil
-                member.kickStart = nil
-                member.kickDuration = nil
-                member.extraKicks = nil
-                member.reducedAt = nil
-                member.kicked = nil
-            end
-        end
-        self:ClearPairing()
+        self:DropTeammateMessageState()
         self:UpdateBars()
         self:LayoutBars()
     elseif action == "enter-sync" then
@@ -1397,6 +1701,8 @@ function KT:StartBarTimer(bar, startTime, duration)
     local direction = (self.db.ColorMode == "dark") and Enum.StatusBarTimerDirection.RemainingTime
         or Enum.StatusBarTimerDirection.ElapsedTime
     bar.statusBar:SetTimerDuration(d, Enum.StatusBarInterpolation.Immediate, direction)
+    -- A countdown needs the container pass, which detaches when idle.
+    self:StartOnUpdate()
 end
 
 -- A zero duration stops the engine drive; the bar then holds `value`.
@@ -1540,10 +1846,12 @@ function KT:UpdateBarVisuals(bar, member)
         end
     end
 
+    -- An unconfirmed cooldown carries a record's "*" while it drives the row.
+    local unconfirmed = member ~= nil and member.unconfirmed == true and not isReady and rowKick == nil
     if kicked then
-        self:ApplyNameMarks(bar, false, kicked.mark, kicked.hasMark)
+        self:ApplyNameMarks(bar, unconfirmed, kicked.mark, kicked.hasMark)
     else
-        self:ApplyNameMarks(bar, false)
+        self:ApplyNameMarks(bar, unconfirmed)
     end
 
     -- Timer text
@@ -1560,11 +1868,7 @@ function KT:UpdateBarVisuals(bar, member)
         -- Dark mode: no fill visible (just dark background). Class mode: full bar.
         self:StopBarTimer(bar, isDarkMode and 0 or 1)
         if db.ShowTimer then
-            -- "Ready" is a claim — only bars we can actually track make it
-            -- (self and comm-verified members).
-            -- Unverified members' timer area stays blank: 12.0.5 hides
-            -- their kicks, so Ready would be a guess.
-            if db.ShowReadyText and member and member.kickVerified then
+            if db.ShowReadyText and member then
                 SetTimerText(bar, db.ReadyText or "Ready")
             else
                 SetTimerText(bar, "")
@@ -1632,11 +1936,10 @@ end
 function KT:UpdateBars()
     if self.isPreview then return end
 
-    -- Collect eligible members: has a kick AND we can actually track it
-    -- (self and comm users; KT.RowShown). Everyone else's kicks are records.
+    -- Every member with a kick has a row (KT.RowShown).
     local needsBars = {}
     for guid, member in pairs(self.partyMembers) do
-        if KT.RowShown(member, self.commMode) then
+        if KT.RowShown(member) then
             needsBars[guid] = true
         end
     end
@@ -1796,30 +2099,35 @@ function KT:LayoutBars()
         table_insert(self.sortedBars, entry)
     end
 
-    -- Position bars
+    -- Every row shows. Records past Max Records (MaxBars) hide, those with
+    -- the most time left first; that happens only after the slider is lowered,
+    -- since KT:ProcessTeammateKick already trims the list.
     local growUp = db.GrowthDirection == "UP"
-    local maxBars = db.MaxBars or 5
+    local maxRecords = db.MaxBars or 5
     local spacing = db.BarSpacing or 2
     local barHeight = db.BarHeight or 20
 
     -- Bars pin to the container's self-point (growth vertical edge + user
     -- horizontal edge) and stack inward, exactly filling the full-height container.
     local selfPoint = self:GetSelfPoint(self:ResolvePositionConfig())
-    for i, entry in ipairs(self.sortedBars) do
+    local slot, records = 0, 0
+    for _, entry in ipairs(self.sortedBars) do
         local bar = entry.bar
-        if i <= maxBars then
+        if entry.record then records = records + 1 end
+        if entry.record and records > maxRecords then
+            bar:Hide()
+        else
             bar:ClearAllPoints()
-            local offset = (i - 1) * (barHeight + spacing)
+            local offset = slot * (barHeight + spacing)
             bar:SetPoint(selfPoint, self.containerFrame, selfPoint, 0, growUp and offset or -offset)
             bar:Show()
-        else
-            bar:Hide()
+            slot = slot + 1
         end
     end
 
-    -- Size container to the full max-bar stack so the EditMode overlay spans the
-    -- whole group (not just one bar).
-    local n = db.MaxBars or 5
+    -- Size the container for every row plus Max Records, so the EditMode
+    -- overlay spans the whole group.
+    local n = ROW_SLOTS + maxRecords
     self.containerFrame:SetSize(db.BarWidth, barHeight * n + math_max(n - 1, 0) * spacing)
 end
 
@@ -1843,9 +2151,9 @@ function KT:StopOnUpdate()
     self._onUpdateActive = false
 end
 
--- Attach OnUpdate while there is at least one active/preview bar; detach
--- otherwise. Out-of-combat with no group, no kicks → script detached, zero
--- per-frame dispatch cost. Call after every mutation of activeBars.
+-- A new bar attaches the pass, whose first run decides whether it is needed;
+-- no bar detaches it. KT:OnUpdateBars also detaches it when idle. Call after
+-- every mutation of activeBars.
 function KT:_RefreshOnUpdate()
     if next(self.activeBars) then
         self:StartOnUpdate()
@@ -1863,6 +2171,7 @@ function KT:OnUpdateBars(elapsed)
     local now = GetTime()
     local needsRelayout = false
     local anyCooling = false
+    local busy = false  -- a row's main kick runs: its row can still change
 
     if DEBUG_KT_TICKS then
         _ktContainerTickCounter = _ktContainerTickCounter + 1
@@ -1882,6 +2191,9 @@ function KT:OnUpdateBars(elapsed)
         local member = self.partyMembers[guid]
         if member and member.interruptData then
             local rowKick, isReady = KT.PickRowKick(member, now)
+            if member.kickStart and member.kickDuration and now - member.kickStart < member.kickDuration then
+                busy = true
+            end
             if isReady ~= bar.rowReady or rowKick ~= bar.rowKick then
                 self:UpdateBarVisuals(bar, member)
                 needsRelayout = true
@@ -1926,6 +2238,11 @@ function KT:OnUpdateBars(elapsed)
     if needsRelayout then
         self:LayoutBars()
     end
+
+    -- Idle: no main kick running and no record listed, so nothing can change
+    -- until a countdown starts, a record joins the list or a bar is made, and
+    -- each of those attaches this again.
+    if not busy and #self.kickRecords == 0 then self:StopOnUpdate() end
 end
 
 ---------------------------------------------------------------------------------
@@ -1988,9 +2305,8 @@ function KT:ShowPreview()
     local barHeight = db.BarHeight or 20
     local previewSelfPoint = self:GetSelfPoint(self:ResolvePositionConfig())
 
+    -- The mocks are rows, which Max Records never limits.
     for i, data in ipairs(previewData) do
-        if i > (db.MaxBars or 5) then break end
-
         -- Reuse via the pool (keyed like live bars) — direct CreateBar here
         -- stranded 5 frames per preview cycle since HideAllBars had just
         -- pooled the previous set.
@@ -2000,7 +2316,6 @@ function KT:ShowPreview()
             classToken = data.classToken,
             interruptData = { id = data.spellID, cd = data.cd or 15, role = "DAMAGER" },
             kickStart = (not data.ready) and GetTime() or nil,
-            kickVerified = true,  -- preview mocks show the verified look
         }
         self:UpdateBarVisuals(bar, fakeMember)
 
@@ -2087,9 +2402,8 @@ function KT:ShowPreview()
         bar:Show()
     end
 
-    -- Size container to the full max-bar stack so the EditMode overlay spans the
-    -- whole group (not just one bar).
-    local nPrev = db.MaxBars or 5
+    -- Size the container as KT:LayoutBars does: every row plus Max Records.
+    local nPrev = ROW_SLOTS + (db.MaxBars or 5)
     self.containerFrame:SetSize(db.BarWidth, barHeight * nPrev + math_max(nPrev - 1, 0) * spacing)
     self.containerFrame:Show()
     self:_RefreshOnUpdate()
@@ -2217,6 +2531,9 @@ end
 
 function KT:ApplySettings()
     self:UpdateDB()
+    -- Kick Sync off (the page or a profile change) drops what messages
+    -- taught, as the chat lock does; the redraw below shows it.
+    if not self:MessagesHeard() then self:DropTeammateMessageState() end
     if not self.containerFrame then return end
 
     self:ApplyContainerPosition()
