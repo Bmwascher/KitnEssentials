@@ -219,20 +219,31 @@ local function StripEnchantPreamble(text)
     return text:sub(cut + 3)
 end
 
--- The numbers change with the rank, so only the stat words are kept.
+-- The numbers change with the rank, so only the stat words are kept. Two
+-- words joined by a bare slash ("Agility/Strength") are one stat either way,
+-- so they keep the slash.
 local function EffectLineLabel(text, style)
     local found = {}
     for _, pair in ipairs(ENCHANT_STAT_WORDS) do
         local at = text:find(pair[1], 1, true)
         if at then
-            found[#found + 1] = { at = at, word = style == "verbose" and pair[1] or pair[2] }
+            found[#found + 1] = {
+                at = at,
+                stop = at + #pair[1],
+                word = style == "verbose" and pair[1] or pair[2],
+            }
         end
     end
     if #found == 0 then return nil end
     table.sort(found, function(a, b) return a.at < b.at end)
-    local words = {}
-    for i, f in ipairs(found) do words[i] = f.word end
-    return table.concat(words, " & ")
+    local parts = {}
+    for i, f in ipairs(found) do
+        if i > 1 then
+            parts[#parts + 1] = text:sub(found[i - 1].stop, f.at - 1) == "/" and "/" or " & "
+        end
+        parts[#parts + 1] = f.word
+    end
+    return table.concat(parts)
 end
 
 -- Memoized: the same few equipped enchant lines resolve again on every slot
@@ -1944,6 +1955,79 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     return detail
 end
 
+-- Facing slots across the model, by row. The shirt and tabard rows carry no
+-- slot text, so the ring and trinket facing them have no partner.
+local OPPOSITE_SLOT = {
+    [1] = 10, [10] = 1, [2] = 6, [6] = 2, [3] = 7, [7] = 3,
+    [15] = 8, [8] = 15, [5] = 11, [11] = 5, [9] = 14, [14] = 9,
+}
+local ENCHANT_FIT_FLOOR = 9
+local ENCHANT_FIT_GAP = 6
+-- Each enchant label starts this far past its slot's edge.
+local ENCHANT_INSET = 3
+
+-- One size for a facing pair: the largest from `size` down to `floor` at which
+-- both fit side by side with the gap between them. At the floor they are cut
+-- instead, and the shorter keeps its whole width when it fits in half the
+-- room. A size already at or below the floor is never raised. A nil cap keeps
+-- that label's natural width.
+local function FitEnchantPair(measure, avail, size, floor)
+    if not avail then return size, nil, nil end
+    local s = size
+    while true do
+        local wL, wR = measure(s)
+        if wL + wR + ENCHANT_FIT_GAP <= avail then return s, nil, nil end
+        if s <= floor then
+            local room = math.max(avail - ENCHANT_FIT_GAP, 0)
+            local half = room / 2
+            if wL <= wR and wL <= half then return s, nil, room - wL end
+            if wR < wL and wR <= half then return s, room - wR, nil end
+            return s, half, half
+        end
+        s = math.max(s - 1, floor)
+    end
+end
+CP._FitEnchantPair = FitEnchantPair
+
+-- Full labels in facing slots can run into each other across the model. The
+-- facing label goes back to Slot Info Font Size first, so a pair that no
+-- longer needs the fit, or a style change, leaves both whole.
+local function FitFacingLabels(db, slotFrame, slotID, unit, detail)
+    local partnerID = OPPOSITE_SLOT[slotID]
+    if not partnerID then return end
+    local frames = unit == "player" and SLOT_FRAMES or INSPECT_SLOT_FRAMES
+    local partnerFrame = _G[frames[partnerID]]
+    local partnerData = partnerFrame and FFD[partnerFrame]
+    local partner = partnerData and partnerData.detail and partnerData.detail.enchantText
+    if not partner then return end
+    local fontFace = db.FontFace
+    local fontSize = db.SlotInfoFontSize or 11
+    local fontOutline = db.FontOutline or "OUTLINE"
+    KE:ApplyFont(partner, fontFace, fontSize, fontOutline)
+    partner:SetWidth(0)
+    local own = detail.enchantText
+    if db.EnchantNameStyle ~= "full" or not (own:IsShown() and partner:IsShown()) then return end
+
+    local leftFrame, rightFrame, leftLabel, rightLabel = slotFrame, partnerFrame, own, partner
+    if STRIP_LEFT_SLOTS[slotID] then
+        leftFrame, rightFrame, leftLabel, rightLabel = partnerFrame, slotFrame, partner, own
+    end
+    local leftEdge, rightEdge = leftFrame:GetRight(), rightFrame:GetLeft()
+    local avail = leftEdge and rightEdge and (rightEdge - leftEdge - ENCHANT_INSET * 2) or nil
+    local function measure(size)
+        KE:ApplyFont(leftLabel, fontFace, size, fontOutline)
+        KE:ApplyFont(rightLabel, fontFace, size, fontOutline)
+        return leftLabel:GetUnboundedStringWidth(), rightLabel:GetUnboundedStringWidth()
+    end
+    local size, capLeft, capRight = FitEnchantPair(measure, avail, fontSize, ENCHANT_FIT_FLOOR)
+    measure(size)
+    -- No wrap, so a capped label ends in "..." on its one line.
+    leftLabel:SetWordWrap(false)
+    rightLabel:SetWordWrap(false)
+    leftLabel:SetWidth(capLeft or 0)
+    rightLabel:SetWidth(capRight or 0)
+end
+
 -- suppressGems (optional): when true, skip the gem-icon scan + render and hide
 -- all icon slots. Used by InspectPanel's paint-pass retry to avoid flashing red
 -- "empty socket" cues while the inspect packet's gem data is still resolving.
@@ -2037,8 +2121,10 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = self.db.FontOutline or "OUTLINE"
 
-    -- Re-apply font each call so the size slider is live.
+    -- Re-apply font each call so the size slider is live. The width undoes a
+    -- cap the facing-pair fit may have set on an earlier render.
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
+    detail.enchantText:SetWidth(0)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
 
     -- Returned for the inspect retry: whether the enchant label is a stand-in,
@@ -2055,6 +2141,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         detail.enchantText:SetText("")
         detail.enchantText:Hide()
     end
+    FitFacingLabels(self.db, slotFrame, slotID, unit, detail)
 
     -- Item level, colored by the equipped item's quality, with the track span
     -- inline while the item is still upgrading. The item level retains its

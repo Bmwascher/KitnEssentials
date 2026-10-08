@@ -372,17 +372,47 @@ end
 local TEXT_WITH_STATE = Enum and Enum.UIWidgetVisualizationType
     and Enum.UIWidgetVisualizationType.TextWithState
 
+-- Setup sized the widget to its text at the font it measured; a font KE set
+-- afterward leaves that width behind. Text is anchored TOPLEFT only at width
+-- 0, so a widget resized to the string, as Setup's own tail does it, holds the
+-- text exactly and the container's anchor re-centers it. No layout call:
+-- those write fields on Blizzard's frames, and the container's next layout
+-- would then run tainted.
+local function FitTextWidget(widget, text)
+    local stringW, widgetW = text:GetStringWidth(), widget:GetWidth()
+    if type(stringW) ~= "number" or type(widgetW) ~= "number"
+        or issecretvalue(stringW) or issecretvalue(widgetW) then return end
+    if math.abs(widgetW - stringW) <= 0.5 then return end
+    local id = widget.widgetID
+    -- Through _G: .luacheckrc does not list the namespace.
+    local widgetAPI = _G.C_UIWidgetManager
+    local getInfo = widgetAPI and widgetAPI.GetTextWithStateWidgetVisualizationInfo
+    if not getInfo or type(id) ~= "number" or issecretvalue(id) then return end
+    local info = getInfo(id)
+    if type(info) ~= "table" then return end
+    -- A fixed size setting is Blizzard's to keep.
+    local sizeSetting, bottomPad = info.widgetSizeSetting, info.bottomPadding
+    if type(sizeSetting) ~= "number" or issecretvalue(sizeSetting) or sizeSetting ~= 0 then return end
+    local stringH = text:GetStringHeight()
+    if type(stringH) ~= "number" or issecretvalue(stringH) then return end
+    local pad = 0
+    if type(bottomPad) == "number" and not issecretvalue(bottomPad) then pad = bottomPad end
+    widget:SetWidth(stringW)
+    widget:SetHeight(stringH + math_max(0, math_min(pad, stringH - 1)))
+end
+
 function UIW:StyleTextWidget(widget)
     if not widget or widget:IsForbidden() then return end
 
-    -- No anchor or width here. Setup sizes the widget from this fontstring's
-    -- string width on every update; a forced widget width leaves Text at its
-    -- TOPLEFT anchor, and a LEFT/RIGHT anchor here overrides the width Setup
-    -- gives it.
+    -- No anchor here: a LEFT/RIGHT anchor overrides the width Setup gives the
+    -- text. The only width written is the string's own, as Setup writes it.
     local text = widget.Text
     if not text then return end
     ApplyFont(text, "Text")
-    if TEXT_WITH_STATE and widget.widgetType == TEXT_WITH_STATE then ApplyCenter(text) end
+    if TEXT_WITH_STATE and widget.widgetType == TEXT_WITH_STATE then
+        ApplyCenter(text)
+        FitTextWidget(widget, text)
+    end
 end
 
 function UIW:StyleWidgetByType(widget)

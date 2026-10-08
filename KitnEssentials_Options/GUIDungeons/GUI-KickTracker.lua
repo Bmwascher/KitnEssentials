@@ -76,16 +76,16 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick.\n\n" ..
-        "Teammates running a kick-sync addon get exact cooldowns outside a running keystone. " ..
-        "Other kicks go on the kicker's bar when the game names the kicker, or when the Damage " ..
-        "Meter's interrupt list shows who kicked. When the kicker cannot be told, the kick shows " ..
-        "as a temporary class-colored record marked *. A Warrior's or Protection Paladin's bar " ..
-        "marked * is cooling for an interrupt that may have come from another spell, such as a " ..
-        "thrown weapon or Avenger's Shield. Any teammate's bar marked * after a repeat kick is " ..
-        "the meter's best reading of who kicked, and can now and then be the wrong teammate.\n\n" ..
-        "A teammate's kick that interrupts nothing shows only through a kick-sync addon, " ..
-        "outside a running keystone. Only active in 5-player dungeons.")
+    card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick. " ..
+        "Only active in 5-player dungeons.\n\n" ..
+        "In a key, a kick goes on the kicker's bar when the game or the Damage Meter names who " ..
+        "kicked, and the bar reads " .. KE:ColorTextByTheme("Ready") .. " when the kick is back. " ..
+        "A kick that interrupts nothing does not show.\n\n" ..
+        "When nobody is named, the kick shows as a " .. KE:ColorTextByTheme("record") ..
+        ": a short class-colored bar marked " .. KE:ColorTextByTheme("*") .. ". Any bar marked " ..
+        KE:ColorTextByTheme("*") .. " is a best guess. A Warrior's or Protection Paladin's " ..
+        "interrupt may have come from another spell (a thrown weapon, Avenger's Shield), and " ..
+        "after a repeat kick the meter can now and then name the wrong teammate.")
 
     yOffset = card1:GetNextOffset()
 

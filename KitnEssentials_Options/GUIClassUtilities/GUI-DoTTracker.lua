@@ -56,12 +56,6 @@ local function SpecInfo(specId)
     return "Spec " .. specId, nil
 end
 
-local function AddNote(card, text)
-    local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    row:AddWidget(GUIFrame:CreateText(row, KE:ColorTextByTheme("Note"), text, 40, "hide"), 1)
-    card:AddRow(row, Theme.rowHeightLast, 0)
-end
-
 local function RefreshPage()
     GUIFrame:RefreshContent()
 end
@@ -74,6 +68,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     local Rules = KE.DoTTrackerRules
     local seeds = KE.DOT_TRACKER_SEEDS
     local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("icon", function() return db.ShowIcon ~= false end)
 
     local function ApplySettings()
         if DT then DT:ApplySettings() end
@@ -100,13 +95,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             value = db.OnlyInCombat ~= false,
             callback = function(checked)
                 db.OnlyInCombat = checked
-                ApplySettings()
-            end,
-        }), 1 / 3)
-        row1:AddWidget(GUIFrame:CreateCheckbox(row1, "Hide A DoT Nobody Has", {
-            value = db.HideEmpty ~= false,
-            callback = function(checked)
-                db.HideEmpty = checked
                 ApplySettings()
             end,
         }), 1 / 3)
@@ -169,7 +157,8 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         for index, entry in ipairs(entries) do
             local key = Rules.SpellKey(specId, entry.id)
             local saved = db.Spells[key]
-            local label = SpellLabel(entry.id)
+            local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.id)
+            local label = GUIFrame.IconText(texture) .. SpellLabel(entry.id)
             if entry.custom then label = label .. " (custom)" end
             local tooltip
             if entry.row and entry.row.talent then
@@ -209,23 +198,22 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
 
         local specOptions = {}
         for _, specId in ipairs(specIds) do
-            specOptions[#specOptions + 1] = { key = specId, text = (SpecInfo(specId)) }
+            local specName, specIcon = SpecInfo(specId)
+            specOptions[#specOptions + 1] = { key = specId, text = GUIFrame.IconText(specIcon) .. specName }
         end
         local chosenSpec = specIds[1]
         if classToken == playerClass and currentSpecId then chosenSpec = currentSpecId end
 
-        local addRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-        addRow:AddWidget(GUIFrame:CreateDropdown(addRow, "Spec", {
-            options = specOptions,
-            value = chosenSpec,
-            callback = function(key) chosenSpec = key end,
-        }), 0.25)
-        local idBox = GUIFrame:CreateEditBox(addRow, "Debuff Spell ID", { value = "" })
-        addRow:AddWidget(idBox, 0.25)
-        addRow:AddWidget(GUIFrame:CreateButton(addRow, "Add", {
-            height = 24,
-            callback = function()
-                local id, reason = Rules.CanAdd(seeds, db.Spells, classToken, chosenSpec, idBox:GetValue(), SpellExists)
+        local addRow = GUIFrame:CreateSpellAddRow(card2.content, {
+            picker = {
+                label = "Spec",
+                options = specOptions,
+                value = chosenSpec,
+                callback = function(key) chosenSpec = key end,
+            },
+            idLabel = "Debuff Spell ID",
+            onAdd = function(text)
+                local id, reason = Rules.CanAdd(seeds, db.Spells, classToken, chosenSpec, text, SpellExists)
                 if not id then
                     KE:Print(reason)
                     return
@@ -234,11 +222,8 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
                 Redraw(classToken)
                 ApplySettings()
             end,
-        }), 0.25)
-        addRow:AddWidget(GUIFrame:CreateButton(addRow, "Remove", {
-            height = 24,
-            callback = function()
-                local key, reason = Rules.CanRemove(seeds, db.Spells, classToken, chosenSpec, idBox:GetValue())
+            onRemove = function(text)
+                local key, reason = Rules.CanRemove(seeds, db.Spells, classToken, chosenSpec, text)
                 if not key then
                     KE:Print(reason)
                     return
@@ -247,10 +232,10 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
                 Redraw(classToken)
                 ApplySettings()
             end,
-        }), 0.25)
+        })
         card2:AddRow(addRow, Theme.rowHeight)
 
-        AddNote(card2, "Adds to the chosen class and spec. Use the DEBUFF's id, which for many " ..
+        card2:AddNote("Adds to the chosen class and spec. Use the DEBUFF's id, which for many " ..
             "spells differs from the button you press. Remove takes off only DoTs you added; " ..
             "untick a shipped one instead.")
     end
@@ -286,7 +271,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card3:AddRow(row3, Theme.rowHeight)
-    AddNote(card3, "Attackable, alive enemies with a nameplate. On training dummies, which flag " ..
+    card3:AddNote("Attackable, alive enemies with a nameplate. On training dummies, which flag " ..
         "neither rule, every attackable enemy counts.")
     yOffset = card3:GetNextOffset()
 
@@ -322,14 +307,17 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             ApplySettings()
         end,
     }), 0.5)
-    row4b:AddWidget(GUIFrame:CreateDropdown(row4b, "Count Position", {
+    -- With the icon hidden the count is the cell, so it has no side to take.
+    local countPosition = GUIFrame:CreateDropdown(row4b, "Count Position", {
         options = COUNT_POSITIONS,
         value = db.CountPosition or "RIGHT",
         callback = function(key)
             db.CountPosition = key
             ApplySettings()
         end,
-    }), 0.5)
+    })
+    row4b:AddWidget(countPosition, 0.5)
+    manager:Register(countPosition, "icon")
     card4:AddRow(row4b, Theme.rowHeight)
 
     local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
@@ -353,6 +341,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         value = db.ShowIcon ~= false,
         callback = function(checked)
             db.ShowIcon = checked
+            manager:UpdateAll(true)
             ApplySettings()
         end,
     }), 1 / 3)
@@ -523,7 +512,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        showAnchorFrameType = false,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })

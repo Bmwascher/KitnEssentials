@@ -426,6 +426,11 @@ describe("Enchant name style", function()
             { name = "effect line, stats in order of appearance",
               line = "+115 Stamina & +41 Intellect",
               short = "Stam & Int", verbose = "Stamina & Intellect", full = "+115 Stamina & +41 Intellect" },
+            -- One stat either way, so the slash between the two words stays.
+            { name = "effect line, a slash pair joined by its slash",
+              line = "+41 Agility/Strength & +115 Stamina",
+              short = "Agi/Str & Stam", verbose = "Agility/Strength & Stamina",
+              full = "+41 Agility/Strength & +115 Stamina" },
             { name = "unknown name",
               line = "Enchant Cloak - Chant of Winged Grace",
               short = "Chant of Winged Grace", verbose = "Chant of Winged Grace",
@@ -463,6 +468,40 @@ describe("Enchant name style", function()
         assert.equals("Critical Strike", second)
         -- And back again, to catch a cache that only breaks in one direction.
         assert.equals("Nature's Fury", CP._ProcessEnchantText(RAW, "full"))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Enchant label pair fit
+---------------------------------------------------------------------------------
+describe("Enchant label pair fit", function()
+    it("shrinks a facing pair to one size that fits, cuts at the floor, and never raises a size", function()
+        local CP = loadCP()
+        local GAP = 6
+        -- Widths grow linearly with the size: points times the per-point width.
+        local function linear(perL, perR)
+            return function(s) return perL * s, perR * s end
+        end
+        local cases = {
+            { name = "fits at its own size", measure = linear(5, 5), avail = 200, size = 15,
+              want = { 15, nil, nil } },
+            { name = "fits after shrinking", measure = linear(10, 10), avail = 250, size = 15,
+              want = { 12, nil, nil } },
+            { name = "floor, the shorter left label keeps its width", measure = linear(4, 20), avail = 200, size = 15,
+              want = { 9, nil, 200 - GAP - 36 } },
+            { name = "floor, the shorter right label keeps its width", measure = linear(20, 4), avail = 200, size = 15,
+              want = { 9, 200 - GAP - 36, nil } },
+            { name = "floor, both cut to half", measure = linear(15, 15), avail = 200, size = 15,
+              want = { 9, (200 - GAP) / 2, (200 - GAP) / 2 } },
+            { name = "no room read", measure = linear(10, 10), avail = nil, size = 15,
+              want = { 15, nil, nil } },
+            { name = "a size below the floor is cut there, not raised", measure = linear(20, 20), avail = 100, size = 8,
+              want = { 8, (100 - GAP) / 2, (100 - GAP) / 2 } },
+        }
+        for _, c in ipairs(cases) do
+            local size, capLeft, capRight = CP._FitEnchantPair(c.measure, c.avail, c.size, 9)
+            assert.same(c.want, { size, capLeft, capRight }, c.name)
+        end
     end)
 end)
 

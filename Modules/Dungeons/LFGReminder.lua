@@ -374,6 +374,7 @@ local combatHidden         -- the hide came from combat, not from the user
 local pendingRole          -- role captured with the prompt, or nil
 local shownRole            -- role the popup is drawing, or nil
 local previewState         -- settings preview: nil, "empty", or "prompt" (a live prompt waits behind it)
+local pendingInstance      -- instance ID a party prompt was raised in, or nil
 
 
 local BuildPopup, ShowPrompt, HidePrompt, ClearPending, ReadPartyScope, DropPrompt
@@ -437,7 +438,7 @@ end
 
 -- Popup geometry. The row sits below the header; the footer line under it
 -- holds "Disable Feature" and the watermark.
-local POPUP_W     = 210
+local POPUP_W     = 280
 local TITLE_H     = 27
 local PAD         = 10
 local BTN_TOP     = TITLE_H + 11
@@ -449,7 +450,7 @@ local TEXT_W      = POPUP_W - PAD * 2 - TEXT_LEFT - TEXT_RIGHT
 local NAME_LINE_H = 17  -- used when the font reports no line height
 local FOOT_GAP    = 8
 local FOOT_H      = 16
-local FOOT_PAD    = 8
+local FOOT_PAD    = 4
 local DISABLE_W   = 90  -- used when the label reports no width
 
 -- Dungeon name the popup is drawing; every show path sets it before layout.
@@ -522,8 +523,10 @@ ApplyPopupLayout = function()
     disableBtn:ClearAllPoints()
     disableBtn:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -footTop)
     disableBtn:SetShown(showDisable)
+    -- On the footer line's center, where "Disable Feature" is centered, so the
+    -- two share a baseline.
     popup._mark:ClearAllPoints()
-    popup._mark:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -footTop)
+    popup._mark:SetPoint("RIGHT", popup, "TOPRIGHT", -PAD, -(footTop + FOOT_H / 2))
 
     popup:SetHeight(footTop + FOOT_H + FOOT_PAD)
 end
@@ -606,14 +609,14 @@ BuildPopup = function()
     secureBtn._name = nameFS
 
     local roleFS = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
+    if S and S.SetFont then S.SetFont(roleFS, 13, "") end
     roleFS:SetJustifyH("LEFT")
     roleFS:SetWordWrap(false)
     roleFS:Hide()
     secureBtn._role = roleFS
 
     local btnLabel = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(btnLabel, 10, "") end
+    if S and S.SetFont then S.SetFont(btnLabel, 11, "") end
     btnLabel:SetWordWrap(false)
     btnLabel:SetText("Teleport")
     secureBtn._label = btnLabel
@@ -886,6 +889,7 @@ ClearPending = function()
     pendingSource      = nil
     pendingLine2       = nil
     pendingRole        = nil
+    pendingInstance    = nil
     -- A combat join sets pendingShow; a group that breaks before combat ends
     -- must leave PLAYER_REGEN_ENABLED nothing to build or arm.
     pendingShow        = nil
@@ -976,21 +980,20 @@ local PREFIX_SUCCESS   = PREFIX_RESULT and PREFIX_RESULT.Success or 0
 local PREFIX_DUPLICATE = PREFIX_RESULT and PREFIX_RESULT.DuplicatePrefix or 1
 
 local moduleOn          -- OnEnable passed its Enabled gate; OnDisable clears it
-local partyAttached     -- the completion and restriction events are registered
+local partyAttached     -- the restriction event is registered
 local partyListening = false -- the party listeners are registered
 local prefixRegistered
 local castFrame
-local completedInstance -- instance ID of the dungeon whose key was finished
 local recheckQueued     -- a scope recheck waits for the next frame
 local sendName          -- "Name-Realm" for the payload, read on first send
 
 -- Where party teleports are heard, sent and shown: a home party, never a
--- raid; outside instances, or inside a dungeon whose key was finished once
--- chat messaging is unlocked. A running key is always closed.
+-- raid; outside instances, or inside a party dungeon while no key is running
+-- and chat messaging is unlocked.
 local function PartyScopeOpen(s)
     if not (s.on and s.homeParty) or s.inRaid then return false end
     if not s.inInstance then return true end
-    return s.instanceType == "party" and s.keyCompleted == true and not s.chatLocked
+    return s.instanceType == "party" and not s.keyRunning and not s.chatLocked
 end
 
 local function PartyTeleportsOn()
@@ -1003,9 +1006,12 @@ local function CurrentInstanceID()
     return instanceID
 end
 
--- A finished key counts only inside the dungeon it was finished in.
-local function InCompletedInstance()
-    return completedInstance ~= nil and completedInstance == CurrentInstanceID()
+-- The ChallengeMode restriction spans exactly the running key.
+local function KeyRunning()
+    local kinds = Enum and Enum.AddOnRestrictionType
+    local isActive = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
+    if not (kinds and kinds.ChallengeMode and isActive) then return false end
+    return isActive(kinds.ChallengeMode) == true
 end
 
 ReadPartyScope = function()
@@ -1016,7 +1022,7 @@ ReadPartyScope = function()
         inRaid       = IsInRaid(),
         inInstance   = inInstance,
         instanceType = instanceType,
-        keyCompleted = InCompletedInstance(),
+        keyRunning   = KeyRunning(),
         chatLocked   = KE:IsChatMessagingLocked(),
     })
 end
@@ -1097,18 +1103,14 @@ local function RequestPartyRecheck()
 end
 
 -- Attaches what the party path watches while Party Teleports and the module
--- are both on, and detaches all of it otherwise. A detached completion
--- event cannot see a dungeon change, so the finished key goes with it.
+-- are both on, and detaches all of it otherwise.
 function LR:ApplyPartyTeleports()
     local on = PartyTeleportsOn()
     if on and not partyAttached then
         partyAttached = true
-        self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
         self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     elseif not on and partyAttached then
         partyAttached = nil
-        completedInstance = nil
-        self:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
         self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     end
     -- Off, not listening and holding no party prompt: nothing to read or
@@ -1120,11 +1122,6 @@ end
 
 -- Every restriction type, Chat included: the scope reads the chat lock.
 function LR:ADDON_RESTRICTION_STATE_CHANGED()
-    RequestPartyRecheck()
-end
-
-function LR:CHALLENGE_MODE_COMPLETED()
-    completedInstance = CurrentInstanceID()
     RequestPartyRecheck()
 end
 
@@ -1229,6 +1226,7 @@ function LR:CHAT_MSG_ADDON(_, prefix, text, channel, sender)
     ClearPending(); DropPrompt()
     pendingSpellID = PickOwnPortal(mapID, KnowsSpell)
     pendingName, pendingMapID, pendingSource = name, mapID, "party"
+    pendingInstance = CurrentInstanceID()
     pendingLine2 = PartyLine(unit, realName)
     ShowPrompt()
 end
@@ -1248,11 +1246,11 @@ end
 
 function LR:CheckInstance()
     local inInstance, instanceType = IsInInstance()
-    if not inInstance then
-        completedInstance = nil
-    -- A party prompt raised inside a finished key leads to the next dungeon.
-    elseif instanceType == "party"
-        and not (pendingSource == "party" and InCompletedInstance()) then
+    -- A party prompt raised inside this dungeon leads to another one; only a
+    -- prompt raised elsewhere is dropped on entry.
+    if inInstance and instanceType == "party"
+        and not (pendingSource == "party" and pendingInstance ~= nil
+            and pendingInstance == CurrentInstanceID()) then
         ClearPending(); DropPrompt()
     end
     RequestPartyRecheck()

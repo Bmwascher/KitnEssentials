@@ -96,8 +96,9 @@ describe("PetStatusText Grimoire of Sacrifice after a death", function()
               state = { hasPet = false, petDead = false, aura = { spellId = GRIMOIRE } }, expect = nil },
             { name = "buff present while the dead pet still exists",
               state = { hasPet = true, petDead = true, aura = { spellId = GRIMOIRE } }, expect = nil },
-            { name = "buff hidden, no pet, after the death",
-              state = { hasPet = false, petDead = false, aurasHidden = true }, expect = nil },
+            -- The death was read while the buff showed, so the hold keeps it.
+            { name = "buff hidden, no pet, after a death read while the buff showed",
+              state = { hasPet = false, petDead = false, aurasHidden = true }, expect = "PET DEAD" },
             { name = "buff hidden while the dead pet still exists",
               state = { hasPet = true, petDead = true, aurasHidden = true }, expect = "PET DEAD" },
             { name = "buff absent after a real death",
@@ -149,6 +150,43 @@ describe("Demonology expected pet", function()
         }
         for _, r in ipairs(rows) do
             assert.equals(r[3], PS.DemoPetExpected(r[1], r[2]), tostring(r[1]) .. " in " .. r[2])
+        end
+    end)
+end)
+
+describe("PetStatusText held verdict", function()
+    -- PET_STATUS values: NONE 0, MISSING 1, DEAD 2.
+    local NONE, MISSING, DEAD = 0, 1, 2
+
+    it("holds the last readable MISSING or DEAD while the buff is hidden, until a live pet or a readable buff", function()
+        local PS = L.loadPetStatusText()
+        local rows = {
+            { name = "start state: nothing held, quiet while hidden",
+              held = nil, status = NONE, guarded = true, readable = false, livePet = false,
+              shown = NONE, newHeld = nil },
+            { name = "a held MISSING shows while hidden",
+              held = MISSING, status = NONE, guarded = true, readable = false, livePet = false,
+              shown = MISSING, newHeld = MISSING },
+            { name = "a held DEAD shows while hidden",
+              held = DEAD, status = NONE, guarded = true, readable = false, livePet = false,
+              shown = DEAD, newHeld = DEAD },
+            { name = "summon: a live pet shows live and clears the hold",
+              held = MISSING, status = NONE, guarded = false, readable = false, livePet = true,
+              shown = NONE, newHeld = NONE },
+            { name = "death mid-fight: shown while the corpse is there, not held",
+              held = NONE, status = DEAD, guarded = false, readable = false, livePet = false,
+              shown = DEAD, newHeld = NONE },
+            { name = "combat end: the readable verdict replaces the hold",
+              held = DEAD, status = MISSING, guarded = false, readable = true, livePet = false,
+              shown = MISSING, newHeld = MISSING },
+            { name = "combat end with nothing wrong: the hold goes quiet",
+              held = MISSING, status = NONE, guarded = false, readable = true, livePet = false,
+              shown = NONE, newHeld = NONE },
+        }
+        for _, r in ipairs(rows) do
+            local shown, newHeld = PS.ResolveHeld(r.held, r.status, r.guarded, r.readable, r.livePet)
+            assert.equals(r.shown, shown, r.name .. ": shown")
+            assert.equals(r.newHeld, newHeld, r.name .. ": held")
         end
     end)
 end)

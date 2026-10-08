@@ -461,10 +461,12 @@ local function ReanchorShown(push)
             icon:SetPoint(growPoint, frame, growPoint, pos * stepX, pos * stepY)
             if push then
                 icon.entry:Stop()
-                icon.entry:Play()
+                -- The newest icon appears in its slot; only the older ones glide.
                 if pos == 0 then
                     icon.appear:Stop()
                     icon.appear:Play()
+                else
+                    icon.entry:Play()
                 end
             end
         end

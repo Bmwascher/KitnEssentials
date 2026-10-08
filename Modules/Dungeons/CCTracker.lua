@@ -53,9 +53,9 @@ local UNIT_EVENTS = { "UNIT_FLAGS", "UNIT_FACTION", "UNIT_NAME_UPDATE" }
 local CC_GROUP = { capabilities = { hasBorder = true, hasTimerFont = true, durationRoundUp = true } }
 local DEFAULT_NAME_COLOR = { 1, 1, 1, 1 }
 local SAMPLES = {
-    { spell = 118, time = 42, name = "Nakt" },
-    { spell = 51514, time = 18, name = "Bonebreaker Grunt" },
-    { spell = 3355, time = 7, name = "Ravenous Ghoul of the Deep Barrow" },
+    { spell = 118, time = 42, name = "Gloomfang Stalker" },
+    { spell = 51514, time = 18, name = "Ashen Cultist" },
+    { spell = 3355, time = 7, name = "Venerable Archivist of the Sunken Vaults" },
 }
 
 CC.anchor = nil

@@ -45,7 +45,7 @@ describe("RCLootCouncil skin-list guard", function()
         end
     end)
 
-    it("keeps a size that fits, else takes the largest whole size below it that fits, else the floor, and never raises a size at or below the floor", function()
+    it("takes the largest whole size that fits from 12, or from the current size when larger, down to the floor; else the floor, keeping a size already at or below it", function()
         local _, _, headerSize = L.loadRCLootCouncilSkin()
         local function fitsAtOrBelow(limit)
             return function(size) return size <= limit end
@@ -57,6 +57,9 @@ describe("RCLootCouncil skin-list guard", function()
             { 12, 7, 8 },
             { 7, 6, 7 },
             { 8, 6, 8 },
+            { 10, 12, 12 },
+            { 10, 11, 11 },
+            { 14, 14, 14 },
         }
         for i, c in ipairs(cases) do
             assert.equals(c[3], headerSize(c[1], fitsAtOrBelow(c[2])), "case " .. i)

@@ -43,22 +43,23 @@ describe("LFGReminder party scope and send gate", function()
         LR = loader.loadLFGReminder()
     end)
 
-    it("opens only in a home party outside instances, or in a finished key with chat unlocked", function()
+    it("opens in a home party outside instances, or in a party dungeon with no key running and chat unlocked", function()
         local function scope(over)
             local s = { on = true, homeParty = true, inRaid = false, inInstance = false,
-                        instanceType = "none", keyCompleted = false, chatLocked = false }
+                        instanceType = "none", keyRunning = false, chatLocked = false }
             for k, v in pairs(over) do s[k] = v end
             return LR._PartyScopeOpen(s)
         end
         local cases = {
-            { name = "open world",                  over = {},                    want = true },
-            { name = "off",                         over = { on = false },        want = false },
-            { name = "not in a home party",         over = { homeParty = false }, want = false },
-            { name = "raid",                        over = { inRaid = true },     want = false },
-            { name = "dungeon, key running",        over = { inInstance = true, instanceType = "party" }, want = false },
-            { name = "finished key, unlocked",      over = { inInstance = true, instanceType = "party", keyCompleted = true }, want = true },
-            { name = "finished key, chat locked",   over = { inInstance = true, instanceType = "party", keyCompleted = true, chatLocked = true }, want = false },
-            { name = "raid instance with the flag", over = { inInstance = true, instanceType = "raid", keyCompleted = true }, want = false },
+            { name = "open world",          over = {},                    want = true },
+            { name = "off",                 over = { on = false },        want = false },
+            { name = "not in a home party", over = { homeParty = false }, want = false },
+            { name = "raid",                over = { inRaid = true },     want = false },
+            -- Normal, heroic, mythic 0 and a finished key all read this way.
+            { name = "party dungeon, no key running, unlocked", over = { inInstance = true, instanceType = "party" }, want = true },
+            { name = "running key",         over = { inInstance = true, instanceType = "party", keyRunning = true }, want = false },
+            { name = "party dungeon, chat locked", over = { inInstance = true, instanceType = "party", chatLocked = true }, want = false },
+            { name = "raid instance",       over = { inInstance = true, instanceType = "raid" }, want = false },
         }
         for _, c in ipairs(cases) do
             assert.equals(c.want, scope(c.over), c.name)

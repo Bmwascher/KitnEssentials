@@ -16,6 +16,10 @@ local function GetModule()
     return nil
 end
 
+local function RefreshPage()
+    GUIFrame:RefreshContent()
+end
+
 GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.TimeSpiral
     if not db then
@@ -26,7 +30,6 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
 
     local TSP = GetModule()
     local manager = GUIFrame:CreateWidgetStateManager()
-    manager:SetCondition("glow",  function() return db.GlowEnabled ~= false end)
     manager:SetCondition("text",  function() return db.ShowText    ~= false end)
     manager:SetCondition("timer", function() return db.ShowTimer   ~= false end)
 
@@ -66,12 +69,12 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Display & Glow Settings
+    -- Card 2: Display
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Display & Glow Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     manager:Register(card2, "all")
 
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local iconSizeSlider = GUIFrame:CreateSlider(row2a, "Icon Size", {
         min = 20, max = 100, step = 1,
         value = db.IconSize or 40,
@@ -79,59 +82,62 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     })
     row2a:AddWidget(iconSizeSlider, 1)
     manager:Register(iconSizeSlider, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
+    card2:AddRow(row2a, Theme.rowHeightLast, 0)
 
-    local rowSep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(rowSep)
-    rowSep:AddWidget(sep1, 1)
-    manager:Register(sep1, "all")
-    card2:AddRow(rowSep, Theme.rowHeightSeparator)
+    yOffset = card2:GetNextOffset()
 
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local enableGlowCheck = GUIFrame:CreateCheckbox(row2b, "Enable Glow Effect", {
-        value = db.GlowEnabled ~= false,
-        callback = function(checked)
-            db.GlowEnabled = checked
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    row2b:AddWidget(enableGlowCheck, 0.5)
-    manager:Register(enableGlowCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    -- SetType, not a plain write: a stored "proc" keeps its loop speed in
-    -- GlowDuration, and a plain write would drop it.
-    local glowTypeDropdown = GUIFrame:CreateDropdown(row2c, "Glow Type", {
-        options = {
+    ----------------------------------------------------------------
+    -- Card 2b: Glow
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+        title = "Glow",
+        db = db,
+        dbKeys = {
+            enabled   = "GlowEnabled",
+            type      = "GlowType",
+            color     = "GlowColor",
+            lines     = "GlowLines",
+            frequency = "GlowFrequency",
+            thickness = "GlowThickness",
+            duration  = "GlowDuration",
+        },
+        types = {
             { key = "pixel",    text = "Pixel" },
             { key = "ants",     text = "Ants" },
             { key = "procloop", text = "Proc Loop" },
             { key = "alert",    text = "Alert" },
         },
-        value = KE.AuraGlowRules.ResolveType(db.GlowType),
-        callback = function(key)
-            KE.AuraGlowRules.SetType(db,
-                { type = "GlowType", frequency = "GlowFrequency", duration = "GlowDuration" }, key)
-            ApplySettings()
+        resolveType = KE.AuraGlowRules.ResolveType,
+        -- Length and Border need a Lua-driven pixel glow; the engine's is not.
+        typeRows = function(rows)
+            return {
+                pixel       = rows.pixel,
+                unsupported = rows.pixelExtras,
+                autocast    = rows.autocast,
+                proc        = rows.proc,
+                border      = rows.border,
+            }
         end,
+        showSpeed = function() return true end,
+        -- SetType, not a plain write: a stored "proc" keeps its loop speed in
+        -- GlowDuration, and a plain write would drop it.
+        speedAdapter = {
+            read = function(readDb, readKeys)
+                return KE.AuraGlowRules.NormalizeFrequency(
+                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
+            end,
+            write   = KE.AuraGlowRules.WriteSpeed,
+            setType = KE.AuraGlowRules.SetType,
+            min     = 0.05,
+            max     = 2,
+        },
+        onChangeCallback = ApplySettings,
+        -- Pixel shows a row of controls the other styles do not; the cards
+        -- below sit at fixed offsets, so the page is rebuilt.
+        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
     })
-    row2c:AddWidget(glowTypeDropdown, 0.5)
-    manager:Register(glowTypeDropdown, "glow")
-
-    local glowColorPicker = GUIFrame:CreateColorPicker(row2c, "Glow Color", {
-        color = db.GlowColor or { 0, 1, 0, 1 },
-        callback = function(r, g, b, a)
-            db.GlowColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row2c:AddWidget(glowColorPicker, 0.5)
-    manager:Register(glowColorPicker, "glow")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
+    manager:Register(glowCard, "all")
+    yOffset = glowOffset
 
     ----------------------------------------------------------------
     -- Card 3: Position Settings

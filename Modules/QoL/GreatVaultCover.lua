@@ -29,9 +29,11 @@ local STORE_KEY = "GreatVaultRevealed"
 local ART = "Interface\\AddOns\\KitnEssentials\\Media\\Vault\\VaultCover.png"
 local ART_RIGHT, ART_BOTTOM = 438 / 512, 252 / 256
 local SKULL = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:16|t"
-local BAD_LOOT_TEXT = "GG, Fuggin Easy"
-local HIGHLIGHT_ALPHA = 0.12
-local PULSE_ALPHA, PULSE_SECONDS = 0.3, 1.4
+local BAD_LOOT_TEXT = "GG, Fuggin Easy. Better luck next week!"
+local HIGHLIGHT_ALPHA = 0.25
+local PULSE_ALPHA, PULSE_SECONDS = 0.55, 1.4
+-- The reveal flare starts from its own alpha, not the breathing peak.
+local REVEAL_FROM_ALPHA = 0.3
 local FLARE_SECONDS, FADE_SECONDS, GROW_SCALE = 0.12, 0.38, 1.06
 local JACKPOT_SECONDS = 1.5
 local GOLD_R, GOLD_G, GOLD_B = 1, 0.82, 0
@@ -369,7 +371,7 @@ function GVA:CreateCover(card)
     reveal:SetToFinalAlpha(true)
     local flare = reveal:CreateAnimation("Alpha")
     flare:SetTarget(shine)
-    flare:SetFromAlpha(PULSE_ALPHA)
+    flare:SetFromAlpha(REVEAL_FROM_ALPHA)
     flare:SetToAlpha(1)
     flare:SetDuration(FLARE_SECONDS)
     flare:SetOrder(1)
