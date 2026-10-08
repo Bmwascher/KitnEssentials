@@ -437,6 +437,8 @@ function NMA:OnInitialize()
     self.chargeCount = {}
     self.chargeTimers = {}
     self.isPreview = false
+    -- Starts false, not nil, so the first placement is not read as a change.
+    self.attached = false
     self:SetEnabledState(false)
 end
 
@@ -745,6 +747,7 @@ function NMA:Update()
 
     if db.HideOutOfCombat and not UnitAffectingCombat("player") then
         self.frame:Hide()
+        self:NotifyAttach()
         self:StopTicker()
         return
     end
@@ -855,16 +858,14 @@ function NMA:Update()
             self.slots[i]:SetAlpha(slotAlphas[i])
             if type(textAlphas[i]) ~= "nil" then self.slots[i].text:SetAlpha(textAlphas[i]) end
         end
-        self:ApplyPosition()
+        -- Attached, Combat Texts holds the position; only a change is reported.
+        if not self.attached then self:ApplyPosition() end
         self.frame:Show()
     else
         self.frame:Hide()
     end
+    self:NotifyAttach()
 
-    -- While attached, this slot in the stack moves as Combat Texts
-    -- messages come and go. The ticker only runs while something is
-    -- counting down -- exactly when this is visible -- so re-seating here
-    -- costs nothing when idle and keeps formation when not.
     if not anyRunning then self:StopTicker() end
     return anyRunning
 end
@@ -1028,38 +1029,25 @@ function NMA:ClearBuffFallback()
     if self:RefreshBuffStates() then self:Update() end
 end
 
--- Optional attach to the Combat Texts stack. Combat Texts owns
--- KE_CombatTextsContainer, whose height ArrangeMessages() recomputes
--- every time a message shows or hides -- so anchoring our TOP to its
--- BOTTOM makes the alerts genuinely flow underneath its messages rather
--- than just sitting near them, and one anchor moves both. Works for all
--- three display modes; no coupling into Combat Texts' message pooling.
--- Falls back to our own Position whenever Combat Texts is off or its
--- container does not exist yet.
-function NMA:GetCombatTextsContainer()
-    local cm = KitnEssentials and KitnEssentials:GetModule("CombatTexts", true)
-    if not cm or not cm.container then return nil end
-    if not (cm.db and cm.db.Enabled) then return nil end
-    return cm.container
-end
-
--- Height the visible Combat Texts messages actually occupy, using that
--- module's own frames and spacing. Zero when nothing is shown.
-function NMA:CombatTextsUsedHeight()
-    local cm = KitnEssentials and KitnEssentials:GetModule("CombatTexts", true)
-    if not (cm and cm.messageFrames) then return 0 end
-    local spacing = (cm.db and cm.db.Spacing) or 4
-    local used = 0
-    for _, f in pairs(cm.messageFrames) do
-        if f and f.IsShown and f:IsShown() then
-            used = used + (f:GetHeight() or 0) + spacing
-        end
-    end
-    return used
-end
+-- Optional attach to the Combat Texts stack. Attached, Combat Texts places
+-- this frame below its lines (CM:ArrangeMessages) and this module reports
+-- every show, hide and resize; detached, it uses its own Position.
+local ATTACH_KEY = "noMovement"
 
 function NMA:IsAttached()
-    return self.db and self.db.AttachToCombatTexts and self:GetCombatTextsContainer() ~= nil
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    return cm ~= nil and self.db ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+end
+
+function NMA:NotifyAttach()
+    if not self.attached then return end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:AttachedFrameChanged(ATTACH_KEY) end
+end
+
+function NMA:UpdateAttachSubscription()
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled() or self.isPreview) end
 end
 
 -- Attached means "be a Combat Texts line" -- font face/size/outline and
@@ -1072,7 +1060,8 @@ function NMA:EffectiveStyle()
         local cm = KitnEssentials:GetModule("CombatTexts", true)
         local c = cm and cm.db
         if c then
-            return c.FontFace or db.FontFace, c.FontSize or db.FontSize,
+            local size = cm.ResolveAttachedSize(true, db.AttachOwnFontSize, db.FontSize, c.FontSize)
+            return c.FontFace or db.FontFace, size,
                    c.FontOutline or db.FontOutline, c.Spacing or db.Spacing, 1
         end
     end
@@ -1082,23 +1071,23 @@ end
 function NMA:ApplyPosition()
     local db, frame = self.db, self.frame
     if not frame or not db then return end
-    frame:ClearAllPoints()
 
-    local container = db.AttachToCombatTexts and self:GetCombatTextsContainer()
-    if container then
-        -- Take the NEXT SLOT in the Combat Texts stack, not a position
-        -- under the container. Its container keeps a 30px minimum height
-        -- even with nothing shown (ArrangeMessages: max(30, ...)), so
-        -- anchoring to BOTTOM would leave a phantom row of empty space.
-        -- Measuring the actually-visible message frames instead means: no
-        -- messages up -> sit exactly where the first one would; messages
-        -- up -> sit directly after them, at their own spacing.
-        frame:SetPoint("TOP", container, "TOP", 0, -self:CombatTextsUsedHeight())
-    else
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    local wasAttached = self.attached
+    self.attached = (self:IsEnabled() or self.isPreview) and cm ~= nil and self:IsAttached()
+        and cm:SetAttachedFrame(ATTACH_KEY, frame) or false
+    if not self.attached then
+        if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
         KE:ApplyFramePosition(frame, db.Position, db)
     end
     local _, _, _, _, scale = self:EffectiveStyle()
     frame:SetScale(scale)
+    self:UpdateAttachSubscription()
+    -- A Combat Texts on/off message flips attachment with no enable or preview
+    -- behind it, so the mover follows here.
+    if wasAttached ~= self.attached and (self:IsEnabled() or self.isPreview) then
+        self:RegisterAnchor()
+    end
 end
 
 function NMA:ApplySettings()
@@ -1179,9 +1168,7 @@ function NMA:OnEnable()
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnSpecChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
-    -- While attached, Combat Texts' container height changes as its
-    -- messages come and go; combat transitions are when that happens, and
-    -- Refresh -> Update -> ApplyPosition re-seats this underneath.
+    -- Combat transitions change what Hide Out of Combat shows.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Refresh")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "Refresh")
     -- Combat exit is not the only release. The restriction predicate also covers
@@ -1232,11 +1219,15 @@ function NMA:OnDisable()
     self:CancelChargeTimers()
     self:StopTicker()
     if self.frame then self.frame:Hide() end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
+    self.attached = false
     self.tracked = {}
     self.auraActive = {}
     self.readyFired = nil
     self.isPreview = false
     self:UnregisterAnchor()
+    self:UpdateAttachSubscription()
 end
 
 ------------------------------------------------------------------------
@@ -1258,6 +1249,7 @@ function NMA:ShowPreview()
     self:LayoutSlots(count)
     self:ApplyPosition()
     self.frame:Show()
+    self:NotifyAttach()
     self:RegisterAnchor()
 end
 
@@ -1268,6 +1260,8 @@ function NMA:HidePreview()
         self:Refresh()
     else
         self.frame:Hide()
+        self:NotifyAttach()
         self:UnregisterAnchor()
+        self:UpdateAttachSubscription()
     end
 end
