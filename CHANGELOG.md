@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.18
+
+### Interrupt Tracker
+
+- Every party member with a kick always has a row, ready or cooling, in and
+  out of a key, and every ready row reads Ready
+- Where the game hides who kicked (any dungeon), a teammate's kick that the
+  damage meter names lands on their own row at once, with the kicked spell's
+  icon and the mob's marker. A kick it cannot name stays a record
+- In a key, a teammate's repeat kick can land on their row marked `*`: the
+  meter's best guess, which can now and then be the wrong teammate
+- Entering a key keeps every row and its running cooldown
+- Every row always shows. "Max Bars" is now "Max Records" and limits only
+  the records beside the rows, so the frame is taller
+- **NEW:** a Balance Druid's Solar Beam has its own row
+- A Warrior's or Protection Paladin's row cooled by a credited interrupt
+  reads `*`, as it may have been a throw or Avenger's Shield
+- Fewer false records: an enemy stopping a party member's cast, or one
+  interrupt reported twice, no longer adds one. The page note is shorter
+  and written for keys
+
+---
+
 ## v4.9.17
 
 ### Dungeon Teleport Reminder
