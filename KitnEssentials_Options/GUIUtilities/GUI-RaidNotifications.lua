@@ -10,6 +10,17 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+local GENERAL_ALERTS = {
+    { dbKey = "GatewayEnabled",  label = "Gateway",             tooltip = "Shows when Demonic Gateway is usable." },
+    { dbKey = "BenchEnabled",    label = "Benched",             tooltip = "Alerts when sitting in raid group 7 or 8 of a Mythic raid." },
+    { dbKey = "VoidcoreEnabled", label = "Bonus Rolls Missing", tooltip = "Shows in a seasonal dungeon or raid while Nebulous Voidcore is below its cap. Hides in combat and inside a running key." },
+}
+
+local BOSS_ALERTS = {
+    { dbKey = "ResetBossEnabled", label = "Reset Boss", tooltip = "Reminder when a lust debuff is active between pulls." },
+    { dbKey = "LootBossEnabled",  label = "Loot Boss",  tooltip = "Reminder to loot after a boss kill." },
+}
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("RaidNotifications", true)
@@ -49,6 +60,22 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         manager:UpdateAll(db.Enabled ~= false)
     end
 
+    -- == true, not ~= false: the module never subscribes an alert whose key is nil.
+    local function AddAlertRow(card, alerts)
+        local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+        for _, alert in ipairs(alerts) do
+            local key = alert.dbKey
+            local check = GUIFrame:CreateCheckbox(row, alert.label, {
+                value = db[key] == true,
+                callback = function(checked) db[key] = checked; ApplySettings() end,
+                tooltip = alert.tooltip,
+            })
+            row:AddWidget(check, 1/3)
+            manager:Register(check, "all")
+        end
+        card:AddRow(row, Theme.rowHeight)
+    end
+
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -63,75 +90,56 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
-    card1:AddLabel("On-screen alerts for the moments a raid forgets: a usable Demonic Gateway, a " ..
-        "boss to reset while a lust debuff is still up, a boss left unlooted, a seat on the bench in " ..
-        "group 7 or 8 of a Mythic raid, and bonus roll currency still below its weekly cap. Each " ..
-        "alert has its own switch below.")
+    card1:AddLabel("On-screen reminders for the moments a raid forgets. Hover an alert for what it watches.")
+
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local iconToggle = GUIFrame:CreateCheckbox(row1, "Show Icons", {
+        value = db.ShowIcons ~= false,
+        callback = function(checked) db.ShowIcons = checked; ApplySettings() end,
+        tooltip = "Shows flavor icons alongside the alert text, for every alert.",
+    })
+    row1:AddWidget(iconToggle, 1/3)
+    manager:Register(iconToggle, "all")
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
+
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Alert Settings
+    -- Card 2: General Alerts
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Alert Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "General Alerts", yOffset)
     manager:Register(card2, "all")
 
-    local accentDash = KE:ColorTextByTheme("—")
-    local gray = "|cff888888"
-
-    local alertTypes = {
-        { dbKey = "GatewayEnabled",  label = "Gateway",     desc = "- Shows when Demonic Gateway is usable.",    default = true },
-        { dbKey = "ResetBossEnabled", label = "Reset Boss",  desc = "- Reminder when lust debuff is active between pulls.", default = true },
-        { dbKey = "LootBossEnabled",  label = "Loot Boss",   desc = "- Reminder to loot after a boss kill.",       default = true },
-        { dbKey = "BenchEnabled",     label = "Benched",     desc = "- Alerts when sitting in raid group 7 or 8 of a Mythic raid.", default = true },
-        { dbKey = "VoidcoreEnabled", label = "Bonus Rolls Missing", desc = "- Shows when in a seasonal dungeon or raid and Nebulous Voidcore is below weekly cap.", default = true },
-    }
-
-    for _, alert in ipairs(alertTypes) do
-        local row = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-        local checked = db[alert.dbKey] ~= false
-        if alert.default == false then
-            checked = db[alert.dbKey] == true
-        end
-        local check = GUIFrame:CreateCheckbox(row, alert.label .. "  " .. gray .. alert.desc .. "|r", {
-            value = checked,
-            callback = function(val) db[alert.dbKey] = val; ApplySettings() end,
-        })
-        row:AddWidget(check, 1)
-        manager:Register(check, "all")
-        card2:AddRow(row, Theme.rowHeight)
-    end
-
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local iconToggle = GUIFrame:CreateCheckbox(row2b, "Show Icons  " .. gray .. "- Shows the spell icon alongside alert text.|r", {
-        value = db.ShowIcons ~= false,
-        callback = function(checked) db.ShowIcons = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(iconToggle, 1)
-    manager:Register(iconToggle, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local durationSlider = GUIFrame:CreateSlider(row2c, "Alert Duration", {
-        min = 5, max = 120, step = 1,
-        value = db.AlertDuration or 40,
-        callback = function(val) db.AlertDuration = val end,
-    })
-    row2c:AddWidget(durationSlider, 1)
-    manager:Register(durationSlider, "all")
-
-    -- Inline descriptor: sits to the right of the slider's "Alert Duration" label,
-    -- in the empty space above the slider bar (y=0 to y=-14ish).
-    local durationDesc = row2c:GetLabel("small")
-    durationDesc:SetPoint("LEFT", durationSlider.label, "RIGHT", 8, 0)
-    durationDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
-    durationDesc:SetJustifyH("LEFT")
-    durationDesc:SetText(accentDash .. " |cff888888Duration applies to Reset Boss and Loot Boss alerts.|r")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+    AddAlertRow(card2, GENERAL_ALERTS)
+    card2:AddNote("Each stays up while its condition holds.")
 
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Position Settings
+    -- Card 3: Boss Alerts
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Boss Alerts", yOffset)
+    manager:Register(card3, "all")
+
+    AddAlertRow(card3, BOSS_ALERTS)
+
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local durationSlider = GUIFrame:CreateSlider(row3, "Duration", {
+        min = 5, max = 120, step = 1,
+        value = db.AlertDuration or 40,
+        callback = function(val) db.AlertDuration = val end,
+        tooltip = "How long Reset Boss and Loot Boss stay up at most. Both also hide early on their own. The other alerts follow their condition and have no timer.",
+    })
+    row3:AddWidget(durationSlider, 1)
+    manager:Register(durationSlider, "all")
+    card3:AddRow(row3, Theme.rowHeight)
+
+    card3:AddNote("The longest either stays up. Reset Boss also hides when combat starts or the lust debuff ends; Loot Boss when you loot or the next pull starts.")
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Position Settings
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
@@ -156,7 +164,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card 4: Font Settings
+    -- Card 5: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         db = db,
@@ -174,7 +182,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     yOffset = fontOffset
 
     ----------------------------------------------------------------
-    -- Card 5: Colors
+    -- Card 6: Colors
     ----------------------------------------------------------------
     yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
         db         = db,
