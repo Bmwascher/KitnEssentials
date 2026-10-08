@@ -45,6 +45,7 @@ local Ask = KE.PlateSlots.Ask
 local DEBUG_DOT = false
 
 local STRIDE = 512
+local COUNT_GAP = 2
 local TICK_SECONDS = 1
 local SPEC_SETTLE_DELAY = 2
 local TAIL_TEMPLATE = "DisableUntrustedLayoutScriptsTemplate"
@@ -173,12 +174,22 @@ local function Geometry(db)
     local padX, padY = GlowMargins(db, w, h)
     local boxL, boxT = math_min(0, left) - padX, math_min(0, top) - padY
     local boxR, boxB = math_max(w, left + tw) + padX, math_max(h, top + th) + padY
+    -- Beside the icon the count is drawn from its near edge, COUNT_GAP off the
+    -- icon, so a short count sits as close as the widest one.
+    local labelW = tw - 2
+    local justify, centerX = "CENTER", left + tw / 2
+    if db.ShowIcon ~= false and where == "RIGHT" then
+        justify, centerX = "LEFT", left + COUNT_GAP + labelW / 2
+    elseif db.ShowIcon ~= false and where == "LEFT" then
+        justify, centerX = "RIGHT", left + tw - COUNT_GAP - labelW / 2
+    end
     return {
         w = w, h = h,
         viewX = boxL, viewY = boxT,
         viewW = math_min(boxR - boxL, STRIDE - 2), viewH = boxB - boxT,
         iconX = -boxL, iconY = -boxT,
-        labelX = left + tw / 2 - boxL, labelY = top + th / 2 - boxT,
+        labelX = centerX - boxL, labelY = top + th / 2 - boxT,
+        labelW = labelW, justify = justify,
     }
 end
 
@@ -208,6 +219,8 @@ end
 local function StyleAnswer(cell, k, answer)
     local db = DT.db
     KE:ApplyFontToText(answer.label, db.FontFace, db.FontSize, db.FontOutline)
+    answer.label:SetWidth(cell.geo.labelW)
+    answer.label:SetJustifyH(cell.geo.justify)
     PlaceAnswer(cell, k, answer)
 end
 
@@ -408,6 +421,8 @@ local function StyleCell(cell, geo)
     cell.glowOn = nil
     for k = 0, #cell.sensors do StyleAnswer(cell, k, cell.answers[k]) end
     KE:ApplyFontToText(cell.sample, db.FontFace, db.FontSize, db.FontOutline)
+    cell.sample:SetWidth(geo.labelW)
+    cell.sample:SetJustifyH(geo.justify)
     cell.sample:ClearAllPoints()
     cell.sample:SetPoint("CENTER", cell.frame, "TOPLEFT", geo.viewX + geo.labelX, -(geo.viewY + geo.labelY))
     KE:ApplyFontToText(cell.sampleTimer, db.FontFace, db.TimerFontSize, db.FontOutline)
