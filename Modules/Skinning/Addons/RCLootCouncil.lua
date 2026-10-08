@@ -82,20 +82,27 @@ local function UI_New(ui, elementType)
 end
 
 local HEADER_FLOOR = 8
+local HEADER_CAP = 12
 -- The table library anchors each header string to its whole column and to
 -- this much inside each edge; the string's box comes out this much narrower
 -- than the column, not twice this much.
 local HEADER_PADDING = 2.5
 
+-- The largest whole size that fits, tried from the cap, or from the current
+-- size when that is larger, down to the floor. When none fits: the floor, or
+-- the current size when that is already at or below it.
 local function headerSize(current, fits)
-    if current <= HEADER_FLOOR or fits(current) then return current end
-    local size = math_floor(current)
-    if size == current then size = size - 1 end
-    while size > HEADER_FLOOR do
+    local size = math_max(current, HEADER_CAP)
+    if size ~= math_floor(size) then
+        if fits(size) then return size end
+        size = math_floor(size)
+    end
+    while size >= HEADER_FLOOR do
         if fits(size) then return size end
         size = size - 1
     end
-    return HEADER_FLOOR
+    if current > HEADER_FLOOR then return HEADER_FLOOR end
+    return current
 end
 
 -- A header wider than its column is cut, and the library re-anchors every
@@ -124,7 +131,7 @@ local function FitHeaders(name, cols)
         end
     end
     local function fits(size)
-        if size ~= current then setSize(size) end
+        setSize(size)
         for i, fs in ipairs(strings) do
             -- The string is bounded by its column, so its plain string width
             -- never exceeds the box; the unbounded width is the whole text's.
@@ -135,8 +142,9 @@ local function FitHeaders(name, cols)
         end
         return true
     end
-    local size = headerSize(current, fits)
-    if size ~= current then setSize(size) end
+    -- Every string takes the size, including any a relayout made at the
+    -- library's own size.
+    setSize(headerSize(current, fits))
 end
 
 local function SkinScrollTable(lib, cols, _, _, _, parent)
@@ -264,6 +272,16 @@ local function VotingFrame_GetFrame()
     local db = addon and addon.Getdb and addon:Getdb()
     local votingDB = db and db.modules and db.modules.RCVotingFrame
     SkinPageButton(frame.moreInfoBtn, votingDB and votingDB.moreInfo and "left" or "right")
+end
+
+-- RC lays the voting columns out again on the table it already has, and the
+-- library makes any new column's header at its own size, so the row is
+-- fitted again.
+local function VotingFrame_RefreshColumnLayout(module)
+    local st = module and module.frame and module.frame.st
+    local frame = st and st.frame
+    local name = frame and frame:GetName()
+    if name then FitHeaders(name, module.scrollCols) end
 end
 
 local function LootHistory_GetFrame()
@@ -413,6 +431,7 @@ local function Skin()
     if LibDialog then hooksecurefunc(LibDialog, "Spawn", SkinDialogs) end
 
     HookModule(addon, "RCVotingFrame", "GetFrame", VotingFrame_GetFrame)
+    HookModule(addon, "RCVotingFrame", "RefreshColumnLayout", VotingFrame_RefreshColumnLayout)
     HookModule(addon, "RCLootHistory", "GetFrame", LootHistory_GetFrame)
     HookModule(addon, "RCSessionFrame", "GetFrame", SessionFrame_GetFrame)
     HookModule(addon, "Sync", "Spawn", Sync_Spawn)
