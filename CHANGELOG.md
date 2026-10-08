@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.4
+
+### Settings Window
+
+- Buttons and dropdowns sit on a plate darker than the card behind them
+  instead of lighter, with darker hover and pressed looks
+
+---
+
 ## v4.9.3
 
 ### Settings Window
