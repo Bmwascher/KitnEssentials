@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GroupFinderPanel.lua                                    ║
 -- ║  Module: Group Finder Panel                              ║
--- ║  Purpose: affixes, a M+ dungeon/role filter pane and a    ║
--- ║           weekly runs footer, beside the M+ search.       ║
+-- ║  Purpose: affixes, a M+ dungeon/role filter pane and a   ║
+-- ║           weekly runs footer, beside the M+ search.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- TAINT POSTURE -- read this before changing anything below.

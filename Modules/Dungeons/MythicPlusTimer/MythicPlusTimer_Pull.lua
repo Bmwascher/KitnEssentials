@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  MythicPlusTimer_Pull.lua                                ║
--- ║  Live pull estimate for the forces bar: the forces      ║
--- ║  weight of the exposed, engaged nameplates, summed by   ║
--- ║  chained StatusBars so a secret per-unit count never    ║
--- ║  meets Lua arithmetic. Feeds the HUD's pull sinks with  ║
+-- ║  Live pull estimate for the forces bar: the forces       ║
+-- ║  weight of the exposed, engaged nameplates, summed by    ║
+-- ║  chained StatusBars so a secret per-unit count never     ║
+-- ║  meets Lua arithmetic. Feeds the HUD's pull sinks with   ║
 -- ║  an opaque endpoint (MythicPlusTimer_HUD.lua).           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
