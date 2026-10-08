@@ -184,7 +184,7 @@ describe("UIWidgets font role", function()
         local db = allOn()
         db.Enabled = false
         for _, r in ipairs(ROLES) do
-            assert.is_nil(UIW.FontSizeForRole(db, r.role))
+            assert.is_nil(UIW.FontSizeForRole(db, r.role, 27))
         end
     end)
 
@@ -193,7 +193,7 @@ describe("UIWidgets font role", function()
         for _, r in ipairs(ROLES) do
             local db = allOn()
             db[r.group].Enabled = false
-            assert.is_nil(UIW.FontSizeForRole(db, r.role))
+            assert.is_nil(UIW.FontSizeForRole(db, r.role, 27))
         end
     end)
 
@@ -202,7 +202,30 @@ describe("UIWidgets font role", function()
         for _, r in ipairs(ROLES) do
             local db = allOn()
             db[r.group][r.flag] = false
-            assert.is_nil(UIW.FontSizeForRole(db, r.role))
+            assert.is_nil(UIW.FontSizeForRole(db, r.role, 27))
+        end
+    end)
+
+    it("gives the Text role the larger of its size and Blizzard's, or its size with no floor", function()
+        local UIW = L.loadUIWidgets()
+        local cases = {
+            { size = 17, floor = 27, want = 27 },
+            { size = 24, floor = 18, want = 24 },
+            { size = 17, floor = nil, want = 17 },
+        }
+        for _, c in ipairs(cases) do
+            local db = allOn()
+            db.TextWidget.Size = c.size
+            assert.equals(c.want, UIW.FontSizeForRole(db, "Text", c.floor))
+        end
+    end)
+
+    it("never lets a floor raise Label or BarText", function()
+        local UIW = L.loadUIWidgets()
+        for _, r in ipairs(ROLES) do
+            if r.role ~= "Text" then
+                assert.equals(r.size, UIW.FontSizeForRole(allOn(), r.role, 27))
+            end
         end
     end)
 end)
