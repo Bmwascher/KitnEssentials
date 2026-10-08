@@ -353,9 +353,26 @@ end
 ---------------------------------------------------------------------------------
 -- External Lines
 ---------------------------------------------------------------------------------
+-- Pure, so the rule is spec-covered. Every attacher asks through AcceptsAttach.
+function CM.AttachWanted(toggleOn, moduleEnabled, dbEnabled, hasContainer)
+    return toggleOn == true and moduleEnabled == true and dbEnabled == true
+        and hasContainer == true
+end
+
+-- Pure. Attached with the override off, an attacher takes the Combat Texts
+-- size; in every other case it keeps its own.
+function CM.ResolveAttachedSize(attached, overrideOn, ownSize, ctSize)
+    if attached and not overrideOn and ctSize ~= nil then return ctSize end
+    return ownSize
+end
+
+function CM:AcceptsAttach(toggleOn)
+    return CM.AttachWanted(toggleOn, self:IsEnabled(),
+        self.db ~= nil and self.db.Enabled ~= false, self.container ~= nil)
+end
+
 function CM:AcceptsExternalLines()
-    return self:IsEnabled() and self.db ~= nil and self.db.Enabled ~= false
-        and self.container ~= nil
+    return self:AcceptsAttach(true)
 end
 
 -- Not refused during the preview: the line belongs to its owner, and the
