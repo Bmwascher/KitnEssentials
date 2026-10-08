@@ -133,24 +133,32 @@ local function TextBox(db)
     return math_ceil(width) + 6, size + 6
 end
 
--- The sheet glow styles draw past the icon edge; the window grows to keep them.
-local function GlowMargin(db)
-    if not db.GlowEnabled then return 0 end
+-- The sheet glow styles draw at Icon Size times the sheet's factor, centered
+-- on the cell whatever the cell's own size, so past its edge on each axis by
+-- half the difference; the window grows to keep them.
+local function GlowMargins(db, w, h)
+    if not db.GlowEnabled then return 0, 0 end
     local entry = KE.AuraGlowRules.FLIPBOOKS[KE.AuraGlowRules.ResolveType(db.GlowType)]
-    if not entry then return 0 end
-    return math_ceil((entry.sizeFactor - 1) / 2 * (db.IconSize or 40))
+    if not entry then return 0, 0 end
+    local drawn = (db.IconSize or 40) * entry.sizeFactor
+    return math_max(0, math_ceil((drawn - w) / 2)), math_max(0, math_ceil((drawn - h) / 2))
 end
 
--- Pixels from the icon's top left, y growing downward. The window is the
--- smallest box holding the icon and the text, and stays narrower than a stride
--- so the answers on either side are clipped.
+-- Pixels from the cell's top left, y growing downward. The cell is the icon,
+-- or with the icon hidden the count's own box. The window is the smallest box
+-- holding the cell and the text, and stays narrower than a stride so the
+-- answers on either side are clipped.
 local function Geometry(db)
     local size = db.IconSize or 40
     local tw, th = TextBox(db)
     local tx, ty = db.CountX or 0, -(db.CountY or 0)
     local where = db.CountPosition
+    local w, h = size, size
     local left, top
-    if where == "TOP" then
+    if db.ShowIcon == false then
+        w, h = tw, th
+        left, top = 0, 0
+    elseif where == "TOP" then
         left, top = size / 2 - tw / 2, -th
     elseif where == "BOTTOM" then
         left, top = size / 2 - tw / 2, size
@@ -162,11 +170,11 @@ local function Geometry(db)
         left, top = size / 2 - tw / 2, size / 2 - th / 2
     end
     left, top = left + tx, top + ty
-    local pad = GlowMargin(db)
-    local boxL, boxT = math_min(0, left) - pad, math_min(0, top) - pad
-    local boxR, boxB = math_max(size, left + tw) + pad, math_max(size, top + th) + pad
+    local padX, padY = GlowMargins(db, w, h)
+    local boxL, boxT = math_min(0, left) - padX, math_min(0, top) - padY
+    local boxR, boxB = math_max(w, left + tw) + padX, math_max(h, top + th) + padY
     return {
-        size = size,
+        w = w, h = h,
         viewX = boxL, viewY = boxT,
         viewW = math_min(boxR - boxL, STRIDE - 2), viewH = boxB - boxT,
         iconX = -boxL, iconY = -boxT,
@@ -234,7 +242,7 @@ local function PlaceGlow(cell, total)
     end
     if on == cell.glowOn then return end
     if on then
-        KE.AuraGlow.Configure(host, DT.db, geo.size, geo.size)
+        KE.AuraGlow.Configure(host, DT.db, geo.w, geo.h)
     else
         KE.AuraGlow.Configure(host, GLOW_OFF)
     end
@@ -386,7 +394,7 @@ local function StyleCell(cell, geo)
     local db = DT.db
     cell.geo = geo
     cell.texture = C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(cell.id)
-    cell.frame:SetSize(geo.size, geo.size)
+    cell.frame:SetSize(geo.w, geo.h)
     cell.icon:SetTexture(cell.texture)
     local alpha = db.ShowIcon == false and 0 or 1
     cell.icon:SetAlpha(alpha)
@@ -395,7 +403,7 @@ local function StyleCell(cell, geo)
     cell.view:SetPoint("TOPLEFT", cell.frame, "TOPLEFT", geo.viewX, -geo.viewY)
     cell.view:SetSize(geo.viewW, geo.viewH)
     cell.tail:SetSize(geo.viewW, geo.viewH)
-    cell.glow:SetSize(geo.size, geo.size)
+    cell.glow:SetSize(geo.w, geo.h)
     -- Restyled by the next placement, which Apply forces.
     cell.glowOn = nil
     for k = 0, #cell.sensors do StyleAnswer(cell, k, cell.answers[k]) end
@@ -409,16 +417,16 @@ local function StyleCell(cell, geo)
     cell.sampleTimer:SetPoint("CENTER", cell.frame, "CENTER", db.TimerX or 0, db.TimerY or 0)
 end
 
--- The root is the first icon, not the row, so the row grows from where it was
+-- The root is the first cell, not the row, so the row grows from where it was
 -- put however long the list is.
-local function LayoutCells()
+local function LayoutCells(geo)
     local db = DT.db
-    local size, gap = db.IconSize or 40, db.Spacing or 4
+    local gap = db.Spacing or 4
     local grow = db.GrowDirection or "DOWN"
-    DT.root:SetSize(size, size)
-    local step = size + gap
-    local dx = (grow == "LEFT" and -step) or (grow == "RIGHT" and step) or 0
-    local dy = (grow == "UP" and step) or (grow == "DOWN" and -step) or 0
+    DT.root:SetSize(geo.w, geo.h)
+    local stepX, stepY = geo.w + gap, geo.h + gap
+    local dx = (grow == "LEFT" and -stepX) or (grow == "RIGHT" and stepX) or 0
+    local dy = (grow == "UP" and stepY) or (grow == "DOWN" and -stepY) or 0
     for i = 1, #DT.list do
         local frame = DT.cells[i].frame
         frame:ClearAllPoints()
@@ -755,7 +763,7 @@ function DT:Apply(list, allowed)
             KE:Print("[DOT] style refused for " .. tostring(self.cells[i].id))
         end
     end
-    LayoutCells()
+    LayoutCells(geo)
     self:StyleTimers(list, TimerStyleKey(db), allowed)
 
     local listKey = table_concat(list, ",") .. "@" .. tostring(db.MaxEnemies)
@@ -1034,7 +1042,7 @@ function DT:PaintPreview()
         cell.sampleTimer:SetText(SAMPLE_TIMERS[((i - 1) % #SAMPLE_TIMERS) + 1])
         cell.sampleTimer:SetShown(db.TimerEnabled ~= false)
         if db.GlowEnabled and k == SAMPLE_TOTAL then
-            KE.AuraGlow.Configure(cell.previewGlow, db, cell.geo.size, cell.geo.size)
+            KE.AuraGlow.Configure(cell.previewGlow, db, cell.geo.w, cell.geo.h)
         else
             KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
         end

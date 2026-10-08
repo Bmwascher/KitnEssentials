@@ -68,6 +68,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     local Rules = KE.DoTTrackerRules
     local seeds = KE.DOT_TRACKER_SEEDS
     local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("icon", function() return db.ShowIcon ~= false end)
 
     local function ApplySettings()
         if DT then DT:ApplySettings() end
@@ -306,14 +307,17 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             ApplySettings()
         end,
     }), 0.5)
-    row4b:AddWidget(GUIFrame:CreateDropdown(row4b, "Count Position", {
+    -- With the icon hidden the count is the cell, so it has no side to take.
+    local countPosition = GUIFrame:CreateDropdown(row4b, "Count Position", {
         options = COUNT_POSITIONS,
         value = db.CountPosition or "RIGHT",
         callback = function(key)
             db.CountPosition = key
             ApplySettings()
         end,
-    }), 0.5)
+    })
+    row4b:AddWidget(countPosition, 0.5)
+    manager:Register(countPosition, "icon")
     card4:AddRow(row4b, Theme.rowHeight)
 
     local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
@@ -337,6 +341,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         value = db.ShowIcon ~= false,
         callback = function(checked)
             db.ShowIcon = checked
+            manager:UpdateAll(true)
             ApplySettings()
         end,
     }), 1 / 3)
