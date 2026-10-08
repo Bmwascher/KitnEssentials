@@ -1963,7 +1963,7 @@ local OPPOSITE_SLOT = {
 }
 local ENCHANT_FIT_FLOOR = 9
 local ENCHANT_FIT_GAP = 6
--- Each enchant label sits this far inside its slot's edge.
+-- Each enchant label starts this far past its slot's edge.
 local ENCHANT_INSET = 3
 
 -- One size for a facing pair: the largest from `size` down to `floor` at which

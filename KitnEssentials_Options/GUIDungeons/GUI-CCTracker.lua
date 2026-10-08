@@ -274,7 +274,8 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         manager:RegisterGroup(fontWidgets, "all")
     end
 
-    -- The card's own last row is added with no trailing gap.
+    -- The card's own last row is added with no trailing gap, so re-open the
+    -- spacing before appending to it.
     fontCard:AddSpacing(Theme.paddingSmall)
     fontCard:AddNote("The font and outline are also used for the enemy name.")
     yOffset = fontCard:GetNextOffset()
