@@ -370,6 +370,10 @@ function KT:RefreshPartyRoster()
                     specID = GetPlayerSpecID() or 0
                 elseif name and KE:IsSafeValue(name) then
                     specID = self.nameSpecCache[name] or 0
+                    -- Another realm's teammate the short-name read missed.
+                    if specID == 0 and member.fullKey and realm and realm ~= "" then
+                        specID = self.nameSpecCache[member.fullKey] or 0
+                    end
                 end
 
                 if specID > 0 then
@@ -425,6 +429,11 @@ end
 function KT:OnLibSpecGroupUpdate(specID, _, _, playerName)
     if not specID or specID == 0 or not playerName then return end
     self.nameSpecCache[playerName] = specID
+    -- Another realm's teammate arrives as Name-Realm, which no short name
+    -- equals; their spec is also kept under the key the roster gives them.
+    local crossKey
+    if KE:IsSafeValue(playerName) then crossKey = KE:BuildNicknameKey(playerName, nil) end
+    if crossKey then self.nameSpecCache[crossKey] = specID end
 
     if not self.isActive then return end
     for guid, member in pairs(self.partyMembers) do
@@ -433,6 +442,10 @@ function KT:OnLibSpecGroupUpdate(specID, _, _, playerName)
             return
         end
     end
+    -- Reached only when the loop above matched nobody.
+    if not crossKey then return end
+    local guid, member = KT.MemberForSender(self.partyMembers, crossKey, nil)
+    if guid and member then self:ApplySpecData(guid, member.unit, specID) end
 end
 
 function KT:OnPlayerSpecChanged()
