@@ -1,150 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.9.21
+## v4.10.0
 
-### Combat Texts
+### DoT Tracker
 
-- **NEW:** an Aggro sound, in every sound list, and the AGGRO line's default
-  sound. The aggro sound itself stays off until you tick it
-
----
-
-## v4.9.20
-
-### UI Widgets
-
-- Text widgets that Blizzard draws larger than your Font Size keep
-  Blizzard's size, so the icon beside the top-center Stars bar is no longer
-  shrunk. Font Size is now a minimum, and its tooltip says so
-- A text widget stays centered when Font Size is above Blizzard's size
-
----
-
-## v4.9.19
-
-### Havoc Tracker
-
-- The Havoc warning lets clicks through and shows no tooltip, and it stays
-  dark on a friendly target
-
-### Character Panel
-
-- A crafted piece's "CR" is colored by its crest tier: orange for Myth,
-  purple for Hero, white when no crest is known
-
-### Skinning
-
-- With the Character skin off, the equipment flyout keeps Blizzard's look
-- The Great Vault's two "Or" plates show their reward icon at the skinned
-  size
-
-### Chat
-
-- Chat History listens only while the chat skin is on. Turning the skin on
-  later in a session still lets history replay once
-
-### Nicknames
-
-- Where you have both a Northern Sky Raid Tools nickname and an older
-  KitnEssentials nickname for someone, the Northern Sky one shows (Damage
-  Meter, Death Notifications, Healer Mana)
-
-### Settings Window
-
-- On the Movement Buffs and Aura Externals pages, changing the glow type
-  moves the cards below the Glow card with it
-
----
-
-## v4.9.18
-
-### Interrupt Tracker
-
-- Every party member with a kick always has a row, ready or cooling, in and
-  out of a key, and every ready row reads Ready
-- Where the game hides who kicked (any dungeon), a teammate's kick that the
-  damage meter names lands on their own row at once, with the kicked spell's
-  icon and the mob's marker. A kick it cannot name stays a record
-- In a key, a teammate's repeat kick can land on their row marked `*`: the
-  meter's best guess, which can now and then be the wrong teammate
-- Entering a key keeps every row and its running cooldown
-- Every row always shows. "Max Bars" is now "Max Records" and limits only
-  the records beside the rows, so the frame is taller
-- **NEW:** a Balance Druid's Solar Beam has its own row
-- A Warrior's or Protection Paladin's row cooled by a credited interrupt
-  reads `*`, as it may have been a throw or Avenger's Shield
-- Fewer false records: an enemy stopping a party member's cast, or one
-  interrupt reported twice, no longer adds one. The page note is shorter
-  and written for keys
-
----
-
-## v4.9.17
-
-### Dungeon Teleport Reminder
-
-- The LFG Reminder card is renamed Dungeon Teleport Reminder
-- **NEW:** Party Teleports, on by default inside the module (the module
-  itself stays off by default). When a party member teleports to a dungeon,
-  a "Teleport Reminder" popup offers your own teleport there, and your own
-  dungeon teleports are shared with the party
-- Party teleports work in the open world and in any party dungeon, but not
-  in a raid or inside a running key. A popup that arrives in combat waits
-  until combat ends, and one dungeon prompts at most once a minute
-- "Disable Feature" on a party popup turns off Party Teleports only; Group
-  Finder prompts carry on
-- The popup is wider and easier to read, with a slimmer footer, and can no
-  longer be dragged off screen
-- Group Finder prompts recognize every season's dungeons, and a new prompt
-  replaces any older popup
-
-### Conflicts
-
-- With Mythic+ Tweaks' teleport popups also on, you are asked once which
-  to keep. Choosing KitnEssentials turns off only those two popups
-
----
-
-## v4.9.16
-
-### Great Vault Alert
-
-- **NEW:** Reward Cover. At the vault, in a rested area with a reward to
-  claim, each card holding a reward is covered by a card you click to
-  reveal, one at a time, in any order. On by default inside Great Vault
-  Alert (the module itself stays off by default)
-- A reveal plays the Reveal Sound and flares in the item's quality color.
-  Waiting covers glow and highlight under the mouse
-- A revealed card stays revealed on that character until you claim, across
-  /reload. "Cover Revealed Cards Again" covers them again
-- **NEW:** Bad Loot Line (on by default): a red "GG, Fuggin Easy. Better
-  luck next week!" line under the reward strip
-- **NEW:** Reveal Flavor (on by default): "Jackpot!" on the week's highest
-  item level, and "Last one..." on the final cover
-- **NEW:** Chat Recap (off by default) names your best reward and its item
-  level after the last reveal
-
----
-
-## v4.9.15
-
-### Alter Time
-
-- **NEW:** Alter Time, for Mages. When you cast Alter Time, your health at
-  that moment ("62%") shows above Alter Time's icon in the Cooldown
-  Manager's Tracked Buffs. Off by default
-- The number clears on the return cast, after 10 seconds, on death and on a
-  loading screen
-- Attach To and Position on Icon (Above, Center or Below) set where it
-  sits. Without a visible Alter Time icon it uses its own screen position
-
-### Class Tools
-
-- **NEW:** a Mage tab. On a Mage, Class Tools opens on it
-
----
-
-## v4.9.14
+- **NEW:** DoT Tracker, in Class Tools > All Classes. One icon per DoT your
+  spec applies, with a count of how many enemies in combat carry yours
+  ("3/6"). Off by default
+- The count turns green when every counted enemy has the DoT; a DoT nobody
+  has shows its icon with "0/6"
+- Your DoTs lists each spec's DoTs with spell icons. Talent DoTs show only
+  while the talent is known, and you can add or remove your own by spell ID
+- Who Counts: only enemies in combat, up to 40 (20 by default)
+- Layout: icon size, spacing, grow direction, the count on, beside, above or
+  below the icon, and three count formats. With Show Icon off, the counts
+  take the icons' places
+- Target Timer shows your target's time left on the icon, and Glow lights
+  the icon when every enemy has it. Both are off by default
+- It can anchor to the screen, the player frame or a chosen frame
 
 ### CC Tracker
 
@@ -157,54 +30,37 @@
 - Tracks crowd control from anyone by default, or Mine Only. Every Crowd
   Control adds short stuns too
 - Tracked Crowd Control shows one class at a time from a dropdown with
-  class icons, each spell with its icon. Add or remove your own by spell ID
+  class icons. Add or remove your own by spell ID
 - Settings for icon size, row spacing, Max Enemies (up to 40), grow
   direction, the time left font and decimals, and the enemy name
 
----
+### Alter Time
 
-## v4.9.13
+- **NEW:** Alter Time, for Mages, on a new Mage tab in Class Tools. When you
+  cast Alter Time, your health at that moment ("62%") shows above Alter
+  Time's icon in the Cooldown Manager's Tracked Buffs. Off by default
+- The number clears on the return cast, after 10 seconds, on death and on a
+  loading screen
+- Attach To and Position on Icon (Above, Center or Below) set where it
+  sits. Without a visible Alter Time icon it uses its own screen position
 
-### DoT Tracker
+### Interrupt Tracker
 
-- **NEW:** DoT Tracker, in Class Tools > All Classes. One icon per DoT your
-  spec applies, with a count of how many enemies in combat carry yours
-  ("3/6"). Off by default
-- The count turns green when every counted enemy has the DoT. A DoT nobody
-  has shows its icon with "0/6"
-- Your DoTs lists each spec's DoTs with spell icons. Talent DoTs show only
-  while the talent is known, and you can add or remove your own by spell ID
-- Who Counts: only enemies in combat, up to 40 (20 by default)
-- Layout: icon size, spacing, grow direction, the count on, beside, above or
-  below the icon, and three count formats. With Show Icon off, the counts
-  take the icons' places
-- Target Timer shows your target's time left on the icon, and Glow lights
-  the icon when every enemy has it. Both are off by default
-- It can anchor to the screen, the player frame or a chosen frame
-
----
-
-## v4.9.12
-
-### Time Spiral
-
-- The display follows the Time Spiral buff itself instead of your movement
-  spell's glow. The Warlock Soulburn false alert is gone, and it works again
-  for Havoc Demon Hunters with Inertia or Dash of Chaos
-- The timer counts the buff's real time left, and the icon hides when you
-  use the free cast, when the buff ends, or in a vehicle
-- A buff already on you at a /reload now shows
-- Glow types are now Pixel, Ants, Proc Loop and Alert. A saved older type
-  shows as the closest new one
-- **NEW:** the glow settings gain Lines, Speed, Thickness and the other
-  controls the other glow cards have. The glow looks the same until you
-  move one
-- Settings changed inside a key, an encounter or combat apply when it ends;
-  the preview updates at once
-
----
-
-## v4.9.11
+- Every party member with a kick always has a row, ready or cooling, in and
+  out of a key, and every ready row reads Ready
+- Where the game hides who kicked (any dungeon), a teammate's kick that the
+  damage meter names lands on their own row at once, with the kicked spell's
+  icon and the mob's marker. A kick it cannot name stays a record
+- In a key, a teammate's repeat kick can land on their row marked `*`: the
+  meter's best guess, which can now and then be the wrong teammate. A
+  Warrior's or Protection Paladin's credited row also reads `*`, as it may
+  have been a throw or Avenger's Shield
+- Entering a key keeps every row and its running cooldown
+- "Max Bars" is now "Max Records" and limits only the records beside the
+  rows, so the frame is taller
+- **NEW:** a Balance Druid's Solar Beam has its own row
+- Fewer false records: an enemy stopping a party member's cast, or one
+  interrupt reported twice, no longer adds one
 
 ### Combat Texts
 
@@ -212,143 +68,136 @@
   you. On by default inside Combat Texts (the module itself stays off by
   default) and never shown on a tank spec
 - **NEW:** Instances Only (on by default: dungeons and raids, Mythic+
-  included), Pulse (off by default) and an optional sound, played at most
-  once every 2 seconds
+  included) and Pulse (off by default) for the AGGRO line
+- **NEW:** an Aggro sound, in every sound list, played with the AGGRO line
+  at most once every 2 seconds. On by default
 - No Target is now on by default. If you have Combat Texts on and never
   ticked No Target, "NO TARGET" now shows in combat
-- The Combat Texts preview shows the AGGRO line
-
----
-
-## v4.9.10
 
 ### Pet Status
 
 - **NEW:** Attach to Combat Texts, off by default. On, the pet text becomes
   the last line of the Combat Texts stack in its font, and its own position
-  and font settings hide. No Movement Alert lines attached there sit below it
+  and font settings hide
 - Warlocks with Grimoire of Sacrifice no longer see a false "PET DEAD" after
   sacrificing, or while the game hides the sacrifice buff in combat
-- Warlocks: a "PET MISSING" or "PET DEAD" that is showing when a fight
-  starts stays up through the fight, where it used to disappear in combat.
-  Summoning a demon clears it
+- Warlocks: a "PET MISSING" or "PET DEAD" showing when a fight starts stays
+  up through the fight. Summoning a demon clears it
 
----
+### Great Vault Alert
 
-## v4.9.9
+- **NEW:** Reward Cover. At the vault, in a rested area with a reward to
+  claim, each card holding a reward is covered by a card you click to
+  reveal, one at a time, in any order. On by default inside Great Vault
+  Alert (the module itself stays off by default)
+- A reveal plays the Reveal Sound and flares in the item's quality color. A
+  revealed card stays revealed on that character until you claim, across
+  /reload; "Cover Revealed Cards Again" covers them again
+- **NEW:** Bad Loot Line and Reveal Flavor (both on by default), and Chat
+  Recap (off by default), which names your best reward after the last
+  reveal
+
+### Dungeon Teleport Reminder
+
+- The LFG Reminder card is renamed Dungeon Teleport Reminder
+- **NEW:** Party Teleports, on by default inside the module (the module
+  itself stays off by default). When a party member teleports to a dungeon,
+  a "Teleport Reminder" popup offers your own teleport there, and your own
+  dungeon teleports are shared with the party
+- Party teleports work in the open world and in any party dungeon, but not
+  in a raid or inside a running key. A popup that arrives in combat waits
+  until combat ends, and one dungeon prompts at most once a minute
+- "Disable Feature" on a party popup turns off Party Teleports only
+- The popup is wider and easier to read, and can no longer be dragged off
+  screen. Group Finder prompts recognize every season's dungeons
+- With Mythic+ Tweaks' teleport popups also on, you are asked once which
+  to keep
+
+### Party Buffs
+
+- New defaults: icon size 36, spacing 1, timer size 14, and one decimal
+  under 1 second. Settings you changed keep your values
+
+### Time Spiral
+
+- The display follows the Time Spiral buff itself instead of your movement
+  spell's glow. The Warlock Soulburn false alert is gone, and it works again
+  for Havoc Demon Hunters with Inertia or Dash of Chaos
+- The timer counts the buff's real time left, the icon hides when you use
+  the free cast, when the buff ends, or in a vehicle, and a buff already on
+  you at a /reload shows
+- Glow types are now Pixel, Ants, Proc Loop and Alert; a saved older type
+  shows as the closest new one. **NEW:** Lines, Speed, Thickness and the
+  other glow controls
 
 ### Character Panel
 
 - An item above its track's normal cap, such as a 344 Myth piece, shows its
-  track letter (an orange "M")
-- Enchant labels are rewritten. Verbose spells out the stats ("Intellect &
-  Stamina", "Primary Stat"), lesser enchants read "Minor", and Empowered
-  helm enchants read "Empowered Leech" and so on in Verbose
-- Short says "Avoid" for avoidance everywhere. "&" joins two stats and "/"
-  means either one ("Agi/Str & Stam", "Agility/Strength & Stamina")
-- Enchants from earlier expansions show their own name instead of a label;
-  Death Knight runeforges keep theirs
-- Labels are cut at 32 characters instead of 18 and drop the "Enchant
-  <slot> -" opening, so Full shows long names whole
-- Full: two labels that would meet across the character model shrink
-  together, then cut
-- The same labels show on the Inspect window, and the Enchant Name Style
-  tooltip gives an example of each style
-
----
-
-## v4.9.8
+  track letter, and a crafted piece's "CR" is colored by its crest tier
+- Enchant labels are rewritten: Verbose spells out the stats, Short says
+  "Avoid", "&" joins two stats and "/" means either one. Earlier expansions'
+  enchants show their own name, and Death Knight runeforges keep theirs
+- Labels are cut at 32 characters instead of 18, and in Full two labels that
+  would meet across the character model shrink together
+- The same labels show on the Inspect window
 
 ### Addon Skins
 
 - **NEW:** an RCLootCouncil skin, on by default and grayed out when
-  RCLootCouncil is not installed. Its windows, tables, buttons, item icons,
-  menus, popups and the loot row's timer bar get KitnEssentials' look, and
-  its colored icon borders keep their colors
-- RCLootCouncil gains a KitnUI skin and stays on it while the row is on.
-  After you turn the row off, KitnUI stays selected in RCLootCouncil until
-  you pick another skin
-- RCLootCouncil window titles sit above the window, table headers use the
-  largest size that fits their columns (up to 12), and loot rows for your
-  own items keep the normal dark border
-- RCLootCouncil borders stay one pixel wide when the UI scale changes, and
-  popup buttons stay bright when a popup is reused
-- Mythic Dungeon Tools: the window is skinned again, including its close
-  and maximize buttons, side panel, tooltips, toolbar arrow, progress bar
-  and the dungeon buttons, which are skinned on the first open
+  RCLootCouncil is not installed. Its windows, tables, buttons, icons, menus,
+  popups and timer bar get KitnEssentials' look, and RCLootCouncil gains a
+  KitnUI skin
+- Mythic Dungeon Tools: the window is skinned again, including its buttons,
+  side panel, tooltips, progress bar and dungeon buttons
 
----
+### Skinning
 
-## v4.9.7
-
-### Chat
-
-- Chat settings window: under Combat Log > Message Types, each group's
-  sub-checkboxes (such as Damage and Missed under Melee) show again
-- The Combat Log sub-tabs are sized to their labels, and the chat-window
-  tabs are no longer forced to one width; the game sizes them and shrinks
-  them to fit when there are many
-- The Chat History settings are split into two cards, Chat History and
-  Saved Chat Types. The types are compact checkboxes grouped Local, Social
-  and Group, with Channel under Social
-- "Lines To Keep" is renamed Saved Lines and has a tooltip
-- Clear History asks before it deletes anything
-- Clear History and Clear Other Characters share one row, half each,
-  evenly spaced in the card
-- With History off, its controls gray out. With the chat skin off, the card
-  stays and says History needs the chat skin
-
----
-
-## v4.9.6
+- With the Character skin off, the equipment flyout keeps Blizzard's look
+- The Great Vault's two "Or" plates show their reward icon at the skinned
+  size
 
 ### Spell History
 
 - Every cast pushes the strip: older icons glide one step over and the
-  newest icon appears in its slot, fading in
-- **NEW:** Fade Mode (Per Icon or Whole Strip) and Hold in Combat on the
-  Fade card
-- Whole Strip with Hold in Combat is the new default: the strip fades as
-  one, Fade Delay seconds after your last cast, and stays at full strength
-  through a fight
-- Shorter page text, and tooltips on the Casts checkboxes
+  newest fades in
+- **NEW:** Fade Mode (Per Icon or Whole Strip) and Hold in Combat. Whole
+  Strip with Hold in Combat is the new default: the strip fades as one after
+  your last cast and stays at full strength through a fight
 
----
+### Chat
 
-## v4.9.5
+- Chat settings: the Combat Log's Message Types sub-checkboxes show again,
+  and the Combat Log and chat-window tabs size to their labels
+- Chat History is split into Chat History and Saved Chat Types cards; Clear
+  History asks before it deletes anything
+- Chat History listens only while the chat skin is on
+
+### UI Widgets
+
+- Text widgets that Blizzard draws larger than your Font Size keep
+  Blizzard's size, and stay centered. Font Size is now a minimum
+
+### Havoc Tracker
+
+- The Havoc warning lets clicks through, shows no tooltip, and stays dark
+  on a friendly target
+
+### Nicknames
+
+- Where you have both a Northern Sky Raid Tools nickname and an older
+  KitnEssentials nickname for someone, the Northern Sky one shows
 
 ### Raid Notifications
 
-- The settings page is regrouped into General Alerts (Gateway, Benched,
-  Bonus Rolls Missing) and Boss Alerts (Reset Boss, Loot Boss), three
-  switches to a row with short labels
-- Each alert's description moves into a tooltip on its switch, and the page
-  header is one line
-- Show Icons sits alone in the first card. The Alert Duration slider is
-  renamed Duration and sits under the two boss alerts it controls, with a
-  note on what ends each one
-- The alerts themselves behave as before
-
----
-
-## v4.9.4
+- The settings page is regrouped into General Alerts and Boss Alerts, with
+  each alert's description in a tooltip on its switch
 
 ### Settings Window
 
 - Buttons and dropdowns sit on a plate darker than the card behind them
-  instead of lighter, with darker hover and pressed looks
-
----
-
-## v4.9.3
-
-### Settings Window
-
-- Compact checkboxes (the small box with a label) respond to clicks, hover
-  and tooltips only over the box and its label text. The blank space to the
-  right of the label does nothing
-- On the Secondary Stats and Enemy Counter spec cards, clicking anywhere
-  across the card no longer toggles a spec
+- Compact checkboxes respond only over the box and its label text
+- On the Movement Buffs and Aura Externals pages, changing the glow type
+  moves the cards below the Glow card with it
 
 ---
 
