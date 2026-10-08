@@ -61,6 +61,19 @@ local EXTERNAL_LINE_TYPES = {
 local IS_EXTERNAL_LINE = {}
 for _, key in ipairs(EXTERNAL_LINE_TYPES) do IS_EXTERNAL_LINE[key] = true end
 
+-- Frames other modules attach below the lines, top to bottom. Havoc stays
+-- last: the game draws its text and will not say whether it is shown, so
+-- nothing may sit below it.
+local ATTACHED_FRAME_TYPES = {
+    "potionReady",
+    "stanceText",
+    "noMovement",
+    "huntersMark",
+    "havoc",
+}
+local IS_ATTACHED_FRAME = {}
+for _, key in ipairs(ATTACHED_FRAME_TYPES) do IS_ATTACHED_FRAME[key] = true end
+
 CM.container = nil
 CM.messageFrames = {}
 CM.activeMessages = {}
@@ -81,8 +94,13 @@ CM.aggroEventFrame = nil
 CM.aggroEventsRegistered = false
 CM.aggroSoundBlocked = false
 CM.aggroPulse = nil
--- Sent on enable and disable, so an external line's owner can move its text
--- between its own frame and this stack.
+CM.attachedFrames = {}
+CM.attachedInsets = {}
+CM.arrangedShown = {}
+CM.arrangedHeight = {}
+-- Sent on enable and disable, and from ApplySettings once the container
+-- exists, so an attached module can move between its own anchor and this
+-- stack and pick up the font.
 CM.CHANGED_MESSAGE = "KitnEssentials_CombatTextsChanged"
 
 ---------------------------------------------------------------------------------
@@ -213,8 +231,25 @@ function CM:ArrangeMessages()
     local yOffset = StackFrames(self, MESSAGE_TYPES, 0, spacing)
     yOffset = StackFrames(self, EXTERNAL_LINE_TYPES, yOffset, spacing)
 
-    if self.container then
-        self.container:SetHeight(math_max(30, yOffset - spacing))
+    if not self.container then return end
+    -- Lines only: the container can be anchored at its center, so counting
+    -- attached frames would move the lines every time one shows.
+    self.container:SetHeight(math_max(30, yOffset - spacing))
+
+    for _, key in ipairs(ATTACHED_FRAME_TYPES) do
+        local frame = self.attachedFrames[key]
+        if frame then
+            local shown = frame:IsShown()
+            local height = frame:GetHeight()
+            self.arrangedShown[key] = shown
+            self.arrangedHeight[key] = height
+            if shown then
+                local inset = self.attachedInsets[key] or 0
+                frame:ClearAllPoints()
+                frame:SetPoint("TOP", self.container, "TOP", 0, -(yOffset + inset))
+                yOffset = yOffset + inset + height + spacing
+            end
+        end
     end
 end
 
@@ -376,10 +411,17 @@ function CM:AcceptsExternalLines()
 end
 
 -- Not refused during the preview: the line belongs to its owner, and the
--- preview never repaints or hides it.
-function CM:ShowExternalLine(key, text, r, g, b, a)
+-- preview never repaints or hides it. size is the owner's own text size, or
+-- nil for the Combat Texts size.
+function CM:ShowExternalLine(key, text, r, g, b, a, size)
     if not IS_EXTERNAL_LINE[key] or not self:AcceptsExternalLines() then return false end
     local frame = self:GetMessageFrame(key)
+    if frame.sizeOverride ~= size then
+        frame.sizeOverride = size
+        local lineSize = size or self.db.FontSize or 16
+        KE:ApplyFontToText(frame.text, self.db.FontFace, lineSize, self.db.FontOutline)
+        frame:SetHeight(lineSize + 2)
+    end
     frame.text:SetText(text)
     frame.text:SetTextColor(r or 1, g or 1, b or 1, a or 1)
     frame:SetAlpha(1)
@@ -394,6 +436,51 @@ function CM:HideExternalLine(key)
     if not (frame and frame:IsShown()) then return end
     frame:Hide()
     self:ArrangeMessages()
+end
+
+-- A nil frame detaches, which is never refused. topInset is room kept above
+-- the frame for something drawn outside its bounds.
+function CM:SetAttachedFrame(key, frame, topInset)
+    if not IS_ATTACHED_FRAME[key] then return false end
+    if frame == nil then
+        if self.attachedFrames[key] == nil then return false end
+        self.attachedFrames[key] = nil
+        self.attachedInsets[key] = nil
+        self.arrangedShown[key] = nil
+        self.arrangedHeight[key] = nil
+        if self.container then self:ArrangeMessages() end
+        return false
+    end
+    if not self:AcceptsAttach(true) then return false end
+    self.attachedFrames[key] = frame
+    self.attachedInsets[key] = topInset or 0
+    self:ArrangeMessages()
+    return true
+end
+
+-- Owners call this after every show, hide or resize; it re-arranges only when
+-- the frame's shown state or height moved since the last arrange.
+function CM:AttachedFrameChanged(key)
+    local frame = self.attachedFrames[key]
+    if not frame then return end
+    if frame:IsShown() == self.arrangedShown[key]
+        and frame:GetHeight() == self.arrangedHeight[key] then
+        return
+    end
+    self:ArrangeMessages()
+end
+
+-- One subscription rule for every attacher: CHANGED_MESSAGE runs its
+-- ApplySettings only while it is active and its attach toggle is on.
+function CM:SyncAttachSubscription(owner, active)
+    local wanted = active and owner.db ~= nil and owner.db.AttachToCombatTexts == true
+    if wanted and not owner.attachMessage then
+        owner:RegisterMessage(self.CHANGED_MESSAGE, "ApplySettings")
+        owner.attachMessage = self.CHANGED_MESSAGE
+    elseif not wanted and owner.attachMessage then
+        owner:UnregisterMessage(owner.attachMessage)
+        owner.attachMessage = nil
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -607,7 +694,7 @@ function CM:ApplySettings()
     -- Update font settings and frame height for all message frames
     local fontSize = self.db.FontSize or 16
     for _, frame in pairs(self.messageFrames) do
-        frame:SetHeight(fontSize + 2)
+        frame:SetHeight((frame.sizeOverride or fontSize) + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
                 frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
@@ -620,7 +707,8 @@ function CM:ApplySettings()
                     KE:GetFontOutline(self.db.FontOutline))
                 frame.interruptName:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
             else
-                KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+                KE:ApplyFontToText(frame.text, self.db.FontFace,
+                    frame.sizeOverride or self.db.FontSize, self.db.FontOutline)
             end
         end
     end
@@ -650,7 +738,9 @@ function CM:ApplySettings()
     else
         self:CheckNoTarget()
         self:CheckAggro()
+        self:ArrangeMessages()
     end
+    self:SendMessage(self.CHANGED_MESSAGE)
 end
 
 function CM:ApplyPosition()
@@ -727,15 +817,14 @@ function CM:HidePreview()
         if frame then frame:Hide() end
         self.activeMessages[msgType] = nil
     end
-    -- Re-arranged only while such a line is still shown: the arrange shrinks
-    -- the container, which moves anything anchored to its top.
+    -- Re-arranged only while an external line is shown or a frame is attached:
+    -- the arrange shrinks the container, which moves anything anchored to its top.
+    local rearrange = next(self.attachedFrames) ~= nil
     for _, key in ipairs(EXTERNAL_LINE_TYPES) do
         local frame = self.messageFrames[key]
-        if frame and frame:IsShown() then
-            self:ArrangeMessages()
-            break
-        end
+        if frame and frame:IsShown() then rearrange = true end
     end
+    if rearrange then self:ArrangeMessages() end
 
     SetAggroPulse(self.messageFrames.aggro, false)
 
@@ -1035,5 +1124,11 @@ function CM:OnDisable()
     self:UpdateInterruptEventRegistration(true)
     self.interruptAnnounceSpells = nil
     self:UnregisterAllEvents()
+    for _, key in ipairs(ATTACHED_FRAME_TYPES) do
+        self.attachedFrames[key] = nil
+        self.attachedInsets[key] = nil
+        self.arrangedShown[key] = nil
+        self.arrangedHeight[key] = nil
+    end
     self:SendMessage(self.CHANGED_MESSAGE)
 end
