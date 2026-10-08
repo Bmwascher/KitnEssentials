@@ -328,7 +328,8 @@ end
 
 function PS:Paint(text, r, g, b, a)
     local cm = text and GetAttachTarget()
-    if cm and cm:ShowExternalLine(PET_LINE_KEY, text, r, g, b, a) then
+    local size = self.db.AttachOwnFontSize and self.db.FontSize or nil
+    if cm and cm:ShowExternalLine(PET_LINE_KEY, text, r, g, b, a, size) then
         self.externalShown = true
         self.frame:Hide()
         return
@@ -395,18 +396,11 @@ end
 -- Settings
 ---------------------------------------------------------------------------------
 -- Subscribed only while attached, so a player who never attaches does no
--- work when Combat Texts turns on or off.
+-- work when Combat Texts turns on or off. The preview counts: on a class with
+-- no pet the module never starts tracking, but its preview still shows.
 function PS:UpdateAttachSubscription()
-    local cm = self._tracking and self.db.AttachToCombatTexts
-        and KitnEssentials:GetModule("CombatTexts", true)
-    local message = cm and cm.CHANGED_MESSAGE
-    if message and not self.attachMessage then
-        self:RegisterMessage(message, "ApplySettings")
-        self.attachMessage = message
-    elseif not message and self.attachMessage then
-        self:UnregisterMessage(self.attachMessage)
-        self.attachMessage = nil
-    end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SyncAttachSubscription(self, self._tracking or self.isPreview) end
 end
 
 function PS:ApplySettings()
@@ -464,6 +458,7 @@ function PS:ShowPreview(state)
 
     self.isPreview = true
     self.previewState = state or "missing"
+    self:UpdateAttachSubscription()
 
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
@@ -502,6 +497,7 @@ end
 
 function PS:HidePreview()
     self.isPreview = false
+    self:UpdateAttachSubscription()
     if self.db.Enabled then
         self:UpdatePetText()
     else
@@ -562,7 +558,11 @@ function PS:OnDisable()
     heldStatus = nil
     self._updatePending = false
     self:UnregisterAllEvents()
-    self:UpdateAttachSubscription()
+    -- Off outright, even with a preview still up: AceEvent drops the message
+    -- registration after this returns, and a marker left set would block the
+    -- next enable from registering again.
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SyncAttachSubscription(self, false) end
     if self.frame then self.frame:Hide() end
     self:HideExternalLine()
 end
