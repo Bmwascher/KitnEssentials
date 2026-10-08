@@ -438,7 +438,7 @@ end
 
 -- Popup geometry. The row sits below the header; the footer line under it
 -- holds "Disable Feature" and the watermark.
-local POPUP_W     = 270
+local POPUP_W     = 250
 local TITLE_H     = 27
 local PAD         = 10
 local BTN_TOP     = TITLE_H + 11
@@ -602,14 +602,14 @@ BuildPopup = function()
     -- Anchored top-left and top-right only, with no height and no line limit,
     -- so a long name wraps instead of truncating.
     local nameFS = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(nameFS, 14, "") end
+    if S and S.SetFont then S.SetFont(nameFS, 13, "") end
     nameFS:SetJustifyH("LEFT")
     nameFS:SetWordWrap(true)
     nameFS:SetNonSpaceWrap(true)
     secureBtn._name = nameFS
 
     local roleFS = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(roleFS, 13, "") end
+    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
     roleFS:SetJustifyH("LEFT")
     roleFS:SetWordWrap(false)
     roleFS:Hide()
