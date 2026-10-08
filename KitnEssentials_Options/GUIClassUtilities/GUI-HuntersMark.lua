@@ -71,7 +71,6 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        showAnchorFrameType = false,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
