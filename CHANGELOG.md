@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.14
+
+### CC Tracker
+
+- **NEW:** CC Tracker, a fourth tab on Dungeon Tools > Kicks & Casts. Each
+  enemy held by a long crowd control gets a row: the spell's icon, its time
+  left and the enemy's name. Off by default
+- Rows stack from the saved spot and close up when a crowd control ends. An
+  enemy held by up to three shows them side by side, shortest first
+- The time left reads the same as the nameplate's own countdown
+- Tracks crowd control from anyone by default, or Mine Only. Every Crowd
+  Control adds short stuns too
+- Tracked Crowd Control shows one class at a time from a dropdown with
+  class icons, each spell with its icon. Add or remove your own by spell ID
+- Settings for icon size, row spacing, Max Enemies (up to 40), grow
+  direction, the time left font and decimals, and the enemy name
+
+---
+
 ## v4.9.13
 
 ### DoT Tracker
