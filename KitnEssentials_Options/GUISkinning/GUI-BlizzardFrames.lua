@@ -702,21 +702,20 @@ end)
 -- This row keeps its own active id. GUIFrame.tabbedPageState is keyed by PAGE,
 -- and this row is not a page.
 local elementTabs = {
-    { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
-    { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
-    { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
-    { id = "VehicleExit",                  label = "Vehicle Exit" },
+    { id = "SkinBlizzardFramesLootRoll",    label = "Loot Roll" },
+    { id = "SkinBlizzardFramesLootWindow",  label = "Loot Window" },
+    { id = "SkinBlizzardFramesWidgets",     label = "UI Widgets" },
+    { id = "SkinBlizzardFramesAlertFrames", label = "Alert Frames" },
+    { id = "VehicleExit",                   label = "Vehicle Exit" },
 }
 local activeElement = elementTabs[1].id
 
 -- Edit Mode's Open Settings hands over one of these nested ids. The page-level
 -- resolver cannot see them, so it needs to know which outer tab owns them.
-GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", {
-    "SkinBlizzardFramesLootRoll",
-    "SkinBlizzardFramesLootWindow",
-    "SkinBlizzardFramesWidgets",
-    "VehicleExit",
-})
+-- Built from the row so the two lists cannot drift.
+local elementIds = {}
+for i, tab in ipairs(elementTabs) do elementIds[i] = tab.id end
+GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", elementIds)
 
 -- No conflict branch here. Every tab on this row configures a module that
 -- stands down under ElvUI, so the whole Elements tab drops out of the strip

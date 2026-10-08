@@ -1,8 +1,9 @@
 -- The Dark Theme page is tabbed: GUI-BlizzardFrames.lua declares the strip via
 -- RegisterTabbedContent, and each entry's id must be matched by a
 -- GUIFrame:RegisterContent(id, fn) call -- which may live in a sibling file
--- (GUI-UIWidgets.lua, GUI-LootRoll.lua, GUI-LootFrame.lua, GUI-VehicleExit.lua
--- and GUI-BlizzardMessages.lua all register into the same strip). Neither
+-- (GUI-UIWidgets.lua, GUI-AlertFrames.lua, GUI-LootRoll.lua, GUI-LootFrame.lua,
+-- GUI-VehicleExit.lua and GUI-BlizzardMessages.lua all register into the same
+-- strip). Neither
 -- tabbed_content_spec.lua (a synthetic TABS fixture, not GUI-BlizzardFrames.lua's
 -- own list) nor gui_blizzardframes_spec.lua (stubs RegisterTabbedContent to a
 -- no-op, discarding the strip entirely) proves every declared id actually
@@ -57,6 +58,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         }
 
         helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-UIWidgets.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-AlertFrames.lua", KE)
         helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-LootRoll.lua", KE)
         helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-LootFrame.lua", KE)
         helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-VehicleExit.lua", KE)
@@ -161,15 +163,15 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
 
     -- The row no longer gates on the conflict state: the whole Elements tab
     -- drops out of the strip there, so this list is the same either way.
-    it("offers the same four elements in both states", function()
+    it("offers the same five elements in both states", function()
         elvui = false
         local offTabs = GUIFrame._VisibleElementTabs()
         elvui = true
         local onTabs = GUIFrame._VisibleElementTabs()
 
-        assert.same({ 4, 4 }, { #offTabs, #onTabs })
+        assert.same({ 5, 5 }, { #offTabs, #onTabs })
         assert.equals("SkinBlizzardFramesLootRoll", offTabs[1].id)
-        assert.equals("VehicleExit", offTabs[4].id)
+        assert.equals("VehicleExit", offTabs[5].id)
         assert.same(idSet(offTabs), idSet(onTabs))
     end)
 
@@ -185,7 +187,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     -- this row is what has to pick it up.
     describe("pending nested id", function()
         -- Runs the row's own builder and reports which element it selected.
-        -- The four child builders are replaced with inert recorders: the real
+        -- The five child builders are replaced with inert recorders: the real
         -- ones need the whole card stack, and what is under test here is the
         -- selection, not what those pages render.
         local function buildRow()
@@ -195,7 +197,8 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
                 return nil, yOffset
             end
             for _, id in ipairs({ "SkinBlizzardFramesLootRoll", "SkinBlizzardFramesLootWindow",
-                                  "SkinBlizzardFramesWidgets", "VehicleExit" }) do
+                                  "SkinBlizzardFramesWidgets", "SkinBlizzardFramesAlertFrames",
+                                  "VehicleExit" }) do
                 GUIFrame.registeredContent[id] = function(_, yOffset) return yOffset end
             end
             GUIFrame.registeredContent["SkinBlizzardFramesElements"]({}, 0)

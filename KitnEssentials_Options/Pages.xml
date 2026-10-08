@@ -89,6 +89,7 @@
     <Script file="GUISkinning\GUI-Tooltips.lua" />
     <Script file="GUISkinning\GUI-BlizzardMessages.lua" />
     <Script file="GUISkinning\GUI-UIWidgets.lua" />
+    <Script file="GUISkinning\GUI-AlertFrames.lua" />
     <Script file="GUISkinning\GUI-LootRoll.lua" />
     <Script file="GUISkinning\GUI-LootFrame.lua" />
     <Script file="GUISkinning\GUI-VehicleExit.lua" />

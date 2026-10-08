@@ -388,11 +388,11 @@ function AF:RegisterEditMode()
             return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
         end,
         -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row of
-        -- its own -- its config cards live on the UI Widgets tab instead, so
+        -- its own -- its config cards live on Dark Theme's Alert Frames tab, so
         -- route through the page that hosts them. guiTab is a NESTED id;
         -- GUI/GUIMain/GUI-TabbedContent.lua translates it to its owning tab.
         guiPath = "SkinBlizzardFrames",
-        guiTab = "SkinBlizzardFramesWidgets",
+        guiTab = "SkinBlizzardFramesAlertFrames",
     })
     KE.EditMode:RegisterElement({
         key = "EventToasts",
@@ -418,7 +418,7 @@ function AF:RegisterEditMode()
         end,
         -- Same page as the AlertFrames element above -- see its comment.
         guiPath = "SkinBlizzardFrames",
-        guiTab = "SkinBlizzardFramesWidgets",
+        guiTab = "SkinBlizzardFramesAlertFrames",
     })
 end
 
