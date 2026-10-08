@@ -260,6 +260,12 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         fontSizes = {
             { label = "Font Size", dbKey = "TimerFontSize", default = 20 },
         },
+        extraSlider = {
+            label = "Show Decimals Below (sec)",
+            dbKey = "DecimalThreshold",
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        },
         fontSizeRange = { 8, 40 },
         onChangeCallback = ApplySettings,
     })
@@ -268,21 +274,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         manager:RegisterGroup(fontWidgets, "all")
     end
 
-    -- The card's own last row is added with no trailing gap, so re-open the
-    -- spacing before appending to it.
-    fontCard:AddSpacing(Theme.paddingSmall)
-    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
-    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
-        min = 0, max = 10, step = 1,
-        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
-        callback = function(value)
-            db.DecimalThreshold = value
-            ApplySettings()
-        end,
-    })
-    decimalRow:AddWidget(decimalSlider, 0.5)
-    manager:Register(decimalSlider, "all")
-    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
+    -- The card's own last row is added with no trailing gap.
     fontCard:AddSpacing(Theme.paddingSmall)
     fontCard:AddNote("The font and outline are also used for the enemy name.")
     yOffset = fontCard:GetNextOffset()
