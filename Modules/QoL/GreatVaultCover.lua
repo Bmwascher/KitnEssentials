@@ -29,7 +29,7 @@ local STORE_KEY = "GreatVaultRevealed"
 local ART = "Interface\\AddOns\\KitnEssentials\\Media\\Vault\\VaultCover.png"
 local ART_RIGHT, ART_BOTTOM = 438 / 512, 252 / 256
 local SKULL = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:16|t"
-local BAD_LOOT_TEXT = "GG, Fuggin Easy"
+local BAD_LOOT_TEXT = "GG, Fuggin Easy. Better luck next week!"
 local HIGHLIGHT_ALPHA = 0.25
 local PULSE_ALPHA, PULSE_SECONDS = 0.55, 1.4
 -- The reveal flare keeps its own start, so a brighter breath leaves it as it is.
