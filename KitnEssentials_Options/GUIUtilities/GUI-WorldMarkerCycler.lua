@@ -52,7 +52,9 @@ end
 local function GetCaptureFrame()
     if captureFrame then return captureFrame end
 
-    local frame = CreateFrame("Button", nil, UIParent)
+    -- A child of the settings window, so any close hides it and its OnHide
+    -- cancels the capture.
+    local frame = CreateFrame("Button", nil, GUIFrame.mainFrame)
     frame:SetFrameStrata("FULLSCREEN_DIALOG")
     frame:SetAllPoints(UIParent)
     frame:EnableKeyboard(true)
