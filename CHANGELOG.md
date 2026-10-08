@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.13
+
+### DoT Tracker
+
+- **NEW:** DoT Tracker, in Class Tools > All Classes. One icon per DoT your
+  spec applies, with a count of how many enemies in combat carry yours
+  ("3/6"). Off by default
+- The count turns green when every counted enemy has the DoT. A DoT nobody
+  has shows its icon with "0/6"
+- Your DoTs lists each spec's DoTs with spell icons. Talent DoTs show only
+  while the talent is known, and you can add or remove your own by spell ID
+- Who Counts: only enemies in combat, up to 40 (20 by default)
+- Layout: icon size, spacing, grow direction, the count on, beside, above or
+  below the icon, and three count formats. With Show Icon off, the counts
+  take the icons' places
+- Target Timer shows your target's time left on the icon, and Glow lights
+  the icon when every enemy has it. Both are off by default
+- It can anchor to the screen, the player frame or a chosen frame
+
+---
+
 ## v4.9.12
 
 ### Time Spiral
