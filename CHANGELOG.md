@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.10
+
+### Pet Status
+
+- **NEW:** Attach to Combat Texts, off by default. On, the pet text becomes
+  the last line of the Combat Texts stack in its font, and its own position
+  and font settings hide. No Movement Alert lines attached there sit below it
+- Warlocks with Grimoire of Sacrifice no longer see a false "PET DEAD" after
+  sacrificing, or while the game hides the sacrifice buff in combat
+- Warlocks: a "PET MISSING" or "PET DEAD" that is showing when a fight
+  starts stays up through the fight, where it used to disappear in combat.
+  Summoning a demon clears it
+
+---
+
 ## v4.9.9
 
 ### Character Panel
