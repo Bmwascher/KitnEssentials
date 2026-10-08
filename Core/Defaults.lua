@@ -1166,7 +1166,7 @@ local Defaults = {
             InspectPanelEnabled  = true,
             ShowSlotItemLevel    = true,
             ShowEnchantNames     = true,
-            -- short = nickname + abbreviations, verbose = keyword only, full = as the tooltip gives it
+            -- short = abbreviated stats, verbose = stats spelled out, full = the tooltip's own text
             EnchantNameStyle     = "short",
             -- Crafted enchants carry a tier the tooltip shows only as an icon
             ShowEnchantRank      = false,

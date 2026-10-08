@@ -1,6 +1,7 @@
 -- Tier: KE-invented branching only (tiered test policy). The tooltip line match
 -- is ported and covered by the structural diff; what is tested here is the
--- wrapper that stops a shared constant being mutated, the cap predicate, the
+-- wrapper that stops a shared constant being mutated, which of the track's two
+-- sources wins (the game's upgrade data, then the tooltip), the cap predicate, the
 -- span builder's two independent gates, which side the span goes on, and the two
 -- separate things that decide whether a slot repaints at all: the track
 -- indicator's dirty key, and the detail render's pending flag.
@@ -16,7 +17,8 @@ local owned = {}
 -- needed there. The structure around it differs: this one captures the module
 -- registry and seeds KE inline, and it adds the two overrides this file needs --
 -- a tooltip that returns the caller's lines, and the detailed item level lookup
--- the crafted-track fallback calls. Write the block below as it stands; do not
+-- the crafted-track fallback calls. A case that needs the item link or the
+-- game's upgrade data passes them as overrides. Write the block below as it stands; do not
 -- go and copy the other file.
 --
 -- Do NOT hand-minimize this stub set. The module captures several of these as
@@ -91,6 +93,52 @@ describe("Item track extraction", function()
         local second = CP2:GetItemTrack("player", 1)
         assert.equals("4", first.cur)
         assert.equals("2", second.cur)
+    end)
+end)
+
+describe("Item track source order", function()
+    local LINK = "|cffa335ee|Hitem:1|h[x]|h|r"
+
+    -- The override survives the file's later loads, which only stub the link
+    -- lookup when it is absent.
+    after_each(function()
+        _G.GetInventoryItemLink = nil
+    end)
+
+    local function trackFor(info, tooltipLine)
+        local CP = loadCP(upgradeLine(tooltipLine), {
+            GetInventoryItemLink = function() return LINK end,
+            C_Item = {
+                GetItemInfoInstant = function() return nil end,
+                GetDetailedItemLevelInfo = function() return nil end,
+                GetItemUpgradeInfo = function() return info end,
+            },
+        })
+        return CP, CP:GetItemTrack("player", 5)
+    end
+
+    it("reads the game's track first and falls back to the tooltip when it names none KE knows", function()
+        local cases = {
+            { name = "API track wins over the tooltip's, and 9 of 6 is capped",
+              info = { trackString = "Myth", currentLevel = 9, maxLevel = 6 },
+              line = "Upgrade Level: Hero 2/6",
+              letter = "M", cur = 9, max = 6, capped = true },
+            { name = "API info without a track name falls back to the tooltip",
+              info = { currentLevel = 0, maxLevel = 0 },
+              line = "Upgrade Level: Hero 4/6",
+              letter = "H", cur = "4", max = "6", capped = false },
+            { name = "API track name matching no keyword falls back to the tooltip",
+              info = { trackString = "Gladiator", currentLevel = 1, maxLevel = 6 },
+              line = "Upgrade Level: Champion 3/8",
+              letter = "C", cur = "3", max = "8", capped = false },
+        }
+        for _, c in ipairs(cases) do
+            local CP, w = trackFor(c.info, c.line)
+            assert.equals(c.letter, w.track.letter, c.name)
+            assert.equals(c.cur, w.cur, c.name)
+            assert.equals(c.max, w.max, c.name)
+            assert.equals(c.capped, CP._IsUpgradeCapped(w), c.name)
+        end
     end)
 end)
 
