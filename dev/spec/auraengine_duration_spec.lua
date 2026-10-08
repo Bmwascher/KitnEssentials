@@ -152,6 +152,28 @@ describe("AuraEngine duration formatting", function()
         assert.is_false(decimal == getDurationFormatter(settings))
     end)
 
+    -- Opt-in for a display drawn beside the nameplate's own countdown, which
+    -- reads a second higher than rounding down.
+    it("rounds the seconds and tenths up for a display that opts in, and caches per choice", function()
+        local captured = installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+
+        local settings = { DecimalThreshold = 5 }
+        local down = getDurationFormatter(settings)
+        local up = getDurationFormatter(settings, true)
+        assert.is_false(down == up)
+
+        assert.equals(5, #captured.breakpoints)
+        for index = 1, 3 do
+            assert.equals("down", captured.breakpoints[index].components[1].rounding)
+        end
+        assert.equals("up", captured.breakpoints[4].rounding)
+        assert.equals("up", captured.breakpoints[5].rounding)
+        assert.is_true(up == getDurationFormatter(settings, true))
+    end)
+
     it("formats preview durations in hours from one hour and days from one day", function()
         local Preview = L.loadAuraPreview()
         local buildFrames = findUpvalue(Preview.Enter, "BuildFrames")

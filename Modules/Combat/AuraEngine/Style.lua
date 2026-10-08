@@ -33,11 +33,12 @@ Style.DISPEL_ICON_FRACTION = 0.40
 
 local DurationFormatterCache = setmetatable({}, { __mode = "k" })
 
-local function GetDurationFormatter(settings)
+local function GetDurationFormatter(settings, roundUp)
     local decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
+    roundUp = roundUp == true
 
     local cached = DurationFormatterCache[settings]
-    if cached and cached.decimalThreshold == decimalThreshold then
+    if cached and cached.decimalThreshold == decimalThreshold and cached.roundUp == roundUp then
         return cached.formatter
     end
 
@@ -68,25 +69,27 @@ local function GetDurationFormatter(settings)
     -- Down, to agree with the Cooldown Manager. Its icons keep the game's own
     -- countdown numbers while these displays draw their own text, and rounding
     -- up read a second higher than the same buff shown there. The tenths rule
-    -- rounds the same way, for the same reason.
+    -- rounds the same way, for the same reason. A display drawn beside the
+    -- nameplate's own countdown opts into Up, which is how that one reads.
+    local rounding = roundUp and Enum.NumericRuleFormatRounding.Up or Enum.NumericRuleFormatRounding.Down
     if decimalThreshold > 0 then
         breakpoints[#breakpoints + 1] = {
             threshold = decimalThreshold,
             step      = 1,
-            rounding  = Enum.NumericRuleFormatRounding.Down,
+            rounding  = rounding,
             format    = "%d",
         }
         breakpoints[#breakpoints + 1] = {
             threshold = 0,
             step      = 0.1,
-            rounding  = Enum.NumericRuleFormatRounding.Down,
+            rounding  = rounding,
             format    = "%.1f",
         }
     else
         breakpoints[#breakpoints + 1] = {
             threshold = 0,
             step      = 1,
-            rounding  = Enum.NumericRuleFormatRounding.Down,
+            rounding  = rounding,
             format    = "%d",
         }
     end
@@ -96,6 +99,7 @@ local function GetDurationFormatter(settings)
 
     DurationFormatterCache[settings] = {
         decimalThreshold = decimalThreshold,
+        roundUp          = roundUp,
         formatter        = formatter,
     }
     return formatter
@@ -393,7 +397,8 @@ function Style.RegisterRegions(button, _display, group, settings)
         if settings.ShowTimer ~= false then
             button.keTimer:Show()
             button:SetDurationText(button.keTimer, {
-                textFormatter = GetDurationFormatter(settings),
+                textFormatter = GetDurationFormatter(settings,
+                    group.capabilities and group.capabilities.durationRoundUp),
                 textColor     = nil,
             })
         else

@@ -3,6 +3,8 @@
     <Script file="KickTracker.lua" />
     <Script file="KickTrackerRules.lua" />
     <Script file="DungeonCasts.lua" />
+    <Script file="CCTrackerRules.lua" />
+    <Script file="CCTracker.lua" />
     <Script file="TargetedSpellsGlow.lua" />
     <Script file="TargetedSpells.lua" />
     <Script file="DeathNotifications.lua" />
