@@ -5,17 +5,17 @@ local _G = _G
 local ipairs, pairs = ipairs, pairs
 local hooksecurefunc = hooksecurefunc
 
--- The first two category tabs carry longer labels than the rest.
-local TAB_W, TAB_W_WIDE, TAB_W_NARROW = 80, 90, 70
-local WIDE_TABS = 2
-
--- Blizzard resets the combat tabs to their natural width on a UI scale
--- change; after one, fixed widths written later would undo it.
-local scaleChanged = false
-local combatEventHooked = false
-
-local function OnCombatSettingsEvent(_, event)
-    if event == "UI_SCALE_CHANGED" then scaleChanged = true end
+-- Runs again on every open: KE's font can change while the window is closed.
+local function ResizeCombatTabs()
+    local resize = _G.PanelTemplates_TabResize
+    if not resize then return end
+    local i = 1
+    local tab = _G["CombatConfigTab" .. i]
+    while tab do
+        if tab.Text and tab.Left and tab.Right then resize(tab, 0) end
+        i = i + 1
+        tab = _G["CombatConfigTab" .. i]
+    end
 end
 
 local function OnUpdateCheckboxes(frame)
@@ -54,7 +54,6 @@ local function OnTabManagerWidth(frame)
             S.data(tab).skinned = true
             S.StripTextures(tab)
         end
-        tab:SetWidth(TAB_W)
     end
 end
 
@@ -94,13 +93,12 @@ local function Skin()
         local tab = _G["CombatConfigTab" .. i]
         while tab do
             S.StripTextures(tab)
-            if not scaleChanged then
-                tab:SetWidth(i <= WIDE_TABS and TAB_W_WIDE or TAB_W_NARROW)
-            end
             i = i + 1
             tab = _G["CombatConfigTab" .. i]
         end
     end
+    ResizeCombatTabs()
+    ccf:HookScript("OnShow", ResizeCombatTabs)
 
     for _, frame in pairs({
         _G.ChatConfigCategoryFrame, _G.ChatConfigBackgroundFrame,
@@ -206,12 +204,6 @@ local function Arm()
     hooksecurefunc("TextToSpeechFrame_UpdateMessageCheckboxes", arm:Late(OnUpdateSpeechCheckboxes))
     if _G.ChatConfigFrameChatTabManager then
         hooksecurefunc(_G.ChatConfigFrameChatTabManager, "UpdateWidth", OnTabManagerWidth)
-    end
-    -- The combat tabs' only width writer after login is this frame's own
-    -- XML OnEvent, which a hook on the global function never sees.
-    if _G.ChatConfigCombatSettings and not combatEventHooked then
-        combatEventHooked = true
-        _G.ChatConfigCombatSettings:HookScript("OnEvent", OnCombatSettingsEvent)
     end
     -- The chat-bar speech button sits outside the window.
     if _G.TextToSpeechButton then S.StripTextures(_G.TextToSpeechButton) end

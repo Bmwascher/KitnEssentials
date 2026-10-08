@@ -1367,11 +1367,22 @@ function S.NavButton(button)
     S.data(button).skinned = true
 end
 
+-- A nested CheckButton is a control, not decoration: the game parents tiered
+-- sub-checkboxes to their tier checkbox, and each is skinned on its own.
+---@param child table
+---@param ours table|nil the check's KE backdrop
+---@return boolean
+function S._IsCheckDecoration(child, ours)
+    if child == ours or not child.SetAlpha then return false end
+    if child.IsObjectType and child:IsObjectType("CheckButton") then return false end
+    return true
+end
+
 function S.SweepCheckChildren(check)
     if not check or not check.GetChildren then return end
     local ours = S.GetBackdrop(check)
     for _, child in ipairs({ check:GetChildren() }) do
-        if child ~= ours and child.SetAlpha then
+        if S._IsCheckDecoration(child, ours) then
             child:SetAlpha(0)
         end
     end
@@ -1408,14 +1419,7 @@ function S.CheckRefresh(check)
             end
         end
     end
-    if check.GetChildren then
-        local ours = S.GetBackdrop(check)
-        for _, child in ipairs({ check:GetChildren() }) do
-            if child ~= ours and child.SetAlpha then
-                child:SetAlpha(0)
-            end
-        end
-    end
+    S.SweepCheckChildren(check)
     flat(checked)
     flat(disabledChecked)
 end
@@ -1494,14 +1498,7 @@ function S.CheckBox(check)
         end
     end
 
-    if check.GetChildren then
-        local ours = S.GetBackdrop(check)
-        for _, child in ipairs({ check:GetChildren() }) do
-            if child ~= ours and child.SetAlpha then
-                child:SetAlpha(0)
-            end
-        end
-    end
+    S.SweepCheckChildren(check)
 
     if checked then
         flatCheck(checked)
