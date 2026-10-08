@@ -675,9 +675,8 @@ function PB:OnRestrictionChanged()
     end)
 end
 
--- Registered only while Use in Healer Specs is on. No healer answer is cached:
--- the placement reads ask the spec when they run, and a re-apply that keeps
--- the player on the same side of the healer line moves nothing.
+-- Registered only while Use in Healer Specs is on. No healer answer is cached;
+-- the placement reads ask the spec each time.
 function PB:OnSpecChanged(_, unit)
     if unit ~= "player" then return end
     self:ApplySettings()
@@ -791,8 +790,6 @@ function PB:ApplySettings()
     if self.previewing then self:ShowPreview() end
 end
 
--- The first time Use in Healer Specs is turned on, the healer copy starts as
--- the current placement, so nothing moves until it is edited.
 function PB:SeedHealerPlacement()
     self:UpdateDB()
     KE.PartyBuffsRules.SeedHealerPlacement(self.db)

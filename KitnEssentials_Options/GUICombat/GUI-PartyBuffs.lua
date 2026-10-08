@@ -46,7 +46,6 @@ local PLACEMENT_TABS = {
     { id = "HEALER",  label = "Healer" },
 }
 
--- Each placement key's healer copy, taken from the module's own list.
 local HEALER_KEY = {}
 for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
 
