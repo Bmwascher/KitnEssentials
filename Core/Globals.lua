@@ -1815,21 +1815,58 @@ function KE:EUIDrawsSlotElement(unit, element)
 end
 
 ---------------------------------------------------------------------------------
+-- Aura containers
+---------------------------------------------------------------------------------
+-- Loaded with the game; the load call only covers it not being up yet. A
+-- consumer whose own frames hang off a container with a group also needs the
+-- layout-script template, and passes its name.
+function KE:AuraContainersAvailable(template)
+    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
+        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
+    end
+    if _G.AuraContainerSortMethod == nil then return false end
+    if not template then return true end
+    local xml = _G.C_XMLUtil
+    if not (xml and xml.GetTemplateInfo) then return false end
+    local ok, info = pcall(xml.GetTemplateInfo, template)
+    return ok and info ~= nil
+end
+
+---------------------------------------------------------------------------------
+-- Instanced content
+---------------------------------------------------------------------------------
+-- A dungeon or raid with a real difficulty. Difficulty 0 is the open world,
+-- and a garrison reports itself as an instance.
+function KE:InRealInstancedContent()
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    difficultyID = tonumber(difficultyID) or 0
+    if difficultyID == 0 then return false end
+    if C_Garrison and C_Garrison.IsOnGarrisonMap and C_Garrison.IsOnGarrisonMap() then
+        return false
+    end
+    return instanceType == "party" or instanceType == "raid"
+end
+
+---------------------------------------------------------------------------------
 -- Spec role
 ---------------------------------------------------------------------------------
 
-local function PlayerSpecRole()
+-- Your own spec is never secret. Index 0 is a character with no spec yet.
+function KE:GetPlayerSpecRole()
     local specIndex = C_SpecializationInfo.GetSpecialization()
-    if not specIndex then return nil end
-    return _G.GetSpecializationRole(specIndex)
+    if not specIndex or specIndex == 0 then return nil end
+    local getRole = _G.GetSpecializationRole
+    if not getRole then return nil end
+    return getRole(specIndex)
 end
 
 function KE:IsPlayerHealerSpec()
-    return PlayerSpecRole() == "HEALER"
+    return self:GetPlayerSpecRole() == "HEALER"
 end
 
 function KE:IsPlayerTankSpec()
-    return PlayerSpecRole() == "TANK"
+    return self:GetPlayerSpecRole() == "TANK"
 end
 
 ---------------------------------------------------------------------------------

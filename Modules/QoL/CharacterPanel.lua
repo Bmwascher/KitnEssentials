@@ -272,13 +272,14 @@ local ITEM_TRACKS = {
     { keyword = "Adventurer", letter = "A", color = { 0.70, 0.70, 0.70 } },
 }
 
--- Crafted gear track auto-detection from item level.
-local CRAFTED_TRACKS = {
-    { minIlvl = 295, letter = "CR", color = { 1.00, 0.50, 0.00 }, weaponOnly = true },
-    { minIlvl = 285, letter = "CR", color = { 1.00, 0.50, 0.00 } },
-    { minIlvl = 282, letter = "CR", color = { 0.78, 0.30, 0.78 } },
-    { minIlvl = 269, letter = "CR", color = { 0.00, 0.70, 1.00 } },
+-- Crafted gear has no upgrade track. Its crest bonus id gives the tier it was
+-- made at, in that track's color; a crafted piece whose id is not listed here
+-- still reads as crafted from its tooltip, in a neutral color.
+local CRAFTED_CREST_TRACKS = {
+    [13835] = { letter = "CR", color = ITEM_TRACKS[2].color },  -- Hero
+    [13836] = { letter = "CR", color = ITEM_TRACKS[1].color },  -- Myth
 }
+local CRAFTED_UNKNOWN = { letter = "CR", color = { 1, 1, 1 } }
 
 -- All equipped slots — for track indicators and gem helper anchor frames.
 local SLOT_FRAMES = {
@@ -1463,15 +1464,40 @@ end
 ---------------------------------------------------------------------------------
 -- Item Track Indicators
 ---------------------------------------------------------------------------------
+-- The link's payload after "item:" keeps its empty fields; field 13 is the
+-- bonus count and the bonus ids follow it.
+local function CraftedCrestTrack(link)
+    if issecretvalue(link) or type(link) ~= "string" then return nil end
+    local payload = link:match("item:([^|]+)")
+    if not payload then return nil end
+    local index, last = 0, nil
+    for field in (payload .. ":"):gmatch("([^:]*):") do
+        index = index + 1
+        if index == 13 then
+            local count = tonumber(field)
+            if not count or count < 1 then return nil end
+            last = 13 + count
+        elseif index > 13 then
+            local entry = CRAFTED_CREST_TRACKS[tonumber(field) or 0]
+            if entry then return entry end
+            if index >= last then return nil end
+        end
+    end
+    return nil
+end
+CP._CraftedCrestTrack = CraftedCrestTrack
+
 -- Returns a WRAPPER, never an ITEM_TRACKS entry: the entries are a shared
 -- constant, and writing the per-slot count onto one would leak that count onto
 -- every other slot of the same track.
 -- The game's upgrade data comes first: it names the track even on an item whose
--- tooltip prints no upgrade line.
+-- tooltip prints no upgrade line. Crafted gear has no track there, and its
+-- crest id gives the tier without a tooltip.
 function CP:GetItemTrack(unit, slotID, data)
     unit = unit or "player"
     local link = GetInventoryItemLink(unit, slotID)
-    local info = link and C_Item.GetItemUpgradeInfo(link)
+    if not link then return nil end
+    local info = C_Item.GetItemUpgradeInfo(link)
     local trackName = info and info.trackString
     if trackName then
         for _, track in ipairs(ITEM_TRACKS) do
@@ -1480,6 +1506,9 @@ function CP:GetItemTrack(unit, slotID, data)
             end
         end
     end
+
+    local crest = CraftedCrestTrack(link)
+    if crest then return { track = crest } end
 
     if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
     if not data or not data.lines then return nil end
@@ -1500,18 +1529,7 @@ function CP:GetItemTrack(unit, slotID, data)
         end
     end
 
-    if isCrafted and link then
-        local ilvl = C_Item.GetDetailedItemLevelInfo(link)
-        if ilvl then
-            local isWeapon = slotID == 16 or slotID == 17
-            for _, track in ipairs(CRAFTED_TRACKS) do
-                if ilvl >= track.minIlvl and (not track.weaponOnly or isWeapon) then
-                    return { track = track }
-                end
-            end
-        end
-    end
-
+    if isCrafted then return { track = CRAFTED_UNKNOWN } end
     return nil
 end
 
@@ -1688,8 +1706,8 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     -- but two readings of one thing on every slot is clutter. Suppressed only
     -- while EUI is actually drawing it on THIS frame: its
     -- showUpgradeTrack / inspectShowUpgradeTrack toggles turn it off separately,
-    -- and then ours is the only one left. Bail before the tooltip read too --
-    -- GetItemTrack allocates one per slot just to decide the letter.
+    -- and then ours is the only one left. Bail before the track read too: an
+    -- item the game names no track for can still cost a tooltip fetch.
     if KE:EUIDrawsSlotElement(unit, "track") then
         local d = FFD[slotFrame]
         if d and d.track then d.track:Hide() end

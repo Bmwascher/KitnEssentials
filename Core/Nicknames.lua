@@ -35,8 +35,7 @@ end
 -- Public Lookup
 ---------------------------------------------------------------------------------
 -- Returns a nickname for a unit, or its UnitName when neither source has one.
--- KE's own store is consulted first, then the foreign source; the precedence
--- rule and the reason for it live in KE:ResolveNicknamePrecedence.
+-- Which source wins, and why, lives in KE:ResolveNicknamePrecedence.
 -- Key format is "Fullname-NormalizedRealm".
 --
 -- The secret test comes FIRST and the order is the point. UnitFullName is
@@ -128,7 +127,8 @@ function KE:GetNSRTNickname(subject)
     return nick
 end
 
--- KE's own store wins: a locally typed name beats a broadcast one.
+-- The foreign source wins: KE's own store has no settings page, so its names
+-- are only a fallback for a player the foreign source does not nickname.
 --
 -- Two refusals because NSAPI says "no nickname" two ways -- it echoes the
 -- string it was given, or returns the BARE name when it resolved that string
@@ -141,14 +141,16 @@ end
 ---@param realName string|nil the plain name the foreign source was asked about
 ---@return string|nil nickname resolved nickname, or nil for none
 function KE:ResolveNicknamePrecedence(own, foreign, realName)
-    if type(own) == "string" and own ~= "" then return own end
-    if type(foreign) ~= "string" or foreign == "" then return nil end
-    if type(realName) == "string" then
-        if foreign == realName then return nil end
-        local bare = realName:match("^([^-]+)")
-        if bare and foreign == bare then return nil end
+    if type(foreign) == "string" and foreign ~= "" then
+        local echo = false
+        if type(realName) == "string" then
+            local bare = realName:match("^([^-]+)")
+            echo = foreign == realName or (bare ~= nil and foreign == bare)
+        end
+        if not echo then return foreign end
     end
-    return foreign
+    if type(own) == "string" and own ~= "" then return own end
+    return nil
 end
 
 ---------------------------------------------------------------------------------

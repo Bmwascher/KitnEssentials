@@ -28,19 +28,18 @@ if not KitnEssentials then return end
 local HT = KitnEssentials:NewModule("HavocTracker", "AceEvent-3.0")
 HT.classRestriction = "WARLOCK"
 
-local _G = _G
 local CreateFrame = CreateFrame
-local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local UnitClass = UnitClass
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local pcall = pcall
 local unpack = unpack
+local UnitExists = UnitExists
+local UnitCanAssist = UnitCanAssist
+local Ask = KE.PlateSlots.Ask
 
--- Flip to true, /reload, repro, read the log. The slot-anchoring line is the
--- one that matters: a refusal there means the bound unit is identity-restricted
--- and no amount of layout work will make this display appear.
+-- Flip to true, /reload, repro, read the log.
 local DEBUG_HT = false
 
 ---------------------------------------------------------------------------------
@@ -62,6 +61,8 @@ HT.previewText = nil
 HT.active = false
 HT.previewing = false
 HT.editModeRegistered = false
+HT.bound = false
+HT.targetWanted = nil
 
 local function WarningText(db)
     local text = db.WarningText
@@ -126,15 +127,6 @@ end
 ---------------------------------------------------------------------------------
 -- Display
 ---------------------------------------------------------------------------------
--- Load-on-demand. Testing the global alone lets addon load order decide whether
--- this feature exists at all.
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    return _G.AuraContainerSortMethod ~= nil
-end
 
 function HT:CreateAnchor()
     if self.anchor then return end
@@ -153,6 +145,15 @@ end
 function HT:InitWarningButton(button)
     local db = self.db
 
+    -- A slot takes no part in the flow layout, so it is placed by hand: an
+    -- unplaced button is matched and drawn nowhere, with no error.
+    button:ClearAllPoints()
+    button:SetPoint("CENTER", self.anchor, "CENTER", 0, 0)
+    button:SetSize(ANCHOR_WIDTH, AnchorHeight(db))
+    -- Display only: no aura tooltip, and clicks reach the world.
+    pcall(button.SetMouseClickEnabled, button, false)
+    pcall(button.SetMouseMotionEnabled, button, false)
+
     local text = button:CreateFontString(nil, "OVERLAY")
     -- One anchor point, deliberately. SetAllPoints would tie the string to a
     -- button whose size we cannot know.
@@ -165,7 +166,7 @@ end
 
 function HT:BuildContainer()
     if self.container then return end
-    if not ContainersAvailable() then
+    if not KE:AuraContainersAvailable() then
         if DEBUG_HT then KE:Print("[HT] build skipped: aura containers unavailable") end
         return
     end
@@ -185,30 +186,11 @@ function HT:BuildContainer()
         candidateFilters = { includeSpellIDs = HAVOC_IDS },
     }
 
-    local added, slot = pcall(container.AddAuraSlot, container, "havoctarget", "HARMFUL|PLAYER", options)
+    local added = pcall(container.AddAuraSlot, container, "havoctarget", "HARMFUL|PLAYER", options)
     if DEBUG_HT then KE:Print("[HT] slot added=" .. tostring(added)) end
     if not added then return end
 
-    -- A slot takes no part in the flow layout and MUST be anchored by hand. An
-    -- unanchored frame has no position, so the engine matches the aura, builds
-    -- the button, and draws it nowhere with no error to show for it.
-    --
-    -- pcall'd because these are refused outright on a container bound to an
-    -- identity-restricted unit.
-    if slot then
-        local anchored = pcall(function()
-            slot:ClearAllPoints()
-            slot:SetPoint("CENTER", self.anchor, "CENTER", 0, 0)
-            slot:SetSize(ANCHOR_WIDTH, AnchorHeight(self.db))
-        end)
-        if DEBUG_HT then
-            KE:Print("[HT] slot anchoring " .. (anchored and "allowed" or "REFUSED"))
-        end
-    end
-
-    pcall(container.SetUnit, container, "target")
-    pcall(container.UpdateAllAuras, container)
-    if container.SetEnabled then pcall(container.SetEnabled, container, true) end
+    -- Bound and enabled by UpdateTarget.
     container:Show()
 
     self.container = container
@@ -217,12 +199,35 @@ end
 ---------------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------------
-function HT:PLAYER_TARGET_CHANGED()
-    if not self.container then return end
-    -- Re-pointed rather than left to follow.
-    local ok = pcall(self.container.SetUnit, self.container, "target")
-    pcall(self.container.UpdateAllAuras, self.container)
-    if DEBUG_HT then KE:Print("[HT] retargeted ok=" .. tostring(ok)) end
+-- The game ignores a spell-id filter for harmful auras on a unit the player
+-- can assist, so there the slot would light for any of the player's debuffs.
+-- Immune and uninteractable units count as assistable, as the filter's guard
+-- counts them.
+local function CanAssist(unit)
+    return Ask(UnitCanAssist, "player", unit, true, true)
+end
+
+-- The same token is a no-op for SetUnit, so a new target is read through
+-- UpdateAllAuras.
+function HT:UpdateTarget()
+    local container = self.container
+    if not container then return end
+    if not self.bound then
+        self.bound = pcall(container.SetUnit, container, "target")
+    end
+    local want = self.bound
+        and KE.DoTTrackerRules.TimerWanted(Ask(UnitExists, "target"), CanAssist("target"))
+    self.targetWanted = want
+    pcall(container.SetEnabled, container, want)
+    if want then pcall(container.UpdateAllAuras, container) end
+    if DEBUG_HT then
+        KE:Print("[HT] target bound=" .. tostring(self.bound) .. " wanted=" .. tostring(want))
+    end
+end
+
+-- Either side's faction can change while targeted.
+function HT:OnUnitFaction(_, unit)
+    if unit == "target" or unit == "player" then self:UpdateTarget() end
 end
 
 function HT:Activate()
@@ -238,15 +243,18 @@ function HT:Activate()
     self.container:Show()
 
     self.active = true
-    self:RegisterEvent("PLAYER_TARGET_CHANGED")
-    self:PLAYER_TARGET_CHANGED()
+    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTarget")
+    self:RegisterEvent("UNIT_FACTION", "OnUnitFaction")
+    self:UpdateTarget()
 end
 
 function HT:Deactivate()
     if not self.active then return end
     self.active = false
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+    self:UnregisterEvent("UNIT_FACTION")
     if self.container then
+        pcall(self.container.SetEnabled, self.container, false)
         self.container:Hide()
     end
 end

@@ -423,6 +423,8 @@ local function EquipmentFlyoutNav()
     S.data(navi).skinned = true
 end
 
+local flyoutHooked = false
+
 -- Per-tab inset backdrop, hooked on CharacterFrameMixin.ShowSubFrame.
 -- The list tabs want a dark inset behind their rows; the paperdoll
 -- does not -- that is the backdrop  saw sticking around after
@@ -513,6 +515,18 @@ local function Skin()
         S.data(frame).insetHook = true
         hooksecurefunc(_G.CharacterFrameMixin, "ShowSubFrame", UpdateCharacterInset)
     end
+
+    -- The flyout is skinned in the same frame Blizzard builds it. Installed
+    -- only when this skin runs, so a disabled skin never paints the flyout.
+    if not flyoutHooked then
+        flyoutHooked = true
+        if _G.EquipmentFlyout_SetBackgroundTexture then
+            hooksecurefunc("EquipmentFlyout_SetBackgroundTexture", EquipmentFlyoutNav)
+        end
+        if _G.EquipmentFlyout_UpdateItems then
+            hooksecurefunc("EquipmentFlyout_UpdateItems", EquipmentFlyoutSkin)
+        end
+    end
     local current = frame.activeSubFrame
     UpdateCharacterInset(current)
     S.Tabs("CharacterFrameTab", 6)
@@ -560,21 +574,6 @@ local function Skin()
         end)
         S.data(cframe).aeReskinHooked = true
     end
-end
-
--- Every piece of machinery that used to sit here -- the event-driven
--- deferred driver, the 0.1s panel ticker, the post-hoc
--- issecurevariable audit -- was built on the wrong theory that hooking
--- a function inside a secure flow taints it. It does not: these very
--- two functions hook cleanly with no flyout taint. The real cause was
--- our KillTexture NOOP surgery, now gone. Hooks restored, so
--- the flyout skins in the same frame Blizzard builds it -- no more
--- half-second unskinned flash.
-if _G.EquipmentFlyout_SetBackgroundTexture then
-    hooksecurefunc("EquipmentFlyout_SetBackgroundTexture", EquipmentFlyoutNav)
-end
-if _G.EquipmentFlyout_UpdateItems then
-    hooksecurefunc("EquipmentFlyout_UpdateItems", EquipmentFlyoutSkin)
 end
 
 S:Register("Blizzard_UIPanels_Game", Skin, "Character")

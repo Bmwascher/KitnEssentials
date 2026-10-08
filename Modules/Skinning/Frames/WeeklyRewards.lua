@@ -1,7 +1,7 @@
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
-local pairs, unpack = pairs, unpack
+local ipairs, pairs, unpack = ipairs, pairs, unpack
 local hooksecurefunc = hooksecurefunc
 
 -- Blizzard's selection pass ANIMATES alpha on its glow art, so
@@ -21,6 +21,9 @@ local function EpicRGB()
 end
 
 local ACTIVITY_PANES = { "RaidFrame", "MythicFrame", "PVPFrame", "WorldFrame" }
+-- The two "Or" plates under ConcessionsFrame.Rewards. Their backdrop comes
+-- from the Activities loop, which holds them too; only their text needs this.
+local CONCESSION_PLATES = { "ConcessionFrame1", "ConcessionFrame2" }
 
 local function DressRewardIcon(itemFrame)
     local d = S.data(itemFrame)
@@ -156,7 +159,6 @@ local function Skin()
     end
 
     if frame.BorderContainer then S.StripTextures(frame.BorderContainer) end
-    if frame.ConcessionFrame then S.StripTextures(frame.ConcessionFrame) end
 
     if frame.CloseButton then S.CloseButton(frame.CloseButton) end
     if frame.SelectRewardButton then S.Button(frame.SelectRewardButton) end
@@ -168,11 +170,16 @@ local function Skin()
         DressActivityPane(activity, true)
     end
 
-    local rewardText = frame.ConcessionFrame and frame.ConcessionFrame.RewardsFrame
-        and frame.ConcessionFrame.RewardsFrame.Text
-    if rewardText then
-        S.ReplaceIconString(rewardText)
-        hooksecurefunc(rewardText, "SetText", S.ReplaceIconString)
+    local plates = frame.ConcessionsFrame and frame.ConcessionsFrame.Rewards
+    if plates then
+        for _, key in ipairs(CONCESSION_PLATES) do
+            local plate = plates[key]
+            local rewardText = plate and plate.RewardsFrame and plate.RewardsFrame.Text
+            if rewardText then
+                S.ReplaceIconString(rewardText)
+                hooksecurefunc(rewardText, "SetText", S.ReplaceIconString)
+            end
+        end
     end
 
     local warningDialog = _G.WeeklyRewardExpirationWarningDialog

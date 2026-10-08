@@ -228,7 +228,7 @@ function TSP:OnEnable()
     -- AceEvent drops every event on disable, so each enable registers these.
     -- PLAYER_ENTERING_WORLD stays the engine's: a second registration on this
     -- owner would replace its handler.
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "RepickIcon")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "RepickIcon")
     self:RegisterEvent("SPELLS_CHANGED", "RepickIcon")
 end
@@ -241,6 +241,13 @@ function TSP:RepickIcon()
     if self:GetDisplayIcon() ~= self.paintedIcon then
         KE.AuraEngine.ApplySettings(self.display)
     end
+end
+
+-- The event fires for every group member; only the player's spec decides the
+-- icon.
+function TSP:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:RepickIcon()
 end
 
 function TSP:OnDisable()

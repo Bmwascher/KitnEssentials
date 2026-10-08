@@ -803,3 +803,100 @@ describe("KE:GetChallengeMapIDByName", function()
     end)
 end)
 
+-- The free-containers check every aura-container consumer asks before it
+-- builds. The template is optional, so both the plain and the layout-script
+-- forms are one decision.
+describe("KE:AuraContainersAvailable", function()
+    local KE, saved
+    local STUBBED = { "AuraContainerSortMethod", "C_XMLUtil" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("answers from the sort-method global, the load call and the template", function()
+        local found = function() return {} end
+        local cases = {
+            { name = "global up, no template asked", sort = true, want = true },
+            { name = "global absent, the addon cannot be loaded", sort = false, want = false },
+            { name = "global absent, the load call brings it up", sort = false, loads = true, want = true },
+            { name = "template found", sort = true, template = "T",
+              xml = { GetTemplateInfo = found }, want = true },
+            { name = "template missing", sort = true, template = "T",
+              xml = { GetTemplateInfo = function() return nil end }, want = false },
+            { name = "template lookup throws", sort = true, template = "T",
+              xml = { GetTemplateInfo = function() error("no template") end }, want = false },
+            { name = "no template API", sort = true, template = "T", want = false },
+        }
+        for _, c in ipairs(cases) do
+            _G.AuraContainerSortMethod = c.sort and {} or nil
+            _G.C_XMLUtil = c.xml
+            _G.C_AddOns.LoadAddOn = c.loads and function() _G.AuraContainerSortMethod = {} end or nil
+            assert.equals(c.want, KE:AuraContainersAvailable(c.template), c.name)
+        end
+    end)
+end)
+
+-- The dungeon/raid gate Cursor, Combat Cross and the aggro line share.
+describe("KE:InRealInstancedContent", function()
+    local KE, saved
+    local STUBBED = { "GetInstanceInfo", "C_Garrison" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("is true only in a party or raid instance with a difficulty, outside a garrison", function()
+        local cases = {
+            { name = "open world", kind = "none",     difficulty = 0,  want = false },
+            { name = "garrison",   kind = "party",    difficulty = 1,  garrison = true, want = false },
+            { name = "dungeon",    kind = "party",    difficulty = 8,  want = true },
+            { name = "raid",       kind = "raid",     difficulty = 16, want = true },
+            { name = "scenario",   kind = "scenario", difficulty = 12, want = false },
+        }
+        for _, c in ipairs(cases) do
+            _G.GetInstanceInfo = function() return "Somewhere", c.kind, c.difficulty end
+            _G.C_Garrison = { IsOnGarrisonMap = function() return c.garrison == true end }
+            assert.equals(c.want, KE:InRealInstancedContent(), c.name)
+        end
+    end)
+end)
+
+-- The role string every reader takes from Core. Index 0 is a character with
+-- no specialization yet.
+describe("KE:GetPlayerSpecRole", function()
+    local KE, saved
+    local STUBBED = { "GetSpecialization", "GetSpecializationRole" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("returns the current spec's role, or nil with no spec or no role API", function()
+        local healer = function() return "HEALER" end
+        local cases = {
+            { name = "no spec index", index = nil, getRole = healer, want = nil },
+            { name = "spec index 0",  index = 0,   getRole = healer, want = nil },
+            { name = "a spec",        index = 2,   getRole = healer, want = "HEALER" },
+            { name = "no role API",   index = 2,   getRole = nil,    want = nil },
+        }
+        for _, c in ipairs(cases) do
+            _G.GetSpecialization = function() return c.index end
+            _G.GetSpecializationRole = c.getRole
+            assert.equals(c.want, KE:GetPlayerSpecRole(), c.name)
+        end
+    end)
+end)
+

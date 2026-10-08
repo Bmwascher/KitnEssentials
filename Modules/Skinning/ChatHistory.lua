@@ -311,6 +311,7 @@ end
 function CH:RefreshEvents()
     self:UnregisterAllEvents()
     if not self.db or not self.db.Enabled then return end
+    if not self:ChatSkinWanted() then return end
     self:RegisterHistoryEvents()
 end
 
@@ -350,6 +351,16 @@ function CH:ChatSkinActive()
     return CHAT and CHAT.IsEnabled and CHAT:IsEnabled() and true or false
 end
 
+-- Whether the skin will be running, from its saved setting rather than the
+-- live module: enable order is pairs() order, so the module can still be off
+-- when this asks. Under ElvUI the skin never starts.
+function CH:ChatSkinWanted()
+    local skinning = KE.db and KE.db.profile and KE.db.profile.Skinning
+    local chat = skinning and skinning.Chat
+    if not (chat and chat.Enabled) then return false end
+    return not (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule())
+end
+
 function CH:OnInitialize()
     self:UpdateDB()
     -- Literal false: without it AceAddon auto-enables the module and KE's own
@@ -364,21 +375,24 @@ end
 function CH:ScheduleReplay()
     -- Once per session, not once per enable. The GUI toggle disables and
     -- re-enables this module, and without the latch an off/on cycle would print
-    -- the whole stored history into chat a second time.
-    if self.replayed then return end
-    self.replayed = true
-    C_Timer.After(0, function() CH:DisplayChatHistory() end)
+    -- the whole stored history into chat a second time. The replay sets the
+    -- latch itself, so a refused one leaves it open.
+    if self.replayed or self.replayQueued then return end
+    self.replayQueued = true
+    C_Timer.After(0, function()
+        CH.replayQueued = nil
+        CH:DisplayChatHistory()
+    end)
 end
 
--- Deliberately NOT gated on the chat skin here. Module enable order is
--- `pairs()` order, so this can run before the Chat module does, and AceAddon
--- does not re-run OnEnable when a sibling starts later. The skin check lives in
--- IsPersistenceActive, which every write asks.
+-- The skin is asked through its saved setting here, because the Chat module
+-- may not have started yet; the replay asks the live module a frame later.
+-- IsPersistenceActive still gates every write.
 function CH:OnEnable()
     if not self.db then self:UpdateDB() end
     if not self.db.Enabled then return end
 
-    self:RegisterHistoryEvents()
+    if self:ChatSkinWanted() then self:RegisterHistoryEvents() end
     self:ScheduleReplay()
 end
 
@@ -463,8 +477,10 @@ CH.ResolveBNSender = ResolveBNSender
 -- without CHAT:AddMessage installed the marker is ignored and every replayed
 -- line would be stamped with the login time.
 function CH:DisplayChatHistory()
+    if self.replayed then return end
     if not self.db or not self.db.Enabled then return end
     if not self:ChatSkinActive() then return end
+    self.replayed = true
 
     local data = Store()
     if not data or #data == 0 then return end

@@ -474,10 +474,7 @@ function CM:CheckAggro()
         threat = status
         threatSecret = KE:IsSecretValue(status)
     end
-    -- Resolved per call: this file parses before Cursor.lua. The test is a
-    -- plain GetInstanceInfo read, live whether or not that module is on.
-    local cursor = KitnEssentials:GetModule("Cursor", true)
-    local inInstance = (cursor and cursor:InRealInstancedContent()) or false
+    local inInstance = KE:InRealInstancedContent()
 
     local frame = self.messageFrames.aggro
     if CM.ShouldShowAggro(self.db, self.inCombat, KE:IsPlayerTankSpec(), inInstance, threat, threatSecret) then

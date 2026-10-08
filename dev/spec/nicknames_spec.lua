@@ -336,13 +336,18 @@ describe("Nicknames.lua ResolveNicknamePrecedence", function()
     local KE
     before_each(function() KE = L.loadNicknames() end)
 
-    it("prefers KE's own nickname when both sources have one", function()
-        assert.equals("Own", KE:ResolveNicknamePrecedence("Own", "Foreign", "Bob"))
-    end)
-
-    it("uses whichever single source has a nickname", function()
-        assert.equals("Own", KE:ResolveNicknamePrecedence("Own", nil, "Bob"))
-        assert.equals("Foreign", KE:ResolveNicknamePrecedence(nil, "Foreign", "Bob"))
+    it("puts the foreign nickname first and falls back to KE's own", function()
+        local cases = {
+            { name = "both set",                 own = "Own", foreign = "Foreign", want = "Foreign" },
+            { name = "foreign only",             foreign = "Foreign",              want = "Foreign" },
+            { name = "own only",                 own = "Own",                      want = "Own" },
+            { name = "foreign echoes the name",  own = "Own", foreign = "Bob",     want = "Own" },
+            { name = "foreign echoes bare name", own = "Own", foreign = "Bob", real = "Bob-Realm", want = "Own" },
+            { name = "neither",                  want = nil },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, KE:ResolveNicknamePrecedence(c.own, c.foreign, c.real or "Bob"), c.name)
+        end
     end)
 
     it("resolves nothing when neither source offers a usable string", function()
@@ -375,17 +380,25 @@ end)
 describe("Nicknames.lua GetNicknameOrName with a foreign source", function()
     local KE
     before_each(function() KE = L.loadNicknames() end)
-    after_each(function() _G.NSAPI = nil end)
+    local STUBBED = { "NSAPI" }
+    local saved
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
 
     it("returns a foreign nickname when KE's store has none", function()
         _G.NSAPI = { GetName = function() return "Foreign" end }
         assert.equals("Foreign", KE:GetNicknameOrName("player"))
     end)
 
-    it("keeps KE's own nickname ahead of the foreign one", function()
+    it("puts the foreign nickname ahead of KE's own", function()
         KE.db.global.Nicknames["Bob-Realm"] = "Bobby"
         _G.NSAPI = { GetName = function() return "Foreign" end }
-        assert.equals("Bobby", KE:GetNicknameOrName("player"))
+        assert.equals("Foreign", KE:GetNicknameOrName("player"))
     end)
 
     it("survives a foreign source that throws", function()

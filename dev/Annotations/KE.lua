@@ -1106,6 +1106,9 @@ function KE:EUISheetActive(unit) end
 ---@return boolean
 function KE:EUIDrawsSlotElement(unit, element) end
 
+---@return string? role "TANK", "HEALER" or "DAMAGER"; nil with no spec
+function KE:GetPlayerSpecRole() end
+
 ---@return boolean
 function KE:IsPlayerHealerSpec() end
 
@@ -1119,6 +1122,13 @@ function KE:IsSpecEnabled(enabledSpecs, specId) end
 
 ---@return number?
 function KE:GetPlayerSpecId() end
+
+---@param template string? XML template the caller's frames also need
+---@return boolean
+function KE:AuraContainersAvailable(template) end
+
+---@return boolean
+function KE:InRealInstancedContent() end
 
 --- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
 --- resolution; nil resolves live (UseHealerPosition + current spec).

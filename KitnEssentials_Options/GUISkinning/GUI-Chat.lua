@@ -145,6 +145,9 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         else
             KitnEssentials:DisableModule("Chat")
         end
+        -- Chat History listens only while the skin is on.
+        local history = KitnEssentials:GetModule("ChatHistory", true)
+        if history and history:IsEnabled() then history:ApplySettings() end
         KE:CreateReloadPrompt("Toggling the custom chat panel requires a UI reload to fully apply.")
     end)
 

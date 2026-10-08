@@ -7,9 +7,13 @@ local C_Timer = C_Timer
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 local BUTTON_SIZE = 40
--- MDT creates its window in a build coroutine after its window addon loads
--- and offers no callback for it; the skin only has to catch the window once.
-local LOOK_INTERVAL = 0.25
+-- MDT creates its window in a build coroutine on its first open and offers no
+-- callback for it; the skin only has to catch the window once. Another addon
+-- can load the window addon long before any open, so the look slows after its
+-- first ten seconds instead of running fast all session.
+local FAST_LOOK_INTERVAL = 0.25
+local FAST_LOOKS = 40
+local SLOW_LOOK_INTERVAL = 1
 
 local function ReskinTooltip(tt)
     if not tt then return end
@@ -196,6 +200,7 @@ end
 
 local attached = false
 local looker
+local looks = 0
 
 local function Attach()
     if attached then return true end
@@ -208,15 +213,23 @@ local function Attach()
 end
 
 local function Look()
-    if Attach() and looker then
+    if Attach() then
+        if looker then
+            looker:Cancel()
+            looker = nil
+        end
+        return
+    end
+    looks = looks + 1
+    if looks == FAST_LOOKS and looker then
         looker:Cancel()
-        looker = nil
+        looker = C_Timer.NewTicker(SLOW_LOOK_INTERVAL, Look)
     end
 end
 
 local function Skin()
     if Attach() or looker or not C_Timer then return end
-    looker = C_Timer.NewTicker(LOOK_INTERVAL, Look)
+    looker = C_Timer.NewTicker(FAST_LOOK_INTERVAL, Look)
 end
 
 S:Register("MythicDungeonTools_UI", Skin, "MythicDungeonTools")

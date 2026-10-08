@@ -23,7 +23,6 @@ local UnitCastingInfo  = UnitCastingInfo
 local UnitChannelInfo  = UnitChannelInfo
 local IsMouseButtonDown = IsMouseButtonDown
 local IsInGroup        = IsInGroup
-local GetInstanceInfo  = GetInstanceInfo
 local InCombatLockdown = InCombatLockdown
 local floor            = math.floor
 local sin, cos         = math.sin, math.cos
@@ -150,19 +149,6 @@ C._trail_cursorShown  = false
 ---------------------------------------------------------------------------------
 function C:UpdateDB()
     self.db = KE.db.profile.Cursor
-end
-
----------------------------------------------------------------------------------
--- Instance / context helpers
----------------------------------------------------------------------------------
-function C:InRealInstancedContent()
-    local _, instanceType, difficultyID = GetInstanceInfo()
-    difficultyID = tonumber(difficultyID) or 0
-    if difficultyID == 0 then return false end
-    if C_Garrison and C_Garrison.IsOnGarrisonMap and C_Garrison.IsOnGarrisonMap() then
-        return false
-    end
-    return instanceType == "party" or instanceType == "raid"
 end
 
 ---------------------------------------------------------------------------------
@@ -329,7 +315,7 @@ local function _gcdOnEvent(self, event, unit, _, _)
     if unit ~= "player" then return end
     local db = C.db.GCD
     if not db.Enabled then return end
-    if db.InstanceOnly and not C:InRealInstancedContent() then return end
+    if db.InstanceOnly and not KE:InRealInstancedContent() then return end
 
     if event == "UNIT_SPELLCAST_FAILED"
        or event == "UNIT_SPELLCAST_INTERRUPTED"
@@ -572,7 +558,7 @@ local function _castOnEvent(self, event, unit, castID)
     if unit ~= "player" then return end
     local db = C.db.Cast
     if not db.Enabled then return end
-    if db.InstanceOnly and not C:InRealInstancedContent() then return end
+    if db.InstanceOnly and not KE:InRealInstancedContent() then return end
 
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_DELAYED" then
         local name, _, _, startMS, endMS, _, cID = UnitCastingInfo("player")
@@ -1335,7 +1321,7 @@ local function _shouldShowByMode(mode)
     if mode == "never"  then return false end
     if mode == "in_combat"     then return _inCombat end
     if mode == "out_of_combat" then return not _inCombat end
-    if mode == "in_instance"   then return C:InRealInstancedContent() end
+    if mode == "in_instance"   then return KE:InRealInstancedContent() end
     if mode == "solo"          then return not IsInGroup() end
     if mode == "mouseDown"     then
         -- mouseDown handled separately in cursor OnUpdate (alpha-gated)
@@ -1366,7 +1352,7 @@ function C:UpdateVisibility(event)
     self._cursorShown = masterShown
     self._trail_cursorShown = masterShown
     self._trail_instanceOK = (not (self.db.Trail and self.db.Trail.InstanceOnly))
-        or self:InRealInstancedContent()
+        or KE:InRealInstancedContent()
 
     if self.cursorFrame then
         if masterShown then
@@ -1389,7 +1375,7 @@ function C:UpdateVisibility(event)
         if not satDB or not satDB.Enabled then return false end
         local mode = satDB.VisibilityOverride
         local ok = (mode and _shouldShowByMode(mode)) or (not mode and masterShown)
-        if satDB.InstanceOnly and not self:InRealInstancedContent() then ok = false end
+        if satDB.InstanceOnly and not KE:InRealInstancedContent() then ok = false end
         return ok
     end
 

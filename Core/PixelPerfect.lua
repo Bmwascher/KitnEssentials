@@ -236,6 +236,9 @@ function KE:SnapFrameToPixels(frame)
 
     local left = frame:GetLeft()
     local bottom = frame:GetBottom()
+    -- Secret under a parent with secret anchoring. The truth test below would
+    -- survive one, but the arithmetic after it would not.
+    if issecretvalue(left) or issecretvalue(bottom) then return end
     if not (left and bottom) then return end
 
     local pixelSize = cachedPixelSize
@@ -249,6 +252,7 @@ function KE:SnapFrameToPixels(frame)
 
     local point, relativeTo, relativePoint, x, y = frame:GetPoint(1)
     if not point then return end
+    if issecretvalue(x) or issecretvalue(y) then return end
 
     frame:ClearAllPoints()
     frame:SetPoint(point, relativeTo, relativePoint, (x or 0) + offsetX, (y or 0) + offsetY)

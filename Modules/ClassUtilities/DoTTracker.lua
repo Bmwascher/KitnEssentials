@@ -21,10 +21,8 @@ if not KitnEssentials then return end
 ---@class DoTTracker: AceModule
 local DT = KitnEssentials:NewModule("DoTTracker", "AceEvent-3.0")
 
-local _G = _G
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local C_AddOns = C_AddOns
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
 local C_Timer = C_Timer
@@ -119,20 +117,6 @@ end
 
 local function IsKnown(spellID)
     return Ask(C_SpellBook and C_SpellBook.IsSpellKnown, spellID, Enum.SpellBookSpellBank.Player)
-end
-
--- Load-on-demand, and the tail template is the feature: without it nothing of
--- ours may hang off a container that has a group.
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    if _G.AuraContainerSortMethod == nil then return false end
-    local xml = _G.C_XMLUtil
-    if not (xml and xml.GetTemplateInfo) then return false end
-    local ok, info = pcall(xml.GetTemplateInfo, TAIL_TEMPLATE)
-    return ok and info ~= nil
 end
 
 ---------------------------------------------------------------------------------
@@ -559,7 +543,7 @@ local function EnsureTimer(cell)
         return false
     end
     cell.timer, cell.timerSlot = container, slot
-    pcall(container.SetUnit, container, "target")
+    cell.timerBound = pcall(container.SetUnit, container, "target")
     return styled
 end
 
@@ -602,11 +586,17 @@ function DT:UpdateTimers()
     local shown = self.active and not self.previewing and self.db.TimerEnabled ~= false
     local want = shown and TargetWanted()
     for i = 1, #self.list do
-        local timer = self.cells[i].timer
+        local cell = self.cells[i]
+        local timer = cell.timer
         if timer then
+            -- A refused bind is retried here; an unbound timer stays off.
+            if want and not cell.timerBound then
+                cell.timerBound = pcall(timer.SetUnit, timer, "target")
+            end
+            local enable = want and cell.timerBound
             pcall(timer.SetShown, timer, shown)
-            pcall(timer.SetEnabled, timer, want)
-            if want then pcall(timer.UpdateAllAuras, timer) end
+            pcall(timer.SetEnabled, timer, enable)
+            if enable then pcall(timer.UpdateAllAuras, timer) end
         end
     end
     if DEBUG_DOT then KE:Print("[DOT] timers shown=" .. tostring(shown) .. " target=" .. tostring(want)) end
@@ -626,9 +616,10 @@ function DT:BindSlot(slot, unit)
         local sensor = self.cells[i].sensors[slot]
         if sensor then
             -- Unit before enable: enabling registers the unit's events, and the
-            -- off-to-on switch is what makes a reused token read afresh.
-            pcall(sensor.SetUnit, sensor, unit)
-            pcall(sensor.SetEnabled, sensor, true)
+            -- off-to-on switch is what makes a reused token read afresh. A
+            -- refused bind stays off rather than count the plate it held before.
+            local bound = pcall(sensor.SetUnit, sensor, unit)
+            pcall(sensor.SetEnabled, sensor, bound)
         end
     end
     if DEBUG_DOT then KE:Print("[DOT] slot " .. slot .. " = " .. unit) end
@@ -869,7 +860,7 @@ end
 
 function DT:Reconcile()
     local wanted, class, specID = self:ResolveList()
-    if #wanted > 0 and not ContainersAvailable() then
+    if #wanted > 0 and not KE:AuraContainersAvailable(TAIL_TEMPLATE) then
         if DEBUG_DOT then KE:Print("[DOT] aura containers unavailable") end
         -- Nothing can be built, so an earlier refusal has nothing left to drain.
         self.gate:Cancel()

@@ -974,9 +974,9 @@ end
 ---------------------------------------------------------------------------------
 -- Party members also running KitnEssentials broadcast their own kicks, letting
 -- receivers flip the sender's roster bar with the exact CD. Other teammates'
--- kicks come from nameplate interrupts (KT:HandleNameplateInterrupt). Comms
--- over INSTANCE_CHAT probe-verified working (family rule); every send/parse
--- is pcall'd, so a blocked context loses only the sync.
+-- kicks come from nameplate interrupts (KT:HandleNameplateInterrupt). Sends
+-- are refused inside a running key, and every send and parse is pcall'd, so a
+-- blocked context loses only the sync.
 local COMM_PREFIX = "KEKick"
 -- BliZzi Party Tools interop: their dispatcher accepts
 -- KICK from any class-auto-registered party member — no HELLO handshake
@@ -984,6 +984,14 @@ local COMM_PREFIX = "KEKick"
 -- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored
 -- messages, never errors.
 local BLIZZI_PREFIX = "BliZziIT"
+
+-- Success and DuplicatePrefix both leave a prefix registered; any other
+-- result is tried again on the next activation.
+local PREFIX_RESULT    = Enum and Enum.RegisterAddonMessagePrefixResult
+local PREFIX_SUCCESS   = PREFIX_RESULT and PREFIX_RESULT.Success or 0
+local PREFIX_DUPLICATE = PREFIX_RESULT and PREFIX_RESULT.DuplicatePrefix or 1
+local COMM_PREFIXES = { COMM_PREFIX, BLIZZI_PREFIX }
+local prefixHeld = {}
 
 local whisperTargets = {}
 
@@ -1369,8 +1377,20 @@ function KT:CreateCastFrame()
     self.castFrame = frame
 end
 
+-- BliZzi's prefix is registered so their users' kicks reach us.
+function KT:EnsureCommPrefixes()
+    if not (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) then return end
+    for _, prefix in ipairs(COMM_PREFIXES) do
+        if not prefixHeld[prefix] then
+            local ok, result = pcall(C_ChatInfo.RegisterAddonMessagePrefix, prefix)
+            prefixHeld[prefix] = ok and (result == PREFIX_SUCCESS or result == PREFIX_DUPLICATE) or nil
+        end
+    end
+end
+
 function KT:RegisterCombatEvents()
     if self.combatEventsRegistered then return end
+    self:EnsureCommPrefixes()
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
@@ -2479,12 +2499,7 @@ function KT:OnEnable()
     self:CreateCastFrame()
     self:RegWithEditMode()
 
-    -- Kick-sync comm prefixes (pcall: registration can fail at the prefix
-    -- cap). BliZzi's prefix is registered so their users' kicks reach us.
-    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
-        pcall(C_ChatInfo.RegisterAddonMessagePrefix, COMM_PREFIX)
-        pcall(C_ChatInfo.RegisterAddonMessagePrefix, BLIZZI_PREFIX)
-    end
+    self:EnsureCommPrefixes()
 
     -- Register non-combat events. INSPECT_READY/PLAYER_REGEN_ENABLED no longer
     -- needed — LibSpec handles party spec discovery passively via comms.

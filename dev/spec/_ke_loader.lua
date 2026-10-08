@@ -1215,6 +1215,8 @@ function L.loadCursor(overrides)
             SubscribeSpec = function() return true end,
             UnsubscribeSpec = function() end,
         },
+        -- Core/Globals.lua's instance check, answering as the open world.
+        InRealInstancedContent = function() return false end,
     }
     helpers.loadModule("Modules/Combat/Cursor.lua", KE)
     local C = modules["Cursor"]
@@ -1291,6 +1293,8 @@ function L.loadCombatCross(overrides)
         GetFontPath = function() return "Fonts\\Expressway.TTF" end,
         GetAccentColor = function() return 1, 1, 1, 1 end,
         ApplyFramePosition = function() end,
+        -- Core/Globals.lua's instance check, answering as the open world.
+        InRealInstancedContent = function() return false end,
     }
     helpers.loadModule("Modules/Combat/CombatCross.lua", KE)
     local CC = modules["CombatCross"]
@@ -1494,6 +1498,8 @@ function L.loadLFGReminder(overrides)
         IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
         -- Core/Secret.lua's chat lock, unlocked.
         IsChatMessagingLocked = function() return false end,
+        -- Core/Globals.lua's role getter: no spec, as the preview's default.
+        GetPlayerSpecRole = function() return nil end,
     }
     -- Core/Globals.lua's lookup over the dungeons the specs name. The row's
     -- art still falls back to the teleport icon: the default C_ChallengeMode
@@ -1737,6 +1743,7 @@ function L.loadGroupFinderPanel(overrides)
         FONT = "Fonts\\FRIZQT__.TTF",
         Print = function() end,
         Theme = { accent = { 1, 0, 0.549, 1 } },
+        GetPlayerSpecRole = function() return "DAMAGER" end,
     }
     if overrides.profile then KE.db.profile = overrides.profile end
 
@@ -1749,7 +1756,6 @@ function L.loadGroupFinderPanel(overrides)
     GFP.db = KE.db.profile.GroupFinderPanel
 
     local seams = {
-        playerSpecRole      = GFP._PlayerSpecRole,
         getPartyRoles       = GFP._GetPartyRoles,
         seasonGroups        = GFP._SeasonGroups,
         isDungeonSearchMode = GFP._IsDungeonSearchMode,
@@ -2508,6 +2514,8 @@ function L.loadHavocTracker(overrides)
     local KE = {
         db = { profile = { HavocTracker = overrides.db or { Enabled = true } } },
         Print = function() end,
+        -- Captured at file scope by the target guard.
+        PlateSlots = { Ask = function() return nil end },
     }
     helpers.loadModule("Modules/ClassUtilities/HavocTracker.lua", KE)
 
@@ -2521,8 +2529,8 @@ end
 -- Modules/ClassUtilities/PIAssist.lua. Same shape as loadHavocTracker: the
 -- gate's two sinks are replaced by counters, as are Activate's three sinks
 -- and its event registrations, so the real Activate can be driven with
--- overrides.liveActivate = true. The module localizes GetSpecializationRole
--- at file scope, so it is assigned before the load. overrides.role is the
+-- overrides.liveActivate = true. KE:GetPlayerSpecRole answers overrides.role
+-- while overrides.specIndex is above 0. overrides.role is the
 -- spec role string ("HEALER" / "DAMAGER"); overrides.db is the PIAssist block;
 -- overrides.builder = { enabled = bool, applied = name } stands in for the
 -- PIMacroBuilder module TargetName consults (off with nothing applied by
@@ -2558,6 +2566,10 @@ function L.loadPIAssist(overrides)
         Print = function() end,
         IsSecretValue = function() return false end,
         IsSafeValue = function(_, v) return v ~= nil end,
+        GetPlayerSpecRole = function()
+            local index = overrides.specIndex
+            return index and index > 0 and overrides.role or nil
+        end,
     }
     helpers.loadModule("Modules/ClassUtilities/PIAssist.lua", KE)
 

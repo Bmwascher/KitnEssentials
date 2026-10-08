@@ -22,7 +22,6 @@ PA.classRestriction = "PRIEST"
 
 local _G = _G
 local CreateFrame = CreateFrame
-local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
 local UnitClass = UnitClass
@@ -31,8 +30,6 @@ local UnitIsUnit = UnitIsUnit
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local GetNumGroupMembers = GetNumGroupMembers
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationRole = GetSpecializationRole
 local GetTime = GetTime
 local pcall = pcall
 local pairs = pairs
@@ -100,12 +97,7 @@ end
 -- Reading your own class and spec is never restricted.
 local function ReadSpecIdentity()
     local _, class = UnitClass("player")
-    local specIndex = GetSpecialization and GetSpecialization()
-    local role = nil
-    if specIndex and specIndex > 0 and GetSpecializationRole then
-        role = GetSpecializationRole(specIndex)
-    end
-    return class, role
+    return class, KE:GetPlayerSpecRole()
 end
 
 local function WantsSpec(class, role, healersOnly)
@@ -286,14 +278,6 @@ end
 -- Holder + container. The holder is ours and sits over the unit frame; the
 -- container is bound to the unit.
 ---------------------------------------------------------------------------------
-local function ContainersAvailable()
-    if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn
-        and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
-        pcall(C_AddOns.LoadAddOn, "Blizzard_AuraContainer")
-    end
-    return _G.AuraContainerSortMethod ~= nil
-end
-
 function PA:EnsureHolder()
     if self.holder then return self.holder end
     local h = CreateFrame("Frame", "KE_PIAssistHolder", UIParent)
@@ -328,7 +312,7 @@ function PA:InitSlotButton(button)
 end
 
 function PA:BuildContainer()
-    if self.container or not ContainersAvailable() then return end
+    if self.container or not KE:AuraContainersAvailable() then return end
     local holder = self:EnsureHolder()
 
     local ok, container = pcall(CreateFrame, "AuraContainer", nil, holder, "CustomAuraContainerTemplate")
@@ -555,7 +539,7 @@ function PA:Activate()
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRelease")
         self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
         -- AceEvent has no unit filter, so the player-only cast event lives on
-        -- an own frame.
+        -- its own frame.
         self:EnsureCastFrame():RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     end
     self:ResolveTarget()
