@@ -194,6 +194,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
 ---@field DOT_TRACKER_SEEDS table
+---@field CDMIcons table
 ---@field CombatState KE.CombatState
 ---@field Context KE.Context
 ---@field curves KE.Curves

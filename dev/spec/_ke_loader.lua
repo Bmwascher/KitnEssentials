@@ -3320,4 +3320,32 @@ function L.loadDoTTrackerRules(overrides)
     return KE
 end
 
+-- Core/CDMIcons.lua. The info function is looked up at call time, so a spec
+-- passes its own C_CooldownViewer per load; viewers are plain tables the spec
+-- puts on _G. Returns KE.
+function L.loadCDMIcons(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    _G.C_CooldownViewer = overrides.C_CooldownViewer
+        or { GetCooldownViewerCooldownInfo = function() return nil end }
+    return helpers.loadModule("Core/CDMIcons.lua", {})
+end
+
+-- Modules/ClassUtilities/AlterTime.lua. Only Classify is under test, so
+-- nothing past the module's file scope runs. Returns the module.
+function L.loadAlterTime(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    _G.UIParent = noopFrame()
+    _G.UnitClass = function() return "Mage", "MAGE" end
+    _G.LibStub = function() return nil end
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { AlterTime = { Enabled = true } } },
+        Print = function() end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/AlterTime.lua", KE)
+    return modules["AlterTime"]
+end
+
 return L

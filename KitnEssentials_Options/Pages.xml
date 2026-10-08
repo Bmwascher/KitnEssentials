@@ -29,6 +29,7 @@
     <Script file="GUIClassUtilities\GUI-HuntersMark.lua" />
     <Script file="GUIClassUtilities\GUI-HavocTracker.lua" />
     <Script file="GUIClassUtilities\GUI-DoTTracker.lua" />
+    <Script file="GUIClassUtilities\GUI-AlterTime.lua" />
     <Script file="GUIClassUtilities\GUI-SpellAlerts.lua" />
     <Script file="GUIClassUtilities\GUI-PIMacroBuilder.lua" />
     <Script file="GUIClassUtilities\GUI-PIAssist.lua" />
