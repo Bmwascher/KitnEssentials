@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.12
+
+### Time Spiral
+
+- The display follows the Time Spiral buff itself instead of your movement
+  spell's glow. The Warlock Soulburn false alert is gone, and it works again
+  for Havoc Demon Hunters with Inertia or Dash of Chaos
+- The timer counts the buff's real time left, and the icon hides when you
+  use the free cast, when the buff ends, or in a vehicle
+- A buff already on you at a /reload now shows
+- Glow types are now Pixel, Ants, Proc Loop and Alert. A saved older type
+  shows as the closest new one
+- **NEW:** the glow settings gain Lines, Speed, Thickness and the other
+  controls the other glow cards have. The glow looks the same until you
+  move one
+- Settings changed inside a key, an encounter or combat apply when it ends;
+  the preview updates at once
+
+---
+
 ## v4.9.11
 
 ### Combat Texts
