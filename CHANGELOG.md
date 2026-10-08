@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.5
+
+### Raid Notifications
+
+- The settings page is regrouped into General Alerts (Gateway, Benched,
+  Bonus Rolls Missing) and Boss Alerts (Reset Boss, Loot Boss), three
+  switches to a row with short labels
+- Each alert's description moves into a tooltip on its switch, and the page
+  header is one line
+- Show Icons sits alone in the first card. The Alert Duration slider is
+  renamed Duration and sits under the two boss alerts it controls, with a
+  note on what ends each one
+- The alerts themselves behave as before
+
+---
+
 ## v4.9.4
 
 ### Settings Window
