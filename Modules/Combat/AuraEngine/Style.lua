@@ -14,6 +14,7 @@ KE.AuraStyle = Style
 
 -- Fallback colors, shared because KE:ResolveColor only reads them.
 local BLACK = { 0, 0, 0, 1 }
+local WHITE = { 1, 1, 1, 1 }
 local DEFAULT_RING = { 0.8, 0, 0, 1 }
 
 -- The dispel badge is a fixed fraction of the icon, not a setting -- ported
@@ -274,6 +275,13 @@ function Style.CreateRegions(frame, group, settings)
     frame.keCount:SetJustifyH("RIGHT")
     frame.keTimer = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
 
+    -- On the text overlay so the glow cannot paint over it. Static text from
+    -- settings, never registered with the button.
+    if caps.hasLabel then
+        frame.keCaption = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
+        frame.keCaption:SetJustifyH("CENTER")
+    end
+
     -- Seeded here for the same reason as the dispel host's fontstring:
     -- RegisterRegions's Set* calls can trigger an immediate UpdateAuraDisplay,
     -- and SetText on a fontless string errors.
@@ -346,8 +354,17 @@ end
 ---------------------------------------------------------------------------------
 
 function Style.RegisterRegions(button, _display, group, settings)
+    -- A fixed icon is painted by KE and never registered, so the game's aura
+    -- repaint leaves it alone. Writes to it are denied while auras are
+    -- secret; the engine reaches this only before the restriction attaches or
+    -- behind the reconfigure gate.
     if button.keIcon then
-        button:SetIcon(button.keIcon)
+        local caps = group.capabilities or {}
+        if caps.fixedIcon then
+            button.keIcon:SetTexture(caps.fixedIcon(settings))
+        else
+            button:SetIcon(button.keIcon)
+        end
     end
 
     -- Tooltips are a live toggle, so the policy is re-applied here rather
@@ -476,7 +493,15 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
     end
 
     if frame.keTimer then
-        KE:ApplyFontToText(frame.keTimer, settings.FontFace, settings.TimerFontSize, settings.FontOutline)
+        if caps.hasTimerFont then
+            KE:ApplyFontToText(frame.keTimer, settings.TimerFontFace, settings.TimerFontSize, settings.TimerFontOutline)
+            frame.keTimer:SetTextColor(KE:ResolveColor(settings.TimerTextColor, WHITE))
+            -- Preview frames never pass through RegisterRegions, where live
+            -- buttons take this switch, and the preview writes the text anyway.
+            frame.keTimer:SetShown(settings.ShowTimer ~= false)
+        else
+            KE:ApplyFontToText(frame.keTimer, settings.FontFace, settings.TimerFontSize, settings.FontOutline)
+        end
         if frame.keTimer.SetShadowOffset then frame.keTimer:SetShadowOffset(0, 0) end
         frame.keTimer:ClearAllPoints()
         local tp = settings.TimerPosition
@@ -488,6 +513,16 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
             -- a fallback the ClearAllPoints above leaves the text unanchored.
             frame.keTimer:SetPoint("CENTER", frame, "CENTER", 0, 0)
         end
+    end
+
+    if caps.hasLabel and frame.keCaption then
+        local caption = frame.keCaption
+        KE:ApplyFontToText(caption, settings.FontFace, settings.FontSize, settings.FontOutline)
+        caption:SetTextColor(KE:ResolveColor(settings.TextColor, WHITE))
+        caption:SetText(settings.TextLabel or "FREE")
+        caption:ClearAllPoints()
+        caption:SetPoint("TOP", frame, "BOTTOM", 0, -2)
+        caption:SetShown(settings.ShowText ~= false)
     end
 
     if caps.hasBorder and frame.keBorder then

@@ -427,6 +427,7 @@ function Engine.RegWithEditMode(display)
             return KE:ResolveAnchorFrame(settings.anchorFrameType, settings.ParentFrame)
         end,
         guiPath = decl.guiPath or display.key,
+        guiTab = decl.guiTab,
     })
     display.editModeRegistered = true
 end

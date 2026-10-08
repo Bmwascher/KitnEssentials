@@ -467,6 +467,14 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -160),
+            IconSpacing = 0,
+            IconsPerRow = 1,
+            MaxRows = 1,
+            Swipe = true,
+            Reverse = true,
+            DecimalThreshold = 10, -- tenths for the whole of a buff of 10 s or less
+            ShowTooltips = false,
+            GlowDuration = 1, -- loop period a stored "proc" glow type reads
         },
 
         PlayerAbsorbs = {
