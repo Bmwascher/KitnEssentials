@@ -415,6 +415,7 @@ function GUIFrame:ToggleMinimize()
         -- pass on the way back up.
         frame:SetHeight(self._savedHeight or self.minHeight)
         frame:SetResizeBounds(self.minWidth, self.minHeight)
+        self:ResetLabelRebuilds()
         if self.contentArea then self.contentArea:Show() end
         if self.sidebar then self.sidebar:Show() end
         if self.bottomBar then self.bottomBar:Show() end
@@ -898,6 +899,8 @@ function CardMethods:AddLabel(text)
     self.content:SetHeight(self.currentY)
     self:UpdateHeight()
     table_insert(self.regions, label)
+    label._keLaidHeight = height
+    GUIFrame._liveLabels[label] = true
     return label
 end
 
@@ -1182,6 +1185,7 @@ function GUIFrame:ResizeCardInPlace(card, oldHeight)
             end
         end
     end
+    self:ResetLabelRebuilds()
     parent:SetHeight(parent:GetHeight() + delta)
 end
 
@@ -1311,6 +1315,79 @@ function GUIFrame:CreateRow(parent, height)
 end
 
 ---------------------------------------------------------------------------------
+-- Label recheck
+---------------------------------------------------------------------------------
+-- AddLabel measures a label once, at the width it is built at. Shown later at
+-- another width, it keeps its old slot and overlaps what is below it, so once
+-- the width settles the page is rebuilt if any label's height moved.
+local LABEL_HEIGHT_TOLERANCE = 1
+-- A rebuild can flip the scroll bar and so the width again; two rebuilds in
+-- a row cover both directions, and the cap holds even on a page that grows
+-- as it widens.
+local MAX_LABEL_REBUILDS = 2
+
+GUIFrame._liveLabels = {}
+
+-- The page is off screen: the window is closed or collapsed to its title bar.
+local function PageHidden(gui)
+    return gui.minimized or not gui:IsShown()
+end
+
+-- Pure. Sizing waits because the grip's release queues its own check.
+function GUIFrame.LabelRecheckAction(state)
+    if state.sizing then return "wait" end
+    if state.hidden then return "defer" end
+    if (state.rebuilds or 0) >= MAX_LABEL_REBUILDS then return "stop" end
+    return "check"
+end
+
+function GUIFrame:RecheckLabels()
+    local action = GUIFrame.LabelRecheckAction({
+        sizing = self.isResizing,
+        hidden = PageHidden(self),
+        rebuilds = self._labelRebuilds,
+    })
+    if action == "check" then
+        for label in pairs(self._liveLabels) do
+            local laid = label._keLaidHeight
+            if laid and label:IsVisible() then
+                local height = label:GetStringHeight()
+                if height and math.abs(height - laid) > LABEL_HEIGHT_TOLERANCE then
+                    self._labelRebuilds = (self._labelRebuilds or 0) + 1
+                    self._labelRebuild = true
+                    self:RefreshContent()
+                    -- The rebuild may flip the scroll bar; the next check
+                    -- either continues this chain or ends it.
+                    self:QueueLabelRecheck()
+                    return
+                end
+            end
+        end
+    elseif action == "defer" then
+        -- Show and the minimize restore rebuild a dirty page.
+        self._contentDirtyWhileHidden = true
+    end
+    self:ResetLabelRebuilds()
+end
+
+-- Every change to the page or the window that is not a check-started
+-- rebuild calls this, so a pending check never applies an old chain's count
+-- to a new change.
+function GUIFrame:ResetLabelRebuilds()
+    self._labelRebuilds = 0
+end
+
+-- One check a frame later, however often the width settles in between.
+function GUIFrame:QueueLabelRecheck()
+    if self._labelRecheckQueued then return end
+    self._labelRecheckQueued = true
+    C_Timer.After(0, function()
+        self._labelRecheckQueued = nil
+        self:RecheckLabels()
+    end)
+end
+
+---------------------------------------------------------------------------------
 -- RefreshContent
 ---------------------------------------------------------------------------------
 function GUIFrame:RefreshContent()
@@ -1327,6 +1404,13 @@ function GUIFrame:RefreshContent()
     -- for a rebuild; the rebuild already under way is the one it wants.
     if self._drainingDeferred or self._tearingDown then return end
 
+    -- A rebuild the label recheck did not start begins a new chain. Read and
+    -- cleared here, below the nested-call guard and before anything that
+    -- can fail.
+    local fromRecheck = self._labelRebuild
+    self._labelRebuild = nil
+    if not fromRecheck then self:ResetLabelRebuilds() end
+
     if not self.contentArea then return end
 
     -- NEVER rebuild while the GUI is hidden. Every frame a page builds for
@@ -1337,7 +1421,7 @@ function GUIFrame:RefreshContent()
     -- Minimized counts as hidden here. The frame is still shown, so the test
     -- below passes, but the page is not on screen and every edit-mode drop
     -- calls in.
-    if self.minimized or not (self.mainFrame and self.mainFrame:IsShown()) then
+    if PageHidden(self) then
         self._contentDirtyWhileHidden = true
         return
     end
@@ -1396,6 +1480,8 @@ function GUIFrame:RefreshContent()
 
     local T = Theme
     local yOffset = T.paddingMedium
+
+    wipe(self._liveLabels)
 
     if itemId and self.registeredContent[itemId] then
         local ok, result = pcall(self.registeredContent[itemId], scrollChild, yOffset)

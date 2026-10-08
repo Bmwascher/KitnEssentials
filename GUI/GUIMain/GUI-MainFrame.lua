@@ -238,9 +238,14 @@ function GUIFrame:CreateContentArea(parent)
             local contentH = scrollChild:GetHeight()
             local frameH = scrollFrame:GetHeight()
             local needsScrollbar = contentH > frameH
+            local flipped = needsScrollbar ~= scrollbarVisible
             scrollbarVisible = needsScrollbar
             scrollFrame.ScrollBar:SetAlpha(needsScrollbar and 1 or 0)
             UpdateScrollChildWidth()
+            -- The bar's width came or went, so card notes may wrap differently.
+            -- A minimized window cannot change width (the grip is hidden), so
+            -- a flip from collapsing it is undone by the restore.
+            if flipped and not GUIFrame.minimized then GUIFrame:QueueLabelRecheck() end
         end
     end
 
@@ -307,14 +312,14 @@ function GUIFrame:CreateMainFrame()
     -- Every handler on both the move path and the size path reports, so the
     -- ORDER they fire in is visible -- a move and a size both engaging is the
     -- shape worth ruling in or out, and it cannot be seen from the end state.
-    local isResizing = false
+    GUIFrame.isResizing = false
     local function resizeLog(tag)
         if not frame.DEBUG_RESIZE then return end
         local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
         KE:Print(string.format("%s w=%.1f h=%.1f %s>%s %.1f,%.1f sizing=%s",
             tag, frame:GetWidth() or -1, frame:GetHeight() or -1,
             tostring(point), tostring(relativePoint),
-            xOfs or 0, yOfs or 0, tostring(isResizing)))
+            xOfs or 0, yOfs or 0, tostring(GUIFrame.isResizing)))
     end
 
     frame:SetScript("OnSizeChanged", function() resizeLog("size") end)
@@ -579,8 +584,8 @@ function GUIFrame:CreateMainFrame()
     local sizeAtGrab
     local function stopAndSaveResize()
         resizeLog("sizeStop")
-        if not isResizing then return end
-        isResizing = false
+        if not GUIFrame.isResizing then return end
+        GUIFrame.isResizing = false
         frame:StopMovingOrSizing()
 
         -- A click that never became a drag must not commit a size. WoW polls
@@ -609,6 +614,8 @@ function GUIFrame:CreateMainFrame()
             gs.xOffset = xOfs
             gs.yOffset = yOfs
         end
+        GUIFrame:ResetLabelRebuilds()
+        GUIFrame:QueueLabelRecheck()
     end
     -- Sizing starts on the PRESS, while the cursor is provably still on the
     -- grip. StartSizing snaps the dragged corner to wherever the cursor is when
@@ -622,15 +629,15 @@ function GUIFrame:CreateMainFrame()
     -- still fires afterward and the isResizing guard makes it a no-op.
     resizeGrip:RegisterForDrag("LeftButton")
     resizeGrip:SetScript("OnMouseDown", function(_, button)
-        if button ~= "LeftButton" or isResizing then return end
+        if button ~= "LeftButton" or GUIFrame.isResizing then return end
         resizeLog("sizeStart")
-        isResizing = true
+        GUIFrame.isResizing = true
         sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
         frame:StartSizing("BOTTOMRIGHT")
     end)
     resizeGrip:SetScript("OnDragStart", function()
-        if isResizing then return end
-        isResizing = true
+        if GUIFrame.isResizing then return end
+        GUIFrame.isResizing = true
         sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
         frame:StartSizing("BOTTOMRIGHT")
     end)
