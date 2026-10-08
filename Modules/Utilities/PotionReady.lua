@@ -20,6 +20,9 @@ local CreateFrame      = CreateFrame
 local IsInInstance     = IsInInstance
 local UIParent         = UIParent
 
+local ATTACH_KEY = "potionReady"
+local DETACHED_HEIGHT = 30
+
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
@@ -109,23 +112,32 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
+-- Every show and hide of the text goes through here, so an attached text's
+-- place in the Combat Texts stack follows it.
+function PR:SetTextShown(shown)
+    if not self.frame then return end
+    if shown then self.frame:Show() else self.frame:Hide() end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:AttachedFrameChanged(ATTACH_KEY) end
+end
+
 function PR:CheckPotions()
     if not self.frame then return end
     self:SyncListening()
     if self.isPreview then return end
     if not self:PassesVisibility() then
-        self.frame:Hide()
+        self:SetTextShown(false)
         return
     end
 
     for _, id in ipairs(POTION_IDS) do
         if HasPotion(id) and IsPotionReady(id) then
-            self.frame:Show()
+            self:SetTextShown(true)
             return
         end
     end
 
-    self.frame:Hide()
+    self:SetTextShown(false)
 end
 
 ---------------------------------------------------------------------------------
@@ -135,7 +147,7 @@ function PR:CreateFrame()
     if self.frame then return end
 
     local f = CreateFrame("Frame", "KE_PotionReady", UIParent)
-    f:SetSize(200, 30)
+    f:SetSize(200, DETACHED_HEIGHT)
     f:Hide()
 
     local t = f:CreateFontString(nil, "OVERLAY")
@@ -143,23 +155,54 @@ function PR:CreateFrame()
 
     self.frame = f
     self.text  = t
+    -- Attached, the login anchor pass must not put the text back on its own
+    -- Player Frame position.
+    KE:RegisterAnchorRepair(f, function()
+        return not self:IsAttached() and self.db.anchorFrameType == "PLAYERFRAME"
+    end, function() self:ApplySettings() end)
 end
 
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+function PR:IsAttached()
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+end
+
+-- Attached, the text is a Combat Texts row: that module's face and outline,
+-- the resolved size, and the line height Combat Texts gives its own rows.
+-- Only an active module takes a slot: the page applies settings to a kept
+-- frame while the module is off.
 function PR:ApplySettings()
     if not self.frame or not self.text then return end
     local db = self.db
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    local attached = (self:IsEnabled() or self.isPreview) and cm ~= nil and self:IsAttached()
 
-    KE:ApplyFontToText(self.text, db.FontFace, db.FontSize, db.FontOutline)
+    local face, outline, size = db.FontFace, db.FontOutline, db.FontSize
+    if attached and cm then
+        face, outline = cm.db.FontFace, cm.db.FontOutline
+        size = cm.ResolveAttachedSize(true, db.AttachOwnFontSize, db.FontSize, cm.db.FontSize)
+    end
+    KE:ApplyFontToText(self.text, face, size, outline)
 
     local r, g, b, a = KE:GetAccentColor(db.ColorMode, db.Color)
     self.text:SetTextColor(r, g, b, a)
     self.text:SetText(db.Text or "Potion Ready")
 
     self.frame:SetFrameStrata(db.Strata or "HIGH")
-    KE:ApplyFramePosition(self.frame, db.Position, db)
+    if attached and cm then
+        self.frame:SetHeight(size + 2)
+        attached = cm:SetAttachedFrame(ATTACH_KEY, self.frame)
+    end
+    if not attached then
+        if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
+        self.frame:SetHeight(DETACHED_HEIGHT)
+        KE:ApplyFramePosition(self.frame, db.Position, db)
+    end
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled() or self.isPreview) end
+    if self:IsEnabled() or self.isPreview then self:RegWithEditMode() end
 
     -- A profile switch reaches this module here only; a gate it opens needs
     -- the events on for the next cooldown or bag change.
@@ -170,7 +213,17 @@ end
 -- Edit Mode
 ---------------------------------------------------------------------------------
 function PR:RegWithEditMode()
-    if KE.EditMode and not self.editModeRegistered then
+    if not KE.EditMode then return end
+    -- Attached, the Combat Texts mover moves the text; a second mover for it
+    -- would fight that one.
+    if self:IsAttached() then
+        if self.editModeRegistered then
+            KE.EditMode:UnregisterElement("PotionReady")
+            self.editModeRegistered = false
+        end
+        return
+    end
+    if not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key         = "PotionReady",
             module      = self,
@@ -202,15 +255,17 @@ function PR:ShowPreview()
     self.isPreview = true
     self:ApplySettings()
     self.text:SetText(self.db.Text or "Potion Ready")
-    self.frame:Show()
+    self:SetTextShown(true)
 end
 
 function PR:HidePreview()
     self.isPreview = false
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled()) end
     if self.db and self.db.Enabled and self.frame then
         self:CheckPotions()
     elseif self.frame then
-        self.frame:Hide()
+        self:SetTextShown(false)
     end
 end
 
@@ -300,7 +355,12 @@ end
 
 function PR:OnDisable()
     self:UnregisterAllEvents()
-    if self.frame then self.frame:Hide() end
+    self:SetTextShown(false)
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then
+        cm:SetAttachedFrame(ATTACH_KEY, nil)
+        cm:SyncAttachSubscription(self, false)
+    end
     self.isPreview = false
     self.inCombat  = false
     self._listening = false
