@@ -523,7 +523,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        showAnchorFrameType = false,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
