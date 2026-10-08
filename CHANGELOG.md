@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.6
+
+### Spell History
+
+- Every cast pushes the strip: older icons glide one step over and the
+  newest icon appears in its slot, fading in
+- **NEW:** Fade Mode (Per Icon or Whole Strip) and Hold in Combat on the
+  Fade card
+- Whole Strip with Hold in Combat is the new default: the strip fades as
+  one, Fade Delay seconds after your last cast, and stays at full strength
+  through a fight
+- Shorter page text, and tooltips on the Casts checkboxes
+
+---
+
 ## v4.9.5
 
 ### Raid Notifications
