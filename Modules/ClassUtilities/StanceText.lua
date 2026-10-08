@@ -30,7 +30,6 @@ local UIParent = UIParent
 local MISSING_TEXT_DEFAULT = "MISSING"
 local WRONG_TEXT_DEFAULT = "WRONG"
 local ATTACH_KEY = "stanceText"
--- Gap between the icon's top and the caption above it.
 local CAPTION_GAP = 4
 
 -- Per-spec expected form, keyed by specialization ID.
