@@ -51,6 +51,7 @@ local HAVOC_IDS = { [80240] = true }
 local DESTRUCTION_SPEC = 267
 local DEFAULT_TEXT = "Havoc Target"
 local ANCHOR_WIDTH = 280
+local ATTACH_KEY = "havoc"
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -70,8 +71,24 @@ local function WarningText(db)
     return DEFAULT_TEXT
 end
 
-local function AnchorHeight(db)
-    return (db.WarningFontSize or 24) + 8
+-- Keyed on the toggle and the saved Combat Texts settings rather than on
+-- Combat Texts running: the game builds the warning once, possibly before
+-- Combat Texts is up. Returns face, outline, size.
+local function EffectiveStyle(db)
+    local ct = KE.db and KE.db.profile.CombatTexts
+    if db.AttachToCombatTexts and ct then
+        local cm = KitnEssentials:GetModule("CombatTexts", true)
+        local size = cm and cm.ResolveAttachedSize(true, db.AttachOwnFontSize, db.WarningFontSize, ct.FontSize)
+        return ct.FontFace, ct.FontOutline, size or db.WarningFontSize
+    end
+    return db.FontFace, db.FontOutline, db.WarningFontSize
+end
+
+-- builtSize is the largest size the game's warning was built at this session.
+-- That text keeps it until a reload, so the anchor never shrinks below it.
+local function AnchorHeight(db, builtSize)
+    local _, _, size = EffectiveStyle(db)
+    return math.max(size or 24, builtSize or 0) + 8
 end
 
 ---------------------------------------------------------------------------------
@@ -130,13 +147,38 @@ end
 
 function HT:CreateAnchor()
     if self.anchor then return end
-    local db = self.db
-
     local frame = CreateFrame("Frame", "KE_HavocWarning", UIParent)
-    frame:SetSize(ANCHOR_WIDTH, AnchorHeight(db))
-    frame:SetFrameStrata(db.Strata or "MEDIUM")
-    KE:ApplyFramePosition(frame, db.WarningPosition, db)
+    frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     self.anchor = frame
+    -- Attached, the login anchor pass must not put the anchor back on its own
+    -- Player Frame position.
+    KE:RegisterAnchorRepair(frame, function()
+        return not self:IsAttached() and self.db.anchorFrameType == "PLAYERFRAME"
+    end, function() self:ApplyPosition() end)
+    self:ApplyPosition()
+end
+
+function HT:IsAttached()
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+end
+
+-- Moves only our anchor. The engine's button is centered on it and follows,
+-- so nothing here touches the button.
+function HT:ApplyPosition()
+    local anchor = self.anchor
+    if not anchor then return end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    local wantAttach = (self:IsEnabled() or self.previewing) and cm ~= nil and self:IsAttached()
+    -- The built-size floor is for the stack only; detached, the height keeps
+    -- its own rule so a centered anchor does not move.
+    anchor:SetSize(ANCHOR_WIDTH, AnchorHeight(self.db, wantAttach and self.builtSize or nil))
+    local attached = wantAttach and cm:SetAttachedFrame(ATTACH_KEY, anchor)
+    if not attached then
+        if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
+        KE:ApplyFramePosition(anchor, self.db.WarningPosition, self.db)
+    end
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled() or self.previewing) end
 end
 
 -- The engine's one legal creation window for this button. Everything drawn on it
@@ -158,7 +200,11 @@ function HT:InitWarningButton(button)
     -- One anchor point, deliberately. SetAllPoints would tie the string to a
     -- button whose size we cannot know.
     text:SetPoint("CENTER", button, "CENTER", 0, 0)
-    KE:ApplyFontToText(text, db.FontFace, db.WarningFontSize, db.FontOutline)
+    local face, outline, size = EffectiveStyle(db)
+    KE:ApplyFontToText(text, face, size, outline)
+    -- Recorded on the module, not the button. The anchor was last sized from
+    -- these same settings, so nothing needs moving here.
+    self.builtSize = math.max(self.builtSize or 0, size or 24)
     text:SetTextColor(unpack(db.WarningColor))
     text:SetText(WarningText(db))
     text:Show()
@@ -263,22 +309,31 @@ end
 -- Edit Mode
 ---------------------------------------------------------------------------------
 function HT:RegWithEditMode()
-    if KE.EditMode and not self.editModeRegistered then
-        self:CreateAnchor()
-        KE.EditMode:RegisterElement({
-            key = "HavocTracker", displayName = "Havoc Warning", frame = self.anchor,
-            module = self,
-            getPosition = function() return self.db.WarningPosition end,
-            setPosition = function(pos)
-                self.db.WarningPosition = pos
-                KE:ApplyFramePosition(self.anchor, self.db.WarningPosition, self.db)
-            end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "ClassTools",
-            guiTab = "HavocTracker",
-        })
-        self.editModeRegistered = true
+    if not KE.EditMode then return end
+    self:CreateAnchor()
+    -- Attached, the Combat Texts mover moves the warning; a second mover for
+    -- it would fight that one.
+    if self:IsAttached() then
+        if self.editModeRegistered then
+            KE.EditMode:UnregisterElement("HavocTracker")
+            self.editModeRegistered = false
+        end
+        return
     end
+    if self.editModeRegistered then return end
+    KE.EditMode:RegisterElement({
+        key = "HavocTracker", displayName = "Havoc Warning", frame = self.anchor,
+        module = self,
+        getPosition = function() return self.db.WarningPosition end,
+        setPosition = function(pos)
+            self.db.WarningPosition = pos
+            KE:ApplyFramePosition(self.anchor, self.db.WarningPosition, self.db)
+        end,
+        getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+        guiPath = "ClassTools",
+        guiTab = "HavocTracker",
+    })
+    self.editModeRegistered = true
 end
 
 ---------------------------------------------------------------------------------
@@ -288,9 +343,9 @@ function HT:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
     if self.anchor then
-        self.anchor:SetSize(ANCHOR_WIDTH, AnchorHeight(self.db))
         self.anchor:SetFrameStrata(self.db.Strata or "MEDIUM")
-        KE:ApplyFramePosition(self.anchor, self.db.WarningPosition, self.db)
+        self:ApplyPosition()
+        self:RegWithEditMode()
     end
 
     -- Re-draw the preview if one is up. Without this every control on the page
@@ -317,16 +372,20 @@ function HT:ShowPreview()
         self.previewText = self.anchor:CreateFontString(nil, "OVERLAY")
         self.previewText:SetPoint("CENTER", self.anchor, "CENTER", 0, 0)
     end
-    KE:ApplyFontToText(self.previewText, db.FontFace, db.WarningFontSize, db.FontOutline)
+    local face, outline, size = EffectiveStyle(db)
+    KE:ApplyFontToText(self.previewText, face, size, outline)
     self.previewText:SetTextColor(unpack(db.WarningColor))
     self.previewText:SetText(WarningText(db))
     self.previewText:Show()
     self.anchor:Show()
+    self:ApplyPosition()
 end
 
 function HT:HidePreview()
     self.previewing = false
     if self.previewText then self.previewText:Hide() end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled()) end
 end
 
 ---------------------------------------------------------------------------------
@@ -345,6 +404,9 @@ function HT:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "EvaluateGate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "EvaluateGate")
     self:RegWithEditMode()
+    -- A retained anchor skips CreateAnchor's placement, and disable dropped
+    -- the slot and the subscription.
+    self:ApplyPosition()
     -- Deferred once: the spec is not reliably readable on the frame this runs.
     C_Timer.After(0.5, function()
         if self:IsEnabled() then self:EvaluateGate() end
@@ -355,6 +417,8 @@ function HT:OnDisable()
     self:Deactivate()
     self:UnregisterAllEvents()
     self:HidePreview()
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
     -- Clearing the guard is what lets a later enable register again.
     if KE.EditMode then KE.EditMode:UnregisterElement("HavocTracker") end
     self.editModeRegistered = false
