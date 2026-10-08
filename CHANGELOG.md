@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.8
+
+### Addon Skins
+
+- **NEW:** an RCLootCouncil skin, on by default and grayed out when
+  RCLootCouncil is not installed. Its windows, tables, buttons, item icons,
+  menus, popups and the loot row's timer bar get KitnEssentials' look, and
+  its colored icon borders keep their colors
+- RCLootCouncil gains a KitnUI skin and stays on it while the row is on.
+  After you turn the row off, KitnUI stays selected in RCLootCouncil until
+  you pick another skin
+- RCLootCouncil window titles sit above the window, table headers use the
+  largest size that fits their columns (up to 12), and loot rows for your
+  own items keep the normal dark border
+- RCLootCouncil borders stay one pixel wide when the UI scale changes, and
+  popup buttons stay bright when a popup is reused
+- Mythic Dungeon Tools: the window is skinned again, including its close
+  and maximize buttons, side panel, tooltips, toolbar arrow, progress bar
+  and the dungeon buttons, which are skinned on the first open
+
+---
+
 ## v4.9.7
 
 ### Chat
