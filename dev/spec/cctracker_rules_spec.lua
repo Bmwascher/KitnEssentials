@@ -1,7 +1,7 @@
 -- Modules/Dungeons/CCTrackerRules.lua -- the rules a later edit breaks
 -- silently: which ids are tracked, the filter each container gets, which
--- plates get a row, the size of the box kept on screen, what Add refuses, and
--- the preview's countdown text.
+-- plates get a row, the size of the box kept on screen, what Add and Remove
+-- refuse, and the preview's countdown text.
 -- The shipped seed table is data and gets no case; these cases use their own.
 local L = require("dev.spec._ke_loader")
 
@@ -207,6 +207,21 @@ describe("cc tracker rules", function()
         }
         for i, case in ipairs(cases) do
             local id, reason = Rules.CanAdd(case[1], SEEDS, custom, getName)
+            assert.equals(case[2], id, "case " .. i)
+            assert.equals(case[3], reason, "case " .. i)
+        end
+    end)
+
+    it("refuses what Remove cannot take and accepts an added id", function()
+        local custom = { [99] = true }
+        local cases = {
+            { "abc", nil, "Enter a whole positive number." },
+            { "4", nil, "That is a shipped crowd control: untick it instead." },
+            { "777", nil, "That id is not one of your added spells." },
+            { "99", 99, nil },
+        }
+        for i, case in ipairs(cases) do
+            local id, reason = Rules.CanRemove(case[1], SEEDS, custom)
             assert.equals(case[2], id, "case " .. i)
             assert.equals(case[3], reason, "case " .. i)
         end
