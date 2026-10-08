@@ -438,7 +438,7 @@ end
 
 -- Popup geometry. The row sits below the header; the footer line under it
 -- holds "Disable Feature" and the watermark.
-local POPUP_W     = 280
+local POPUP_W     = 270
 local TITLE_H     = 27
 local PAD         = 10
 local BTN_TOP     = TITLE_H + 11
