@@ -32,7 +32,7 @@ local SKULL = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:16|t"
 local BAD_LOOT_TEXT = "GG, Fuggin Easy. Better luck next week!"
 local HIGHLIGHT_ALPHA = 0.25
 local PULSE_ALPHA, PULSE_SECONDS = 0.55, 1.4
--- The reveal flare keeps its own start, so a brighter breath leaves it as it is.
+-- The reveal flare starts from its own alpha, not the breathing peak.
 local REVEAL_FROM_ALPHA = 0.3
 local FLARE_SECONDS, FADE_SECONDS, GROW_SCALE = 0.12, 0.38, 1.06
 local JACKPOT_SECONDS = 1.5

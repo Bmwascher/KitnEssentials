@@ -384,15 +384,13 @@ local function FitTextWidget(widget, text)
         or issecretvalue(stringW) or issecretvalue(widgetW) then return end
     if math.abs(widgetW - stringW) <= 0.5 then return end
     local id = widget.widgetID
-    -- Through _G: the namespace is not in .luacheckrc's read globals, and the
-    -- allowlist is not widened for one read.
+    -- Through _G: .luacheckrc does not list the namespace.
     local widgetAPI = _G.C_UIWidgetManager
     local getInfo = widgetAPI and widgetAPI.GetTextWithStateWidgetVisualizationInfo
     if not getInfo or type(id) ~= "number" or issecretvalue(id) then return end
     local info = getInfo(id)
     if type(info) ~= "table" then return end
-    -- A fixed size setting is Blizzard's to keep. Every field is checked for
-    -- a secret before it is compared or used in arithmetic.
+    -- A fixed size setting is Blizzard's to keep.
     local sizeSetting, bottomPad = info.widgetSizeSetting, info.bottomPadding
     if type(sizeSetting) ~= "number" or issecretvalue(sizeSetting) or sizeSetting ~= 0 then return end
     local stringH = text:GetStringHeight()

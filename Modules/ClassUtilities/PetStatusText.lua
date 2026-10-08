@@ -343,8 +343,7 @@ function PS:Paint(text, r, g, b, a)
     end
 end
 
--- Mounted says nothing and leaves the hold as it is, so a mount never stands
--- in for the verdict read before it.
+-- Mounted shows nothing and leaves the hold unchanged.
 local function EvaluatePetStatus()
     local status, message, color, guarded = CheckPetStatus()
     if not isGrimoireClass or IsPlayerMounted() then return message, color end
