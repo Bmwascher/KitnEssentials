@@ -74,6 +74,7 @@ local function loadCombatTexts(options)
             self._unregisterAllCalls = self._unregisterAllCalls + 1
         end,
         IsEnabled = function() return options.moduleEnabled ~= false end,
+        SendMessage = function() end,
     }
     local KE = {
         db = { profile = { CombatTexts = {} } },

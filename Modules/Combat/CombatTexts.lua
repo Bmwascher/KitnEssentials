@@ -48,6 +48,12 @@ local MESSAGE_TYPES = {
     "interrupt",
 }
 
+local EXTERNAL_LINE_TYPES = {
+    "petStatus",
+}
+local IS_EXTERNAL_LINE = {}
+for _, key in ipairs(EXTERNAL_LINE_TYPES) do IS_EXTERNAL_LINE[key] = true end
+
 CM.container = nil
 CM.messageFrames = {}
 CM.activeMessages = {}
@@ -64,6 +70,9 @@ CM.lastAcceptedCastGUID = nil
 CM.lastUnkeyedAcceptAt = nil
 CM.reverseInterruptAt = nil
 CM.reverseInterruptSuccessSpellID = nil
+-- Sent on enable and disable, so an external line's owner can move its text
+-- between its own frame and this stack.
+CM.CHANGED_MESSAGE = "KitnEssentials_CombatTextsChanged"
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -172,11 +181,8 @@ end
 ---------------------------------------------------------------------------------
 -- Layout
 ---------------------------------------------------------------------------------
-function CM:ArrangeMessages()
-    local spacing = self.db.Spacing or 4
-    local yOffset = 0
-
-    for _, msgType in ipairs(MESSAGE_TYPES) do
+local function StackFrames(self, types, yOffset, spacing)
+    for _, msgType in ipairs(types) do
         local frame = self.messageFrames[msgType]
         if frame and frame:IsShown() then
             frame:ClearAllPoints()
@@ -184,6 +190,13 @@ function CM:ArrangeMessages()
             yOffset = yOffset + frame:GetHeight() + spacing
         end
     end
+    return yOffset
+end
+
+function CM:ArrangeMessages()
+    local spacing = self.db.Spacing or 4
+    local yOffset = StackFrames(self, MESSAGE_TYPES, 0, spacing)
+    yOffset = StackFrames(self, EXTERNAL_LINE_TYPES, yOffset, spacing)
 
     if self.container then
         self.container:SetHeight(math_max(30, yOffset - spacing))
@@ -320,6 +333,35 @@ function CM:HidePersistentMessage(msgType)
         self.activeMessages[msgType] = nil
         self:ArrangeMessages()
     end
+end
+
+---------------------------------------------------------------------------------
+-- External Lines
+---------------------------------------------------------------------------------
+function CM:AcceptsExternalLines()
+    return self:IsEnabled() and self.db ~= nil and self.db.Enabled ~= false
+        and self.container ~= nil
+end
+
+-- Not refused during the preview: the line belongs to its owner, and the
+-- preview never repaints or hides it.
+function CM:ShowExternalLine(key, text, r, g, b, a)
+    if not IS_EXTERNAL_LINE[key] or not self:AcceptsExternalLines() then return false end
+    local frame = self:GetMessageFrame(key)
+    frame.text:SetText(text)
+    frame.text:SetTextColor(r or 1, g or 1, b or 1, a or 1)
+    frame:SetAlpha(1)
+    frame:Show()
+    self:ArrangeMessages()
+    return true
+end
+
+function CM:HideExternalLine(key)
+    if not IS_EXTERNAL_LINE[key] then return end
+    local frame = self.messageFrames[key]
+    if not (frame and frame:IsShown()) then return end
+    frame:Hide()
+    self:ArrangeMessages()
 end
 
 ---------------------------------------------------------------------------------
@@ -540,9 +582,20 @@ function CM:HidePreview()
 
     self.isPreview = false
 
-    for msgType, frame in pairs(self.messageFrames) do
-        frame:Hide()
+    -- Built-in lines only: an external line belongs to its owner and stays up.
+    for _, msgType in ipairs(MESSAGE_TYPES) do
+        local frame = self.messageFrames[msgType]
+        if frame then frame:Hide() end
         self.activeMessages[msgType] = nil
+    end
+    -- Re-arranged only while such a line is still shown: the arrange shrinks
+    -- the container, which moves anything anchored to its top.
+    for _, key in ipairs(EXTERNAL_LINE_TYPES) do
+        local frame = self.messageFrames[key]
+        if frame and frame:IsShown() then
+            self:ArrangeMessages()
+            break
+        end
     end
 
     -- Re-check actual state
@@ -821,6 +874,8 @@ function CM:OnEnable()
     else
         C_Timer.After(1, function() self:CheckDurability() end)
     end
+
+    self:SendMessage(self.CHANGED_MESSAGE)
 end
 
 function CM:OnDisable()
@@ -834,4 +889,5 @@ function CM:OnDisable()
     self:UpdateInterruptEventRegistration(true)
     self.interruptAnnounceSpells = nil
     self:UnregisterAllEvents()
+    self:SendMessage(self.CHANGED_MESSAGE)
 end

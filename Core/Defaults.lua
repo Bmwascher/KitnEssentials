@@ -303,6 +303,7 @@ local Defaults = {
             DeadColor = { 1, 0.2, 0.2, 1 },          -- #FF3333
             PassiveColor = { 1, 0, 0.549, 1 },        -- #FF008C
             WrongColor = { 1, 0.4, 0, 1 },            -- #FF6600
+            AttachToCombatTexts = false,
         },
 
         RaidNotifications = {

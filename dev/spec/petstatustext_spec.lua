@@ -18,9 +18,10 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_true(rec.shown)
     end)
 
-    it("stays silent for a Warlock whose Grimoire is readable and present", function()
+    it("stays silent for a Warlock without the talent whose Grimoire is readable and present", function()
         local PS, rec = L.loadPetStatusText({
             class = "WARLOCK", specID = AFFLICTION, hasPet = false, aura = { spellId = GRIMOIRE },
+            unknownSpells = { [108503] = true },
         })
         PS:UpdatePetText()
         assert.is_nil(rec.text)
@@ -34,12 +35,14 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_false(rec.shown)
     end)
 
-    it("REFUSES to accuse a Warlock while aura identities are hidden", function()
+    it("REFUSES to accuse a Warlock without the talent while aura identities are hidden", function()
         -- The defect. The Grimoire search cannot succeed here, so the old code
         -- read its own blindness as proof the pet was missing and said so for
-        -- the whole pull.
+        -- the whole pull. Without the talent, so the Missing branch's own guard
+        -- is what refuses; a talent holder returns earlier.
         local PS, rec = L.loadPetStatusText({
             class = "WARLOCK", specID = AFFLICTION, hasPet = false, aurasHidden = true,
+            unknownSpells = { [108503] = true },
         })
         PS:UpdatePetText()
         assert.is_nil(rec.text)
@@ -66,10 +69,11 @@ describe("pet status per-spell secrecy", function()
                  ShouldAurasBeSecret = function() return true end }
     end
 
-    it("refuses when the exact predicate says the sacrifice aura is secret", function()
+    it("refuses a Warlock without the talent when the exact predicate says the sacrifice aura is secret", function()
         local PS, rec = L.loadPetStatusText({
             class = "WARLOCK", specID = 265, hasPet = false,
             aurasHidden = false, C_Secrets = secrets(true),
+            unknownSpells = { [108503] = true },
         })
         PS:UpdatePetText()
         assert.is_false(rec.shown)
@@ -82,6 +86,45 @@ describe("pet status per-spell secrecy", function()
         })
         PS:UpdatePetText()
         assert.is_true(rec.shown)
+    end)
+end)
+
+describe("PetStatusText Grimoire of Sacrifice after a death", function()
+    it("silences a remembered death only where the sacrifice explains it", function()
+        local rows = {
+            { name = "buff present after the sacrifice, no pet",
+              state = { hasPet = false, petDead = false, aura = { spellId = GRIMOIRE } }, expect = nil },
+            { name = "buff present while the dead pet still exists",
+              state = { hasPet = true, petDead = true, aura = { spellId = GRIMOIRE } }, expect = nil },
+            { name = "buff hidden, no pet, after the death",
+              state = { hasPet = false, petDead = false, aurasHidden = true }, expect = nil },
+            { name = "buff hidden while the dead pet still exists",
+              state = { hasPet = true, petDead = true, aurasHidden = true }, expect = "PET DEAD" },
+            { name = "buff absent after a real death",
+              state = { hasPet = false, petDead = false }, expect = "PET DEAD" },
+            { name = "talent not known, buff hidden, no pet, after the death",
+              state = { hasPet = false, petDead = false, aurasHidden = true, unknownSpells = { [108503] = true } },
+              expect = "PET DEAD" },
+        }
+        for _, row in ipairs(rows) do
+            local overrides = {
+                class = "WARLOCK", specID = AFFLICTION, hasPet = true, petDead = true,
+                db = {
+                    Enabled = true,
+                    PetMissing = "PET MISSING", MissingColor = { 1, 1, 1, 1 },
+                    PetDead = "PET DEAD", DeadColor = { 1, 1, 1, 1 },
+                },
+            }
+            local PS, rec = L.loadPetStatusText(overrides)
+            PS:UpdatePetText()
+            assert.equal("PET DEAD", rec.text, row.name .. ": the real death is painted first")
+
+            for key, value in pairs(row.state) do overrides[key] = value end
+            rec.text = nil
+            PS:UpdatePetText()
+            assert.equal(row.expect, rec.text, row.name)
+            assert.equal(row.expect ~= nil, rec.shown, row.name)
+        end
     end)
 end)
 
