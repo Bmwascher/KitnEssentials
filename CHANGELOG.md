@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.3
+
+### Settings Window
+
+- Compact checkboxes (the small box with a label) respond to clicks, hover
+  and tooltips only over the box and its label text. The blank space to the
+  right of the label does nothing
+- On the Secondary Stats and Enemy Counter spec cards, clicking anywhere
+  across the card no longer toggles a spec
+
+---
+
 ## v4.9.2
 
 ### Performance
