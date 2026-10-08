@@ -227,3 +227,47 @@ describe("PartyBuffsRules.IsPlayerCandidate", function()
         end
     end)
 end)
+
+describe("PartyBuffsRules.ActivePlacement", function()
+    local function placementDb(overrides)
+        local db = {
+            Side = "LEFT", XOffset = 0, YOffset = 0, Strata = "FRAME",
+            HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4, HealerStrata = "HIGH",
+        }
+        for key, value in pairs(overrides or {}) do db[key] = value end
+        return db
+    end
+
+    it("uses the healer copy only while the toggle is on and the healer answer is true", function()
+        local R = L.loadPartyBuffsRules()
+        local default = { "LEFT", 0, 0, "FRAME" }
+        local healer = { "RIGHT", 6, -4, "HIGH" }
+        local cases = {
+            { name = "toggle off, healer spec", toggle = false, useHealer = true, want = default },
+            { name = "toggle on, other spec", toggle = true, useHealer = false, want = default },
+            { name = "toggle on, healer spec", toggle = true, useHealer = true, want = healer },
+        }
+        for _, case in ipairs(cases) do
+            local db = placementDb({ UseHealerPlacement = case.toggle })
+            assert.are.same(case.want, { R.ActivePlacement(db, case.useHealer) }, case.name)
+        end
+    end)
+
+    it("reads the default key for a healer key that is absent", function()
+        local R = L.loadPartyBuffsRules()
+        local db = placementDb({ UseHealerPlacement = true })
+        db.HealerXOffset = nil
+        db.HealerStrata = nil
+        assert.are.same({ "RIGHT", 0, -4, "FRAME" }, { R.ActivePlacement(db, true) })
+    end)
+end)
+
+describe("PartyBuffsRules.SeedHealerPlacement", function()
+    it("fills each absent healer key from its default and keeps one already set", function()
+        local R = L.loadPartyBuffsRules()
+        local db = { Side = "ABOVE", XOffset = 3, YOffset = -2, Strata = "LOW", HealerSide = "BELOW" }
+        R.SeedHealerPlacement(db)
+        assert.are.same({ "BELOW", 3, -2, "LOW" },
+            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerStrata })
+    end)
+end)

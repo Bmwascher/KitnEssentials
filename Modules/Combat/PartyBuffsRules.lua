@@ -142,3 +142,32 @@ function Rules.PickFrames(candidates, maxSlots)
     end
     return bindings
 end
+
+-- The placement fields a healer copy can override, as { default key, healer key },
+-- in the order ActivePlacement returns them.
+Rules.PLACEMENT_KEYS = {
+    { "Side", "HealerSide" },
+    { "XOffset", "HealerXOffset" },
+    { "YOffset", "HealerYOffset" },
+    { "Strata", "HealerStrata" },
+}
+
+-- Side, X, Y and Strata to use. An unseeded healer key reads its default
+-- counterpart, so a profile with the toggle on and no copy changes nothing.
+function Rules.ActivePlacement(db, useHealer)
+    local healer = useHealer and db.UseHealerPlacement == true
+    local function pick(pair)
+        local value = healer and db[pair[2]]
+        if value == nil or value == false then value = db[pair[1]] end
+        return value
+    end
+    local keys = Rules.PLACEMENT_KEYS
+    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4])
+end
+
+-- Fills absent healer keys from their defaults; an edited copy is kept.
+function Rules.SeedHealerPlacement(db)
+    for _, pair in ipairs(Rules.PLACEMENT_KEYS) do
+        if db[pair[2]] == nil then db[pair[2]] = db[pair[1]] end
+    end
+end
