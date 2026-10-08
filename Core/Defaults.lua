@@ -211,7 +211,7 @@ local Defaults = {
             AggroColor = { 1, 0.15, 0.15, 1 },
             AggroInstanceOnly = true,
             AggroPulse = false,
-            AggroSoundEnabled = false,
+            AggroSoundEnabled = true,
             AggroSoundFile = "Aggro",
             AggroSoundChannel = "Master",
             Backdrop = DefaultBackdrop(),
@@ -802,7 +802,7 @@ local Defaults = {
             ShowTooltips = false,
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = { AnchorFrom = "TOPLEFT", AnchorTo = "CENTER", XOffset = -500, YOffset = 250 },
+            Position = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 0, YOffset = 69 },
         },
 
         StanceText = {
@@ -870,7 +870,7 @@ local Defaults = {
             OnlyEnemiesInCombat = true,
             MaxEnemies = 20,
             IconSize = 40,
-            Spacing = 4,
+            Spacing = 1,
             ShowIcon = true,
             GrowDirection = "DOWN",
             CountPosition = "RIGHT",
@@ -888,7 +888,7 @@ local Defaults = {
             TimerX = 0,
             TimerY = 0,
             GlowEnabled = false,
-            GlowType = "pixel",
+            GlowType = "ants",
             GlowColor = { 1, 0.76, 0.1, 1 },
             GlowLines = 8,
             GlowFrequency = 0.25,
@@ -897,7 +897,7 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -160),
+            Position = DefaultPosition(-217, -4),
             -- Overrides and added DoTs, keyed "specID:spellID". The shipped list
             -- lives in code, so an untouched profile stores nothing here.
             Spells = {},
@@ -1502,8 +1502,8 @@ local Defaults = {
             ShowInDelves      = true,
             ShowInWorld       = true,
             ShowInArenas      = true,
-            IconSize          = 32,
-            IconSpacing       = 2,
+            IconSize          = 36,
+            IconSpacing       = 1,
             MaxPerMember      = 4,
             Side              = "LEFT",
             XOffset           = 0,
@@ -1520,8 +1520,8 @@ local Defaults = {
             FontSize          = 10,
             FontOutline       = "OUTLINE",
             ShowTimer         = true,
-            TimerFontSize     = 12,
-            DecimalThreshold  = 0, -- seconds; below this the timer shows one decimal (0 = off)
+            TimerFontSize     = 14,
+            DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             -- ListExternals and ListBurst are row copies of the External
             -- Tracker and PI Assist lists, made below this table.
             ListPotions = {
