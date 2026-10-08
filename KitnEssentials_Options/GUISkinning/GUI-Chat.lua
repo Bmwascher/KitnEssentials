@@ -861,7 +861,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
                     end, nil, "Clear", "Cancel")
             end,
         })
-        row13b:AddWidget(clearHistory, 0.33)
+        row13b:AddWidget(clearHistory, 0.5)
         manager:Register(clearHistory, "history")
 
         local clearOthers = GUIFrame:CreateButton(row13b, "Clear Other Characters", {
@@ -881,7 +881,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
                     end, nil, "Clear", "Cancel")
             end,
         })
-        row13b:AddWidget(clearOthers, 0.33)
+        row13b:AddWidget(clearOthers, 0.5)
         manager:Register(clearOthers, "history")
         card13:AddRow(row13b, Theme.rowHeightLast, 0)
 
