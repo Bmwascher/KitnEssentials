@@ -461,6 +461,9 @@ local Defaults = {
             GlowEnabled = true,
             GlowType = "proc",
             GlowColor = { 0, 1, 0, 1 },
+            -- The engine's own values when these are unset, so the glow is unchanged.
+            GlowLines = 8,
+            GlowThickness = 1,
             FontSize = 14,
             FontOutline = "OUTLINE",
             Strata = "MEDIUM",
