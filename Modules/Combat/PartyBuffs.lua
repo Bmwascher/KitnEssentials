@@ -103,7 +103,9 @@ PB.queue = {}
 PB.queued = {}
 PB.watchedCells = setmetatable({}, { __mode = "k" })
 PB.previewRows = {}
--- "HEALER" or "DEFAULT": the placement view the settings page shows.
+-- "HEALER" or "DEFAULT": the placement view the settings page last showed.
+-- Kept while the preview is hidden: reopening the window shows the preview
+-- again without rebuilding the page, and only the page sets it.
 PB.previewContext = nil
 
 local function Debug(fmt, ...)
@@ -976,7 +978,6 @@ end
 
 function PB:HidePreview()
     self.previewing = false
-    self.previewContext = nil
     self:HidePreviewFrames()
 end
 

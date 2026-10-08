@@ -127,7 +127,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     end
 
     -- A switch moves the preview and the Edit Mode overlay to that view's
-    -- position; the strip rebuilds the page itself.
+    -- position while it applies; the strip rebuilds the page itself.
     local _, viewOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
         tabs = {
             { id = "DEFAULT", label = "Default" },
