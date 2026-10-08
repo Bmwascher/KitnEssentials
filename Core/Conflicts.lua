@@ -77,7 +77,7 @@ local CONFLICTS = {
     },
     {
         module = "LFGReminder",
-        label  = "LFG Teleport Prompt",
+        label  = "Dungeon Teleport Reminder",
         -- Flat single-element path: this module's settings are top-level,
         -- unlike the two skinning rows above whose DB is nested.
         dbPath = { "LFGReminder" },
@@ -85,7 +85,7 @@ local CONFLICTS = {
         -- modules that go inert under ElvUI, so prompting about them would
         -- be prompting about a conflict that is not happening. This module
         -- runs regardless of ElvUI, so the gate must not apply.
-        addons = { "EllesmereUIQoL" },
+        addons = { "EllesmereUIQoL", "MythicPlusTweaks" },
         resolvers = {
             EllesmereUIQoL = {
                 label = "EllesmereUI's teleport prompt",
@@ -114,6 +114,46 @@ local CONFLICTS = {
                     if type(_G.EllesmereUIDB) ~= "table" then return true end
                     local cfg = _G.EllesmereUIDB.teleportPrompt
                     return type(cfg) ~= "table" or cfg.enabled ~= false
+                end,
+            },
+            MythicPlusTweaks = {
+                label = "Mythic+ Tweaks' teleport popups",
+                -- Its party popup and its Group Finder popup both repeat this
+                -- module's; its chat lines and other modules stay. It keeps
+                -- this settings table and reads it on each event, so the
+                -- switches flip in place: a new table would never be read.
+                -- Its loader keeps any table already here and fills only nil
+                -- keys, so a missing level is created; a level that is not a
+                -- table is left alone.
+                apply = function()
+                    if _G.MythicPlusTweaksDB == nil then _G.MythicPlusTweaksDB = {} end
+                    local db = _G.MythicPlusTweaksDB
+                    if type(db) ~= "table" then return false end
+                    if db.moduleDb == nil then db.moduleDb = {} end
+                    if type(db.moduleDb) ~= "table" then return false end
+                    local cfg = db.moduleDb.DungeonTeleports
+                    if cfg == nil then
+                        cfg = {}
+                        db.moduleDb.DungeonTeleports = cfg
+                    end
+                    if type(cfg) ~= "table" then return false end
+                    cfg.popupOnGroupCast = false
+                    cfg.groupFormedPopup = false
+                    return true
+                end,
+                -- Stateless companion to apply(). Its defaults fill only nil
+                -- values, so an absent switch is on. Its module switch turns
+                -- the whole teleport module off, popups included.
+                isActive = function()
+                    local db = _G.MythicPlusTweaksDB
+                    if type(db) == "table" and type(db.modules) == "table"
+                        and db.modules.DungeonTeleports == false then
+                        return false
+                    end
+                    local cfg = type(db) == "table" and type(db.moduleDb) == "table"
+                        and db.moduleDb.DungeonTeleports
+                    if type(cfg) ~= "table" then return true end
+                    return not (cfg.popupOnGroupCast == false and cfg.groupFormedPopup == false)
                 end,
             },
         },
@@ -312,6 +352,7 @@ local ADDON_LABELS = {
     ["Prat-3.0"] = "Prat",
     ["BasicChatMods"] = "Basic Chat Mods",
     ["NorthernSkyRaidTools"] = "Northern Sky Raid Tools",
+    ["MythicPlusTweaks"] = "Mythic+ Tweaks",
 }
 
 local promptQueue = {}

@@ -1,33 +1,23 @@
--- Fixture dungeon is season-volatile: it must be a key that exists in
--- TELEPORT_BY_NAME, so a season rotation changes it here too. These tests
--- are about join handling and cooldown refusal, not about the table.
+-- The fixture dungeons resolve through the loader's map fixture and the
+-- module's map table. These tests are about join handling and cooldown
+-- refusal, not about the table.
 local loader = require("dev.spec._ke_loader")
 
 describe("LFGReminder module", function()
     describe("teleport lookup", function()
-        it("normalizes case and a trailing difficulty suffix before matching", function()
-            local _, _, seams = loader.loadLFGReminder()
+        it("resolves a listing name to its teleport, clean name and map", function()
+            local LR = loader.loadLFGReminder()
             local cases = {
-                { "murder row", 1286809 },
-                { "Murder Row", 1286809 },
-                -- Apostrophe kept deliberately: it exercises the key that a
-                -- misplaced apostrophe would silently fail to match.
-                { "Kings' Rest (Mythic)", 1286831 },
+                { name = "suffix stripped", full = "Kings' Rest (Mythic)", spell = 1286831, clean = "Kings' Rest", map = 249 },
+                { name = "unknown dungeon", full = "Not A Dungeon" },
+                { name = "not a string",    full = 42 },
             }
-            for _, case in ipairs(cases) do
-                assert.equals(case[2], seams.resolveByName(case[1]))
+            for _, c in ipairs(cases) do
+                local spell, clean, map = LR._ResolveGroupFinderPortal(c.full)
+                assert.equals(c.spell, spell, c.name)
+                assert.equals(c.clean, clean, c.name)
+                assert.equals(c.map, map, c.name)
             end
-        end)
-
-        it("returns nil for an unknown dungeon", function()
-            local _, _, seams = loader.loadLFGReminder()
-            assert.is_nil(seams.resolveByName("Not A Dungeon"))
-        end)
-
-        it("returns nil for a non-string", function()
-            local _, _, seams = loader.loadLFGReminder()
-            assert.is_nil(seams.resolveByName(42))
-            assert.is_nil(seams.resolveByName(nil))
         end)
     end)
 
@@ -210,45 +200,44 @@ describe("LFGReminder module", function()
         end)
 
         -- LFG_LIST_JOINED_GROUP only fires for someone who applied, so the
-        -- person who made the group (the leader) never gets a prompt through
-        -- that path. The leader arms off their own active listing instead,
-        -- and only fires once that listing drops WITH a full group.
-        it("arms and prompts the leader when their full-group listing drops", function()
-            local entryPresent = true
-            local LR = loader.loadLFGReminder({
-                C_LFGList = {
-                    GetActiveEntryInfo = function()
-                        if entryPresent then return { activityID = 7 } end
-                        return nil
-                    end,
-                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
-                },
-                GetNumGroupMembers = function() return 5 end,
-                IsInRaid = function() return false end,
-            })
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing up: arms
-            entryPresent = false
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing gone, group full: prompts
-            assert.equals(1286809, LR:_GetPendingSpellID())
-        end)
-
-        it("does not prompt the leader when the listing drops short-handed", function()
-            local entryPresent = true
-            local LR = loader.loadLFGReminder({
-                C_LFGList = {
-                    GetActiveEntryInfo = function()
-                        if entryPresent then return { activityID = 7 } end
-                        return nil
-                    end,
-                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
-                },
-                GetNumGroupMembers = function() return 3 end,
-                IsInRaid = function() return false end,
-            })
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-            entryPresent = false
-            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-            assert.is_nil(LR:_GetPendingSpellID())
+        -- leader's prompt comes from the game's listing-full event, for the
+        -- dungeon their own listing last read as. The game may clear the
+        -- entry before the event, and chat lockdown can make it unreadable;
+        -- both keep the remembered dungeon. A full raid listing reports the
+        -- same event and never prompts.
+        it("prompts the leader for the last readable listing when it fills, never in a raid", function()
+            for _, c in ipairs({
+                { name = "party, entry gone",                  raid = false, last = "gone",       want = 1286809 },
+                { name = "raid, entry gone",                   raid = true,  last = "gone",       want = nil },
+                { name = "party, entry unreadable",            raid = false, last = "unreadable", want = 1286809 },
+                { name = "party, prompt up, relisted with no teleport", raid = false, last = "other", prior = true, want = nil },
+            }) do
+                local entry = "readable"
+                local LR = loader.loadLFGReminder({
+                    C_LFGList = {
+                        GetActiveEntryInfo = function()
+                            if entry == "gone" then return nil end
+                            return { activityID = entry == "other" and 8 or 7 }
+                        end,
+                        GetActivityInfoTable = function(id)
+                            if entry == "unreadable" then return nil end
+                            return { fullName = id == 8 and "Not A Dungeon" or "Murder Row" }
+                        end,
+                    },
+                    IsInRaid = function() return c.raid end,
+                })
+                LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                if c.prior then
+                    -- An earlier full listing leaves its prompt up; the same
+                    -- listing is read again before it changes.
+                    LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
+                    LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                end
+                entry = c.last
+                LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+                LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
+                assert.equals(c.want, LR:_GetPendingSpellID(), c.name)
+            end
         end)
 
         it("refuses to open the prompt while the teleport is on cooldown", function()
@@ -267,11 +256,11 @@ describe("LFGReminder module", function()
 end)
 
 describe("LFGReminder preview", function()
-    -- The preview must draw a dungeon the live teleport table knows, so a
-    -- season update that drops it from the table fails here.
+    -- The preview draws Ruby Life Pools' teleport from the live map table, so
+    -- a data update that drops the map fails here.
     it("draws the teleport the live table gives its dungeon", function()
         local asked
-        local LR, _, seams = loader.loadLFGReminder({
+        local LR = loader.loadLFGReminder({
             C_Spell = {
                 GetSpellInfo = function(id) asked = id; return nil end,
                 GetSpellCooldown = function() return nil end,
@@ -280,7 +269,7 @@ describe("LFGReminder preview", function()
         })
         LR.IsEnabled = function() return true end
         LR:ShowPreview()
-        local want = seams.resolveByName("Ruby Life Pools")
+        local want = LR._PickOwnPortal(399, function() return true end)
         assert.is_not_nil(want)
         assert.equals(want, asked)
     end)

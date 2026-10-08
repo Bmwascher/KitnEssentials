@@ -1440,9 +1440,11 @@ function L.loadLFGReminder(overrides)
         GetSearchResultInfo = function() return nil end,
         GetActivityInfoTable = function() return nil end,
     }
-    -- Read at call time by the row's art lookup; the default has no art.
+    -- Read at call time by the row's art lookup and the season set; the
+    -- default has no art and no season list.
     _G.C_ChallengeMode = overrides.C_ChallengeMode or {
         GetMapUIInfo = function() return nil end,
+        GetMapTable = function() return {} end,
     }
     -- LFGReminder.lua reads Enum.SpellBookSpellBank.Player at file scope, so the
     -- stub must exist BEFORE helpers.loadModule runs.
@@ -1453,7 +1455,18 @@ function L.loadLFGReminder(overrides)
     _G.IsInGroup = overrides.IsInGroup or function() return true end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
     _G.IsInRaid = overrides.IsInRaid or function() return false end
-    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
+    -- The party path's file-scope captures; nothing here is secret.
+    _G.C_ChatInfo = overrides.C_ChatInfo or {
+        RegisterAddonMessagePrefix = function() return 0 end,
+        SendAddonMessage = function() return 0 end,
+    }
+    _G.UnitNameUnmodified = overrides.UnitNameUnmodified or function() return "Tester" end
+    _G.GetRealmName = overrides.GetRealmName or function() return "Area 52" end
+    _G.UnitFullName = overrides.UnitFullName or function() return nil end
+    _G.UnitClass = overrides.UnitClass or function() return nil end
+    _G.GetNormalizedRealmName = overrides.GetNormalizedRealmName or function() return "Area52" end
+    _G.GetInstanceInfo = overrides.GetInstanceInfo or function() return nil end
+    _G.LE_PARTY_CATEGORY_HOME = 1
 
     local profile = {
         LFGReminder = {
@@ -1479,10 +1492,16 @@ function L.loadLFGReminder(overrides)
         -- creates two frames at file scope, which would pollute this
         -- loader's onCreateFrame spy (used to count BuildPopup's frames).
         IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
+        -- Core/Secret.lua's chat lock, unlocked.
+        IsChatMessagingLocked = function() return false end,
     }
-    -- Core/Globals.lua's lookup; the default knows no map, so the row falls
-    -- back to the teleport icon.
-    KE.GetChallengeMapIDByName = overrides.GetChallengeMapIDByName or function() return nil end
+    -- Core/Globals.lua's lookup over the dungeons the specs name. The row's
+    -- art still falls back to the teleport icon: the default C_ChallengeMode
+    -- above has no art.
+    local fixtureMaps = { ["murder row"] = 587, ["kings' rest"] = 249, ["ruby life pools"] = 399 }
+    KE.GetChallengeMapIDByName = overrides.GetChallengeMapIDByName or function(_, name)
+        return type(name) == "string" and fixtureMaps[name:lower()] or nil
+    end
     helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
     local LR = modules["LFGReminder"]
     -- ShowPopup/HidePopup (the leader/cooldown-gate work) register and
@@ -1497,18 +1516,14 @@ function L.loadLFGReminder(overrides)
     LR.UnregisterEvent = function(_, event) registeredEvents[event] = nil end
     LR:UpdateDB()
 
-    -- ResolveTeleportSpellByName has no stored handle and no caller that
-    -- references it, so debug.getupvalue cannot reach it -- the module
-    -- exports it directly as LR._ResolveTeleportSpellByName (Task 3).
+    -- The pure lookups are exported by the module itself as LR._X seams.
     -- The deferral helpers ARE upvalues of the module methods that call
     -- them, so findUpvalue recovers those without running anything.
-    -- Both are guarded: Task 5 is what creates these methods.
     -- The module lifecycle methods (SetEnabledState, IsEnabled) are NOT
     -- stubbed by helpers.installAddonShim -- its modules are bare tables. A
     -- test that drives a path calling one of them stubs it itself, e.g.
     -- LR.IsEnabled = function() return true end.
     local seams = {}
-    seams.resolveByName = LR._ResolveTeleportSpellByName
     seams.registeredEvents = registeredEvents
     -- Drain the deferred-teardown queue, i.e. "combat ended".
     seams.runCombatQueue = function()

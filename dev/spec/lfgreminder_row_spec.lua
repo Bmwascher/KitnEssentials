@@ -65,20 +65,17 @@ describe("LFGReminder row", function()
     end)
 
     describe("dungeon art", function()
-        local function artFor(name, texture)
+        local function artFor(mapID, texture)
             local LR = loader.loadLFGReminder({
-                GetChallengeMapIDByName = function(_, n)
-                    if n == "Ruby Life Pools" then return 399 end
-                end,
                 C_ChallengeMode = {
                     GetMapUIInfo = function() return "Ruby Life Pools", 399, 1800, texture end,
                 },
             })
-            return LR._ResolveDungeonArt(name)
+            return LR._ResolveDungeonArt(mapID)
         end
 
-        it("returns the map's art for a known name", function()
-            assert.equals(4746639, artFor("Ruby Life Pools", 4746639))
+        it("returns the map's art", function()
+            assert.equals(4746639, artFor(399, 4746639))
         end)
 
         it("returns nil when the map has no art", function()
@@ -87,12 +84,12 @@ describe("LFGReminder row", function()
                 { label = "0",   texture = 0 },
             }
             for _, c in ipairs(cases) do
-                assert.is_nil(artFor("Ruby Life Pools", c.texture), c.label)
+                assert.is_nil(artFor(399, c.texture), c.label)
             end
         end)
 
-        it("returns nil for a name with no map", function()
-            assert.is_nil(artFor("Not A Dungeon", 4746639))
+        it("returns nil with no map", function()
+            assert.is_nil(artFor(nil, 4746639))
         end)
     end)
 end)

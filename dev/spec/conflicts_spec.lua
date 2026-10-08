@@ -181,6 +181,66 @@ describe("Core/Conflicts.lua decision layer", function()
             })
             assert.same({}, queue)
         end)
+
+        describe("Mythic+ Tweaks resolver", function()
+            -- Reaches apply/isActive through the queued item, so the queue
+            -- ignores the resolver and does not empty itself first.
+            local function mptResolver()
+                return KE:BuildConflictQueue({
+                    profile = { LFGReminder = { Enabled = true } },
+                    isLoaded = function(name) return name == "MythicPlusTweaks" end,
+                    shouldNotLoad = false,
+                })[1].resolver
+            end
+
+            -- _G is shared across the whole run, so every case that seeds the
+            -- rival's saved variable must put it back.
+            after_each(function() _G.MythicPlusTweaksDB = nil end)
+
+            -- `after` is a separate literal: comparing the saved variable
+            -- against the table it IS would pass any write.
+            local function off()
+                return { moduleDb = { DungeonTeleports = { popupOnGroupCast = false, groupFormedPopup = false } } }
+            end
+            it("apply creates each missing level and refuses a non-table saved variable", function()
+                for _, case in ipairs({
+                    { name = "the saved variable is absent",      db = nil,               ok = true,  after = off() },
+                    { name = "moduleDb is absent",                db = {},                ok = true,  after = off() },
+                    { name = "DungeonTeleports is absent",        db = { moduleDb = {} }, ok = true,  after = off() },
+                    { name = "the saved variable is not a table", db = "corrupt",         ok = false, after = "corrupt" },
+                }) do
+                    _G.MythicPlusTweaksDB = case.db
+                    assert.equals(case.ok, mptResolver().apply(), case.name)
+                    assert.same(case.after, _G.MythicPlusTweaksDB, case.name)
+                end
+            end)
+
+            it("apply flips both popups in the table the addon already holds", function()
+                local held = { popupOnGroupCast = true, chatMessage = true }
+                _G.MythicPlusTweaksDB = { moduleDb = { DungeonTeleports = held } }
+                assert.is_true(mptResolver().apply())
+                assert.equals(held, _G.MythicPlusTweaksDB.moduleDb.DungeonTeleports)
+                assert.same({ popupOnGroupCast = false, groupFormedPopup = false, chatMessage = true }, held)
+            end)
+
+            it("isActive is false once both popups are off or its teleport module is off", function()
+                for _, case in ipairs({
+                    { name = "both popups off",
+                      db = { moduleDb = { DungeonTeleports = { popupOnGroupCast = false, groupFormedPopup = false } } },
+                      active = false },
+                    { name = "its teleport module off, popups on",
+                      db = { modules = { DungeonTeleports = false },
+                             moduleDb = { DungeonTeleports = { popupOnGroupCast = true } } },
+                      active = false },
+                    { name = "one popup unset",
+                      db = { moduleDb = { DungeonTeleports = { popupOnGroupCast = false } } }, active = true },
+                    { name = "the saved variable is absent", db = nil, active = true },
+                }) do
+                    _G.MythicPlusTweaksDB = case.db
+                    assert.equals(case.active, mptResolver().isActive(), case.name)
+                end
+            end)
+        end)
     end)
 
     describe("ReadyCheckConsumables conflict entry", function()

@@ -7,12 +7,15 @@
 -- ║           teleport button. Hides on entering the         ║
 -- ║           dungeon, leaving the group, or entering        ║
 -- ║           combat.                                        ║
+-- ║           Party members who share their dungeon          ║
+-- ║           teleports raise the same popup, and the        ║
+-- ║           player's own are shared with the party.        ║
 -- ║                                                          ║
 -- ║  Taint / secret-value safety -- critical, read before    ║
 -- ║  editing:                                                ║
 -- ║    * The teleport spellID fed to SetAttribute("spell")   ║
--- ║      is ALWAYS a static integer from our own name->spell ║
--- ║      table, never an LFG field.                          ║
+-- ║      is ALWAYS a static integer from our own map->spell  ║
+-- ║      table, never an LFG field or an addon message.      ║
 -- ║    * The dungeon resolves on LFG_LIST_JOINED_GROUP,      ║
 -- ║      where the search result is readable (browse/apply-  ║
 -- ║      phase secrecy is lifted once joined). Every field   ║
@@ -48,7 +51,6 @@ local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
-local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local UIParent = UIParent
 local C_Spell = C_Spell
@@ -61,46 +63,183 @@ local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationRole = GetSpecializationRole
+local C_ChatInfo = C_ChatInfo
+local C_Timer = C_Timer
+local GetInstanceInfo = GetInstanceInfo
+local UnitNameUnmodified = UnitNameUnmodified
+local GetRealmName = GetRealmName
+local UnitFullName = UnitFullName
+local UnitClass = UnitClass
+local GetNormalizedRealmName = GetNormalizedRealmName
 -- Both secret predicates get the same fallback: an environment missing one
 -- would be missing both, and a bare call to either throws.
 local issecretvalue = issecretvalue or function() return false end
 local issecrettable = issecrettable or function() return false end
 
--- Dungeon display name (lowercase, difficulty suffix stripped) ->
--- teleport spellID. Season-volatile data matched by name against
--- GetActivityInfoTable's fullName.
---
--- English keys only. Cyrillic keys were dropped deliberately: they cannot
--- ever match. The lookup lowercases
--- with Lua's string.lower, which is byte-wise and ASCII-only, so a
--- capitalized Cyrillic name ("Небесный путь") never folds to the lowercase
--- key ("небесный путь") -- measured in this project's Lua 5.1.
--- KE ships no localization, so
--- carrying them would imply support that does not exist. Adding real
--- Russian support means Cyrillic-aware case folding, not these keys.
--- Note the apostrophe in "kings' rest": it follows the s, and a key with it
--- in the other place cannot match.
-local TELEPORT_BY_NAME = {
-    ["the blinding vale"]          = 1286801,
-    ["voidscar arena"]             = 1286804,
-    ["den of nalorakk"]            = 1286807,
-    ["murder row"]                 = 1286809,
-    ["altar of fangs"]             = 1286812,
-    ["ruby life pools"]            = 393256,
-    ["temple of sethraliss"]       = 1286828,
-    ["kings' rest"]                = 1286831,
+-- Challenge-mode map ID -> every teleport spell that reaches it (faction
+-- variants, re-issued IDs); maps that share one entrance share one teleport.
+-- The player's own spell is picked at use, so the table carries every season.
+local PORTALS_BY_MAP = {
+    [2] = { 131204 }, -- Temple of the Jade Serpent
+    [56] = { 131205 }, -- Stormstout Brewery
+    [57] = { 131225 }, -- Gate of the Setting Sun
+    [58] = { 131206 }, -- Shado-Pan Monastery
+    [59] = { 131228 }, -- Siege of Niuzao Temple
+    [60] = { 131222 }, -- Mogu'shan Palace
+    [76] = { 131232 }, -- Scholomance
+    [77] = { 131231 }, -- Scarlet Halls
+    [78] = { 131229 }, -- Scarlet Monastery
+    [161] = { 159898, 1254557 }, -- Skyreach
+    [163] = { 159895 }, -- Bloodmaul Slag Mines
+    [164] = { 159897 }, -- Auchindoun
+    [165] = { 159899 }, -- Shadowmoon Burial Grounds
+    [166] = { 159900 }, -- Grimrail Depot
+    [167] = { 159902 }, -- Upper Blackrock Spire
+    [168] = { 159901 }, -- The Everbloom
+    [169] = { 159896 }, -- Iron Docks
+    [198] = { 424163 }, -- Darkheart Thicket
+    [199] = { 424153 }, -- Black Rook Hold
+    [200] = { 393764 }, -- Halls of Valor
+    [206] = { 410078 }, -- Neltharion's Lair
+    [210] = { 393766 }, -- Court of Stars
+    [227] = { 373262 }, -- Return to Karazhan: Lower
+    [234] = { 373262 }, -- Return to Karazhan: Upper
+    [239] = { 1254551 }, -- Seat of the Triumvirate
+    [244] = { 424187 }, -- Atal'Dazar
+    [245] = { 410071 }, -- Freehold
+    [247] = { 467553, 467555 }, -- The MOTHERLODE!!
+    [248] = { 424167 }, -- Waycrest Manor
+    [249] = { 1286831 }, -- Kings' Rest
+    [250] = { 1286828 }, -- Temple of Sethraliss
+    [251] = { 410074 }, -- The Underrot
+    [353] = { 445418, 464256 }, -- Siege of Boralus
+    [369] = { 373274 }, -- Operation: Mechagon - Junkyard
+    [370] = { 373274 }, -- Operation: Mechagon - Workshop
+    [375] = { 354464 }, -- Mists of Tirna Scithe
+    [376] = { 354462 }, -- The Necrotic Wake
+    [377] = { 354468 }, -- De Other Side
+    [378] = { 354465 }, -- Halls of Atonement
+    [379] = { 354463 }, -- Plaguefall
+    [380] = { 354469 }, -- Sanguine Depths
+    [381] = { 354466 }, -- Spires of Ascension
+    [382] = { 354467 }, -- Theater of Pain
+    [391] = { 367416 }, -- Tazavesh: Streets of Wonder
+    [392] = { 367416 }, -- Tazavesh: So'leah's Gambit
+    [399] = { 393256 }, -- Ruby Life Pools
+    [400] = { 393262 }, -- The Nokhud Offensive
+    [401] = { 393279 }, -- The Azure Vault
+    [402] = { 393273 }, -- Algeth'ar Academy
+    [403] = { 393222 }, -- Uldaman: Legacy of Tyr
+    [404] = { 393276 }, -- Neltharus
+    [405] = { 393267 }, -- Brackenhide Hollow
+    [406] = { 393283 }, -- Halls of Infusion
+    [438] = { 410080 }, -- The Vortex Pinnacle
+    [456] = { 424142 }, -- Throne of the Tides
+    [463] = { 424197 }, -- Dawn of the Infinite: Galakrond's Fall
+    [464] = { 424197 }, -- Dawn of the Infinite: Murozond's Rise
+    [499] = { 445444 }, -- Priory of the Sacred Flame
+    [500] = { 445443 }, -- The Rookery
+    [501] = { 445269 }, -- The Stonevault
+    [502] = { 445416 }, -- City of Threads
+    [503] = { 445417 }, -- Ara-Kara, City of Echoes
+    [504] = { 445441 }, -- Darkflame Cleft
+    [505] = { 445414 }, -- The Dawnbreaker
+    [506] = { 445440, 467546 }, -- Cinderbrew Meadery
+    [507] = { 445424 }, -- Grim Batol
+    [525] = { 1216786 }, -- Operation: Floodgate
+    [542] = { 1237215 }, -- Eco-Dome Al'dani
+    [556] = { 1254555 }, -- Pit of Saron
+    [557] = { 1254400 }, -- Windrunner Spire
+    [558] = { 1254572 }, -- Magisters' Terrace
+    [559] = { 1254563 }, -- Nexus-Point Xenas
+    [560] = { 1254559 }, -- Maisara Caverns
+    [583] = { 1254551 }, -- Seat of the Triumvirate
+    [584] = { 1286801 }, -- The Blinding Vale
+    [585] = { 1286804 }, -- Voidscar Arena
+    [586] = { 1286807 }, -- Den of Nalorakk
+    [587] = { 1286809 }, -- Murder Row
+    [588] = { 1286812 }, -- Altar of Fangs
 }
 
-local function ResolveTeleportSpellByName(displayName)
-    if type(displayName) ~= "string" then return nil end
-    local n = displayName:lower():gsub("%s*%b()%s*$", "")
-    return TELEPORT_BY_NAME[n]
+-- Teleport spell -> every map it reaches, lowest first. Built on first use.
+local mapsBySpell
+
+local function MapsForSpell(spellID)
+    if not mapsBySpell then
+        mapsBySpell = {}
+        for mapID, spells in pairs(PORTALS_BY_MAP) do
+            for _, sid in ipairs(spells) do
+                local maps = mapsBySpell[sid]
+                if not maps then
+                    maps = {}
+                    mapsBySpell[sid] = maps
+                end
+                maps[#maps + 1] = mapID
+            end
+        end
+        for _, maps in pairs(mapsBySpell) do table.sort(maps) end
+    end
+    return mapsBySpell[spellID]
 end
 
--- Test seam. The lookup is a pure file-local with no other handle, and no
--- function references it until the resolve chain lands, so debug.getupvalue
--- has nothing to reach it through.
-LR._ResolveTeleportSpellByName = ResolveTeleportSpellByName
+-- The dungeon a plain teleport spell ID leads to. A spell two maps share
+-- resolves to the one in the inSeason set, else the lowest ID, so the drawn
+-- name does not change between calls.
+local function MapForPortalSpell(spellID, inSeason)
+    local maps = MapsForSpell(spellID)
+    if not maps then return nil end
+    if inSeason then
+        for _, mapID in ipairs(maps) do
+            if inSeason[mapID] then return mapID end
+        end
+    end
+    return maps[1]
+end
+
+-- This season's maps as a set. Not kept while empty: the map data may not
+-- have loaded yet.
+local seasonMaps
+local function SeasonMaps()
+    if seasonMaps then return seasonMaps end
+    local ok, maps = pcall(function() return C_ChallengeMode.GetMapTable() end)
+    if not ok or type(maps) ~= "table" or #maps == 0 then return nil end
+    local set = {}
+    for _, mapID in ipairs(maps) do set[mapID] = true end
+    seasonMaps = set
+    return set
+end
+
+-- The player's own teleport for a map: the first of its spells isKnown
+-- accepts, else the first, which the row draws as not learned.
+local function PickOwnPortal(mapID, isKnown)
+    local spells = mapID and PORTALS_BY_MAP[mapID]
+    if not spells then return nil end
+    for _, sid in ipairs(spells) do
+        if isKnown(sid) then return sid end
+    end
+    return spells[1]
+end
+
+local function KnowsSpell(spellID)
+    return C_SpellBook.IsSpellKnown(spellID, SpellBookBank_Player) == true
+end
+
+-- A Group Finder activity name, difficulty suffix and all, to the player's
+-- teleport, the clean dungeon name and its map. The name is matched against
+-- the client's own map list, so it needs no per-season table.
+local function ResolveGroupFinderPortal(fullName)
+    if type(fullName) ~= "string" then return nil end
+    local name = fullName:gsub("%s*%b()%s*$", "")
+    local mapID = KE:GetChallengeMapIDByName(name)
+    local spellID = PickOwnPortal(mapID, KnowsSpell)
+    if not spellID then return nil end
+    return spellID, name, mapID
+end
+
+-- Test seams: pure file-locals with no other handle.
+LR._MapForPortalSpell = MapForPortalSpell
+LR._PickOwnPortal = PickOwnPortal
+LR._ResolveGroupFinderPortal = ResolveGroupFinderPortal
 
 -- Keyed by the role strings Blizzard's role APIs return; membership is what
 -- makes a read a usable role.
@@ -181,10 +320,9 @@ local function RowLayout(lines, lineH)
     return rowH, math.floor((rowH - textH) / 2)
 end
 
--- Challenge-mode art for a dungeon name, or nil: no map for the name, or a
--- map without art (the client's own dungeon list treats 0 as none).
-local function ResolveDungeonArt(name)
-    local mapID = KE:GetChallengeMapIDByName(name)
+-- Challenge-mode art for a map, or nil: no map, or a map without art (the
+-- client's own dungeon list treats 0 as none).
+local function ResolveDungeonArt(mapID)
     if not (mapID and C_ChallengeMode and C_ChallengeMode.GetMapUIInfo) then return nil end
     local ok, _, _, _, texture = pcall(C_ChallengeMode.GetMapUIInfo, mapID)
     if not ok or type(texture) ~= "number" or texture == 0 then return nil end
@@ -228,6 +366,9 @@ end
 local popup, secureBtn
 local pendingSpellID       -- resolved teleport spell (static integer)
 local pendingName          -- dungeon display name (clean)
+local pendingMapID         -- challenge-mode map of the pending prompt
+local pendingSource        -- "lfg" (Group Finder) or "party" (a party member's teleport)
+local pendingLine2         -- the party prompt's "<Name> teleported", already colored
 local pendingShow          -- join landed in combat; show on REGEN_ENABLED
 local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
 local combatHidden         -- the hide came from combat, not from the user
@@ -236,7 +377,7 @@ local shownRole            -- role the popup is drawing, or nil
 local previewState         -- settings preview: nil, "empty", or "prompt" (a live prompt waits behind it)
 
 
-local BuildPopup, ShowPrompt, HidePrompt, ClearPending
+local BuildPopup, ShowPrompt, HidePrompt, ClearPending, ReadPartyScope, DropPrompt
 local UpdateButtonVisuals, ResolveDungeon
 local SavePosition, ApplySavedPosition, ApplyPopupLayout
 
@@ -316,6 +457,10 @@ local DISABLE_W   = 90  -- used when the label reports no width
 ---@type string?
 local shownName = nil
 
+-- Party line the popup is drawing, or nil for a Group Finder prompt.
+---@type string?
+local shownLine2 = nil
+
 local function MeasureName(s)
     return secureBtn._name:GetUnboundedStringWidthForText(s)
 end
@@ -327,6 +472,8 @@ ApplyPopupLayout = function()
     if not popup then return end
     local showDisable = not LR.db or LR.db.ShowDisable ~= false
     local showRole = shownRole ~= nil and (not LR.db or LR.db.ShowRole ~= false)
+    -- The party line takes the role line's place and ignores Show Role.
+    local showLine2 = shownLine2 ~= nil or showRole
 
     local nameFS = secureBtn._name
     nameFS:SetText(shownName or "")
@@ -342,7 +489,9 @@ ApplyPopupLayout = function()
     nameFS:SetPoint("TOPRIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, -nameTop)
 
     local roleFS = secureBtn._role
-    if showRole then
+    if shownLine2 then
+        roleFS:SetText(shownLine2)
+    elseif showRole then
         local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
         local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
         local icon = icons and icons[shownRole]
@@ -351,18 +500,20 @@ ApplyPopupLayout = function()
     end
     roleFS:ClearAllPoints()
     roleFS:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
-    roleFS:SetShown(showRole)
+    roleFS:SetShown(showLine2)
 
-    -- "Teleport" ends the role line, or starts it when no role shows.
+    -- "Teleport" ends the second line, or starts it when none shows.
     local label = secureBtn._label
     label:ClearAllPoints()
-    if showRole then
+    if showLine2 then
         label:SetPoint("RIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, line2Y)
         label:SetJustifyH("RIGHT")
     else
         label:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
         label:SetJustifyH("LEFT")
     end
+    -- A long party name stops short of "Teleport" instead of running under it.
+    if shownLine2 then roleFS:SetPoint("RIGHT", label, "LEFT", -4, 0) end
 
     local footTop = BTN_TOP + rowH + FOOT_GAP
     local disableBtn = popup._disableBtn
@@ -390,6 +541,7 @@ BuildPopup = function()
     popup:SetWidth(POPUP_W)
     popup:SetFrameStrata("DIALOG")
     popup:SetMovable(true)
+    popup:SetClampedToScreen(true)
     popup:EnableMouse(true)
     popup:RegisterForDrag("LeftButton")
     popup:SetScript("OnDragStart", function(s) s:StartMoving() end)
@@ -409,6 +561,7 @@ BuildPopup = function()
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     title:SetText("LFG Reminder")
+    popup._title = title
 
     -- Close (X) in the header
     local xBtn = CreateFrame("Button", nil, popup)
@@ -494,7 +647,8 @@ BuildPopup = function()
     end)
     secureBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- "Disable Feature" text: turns the whole feature off immediately
+    -- "Disable Feature" text: turns the module off, or only Party Teleports
+    -- on a party popup
     local disableBtn = CreateFrame("Button", nil, popup)
     local disableLbl = disableBtn:CreateFontString(nil, "OVERLAY")
     if S and S.SetFont then S.SetFont(disableLbl, 10, "") end
@@ -506,8 +660,16 @@ BuildPopup = function()
     disableBtn:SetScript("OnLeave", function() disableLbl:SetTextColor(0.6, 0.6, 0.6, 1) end)
     disableBtn._label = disableLbl
     disableBtn:SetScript("OnClick", function()
-        if LR.db then LR.db.Enabled = false end
-        KitnEssentials:DisableModule("LFGReminder")
+        -- A live party prompt turns off only its own switch, so Group Finder
+        -- prompts keep running; switching it off closes the party scope,
+        -- which ends the prompt. The preview stands for the whole module.
+        if not previewState and pendingSource == "party" then
+            if LR.db then LR.db.PartyTeleports = false end
+            LR:ApplyPartyTeleports()
+        else
+            if LR.db then LR.db.Enabled = false end
+            KitnEssentials:DisableModule("LFGReminder")
+        end
         -- The DB write and the disable both land, but nothing redraws an
         -- open config page, so its master toggle kept showing ON until a
         -- reload. EnableModule/DisableModule's posthook only refreshes
@@ -540,9 +702,9 @@ local FALLBACK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 -- Dungeon art when the map has some and it loads, else the teleport's icon.
 -- Always writes, so one dungeon's image never carries over to the next.
-local function SetRowIcon(name, spellID)
+local function SetRowIcon(mapID, spellID)
     local icon = secureBtn._icon
-    local art = ResolveDungeonArt(name)
+    local art = ResolveDungeonArt(mapID)
     if art and icon:SetTexture(art) then return end
     local info = spellID and C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
     icon:SetTexture(info and info.iconID or FALLBACK_ICON)
@@ -560,7 +722,7 @@ end
 UpdateButtonVisuals = function()
     if not secureBtn or not pendingSpellID then return end
     local sid = pendingSpellID
-    SetRowIcon(pendingName, sid)
+    SetRowIcon(pendingMapID, sid)
     local known = C_SpellBook.IsSpellKnown(sid, SpellBookBank_Player)
     SetRowKnown(known)
     if known then
@@ -606,11 +768,10 @@ ResolveDungeon = function(resultID)
         if type(act) ~= "table" then return end
         local fullName = act.fullName
         if type(fullName) ~= "string" or issecretvalue(fullName) then return end
-        local spellID = ResolveTeleportSpellByName(fullName)
+        local spellID, name, mapID = ResolveGroupFinderPortal(fullName)
         if spellID then
-            pendingSpellID = spellID
-            -- Name only, no trailing difficulty suffix
-            pendingName = (fullName:gsub("%s*%b()%s*$", ""))
+            pendingSpellID, pendingName, pendingMapID = spellID, name, mapID
+            pendingSource = "lfg"
             -- Last, so an error here can cost the role but never the prompt.
             if wantRole and C_LFGList.GetApplicationInfo then
                 applicationRole = select(5, C_LFGList.GetApplicationInfo(resultID))
@@ -624,28 +785,22 @@ ResolveDungeon = function(resultID)
 end
 
 -- LFG_LIST_JOINED_GROUP only fires for someone who APPLIED, so the person
--- who made the group never got the prompt. Arm while our own listing is up,
--- and fire when that listing ends WITH a full group: the game delists
--- automatically at that point, which is when the group is actually ready to
--- move. A listing that ends any other way -- canceled by hand, group broke
--- up -- leaves the group short and prompts nothing.
-local armedSpellID, armedName, armedPending
-
-local function GroupIsFull()
-    if IsInRaid() then return false end
-    return GetNumGroupMembers() >= 5
-end
+-- who made the group never got the prompt. Remember the dungeon while our own
+-- listing is up, and prompt when the game delists it for being full.
+local armedSpellID, armedName, armedMapID
 
 local function ClearArmed()
-    armedSpellID, armedName, armedPending = nil, nil, nil
+    armedSpellID, armedName, armedMapID = nil, nil, nil
 end
 
 -- Same clean-string chain as ResolveDungeon, against our own active entry.
--- The active-entry read can return secret data in chat-messaging lockdown,
--- so the guards are not optional.
+-- Returns whether the entry's dungeon name could be read, then its teleport,
+-- name and map. The active-entry read can return secret data in
+-- chat-messaging lockdown, so the guards are not optional, and an entry that
+-- is gone or unreadable both read false.
 local function ResolveListing()
-    if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return nil end
-    local spellID, name
+    if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return false end
+    local readable, spellID, name, mapID = false, nil, nil, nil
     pcall(function()
         local info = C_LFGList.GetActiveEntryInfo()
         if type(info) ~= "table" then return end
@@ -658,10 +813,10 @@ local function ResolveListing()
         if type(act) ~= "table" then return end
         local fullName = act.fullName
         if type(fullName) ~= "string" or issecretvalue(fullName) then return end
-        spellID = ResolveTeleportSpellByName(fullName)
-        name = (fullName:gsub("%s*%b()%s*$", ""))
+        readable = true
+        spellID, name, mapID = ResolveGroupFinderPortal(fullName)
     end)
-    return spellID, name
+    return readable, spellID, name, mapID
 end
 
 -- Every popup:Show() pairs with registering SPELL_UPDATE_COOLDOWN, and every
@@ -680,6 +835,8 @@ end
 
 ShowPrompt = function()
     if not (LR.db and LR.db.Enabled ~= false) or not pendingSpellID then return end
+    -- Every show path, deferred ones included, re-reads the party scope.
+    if pendingSource == "party" and not ReadPartyScope() then ClearPending() return end
     if TeleportOnCooldown(pendingSpellID) then return end
     if InCombatLockdown() then
         -- Deferral comes BEFORE BuildPopup, because BuildPopup calls
@@ -701,6 +858,8 @@ ShowPrompt = function()
     BuildPopup()
     shownName = pendingName
     shownRole = pendingRole
+    shownLine2 = pendingLine2
+    popup._title:SetText(pendingSource == "party" and "Teleport Reminder" or "LFG Reminder")
     ApplyPopupLayout()
     -- The only write that arms the button, so the preview hold above covers
     -- every path that arms it.
@@ -724,6 +883,9 @@ end
 ClearPending = function()
     pendingSpellID     = nil
     pendingName        = nil
+    pendingMapID       = nil
+    pendingSource      = nil
+    pendingLine2       = nil
     pendingRole        = nil
     -- A combat join sets pendingShow; a group that breaks before combat ends
     -- must leave PLAYER_REGEN_ENABLED nothing to build or arm.
@@ -746,6 +908,7 @@ end
 -- ApplySettings for modules it just enabled. The popup parents a secure
 -- button, so its anchors and scale are protected in combat.
 function LR:ApplySettings()
+    self:ApplyPartyTeleports()
     if not popup or InCombatLockdown() then return end
     self:RefreshVisuals()
     ApplySavedPosition()
@@ -755,31 +918,32 @@ function LR:LFG_LIST_JOINED_GROUP(_, resultID)
     -- Fires the moment the player joins a Group Finder group; unlike
     -- browse/apply, the search result is readable here. Capture
     -- immediately -- the result can expire shortly after joining.
-    ClearPending()
+    -- A new prompt replaces the old one even when it resolves to nothing,
+    -- so a party popup never stays up unowned.
+    ClearPending(); DropPrompt()
     ResolveDungeon(resultID)
     if pendingSpellID then ShowPrompt() end
 end
 
 function LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
-    local spellID, name = ResolveListing()
-    if spellID then
-        armedSpellID, armedName, armedPending = spellID, name, nil
-        return
-    end
-    -- Entry gone. Arm the check rather than deciding here: the fifth player
-    -- joining can update the listing before the roster, so the member count
-    -- may still read four at this instant. GROUP_ROSTER_UPDATE retries it.
-    if armedSpellID then
-        armedPending = true
-        self:TryLeaderPrompt()
+    local readable, spellID, name, mapID = ResolveListing()
+    -- A listing that is gone or unreadable keeps what it listed: the game can
+    -- clear the entry before it reports the listing full, and chat lockdown
+    -- can hide it.
+    if readable then
+        armedSpellID, armedName, armedMapID = spellID, name, mapID
     end
 end
 
-function LR:TryLeaderPrompt()
-    if not (armedPending and armedSpellID) then return end
-    if not GroupIsFull() then return end
-    pendingSpellID, pendingName = armedSpellID, armedName
-    pendingRole = nil
+-- The game delists a group the moment it fills and reports it here. A full
+-- raid listing reports here too, and never prompts. The full group replaces
+-- any older prompt even when its listing named no teleport.
+function LR:LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS()
+    if IsInRaid() then return end
+    ClearPending(); DropPrompt()
+    if not armedSpellID then return end
+    pendingSpellID, pendingName, pendingMapID = armedSpellID, armedName, armedMapID
+    pendingSource = "lfg"
     if self.db and self.db.ShowRole ~= false then
         pendingRole = PickRole(nil, UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
     end
@@ -790,12 +954,284 @@ end
 -- The live prompt is no longer wanted. While the settings preview is up the
 -- popup is the preview's and the page still shows it, so only the prompt
 -- waiting behind it is dropped.
-local function DropPrompt()
+DropPrompt = function()
     if previewState then
         previewState = "empty"
         return
     end
     HidePrompt()
+end
+
+---------------------------------------------------------------------------------
+-- Party teleports
+---------------------------------------------------------------------------------
+
+-- The message format other teleport-sharing addons use, so their players and
+-- ours hear each other: "BV1_<Name-Realm>\030<spellID>" on the party channel.
+local PORTAL_PREFIX = "LKeystonePortal"
+local PORTAL_MSG    = "BV1_%s\030%d"
+-- Both leave the prefix registered; any other result is tried again the next
+-- time the scope opens.
+local PREFIX_RESULT    = Enum and Enum.RegisterAddonMessagePrefixResult
+local PREFIX_SUCCESS   = PREFIX_RESULT and PREFIX_RESULT.Success or 0
+local PREFIX_DUPLICATE = PREFIX_RESULT and PREFIX_RESULT.DuplicatePrefix or 1
+
+local moduleOn          -- OnEnable passed its Enabled gate; OnDisable clears it
+local partyAttached     -- the completion and restriction events are registered
+local partyListening = false -- the party listeners are registered
+local prefixRegistered
+local castFrame
+local completedInstance -- instance ID of the dungeon whose key was finished
+local recheckQueued     -- a scope recheck waits for the next frame
+local sendName          -- "Name-Realm" for the payload, read on first send
+
+-- Where party teleports are heard, sent and shown: a home party, never a
+-- raid; outside instances, or inside a dungeon whose key was finished once
+-- chat messaging is unlocked. A running key is always closed.
+local function PartyScopeOpen(s)
+    if not (s.on and s.homeParty) or s.inRaid then return false end
+    if not s.inInstance then return true end
+    return s.instanceType == "party" and s.keyCompleted == true and not s.chatLocked
+end
+
+local function PartyTeleportsOn()
+    return moduleOn == true and LR.db ~= nil and LR.db.PartyTeleports ~= false
+end
+
+local function CurrentInstanceID()
+    local _, _, _, _, _, _, _, instanceID = GetInstanceInfo()
+    if issecretvalue(instanceID) or type(instanceID) ~= "number" then return nil end
+    return instanceID
+end
+
+-- A finished key counts only inside the dungeon it was finished in.
+local function InCompletedInstance()
+    return completedInstance ~= nil and completedInstance == CurrentInstanceID()
+end
+
+ReadPartyScope = function()
+    local inInstance, instanceType = IsInInstance()
+    return PartyScopeOpen({
+        on           = PartyTeleportsOn(),
+        homeParty    = IsInGroup(LE_PARTY_CATEGORY_HOME),
+        inRaid       = IsInRaid(),
+        inInstance   = inInstance,
+        instanceType = instanceType,
+        keyCompleted = InCompletedInstance(),
+        chatLocked   = KE:IsChatMessagingLocked(),
+    })
+end
+
+-- The scope ignores the chat lock outside instances, so a send checks it too.
+local function SendRefusal(scopeOpen, chatLocked)
+    if not scopeOpen then return "scope" end
+    if chatLocked then return "locked" end
+    return nil
+end
+
+LR._PartyScopeOpen = PartyScopeOpen
+LR._SendRefusal = SendRefusal
+
+local function OwnPayloadName()
+    if sendName then return sendName end
+    local name, realm = UnitNameUnmodified("player"), GetRealmName()
+    if issecretvalue(name) or issecretvalue(realm) then return nil end
+    if type(name) ~= "string" or name == "" or type(realm) ~= "string" or realm == "" then
+        return nil
+    end
+    sendName = name .. "-" .. realm
+    return sendName
+end
+
+-- Every other cast leaves after one secret test and one lookup. The send is
+-- pcall'd and its result unread: a send the game refuses returns a code.
+local function OnOwnCast(_, _, _, _, spellID)
+    if issecretvalue(spellID) or type(spellID) ~= "number" then return end
+    if not MapForPortalSpell(spellID) then return end
+    if SendRefusal(ReadPartyScope(), KE:IsChatMessagingLocked()) then return end
+    local who = OwnPayloadName()
+    if not who then return end
+    pcall(C_ChatInfo.SendAddonMessage, PORTAL_PREFIX, PORTAL_MSG:format(who, spellID), "PARTY")
+end
+
+-- Registers the party listeners while the scope is open and drops them
+-- otherwise. Re-run on every input the scope reads.
+function LR:UpdatePartyListeners()
+    local open = ReadPartyScope()
+    -- A party prompt lives only inside the scope that raised it.
+    if not open and pendingSource == "party" then
+        ClearPending(); DropPrompt()
+    end
+    if open == partyListening then return end
+    partyListening = open
+    if open then
+        if not prefixRegistered then
+            local ok, result = pcall(C_ChatInfo.RegisterAddonMessagePrefix, PORTAL_PREFIX)
+            prefixRegistered = ok and (result == PREFIX_SUCCESS or result == PREFIX_DUPLICATE) or nil
+        end
+        if not castFrame then
+            castFrame = CreateFrame("Frame")
+            castFrame:SetScript("OnEvent", OnOwnCast)
+        end
+        castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+        self:RegisterEvent("CHAT_MSG_ADDON")
+    else
+        if castFrame then castFrame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED") end
+        self:UnregisterEvent("CHAT_MSG_ADDON")
+    end
+end
+
+function LR:_IsPartyListening() return partyListening == true end
+
+local function RecheckParty()
+    recheckQueued = nil
+    LR:UpdatePartyListeners()
+end
+
+-- Core/Secret.lua records restriction changes in its own handlers for the
+-- same events, which may run after these, so the scope is read a frame later.
+-- Nothing is queued while the party path is detached.
+local function RequestPartyRecheck()
+    if recheckQueued or not partyAttached then return end
+    recheckQueued = true
+    C_Timer.After(0, RecheckParty)
+end
+
+-- Attaches what the party path watches while Party Teleports and the module
+-- are both on, and detaches all of it otherwise. A detached completion
+-- event cannot see a dungeon change, so the finished key goes with it.
+function LR:ApplyPartyTeleports()
+    local on = PartyTeleportsOn()
+    if on and not partyAttached then
+        partyAttached = true
+        self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+        self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    elseif not on and partyAttached then
+        partyAttached = nil
+        completedInstance = nil
+        self:UnregisterEvent("CHALLENGE_MODE_COMPLETED")
+        self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    end
+    -- Off, not listening and holding no party prompt: nothing to read or
+    -- tear down. ApplySettings reaches here on every loading screen.
+    if on or partyListening or pendingSource == "party" then
+        self:UpdatePartyListeners()
+    end
+end
+
+-- Every restriction type, Chat included: the scope reads the chat lock.
+function LR:ADDON_RESTRICTION_STATE_CHANGED()
+    RequestPartyRecheck()
+end
+
+function LR:CHALLENGE_MODE_COMPLETED()
+    completedInstance = CurrentInstanceID()
+    RequestPartyRecheck()
+end
+
+-- "BV1_<Name-Realm>\030<spellID>". Only the spell ID is used: the event's
+-- sender field names the caster.
+local function ParsePortalMessage(text)
+    if type(text) ~= "string" then return nil end
+    local _, spell = text:match("^BV1_(.+)\030(.+)$")
+    return tonumber(spell)
+end
+
+-- One prompt per dungeon a minute, however many members port there. Each
+-- hold clears on its own timer, so toggling the setting cannot cut one short.
+local PARTY_THROTTLE_S = 60
+local heldMaps = {}
+
+local function ThrottleHeld(mapID)
+    return heldMaps[mapID] == true
+end
+
+local function ReleaseThrottle(mapID)
+    heldMaps[mapID] = nil
+end
+
+local function HoldThrottle(mapID)
+    heldMaps[mapID] = true
+    C_Timer.After(PARTY_THROTTLE_S, function() ReleaseThrottle(mapID) end)
+end
+
+-- nil means prompt. A live Group Finder prompt always wins over a party one.
+local function PartyPromptRefusal(s)
+    if not s.scopeOpen then return "scope" end
+    if not s.unit then return "not in party" end
+    if not s.mapID then return "not a portal" end
+    if s.throttled then return "throttled" end
+    if s.lfgLive then return "group finder" end
+    return nil
+end
+
+LR._ParsePortalMessage = ParsePortalMessage
+LR._ThrottleHeld = ThrottleHeld
+LR._HoldThrottle = HoldThrottle
+LR._ReleaseThrottle = ReleaseThrottle
+LR._PartyPromptRefusal = PartyPromptRefusal
+
+local PARTY_UNITS = { "party1", "party2", "party3", "party4" }
+
+-- The party unit a "Name-Realm" sender is, and its plain character name.
+local function MatchPartyUnit(sender)
+    local myRealm = GetNormalizedRealmName()
+    local key = KE:BuildNicknameKey(sender, myRealm)
+    if not key then return nil end
+    for _, unit in ipairs(PARTY_UNITS) do
+        local name, realm = UnitFullName(unit)
+        if not issecretvalue(name) and not issecretvalue(realm)
+            and type(name) == "string" and name ~= "" then
+            local raw = (type(realm) == "string" and realm ~= "") and (name .. "-" .. realm) or name
+            if KE:BuildNicknameKey(raw, myRealm) == key then return unit, name end
+        end
+    end
+    return nil
+end
+
+local function DungeonName(mapID)
+    if not (C_ChallengeMode and C_ChallengeMode.GetMapUIInfo) then return nil end
+    local ok, name = pcall(C_ChallengeMode.GetMapUIInfo, mapID)
+    if not ok or issecretvalue(name) or type(name) ~= "string" or name == "" then return nil end
+    return name
+end
+
+-- "<Name> teleported": the NSRT nickname, else the character name, never the
+-- realm, in the unit's class color when the class reads plain.
+local function PartyLine(unit, realName)
+    local name = KE:ResolveNicknamePrecedence(nil, KE:GetNSRTNickname(unit), realName) or realName
+    local _, class = UnitClass(unit)
+    if issecretvalue(class) or type(class) ~= "string" then
+        return name .. " teleported"
+    end
+    return KE:ColorTextByClass(name, class) .. " teleported"
+end
+
+-- This event carries every registered addon's traffic, so the prefix test
+-- comes first and nothing is built before it passes.
+function LR:CHAT_MSG_ADDON(_, prefix, text, channel, sender)
+    if issecretvalue(prefix) or prefix ~= PORTAL_PREFIX then return end
+    if issecretvalue(text) or issecretvalue(channel) or issecretvalue(sender) then return end
+    if channel ~= "PARTY" then return end
+    local spellID = ParsePortalMessage(text)
+    local mapID = spellID and MapForPortalSpell(spellID, SeasonMaps()) or nil
+    local unit, realName
+    if mapID then unit, realName = MatchPartyUnit(sender) end
+    if PartyPromptRefusal({
+        scopeOpen = ReadPartyScope(),
+        unit      = unit,
+        mapID     = mapID,
+        throttled = mapID ~= nil and ThrottleHeld(mapID),
+        lfgLive   = pendingSource == "lfg" and pendingSpellID ~= nil,
+    }) then return end
+    local name = DungeonName(mapID)
+    if not name then return end
+    HoldThrottle(mapID)
+    ClearPending(); DropPrompt()
+    pendingSpellID = PickOwnPortal(mapID, KnowsSpell)
+    pendingName, pendingMapID, pendingSource = name, mapID, "party"
+    pendingLine2 = PartyLine(unit, realName)
+    ShowPrompt()
 end
 
 function LR:SPELL_UPDATE_COOLDOWN()
@@ -807,16 +1243,20 @@ function LR:GROUP_ROSTER_UPDATE()
     if not IsInGroup() then
         ClearArmed()
         ClearPending(); DropPrompt()
-        return
     end
-    self:TryLeaderPrompt()
+    if partyAttached then self:UpdatePartyListeners() end
 end
 
 function LR:CheckInstance()
     local inInstance, instanceType = IsInInstance()
-    if inInstance and instanceType == "party" then
+    if not inInstance then
+        completedInstance = nil
+    -- A party prompt raised inside a finished key leads to the next dungeon.
+    elseif instanceType == "party"
+        and not (pendingSource == "party" and InCompletedInstance()) then
         ClearPending(); DropPrompt()
     end
+    RequestPartyRecheck()
 end
 
 function LR:PLAYER_REGEN_DISABLED()
@@ -859,9 +1299,11 @@ function LR:OnEnable()
     if not InCombatLockdown() then
         BuildPopup()  -- secure button needs out-of-combat creation
     end
+    moduleOn = true
     self:ApplySettings()
     self:RegisterEvent("LFG_LIST_JOINED_GROUP")
     self:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+    self:RegisterEvent("LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS")
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckInstance")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckInstance")
@@ -895,6 +1337,8 @@ function LR:OnDisable()
             if popup and popup:IsShown() then HidePopup() end
         end)
     end
+    moduleOn = nil
+    self:ApplyPartyTeleports()
 end
 
 ---------------------------------------------------------------------------------
@@ -923,9 +1367,8 @@ function LR:ShowPreview()
     end
     pendingHide = nil  -- the preview supersedes a deferred hide
     if secureBtn then secureBtn:SetAttribute("spell", nil) end
-    -- A current-season dungeon: it must stay a key of TELEPORT_BY_NAME, so
-    -- the preview draws the live table's teleport.
-    local dungeon = "Ruby Life Pools"
+    -- Ruby Life Pools' map: the preview draws the live table's teleport.
+    local dungeon, mapID = "Ruby Life Pools", 399
     shownName = dungeon
     -- Read whether or not Show Role is on, so ticking it with the preview open
     -- shows the row through the page's refresh.
@@ -933,8 +1376,10 @@ function LR:ShowPreview()
     local specRole = specIndex and specIndex > 0 and GetSpecializationRole
         and GetSpecializationRole(specIndex)
     shownRole = PickRole(specRole, nil) or "DAMAGER"
+    shownLine2 = nil
+    popup._title:SetText("LFG Reminder")
     ApplyPopupLayout()
-    SetRowIcon(dungeon, ResolveTeleportSpellByName(dungeon))
+    SetRowIcon(mapID, PickOwnPortal(mapID, KnowsSpell))
     SetRowKnown(true)
     ShowPopup()
 end
@@ -943,7 +1388,7 @@ function LR:HidePreview()
     if not previewState then return end
     local restore = previewState == "prompt"
     previewState = nil
-    shownName, shownRole = nil, nil
+    shownName, shownRole, shownLine2 = nil, nil, nil
     if InCombatLockdown() then
         -- The popup parents a secure button: hide it when combat ends, and
         -- let the combat re-show bring back a prompt that was waiting.
