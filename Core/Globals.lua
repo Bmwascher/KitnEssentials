@@ -914,6 +914,7 @@ local PREVIEW_MODULES = {
     "VehicleExit",
     "HavocTracker",
     "PIAssist",
+    "DoTTracker",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -927,7 +928,7 @@ local SECTION_PREVIEW_MODULES = {
         "NoMovementAlert", "PlayerAbsorbs", "PotionReady",
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
         "DisintegrateTicks", "StasisTracker",
-        "Recuperate", "TimeSpiral", "PIAssist",
+        "Recuperate", "TimeSpiral", "PIAssist", "DoTTracker",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",

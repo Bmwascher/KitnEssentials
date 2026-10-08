@@ -189,6 +189,9 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field LEGACY_EXPORT_MESSAGE string
 ---@field GUI table
 ---@field FramePool KE.FramePool
+---@field PlateSlots table
+---@field DoTTrackerRules table
+---@field DOT_TRACKER_SEEDS table
 ---@field CombatState KE.CombatState
 ---@field Context KE.Context
 ---@field curves KE.Curves
