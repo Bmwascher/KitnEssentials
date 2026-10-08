@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.9
+
+### Character Panel
+
+- An item above its track's normal cap, such as a 344 Myth piece, shows its
+  track letter (an orange "M")
+- Enchant labels are rewritten. Verbose spells out the stats ("Intellect &
+  Stamina", "Primary Stat"), lesser enchants read "Minor", and Empowered
+  helm enchants read "Empowered Leech" and so on in Verbose
+- Short says "Avoid" for avoidance everywhere. "&" joins two stats and "/"
+  means either one ("Agi/Str & Stam", "Agility/Strength & Stamina")
+- Enchants from earlier expansions show their own name instead of a label;
+  Death Knight runeforges keep theirs
+- Labels are cut at 32 characters instead of 18 and drop the "Enchant
+  <slot> -" opening, so Full shows long names whole
+- Full: two labels that would meet across the character model shrink
+  together, then cut
+- The same labels show on the Inspect window, and the Enchant Name Style
+  tooltip gives an example of each style
+
+---
+
 ## v4.9.8
 
 ### Addon Skins
