@@ -160,7 +160,15 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
             min = 0, max = 20, step = 1,
             default = 4,
         },
-        onChangeCallback = ApplySettings,
+        -- An attached Havoc warning takes this font, and the game builds it
+        -- once, so a change here reaches it only after a reload.
+        onChangeCallback = function()
+            local ht = KitnEssentials:GetModule("HavocTracker", true)
+            if ht and ht.container and ht.db and ht.db.AttachToCombatTexts then
+                KE:FlagReloadNeeded()
+            end
+            ApplySettings()
+        end,
     })
     manager:Register(fontCard, "all")
     if fontWidgets then

@@ -28,6 +28,14 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
         if HT then HT:ApplySettings() end
     end
 
+    -- The game builds the live warning once and reads its text, font and color
+    -- only then, so those changes need a reload; the preview is ours and
+    -- updates now.
+    local function ApplyWithReload()
+        KE:FlagReloadNeeded()
+        ApplySettings()
+    end
+
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -48,6 +56,33 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled ~= true then return yOffset end
 
+    local attached = db.AttachToCombatTexts == true
+    local attachRow = GUIFrame:CreateRow(card1.content, attached and Theme.rowHeight or Theme.rowHeightLast)
+    local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
+        value = attached,
+        tooltip = "Show the warning last in the Combat Texts stack and move with it, "
+            .. "instead of using a separate anchor.",
+        callback = function(checked)
+            db.AttachToCombatTexts = checked
+            ApplyWithReload()
+            GUIFrame:RefreshContent()
+        end,
+    })
+    attachRow:AddWidget(attachCheck, 1)
+    manager:Register(attachCheck, "all")
+    if attached then
+        card1:AddRow(attachRow, Theme.rowHeight)
+        for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
+            sizeKey = "WarningFontSize", default = 24, range = { 10, 48 },
+            onChange = ApplyWithReload, isLast = true,
+        })) do
+            manager:Register(widget, "all")
+        end
+    else
+        card1:AddRow(attachRow, Theme.rowHeightLast, 0)
+    end
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: Display
     ----------------------------------------------------------------
@@ -56,13 +91,9 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     local textRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local textBox = GUIFrame:CreateEditBox(textRow, "Text", {
         value = db.WarningText or "Havoc Target",
-        -- ApplySettings as well as the reload flag: the live display is built by
-        -- the game and only reads this when it is created, but the preview is
-        -- ours and updates now.
         callback = function(value)
             db.WarningText = value
-            KE:FlagReloadNeeded()
-            ApplySettings()
+            ApplyWithReload()
         end,
     })
     textRow:AddWidget(textBox, 1)
@@ -72,60 +103,64 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     local noteRow2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local noteText2 = GUIFrame:CreateText(noteRow2,
         KE:ColorTextByTheme("Note"),
-        "Changing the text or its size needs a reload, since the game builds this display itself.",
+        "Changing the text, font, size, outline or color needs a reload, since the game builds "
+            .. "this display itself.",
         40, "hide")
     noteRow2:AddWidget(noteText2, 1)
     card2:AddRow(noteRow2, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings
-    ----------------------------------------------------------------
-    -- The module db, with positionKey routing the coordinates into
-    -- WarningPosition. Strata is a ROOT key of this card, so handing it the
-    -- sub-table instead would put strata out of reach and leave the module's
-    -- SetFrameStrata call unreachable from the GUI.
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        positionKey = "WarningPosition",
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
+    -- Combat Texts owns the anchor and the font while attached.
+    if not attached then
+        ----------------------------------------------------------------
+        -- Card 3: Position Settings
+        ----------------------------------------------------------------
+        -- The module db, with positionKey routing the coordinates into
+        -- WarningPosition. Strata is a ROOT key of this card, so handing it the
+        -- sub-table instead would put strata out of reach and leave the module's
+        -- SetFrameStrata call unreachable from the GUI.
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            positionKey = "WarningPosition",
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
 
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+        if posCard.positionWidgets then
+            manager:RegisterGroup(posCard.positionWidgets, "all")
+        end
+        manager:Register(posCard, "all")
+        yOffset = posOffset
 
-    ----------------------------------------------------------------
-    -- Card 4: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "WarningFontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 10, 48 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+        ----------------------------------------------------------------
+        -- Card 4: Font Settings
+        ----------------------------------------------------------------
+        local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                fontFace = "FontFace",
+                fontSize = "WarningFontSize",
+                fontOutline = "FontOutline",
+            },
+            fontSizeRange = { 10, 48 },
+            onChangeCallback = ApplyWithReload,
+        })
+        manager:Register(fontCard, "all")
+        if fontWidgets then
+            manager:RegisterGroup(fontWidgets, "all")
+        end
+        yOffset = fontOffset
     end
-    yOffset = fontOffset
 
     ----------------------------------------------------------------
     -- Card 5: Colors
@@ -133,7 +168,7 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
         db = db,
         manager = manager,
-        onChange = ApplySettings,
+        onChange = ApplyWithReload,
         colors = {
             { label = "Warning Color", key = "WarningColor", default = { 1, 0.1, 0.1, 1 } },
         },

@@ -8,6 +8,7 @@
 ---@class KE
 local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
+local Theme = KE.Theme
 
 local function GetModule()
     if KitnEssentials then
@@ -57,47 +58,77 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
-    ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showStrata = true,
-        onChangeCallback = ApplySettings,
+    local attached = db.AttachToCombatTexts == true
+    local attachRow = GUIFrame:CreateRow(card1.content, attached and Theme.rowHeight or Theme.rowHeightLast)
+    local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
+        value = attached,
+        tooltip = "Show the warning as a row of the Combat Texts messages and move with them, "
+            .. "instead of using a separate anchor.",
+        callback = function(checked)
+            db.AttachToCombatTexts = checked
+            ApplySettings()
+            GUIFrame:RefreshContent()
+        end,
     })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
+    attachRow:AddWidget(attachCheck, 1)
+    manager:Register(attachCheck, "all")
+    if attached then
+        card1:AddRow(attachRow, Theme.rowHeight)
+        for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
+            sizeKey = "FontSize", default = 16, range = { 8, 72 },
+            onChange = ApplySettings, isLast = true,
+        })) do
+            manager:Register(widget, "all")
+        end
+    else
+        card1:AddRow(attachRow, Theme.rowHeightLast, 0)
     end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+    yOffset = card1:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 3: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+    -- Combat Texts owns the anchor and the font while attached.
+    if not attached then
+        ----------------------------------------------------------------
+        -- Card 2: Position Settings
+        ----------------------------------------------------------------
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
+
+        if posCard.positionWidgets then
+            manager:RegisterGroup(posCard.positionWidgets, "all")
+        end
+        manager:Register(posCard, "all")
+        yOffset = posOffset
+
+        ----------------------------------------------------------------
+        -- Card 3: Font Settings
+        ----------------------------------------------------------------
+        local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                fontFace = "FontFace",
+                fontSize = "FontSize",
+                fontOutline = "FontOutline",
+            },
+            onChangeCallback = ApplySettings,
+        })
+        manager:Register(fontCard, "all")
+        if fontWidgets then
+            manager:RegisterGroup(fontWidgets, "all")
+        end
+        yOffset = fontOffset
     end
-    yOffset = fontOffset
 
     ----------------------------------------------------------------
     -- Card 4: Colors
