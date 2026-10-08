@@ -1415,7 +1415,7 @@ function KT:CreateCastFrame()
     self.castFrame = frame
 end
 
--- BliZzi's prefix is registered so their users' kicks reach us.
+-- Another kick tracker's prefix is registered so its users' kicks reach us.
 function KT:EnsureCommPrefixes()
     if not (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) then return end
     for _, prefix in ipairs(COMM_PREFIXES) do
