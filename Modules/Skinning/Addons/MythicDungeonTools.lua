@@ -1,14 +1,15 @@
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
-local pairs = pairs
+local ipairs = ipairs
 local hooksecurefunc = hooksecurefunc
+local C_Timer = C_Timer
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
--- was a 0.1s poll (MDT skinned in visibly). Per-frame now.
-local function WaitFor(check, run, tries)
-    S.WaitFor(check, run, (tries or 20) * 30)
-end
+local BUTTON_SIZE = 40
+-- MDT creates its window in a build coroutine after its window addon loads
+-- and offers no callback for it; the skin only has to catch the window once.
+local LOOK_INTERVAL = 0.25
 
 local function ReskinTooltip(tt)
     if not tt then return end
@@ -34,48 +35,48 @@ local function ReskinButtonTexture(texture, alpha)
     end
 end
 
-local function ReskinDungeonButtons(MDT)
-    local db = MDT.GetDB and MDT:GetDB()
-    local sel = db and db.selectedDungeonList
-    local list = MDT.dungeonSelectionToIndex and sel and MDT.dungeonSelectionToIndex[sel]
-    if not list then return end
-    for idx = 1, #list do
-        local button = _G["MDTDungeonButton" .. idx]
-        if button and not S.data(button).skinned then
+local function InsetRegion(region, button)
+    region:ClearAllPoints()
+    region:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+    region:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+end
+
+local function ReskinDungeonButton(button, idx, main)
+    S.Backdrop(button)
+    if button.texture then
+        button.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        InsetRegion(button.texture, button)
+    end
+    if button.highlightTexture then
+        button.highlightTexture:SetTexture(WHITE)
+        button.highlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
+        InsetRegion(button.highlightTexture, button)
+    end
+    if button.selectedTexture then
+        button.selectedTexture:SetTexture(WHITE)
+        S.PaintBrand(button.selectedTexture, "SetVertexColor", S.palette.selectedA)
+        InsetRegion(button.selectedTexture, button)
+    end
+    button:ClearAllPoints()
+    button:SetPoint("TOPLEFT", main, "TOPLEFT", (idx - 1) * (BUTTON_SIZE + 1) + 2, -2)
+end
+
+-- MDT keeps its dungeon list private and creates these buttons in order, so
+-- the walk stops at the first missing name.
+local function ReskinDungeonButtons(main)
+    local idx = 1
+    local button = _G["MDTDungeonButton" .. idx]
+    while button do
+        if not S.data(button).skinned then
             S.data(button).skinned = true
-
-            S.Backdrop(button)
-            local function Inset(t)
-                t:ClearAllPoints()
-                t:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
-                t:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
-            end
-            if button.texture then
-                button.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                Inset(button.texture)
-            end
-            if button.highlightTexture then
-
-                button.highlightTexture:SetTexture(WHITE)
-                button.highlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
-                Inset(button.highlightTexture)
-            end
-            if button.selectedTexture then
-                button.selectedTexture:SetTexture(WHITE)
-                S.PaintBrand(button.selectedTexture, "SetVertexColor", S.palette.selectedA)
-                Inset(button.selectedTexture)
-            end
-            local SIZE = 40
-            if MDT.main_frame then
-                button:ClearAllPoints()
-
-                button:SetPoint("TOPLEFT", MDT.main_frame, "TOPLEFT", (idx - 1) * (SIZE + 1) + 2, -2)
-            end
+            ReskinDungeonButton(button, idx, main)
         end
+        idx = idx + 1
+        button = _G["MDTDungeonButton" .. idx]
     end
 end
 
-local function ReskinProgressBar(_, progressBar)
+local function ReskinProgressBar(progressBar)
     local bar = progressBar and progressBar.Bar
     if not bar then return end
 
@@ -94,17 +95,6 @@ local function ReskinProgressBar(_, progressBar)
         S.SetFont(bar.Label, 12, "OUTLINE")
         bar.Label:SetShadowOffset(0, 0)
     end
-end
-
-local function ReskinMapPOI(frame)
-    if not frame or S.data(frame).skinned or not frame.Texture then return end
-    S.data(frame).skinned = true
-    S.StripKeepingIcon(frame, frame.Texture); S.Backdrop(frame)
-    if frame.HighlightTexture then
-        frame.HighlightTexture:SetTexture(WHITE)
-        frame.HighlightTexture:SetVertexColor(1, 1, 1, 0.2)
-    end
-    if frame.Texture then frame.Texture:SetTexCoord(0, 1, 0, 1) end
 end
 
 local function SkinMDTWidget(widget)
@@ -137,103 +127,96 @@ local SIDE_BUTTONS = {
     "sidePanelExportButton", "sidePanelImportButton",
 }
 
-local function Skin()
-    local MDT = _G.MDT
-    if not MDT then return end
-
-    if MDT.Async then
-        hooksecurefunc(MDT, "Async", function(_, _, name)
-            if name ~= "showInterface" then return end
-            WaitFor(function()
-                return _G.MDTFrame and _G.MDTFrame.closeButton and true or false
-            end, function()
-                if _G.MDTFrame.closeButton then S.CloseButton(_G.MDTFrame.closeButton) end
-
-                S.MaxMinFrame(_G.MDTFrame.maximizeButton)
-            end, 10)
-
-            WaitFor(function()
-                return MDT.main_frame and MDT.main_frame.sidePanelNewButton and true or false
-            end, function()
-
-                local mf = _G.MDTButtonFont
-                if mf and mf.GetFont and not S.data(mf).aeBumped then
-                    S.data(mf).aeBumped = true
-                    local face, _, flags = mf:GetFont()
-                    if face then mf:SetFont(face, 12, flags or "") end
-                end
-                for _, key in pairs(SIDE_BUTTONS) do
-                    local w = MDT.main_frame[key]
-                    local btn = w and w.frame
-                    local bd = btn and S.GetBackdrop(btn)
-                    if bd then
-                        bd:ClearAllPoints()
-                        bd:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-                        bd:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
-                    end
-                end
-            end, 20)
-            WaitFor(function()
-                return MDT.tooltip and MDT.pullTooltip and true or false
-            end, function()
-                ReskinTooltip(MDT.tooltip); ReskinTooltip(MDT.pullTooltip)
-            end, 10)
-        end)
-    end
-    if MDT.UpdateDungeonDropDown then hooksecurefunc(MDT, "UpdateDungeonDropDown", ReskinDungeonButtons) end
-
-    if MDT.ShowEnemyInfoFrame then
-        hooksecurefunc(MDT, "ShowEnemyInfoFrame", function(m)
-            local f = m.enemyInfoFrame
-            if not f then return end
-            if S.AceSkinTabGroup then S.AceSkinTabGroup(f.tabGroup) end
-            if S.AceFixPullout then S.AceFixPullout(f.enemyDropDown) end
-        end)
-    end
-
-    if MDT.initToolbar then
-        hooksecurefunc(MDT, "initToolbar", function(_, frame)
-            local tb = frame and frame.toolbar
-            local tog = tb and tb.toggleButton
-            if not tog or S.data(tog).skinned then return end
-            S.data(tog).skinned = true
-            local function Restyle()
-                local tex = tog.GetNormalTexture and tog:GetNormalTexture()
-                if not tex then return end
-                tex:SetTexture(ARROW_TEX)
-                tex:SetTexCoord(0, 1, 0, 1)
-                tex:ClearAllPoints()
-                tex:SetPoint("CENTER")
-
-                tex:SetSize(16, 16)
-                tex:SetVertexColor(1, 1, 1)
-
-                tex:SetRotation(tb:IsShown() and 1.5708 or -1.5708)
-            end
-            Restyle()
-            tog:HookScript("OnClick", Restyle)
-        end)
-    end
-    if MDT.SkinProgressBar then hooksecurefunc(MDT, "SkinProgressBar", ReskinProgressBar) end
-    if MDT.POI_CreateFramePools then
-        hooksecurefunc(MDT, "POI_CreateFramePools", function(m)
-            for _, template in pairs({ "MapLinkPinTemplate", "DeathReleasePinTemplate", "VignettePinTemplate" }) do
-                local pool = m.GetFramePool and m.GetFramePool(template)
-                if pool and pool.Acquire then
-                    hooksecurefunc(pool, "Acquire", function(p)
-                        if p.active then
-                            for _, frame in pairs(p.active) do
-                                if frame and frame.Texture and not S.data(frame).poiHooked then
-                                    S.data(frame).poiHooked = true
-                                    hooksecurefunc(frame.Texture, "SetTexture", function() ReskinMapPOI(frame) end)
-                                end
-                            end
-                        end
-                    end)
-                end
-            end
-        end)
+local function BumpButtonFont()
+    local mf = _G.MDTButtonFont
+    if mf and mf.GetFont and not S.data(mf).aeBumped then
+        S.data(mf).aeBumped = true
+        local face, _, flags = mf:GetFont()
+        if face then mf:SetFont(face, 12, flags or "") end
     end
 end
 
-S:Register("MythicDungeonTools", Skin, "MythicDungeonTools")
+local function InsetSideButtons(main)
+    for _, key in ipairs(SIDE_BUTTONS) do
+        local w = main[key]
+        local btn = w and w.frame
+        local bd = btn and S.GetBackdrop(btn)
+        if bd then
+            bd:ClearAllPoints()
+            bd:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+            bd:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+        end
+    end
+end
+
+local function RestyleToggle(tog, toolbar)
+    local tex = tog.GetNormalTexture and tog:GetNormalTexture()
+    if not tex then return end
+    tex:SetTexture(ARROW_TEX)
+    tex:SetTexCoord(0, 1, 0, 1)
+    tex:ClearAllPoints()
+    tex:SetPoint("CENTER")
+
+    tex:SetSize(16, 16)
+    tex:SetVertexColor(1, 1, 1)
+
+    tex:SetRotation(toolbar:IsShown() and 1.5708 or -1.5708)
+end
+
+local function SkinToolbarToggle(main)
+    local toolbar = main.toolbar
+    local tog = toolbar and toolbar.toggleButton
+    if not tog or S.data(tog).skinned then return end
+    S.data(tog).skinned = true
+    RestyleToggle(tog, toolbar)
+    tog:HookScript("OnClick", function() RestyleToggle(tog, toolbar) end)
+end
+
+local function SkinOnce(main)
+    if main.closeButton then S.CloseButton(main.closeButton) end
+    S.MaxMinFrame(main.maximizeButton)
+    BumpButtonFont()
+    InsetSideButtons(main)
+    ReskinTooltip(_G.MDTModelTooltip)
+    ReskinTooltip(_G.MDTPullTooltip)
+    SkinToolbarToggle(main)
+    ReskinProgressBar(main.sidePanel and main.sidePanel.ProgressBar)
+end
+
+-- MDT shows the window only once it is fully built, so every part exists by
+-- the first OnShow. Dungeon buttons can be added later, hence the per-show walk.
+local function Pass(main)
+    local d = S.data(main)
+    if not d.keSkinned then
+        d.keSkinned = true
+        SkinOnce(main)
+    end
+    ReskinDungeonButtons(main)
+end
+
+local attached = false
+local looker
+
+local function Attach()
+    if attached then return true end
+    local main = _G.MDTFrame
+    if not (main and main.HookScript) then return false end
+    attached = true
+    main:HookScript("OnShow", Pass)
+    if main:IsShown() then Pass(main) end
+    return true
+end
+
+local function Look()
+    if Attach() and looker then
+        looker:Cancel()
+        looker = nil
+    end
+end
+
+local function Skin()
+    if Attach() or looker or not C_Timer then return end
+    looker = C_Timer.NewTicker(LOOK_INTERVAL, Look)
+end
+
+S:Register("MythicDungeonTools_UI", Skin, "MythicDungeonTools")

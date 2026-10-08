@@ -1,0 +1,27 @@
+-- Modules/Skinning/Addons/RCLootCouncil.lua -- ensurePlan.
+--
+-- While its row is on, the skin keeps RC on the KitnUI skin-list entry. The
+-- post-hook on RC's ActivateSkin asks this predicate whether to put the entry
+-- back and whether to select it. Inside its own ActivateSkin call it must do
+-- neither, or the hook recurses.
+
+local L = require("dev.spec._ke_loader")
+
+describe("RCLootCouncil skin-list guard", function()
+    it("inserts a missing entry, selects it unless already selected, and does nothing inside its own call", function()
+        local ensurePlan = L.loadRCLootCouncilSkin()
+        -- present, isKitnUI, inOwnCall -> insert, activate
+        local cases = {
+            { false, false, false, true,  true  },
+            { false, true,  false, true,  true  },
+            { true,  false, false, false, true  },
+            { true,  true,  false, false, false },
+            { false, false, true,  false, false },
+            { true,  false, true,  false, false },
+        }
+        for i, c in ipairs(cases) do
+            local insert, activate = ensurePlan(c[1], c[2], c[3])
+            assert.same({ c[4], c[5] }, { insert, activate }, "case " .. i)
+        end
+    end)
+end)

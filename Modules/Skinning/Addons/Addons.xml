@@ -6,6 +6,7 @@
     <Script file="BigWigs.lua" />
     <Script file="BugSack.lua" />
     <Script file="MythicDungeonTools.lua" />
+    <Script file="RCLootCouncil.lua" />
     <Script file="SimpleAddonManager.lua" />
     <Script file="Simulationcraft.lua" />
     <Script file="TalentLoadoutsEx.lua" />
