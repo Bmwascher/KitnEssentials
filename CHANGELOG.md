@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.11
+
+### Combat Texts
+
+- **NEW:** an "AGGRO" line that shows in combat while a mob is attacking
+  you. On by default inside Combat Texts (the module itself stays off by
+  default) and never shown on a tank spec
+- **NEW:** Instances Only (on by default: dungeons and raids, Mythic+
+  included), Pulse (off by default) and an optional sound, played at most
+  once every 2 seconds
+- No Target is now on by default. If you have Combat Texts on and never
+  ticked No Target, "NO TARGET" now shows in combat
+- The Combat Texts preview shows the AGGRO line
+
+---
+
 ## v4.9.10
 
 ### Pet Status
