@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.21
+
+### Combat Texts
+
+- **NEW:** an Aggro sound, in every sound list, and the AGGRO line's default
+  sound. The aggro sound itself stays off until you tick it
+
+---
+
 ## v4.9.20
 
 ### UI Widgets
