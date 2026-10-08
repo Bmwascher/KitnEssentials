@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.7
+
+### Chat
+
+- Chat settings window: under Combat Log > Message Types, each group's
+  sub-checkboxes (such as Damage and Missed under Melee) show again
+- The Combat Log sub-tabs are sized to their labels, and the chat-window
+  tabs are no longer forced to one width; the game sizes them and shrinks
+  them to fit when there are many
+- The Chat History settings are split into two cards, Chat History and
+  Saved Chat Types. The types are compact checkboxes grouped Local, Social
+  and Group, with Channel under Social
+- "Lines To Keep" is renamed Saved Lines and has a tooltip
+- Clear History asks before it deletes anything
+- Clear History and Clear Other Characters share one row, half each,
+  evenly spaced in the card
+- With History off, its controls gray out. With the chat skin off, the card
+  stays and says History needs the chat skin
+
+---
+
 ## v4.9.6
 
 ### Spell History
