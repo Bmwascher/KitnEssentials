@@ -244,9 +244,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card3:AddRow(row3b, Theme.rowHeight)
-    card3:AddNote("The stack stays on screen up to the screen's height. The box kept on screen " ..
-        "is Max Enemies rows tall, so lower it or grow away from a nearby edge. In a stack " ..
-        "taller than the screen, the first rows stay on screen and the rest can run off the edge.")
+    card3:AddNote("The stack stays on screen, Max Enemies rows tall: lower it near a screen edge.")
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
