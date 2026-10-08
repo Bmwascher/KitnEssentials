@@ -214,12 +214,28 @@ end
 ---------------------------------------------------------------------------------
 -- Layout
 ---------------------------------------------------------------------------------
+-- Every arrange SetPoint goes through here. The engine's Havoc aura button
+-- hangs on an attached frame, so the game may refuse a re-anchor; a refused
+-- frame keeps its place and room, and the next allowed arrange seats it.
+local function CanPlace(frame)
+    if not KE:CanReanchorNow(frame) then return false end
+    if not frame.IsAnchoringRestricted then return true end
+    local restricted = frame:IsAnchoringRestricted()
+    if KE:IsSecretValue(restricted) or restricted == true then return false end
+    return true
+end
+
+local function PlaceAt(self, frame, yOffset)
+    if not CanPlace(frame) then return end
+    frame:ClearAllPoints()
+    frame:SetPoint("TOP", self.container, "TOP", 0, -yOffset)
+end
+
 local function StackFrames(self, types, yOffset, spacing)
     for _, msgType in ipairs(types) do
         local frame = self.messageFrames[msgType]
         if frame and frame:IsShown() then
-            frame:ClearAllPoints()
-            frame:SetPoint("TOP", self.container, "TOP", 0, -yOffset)
+            PlaceAt(self, frame, yOffset)
             yOffset = yOffset + frame:GetHeight() + spacing
         end
     end
@@ -239,14 +255,17 @@ function CM:ArrangeMessages()
     for _, key in ipairs(ATTACHED_FRAME_TYPES) do
         local frame = self.attachedFrames[key]
         if frame then
-            local shown = frame:IsShown()
-            local height = frame:GetHeight()
-            self.arrangedShown[key] = shown
-            self.arrangedHeight[key] = height
-            if shown then
+            local shown, height = frame:IsShown(), frame:GetHeight()
+            -- A secret read keeps the last recorded answer; arithmetic on it
+            -- would error.
+            if KE:IsSecretValue(shown) or KE:IsSecretValue(height) then
+                shown, height = self.arrangedShown[key], self.arrangedHeight[key]
+            else
+                self.arrangedShown[key], self.arrangedHeight[key] = shown, height
+            end
+            if shown and height then
                 local inset = self.attachedInsets[key] or 0
-                frame:ClearAllPoints()
-                frame:SetPoint("TOP", self.container, "TOP", 0, -(yOffset + inset))
+                PlaceAt(self, frame, yOffset + inset)
                 yOffset = yOffset + inset + height + spacing
             end
         end
@@ -460,10 +479,9 @@ end
 function CM:AttachedFrameChanged(key)
     local frame = self.attachedFrames[key]
     if not frame then return end
-    if frame:IsShown() == self.arrangedShown[key]
-        and frame:GetHeight() == self.arrangedHeight[key] then
-        return
-    end
+    local shown, height = frame:IsShown(), frame:GetHeight()
+    if KE:IsSecretValue(shown) or KE:IsSecretValue(height) then return end
+    if shown == self.arrangedShown[key] and height == self.arrangedHeight[key] then return end
     self:ArrangeMessages()
 end
 
