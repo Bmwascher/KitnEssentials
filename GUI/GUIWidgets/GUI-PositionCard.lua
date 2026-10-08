@@ -252,8 +252,8 @@ local function CreatePositionCardKit(holder)
     -- Override card:SetEnabled to also walk the kit's widgets. Default
     -- card:SetEnabled (from GUI-Core) only does alpha + the click-blocker
     -- overlay. We additionally want each widget's individual disabled state
-    -- (grays the slider/dropdown text, blocks anchor button clicks even if
-    -- the overlay is bypassed).
+    -- (grays the slider/dropdown text, blocks dropdown clicks even if the
+    -- overlay is bypassed).
     local baseSetEnabled = card.SetEnabled
     function card:SetEnabled(enabled)
         if baseSetEnabled then baseSetEnabled(self, enabled) end
