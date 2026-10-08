@@ -805,17 +805,22 @@ describe("KickTracker meter burst sessions", function()
 end)
 
 describe("KickTracker meter report owner", function()
-    it("names the member every naming list agrees on, unless the burst was shared", function()
+    it("names the member the sure lists, else the climbs, agree on, unless the burst was shared", function()
         local KT = L.loadKickTrackerRules()
         local rows = {
-            { name = "one list names a member", named = { "ann" }, want = "ann" },
-            { name = "both lists name the same member", named = { "ann", "ann" }, want = "ann" },
-            { name = "two lists name different members", named = { "ann", "cal" }, want = nil },
-            { name = "a shared burst names nobody, though the lists agree", named = { "ann", "ann" },
+            { name = "a sure list names a member", sure = { "ann" }, want = "ann" },
+            { name = "two sure lists name the same member", sure = { "ann", "ann" }, want = "ann" },
+            { name = "two sure lists name different members", sure = { "ann", "cal" }, want = nil },
+            { name = "a sure name outranks a climb naming someone else", sure = { "ann" }, climbs = { "cal" },
+              want = "ann" },
+            { name = "a climb alone names its member, unsure", climbs = { "cal" }, want = "cal", unsure = true },
+            { name = "a shared burst names nobody, though the lists agree", sure = { "ann", "ann" },
               shared = true, want = nil },
         }
         for _, row in ipairs(rows) do
-            assert.equals(row.want, KT.MeterReportOwner(row.named, row.shared == true), row.name)
+            local owner, unsure = KT.MeterReportOwner(row.sure or {}, row.climbs or {}, row.shared == true)
+            assert.equals(row.want, owner, row.name)
+            assert.equals(row.unsure, unsure, row.name)
         end
     end)
 end)
@@ -835,6 +840,14 @@ describe("KickTracker hidden-kicker resolution", function()
               hits = { { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
             { name = "a report named only by a climb: fold, unsure",
               hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
+            { name = "a teammate named only by a climb, kick cooling at the interrupt: record", annStart = -4,
+              hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "record" },
+            { name = "a teammate named only by a climb, cooling at the interrupt, cleared since: record",
+              cooling = { ann = true }, hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "record" },
+            { name = "a teammate named only by a climb, kick cooled before it: fold, unsure", annStart = -10,
+              hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
+            { name = "a teammate named for certain while their kick cools: fold", annStart = -4,
+              hits = { { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
             { name = "no report: record", hits = {}, want = "record" },
             { name = "an unnamed report: record", hits = { { at = 10.1 } }, want = "record" },
             { name = "two reports: record", hits = { { at = 9.6 }, { at = 10.1, owner = "ann" } }, want = "record" },
@@ -870,7 +883,9 @@ describe("KickTracker hidden-kicker resolution", function()
         for _, row in ipairs(rows) do
             members.me.kickStart = row.meCooling and 9.5 or nil
             members.me.kickDuration = row.meCooling and 15 or nil
-            local entry = { startTime = 10, state = row.state or "pending" }
+            members.ann.kickStart = row.annStart
+            members.ann.kickDuration = row.annStart and 15 or nil
+            local entry = { startTime = 10, state = row.state or "pending", cooling = row.cooling }
             local entries = { entry }
             for _, other in ipairs(row.others or {}) do entries[#entries + 1] = other end
             local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, entries, row.hits, members,

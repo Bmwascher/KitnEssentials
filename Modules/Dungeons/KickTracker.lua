@@ -169,10 +169,10 @@ KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful 
 KT.kickPairing = { claims = {}, paired = {} }  -- keyed guid..":"..kickID; see KT.PairComm
 KT.ownClaim = {}  -- at: the player's last kick cast; see KT:ClaimOwnKick
 KT.recentKicks = {}  -- accepted interrupts, oldest first; see KT:HandleNameplateInterrupt
-KT.meterHits = {}    -- meter reports { at, last, owner }, oldest first; see KT:ReadMeter
+KT.meterHits = {}    -- meter reports { at, last, owner, uncertain }, oldest first; see KT:ReadMeter
 KT.meterSnap = {}    -- [sessionType] = the last read of that interrupt list
 KT.lastEventAt = {}  -- [nameplate token] = its last accepted interrupt time
-KT.meterBurstSessions = {}  -- the sessions the gathering burst updated; see KT.SessionRepeats
+KT.meterBurstSessions = {}  -- whether the gathering burst had a Current update; see KT.SessionRepeats
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -583,6 +583,7 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         raidMark = mark,                          -- possibly secret; SetSpriteSheetCell-only
         hasRaidMark = hasMark,
         state = "pending",
+        cooling = hidden and self:CoolingTeammates(now) or nil,
     }
     table_insert(self.recentKicks, entry)
 
@@ -763,6 +764,21 @@ function KT:ChargeKick(entry, guid, unsure)
     self:ShowKicked(guid, KickedFromRecord(entry))
 end
 
+-- The teammates whose kick cools at now, or nil. A cooldown that ends before
+-- a hidden kicker's interrupt resolves clears kickStart, so the interrupt
+-- keeps this set for KT.ResolveInterrupt.
+function KT:CoolingTeammates(now)
+    local cooling
+    for guid, member in pairs(self.partyMembers) do
+        local start, duration = member.kickStart, member.kickDuration
+        if member.unit ~= "player" and start and duration and now - start < duration then
+            cooling = cooling or {}
+            cooling[guid] = true
+        end
+    end
+    return cooling
+end
+
 -- A hidden kicker's interrupt once every input in its windows is in: the
 -- member the meter names takes it on their row (KT.ResolveInterrupt), and its
 -- drawn record goes; otherwise the record stays as drawn.
@@ -920,13 +936,13 @@ function KT:ReadMeterList(sessionType)
 end
 
 -- One read of both lists, each diffed against its last read and kept; the
--- report's owner is KT.MeterReportOwner's, uncertain when no list named them
--- by more than a climb. A failed read drops that list's last read: the next
+-- report's owner is KT.MeterReportOwner's, uncertain when only a climb
+-- named them. A failed read drops that list's last read: the next
 -- diff would otherwise span the gap and show a kick from inside it as this
 -- report's. The report covers the burst of updates from at to last; a shared
 -- burst's lists are still kept.
 function KT:ReadMeter(at, last, shared)
-    local named, certain = {}, false
+    local sure, climbs = {}, {}
     for _, sessionType in ipairs(METER_SESSIONS) do
         local list = self:ReadMeterList(sessionType)
         local entry, climbed
@@ -940,18 +956,18 @@ function KT:ReadMeter(at, last, shared)
                     tostring(climbed == true), tostring(count)))
             end
             if count == 1 then
+                local named = climbed and climbs or sure
                 named[#named + 1] = guid
-                if not climbed then certain = true end
             end
         end
     end
-    local owner = KT.MeterReportOwner(named, shared == true)
+    local owner, unsure = KT.MeterReportOwner(sure, climbs, shared == true)
     if DEBUG_KT then
-        KE:Print(string_format("[KT] meter owner named=%d shared=%s", #named, tostring(shared == true)))
+        KE:Print(string_format("[KT] meter owner sure=%d climbs=%d shared=%s", #sure, #climbs,
+            tostring(shared == true)))
     end
     self:PruneKicks(GetTime())
-    table_insert(self.meterHits, { at = at, last = last, owner = owner,
-        uncertain = (owner ~= nil and not certain) or nil })
+    table_insert(self.meterHits, { at = at, last = last, owner = owner, uncertain = unsure })
     if DEBUG_KT then KE:Print("[KT] meter report named=" .. tostring(owner ~= nil)) end
 end
 
