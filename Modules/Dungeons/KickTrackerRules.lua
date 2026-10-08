@@ -454,12 +454,14 @@ function KT.TakeOwnClaim(claim, now, window)
 end
 
 -- The interrupt came first: the newest record with a hidden kicker made
--- inside the window is the player's own kick. Records are in time order.
+-- inside the window is the player's own kick, unless the meter already put
+-- its kick on a teammate's row. Records are in time order.
 function KT.OwnRecordIndex(records, now, window)
     for i = #records, 1, -1 do
         local record = records[i]
         if now - record.startTime > window then return nil end
-        if record.hiddenKicker then return i end
+        local folded = record.entry ~= nil and record.entry.state == "fold"
+        if record.hiddenKicker and not folded then return i end
     end
     return nil
 end
@@ -675,23 +677,25 @@ local function othersBetween(entries, entry, from, to)
     return false
 end
 
--- A hidden kicker's interrupt once its window has closed: "own"; "fold" with
--- the teammate's guid, and true as a fourth return when only a climb named
--- them; "record"; nil when something already took it; or "wait", nil and the
--- time its report's window closes. A report is one read
--- of a burst of meter updates, from its first update (at) to its last (last):
--- the read may hold any of them. It folds only when it is the one interrupt
--- within the window of itself and of its report's whole span, and that report
--- is the one near it, naming one member: otherwise a report may belong to
--- another kick, and one report never credits two interrupts. An interrupt
--- near the report can still arrive until the report's window closes, so a
--- fold waits for it; a record never waits, since more arrivals cannot undo
--- one. A synced teammate's kick stays on the record path their KICK claims
--- while their messages can arrive (messagesHeard), a name for the player
--- counts only while the player's kick cools, and a climb-only name for a
--- teammate only while their kick was ready when the interrupt landed (the
--- entry's cooling set) and has not started since.
-function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, window, echoWindow)
+-- A hidden kicker's interrupt: "own"; "fold" with the teammate's guid, and
+-- true as a fourth return when only a climb named them; "record"; nil when
+-- something already took it; or "wait", nil and the time it may resolve. A
+-- report is one read of a burst of meter updates, from its first update (at)
+-- to its last (last): the read may hold any of them. It folds only when it is
+-- the one interrupt within the window of itself and of its report's whole
+-- span, and that report is the one near it, naming one member: otherwise a
+-- report may belong to another kick, and one report never credits two
+-- interrupts. The meter updates in the frame its kick lands, so a report in
+-- the interrupt's own frame (within sameFrame) folds at once; an interrupt
+-- arriving later finds the fold in its window and stays a record. Any other
+-- report waits for its window to close, since a report or interrupt arriving
+-- inside it would make the pairing ambiguous; a record never waits. A synced
+-- teammate's kick stays on the record path their KICK claims while their
+-- messages can arrive (messagesHeard), a name for the player counts only
+-- while the player's kick cools, and a climb-only name for a teammate only
+-- while their kick was ready when the interrupt landed (the entry's cooling
+-- set) and has not started since.
+function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, window, echoWindow, sameFrame)
     if entry.state ~= "pending" then return nil end
     local t = entry.startTime
     if othersBetween(entries, entry, t - window, t + window) then return "record" end
@@ -702,10 +706,12 @@ function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, 
             hit, count = h, count + 1
         end
     end
+    if count == 0 and now < t + window then return "wait", nil, t + window end
     if count ~= 1 or not hit.owner then return "record" end
     local closes = (hit.last or hit.at) + window
     if othersBetween(entries, entry, hit.at - window, closes) then return "record" end
-    if now < closes then return "wait", nil, closes end
+    local inFrame = t >= hit.at - sameFrame and t <= (hit.last or hit.at) + sameFrame
+    if not inFrame and now < closes then return "wait", nil, closes end
     local member = members[hit.owner]
     if not member then return "record" end
     if member.unit == "player" then
