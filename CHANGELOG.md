@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.16
+
+### Great Vault Alert
+
+- **NEW:** Reward Cover. At the vault, in a rested area with a reward to
+  claim, each card holding a reward is covered by a card you click to
+  reveal, one at a time, in any order. On by default inside Great Vault
+  Alert (the module itself stays off by default)
+- A reveal plays the Reveal Sound and flares in the item's quality color.
+  Waiting covers glow and highlight under the mouse
+- A revealed card stays revealed on that character until you claim, across
+  /reload. "Cover Revealed Cards Again" covers them again
+- **NEW:** Bad Loot Line (on by default): a red "GG, Fuggin Easy. Better
+  luck next week!" line under the reward strip
+- **NEW:** Reveal Flavor (on by default): "Jackpot!" on the week's highest
+  item level, and "Last one..." on the final cover
+- **NEW:** Chat Recap (off by default) names your best reward and its item
+  level after the last reveal
+
+---
+
 ## v4.9.15
 
 ### Alter Time
