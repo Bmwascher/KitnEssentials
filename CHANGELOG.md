@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.20
+
+### UI Widgets
+
+- Text widgets that Blizzard draws larger than your Font Size keep
+  Blizzard's size, so the icon beside the top-center Stars bar is no longer
+  shrunk. Font Size is now a minimum, and its tooltip says so
+- A text widget stays centered when Font Size is above Blizzard's size
+
+---
+
 ## v4.9.19
 
 ### Havoc Tracker
