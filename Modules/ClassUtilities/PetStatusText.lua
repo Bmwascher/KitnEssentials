@@ -47,6 +47,9 @@ local PET_CLASSES = {
 local petInfo = nil
 local isGrimoireClass = false
 local petDeathTracked = false
+-- The last MISSING or DEAD read while Grimoire of Sacrifice could be seen;
+-- shown while it is hidden. nil until a verdict has been read.
+local heldStatus = nil
 
 local PET_STATUS = {
     NONE = 0,
@@ -146,6 +149,23 @@ function PS.DemoPetExpected(npcID, content)
     return FELGUARD_NPC_IDS[npcID] == true
 end
 
+-- Warlocks only. A quiet verdict given only because the sacrifice buff is
+-- hidden (guarded) shows the MISSING or DEAD read while it could be seen. A
+-- live pet clears the hold; a readable buff replaces it. Returns the status to
+-- show and the new hold.
+function PS.ResolveHeld(held, status, guarded, readable, livePet)
+    if guarded then
+        if held == PET_STATUS.MISSING or held == PET_STATUS.DEAD then return held, held end
+        return PET_STATUS.NONE, held
+    end
+    if livePet then return status, PET_STATUS.NONE end
+    if readable then
+        if status == PET_STATUS.MISSING or status == PET_STATUS.DEAD then return status, status end
+        return status, PET_STATUS.NONE
+    end
+    return status, held
+end
+
 local function CheckAndUpdatePetDeathState()
     if UnitExists("pet") and not UnitIsDeadOrGhost("pet") then
         petDeathTracked = false
@@ -169,6 +189,8 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
+-- The fourth return marks a quiet verdict given only because the sacrifice
+-- buff is hidden.
 local function CheckPetStatus()
     if not petInfo then return PET_STATUS.NONE, nil, nil end
     if IsPlayerMounted() then return PET_STATUS.NONE, nil, nil end
@@ -208,7 +230,7 @@ local function CheckPetStatus()
         -- Hidden, a missing buff proves nothing: no pet stays silent, and a
         -- remembered death waits until the buff can be read.
         if not hasPet and hidden then
-            return PET_STATUS.NONE, nil, nil
+            return PET_STATUS.NONE, nil, nil, true
         end
         if (not hasPet or UnitIsDeadOrGhost("pet")) and not hidden
             and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(196099) then
@@ -235,7 +257,7 @@ local function CheckPetStatus()
         -- accusation for the whole restricted stretch. Warlocks only: no other
         -- pet class can be holding this buff, so their warning is untouched.
         if isGrimoireClass and KE:IsAuraHiddenForSpell(196099) then
-            return PET_STATUS.NONE, nil, nil
+            return PET_STATUS.NONE, nil, nil, true
         end
         local sacrificeAura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(196099)
         if sacrificeAura then
@@ -321,6 +343,21 @@ function PS:Paint(text, r, g, b, a)
     end
 end
 
+-- Mounted says nothing and leaves the hold as it is, so a mount never stands
+-- in for the verdict read before it.
+local function EvaluatePetStatus()
+    local status, message, color, guarded = CheckPetStatus()
+    if not isGrimoireClass or IsPlayerMounted() then return message, color end
+    local livePet = UnitExists("pet") and not UnitIsDeadOrGhost("pet")
+    local readable = not KE:IsAuraHiddenForSpell(196099)
+    local shown
+    shown, heldStatus = PS.ResolveHeld(heldStatus, status, guarded, readable, livePet)
+    if shown == status then return message, color end
+    if shown == PET_STATUS.MISSING then return PS.db.PetMissing, PS.db.MissingColor end
+    if shown == PET_STATUS.DEAD then return PS.db.PetDead, PS.db.DeadColor end
+    return nil, nil
+end
+
 function PS:UpdatePetText()
     if not self.frame then return end
     -- The preview owns the frame while it is up; a live pet event must not
@@ -330,7 +367,7 @@ function PS:UpdatePetText()
     -- If the status evaluation ever throws on an API change, hide the text
     -- rather than leave the last painted state frozen on screen. A reminder
     -- that cannot evaluate must not nag.
-    local ok, _, message, color = pcall(CheckPetStatus)
+    local ok, message, color = pcall(EvaluatePetStatus)
     if ok and message and color then
         self:Paint(message, KE:ResolveColor(color, { 1, 1, 1, 1 }))
     else
@@ -494,6 +531,7 @@ function PS:OnEnable()
 
     self._tracking = true
     self._updatePending = false
+    heldStatus = nil
 
     self:RegisterEvent("UNIT_PET", function(_, unit)
         if unit ~= "player" then return end
@@ -522,6 +560,7 @@ end
 
 function PS:OnDisable()
     self._tracking = false
+    heldStatus = nil
     self._updatePending = false
     self:UnregisterAllEvents()
     self:UpdateAttachSubscription()
