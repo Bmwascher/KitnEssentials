@@ -1,5 +1,31 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.17
+
+### Dungeon Teleport Reminder
+
+- The LFG Reminder card is renamed Dungeon Teleport Reminder
+- **NEW:** Party Teleports, on by default inside the module (the module
+  itself stays off by default). When a party member teleports to a dungeon,
+  a "Teleport Reminder" popup offers your own teleport there, and your own
+  dungeon teleports are shared with the party
+- Party teleports work in the open world and in any party dungeon, but not
+  in a raid or inside a running key. A popup that arrives in combat waits
+  until combat ends, and one dungeon prompts at most once a minute
+- "Disable Feature" on a party popup turns off Party Teleports only; Group
+  Finder prompts carry on
+- The popup is wider and easier to read, with a slimmer footer, and can no
+  longer be dragged off screen
+- Group Finder prompts recognize every season's dungeons, and a new prompt
+  replaces any older popup
+
+### Conflicts
+
+- With Mythic+ Tweaks' teleport popups also on, you are asked once which
+  to keep. Choosing KitnEssentials turns off only those two popups
+
+---
+
 ## v4.9.16
 
 ### Great Vault Alert
