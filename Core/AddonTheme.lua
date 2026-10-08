@@ -43,9 +43,9 @@ local ThemeDefaults = {
     -- Customize pick reaches them; no window outside the GUI reads them.
     fieldBg        = { 0.075, 0.075, 0.075, 1 },
     fieldBorder    = { 0.188, 0.188, 0.188, 1 },
-    controlBg      = { 0.090, 0.090, 0.090, 1 },
-    controlHover   = { 0.110, 0.110, 0.110, 1 },
-    controlPressed = { 0.039, 0.039, 0.039, 1 },
+    controlBg      = { 0.039, 0.039, 0.039, 1 },
+    controlHover   = { 0.063, 0.063, 0.063, 1 },
+    controlPressed = { 0, 0, 0, 1 },
     controlBorder  = { 0.173, 0.173, 0.173, 1 },
     listBg         = { 0.082, 0.082, 0.082, 1 },
     listBorder     = { 0.188, 0.188, 0.188, 1 },
