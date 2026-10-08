@@ -99,8 +99,11 @@ CM.attachedInsets = {}
 CM.arrangedShown = {}
 CM.arrangedHeight = {}
 -- Per attached key: the KE spacer the frame hangs under, whether the frame is
--- seated on it, and the spacer height last applied.
+-- seated on it, and the offset last applied.
 CM.attachSpacers = {}
+-- A zero-height region has no usable bottom edge, so a spacer is always this
+-- much taller than its offset and the frame hangs this far above its bottom.
+CM.SPACER_LIFT = 1
 CM.attachSeated = {}
 CM.attachTop = {}
 -- Per line: the last readable shown state and height, and the top it was
@@ -271,12 +274,12 @@ local function SeatAttached(self, key, frame)
     if not CanMove(self, frame) or (spacer and not CanMove(self, spacer)) then return false end
     if not spacer then
         spacer = CreateFrame("Frame", nil, self.container)
-        spacer:SetWidth(1)
+        spacer:SetSize(1, self.SPACER_LIFT)
         spacer:SetPoint("TOP", self.container, "TOP", 0, 0)
         self.attachSpacers[key] = spacer
     end
     frame:ClearAllPoints()
-    frame:SetPoint("TOP", spacer, "BOTTOM", 0, 0)
+    frame:SetPoint("TOP", spacer, "BOTTOM", 0, self.SPACER_LIFT)
     self.attachSeated[key] = true
     self.attachTop[key] = nil
     return true
@@ -303,7 +306,7 @@ function CM:ArrangeMessages()
                 local placed = self.attachTop[key]
                 if placed ~= top and SeatAttached(self, key, frame)
                     and CanMove(self, self.attachSpacers[key]) then
-                    self.attachSpacers[key]:SetHeight(top)
+                    self.attachSpacers[key]:SetHeight(top + self.SPACER_LIFT)
                     placed = top
                     self.attachTop[key] = top
                 end
