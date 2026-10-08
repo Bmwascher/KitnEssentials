@@ -583,13 +583,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesSkins", function(scrollChild, yOffse
     return yOffset
 end)
 
-GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffset)
+GUIFrame:RegisterContent("SkinBlizzardFramesFontsWindows", function(scrollChild, yOffset)
     local db = GetDB()
     if not db then return yOffset end
     local S = KE.Skins
 
-    local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
-    card:AddLabel("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
+    local card = GUIFrame:CreateCard(scrollChild, "Skinned Windows", yOffset)
+    card:AddLabel("Text inside the windows the Dark Theme skins. Bigger text, such as window titles, keeps its extra size.")
 
     local fontOptions = {}
     if LSM then
@@ -631,7 +631,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     -- instead. FontOffset is still read and still applied, which is what keeps
     -- an existing saved look unchanged -- it just has no control any more.
     local rowSize = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    rowSize:AddWidget(GUIFrame:CreateSlider(rowSize, "Base Font Size", {
+    rowSize:AddWidget(GUIFrame:CreateSlider(rowSize, "Text Size", {
         min = 8, max = 26, step = 1, value = db.FontSize or 12,
         tooltip = "Size of text in skinned windows. Larger elements keep their extra size and move with it. 12 is the designed look.",
         callback = function(val)
@@ -641,15 +641,16 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     }), 1)
     card:AddRow(rowSize, Theme.rowHeightLast, 0)
 
-    yOffset = card:GetNextOffset()
-
-    -- Same subject, wider scope: the game-wide text settings, chained as-is so
-    -- this page stays the one place fonts are configured.
-    local messages = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinMessages"]
-    if messages then yOffset = messages(scrollChild, yOffset) end
-
-    return yOffset
+    return card:GetNextOffset()
 end)
+
+-- The Fonts tab, one sub-tab per font source. Nothing outside this row hands
+-- over one of these ids, so none is registered as a nested id.
+GUIFrame:RegisterTabbedContent("SkinBlizzardFramesFonts", {
+    { id = "SkinBlizzardFramesFontsWindows",  label = "Skinned Windows" },
+    { id = "SkinBlizzardFramesFontsBlizzard", label = "Blizzard Text" },
+    { id = "SkinMessages",                    label = "On-Screen Messages" },
+})
 
 GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffset)
     local db = GetDB()

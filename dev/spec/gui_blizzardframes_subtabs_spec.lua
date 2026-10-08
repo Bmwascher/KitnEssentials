@@ -30,7 +30,12 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             nestedTabOwner = {},
             pendingNestedTab = {},
             RegisterContent = function(self, id, fn) self.registeredContent[id] = fn end,
-            RegisterTabbedContent = function(self, id, tabs) self.tabStrips[id] = tabs end,
+            -- Records the strip and, like the real one, registers the page
+            -- itself, so a nested strip's own id still resolves as a builder.
+            RegisterTabbedContent = function(self, id, tabs)
+                self.tabStrips[id] = tabs
+                self.registeredContent[id] = function(_, yOffset) return yOffset end
+            end,
             RegisterNestedTabs = function(self, ownerId, nestedIds)
                 for _, nestedId in ipairs(nestedIds) do
                     self.nestedTabOwner[nestedId] = ownerId
@@ -175,11 +180,19 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.same(idSet(offTabs), idSet(onTabs))
     end)
 
-    it("registers a builder for every element id in both states", function()
-        elvui = false
-        assertEveryIdResolves(GUIFrame._VisibleElementTabs())
-        elvui = true
-        assertEveryIdResolves(GUIFrame._VisibleElementTabs())
+    -- Both nested rows: the Elements row in either conflict state, and the
+    -- Fonts tab's own strip.
+    it("registers a builder for every id on each nested row", function()
+        local rows = {
+            function() elvui = false; return GUIFrame._VisibleElementTabs() end,
+            function() elvui = true; return GUIFrame._VisibleElementTabs() end,
+            function() return GUIFrame.tabStrips["SkinBlizzardFramesFonts"] end,
+        }
+        for _, row in ipairs(rows) do
+            local tabs = row()
+            assert.is_table(tabs)
+            assertEveryIdResolves(tabs)
+        end
     end)
 
     -- Edit Mode's Open Settings names one of the nested ids. GUI-TabbedContent
