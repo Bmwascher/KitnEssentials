@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.15
+
+### Alter Time
+
+- **NEW:** Alter Time, for Mages. When you cast Alter Time, your health at
+  that moment ("62%") shows above Alter Time's icon in the Cooldown
+  Manager's Tracked Buffs. Off by default
+- The number clears on the return cast, after 10 seconds, on death and on a
+  loading screen
+- Attach To and Position on Icon (Above, Center or Below) set where it
+  sits. Without a visible Alter Time icon it uses its own screen position
+
+### Class Tools
+
+- **NEW:** a Mage tab. On a Mage, Class Tools opens on it
+
+---
+
 ## v4.9.14
 
 ### CC Tracker
