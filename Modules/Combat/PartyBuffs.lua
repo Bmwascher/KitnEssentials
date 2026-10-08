@@ -103,6 +103,8 @@ PB.queue = {}
 PB.queued = {}
 PB.watchedCells = setmetatable({}, { __mode = "k" })
 PB.previewRows = {}
+-- "HEALER" or "DEFAULT": the placement view the settings page shows.
+PB.previewContext = nil
 
 local function Debug(fmt, ...)
     if not DEBUG_PB then return end
@@ -469,7 +471,7 @@ end
 -- Returns false when any container call was refused, so the caller can retry.
 function PB:ApplySlotLayout(slot)
     local db = self.db
-    local side = SIDES[db.Side] or SIDES.LEFT
+    local side = self:Placement()
     local container = slot.container
     local width = RowWidth(db)
     slot.holder:SetSize(width, db.IconSize)
@@ -512,7 +514,7 @@ function PB:BuildSlot(k)
         self.slots[k] = slot
     end
     if not slot.container then
-        local corner = (SIDES[self.db.Side] or SIDES.LEFT).corner
+        local corner = self:Placement().corner
         local ok, container = pcall(CreateFrame, "AuraContainer", "KE_PartyBuffsContainer" .. k,
             slot.holder, "CustomAuraContainerTemplate")
         if not (ok and container) then
@@ -542,19 +544,30 @@ function PB:BuildSlot(k)
     return true
 end
 
+-- The SIDES row, X, Y and strata in effect. A preview row follows the
+-- settings page's view while it names one; the icons follow the player's spec.
+function PB:Placement(forPreview)
+    local useHealer
+    if forPreview and self.previewContext then
+        useHealer = self.previewContext == "HEALER"
+    else
+        useHealer = KE:IsPlayerHealerSpec()
+    end
+    local side, x, y, strata = KE.PartyBuffsRules.ActivePlacement(self.db, useHealer)
+    return SIDES[side] or SIDES.LEFT, x, y, strata
+end
+
 -- Anchored, never parented: a child of a party frame inherits its protection
 -- and could not be hidden in combat. Returns the strata and level applied, or
 -- nil when the anchor was refused.
-function PB:PlaceHolder(holder, frame)
-    local db = self.db
-    local side = SIDES[db.Side] or SIDES.LEFT
-    local gap = db.IconSpacing
+function PB:PlaceHolder(holder, frame, forPreview)
+    local side, x, y, strata = self:Placement(forPreview)
+    local gap = self.db.IconSpacing
     holder:ClearAllPoints()
     if not pcall(holder.SetPoint, holder, side.point, frame, side.rel,
-        side.dx * gap + db.XOffset, side.dy * gap + db.YOffset) then
+        side.dx * gap + x, side.dy * gap + y) then
         return nil
     end
-    local strata = db.Strata
     local level
     if strata == "FRAME" then
         strata = "MEDIUM"
@@ -662,6 +675,14 @@ function PB:OnRestrictionChanged()
     end)
 end
 
+-- Registered only while Use in Healer Specs is on. No healer answer is cached:
+-- the placement reads ask the spec when they run, and a re-apply that keeps
+-- the player on the same side of the healer line moves nothing.
+function PB:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:ApplySettings()
+end
+
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
@@ -758,11 +779,23 @@ end
 function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
+    if self.db.UseHealerPlacement == true then
+        self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    else
+        self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    end
     self:BuildStyleSettings()
     self:EvaluateGate()
     self:ReconfigureAll()
     self:Restyle()
     if self.previewing then self:ShowPreview() end
+end
+
+-- The first time Use in Healer Specs is turned on, the healer copy starts as
+-- the current placement, so nothing moves until it is edited.
+function PB:SeedHealerPlacement()
+    self:UpdateDB()
+    KE.PartyBuffsRules.SeedHealerPlacement(self.db)
 end
 
 ---------------------------------------------------------------------------------
@@ -848,11 +881,11 @@ function PB:DrawPreviewRow(k, frame)
     end
     local holder = row.holder
     holder:SetSize(RowWidth(db), db.IconSize)
-    if not self:PlaceHolder(holder, frame) then
+    if not self:PlaceHolder(holder, frame, true) then
         holder:Hide()
         return
     end
-    local side = SIDES[db.Side] or SIDES.LEFT
+    local side = self:Placement(true)
     local step = (db.IconSize + db.IconSpacing) * (side.left and -1 or 1)
     local now, shown, limit = GetTime(), 0, KE.PartyBuffsRules.IconCount(db)
     for i = 1, #DESCRIPTORS do
@@ -946,6 +979,7 @@ end
 
 function PB:HidePreview()
     self.previewing = false
+    self.previewContext = nil
     self:HidePreviewFrames()
 end
 
