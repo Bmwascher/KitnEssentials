@@ -437,7 +437,7 @@ end
 
 -- Popup geometry. The row sits below the header; the footer line under it
 -- holds "Disable Feature" and the watermark.
-local POPUP_W     = 210
+local POPUP_W     = 280
 local TITLE_H     = 27
 local PAD         = 10
 local BTN_TOP     = TITLE_H + 11
@@ -449,7 +449,7 @@ local TEXT_W      = POPUP_W - PAD * 2 - TEXT_LEFT - TEXT_RIGHT
 local NAME_LINE_H = 17  -- used when the font reports no line height
 local FOOT_GAP    = 8
 local FOOT_H      = 16
-local FOOT_PAD    = 8
+local FOOT_PAD    = 4
 local DISABLE_W   = 90  -- used when the label reports no width
 
 -- Dungeon name the popup is drawing; every show path sets it before layout.
@@ -522,8 +522,10 @@ ApplyPopupLayout = function()
     disableBtn:ClearAllPoints()
     disableBtn:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -footTop)
     disableBtn:SetShown(showDisable)
+    -- On the footer line's center, where "Disable Feature" is centered, so the
+    -- two share a baseline.
     popup._mark:ClearAllPoints()
-    popup._mark:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -footTop)
+    popup._mark:SetPoint("RIGHT", popup, "TOPRIGHT", -PAD, -(footTop + FOOT_H / 2))
 
     popup:SetHeight(footTop + FOOT_H + FOOT_PAD)
 end
@@ -606,14 +608,14 @@ BuildPopup = function()
     secureBtn._name = nameFS
 
     local roleFS = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
+    if S and S.SetFont then S.SetFont(roleFS, 13, "") end
     roleFS:SetJustifyH("LEFT")
     roleFS:SetWordWrap(false)
     roleFS:Hide()
     secureBtn._role = roleFS
 
     local btnLabel = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(btnLabel, 10, "") end
+    if S and S.SetFont then S.SetFont(btnLabel, 11, "") end
     btnLabel:SetWordWrap(false)
     btnLabel:SetText("Teleport")
     secureBtn._label = btnLabel
