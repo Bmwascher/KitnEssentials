@@ -1173,6 +1173,11 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 200),
+            CoverEnabled = true,
+            CoverBadLoot = true,
+            CoverFlavor = true,
+            CoverChatRecap = false,
+            CoverSound = "Blizzard - Epic Loot",
         },
 
         -- Sized from its own text, so this center anchor moves both edges by
@@ -2903,10 +2908,11 @@ function KE:MigrateCombatLoggerKeys()
 end
 
 ---------------------------------------------------------------------------------
--- Per-Character Chat Store
+-- Per-Character Store
 ---------------------------------------------------------------------------------
--- Chat history lives in KitnEssentialsCharDB, so a login loads one
--- character's chat instead of every character's.
+-- Per-character data lives in KitnEssentialsCharDB, so a login loads one
+-- character's data instead of every character's. CHAR_STORE_KEYS are the chat
+-- keys moved out of AceDB's char section; other keys are written there directly.
 
 local CHAR_STORE_KEYS = { "ChatHistory", "ChatTypingHistory" }
 

@@ -142,7 +142,95 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Position Settings
+    -- Card 3: Reward Cover
+    ----------------------------------------------------------------
+    local function ApplyCover()
+        if GVA then GVA:ApplyCover() end
+    end
+
+    local card3 = GUIFrame:CreateCard(scrollChild, "Reward Cover", yOffset)
+    manager:Register(card3, "all")
+    card3:AddHeaderToggle(db.CoverEnabled ~= false, function(checked)
+        db.CoverEnabled = checked
+        ApplyCover()
+        RefreshStates()
+    end)
+    card3:AddLabel("Hides each reward behind a KitnUI card when you open the vault to choose this " ..
+        "week's reward. Click a card to reveal what is under it. A revealed card stays revealed on " ..
+        "that character until you claim.")
+    manager:SetCondition("cover", function() return db.CoverEnabled ~= false end)
+
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local badLootCheck = GUIFrame:CreateCheckbox(row3a, "Bad Loot Line", {
+        value = db.CoverBadLoot ~= false,
+        tooltip = "Adds a bad-loot line under the coin choices below the cards.",
+        callback = function(checked) db.CoverBadLoot = checked; ApplyCover() end,
+    })
+    row3a:AddWidget(badLootCheck, 0.5)
+    manager:Register(badLootCheck, "cover")
+
+    local flavorCheck = GUIFrame:CreateCheckbox(row3a, "Reveal Flavor", {
+        value = db.CoverFlavor ~= false,
+        tooltip = "A \"Last one...\" tease on the final card, and \"Jackpot!\" on the week's best item level.",
+        callback = function(checked) db.CoverFlavor = checked; ApplyCover() end,
+    })
+    row3a:AddWidget(flavorCheck, 0.5)
+    manager:Register(flavorCheck, "cover")
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    local coverSounds = {}
+    for _, sound in ipairs(GVA and GVA.COVER_SOUNDS or {}) do
+        coverSounds[#coverSounds + 1] = { key = sound.key, text = sound.key }
+    end
+    coverSounds[#coverSounds + 1] = { key = "None", text = "None" }
+    if LSM then
+        local names = {}
+        for name in pairs(LSM:HashTable("sound")) do
+            if name ~= "None" then names[#names + 1] = name end
+        end
+        table.sort(names)
+        for _, name in ipairs(names) do
+            coverSounds[#coverSounds + 1] = { key = name, text = name }
+        end
+    end
+
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local recapCheck = GUIFrame:CreateCheckbox(row3b, "Chat Recap", {
+        value = db.CoverChatRecap == true,
+        tooltip = "After the last card, prints your best reward to chat.",
+        callback = function(checked) db.CoverChatRecap = checked; ApplyCover() end,
+    })
+    row3b:AddWidget(recapCheck, 0.5)
+    manager:Register(recapCheck, "cover")
+
+    local revealSoundDropdown = GUIFrame:CreateDropdown(row3b, "Reveal Sound", {
+        options = coverSounds,
+        searchable = true,
+        value = db.CoverSound or "Blizzard - Epic Loot",
+        callback = function(key)
+            db.CoverSound = key
+            if GVA then GVA:PlayCoverSound(key) end
+        end,
+    })
+    row3b:AddWidget(revealSoundDropdown, 0.5)
+    manager:Register(revealSoundDropdown, "cover")
+    card3:AddRow(row3b, Theme.rowHeight)
+
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local recoverButton = GUIFrame:CreateButton(row3c, "Cover Revealed Cards Again", {
+        width = 220,
+        height = 28,
+        tooltip = "Covers the cards you already revealed, until you claim.",
+        callback = function() if GVA then GVA:ResetRevealed() end end,
+    })
+    row3c:AddWidget(recoverButton, 0.5)
+    manager:Register(recoverButton, "cover")
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Position Settings
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
@@ -165,7 +253,7 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card 4: Font Settings
+    -- Card 5: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         db = db,

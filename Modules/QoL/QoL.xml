@@ -9,6 +9,7 @@
     <Script file="AuctionHouseFilter.lua" />
     <Script file="HousingDashboardFix.lua" />
     <Script file="GreatVaultAlert.lua" />
+    <Script file="GreatVaultCover.lua" />
     <Script file="VantusRune.lua" />
     <Script file="CharacterPanel.lua" />
     <Script file="InspectPanel.lua" />
