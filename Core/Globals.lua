@@ -1813,14 +1813,21 @@ function KE:EUIDrawsSlotElement(unit, element)
 end
 
 ---------------------------------------------------------------------------------
--- Healer Position Override
+-- Spec role
 ---------------------------------------------------------------------------------
 
-function KE:IsPlayerHealerSpec()
+local function PlayerSpecRole()
     local specIndex = C_SpecializationInfo.GetSpecialization()
-    if not specIndex then return false end
-    local role = _G.GetSpecializationRole(specIndex)
-    return role == "HEALER"
+    if not specIndex then return nil end
+    return _G.GetSpecializationRole(specIndex)
+end
+
+function KE:IsPlayerHealerSpec()
+    return PlayerSpecRole() == "HEALER"
+end
+
+function KE:IsPlayerTankSpec()
+    return PlayerSpecRole() == "TANK"
 end
 
 ---------------------------------------------------------------------------------

@@ -1103,6 +1103,9 @@ function KE:EUIDrawsSlotElement(unit, element) end
 ---@return boolean
 function KE:IsPlayerHealerSpec() end
 
+---@return boolean
+function KE:IsPlayerTankSpec() end
+
 ---@param enabledSpecs table<number, boolean>?
 ---@param specId number?
 ---@return boolean

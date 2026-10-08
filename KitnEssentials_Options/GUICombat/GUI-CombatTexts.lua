@@ -8,6 +8,9 @@
 local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
+local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
+
+local pairs = pairs
 
 GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.CombatTexts
@@ -28,6 +31,12 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     end)
     manager:SetCondition("noTarget", function()
         return db.NoTargetEnabled == true
+    end)
+    manager:SetCondition("aggro", function()
+        return db.AggroEnabled ~= false
+    end)
+    manager:SetCondition("aggroSound", function()
+        return db.AggroEnabled ~= false and db.AggroSoundEnabled == true
     end)
     manager:SetCondition("durability", function()
         return db.DurabilityEnabled ~= false
@@ -74,8 +83,8 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     card1:AddLabel("Floating messages for the moments the game does not call out: entering and " ..
-        "leaving combat, having no target, the spell you just interrupted with its icon, and low " ..
-        "durability. Each message has its own card below.")
+        "leaving combat, having no target, a mob attacking you, the spell you just interrupted " ..
+        "with its icon, and low durability. Each message has its own card below.")
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -254,6 +263,135 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     card5:AddRow(row5note, Theme.rowHeight, 0)
 
     yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Aggro Warning
+    ----------------------------------------------------------------
+    local cardAggro = GUIFrame:CreateCard(scrollChild, "Aggro Warning", yOffset)
+    manager:Register(cardAggro, "all")
+
+    local rowAggroA = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
+    local aggroEnableCheck = GUIFrame:CreateCheckbox(rowAggroA, "Enabled", {
+        value = db.AggroEnabled ~= false,
+        callback = function(checked)
+            db.AggroEnabled = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    rowAggroA:AddWidget(aggroEnableCheck, 0.2)
+    manager:Register(aggroEnableCheck, "all")
+
+    local aggroColorPicker = GUIFrame:CreateColorPicker(rowAggroA, "Color", {
+        color = db.AggroColor or { 1, 0.15, 0.15, 1 },
+        callback = function(r, g, b, a)
+            db.AggroColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    rowAggroA:AddWidget(aggroColorPicker, 0.3)
+    manager:Register(aggroColorPicker, "aggro")
+
+    local aggroTextInput = GUIFrame:CreateEditBox(rowAggroA, "Text", {
+        value = db.AggroText or "AGGRO",
+        callback = function(val) db.AggroText = val; ApplySettings() end,
+    })
+    rowAggroA:AddWidget(aggroTextInput, 0.5)
+    manager:Register(aggroTextInput, "aggro")
+    cardAggro:AddRow(rowAggroA, Theme.rowHeight)
+
+    local rowAggroSep1 = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeightSeparator)
+    local sepAggroA = GUIFrame:CreateSeparator(rowAggroSep1)
+    rowAggroSep1:AddWidget(sepAggroA, 1)
+    manager:Register(sepAggroA, "aggro")
+    cardAggro:AddRow(rowAggroSep1, Theme.rowHeightSeparator)
+
+    local rowAggroB = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
+    local aggroInstanceCheck = GUIFrame:CreateCheckbox(rowAggroB, "Instances Only", {
+        value = db.AggroInstanceOnly ~= false,
+        tooltip = "Show the warning only inside dungeons and raids, Mythic+ included. The open world, " ..
+            "delves, scenarios, battlegrounds and arenas never show it.",
+        callback = function(checked) db.AggroInstanceOnly = checked; ApplySettings() end,
+    })
+    rowAggroB:AddWidget(aggroInstanceCheck, 0.5)
+    manager:Register(aggroInstanceCheck, "aggro")
+
+    local aggroPulseCheck = GUIFrame:CreateCheckbox(rowAggroB, "Pulse", {
+        value = db.AggroPulse == true,
+        tooltip = "Fade the warning in and out while it is up.",
+        callback = function(checked) db.AggroPulse = checked; ApplySettings() end,
+    })
+    rowAggroB:AddWidget(aggroPulseCheck, 0.5)
+    manager:Register(aggroPulseCheck, "aggro")
+    cardAggro:AddRow(rowAggroB, Theme.rowHeight)
+
+    local rowAggroSep2 = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeightSeparator)
+    local sepAggroB = GUIFrame:CreateSeparator(rowAggroSep2)
+    rowAggroSep2:AddWidget(sepAggroB, 1)
+    manager:Register(sepAggroB, "aggro")
+    cardAggro:AddRow(rowAggroSep2, Theme.rowHeightSeparator)
+
+    local aggroSoundList = { ["None"] = "None" }
+    if LSM then
+        for name in pairs(LSM:HashTable("sound")) do aggroSoundList[name] = name end
+    end
+
+    local rowAggroC = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
+    local aggroSoundCheck = GUIFrame:CreateCheckbox(rowAggroC, "Play Sound", {
+        value = db.AggroSoundEnabled == true,
+        tooltip = "Play the chosen sound when the warning appears, at most once every 2 seconds.",
+        callback = function(checked)
+            db.AggroSoundEnabled = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    rowAggroC:AddWidget(aggroSoundCheck, 0.5)
+    manager:Register(aggroSoundCheck, "aggro")
+
+    local aggroChannelDropdown = GUIFrame:CreateDropdown(rowAggroC, "Channel", {
+        options = {
+            { key = "Master",   text = "Master" },
+            { key = "SFX",      text = "SFX" },
+            { key = "Music",    text = "Music" },
+            { key = "Ambience", text = "Ambience" },
+            { key = "Dialog",   text = "Dialog" },
+        },
+        value = db.AggroSoundChannel or "Master",
+        callback = function(key) db.AggroSoundChannel = key; ApplySettings() end,
+    })
+    rowAggroC:AddWidget(aggroChannelDropdown, 0.5)
+    manager:Register(aggroChannelDropdown, "aggroSound")
+    cardAggro:AddRow(rowAggroC, Theme.rowHeight)
+
+    local rowAggroD = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeightLast)
+    local aggroSoundDropdown = GUIFrame:CreateDropdown(rowAggroD, "Sound", {
+        options = aggroSoundList,
+        value = db.AggroSoundFile or "None",
+        callback = function(key)
+            db.AggroSoundFile = key
+            if key ~= "None" and LSM then
+                local path = LSM:Fetch("sound", key)
+                if path then PlaySoundFile(path, db.AggroSoundChannel or "Master") end
+            end
+            ApplySettings()
+        end,
+        searchable = true,
+    })
+    rowAggroD:AddWidget(aggroSoundDropdown, 1)
+    manager:Register(aggroSoundDropdown, "aggroSound")
+    cardAggro:AddRow(rowAggroD, Theme.rowHeightLast)
+
+    local rowAggroNote = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
+    local aggroNote = GUIFrame:CreateText(rowAggroNote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Shows while a mob is attacking you in combat. Never shown on a tank specialization.",
+        Theme.rowHeight, "hide")
+    rowAggroNote:AddWidget(aggroNote, 1)
+    manager:Register(aggroNote, "aggro")
+    cardAggro:AddRow(rowAggroNote, Theme.rowHeight, 0)
+
+    yOffset = cardAggro:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Interrupt Text

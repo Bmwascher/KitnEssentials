@@ -2908,6 +2908,21 @@ function L.loadPotionReady(overrides)
     return modules["PotionReady"], KE
 end
 
+-- Modules/Combat/CombatTexts.lua, for its aggro specs. Nothing creates a
+-- frame or registers an event at load; the file indexes C_Spell at load.
+-- Returns CM, KE.
+function L.loadCombatTexts(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.C_Spell = {}
+    -- Captured at load, so it is installed first.
+    _G.PlaySoundFile = overrides and overrides.PlaySoundFile
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Combat/CombatTexts.lua", KE)
+    return modules["CombatTexts"], KE
+end
+
 -- Modules/Combat/CombatRes.lua, for its pure listening rule. Nothing creates a
 -- frame, registers an event or subscribes at load. Returns CR, KE.
 function L.loadCombatRes(overrides)
