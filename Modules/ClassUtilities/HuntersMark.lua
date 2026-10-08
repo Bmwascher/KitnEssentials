@@ -10,8 +10,9 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class HuntersMark: AceModule
-local HM = KitnEssentials:NewModule("HuntersMark")
+---@class HuntersMark: AceModule, AceEvent-3.0
+---@field editModeRegistered boolean? true while the Edit Mode element is registered; nil once dropped
+local HM = KitnEssentials:NewModule("HuntersMark", "AceEvent-3.0")
 HM.classRestriction = "HUNTER"
 
 local CreateFrame = CreateFrame
@@ -30,6 +31,8 @@ local type = type
 local _, playerClass = UnitClass("player")
 local isHunter = playerClass == "HUNTER"
 local SPELL_ID = 257284 -- Hunter's Mark
+local ATTACH_KEY = "huntersMark"
+local DETACHED_HEIGHT = 40
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -87,6 +90,15 @@ local function IsInRaid()
     return inInstance and instanceType == "raid"
 end
 
+-- Every show and hide of the warning goes through here, so an attached
+-- warning's place in the Combat Texts stack follows it.
+function HM:SetWarningShown(shown)
+    if not self.frame then return end
+    if shown then self.frame:Show() else self.frame:Hide() end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:AttachedFrameChanged(ATTACH_KEY) end
+end
+
 function HM:UpdateWarningDisplay()
     if not isHunter then return end
     if self.isPreview then return end
@@ -96,26 +108,26 @@ function HM:UpdateWarningDisplay()
     -- During full restriction: hide and stop tracking entirely
     if KE:IsFullyRestricted() then
         wipe(markedUnits)
-        self.frame:Hide()
+        self:SetWarningShown(false)
         return
     end
 
     -- No boss nameplates visible
     if not next(markedUnits) then
-        self.frame:Hide()
+        self:SetWarningShown(false)
         return
     end
 
     -- Check if any visible boss has mark
     for _, hasAura in next, markedUnits do
         if hasAura then
-            self.frame:Hide()
+            self:SetWarningShown(false)
             return
         end
     end
 
     -- Boss nameplate exists but missing mark
-    self.frame:Show()
+    self:SetWarningShown(true)
 end
 
 function HM:CheckUnitForMark(unit)
@@ -188,7 +200,7 @@ function HM:SetScanningActive(active)
         self.scannerFrame:UnregisterEvent("ENCOUNTER_END")
         self.scannerFrame:UnregisterEvent("UNIT_AURA")
         wipe(markedUnits)
-        if self.frame then self.frame:Hide() end
+        self:SetWarningShown(false)
     end
 end
 
@@ -199,7 +211,7 @@ function HM:CreateWarningFrame()
     if self.frame then return end
 
     local frame = CreateFrame("Frame", "KE_HuntersMarkWarning", UIParent)
-    frame:SetSize(200, 40)
+    frame:SetSize(200, DETACHED_HEIGHT)
 
     local text = frame:CreateFontString(nil, "OVERLAY")
     text:SetFont(KE.FONT, self.db.FontSize or 16, "")
@@ -218,6 +230,11 @@ function HM:CreateWarningFrame()
 
     frame:Hide()
     self.frame = frame
+    -- Attached, the login anchor pass must not put the warning back on its
+    -- own Player Frame position.
+    KE:RegisterAnchorRepair(frame, function()
+        return not self:IsAttached() and self.db.anchorFrameType == "PLAYERFRAME"
+    end, function() self:ApplySettings() end)
     self:ApplySettings()
 end
 
@@ -259,7 +276,7 @@ function HM:StartScanning()
         -- Combat/encounter events: wipe and hide
         if event == "ENCOUNTER_START" or event == "PLAYER_REGEN_DISABLED" then
             wipe(markedUnits)
-            if self.frame then self.frame:Hide() end
+            self:SetWarningShown(false)
             return
         end
 
@@ -313,16 +330,41 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+function HM:IsAttached()
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+end
+
+-- Attached, the warning is a Combat Texts row: that module's face and
+-- outline, the resolved size, and a row height that fits the text and icons.
+-- Only an active module takes a slot: the page applies settings to a kept
+-- frame while the module is off.
 function HM:ApplySettings()
     if not self.db or not self.frame then return end
+    local db = self.db
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    local attached = (self:IsEnabled() or self.isPreview) and cm ~= nil and self:IsAttached()
 
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    local face, outline, size = db.FontFace, db.FontOutline, db.FontSize
+    if attached and cm then
+        face, outline = cm.db.FontFace, cm.db.FontOutline
+        size = cm.ResolveAttachedSize(true, db.AttachOwnFontSize, db.FontSize, cm.db.FontSize)
+        self.frame:SetHeight(size + 2)
+        attached = cm:SetAttachedFrame(ATTACH_KEY, self.frame)
+    end
+    if not attached then
+        if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
+        self.frame:SetHeight(DETACHED_HEIGHT)
+        KE:ApplyFramePosition(self.frame, db.Position, db)
+    end
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled() or self.isPreview) end
+    if self:IsEnabled() or self.isPreview then self:RegWithEditMode() end
 
     -- Text settings
     local text = self.frame.text
     if text then
-        local r, g, b, a = KE:ResolveColor(self.db.Color, { 1, 0.82, 0, 1 })
-        KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+        local r, g, b, a = KE:ResolveColor(db.Color, { 1, 0.82, 0, 1 })
+        KE:ApplyFontToText(text, face, size, outline)
         text:SetTextColor(r, g, b, a)
     end
 
@@ -330,12 +372,12 @@ function HM:ApplySettings()
     local texture = C_Spell.GetSpellTexture(SPELL_ID)
 
     if self.frame.leftIcon then
-        self.frame.leftIcon:SetIconSize(self.db.FontSize)
+        self.frame.leftIcon:SetIconSize(size)
         self.frame.leftIcon.icon:SetTexture(texture)
     end
 
     if self.frame.rightIcon then
-        self.frame.rightIcon:SetIconSize(self.db.FontSize)
+        self.frame.rightIcon:SetIconSize(size)
         self.frame.rightIcon.icon:SetTexture(texture)
     end
 end
@@ -344,18 +386,27 @@ end
 -- Edit Mode
 ---------------------------------------------------------------------------------
 function HM:RegWithEditMode()
-    if KE.EditMode and not self.editModeRegistered then
-        KE.EditMode:RegisterElement({
-            key = "HuntersMark", displayName = "Hunter's Mark Warning", frame = self.frame,
-            module = self,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "ClassTools",
-            guiTab = "HuntersMark",
-        })
-        self.editModeRegistered = true
+    if not KE.EditMode then return end
+    -- Attached, the Combat Texts mover moves the warning; a second mover for
+    -- it would fight that one.
+    if self:IsAttached() then
+        if self.editModeRegistered then
+            KE.EditMode:UnregisterElement("HuntersMark")
+            self.editModeRegistered = nil
+        end
+        return
     end
+    if self.editModeRegistered then return end
+    KE.EditMode:RegisterElement({
+        key = "HuntersMark", displayName = "Hunter's Mark Warning", frame = self.frame,
+        module = self,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+        getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+        guiPath = "ClassTools",
+        guiTab = "HuntersMark",
+    })
+    self.editModeRegistered = true
 end
 
 ---------------------------------------------------------------------------------
@@ -368,14 +419,16 @@ function HM:ShowPreview()
     self:RegWithEditMode()
     self.isPreview = true
     self.frame:SetAlpha(1)
-    self.frame:Show()
     self:ApplySettings()
+    self:SetWarningShown(true)
 end
 
 function HM:HidePreview()
     self.isPreview = false
     if not self.frame then return end
-    self.frame:Hide()
+    self:SetWarningShown(false)
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled()) end
 
     if not self.db.Enabled then return end
 
@@ -412,8 +465,11 @@ function HM:OnDisable()
     if self.scannerFrame then
         self.scannerFrame:UnregisterAllEvents()
     end
-    if self.frame then
-        self.frame:Hide()
+    self:SetWarningShown(false)
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then
+        cm:SetAttachedFrame(ATTACH_KEY, nil)
+        cm:SyncAttachSubscription(self, false)
     end
     -- Keeps the element out of /kes edit while the module is off. Clearing the
     -- guard is what lets a later enable register again.
