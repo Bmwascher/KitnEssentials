@@ -717,7 +717,7 @@ describe("KickTracker meter list keys", function()
 end)
 
 describe("KickTracker meter list diff", function()
-    it("names a lone entry, or the one entry added with none removed, and nothing else", function()
+    it("names a lone entry, the one entry added with none removed, or the one entry that moved up", function()
         local KT = L.loadKickTrackerRules()
         local function list(...)
             local out = {}
@@ -732,14 +732,24 @@ describe("KickTracker meter list diff", function()
             { name = "two added entries name nothing", old = list("DK"), new = list("DK", "MAGE", "ROGUE"), want = nil },
             { name = "a list one longer with an old entry gone names nothing", old = list("DK", "MAGE"),
               new = list("DK", "ROGUE", "HUNTER"), want = nil },
-            { name = "an entry that moved up is not trusted", old = list("DK", "MAGE"),
-              new = list("MAGE", "DK"), want = nil },
+            { name = "the one entry that moved up is named as a climb", old = list("DK", "MAGE", "ROGUE"),
+              new = list("ROGUE", "DK", "MAGE"), want = "ROGUE", climbed = true },
+            { name = "two entries that moved up name nothing", old = list("DK", "MAGE", "ROGUE", "HUNTER"),
+              new = list("MAGE", "DK", "HUNTER", "ROGUE"), want = nil },
+            { name = "an entry replaced in a list of the same length names nothing", old = list("DK", "MAGE"),
+              new = list("ROGUE", "DK"), want = nil },
+            { name = "no entry moved names nothing", old = list("DK", "MAGE"), new = list("DK", "MAGE"), want = nil },
+            { name = "a climber sharing its class, spec and flag names nothing",
+              old = { { key = "DK:250", shared = true }, { key = "MAGE" }, { key = "DK:250#2", shared = true } },
+              new = { { key = "DK:250", shared = true }, { key = "DK:250#2", shared = true }, { key = "MAGE" } },
+              want = nil },
             { name = "an added entry sharing its class, spec and flag names nothing",
               old = list("DK:250"), new = shared, want = nil },
         }
         for _, row in ipairs(rows) do
-            local entry = KT.DiffMeterList(row.old, row.new)
+            local entry, climbed = KT.DiffMeterList(row.old, row.new)
             assert.equals(row.want, entry and entry.key, row.name)
+            assert.equals(row.climbed == true, climbed == true, row.name)
         end
     end)
 end)
@@ -775,12 +785,13 @@ describe("KickTracker meter entry to member", function()
 end)
 
 describe("KickTracker meter burst sessions", function()
-    it("marks a burst shared only when one session updates twice in it", function()
+    it("marks a burst shared only when the Current session updates twice in it", function()
         local KT = L.loadKickTrackerRules()
         local rows = {
-            { name = "Current and Overall once each", updates = { { id = 1 }, { id = 2 } }, want = false },
-            { name = "the same session twice", updates = { { id = 1 }, { id = 2 }, { id = 1 } }, want = true },
-            { name = "two unreadable IDs count as one session twice",
+            { name = "Current and Overall's ID 0 once each", updates = { { id = 1 }, { id = 0 } }, want = false },
+            { name = "two Current updates across a rollover repeat",
+              updates = { { id = 4 }, { id = 0 }, { id = 5 }, { id = 0 } }, want = true },
+            { name = "two unreadable IDs count as two Current updates",
               updates = { { secret = true }, { secret = true } }, want = true },
         }
         for _, row in ipairs(rows) do
@@ -822,6 +833,8 @@ describe("KickTracker hidden-kicker resolution", function()
         local rows = {
             { name = "one interrupt, one report naming a teammate: fold",
               hits = { { at = 10.1, owner = "ann" } }, want = "fold", guid = "ann" },
+            { name = "a report named only by a climb: fold, unsure",
+              hits = { { at = 10.1, owner = "ann", uncertain = true } }, want = "fold", guid = "ann", unsure = true },
             { name = "no report: record", hits = {}, want = "record" },
             { name = "an unnamed report: record", hits = { { at = 10.1 } }, want = "record" },
             { name = "two reports: record", hits = { { at = 9.6 }, { at = 10.1, owner = "ann" } }, want = "record" },
@@ -842,6 +855,8 @@ describe("KickTracker hidden-kicker resolution", function()
               hits = { { at = 10.5, last = 10.7, owner = "ann" } }, want = "record" },
             { name = "the player named while the own kick cools: own", meCooling = true,
               hits = { { at = 10.1, owner = "me" } }, want = "own" },
+            { name = "the player named only by a climb: record", meCooling = true,
+              hits = { { at = 10.1, owner = "me", uncertain = true } }, want = "record" },
             { name = "the player named while the own kick is ready: record",
               hits = { { at = 10.1, owner = "me" } }, want = "record" },
             { name = "a synced teammate whose messages can arrive: record", heard = true,
@@ -858,11 +873,12 @@ describe("KickTracker hidden-kicker resolution", function()
             local entry = { startTime = 10, state = row.state or "pending" }
             local entries = { entry }
             for _, other in ipairs(row.others or {}) do entries[#entries + 1] = other end
-            local outcome, guid, untilAt = KT.ResolveInterrupt(entry, entries, row.hits, members,
+            local outcome, guid, untilAt, unsure = KT.ResolveInterrupt(entry, entries, row.hits, members,
                 row.heard == true, 11.2, 1, 0.5)
             assert.equals(row.want, outcome, row.name)
             assert.equals(row.guid, guid, row.name)
             assert.equals(row.untilAt, untilAt, row.name)
+            assert.equals(row.unsure, unsure, row.name)
         end
     end)
 end)

@@ -535,25 +535,43 @@ function KT.KeyMeterEntries(list)
 end
 
 -- The list's order is readable in combat, its amounts are not. A one-entry
--- list names its entry. Otherwise a member's first kick adds exactly one entry
--- and removes none, and only that shape names the added entry. An entry that
--- moved up is not trusted (equal amounts can swap on any re-sort), nor one
--- whose class, spec icon and local flag another entry shares: those keys are
+-- list names its entry. A member's first kick adds exactly one entry and
+-- removes none, and that shape names the added entry. A repeat kick only
+-- reorders: with the same entries, the one entry that moved up is named and
+-- the second return is true, since equal amounts can also swap on a re-sort
+-- another kick caused. Two entries moving up name nothing, nor does an entry
+-- whose class, spec icon and local flag another shares: those keys are
 -- positions, not identities.
 function KT.DiffMeterList(old, list)
     if #list == 1 then return list[1] end
-    if not old or #list ~= #old + 1 then return nil end
-    for i = 1, #old do
-        if not hasKey(list, old[i].key) then return nil end
+    if not old then return nil end
+    if #list == #old + 1 then
+        for i = 1, #old do
+            if not hasKey(list, old[i].key) then return nil end
+        end
+        for i = 1, #list do
+            local entry = list[i]
+            if not hasKey(old, entry.key) then
+                if entry.shared then return nil end
+                return entry
+            end
+        end
+        return nil
     end
+    if #list ~= #old then return nil end
+    local oldIndex = {}
+    for i = 1, #old do oldIndex[old[i].key] = i end
+    local climber
     for i = 1, #list do
-        local entry = list[i]
-        if not hasKey(old, entry.key) then
-            if entry.shared then return nil end
-            return entry
+        local was = oldIndex[list[i].key]
+        if not was then return nil end
+        if i < was then
+            if climber then return nil end
+            climber = list[i]
         end
     end
-    return nil
+    if not climber or climber.shared then return nil end
+    return climber, true
 end
 
 -- How many roster members could be this meter entry, and the last of them.
@@ -581,14 +599,15 @@ function KT.MatchMeterEntry(entry, members)
     return count, found
 end
 
--- One kick updates each meter session once, so a session updated twice in
--- one burst means more than one kick, and one read cannot tell which added
--- the new entry. seen holds the burst's sessions so far and takes this one;
--- every unreadable ID counts as the same session.
+-- One kick updates the Current session once, so a second Current update in
+-- one burst means more than one kick, even when a rollover gives it a new ID,
+-- and one read cannot tell which added the new entry. seen holds the burst's
+-- state. The Overall session (ID 0) updates beside every Current update, so
+-- it never counts; an unreadable ID may be either, so it counts.
 function KT.SessionRepeats(seen, sessionID, idSecret)
-    local key = idSecret and "?" or tostring(sessionID)
-    local repeated = seen[key] == true
-    seen[key] = true
+    if not idSecret and sessionID == 0 then return false end
+    local repeated = seen.current == true
+    seen.current = true
     return repeated
 end
 
@@ -647,9 +666,10 @@ local function othersBetween(entries, entry, from, to)
     return false
 end
 
--- A hidden kicker's interrupt once its window has closed: "own", "fold" with
--- the teammate's guid, or "record"; nil when something already took it; or
--- "wait", nil and the time its report's window closes. A report is one read
+-- A hidden kicker's interrupt once its window has closed: "own"; "fold" with
+-- the teammate's guid, and true as a fourth return when only a climb named
+-- them; "record"; nil when something already took it; or "wait", nil and the
+-- time its report's window closes. A report is one read
 -- of a burst of meter updates, from its first update (at) to its last (last):
 -- the read may hold any of them. It folds only when it is the one interrupt
 -- within the window of itself and of its report's whole span, and that report
@@ -678,11 +698,14 @@ function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, 
     local member = members[hit.owner]
     if not member then return "record" end
     if member.unit == "player" then
+        -- The player's own kick never reaches a climb (its entry is always
+        -- near), so a climb naming the player is another kicker's re-sort.
+        if hit.uncertain then return "record" end
         local start, duration = member.kickStart, member.kickDuration
         if member.interruptData and start and duration and now - start < duration then return "own" end
         return "record"
     end
     if not KT.RowTakesKick(member, messagesHeard) then return "record" end
-    return "fold", hit.owner
+    return "fold", hit.owner, nil, hit.uncertain
 end
 
