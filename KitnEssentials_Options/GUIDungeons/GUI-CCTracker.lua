@@ -33,7 +33,6 @@ local GROW_OPTIONS = {
 local SEEDS_PER_ROW = 3
 local SEED_CELL_H = 24
 local SEED_CELL_SPACING = 2
-local ADDED_PER_ROW = 3
 
 local function SpellName(id)
     local ok, name = pcall(C_Spell.GetSpellName, id)
@@ -155,13 +154,10 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         seedManager:UpdateAll(true)
         card2:AddSeparator()
 
-        local addRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-        local idBox = GUIFrame:CreateEditBox(addRow, "Add Spell ID (the debuff's ID)", { value = "" })
-        addRow:AddWidget(idBox, 0.5)
-        addRow:AddWidget(GUIFrame:CreateButton(addRow, "Add", {
-            height = 24,
-            callback = function()
-                local id, reason = Rules.CanAdd(idBox:GetValue(), seeds, db.CustomIDs, SpellName)
+        local addRow = GUIFrame:CreateSpellAddRow(card2.content, {
+            idLabel = "Debuff Spell ID",
+            onAdd = function(text)
+                local id, reason = Rules.CanAdd(text, seeds, db.CustomIDs, SpellName)
                 if not id then
                     KE:Print(reason)
                     return
@@ -170,7 +166,17 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
                 ApplySettings()
                 GUIFrame:RefreshContent()
             end,
-        }), 0.25)
+            onRemove = function(text)
+                local id, reason = Rules.CanRemove(text, seeds, db.CustomIDs)
+                if not id then
+                    KE:Print(reason)
+                    return
+                end
+                db.CustomIDs[id] = nil
+                ApplySettings()
+                GUIFrame:RefreshContent()
+            end,
+        })
         card2:AddRow(addRow, Theme.rowHeight)
 
         local added = {}
@@ -178,29 +184,13 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
             if on == true and type(id) == "number" then added[#added + 1] = id end
         end
         table_sort(added)
-        if #added == 0 then
-            card2:AddNote("Added: none.")
-        else
-            card2:AddNote("Click an added spell to remove it.")
-            local pending
-            for index, id in ipairs(added) do
-                if not pending then pending = GUIFrame:CreateRow(card2.content, Theme.rowHeight) end
-                local name = SpellName(id)
-                local text = name and (name .. " (" .. id .. ")") or ("Spell " .. id)
-                pending:AddWidget(GUIFrame:CreateButton(pending, text, {
-                    height = 24,
-                    callback = function()
-                        db.CustomIDs[id] = nil
-                        ApplySettings()
-                        GUIFrame:RefreshContent()
-                    end,
-                }), 1 / ADDED_PER_ROW)
-                if index % ADDED_PER_ROW == 0 or index == #added then
-                    card2:AddRow(pending, Theme.rowHeight)
-                    pending = nil
-                end
-            end
+        local entries = {}
+        for i, id in ipairs(added) do
+            local name = SpellName(id)
+            local texture = C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)
+            entries[i] = GUIFrame.IconText(texture) .. (name and (name .. " (" .. id .. ")") or ("Spell " .. id))
         end
+        card2:AddNote(#entries == 0 and "Added: none." or ("Added: " .. table.concat(entries, ", ") .. "."))
     end
 
     local classRow, shownClass = GUIFrame:CreateClassPickerRow(card2.content, {

@@ -177,3 +177,18 @@ function Rules.CanAdd(text, seeds, customIDs, getName)
     if type(customIDs) == "table" and customIDs[id] then return nil, MSG_ADDED end
     return id
 end
+
+-- Only an added id can be removed; a shipped one is unticked instead.
+function Rules.CanRemove(text, seeds, customIDs)
+    local id = tonumber(text)
+    if not IsWholePositive(id) then return nil, MSG_NOT_ID end
+    for _, seed in ipairs(seeds) do
+        for _, seedID in ipairs(seed.ids) do
+            if seedID == id then return nil, "That is a shipped crowd control: untick it instead." end
+        end
+    end
+    if not (type(customIDs) == "table" and customIDs[id]) then
+        return nil, "That id is not one of your added spells."
+    end
+    return id
+end
