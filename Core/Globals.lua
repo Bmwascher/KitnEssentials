@@ -88,7 +88,7 @@ if KE.LSM then
     -- truth — keep the table in sync if files are added/renamed/removed.
     local SOUND_DIR = KE.PATH .. [[Sounds\]]
     local sounds = {
-        "Add", "Adds", "AoE", "Aoe And Dance",
+        "Add", "Adds", "Aggro", "AoE", "Aoe And Dance",
         "Boss Buffed", "CC", "Clear", "Dance", "Defensive",
         "Dispel", "Dmg Amp", "Dodge", "Drop", "Feet",
         "Fixate Incoming", "Frontal", "Gun1", "Hide",

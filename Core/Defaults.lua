@@ -212,7 +212,7 @@ local Defaults = {
             AggroInstanceOnly = true,
             AggroPulse = false,
             AggroSoundEnabled = false,
-            AggroSoundFile = "None",
+            AggroSoundFile = "Aggro",
             AggroSoundChannel = "Master",
             Backdrop = DefaultBackdrop(),
         },
