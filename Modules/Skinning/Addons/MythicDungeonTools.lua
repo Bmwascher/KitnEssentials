@@ -176,6 +176,16 @@ local function SkinToolbarToggle(main)
     tog:HookScript("OnClick", function() RestyleToggle(tog, toolbar) end)
 end
 
+-- MDT creates and updates the dungeon buttons in an update that ends with this
+-- list call, and on the first open that update can finish after the window
+-- shows.
+local function HookDungeonButtons(main)
+    local group = main.sublevelSelectionGroup
+    local dropdown = group and group.sublevelDropdown
+    if not (dropdown and dropdown.SetList) then return end
+    hooksecurefunc(dropdown, "SetList", function() ReskinDungeonButtons(main) end)
+end
+
 local function SkinOnce(main)
     if main.closeButton then S.CloseButton(main.closeButton) end
     S.MaxMinFrame(main.maximizeButton)
@@ -185,10 +195,12 @@ local function SkinOnce(main)
     ReskinTooltip(_G.MDTPullTooltip)
     SkinToolbarToggle(main)
     ReskinProgressBar(main.sidePanel and main.sidePanel.ProgressBar)
+    HookDungeonButtons(main)
 end
 
--- MDT shows the window only once it is fully built, so every part exists by
--- the first OnShow. Dungeon buttons can be added later, hence the per-show walk.
+-- MDT shows the window only once it is fully built, so every other part exists
+-- by the first OnShow. The per-show walk covers dungeon buttons built before
+-- the list hook went in.
 local function Pass(main)
     local d = S.data(main)
     if not d.keSkinned then

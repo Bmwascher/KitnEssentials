@@ -3314,10 +3314,10 @@ function L.loadReadyCheckConsumables(overrides)
     return RCC, KE, seams
 end
 
--- Modules/Skinning/Addons/RCLootCouncil.lua. The skin-list guard is a pure
--- file-local that Skin reaches only through ensureSkinEntry, so it is read off
--- that function's upvalues, the way loadCommunitiesSkin reaches its local.
--- Nothing in the skin runs. Returns ensurePlan.
+-- Modules/Skinning/Addons/RCLootCouncil.lua. The pure rules are file-locals
+-- that Skin reaches only through other functions, so each is read off its
+-- caller's upvalues, the way loadCommunitiesSkin reaches its local. Nothing in
+-- the skin runs. Returns ensurePlan, PageDirection, headerSize.
 function L.loadRCLootCouncilSkin(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local captured
@@ -3325,7 +3325,12 @@ function L.loadRCLootCouncilSkin(overrides)
         Register = function(_, _, fn) captured = fn end,
     } }
     helpers.loadModule("Modules/Skinning/Addons/RCLootCouncil.lua", KE)
-    return findUpvalue(findUpvalue(captured, "ensureSkinEntry"), "ensurePlan")
+    local pageHook = findUpvalue(findUpvalue(findUpvalue(captured, "VotingFrame_GetFrame"),
+        "SkinPageButton"), "PageButton_SetNormalTexture")
+    local fitHeaders = findUpvalue(findUpvalue(captured, "SkinScrollTable"), "FitHeaders")
+    return findUpvalue(findUpvalue(captured, "ensureSkinEntry"), "ensurePlan"),
+        findUpvalue(pageHook, "PageDirection"),
+        fitHeaders and findUpvalue(fitHeaders, "headerSize")
 end
 
 -- Core/PlateSlots.lua. CreateFrame comes from _wow_mock, so the event frame the

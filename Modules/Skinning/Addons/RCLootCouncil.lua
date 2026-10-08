@@ -6,15 +6,11 @@ local pairs = pairs
 local pcall = pcall
 local type = type
 local hooksecurefunc = hooksecurefunc
+local math_max = math.max
+local math_floor = math.floor
 
-local WHITE = "Interface\\Buttons\\WHITE8x8"
 local SKIN_KEY = "kitnui"
 local MSA_BACKDROPS = { "Backdrop", "MenuBackdrop" }
-
--- RC recolors these borders itself (icon state, own-item rows), so they stay
--- on RC's own frame: a backdrop drawn below it would never get the color.
-local PLATE_EDGE = { bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 }
-local EDGE_ONLY = { edgeFile = WHITE, edgeSize = 1 }
 
 local function ClearOwnBackdrop(frame)
     if frame and frame.SetBackdrop then frame:SetBackdrop(nil) end
@@ -33,6 +29,10 @@ local function SkinFrame(frame)
         ClearOwnBackdrop(title)
         S.Template(title, "Default")
         if title.Update then hooksecurefunc(title, "Update", ClearOwnBackdrop) end
+        -- RC centers the title on the window's top edge, so half of its opaque
+        -- plate would cover the window's first row.
+        title:ClearAllPoints()
+        title:SetPoint("BOTTOM", frame, "TOP", 0, 0)
     end
 end
 
@@ -40,16 +40,11 @@ local function SkinButton(button)
     S.Button(button)
 end
 
-local function InsetByEdge(region, frame)
-    local px = PLATE_EDGE.edgeSize
-    region:ClearAllPoints()
-    region:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
-    region:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
-end
-
+-- RC recolors this border itself (item state), so it stays on RC's own frame:
+-- a backdrop drawn below it would never get the color.
 local function SkinIconBordered(button)
     if not button.SetBackdrop then return end
-    button:SetBackdrop(PLATE_EDGE)
+    S.OwnBackdrop(button)
     local bg, border = S.palette.control, S.palette.border
     button:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
     button:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
@@ -58,12 +53,12 @@ local function SkinIconBordered(button)
     local normal = button.GetNormalTexture and button:GetNormalTexture()
     if normal then
         S.Icon(normal)
-        InsetByEdge(normal, button)
+        S.InsetToEdge(normal, button)
     end
     local highlight = button.GetHighlightTexture and button:GetHighlightTexture()
     if highlight then
         highlight:SetColorTexture(1, 1, 1, 0.3)
-        InsetByEdge(highlight, button)
+        S.InsetToEdge(highlight, button)
     end
 end
 
@@ -86,7 +81,65 @@ local function UI_New(ui, elementType)
     SkinElement(skin, frames[#frames])
 end
 
-local function SkinScrollTable(lib, _, _, _, _, parent)
+local HEADER_FLOOR = 8
+-- The table library anchors each header string to its whole column and to
+-- this much inside each edge; the string's box comes out this much narrower
+-- than the column, not twice this much.
+local HEADER_PADDING = 2.5
+
+local function headerSize(current, fits)
+    if current <= HEADER_FLOOR or fits(current) then return current end
+    local size = math_floor(current)
+    if size == current then size = size - 1 end
+    while size > HEADER_FLOOR do
+        if fits(size) then return size end
+        size = size - 1
+    end
+    return HEADER_FLOOR
+end
+
+-- A header wider than its column is cut, and the library re-anchors every
+-- header on each column change, so headers are fitted by size instead: one
+-- size for the whole table. The library keeps these strings for the columns'
+-- life, so the size holds.
+local function FitHeaders(name, cols)
+    if type(cols) ~= "table" then return end
+    local strings, widths = {}, {}
+    for i, col in ipairs(cols) do
+        local header = _G[name .. "HeadCol" .. i]
+        local fs = header and header.GetFontString and header:GetFontString()
+        if fs and type(col) == "table" and type(col.width) == "number" then
+            strings[#strings + 1] = fs
+            widths[#widths + 1] = col.width - HEADER_PADDING
+        end
+    end
+    local first = strings[1]
+    if not first then return end
+    local _, current = first:GetFont()
+    if not current then return end
+    local function setSize(size)
+        for _, fs in ipairs(strings) do
+            local face, _, flags = fs:GetFont()
+            if face then fs:SetFont(face, size, flags or "") end
+        end
+    end
+    local function fits(size)
+        if size ~= current then setSize(size) end
+        for i, fs in ipairs(strings) do
+            -- The string is bounded by its column, so its plain string width
+            -- never exceeds the box; the unbounded width is the whole text's.
+            local w = fs:GetUnboundedStringWidth()
+            if type(w) == "number" and not issecretvalue(w) and w > widths[i] then
+                return false
+            end
+        end
+        return true
+    end
+    local size = headerSize(current, fits)
+    if size ~= current then setSize(size) end
+end
+
+local function SkinScrollTable(lib, cols, _, _, _, parent)
     local parentName = parent and parent.GetName and parent:GetName()
     if not (parentName and parentName:find("^RC")) then return end
     local frame = _G["ScrollTable" .. ((lib.framecount or 1) - 1)]
@@ -99,6 +152,17 @@ local function SkinScrollTable(lib, _, _, _, _, parent)
     local trough, troughBorder = _G[name .. "ScrollTrough"], _G[name .. "ScrollTroughBorder"]
     if trough then trough:Hide() end
     if troughBorder then troughBorder:Hide() end
+    FitHeaders(name, cols)
+end
+
+-- The library parks released controls on a nil parent. Across that round trip
+-- a plate can come back far above its control and cover the label, so every
+-- plate goes back under its owner on each spawn.
+local function RelevelPlate(owner)
+    local bd = S.GetBackdrop(owner)
+    if not bd then return end
+    local target = math_max(owner:GetFrameLevel() - 1, 0)
+    if bd:GetFrameLevel() ~= target then bd:SetFrameLevel(target) end
 end
 
 -- Every dialog of this library instance is styled: the library pools dialogs
@@ -114,14 +178,24 @@ local function SkinDialogs(lib)
             hooksecurefunc(dialog, "Reset", ClearOwnBackdrop)
             S.CloseButton(dialog.close_button)
         end
+        RelevelPlate(dialog)
         if dialog.buttons then
-            for _, button in ipairs(dialog.buttons) do S.Button(button) end
+            for _, button in ipairs(dialog.buttons) do
+                S.Button(button)
+                RelevelPlate(button)
+            end
         end
         if dialog.editboxes then
-            for _, editBox in ipairs(dialog.editboxes) do S.EditBox(editBox) end
+            for _, editBox in ipairs(dialog.editboxes) do
+                S.EditBox(editBox)
+                RelevelPlate(editBox)
+            end
         end
         if dialog.checkboxes then
-            for _, checkBox in ipairs(dialog.checkboxes) do S.CheckBox(checkBox) end
+            for _, checkBox in ipairs(dialog.checkboxes) do
+                S.CheckBox(checkBox)
+                RelevelPlate(checkBox)
+            end
         end
     end
 end
@@ -155,23 +229,31 @@ local function HookNewLevels()
     msaLevels = maxLevels
 end
 
+-- RC's page paths name the arrow's direction. Anything else, the clear value
+-- included, says nothing about it.
 local function PageDirection(texture)
-    if type(texture) == "string" and texture:find("PrevPage", 1, true) then return "left" end
-    return "right"
+    if type(texture) ~= "string" then return nil end
+    if texture:find("PrevPage", 1, true) then return "left" end
+    if texture:find("NextPage", 1, true) then return "right" end
+    return nil
 end
 
 -- RC flips the arrow by swapping its page textures; the skin's arrow follows.
 local function PageButton_SetNormalTexture(button, texture)
     local arrow = S.data(button).arrow
-    if arrow then S.ArrowTexture(arrow, PageDirection(texture)) end
+    local direction = PageDirection(texture)
+    if arrow and direction then S.ArrowTexture(arrow, direction) end
 end
 
 -- No plate: the arrow helper re-kills the textures of every child frame on
--- hover, show and each state change, a backdrop child included.
+-- hover, show and each state change, a backdrop child included. The engine
+-- shows the normal texture itself after a click, past any hide, so its art is
+-- cleared instead.
 local function SkinPageButton(button, direction)
     if not button or S.data(button).rcSkinned then return end
     S.data(button).rcSkinned = true
     S.ArrowButton(button, direction)
+    S.ClearButtonArt(button)
     hooksecurefunc(button, "SetNormalTexture", PageButton_SetNormalTexture)
 end
 
@@ -211,13 +293,20 @@ local function Sync_Spawn()
 end
 
 -- RC gives only the player's own items a row border; the skin swaps it for a
--- thin accent one. backdropInfo is read directly because GetBackdrop copies a
--- table on every call, and this runs on every row update.
+-- thin one in the skin's border color. backdropInfo is read directly because
+-- GetBackdrop copies a table on every call, and this runs on every row update.
 local function LootEntry_Update(entry)
     local frame = entry and entry.frame
     if not (frame and frame.backdropInfo) then return end
-    frame:SetBackdrop(EDGE_ONLY)
-    S.PaintBrand(frame, "SetBackdropBorderColor")
+    S.OwnBackdrop(frame, true)
+    local border = S.palette.border
+    frame:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
+end
+
+-- RC re-points and re-sizes the bar on every relayout, with insets sized for
+-- its thick tooltip border, so the fit is re-applied after each one.
+local function LootEntry_FitBar(entry)
+    S.InsetToEdge(entry.timeoutBar, entry.frame)
 end
 
 local function SkinLootEntry(entry)
@@ -227,6 +316,11 @@ local function SkinLootEntry(entry)
     if entry.timeoutBar then
         entry.timeoutBar:SetStatusBarTexture(KE:GetStatusbarPath("KitnUI"))
     end
+    -- Rows of other players' items wear no KE edge, so the row is tracked for
+    -- its bar alone.
+    S.TrackEdgeClients(entry.frame)
+    LootEntry_FitBar(entry)
+    if entry.UpdatePosition then hooksecurefunc(entry, "UpdatePosition", LootEntry_FitBar) end
     if entry.noteEditbox then
         ClearOwnBackdrop(entry.noteEditbox)
         S.EditBox(entry.noteEditbox)
@@ -308,9 +402,6 @@ end
 local function Skin()
     local addon = _G.RCLootCouncil
     if not (addon and addon.UI and addon.GetModule) then return end
-
-    local px = KE:GetPixelSize()
-    if px then PLATE_EDGE.edgeSize, EDGE_ONLY.edgeSize = px, px end
 
     hooksecurefunc(addon.UI, "New", UI_New)
     hooksecurefunc(addon.UI, "NewNamed", UI_New)
