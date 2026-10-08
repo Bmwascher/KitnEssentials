@@ -1,5 +1,41 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.19
+
+### Havoc Tracker
+
+- The Havoc warning lets clicks through and shows no tooltip, and it stays
+  dark on a friendly target
+
+### Character Panel
+
+- A crafted piece's "CR" is colored by its crest tier: orange for Myth,
+  purple for Hero, white when no crest is known
+
+### Skinning
+
+- With the Character skin off, the equipment flyout keeps Blizzard's look
+- The Great Vault's two "Or" plates show their reward icon at the skinned
+  size
+
+### Chat
+
+- Chat History listens only while the chat skin is on. Turning the skin on
+  later in a session still lets history replay once
+
+### Nicknames
+
+- Where you have both a Northern Sky Raid Tools nickname and an older
+  KitnEssentials nickname for someone, the Northern Sky one shows (Damage
+  Meter, Death Notifications, Healer Mana)
+
+### Settings Window
+
+- On the Movement Buffs and Aura Externals pages, changing the glow type
+  moves the cards below the Glow card with it
+
+---
+
 ## v4.9.18
 
 ### Interrupt Tracker
