@@ -846,7 +846,9 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
         card13:AddSeparator()
 
-        local row13b = GUIFrame:CreateRow(card13.content, Theme.rowHeightLast)
+        -- The 28 px buttons sit 6 px down a 37 px row, so the separator line above
+        -- and the card's border below are both 10 px away.
+        local row13b = GUIFrame:CreateRow(card13.content, 37)
         local clearHistory = GUIFrame:CreateButton(row13b, "Clear History", {
             height = 28,
             tooltip = "Deletes this character's saved chat and the lines you have typed (Up / Down recall).",
@@ -861,7 +863,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
                     end, nil, "Clear", "Cancel")
             end,
         })
-        row13b:AddWidget(clearHistory, 0.5)
+        row13b:AddWidget(clearHistory, 0.5, nil, 0, -6)
         manager:Register(clearHistory, "history")
 
         local clearOthers = GUIFrame:CreateButton(row13b, "Clear Other Characters", {
@@ -881,9 +883,9 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
                     end, nil, "Clear", "Cancel")
             end,
         })
-        row13b:AddWidget(clearOthers, 0.5)
+        row13b:AddWidget(clearOthers, 0.5, nil, 0, -6)
         manager:Register(clearOthers, "history")
-        card13:AddRow(row13b, Theme.rowHeightLast, 0)
+        card13:AddRow(row13b, 37, 0)
 
         yOffset = card13:GetNextOffset()
 
