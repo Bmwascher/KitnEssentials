@@ -29,6 +29,9 @@ local UIParent = UIParent
 
 local MISSING_TEXT_DEFAULT = "MISSING"
 local WRONG_TEXT_DEFAULT = "WRONG"
+local ATTACH_KEY = "stanceText"
+-- Gap between the icon's top and the caption above it.
+local CAPTION_GAP = 4
 
 -- Per-spec expected form, keyed by specialization ID.
 --
@@ -238,7 +241,7 @@ function ST:CreateFrame()
     f.icon = icon
 
     f.text = f:CreateFontString(nil, "OVERLAY")
-    f.text:SetPoint("BOTTOM", f, "TOP", 0, 4)
+    f.text:SetPoint("BOTTOM", f, "TOP", 0, CAPTION_GAP)
     f.text:SetWordWrap(false)
     -- A FontString with no font THROWS on SetText, so the font is applied at
     -- creation and never conditionally.
@@ -246,14 +249,19 @@ function ST:CreateFrame()
 
     f:Hide()
     self.frame = f
-    KE:ApplyFramePosition(f, db.Position, db)
+    -- Attached, the login anchor pass must not put the icon back on its own
+    -- Player Frame position, which is this module's default anchor.
+    KE:RegisterAnchorRepair(f, function()
+        return not self:IsAttached() and self.db.anchorFrameType == "PLAYERFRAME"
+    end, function() self:ApplyPosition() end)
+    self:ApplyPosition()
 end
 
 -- The whole feature: is the current spec in the form it should be in.
 function ST:Update()
     local db = self.db
     if not db or not db.Enabled then
-        if self.frame then self.frame:Hide() end
+        self:SetIconShown(false)
         return
     end
     if self.previewing then return end
@@ -264,7 +272,7 @@ function ST:Update()
     local shown = self:EvaluateSpec(db, specID, entry, evalContext)
 
     if not shown then
-        if self.frame then self.frame:Hide() end
+        self:SetIconShown(false)
         return
     end
 
@@ -282,7 +290,7 @@ function ST:Update()
     f.icon:SetTexture(C_Spell.GetSpellTexture(shown))
     f:SetAlpha(db.Alpha or 1)
     self:ApplyText(db, wrongForm)
-    f:Show()
+    self:SetIconShown(true)
 end
 
 -- The "MISSING" caption above the icon.
@@ -304,6 +312,7 @@ function ST:ApplyText(db, wrongForm)
         text, fallback = db.Text, MISSING_TEXT_DEFAULT
     end
     KE:ApplyFontToText(f.text, db.FontFace, db.FontSize, db.FontOutline)
+    self.captionSize = db.FontSize
     f.text:SetTextColor(unpack(db.TextColor))
     f.text:SetText(text and text ~= "" and text or fallback)
     f.text:Show()
@@ -314,9 +323,79 @@ function ST:ApplySettings()
     self:UpdateDB()
     if self.frame then
         self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
-        KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+        self:ApplyPosition()
     end
     self:Update()
+end
+
+function ST:IsAttached()
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+end
+
+-- Attached, the caption above the icon gets its own room in the stack, so it
+-- never overlaps the row above.
+function ST:ApplyPosition()
+    local f, db = self.frame, self.db
+    if not f then return end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    -- Live, Update draws the caption from the settings in the same pass. In the
+    -- preview Update returns early, so the caption stays as last drawn and the
+    -- room follows that drawing instead.
+    local captionShown, captionSize = db.ShowText, db.FontSize
+    if self.previewing then
+        captionShown = f.text:IsShown()
+        captionSize = self.captionSize or db.FontSize
+    end
+    local inset = captionShown and ((captionSize or 14) + CAPTION_GAP) or 0
+    -- Only an active module takes a slot: closing the preview of a module that
+    -- was just switched off lands here too.
+    local attached = (self:IsEnabled() or self.previewing) and cm ~= nil and self:IsAttached()
+        and cm:SetAttachedFrame(ATTACH_KEY, f, inset)
+    if not attached then
+        if cm then cm:SetAttachedFrame(ATTACH_KEY, nil) end
+        KE:ApplyFramePosition(f, db.Position, db)
+    end
+    if cm then cm:SyncAttachSubscription(self, self:IsEnabled() or self.previewing) end
+    if self:IsEnabled() then self:RegWithEditMode() end
+end
+
+-- Every show and hide of the icon goes through here, so an attached icon's
+-- place in the Combat Texts stack follows it.
+function ST:SetIconShown(shown)
+    if not self.frame then return end
+    if shown then self.frame:Show() else self.frame:Hide() end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then cm:AttachedFrameChanged(ATTACH_KEY) end
+end
+
+function ST:RegWithEditMode()
+    if not self.frame or not KE.EditMode then return end
+    -- Attached, the Combat Texts mover moves the icon; a second mover for it
+    -- would fight that one.
+    if self:IsAttached() then
+        if self.editModeRegistered then
+            KE.EditMode:UnregisterElement("StanceText")
+            self.editModeRegistered = false
+        end
+        return
+    end
+    if self.editModeRegistered then return end
+    KE.EditMode:RegisterElement({
+        key = "StanceText",
+        module = self,
+        displayName = "Missing Forms",
+        frame = self.frame,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos)
+            self.db.Position = pos
+            KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+        end,
+        getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+        guiPath = "ClassTools",
+        guiTab = "StanceText",
+    })
+    self.editModeRegistered = true
 end
 
 function ST:OnEnable()
@@ -337,23 +416,10 @@ function ST:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "Update")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "Update")
     self:RegisterEvent("PLAYER_ALIVE", "Update")
+    -- A retained frame skips CreateFrame's placement, and disable dropped the
+    -- slot and the subscription. ApplyPosition also registers the mover.
+    self:ApplyPosition()
     self:Update()
-
-    if not self.frame or not KE.EditMode then return end
-    KE.EditMode:RegisterElement({
-        key = "StanceText",
-        module = self,
-        displayName = "Missing Forms",
-        frame = self.frame,
-        getPosition = function() return self.db.Position end,
-        setPosition = function(pos)
-            self.db.Position = pos
-            KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
-        end,
-        getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-        guiPath = "ClassTools",
-        guiTab = "StanceText",
-    })
 end
 
 function ST:OnDisable()
@@ -364,7 +430,12 @@ function ST:OnDisable()
     self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:UnregisterEvent("PLAYER_ALIVE")
-    if self.frame then self.frame:Hide() end
+    self:SetIconShown(false)
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm then
+        cm:SetAttachedFrame(ATTACH_KEY, nil)
+        cm:SyncAttachSubscription(self, false)
+    end
 end
 
 -- Preview (options page) -----------------------------------------------
@@ -378,10 +449,14 @@ function ST:ShowPreview()
     self.frame:SetSize(self.db.IconSize, self.db.IconSize)
     self.frame.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
     self.frame:SetAlpha(self.db.Alpha or 1)
-    self.frame:Show()
+    self:ApplyPosition()
+    self:SetIconShown(true)
 end
 
 function ST:HidePreview()
     self.previewing = false
+    -- Back to the settings-driven inset; this also drops a preview-only
+    -- subscription.
+    self:ApplyPosition()
     self:Update()
 end
