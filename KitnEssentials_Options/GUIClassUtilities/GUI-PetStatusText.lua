@@ -64,7 +64,8 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
         "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
         "its own text and color below.")
 
-    local attachRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local attachRow = GUIFrame:CreateRow(card1.content,
+        db.AttachToCombatTexts and Theme.rowHeight or Theme.rowHeightLast)
     local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
         value = db.AttachToCombatTexts == true,
         tooltip = "Show the pet text as a line of the Combat Texts messages and move with them, "
@@ -77,7 +78,17 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
     })
     attachRow:AddWidget(attachCheck, 1)
     manager:Register(attachCheck, "all")
-    card1:AddRow(attachRow, Theme.rowHeightLast, 0)
+    if db.AttachToCombatTexts then
+        card1:AddRow(attachRow, Theme.rowHeight)
+        for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
+            sizeKey = "FontSize", default = 26, range = { 8, 72 },
+            onChange = ApplySettings, isLast = true,
+        })) do
+            manager:Register(widget, "all")
+        end
+    else
+        card1:AddRow(attachRow, Theme.rowHeightLast, 0)
+    end
     yOffset = card1:GetNextOffset()
 
     -- Combat Texts owns the anchor and the font while attached.

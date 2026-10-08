@@ -144,6 +144,12 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     })
     attachRow:AddWidget(attachCheck, 1)
     card2:AddRow(attachRow, 40)
+    if db.AttachToCombatTexts then
+        GUIFrame:CreateAttachSizeRow(card2, db, {
+            sizeKey = "FontSize", default = 16, range = { 8, 48 },
+            onChange = ApplySettings,
+        })
+    end
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
