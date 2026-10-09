@@ -13,12 +13,14 @@ local GUIFrame = KE.GUIFrame
 local ipairs = ipairs
 local UnitClass = UnitClass
 
--- Hunter, Mage and Warlock have one tool each, so their tab is that tool's page.
+-- Hunter, Mage, Shaman and Warlock have one tool each, so their tab is that
+-- tool's page.
 local CLASS_TAB = {
     EVOKER  = "ClassToolsEvoker",
     HUNTER  = "HuntersMark",
     MAGE    = "AlterTime",
     PRIEST  = "ClassToolsPriest",
+    SHAMAN  = "ShamanProcCooldowns",
     WARLOCK = "HavocTracker",
 }
 
@@ -58,6 +60,7 @@ GUIFrame:RegisterTabbedContent("ClassTools", {
     { id = "HuntersMark",          label = "Hunter" },
     { id = "AlterTime",            label = "Mage" },
     { id = "ClassToolsPriest",     label = "Priest" },
+    { id = "ShamanProcCooldowns",  label = "Shaman" },
     { id = "HavocTracker",         label = "Warlock" },
 }, {
     defaultTab = function()
