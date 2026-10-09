@@ -814,8 +814,7 @@ end, {
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
             card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
         else
-            card:AddLabel("Skins Blizzard's windows to match the theme. Each window is skinned the " ..
-                "first time you open it, so there is no idle cost. The Frame Skins tab picks the " ..
+            card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
                 "windows and drops out of the tab row while this is off. Fonts and Elements have " ..
                 "their own switches and keep working with this off. The Skinned Windows size and " ..
                 "outline only show in skinned windows; its font face is also the one Blizzard Text " ..
