@@ -750,9 +750,11 @@ local function GroupSize()
 end
 
 -- In a raid, or with an unread group, the list is nil and the group rule
--- lets every enemy through.
+-- lets every enemy through. An unchanged list needs no scan.
 function DT:RefreshWatchers()
-    self.watchers = Rules.Watchers(Ask(IsInRaid), GroupSize())
+    local list = Rules.Watchers(Ask(IsInRaid), GroupSize())
+    if Rules.SameList(list or NONE, self.watchers or NONE) then return end
+    self.watchers = list
     if self.slots then self.slots:QueueScan() end
 end
 
@@ -780,9 +782,10 @@ end
 
 -- `list` comes from Rules.PlanApply, so a changed id or set of extra ids
 -- reaches Refilter only with the gate's yes. `class` and `specID` are the ones
--- the list was resolved for: for a row the gate kept on screen, the spec it
--- was shown under, so its rows, caps and colors stay its own.
-function DT:Apply(list, allowed, class, specID)
+-- the list was resolved for: for a row the gate kept on screen (`held`), the
+-- spec it was shown under, so its rows, caps and colors stay its own. A held
+-- row keeps its icons too, because the spellbook may already be the next spec's.
+function DT:Apply(list, allowed, class, specID, held)
     local db = self.db
     -- A changed list, or a cell about to be re-pointed for the same id, starts
     -- with every slot retaken; a look-only change keeps the sensors bound. The
@@ -809,7 +812,7 @@ function DT:Apply(list, allowed, class, specID)
             Refilter(cell, id)
         end
         cell.row, cell.cap = row, row and row.cap
-        cell.iconId = Rules.IconOf(row, id, IsKnown)
+        if not (held and cell.iconId) then cell.iconId = Rules.IconOf(row, id, IsKnown) end
         local own = Rules.ColorOf(db.Spells and db.Spells[Rules.SpellKey(specID, id)], row, colorsOn)
         cell.own = own and { KE:ResolveColor(own, DEFAULT_SOME) } or nil
         cell.frame:Show()
@@ -922,11 +925,12 @@ function DT:Reconcile()
     if not list then return end
     if #list == 0 then return self:Deactivate() end
     -- A row the gate kept on screen keeps the spec it was resolved for.
-    if list ~= wanted then class, specID = self.listClass, self.listSpec end
-    self:Activate(list, allowed, class, specID)
+    local held = list ~= wanted
+    if held then class, specID = self.listClass, self.listSpec end
+    self:Activate(list, allowed, class, specID, held)
 end
 
-function DT:Activate(list, allowed, class, specID)
+function DT:Activate(list, allowed, class, specID, held)
     self:CreateRoot()
     self:RegWithEditMode()
     self:EnsureCounting()
@@ -947,8 +951,10 @@ function DT:Activate(list, allowed, class, specID)
         self:RefreshWatchers()
     else
         self:UnregisterEvent("GROUP_ROSTER_UPDATE")
+        -- Turning the toggle on again then finds a new list and rescans.
+        self.watchers = nil
     end
-    self:Apply(list, allowed, class, specID)
+    self:Apply(list, allowed, class, specID, held)
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 

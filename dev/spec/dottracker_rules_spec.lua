@@ -88,6 +88,7 @@ describe("dot tracker rules", function()
                 { false, 0, { "player", "pet" } },
                 { false, 3, { "player", "pet", "party1", "party2" } },
                 { false, 5, { "player", "pet", "party1", "party2", "party3", "party4" } },
+                { false, 7, { "player", "pet", "party1", "party2", "party3", "party4" } },
                 { true, 20, nil },
                 { nil, 3, nil },
                 { false, nil, nil },
@@ -203,12 +204,15 @@ describe("dot tracker rules", function()
 
         it("saves a picked color, and none when a row without an override gets back the color it opened with", function()
             local shown = { 0.5, 0.65, 1 }
+            local step = 1 / 255
             -- picked r, g, b, a; row had an override when drawn; expected save
             local cases = {
                 { { 0.5, 0.65, 1, 1 }, false, nil },
                 { { 0.5, 0.65, 1, 1 }, true, { 0.5, 0.65, 1, 1 } },
                 { { 1, 0, 0, 1 }, false, { 1, 0, 0, 1 } },
                 { { 0.5, 0.65, 1, 0.5 }, false, { 0.5, 0.65, 1, 0.5 } },
+                { { 0.5 + step / 4, 0.65 - step / 4, 1, 1 - step / 4 }, false, nil },
+                { { 0.5, 0.65 + step * 2, 1, 1 }, false, { 0.5, 0.65 + step * 2, 1, 1 } },
             }
             for i, case in ipairs(cases) do
                 local c = case[1]

@@ -7,7 +7,7 @@
 ---@class KE
 local KE = select(2, ...)
 
-local floor, math_max, math_min = math.floor, math.max, math.min
+local floor, math_abs, math_max, math_min = math.floor, math.abs, math.max, math.min
 local next, pairs, tonumber, tostring, type = next, pairs, tonumber, tostring, type
 local table_sort = table.sort
 
@@ -239,11 +239,20 @@ function Rules.SetField(spells, key, field, value)
     if next(entry) == nil then spells[key] = nil end
 end
 
+-- Under one step of the picker's 8-bit hex, two colors read the same; Okay and
+-- the picker's open can hand back the opening color with float drift.
+local SAME_COLOR = 1 / 255
+
+local function Near(x, y)
+    return math_abs(x - y) < SAME_COLOR
+end
+
 -- What a picker write saves. The picker sends back the color it opened with on
 -- Cancel, on Escape and on any click outside it; for a row with no override of
 -- its own that must leave it without one, not pin the default as an override.
 function Rules.PickedColor(r, g, b, a, shown, overridden)
-    if not overridden and r == shown[1] and g == shown[2] and b == shown[3] and a == (shown[4] or 1) then
+    if not overridden and Near(r, shown[1]) and Near(g, shown[2]) and Near(b, shown[3])
+        and Near(a, shown[4] or 1) then
         return nil
     end
     return { r, g, b, a }

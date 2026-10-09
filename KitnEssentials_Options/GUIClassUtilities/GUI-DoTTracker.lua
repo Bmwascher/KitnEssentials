@@ -160,6 +160,24 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     -- from an earlier one.
     local colorManager
 
+    -- The swatches of rows drawn without a color of their own, each with the
+    -- pool generation it had then. Rebuilt with the body, like colorManager.
+    local followers = {}
+    -- SetColor runs the swatch's callback; this turns that write away.
+    local repainting = false
+
+    -- Shows the current Some Have It on every follower that still has no color
+    -- of its own and still belongs to this page.
+    local function RepaintFollowers(r, g, b, a)
+        repainting = true
+        for _, f in ipairs(followers) do
+            if f.picker._keGen == f.gen and Rules.ColorOf(db.Spells[f.key], nil, true) == nil then
+                f.picker:SetColor(r, g, b, a)
+            end
+        end
+        repainting = false
+    end
+
     local function RowLabel(entry)
         local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.id)
         local label = GUIFrame.IconText(texture) .. SpellLabel(entry.id)
@@ -214,17 +232,22 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
                 end,
             }), 0.5)
             local epoch = ColorEpoch(key)
-            local shown = Rules.ColorOf(saved, entry.row, true) or db.SomeColor
+            local own = Rules.ColorOf(saved, entry.row, true)
             local overridden = type(saved) == "table" and type(saved.color) == "table"
             local picker = GUIFrame:CreateColorPicker(line, "Color", {
-                color = shown,
+                color = own or db.SomeColor,
                 callback = function(r, g, b, a)
-                    if ColorEpoch(key) ~= epoch then return end
+                    if repainting or ColorEpoch(key) ~= epoch then return end
+                    -- A row without its own color shows Some Have It as it is now.
+                    local shown = own or db.SomeColor
                     Rules.SetField(db.Spells, key, "color", Rules.PickedColor(r, g, b, a, shown, overridden))
                     ApplySettings()
                 end,
             })
             line:AddWidget(picker, 0.25)
+            if not own then
+                followers[#followers + 1] = { picker = picker, gen = picker._keGen, key = key }
+            end
             -- Redrawn, not repainted: setting the picker's color would run its
             -- callback and save the color straight back.
             local reset = GUIFrame:CreateButton(line, "Reset", {
@@ -247,6 +270,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
 
     DrawClass = function(classToken)
         colorManager = GUIFrame:CreateWidgetStateManager()
+        followers = {}
         colorManager:SetCondition("colors", function() return db.DoTColors ~= false end)
         local currentSpecId = KE:GetPlayerSpecId()
         local specIds = classSpecs[classToken] or {}
@@ -458,6 +482,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         color = db.SomeColor,
         callback = function(r, g, b, a)
             db.SomeColor = { r, g, b, a }
+            RepaintFollowers(r, g, b, a)
             ApplySettings()
         end,
     }), 0.5)
