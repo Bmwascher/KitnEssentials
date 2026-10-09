@@ -16,6 +16,10 @@ local GENERAL_ALERTS = {
     { dbKey = "VoidcoreEnabled", label = "Bonus Rolls Missing", tooltip = "Shows in a seasonal dungeon or raid while Nebulous Voidcore is below its cap. Hides in combat and inside a running key." },
 }
 
+local AUTO_READY = {
+    { dbKey = "AutoReadyBenched", label = "Auto Ready When Benched", tooltip = "Clicks Ready for you on a raid ready check while you sit in raid group 7 or 8 outside the raid instance, and prints a line in chat. In combat, or on a check you started, it leaves the check to you." },
+}
+
 local BOSS_ALERTS = {
     { dbKey = "ResetBossEnabled", label = "Reset Boss", tooltip = "Reminder when a lust debuff is active between pulls." },
     { dbKey = "LootBossEnabled",  label = "Loot Boss",  tooltip = "Reminder to loot after a boss kill." },
@@ -111,7 +115,8 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     manager:Register(card2, "all")
 
     AddAlertRow(card2, GENERAL_ALERTS)
-    card2:AddNote("Each stays up while its condition holds.")
+    AddAlertRow(card2, AUTO_READY)
+    card2:AddNote("Each alert stays up while its condition holds. Auto Ready When Benched shows no alert; it answers the ready check.")
 
     yOffset = card2:GetNextOffset()
 
