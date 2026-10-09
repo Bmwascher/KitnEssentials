@@ -261,8 +261,8 @@ end
 ---------------------------------------------------------------------------------
 -- Drawn at answer d's icon (the total, or the DoT's target limit when lower),
 -- so the window shows it only while every enemy the DoT can reach carries it.
--- A repaint or a new sensor only moves it; a
--- restyle restarts its animations, so it waits for an on/off change or Apply.
+-- A repaint or a new sensor only moves it; a restyle restarts its animations,
+-- so it waits for an on/off change or Apply.
 -- Off goes through Configure, not Hide: a hidden animation still costs.
 local function PlaceGlow(cell, total)
     local host, geo = cell.glow, cell.geo
