@@ -28,13 +28,16 @@ describe("Raid Notifications auto-ready rule", function()
             args.subgroup, args.status, args.lockdown)
     end
 
-    it("accepts for a benched raider outside the raid instance and refuses every other state", function()
+    it("accepts for a benched raider outside any instance and refuses every other state", function()
         local cases = {
             { name = "group 7, open world",       over = {},                                      want = true },
-            { name = "group 8, inside a dungeon", over = { subgroup = 8, instanceType = "party" }, want = true },
+            { name = "group 8, open world",       over = { subgroup = 8 },                        want = true },
             { name = "toggle off",                over = { enabled = false },                     want = false },
             { name = "not in a raid group",       over = { inRaid = false },                      want = false },
             { name = "inside a raid instance",    over = { instanceType = "raid" },               want = false },
+            { name = "inside a dungeon",          over = { instanceType = "party" },              want = false },
+            { name = "inside a battleground",     over = { instanceType = "pvp" },                want = false },
+            { name = "no instance type",          over = { instanceType = NONE },                 want = false },
             { name = "an active subgroup",        over = { subgroup = 1 },                        want = false },
             { name = "group 6",                   over = { subgroup = 6 },                        want = false },
             { name = "not found, or secret",      over = { subgroup = NONE },                     want = false },

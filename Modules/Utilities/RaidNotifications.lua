@@ -715,9 +715,11 @@ local function PlayerSubgroup()
     return nil
 end
 
--- Auto Ready When Benched scope: a raid group, outside any raid instance.
+-- Auto Ready When Benched scope: a raid group in the open world. Inside any
+-- instance groups 7 and 8 can be active players, and a restricted ready-check
+-- confirm there could be refused without an error.
 function RN.AutoReadyInScope(enabled, inRaidGroup, instanceType)
-    return enabled == true and inRaidGroup == true and instanceType ~= "raid"
+    return enabled == true and inRaidGroup == true and instanceType == "none"
 end
 
 -- Only a benched raider whose answer is still pending. The status test is

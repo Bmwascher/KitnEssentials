@@ -17,7 +17,7 @@ local GENERAL_ALERTS = {
 }
 
 local AUTO_READY = {
-    { dbKey = "AutoReadyBenched", label = "Auto Ready When Benched", tooltip = "Clicks Ready for you on a raid ready check while you sit in raid group 7 or 8 outside the raid instance, and prints a line in chat. In combat, or on a check you started, it leaves the check to you." },
+    { dbKey = "AutoReadyBenched", label = "Auto Ready When Benched", tooltip = "Clicks Ready for you on a raid ready check while you sit in raid group 7 or 8 outside any instance, and prints a line in chat. In combat, or on a check you started, it leaves the check to you." },
 }
 
 local BOSS_ALERTS = {
