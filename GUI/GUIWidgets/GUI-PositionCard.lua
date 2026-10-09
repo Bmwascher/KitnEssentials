@@ -168,7 +168,7 @@ local function CreatePositionCardKit(holder)
     kit.frameInput = frameInput
     kit.selectFrameBtn = selectFrameBtn
 
-    -- Row 3: anchor point dropdowns (always shown)
+    -- Row 3: anchor point dropdowns (shown unless showSelfPoint is false)
     local anchorPointRow = GUIFrame:CreateRow(card.content, 36)
     local selfPointDropdown = GUIFrame:CreateDropdown(anchorPointRow, "Anchor From", {
         options = ANCHOR_POINT_OPTIONS,
