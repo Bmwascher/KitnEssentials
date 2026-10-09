@@ -244,6 +244,13 @@ local function ReadShownHeight(frame, shownCache, heightCache, key)
     return shown, height
 end
 
+-- A secret IsShown read answers ifSecret instead; a truth test on it errors.
+local function IsShownOr(frame, ifSecret)
+    local shown = frame:IsShown()
+    if KE:IsSecretValue(shown) then return ifSecret end
+    return shown
+end
+
 -- A refused move leaves a line where it was; what follows starts below both
 -- its old and its new place.
 local function StackFrames(self, types, yOffset, spacing)
@@ -397,7 +404,9 @@ function CM:ShowFlashMessage(msgType, textOverride, iconOverride, nameOverride)
     local fadeDuration = 0.4
     C_Timer.After(duration - fadeDuration, function()
         if frame.generation ~= myGeneration or self.isPreview then return end
-        if not frame:IsShown() then return end
+        -- Secret reads as shown: the generation already proves this message,
+        -- and skipping the fade would leave it on screen.
+        if not IsShownOr(frame, true) then return end
         local fadeStart = GetTime()
         frame:SetScript("OnUpdate", function(f)
             if f.generation ~= myGeneration or self.isPreview then
@@ -619,7 +628,7 @@ local function SetAggroPulse(frame, on)
         if not pulse:IsPlaying() then pulse:Play() end
     elseif pulse and pulse:IsPlaying() then
         pulse:Stop()
-        if frame:IsShown() then frame:SetAlpha(1) end
+        if IsShownOr(frame, true) then frame:SetAlpha(1) end
     end
 end
 
@@ -649,15 +658,18 @@ function CM:CheckAggro()
     end
     local inInstance = KE:InRealInstancedContent()
 
+    -- A secret shown state re-shows the line without the sound, which plays
+    -- only on a plain hidden-to-shown edge, and still lets a hide run. The
+    -- re-show resets alpha to 1, so a playing pulse may flash once per event.
     local frame = self.messageFrames.aggro
     if CM.ShouldShowAggro(self.db, self.inCombat, KE:IsPlayerTankSpec(), inInstance, threat, threatSecret) then
-        if not (frame and frame:IsShown()) then
+        if not (frame and IsShownOr(frame, false)) then
             self:ShowPersistentMessage("aggro")
             frame = self.messageFrames.aggro
-            if frame and frame:IsShown() then self:PlayAggroSound() end
+            if frame and IsShownOr(frame, false) then self:PlayAggroSound() end
         end
         SetAggroPulse(frame, self.db.AggroPulse == true)
-    elseif frame and frame:IsShown() then
+    elseif frame and IsShownOr(frame, true) then
         self:HidePersistentMessage("aggro")
         SetAggroPulse(frame, false)
     end
@@ -1185,6 +1197,10 @@ end
 
 function CM:OnDisable()
     for _, frame in pairs(self.messageFrames) do
+        -- A pending flash fade checks the generation, so a disabled module
+        -- never starts or finishes one, however the shown state reads.
+        frame.generation = frame.generation + 1
+        frame:SetScript("OnUpdate", nil)
         frame:Hide()
     end
     self.activeMessages = {}
