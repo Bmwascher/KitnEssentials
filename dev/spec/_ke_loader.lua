@@ -709,13 +709,22 @@ function L.loadAuraEngine()
             defaultIconsPerRow = display.defaultIconsPerRow,
         }
     end
-    container.ApplyState = function() container.applyStates = container.applyStates + 1 end
+    -- The last arguments too: a vehicle case asserts on what was applied.
+    container.ApplyState = function(_, state, anchorShown)
+        container.applyStates = container.applyStates + 1
+        container.lastState   = state
+        container.lastAnchor  = anchorShown
+    end
     container.Reconfigure = function() container.reconfigures = container.reconfigures + 1 end
     KE.AuraContainer = container
 
     helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
     helpers.loadModule("Modules/Combat/AuraEngine/Restriction.lua", KE)
     helpers.loadModule("Modules/Combat/AuraEngine/Engine.lua", KE)
+
+    -- Register reads the vehicle state; a spec replaces this to put the
+    -- player in a vehicle.
+    _G.UnitHasVehicleUI = function() return false end
 
     -- Register keys its duplicate check on the owner object and hands it every
     -- event registration, so the owner is real work even where a spec never

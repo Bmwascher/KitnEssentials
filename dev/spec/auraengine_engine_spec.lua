@@ -40,3 +40,26 @@ describe("first container creation under restriction", function()
         assert.equals(1, KE.AuraContainer.reconfigures)
     end)
 end)
+
+-- A disabled module receives no vehicle events, so turning it back on must
+-- re-read the vehicle state rather than trust the one recorded before.
+describe("vehicle state on re-registration", function()
+    it("re-registration re-reads the vehicle state", function()
+        local rows = {
+            { name = "left the vehicle while off",    stale = true,  inVehicle = false, shown = true },
+            { name = "entered the vehicle while off", stale = false, inVehicle = true,  shown = false },
+        }
+        for _, row in ipairs(rows) do
+            local E, KE, display = L.loadAuraEngine()
+            E.ApplySettings(display)
+            display.vehicleDisabled = row.stale
+            _G.UnitHasVehicleUI = function() return row.inVehicle end
+
+            E.RegisterEvents(display)
+            E.ApplySettings(display)
+
+            assert.equals(row.shown, KE.AuraContainer.lastState, row.name)
+            assert.equals(row.shown, KE.AuraContainer.lastAnchor, row.name)
+        end
+    end)
+end)
