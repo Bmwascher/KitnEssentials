@@ -3835,6 +3835,13 @@ function S.DebugRerun(key, selector)
         return
     end
 
+    -- The dispatch gate the rerun skipped: a row the player turned off.
+    if not SkinEnabled(key, record.addon) then
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
+            .. " is off in Dark Theme > Frame Skins -- turn its row on to rerun it.")
+        return
+    end
+
     local ok, err = pcall(record.entry.fn)
     print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. (ok and "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)" or ("|cffff0000ERROR:|r " .. tostring(err))))
 end

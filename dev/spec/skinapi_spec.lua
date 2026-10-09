@@ -749,6 +749,17 @@ describe("SkinAPI per-registration diagnostics", function()
             assert.equals(1, runsB)
             assert.truthy(line:find("has no registration", 1, true))
         end)
+
+        it("refuses a dispatched record whose Frame Skins row is off", function()
+            local runs = 0
+            S:Register("Blizzard_A", function() runs = runs + 1 end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            KE.db.profile.Skinning.BlizzardFrames.Skins.Key = false
+
+            local line = captureOne(function() S.DebugRerun("Key") end)
+            assert.equals(1, runs)
+            assert.truthy(line:find("is off in Dark Theme", 1, true))
+        end)
     end)
 end)
 
