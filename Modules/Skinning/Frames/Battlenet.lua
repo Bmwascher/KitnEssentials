@@ -31,15 +31,6 @@ local function Skin()
         S.Template(rcd, "Window")
         if _G.ReportCheatingDialogCommentFrameEditBox then S.EditBox(_G.ReportCheatingDialogCommentFrameEditBox) end
     end
-
-    local bti = _G.BattleTagInviteFrame
-    if bti then
-        S.StripTextures(bti)
-        S.Template(bti, "Window")
-        for _, child in ipairs({ bti:GetChildren() }) do
-            if child:IsObjectType("Button") then S.Button(child) end
-        end
-    end
 end
 
 S:RegisterEarly(Skin, "Battlenet")

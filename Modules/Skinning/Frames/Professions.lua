@@ -282,7 +282,7 @@ local function FitTabToText(tab)
     fs:SetPoint("CENTER", tab, "CENTER", 0, 0)
     fs:SetWidth(0)
 
-    local w = fs.GetUnboundedStringWidth and fs:GetUnboundedStringWidth() or fs:GetStringWidth()
+    local w = fs:GetUnboundedStringWidth()
     if w and w > 0 and tab.SetTabWidth then
         tab:SetTabWidth(math.ceil(w) + 20)
     end
@@ -557,8 +557,7 @@ local function Skin()
 
                     fs:ClearAllPoints()
                     fs:SetPoint("CENTER", tab, "CENTER", 0, 0)
-                    local w = (fs.GetUnboundedStringWidth and fs:GetUnboundedStringWidth())
-                        or (fs.GetStringWidth and fs:GetStringWidth())
+                    local w = fs:GetUnboundedStringWidth()
                     if w and w > 0 then
 
                         local text = fs:GetText()

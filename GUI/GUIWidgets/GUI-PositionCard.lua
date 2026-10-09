@@ -238,16 +238,14 @@ local function CreatePositionCardKit(holder)
     -- inserted them; we keep that order stable and just hide/show.
     kit._maxCurrentY = card.currentY
 
-    -- Track widgets for SetEnabled compatibility (the original API exposed
-    -- card.positionWidgets and card.AnchorButtonWidgets; consumers like
-    -- WidgetStateManager pass these to RegisterGroup).
+    -- Every widget, for card:SetEnabled and for the pages that pass
+    -- card.positionWidgets to RegisterGroup.
     kit.allWidgets = {
         anchorTypeDropdown, frameInput, selectFrameBtn,
         selfPointDropdown, anchorPointDropdown,
         xSlider, ySlider,
         strataOnlyDropdown,
     }
-    kit.anchorButtonWidgets = { selfPointDropdown, anchorPointDropdown }
 
     -- Override card:SetEnabled to also walk the kit's widgets. Default
     -- card:SetEnabled (from GUI-Core) only does alpha + the click-blocker
@@ -266,14 +264,8 @@ local function CreatePositionCardKit(holder)
         end
     end
 
-    -- Compatibility shims for callers that used to read these directly off
-    -- the card. The original implementation exposed positionWidgets and
-    -- AnchorButtonWidgets as card-level fields used by WidgetStateManager.
     card.positionWidgets = kit.allWidgets
-    card.AnchorButtonWidgets = kit.anchorButtonWidgets
     card.strataWidget = strataOnlyDropdown
-
-    function card:SetPositionWidgetsEnabled(enabled) self:SetEnabled(enabled) end
 
     -- For a page that rewrites the saved offsets by code while the card shows.
     function card:RefreshOffsets()
@@ -282,11 +274,6 @@ local function CreatePositionCardKit(holder)
         local defaults = kit._config and kit._config.defaults or {}
         kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)
         kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
-    end
-    function card:SetAnchorsOnlyEnabled(enabled)
-        for _, widget in ipairs(kit.anchorButtonWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(enabled) end
-        end
     end
 
     return kit

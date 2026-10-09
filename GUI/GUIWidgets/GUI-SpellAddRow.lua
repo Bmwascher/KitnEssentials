@@ -24,8 +24,8 @@ function GUIFrame.IconText(texture)
 end
 
 -- Config: { picker = { label, options, value, callback } or nil, idLabel,
--- onAdd(text), onRemove(text) }. Returns the row and its edit box; the caller
--- adds the row to its card.
+-- onAdd(text), onRemove(text) }. Returns the row; the caller adds it to its
+-- card.
 function GUIFrame:CreateSpellAddRow(parent, config)
     if type(config) ~= "table" then config = {} end
     local row = GUIFrame:CreateRow(parent, Theme.rowHeight)
@@ -51,5 +51,5 @@ function GUIFrame:CreateSpellAddRow(parent, config)
             if config.onRemove then config.onRemove(idBox:GetValue()) end
         end,
     }), 0.2, nil, 0, FIELD_TOP)
-    return row, idBox
+    return row
 end

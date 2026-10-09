@@ -180,7 +180,6 @@ function GUIFrame:CreateContentArea(parent)
         end
         return frameWidth - T.sidebarWidth - (T.borderSize * 2)
     end
-    content.ResolveContentWidth = ResolveContentWidth
 
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, content, "UIPanelScrollFrameTemplate")
@@ -274,17 +273,6 @@ function GUIFrame:CreateContentArea(parent)
     parent.content = content
     self.contentArea = content
     return content
-end
-
--- Live width of the content pane. Panel builders that used to derive their
--- own width from the Theme.contentWidth constant read this instead, so a
--- resized window reaches nested tab panels too.
-function GUIFrame:GetContentWidth()
-    local content = self.contentArea
-    if content and content.ResolveContentWidth then
-        return content.ResolveContentWidth()
-    end
-    return Theme.contentWidth
 end
 
 ---------------------------------------------------------------------------------
