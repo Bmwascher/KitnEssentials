@@ -690,6 +690,40 @@ end
 -- detection is convention-based. Subgroups 1-4 hold the active 20 (5 per group)
 -- across most raid teams; 5-6 are typically left empty as buffer; 7-8 are the
 -- two conventional bench groups. We treat subgroup 7 OR 8 as benched.
+local function IsBenchSubgroup(subgroup)
+    return subgroup == 7 or subgroup == 8
+end
+
+-- The player's raid subgroup, or nil when not found. Each value is tested
+-- for secrecy before any truth test or comparison, and a secret one counts
+-- as not found: the roster API carries no secret-return contract to rely on.
+local function PlayerSubgroup()
+    local playerName = UnitName("player")
+    if KE:IsSecretValue(playerName) or not playerName then return nil end
+    for i = 1, 40 do
+        local name, _, subgroup = GetRaidRosterInfo(i)
+        if not KE:IsSecretValue(name) and name and name == playerName then
+            if KE:IsSecretValue(subgroup) then return nil end
+            return subgroup
+        end
+    end
+    return nil
+end
+
+-- Auto Ready When Benched scope: a raid group, outside any raid instance.
+function RN.AutoReadyInScope(enabled, inRaidGroup, instanceType)
+    return enabled == true and inRaidGroup == true and instanceType ~= "raid"
+end
+
+-- Only a benched raider whose answer is still pending. The status test is
+-- also what skips a check the player started.
+function RN.ShouldAutoReady(enabled, inRaidGroup, instanceType, subgroup, status, inLockdown)
+    return RN.AutoReadyInScope(enabled, inRaidGroup, instanceType)
+        and IsBenchSubgroup(subgroup)
+        and status == "waiting"
+        and not inLockdown
+end
+
 function RN:CheckBench()
     if self.isPreview then return end
     if not self.db or not self.db.Enabled then return end
@@ -712,28 +746,11 @@ function RN:CheckBench()
     -- Mythic-only gate is now in BenchAlert.shouldSubscribe via GetInstanceInfo;
     -- CheckBench only runs when the subsystem is in scope (= mythic raid).
 
-    local playerName = UnitName("player")
-    if not playerName then
+    if IsBenchSubgroup(PlayerSubgroup()) then
+        self:ShowAlert("BenchAlert")
+    else
         self:HideAlert("BenchAlert")
-        return
     end
-
-    -- Walk the raid roster (max 40 slots) to find the player's subgroup.
-    -- GetRaidRosterInfo returns nil for empty slots. Convention: subgroups
-    -- 7 and 8 are the bench (1-4 active 20, 5-6 buffer/unused, 7-8 bench).
-    for i = 1, 40 do
-        local name, _, subgroup = GetRaidRosterInfo(i)
-        if name and name == playerName then
-            if subgroup == 7 or subgroup == 8 then
-                self:ShowAlert("BenchAlert")
-            else
-                self:HideAlert("BenchAlert")
-            end
-            return
-        end
-    end
-
-    self:HideAlert("BenchAlert")
 end
 
 ---------------------------------------------------------------------------------
