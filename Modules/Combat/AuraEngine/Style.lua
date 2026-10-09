@@ -501,12 +501,12 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         if caps.hasTimerFont then
             KE:ApplyFontToText(frame.keTimer, settings.TimerFontFace, settings.TimerFontSize, settings.TimerFontOutline)
             frame.keTimer:SetTextColor(KE:ResolveColor(settings.TimerTextColor, WHITE))
-            -- Preview frames never pass through RegisterRegions, where live
-            -- buttons take this switch, and the preview writes the text anyway.
-            frame.keTimer:SetShown(settings.ShowTimer ~= false)
         else
             KE:ApplyFontToText(frame.keTimer, settings.FontFace, settings.TimerFontSize, settings.FontOutline)
         end
+        -- Preview frames never pass through RegisterRegions, where live
+        -- buttons take this switch, and the preview writes the text anyway.
+        frame.keTimer:SetShown(settings.ShowTimer ~= false)
         if frame.keTimer.SetShadowOffset then frame.keTimer:SetShadowOffset(0, 0) end
         frame.keTimer:ClearAllPoints()
         local tp = settings.TimerPosition
