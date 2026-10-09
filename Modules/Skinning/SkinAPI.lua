@@ -2996,6 +2996,10 @@ local function skinScrollArrows(frame)
                 d.arrow = a
                 b:HookScript("OnEnter", arrowOnEnter)
                 b:HookScript("OnLeave", arrowOnLeave)
+            else
+                -- A second pass on the same bar strips this arrow along with
+                -- the stepper's own art.
+                S.ArrowTexture(d.arrow, side[2])
             end
         end
     end
