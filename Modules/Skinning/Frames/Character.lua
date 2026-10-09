@@ -527,7 +527,7 @@ local function Skin()
             hooksecurefunc("EquipmentFlyout_UpdateItems", EquipmentFlyoutSkin)
         end
     end
-    local current = frame.activeSubFrame
+    local current = frame.activeSubframe
     UpdateCharacterInset(current)
     S.Tabs("CharacterFrameTab", 6)
     -- Art only. The per-slot ilvl/gem text this loop used to add, and the
