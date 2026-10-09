@@ -876,6 +876,7 @@ local Defaults = {
             Enabled = false,
             OnlyInCombat = true,
             OnlyEnemiesInCombat = true,
+            OnlyEnemiesFightingGroup = true,
             MaxEnemies = 20,
             IconSize = 40,
             Spacing = 1,

@@ -32,8 +32,11 @@ local UnitCanAttack = UnitCanAttack
 local UnitCanAssist = UnitCanAssist
 local UnitIsDead = UnitIsDead
 local UnitAffectingCombat = UnitAffectingCombat
+local UnitThreatSituation = UnitThreatSituation
+local IsInRaid = IsInRaid
+local GetNumGroupMembers = GetNumGroupMembers
 local issecretvalue = issecretvalue
-local ipairs, pcall, tostring = ipairs, pcall, tostring
+local ipairs, pcall, tostring, type = ipairs, pcall, tostring, type
 local math_ceil, math_max, math_min = math.ceil, math.max, math.min
 local table_concat = table.concat
 
@@ -82,6 +85,7 @@ DT.paintedTotal = -1
 DT.editModeRegistered = false
 DT.someColor = DEFAULT_SOME
 DT.allColor = DEFAULT_ALL
+DT.watchers = nil
 
 local measureFS
 
@@ -106,16 +110,24 @@ local function CanAssist(unit)
     return Ask(UnitCanAssist, "player", unit, true, true)
 end
 
+-- A number is a place on the list and nil is none; a secret or an error is
+-- unread.
+local function ThreatRead(watcher, unit)
+    return Ask(UnitThreatSituation, watcher, unit)
+end
+
 local unitApi = {
-    exists    = function(unit) return Ask(UnitExists, unit) end,
-    canAttack = function(unit) return Ask(UnitCanAttack, "player", unit) end,
-    canAssist = CanAssist,
-    isDead    = function(unit) return Ask(UnitIsDead, unit) end,
-    inCombat  = function(unit) return Ask(UnitAffectingCombat, unit) end,
+    exists      = function(unit) return Ask(UnitExists, unit) end,
+    canAttack   = function(unit) return Ask(UnitCanAttack, "player", unit) end,
+    canAssist   = CanAssist,
+    isDead      = function(unit) return Ask(UnitIsDead, unit) end,
+    inCombat    = function(unit) return Ask(UnitAffectingCombat, unit) end,
+    groupThreat = function(unit) return Rules.GroupThreat(unit, DT.watchers, ThreatRead) end,
 }
 
 local function Verdict(unit, strict)
-    return Rules.Verdict(unit, strict, DT.db.OnlyEnemiesInCombat ~= false, false, unitApi)
+    local db = DT.db
+    return Rules.Verdict(unit, strict, db.OnlyEnemiesInCombat ~= false, db.OnlyEnemiesFightingGroup ~= false, unitApi)
 end
 
 local function IsKnown(spellID)
@@ -730,6 +742,20 @@ function DT:EnsureCounting()
     })
 end
 
+-- Ask would turn the count into a boolean.
+local function GroupSize()
+    local ok, size = pcall(GetNumGroupMembers)
+    if not ok or (issecretvalue and issecretvalue(size)) or type(size) ~= "number" then return nil end
+    return size
+end
+
+-- In a raid, or with an unread group, the list is nil and the group rule
+-- lets every enemy through.
+function DT:RefreshWatchers()
+    self.watchers = Rules.Watchers(Ask(IsInRaid), GroupSize())
+    if self.slots then self.slots:QueueScan() end
+end
+
 ---------------------------------------------------------------------------------
 -- Apply
 ---------------------------------------------------------------------------------
@@ -916,6 +942,12 @@ function DT:Activate(list, allowed, class, specID)
         self:UnregisterEvent("PLAYER_TARGET_CHANGED")
         self:UnregisterEvent("UNIT_FACTION")
     end
+    if self.db.OnlyEnemiesFightingGroup ~= false then
+        self:RegisterEvent("GROUP_ROSTER_UPDATE", "RefreshWatchers")
+        self:RefreshWatchers()
+    else
+        self:UnregisterEvent("GROUP_ROSTER_UPDATE")
+    end
     self:Apply(list, allowed, class, specID)
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
@@ -927,6 +959,7 @@ function DT:Deactivate()
     self.active = false
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
     self:UnregisterEvent("UNIT_FACTION")
+    self:UnregisterEvent("GROUP_ROSTER_UPDATE")
     if self.runner then self.runner:Cancel() end
     if self.slots then self.slots:Stop() end
     self.buildTarget = 0
