@@ -3361,6 +3361,13 @@ function L.loadDoTTrackerRules(overrides)
     return KE
 end
 
+-- Modules/ClassUtilities/ShamanProcRules.lua. Pure logic: nothing to stub
+-- beyond the mock. Returns KE.
+function L.loadShamanProcRules(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    return helpers.loadModule("Modules/ClassUtilities/ShamanProcRules.lua", {})
+end
+
 -- Core/CDMIcons.lua. The info function is looked up at call time, so a spec
 -- passes its own C_CooldownViewer per load; viewers are plain tables the spec
 -- puts on _G. Returns KE.
