@@ -47,7 +47,9 @@ local function BuildStatusbarOptions()
 end
 
 GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return end
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "Tooltips", "tooltips")
+    end
     local db = KE.db and KE.db.profile.Skinning.Tooltips
     if not db then return yOffset end
 

@@ -119,7 +119,9 @@ local function AddSeparatorRow(card, manager)
 end
 
 GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return end
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "Chat", "chat")
+    end
     local db = KE.db and KE.db.profile.Skinning.Chat
     if not db then return yOffset end
 

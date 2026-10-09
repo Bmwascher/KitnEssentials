@@ -103,13 +103,12 @@ GUIFrame.sidebarConfig = {
             -- behind its own tab strip, either as a top-level tab, chained
             -- onto General, or nested inside the Elements sub-row.
             --
-            -- alwaysEnabled keeps it and Skyriding UI clickable while the
-            -- section is grayed for ElvUI.
-            -- Dark Theme's General tab carries Color Picker and Raid Control,
-            -- neither of which has an ElvUI gate of its own; Character Panel
-            -- and Skyriding UI are not skins and hold their own rows. Chat and
-            -- Tooltips carry no exemption because both modules genuinely do
-            -- stand down.
+            -- An item without alwaysEnabled is grayed and unclickable under
+            -- ElvUI. Dark Theme's General tab carries Color Picker and Raid
+            -- Control, neither of which has an ElvUI gate of its own; Character
+            -- Panel, Damage Meter, Mythic+ Timer and Skyriding UI are not skins.
+            -- Chat and Tooltips do stand down, and stay clickable so their page
+            -- can say so.
             --
             -- The keyword list absorbs the rows this page swallowed, so
             -- searching "raid control", "ilvl", "hex" or "objective tracker"
@@ -126,11 +125,11 @@ GUIFrame.sidebarConfig = {
                 "status bars", "text widgets", "spell icons", "top-center container", "top-center position",
                 "alert stack position", "event toasts", "event toast position", } },
             { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "gems", "sockets", "enchant", "great vault", "vault", "omnium", "window buttons" } },
-            { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
+            { id = "Chat",               text = "Chat", alwaysEnabled = true, keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
-            { id = "SkinTooltips",       text = "Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
+            { id = "SkinTooltips",       text = "Tooltips", alwaysEnabled = true, keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
         },
     },
 }

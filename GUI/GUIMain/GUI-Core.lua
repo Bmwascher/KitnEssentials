@@ -1515,6 +1515,16 @@ function GUIFrame:BuildPlaceholderContent(scrollChild, yOffset)
     return yOffset
 end
 
+-- The page of a module that stands down while ElvUI handles the same frames.
+-- area completes "ElvUI is handling ...".
+function GUIFrame:BuildElvUINote(scrollChild, yOffset, title, area)
+    local T = Theme
+    local card = self:CreateCard(scrollChild, title, yOffset)
+    card:AddNote("|cffffd100ElvUI is handling " .. area .. ".|r KitnEssentials stands down so the two do not fight over the same frames, so these settings do not apply right now. Your settings are kept and take effect again if you turn ElvUI off.")
+    card:AddSpacing(T.paddingSmall)
+    return yOffset + card:GetContentHeight() + T.paddingMedium
+end
+
 function GUIFrame:BuildPagesNotLoadedContent(scrollChild, yOffset)
     local T = Theme
     local card = self:CreateCard(scrollChild, "Settings pages not loaded", yOffset)
