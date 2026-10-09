@@ -378,11 +378,10 @@ local function NewCell(index)
     cell.tail = CreateFrame("Frame", nil, cell.view, TAIL_TEMPLATE)
     cell.tail:SetPoint("TOPLEFT", cell.view, "TOPLEFT", 0, 0)
     BuildAnswer(cell, 0)
-    cell.glow = KE.AuraGlow.CreateHost(cell.tail, DT.db, TAIL_TEMPLATE)
+    cell.glow = KE.AuraGlow.CreateHost(cell.tail, GLOW_OFF, TAIL_TEMPLATE)
     -- CreateHost fills its parent; from here on the host keeps one TOPLEFT
     -- point, which PlaceGlow replaces in place.
     cell.glow:ClearAllPoints()
-    KE.AuraGlow.Configure(cell.glow, GLOW_OFF)
     cell.glowOn = false
 
     -- The preview's stand-ins, plain frames off the tail: the real labels line
@@ -393,8 +392,7 @@ local function NewCell(index)
     cell.over:Hide()
     cell.sample = cell.over:CreateFontString(nil, "OVERLAY")
     cell.sampleTimer = cell.over:CreateFontString(nil, "OVERLAY")
-    cell.previewGlow = KE.AuraGlow.CreateHost(cell.over, DT.db)
-    KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
+    cell.previewGlow = KE.AuraGlow.CreateHost(cell.over, GLOW_OFF)
 
     DT.cells[index] = cell
     return cell
@@ -573,8 +571,10 @@ local function TargetWanted()
 end
 
 -- Timer work only the gate may allow: a shown cell still without its timer, or
--- a timer whose look is out of date.
+-- a timer whose look is out of date. None while Target Timer is off: no timer
+-- is built or restyled then, and turning it on makes the work owed.
 function DT:TimersOwed(list, key)
+    if self.db.TimerEnabled == false then return false end
     for i = 1, #list do
         local cell = self.cells[i]
         if not cell then return true end
@@ -585,7 +585,7 @@ function DT:TimersOwed(list, key)
 end
 
 function DT:StyleTimers(list, key, allowed)
-    if not self.active or not allowed then return end
+    if not self.active or not allowed or self.db.TimerEnabled == false then return end
     for i = 1, #list do
         local cell = self.cells[i]
         if not cell.timer then
