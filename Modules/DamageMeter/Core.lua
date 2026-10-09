@@ -475,6 +475,10 @@ function DM:RegWithEditMode()
                 KE:ApplyFramePosition(self.dock, self.db.Position, self.db)
                 self:RefreshDock()
             end,
+            -- A drag is computed in the frame Anchored To resolves to.
+            getParentFrame = function()
+                return KE:ResolveAnchorFrame(self.db and self.db.anchorFrameType, self.db and self.db.ParentFrame)
+            end,
             guiPath = "DamageMeter",
         }
     end

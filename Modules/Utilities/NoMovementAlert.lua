@@ -1143,6 +1143,10 @@ function NMA:RegisterAnchor()
     cfg.frame = self.frame
     cfg.module = self
     cfg.getPosition = function() return self.db.Position end
+    -- A drag is computed in the frame Anchored To resolves to.
+    cfg.getParentFrame = function()
+        return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+    end
     cfg.setPosition = function(pos)
         local p = self.db.Position
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo

@@ -158,15 +158,17 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     -- Texts owns the anchor and these values would write to nothing.
     ------------------------------------------------------------------
     if not db.AttachToCombatTexts then
+        -- The module root, so Anchored To lands where NMA:ApplyPosition reads
+        -- it; the points and offsets still land in db.Position.
         local _, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            db = db.Position,
+            db = db,
+            positionKey = "Position",
             dbKeys = {
                 selfPoint   = "AnchorFrom",
                 anchorPoint = "AnchorTo",
                 xOffset     = "XOffset",
                 yOffset     = "YOffset",
             },
-            showAnchorFrameType = false,
             showStrata = false,
             onChangeCallback = ApplySettings,
         })
