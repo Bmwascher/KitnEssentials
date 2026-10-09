@@ -101,7 +101,13 @@ local function ReskinProgressBar(progressBar)
     end
 end
 
+-- Whether the MDT skin last ran with its row's dispatch gate open. A debug
+-- rerun runs Skin even with the row off, so the gate is asked, not assumed.
+-- The AceGUI row decides whether this skinner is called at all.
+local mdtDispatched = false
+
 local function SkinMDTWidget(widget)
+    if not mdtDispatched then return end
     local t = widget and widget.type
     if t == "MDTPullButton" then
         ReskinButtonTexture(widget.frame and widget.frame.pickedGlow, 0.5)
@@ -240,6 +246,7 @@ local function Look()
 end
 
 local function Skin()
+    mdtDispatched = S.SkinEnabled("MythicDungeonTools", "MythicDungeonTools_UI") and true or false
     if Attach() or looker or not C_Timer then return end
     looker = C_Timer.NewTicker(FAST_LOOK_INTERVAL, Look)
 end

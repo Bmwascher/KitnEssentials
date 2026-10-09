@@ -3452,6 +3452,8 @@ local function SkinEnabled(key, addon)
     local skins = frames and frames.Skins
     return not skins or skins[key] ~= false
 end
+-- The dispatch gate, for a skin that a debug rerun can reach with its row off.
+S.SkinEnabled = SkinEnabled
 
 function S:Register(addonName, fn, key)
     local list = addonSkins[addonName]
