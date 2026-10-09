@@ -695,6 +695,15 @@ function S.RefreshEdgesUnderRoots(roots)
     return WalkEdges(nil, roots, RefreshEdge)
 end
 
+-- The edges S.OwnBackdrop drew on other addons' frames, and the regions
+-- S.TrackEdgeClients follows, under a root whose scale changed.
+function S.RefreshOwnEdgesUnder(root)
+    if not root then return end
+    for frame in pairs(ownEdges) do
+        pcall(RefreshIfUnder, frame, root, nil, RefreshOwnEdge)
+    end
+end
+
 -- Re-measure ONE frame's border. For hosts that scale each element
 -- individually and often (bag addons scale every item button on every layout
 -- pass), walking the whole cache per element is far too much. RefreshEdge
