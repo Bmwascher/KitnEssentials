@@ -724,13 +724,13 @@ local function CreateListRowKit(holder)
     kit.label:SetJustifyH("LEFT")
     kit.label:SetWordWrap(false)
 
-    row:SetScript("OnEnter", function(b)
-        if b._spellId and b._spellId ~= b._currentSelected then
+    row:SetScript("OnEnter", function()
+        if kit._spellId and kit._spellId ~= kit._currentSelected then
             kit.bg:SetColorTexture(1, 1, 1, 0.06)
         end
     end)
-    row:SetScript("OnLeave", function(b)
-        if b._spellId and b._spellId ~= b._currentSelected then
+    row:SetScript("OnLeave", function()
+        if kit._spellId and kit._spellId ~= kit._currentSelected then
             kit.bg:SetColorTexture(0, 0, 0, 0)
         end
     end)
