@@ -55,6 +55,20 @@ local function TalentTooltip(talent)
     return "Shows only while " .. names .. " is known."
 end
 
+-- Counts the Resets and Removes of each saved key. The client keeps a closed
+-- picker's callback in ColorPickerFrame.swatchFunc, so a callback whose count
+-- has moved writes nothing: a later call cannot restore a reset color or
+-- recreate a removed DoT. File scope, so a page rebuild keeps it.
+local colorEpoch = {}
+
+local function ColorEpoch(key)
+    return colorEpoch[key] or 0
+end
+
+local function BumpColorEpoch(key)
+    colorEpoch[key] = ColorEpoch(key) + 1
+end
+
 local function SpellExists(id)
     local ok, name = pcall(C_Spell.GetSpellName, id)
     return ok and name or nil
@@ -81,6 +95,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     local seeds = KE.DOT_TRACKER_SEEDS
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("icon", function() return db.ShowIcon ~= false end)
+    manager:SetCondition("fullCoverage", function() return db.FullCoverageColor ~= false end)
 
     local function ApplySettings()
         if DT then DT:ApplySettings() end
@@ -141,6 +156,21 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         GUIFrame:ResizeCardInPlace(card2, oldHeight)
     end
 
+    -- Rebuilt with the body on every draw, so it never holds a pooled widget
+    -- from an earlier one.
+    local colorManager
+
+    local function RowLabel(entry)
+        local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.id)
+        local label = GUIFrame.IconText(texture) .. SpellLabel(entry.id)
+        local also = entry.row and entry.row.also
+        if also then
+            for _, id in ipairs(also) do label = label .. " / " .. SpellLabel(id) end
+        end
+        if entry.custom then label = label .. " (custom)" end
+        return label
+    end
+
     local function DrawSpec(classToken, specId, currentSpecId)
         local specName, specIcon = SpecInfo(specId)
         local header = GUIFrame:CreateRow(card2.content, 26)
@@ -165,46 +195,65 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             return
         end
 
-        local pending, PER_ROW = nil, 3
-        for index, entry in ipairs(entries) do
+        for _, entry in ipairs(entries) do
             local key = Rules.SpellKey(specId, entry.id)
             local saved = db.Spells[key]
-            local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.id)
-            local label = GUIFrame.IconText(texture) .. SpellLabel(entry.id)
-            if entry.custom then label = label .. " (custom)" end
             local tooltip
             if entry.row and entry.row.talent then
                 tooltip = TalentTooltip(entry.row.talent)
             elseif entry.row and entry.row.replacedBy then
                 tooltip = "Hidden while " .. SpellLabel(entry.row.replacedBy) .. " is known."
             end
-            if not pending then pending = GUIFrame:CreateRow(card2.content, 36) end
-            pending:AddWidget(GUIFrame:CreateCheckbox(pending, label, {
+            local line = GUIFrame:CreateRow(card2.content, 40)
+            line:AddWidget(GUIFrame:CreateCheckbox(line, RowLabel(entry), {
                 value = Rules.IsEnabled(saved, entry.row),
                 tooltip = tooltip,
                 callback = function(checked)
-                    local current = db.Spells[key]
-                    if type(current) == "table" then
-                        current.enabled = checked
-                    else
-                        db.Spells[key] = { enabled = checked }
-                    end
+                    Rules.SetField(db.Spells, key, "enabled", checked)
                     ApplySettings()
                 end,
-            }), 1 / PER_ROW)
-            if index % PER_ROW == 0 or index == #entries then
-                card2:AddRow(pending, 36)
-                pending = nil
-            end
+            }), 0.5)
+            local epoch = ColorEpoch(key)
+            local shown = Rules.ColorOf(saved, entry.row, true) or db.SomeColor
+            local overridden = type(saved) == "table" and type(saved.color) == "table"
+            local picker = GUIFrame:CreateColorPicker(line, "Color", {
+                color = shown,
+                callback = function(r, g, b, a)
+                    if ColorEpoch(key) ~= epoch then return end
+                    Rules.SetField(db.Spells, key, "color", Rules.PickedColor(r, g, b, a, shown, overridden))
+                    ApplySettings()
+                end,
+            })
+            line:AddWidget(picker, 0.25)
+            -- Redrawn, not repainted: setting the picker's color would run its
+            -- callback and save the color straight back.
+            local reset = GUIFrame:CreateButton(line, "Reset", {
+                height = 24,
+                tooltip = "Clears the color you picked for this DoT.",
+                callback = function()
+                    BumpColorEpoch(key)
+                    Rules.SetField(db.Spells, key, "color", nil)
+                    Redraw(classToken)
+                    ApplySettings()
+                end,
+            })
+            -- Level with the swatch, which sits 14 px below the picker's top.
+            line:AddWidget(reset, 0.1, nil, 0, -14)
+            colorManager:Register(picker, "colors")
+            colorManager:Register(reset, "colors")
+            card2:AddRow(line, 40)
         end
     end
 
     DrawClass = function(classToken)
+        colorManager = GUIFrame:CreateWidgetStateManager()
+        colorManager:SetCondition("colors", function() return db.DoTColors ~= false end)
         local currentSpecId = KE:GetPlayerSpecId()
         local specIds = classSpecs[classToken] or {}
         for _, specId in ipairs(specIds) do
             DrawSpec(classToken, specId, currentSpecId)
         end
+        colorManager:UpdateAll(true)
 
         card2:AddRow(GUIFrame:CreateSeparator(card2.content), Theme.rowHeightSeparator)
 
@@ -241,6 +290,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
                     return
                 end
                 db.Spells[key] = nil
+                BumpColorEpoch(key)
                 Redraw(classToken)
                 ApplySettings()
             end,
@@ -273,7 +323,14 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             db.OnlyEnemiesInCombat = checked
             ApplySettings()
         end,
-    }), 0.5)
+    }), 1 / 3)
+    row3:AddWidget(GUIFrame:CreateCheckbox(row3, "Only Enemies Fighting Your Group", {
+        value = db.OnlyEnemiesFightingGroup ~= false,
+        callback = function(checked)
+            db.OnlyEnemiesFightingGroup = checked
+            ApplySettings()
+        end,
+    }), 1 / 3)
     row3:AddWidget(GUIFrame:CreateSlider(row3, "Most Enemies Counted", {
         min = 1, max = 40, step = 1,
         value = db.MaxEnemies or 20,
@@ -281,10 +338,11 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             db.MaxEnemies = value
             ApplySettings()
         end,
-    }), 0.5)
+    }), 1 / 3)
     card3:AddRow(row3, Theme.rowHeight)
-    card3:AddNote("Attackable, alive enemies with a nameplate. On training dummies, which flag " ..
-        "neither rule, every attackable enemy counts.")
+    card3:AddNote("Attackable, alive enemies with a nameplate. Fighting your group: you, your pet or a " ..
+        "party member is on the enemy's threat list; in a raid this toggle has no effect. While you are in " ..
+        "combat and no enemy passes, as on training dummies, every attackable enemy counts.")
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -374,6 +432,27 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card5:AddRow(row5a, Theme.rowHeight)
+    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "DoT Colors", {
+        value = db.DoTColors ~= false,
+        tooltip = "Each DoT's count and icon border take its own color, set in Your DoTs. " ..
+            "Off: Some Have It and a black border for every DoT.",
+        callback = function(checked)
+            db.DoTColors = checked
+            colorManager:UpdateAll(true)
+            ApplySettings()
+        end,
+    }), 0.5)
+    row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "Full Coverage Color", {
+        value = db.FullCoverageColor ~= false,
+        tooltip = "The count turns All Have It when every counted enemy has the DoT.",
+        callback = function(checked)
+            db.FullCoverageColor = checked
+            manager:UpdateAll(true)
+            ApplySettings()
+        end,
+    }), 0.5)
+    card5:AddRow(row5c, Theme.rowHeight)
     local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
     row5b:AddWidget(GUIFrame:CreateColorPicker(row5b, "Some Have It", {
         color = db.SomeColor,
@@ -382,13 +461,15 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             ApplySettings()
         end,
     }), 0.5)
-    row5b:AddWidget(GUIFrame:CreateColorPicker(row5b, "All Have It", {
+    local allPicker = GUIFrame:CreateColorPicker(row5b, "All Have It", {
         color = db.AllColor,
         callback = function(r, g, b, a)
             db.AllColor = { r, g, b, a }
             ApplySettings()
         end,
-    }), 0.5)
+    })
+    row5b:AddWidget(allPicker, 0.5)
+    manager:Register(allPicker, "fullCoverage")
     card5:AddRow(row5b, Theme.rowHeight)
     yOffset = card5:GetNextOffset()
 
