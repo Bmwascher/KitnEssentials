@@ -928,8 +928,8 @@ local function ApplyWiden()
     insetR:SetPoint("TOPLEFT", inset, "TOPRIGHT", 1, 0)
     insetR:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", -4, 4)
 
-    -- Hidden while widened. With the Character skin on, the pieces are already
-    -- blank, so hiding or showing them changes nothing there.
+    -- With the Character skin on, these pieces are already blank, so hiding or
+    -- showing them changes nothing there.
     for _, name in ipairs(INNER_BORDER) do
         local piece = _G[name]
         if piece then
