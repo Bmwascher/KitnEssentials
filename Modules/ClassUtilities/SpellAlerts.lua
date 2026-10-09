@@ -47,8 +47,14 @@ function SA:ApplyForCurrentSpec()
     SetCVar("displaySpellActivationOverlays", shown and "1" or "0")
 end
 
+-- The event fires for every group member; only the player's spec decides.
+function SA:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:ApplyForCurrentSpec()
+end
+
 function SA:OnEnable()
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "ApplyForCurrentSpec")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "ApplyForCurrentSpec")
     self:ApplyForCurrentSpec()
 end

@@ -391,6 +391,12 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- The event fires for every group member; only the player's spec decides.
+function HT:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:EvaluateGate()
+end
+
 function HT:OnEnable()
     self:UpdateDB()
     -- Class before anything else. Without it a non-Warlock with the module
@@ -401,7 +407,7 @@ function HT:OnEnable()
     if class ~= "WARLOCK" then return end
     if not self.db.Enabled then return end
 
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "EvaluateGate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "EvaluateGate")
     self:RegWithEditMode()
     -- A retained anchor skips CreateAnchor's placement, and disable dropped

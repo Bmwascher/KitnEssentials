@@ -543,7 +543,10 @@ function PS:OnEnable()
     self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "QueueUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
     self:RegisterEvent("SPELLS_CHANGED", "QueueUpdate")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "QueueUpdate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", function(_, unit)
+        if unit ~= "player" then return end
+        self:QueueUpdate()
+    end)
     self:RegisterEvent("UNIT_DIED", "QueueUpdate")
     -- Mounting hides the text, and without this nothing re-checks on dismount.
     self:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED", "QueueUpdate")

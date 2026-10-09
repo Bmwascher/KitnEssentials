@@ -453,6 +453,12 @@ function TT:UnregisterEditMode()
     -- The EllesmereUI element deliberately stays; see CHAT:UnregisterEditMode.
 end
 
+-- The event fires for every group member; only the player's spec decides.
+function TT:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:OnTotemUpdate()
+end
+
 function TT:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
@@ -475,7 +481,7 @@ function TT:OnEnable()
 
     self:RegisterEvent("PLAYER_TOTEM_UPDATE",          "OnTotemUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD",        "OnTotemUpdate")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTotemUpdate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     C_Timer.After(0.1, function() self:UpdateTotems() end)
 
     self:RegisterEditMode()

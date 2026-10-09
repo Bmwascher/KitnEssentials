@@ -468,7 +468,9 @@ end
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
-function CC:OnSpecChanged()
+-- The event fires for every group member; only the player's spec decides.
+function CC:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
     self:ResolveRangeAbility()
     self.lastInRange = nil
     self:UpdateOnUpdateState()
