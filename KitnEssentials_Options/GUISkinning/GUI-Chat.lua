@@ -109,6 +109,15 @@ local function BuildWhisperSoundOptions()
     return opts
 end
 
+-- manager is nil for a card the state manager leaves alone (Chat Links).
+local function AddSeparatorRow(card, manager)
+    local row = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
+    local sep = GUIFrame:CreateSeparator(row)
+    row:AddWidget(sep, 1)
+    if manager then manager:Register(sep, "all") end
+    card:AddRow(row, Theme.rowHeightSeparator)
+end
+
 GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     if KE:ShouldNotLoadModule() then return end
     local db = KE.db and KE.db.profile.Skinning.Chat
@@ -265,6 +274,21 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card4, "all")
 
+    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
+        value = db.MatchDamageMeterSize == true,
+        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
+            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
+        callback = function(checked)
+            db.MatchDamageMeterSize = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row4match:AddWidget(matchChk, 1)
+    manager:Register(matchChk, "all")
+    card4:AddRow(row4match, Theme.rowHeight)
+
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local widthSlider = GUIFrame:CreateSlider(row4a, "Panel Width", {
         min = 300, max = 900, step = 1,
@@ -289,20 +313,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     manager:Register(heightSlider, "panelsize")
     card4:AddRow(row4a, Theme.rowHeight)
 
-    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
-        value = db.MatchDamageMeterSize == true,
-        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
-            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
-        callback = function(checked)
-            db.MatchDamageMeterSize = checked
-            ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-    })
-    row4match:AddWidget(matchChk, 1)
-    manager:Register(matchChk, "all")
-    card4:AddRow(row4match, Theme.rowHeight)
+    AddSeparatorRow(card4, manager)
 
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local editBoxPosDropdown = GUIFrame:CreateDropdown(row4b, "Edit Box Position", {
@@ -316,17 +327,19 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row4b:AddWidget(editBoxPosDropdown, 0.5)
     manager:Register(editBoxPosDropdown, "all")
 
-    local scrollMsgSlider = GUIFrame:CreateSlider(row4b, "Messages Per Scroll", {
-        min = 1, max = 10, step = 1,
-        value = db.NumScrollMessages or 3,
+    local editBoxFontSlider = GUIFrame:CreateSlider(row4b, "Edit Box Font Size", {
+        min = 8, max = 24, step = 1,
+        value = db.EditBoxFontSize or 14,
         callback = function(value)
-            db.NumScrollMessages = value
+            db.EditBoxFontSize = value
             ApplySettings()
         end,
     })
-    row4b:AddWidget(scrollMsgSlider, 0.5)
-    manager:Register(scrollMsgSlider, "all")
+    row4b:AddWidget(editBoxFontSlider, 0.5)
+    manager:Register(editBoxFontSlider, "all")
     card4:AddRow(row4b, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
 
     local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local maxLinesSlider = GUIFrame:CreateSlider(row4c, "Max History Lines", {
@@ -340,42 +353,19 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row4c:AddWidget(maxLinesSlider, 0.5)
     manager:Register(maxLinesSlider, "all")
 
-    local editBoxFontSlider = GUIFrame:CreateSlider(row4c, "Edit Box Font Size", {
-        min = 8, max = 24, step = 1,
-        value = db.EditBoxFontSize or 14,
+    local scrollMsgSlider = GUIFrame:CreateSlider(row4c, "Messages Per Scroll", {
+        min = 1, max = 10, step = 1,
+        value = db.NumScrollMessages or 3,
         callback = function(value)
-            db.EditBoxFontSize = value
+            db.NumScrollMessages = value
             ApplySettings()
         end,
     })
-    row4c:AddWidget(editBoxFontSlider, 0.5)
-    manager:Register(editBoxFontSlider, "all")
+    row4c:AddWidget(scrollMsgSlider, 0.5)
+    manager:Register(scrollMsgSlider, "all")
     card4:AddRow(row4c, Theme.rowHeight)
 
-    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local shortChannelsCheck = GUIFrame:CreateCheckbox(row4d, "Short Channel Names", {
-        value = db.ShortChannels ~= false,
-        callback = function(checked)
-            db.ShortChannels = checked
-            ApplySettings()
-        end,
-    })
-    row4d:AddWidget(shortChannelsCheck, 0.5)
-    manager:Register(shortChannelsCheck, "all")
-
-    local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
-        value = db.RoleIcons ~= false,
-        tooltip = "Shows tank, healer, and DPS role icons before sender names in party, raid, and instance chat.",
-        callback = function(checked)
-            db.RoleIcons = checked
-            ApplySettings()
-        end,
-    })
-    row4d:AddWidget(roleIconsCheck, 0.5)
-    manager:Register(roleIconsCheck, "all")
-    card4:AddRow(row4d, Theme.rowHeight)
-
-    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local fadeCheck = GUIFrame:CreateCheckbox(row4e, "Fade Chat Text", {
         value = db.FadeEnabled ~= false,
         callback = function(checked)
@@ -396,7 +386,32 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     })
     row4e:AddWidget(fadeTimeSlider, 0.5)
     manager:Register(fadeTimeSlider, "all")
-    card4:AddRow(row4e, Theme.rowHeightLast, 0)
+    card4:AddRow(row4e, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
+
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local shortChannelsCheck = GUIFrame:CreateCheckbox(row4d, "Short Channel Names", {
+        value = db.ShortChannels ~= false,
+        callback = function(checked)
+            db.ShortChannels = checked
+            ApplySettings()
+        end,
+    })
+    row4d:AddWidget(shortChannelsCheck, 0.5)
+    manager:Register(shortChannelsCheck, "all")
+
+    local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
+        value = db.RoleIcons ~= false,
+        tooltip = "Shows tank, healer, and DPS role icons before sender names in party, raid, and instance chat.",
+        callback = function(checked)
+            db.RoleIcons = checked
+            ApplySettings()
+        end,
+    })
+    row4d:AddWidget(roleIconsCheck, 0.5)
+    manager:Register(roleIconsCheck, "all")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
 
