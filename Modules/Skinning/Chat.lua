@@ -1319,7 +1319,7 @@ function CHAT:OnChatEdit_UpdateHeader(editbox)
         insetWritten[editbox] = right
         editbox:SetTextInsets(insetLeft, right, insetTop, insetBottom)
     end
-    self:ApplyFrameStyle(editbox, nil, true)
+    self:ApplyFrameStyle(editbox)
 
     if chanIndex and chatType == "CHANNEL" then
         if chanIndex == 0 then
@@ -1553,13 +1553,10 @@ function CHAT:StyleTab(tab, chat)
     tab.styled = true
 end
 
-function CHAT:ApplyFrameStyle(frame, template, glossTex, ignoreUpdates, forcePixelMode)
+function CHAT:ApplyFrameStyle(frame, template)
     if not frame then return end
 
     frame.template = template or "Default"
-    frame.glossTex = glossTex
-    frame.ignoreUpdates = ignoreUpdates
-    frame.forcePixelMode = forcePixelMode
 
     if not frame.SetBackdrop then
         Mixin(frame, BackdropTemplateMixin)
@@ -1671,7 +1668,7 @@ function CHAT:StyleEditbox(editbox)
     local name = editbox:GetName()
 
     editbox:SetAltArrowKeyMode(false)
-    self:ApplyFrameStyle(editbox, nil, true)
+    self:ApplyFrameStyle(editbox)
     editbox:SetFont(cachedFontPath, db.EditBoxFontSize or 14, NormalizeFontOutline(db.FontOutline))
 
     if name then
