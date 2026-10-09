@@ -65,6 +65,8 @@ local NONE = {}
 DT.root = nil
 DT.cells = {}
 DT.list = {}
+DT.listClass = nil
+DT.listSpec = nil
 DT.slots = nil
 DT.runner = nil
 DT.gate = nil
@@ -227,12 +229,14 @@ end
 
 local function PaintAnswers(cell, total)
     local db = DT.db
+    local fullCoverage = db.FullCoverageColor ~= false
     for k = 0, #cell.sensors do
         local answer = cell.answers[k]
         if k <= total then
-            local color = Rules.LabelColorKey(k, total) == "all" and DT.allColor or DT.someColor
+            local shown, d = Rules.Capped(k, total, cell.cap)
+            local color = Rules.CountColor(shown, d, cell.own, DT.someColor, DT.allColor, fullCoverage)
             answer.label:SetTextColor(color[1], color[2], color[3], color[4])
-            answer.label:SetText(Rules.Label(k, total, db.CountFormat))
+            answer.label:SetText(Rules.Label(shown, d, db.CountFormat))
             answer.label:Show()
         else
             answer.label:Hide()
@@ -243,16 +247,18 @@ end
 ---------------------------------------------------------------------------------
 -- Glow
 ---------------------------------------------------------------------------------
--- Drawn at answer `total`'s icon, so the window shows it only while every
--- counted enemy carries the DoT. A repaint or a new sensor only moves it; a
+-- Drawn at answer d's icon (the total, or the DoT's target limit when lower),
+-- so the window shows it only while every enemy the DoT can reach carries it.
+-- A repaint or a new sensor only moves it; a
 -- restyle restarts its animations, so it waits for an on/off change or Apply.
 -- Off goes through Configure, not Hide: a hidden animation still costs.
 local function PlaceGlow(cell, total)
     local host, geo = cell.glow, cell.geo
     if not host or not geo then return end
-    local on = DT.db.GlowEnabled == true and total > 0
+    local _, d = Rules.Capped(0, total, cell.cap)
+    local on = DT.db.GlowEnabled == true and d > 0
     if on then
-        host:SetPoint("TOPLEFT", cell.tail, "TOPLEFT", AnswerX(cell, total) + geo.iconX, -geo.iconY)
+        host:SetPoint("TOPLEFT", cell.tail, "TOPLEFT", AnswerX(cell, d) + geo.iconX, -geo.iconY)
     end
     if on == cell.glowOn then return end
     if on then
@@ -308,7 +314,7 @@ local function AddSensor(cell)
     if not pcall(sensor.SetSize, sensor, 1, 1) then return Discard(cell, sensor, "size refused") end
     local grouped, groupErr = pcall(sensor.AddAuraGroup, sensor, SENSOR_GROUP, AURA_FILTER, {
         maxFrameCount = 1,
-        candidateFilters = { includeSpellIDs = { [cell.id] = true } },
+        candidateFilters = { includeSpellIDs = Rules.FilterIds(cell.id, cell.also) },
         initializeFrame = InitSensorButton,
         layout = { elementWidth = STRIDE, elementHeight = 1, elementSpacing = 0, lineSpacing = 0 },
     })
@@ -389,13 +395,13 @@ local function Refilter(cell, id)
     local accepted = 0
     for i = 1, #cell.sensors do
         local sensor = cell.sensors[i]
-        if pcall(sensor.SetAuraGroupCandidateFilters, sensor, SENSOR_GROUP, { includeSpellIDs = { [id] = true } }) then
+        if pcall(sensor.SetAuraGroupCandidateFilters, sensor, SENSOR_GROUP, { includeSpellIDs = Rules.FilterIds(id, cell.also) }) then
             accepted = accepted + 1
         end
     end
     local timerOk
     if cell.timer then
-        timerOk = pcall(cell.timer.SetAuraSlotCandidateFilters, cell.timer, TIMER_SLOT, { includeSpellIDs = { [id] = true } })
+        timerOk = pcall(cell.timer.SetAuraSlotCandidateFilters, cell.timer, TIMER_SLOT, { includeSpellIDs = Rules.FilterIds(id, cell.also) })
     end
     if DEBUG_DOT then
         KE:Print(("[DOT] %s re-pointed to %s: sensors %d/%d, timer %s"):format(
@@ -407,9 +413,15 @@ end
 local function StyleCell(cell, geo)
     local db = DT.db
     cell.geo = geo
-    cell.texture = C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(cell.id)
+    cell.texture = C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(cell.iconId or cell.id)
     cell.frame:SetSize(geo.w, geo.h)
     cell.icon:SetTexture(cell.texture)
+    local own = cell.own
+    if own then
+        cell.border:SetColorTexture(own[1], own[2], own[3], own[4])
+    else
+        cell.border:SetColorTexture(0, 0, 0, 1)
+    end
     local alpha = db.ShowIcon == false and 0 or 1
     cell.icon:SetAlpha(alpha)
     cell.border:SetAlpha(alpha)
@@ -514,7 +526,7 @@ local function EnsureTimer(cell)
     local added, slot
     if pcall(PlaceTimerContainer, container, cell.frame) then
         added, slot = pcall(container.AddAuraSlot, container, TIMER_SLOT, AURA_FILTER, {
-            candidateFilters = { includeSpellIDs = { [cell.id] = true } },
+            candidateFilters = { includeSpellIDs = Rules.FilterIds(cell.id, cell.also) },
             initializeFrame = function(button)
                 -- A slot takes no part in the flow layout, so it is anchored by hand.
                 local db = DT.db
@@ -740,32 +752,46 @@ function DT:ResolveList()
     return Rules.ResolveList(KE.DOT_TRACKER_SEEDS, self.db.Spells, class, specID, IsKnown), class, specID
 end
 
--- `list` comes from Rules.PlanApply, so a changed id reaches Refilter only with
--- the gate's yes.
-function DT:Apply(list, allowed)
+-- `list` comes from Rules.PlanApply, so a changed id or set of extra ids
+-- reaches Refilter only with the gate's yes. `class` and `specID` are the ones
+-- the list was resolved for: for a row the gate kept on screen, the spec it
+-- was shown under, so its rows, caps and colors stay its own.
+function DT:Apply(list, allowed, class, specID)
     local db = self.db
-    -- A changed list starts with every slot retaken; a look-only change keeps
-    -- the sensors bound. The scan Stop reports must not raise the build target
-    -- for the list being replaced.
-    if self.slots and not Rules.SameList(list, self.list) then
+    -- A changed list, or a cell about to be re-pointed for the same id, starts
+    -- with every slot retaken; a look-only change keeps the sensors bound. The
+    -- scan Stop reports must not raise the build target for the list being
+    -- replaced.
+    if self.slots and (not Rules.SameList(list, self.list) or self:NeedsRefilter(list, class, specID)) then
         self.applying = true
         self.slots:Stop()
         self.applying = false
     end
 
+    local colorsOn = db.DoTColors ~= false
     for i = 1, #list do
+        local id = list[i]
         local cell = self.cells[i] or NewCell(i)
+        local row = Rules.RowOf(KE.DOT_TRACKER_SEEDS, class, specID, id)
+        local also = Rules.AlsoOf(row)
         if cell.id == nil then
-            cell.id = list[i]
-        elseif cell.id ~= list[i] then
-            Refilter(cell, list[i])
+            cell.id, cell.also = id, also
+        elseif cell.id ~= id or not Rules.SameList(cell.also, also) then
+            -- Reached only with the gate's yes: Reconcile asked it through
+            -- NeedsRefilter for exactly this difference.
+            cell.also = also
+            Refilter(cell, id)
         end
+        cell.row, cell.cap = row, row and row.cap
+        cell.iconId = Rules.IconOf(row, id, IsKnown)
+        local own = Rules.ColorOf(db.Spells and db.Spells[Rules.SpellKey(specID, id)], row, colorsOn)
+        cell.own = own and { KE:ResolveColor(own, DEFAULT_SOME) } or nil
         cell.frame:Show()
     end
     for i = #list + 1, #self.cells do
         RetireCell(self.cells[i])
     end
-    self.list = list
+    self.list, self.listClass, self.listSpec = list, class, specID
 
     self.someColor = { KE:ResolveColor(db.SomeColor, DEFAULT_SOME) }
     self.allColor = { KE:ResolveColor(db.AllColor, DEFAULT_ALL) }
@@ -818,12 +844,10 @@ end
 ---------------------------------------------------------------------------------
 -- Gate and lifecycle
 ---------------------------------------------------------------------------------
-function DT:NeedsRefilter(wanted)
-    for i = 1, math_min(#wanted, #self.cells) do
-        local id = self.cells[i].id
-        if id ~= nil and id ~= wanted[i] then return true end
-    end
-    return false
+function DT:NeedsRefilter(wanted, class, specID)
+    return Rules.NeedsRefilter(self.cells, wanted, function(id)
+        return Rules.AlsoOf(Rules.RowOf(KE.DOT_TRACKER_SEEDS, class, specID, id))
+    end)
 end
 
 -- Every gate request goes through here, so the drain's events follow right
@@ -861,7 +885,7 @@ function DT:Reconcile()
         return self:Deactivate()
     end
     local list, allowed = Rules.PlanApply(self.active and self.list or NONE, wanted,
-        self:NeedsRefilter(wanted), self:TimersOwed(wanted, TimerStyleKey(self.db)), self.requestGate)
+        self:NeedsRefilter(wanted, class, specID), self:TimersOwed(wanted, TimerStyleKey(self.db)), self.requestGate)
     -- A yes, or nothing gated owed, means this pass applies the settings as
     -- they are: an earlier refusal (a DoT since removed, say) is moot.
     if allowed then self.gate:Cancel() end
@@ -871,10 +895,12 @@ function DT:Reconcile()
     end
     if not list then return end
     if #list == 0 then return self:Deactivate() end
-    self:Activate(list, allowed)
+    -- A row the gate kept on screen keeps the spec it was resolved for.
+    if list ~= wanted then class, specID = self.listClass, self.listSpec end
+    self:Activate(list, allowed, class, specID)
 end
 
-function DT:Activate(list, allowed)
+function DT:Activate(list, allowed, class, specID)
     self:CreateRoot()
     self:RegWithEditMode()
     self:EnsureCounting()
@@ -890,7 +916,7 @@ function DT:Activate(list, allowed)
         self:UnregisterEvent("PLAYER_TARGET_CHANGED")
         self:UnregisterEvent("UNIT_FACTION")
     end
-    self:Apply(list, allowed)
+    self:Apply(list, allowed, class, specID)
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
@@ -970,9 +996,18 @@ function DT:OnSpellsChanged()
     C_Timer.After(0, ReResolveNow)
 end
 
+-- A hero talent can swap a merged row's icon while the list stays the same.
+function DT:IconsChanged()
+    for i = 1, #self.list do
+        local cell = self.cells[i]
+        if Rules.IconOf(cell.row, cell.id, IsKnown) ~= cell.iconId then return true end
+    end
+    return false
+end
+
 function DT:ReResolve()
     if not self:IsEnabled() then return end
-    if Rules.SameList(self:ResolveList(), self.list) then return end
+    if Rules.SameList(self:ResolveList(), self.list) and not self:IconsChanged() then return end
     self:Evaluate()
 end
 
@@ -1046,16 +1081,17 @@ end
 
 function DT:PaintPreview()
     local db = self.db
+    local fullCoverage = db.FullCoverageColor ~= false
     for i = 1, #self.list do
         local cell = self.cells[i]
-        local k = SAMPLE_LIT[((i - 1) % #SAMPLE_LIT) + 1]
-        local color = Rules.LabelColorKey(k, SAMPLE_TOTAL) == "all" and self.allColor or self.someColor
+        local shown, d = Rules.Capped(SAMPLE_LIT[((i - 1) % #SAMPLE_LIT) + 1], SAMPLE_TOTAL, cell.cap)
+        local color = Rules.CountColor(shown, d, cell.own, self.someColor, self.allColor, fullCoverage)
         cell.sample:SetTextColor(color[1], color[2], color[3], color[4])
-        cell.sample:SetText(Rules.Label(k, SAMPLE_TOTAL, db.CountFormat))
+        cell.sample:SetText(Rules.Label(shown, d, db.CountFormat))
         cell.sample:Show()
         cell.sampleTimer:SetText(SAMPLE_TIMERS[((i - 1) % #SAMPLE_TIMERS) + 1])
         cell.sampleTimer:SetShown(db.TimerEnabled ~= false)
-        if db.GlowEnabled and k == SAMPLE_TOTAL then
+        if db.GlowEnabled and shown == d then
             KE.AuraGlow.Configure(cell.previewGlow, db, cell.geo.w, cell.geo.h)
         else
             KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
