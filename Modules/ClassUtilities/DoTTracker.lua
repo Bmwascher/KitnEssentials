@@ -113,7 +113,7 @@ local unitApi = {
 }
 
 local function Verdict(unit, strict)
-    return Rules.Verdict(unit, strict, DT.db.OnlyEnemiesInCombat ~= false, unitApi)
+    return Rules.Verdict(unit, strict, DT.db.OnlyEnemiesInCombat ~= false, false, unitApi)
 end
 
 local function IsKnown(spellID)

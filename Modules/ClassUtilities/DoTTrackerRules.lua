@@ -164,8 +164,8 @@ end
 -- Every read arrives already resolved to true, false or nil. A unit whose
 -- existence cannot be read is refused: nothing could be bound to it. Any other
 -- nil (an error or a secret) lets the unit through, and so does strict being
--- off for the combat rule.
-function Rules.Verdict(unit, strict, onlyEnemiesInCombat, api)
+-- off for the combat and group rules.
+function Rules.Verdict(unit, strict, onlyEnemiesInCombat, onlyFightingGroup, api)
     if api.exists(unit) ~= true then return "no unit" end
     if api.canAttack(unit) == false then return "not attackable" end
     -- The game ignores spell-id filters for harmful auras on a unit the player
@@ -174,7 +174,26 @@ function Rules.Verdict(unit, strict, onlyEnemiesInCombat, api)
     if api.isDead(unit) == true then return "dead" end
     if not strict then return nil end
     if onlyEnemiesInCombat and api.inCombat(unit) == false then return "not in combat" end
+    if onlyFightingGroup and api.groupThreat(unit) == false then return "not fighting your group" end
     return nil
+end
+
+-- Whether any watcher is on the unit's threat list; nil when no read says so
+-- and one could not be read, or when there is no watcher list.
+function Rules.GroupThreat(unit, watchers, read)
+    if not watchers then return nil end
+    return AnyTrue(watchers, read, unit)
+end
+
+-- Whose threat lists count: the player, the pet and up to four party members.
+-- Nil in a raid, where the rule stands aside, and when either input is unread.
+function Rules.Watchers(inRaid, members)
+    if inRaid ~= false or type(members) ~= "number" then return nil end
+    local list = { "player", "pet" }
+    for i = 1, math_min(members - 1, 4) do
+        list[#list + 1] = "party" .. i
+    end
+    return list
 end
 
 function Rules.Label(k, total, format)

@@ -16,10 +16,12 @@ describe("dot tracker rules", function()
 
     describe("who counts", function()
         local NIL = {}
-        local KEYS = { "exists", "canAttack", "canAssist", "isDead", "inCombat" }
+        local KEYS = { "exists", "canAttack", "canAssist", "isDead", "inCombat", "groupThreat" }
 
         local function api(changes)
-            local reads = { exists = true, canAttack = true, canAssist = false, isDead = false, inCombat = true }
+            local reads = {
+                exists = true, canAttack = true, canAssist = false, isDead = false, inCombat = true, groupThreat = true,
+            }
             for key, value in pairs(changes) do
                 if value == NIL then reads[key] = nil else reads[key] = value end
             end
@@ -31,21 +33,67 @@ describe("dot tracker rules", function()
         end
 
         it("rejects in order; an unreadable existence rejects, any other unreadable read lets through", function()
+            -- reads, strict, in-combat rule on, group rule on, expected
             local cases = {
-                { {}, true, true, nil },
-                { { exists = false }, true, true, "no unit" },
-                { { exists = NIL }, true, true, "no unit" },
-                { { canAttack = false }, true, true, "not attackable" },
-                { { canAssist = true }, true, true, "assistable" },
-                { { isDead = true }, true, true, "dead" },
-                { { inCombat = false }, true, true, "not in combat" },
-                { { inCombat = false }, false, true, nil },
-                { { inCombat = false }, true, false, nil },
-                { { canAttack = NIL, canAssist = NIL, isDead = NIL, inCombat = NIL }, true, true, nil },
+                { {}, true, true, true, nil },
+                { { exists = false }, true, true, true, "no unit" },
+                { { exists = NIL }, true, true, true, "no unit" },
+                { { canAttack = false }, true, true, true, "not attackable" },
+                { { canAssist = true }, true, true, true, "assistable" },
+                { { isDead = true }, true, true, true, "dead" },
+                { { inCombat = false }, true, true, true, "not in combat" },
+                { { inCombat = false }, false, true, true, nil },
+                { { inCombat = false }, true, false, true, nil },
+                { { groupThreat = false }, true, true, true, "not fighting your group" },
+                { { groupThreat = NIL }, true, true, true, nil },
+                { { groupThreat = false }, true, true, false, nil },
+                { { groupThreat = false }, false, true, true, nil },
+                { { inCombat = false, groupThreat = false }, true, true, true, "not in combat" },
+                { { canAttack = NIL, canAssist = NIL, isDead = NIL, inCombat = NIL, groupThreat = NIL }, true, true, true, nil },
             }
             for i, case in ipairs(cases) do
-                local reason = Rules.Verdict("nameplate1", case[2], case[3], api(case[1]))
-                assert.equals(case[4], reason, "case " .. i)
+                local reason = Rules.Verdict("nameplate1", case[2], case[3], case[4], api(case[1]))
+                assert.equals(case[5], reason, "case " .. i)
+            end
+        end)
+
+        it("finds the group on a threat list at any true read, and stays unsure only when a read failed", function()
+            -- watcher reads in order, expected
+            local cases = {
+                { { true }, true },
+                { { NIL, true }, true },
+                { { false, NIL }, nil },
+                { { false, false }, false },
+                { {}, false },
+            }
+            for i, case in ipairs(cases) do
+                local watchers, reads = {}, {}
+                for j, value in ipairs(case[1]) do
+                    watchers[j] = "w" .. j
+                    if value ~= NIL then reads["w" .. j] = value end
+                end
+                local function read(watcher, unit)
+                    assert.equals("nameplate1", unit)
+                    return reads[watcher]
+                end
+                assert.equals(case[2], Rules.GroupThreat("nameplate1", watchers, read), "case " .. i)
+            end
+            local function noRead() error("no read expected without a watcher list") end
+            assert.is_nil(Rules.GroupThreat("nameplate1", nil, noRead), "no list")
+        end)
+
+        it("watches the player, pet and party, and nobody in a raid or with an unread group", function()
+            -- in a raid, group size, expected list
+            local cases = {
+                { false, 0, { "player", "pet" } },
+                { false, 3, { "player", "pet", "party1", "party2" } },
+                { false, 5, { "player", "pet", "party1", "party2", "party3", "party4" } },
+                { true, 20, nil },
+                { nil, 3, nil },
+                { false, nil, nil },
+            }
+            for i, case in ipairs(cases) do
+                assert.same(case[3], Rules.Watchers(case[1], case[2]), "case " .. i)
             end
         end)
 
