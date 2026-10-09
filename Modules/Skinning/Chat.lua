@@ -146,8 +146,6 @@ end
 local BLANK_TEX = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
-local BACKDROP_TEMPLATE = { bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1, }
-
 local SHORT_CHANNEL_NAMES = {
     { global = "CHAT_RAID_WARNING_GET",  short = "RW" },
     { global = "CHAT_INSTANCE_CHAT_GET", short = "I" },
@@ -610,7 +608,7 @@ function CHAT:UpdateTabBackdrop()
     local tabBorderColor = db.TabBackdrop and db.TabBackdrop.BorderColor or { 0, 0, 0, 1 }
     local tabBackdropEnabled = db.TabBackdrop and db.TabBackdrop.Enabled
 
-    tabBackdrop:SetBackdrop(BACKDROP_TEMPLATE)
+    KE.Skins.OwnBackdrop(tabBackdrop)
 
     if tabBackdropEnabled then
         tabBackdrop:SetBackdropColor(tabBgColor[1], tabBgColor[2], tabBgColor[3], tabBgColor[4] or 0.5)
@@ -625,7 +623,7 @@ end
 function CHAT:ApplyBackdrop(backdrop)
     local db = self.db
 
-    backdrop:SetBackdrop(BACKDROP_TEMPLATE)
+    KE.Skins.OwnBackdrop(backdrop)
 
     if db.Backdrop.Enabled ~= false then
         backdrop:SetBackdropColor(db.Backdrop.Color[1], db.Backdrop.Color[2], db.Backdrop.Color[3],
@@ -2393,7 +2391,7 @@ function CHAT:StyleCombatLog()
             end
         end
 
-        bar:SetBackdrop(BACKDROP_TEMPLATE)
+        KE.Skins.OwnBackdrop(bar)
         bar:SetBackdropColor(0, 0, 0, 0.6)
         bar:SetBackdropBorderColor(0, 0, 0, 1)
         bar.styled = true
