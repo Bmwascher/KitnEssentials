@@ -313,19 +313,15 @@ function L.loadPixelPerfect(opts, overrides)
     return helpers.loadModule("Core/PixelPerfect.lua")
 end
 
--- Core/Nicknames.lua. It captures its globals as file-scope upvalues, so
--- every stub must exist BEFORE its loadModule. Returns the KE table (nickname
--- store: KE.db.global.Nicknames, read live). The export codec
--- (Core/ProfileManager.lua) is not loaded: no nicknames case reaches it.
+-- Core/Nicknames.lua. It captures its unit globals as file-scope upvalues, so
+-- every stub must exist BEFORE its loadModule. Returns the KE table.
 function L.loadNicknames(overrides)
     installMock(overrides, { UnitName = function() return "Bob" end })
     helpers.installAddonShim()
     -- Unit identity consistent with the mock UnitName ("Bob" on "Realm").
     _G.UnitFullName = function() return "Bob", "Realm" end
     _G.UnitIsPlayer = function() return true end
-    _G.GetNormalizedRealmName = function() return "Realm" end
-    local KE = { db = { global = { Nicknames = {} } } }
-    return helpers.loadModule("Core/Nicknames.lua", KE)
+    return helpers.loadModule("Core/Nicknames.lua", {})
 end
 
 -- Modules/Dungeons/TargetedSpells.lua pure helpers. Returns TS, KE.

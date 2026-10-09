@@ -718,7 +718,7 @@ function KE:FlagReloadNeeded() end
 function KE:FlushPendingReloadPrompt() end
 
 -- ─── Nicknames (Core/Nicknames.lua) ──────────────────────
---- Store key ("Name-NormalizedRealm") from a raw name STRING ("Name" or
+--- Normalized key ("Name-NormalizedRealm") from a raw name STRING ("Name" or
 --- "Name-Realm"; the realm side is normalized defensively). Pure string
 --- helper; nil when either side is unresolvable.
 ---@param rawName string?
@@ -1220,43 +1220,17 @@ function KE:SetupMinimapIcon() end
 
 -- Core/Nicknames.lua
 ---@param unit string Unit token (e.g., "player", "party2")
----@return string name Nickname from either source, else raw UnitName
+---@return string name Nickname from the external provider, else raw UnitName
 function KE:GetNicknameOrName(unit) end
 
 ---@param subject string Unit token, "Name" or "Name-Realm"
 ---@return string|nil nickname Plain nickname from the external provider, or nil
 function KE:GetNSRTNickname(subject) end
 
----@param own string|nil Nickname from KE's own store
 ---@param foreign string|nil Nickname from the external provider
 ---@param realName string|nil Plain name the provider was asked about
----@return string|nil nickname Resolved nickname, or nil when neither applies
-function KE:ResolveNicknamePrecedence(own, foreign, realName) end
-
----@return table|nil payload
----@return number|string countOrError
-function KE:CollectNicknamePayload() end
-
----@return string|nil encoded
----@return string|nil error
----@return number|nil count
-function KE:ExportNicknames() end
-
----@param payload table
----@param replaceAll boolean|nil
----@return number|nil added
----@return number|string updatedOrError
----@return number|nil removed
-function KE:ApplyNicknamePayload(payload, replaceAll) end
-
----@param importString string
----@param replaceAll boolean|nil wipe local entries before applying the import
----@return boolean success
----@return string message
-function KE:ImportNicknames(importString, replaceAll) end
-
----@return number cleared
-function KE:ClearAllNicknames() end
+---@return string|nil nickname The provider's nickname, or nil when it only echoes the name
+function KE:ResolveNicknamePrecedence(foreign, realName) end
 
 function KE:RefreshNicknameTags() end
 

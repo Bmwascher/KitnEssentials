@@ -1195,7 +1195,7 @@ end
 -- "<Name> teleported": the NSRT nickname, else the character name, never the
 -- realm, in the unit's class color when the class reads plain.
 local function PartyLine(unit, realName)
-    local name = KE:ResolveNicknamePrecedence(nil, KE:GetNSRTNickname(unit), realName) or realName
+    local name = KE:ResolveNicknamePrecedence(KE:GetNSRTNickname(unit), realName) or realName
     local _, class = UnitClass(unit)
     if issecretvalue(class) or type(class) ~= "string" then
         return name .. " teleported"

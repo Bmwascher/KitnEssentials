@@ -141,7 +141,7 @@ end
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 
 local function FormatPartyDeathMessage(db, unitID, fallbackName)
-    -- The nickname store first, falling back to the secret-safe lookup when
+    -- The nickname lookup first, falling back to the secret-safe lookup when
     -- the name comes back secret. The secret test MUST precede the emptiness
     -- comparison: comparing a secret string throws, so the other order made
     -- the secret branch unreachable and crashed on exactly the value it was

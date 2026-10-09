@@ -1288,33 +1288,30 @@ end
 --
 -- Substitutes nicknames for player names on the bars at DISPLAY time only:
 -- chat reports and the Detail targets keying (bar._rawName) keep real names.
--- Two sources, ordered by KE:ResolveNicknamePrecedence (Core/Nicknames.lua).
--- Always on; the only switch is NSAPI's own.
+-- The source is the external provider, filtered by
+-- KE:ResolveNicknamePrecedence (Core/Nicknames.lua). Always on; the only
+-- switch is NSAPI's own.
 -- Resolution never touches a secret name -- the self row keys off isLocalPlayer
--- (NeverSecret), plain names build a store key via KE:BuildNicknameKey
--- (memoized in nickLookup), and a secret-in-combat name falls back to the
--- nickByGUID memo learned while it was plain. A player never seen plain this
--- session keeps their real name until combat drops.
+-- (NeverSecret), plain names are memoized in nickLookup once KE:BuildNicknameKey
+-- resolves, and a secret-in-combat name falls back to the nickByGUID memo
+-- learned while it was plain. A player never seen plain this session keeps
+-- their real name until combat drops.
 ---------------------------------------------------------------------------------
 
 -- The player's own nickname, resolved once and cached on the module (false =
--- confirmed none set) so the isLocalPlayer render path does no per-tick store
--- work. OnNicknamesChanged nils the cache so a change re-resolves. Caches
--- ONLY once the identity actually resolved: at the login-time first paint
--- UnitFullName / GetNormalizedRealmName can still be nil, and caching `false`
--- then would stick "no nickname" for the session (the render path only calls
--- back in while _selfNick is nil) -- returning nil un-cached lets the next
--- tick retry, which settles within moments of login.
+-- confirmed none set) so the isLocalPlayer render path does no per-tick
+-- provider call. OnNicknamesChanged nils the cache so a change re-resolves.
+-- Caches ONLY once the identity actually resolved: at the login-time first
+-- paint UnitFullName / GetNormalizedRealmName can still be nil, and caching
+-- `false` then would stick "no nickname" for the session (the render path only
+-- calls back in while _selfNick is nil) -- returning nil un-cached lets the
+-- next tick retry, which settles within moments of login.
 function DM:ResolveSelfNickname()
-    -- Same key construction as KE:GetNicknameOrName (Core/Nicknames.lua).
     local name, realm = UnitFullName("player")
     if not name or name == "" then return nil end
     if not realm or realm == "" then realm = GetNormalizedRealmName() end
     if not realm or realm == "" then return nil end
-    local own
-    local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
-    if nicks then own = nicks[name .. "-" .. realm] end
-    local nick = KE:ResolveNicknamePrecedence(own, KE:GetNSRTNickname("player"), name) or false
+    local nick = KE:ResolveNicknamePrecedence(KE:GetNSRTNickname("player"), name) or false
     self._selfNick = nick
     return nick
 end
@@ -1323,28 +1320,24 @@ end
 -- module's other player-name surfaces (the hover-tip / detail-panel enemy
 -- breakdowns in Detail.lua): plain raw name in ("Name" or "Name-Realm" -- the
 -- CALLER guarantees it is non-secret), nickname string or nil out. One
--- nickLookup memo index in the steady state; a miss builds the store key once
--- (KE:BuildNicknameKey), asks both sources, and remembers hit AND miss.
--- Memoizes only a REAL resolution: key is nil while the realm is still
--- unresolved (login-time first paint), and caching that false would kill
--- nicknames for the whole session.
+-- nickLookup memo index in the steady state; a miss asks the provider once
+-- and remembers hit AND miss.
+-- Memoizes only a REAL resolution: KE:BuildNicknameKey is nil while the realm
+-- is still unresolved (login-time first paint), and caching that false would
+-- kill nicknames for the whole session.
 function DM:LookupNickname(rawName)
     if not rawName or rawName == "" then return nil end
     local c = nickLookup[rawName]
     if c == nil then
-        -- Key independent of the store, so the memo arms even when the store
-        -- is missing; otherwise the NSAPI call repeats per bar per tick.
         local key = KE:BuildNicknameKey(rawName, GetNormalizedRealmName())
-        local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
-        local own = (key and nicks) and nicks[key] or nil
-        c = KE:ResolveNicknamePrecedence(own, KE:GetNSRTNickname(rawName), rawName) or false
+        c = KE:ResolveNicknamePrecedence(KE:GetNSRTNickname(rawName), rawName) or false
         if key then nickLookup[rawName] = c end
     end
     return c or nil
 end
 
--- Nickname-change hook, called from KE:RefreshNicknameTags (store imports,
--- store clears, and NSAPI's own change callback). Drops the memos so the next
+-- Nickname-change hook, called from KE:RefreshNicknameTags (NSAPI's own change
+-- callback). Drops the memos so the next
 -- paint re-resolves, with the in-combat exception below; the trailing Tick
 -- repaints immediately, because a change usually lands out of combat where
 -- no ticker runs to pick it up --
@@ -1967,7 +1960,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- the spec-icon and realmNames guards in this function.
         local guidPlain = guid and not issecretvalue(guid)
         -- classFile "" is the documented enemy-mob marker (see the icon
-        -- tiers above): creatures can't have nicknames, so skip the store
+        -- tiers above): creatures can't have nicknames, so skip the lookup
         -- work entirely and keep creature names out of the memos.
         if not nmSecret and nm and classFile ~= "" then
             -- Learn the realm-bearing form REGARDLESS of ShowRealm (the
