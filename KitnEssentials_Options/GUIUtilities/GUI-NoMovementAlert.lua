@@ -147,7 +147,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     if db.AttachToCombatTexts then
         GUIFrame:CreateAttachSizeRow(card2, db, {
             sizeKey = "FontSize", default = 16, range = { 8, 48 },
-            onChange = ApplySettings,
+            onChange = ApplySettings, isLast = true,
         })
     end
 
