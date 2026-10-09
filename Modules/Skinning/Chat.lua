@@ -1142,8 +1142,6 @@ function CHAT:HandleShortChannels(msg, hide)
     msg = gsub(msg, "^(.-|h) whispers", "%1")
     msg = gsub(msg, "^(.-|h) says", "%1")
     msg = gsub(msg, "^(.-|h) yells", "%1")
-    msg = gsub(msg, "<" .. _G.AFK .. ">", "[|cffFF9900AFK|r] ")
-    msg = gsub(msg, "<" .. _G.DND .. ">", "[|cffFF3333DND|r] ")
 
     if SHORT_CHANNEL_PATTERNS then
         for _, info in ipairs(SHORT_CHANNEL_PATTERNS) do msg = gsub(msg, info.pattern, info.replacement) end
