@@ -902,8 +902,6 @@ local Defaults = {
             ReadyColor = { 0.25, 0.82, 0.42, 1 },
             Separator = "-",
 
-            -- First free center-column spot below Range Display, Time Spiral
-            -- and Alter Time.
             Position = DefaultPosition(0, -220),
         },
 

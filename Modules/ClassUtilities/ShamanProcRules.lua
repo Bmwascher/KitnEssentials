@@ -91,7 +91,6 @@ function Rules.Remaining(now, startedAt, length)
     return left
 end
 
--- Whole seconds; one decimal below a second.
 function Rules.FormatTime(remaining)
     if remaining >= 1 then return string_format("%d", remaining) end
     return string_format("%.1f", remaining)
