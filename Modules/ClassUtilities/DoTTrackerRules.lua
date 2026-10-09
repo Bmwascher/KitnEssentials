@@ -243,9 +243,10 @@ function Rules.SetField(spells, key, field, value)
     if next(entry) == nil then spells[key] = nil end
 end
 
--- Under one step of the picker's 8-bit hex, two colors read the same; Okay and
--- the picker's open can hand back the opening color with float drift.
-local SAME_COLOR = 1 / 255
+-- Okay and the picker's open can hand back the opening color with float drift
+-- or rounded to the 8-bit hex. Half a step takes both, and keeps a change of
+-- one full step clear of rounding at the edge.
+local SAME_COLOR = 0.5 / 255
 
 local function Near(x, y)
     return math_abs(x - y) < SAME_COLOR

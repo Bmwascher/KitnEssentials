@@ -233,13 +233,21 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             }), 0.5)
             local epoch = ColorEpoch(key)
             local own = Rules.ColorOf(saved, entry.row, true)
-            local overridden = type(saved) == "table" and type(saved.color) == "table"
+            -- The row as the current pick opened, kept for the whole pick. The
+            -- first callback of a pick precedes its first write, and each open
+            -- sets a new ColorPickerFrame.swatchFunc.
+            local pick, shown, overridden
             local picker = GUIFrame:CreateColorPicker(line, "Color", {
                 color = own or db.SomeColor,
                 callback = function(r, g, b, a)
                     if repainting or ColorEpoch(key) ~= epoch then return end
-                    -- A row without its own color shows Some Have It as it is now.
-                    local shown = own or db.SomeColor
+                    local session = ColorPickerFrame and ColorPickerFrame.swatchFunc
+                    if session ~= pick or not shown then
+                        pick = session
+                        local current = db.Spells[key]
+                        shown = Rules.ColorOf(current, entry.row, true) or db.SomeColor
+                        overridden = type(current) == "table" and type(current.color) == "table"
+                    end
                     Rules.SetField(db.Spells, key, "color", Rules.PickedColor(r, g, b, a, shown, overridden))
                     ApplySettings()
                 end,

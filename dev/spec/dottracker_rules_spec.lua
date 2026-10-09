@@ -216,6 +216,7 @@ describe("dot tracker rules", function()
                 { { 0.5, 0.65, 1, 0.5 }, false, { 0.5, 0.65, 1, 0.5 } },
                 { { 0.5 + step / 4, 0.65 - step / 4, 1, 1 - step / 4 }, false, nil },
                 { { 0.5, 0.65 + step * 2, 1, 1 }, false, { 0.5, 0.65 + step * 2, 1, 1 } },
+                { { 0.5, 0.65, 254 / 255, 1 }, false, { 0.5, 0.65, 254 / 255, 1 } },
             }
             for i, case in ipairs(cases) do
                 local c = case[1]
