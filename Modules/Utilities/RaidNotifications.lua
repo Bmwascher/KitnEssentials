@@ -3,7 +3,8 @@
 -- ║  Module: Raid Notifications                              ║
 -- ║  Purpose: Multi-alert raid utility notifications —       ║
 -- ║           Gateway, ResetBoss, LootBoss, Bench, and       ║
--- ║           Voidcore, with per-alert toggles.              ║
+-- ║           Voidcore, with per-alert toggles; plus         ║
+-- ║           auto-ready for benched raiders.                ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -28,6 +29,10 @@ local UnitName = UnitName
 local IsInInstance = IsInInstance
 local IsInRaid = IsInRaid
 local GetRaidRosterInfo = GetRaidRosterInfo
+local C_PartyInfo = C_PartyInfo
+-- Not in .luacheckrc's read_globals; aliased through _G as
+-- GroupFinderPanel does for C_LFGList.
+local GetReadyCheckStatus = _G.GetReadyCheckStatus
 
 local function IsInRaidInstance()
     local difficultyID = select(3, GetInstanceInfo()) or 0
@@ -753,6 +758,36 @@ function RN:CheckBench()
     end
 end
 
+--- READY_CHECK handler for Auto Ready When Benched. The payload is never
+--- read: it is secret in chat messaging lockdown. One frame later
+--- Blizzard's window is up, so the hide below closes it as its Ready
+--- button does.
+function RN:_OnAutoReadyCheck()
+    C_Timer.After(0, function()
+        if not self:IsEnabled() then return end
+        -- Re-checked before any roster read: the checkbox or the scope can
+        -- change in the frame since the event.
+        local _, instanceType = GetInstanceInfo()
+        if not RN.AutoReadyInScope(self.db.AutoReadyBenched, IsInRaid(), instanceType) then
+            return
+        end
+        local status = GetReadyCheckStatus and GetReadyCheckStatus("player")
+        if not KE:IsSafeValue(status) then status = nil end
+        local subgroup = PlayerSubgroup()
+        if not RN.ShouldAutoReady(self.db.AutoReadyBenched, IsInRaid(), instanceType,
+                subgroup, status, InCombatLockdown()) then
+            return
+        end
+        if not (C_PartyInfo and C_PartyInfo.ConfirmReadyCheck) then return end
+        -- A refusal leaves the window for the player, with no error.
+        if not pcall(C_PartyInfo.ConfirmReadyCheck, true) then return end
+        -- Hiding clears the window's initiator, which stops Blizzard printing
+        -- "You were away" when the check ends.
+        if ReadyCheckFrame and ReadyCheckFrame:IsShown() then ReadyCheckFrame:Hide() end
+        KE:Print(string.format("Ready check accepted for you (benched, group %d).", subgroup))
+    end)
+end
+
 ---------------------------------------------------------------------------------
 -- Apply Settings
 ---------------------------------------------------------------------------------
@@ -938,6 +973,18 @@ SUBSYSTEMS = {
         },
         onScopeEnter = "CheckBench",
         onScopeExit  = function(self) self:HideAlert("BenchAlert") end,
+    },
+
+    -------------------------------------------------------------------------
+    AutoReady = {
+        shouldSubscribe = function(self)
+            if not self.db.AutoReadyBenched then return false end
+            local _, instanceType = GetInstanceInfo()
+            return RN.AutoReadyInScope(self.db.AutoReadyBenched, IsInRaid(), instanceType)
+        end,
+        handlers = {
+            READY_CHECK = "_OnAutoReadyCheck",
+        },
     },
 
     -------------------------------------------------------------------------
