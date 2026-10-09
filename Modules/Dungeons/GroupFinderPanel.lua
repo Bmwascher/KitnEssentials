@@ -744,8 +744,10 @@ function GFP:RunSearch()
     local languages = C_LFGList.GetLanguageSearchFilter and C_LFGList.GetLanguageSearchFilter()
     local adv = IsDungeonSearchMode() and C_LFGList.GetAdvancedFilter
         and C_LFGList.GetAdvancedFilter() or nil
+    -- Shown before the call so a result event raised inside it is not missed.
+    ShowSearchCover(sp)
     local ok = pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
-    if ok then ShowSearchCover(sp) end
+    if not ok then HideSearchCover() end
 end
 
 -- The Search button's action, and the escape from the window: always saves,
