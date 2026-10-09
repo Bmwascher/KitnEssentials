@@ -97,9 +97,9 @@ end
 -- the player's own auras instead FOLLOWS the player into the seat, which
 -- is what the vehicle unit token is for.
 --
--- Recording is separate from applying because RegisterEvents records only:
--- its callers apply next through ApplySettings, which keeps the restriction
--- gate.
+-- RecordVehicle never changes visibility: a suspend display's flag waits
+-- for ApplySettings and its restriction gate. A follow display swaps its
+-- unit at once; SetUnit is not behind the gate.
 local function RecordVehicle(display, inVehicle)
     if display.declaration.vehiclePolicy == "follow" then
         if display.handle then
@@ -167,8 +167,8 @@ function Engine.RegisterEvents(display)
         ApplyVehicle(display, UnitHasVehicleUI("player") or false)
     end)
 
-    -- At first registration the flag is only a default, and after a re-enable
-    -- it misses the vehicle events that fired while the module was off.
+    -- At first registration the state is only a default, and after a
+    -- re-enable it misses the vehicle events fired while the module was off.
     RecordVehicle(display, UnitHasVehicleUI("player") or false)
 end
 
