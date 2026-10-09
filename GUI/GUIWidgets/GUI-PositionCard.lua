@@ -8,10 +8,10 @@
 -- ║  page switches leaked ~50 frames per card to UIParent.   ║
 -- ║                                                          ║
 -- ║  Factory builds the maximal widget set ONCE. Configure   ║
--- ║  shows/hides per-config (showAnchorFrameType / strata /  ║
--- ║  pixelSnap), swaps closure slots (_db, _keys, _onChange, ║
--- ║  _positionKey) read by factory-bound callbacks, and      ║
--- ║  recomputes height.                                      ║
+-- ║  shows/hides per-config (showAnchorFrameType /           ║
+-- ║  showSelfPoint / strata / pixelSnap), swaps closure      ║
+-- ║  slots (_db, _keys, _onChange, _positionKey) read by     ║
+-- ║  factory-bound callbacks, and recomputes height.         ║
 -- ║  ReleaseAll fires from contentRebuildCallbacks on every  ║
 -- ║  GUIFrame:RefreshContent so the pool reclaims kits       ║
 -- ║  before the page teardown would orphan them.             ║
@@ -194,6 +194,23 @@ local function CreatePositionCardKit(holder)
     kit.selfPointDropdown = selfPointDropdown
     kit.anchorPointDropdown = anchorPointDropdown
 
+    -- Row 3b: the anchor-point dropdown alone at full width, for a page that
+    -- passes showSelfPoint = false. Configure shows one of rows 3 and 3b.
+    local anchorPointOnlyRow = GUIFrame:CreateRow(card.content, 36)
+    local anchorPointOnlyDropdown = GUIFrame:CreateDropdown(anchorPointOnlyRow, "To Screen's", {
+        options = ANCHOR_POINT_OPTIONS,
+        value = "CENTER",
+        labelWidth = 70,
+        callback = function(key)
+            if not kit._db or not kit._keys then return end
+            kitSetValue(kit, kit._keys.anchorPoint, key)
+        end,
+    })
+    anchorPointOnlyRow:AddWidget(anchorPointOnlyDropdown, 1)
+    card:AddRow(anchorPointOnlyRow, 36)
+    kit.anchorPointOnlyRow = anchorPointOnlyRow
+    kit.anchorPointOnlyDropdown = anchorPointOnlyDropdown
+
     -- Row 4: X/Y offset sliders (always shown)
     local offsetRow = GUIFrame:CreateRow(card.content, 36)
     local xSlider = GUIFrame:CreateSlider(offsetRow, "X Offset", {
@@ -242,7 +259,7 @@ local function CreatePositionCardKit(holder)
     -- card.positionWidgets to RegisterGroup.
     kit.allWidgets = {
         anchorTypeDropdown, frameInput, selectFrameBtn,
-        selfPointDropdown, anchorPointDropdown,
+        selfPointDropdown, anchorPointDropdown, anchorPointOnlyDropdown,
         xSlider, ySlider,
         strataOnlyDropdown,
     }
@@ -303,6 +320,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     local defaults = config.defaults or {}
     local onChange = config.onChangeCallback
     local showAnchorFrameType = config.showAnchorFrameType ~= false
+    local showSelfPoint = config.showSelfPoint ~= false
     local showStrata = config.showStrata == true
 
     -- Resolve keys map. Keep the same defaults as the original implementation
@@ -353,6 +371,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
         (anchoredToFrame and "To Frame's" or "To Screen's") or
         "To Frame's"
     kit.anchorPointDropdown.label:SetText(anchorPointLabel)
+    kit.anchorPointOnlyDropdown.label:SetText(anchorPointLabel)
 
     -- The kit is pooled across pages: without this, a card one page grayed
     -- comes back grayed on a page that has no gray-out of its own.
@@ -365,7 +384,9 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit.anchorTypeDropdown:SetValue(currentType, true)
     kit.frameInput:SetValue(kitGetValue(kit, keys.anchorFrameFrame, ""))
     kit.selfPointDropdown:SetValue(kitGetValue(kit, keys.selfPoint, defaults.selfPoint or "CENTER"), true)
-    kit.anchorPointDropdown:SetValue(kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER"), true)
+    local anchorPoint = kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER")
+    kit.anchorPointDropdown:SetValue(anchorPoint, true)
+    kit.anchorPointOnlyDropdown:SetValue(anchorPoint, true)
 
     -- Slider range may be overridden per consumer (DungeonTimersBars/Texts
     -- use ±800 instead of the default ±1000). Apply per render before
@@ -413,7 +434,13 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     else
         kit.selectFrameRow:Hide()
     end
-    showRow(kit.anchorPointRow, 36)
+    if showSelfPoint then
+        showRow(kit.anchorPointRow, 36)
+        kit.anchorPointOnlyRow:Hide()
+    else
+        kit.anchorPointRow:Hide()
+        showRow(kit.anchorPointOnlyRow, 36)
+    end
     showRow(kit.offsetRow, 36)
     if showStrataRow then
         showRow(kit.strataOnlyRow, T.rowHeightLast)
