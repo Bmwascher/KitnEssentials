@@ -650,6 +650,14 @@ function S.OwnBackdrop(frame, edgeOnly)
     RefitEdgeClients(frame)
 end
 
+-- For an owner whose skin is turned off: the scale walk stops re-laying the
+-- frame, which keeps the backdrop it wears. S.OwnBackdrop enrolls it again.
+function S.ReleaseOwnBackdrop(frame)
+    if not frame then return end
+    ownEdges[frame] = nil
+    unsettled[frame] = nil
+end
+
 edgeRefresher:SetScript("OnEvent", function()
     -- One frame that refuses a geometry read must not abort the sweep:
     -- that would leave every backdrop after it in the iteration order

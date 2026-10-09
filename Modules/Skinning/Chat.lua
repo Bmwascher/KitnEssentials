@@ -143,7 +143,6 @@ do
     CLOSE_BUTTONS[_G.CLOSE_CHAT_WINDOW or "Close Window"] = true
 end
 
-local BLANK_TEX = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
 local SHORT_CHANNEL_NAMES = {
@@ -1576,13 +1575,10 @@ function CHAT:ApplyFrameStyle(frame, template, glossTex, ignoreUpdates, forcePix
     end
 
     local db = self.db
-    local edgeSize = KE:GetPixelSize()
 
-    frame:SetBackdrop({
-        bgFile = glossTex and (type(glossTex) == "string" and glossTex or BLANK_TEX) or BLANK_TEX,
-        edgeFile = BLANK_TEX,
-        edgeSize = edgeSize,
-    })
+    -- Joins the shared edge refresher, so the border stays one pixel after a
+    -- UI-scale change. It paints both colors white; they are set below.
+    KE.Skins.OwnBackdrop(frame)
 
     local backdropR, backdropG, backdropB, backdropA, borderR, borderG, borderB, borderA = GetTemplateColors(template)
 
@@ -2516,7 +2512,12 @@ function CHAT:RestoreChat(chat)
         -- set, a disable then re-enable in the same session silently loses
         -- focus-shows-panel, Up/Down history recall and the chat-type border
         -- for the rest of the session.
-        if chat.editBox then chat.editBox.styled = nil end
+        if chat.editBox then
+            chat.editBox.styled = nil
+            -- A disabled Chat leaves the border to no one; the scale walk
+            -- stops re-laying it until StyleEditbox enrolls it again.
+            KE.Skins.ReleaseOwnBackdrop(chat.editBox)
+        end
 
         chat.keStyled = nil
     end
