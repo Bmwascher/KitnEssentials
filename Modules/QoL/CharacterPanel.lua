@@ -842,6 +842,16 @@ local function WidenAmount(extra, pdfShown, applied)
 end
 CP._WidenAmount = WidenAmount
 
+-- Blizzard's inner border around the model. It hangs off the inset, so a
+-- widened inset carries it into the right column's labels.
+local INNER_BORDER = {
+    "PaperDollInnerBorderTopLeft", "PaperDollInnerBorderTopRight",
+    "PaperDollInnerBorderBottomLeft", "PaperDollInnerBorderBottomRight",
+    "PaperDollInnerBorderLeft", "PaperDollInnerBorderRight",
+    "PaperDollInnerBorderTop", "PaperDollInnerBorderBottom",
+    "PaperDollInnerBorderBottom2",
+}
+
 -- The header belongs over the character, not over the panel. Blizzard centers
 -- both header strings on the whole frame, so the stat pane drags them right of
 -- the model.
@@ -905,12 +915,27 @@ local function ApplyWiden()
 
     cf:SetWidth(baseW + add)
 
-    -- Stat pane: left edge pushed out by the extra width, right edge still
-    -- pinned to the frame (which grew by the same amount), so it MOVES rather
-    -- than stretching.
+    -- The inset box grows with the window, in the shape of Blizzard's own
+    -- UpdateSize write, so the stock box and its art reach the stat pane. One
+    -- point only: the inset keeps Blizzard's TOPLEFT.
+    inset:SetPoint("BOTTOMRIGHT", cf, "BOTTOMLEFT",
+        (_G.PANEL_DEFAULT_WIDTH or 338) + (_G.PANEL_INSET_RIGHT_OFFSET or -6) + add,
+        _G.PANEL_INSET_BOTTOM_OFFSET or 4)
+
+    -- Stat pane on Blizzard's own anchor: against the widened inset it moves by
+    -- the extra width, and its right edge stays pinned to the frame.
     insetR:ClearAllPoints()
-    insetR:SetPoint("TOPLEFT", inset, "TOPRIGHT", 1 + add, 0)
+    insetR:SetPoint("TOPLEFT", inset, "TOPRIGHT", 1, 0)
     insetR:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", -4, 4)
+
+    -- Hidden while widened. With the Character skin on, the pieces are already
+    -- blank, so hiding or showing them changes nothing there.
+    for _, name in ipairs(INNER_BORDER) do
+        local piece = _G[name]
+        if piece then
+            if add > 0 then piece:Hide() else piece:Show() end
+        end
+    end
 
     -- The stat-pane-left-edge anchor described above. On the single restoring
     -- pass (add == 0) Blizzard's own anchor goes back instead.
