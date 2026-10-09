@@ -9,6 +9,7 @@
     <Script file="HuntersMark.lua" />
     <Script file="HavocTracker.lua" />
     <Script file="ShamanProcRules.lua" />
+    <Script file="ShamanProcCooldowns.lua" />
     <Script file="DoTTrackerRules.lua" />
     <Script file="DoTTracker.lua" />
     <Script file="AlterTime.lua" />

@@ -68,6 +68,7 @@ local ATTACHED_FRAME_TYPES = {
     "potionReady",
     "stanceText",
     "noMovement",
+    "shamanProcs",
     "huntersMark",
     "havoc",
 }
