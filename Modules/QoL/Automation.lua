@@ -2034,10 +2034,7 @@ local function IsQuestModifierHeld()
     return IsModifierHeld(AU.db.QuestModifier)
 end
 
--- The weekly Voidcore quests, by saved choice. The generic SetupAutoQuests
--- path yields to the dedicated handler on GOSSIP_SHOW (via
--- ShouldSkipForVoidcores) so its "select first available quest" branch
--- doesn't grab the wrong one and skip the chosen quest's dedicated logic.
+-- The weekly Voidcore quests, by saved choice.
 local VOIDCORE_QUESTS = {
     Gold      = 98016,  -- Nebulous Voidcores: Gold
     Mistcrest = 98012,  -- Nebulous Voidcores: Veteran Mistcrest
@@ -2138,8 +2135,6 @@ local function SetupAutoQuests()
             end
             if AU.db.AutoAcceptQuests then
                 local availableQuests = C_GossipInfo.GetAvailableQuests()
-                -- Yield to the voidcores handler so its priority pick isn't
-                -- overridden by the generic "select first available" path.
                 if ShouldSkipForVoidcores(voidcoresOn, availableQuests) then return end
                 if #availableQuests > 0 then
                     C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
