@@ -377,10 +377,23 @@ function S.StripTextures(frame, kill)
     S.KillRegions(frame)
 end
 
+-- Reapply art read before a strip. GetAtlas is declared non-nil, so a
+-- plainly textured region can report an empty string; that has to fall
+-- through to the texture, because SetAtlas("") leaves the region blank.
+---@param region Texture|nil
+---@param atlas string|nil
+---@param tex string|number|nil
+function S.RestoreArt(region, atlas, tex)
+    if not region then return end
+    if atlas and atlas ~= "" and region.SetAtlas then
+        region:SetAtlas(atlas)
+    elseif tex and region.SetTexture then
+        region:SetTexture(tex)
+    end
+end
+
 -- Strip a frame without losing the icon it holds: read the icon's art back
--- first, strip, then reapply. Atlas is tried first; a plainly textured icon
--- reports no atlas (nil or an empty string), so the texture branch still
--- runs for those.
+-- first, strip, then reapply.
 ---@param frame Frame
 ---@param icon Texture|nil
 ---@param kill boolean|nil hide the stripped regions rather than clearing them
@@ -389,11 +402,7 @@ function S.StripKeepingIcon(frame, icon, kill)
     local atlas = icon and icon.GetAtlas and icon:GetAtlas()
     local tex = icon and icon.GetTexture and icon:GetTexture()
     S.StripTextures(frame, kill)
-    if atlas and atlas ~= "" and icon.SetAtlas then
-        icon:SetAtlas(atlas)
-    elseif tex and icon.SetTexture then
-        icon:SetTexture(tex)
-    end
+    S.RestoreArt(icon, atlas, tex)
     return icon
 end
 
@@ -1159,10 +1168,7 @@ function S.Button(button, keepRegion)
     clearButtonStates(button)
 
     S.KillAllTextures(button, keepRegion)
-    if keepRegion then
-        if keepAtlas and keepRegion.SetAtlas then keepRegion:SetAtlas(keepAtlas)
-        elseif keepTex and keepRegion.SetTexture then keepRegion:SetTexture(keepTex) end
-    end
+    S.RestoreArt(keepRegion, keepAtlas, keepTex)
 
     if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
     local aeBD = S.Backdrop(button)
