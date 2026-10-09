@@ -1,9 +1,9 @@
 -- Modules/ClassUtilities/DoTTrackerRules.lua -- the rules a later edit breaks
--- silently: who counts, the label each answer shows, which DoTs a spec lists,
--- what the add and remove controls refuse, and the module's guards (what the
--- restriction gate must hold back, how far the build runs, how many enemies
--- may count, when the timer and the threat event act). The seed table is data
--- and gets no case.
+-- silently: who counts, the label, color and cap each answer takes, which DoTs
+-- a spec lists, how a saved entry is written, what the add and remove controls
+-- refuse, and the module's guards (what the restriction gate must hold back,
+-- how far the build runs, how many enemies may count, when the timer and the
+-- threat event act). The seed table is data and gets no case.
 local L = require("dev.spec._ke_loader")
 
 describe("dot tracker rules", function()
@@ -79,6 +79,96 @@ describe("dot tracker rules", function()
         end
     end)
 
+    describe("colors, caps and saved entries", function()
+        it("takes a DoT's own color from its override, else its seed, and none while DoT Colors is off", function()
+            local row = { id = 1, color = { 0.1, 0.2, 0.3 } }
+            local override = { 1, 0, 0, 1 }
+            -- entry, row, DoT Colors on, expected
+            local cases = {
+                { { color = override }, row, true, override },
+                { { enabled = true }, row, true, row.color },
+                { nil, row, true, row.color },
+                { { enabled = true }, nil, true, nil },
+                { "junk", { id = 1 }, true, nil },
+                { { color = override }, row, false, nil },
+            }
+            for i, case in ipairs(cases) do
+                assert.equals(case[4], Rules.ColorOf(case[1], case[2], case[3]), "case " .. i)
+            end
+        end)
+
+        it("paints All Have It only at full coverage with Full Coverage Color on, else the own color or Some Have It", function()
+            local own, some, all = {}, {}, {}
+            -- k, d, own color, Full Coverage Color on, expected
+            local cases = {
+                { 6, 6, own, true, all },
+                { 6, 6, own, false, own },
+                { 3, 6, own, true, own },
+                { 3, 6, nil, true, some },
+                { 6, 6, nil, false, some },
+                { 0, 0, own, true, own },
+            }
+            for i, case in ipairs(cases) do
+                assert.equals(case[5], Rules.CountColor(case[1], case[2], case[3], some, all, case[4]), "case " .. i)
+            end
+        end)
+
+        it("caps the denominator at the DoT's target limit and clamps the count to it", function()
+            -- k, total, cap, shown k, d
+            local cases = {
+                { 3, 10, nil, 3, 10 },
+                { 3, 4, 6, 3, 4 },
+                { 6, 6, 6, 6, 6 },
+                { 5, 10, 6, 5, 6 },
+                { 8, 10, 6, 6, 6 },
+                { 0, 0, 1, 0, 0 },
+            }
+            for i, case in ipairs(cases) do
+                local k, d = Rules.Capped(case[1], case[2], case[3])
+                assert.equals(case[4], k, "k " .. i)
+                assert.equals(case[5], d, "d " .. i)
+            end
+        end)
+
+        it("writes one field of a saved entry and drops an entry left empty", function()
+            local color, other = { 1, 0, 0, 1 }, { 0, 1, 0, 1 }
+            local spells = {
+                ["71:1"] = { enabled = false, color = color },
+                ["71:3"] = "junk",
+                ["71:4"] = { color = color, custom = true, enabled = true },
+            }
+            Rules.SetField(spells, "71:1", "enabled", true)
+            assert.same({ enabled = true, color = color }, spells["71:1"])
+            Rules.SetField(spells, "71:1", "color", other)
+            assert.same({ enabled = true, color = other }, spells["71:1"])
+            Rules.SetField(spells, "71:1", "color", nil)
+            assert.same({ enabled = true }, spells["71:1"])
+            Rules.SetField(spells, "71:2", "color", color)
+            assert.same({ color = color }, spells["71:2"])
+            Rules.SetField(spells, "71:3", "enabled", true)
+            assert.same({ enabled = true }, spells["71:3"])
+            Rules.SetField(spells, "71:2", "color", nil)
+            assert.is_nil(spells["71:2"])
+            Rules.SetField(spells, "71:4", "color", nil)
+            assert.same({ custom = true, enabled = true }, spells["71:4"])
+        end)
+
+        it("saves a picked color, and none when a row without an override gets back the color it opened with", function()
+            local shown = { 0.5, 0.65, 1 }
+            -- picked r, g, b, a; row had an override when drawn; expected save
+            local cases = {
+                { { 0.5, 0.65, 1, 1 }, false, nil },
+                { { 0.5, 0.65, 1, 1 }, true, { 0.5, 0.65, 1, 1 } },
+                { { 1, 0, 0, 1 }, false, { 1, 0, 0, 1 } },
+                { { 0.5, 0.65, 1, 0.5 }, false, { 0.5, 0.65, 1, 0.5 } },
+            }
+            for i, case in ipairs(cases) do
+                local c = case[1]
+                assert.same(case[3], Rules.PickedColor(c[1], c[2], c[3], c[4], shown, case[2]), "case " .. i)
+            end
+        end)
+    end)
+
     describe("the list a spec shows", function()
         local unreadable = function() return nil end
 
@@ -114,6 +204,43 @@ describe("dot tracker rules", function()
                 local known = function() return case[1] end
                 assert.same(case[2], Rules.ResolveList(seeds, {}, "PRIEST", 256, known), "case " .. i)
             end
+        end)
+
+        it("lists a talent-list row while any talent is known or unreadable, and a default-off row only once ticked", function()
+            local seeds = { WARRIOR = { [71] = {
+                { id = 1, talent = { 10, 11, 12 } },
+                { id = 2, defaultOff = true },
+            } } }
+            -- talent reads (a missing key is unreadable), saved entries, expected list
+            local cases = {
+                { { [10] = false, [11] = true, [12] = false }, {}, { 1 } },
+                { { [10] = false, [12] = false }, {}, { 1 } },
+                { { [10] = false, [11] = false, [12] = false }, {}, {} },
+                { { [11] = true }, { ["71:2"] = { color = { 1, 0, 0, 1 } } }, { 1 } },
+                { { [11] = true }, { ["71:2"] = { enabled = true } }, { 1, 2 } },
+            }
+            for i, case in ipairs(cases) do
+                local reads = case[1]
+                local known = function(id) return reads[id] end
+                assert.same(case[3], Rules.ResolveList(seeds, case[2], "WARRIOR", 71, known), "case " .. i)
+            end
+        end)
+
+        it("lists a merged row once, counts its extra ids, and shows the extra icon only on a known hero talent", function()
+            local row = { id = 146739, also = { 445474 }, iconTalent = 445465, iconId = 445474 }
+            local seeds = { WARLOCK = { [265] = { row } } }
+            local spells = {
+                ["265:445474"] = { enabled = true, custom = true },
+                ["265:42"] = { enabled = true, custom = true },
+            }
+            assert.same({ 146739, 42 }, Rules.ResolveList(seeds, spells, "WARLOCK", 265, unreadable))
+            assert.same({ [146739] = true, [445474] = true }, Rules.FilterIds(146739, Rules.AlsoOf(row)))
+            assert.same({ [42] = true }, Rules.FilterIds(42, Rules.AlsoOf(nil)))
+            local icons = { { true, 445474 }, { false, 146739 }, { nil, 146739 } }
+            for i, case in ipairs(icons) do
+                assert.equals(case[2], Rules.IconOf(row, 146739, function() return case[1] end), "icon " .. i)
+            end
+            assert.equals(42, Rules.IconOf(nil, 42, function() return true end))
         end)
     end)
 
@@ -156,6 +283,13 @@ describe("dot tracker rules", function()
                 if case[3] then assert.matches(case[3], reason, nil, true) end
             end
         end)
+
+        it("refuses a merged row's extra id as already listed", function()
+            local merged = { WARLOCK = { [265] = { { id = 146739, also = { 445474 } } } } }
+            local id, reason = Rules.CanAdd(merged, {}, "WARLOCK", 265, "445474", nameOf)
+            assert.is_nil(id)
+            assert.matches("already listed", reason, nil, true)
+        end)
     end)
 
     describe("the module's guards", function()
@@ -184,6 +318,26 @@ describe("dot tracker rules", function()
                 assert.equals(expected, row, "row " .. i)
                 assert.equals(case[7], allowed, "allowed " .. i)
                 assert.equals(case[8], asked, "asked " .. i)
+            end
+        end)
+
+        it("re-points a pooled cell for a new id, or for the same id with other extra ids", function()
+            local merged = { 445474 }
+            local function alsoOf(id)
+                if id == 146739 then return merged end
+                return Rules.AlsoOf(nil)
+            end
+            -- pooled cells, wanted list, expected
+            local cases = {
+                { { { id = 1, also = {} } }, { 1 }, false },
+                { { { id = 1, also = {} } }, { 2 }, true },
+                { { { id = 146739, also = {} } }, { 146739 }, true },
+                { { { id = 146739, also = { 445474 } } }, { 146739 }, false },
+                { { { id = 1, also = {} }, { id = 9, also = {} } }, { 1 }, false },
+                { { {} }, { 146739 }, false },
+            }
+            for i, case in ipairs(cases) do
+                assert.equals(case[3], Rules.NeedsRefilter(case[1], case[2], alsoOf), "case " .. i)
             end
         end)
 

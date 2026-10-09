@@ -43,6 +43,18 @@ local function SpellLabel(id)
     return name or ("Spell " .. id)
 end
 
+-- A row's `talent` is one id or a list: "A", "A or B", "A, B or C".
+local function TalentTooltip(talent)
+    if type(talent) ~= "table" then
+        return "Shows only while " .. SpellLabel(talent) .. " is known."
+    end
+    local names = SpellLabel(talent[1])
+    for i = 2, #talent do
+        names = names .. (i == #talent and " or " or ", ") .. SpellLabel(talent[i])
+    end
+    return "Shows only while " .. names .. " is known."
+end
+
 local function SpellExists(id)
     local ok, name = pcall(C_Spell.GetSpellName, id)
     return ok and name or nil
@@ -162,13 +174,13 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             if entry.custom then label = label .. " (custom)" end
             local tooltip
             if entry.row and entry.row.talent then
-                tooltip = "Shows only while " .. SpellLabel(entry.row.talent) .. " is known."
+                tooltip = TalentTooltip(entry.row.talent)
             elseif entry.row and entry.row.replacedBy then
                 tooltip = "Hidden while " .. SpellLabel(entry.row.replacedBy) .. " is known."
             end
             if not pending then pending = GUIFrame:CreateRow(card2.content, 36) end
             pending:AddWidget(GUIFrame:CreateCheckbox(pending, label, {
-                value = not (type(saved) == "table" and saved.enabled == false),
+                value = Rules.IsEnabled(saved, entry.row),
                 tooltip = tooltip,
                 callback = function(checked)
                     local current = db.Spells[key]
