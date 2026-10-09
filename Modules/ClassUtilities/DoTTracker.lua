@@ -33,6 +33,7 @@ local UnitCanAssist = UnitCanAssist
 local UnitIsDead = UnitIsDead
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitThreatSituation = UnitThreatSituation
+local UnitPlayerControlled = UnitPlayerControlled
 local IsInRaid = IsInRaid
 local GetNumGroupMembers = GetNumGroupMembers
 local issecretvalue = issecretvalue
@@ -117,12 +118,13 @@ local function ThreatRead(watcher, unit)
 end
 
 local unitApi = {
-    exists      = function(unit) return Ask(UnitExists, unit) end,
-    canAttack   = function(unit) return Ask(UnitCanAttack, "player", unit) end,
-    canAssist   = CanAssist,
-    isDead      = function(unit) return Ask(UnitIsDead, unit) end,
-    inCombat    = function(unit) return Ask(UnitAffectingCombat, unit) end,
-    groupThreat = function(unit) return Rules.GroupThreat(unit, DT.watchers, ThreatRead) end,
+    exists           = function(unit) return Ask(UnitExists, unit) end,
+    canAttack        = function(unit) return Ask(UnitCanAttack, "player", unit) end,
+    canAssist        = CanAssist,
+    isDead           = function(unit) return Ask(UnitIsDead, unit) end,
+    inCombat         = function(unit) return Ask(UnitAffectingCombat, unit) end,
+    groupThreat      = function(unit) return Rules.GroupThreat(unit, DT.watchers, ThreatRead) end,
+    playerControlled = function(unit) return Ask(UnitPlayerControlled, unit) end,
 }
 
 local function Verdict(unit, strict)

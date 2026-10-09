@@ -365,8 +365,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     }), 1 / 3)
     card3:AddRow(row3, Theme.rowHeight)
     card3:AddNote("Attackable, alive enemies with a nameplate. Fighting your group: you, your pet or a " ..
-        "party member is on the enemy's threat list; in a raid this toggle has no effect. While you are in " ..
-        "combat and no enemy passes, as on training dummies, every attackable enemy counts.")
+        "party member is on the enemy's threat list. Enemy players and their pets are exempt, and in a " ..
+        "raid this toggle has no effect. While you are in combat and no enemy passes, as on training " ..
+        "dummies, every attackable enemy counts.")
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------

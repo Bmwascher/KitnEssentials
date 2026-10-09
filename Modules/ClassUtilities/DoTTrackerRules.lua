@@ -174,7 +174,11 @@ function Rules.Verdict(unit, strict, onlyEnemiesInCombat, onlyFightingGroup, api
     if api.isDead(unit) == true then return "dead" end
     if not strict then return nil end
     if onlyEnemiesInCombat and api.inCombat(unit) == false then return "not in combat" end
-    if onlyFightingGroup and api.groupThreat(unit) == false then return "not fighting your group" end
+    -- Enemy players and their pets have no threat list, so the group rule leaves
+    -- them to the rules above; it asks only after a false group read.
+    if onlyFightingGroup and api.groupThreat(unit) == false and api.playerControlled(unit) == false then
+        return "not fighting your group"
+    end
     return nil
 end
 

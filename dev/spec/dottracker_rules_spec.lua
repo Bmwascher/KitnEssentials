@@ -16,11 +16,12 @@ describe("dot tracker rules", function()
 
     describe("who counts", function()
         local NIL = {}
-        local KEYS = { "exists", "canAttack", "canAssist", "isDead", "inCombat", "groupThreat" }
+        local KEYS = { "exists", "canAttack", "canAssist", "isDead", "inCombat", "groupThreat", "playerControlled" }
 
         local function api(changes)
             local reads = {
                 exists = true, canAttack = true, canAssist = false, isDead = false, inCombat = true, groupThreat = true,
+                playerControlled = false,
             }
             for key, value in pairs(changes) do
                 if value == NIL then reads[key] = nil else reads[key] = value end
@@ -48,6 +49,8 @@ describe("dot tracker rules", function()
                 { { groupThreat = NIL }, true, true, true, nil },
                 { { groupThreat = false }, true, true, false, nil },
                 { { groupThreat = false }, false, true, true, nil },
+                { { groupThreat = false, playerControlled = true }, true, true, true, nil },
+                { { groupThreat = false, playerControlled = NIL }, true, true, true, nil },
                 { { inCombat = false, groupThreat = false }, true, true, true, "not in combat" },
                 { { canAttack = NIL, canAssist = NIL, isDead = NIL, inCombat = NIL, groupThreat = NIL }, true, true, true, nil },
             }
