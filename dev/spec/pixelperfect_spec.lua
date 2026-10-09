@@ -43,6 +43,17 @@ describe("PixelPerfect.lua pixel-size cache", function()
         assert.equals(1, KE:GetPixelSize())
     end)
 
+    -- A declared sentinel stands in for a secret scale: without the guard the
+    -- `<= 0` test compares it and raises.
+    it("keeps the last good cache when the effective scale reads secret", function()
+        local SECRET = "<<declared secret>>"
+        KE = L.loadPixelPerfect(opts, { issecretvalue = function(v) return v == SECRET end })
+        assert.equals(1, KE:GetPixelSize())
+        opts.effectiveScale = SECRET
+        assert.has_no.errors(function() KE:UpdatePixelCache() end)
+        assert.equals(1, KE:GetPixelSize())
+    end)
+
     it("recomputes on UI_SCALE_CHANGED via the watcher frame", function()
         -- Loader's mock.install starts a fresh frame list; the file creates
         -- exactly one frame (the watcher) so _G.frames[1] is it. The

@@ -40,6 +40,8 @@ local cachedPixelSize = 1
 local function recompute()
     local _, physH = GetPhysicalScreenSize()
     local effScale = (UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
+    -- A secret scale cannot be compared or divided; the last good cache stays.
+    if issecretvalue(effScale) then return end
     if not physH or physH <= 0 then return end
     if not effScale or effScale <= 0 then return end
     if physH == cachedPhysH and effScale == cachedEffScale then return end
