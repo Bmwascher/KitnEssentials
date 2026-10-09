@@ -2442,8 +2442,6 @@ function L.loadPetStatusText(overrides)
     _G.UnitOnTaxi          = function() return false end
     _G.UnitInVehicle       = function() return false end
     _G.UnitHasVehicleUI    = function() return false end
-    _G.GetSpecialization   = function() return 1 end
-    _G.GetSpecializationInfo = function() return overrides.specID or 265 end
     _G.C_SpellBook         = { IsSpellKnown = function(spellID)
         return not (overrides.unknownSpells and overrides.unknownSpells[spellID])
     end }
@@ -2473,6 +2471,7 @@ function L.loadPetStatusText(overrides)
         end,
         GetSafeUnitGUID = function() return nil end,
         ResolveColor = function() return 1, 1, 1, 1 end,
+        GetPlayerSpecId = function() return overrides.specID or 265 end,
     }
     helpers.loadModule("Modules/ClassUtilities/PetStatusText.lua", KE)
 

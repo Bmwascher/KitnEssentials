@@ -18,8 +18,6 @@ local IsMounted = IsMounted
 local UnitOnTaxi = UnitOnTaxi
 local UnitInVehicle = UnitInVehicle
 local UnitHasVehicleUI = UnitHasVehicleUI
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local UnitExists = UnitExists
 local CreateFrame = CreateFrame
 local GetPetActionInfo = GetPetActionInfo
@@ -195,8 +193,9 @@ local function CheckPetStatus()
     if not petInfo then return PET_STATUS.NONE, nil, nil end
     if IsPlayerMounted() then return PET_STATUS.NONE, nil, nil end
 
-    local specIndex = GetSpecialization()
-    local specID = GetSpecializationInfo(specIndex)
+    -- nil for a character with no spec (index nil or 0), so the class-pet
+    -- check below is skipped instead of comparing against nothing.
+    local specID = KE:GetPlayerSpecId()
 
     -- MM Hunter with Unbreakable Bond (466867) or Spotter's Mark (466872) — both replace the pet
     if specID == 254 and (C_SpellBook.IsSpellKnown(466867, SpellBookBank_Player) or C_SpellBook.IsSpellKnown(466872, SpellBookBank_Player)) then
@@ -205,7 +204,7 @@ local function CheckPetStatus()
 
     -- Spec check for class-specific pets
     if petInfo.specId then
-        if specIndex then
+        if specID then
             if specID ~= petInfo.specId then return PET_STATUS.NONE, nil, nil end
         end
     end
