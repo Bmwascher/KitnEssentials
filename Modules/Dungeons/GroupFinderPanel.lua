@@ -667,6 +667,9 @@ local function GetSearchCover(sp)
     -- Parented to the panel: the client hides and reshows it with the panel.
     local cover = CreateFrame("Frame", nil, sp)
     cover:SetAllPoints(sp.ScrollBox)
+    -- HIGH, so it covers the skinned Start a Group overlay, a UIParent child
+    -- at HIGH.
+    cover:SetFrameStrata("HIGH")
     cover:SetFrameLevel(sp.ScrollBox:GetFrameLevel() + SEARCH_COVER_LEVEL_OFFSET)
     cover:EnableMouse(true)
     local bg = cover:CreateTexture(nil, "BACKGROUND")
