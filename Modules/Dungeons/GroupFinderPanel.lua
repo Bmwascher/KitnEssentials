@@ -641,15 +641,12 @@ local function ResolveCategoryFilters(categoryID, filters)
     return filters
 end
 
--- KE's search calls C_LFGList.Search directly, so the old rows stay up until
--- the results arrive, and hovering one whose result has expired throws in
--- Blizzard's tooltip code. This cover is KE's own frame over the rows for
--- that window: it writes no Blizzard field and calls nothing on the panel.
--- Blizzard shows and hides the search panel inside the calls that build its
--- result list, so nothing here may run on a show or hide: no OnShow/OnHide
--- script, no template (SpinnerTemplate carries both), no hook. OnEvent is
--- the only script. No timeout either: uncovering without an answer would
--- show the stale rows again.
+-- KE's search leaves the old rows up until the results arrive, and hovering
+-- an expired one errors in Blizzard's tooltip code, so a KE frame covers them.
+-- Blizzard shows and hides the search panel while building its result list,
+-- so nothing here may run on a show or hide: no OnShow/OnHide, no template
+-- (SpinnerTemplate has both), no hook. No timeout: it would uncover the
+-- stale rows.
 -- Above the ScrollBox's scroll target and its pooled rows.
 local SEARCH_COVER_LEVEL_OFFSET = 10
 -- What InsetFrameTemplate's Bg draws: the list background with the Group
