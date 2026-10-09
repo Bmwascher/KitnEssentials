@@ -749,7 +749,18 @@ function GFP:RunSearch()
         and C_LFGList.GetAdvancedFilter() or nil
     -- Shown before the call so a result event raised inside it is not missed.
     ShowSearchCover(sp)
+    -- A refused search raises one of these inside the call, returns normally
+    -- and sends no result event, so the cover listens for exactly the call.
+    local cover = searchCover
+    if cover then
+        cover:RegisterEvent("ADDON_ACTION_BLOCKED")
+        cover:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    end
     local ok = pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
+    if cover then
+        cover:UnregisterEvent("ADDON_ACTION_BLOCKED")
+        cover:UnregisterEvent("ADDON_ACTION_FORBIDDEN")
+    end
     if not ok then HideSearchCover() end
 end
 
