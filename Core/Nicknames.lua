@@ -4,7 +4,8 @@
 -- ║           the rule that decides whether its answer is a  ║
 -- ║           nickname, and the Name-Realm key builder. Read ║
 -- ║           by the Damage Meter, Death Notifications,      ║
--- ║           Healer Mana and the LFG Reminder.              ║
+-- ║           Healer Mana, the LFG Reminder and the Kick     ║
+-- ║           Tracker (the key builder only).                ║
 -- ╚══════════════════════════════════════════════════════════╝
 ---@class KE
 local KE = select(2, ...)

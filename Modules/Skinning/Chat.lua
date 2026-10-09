@@ -2511,8 +2511,8 @@ function CHAT:RestoreChat(chat)
         -- for the rest of the session.
         if chat.editBox then
             chat.editBox.styled = nil
-            -- A disabled Chat leaves the border to no one; the scale walk
-            -- stops re-laying it until StyleEditbox enrolls it again.
+            -- Chat is off, so the scale walk stops re-laying the edit-box
+            -- border until StyleEditbox enrolls it again.
             KE.Skins.ReleaseOwnBackdrop(chat.editBox)
         end
 
