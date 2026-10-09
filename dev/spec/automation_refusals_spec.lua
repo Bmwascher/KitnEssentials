@@ -1877,4 +1877,3 @@ describe("Automation Voidcore quest guard", function()
         end
     end)
 end)
-
