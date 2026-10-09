@@ -398,7 +398,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row4d:AddWidget(shortChannelsCheck, 0.5)
+    row4d:AddWidget(shortChannelsCheck, 0.34)
     manager:Register(shortChannelsCheck, "all")
 
     local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
@@ -409,8 +409,16 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row4d:AddWidget(roleIconsCheck, 0.5)
+    row4d:AddWidget(roleIconsCheck, 0.33)
     manager:Register(roleIconsCheck, "all")
+
+    local afkDndCheck = GUIFrame:CreateCheckbox(row4d, "AFK/DND Tags", {
+        value = db.AFKDNDTags ~= false,
+        tooltip = "Shows [AFK] or [DND] before the name of a player who is away or busy, as the default chat does.",
+        callback = function(checked) db.AFKDNDTags = checked end,
+    })
+    row4d:AddWidget(afkDndCheck, 0.33)
+    manager:Register(afkDndCheck, "all")
     card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
