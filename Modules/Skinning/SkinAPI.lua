@@ -3120,6 +3120,48 @@ function S.ScrollBar(scrollbar, ignoreUpdates)
     S.data(scrollbar).skinned = true
 end
 
+local function PaintSliderThumb(thumb)
+    thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+    S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
+    thumb:SetSize(10, 18)
+end
+
+-- The accent fill from the plate's left edge to the thumb, and the gray both
+-- take while the slider is disabled.
+local function AddStepFill(slider, thumb, bd)
+    if S.data(slider).stepBar then return end
+    local step = CreateFrame("StatusBar", nil, slider)
+    step:SetFrameLevel(bd:GetFrameLevel() + 1)
+    step:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    S.PaintBrand(step, "SetStatusBarColor", 0.35)
+    local px = PixelBorder()
+    step:SetPoint("TOPLEFT", bd, "TOPLEFT", px, -px)
+    step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", px, px)
+    step:SetPoint("RIGHT", thumb, "CENTER")
+    S.data(slider).stepBar = step
+
+    if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
+    if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
+    local function stateColor()
+        local on = not slider.IsEnabled or slider:IsEnabled()
+        if on then
+            S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
+            S.PaintBrand(step, "SetStatusBarColor", 0.35)
+        else
+            S.ForgetBrand(thumb)
+            S.ForgetBrand(step)
+            thumb:SetVertexColor(0.486, 0.486, 0.486, 1)
+            step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
+        end
+    end
+    if slider.HookScript then
+        hooksecurefunc(slider, "Enable", stateColor)
+        hooksecurefunc(slider, "Disable", stateColor)
+        if slider.SetEnabled then hooksecurefunc(slider, "SetEnabled", stateColor) end
+    end
+    stateColor()
+end
+
 function S.StepSlider(stepper)
     if not stepper or S.data(stepper).skinned then return end
     S.StripTextures(stepper)
@@ -3130,9 +3172,7 @@ function S.StepSlider(stepper)
 
         local thumb = slider.Thumb
         if thumb then
-            thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
-            S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
-            thumb:SetSize(10, 18)
+            PaintSliderThumb(thumb)
         end
 
         local bd = S.Backdrop(slider)
@@ -3145,38 +3185,7 @@ function S.StepSlider(stepper)
             bd:SetParent(stepper)
             bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
 
-            if thumb and not S.data(slider).stepBar then
-                local step = CreateFrame("StatusBar", nil, slider)
-                step:SetFrameLevel(bd:GetFrameLevel() + 1)
-                step:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-                S.PaintBrand(step, "SetStatusBarColor", 0.35)
-                local px = PixelBorder()
-                step:SetPoint("TOPLEFT", bd, "TOPLEFT", px, -px)
-                step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", px, px)
-                step:SetPoint("RIGHT", thumb, "CENTER")
-                S.data(slider).stepBar = step
-
-                if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
-                if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
-                local function stateColor()
-                    local on = not slider.IsEnabled or slider:IsEnabled()
-                    if on then
-                        S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
-                        S.PaintBrand(step, "SetStatusBarColor", 0.35)
-                    else
-                        S.ForgetBrand(thumb)
-                        S.ForgetBrand(step)
-                        thumb:SetVertexColor(0.486, 0.486, 0.486, 1)
-                        step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
-                    end
-                end
-                if slider.HookScript then
-                    hooksecurefunc(slider, "Enable", stateColor)
-                    hooksecurefunc(slider, "Disable", stateColor)
-                    if slider.SetEnabled then hooksecurefunc(slider, "SetEnabled", stateColor) end
-                end
-                stateColor()
-            end
+            if thumb then AddStepFill(slider, thumb, bd) end
         end
     end
 
@@ -3189,6 +3198,31 @@ function S.StepSlider(stepper)
         end
     end
     S.data(stepper).skinned = true
+end
+
+-- A bare UISliderTemplate slider. Its track is a NineSlice child, which the
+-- strip already fades, and its height differs by caller, so the plate is a
+-- fixed-height bar across its middle: the height a stepper slider's plate
+-- comes out at.
+local SLIDER_PLATE_H = 14
+
+function S.Slider(slider)
+    if not slider or S.data(slider).skinned then return end
+    S.StripTextures(slider)
+
+    local thumb = slider.Thumb
+    if thumb then PaintSliderThumb(thumb) end
+
+    local bd = S.Backdrop(slider)
+    if bd then
+        bd:ClearAllPoints()
+        bd:SetPoint("LEFT", slider, "LEFT", 2, 0)
+        bd:SetPoint("RIGHT", slider, "RIGHT", -2, 0)
+        bd:SetHeight(SLIDER_PLATE_H)
+        bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
+        if thumb then AddStepFill(slider, thumb, bd) end
+    end
+    S.data(slider).skinned = true
 end
 
 local INSET_ART_KEYS = {
