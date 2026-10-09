@@ -107,11 +107,24 @@ CM.attachSpacers = {}
 CM.SPACER_LIFT = 1
 CM.attachSeated = {}
 CM.attachTop = {}
--- Per line: the last readable shown state and height, and the top it was
--- last placed at.
+-- Per line: the last known shown state and height, and the top it was last
+-- placed at. KE records its own writes; a plain read refreshes them.
 CM.lineShown = {}
 CM.lineHeight = {}
 CM.lineTop = {}
+
+-- KE records what it writes to a stacked line, so a later secret read gets
+-- the right answer from ReadShownHeight's cache, a line built while reads
+-- are secret included.
+local function SetLineShown(self, frame, key, shown)
+    if shown then frame:Show() else frame:Hide() end
+    self.lineShown[key] = shown
+end
+
+local function SetLineHeight(self, frame, key, height)
+    frame:SetHeight(height)
+    self.lineHeight[key] = height
+end
 -- Sent on enable and disable, and from ApplySettings once the container
 -- exists, so an attached module can move between its own anchor and this
 -- stack and pick up the font.
@@ -179,7 +192,8 @@ function CM:GetMessageFrame(msgType)
 
     local frame = CreateFrame("Frame", nil, self.container)
     local fontSize = self.db.FontSize or 16
-    frame:SetSize(200, fontSize + 2)
+    frame:SetWidth(200)
+    SetLineHeight(self, frame, msgType, fontSize + 2)
     frame:Hide()
 
     local text = frame:CreateFontString(nil, "OVERLAY")
@@ -195,7 +209,7 @@ function CM:GetMessageFrame(msgType)
     self.messageFrames[msgType] = frame
 
     if msgType == "interrupt" then
-        frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
+        SetLineHeight(self, frame, msgType, fontSize + INTERRUPT_FONT_EMPHASIS * 2)
         local icon = frame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(fontSize + INTERRUPT_FONT_EMPHASIS, fontSize + INTERRUPT_FONT_EMPHASIS)
         -- Trim the baked spell-icon border.
@@ -380,14 +394,14 @@ function CM:ShowFlashMessage(msgType, textOverride, iconOverride, nameOverride)
 
     -- Show and arrange
     frame:SetAlpha(1)
-    frame:Show()
+    SetLineShown(self, frame, msgType, true)
     self.activeMessages[msgType] = true
     self:ArrangeMessages()
 
     -- Fade out and hide
     local function HideIfCurrent()
         if frame.generation == myGeneration and not self.isPreview then
-            frame:Hide()
+            SetLineShown(self, frame, msgType, false)
             -- Don't reset alpha here. Render tick can process a SetAlpha(1)
             -- as a visible frame before the Hide takes effect, flashing the
             -- text at full alpha.
@@ -444,7 +458,7 @@ function CM:ShowPersistentMessage(msgType)
     frame.text:SetTextColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
 
     frame:SetAlpha(1)
-    frame:Show()
+    SetLineShown(self, frame, msgType, true)
     self.activeMessages[msgType] = true
     self:ArrangeMessages()
 end
@@ -452,7 +466,7 @@ end
 function CM:HidePersistentMessage(msgType)
     local frame = self.messageFrames[msgType]
     if frame then
-        frame:Hide()
+        SetLineShown(self, frame, msgType, false)
         self.activeMessages[msgType] = nil
         self:ArrangeMessages()
     end
@@ -490,12 +504,12 @@ function CM:ShowExternalLine(key, text, r, g, b, a, size)
         frame.sizeOverride = size
         local lineSize = size or self.db.FontSize or 16
         KE:ApplyFontToText(frame.text, self.db.FontFace, lineSize, self.db.FontOutline)
-        frame:SetHeight(lineSize + 2)
+        SetLineHeight(self, frame, key, lineSize + 2)
     end
     frame.text:SetText(text)
     frame.text:SetTextColor(r or 1, g or 1, b or 1, a or 1)
     frame:SetAlpha(1)
-    frame:Show()
+    SetLineShown(self, frame, key, true)
     self:ArrangeMessages()
     return true
 end
@@ -506,7 +520,7 @@ function CM:HideExternalLine(key)
     if not frame then return end
     local shown = frame:IsShown()
     if not KE:IsSecretValue(shown) and not shown then return end
-    frame:Hide()
+    SetLineShown(self, frame, key, false)
     self:ArrangeMessages()
 end
 
@@ -775,10 +789,10 @@ function CM:ApplySettings()
     -- Update font settings and frame height for all message frames
     local fontSize = self.db.FontSize or 16
     for _, frame in pairs(self.messageFrames) do
-        frame:SetHeight((frame.sizeOverride or fontSize) + 2)
+        SetLineHeight(self, frame, frame.msgType, (frame.sizeOverride or fontSize) + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
-                frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
+                SetLineHeight(self, frame, frame.msgType, fontSize + INTERRUPT_FONT_EMPHASIS * 2)
                 frame.interruptIcon:SetSize(fontSize + INTERRUPT_FONT_EMPHASIS,
                     fontSize + INTERRUPT_FONT_EMPHASIS)
                 KE:ApplyFont(frame.text, self.db.FontFace, fontSize + INTERRUPT_FONT_EMPHASIS,
@@ -878,7 +892,7 @@ function CM:ShowPreview()
                     msgColor[1] or 1, msgColor[2] or 1, msgColor[3] or 1, msgColor[4] or 1)
             end
             frame:SetAlpha(1)
-            frame:Show()
+            SetLineShown(self, frame, msgType, true)
             self.activeMessages[msgType] = true
         end
     end
@@ -895,7 +909,7 @@ function CM:HidePreview()
     -- Built-in lines only: an external line belongs to its owner and stays up.
     for _, msgType in ipairs(MESSAGE_TYPES) do
         local frame = self.messageFrames[msgType]
-        if frame then frame:Hide() end
+        if frame then SetLineShown(self, frame, msgType, false) end
         self.activeMessages[msgType] = nil
     end
     -- Re-arranged only while an external line is shown or a frame is attached:
@@ -1201,7 +1215,7 @@ function CM:OnDisable()
         -- never starts or finishes one, however the shown state reads.
         frame.generation = frame.generation + 1
         frame:SetScript("OnUpdate", nil)
-        frame:Hide()
+        SetLineShown(self, frame, frame.msgType, false)
     end
     self.activeMessages = {}
     self.isPreview = false
