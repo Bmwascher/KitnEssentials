@@ -2048,15 +2048,27 @@ local function ChosenVoidcoreQuest()
     return VOIDCORE_QUESTS[AU.db.AutoVoidcoresQuest] or VOIDCORE_QUESTS.Gold
 end
 
-local function ShouldSkipForVoidcores(quests)
-    if not AU.db.AutoVoidcoresGold then return false end
-    local chosen = ChosenVoidcoreQuest()
-    if C_QuestLog.IsQuestFlaggedCompleted(chosen) then return false end
-    if not quests then return false end
+local VOIDCORE_QUEST_IDS = {}
+for _, questID in pairs(VOIDCORE_QUESTS) do
+    VOIDCORE_QUEST_IDS[questID] = true
+end
+
+-- With the master on, the general pick never takes a Voidcore quest, done
+-- this week or not: the chosen one is the dedicated handler's, and the
+-- others are left for the player.
+local function ShouldSkipForVoidcores(masterOn, quests)
+    if not masterOn or not quests then return false end
     for _, quest in ipairs(quests) do
-        if quest.questID == chosen then return true end
+        if VOIDCORE_QUEST_IDS[quest.questID] then return true end
     end
     return false
+end
+
+-- With the master on, the general handler's per-quest steps leave every
+-- Voidcore quest alone: the dedicated handler runs the chosen one's whole
+-- chain, and the others wait for the player.
+local function IsHeldVoidcoreQuest(masterOn, questID)
+    return masterOn == true and VOIDCORE_QUEST_IDS[questID] == true
 end
 
 local questFrame
@@ -2072,6 +2084,14 @@ local function SetupAutoQuests()
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
         if IsQuestModifierHeld() then return end
+        local voidcoresOn = AU.db.AutoVoidcoresGold == true
+
+        if event == "QUEST_DETAIL" or event == "QUEST_PROGRESS"
+            or event == "QUEST_COMPLETE" then
+            if IsHeldVoidcoreQuest(voidcoresOn, GetQuestID()) then
+                return
+            end
+        end
 
         if event == "QUEST_DETAIL" then
             if AU.db.AutoAcceptQuests then
@@ -2109,7 +2129,8 @@ local function SetupAutoQuests()
             if AU.db.AutoTurnInQuests then
                 local activeQuests = C_GossipInfo.GetActiveQuests()
                 for _, quest in ipairs(activeQuests) do
-                    if quest.isComplete then
+                    if quest.isComplete
+                        and not IsHeldVoidcoreQuest(voidcoresOn, quest.questID) then
                         C_GossipInfo.SelectActiveQuest(quest.questID)
                         return
                     end
@@ -2119,7 +2140,7 @@ local function SetupAutoQuests()
                 local availableQuests = C_GossipInfo.GetAvailableQuests()
                 -- Yield to the voidcores handler so its priority pick isn't
                 -- overridden by the generic "select first available" path.
-                if ShouldSkipForVoidcores(availableQuests) then return end
+                if ShouldSkipForVoidcores(voidcoresOn, availableQuests) then return end
                 if #availableQuests > 0 then
                     C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
                 end
@@ -2142,6 +2163,7 @@ local function SetupAutoVoidcores()
     voidcoresFrame:RegisterEvent("GOSSIP_SHOW")
     voidcoresFrame:RegisterEvent("QUEST_DETAIL")
     voidcoresFrame:RegisterEvent("QUEST_PROGRESS")
+    voidcoresFrame:RegisterEvent("QUEST_COMPLETE")
     voidcoresFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.AutoVoidcoresGold then return end
@@ -2177,6 +2199,15 @@ local function SetupAutoVoidcores()
         elseif event == "QUEST_PROGRESS" then
             if GetQuestID() == chosen and IsQuestCompletable() then
                 CompleteQuest()
+            end
+        -- CompleteQuest only opens the reward window; the reward is a
+        -- separate call, and the general handler skips Voidcore quests.
+        elseif event == "QUEST_COMPLETE" then
+            if GetQuestID() == chosen then
+                local numChoices = GetNumQuestChoices()
+                if numChoices <= 1 then
+                    GetQuestReward(numChoices)
+                end
             end
         end
     end)

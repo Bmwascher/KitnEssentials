@@ -22,6 +22,7 @@
 --   * Character-window button placement arithmetic.
 --   * The Great Vault button's gates, including the lifecycle predicate in the
 --     one state a preference key cannot reach.
+--   * The Voidcore quest guard on the general quest handler.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -1829,3 +1830,51 @@ describe("Automation Persist Signup Note lockdown clear", function()
         end)
     end
 end)
+
+---------------------------------------------------------------------------------
+-- Voidcore quest guard. With Auto Complete Voidcores on, the general quest
+-- handler leaves all three Voidcore quests alone: the chosen one belongs to
+-- the dedicated handler, the others to the player. A guard that stops
+-- guarding takes a weekly quest the player never picked.
+---------------------------------------------------------------------------------
+describe("Automation Voidcore quest guard", function()
+    local function seams()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoQuests")
+        return findUpvalue(setup, "IsHeldVoidcoreQuest"),
+               findUpvalue(setup, "ShouldSkipForVoidcores")
+    end
+
+    it("holds every Voidcore quest, and only with the master on", function()
+        local IsHeld = seams()
+        local cases = {
+            { name = "a Voidcore quest (Gold)",              master = true,  quest = 98016, want = true },
+            { name = "a Voidcore quest (Voidlight Marl)",    master = true,  quest = 98015, want = true },
+            { name = "the master is off",                    master = false, quest = 98015, want = false },
+            { name = "a quest that is not a Voidcore quest", master = true,  quest = 12345, want = false },
+            { name = "no quest id",                          master = true,  quest = nil,   want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.want, IsHeld(case.master, case.quest), case.name)
+        end
+    end)
+
+    it("skips the general pick whenever a Voidcore quest is offered with the master on", function()
+        local _, ShouldSkip = seams()
+        local cases = {
+            { name = "the chosen quest offered", master = true,
+              quests = { { questID = 98016 } }, want = true },
+            { name = "an unchosen one offered among others", master = true,
+              quests = { { questID = 12345 }, { questID = 98012 } }, want = true },
+            { name = "the master is off", master = false,
+              quests = { { questID = 98012 } }, want = false },
+            { name = "no Voidcore quest offered", master = true,
+              quests = { { questID = 12345 } }, want = false },
+            { name = "no list", master = true, quests = nil, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.want, ShouldSkip(case.master, case.quests), case.name)
+        end
+    end)
+end)
+
