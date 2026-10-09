@@ -483,52 +483,54 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row7b:AddWidget(panelColorPicker, 0.5)
     manager:Register(panelColorPicker, "all")
 
-    local panelBorderColorPicker = GUIFrame:CreateColorPicker(row7b, "Panel Border Color", {
-        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.Backdrop.BorderColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7b:AddWidget(panelBorderColorPicker, 0.5)
-    manager:Register(panelBorderColorPicker, "all")
-    card7:AddRow(row7b, Theme.rowHeight)
-
-    -- Edit Box Border Color has no control here: the edit box border is
-    -- chat-type colored on every header update (say/whisper/channel), same
-    -- so a static color option would be applied then instantly overridden.
-    local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-    local editBoxColorPicker = GUIFrame:CreateColorPicker(row7c, "Edit Box Color", {
-        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
-        callback = function(r, g, b, a)
-            db.EditBox.BackdropColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7c:AddWidget(editBoxColorPicker, 0.5)
-    manager:Register(editBoxColorPicker, "all")
-
-    local tabColorPicker = GUIFrame:CreateColorPicker(row7c, "Tab Bar Color", {
+    local tabColorPicker = GUIFrame:CreateColorPicker(row7b, "Tab Bar Color", {
         color = db.TabBackdrop.Color or { 0, 0, 0, 0.2 },
         callback = function(r, g, b, a)
             db.TabBackdrop.Color = { r, g, b, a }
             ApplySettings()
         end,
     })
-    row7c:AddWidget(tabColorPicker, 0.5)
+    row7b:AddWidget(tabColorPicker, 0.5)
     manager:Register(tabColorPicker, "all")
-    card7:AddRow(row7c, Theme.rowHeight)
+    card7:AddRow(row7b, Theme.rowHeight)
 
-    local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
-    local tabBorderColorPicker = GUIFrame:CreateColorPicker(row7d, "Tab Bar Border Color", {
+    local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local panelBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Panel Border Color", {
+        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a)
+            db.Backdrop.BorderColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7c:AddWidget(panelBorderColorPicker, 0.5)
+    manager:Register(panelBorderColorPicker, "all")
+
+    local tabBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Tab Bar Border Color", {
         color = db.TabBackdrop.BorderColor or { 0, 0, 0, 1 },
         callback = function(r, g, b, a)
             db.TabBackdrop.BorderColor = { r, g, b, a }
             ApplySettings()
         end,
     })
-    row7d:AddWidget(tabBorderColorPicker, 0.5)
+    row7c:AddWidget(tabBorderColorPicker, 0.5)
     manager:Register(tabBorderColorPicker, "all")
+    card7:AddRow(row7c, Theme.rowHeight)
+
+    AddSeparatorRow(card7, manager)
+
+    -- Edit Box Border Color has no control here: the edit box border is
+    -- chat-type colored on every header update (say/whisper/channel), same
+    -- so a static color option would be applied then instantly overridden.
+    local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local editBoxColorPicker = GUIFrame:CreateColorPicker(row7d, "Edit Box Color", {
+        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
+        callback = function(r, g, b, a)
+            db.EditBox.BackdropColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7d:AddWidget(editBoxColorPicker, 0.5)
+    manager:Register(editBoxColorPicker, "all")
     card7:AddRow(row7d, Theme.rowHeightLast, 0)
 
     yOffset = card7:GetNextOffset()
@@ -638,30 +640,10 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     manager:Register(tabTextColorPicker, "all")
     card9:AddRow(row9b, Theme.rowHeight)
 
+    AddSeparatorRow(card9, manager)
+
     local row9c = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
-    local tabSelectedEnabledCheck = GUIFrame:CreateCheckbox(row9c, "Custom Selected Tab Color", {
-        value = db.TabSelectedTextEnabled ~= false,
-        callback = function(checked)
-            db.TabSelectedTextEnabled = checked
-            ApplySettings()
-        end,
-    })
-    row9c:AddWidget(tabSelectedEnabledCheck, 0.5)
-    manager:Register(tabSelectedEnabledCheck, "all")
-
-    local tabSelectedColorPicker = GUIFrame:CreateColorPicker(row9c, "Selected Tab Color", {
-        color = { db.TabSelectedTextColor.r or 1, db.TabSelectedTextColor.g or 0, db.TabSelectedTextColor.b or 0.549, 1 },
-        callback = function(r, g, b)
-            db.TabSelectedTextColor.r, db.TabSelectedTextColor.g, db.TabSelectedTextColor.b = r, g, b
-            ApplySettings()
-        end,
-    })
-    row9c:AddWidget(tabSelectedColorPicker, 0.5)
-    manager:Register(tabSelectedColorPicker, "all")
-    card9:AddRow(row9c, Theme.rowHeight)
-
-    local row9d = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
-    local tabSelectorDropdown = GUIFrame:CreateDropdown(row9d, "Selected Tab Marker", {
+    local tabSelectorDropdown = GUIFrame:CreateDropdown(row9c, "Selected Tab Marker", {
         options = TAB_SELECTOR_STYLES,
         value = db.TabSelector or "NONE",
         callback = function(value)
@@ -669,18 +651,40 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row9d:AddWidget(tabSelectorDropdown, 0.5)
+    row9c:AddWidget(tabSelectorDropdown, 0.5)
     manager:Register(tabSelectorDropdown, "all")
 
-    local tabSelectorColorPicker = GUIFrame:CreateColorPicker(row9d, "Marker Color", {
+    local tabSelectorColorPicker = GUIFrame:CreateColorPicker(row9c, "Marker Color", {
         color = { db.TabSelectorColor.r or 1, db.TabSelectorColor.g or 1, db.TabSelectorColor.b or 1, 1 },
         callback = function(r, g, b)
             db.TabSelectorColor.r, db.TabSelectorColor.g, db.TabSelectorColor.b = r, g, b
             ApplySettings()
         end,
     })
-    row9d:AddWidget(tabSelectorColorPicker, 0.5)
+    row9c:AddWidget(tabSelectorColorPicker, 0.5)
     manager:Register(tabSelectorColorPicker, "all")
+    card9:AddRow(row9c, Theme.rowHeight)
+
+    local row9d = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+    local tabSelectedEnabledCheck = GUIFrame:CreateCheckbox(row9d, "Custom Selected Tab Color", {
+        value = db.TabSelectedTextEnabled ~= false,
+        callback = function(checked)
+            db.TabSelectedTextEnabled = checked
+            ApplySettings()
+        end,
+    })
+    row9d:AddWidget(tabSelectedEnabledCheck, 0.5)
+    manager:Register(tabSelectedEnabledCheck, "all")
+
+    local tabSelectedColorPicker = GUIFrame:CreateColorPicker(row9d, "Selected Tab Color", {
+        color = { db.TabSelectedTextColor.r or 1, db.TabSelectedTextColor.g or 0, db.TabSelectedTextColor.b or 0.549, 1 },
+        callback = function(r, g, b)
+            db.TabSelectedTextColor.r, db.TabSelectedTextColor.g, db.TabSelectedTextColor.b = r, g, b
+            ApplySettings()
+        end,
+    })
+    row9d:AddWidget(tabSelectedColorPicker, 0.5)
+    manager:Register(tabSelectedColorPicker, "all")
     card9:AddRow(row9d, Theme.rowHeightLast, 0)
 
     yOffset = card9:GetNextOffset()
@@ -781,6 +785,8 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             callback = function(val) linksDb.IconWidth = val end,
         }), 0.5)
         card11:AddRow(row11b, Theme.rowHeight)
+
+        AddSeparatorRow(card11)
 
         local row11c = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
         row11c:AddWidget(GUIFrame:CreateCheckbox(row11c, "Clickable Web Addresses", {
