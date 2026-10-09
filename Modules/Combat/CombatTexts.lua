@@ -108,7 +108,7 @@ CM.SPACER_LIFT = 1
 CM.attachSeated = {}
 CM.attachTop = {}
 -- Per line: the last known shown state and height, and the top it was last
--- placed at. KE records its own writes; a plain read refreshes them.
+-- placed at. A plain read refreshes them.
 CM.lineShown = {}
 CM.lineHeight = {}
 CM.lineTop = {}
