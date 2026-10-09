@@ -56,6 +56,13 @@ function Rules.IsPvPInstance(instanceType)
     return instanceType == "arena" or instanceType == "pvp"
 end
 
+-- The spec event fires for every group member. A unit flagged secret is never
+-- compared and could be the player, so it counts as the player's own.
+function Rules.IsOwnSpecChange(unit, unitSecret)
+    if unitSecret then return true end
+    return unit == "player"
+end
+
 function Rules.Length(key, hasHarmony, inPvP)
     if key == "ThunderousPaws" then return PAWS_LENGTH end
     if not hasHarmony then return NG_BASE end

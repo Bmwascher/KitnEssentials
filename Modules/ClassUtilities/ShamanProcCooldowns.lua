@@ -612,6 +612,12 @@ function SPC:OnTalentChanged()
     C_Timer.After(TALENT_EVAL_DELAY, DeferredEvaluate)
 end
 
+function SPC:OnSpecChanged(_, unit)
+    if Rules.IsOwnSpecChange(unit, KE:IsSecretValue(unit)) then
+        self:OnTalentChanged()
+    end
+end
+
 function SPC:ApplySettings()
     self:UpdateDB()
     if self.db.Enabled then
@@ -639,7 +645,7 @@ function SPC:OnEnable()
 
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnTalentChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnTalentChanged")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTalentChanged")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:Evaluate()
     -- At login the talents may not be readable yet; a second pass catches them.

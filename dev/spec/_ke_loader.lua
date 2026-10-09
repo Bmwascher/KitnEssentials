@@ -3361,10 +3361,10 @@ function L.loadDoTTrackerRules(overrides)
     return KE
 end
 
--- Modules/ClassUtilities/ShamanProcRules.lua. Pure logic: nothing to stub
--- beyond the mock. Returns KE.
+-- Modules/ClassUtilities/ShamanProcRules.lua. Pure logic: nothing to stub.
+-- Returns KE.
 function L.loadShamanProcRules(overrides)
-    installMock(overrides, { C_Timer = inertTimer() })
+    installMock(overrides, {})
     return helpers.loadModule("Modules/ClassUtilities/ShamanProcRules.lua", {})
 end
 

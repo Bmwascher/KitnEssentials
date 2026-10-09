@@ -1,8 +1,8 @@
 -- Modules/ClassUtilities/ShamanProcRules.lua -- the rules a later edit breaks
--- silently: which trackers a character gets, how long each counts, which
--- cooldown announcement starts which tracker, when an announcement is refused,
--- and how much of a countdown is left. Talent reads and secret flags are passed
--- in, so no Blizzard fake is needed.
+-- silently: which trackers a character gets, how long each counts, whose spec
+-- change re-reads talents, which cooldown announcement starts which tracker,
+-- when an announcement is refused, and how much of a countdown is left. Talent
+-- reads and secret flags are passed in, so no Blizzard fake is needed.
 local L = require("dev.spec._ke_loader")
 
 describe("shaman proc rules", function()
@@ -59,6 +59,18 @@ describe("shaman proc rules", function()
         }
         for i, case in ipairs(cases) do
             assert.equals(case[2], Rules.IsPvPInstance(case[1]), "case " .. i)
+        end
+    end)
+
+    it("re-reads talents for the player's own spec change or a unit flagged secret only", function()
+        -- unit, unit secret, expected
+        local cases = {
+            { "player", false, true },
+            { "party1", false, false },
+            { "party1", true, true },
+        }
+        for i, case in ipairs(cases) do
+            assert.equals(case[3], Rules.IsOwnSpecChange(case[1], case[2]), "case " .. i)
         end
     end)
 
