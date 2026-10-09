@@ -531,6 +531,12 @@ function NMA:LayoutSlots(count)
         self.slots[i]:Hide()
     end
     if count > 0 then
+        -- The loop adds a gap after every slot; the last one has none below it.
+        if db.GrowDirection == "RIGHT" or db.GrowDirection == "LEFT" then
+            w = w - spacing
+        else
+            h = h - spacing
+        end
         self.frame:SetSize(math.max(w, 1), math.max(h, 1))
     end
 end
