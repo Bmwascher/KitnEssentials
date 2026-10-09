@@ -262,12 +262,14 @@ function TT:SyncAuraTooltip(forceOff)
         return
     end
     if not inbound.SetTooltipBackdrop then return end
+    -- Refreshed first: the pixel-size watcher may not have handled this event yet.
+    KE:UpdatePixelCache()
     local bg, bd = db.BackdropColor, db.BorderColor
     pcall(inbound.SetTooltipBackdrop, {
         backdropInfo = {
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
+            edgeSize = KE:GetPixelSize(),
             insets = { left = 0, right = 0, top = 0, bottom = 0 },
         },
         centerColor = CreateColor(bg[1], bg[2], bg[3], bg[4] or 0.9),
@@ -1237,6 +1239,8 @@ function TT:OnEnable()
     -- clobbers a write made that early. Kept registered so a later reset is
     -- answered too.
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:RegisterEvent("UI_SCALE_CHANGED", "OnPixelScaleChanged")
+    self:RegisterEvent("DISPLAY_SIZE_CHANGED", "OnPixelScaleChanged")
 
     if _G.GameTooltip then
         if not self.restyleDriver then
@@ -1265,8 +1269,13 @@ end
 
 function TT:PLAYER_ENTERING_WORLD()
     self:SyncAuraSpellIDCVar()
+    self:SyncAuraTooltip()
     local token = auraIDCVarLifecycleToken
     C_Timer.After(0, function() ReassertAuraSpellIDCVar(token) end)
+end
+
+function TT:OnPixelScaleChanged()
+    self:SyncAuraTooltip()
 end
 
 function TT:MODIFIER_STATE_CHANGED()
@@ -1319,6 +1328,8 @@ function TT:OnDisable()
     auraIDCVarLifecycleToken = auraIDCVarLifecycleToken + 1
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    self:UnregisterEvent("UI_SCALE_CHANGED")
+    self:UnregisterEvent("DISPLAY_SIZE_CHANGED")
     self:SyncAuraSpellIDCVar(true)
     self:SyncAuraTooltip(true)
     if self.restyleDriver then self.restyleDriver:SetScript("OnUpdate", nil) end
