@@ -19,7 +19,7 @@ local CHEVRON_Y = -6
 
 -- The one home of the clear rule. A hidden checkbox dependent is reset, so a
 -- setting the player cannot see can never still be acting. A dropdown has no
--- off state and keeps its value; neither dropdown dependent can act while its
+-- off state and keeps its value; no dropdown dependent can act while its
 -- master is off, so there is nothing to make safe.
 function GUIFrame.ResolvePairedDependent(masterOn, clearable)
     if masterOn then return true, false end
