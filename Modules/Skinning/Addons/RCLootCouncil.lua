@@ -250,7 +250,11 @@ end
 local function PageButton_SetNormalTexture(button, texture)
     local arrow = S.data(button).arrow
     local direction = PageDirection(texture)
-    if arrow and direction then S.ArrowTexture(arrow, direction) end
+    if arrow and direction then
+        S.ArrowTexture(arrow, direction)
+        -- The click that flips the arrow happens under the cursor.
+        S.ArrowHoverSync(button)
+    end
 end
 
 -- No plate: the arrow helper re-kills the textures of every child frame on

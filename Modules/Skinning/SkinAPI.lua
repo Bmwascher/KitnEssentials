@@ -1214,6 +1214,15 @@ local function arrowOnLeave(btn)
     if a then a:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3]) end
 end
 
+-- For a caller that repaints an arrow while the cursor is still on its
+-- button: the repaint writes the rest color and no OnEnter follows.
+function S.ArrowHoverSync(button)
+    if button and S.data(button).arrow and button.IsMouseMotionFocus
+        and button:IsMouseMotionFocus() then
+        arrowOnEnter(button)
+    end
+end
+
 function S.StatusBar(bar, inset)
     if not bar or S.data(bar).skinned then return end
     S.Backdrop(bar, inset or -1)
