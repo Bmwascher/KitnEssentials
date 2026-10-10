@@ -697,6 +697,139 @@ function KT.MeterKicker(reads, members, iconOf, shared)
     return nil, cands
 end
 
+-- Interrupts and meter reports pair oldest first, a report with an interrupt
+-- within window of it. A report older than that has no interrupt left and
+-- goes; an interrupt older than that has no report and is dropped; either one
+-- past expire goes unpaired. A report with extra > 0 pairs that many more
+-- interrupts. onPair(entry, hit) and onDrop(entry) are told.
+function KT.PairKicks(pendings, hits, now, expire, window, onPair, onDrop)
+    while pendings[1] and now - pendings[1].startTime > expire do
+        onDrop(table.remove(pendings, 1))
+    end
+    while hits[1] and now - hits[1].at > expire do table.remove(hits, 1) end
+    while pendings[1] and hits[1] do
+        local entry, hit = pendings[1], hits[1]
+        local gap = entry.startTime - hit.at
+        if gap > window then
+            table.remove(hits, 1)
+        elseif gap < -window then
+            onDrop(table.remove(pendings, 1))
+        else
+            table.remove(pendings, 1)
+            if (hit.extra or 0) > 0 then
+                hit.extra = hit.extra - 1
+                hit.paired = true
+            else
+                table.remove(hits, 1)
+            end
+            onPair(entry, hit)
+        end
+    end
+end
+
+-- A read's report shares itself only among interrupts already waiting. Once
+-- that pass ends, a report that paired leaves with its spare capacity, or a
+-- later interrupt would take it before its own report; one that paired
+-- nothing waits as a single report.
+function KT.SettleReport(hits, hit)
+    if hit.paired then
+        for i = 1, #hits do
+            if hits[i] == hit then
+                table.remove(hits, i)
+                return
+            end
+        end
+        return
+    end
+    hit.extra = 0
+end
+
+local function partyIndex(member)
+    return tonumber(member.unit and member.unit:match("^party(%d)$")) or 99
+end
+
+local function busyUntil(member, now)
+    local start, duration = member.kickStart, member.kickDuration
+    if start and duration and now - start < duration then return start + duration end
+    return nil
+end
+
+local function guessBefore(a, b, now)
+    local untilA, untilB = busyUntil(a, now), busyUntil(b, now)
+    if (untilA ~= nil) ~= (untilB ~= nil) then return untilB ~= nil end
+    if untilA then
+        if untilA ~= untilB then return untilA < untilB end
+    else
+        local cdA, cdB = a.interruptData.cd, b.interruptData.cd
+        if cdA ~= cdB then return cdA < cdB end
+    end
+    return partyIndex(a) < partyIndex(b)
+end
+
+-- A synced teammate's messages drive their row (KT.RowTakesKick), so a guess
+-- never lands there.
+function KT.GuessKicker(members, cands, allowBusy, now, heard)
+    local best, bestMember
+    for guid, member in pairs(members) do
+        if member.unit ~= "player" and KT.RowTakesKick(member, heard)
+            and (not cands or cands[guid])
+            and (allowBusy or not busyUntil(member, now))
+            and (not bestMember or guessBefore(member, bestMember, now)) then
+            best, bestMember = guid, member
+        end
+    end
+    return best
+end
+
+-- Returns the guessed guid and its tier (1 to 3), or nil. The meter's
+-- candidates outrank the ready-or-busy bookkeeping: a busy candidate beats a
+-- ready outsider.
+function KT.GuessTarget(members, cands, now, heard)
+    local guid = KT.GuessKicker(members, cands, false, now, heard)
+    if guid then return guid, 1 end
+    if not cands then return nil end
+    guid = KT.GuessKicker(members, cands, true, now, heard)
+    if guid then return guid, 2 end
+    guid = KT.GuessKicker(members, nil, false, now, heard)
+    if guid then return guid, 3 end
+    return nil
+end
+
+-- What a claim (a teammate's KICK or the player's cast) does beyond moving
+-- the kicked spell: "hold" an interrupt still waiting for its meter report,
+-- so it is never charged; "handback" a guess placed on another row.
+function KT.ClaimEffect(entry, claimerGuid)
+    if entry.state == "pending" then return "hold" end
+    if entry.state == "guessed" and entry.guess and entry.guess.guid ~= claimerGuid then
+        return "handback"
+    end
+    return nil
+end
+
+-- Restores a guessed row only while it still holds the guess's charge. Two
+-- backdated charges in one frame share a start time, so the charge number
+-- decides too. Returns true when it restored.
+function KT.HandBackGuess(member, guess)
+    if not member or not guess then return false end
+    if member.kickStart ~= guess.start or member.chargeID ~= guess.charge then return false end
+    local prior = guess.prior
+    member.kickStart, member.kickDuration, member.kicked = prior.kickStart, prior.kickDuration, prior.kicked
+    member.chargeID = prior.chargeID
+    return true
+end
+
+-- The interrupt came first: the newest claimable interrupt with a hidden
+-- kicker inside the window is the player's own kick, unless the meter already
+-- put it on a teammate's row. Entries are in time order.
+function KT.OwnInterruptIndex(entries, now, window)
+    for i = #entries, 1, -1 do
+        local entry = entries[i]
+        if now - entry.startTime > window then return nil end
+        if entry.hidden and entry.claimable and entry.state ~= "fold" then return i end
+    end
+    return nil
+end
+
 local function agreedName(named)
     local owner = nil
     for i = 1, #named do
