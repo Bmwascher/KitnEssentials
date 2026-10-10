@@ -318,8 +318,7 @@ GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
     ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Export", yOffset)
     card1:AddLabel("Turns the active profile into a string you can paste to another player. " ..
-        "It carries every module setting in this profile; nicknames are exported from " ..
-        "their own page.")
+        "It carries every module setting in this profile.")
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local exportBtn = GUIFrame:CreateButton(row1, "Export Active Profile", {

@@ -308,7 +308,9 @@ function PR:PLAYER_REGEN_ENABLED()
     self:CheckPotions()
 end
 
-function PR:PLAYER_SPECIALIZATION_CHANGED()
+-- The event fires for every group member; only the player's spec decides.
+function PR:PLAYER_SPECIALIZATION_CHANGED(_, unit)
+    if unit ~= "player" then return end
     self:CheckPotions()
 end
 

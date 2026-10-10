@@ -92,12 +92,6 @@ local Defaults = {
             Custom = {},
             TintSkins = true,
         },
-
-        -- Map of "Fullname-NormalizedRealm" -> "Nickname".
-        -- Global so nicknames persist across characters/profiles.
-        -- Realm portion uses GetNormalizedRealmName() (no spaces/apostrophes)
-        -- for portable keys if we ever add import/export.
-        Nicknames = {},
     },
     profile = {
         -- Global
@@ -333,7 +327,7 @@ local Defaults = {
             LootBossEnabled = true,
             BenchEnabled = true,
             VoidcoreEnabled = true,
-            AutoReadyBenched = false,
+            AutoReadyBenched = true,
         },
 
         NoMovementAlert = {

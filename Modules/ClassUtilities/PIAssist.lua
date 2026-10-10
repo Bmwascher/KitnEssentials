@@ -667,6 +667,12 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- The event fires for every group member; only the player's spec decides.
+function PA:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:EvaluateGate()
+end
+
 function PA:OnEnable()
     self:UpdateDB()
     -- Class before anything else: classRestriction gates the preview manager
@@ -676,7 +682,7 @@ function PA:OnEnable()
     if class ~= "PRIEST" then return end
     if not self.db.Enabled then return end
 
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "EvaluateGate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "EvaluateGate")
     -- Deferred once: the spec is not reliably readable on the frame this runs.
     C_Timer.After(0.5, function()

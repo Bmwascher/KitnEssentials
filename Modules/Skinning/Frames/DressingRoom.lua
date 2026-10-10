@@ -41,17 +41,11 @@ local function OnDetailsRefreshed(panel)
     end
 end
 
-local function OnDressUpResized(frame, isMinimized)
+local function OnDressUpResized(frame)
     local details = frame.CustomSetDetailsPanel
     if details then
         details:ClearAllPoints()
         details:SetPoint("TOPLEFT", frame, "TOPRIGHT", 4, 0)
-    end
-    local dd = frame.OutfitDropdown
-    if dd then
-        dd:ClearAllPoints()
-        dd:SetPoint("TOP", -(isMinimized and 42 or 28), -32)
-        dd:SetWidth(isMinimized and 140 or 190)
     end
 end
 

@@ -332,7 +332,7 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
         local healerNote = GUIFrame:CreateText(rowX0,
             KE:ColorTextByTheme("Note"),
             db.UseHealerPlacement == true
-                and "While your spec is a healer spec, the icons use this placement."
+                and "Used while you are in a healer spec."
                 or "Off: every spec uses the Default placement.",
             Theme.rowHeight, "hide")
         rowX0:AddWidget(healerNote, 0.5)

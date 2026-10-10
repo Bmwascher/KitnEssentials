@@ -965,7 +965,7 @@ function C:_AttachDispelScripts()
     df:UnregisterAllEvents()
     df:RegisterEvent("SPELL_UPDATE_COOLDOWN")
     df:RegisterEvent("PLAYER_ENTERING_WORLD")
-    df:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    df:RegisterUnitEvent("PLAYER_SPECIALIZATION_CHANGED", "player")
 end
 
 function C:_DetachDispelScripts()

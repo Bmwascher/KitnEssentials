@@ -313,19 +313,15 @@ function L.loadPixelPerfect(opts, overrides)
     return helpers.loadModule("Core/PixelPerfect.lua")
 end
 
--- Core/Nicknames.lua. It captures its globals as file-scope upvalues, so
--- every stub must exist BEFORE its loadModule. Returns the KE table (nickname
--- store: KE.db.global.Nicknames, read live). The export codec
--- (Core/ProfileManager.lua) is not loaded: no nicknames case reaches it.
+-- Core/Nicknames.lua. It captures its unit globals as file-scope upvalues, so
+-- every stub must exist BEFORE its loadModule. Returns the KE table.
 function L.loadNicknames(overrides)
     installMock(overrides, { UnitName = function() return "Bob" end })
     helpers.installAddonShim()
     -- Unit identity consistent with the mock UnitName ("Bob" on "Realm").
     _G.UnitFullName = function() return "Bob", "Realm" end
     _G.UnitIsPlayer = function() return true end
-    _G.GetNormalizedRealmName = function() return "Realm" end
-    local KE = { db = { global = { Nicknames = {} } } }
-    return helpers.loadModule("Core/Nicknames.lua", KE)
+    return helpers.loadModule("Core/Nicknames.lua", {})
 end
 
 -- Modules/Dungeons/TargetedSpells.lua pure helpers. Returns TS, KE.
@@ -2446,8 +2442,6 @@ function L.loadPetStatusText(overrides)
     _G.UnitOnTaxi          = function() return false end
     _G.UnitInVehicle       = function() return false end
     _G.UnitHasVehicleUI    = function() return false end
-    _G.GetSpecialization   = function() return 1 end
-    _G.GetSpecializationInfo = function() return overrides.specID or 265 end
     _G.C_SpellBook         = { IsSpellKnown = function(spellID)
         return not (overrides.unknownSpells and overrides.unknownSpells[spellID])
     end }
@@ -2477,6 +2471,7 @@ function L.loadPetStatusText(overrides)
         end,
         GetSafeUnitGUID = function() return nil end,
         ResolveColor = function() return 1, 1, 1, 1 end,
+        GetPlayerSpecId = function() return overrides.specID or 265 end,
     }
     helpers.loadModule("Modules/ClassUtilities/PetStatusText.lua", KE)
 

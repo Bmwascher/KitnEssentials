@@ -531,6 +531,12 @@ function NMA:LayoutSlots(count)
         self.slots[i]:Hide()
     end
     if count > 0 then
+        -- The loop adds a gap after every slot; the last one has none below it.
+        if db.GrowDirection == "RIGHT" or db.GrowDirection == "LEFT" then
+            w = w - spacing
+        else
+            h = h - spacing
+        end
         self.frame:SetSize(math.max(w, 1), math.max(h, 1))
     end
 end
@@ -1143,6 +1149,10 @@ function NMA:RegisterAnchor()
     cfg.frame = self.frame
     cfg.module = self
     cfg.getPosition = function() return self.db.Position end
+    -- A drag is computed in the frame Anchored To resolves to.
+    cfg.getParentFrame = function()
+        return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+    end
     cfg.setPosition = function(pos)
         local p = self.db.Position
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo

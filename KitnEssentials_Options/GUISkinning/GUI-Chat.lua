@@ -119,7 +119,9 @@ local function AddSeparatorRow(card, manager)
 end
 
 GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return end
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "Chat", "chat")
+    end
     local db = KE.db and KE.db.profile.Skinning.Chat
     if not db then return yOffset end
 
@@ -519,8 +521,8 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     AddSeparatorRow(card7, manager)
 
     -- Edit Box Border Color has no control here: the edit box border is
-    -- chat-type colored on every header update (say/whisper/channel), same
-    -- so a static color option would be applied then instantly overridden.
+    -- chat-type colored on every header update (say/whisper/channel), so a
+    -- static color option would be applied then instantly overridden.
     local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
     local editBoxColorPicker = GUIFrame:CreateColorPicker(row7d, "Edit Box Color", {
         color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },

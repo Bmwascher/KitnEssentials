@@ -555,6 +555,8 @@ function CC:Deactivate()
     self.active = false
     if self.runner then self.runner:Cancel() end
     self.buildTarget = 0
+    -- A refused build blocks every later row; the next activation retries.
+    self.failed = nil
     if self.slots then self.slots:Stop() end
     if self.gate then self.gate:Cancel() end
     if wasActive then

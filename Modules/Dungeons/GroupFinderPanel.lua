@@ -667,6 +667,9 @@ local function GetSearchCover(sp)
     -- Parented to the panel: the client hides and reshows it with the panel.
     local cover = CreateFrame("Frame", nil, sp)
     cover:SetAllPoints(sp.ScrollBox)
+    -- HIGH, so it covers the skinned Start a Group overlay, a UIParent child
+    -- at HIGH.
+    cover:SetFrameStrata("HIGH")
     cover:SetFrameLevel(sp.ScrollBox:GetFrameLevel() + SEARCH_COVER_LEVEL_OFFSET)
     cover:EnableMouse(true)
     local bg = cover:CreateTexture(nil, "BACKGROUND")
@@ -746,7 +749,18 @@ function GFP:RunSearch()
         and C_LFGList.GetAdvancedFilter() or nil
     -- Shown before the call so a result event raised inside it is not missed.
     ShowSearchCover(sp)
+    -- A refused search raises one of these inside the call, returns normally
+    -- and sends no result event, so the cover listens for exactly the call.
+    local cover = searchCover
+    if cover then
+        cover:RegisterEvent("ADDON_ACTION_BLOCKED")
+        cover:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    end
     local ok = pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
+    if cover then
+        cover:UnregisterEvent("ADDON_ACTION_BLOCKED")
+        cover:UnregisterEvent("ADDON_ACTION_FORBIDDEN")
+    end
     if not ok then HideSearchCover() end
 end
 

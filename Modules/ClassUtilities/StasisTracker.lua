@@ -351,6 +351,7 @@ function ST:OnEvent(event, unit, ...)
         end
 
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if unit ~= "player" then return end
         if self:IsValidSpec() then
             self:RegisterSpellEvents()
         else

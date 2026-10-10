@@ -757,27 +757,8 @@ GUIFrame:RegisterContent("SkinBlizzardFramesElements", function(scrollChild, yOf
 end)
 
 -- Three states, evaluated per build, so the master toggle's own RefreshContent
--- switches between them with no reload.
---
--- Exactly TWO of these six configure the skin engine itself -- Frame Skins and
--- Addon Skins -- so they drop out while it is off, because showing them there
--- renders live-looking controls that do nothing.
---
--- Fonts is independent of the engine but still describes a skinned look, so it
--- drops with the engine's own tab. General's Window Colors card is the same
--- case and drops on the same test, gated inside that builder rather than here.
---
--- General is the only tab that stays in every state. It carries Raid Control
--- and the three group-finder pages, none of which is a skin, which is why it
--- does not sit in the two groups above. Elements is engine-independent but not
--- ElvUI-independent: every page on it stands down under ElvUI, so it survives
--- the engine flag and not the conflict state.
---
--- ElvUI is a stricter cut than the engine flag, not a wider one: it drops Fonts
--- and Window Colors too, alongside the skin lists, leaving only General.
--- Color Picker also rides on General but DOES stand down under ElvUI, by its
--- own conflict list rather than the skin gate; its card already says so, which
--- is why it does not change what this list offers.
+-- switches between them with no reload. Color Picker stays on General under
+-- ElvUI: it stands down by its own conflict list, and its card says so.
 GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
     local db = GetDB()
 
@@ -833,8 +814,7 @@ end, {
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
             card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
         else
-            card:AddLabel("Skins Blizzard's windows to match the theme. Each window is skinned the " ..
-                "first time you open it, so there is no idle cost. The Frame Skins tab picks the " ..
+            card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
                 "windows and drops out of the tab row while this is off. Fonts and Elements have " ..
                 "their own switches and keep working with this off. The Skinned Windows size and " ..
                 "outline only show in skinned windows; its font face is also the one Blizzard Text " ..

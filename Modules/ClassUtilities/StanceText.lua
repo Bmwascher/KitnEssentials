@@ -397,6 +397,12 @@ function ST:RegWithEditMode()
     self.editModeRegistered = true
 end
 
+-- The event fires for every group member; only the player's spec decides.
+function ST:OnSpecChanged(_, unit)
+    if unit ~= "player" then return end
+    self:Update()
+end
+
 function ST:OnEnable()
     self:UpdateDB()
     if not self.db.Enabled then return end
@@ -412,7 +418,7 @@ function ST:OnEnable()
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "Update")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Update")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "Update")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "Update")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "Update")
     self:RegisterEvent("PLAYER_ALIVE", "Update")
     -- A retained frame skips CreateFrame's placement, and disable dropped the

@@ -143,7 +143,6 @@ do
     CLOSE_BUTTONS[_G.CLOSE_CHAT_WINDOW or "Close Window"] = true
 end
 
-local BLANK_TEX = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
 local SHORT_CHANNEL_NAMES = {
@@ -1320,7 +1319,7 @@ function CHAT:OnChatEdit_UpdateHeader(editbox)
         insetWritten[editbox] = right
         editbox:SetTextInsets(insetLeft, right, insetTop, insetBottom)
     end
-    self:ApplyFrameStyle(editbox, nil, true)
+    self:ApplyFrameStyle(editbox)
 
     if chanIndex and chatType == "CHANNEL" then
         if chanIndex == 0 then
@@ -1554,13 +1553,10 @@ function CHAT:StyleTab(tab, chat)
     tab.styled = true
 end
 
-function CHAT:ApplyFrameStyle(frame, template, glossTex, ignoreUpdates, forcePixelMode)
+function CHAT:ApplyFrameStyle(frame, template)
     if not frame then return end
 
     frame.template = template or "Default"
-    frame.glossTex = glossTex
-    frame.ignoreUpdates = ignoreUpdates
-    frame.forcePixelMode = forcePixelMode
 
     if not frame.SetBackdrop then
         Mixin(frame, BackdropTemplateMixin)
@@ -1576,13 +1572,10 @@ function CHAT:ApplyFrameStyle(frame, template, glossTex, ignoreUpdates, forcePix
     end
 
     local db = self.db
-    local edgeSize = KE:GetPixelSize()
 
-    frame:SetBackdrop({
-        bgFile = glossTex and (type(glossTex) == "string" and glossTex or BLANK_TEX) or BLANK_TEX,
-        edgeFile = BLANK_TEX,
-        edgeSize = edgeSize,
-    })
+    -- Joins the shared edge refresher, so the border stays one pixel after a
+    -- UI-scale change. It paints both colors white; they are set below.
+    KE.Skins.OwnBackdrop(frame)
 
     local backdropR, backdropG, backdropB, backdropA, borderR, borderG, borderB, borderA = GetTemplateColors(template)
 
@@ -1675,7 +1668,7 @@ function CHAT:StyleEditbox(editbox)
     local name = editbox:GetName()
 
     editbox:SetAltArrowKeyMode(false)
-    self:ApplyFrameStyle(editbox, nil, true)
+    self:ApplyFrameStyle(editbox)
     editbox:SetFont(cachedFontPath, db.EditBoxFontSize or 14, NormalizeFontOutline(db.FontOutline))
 
     if name then
@@ -2516,7 +2509,12 @@ function CHAT:RestoreChat(chat)
         -- set, a disable then re-enable in the same session silently loses
         -- focus-shows-panel, Up/Down history recall and the chat-type border
         -- for the rest of the session.
-        if chat.editBox then chat.editBox.styled = nil end
+        if chat.editBox then
+            chat.editBox.styled = nil
+            -- Chat is off, so the scale walk stops re-laying the edit-box
+            -- border until StyleEditbox enrolls it again.
+            KE.Skins.ReleaseOwnBackdrop(chat.editBox)
+        end
 
         chat.keStyled = nil
     end

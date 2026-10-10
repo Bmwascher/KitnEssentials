@@ -1,48 +1,31 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Nicknames.lua                                           ║
--- ║  Purpose: The nickname store, its serialization helpers, ║
--- ║           and the bridge to the external nickname        ║
--- ║           provider. The config page and the unit-frame   ║
--- ║           tags are gone. Read by the Damage Meter, Death ║
--- ║           Notifications and Healer Mana.                 ║
+-- ║  Purpose: The bridge to the external nickname provider,  ║
+-- ║           the rule that decides whether its answer is a  ║
+-- ║           nickname, and the Name-Realm key builder. Read ║
+-- ║           by the Damage Meter, Death Notifications,      ║
+-- ║           Healer Mana, the LFG Reminder and the Kick     ║
+-- ║           Tracker (the key builder only).                ║
 -- ╚══════════════════════════════════════════════════════════╝
 ---@class KE
 local KE = select(2, ...)
 
 local type = type
-local pairs = pairs
-local wipe = wipe
 local UnitName = UnitName
 local UnitFullName = UnitFullName
 local UnitIsPlayer = UnitIsPlayer
-local GetNormalizedRealmName = GetNormalizedRealmName
-
--- Versioned prefix. Bump the digit if the codec or the payload shape ever
--- changes so older clients surface a clean error instead of decoding garbage.
-local EXPORT_PREFIX = "!KEN2!"
--- Nothing decodes the old prefix; refused with KE.LEGACY_EXPORT_MESSAGE.
-local LEGACY_PREFIX = "!KEN1!"
-
-local function GetDB()
-    return KE.db and KE.db.global and KE.db.global.Nicknames
-end
-
-local function NotifyChange()
-    if KE.RefreshNicknameTags then KE:RefreshNicknameTags() end
-end
 
 ---------------------------------------------------------------------------------
 -- Public Lookup
 ---------------------------------------------------------------------------------
--- Returns a nickname for a unit, or its UnitName when neither source has one.
--- Which source wins, and why, lives in KE:ResolveNicknamePrecedence.
--- Key format is "Fullname-NormalizedRealm".
+-- Returns the provider's nickname for a unit, or its UnitName when there is
+-- none. Whether an answer counts as a nickname lives in
+-- KE:ResolveNicknamePrecedence.
 --
 -- The secret test comes FIRST and the order is the point. UnitFullName is
--- secret when the unit's identity is restricted, and BOTH the emptiness
--- comparison below and the key concatenation are forbidden on a secret --
--- they are two distinct illegal operations, not one. Refusing here falls
--- through to the plain name, which is the same answer an unnamed player gets.
+-- secret when the unit's identity is restricted, and the provider would hand
+-- that secret straight back to be compared. Refusing here falls through to the
+-- plain name, which is the same answer an unnamed player gets.
 --
 -- The fall-through `UnitName(unit) or ""` is deliberately unguarded. A truth
 -- test on a secret string is permitted, so that line cannot throw; it hands
@@ -51,7 +34,7 @@ end
 -- passes this value straight to SetText, which accepts a secret. The cost is
 -- that a caller which COMPARES the result has to guard for itself.
 ---@param unit string Unit token (e.g., "player", "party2")
----@return string name Nickname from either source, else raw UnitName
+---@return string name Nickname from the external provider, else raw UnitName
 function KE:GetNicknameOrName(unit)
     if not unit then return "" end
     if not UnitIsPlayer(unit) then
@@ -61,35 +44,24 @@ function KE:GetNicknameOrName(unit)
     if issecretvalue(name) or issecretvalue(realm) then
         return UnitName(unit) or ""
     end
-    local own
-    local nicks = GetDB()
-    if nicks and name and name ~= "" then
-        if not realm or realm == "" then realm = GetNormalizedRealmName() end
-        if realm and realm ~= "" then
-            own = nicks[name .. "-" .. realm]
-        end
-    end
-    -- Asked only on this plain path: a restricted identity returned above, and
-    -- NSAPI would hand that secret straight back to be compared.
-    local nick = self:ResolveNicknamePrecedence(own, self:GetNSRTNickname(unit), name)
+    local nick = self:ResolveNicknamePrecedence(self:GetNSRTNickname(unit), name)
     if nick then return nick end
     return UnitName(unit) or ""
 end
 
--- Builds the store key ("Name-NormalizedRealm") from a raw name STRING (not a
--- unit token) as data APIs return them: "Name" for a same-realm player (the
+-- Builds the normalized "Name-NormalizedRealm" key from a raw name STRING (not
+-- a unit token) as data APIs return them: "Name" for a same-realm player (the
 -- caller passes its realm -- normally GetNormalizedRealmName() -- as the
 -- fallback) or "Name-Realm" for a cross-realm one. Whichever side supplies the
 -- realm, it is normalized defensively -- spaces / apostrophes / inner hyphens
 -- stripped ("Twisting Nether" -> "TwistingNether", "Azjol-Nerub" ->
--- "AzjolNerub") -- so the key matches the UnitFullName-based store writes
--- whether or not the source already normalized it. A character name never
--- contains a hyphen, so the FIRST hyphen is always the separator. Pure string
--- helper (no store or unit reads): the Damage Meter render path memoizes
+-- "AzjolNerub") -- so two spellings of one player give one key. A character
+-- name never contains a hyphen, so the FIRST hyphen is always the separator.
+-- Pure string helper (no unit reads): the Damage Meter render path memoizes
 -- around it, and the busted spec drives it directly.
 ---@param rawName string|nil "Name" or "Name-Realm" (plain, never secret)
 ---@param fallbackRealm string|nil realm for suffix-less names
----@return string|nil key store key, or nil when either side is unresolvable
+---@return string|nil key normalized key, or nil when either side is unresolvable
 function KE:BuildNicknameKey(rawName, fallbackRealm)
     if type(rawName) ~= "string" or rawName == "" then return nil end
     local name, realm = rawName:match("^([^-]+)%-(.+)$")
@@ -127,20 +99,16 @@ function KE:GetNSRTNickname(subject)
     return nick
 end
 
--- The foreign source wins: KE's own store has no settings page, so its names
--- are only a fallback for a player the foreign source does not nickname.
---
 -- Two refusals because NSAPI says "no nickname" two ways -- it echoes the
 -- string it was given, or returns the BARE name when it resolved that string
 -- as a unit. The Damage Meter asks with the realm-bearing form, so without the
 -- second test every cross-realm player reads as nicknamed and ShowRealm stops
 -- working. A real nickname equal to the bare name is refused with it; the two
 -- are indistinguishable, and this is the side that never invents a nickname.
----@param own string|nil nickname from KE's own store
----@param foreign string|nil nickname from the foreign source
----@param realName string|nil the plain name the foreign source was asked about
+---@param foreign string|nil nickname from the external provider
+---@param realName string|nil the plain name the provider was asked about
 ---@return string|nil nickname resolved nickname, or nil for none
-function KE:ResolveNicknamePrecedence(own, foreign, realName)
+function KE:ResolveNicknamePrecedence(foreign, realName)
     if type(foreign) == "string" and foreign ~= "" then
         local echo = false
         if type(realName) == "string" then
@@ -149,145 +117,14 @@ function KE:ResolveNicknamePrecedence(own, foreign, realName)
         end
         if not echo then return foreign end
     end
-    if type(own) == "string" and own ~= "" then return own end
     return nil
 end
 
 ---------------------------------------------------------------------------------
--- Export
+-- Change Notification
 ---------------------------------------------------------------------------------
-
---- The exportable slice of the store: string keys holding non-empty strings.
----@return table|nil payload
----@return number|string countOrError
-function KE:CollectNicknamePayload()
-    local nicks = GetDB()
-    if not nicks then return nil, "Nicknames database not available" end
-
-    local count = 0
-    local payload = {}
-    for key, nick in pairs(nicks) do
-        if type(key) == "string" and type(nick) == "string" and nick ~= "" then
-            payload[key] = nick
-            count = count + 1
-        end
-    end
-    if count == 0 then return nil, "No nicknames to export" end
-    return payload, count
-end
-
----@return string|nil encoded
----@return string|nil error
----@return number|nil count
-function KE:ExportNicknames()
-    local payload, count = self:CollectNicknamePayload()
-    if not payload then return nil, count --[[@as string]] end
-
-    local encoded = self:EncodeForExport({ v = 1, d = payload })
-    if not encoded then return nil, "Encoding failed" end
-
-    return EXPORT_PREFIX .. encoded, nil, count --[[@as number]]
-end
-
----------------------------------------------------------------------------------
--- Import
----------------------------------------------------------------------------------
-
---- Applies a payload to the store and tells the readers when anything
---- changed. Additive by default: a key in the payload overwrites, a key
---- absent from it is left alone. With `replaceAll` the store is wiped first
---- so it ends equal to the payload.
----@param payload table
----@param replaceAll boolean|nil
----@return number|nil added
----@return number|string updatedOrError
----@return number|nil removed
-function KE:ApplyNicknamePayload(payload, replaceAll)
-    local nicks = GetDB()
-    if not nicks then return nil, "Nicknames database not available" end
-
-    -- Counted before the wipe. Only keys absent from the payload count as
-    -- removed; a key present in both is wiped then re-added.
-    local removed = 0
-    if replaceAll then
-        for key in pairs(nicks) do
-            if payload[key] == nil then removed = removed + 1 end
-        end
-        wipe(nicks)
-    end
-
-    local added, updated = 0, 0
-    for key, nick in pairs(payload) do
-        if type(key) == "string" and type(nick) == "string" and nick ~= "" then
-            if nicks[key] == nil then
-                added = added + 1
-            elseif nicks[key] ~= nick then
-                updated = updated + 1
-            end
-            nicks[key] = nick
-        end
-    end
-
-    if added > 0 or updated > 0 or removed > 0 then NotifyChange() end
-    return added, updated, removed
-end
-
----@param importString string
----@param replaceAll boolean|nil wipe local entries before applying the import
----@return boolean success
----@return string message
-function KE:ImportNicknames(importString, replaceAll)
-    if not importString or importString == "" then
-        return false, "Import string is empty"
-    end
-    if importString:sub(1, #LEGACY_PREFIX) == LEGACY_PREFIX then
-        return false, KE.LEGACY_EXPORT_MESSAGE
-    end
-    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then
-        return false, "Invalid format — this doesn't look like a KE nicknames export"
-    end
-    if not GetDB() then return false, "Nicknames database not available" end
-
-    local data = self:DecodeFromExport(importString:sub(#EXPORT_PREFIX + 1))
-    if not data or type(data.d) ~= "table" then
-        return false, "Invalid export data"
-    end
-
-    local added, updated, removed = self:ApplyNicknamePayload(data.d, replaceAll)
-    if not added then return false, updated --[[@as string]] end
-    if added == 0 and updated == 0 and removed == 0 then
-        return false, "No nicknames were imported"
-    end
-
-    local parts = {}
-    if added > 0 then parts[#parts + 1] = added .. " added" end
-    if updated > 0 then parts[#parts + 1] = updated .. " updated" end
-    if removed > 0 then parts[#parts + 1] = removed .. " removed" end
-    return true, table.concat(parts, ", ")
-end
-
----------------------------------------------------------------------------------
--- Clear All
----------------------------------------------------------------------------------
-
----@return number cleared
-function KE:ClearAllNicknames()
-    local nicks = GetDB()
-    if not nicks then return 0 end
-    local count = 0
-    for _ in pairs(nicks) do count = count + 1 end
-    wipe(nicks)
-    NotifyChange()
-    return count
-end
-
----------------------------------------------------------------------------------
--- Store-change Notification
----------------------------------------------------------------------------------
--- Tells the live readers that a nickname changed, from either source. This
--- used to fan out to ElvUI and UUF as well; KE registers no tags with either
--- any more, so both arms went. Reached by the import and clear paths and by
--- the foreign source's own change callback.
+-- Tells the live readers that a nickname changed. Reached by the external
+-- provider's own change callback.
 
 function KE:RefreshNicknameTags()
     local KEAddon = _G.KitnEssentials

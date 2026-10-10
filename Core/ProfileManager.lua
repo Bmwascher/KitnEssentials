@@ -10,8 +10,7 @@ local ProfileManager = {}
 KE.ProfileManager = ProfileManager
 
 local EXPORT_PREFIX = "!KE2!"
--- Nothing decodes the old prefix; refused with one message, shared with the
--- nicknames import.
+-- Nothing decodes the old prefix; it is refused with one message.
 local LEGACY_PREFIX = "!KE1!"
 KE.LEGACY_EXPORT_MESSAGE = "this string was exported by an older version; ask for a fresh export"
 local DEFAULT_PROFILE = "Default"
@@ -291,10 +290,10 @@ end
 ---------------------------------------------------------------------------------
 -- Export string codec
 ---------------------------------------------------------------------------------
--- CBOR, then Deflate, then Base64. Shared with the nicknames export. The
--- compress, decompress and Base64 calls may return nothing, DeserializeCBOR may
--- return nil, and SerializeCBOR raises on a value it cannot represent, so both
--- directions run under pcall and answer nil.
+-- CBOR, then Deflate, then Base64. The compress, decompress and Base64 calls
+-- may return nothing, DeserializeCBOR may return nil, and SerializeCBOR raises
+-- on a value it cannot represent, so both directions run under pcall and
+-- answer nil.
 
 local function Encode(tbl)
     local serialized = C_EncodingUtil.SerializeCBOR(tbl)

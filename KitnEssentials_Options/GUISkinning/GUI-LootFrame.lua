@@ -11,7 +11,9 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
 GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return end
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "Loot Window", "the loot window")
+    end
     local db = KE.db and KE.db.profile.Skinning.Loot
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)

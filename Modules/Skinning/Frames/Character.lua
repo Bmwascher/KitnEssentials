@@ -425,7 +425,7 @@ end
 
 local flyoutHooked = false
 
--- Per-tab inset backdrop, hooked on CharacterFrameMixin.ShowSubFrame.
+-- Per-tab inset backdrop, hooked on CharacterFrame:ShowSubFrame.
 -- The list tabs want a dark inset behind their rows; the paperdoll
 -- does not -- that is the backdrop  saw sticking around after
 -- tab switching.
@@ -435,8 +435,7 @@ local showInsetBackdrop = {
 }
 
 local function UpdateCharacterInset(a, b)
-    -- hooksecurefunc on a mixin method passes (self, name); accept
-    -- either shape so the tab name is what we actually test.
+    -- The hook passes (self, name); the skin's own call passes (name).
     local name = (type(b) == "string" and b) or (type(a) == "string" and a) or nil
     local inset = _G.CharacterFrameInset
     if not inset then return end
@@ -511,9 +510,11 @@ local function Skin()
     if inset and not S.GetBackdrop(inset) then
         S.Backdrop(inset)
     end
-    if _G.CharacterFrameMixin and not S.data(frame).insetHook then
+    -- On the instance: the XML mixin copied ShowSubFrame onto CharacterFrame
+    -- when it was created, so a hook on CharacterFrameMixin never runs.
+    if frame.ShowSubFrame and not S.data(frame).insetHook then
         S.data(frame).insetHook = true
-        hooksecurefunc(_G.CharacterFrameMixin, "ShowSubFrame", UpdateCharacterInset)
+        hooksecurefunc(frame, "ShowSubFrame", UpdateCharacterInset)
     end
 
     -- The flyout is skinned in the same frame Blizzard builds it. Installed
@@ -527,7 +528,7 @@ local function Skin()
             hooksecurefunc("EquipmentFlyout_UpdateItems", EquipmentFlyoutSkin)
         end
     end
-    local current = frame.activeSubFrame
+    local current = frame.activeSubframe
     UpdateCharacterInset(current)
     S.Tabs("CharacterFrameTab", 6)
     -- Art only. The per-slot ilvl/gem text this loop used to add, and the

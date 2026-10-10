@@ -107,11 +107,24 @@ CM.attachSpacers = {}
 CM.SPACER_LIFT = 1
 CM.attachSeated = {}
 CM.attachTop = {}
--- Per line: the last readable shown state and height, and the top it was
--- last placed at.
+-- Per line: the last known shown state and height, and the top it was last
+-- placed at. A plain read refreshes them.
 CM.lineShown = {}
 CM.lineHeight = {}
 CM.lineTop = {}
+
+-- KE records what it writes to a stacked line, so a later secret read gets
+-- the right answer from ReadShownHeight's cache, a line built while reads
+-- are secret included.
+local function SetLineShown(self, frame, key, shown)
+    if shown then frame:Show() else frame:Hide() end
+    self.lineShown[key] = shown
+end
+
+local function SetLineHeight(self, frame, key, height)
+    frame:SetHeight(height)
+    self.lineHeight[key] = height
+end
 -- Sent on enable and disable, and from ApplySettings once the container
 -- exists, so an attached module can move between its own anchor and this
 -- stack and pick up the font.
@@ -179,7 +192,8 @@ function CM:GetMessageFrame(msgType)
 
     local frame = CreateFrame("Frame", nil, self.container)
     local fontSize = self.db.FontSize or 16
-    frame:SetSize(200, fontSize + 2)
+    frame:SetWidth(200)
+    SetLineHeight(self, frame, msgType, fontSize + 2)
     frame:Hide()
 
     local text = frame:CreateFontString(nil, "OVERLAY")
@@ -195,7 +209,7 @@ function CM:GetMessageFrame(msgType)
     self.messageFrames[msgType] = frame
 
     if msgType == "interrupt" then
-        frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
+        SetLineHeight(self, frame, msgType, fontSize + INTERRUPT_FONT_EMPHASIS * 2)
         local icon = frame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(fontSize + INTERRUPT_FONT_EMPHASIS, fontSize + INTERRUPT_FONT_EMPHASIS)
         -- Trim the baked spell-icon border.
@@ -242,6 +256,13 @@ local function ReadShownHeight(frame, shownCache, heightCache, key)
     end
     shownCache[key], heightCache[key] = shown, height
     return shown, height
+end
+
+-- A secret IsShown read answers ifSecret instead; a truth test on it errors.
+local function IsShownOr(frame, ifSecret)
+    local shown = frame:IsShown()
+    if KE:IsSecretValue(shown) then return ifSecret end
+    return shown
 end
 
 -- A refused move leaves a line where it was; what follows starts below both
@@ -373,14 +394,14 @@ function CM:ShowFlashMessage(msgType, textOverride, iconOverride, nameOverride)
 
     -- Show and arrange
     frame:SetAlpha(1)
-    frame:Show()
+    SetLineShown(self, frame, msgType, true)
     self.activeMessages[msgType] = true
     self:ArrangeMessages()
 
     -- Fade out and hide
     local function HideIfCurrent()
         if frame.generation == myGeneration and not self.isPreview then
-            frame:Hide()
+            SetLineShown(self, frame, msgType, false)
             -- Don't reset alpha here. Render tick can process a SetAlpha(1)
             -- as a visible frame before the Hide takes effect, flashing the
             -- text at full alpha.
@@ -397,7 +418,9 @@ function CM:ShowFlashMessage(msgType, textOverride, iconOverride, nameOverride)
     local fadeDuration = 0.4
     C_Timer.After(duration - fadeDuration, function()
         if frame.generation ~= myGeneration or self.isPreview then return end
-        if not frame:IsShown() then return end
+        -- Secret reads as shown: the generation already proves this message,
+        -- and skipping the fade would leave it on screen.
+        if not IsShownOr(frame, true) then return end
         local fadeStart = GetTime()
         frame:SetScript("OnUpdate", function(f)
             if f.generation ~= myGeneration or self.isPreview then
@@ -435,7 +458,7 @@ function CM:ShowPersistentMessage(msgType)
     frame.text:SetTextColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
 
     frame:SetAlpha(1)
-    frame:Show()
+    SetLineShown(self, frame, msgType, true)
     self.activeMessages[msgType] = true
     self:ArrangeMessages()
 end
@@ -443,7 +466,7 @@ end
 function CM:HidePersistentMessage(msgType)
     local frame = self.messageFrames[msgType]
     if frame then
-        frame:Hide()
+        SetLineShown(self, frame, msgType, false)
         self.activeMessages[msgType] = nil
         self:ArrangeMessages()
     end
@@ -481,12 +504,12 @@ function CM:ShowExternalLine(key, text, r, g, b, a, size)
         frame.sizeOverride = size
         local lineSize = size or self.db.FontSize or 16
         KE:ApplyFontToText(frame.text, self.db.FontFace, lineSize, self.db.FontOutline)
-        frame:SetHeight(lineSize + 2)
+        SetLineHeight(self, frame, key, lineSize + 2)
     end
     frame.text:SetText(text)
     frame.text:SetTextColor(r or 1, g or 1, b or 1, a or 1)
     frame:SetAlpha(1)
-    frame:Show()
+    SetLineShown(self, frame, key, true)
     self:ArrangeMessages()
     return true
 end
@@ -497,7 +520,7 @@ function CM:HideExternalLine(key)
     if not frame then return end
     local shown = frame:IsShown()
     if not KE:IsSecretValue(shown) and not shown then return end
-    frame:Hide()
+    SetLineShown(self, frame, key, false)
     self:ArrangeMessages()
 end
 
@@ -619,7 +642,7 @@ local function SetAggroPulse(frame, on)
         if not pulse:IsPlaying() then pulse:Play() end
     elseif pulse and pulse:IsPlaying() then
         pulse:Stop()
-        if frame:IsShown() then frame:SetAlpha(1) end
+        if IsShownOr(frame, true) then frame:SetAlpha(1) end
     end
 end
 
@@ -649,15 +672,18 @@ function CM:CheckAggro()
     end
     local inInstance = KE:InRealInstancedContent()
 
+    -- A secret shown state re-shows the line without the sound, which plays
+    -- only on a plain hidden-to-shown edge, and still lets a hide run. The
+    -- re-show resets alpha to 1, so a playing pulse may flash once per event.
     local frame = self.messageFrames.aggro
     if CM.ShouldShowAggro(self.db, self.inCombat, KE:IsPlayerTankSpec(), inInstance, threat, threatSecret) then
-        if not (frame and frame:IsShown()) then
+        if not (frame and IsShownOr(frame, false)) then
             self:ShowPersistentMessage("aggro")
             frame = self.messageFrames.aggro
-            if frame and frame:IsShown() then self:PlayAggroSound() end
+            if frame and IsShownOr(frame, false) then self:PlayAggroSound() end
         end
         SetAggroPulse(frame, self.db.AggroPulse == true)
-    elseif frame and frame:IsShown() then
+    elseif frame and IsShownOr(frame, true) then
         self:HidePersistentMessage("aggro")
         SetAggroPulse(frame, false)
     end
@@ -763,10 +789,10 @@ function CM:ApplySettings()
     -- Update font settings and frame height for all message frames
     local fontSize = self.db.FontSize or 16
     for _, frame in pairs(self.messageFrames) do
-        frame:SetHeight((frame.sizeOverride or fontSize) + 2)
+        SetLineHeight(self, frame, frame.msgType, (frame.sizeOverride or fontSize) + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
-                frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
+                SetLineHeight(self, frame, frame.msgType, fontSize + INTERRUPT_FONT_EMPHASIS * 2)
                 frame.interruptIcon:SetSize(fontSize + INTERRUPT_FONT_EMPHASIS,
                     fontSize + INTERRUPT_FONT_EMPHASIS)
                 KE:ApplyFont(frame.text, self.db.FontFace, fontSize + INTERRUPT_FONT_EMPHASIS,
@@ -866,7 +892,7 @@ function CM:ShowPreview()
                     msgColor[1] or 1, msgColor[2] or 1, msgColor[3] or 1, msgColor[4] or 1)
             end
             frame:SetAlpha(1)
-            frame:Show()
+            SetLineShown(self, frame, msgType, true)
             self.activeMessages[msgType] = true
         end
     end
@@ -883,7 +909,7 @@ function CM:HidePreview()
     -- Built-in lines only: an external line belongs to its owner and stays up.
     for _, msgType in ipairs(MESSAGE_TYPES) do
         local frame = self.messageFrames[msgType]
-        if frame then frame:Hide() end
+        if frame then SetLineShown(self, frame, msgType, false) end
         self.activeMessages[msgType] = nil
     end
     -- Re-arranged only while an external line is shown or a frame is attached:
@@ -1185,7 +1211,11 @@ end
 
 function CM:OnDisable()
     for _, frame in pairs(self.messageFrames) do
-        frame:Hide()
+        -- A pending flash fade checks the generation, so a disabled module
+        -- never starts or finishes one, however the shown state reads.
+        frame.generation = frame.generation + 1
+        frame:SetScript("OnUpdate", nil)
+        SetLineShown(self, frame, frame.msgType, false)
     end
     self.activeMessages = {}
     self.isPreview = false

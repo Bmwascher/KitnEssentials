@@ -650,6 +650,14 @@ function S.OwnBackdrop(frame, edgeOnly)
     RefitEdgeClients(frame)
 end
 
+-- For an owner whose skin is turned off: the scale walk stops re-laying the
+-- frame, which keeps the backdrop it wears. S.OwnBackdrop enrolls it again.
+function S.ReleaseOwnBackdrop(frame)
+    if not frame then return end
+    ownEdges[frame] = nil
+    unsettled[frame] = nil
+end
+
 edgeRefresher:SetScript("OnEvent", function()
     -- One frame that refuses a geometry read must not abort the sweep:
     -- that would leave every backdrop after it in the iteration order
@@ -3824,6 +3832,13 @@ function S.DebugRerun(key, selector)
         print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
             .. " is suppressed by EllesmereUI (" .. suppressor
             .. "). Rerunning it would double-skin the window. Turn EllesmereUI's window skin off first.")
+        return
+    end
+
+    -- The dispatch gate the rerun skipped: a row the player turned off.
+    if not SkinEnabled(key, record.addon) then
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
+            .. " is off in Dark Theme > Frame Skins -- turn its row on to rerun it.")
         return
     end
 

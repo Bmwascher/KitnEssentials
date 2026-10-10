@@ -103,13 +103,15 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
         dbKeys = {
             anchorFrameType = "anchorFrameType",
             anchorFrameFrame = "ParentFrame",
-            selfPoint = nil,
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",
             yOffset = "YOffset",
             strata = "Strata",
         },
         positionTable = db.Position,
+        -- The container's own point follows Grow Direction, so Anchor From
+        -- would set nothing.
+        showSelfPoint = false,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
