@@ -1,5 +1,30 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.10
+
+### Shaman Proc Cooldowns
+
+- **NEW:** Shaman Proc Cooldowns, on a new Shaman tab in Class Tools. A
+  countdown starts when Nature's Guardian or Thunderous Paws fires, so you
+  can see when it can fire again. Off by default
+- Nature's Guardian counts 45 seconds, or 30 with Natural Harmony (35 in
+  arenas and battlegrounds). Thunderous Paws counts 20 seconds
+- A tracker shows only while you know its talent and its box under Tracked
+  Talents is ticked
+- Shows as Text or Icons. Text can attach to Combat Texts, below No
+  Movement Alert. Show When Ready and Play Sound When Ready are off by
+  default
+- It has its own Edit Mode mover, and shows a preview while a Combat
+  settings page or Edit Mode is open
+
+### Class Tools
+
+- Class Tools opens on the Shaman tab for a Shaman, instead of All Classes
+- Sidebar search finds Class Tools for "shaman", "nature's guardian",
+  "thunderous paws" and "ghost wolf"
+
+---
+
 ## v4.10.9
 
 ### Aura Tracking
