@@ -1,5 +1,29 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.6
+
+### Chat
+
+- **NEW:** AFK/DND Tags on the Display Settings card, on by default. A
+  player who is away or busy shows an orange [AFK] or red [DND] before
+  their name, your own lines included
+- Lines relayed from Discord show the Discord icon before the sender's
+  name
+- Typing "<Away>" or "<Busy>" in a message no longer turns it into a
+  colored [AFK] or [DND]
+- The chat panel, tab bar, Chat Copy window and web address popup borders
+  draw one screen pixel thick at every UI scale (some scales drew two), and
+  stay that way after a UI scale change
+- The Display Settings, Backdrop, Chat Tabs and Chat Links cards are
+  regrouped, with separator lines. No setting changes
+
+### Tooltips
+
+- The aura tooltip border draws one screen pixel thick at every UI scale,
+  and stays that way after a UI scale change
+
+---
+
 ## v4.10.5
 
 ### DoT Tracker
