@@ -1,5 +1,74 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.11
+
+### Nicknames
+
+- KitnEssentials' own nickname list is retired. Damage Meter, Death
+  Notifications and Healer Mana now show only Northern Sky Raid Tools
+  nicknames. If you saved nicknames in KitnEssentials and do not use
+  Northern Sky Raid Tools, those players now show their character names
+
+### Settings Window
+
+- **NEW:** Anchored To on the Damage Meter position card, and on the No
+  Movement Alert position card while it is not attached to Combat Texts.
+  The meter or alert follows the chosen frame, Edit Mode drags included
+- The Death Notifications position card drops Anchor From, which had no
+  effect, and its anchor dropdown spans the row
+- A card note no longer overlaps the next row after a page builds or a
+  card redraws in place, such as when you pick a class on the DoT Tracker
+  page
+- Position cards have 2 pixels more room between rows, so each label
+  clears the controls above it
+- With ElvUI, the Chat and Tooltips pages open from the sidebar and say
+  that ElvUI handles them, instead of "Coming Soon"
+
+### Raid Notifications
+
+- Auto Ready When Benched is now on by default
+
+### Skinning
+
+- With the Character skin on, the dark plate behind the Reputation and
+  Currency lists now follows tab switches: it shows on Reputation and
+  Currency and hides on the Character tab
+
+### Edit Mode
+
+- The top-center widgets mover is renamed Top-Center Container, to match
+  its settings card
+
+### No Movement Alert
+
+- The alert no longer leaves an extra Spacing gap after its last spell.
+  Attached to Combat Texts, the gap below it matches the Combat Texts
+  spacing instead of doubling it
+
+### Combat Texts
+
+- In the rare case where the game hides whether a line is shown during
+  combat, the stack no longer leaves a gap or lets lines overlap
+
+### Chat
+
+- The chat edit box border stays one pixel thick after a UI scale or
+  resolution change
+
+### Group Finder
+
+- With the Group Finder skin on, Start a Group no longer draws over the
+  "Searching..." cover
+- The "Searching..." cover lifts as soon as the game blocks a search,
+  instead of staying up until the next search
+
+### CC Tracker
+
+- In the rare case where the game refused to build its rows, turning the
+  module off and on brings them back without a /reload
+
+---
+
 ## v4.10.10
 
 ### Shaman Proc Cooldowns
