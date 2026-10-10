@@ -204,6 +204,55 @@ local function SelectSpellList(src)
     return merged, (merged[1] and merged[1].totalAmount) or 0
 end
 
+-- Line 2 of a detail row (the numbers) is three sizes below the bar font, never
+-- below 8. Window.lua's font re-apply uses the same rule through DM.
+local function DetailSubFontSize(fontSize)
+    return math_max(8, (fontSize or 12) - 3)
+end
+DM.DetailSubFontSize = DetailSubFontSize
+
+local math_ceil = math.ceil
+
+-- Rounds up to a whole pixel. The millionth absorbs float noise on an exact
+-- multiple, which would otherwise add a pixel.
+local function SnapUp(v, px)
+    return math_ceil(v / px - 1e-6) * px
+end
+
+-- Two-line row geometry from the window's snapped bar height and spacing. The
+-- row is never shorter than 1.25 x the two font sizes, and the snapped line
+-- centers are pushed down by whole pixels where needed so line 1 starts inside
+-- the row, the two lines do not overlap, and line 2 ends inside the row on any
+-- pixel grid. One reused table: called once per render, never kept by a caller.
+local _detailMetrics = {}
+local function DetailRowMetrics(barH, spacing, fontSize)
+    local m = _detailMetrics
+    local F = fontSize or 12
+    local sub = DetailSubFontSize(fontSize)
+    local px = KE:GetPixelSize()
+    local rowH = math_max(barH + KE:PixelSnap(sub * 0.8), KE:PixelSnap((F + sub) * 1.25))
+    local line1Y = math_max(KE:PixelSnap(rowH * 0.32), SnapUp(F / 2, px))
+    local line2Y = math_max(KE:PixelSnap(rowH * 0.74), line1Y + SnapUp((F + sub) / 2, px))
+    m.barH = barH
+    m.sub = sub
+    m.rowH = math_max(rowH, line2Y + SnapUp(sub / 2, px))
+    m.stride = m.rowH + spacing
+    m.gap = KE:PixelSnap(3)
+    m.line1Y = line1Y
+    m.line2Y = line2Y
+    return m
+end
+
+-- The gray "(Name)" after a recap event: the enemy on damage rows, and the healer
+-- on heal rows only on the panel's two-line rows (the hover tip keeps its one-line
+-- rows without it). A secret or empty name is never shown.
+local function RecapSourceSuffix(srcName, isHeal, twoLine)
+    if srcName and not issecretvalue(srcName) and srcName ~= "" and (twoLine or not isHeal) then
+        return "  |cff999999(" .. srcName .. ")|r"
+    end
+    return ""
+end
+
 -- One detail row: [icon] name .......... value. Scripts wired ONCE (pool reuse).
 -- Clicking any row closes the panel (the back gesture).
 local function MakeDetailRow(parent)
@@ -2223,7 +2272,7 @@ _tipPoll:SetScript("OnUpdate", function(self, elapsed)
 end)
 
 ---------------------------------------------------------------------------------
--- Busted seam (dev/spec/dm_breakdown_spec.lua). The pure aggregation helpers
+-- Busted seam (dev/spec/dm_breakdown_spec.lua, dm_meter_names_spec.lua). The pure helpers
 -- above are file-locals; expose them as statics on DM so the headless spec
 -- tests the REAL bodies instead of a drifting mirror (same static-helper
 -- pattern as MPT.FormatTime / MPT.ResolvePBFrom). Inert in-game: nothing in
@@ -2233,3 +2282,5 @@ DM.AggregateEnemyPlayers = AggregateEnemyPlayers
 DM.AutoAttackName = AutoAttackName
 DM.MergeSpellsByName = MergeSpellsByName
 DM.TipHeaderName = TipHeaderName
+DM.DetailRowMetrics = DetailRowMetrics
+DM.RecapSourceSuffix = RecapSourceSuffix
