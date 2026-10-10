@@ -2023,7 +2023,7 @@ end
 
 function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
     if not frame or not posConfig then return end
-    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame)
+    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent)
     if SetParent then
         frame:SetParent(parent)
     end
