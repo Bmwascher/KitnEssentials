@@ -170,7 +170,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         manager:Register(healerToggle, "all")
         local healerNote = GUIFrame:CreateText(rowHealer,
             KE:ColorTextByTheme("Note"),
-            "While your spec is a healer spec, the tracker moves to this position.",
+            "Used while you are in a healer spec.",
             Theme.rowHeight, "hide")
         rowHealer:AddWidget(healerNote, 0.5)
         cardHealer:AddRow(rowHealer, Theme.rowHeightLast, 0)
