@@ -1,5 +1,36 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.5
+
+### DoT Tracker
+
+- Each DoT's count and icon border now show the DoT's own color
+- **NEW:** DoT Colors on the Count Text card, on by default. Off gives the
+  old look: the Some Have It color and a black border
+- **NEW:** Full Coverage Color, on by default: the count turns All Have It
+  when every counted enemy has the DoT. Off, it keeps the DoT's own color
+- Your DoTs lists one DoT per row, each with a Color swatch and a Reset
+  button
+- Corruption and Immolate share a row with Wither ("Corruption / Wither",
+  "Immolate / Wither") and show Wither's icon while you know Hellcaller's
+  Wither. The separate Wither row is gone
+- New rows: Thrash for Feral and Guardian, Moonfire for Feral with Lunar
+  Inspiration, Shadow Word: Madness, Unstable Affliction, Doom for
+  Demonology and Dread Plague for Unholy. A talent row shows only while you
+  know its talent
+- Flame Shock's count tops out at 6 enemies, and Dread Plague's at 1
+- Deep Wounds (Arms, Fury and Protection) shows only while you know Deep
+  Wounds, Mortal Wounds or Colossus Decimator, and starts unticked. If you
+  used it on Arms or Protection, tick it in Your DoTs to get its icon back
+- Serpent Sting is removed, so Hunters see no tracker unless they add a
+  DoT
+- **NEW:** Only Enemies Fighting Your Group on the Who Counts card, on by
+  default. Solo or in a party, an enemy counts only while you, your pet or
+  a party member is on its threat list. In a raid, and for enemy players
+  and their pets, counting works as before
+
+---
+
 ## v4.10.4
 
 ### Party Buffs
