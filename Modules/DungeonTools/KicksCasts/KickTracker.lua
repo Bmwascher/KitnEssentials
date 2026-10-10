@@ -512,10 +512,11 @@ end
 -- Teammate kicks: rows and the Damage Meter
 ---------------------------------------------------------------------------------
 -- Every accepted interrupt joins recentKicks, where a KICK message or the
--- player's cast can claim it, and the pairing queue, where it waits for the
--- meter report its kick causes (KT.PairKicks). A paired interrupt the game
--- hid goes on the row the meter names, else on the likeliest teammate's row
--- (KT.GuessTarget), else nowhere.
+-- player's cast can claim it. Every one but a readable outsider's also joins
+-- the pairing queue, where it waits for or uses up the meter report its kick
+-- causes (KT.PairKicks). A paired interrupt the game hid goes on the row the
+-- meter names, else on the likeliest teammate's row (KT.GuessTarget), else
+-- nowhere.
 
 -- Display-only values of a kicked cast; each may be secret.
 local function InterruptedSpellIcon(spellID)
@@ -1423,7 +1424,7 @@ function KT:CheckActivation()
         self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
-        self:UnregisterCombatEvents()  -- also clears kick records
+        self:UnregisterCombatEvents()  -- also clears the interrupt queues
         self:HideAllBars()
         if self.containerFrame then self.containerFrame:Hide() end
         wipe(self.partyMembers)

@@ -97,14 +97,14 @@ local function dropOlder(map, now, window)
     end
 end
 
-function KT.PairComm(pairing, records, key, now, window)
+function KT.PairComm(pairing, entries, key, now, window)
     dropOlder(pairing.claims, now, window)
     dropOlder(pairing.paired, now, window)
     if pairing.claims[key] or pairing.paired[key] then return "duplicate" end
 
     local found, count = nil, 0
-    for i = 1, #records do
-        if now - records[i].startTime <= window then
+    for i = 1, #entries do
+        if now - entries[i].startTime <= window then
             count = count + 1
             found = i
         end
@@ -489,8 +489,9 @@ local function shortOf(name)
     return (name:gsub("%-.*$", ""))
 end
 
--- A name is secret in a key, so the class, spec icon and local flag stand in
--- for it. A repeated key gets "#n": it names a position, not a person.
+-- A plain name, without its realm, is the key; when the name is secret, the
+-- class, spec icon and local flag stand in for it. A repeated key gets "#n":
+-- it names a position, not a person.
 function KT.KeyMeterEntries(list)
     local seen = {}
     for i = 1, #list do
@@ -516,7 +517,8 @@ function KT.SessionRepeats(seen, sessionID, idSecret)
 end
 
 -- The list's order is readable in combat, its amounts are not: a kick adds
--- its kicker to the list or moves them up. Two such changes name nobody.
+-- its kicker to the list or moves them up. A one-entry list names its entry;
+-- else one newcomer names its kicker, else one climber does, else nobody.
 function KT.DiffMeter(old, list)
     if #list == 1 then return list[1] end
     if not old then return nil end

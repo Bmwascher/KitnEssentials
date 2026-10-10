@@ -55,21 +55,21 @@ describe("KickTracker pairing, either order", function()
     local W = 1.5
     local function fresh() return { claims = {}, paired = {} } end
 
-    it("a KICK claims the only record in the window", function()
+    it("a KICK claims the only interrupt in the window", function()
         local KT = L.loadKickTrackerRules()
         local result, index = KT.PairComm(fresh(), { { startTime = 8 }, { startTime = 9.5 } }, "A", 10, W)
         assert.equals("claimed", result)
         assert.equals(2, index)
     end)
 
-    it("a KICK with two records in the window claims neither and opens no claim", function()
+    it("a KICK with two interrupts in the window claims neither and opens no claim", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
         assert.equals("ambiguous", (KT.PairComm(pairing, { { startTime = 9.5 }, { startTime = 9.8 } }, "A", 10, W)))
         assert.is_false(KT.PairRecord(pairing, 10.2, W))
     end)
 
-    it("a KICK with no record opens a claim that suppresses the next record once", function()
+    it("a KICK with no interrupt opens a claim that takes the next interrupt once", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
         assert.equals("opened", (KT.PairComm(pairing, {}, "A", 10, W)))
@@ -90,7 +90,7 @@ describe("KickTracker pairing, either order", function()
         end
     end)
 
-    it("a record with two open claims is shown", function()
+    it("an interrupt with two open claims is taken by neither", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
         KT.PairComm(pairing, {}, "A", 10, W)
@@ -98,7 +98,7 @@ describe("KickTracker pairing, either order", function()
         assert.is_false(KT.PairRecord(pairing, 10.5, W))
     end)
 
-    it("a claim older than the window suppresses nothing", function()
+    it("a claim older than the window takes nothing", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
         KT.PairComm(pairing, {}, "A", 10, W)
@@ -108,20 +108,20 @@ describe("KickTracker pairing, either order", function()
     it("a second KICK from the same teammate inside the window changes nothing", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
-        local records = { { startTime = 9.5 } }
-        assert.equals("claimed", (KT.PairComm(pairing, records, "A", 10, W)))
-        table.remove(records, 1)  -- the caller removes the claimed record
-        assert.equals("duplicate", (KT.PairComm(pairing, records, "A", 10.3, W)))
+        local claimable = { { startTime = 9.5 } }
+        assert.equals("claimed", (KT.PairComm(pairing, claimable, "A", 10, W)))
+        table.remove(claimable, 1)  -- a claimed interrupt is no longer claimable
+        assert.equals("duplicate", (KT.PairComm(pairing, claimable, "A", 10.3, W)))
         assert.is_false(KT.PairRecord(pairing, 10.4, W))
     end)
 
-    it("a teammate's second, different kick inside the window pairs with its own record", function()
+    it("a teammate's second, different kick inside the window pairs with its own interrupt", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
-        -- Pummel's KICK first: its claim takes Pummel's record.
+        -- Pummel's KICK first: its claim takes Pummel's interrupt.
         assert.equals("opened", (KT.PairComm(pairing, {}, "A:6552", 10, W)))
         assert.is_true(KT.PairRecord(pairing, 10.1, W))
-        -- The throw 0.3 s later is a new kick, and claims the throw's record.
+        -- The throw 0.3 s later is a new kick, and claims the throw's interrupt.
         local result, index = KT.PairComm(pairing, { { startTime = 10.25 } }, "A:384110", 10.3, W)
         assert.equals("claimed", result)
         assert.equals(1, index)
