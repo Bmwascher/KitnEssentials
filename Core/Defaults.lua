@@ -874,6 +874,37 @@ local Defaults = {
             WarningPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 180 },
         },
 
+        ShamanProcCooldowns = {
+            Enabled = false,
+            TrackNaturesGuardian = true,
+            TrackThunderousPaws = true,
+            DisplayMode = "TEXT", -- TEXT | ICONS
+            ShowWhenReady = false,
+            HideOutOfCombat = false,
+            SoundEnabled = false,
+            Sound = "None",
+            AttachToCombatTexts = false,
+            AttachOwnFontSize = false,
+
+            IconSize = 44,
+            IconSpacing = 2,
+            IconGrowDirection = "RIGHT",
+            DecimalThreshold = 5, -- seconds; below this the icon countdown shows one decimal
+            TimerFontSize = 18,
+
+            FontSize = 16,
+            FontOutline = "OUTLINE",
+            Spacing = 2,
+            GrowDirection = "DOWN",
+            TextColor = { 1, 1, 1, 1 },
+            TimerColor = { 1, 0.82, 0, 1 },
+            SeparatorColor = { 0.5, 0.5, 0.5, 1 },
+            ReadyColor = { 0.25, 0.82, 0.42, 1 },
+            Separator = "-",
+
+            Position = DefaultPosition(0, -220),
+        },
+
         DoTTracker = {
             Enabled = false,
             OnlyInCombat = true,

@@ -28,6 +28,7 @@
     <Script file="GUIClassUtilities\GUI-StanceText.lua" />
     <Script file="GUIClassUtilities\GUI-HuntersMark.lua" />
     <Script file="GUIClassUtilities\GUI-HavocTracker.lua" />
+    <Script file="GUIClassUtilities\GUI-ShamanProcCooldowns.lua" />
     <Script file="GUIClassUtilities\GUI-DoTTracker.lua" />
     <Script file="GUIClassUtilities\GUI-AlterTime.lua" />
     <Script file="GUIClassUtilities\GUI-SpellAlerts.lua" />
