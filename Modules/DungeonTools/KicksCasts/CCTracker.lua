@@ -317,10 +317,10 @@ function CC:Take(slot, unit)
     local container = row.container
     -- Unit before enable: enabling registers the unit's aura events, and the
     -- off-to-on switch makes the container read the unit afresh. A refused
-    -- bind leaves the row disabled, so it draws nothing.
+    -- bind gives the slot back, so the next plate can have the row.
     if not pcall(container.SetUnit, container, unit) then
         if DEBUG_CC then KE:Print("[CC] slot " .. slot .. " bind refused (" .. unit .. ")") end
-        return
+        return false
     end
     pcall(container.SetEnabled, container, true)
     if self.db.NameEnabled ~= false then
@@ -368,7 +368,7 @@ function CC:EnsureSlots()
     self.slots = KE.PlateSlots.New({
         verdict = Verdict,
         cap = 0,
-        onTake = function(slot, unit) CC:Take(slot, unit) end,
+        onTake = function(slot, unit) return CC:Take(slot, unit) end,
         onRelease = function(slot, unit) CC:Release(slot, unit) end,
         unitEvents = UNIT_EVENTS,
         onUnitEvent = function(slots, event, unit) CC:OnPlateUnitEvent(slots, event, unit) end,

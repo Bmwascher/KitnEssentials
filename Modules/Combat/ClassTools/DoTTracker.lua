@@ -628,6 +628,8 @@ end
 ---------------------------------------------------------------------------------
 -- Counting
 ---------------------------------------------------------------------------------
+-- False when a sensor refuses the plate: it then counts for no DoT, and the
+-- release that follows switches off the sensors that did bind.
 function DT:BindSlot(slot, unit)
     for i = 1, #self.list do
         local sensor = self.cells[i].sensors[slot]
@@ -637,6 +639,10 @@ function DT:BindSlot(slot, unit)
             -- refused bind stays off rather than count the plate it held before.
             local bound = pcall(sensor.SetUnit, sensor, unit)
             pcall(sensor.SetEnabled, sensor, bound)
+            if not bound then
+                if DEBUG_DOT then KE:Print("[DOT] slot " .. slot .. " bind refused (" .. unit .. ")") end
+                return false
+            end
         end
     end
     if DEBUG_DOT then KE:Print("[DOT] slot " .. slot .. " = " .. unit) end
@@ -725,7 +731,7 @@ function DT:EnsureCounting()
         verdict = Verdict,
         relax = function() return DT.inCombat end,
         cap = 0,
-        onTake = function(slot, unit) DT:BindSlot(slot, unit) end,
+        onTake = function(slot, unit) return DT:BindSlot(slot, unit) end,
         onRelease = function(slot, unit) DT:UnbindSlot(slot, unit) end,
         onScanDone = function(total) DT:OnScanDone(total) end,
         tickSeconds = TICK_SECONDS,
