@@ -720,69 +720,109 @@ describe("KickTracker meter list keys", function()
 end)
 
 describe("KickTracker meter list diff", function()
-    it("names a lone entry, the one entry added with none removed, or the one entry that moved up", function()
+    it("names a lone entry, the one newcomer, or the one climber when none is new", function()
         local KT = L.loadKickTrackerRules()
         local function list(...)
             local out = {}
             for i, key in ipairs({ ... }) do out[i] = { key = key } end
             return out
         end
-        local shared = { { key = "DK:250", shared = true }, { key = "DK:250#2", shared = true } }
         local rows = {
             { name = "a one-entry list names its entry", old = nil, new = list("DK"), want = "DK" },
             { name = "no earlier read names nothing", old = nil, new = list("DK", "MAGE"), want = nil },
-            { name = "the one added entry is named", old = list("DK"), new = list("DK", "MAGE"), want = "MAGE" },
-            { name = "two added entries name nothing", old = list("DK"), new = list("DK", "MAGE", "ROGUE"), want = nil },
-            { name = "a list one longer with an old entry gone names nothing", old = list("DK", "MAGE"),
-              new = list("DK", "ROGUE", "HUNTER"), want = nil },
-            { name = "the one entry that moved up is named as a climb", old = list("DK", "MAGE", "ROGUE"),
-              new = list("ROGUE", "DK", "MAGE"), want = "ROGUE", climbed = true },
-            { name = "two entries that moved up name nothing", old = list("DK", "MAGE", "ROGUE", "HUNTER"),
+            { name = "the one newcomer is named, even beside a climber", old = list("DK", "MAGE"),
+              new = list("MAGE", "DK", "ROGUE"), want = "ROGUE" },
+            { name = "two newcomers name nothing", old = list("DK"), new = list("DK", "MAGE", "ROGUE"), want = nil },
+            { name = "the one climber is named when none is new", old = list("DK", "MAGE", "ROGUE"),
+              new = list("ROGUE", "DK", "MAGE"), want = "ROGUE" },
+            { name = "two climbers name nothing", old = list("DK", "MAGE", "ROGUE", "HUNTER"),
               new = list("MAGE", "DK", "HUNTER", "ROGUE"), want = nil },
-            { name = "an entry replaced in a list of the same length names nothing", old = list("DK", "MAGE"),
-              new = list("ROGUE", "DK"), want = nil },
-            { name = "no entry moved names nothing", old = list("DK", "MAGE"), new = list("DK", "MAGE"), want = nil },
-            { name = "a climber sharing its class, spec and flag names nothing",
-              old = { { key = "DK:250", shared = true }, { key = "MAGE" }, { key = "DK:250#2", shared = true } },
-              new = { { key = "DK:250", shared = true }, { key = "DK:250#2", shared = true }, { key = "MAGE" } },
-              want = nil },
-            { name = "an added entry sharing its class, spec and flag names nothing",
-              old = list("DK:250"), new = shared, want = nil },
+            { name = "no change names nothing", old = list("DK", "MAGE"), new = list("DK", "MAGE"), want = nil },
         }
         for _, row in ipairs(rows) do
-            local entry, climbed = KT.DiffMeterList(row.old, row.new)
+            local entry = KT.DiffMeter(row.old, row.new)
             assert.equals(row.want, entry and entry.key, row.name)
-            assert.equals(row.climbed == true, climbed == true, row.name)
         end
     end)
 end)
 
 describe("KickTracker meter entry to member", function()
-    it("matches by class and rules members out by the local flag and a plain name only", function()
+    it("matches by the local flag, the class, a plain name and a known spec's icon", function()
         local KT = L.loadKickTrackerRules()
         local members = {
             me = { unit = "player", matchClass = "DEATHKNIGHT", shortName = "Bob", specID = 250 },
             ann = { unit = "party1", matchClass = "DEATHKNIGHT", shortName = "Ann", specID = 251 },
             cal = { unit = "party2", matchClass = "DEATHKNIGHT", shortName = "Cal", specID = 0 },
             dee = { unit = "party3", matchClass = "MAGE", shortName = "Dee", specID = 0 },
+            eve = { unit = "party4", shortName = "Eve", specID = 0 },
         }
+        local icons = { [250] = 135770, [251] = 135773 }
+        local function iconOf(specID) return icons[specID] end
         local rows = {
-            { name = "the local-player flag matches only the player", entry = { class = "MAGE", me = true },
-              count = 1, guid = "me" },
-            { name = "a class matches its members, not the player when the flag says not",
-              entry = { class = "DEATHKNIGHT", me = false }, count = 2 },
-            { name = "an unreadable flag keeps the player in", entry = { class = "DEATHKNIGHT" }, count = 3 },
-            { name = "a spec icon rules nobody out, though one member's known spec differs",
-              entry = { class = "DEATHKNIGHT", me = false, icon = 135770 }, count = 2 },
-            { name = "a plain name, realm stripped, picks one",
-              entry = { class = "DEATHKNIGHT", me = false, name = "Cal-Home" }, count = 1, guid = "cal" },
-            { name = "an unreadable class rules no one out", entry = { class = "MAGE", me = false },
-              members = { ann = { unit = "party1", matchClass = "MAGE" }, dee = { unit = "party3" } }, count = 2 },
+            { name = "the local flag picks the player alone", entry = { class = "MAGE", me = true },
+              want = { "me" } },
+            { name = "a false flag rules the player out", entry = { class = "DEATHKNIGHT", me = false },
+              want = { "ann", "cal" } },
+            { name = "an unreadable flag keeps the player", entry = { class = "DEATHKNIGHT" },
+              want = { "ann", "cal", "me" } },
+            { name = "the class must match, and a member whose class does not read never does",
+              entry = { class = "MAGE", me = false }, want = { "dee" } },
+            { name = "a plain name, realm stripped, rules out other names",
+              entry = { class = "DEATHKNIGHT", me = false, name = "Cal-Home" }, want = { "cal" } },
+            { name = "a known spec with another icon rules out, an unknown spec does not",
+              entry = { class = "DEATHKNIGHT", icon = 135770 }, want = { "cal", "me" } },
         }
         for _, row in ipairs(rows) do
-            local count, guid = KT.MatchMeterEntry(row.entry, row.members or members)
-            assert.equals(row.count, count, row.name)
-            if row.count == 1 then assert.equals(row.guid, guid, row.name) end
+            local out = {}
+            local added = KT.MatchMember(row.entry, members, iconOf, out)
+            local got = {}
+            for guid in pairs(out) do got[#got + 1] = guid end
+            table.sort(got)
+            assert.same(row.want, got, row.name)
+            assert.equals(#row.want, added, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter kicker", function()
+    it("names one match, narrows to several, widens over a list with no entry, and only widens a shared read", function()
+        local KT = L.loadKickTrackerRules()
+        local members = {
+            me = { unit = "player", matchClass = "DEATHKNIGHT", specID = 0 },
+            ann = { unit = "party1", matchClass = "DEATHKNIGHT", specID = 0 },
+            cal = { unit = "party2", matchClass = "DEATHKNIGHT", specID = 0 },
+            dee = { unit = "party3", matchClass = "MAGE", specID = 0 },
+        }
+        local function iconOf() return nil end
+        local mage = { class = "MAGE", me = false }
+        local dk = { class = "DEATHKNIGHT", me = false }
+        local myDk = { class = "DEATHKNIGHT", me = true }
+        local rows = {
+            { name = "an entry matching one member names them",
+              reads = { { entry = mage, list = { mage } }, {} }, owner = "dee", cands = { "dee" } },
+            { name = "an entry matching several narrows to them, and a later list does not widen",
+              reads = { { entry = dk, list = { dk } }, { list = { mage } } }, cands = { "ann", "cal" } },
+            { name = "a list with no entry widens by every entry's matches",
+              reads = { { list = { mage, myDk } }, {} }, cands = { "dee", "me" } },
+            { name = "an Overall entry narrows over a widened Current list",
+              reads = { { list = { mage } }, { entry = dk, list = { dk } } }, cands = { "ann", "cal" } },
+            { name = "no match anywhere gives no candidates",
+              reads = { { list = { { class = "ROGUE" } } }, {} }, cands = nil },
+            { name = "a shared read names nobody and widens over both lists", shared = true,
+              reads = { { entry = mage, list = { mage } }, { entry = myDk, list = { myDk } } },
+              cands = { "dee", "me" } },
+        }
+        for _, row in ipairs(rows) do
+            local owner, cands = KT.MeterKicker(row.reads, members, iconOf, row.shared == true)
+            assert.equals(row.owner, owner, row.name)
+            if row.cands then
+                local got = {}
+                for guid in pairs(cands or {}) do got[#got + 1] = guid end
+                table.sort(got)
+                assert.same(row.cands, got, row.name)
+            else
+                assert.is_nil(cands, row.name)
+            end
         end
     end)
 end)

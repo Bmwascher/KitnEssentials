@@ -510,6 +510,10 @@ end
 ---------------------------------------------------------------------------------
 -- Who kicked, from the Damage Meter's interrupt list
 ---------------------------------------------------------------------------------
+local function shortOf(name)
+    return (name:gsub("%-.*$", ""))
+end
+
 local function hasKey(list, key)
     for i = 1, #list do
         if list[i].key == key then return true end
@@ -611,6 +615,86 @@ function KT.SessionRepeats(seen, sessionID, idSecret)
     local repeated = seen.current == true
     seen.current = true
     return repeated
+end
+
+-- The list's order is readable in combat, its amounts are not: a kick adds
+-- its kicker to the list or moves them up. Two such changes name nobody.
+function KT.DiffMeter(old, list)
+    if #list == 1 then return list[1] end
+    if not old then return nil end
+    local oldIndex = {}
+    for i = 1, #old do oldIndex[old[i].key] = i end
+    local newcomer, climber, newCount, climbCount = nil, nil, 0, 0
+    for i = 1, #list do
+        local entry = list[i]
+        local was = oldIndex[entry.key]
+        if not was then
+            newcomer, newCount = entry, newCount + 1
+        elseif i < was then
+            climber, climbCount = entry, climbCount + 1
+        end
+    end
+    if newCount == 1 then return newcomer end
+    if newCount == 0 and climbCount == 1 then return climber end
+    return nil
+end
+
+-- Adds to out every member this meter entry could be and returns how many it
+-- added. A spec icon rules out only a member whose spec is known; iconOf
+-- gives that spec's icon, or nil.
+function KT.MatchMember(entry, members, iconOf, out)
+    local added = 0
+    for guid, member in pairs(members) do
+        local isPlayer = member.unit == "player"
+        local ok
+        if entry.me == true then
+            ok = isPlayer
+        else
+            ok = member.matchClass == entry.class and (entry.me == nil or entry.me == isPlayer)
+            if ok and entry.name and member.shortName then
+                ok = shortOf(entry.name) == member.shortName
+            end
+            if ok and entry.icon and member.specID and member.specID > 0 then
+                local icon = iconOf(member.specID)
+                if icon and icon ~= entry.icon then ok = false end
+            end
+        end
+        if ok and not out[guid] then
+            out[guid] = true
+            added = added + 1
+        end
+    end
+    return added
+end
+
+-- Who one read names. reads holds, Current then Overall, each list's diffed
+-- entry (nil when it named nobody) and the list (nil when unreadable). An
+-- entry matching one member names them. Otherwise the first entry matching
+-- several narrows the candidates to those; until then each list without an
+-- entry widens them by every member its entries match. A shared read (two
+-- kicks in one read) names nobody and only widens. Returns the owner's guid
+-- or nil, then the candidate set or nil.
+function KT.MeterKicker(reads, members, iconOf, shared)
+    local cands, narrowed = {}, false
+    for i = 1, #reads do
+        local read = reads[i]
+        local entry = not shared and read.entry or nil
+        if entry then
+            local mine = {}
+            if KT.MatchMember(entry, members, iconOf, mine) == 1 then
+                return next(mine), mine
+            end
+            if next(mine) and not narrowed then
+                cands, narrowed = mine, true
+            end
+        elseif read.list and not narrowed then
+            for j = 1, #read.list do
+                KT.MatchMember(read.list[j], members, iconOf, cands)
+            end
+        end
+    end
+    if not next(cands) then return nil, nil end
+    return nil, cands
 end
 
 local function agreedName(named)
