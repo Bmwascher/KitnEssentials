@@ -43,6 +43,9 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     end
 
     local NMA = GetModule()
+    -- The real attachment, not the saved box: with Combat Texts off the
+    -- display stands alone and needs its own layout, position and font.
+    local attached = NMA ~= nil and NMA:IsAttached()
     local function ApplySettings()
         if NMA then NMA:ApplySettings() end
     end
@@ -69,7 +72,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
 
     -- Growth direction is Combat Texts' business while attached: our
     -- lines are members of its stack, so they follow its order.
-    if not db.AttachToCombatTexts then
+    if not attached then
         local row1 = GUIFrame:CreateRow(card2.content, 36)
         row1:AddWidget(GUIFrame:CreateDropdown(row1, "Growth Direction", {
             options = GROW_DIRECTIONS,
@@ -91,7 +94,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     card2:AddRow(row2, 40)
 
     -- Spacing/Scale are inherited from Combat Texts while attached.
-    if not db.AttachToCombatTexts then
+    if not attached then
         local row3 = GUIFrame:CreateRow(card2.content, 44)
         row3:AddWidget(GUIFrame:CreateSlider(row3, "Spacing", {
             min = 0, max = 20, step = 1, value = db.Spacing or 2,
@@ -144,7 +147,10 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     })
     attachRow:AddWidget(attachCheck, 1)
     card2:AddRow(attachRow, 40)
-    if db.AttachToCombatTexts then
+    if db.AttachToCombatTexts and NMA ~= nil and not attached then
+        GUIFrame:AddAttachOffNote(card2)
+    end
+    if attached then
         GUIFrame:CreateAttachSizeRow(card2, db, {
             sizeKey = "FontSize", default = 16, range = { 8, 48 },
             onChange = ApplySettings, isLast = true,
@@ -157,7 +163,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     -- Card 3: Position -- skipped entirely while attached, since Combat
     -- Texts owns the anchor and these values would write to nothing.
     ------------------------------------------------------------------
-    if not db.AttachToCombatTexts then
+    if not attached then
         -- The module root, so Anchored To lands where NMA:ApplyPosition reads
         -- it; the points and offsets still land in db.Position.
         local _, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
@@ -178,7 +184,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     ------------------------------------------------------------------
     -- Card 4: Font -- inherited from Combat Texts while attached.
     ------------------------------------------------------------------
-    if not db.AttachToCombatTexts then
+    if not attached then
         local _, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
             title = "Font",
             db = db,

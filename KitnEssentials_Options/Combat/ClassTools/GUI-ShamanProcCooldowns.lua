@@ -173,7 +173,9 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
             card3:AddRow(layoutRow, Theme.rowHeight)
         end
 
-        local attachRow = GUIFrame:CreateRow(card3.content, attached and Theme.rowHeight or Theme.rowHeightLast)
+        local attachNote = db.AttachToCombatTexts == true and SPC ~= nil and not attached
+        local attachRow = GUIFrame:CreateRow(card3.content,
+            (attached or attachNote) and Theme.rowHeight or Theme.rowHeightLast)
         attachRow:AddWidget(GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
             value = db.AttachToCombatTexts == true,
             tooltip = "Show the lines in the Combat Texts stack and move with it, instead of using a separate anchor.",
@@ -185,6 +187,9 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
                 sizeKey = "FontSize", default = 16, range = { 8, 48 },
                 onChange = ApplySettings, isLast = true,
             })
+        elseif attachNote then
+            card3:AddRow(attachRow, Theme.rowHeight)
+            GUIFrame:AddAttachOffNote(card3)
         else
             card3:AddRow(attachRow, Theme.rowHeightLast, 0)
         end

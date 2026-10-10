@@ -59,10 +59,12 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     local card1 = GUIFrame:CreateCard(scrollChild, "Missing Forms", yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
-        if checked then
-            KitnEssentials:EnableModule("StanceText")
-        else
-            KitnEssentials:DisableModule("StanceText")
+        if mod then
+            if checked then
+                KitnEssentials:EnableModule("StanceText")
+            else
+                KitnEssentials:DisableModule("StanceText")
+            end
         end
     end)
     card1:AddLabel("Shows an icon when your spec is not in the form, stance or aura it should be in.")
@@ -71,10 +73,13 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
 
-    local attached = db.AttachToCombatTexts == true
+    local ticked = db.AttachToCombatTexts == true
+    -- The real attachment, not the saved box: with Combat Texts off the icon
+    -- stands alone and needs its own position.
+    local attached = mod ~= nil and mod:IsAttached()
     local attachRow = GUIFrame:CreateRow(card1.content, 40)
     local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
-        value = attached,
+        value = ticked,
         tooltip = "Show the icon and its caption in the Combat Texts stack and move with it, "
             .. "instead of using a separate anchor.",
         callback = function(checked)
@@ -86,6 +91,9 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     attachRow:AddWidget(attachCheck, 1)
     table_insert(allWidgets, attachCheck)
     card1:AddRow(attachRow, 40)
+    if ticked and mod ~= nil and not attached then
+        GUIFrame:AddAttachOffNote(card1)
+    end
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ------------------------------------------------------------------

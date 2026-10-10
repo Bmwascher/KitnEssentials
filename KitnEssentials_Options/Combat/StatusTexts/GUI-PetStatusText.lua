@@ -64,8 +64,12 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
         "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
         "its own text and color below.")
 
+    -- The real attachment, not the saved box: with Combat Texts off the text
+    -- stands alone and needs its own position and font.
+    local attached = mod ~= nil and mod:IsAttached()
+    local attachNote = db.AttachToCombatTexts == true and mod ~= nil and not attached
     local attachRow = GUIFrame:CreateRow(card1.content,
-        db.AttachToCombatTexts and Theme.rowHeight or Theme.rowHeightLast)
+        (attached or attachNote) and Theme.rowHeight or Theme.rowHeightLast)
     local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
         value = db.AttachToCombatTexts == true,
         tooltip = "Show the pet text as a line of the Combat Texts messages and move with them, "
@@ -78,7 +82,7 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
     })
     attachRow:AddWidget(attachCheck, 1)
     manager:Register(attachCheck, "all")
-    if db.AttachToCombatTexts then
+    if attached then
         card1:AddRow(attachRow, Theme.rowHeight)
         for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
             sizeKey = "FontSize", default = 26, range = { 8, 72 },
@@ -86,13 +90,16 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
         })) do
             manager:Register(widget, "all")
         end
+    elseif attachNote then
+        card1:AddRow(attachRow, Theme.rowHeight)
+        GUIFrame:AddAttachOffNote(card1)
     else
         card1:AddRow(attachRow, Theme.rowHeightLast, 0)
     end
     yOffset = card1:GetNextOffset()
 
     -- Combat Texts owns the anchor and the font while attached.
-    if not db.AttachToCombatTexts then
+    if not attached then
         ----------------------------------------------------------------
         -- Card 2: Position Settings
         ----------------------------------------------------------------
