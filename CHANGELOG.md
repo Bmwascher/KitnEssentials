@@ -1,5 +1,29 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.4
+
+### Party Buffs
+
+- **NEW:** Use in Healer Specs, off by default. On, a healer spec places
+  the icons by a separate Healer copy of Side of the Frame, Frame Strata, X
+  Offset and Y Offset, and changing spec moves them at once
+- The first time you turn it on, the Healer copy starts from your current
+  placement, so nothing moves until you edit it
+- Side of the Frame moves into the Position card. Default and Healer tabs
+  above the card pick which placement you edit
+
+### Interrupt Tracker
+
+- The Position Mode card is gone. Default and Healer tabs above Position
+  Settings pick which position you edit, and the Healer tab holds Use
+  Healer Position. Your settings are unchanged
+- A teammate from another realm who runs an addon that shares specs now
+  gets their spec's interrupt, cooldown and place among the Ready rows, as
+  a same-realm teammate does. A Balance Druid shows Solar Beam (60 s)
+  instead of Skull Bash (15 s)
+
+---
+
 ## v4.10.3
 
 ### Combat Texts
