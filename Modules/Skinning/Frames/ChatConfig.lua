@@ -167,19 +167,22 @@ local function Skin()
     S.CheckBox(_G.CombatConfigColorsColorizeEntireLineByTarget)
     if _G.ChatConfigCombatSettingsFilters then S.ScrollBar(_G.ChatConfigCombatSettingsFilters.ScrollBar) end
 
-    if _G.TextToSpeechFramePlaySampleButton then
-        S.Button(_G.TextToSpeechFramePlaySampleButton)
-        S.Button(_G.TextToSpeechFramePlaySampleAlternateButton)
-        S.Button(_G.TextToSpeechDefaultButton)
+    if _G.TextToSpeechDefaultButton then S.Button(_G.TextToSpeechDefaultButton) end
+    if _G.TextToSpeechCharacterSpecificButton then
         S.CheckBox(_G.TextToSpeechCharacterSpecificButton)
-        pcall(S.DropDown, _G.TextToSpeechFrameTtsVoiceDropdown)
-        pcall(S.DropDown, _G.TextToSpeechFrameTtsVoiceAlternateDropdown)
-        pcall(S.StepSlider, _G.TextToSpeechFrameAdjustRateSlider)
-        pcall(S.StepSlider, _G.TextToSpeechFrameAdjustVolumeSlider)
     end
 
+    -- The panel's own controls carry parentKeys only; they have no global names.
     local ttsPanel = _G.TextToSpeechFramePanelContainer
     if ttsPanel then
+        if ttsPanel.PlaySampleButton then S.Button(ttsPanel.PlaySampleButton) end
+        if ttsPanel.PlaySampleAlternateButton then S.Button(ttsPanel.PlaySampleAlternateButton) end
+        pcall(S.DropDown, ttsPanel.TtsVoiceDropdown)
+        pcall(S.DropDown, ttsPanel.TtsVoiceAlternateDropdown)
+        for _, key in pairs({ "AdjustRateSlider", "AdjustVolumeSlider" }) do
+            local holder = ttsPanel[key]
+            if holder and holder.Slider then S.Slider(holder.Slider) end
+        end
         for _, key in pairs({
             "PlayActivitySoundWhenNotFocusedCheckButton",
             "PlaySoundSeparatingChatLinesCheckButton",

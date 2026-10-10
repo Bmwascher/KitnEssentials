@@ -158,9 +158,18 @@ end)
 -- It counts writes; it never asserts a coordinate. Frame LAYOUT is in the test
 -- policy's "don't try to test" column and is verified in game. "Did we write at
 -- all" is a refusal, and refusals are in the WRITE column.
+local BORDER_PIECES = {
+    "PaperDollInnerBorderTopLeft", "PaperDollInnerBorderTopRight",
+    "PaperDollInnerBorderBottomLeft", "PaperDollInnerBorderBottomRight",
+    "PaperDollInnerBorderLeft", "PaperDollInnerBorderRight",
+    "PaperDollInnerBorderTop", "PaperDollInnerBorderBottom",
+    "PaperDollInnerBorderBottom2",
+}
+
 describe("Widen character window: the guard runs before any write", function()
-    -- Eight frames, one counter. Every method ApplyWiden calls on any of them is
-    -- a geometry write except IsShown, so the count is the whole assertion.
+    -- Eight frames and the nine inner-border pieces, one counter. Every method
+    -- ApplyWiden calls on any of them is a write except IsShown, so the count
+    -- is the whole assertion.
     local function fakeSheet(pdfShown)
         local writes = 0
         local function frame()
@@ -178,6 +187,13 @@ describe("Widen character window: the guard runs before any write", function()
             "PaperDollItemsFrame", "PaperDollFrame",
         }) do
             _G[name] = frame()
+        end
+        for _, name in ipairs(BORDER_PIECES) do
+            _G[name] = {
+                shown = true,
+                Hide = function(self) writes = writes + 1; self.shown = false end,
+                Show = function(self) writes = writes + 1; self.shown = true end,
+            }
         end
         return function() return writes end
     end
@@ -206,5 +222,20 @@ describe("Widen character window: the guard runs before any write", function()
         CP.db = { Enabled = true, WiderFrame = true }
         CP._ApplyWiden()
         assert.is_true(writes() > 0)
+    end)
+
+    -- The border hangs off the inset, so a widened inset would carry it into
+    -- the right column's labels. A piece left hidden after Widen goes off would
+    -- stay hidden until a reload.
+    it("hides all nine inner-border pieces when widening and shows them on the restoring pass", function()
+        local CP = loadCP()
+        fakeSheet(true)
+        CP.db = { Enabled = true, WiderFrame = true }
+        CP._ApplyWiden()
+        for _, name in ipairs(BORDER_PIECES) do assert.is_false(_G[name].shown, name) end
+
+        CP.db.WiderFrame = false
+        CP._ApplyWiden()
+        for _, name in ipairs(BORDER_PIECES) do assert.is_true(_G[name].shown, name) end
     end)
 end)

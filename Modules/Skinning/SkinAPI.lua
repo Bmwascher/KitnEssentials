@@ -377,10 +377,23 @@ function S.StripTextures(frame, kill)
     S.KillRegions(frame)
 end
 
+-- Reapply art read before a strip. GetAtlas is declared non-nil, so a
+-- plainly textured region can report an empty string; that has to fall
+-- through to the texture, because SetAtlas("") leaves the region blank.
+---@param region Texture|nil
+---@param atlas string|nil
+---@param tex string|number|nil
+function S.RestoreArt(region, atlas, tex)
+    if not region then return end
+    if atlas and atlas ~= "" and region.SetAtlas then
+        region:SetAtlas(atlas)
+    elseif tex and region.SetTexture then
+        region:SetTexture(tex)
+    end
+end
+
 -- Strip a frame without losing the icon it holds: read the icon's art back
--- first, strip, then reapply. Atlas is tried first; a plainly textured icon
--- reports no atlas (nil or an empty string), so the texture branch still
--- runs for those.
+-- first, strip, then reapply.
 ---@param frame Frame
 ---@param icon Texture|nil
 ---@param kill boolean|nil hide the stripped regions rather than clearing them
@@ -389,11 +402,7 @@ function S.StripKeepingIcon(frame, icon, kill)
     local atlas = icon and icon.GetAtlas and icon:GetAtlas()
     local tex = icon and icon.GetTexture and icon:GetTexture()
     S.StripTextures(frame, kill)
-    if atlas and atlas ~= "" and icon.SetAtlas then
-        icon:SetAtlas(atlas)
-    elseif tex and icon.SetTexture then
-        icon:SetTexture(tex)
-    end
+    S.RestoreArt(icon, atlas, tex)
     return icon
 end
 
@@ -693,6 +702,15 @@ end
 function S.RefreshEdgesUnderRoots(roots)
     if not roots then return true end
     return WalkEdges(nil, roots, RefreshEdge)
+end
+
+-- The edges S.OwnBackdrop drew on other addons' frames, and the regions
+-- S.TrackEdgeClients follows, under a root whose scale changed.
+function S.RefreshOwnEdgesUnder(root)
+    if not root then return end
+    for frame in pairs(ownEdges) do
+        pcall(RefreshIfUnder, frame, root, nil, RefreshOwnEdge)
+    end
 end
 
 -- Re-measure ONE frame's border. For hosts that scale each element
@@ -1150,10 +1168,7 @@ function S.Button(button, keepRegion)
     clearButtonStates(button)
 
     S.KillAllTextures(button, keepRegion)
-    if keepRegion then
-        if keepAtlas and keepRegion.SetAtlas then keepRegion:SetAtlas(keepAtlas)
-        elseif keepTex and keepRegion.SetTexture then keepRegion:SetTexture(keepTex) end
-    end
+    S.RestoreArt(keepRegion, keepAtlas, keepTex)
 
     if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
     local aeBD = S.Backdrop(button)
@@ -1212,6 +1227,15 @@ end
 local function arrowOnLeave(btn)
     local a = S.data(btn).arrow
     if a then a:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3]) end
+end
+
+-- For a caller that repaints an arrow while the cursor is still on its
+-- button: the repaint writes the rest color and no OnEnter follows.
+function S.ArrowHoverSync(button)
+    if button and S.data(button).arrow and button.IsMouseMotionFocus
+        and button:IsMouseMotionFocus() then
+        arrowOnEnter(button)
+    end
 end
 
 function S.StatusBar(bar, inset)
@@ -2996,6 +3020,10 @@ local function skinScrollArrows(frame)
                 d.arrow = a
                 b:HookScript("OnEnter", arrowOnEnter)
                 b:HookScript("OnLeave", arrowOnLeave)
+            else
+                -- A second pass on the same bar strips this arrow along with
+                -- the stepper's own art.
+                S.ArrowTexture(d.arrow, side[2])
             end
         end
     end
@@ -3120,6 +3148,48 @@ function S.ScrollBar(scrollbar, ignoreUpdates)
     S.data(scrollbar).skinned = true
 end
 
+local function PaintSliderThumb(thumb)
+    thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+    S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
+    thumb:SetSize(10, 18)
+end
+
+-- The accent fill from the plate's left edge to the thumb, and the gray both
+-- take while the slider is disabled.
+local function AddStepFill(slider, thumb, bd)
+    if S.data(slider).stepBar then return end
+    local step = CreateFrame("StatusBar", nil, slider)
+    step:SetFrameLevel(bd:GetFrameLevel() + 1)
+    step:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    S.PaintBrand(step, "SetStatusBarColor", 0.35)
+    local px = PixelBorder()
+    step:SetPoint("TOPLEFT", bd, "TOPLEFT", px, -px)
+    step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", px, px)
+    step:SetPoint("RIGHT", thumb, "CENTER")
+    S.data(slider).stepBar = step
+
+    if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
+    if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
+    local function stateColor()
+        local on = not slider.IsEnabled or slider:IsEnabled()
+        if on then
+            S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
+            S.PaintBrand(step, "SetStatusBarColor", 0.35)
+        else
+            S.ForgetBrand(thumb)
+            S.ForgetBrand(step)
+            thumb:SetVertexColor(0.486, 0.486, 0.486, 1)
+            step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
+        end
+    end
+    if slider.HookScript then
+        hooksecurefunc(slider, "Enable", stateColor)
+        hooksecurefunc(slider, "Disable", stateColor)
+        if slider.SetEnabled then hooksecurefunc(slider, "SetEnabled", stateColor) end
+    end
+    stateColor()
+end
+
 function S.StepSlider(stepper)
     if not stepper or S.data(stepper).skinned then return end
     S.StripTextures(stepper)
@@ -3130,9 +3200,7 @@ function S.StepSlider(stepper)
 
         local thumb = slider.Thumb
         if thumb then
-            thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
-            S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
-            thumb:SetSize(10, 18)
+            PaintSliderThumb(thumb)
         end
 
         local bd = S.Backdrop(slider)
@@ -3145,38 +3213,7 @@ function S.StepSlider(stepper)
             bd:SetParent(stepper)
             bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
 
-            if thumb and not S.data(slider).stepBar then
-                local step = CreateFrame("StatusBar", nil, slider)
-                step:SetFrameLevel(bd:GetFrameLevel() + 1)
-                step:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-                S.PaintBrand(step, "SetStatusBarColor", 0.35)
-                local px = PixelBorder()
-                step:SetPoint("TOPLEFT", bd, "TOPLEFT", px, -px)
-                step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", px, px)
-                step:SetPoint("RIGHT", thumb, "CENTER")
-                S.data(slider).stepBar = step
-
-                if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
-                if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
-                local function stateColor()
-                    local on = not slider.IsEnabled or slider:IsEnabled()
-                    if on then
-                        S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
-                        S.PaintBrand(step, "SetStatusBarColor", 0.35)
-                    else
-                        S.ForgetBrand(thumb)
-                        S.ForgetBrand(step)
-                        thumb:SetVertexColor(0.486, 0.486, 0.486, 1)
-                        step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
-                    end
-                end
-                if slider.HookScript then
-                    hooksecurefunc(slider, "Enable", stateColor)
-                    hooksecurefunc(slider, "Disable", stateColor)
-                    if slider.SetEnabled then hooksecurefunc(slider, "SetEnabled", stateColor) end
-                end
-                stateColor()
-            end
+            if thumb then AddStepFill(slider, thumb, bd) end
         end
     end
 
@@ -3189,6 +3226,31 @@ function S.StepSlider(stepper)
         end
     end
     S.data(stepper).skinned = true
+end
+
+-- A bare UISliderTemplate slider. Its track is a NineSlice child, which the
+-- strip already fades, and its height differs by caller, so the plate is a
+-- fixed-height bar across its middle: the height a stepper slider's plate
+-- comes out at.
+local SLIDER_PLATE_H = 14
+
+function S.Slider(slider)
+    if not slider or S.data(slider).skinned then return end
+    S.StripTextures(slider)
+
+    local thumb = slider.Thumb
+    if thumb then PaintSliderThumb(thumb) end
+
+    local bd = S.Backdrop(slider)
+    if bd then
+        bd:ClearAllPoints()
+        bd:SetPoint("LEFT", slider, "LEFT", 2, 0)
+        bd:SetPoint("RIGHT", slider, "RIGHT", -2, 0)
+        bd:SetHeight(SLIDER_PLATE_H)
+        bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
+        if thumb then AddStepFill(slider, thumb, bd) end
+    end
+    S.data(slider).skinned = true
 end
 
 local INSET_ART_KEYS = {
@@ -3414,6 +3476,8 @@ local function SkinEnabled(key, addon)
     local skins = frames and frames.Skins
     return not skins or skins[key] ~= false
 end
+-- The dispatch gate, for a skin that a debug rerun can reach with its row off.
+S.SkinEnabled = SkinEnabled
 
 function S:Register(addonName, fn, key)
     local list = addonSkins[addonName]

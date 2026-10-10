@@ -1741,3 +1741,25 @@ describe("SkinAPI first-show deferral", function()
         assert.truthy(printed[1]:find("has not run yet", 1, true))
     end)
 end)
+
+describe("SkinAPI RestoreArt", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    it("restores the atlas, else the texture when the atlas is empty, else nothing", function()
+        local tex = "Interface\\DialogFrame\\UI-Dialog-Icon-AlertNew"
+        for _, row in ipairs({
+            { "atlas present", "Some-Atlas", tex, { "SetAtlas", "Some-Atlas" } },
+            { "empty atlas",   "",           tex, { "SetTexture", tex } },
+            { "nothing read",  "",           nil, nil },
+        }) do
+            local calls = {}
+            local region = {
+                SetAtlas = function(_, v) calls[#calls + 1] = { "SetAtlas", v } end,
+                SetTexture = function(_, v) calls[#calls + 1] = { "SetTexture", v } end,
+            }
+            S.RestoreArt(region, row[2], row[3])
+            assert.same(row[4] and { row[4] } or {}, calls, row[1])
+        end
+    end)
+end)

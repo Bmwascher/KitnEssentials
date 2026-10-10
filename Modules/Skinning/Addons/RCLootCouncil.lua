@@ -12,6 +12,25 @@ local math_floor = math.floor
 local SKIN_KEY = "kitnui"
 local MSA_BACKDROPS = { "Backdrop", "MenuBackdrop" }
 
+-- RC windows the skin set up; the LibWindow hook ignores every other window.
+local rcWindows = setmetatable({}, { __mode = "k" })
+local scaleHooked = false
+
+-- RC scales its windows with Ctrl+wheel through LibWindow, which fires
+-- nothing the edge refresher hears. Other addons share the library.
+local function OnWindowScaled(frame)
+    if not rcWindows[frame] then return end
+    S.RefreshEdgesUnder(frame)
+    S.RefreshOwnEdgesUnder(frame)
+end
+
+-- A debug rerun can run Skin with the row off, and Skin can run more than
+-- once, so the shared library is hooked only with the gate open and only once.
+local function ScaleHookNeeded(allowed, available, hooked)
+    return allowed and available and not hooked
+end
+S._RCScaleHookNeeded = ScaleHookNeeded
+
 local function ClearOwnBackdrop(frame)
     if frame and frame.SetBackdrop then frame:SetBackdrop(nil) end
 end
@@ -19,6 +38,7 @@ end
 -- RC repaints its own backdrop on every skin change, and it would cover the
 -- skin's backdrop, which sits one frame level below.
 local function SkinFrame(frame)
+    rcWindows[frame] = true
     local content, title = frame.content, frame.title
     if content then
         ClearOwnBackdrop(content)
@@ -250,7 +270,11 @@ end
 local function PageButton_SetNormalTexture(button, texture)
     local arrow = S.data(button).arrow
     local direction = PageDirection(texture)
-    if arrow and direction then S.ArrowTexture(arrow, direction) end
+    if arrow and direction then
+        S.ArrowTexture(arrow, direction)
+        -- The click that flips the arrow happens under the cursor.
+        S.ArrowHoverSync(button)
+    end
 end
 
 -- No plate: the arrow helper re-kills the textures of every child frame on
@@ -429,6 +453,13 @@ local function Skin()
     if ScrollingTable then hooksecurefunc(ScrollingTable, "CreateST", SkinScrollTable) end
     local LibDialog = LibStub and LibStub("LibDialog-1.1", true)
     if LibDialog then hooksecurefunc(LibDialog, "Spawn", SkinDialogs) end
+    local LibWindow = LibStub and LibStub("LibWindow-1.1", true)
+    local allowed = S.SkinEnabled("RCLootCouncil", "RCLootCouncil") and true or false
+    local available = LibWindow ~= nil and LibWindow.SetScale ~= nil
+    if ScaleHookNeeded(allowed, available, scaleHooked) then
+        hooksecurefunc(LibWindow, "SetScale", OnWindowScaled)
+        scaleHooked = true
+    end
 
     HookModule(addon, "RCVotingFrame", "GetFrame", VotingFrame_GetFrame)
     HookModule(addon, "RCVotingFrame", "RefreshColumnLayout", VotingFrame_RefreshColumnLayout)

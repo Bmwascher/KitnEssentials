@@ -11,7 +11,10 @@ local function Skin()
         if frame.RecipientOverlay.portrait then frame.RecipientOverlay.portrait:SetAlpha(0) end
         if frame.RecipientOverlay.portraitFrame then frame.RecipientOverlay.portraitFrame:SetAlpha(0) end
     end
-    if _G.TradeFrameTradeButton then S.Button(_G.TradeFrameTradeButton) end
+    -- WarningIcon is Blizzard's changed-offer warning: it keeps its art and
+    -- its own Show and Hide through the button strip.
+    local trade = _G.TradeFrameTradeButton
+    if trade then S.Button(trade, trade.WarningIcon) end
     if _G.TradeFrameCancelButton then S.Button(_G.TradeFrameCancelButton) end
     for _, name in next, { "TradeRecipientItemsInset", "TradePlayerItemsInset",
         "TradePlayerInputMoneyInset", "TradePlayerEnchantInset",
