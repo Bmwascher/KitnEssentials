@@ -182,7 +182,7 @@ local function MakeBar(parent, db)
     local fontSize = db and db.FontSize
     local fontOutline = db and db.FontOutline
 
-    -- Rank: between the icon and the name, left-justified in a fixed gutter
+    -- Rank: between the icon and the name, left-justified and content-sized
     -- (shown only when ShowRank is set).
     row.rank = row.fill:CreateFontString(nil, "OVERLAY")
     row.rank:SetJustifyH("LEFT")
@@ -1029,12 +1029,10 @@ function DM:RevealHeaderIcons(W)
     self:SetHeaderIconAlpha(W, 1)
 end
 
--- The OnLeave counterpart: hide only on a genuine exit. IsMouseOver(W.frame) is
--- geometric -- true while the cursor is anywhere over the window (header band, an icon,
--- the body) -- so icon->icon and icon->header keep the icons up; only leaving the window
--- (or, while an overlay holds them open, never) hides them. W.frame:OnLeave doesn't
--- re-fire after a child stole focus, so this icon-level handler is what catches the
--- icon->outside case. No-op outside mouseover-reveal mode.
+-- The OnLeave counterpart: hide only on a genuine exit from the header strip.
+-- icon->icon and icon->strip moves keep the icons up; leaving the strip (or, while
+-- an overlay holds them open, never) hides them. The icons' own OnLeave calls this
+-- too, which catches the icon->outside case. No-op outside mouseover-reveal mode.
 function DM:HeaderIconLeave(W)
     if not W or not W._headerIconHover then return end
     if _AnyOverlayOpen(W) then return end
