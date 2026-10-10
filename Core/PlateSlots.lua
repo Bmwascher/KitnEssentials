@@ -44,6 +44,13 @@ function PlateSlots.Ask(fn, ...)
     return value and true or false
 end
 
+-- The game ignores a spell-id filter for harmful auras on a unit the player can
+-- assist, and its guard counts immune and uninteractable units as assistable;
+-- asked any other way, a unit it treats as friendly would pass.
+function PlateSlots.CanAssist(unit)
+    return PlateSlots.Ask(UnitCanAssist, "player", unit, true, true)
+end
+
 function PlateSlots.PickStrict(relaxAllowed, anyPasses)
     return not relaxAllowed or anyPasses == true
 end

@@ -30,7 +30,6 @@ local C_Spell = C_Spell
 local C_Timer = C_Timer
 local UnitExists = UnitExists
 local UnitCanAttack = UnitCanAttack
-local UnitCanAssist = UnitCanAssist
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitIsBossMob = UnitIsBossMob
 local UnitName = UnitName
@@ -41,6 +40,7 @@ local math_floor, math_max, math_min = math.floor, math.max, math.min
 
 local Rules = KE.CCTrackerRules
 local Ask = KE.PlateSlots.Ask
+local CanAssist = KE.PlateSlots.CanAssist
 
 -- Flip to true, /reload, repro, read the log. It never prints aura data or
 -- names: no code here has them.
@@ -92,12 +92,10 @@ end
 ---------------------------------------------------------------------------------
 -- Reads
 ---------------------------------------------------------------------------------
--- The game's spell-id filter guard counts immune and uninteractable units as
--- assistable; asked any other way, a unit it treats as friendly would pass.
 local unitApi = {
     exists    = function(unit) return Ask(UnitExists, unit) end,
     canAttack = function(unit) return Ask(UnitCanAttack, "player", unit) end,
-    canAssist = function(unit) return Ask(UnitCanAssist, "player", unit, true, true) end,
+    canAssist = CanAssist,
     isDead    = function(unit) return Ask(UnitIsDeadOrGhost, unit) end,
     isBoss    = function(unit) return Ask(UnitIsBossMob, unit) end,
 }

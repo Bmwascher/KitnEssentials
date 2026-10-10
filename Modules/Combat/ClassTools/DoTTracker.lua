@@ -29,7 +29,6 @@ local C_Timer = C_Timer
 local UnitClass = UnitClass
 local UnitExists = UnitExists
 local UnitCanAttack = UnitCanAttack
-local UnitCanAssist = UnitCanAssist
 local UnitIsDead = UnitIsDead
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitThreatSituation = UnitThreatSituation
@@ -43,6 +42,7 @@ local table_concat = table.concat
 
 local Rules = KE.DoTTrackerRules
 local Ask = KE.PlateSlots.Ask
+local CanAssist = KE.PlateSlots.CanAssist
 
 -- Flip to true, /reload, repro, read the log. Nothing can print the lit count:
 -- no code knows it.
@@ -105,12 +105,6 @@ end
 ---------------------------------------------------------------------------------
 -- Reads
 ---------------------------------------------------------------------------------
--- The game's spell-id filter guard counts immune and uninteractable units as
--- assistable; asked any other way, a unit it treats as friendly would pass.
-local function CanAssist(unit)
-    return Ask(UnitCanAssist, "player", unit, true, true)
-end
-
 -- A number is a place on the list and nil is none; a secret or an error is
 -- unread.
 local function ThreatRead(watcher, unit)

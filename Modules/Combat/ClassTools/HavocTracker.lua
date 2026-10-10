@@ -36,8 +36,8 @@ local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local pcall = pcall
 local unpack = unpack
 local UnitExists = UnitExists
-local UnitCanAssist = UnitCanAssist
 local Ask = KE.PlateSlots.Ask
+local CanAssist = KE.PlateSlots.CanAssist
 
 -- Flip to true, /reload, repro, read the log.
 local DEBUG_HT = false
@@ -245,14 +245,6 @@ end
 ---------------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------------
--- The game ignores a spell-id filter for harmful auras on a unit the player
--- can assist, so there the slot would light for any of the player's debuffs.
--- Immune and uninteractable units count as assistable, as the filter's guard
--- counts them.
-local function CanAssist(unit)
-    return Ask(UnitCanAssist, "player", unit, true, true)
-end
-
 -- The same token is a no-op for SetUnit, so a new target is read through
 -- UpdateAllAuras.
 function HT:UpdateTarget()
