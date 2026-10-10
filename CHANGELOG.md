@@ -1,5 +1,36 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.8
+
+### Raid Notifications
+
+- **NEW:** Auto Ready When Benched in General Alerts, off by default. In
+  raid group 7 or 8 outside any instance, a ready check someone else
+  starts is answered Ready for you, with a line in chat. In combat it
+  leaves the check to you
+- Bonus Rolls Missing shows again in this season's Mythic+ dungeons and
+  raids while your bought Nebulous Voidcores are below the cap, with the
+  currency's current icon
+
+### Automation
+
+- Voidcore quest automation works at Orin Straylight instead of Decimus,
+  and hands in the quest itself, even with Auto Turn In Quests off
+- **NEW:** a Quest dropdown beside Auto Complete Voidcores (was Auto
+  Voidcores) picks Gold, Veteran Mistcrest or Voidlight Marl. Gold by
+  default
+- While Auto Complete Voidcores is on, Auto Accept Quests and Auto Turn In
+  Quests leave Orin's three Voidcore quests alone. Only the quest you
+  picked is taken for you
+
+### Group Finder
+
+- After KitnEssentials' Search button or a filter that searches, a
+  "Searching..." cover hides the old results until new ones arrive or the
+  search fails. Hovering an old row no longer causes a Lua error
+
+---
+
 ## v4.10.7
 
 ### Skinning
