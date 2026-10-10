@@ -1,5 +1,36 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.2
+
+### Dark Theme
+
+- The Fonts tab has its own tabs: Skinned Windows, Blizzard Text and
+  On-Screen Messages. The four message cards are now one On-Screen Messages
+  card
+- Elements gains an Alert Frames tab after UI Widgets. The alert and event
+  toast settings move there, and Open Settings on those Edit Mode movers
+  opens it
+- Status Bars, Text Widgets, Spell Icons, Top-Center Container and Event
+  Toasts switch on and off from their card's title bar, with a line in
+  chat. A card that is off shows only its title bar
+- One Text Widgets switch replaces Enable Text Widget Styling and Style
+  Text
+- Shorter labels throughout, for example Flat Bar + Backdrop (was Strip
+  Blizzard Textures & Add Backdrop) and Spell Icons (was Widget Icons)
+- Settings that have no effect now gray out: Category Sizes while Replace
+  All Blizzard Fonts is off, Bar Label Size and Bar Text Size while Status
+  Bars or their Restyle checkbox is off, and Backdrop and Border while Flat
+  Bar + Backdrop is off
+- Sidebar search finds Dark Theme by its tab and card names, such as
+  "alert frames", "spell icons" or "on-screen messages"
+
+### Settings Window
+
+- On a position card anchored to the Player Frame, the right-hand dropdown
+  reads To Frame's instead of To Screen's
+
+---
+
 ## v4.10.1
 
 ### Settings Window
