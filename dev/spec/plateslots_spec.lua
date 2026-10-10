@@ -122,6 +122,37 @@ describe("plate slots", function()
             assert.equals(case[5], slots:SlotOf("nameplate1"), "retry, case " .. i)
         end
     end)
+
+    it("marks a refused plate until it binds, its plate is removed or counting stops", function()
+        local answer
+        -- How the mark is cleared after the refused take.
+        local clears = {
+            { "binds", function(slots)
+                answer = nil
+                slots:ScanNow()
+            end },
+            { "removed", function()
+                up.nameplate1 = nil
+                frames[#frames]:Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+            end },
+            { "stopped", function(slots) slots:Stop() end },
+        }
+        for _, row in ipairs(clears) do
+            up.nameplate1 = true
+            answer = false
+            local slots = KE.PlateSlots.New({
+                verdict = function(unit) return reasons[unit] end,
+                cap = 1,
+                onTake = function() return answer end,
+            })
+            slots:Start()
+            assert.is_false(slots:Refused("nameplate1"), "before, " .. row[1])
+            slots:ScanNow()
+            assert.is_true(slots:Refused("nameplate1"), "refused, " .. row[1])
+            row[2](slots)
+            assert.is_false(slots:Refused("nameplate1"), "cleared, " .. row[1])
+        end
+    end)
 end)
 
 describe("plate slots with the next frame queued", function()

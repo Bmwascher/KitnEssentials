@@ -459,7 +459,8 @@ function Rules.TimerWanted(exists, canAssist)
 end
 
 -- Threat moves on every hit on every engaged plate. It is worth a scan only for
--- a plate not yet counted while a slot is free: a mob that just joined.
-function Rules.WantsThreatScan(holdsSlot, total, cap)
-    return not holdsSlot and total < cap
+-- a plate not yet counted while a slot is free: a mob that just joined. A plate
+-- refused this pull waits for the tick; otherwise each hit on it would rescan.
+function Rules.WantsThreatScan(holdsSlot, refused, total, cap)
+    return not holdsSlot and not refused and total < cap
 end

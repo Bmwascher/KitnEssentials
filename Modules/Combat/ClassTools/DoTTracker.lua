@@ -728,7 +728,7 @@ end
 
 function DT:OnPlateUnitEvent(slots, event, unit)
     if event == "UNIT_THREAT_LIST_UPDATE"
-        and not Rules.WantsThreatScan(slots:SlotOf(unit) ~= nil, slots:Total(), slots:Cap()) then
+        and not Rules.WantsThreatScan(slots:SlotOf(unit) ~= nil, slots:Refused(unit), slots:Total(), slots:Cap()) then
         return
     end
     slots:QueueScan()
