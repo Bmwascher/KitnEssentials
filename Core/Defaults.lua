@@ -327,7 +327,7 @@ local Defaults = {
             LootBossEnabled = true,
             BenchEnabled = true,
             VoidcoreEnabled = true,
-            AutoReadyBenched = false,
+            AutoReadyBenched = true,
         },
 
         NoMovementAlert = {
