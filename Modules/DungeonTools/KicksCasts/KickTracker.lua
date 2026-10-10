@@ -428,11 +428,12 @@ end
 -- case we just cache the spec and the next RefreshPartyRoster will read it.
 function KT:OnLibSpecGroupUpdate(specID, _, _, playerName)
     if not specID or specID == 0 or not playerName then return end
+    -- A secret name is never a table key and never compared.
+    if not KE:IsSafeValue(playerName) then return end
     self.nameSpecCache[playerName] = specID
     -- Another realm's teammate arrives as Name-Realm, which no short name
     -- equals; their spec is also kept under the key the roster gives them.
-    local crossKey
-    if KE:IsSafeValue(playerName) then crossKey = KE:BuildNicknameKey(playerName, nil) end
+    local crossKey = KE:BuildNicknameKey(playerName, nil)
     if crossKey then self.nameSpecCache[crossKey] = specID end
 
     if not self.isActive then return end
