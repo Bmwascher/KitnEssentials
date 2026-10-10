@@ -807,7 +807,7 @@ end
 
 -- Per-enemy player breakdown (Enemy Damage Taken drill-down; OOC-gated via OpenDetail like
 -- RenderBreakdown). Renders the attacking players (AggregateEnemyPlayers) as class-colored
--- rows: [spec icon] name .......... amount + share-of-this-enemy %. Replaces the (blank)
+-- rows: [spec icon] name on line 1, amount + share-of-this-enemy % on line 2. Replaces the (blank)
 -- per-spell render for this meter type -- the enemy's combatSpells don't resolve to
 -- player-spell names. Mirrors RenderBreakdown's row layout / pool handling.
 function DM:RenderEnemyBreakdown(W, src)
@@ -982,7 +982,7 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
         pctSuffix = format(" (%.0f%%)", hpPct * 100)
     end
 
-    -- Label: "-X.Xs SpellName" (+ " (Source)" when a plain sourceName exists).
+    -- Head: "-X.Xs SpellName"; the gray " (Source)" suffix is placed by the twoLine split below.
     -- A SECRET name is KEPT and displayed: a FontString renders one, and the label is
     -- assembled by concatenation, which is safe on a secret string. Falling back to
     -- "Unknown" would erase a name the engine was able to show, on most rows in
@@ -1039,8 +1039,9 @@ end
 
 -- Death-recap timeline, reachable IN COMBAT as well as out of it. Renders the
 -- source's C_DeathRecap events oldest-first: each row is one combat-log event leading
--- to the death, with the HP-remaining fill, "-Xs SpellName from Source" label, and a
--- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
+-- to the death, with the HP-remaining fill, "-Xs SpellName" on line 1, and line 2 the
+-- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix) then the gray
+-- source or healer when readable. Recap fields
 -- use spellId (lowercase d) -- distinct from combatSpells' spellID.
 --
 -- NOTHING here may assume a readable field. Every per-row value goes through
@@ -1290,8 +1291,8 @@ local _tipPaintedRecapID
 -- its size from this; the column/section headers sit one notch below it (TipFontSize - 1).
 local function TipFontSize(s) return math_max(8, (s or 12) - 1) end
 
--- One tip row: [icon] name .......... value. Same anatomy as MakeDetailRow but
--- parented to the tip and laid out by index (the tip is fixed-width, no scroll).
+-- One tip row: [icon] name .......... value, on one line (the panel's MakeDetailRow
+-- rows are two-line), parented to the tip and laid out by index (fixed-width, no scroll).
 -- Scripts are NOT wired here -- the tip is passive (EnableMouse(false)), so a row
 -- never receives clicks; it is a pure display element.
 local function MakeTipRow(parent, rowH)
