@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Restriction.lua               ║
+-- ║  Modules/AuraTracking/AuraEngine/Restriction.lua         ║
 -- ║  Purpose: the deferral gate. One correct implementation  ║
 -- ║  of "may I reconfigure now, and what do I owe later".    ║
 -- ╚══════════════════════════════════════════════════════════╝

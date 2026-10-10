@@ -32,7 +32,7 @@ local issecretvalue = issecretvalue or function() return false end
 -- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture
 -- the namespaced form once at load under a non-colliding local name (a local literally
 -- named SendChatMessage still trips the deprecation lint). C_ChatInfo is a core
--- namespace present before module files run. Mirror: Modules/DamageMeter/Core.lua.
+-- namespace present before module files run. Mirror: Modules/Skinning/DamageMeter/Core.lua.
 local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 
 -- Returns the appropriate group chat channel for boss-split output, or nil when
@@ -873,7 +873,7 @@ function MPT:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN")
     -- Wire the enemy overlay (tooltip post-call + optional nameplate events).
     -- InitOverlay is defined in MythicPlusTimer_Overlay.lua, loaded after this
-    -- file in Dungeons.xml — guaranteed to exist at runtime (same guarantee as
+    -- file in Modules/Modules.xml — guaranteed to exist at runtime (same guarantee as
     -- MigrateLegacyOverlayDB which is called from UpdateDB without a guard).
     self:InitOverlay()
     -- Build the HUD if its file is loaded (BuildHUD lives there); same guard
@@ -1780,7 +1780,7 @@ end
 -- clearsplits (two-step wipe of the global PB store — the recovery path for
 -- a bad improve-only record); anything else — including bare "/kes mt" —
 -- opens the Mythic+ Timer GUI page (the dispatcher's previous behavior).
--- Mirrors DM:HandleSlash in Modules/DamageMeter/Core.lua.
+-- Mirrors DM:HandleSlash in Modules/Skinning/DamageMeter/Core.lua.
 ---------------------------------------------------------------------------------
 
 function MPT:HandleSlash(input)

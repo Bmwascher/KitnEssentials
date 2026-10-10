@@ -2,12 +2,12 @@
 -- ║  AuraDebuffs.lua                                         ║
 -- ║  Module: Aura Debuffs                                    ║
 -- ║  Purpose: Declares the dispellable/important debuff      ║
--- ║           display to the aura engine (Modules/Combat/    ║
--- ║           AuraEngine/). Visibility is filter-driven; the ║
--- ║           engine owns the container, rendering, and the  ║
--- ║           live aura pipeline. This module owns the       ║
--- ║           dispel color palette, since it is the only     ║
--- ║           display with dispel settings.                  ║
+-- ║           display to the aura engine (Modules/           ║
+-- ║           AuraTracking/AuraEngine/). Visibility is       ║
+-- ║           filter-driven; the engine owns the container,  ║
+-- ║           rendering, and the live aura pipeline. This    ║
+-- ║           module owns the dispel color palette, since it ║
+-- ║           is the only display with dispel settings.      ║
 -- ║  Subsumes: BossDebuffs (migrated then deleted).          ║
 -- ╚══════════════════════════════════════════════════════════╝
 

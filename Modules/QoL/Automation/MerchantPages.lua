@@ -37,8 +37,8 @@ local BLIZZ_PER_PAGE = 10
 local BLIZZ_BUYBACK_PER_PAGE = 12
 
 -- KE.Skins is read LAZILY, never hoisted into a file-scope local: this file
--- lives in Modules/QoL/, which loads BEFORE Modules/Skinning/
--- (KitnEssentials.toc), so a file-scope capture of KE.Skins would be nil.
+-- loads before Skinning/SkinAPI.lua in Modules/Modules.xml, so a file-scope
+-- capture of KE.Skins would be nil.
 local function GetS() return KE.Skins end
 
 ---------------------------------------------------------------------------------

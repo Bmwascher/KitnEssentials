@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/ClassUtilities/DoTTrackerRules.lua              ║
+-- ║  Modules/Combat/ClassTools/DoTTrackerRules.lua           ║
 -- ║  Purpose: DoT Tracker's per-spec DoT table, its pure     ║
 -- ║           rules and its guards. No WoW API, no frames.   ║
 -- ╚══════════════════════════════════════════════════════════╝

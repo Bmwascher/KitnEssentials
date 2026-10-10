@@ -23,7 +23,7 @@ local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 
 -- Per-slot item level + gem icons used to be drawn here (EnsureSlotDisplay /
 -- UpdateSlotDisplay / GetEmptySocketIcons).
--- Removed: KE already draws all three from Modules/QoL/CharacterPanel.lua, at
+-- Removed: KE already draws all three from Modules/Skinning/CharacterPanel/CharacterPanel.lua, at
 -- anchors within 2px of these, so every character slot rendered them TWICE
 -- whenever this skin was on.
 -- CharacterPanel is the single owner now, and it also covers the inspect

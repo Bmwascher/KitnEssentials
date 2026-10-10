@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Dungeons/CCTrackerRules.lua                     ║
+-- ║  Modules/DungeonTools/KicksCasts/CCTrackerRules.lua      ║
 -- ║  Purpose: CC Tracker's shipped crowd control list and    ║
 -- ║           its pure rules. No WoW API, no frames.         ║
 -- ╚══════════════════════════════════════════════════════════╝

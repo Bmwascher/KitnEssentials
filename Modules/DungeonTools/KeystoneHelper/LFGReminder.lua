@@ -57,7 +57,7 @@ local C_Spell = C_Spell
 -- Indexed off _G, unlike its neighbors: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
--- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
+-- Modules/Skinning/DarkTheme/Frames/LFG.lua already reaches this same API this way.
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
@@ -534,8 +534,8 @@ end
 -- Build the popup + secure button (once, out of combat)
 BuildPopup = function()
     if popup then return popup end
-    -- Resolved HERE, not at file scope: Dungeons.xml loads before
-    -- Skinning.xml in the toc, so a file-top capture
+    -- Resolved HERE, not at file scope: this file loads before
+    -- Skinning/SkinAPI.lua in Modules/Modules.xml, so a file-top capture
     -- is nil and every skin call silently no-ops.
     local S = KE.Skins
 

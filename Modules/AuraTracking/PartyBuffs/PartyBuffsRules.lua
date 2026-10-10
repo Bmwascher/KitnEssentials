@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/PartyBuffsRules.lua                      ║
+-- ║  Modules/AuraTracking/PartyBuffs/PartyBuffsRules.lua     ║
 -- ║  Purpose: pure decision logic for Party Buffs.           ║
 -- ║  No WoW API, no frames -- so it is testable headlessly.  ║
 -- ╚══════════════════════════════════════════════════════════╝

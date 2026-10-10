@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/ClassUtilities/ShamanProcRules.lua              ║
+-- ║  Modules/Combat/ClassTools/ShamanProcRules.lua           ║
 -- ║  Purpose: the pure rules of Shaman Proc Cooldowns.       ║
 -- ║           No WoW API, no frames.                         ║
 -- ╚══════════════════════════════════════════════════════════╝

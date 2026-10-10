@@ -48,7 +48,7 @@ local C_Timer = C_Timer
 -- Indexed off _G, unlike its neighbors: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
--- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
+-- Modules/Skinning/DarkTheme/Frames/LFG.lua already reaches this same API this way.
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local C_ChallengeMode = C_ChallengeMode

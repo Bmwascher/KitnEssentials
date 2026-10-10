@@ -184,7 +184,7 @@ local showHooked = setmetatable({}, { __mode = "k" })
 -- the pass that first sees a new frame sees it hidden; the OnShow hook
 -- closes that gap. bonusStackTop is what the alert chain continues from.
 -- LootRoll's legacy stacker yields these frames while this module is enabled
--- (Modules/Skinning/LootRoll.lua), so they have one writer.
+-- (Modules/Skinning/DarkTheme/LootRoll.lua), so they have one writer.
 function AF:PositionBonusRollToasts()
     if not self.holder then return end
     local replaces = LootRollReplacesRolls()

@@ -161,7 +161,7 @@ local BONUS_ROLL_FRAMES = {
 }
 
 -- Alert Frames places the bonus-roll frames itself, held by the container or
--- not (Modules/QoL/AlertFrames.lua); a second writer here would leave their
+-- not (Modules/Skinning/DarkTheme/AlertFrames.lua); a second writer here would leave their
 -- anchor to hook order. Off, they are ordinary container contents again.
 local function AlertFramesPlacesBonusRolls()
     local AF = KitnEssentials.GetModule and KitnEssentials:GetModule("AlertFrames", true)

@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/GlowRules.lua                 ║
+-- ║  Modules/AuraTracking/AuraEngine/GlowRules.lua           ║
 -- ║  Purpose: pure glow value rules — type coercion, speed   ║
 -- ║  normalization, and the legacy-duration adapter.         ║
 -- ╚══════════════════════════════════════════════════════════╝

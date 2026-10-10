@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Rules.lua                     ║
+-- ║  Modules/AuraTracking/AuraEngine/Rules.lua               ║
 -- ║  Purpose: pure decision logic for the aura engine.       ║
 -- ║  No WoW API, no frames -- so it is testable headlessly.  ║
 -- ╚══════════════════════════════════════════════════════════╝

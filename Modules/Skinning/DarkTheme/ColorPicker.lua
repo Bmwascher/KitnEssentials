@@ -261,8 +261,8 @@ function CP:Enhance()
     self.applied = true
 
     -- KE.Skins is read here, not captured at file scope: this file loads
-    -- from Modules/QoL/, which loads BEFORE Modules/Skinning/
-    -- (KitnEssentials.toc), so a file-scope capture would be nil.
+    -- before Skinning/SkinAPI.lua in Modules/Modules.xml, so a file-scope
+    -- capture would be nil.
     local S = KE.Skins
     local frame = Picker()
     local Content, Footer = frame.Content, frame.Footer

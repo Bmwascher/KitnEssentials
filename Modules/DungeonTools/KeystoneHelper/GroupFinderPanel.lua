@@ -69,14 +69,15 @@ local format = string.format
 -- These three are NOT in KE's .luacheckrc read_globals, so a bare reference
 -- is a W113 (undefined variable) -- which is never acceptable at any stage.
 -- Alias them at file scope through _G, the same way both sibling modules do
--- for C_LFGList (Modules/Dungeons/LFGQuickCreate.lua,
--- Modules/Dungeons/LFGReminder.lua). Do NOT widen .luacheckrc instead.
+-- for C_LFGList (Modules/DungeonTools/KeystoneHelper/LFGQuickCreate.lua,
+-- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua). Do NOT widen .luacheckrc instead.
 -- C_SocialQueue may legitimately be nil here; every caller nil-checks it.
 local C_LFGList = _G.C_LFGList
 local C_SocialQueue = _G.C_SocialQueue
 local bit = _G.bit
--- NOTE: KE.Skins is resolved at CALL time, not load time -- Dungeons.xml
--- loads before Skinning.xml in the toc, so a file-top capture is nil.
+-- NOTE: KE.Skins is resolved at CALL time, not load time -- this file loads
+-- before Skinning/SkinAPI.lua in Modules/Modules.xml, so a file-top capture
+-- is nil.
 -- Never hoist it, even though every S.* name it uses does exist.
 
 -- Sized to read comfortably next to the Group Finder.

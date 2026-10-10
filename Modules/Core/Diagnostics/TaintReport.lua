@@ -273,7 +273,7 @@ local function IsKESourceLine(line)
         return false
     end
     if not string_find(normalized, ".lua", 1, true) then return false end
-    if string_find(normalized, "modules/diagnostics/taintreport.lua", 1, true) then
+    if string_find(normalized, "modules/core/diagnostics/taintreport.lua", 1, true) then
         return false
     end
     return true

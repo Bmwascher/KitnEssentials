@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Engine.lua                    ║
+-- ║  Modules/AuraTracking/AuraEngine/Engine.lua              ║
 -- ║  Purpose: the facade -- registration, events, settings   ║
 -- ║  routing, and the display lifecycle every consumer uses. ║
 -- ╚══════════════════════════════════════════════════════════╝

@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Glow.lua                      ║
+-- ║  Modules/AuraTracking/AuraEngine/Glow.lua                ║
 -- ║  Purpose: the glow host -- flipbook, pixel and           ║
 -- ║  pulse-border styles, animation-driven, so it keeps      ║
 -- ║  animating while auras are secret.                       ║

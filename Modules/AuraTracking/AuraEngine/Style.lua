@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Style.lua                     ║
+-- ║  Modules/AuraTracking/AuraEngine/Style.lua               ║
 -- ║  Purpose: button dressing -- hosts, region registration, ║
 -- ║  and the duration formatter. Shared by live and preview. ║
 -- ╚══════════════════════════════════════════════════════════╝

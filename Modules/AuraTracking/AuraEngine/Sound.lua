@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Sound.lua                     ║
+-- ║  Modules/AuraTracking/AuraEngine/Sound.lua               ║
 -- ║  Purpose: the aura-sound registry as a desired-state     ║
 -- ║  condition rather than a procedure.                      ║
 -- ╚══════════════════════════════════════════════════════════╝
