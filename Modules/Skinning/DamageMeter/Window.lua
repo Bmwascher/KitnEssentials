@@ -84,17 +84,6 @@ end
 DM.RANK_STRINGS = RANK_STRINGS
 DM.BAR_POOL_SIZE = BAR_POOL_SIZE
 
--- Fixed value-column gutter. The name's RIGHT edge stops at a FIXED reserve from
--- the row edge instead of tracking the live value string's left edge -- so a big
--- number no longer steals name space on every tick; an extreme value overflows
--- leftward over the name's ellipsis instead (rare, and the standard trade-off
--- for meters). Multiples of the bar FontSize, pixel-snapped at anchor
--- time: WIDE reserves room for the two-part "total | perSec" string ("Both" mode
--- on a rate-type view), SINGLE covers everything else (one value / counts /
--- death times). Tuning knobs -- adjust here after in-game eyeballing.
-local VALUE_GUTTER_WIDE = 6     -- x FontSize: "Both" format on a rate-type view
-local VALUE_GUTTER_SINGLE = 4   -- x FontSize: single-value / count / death time
-
 -- AlwaysShowSelf role relevance: the pin only applies where the player's own row
 -- is meaningful for their assigned role -- a DPS pinned at zero in the healing
 -- meter (or a healer in the damage meter) is noise. Damage views pin DAMAGER and
@@ -143,8 +132,8 @@ end
 -- icon and rank are optional (driven by ShowIcon / ShowRank at render time;
 -- both start hidden). The icon sits flush at the row's left edge; the rank sits
 -- between the icon and the name ("[icon] 1. Name"); the name is left-justified
--- after them and its right edge stops at the FIXED value gutter (VALUE_GUTTER_*,
--- so name space doesn't track the live value width); the value is right-
+-- after them and its right edge stops 3 units before the value's left edge, so a
+-- wide value takes name room but never covers the name; the value is right-
 -- justified. The icon lives in its own square frame (row.iconFrame) so the
 -- standard KE 1px borders tightly bound the icon, not the whole row.
 ---------------------------------------------------------------------------------
@@ -200,7 +189,7 @@ local function MakeBar(parent, db)
     KE:ApplyFontToText(row.rank, fontFace, fontSize, fontOutline)
     row.rank:Hide()
 
-    -- Name: left-justified, fills the space between icon/rank and the value gutter.
+    -- Name: left-justified, fills the space between icon/rank and the value.
     row.name = row.fill:CreateFontString(nil, "OVERLAY")
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
@@ -235,9 +224,9 @@ local function MakeBar(parent, db)
     --   _cachedVal        -- last plain (non-secret) value string set; nil while secret
     --   _cachedSlot       -- last displayed rank whose "N." label was set (may be
     --                        a pinned player's real rank, not the pool slot index)
-    --   _layoutKey        -- (hasIcon, ShowRank, wide-value, no-value) combo driving the
-    --                        icon / rank-gutter / name anchors; re-anchored only on change
-    --                        (ReapplyBarVisuals nils it: the gutters scale with FontSize)
+    --   _layoutKey        -- (hasIcon, ShowRank, no-value) combo driving the icon /
+    --                        rank / name anchors; re-anchored only on change
+    --                        (ReapplyBarVisuals nils it after a settings apply)
     --   _iconShown / _nameShown / _rankShown -- cached element visibility so a
     --                        stable toggle does no per-tick Show/Hide widget call
     --   _sourceGUID / _sourceCreatureID / _deathRecapID / _classFilename -- source
@@ -300,7 +289,6 @@ function DM:EnsureBars(W, n)
     local db = self.db
     local snapHeight = W._snapHeight
     local snapStride = W._snapStride
-    local valueGutter = KE:PixelSnap(((db and db.FontSize) or 12) * VALUE_GUTTER_SINGLE)
     for i = built + 1, n do
         local bar = MakeBar(W.content, db)
         local row = bar.row
@@ -318,7 +306,7 @@ function DM:EnsureBars(W, n)
         row.rank:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
         row.name:ClearAllPoints()
         row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-        row.name:SetPoint("RIGHT", row, "RIGHT", -valueGutter, 0)
+        row.name:SetPoint("RIGHT", row.value, "LEFT", -KE:PixelSnap(3), 0)
         bar.win = W
         row:Hide()
         W.bars[i] = bar
@@ -817,9 +805,8 @@ function DM:ReapplyBarVisuals(W)
         bar._cachedNameColorClass = nil
         bar._cachedNameColorOn = nil
         bar._cachedValColorTbl = nil
-        -- The rank slot and the fixed value gutter both scale with FontSize, which
-        -- the layout dirty key doesn't carry -- nil the key so a live font-size
-        -- change re-anchors on the next tick instead of keeping stale gutter widths.
+        -- The name gap is pixel-snapped and the layout key does not carry the pixel
+        -- size, so a settings apply is what re-snaps it.
         bar._layoutKey = nil
     end
 
@@ -1877,24 +1864,20 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.iconFrame:Hide()
     end
 
-    -- Layout (icon / rank-gutter / name anchors), dirty-gated on the (hasIcon,
-    -- ShowRank, wide-value) combination so a stable config does NO per-tick
-    -- re-anchor. hasIcon (not the raw ShowIcon) is the key so an icon-less enemy
-    -- row drops the icon gutter and the rank/name go flush left. The icon always
-    -- sits at the row's left edge (its factory anchor -- never moved here); when
-    -- ShowRank is on, the rank occupies a fixed gutter BETWEEN the icon and the
-    -- name ("[icon] 1. Name") so names start at a deterministic x. The name's
-    -- RIGHT edge stops at the fixed value gutter: wide when this window renders
-    -- the two-part "total | perSec" string, single otherwise. Both gutters scale
-    -- with FontSize, which the key doesn't carry -- ReapplyBarVisuals nils
-    -- _layoutKey so a live font change re-anchors on the next tick.
+    -- Layout (icon / rank / name anchors), dirty-gated on the (hasIcon, ShowRank,
+    -- no-value) combination so a stable config does NO per-tick re-anchor. hasIcon
+    -- (not the raw ShowIcon) is the key so an icon-less enemy row drops the icon
+    -- gutter and the rank/name go flush left. The icon always sits at the row's left
+    -- edge (its factory anchor -- never moved here); when ShowRank is on, the rank
+    -- sits BETWEEN the icon and the name ("[icon] 1. Name"). The name's RIGHT edge
+    -- sits 3 units before the value's LEFT edge: the client re-flows it when the
+    -- value's width changes, and Lua never reads that width (secret once the value
+    -- has held secret text).
     local showRank = db.ShowRank
-    local wideValue = (not W._isDeaths) and W._isRateType and (db.NumberFormat or "Both") == "Both"
-    -- Overall Deaths renders an always-empty value (the "" branch below): drop the
-    -- gutter to the bare edge pad so names keep the full row width in that view --
-    -- matching the old value-anchored behavior when the value string is empty.
+    -- Overall Deaths renders an always-empty value (the "" branch below), so the
+    -- name ends at the edge pad instead of 3 units before an empty string.
     local noValue = W._isDeaths and W._isOverall
-    local layoutKey = (hasIcon and 1 or 0) + (showRank and 2 or 0) + (wideValue and 4 or 0) + (noValue and 8 or 0)
+    local layoutKey = (hasIcon and 1 or 0) + (showRank and 2 or 0) + (noValue and 4 or 0)
     if bar._layoutKey ~= layoutKey then
         bar._layoutKey = layoutKey
 
@@ -1927,9 +1910,12 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
             -- centered in BarThinLine mode; equal to row.fill in normal mode).
             row.name:SetPoint("LEFT", row, "LEFT", 3, 0)
         end
-        local vGutter = noValue and 3
-            or KE:PixelSnap((db.FontSize or 12) * (wideValue and VALUE_GUTTER_WIDE or VALUE_GUTTER_SINGLE))
-        row.name:SetPoint("RIGHT", row, "RIGHT", -vGutter, 0)
+        local gap = KE:PixelSnap(3)
+        if noValue then
+            row.name:SetPoint("RIGHT", row, "RIGHT", -gap, 0)
+        else
+            row.name:SetPoint("RIGHT", row.value, "LEFT", -gap, 0)
+        end
     end
 
     -- Name (secret-aware). In combat src.name may be secret: SetText accepts it,
