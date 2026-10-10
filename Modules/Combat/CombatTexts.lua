@@ -287,6 +287,8 @@ local function StackFrames(self, types, yOffset, spacing)
     return yOffset
 end
 
+local warnedAttachLoop = {}
+
 -- Seated once, by SetPoint, under a KE spacer anchored to the container top.
 -- Later moves only resize the spacer, so no arrange re-anchors a frame the
 -- engine's aura button hangs on.
@@ -294,6 +296,16 @@ local function SeatAttached(self, key, frame)
     if self.attachSeated[key] then return true end
     local spacer = self.attachSpacers[key]
     if not CanMove(self, frame) or (spacer and not CanMove(self, spacer)) then return false end
+    -- With Combat Texts anchored to this frame, directly or through others,
+    -- the seat would close a loop that SetPoint refuses with a Lua error.
+    if KE:IsUnsafeAnchor(frame, self.container) then
+        if not warnedAttachLoop[key] then
+            warnedAttachLoop[key] = true
+            KE:Print("A display cannot join Combat Texts while Combat Texts is anchored to it. "
+                .. "Choose another frame in Combat Texts' Position settings, or untick Attach.")
+        end
+        return false
+    end
     if not spacer then
         spacer = CreateFrame("Frame", nil, self.container)
         spacer:SetSize(1, self.SPACER_LIFT)
