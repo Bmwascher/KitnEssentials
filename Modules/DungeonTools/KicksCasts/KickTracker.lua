@@ -1881,7 +1881,6 @@ function KT:UpdateBars()
         end
     end
 
-    -- Release bars for members who no longer qualify
     for guid in pairs(self.activeBars) do
         if not needsBars[guid] then
             self:ReleaseBar(guid)
