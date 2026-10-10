@@ -4,22 +4,36 @@
 --   lua dev/scripts/file-map.lua [--out <path>] [--retail <file>]
 --
 -- Rows come from GUIFrame.sidebarConfig in GUI/GUIMain/GUI-MainFrame.lua. A
--- row's content ids are its own id plus every tab id registered under it,
--- followed through nested tab tables. Page files register one of those ids;
--- module files name one in guiPath or guiTab. Files no row reaches are listed
--- by folder, then the manifests in load order (from load-list.lua), then the
--- retail-only list (dev/scripts/retail-only.lua unless --retail names another).
+-- row's content ids are its own id plus, transitively, the children of each
+-- id in the set. A Register*("<parent>", ...) call gives <parent> as children:
+--   - the ids of a literal tab table;
+--   - for RegisterTabbedContent and RegisterNestedTabs, the ids inside a
+--     function argument, or in a local table argument plus the local tables
+--     an ipairs loop copies into it;
+--   - for a RegisterContent builder that reads GUIFrame.registeredContent,
+--     each registeredContent["<id>"] and each string of an ipairs({ ... })
+--     list inside it.
+-- Page files register one of those ids. A settings file that registers
+-- through a variable, or registers nothing, is a page for each id it quotes.
+-- Module files name an id in guiPath or guiTab. Files no row reaches are
+-- listed by folder, then the manifests in load order (from load-list.lua),
+-- then the retail-only list (dev/scripts/retail-only.lua unless --retail
+-- names another).
 --
 -- Without --out the map prints to stdout; --out writes the bytes directly,
--- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a self-check
--- fails: a row with no page file, a retail-only entry that is not a tracked
--- file, or a tracked .lua file that neither toc loads. The map is written
--- either way, failures first.
+-- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
+-- self-check fails: a row with no page file, a settings file no row reaches,
+-- a tab strip the rules above cannot read, a retail-only entry that is not a
+-- tracked file, a tracked .lua file that neither toc loads, or a load-list.lua
+-- line that is not a toc header, an <inline> line or an existing file. The
+-- map is written either way, failures first.
 
 local SIDEBAR_FILE = "GUI/GUIMain/GUI-MainFrame.lua"
 local PAGE_ROOTS = { "GUI/", "KitnEssentials_Options/" }
 local MODULE_ROOTS = { "Modules/", "Core/" }
-local INDIRECT_ROOT = "KitnEssentials_Options/"
+local OPTIONS_ROOT = "KitnEssentials_Options/"
+local TOCS = { "KitnEssentials.toc", "KitnEssentials_Options/KitnEssentials_Options.toc" }
+local STRIP_CALLS = { TabbedContent = true, NestedTabs = true }
 local REFRESH = "lua dev/scripts/file-map.lua --out dev/docs/FILE-MAP.md"
 
 local outPath
@@ -44,6 +58,13 @@ local function readFile(path)
     local s = f:read("*a")
     f:close()
     return s
+end
+
+local function fileExists(path)
+    local f = io.open(path, "rb")
+    if not f then return false end
+    f:close()
+    return true
 end
 
 local function commandLines(cmd)
@@ -83,21 +104,41 @@ for _, path in ipairs(tracked) do
     if path:match("%.lua$") then sources[path] = readFile(path) or "" end
 end
 
--- Load list, through the same resolver the load-order proof uses.
+-- Load list, through the same resolver the load-order proof uses. Lua 5.1's
+-- popen close returns no exit status, so the output is checked instead: every
+-- non-zero exit of load-list.lua prints a MISSING line or a Lua error.
 local interpreter = arg[-1] or "lua"
 local loadCmd = interpreter .. " dev/scripts/load-list.lua 2>&1"
 if interpreter:find(" ", 1, true) then
     loadCmd = '"' .. interpreter .. '" dev/scripts/load-list.lua 2>&1'
     if package.config:sub(1, 1) == "\\" then loadCmd = '"' .. loadCmd .. '"' end
 end
-local loaded, manifests = {}, {}
-for _, line in ipairs(commandLines(loadCmd)) do
-    if line:match("^MISSING") then
-        fail("load-list.lua: " .. line)
-    elseif not line:match("^#") and not line:match("^<inline>") then
-        loaded[line] = true
-        if line:match("%.xml$") then manifests[#manifests + 1] = line end
+local loadLines = commandLines(loadCmd)
+
+-- A missing file prints a MISSING line and its bare path; the MISSING line
+-- reports it.
+local missingSet = {}
+for _, line in ipairs(loadLines) do
+    local path = line:match("^MISSING: (.+)$")
+    if path then missingSet[path] = true end
+end
+
+local loaded, manifests, tocSeen = {}, {}, {}
+for _, line in ipairs(loadLines) do
+    local toc = line:match("^# (.+)$")
+    if toc then
+        tocSeen[toc] = true
+    elseif not (line:match("^<inline> ") or line:match("^%s*$") or missingSet[line]) then
+        if fileExists(line) then
+            loaded[line] = true
+            if line:match("%.xml$") then manifests[#manifests + 1] = line end
+        else
+            fail("load-list.lua: " .. line)
+        end
     end
+end
+for _, toc in ipairs(TOCS) do
+    if not tocSeen[toc] then fail("load-list.lua printed no header for " .. toc) end
 end
 if next(loaded) == nil then fail("load-list.lua printed no files") end
 for _, path in ipairs(tracked) do
@@ -139,16 +180,54 @@ for block in (config or "{}"):sub(2, -2):gmatch("%b{}") do
     end
 end
 
--- Tab tables: Register*("<parent>", { { id = "<child>" }, ... }).
+local function tableIds(tableText, kids)
+    for child in tableText:gmatch('id%s*=%s*"([^"]+)"') do kids[#kids + 1] = child end
+end
+
+-- A local tab table, plus every local table an ipairs loop copies into it.
+local function localTableIds(text, name, kids)
+    local own = text:match("local%s+" .. name .. "%s*=%s*(%b{})")
+    if own then tableIds(own, kids) end
+    for source in text:gmatch("ipairs%(%s*([%a_][%w_]*)%s*%)%s*do%s*" .. name .. "%[") do
+        local copied = text:match("local%s+" .. source .. "%s*=%s*(%b{})")
+        if copied then tableIds(copied, kids) end
+    end
+end
+
+-- The whole Register*( ... ) call, or the rest of the file when its
+-- parentheses do not balance.
+local function callSpan(text, open)
+    return text:match("^%b()", open) or text:sub(open)
+end
+
 local children = {}
 for path, text in pairs(sources) do
     if underAny(path, PAGE_ROOTS) then
-        for parent, open in text:gmatch('Register%w*%(%s*"([^"]+)"%s*,%s*(){') do
-            local tabTable = text:match("^%b{}", open)
-            if tabTable then
-                local kids = children[parent] or {}
-                for child in tabTable:gmatch('id%s*=%s*"([^"]+)"') do kids[#kids + 1] = child end
-                children[parent] = kids
+        for kind, open, parent, argAt in text:gmatch('Register(%w*)()%(%s*"([^"]+)"%s*,%s*()') do
+            local kids = {}
+            local word = text:match("^([%a_][%w_]*)", argAt)
+            if text:sub(argAt, argAt) == "{" then
+                tableIds(text:match("^%b{}", argAt) or "", kids)
+            elseif STRIP_CALLS[kind] then
+                if word == "function" then
+                    tableIds(callSpan(text, open), kids)
+                elseif word then
+                    localTableIds(text, word, kids)
+                end
+                if #kids == 0 then fail("tab strip not followed: " .. path .. ": " .. parent) end
+            elseif kind == "Content" and word == "function" then
+                local span = callSpan(text, open)
+                if span:find("registeredContent%[") then
+                    for id in span:gmatch('registeredContent%[%s*"([^"]+)"%s*%]') do kids[#kids + 1] = id end
+                    for list in span:gmatch("ipairs%(%s*(%b{})%s*%)") do
+                        for id in list:gmatch('"([^"]+)"') do kids[#kids + 1] = id end
+                    end
+                end
+            end
+            if #kids > 0 then
+                local all = children[parent] or {}
+                for _, id in ipairs(kids) do all[#all + 1] = id end
+                children[parent] = all
             end
         end
     end
@@ -169,12 +248,21 @@ local function contentIds(rowId)
     return ids
 end
 
+-- Settings files that register through a variable, or register no id, are
+-- pages for each id they quote.
+local quotesIds = {}
+for path, text in pairs(sources) do
+    if path:sub(1, #OPTIONS_ROOT) == OPTIONS_ROOT
+        and (text:find("RegisterContent%(%s*[%a_]")
+            or not (text:find('RegisterContent%(%s*"') or text:find('RegisterTabbedContent%(%s*"'))) then
+        quotesIds[path] = true
+    end
+end
+
 local function isPageFor(path, text, id)
     if not underAny(path, PAGE_ROOTS) then return false end
     if text:find('Register%w*%(%s*"' .. escapePattern(id) .. '"') then return true end
-    return path:sub(1, #INDIRECT_ROOT) == INDIRECT_ROOT
-        and text:find("RegisterContent%(%s*[%a_]") ~= nil
-        and text:find('"' .. id .. '"', 1, true) ~= nil
+    return quotesIds[path] == true and text:find('"' .. id .. '"', 1, true) ~= nil
 end
 
 local function isModuleFor(path, text, id)
@@ -226,6 +314,14 @@ for _, section in ipairs(sections) do
             add(fileLine(path))
         end
         add("")
+    end
+end
+
+-- Every settings file belongs to a row, so one no row reaches is a linking
+-- rule that missed its shape.
+for _, path in ipairs(tracked) do
+    if path:sub(1, #OPTIONS_ROOT) == OPTIONS_ROOT and path:match("%.lua$") and not reached[path] then
+        fail("settings file reached by no row: " .. path)
     end
 end
 
