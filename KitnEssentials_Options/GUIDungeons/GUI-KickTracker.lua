@@ -107,23 +107,18 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     yOffset = cardSync:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Position Mode (healer override toggle + configure-for context)
+    -- Card 2: Position, one view per position
     ----------------------------------------------------------------
-    -- Which context the Position Settings card edits this render. "HEALER" only
-    -- when override is on AND the module remembers Healer was selected; else
-    -- Default. guiConfigContext is a transient module field (not saved) so it
-    -- survives the page rebuild a context switch triggers. (KT module ref from
-    -- the top of this function.)
-    -- First open after /reload: default the edited context to the player's
-    -- live-active context so the card matches the spec-driven preview — a healer
-    -- main lands on Healer, not Default (the old two-card UI did this by graying
-    -- the default card for live healers).
+    -- guiConfigContext is a transient module field (not saved) so the view
+    -- survives the page rebuild a switch triggers. First open after /reload:
+    -- start on the position the player's spec uses, so the page matches the
+    -- spec-driven preview.
     if KT and KT.guiConfigContext == nil then
         KT.guiConfigContext = (db.UseHealerPosition and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec())
             and "HEALER" or "DEFAULT"
     end
-    local isHealerCtx = db.UseHealerPosition and KT and KT.guiConfigContext == "HEALER" or false
-    if KT then KT.previewContext = isHealerCtx and "HEALER" or "DEFAULT" end
+    local isHealerView = KT and KT.guiConfigContext == "HEALER" or false
+    if KT then KT.previewContext = (db.UseHealerPosition and isHealerView) and "HEALER" or "DEFAULT" end
 
     local function RebuildPage()
         if GUIFrame.RefreshContent then
@@ -131,96 +126,87 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         end
     end
 
-    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
-    manager:Register(cardPosMode, "all")
-    local rowPosMode = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightLast)
-
-    local healerToggle = GUIFrame:CreateCheckbox(rowPosMode, "Use Healer Position", {
-        value = db.UseHealerPosition == true,
-        callback = function(checked)
-            db.UseHealerPosition = checked
-            if not checked and KT then
-                -- Override off -> no Healer context to edit; fall back to Default.
-                KT.guiConfigContext = "DEFAULT"
-                KT.previewContext = "DEFAULT"
-                if KT.isPreview then KT:ShowPreview() end
-                if KT.RefreshEditMode then KT:RefreshEditMode() end
-            end
-            ApplySettings()
-            RebuildPage()  -- rebuild so Position Settings reflects override on/off
-        end,
-    })
-    rowPosMode:AddWidget(healerToggle, 0.5)
-    manager:Register(healerToggle, "all")
-
-    -- Configure For: chooses which context (Default/Healer) the card below edits.
-    -- Rebuilds the page so the card shows that context's values, and moves the
-    -- preview to that mode.
-    local configureForDropdown = GUIFrame:CreateDropdown(rowPosMode, "Configure For", {
-        options = {
-            { key = "DEFAULT", text = "Default" },
-            { key = "HEALER",  text = "Healer" },
+    -- A switch moves the preview and the Edit Mode overlay to that view's
+    -- position while it applies; the strip rebuilds the page itself.
+    local _, viewOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
+        tabs = {
+            { id = "DEFAULT", label = "Default" },
+            { id = "HEALER",  label = "Healer" },
         },
-        value = isHealerCtx and "HEALER" or "DEFAULT",
-        callback = function(key)
-            if KT then
-                KT.guiConfigContext = key
-                KT.previewContext = key
-                if KT.isPreview then KT:ShowPreview() end
-                if KT.RefreshEditMode then KT:RefreshEditMode() end
-            end
-            RebuildPage()
+        activeId = isHealerView and "HEALER" or "DEFAULT",
+        onSwitch = function(key)
+            if not KT then return end
+            KT.guiConfigContext = key
+            KT.previewContext = key
+            if KT.isPreview then KT:ShowPreview() end
+            if KT.RefreshEditMode then KT:RefreshEditMode() end
         end,
+        fill = true,
     })
-    rowPosMode:AddWidget(configureForDropdown, 0.5)
-    manager:Register(configureForDropdown, "healerConfig")  -- grayed when override off
-    cardPosMode:AddRow(rowPosMode, Theme.rowHeight)
+    yOffset = viewOffset
 
-    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightNote)
-    local posModeNote = GUIFrame:CreateText(posModeNoteRow,
-        KE:ColorTextByTheme("Note"),
-        "Auto-swaps to a separate position when you're playing a healer spec. " ..
-        "Configure For picks which one to edit below; all other settings are shared.",
-        50, "hide")
-    posModeNoteRow:AddWidget(posModeNote, 1)
-    cardPosMode:AddRow(posModeNoteRow, Theme.rowHeightNote, 0)
-    yOffset = cardPosMode:GetNextOffset()
-
-    -- Configure For only matters when healer override is on.
     manager:SetCondition("healerConfig", function() return db.UseHealerPosition == true end)
 
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings (context-driven: Default vs Healer keys)
-    ----------------------------------------------------------------
-    local posTitle = "Position Settings"
-    if db.UseHealerPosition then
-        posTitle = isHealerCtx and "Position Settings — Healer" or "Position Settings — Default"
+    if isHealerView then
+        local cardHealer = GUIFrame:CreateCard(scrollChild, "Healer Position", yOffset)
+        manager:Register(cardHealer, "all")
+        local rowHealer = GUIFrame:CreateRow(cardHealer.content, Theme.rowHeightLast)
+        -- The checkbox sits in the Healer view, so either answer moves the
+        -- preview and the Edit Mode overlay to what this view now shows.
+        local healerToggle = GUIFrame:CreateCheckbox(rowHealer, "Use Healer Position", {
+            value = db.UseHealerPosition == true,
+            callback = function(checked)
+                db.UseHealerPosition = checked
+                if KT then
+                    KT.previewContext = checked and "HEALER" or "DEFAULT"
+                    if KT.isPreview then KT:ShowPreview() end
+                    if KT.RefreshEditMode then KT:RefreshEditMode() end
+                end
+                ApplySettings()
+                RebuildPage()
+            end,
+        })
+        rowHealer:AddWidget(healerToggle, 0.5)
+        manager:Register(healerToggle, "all")
+        local healerNote = GUIFrame:CreateText(rowHealer,
+            KE:ColorTextByTheme("Note"),
+            "While your spec is a healer spec, the tracker moves to this position.",
+            Theme.rowHeight, "hide")
+        rowHealer:AddWidget(healerNote, 0.5)
+        cardHealer:AddRow(rowHealer, Theme.rowHeightLast, 0)
+        yOffset = cardHealer:GetNextOffset()
     end
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings (the view's keys: Default vs Healer)
+    ----------------------------------------------------------------
+    -- Grayed in the Healer view while Use Healer Position is off.
+    local posGroup = isHealerView and "healerConfig" or "all"
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = posTitle,
+        title = "Position Settings",
         db = db,
-        positionKey = isHealerCtx and "HealerPosition" or "Position",
+        positionKey = isHealerView and "HealerPosition" or "Position",
         dbKeys = {
             -- Anchored To + Strata split per context (KickTracker has Healer*
             -- root keys). Anchor From sets horizontal alignment; its vertical
             -- component is overridden by GrowthDirection so the bar stack and
             -- edit-mode overlay stay aligned on a growth flip.
-            anchorFrameType = isHealerCtx and "HealerAnchorFrameType" or "anchorFrameType",
-            anchorFrameFrame = isHealerCtx and "HealerParentFrame" or "ParentFrame",
+            anchorFrameType = isHealerView and "HealerAnchorFrameType" or "anchorFrameType",
+            anchorFrameFrame = isHealerView and "HealerParentFrame" or "ParentFrame",
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",
             yOffset = "YOffset",
-            strata = isHealerCtx and "HealerStrata" or "Strata",
+            strata = isHealerView and "HealerStrata" or "Strata",
         },
         showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
     if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
+        manager:RegisterGroup(posCard.positionWidgets, posGroup)
     end
-    manager:Register(posCard, "all")
+    manager:Register(posCard, posGroup)
     yOffset = posOffset
 
     ----------------------------------------------------------------

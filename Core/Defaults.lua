@@ -1520,6 +1520,9 @@ local Defaults = {
             YOffset           = 0,
             -- FRAME follows the party frame's own strata.
             Strata            = "FRAME",
+            -- No defaults for the Healer* placement keys: turning this on
+            -- copies the placement above, so nothing moves until edited.
+            UseHealerPlacement = false,
             Swipe             = true,
             CategoryColors    = false,
             ColorExternal     = { 0.949, 0.757, 0.306, 1 },

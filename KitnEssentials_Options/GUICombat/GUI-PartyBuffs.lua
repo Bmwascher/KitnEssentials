@@ -41,8 +41,18 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket" },
 }
 
--- Survives the page rebuild a tab switch triggers.
+local PLACEMENT_TABS = {
+    { id = "DEFAULT", label = "Default" },
+    { id = "HEALER",  label = "Healer" },
+}
+
+local HEALER_KEY = {}
+for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
+
+-- Both survive the page rebuild a tab switch triggers. activePlacement stays
+-- nil until the first render picks the view the player's spec uses.
 local activeList = "ListBurst"
+local activePlacement
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
 
@@ -94,7 +104,14 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
         manager:UpdateAll(db.Enabled == true)
     end
 
+    local function RebuildPage()
+        if GUIFrame.RefreshContent then
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end
+    end
+
     manager:SetCondition("colorsOn", function() return db.CategoryColors == true end)
+    manager:SetCondition("healerOn", function() return db.UseHealerPlacement == true end)
 
     local function AddCheck(row, label, key, tooltip, onChange)
         local check = GUIFrame:CreateCheckbox(row, label, {
@@ -109,22 +126,27 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
         row:AddWidget(check, 0.5)
     end
 
-    local function AddSlider(row, label, key, low, high)
+    -- value, when given, is shown in place of db[key].
+    local function AddSlider(row, label, key, low, high, value)
+        if value == nil then value = db[key] end
         local slider = GUIFrame:CreateSlider(row, label, {
             min = low, max = high, step = 1,
-            value = db[key],
+            value = value,
             callback = function(val) db[key] = val; ApplySettings() end,
         })
         row:AddWidget(slider, 0.5)
+        return slider
     end
 
-    local function AddDropdown(row, label, key, options)
+    local function AddDropdown(row, label, key, options, value)
+        if value == nil then value = db[key] end
         local dropdown = GUIFrame:CreateDropdown(row, label, {
             options = options,
-            value = db[key],
+            value = value,
             callback = function(choice) db[key] = choice; ApplySettings() end,
         })
         row:AddWidget(dropdown, 0.5)
+        return dropdown
     end
 
     local function AddColor(row, spec)
@@ -202,7 +224,6 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddSlider(rowD2, "Max Icons Per Member", "MaxPerMember", 1, 8)
-    AddDropdown(rowD2, "Side of the Frame", "Side", SIDE_OPTIONS)
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
 
     local rowDSep = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
@@ -255,15 +276,75 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     yOffset = fontOffset
 
     ----------------------------------------------------------------
-    -- Card 6: Position
+    -- Card 6: Position, one view per placement
     ----------------------------------------------------------------
+    if activePlacement == nil then
+        activePlacement = (db.UseHealerPlacement == true and KE:IsPlayerHealerSpec()) and "HEALER" or "DEFAULT"
+    end
+    local healerView = activePlacement == "HEALER"
+
+    -- With the toggle off the healer copy never applies, so the Healer view
+    -- previews Default.
+    local previewContext = (healerView and db.UseHealerPlacement == true) and "HEALER" or "DEFAULT"
+    if PB and PB.previewContext ~= previewContext then
+        PB.previewContext = previewContext
+        if PB.previewing then PB:ShowPreview() end
+    end
+
+    local _, placementOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
+        tabs = PLACEMENT_TABS,
+        activeId = activePlacement,
+        onSwitch = function(newId) activePlacement = newId end,
+        fill = true,
+    })
+    yOffset = placementOffset
+
+    -- The Healer view writes the healer keys and shows each default value
+    -- until its healer copy exists, as the module reads them.
+    local function PlacementKey(key)
+        return healerView and HEALER_KEY[key] or key
+    end
+
+    local function PlacementValue(key)
+        local value
+        if healerView then value = db[HEALER_KEY[key]] end
+        if value == nil then value = db[key] end
+        return value
+    end
+
+    local function AddPlacement(widget)
+        if healerView then manager:Register(widget, "healerOn") end
+    end
+
     local cardPosition = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
+    if healerView then
+        local rowX0 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
+        local healerToggle = GUIFrame:CreateCheckbox(rowX0, "Use in Healer Specs", {
+            value = db.UseHealerPlacement == true,
+            callback = function(checked)
+                db.UseHealerPlacement = checked
+                if checked and PB and PB.SeedHealerPlacement then PB:SeedHealerPlacement() end
+                ApplySettings()
+                RebuildPage()
+            end,
+        })
+        rowX0:AddWidget(healerToggle, 0.5)
+        local healerNote = GUIFrame:CreateText(rowX0,
+            KE:ColorTextByTheme("Note"),
+            db.UseHealerPlacement == true
+                and "While your spec is a healer spec, the icons use this placement."
+                or "Off: every spec uses the Default placement.",
+            Theme.rowHeight, "hide")
+        rowX0:AddWidget(healerNote, 0.5)
+        cardPosition:AddRow(rowX0, Theme.rowHeight)
+    end
     local rowX1 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
-    AddSlider(rowX1, "X Offset", "XOffset", -100, 100)
-    AddSlider(rowX1, "Y Offset", "YOffset", -100, 100)
+    AddPlacement(AddDropdown(rowX1, "Side of the Frame", PlacementKey("Side"), SIDE_OPTIONS, PlacementValue("Side")))
+    AddPlacement(AddDropdown(rowX1, "Frame Strata", PlacementKey("Strata"), STRATA_OPTIONS, PlacementValue("Strata")))
     cardPosition:AddRow(rowX1, Theme.rowHeight)
     local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
-    AddDropdown(rowX2, "Frame Strata", "Strata", STRATA_OPTIONS)
+    AddPlacement(AddSlider(rowX2, "X Offset", PlacementKey("XOffset"), -100, 100, PlacementValue("XOffset")))
+    AddPlacement(AddSlider(rowX2, "Y Offset", PlacementKey("YOffset"), -100, 100, PlacementValue("YOffset")))
     cardPosition:AddRow(rowX2, Theme.rowHeightLast, 0)
     yOffset = cardPosition:GetNextOffset()
 
