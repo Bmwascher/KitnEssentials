@@ -1,5 +1,33 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.7
+
+### Skinning
+
+- Trade: when the other player changes their offer, the warning icon left
+  of "Trade" on the Trade button shows again, with its tooltip
+- Chat Settings, Text to Speech: the Play Sample and Defaults buttons, the
+  voice dropdowns, the checkbox and the rate and volume sliders get the
+  KitnEssentials look
+- Scroll bar arrows show again on the guild charter, Guild Registrar,
+  Click Casting, Trainer and Currency Transfer Log windows
+
+### Addon Skins
+
+- Mythic Dungeon Tools: the pull buttons, the new pull button and the
+  enemy spell buttons are skinned only when both the Addon Config Windows
+  (AceGUI) and Mythic Dungeon Tools rows are on
+- RCLootCouncil: the "more info" arrow keeps its accent color after you
+  click it, and borders stay one pixel wide after Ctrl+mouse wheel scaling
+
+### Character Panel
+
+- With the Character skin off and Widen Character Window on, the inset box
+  on the Character tab widens to the stat pane, so the right column of
+  slots sits inside it, and Blizzard's thin inner border is hidden
+
+---
+
 ## v4.10.6
 
 ### Chat
