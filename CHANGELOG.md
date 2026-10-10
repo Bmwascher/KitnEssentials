@@ -1,75 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.10.11
-
-### Nicknames
-
-- KitnEssentials' own nickname list is retired. Damage Meter, Death
-  Notifications and Healer Mana now show only Northern Sky Raid Tools
-  nicknames. If you saved nicknames in KitnEssentials and do not use
-  Northern Sky Raid Tools, those players now show their character names
-
-### Settings Window
-
-- **NEW:** Anchored To on the Damage Meter position card, and on the No
-  Movement Alert position card while it is not attached to Combat Texts.
-  The meter or alert follows the chosen frame, Edit Mode drags included
-- The Death Notifications position card drops Anchor From, which had no
-  effect, and its anchor dropdown spans the row
-- A card note no longer overlaps the next row after a page builds or a
-  card redraws in place, such as when you pick a class on the DoT Tracker
-  page
-- Position cards have 2 pixels more room between rows, so each label
-  clears the controls above it
-- With ElvUI, the Chat and Tooltips pages open from the sidebar and say
-  that ElvUI handles them, instead of "Coming Soon"
-
-### Raid Notifications
-
-- Auto Ready When Benched is now on by default
-
-### Skinning
-
-- With the Character skin on, the dark plate behind the Reputation and
-  Currency lists now follows tab switches: it shows on Reputation and
-  Currency and hides on the Character tab
-
-### Edit Mode
-
-- The top-center widgets mover is renamed Top-Center Container, to match
-  its settings card
-
-### No Movement Alert
-
-- The alert no longer leaves an extra Spacing gap after its last spell.
-  Attached to Combat Texts, the gap below it matches the Combat Texts
-  spacing instead of doubling it
-
-### Combat Texts
-
-- In the rare case where the game hides whether a line is shown during
-  combat, the stack no longer leaves a gap or lets lines overlap
-
-### Chat
-
-- The chat edit box border stays one pixel thick after a UI scale or
-  resolution change
-
-### Group Finder
-
-- With the Group Finder skin on, Start a Group no longer draws over the
-  "Searching..." cover
-- The "Searching..." cover lifts as soon as the game blocks a search,
-  instead of staying up until the next search
-
-### CC Tracker
-
-- In the rare case where the game refused to build its rows, turning the
-  module off and on brings them back without a /reload
-
----
-
-## v4.10.10
+## v4.11.0
 
 ### Shaman Proc Cooldowns
 
@@ -86,121 +17,12 @@
 - It has its own Edit Mode mover, and shows a preview while a Combat
   settings page or Edit Mode is open
 
-### Class Tools
+### Nicknames
 
-- Class Tools opens on the Shaman tab for a Shaman, instead of All Classes
-- Sidebar search finds Class Tools for "shaman", "nature's guardian",
-  "thunderous paws" and "ghost wolf"
-
----
-
-## v4.10.9
-
-### Aura Tracking
-
-- External Tracker and Movement Buffs previews no longer draw the dark
-  cooldown sweep, matching the live display. Any aura display with Swipe
-  off does the same
-- Player Buffs and Player Debuffs previews hide the countdown when Show
-  Timer is off
-- Advanced Debuffs, External Tracker and Movement Buffs, turned off in a
-  vehicle and on again after you leave it, show at once instead of after
-  the next loading screen. Turned on while you sit in a vehicle, they wait
-  until you leave it
-- Player Buffs and Player Debuffs, turned off and on again without a
-  /reload, show the right auras at once
-
-### Dungeon Timers
-
-- In the settings spell list, hovering a spell row now tints it. The
-  selected row keeps its accent color
-
----
-
-## v4.10.8
-
-### Raid Notifications
-
-- **NEW:** Auto Ready When Benched in General Alerts, off by default. In
-  raid group 7 or 8 outside any instance, a ready check someone else
-  starts is answered Ready for you, with a line in chat. In combat it
-  leaves the check to you
-- Bonus Rolls Missing shows again in this season's Mythic+ dungeons and
-  raids while your bought Nebulous Voidcores are below the cap, with the
-  currency's current icon
-
-### Automation
-
-- Voidcore quest automation works at Orin Straylight instead of Decimus,
-  and hands in the quest itself, even with Auto Turn In Quests off
-- **NEW:** a Quest dropdown beside Auto Complete Voidcores (was Auto
-  Voidcores) picks Gold, Veteran Mistcrest or Voidlight Marl. Gold by
-  default
-- While Auto Complete Voidcores is on, Auto Accept Quests and Auto Turn In
-  Quests leave Orin's three Voidcore quests alone. Only the quest you
-  picked is taken for you
-
-### Group Finder
-
-- After KitnEssentials' Search button or a filter that searches, a
-  "Searching..." cover hides the old results until new ones arrive or the
-  search fails. Hovering an old row no longer causes a Lua error
-
----
-
-## v4.10.7
-
-### Skinning
-
-- Trade: when the other player changes their offer, the warning icon left
-  of "Trade" on the Trade button shows again, with its tooltip
-- Chat Settings, Text to Speech: the Play Sample and Defaults buttons, the
-  voice dropdowns, the checkbox and the rate and volume sliders get the
-  KitnEssentials look
-- Scroll bar arrows show again on the guild charter, Guild Registrar,
-  Click Casting, Trainer and Currency Transfer Log windows
-
-### Addon Skins
-
-- Mythic Dungeon Tools: the pull buttons, the new pull button and the
-  enemy spell buttons are skinned only when both the Addon Config Windows
-  (AceGUI) and Mythic Dungeon Tools rows are on
-- RCLootCouncil: the "more info" arrow keeps its accent color after you
-  click it, and borders stay one pixel wide after Ctrl+mouse wheel scaling
-
-### Character Panel
-
-- With the Character skin off and Widen Character Window on, the inset box
-  on the Character tab widens to the stat pane, so the right column of
-  slots sits inside it, and Blizzard's thin inner border is hidden
-
----
-
-## v4.10.6
-
-### Chat
-
-- **NEW:** AFK/DND Tags on the Display Settings card, on by default. A
-  player who is away or busy shows an orange [AFK] or red [DND] before
-  their name, your own lines included
-- Lines relayed from Discord show the Discord icon before the sender's
-  name
-- Typing "<Away>" or "<Busy>" in a message no longer turns it into a
-  colored [AFK] or [DND]
-- The chat panel, tab bar, Chat Copy window and web address popup borders
-  draw one screen pixel thick at every UI scale (some scales drew two), and
-  stay that way after a UI scale change
-- The Display Settings, Backdrop, Chat Tabs and Chat Links cards are
-  regrouped, with separator lines. No setting changes
-
-### Tooltips
-
-- The aura tooltip border draws one screen pixel thick at every UI scale,
-  and stays that way after a UI scale change
-
----
-
-## v4.10.5
+- KitnEssentials' own nickname list is retired. Damage Meter, Death
+  Notifications and Healer Mana now show only Northern Sky Raid Tools
+  nicknames. If you saved nicknames in KitnEssentials and do not use
+  Northern Sky Raid Tools, those players now show their character names
 
 ### DoT Tracker
 
@@ -229,9 +51,59 @@
   a party member is on its threat list. In a raid, and for enemy players
   and their pets, counting works as before
 
----
+### Combat Texts
 
-## v4.10.4
+- **NEW:** Attach to Combat Texts for Hunter's Mark Tracking, Havoc
+  Tracker, Combat Potion Ready and Missing Forms, off by default. Attached,
+  it joins the Combat Texts stack and moves with it, and its Position card
+  and Edit Mode mover hide
+- Attached Hunter's Mark, Havoc and Potion Ready text uses the Combat Texts
+  font and outline in its own color. Missing Forms keeps its own icon size
+  and caption font, with the caption above the icon
+- The stack has a fixed order, top to bottom: the Combat Texts lines, Pet
+  Status, Potion Ready, Missing Forms, No Movement Alert, Shaman Proc
+  Cooldowns, Hunter's Mark and Havoc. A hidden entry leaves no gap
+- **NEW:** Override Text Size, off by default, for attached Pet Status, No
+  Movement Alert, Hunter's Mark, Havoc and Potion Ready. On, a Text Size
+  slider sets that text's own size
+- In the rare case where the game hides whether a line is shown during
+  combat, the stack no longer leaves a gap or lets lines overlap
+
+### Chat
+
+- **NEW:** AFK/DND Tags on the Display Settings card, on by default. A
+  player who is away or busy shows an orange [AFK] or red [DND] before
+  their name, your own lines included
+- Lines relayed from Discord show the Discord icon before the sender's
+  name
+- Typing "<Away>" or "<Busy>" in a message no longer turns it into a
+  colored [AFK] or [DND]
+- The chat panel, tab bar, edit box, Chat Copy window and web address
+  popup borders draw one screen pixel thick at every UI scale (some scales
+  drew two), and stay that way after a UI scale or resolution change
+- The Display Settings, Backdrop, Chat Tabs and Chat Links cards are
+  regrouped, with separator lines. No setting changes
+
+### Raid Notifications
+
+- **NEW:** Auto Ready When Benched in General Alerts, on by default. In
+  raid group 7 or 8 outside any instance, a ready check someone else
+  starts is answered Ready for you, with a line in chat. In combat it
+  leaves the check to you
+- Bonus Rolls Missing shows again in this season's Mythic+ dungeons and
+  raids while your bought Nebulous Voidcores are below the cap, with the
+  currency's current icon
+
+### Automation
+
+- Voidcore quest automation works at Orin Straylight instead of Decimus,
+  and hands in the quest itself, even with Auto Turn In Quests off
+- **NEW:** a Quest dropdown beside Auto Complete Voidcores (was Auto
+  Voidcores) picks Gold, Veteran Mistcrest or Voidlight Marl. Gold by
+  default
+- While Auto Complete Voidcores is on, Auto Accept Quests and Auto Turn In
+  Quests leave Orin's three Voidcore quests alone. Only the quest you
+  picked is taken for you
 
 ### Party Buffs
 
@@ -253,47 +125,26 @@
   a same-realm teammate does. A Balance Druid shows Solar Beam (60 s)
   instead of Skull Bash (15 s)
 
----
+### Settings Window
 
-## v4.10.3
-
-### Combat Texts
-
-- **NEW:** Attach to Combat Texts for Hunter's Mark Tracking, Havoc
-  Tracker, Combat Potion Ready and Missing Forms, off by default. Attached,
-  it joins the Combat Texts stack and moves with it, and its Position card
-  and Edit Mode mover hide
-- Attached Hunter's Mark, Havoc and Potion Ready text uses the Combat Texts
-  font and outline in its own color. Missing Forms keeps its own icon size
-  and caption font, with the caption above the icon
-- The stack has a fixed order, top to bottom: the Combat Texts lines, Pet
-  Status, Potion Ready, Missing Forms, No Movement Alert, Hunter's Mark and
-  Havoc. A hidden entry leaves no gap
-- **NEW:** Override Text Size, off by default, for attached Pet Status, No
-  Movement Alert, Hunter's Mark, Havoc and Potion Ready. On, a Text Size
-  slider sets that text's own size
-
-### No Movement Alert
-
-- Attached to Combat Texts, it moves out of the way as soon as a Combat
-  Texts line appears or disappears, or Combat Texts changes its font or
-  spacing. Turning Combat Texts off or on moves it to its own spot and back
-  at once
-
-### Havoc Tracker
-
-- Changing the font, size, outline or color now asks for a /reload when
-  you close the settings window. While attached, so do the attach toggle,
-  the size override and the Combat Texts Font card
-
-### Pet Status
-
-- On a class with no pet, the settings preview follows Attach to Combat
-  Texts and Combat Texts being turned on or off
-
----
-
-## v4.10.2
+- Position cards replace the two anchor-point grids with two dropdowns on
+  one row: Anchor From, and To Screen's (To Frame's when anchored to a
+  frame). Each lists the nine points, the cards are shorter, and the rows
+  have a little more room between them
+- **NEW:** Death Notifications, Skyriding UI, Havoc Tracker, Hunter's Mark,
+  Damage Meter and No Movement Alert (while not attached to Combat Texts)
+  get Anchored To (Screen Center, Screen (UIParent), Player Frame or Select
+  Frame). Nothing moves until you pick one, and Edit Mode drags follow the
+  chosen frame
+- The Death Notifications position card drops Anchor From, which had no
+  effect, and its anchor dropdown spans the row
+- A card note that wraps onto several lines no longer overlaps the row
+  below it
+- Closing the settings window while a World Marker Cycler keybind button
+  reads "Press a key..." cancels the capture. Your next key press works as
+  normal and the saved keybind stays
+- With ElvUI, the Chat and Tooltips pages open from the sidebar and say
+  that ElvUI handles them, instead of "Coming Soon"
 
 ### Dark Theme
 
@@ -316,30 +167,97 @@
   Bar + Backdrop is off
 - Sidebar search finds Dark Theme by its tab and card names, such as
   "alert frames", "spell icons" or "on-screen messages"
+- The top-center widgets Edit Mode mover is renamed Top-Center Container,
+  to match its settings card
 
-### Settings Window
+### Skinning
 
-- On a position card anchored to the Player Frame, the right-hand dropdown
-  reads To Frame's instead of To Screen's
+- Trade: when the other player changes their offer, the warning icon left
+  of "Trade" on the Trade button shows again, with its tooltip
+- Chat Settings, Text to Speech: the Play Sample and Defaults buttons, the
+  voice dropdowns, the checkbox and the rate and volume sliders get the
+  KitnEssentials look
+- Scroll bar arrows show again on the guild charter, Guild Registrar,
+  Click Casting, Trainer and Currency Transfer Log windows
+- With the Character skin on, the dark plate behind the Reputation and
+  Currency lists now follows tab switches: it shows on Reputation and
+  Currency and hides on the Character tab
+- The aura tooltip border draws one screen pixel thick at every UI scale,
+  and stays that way after a UI scale change
 
----
+### Addon Skins
 
-## v4.10.1
+- Mythic Dungeon Tools: the pull buttons, the new pull button and the
+  enemy spell buttons are skinned only when both the Addon Config Windows
+  (AceGUI) and Mythic Dungeon Tools rows are on
+- RCLootCouncil: the "more info" arrow keeps its accent color after you
+  click it, and borders stay one pixel wide after Ctrl+mouse wheel scaling
 
-### Settings Window
+### Character Panel
 
-- Position cards replace the two anchor-point grids with two dropdowns on
-  one row: Anchor From, and To Screen's (To Frame's when anchored to a
-  frame). Each lists the nine points, and the cards are shorter
-- **NEW:** Death Notifications, Skyriding UI, Havoc Tracker and Hunter's
-  Mark get Anchored To (Screen Center, Screen (UIParent), Player Frame or
-  Select Frame). Nothing moves until you pick one
-- A card note that wraps onto several lines no longer overlaps the row
-  below it after you resize the window, or after the scroll bar appears or
-  goes
-- Closing the settings window while a World Marker Cycler keybind button
-  reads "Press a key..." cancels the capture. Your next key press works as
-  normal and the saved keybind stays
+- With the Character skin off and Widen Character Window on, the inset box
+  on the Character tab widens to the stat pane, so the right column of
+  slots sits inside it, and Blizzard's thin inner border is hidden
+
+### Group Finder
+
+- After KitnEssentials' Search button or a filter that searches, a
+  "Searching..." cover hides the old results until new ones arrive, the
+  search fails or the game blocks it. Hovering an old row no longer causes
+  a Lua error
+- With the Group Finder skin on, Start a Group no longer draws over the
+  "Searching..." cover
+
+### Aura Tracking
+
+- External Tracker and Movement Buffs previews no longer draw the dark
+  cooldown sweep, matching the live display. Any aura display with Swipe
+  off does the same
+- Player Buffs and Player Debuffs previews hide the countdown when Show
+  Timer is off
+- Advanced Debuffs, External Tracker and Movement Buffs, turned off in a
+  vehicle and on again after you leave it, show at once instead of after
+  the next loading screen. Turned on while you sit in a vehicle, they wait
+  until you leave it
+- Player Buffs and Player Debuffs, turned off and on again without a
+  /reload, show the right auras at once
+
+### No Movement Alert
+
+- Attached to Combat Texts, it moves out of the way as soon as a Combat
+  Texts line appears or disappears, or Combat Texts changes its font or
+  spacing. Turning Combat Texts off or on moves it to its own spot and back
+  at once
+- The alert no longer leaves an extra Spacing gap after its last spell.
+  Attached to Combat Texts, the gap below it matches the Combat Texts
+  spacing instead of doubling it
+
+### Havoc Tracker
+
+- Changing the font, size, outline or color now asks for a /reload when
+  you close the settings window. While attached, so do the attach toggle,
+  the size override and the Combat Texts Font card
+
+### Pet Status
+
+- On a class with no pet, the settings preview follows Attach to Combat
+  Texts and Combat Texts being turned on or off
+
+### CC Tracker
+
+- In the rare case where the game refused to build its rows, turning the
+  module off and on brings them back without a /reload
+
+### Class Tools
+
+- Class Tools opens on the Shaman tab for a Shaman, instead of All Classes
+- Sidebar search finds Class Tools for "shaman", "nature's guardian",
+  "thunderous paws" and "ghost wolf"
+
+### Dungeon Timers
+
+- In the settings spell list, hovering a spell row now tints it. The
+  selected row keeps its accent color
 
 ---
 
