@@ -78,14 +78,12 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick. " ..
         "Only active in 5-player dungeons.\n\n" ..
-        "In a key, a kick goes on the kicker's bar when the game or the Damage Meter names who " ..
-        "kicked, and the bar reads " .. KE:ColorTextByTheme("Ready") .. " when the kick is back. " ..
-        "A kick that interrupts nothing does not show.\n\n" ..
-        "When nobody is named, the kick shows as a " .. KE:ColorTextByTheme("record") ..
-        ": a short class-colored bar marked " .. KE:ColorTextByTheme("*") .. ". Any bar marked " ..
-        KE:ColorTextByTheme("*") .. " is a best guess. A Warrior's or Protection Paladin's " ..
-        "interrupt may have come from another spell (a thrown weapon, Avenger's Shield), and " ..
-        "after a repeat kick the meter can now and then name the wrong teammate.")
+        "A kick goes on the kicker's bar, and the bar reads " .. KE:ColorTextByTheme("Ready") ..
+        " when the kick is back. A kick that interrupts nothing does not show.\n\n" ..
+        "In a dungeon the game often hides who kicked. The Damage Meter then names the kicker " ..
+        "when it can. When it cannot, the kick goes on the bar of the teammate most likely to " ..
+        "have used it, a teammate whose kick was ready first. These guesses are not marked and " ..
+        "can now and then be wrong.")
 
     yOffset = card1:GetNextOffset()
 
@@ -231,15 +229,6 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     card3:AddRow(row3a, Theme.rowHeight)
 
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    -- Rows always show; this limits the records beside them.
-    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Records", {
-        min = 1, max = 5, step = 1,
-        value = db.MaxBars or 5,
-        callback = function(val) db.MaxBars = val; ApplySettings() end,
-    })
-    row3b:AddWidget(maxBarsSlider, 0.5)
-    manager:Register(maxBarsSlider, "all")
-
     local spacingSlider = GUIFrame:CreateSlider(row3b, "Bar Spacing", {
         min = 0, max = 10, step = 1,
         value = db.BarSpacing or 2,
@@ -271,17 +260,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     })
     row3c:AddWidget(sideDropdown, 0.5)
     manager:Register(sideDropdown, "all")
-    card3:AddRow(row3c, Theme.rowHeight)
-
-    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local recordSlider = GUIFrame:CreateSlider(row3d, "Teammate Kick Duration", {
-        min = 5, max = 30, step = 1,
-        value = db.KickRecordDuration or 15,
-        callback = function(val) db.KickRecordDuration = val; ApplySettings() end,
-    })
-    row3d:AddWidget(recordSlider, 0.5)
-    manager:Register(recordSlider, "all")
-    card3:AddRow(row3d, Theme.rowHeightLast, 0)
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 
