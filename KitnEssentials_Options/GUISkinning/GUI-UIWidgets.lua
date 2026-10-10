@@ -19,7 +19,9 @@ local table_sort = table.sort
 local OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return end
+    -- As a nested tab a nil return would reach the outer builder, which then
+    -- draws a placeholder over the header card and tab strips.
+    if KE:ShouldNotLoadModule() then return yOffset end
     local db = KE.db and KE.db.profile.Skinning.UIWidgets
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
@@ -37,15 +39,21 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
 
     local barDB = db.StatusBar
     local textDB = db.TextWidget
+    local tcDB = db.TopCenter
 
-    manager:SetCondition("statusbar", function()
-        return barDB.Enabled ~= false
+    -- The same test UIW.FontSizeForRole applies before a size is used.
+    manager:SetCondition("barlabel", function()
+        return barDB.Enabled ~= false and barDB.StyleLabel ~= false
     end)
-    manager:SetCondition("textwidget", function()
-        return textDB.Enabled ~= false
+    manager:SetCondition("bartext", function()
+        return barDB.Enabled ~= false and barDB.StyleBarText ~= false
     end)
+    -- The module draws the fill, backdrop and border only while StripTextures is on.
     manager:SetCondition("striptex", function()
         return barDB.Enabled ~= false and barDB.StripTextures ~= false
+    end)
+    manager:SetCondition("topcenter", function()
+        return tcDB.Enabled == true
     end)
 
     local function RefreshStates()
@@ -68,11 +76,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     local fontList = GetFontList()
 
     ----------------------------------------------------------------
-    -- Card 1: Master Toggle
+    -- Card 1: UI Widgets
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "UI Widgets", yOffset)
 
-    -- Module enable lives in the card header.
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
@@ -85,153 +92,110 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         RefreshStates()
     end)
 
-    -- Disabled modules collapse to the header bar alone:
-    -- settings only render while the module is enabled.
-    if db.Enabled == false then
-        yOffset = card1:GetNextOffset()
-    else
-        card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners) and spell icons.")
+    -- Lone header bar: settings only render while the module is enabled.
+    if db.Enabled == false then return card1:GetNextOffset() end
 
-        yOffset = card1:GetNextOffset()
+    card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners) and spell icons.")
+    yOffset = card1:GetNextOffset()
 
-        ----------------------------------------------------------------
-        -- Card 2: Global Font Settings
-        ----------------------------------------------------------------
-        local card2 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-        manager:Register(card2, "all")
+    ----------------------------------------------------------------
+    -- Card 2: Font
+    ----------------------------------------------------------------
+    local cardFont = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    manager:Register(cardFont, "all")
 
-        -- Font Dropdown
-        local row2a = GUIFrame:CreateRow(card2.content, 36)
-        local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", {
-            options = KE:AddFollowGlobalFont(fontList),
-            value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
-            callback = function(key)
-                db.FontFace = KE:StoredFontFace(key)
-                ApplySettings()
-            end,
-            searchable = true,
-            isFontPreview = true
-        })
-        row2a:AddWidget(fontDropdown, 0.5)
-        manager:Register(fontDropdown, "all")
+    local rowFace = GUIFrame:CreateRow(cardFont.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {
+        options = KE:AddFollowGlobalFont(fontList),
+        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(key)
+            db.FontFace = KE:StoredFontFace(key)
+            ApplySettings()
+        end,
+        searchable = true,
+        isFontPreview = true
+    })
+    rowFace:AddWidget(fontDropdown, 0.5)
+    manager:Register(fontDropdown, "all")
 
-        -- Outline Dropdown
-        local outlineDropdown = GUIFrame:CreateDropdown(row2a, "Outline", {
-            options = OUTLINE_OPTIONS,
-            value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
-            callback = function(key)
-                db.FontOutline = key
-                ApplySettings()
-            end
-        })
-        row2a:AddWidget(outlineDropdown, 0.5)
-        manager:Register(outlineDropdown, "all")
-        card2:AddRow(row2a, 36)
+    local outlineDropdown = GUIFrame:CreateDropdown(rowFace, "Outline", {
+        options = OUTLINE_OPTIONS,
+        value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
+        callback = function(key)
+            db.FontOutline = key
+            ApplySettings()
+        end
+    })
+    rowFace:AddWidget(outlineDropdown, 0.5)
+    manager:Register(outlineDropdown, "all")
+    cardFont:AddRow(rowFace, Theme.rowHeight)
 
-        yOffset = card2:GetNextOffset()
+    local rowSizes = GUIFrame:CreateRow(cardFont.content, Theme.rowHeightLast)
+    local labelSizeSlider = GUIFrame:CreateSlider(rowSizes, "Bar Label Size", {
+        min = 8,
+        max = 24,
+        step = 1,
+        value = barDB.LabelSize or 14,
+        callback = function(val)
+            barDB.LabelSize = val
+            ApplySettings()
+        end
+    })
+    rowSizes:AddWidget(labelSizeSlider, 0.5)
+    manager:Register(labelSizeSlider, "barlabel")
 
-        ----------------------------------------------------------------
-        -- Card 3: Status Bar Widgets
-        ----------------------------------------------------------------
-        local card3 = GUIFrame:CreateCard(scrollChild, "Status Bar Widgets", yOffset)
-        manager:Register(card3, "all")
+    local barTextSizeSlider = GUIFrame:CreateSlider(rowSizes, "Bar Text Size", {
+        min = 8,
+        max = 24,
+        step = 1,
+        value = barDB.BarTextSize or 12,
+        callback = function(val)
+            barDB.BarTextSize = val
+            ApplySettings()
+        end
+    })
+    rowSizes:AddWidget(barTextSizeSlider, 0.5)
+    manager:Register(barTextSizeSlider, "bartext")
+    cardFont:AddRow(rowSizes, Theme.rowHeightLast, 0)
 
-        -- Enable toggle
-        local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-        local enableBarCheck = GUIFrame:CreateCheckbox(row3a, "Enable Status Bar Styling", {
-            value = barDB.Enabled ~= false,
-            callback = function(checked)
-                barDB.Enabled = checked
-                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
-                ApplySettings()
-                RefreshStates()
-            end,
-        })
-        row3a:AddWidget(enableBarCheck, 0.5)
-        manager:Register(enableBarCheck, "all")
+    yOffset = cardFont:GetNextOffset()
 
-        -- Width slider (0 = default/auto)
-        local barWidthSlider = GUIFrame:CreateSlider(row3a, "Width (0=Auto)", {
-            min = 0,
-            max = 400,
-            step = 1,
-            value = barDB.Width or 0,
-            labelWidth = 80,
-            tooltip = "Fixed bar width. Blizzard resizes the bar on every update and the width is put back a moment later, so a non-zero value can flicker. 0 keeps Blizzard's size.",
-            callback = function(val)
-                barDB.Width = val
-                ApplySettings()
-            end
-        })
-        row3a:AddWidget(barWidthSlider, 0.5)
-        manager:Register(barWidthSlider, "statusbar")
-        card3:AddRow(row3a, Theme.rowHeight)
+    ----------------------------------------------------------------
+    -- Card 3: Status Bars
+    ----------------------------------------------------------------
+    local cardBars = GUIFrame:CreateCard(scrollChild, "Status Bars", yOffset)
+    manager:Register(cardBars, "all")
+    cardBars:AddHeaderToggle(barDB.Enabled ~= false, function(checked)
+        barDB.Enabled = checked
+        if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
+        ApplySettings()
+    end)
 
-        -- Style Label toggle
-        local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-        local styleLabelCheck = GUIFrame:CreateCheckbox(row3b, "Style Label Text", {
+    if barDB.Enabled ~= false then
+        local rowStyle = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
+        local styleLabelCheck = GUIFrame:CreateCheckbox(rowStyle, "Restyle Bar Label", {
             value = barDB.StyleLabel ~= false,
             callback = function(checked)
                 barDB.StyleLabel = checked
                 ApplySettings()
+                RefreshStates()
             end,
         })
-        row3b:AddWidget(styleLabelCheck, 0.5)
-        manager:Register(styleLabelCheck, "statusbar")
+        rowStyle:AddWidget(styleLabelCheck, 0.34)
+        manager:Register(styleLabelCheck, "all")
 
-        -- Style Bar Text toggle
-        local styleBarTextCheck = GUIFrame:CreateCheckbox(row3b, "Style Bar Text", {
+        local styleBarTextCheck = GUIFrame:CreateCheckbox(rowStyle, "Restyle Bar Text", {
             value = barDB.StyleBarText ~= false,
             callback = function(checked)
                 barDB.StyleBarText = checked
                 ApplySettings()
+                RefreshStates()
             end,
         })
-        row3b:AddWidget(styleBarTextCheck, 0.5)
-        manager:Register(styleBarTextCheck, "statusbar")
-        card3:AddRow(row3b, Theme.rowHeight)
+        rowStyle:AddWidget(styleBarTextCheck, 0.33)
+        manager:Register(styleBarTextCheck, "all")
 
-        -- Font Size Sliders
-        local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-        local labelSizeSlider = GUIFrame:CreateSlider(row3c, "Label Size", {
-            min = 8,
-            max = 24,
-            step = 1,
-            value = barDB.LabelSize or 14,
-            labelWidth = 60,
-            callback = function(val)
-                barDB.LabelSize = val
-                ApplySettings()
-            end
-        })
-        row3c:AddWidget(labelSizeSlider, 0.5)
-        manager:Register(labelSizeSlider, "statusbar")
-
-        local barTextSizeSlider = GUIFrame:CreateSlider(row3c, "Bar Text Size", {
-            min = 8,
-            max = 24,
-            step = 1,
-            value = barDB.BarTextSize or 12,
-            labelWidth = 70,
-            callback = function(val)
-                barDB.BarTextSize = val
-                ApplySettings()
-            end
-        })
-        row3c:AddWidget(barTextSizeSlider, 0.5)
-        manager:Register(barTextSizeSlider, "statusbar")
-        card3:AddRow(row3c, Theme.rowHeight)
-
-        -- Separator
-        local row3sep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
-        local sep1 = GUIFrame:CreateSeparator(row3sep)
-        row3sep:AddWidget(sep1, 1)
-        manager:Register(sep1, "statusbar")
-        card3:AddRow(row3sep, Theme.rowHeightSeparator)
-
-        -- Strip Textures toggle
-        local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-        local stripTexturesCheck = GUIFrame:CreateCheckbox(row3d, "Strip Blizzard Textures & Add Backdrop", {
+        local stripTexturesCheck = GUIFrame:CreateCheckbox(rowStyle, "Flat Bar + Backdrop", {
             value = barDB.StripTextures ~= false,
             callback = function(checked)
                 barDB.StripTextures = checked
@@ -240,9 +204,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
                 RefreshStates()
             end,
         })
-        row3d:AddWidget(stripTexturesCheck, 1)
-        manager:Register(stripTexturesCheck, "statusbar")
-        card3:AddRow(row3d, Theme.rowHeight)
+        rowStyle:AddWidget(stripTexturesCheck, 0.33)
+        manager:Register(stripTexturesCheck, "all")
+        cardBars:AddRow(rowStyle, Theme.rowHeight)
 
         local statusbarList = {}
         if LSM then
@@ -251,8 +215,8 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             statusbarList["KitnUI"] = "KitnUI"
         end
 
-        local row3dTex = GUIFrame:CreateRow(card3.content, 36)
-        local barTextureDropdown = GUIFrame:CreateDropdown(row3dTex, "Bar Texture", {
+        local rowLook = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
+        local barTextureDropdown = GUIFrame:CreateDropdown(rowLook, "Bar Texture", {
             options = statusbarList,
             value = barDB.BarTexture or "KitnUI",
             callback = function(key)
@@ -261,267 +225,165 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             end,
             searchable = true,
         })
-        row3dTex:AddWidget(barTextureDropdown, 0.5)
+        rowLook:AddWidget(barTextureDropdown, 0.34)
         manager:Register(barTextureDropdown, "striptex")
-        card3:AddRow(row3dTex, 36)
 
-        -- Backdrop Color
-        local row3e = GUIFrame:CreateRow(card3.content, 36)
-        local backdropColorPicker = GUIFrame:CreateColorPicker(row3e, "Backdrop Color", {
+        local backdropColorPicker = GUIFrame:CreateColorPicker(rowLook, "Backdrop", {
             color = barDB.BackdropColor,
             callback = function(r, g, b, a)
                 barDB.BackdropColor = { r, g, b, a }
                 ApplySettings()
             end
         })
-        row3e:AddWidget(backdropColorPicker, 0.5)
-        manager:Register(backdropColorPicker, "statusbar")
+        rowLook:AddWidget(backdropColorPicker, 0.33)
+        manager:Register(backdropColorPicker, "striptex")
 
-        -- Border Color
-        local borderColorPicker = GUIFrame:CreateColorPicker(row3e, "Border Color", {
+        local borderColorPicker = GUIFrame:CreateColorPicker(rowLook, "Border", {
             color = barDB.BorderColor,
             callback = function(r, g, b, a)
                 barDB.BorderColor = { r, g, b, a }
                 ApplySettings()
             end
         })
-        row3e:AddWidget(borderColorPicker, 0.5)
-        manager:Register(borderColorPicker, "statusbar")
-        card3:AddRow(row3e, 36)
+        rowLook:AddWidget(borderColorPicker, 0.33)
+        manager:Register(borderColorPicker, "striptex")
+        cardBars:AddRow(rowLook, Theme.rowHeight)
 
-        yOffset = card3:GetNextOffset()
-
-        ----------------------------------------------------------------
-        -- Card 4: Text Widgets
-        ----------------------------------------------------------------
-        local card4 = GUIFrame:CreateCard(scrollChild, "Text Widgets", yOffset)
-        manager:Register(card4, "all")
-
-        -- Enable toggle and Style Text
-        local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        local enableTextCheck = GUIFrame:CreateCheckbox(row4a, "Enable Text Widget Styling", {
-            value = textDB.Enabled ~= false,
-            callback = function(checked)
-                textDB.Enabled = checked
-                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
+        local rowWidth = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
+        local barWidthSlider = GUIFrame:CreateSlider(rowWidth, "Fixed Bar Width (0 = Blizzard's)", {
+            min = 0,
+            max = 400,
+            step = 1,
+            value = barDB.Width or 0,
+            tooltip = "Fixed bar width. Blizzard resizes the bar on every update and the width is put back a moment later, so a non-zero value can flicker. 0 keeps Blizzard's size.",
+            callback = function(val)
+                barDB.Width = val
                 ApplySettings()
-                RefreshStates()
-            end,
+            end
         })
-        row4a:AddWidget(enableTextCheck, 0.5)
-        manager:Register(enableTextCheck, "all")
+        rowWidth:AddWidget(barWidthSlider, 0.5)
+        manager:Register(barWidthSlider, "all")
+        cardBars:AddRow(rowWidth, Theme.rowHeightLast, 0)
+    end
 
-        -- Style Text toggle
-        local styleTextCheck = GUIFrame:CreateCheckbox(row4a, "Style Text", {
-            value = textDB.StyleText ~= false,
-            callback = function(checked)
-                textDB.StyleText = checked
-                ApplySettings()
-            end,
-        })
-        row4a:AddWidget(styleTextCheck, 0.5)
-        manager:Register(styleTextCheck, "textwidget")
-        card4:AddRow(row4a, Theme.rowHeight)
+    yOffset = cardBars:GetNextOffset()
 
-        -- Font Size Slider
-        local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        local textSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", {
+    ----------------------------------------------------------------
+    -- Card 4: Text Widgets
+    ----------------------------------------------------------------
+    -- One switch over two keys, since either one off leaves the text
+    -- unstyled. On sets both, so a profile with only StyleText off does
+    -- not read off again after the rebuild.
+    local textOn = textDB.Enabled ~= false and textDB.StyleText ~= false
+    local cardText = GUIFrame:CreateCard(scrollChild, "Text Widgets", yOffset)
+    manager:Register(cardText, "all")
+    cardText:AddHeaderToggle(textOn, function(checked)
+        if checked then
+            textDB.Enabled = true
+            textDB.StyleText = true
+        else
+            textDB.Enabled = false
+            KE:FlagReloadNeeded() -- un-skin needs /reload
+        end
+        ApplySettings()
+    end)
+
+    if textOn then
+        local rowText = GUIFrame:CreateRow(cardText.content, Theme.rowHeightLast)
+        local textSizeSlider = GUIFrame:CreateSlider(rowText, "Text Size", {
             min = 8,
             max = 24,
             step = 1,
-            value = textDB.Size or 14,
-            labelWidth = 60,
+            value = textDB.Size or 17,
             tooltip = "Smallest size for text widgets. Text Blizzard draws larger keeps its own size, and any icon in it keeps its size too.",
             callback = function(val)
                 textDB.Size = val
                 ApplySettings()
             end
         })
-        row4b:AddWidget(textSizeSlider, 1)
-        manager:Register(textSizeSlider, "textwidget")
-        card4:AddRow(row4b, Theme.rowHeight)
+        rowText:AddWidget(textSizeSlider, 0.5)
+        manager:Register(textSizeSlider, "all")
 
-        local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        local centerTextCheck = GUIFrame:CreateCheckbox(row4c, "Center Text Widgets", {
+        local centerTextCheck = GUIFrame:CreateCheckbox(rowText, "Center Text", {
             value = textDB.CenterText ~= false,
             callback = function(checked)
                 textDB.CenterText = checked
                 ApplySettings()
             end,
         })
-        row4c:AddWidget(centerTextCheck, 1)
-        manager:Register(centerTextCheck, "textwidget")
-        card4:AddRow(row4c, Theme.rowHeight)
+        rowText:AddWidget(centerTextCheck, 0.5)
+        manager:Register(centerTextCheck, "all")
+        cardText:AddRow(rowText, Theme.rowHeightLast, 0)
+    end
 
-        yOffset = card4:GetNextOffset()
+    yOffset = cardText:GetNextOffset()
 
-        ----------------------------------------------------------------
-        -- Card 5: Widget Icons
-        ----------------------------------------------------------------
-        local cardIcons = GUIFrame:CreateCard(scrollChild, "Widget Icons", yOffset)
-        manager:Register(cardIcons, "all")
+    ----------------------------------------------------------------
+    -- Card 5: Spell Icons (its switch is the whole card)
+    ----------------------------------------------------------------
+    local cardIcons = GUIFrame:CreateCard(scrollChild, "Spell Icons", yOffset)
+    manager:Register(cardIcons, "all")
+    cardIcons:AddHeaderToggle(db.SkinIcons ~= false, function(checked)
+        db.SkinIcons = checked
+        if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
+        ApplySettings()
+    end)
 
-        local rowIcons = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeight)
-        local skinIconsCheck = GUIFrame:CreateCheckbox(rowIcons, "Skin Widget Icons", {
-            value = db.SkinIcons ~= false,
-            callback = function(checked)
-                db.SkinIcons = checked
-                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
-                ApplySettings()
-            end,
-        })
-        rowIcons:AddWidget(skinIconsCheck, 1)
-        manager:Register(skinIconsCheck, "all")
-        cardIcons:AddRow(rowIcons, Theme.rowHeight)
+    yOffset = cardIcons:GetNextOffset()
 
-        yOffset = cardIcons:GetNextOffset()
+    ----------------------------------------------------------------
+    -- Card 6: Top-Center Container
+    ----------------------------------------------------------------
+    local function ApplyTopCenter()
+        local UIW = KitnEssentials:GetModule("UIWidgets", true)
+        if UIW and UIW:IsEnabled() then UIW:ApplyTopCenter() end
+    end
 
-        ----------------------------------------------------------------
-        -- Card 6: Top-Center Widgets (container control)
-        ----------------------------------------------------------------
-        local tcDB = db.TopCenter
-        manager:SetCondition("topcenter", function()
-            return tcDB.Enabled == true
-        end)
+    local cardTC = GUIFrame:CreateCard(scrollChild, "Top-Center Container", yOffset)
+    manager:Register(cardTC, "all")
+    cardTC:AddHeaderToggle(tcDB.Enabled == true, function(checked)
+        tcDB.Enabled = checked
+        ApplyTopCenter()
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end)
 
-        local function ApplyTopCenter()
-            local UIW = KitnEssentials:GetModule("UIWidgets", true)
-            if UIW and UIW:IsEnabled() then UIW:ApplyTopCenter() end
-        end
+    if tcDB.Enabled == true then
+        cardTC:AddLabel("Moves, scales or hides the top-center widget container (M+ objective line, delve and event bars) in every zone.")
 
-        local card5 = GUIFrame:CreateCard(scrollChild, "Top-Center Widgets", yOffset)
-        manager:Register(card5, "all")
-        card5:AddLabel("Moves, scales or hides Blizzard's top-center widget container (M+ objective line, delve and event bars) in every zone.")
-
-        local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-        local tcEnableCheck = GUIFrame:CreateCheckbox(row5a, "Control Top-Center Widgets", {
-            value = tcDB.Enabled == true,
-            callback = function(checked)
-                tcDB.Enabled = checked
-                ApplyTopCenter()
-                RefreshStates()
-                if KE.EditMode then KE.EditMode:RefreshLiveState() end
-            end,
-        })
-        row5a:AddWidget(tcEnableCheck, 0.5)
-        manager:Register(tcEnableCheck, "all")
-
-        local tcHideCheck = GUIFrame:CreateCheckbox(row5a, "Hide (All Zones)", {
+        local rowTC = GUIFrame:CreateRow(cardTC.content, Theme.rowHeightLast)
+        local tcHideCheck = GUIFrame:CreateCheckbox(rowTC, "Hide (All Zones)", {
             value = tcDB.Hide == true,
             callback = function(checked)
                 tcDB.Hide = checked
                 ApplyTopCenter()
             end,
         })
-        row5a:AddWidget(tcHideCheck, 0.5)
-        manager:Register(tcHideCheck, "topcenter")
-        card5:AddRow(row5a, Theme.rowHeight)
+        rowTC:AddWidget(tcHideCheck, 0.5)
+        manager:Register(tcHideCheck, "all")
 
-        local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-        local tcScaleSlider = GUIFrame:CreateSlider(row5b, "Scale", {
+        local tcScaleSlider = GUIFrame:CreateSlider(rowTC, "Scale", {
             min = 0.5, max = 2.0, step = 0.05,
             value = tcDB.Scale or 1.0,
-            labelWidth = 60,
             callback = function(val)
                 tcDB.Scale = val
                 ApplyTopCenter()
             end,
         })
-        row5b:AddWidget(tcScaleSlider, 1)
-        manager:Register(tcScaleSlider, "topcenter")
-        card5:AddRow(row5b, Theme.rowHeight)
-
-        yOffset = card5:GetNextOffset()
-
-        ----------------------------------------------------------------
-        -- Card 7: Top-Center Widget Position
-        ----------------------------------------------------------------
-        -- db is the TopCenter sub-table, so the card's root keys
-        -- (anchorFrameType/ParentFrame/Strata) land there and cannot touch
-        -- the alert-frame cards below, which share this page.
-        local tcPosCard, tcPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            title = "Top-Center Widget Position",
-            db = tcDB,
-            dbKeys = {
-                selfPoint = "AnchorFrom",
-                anchorPoint = "AnchorTo",
-                xOffset = "XOffset",
-                yOffset = "YOffset",
-            },
-            showAnchorFrameType = true,
-            showStrata = true,
-            onChangeCallback = ApplyTopCenter,
-        })
-
-        if tcPosCard.positionWidgets then
-            manager:RegisterGroup(tcPosCard.positionWidgets, "topcenter")
-        end
-        manager:Register(tcPosCard, "topcenter")
-        yOffset = tcPosOffset
-
-        RefreshStates()
+        rowTC:AddWidget(tcScaleSlider, 0.5)
+        manager:Register(tcScaleSlider, "all")
+        cardTC:AddRow(rowTC, Theme.rowHeightLast, 0)
     end
 
-    ----------------------------------------------------------------
-    -- Alert Frames (independent module — hosted on this page)
-    ----------------------------------------------------------------
-    local function GetModule()
-        if KitnEssentials then
-            return KitnEssentials:GetModule("AlertFrames", true)
-        end
-        return nil
-    end
-
-    local afDB = KE.db and KE.db.profile.AlertFrames
-    if not afDB then return yOffset end
-
-    local AF = GetModule()
-    local afManager = GUIFrame:CreateWidgetStateManager()
-    afManager:SetCondition("toasts", function() return afDB.MoveEventToasts == true end)
-
-    local function RefreshAFStates()
-        afManager:UpdateAll(afDB.Enabled ~= false)
-    end
-
-    local function ApplyState(enabled)
-        if not AF then return end
-        afDB.Enabled = enabled
-        if enabled then KitnEssentials:EnableModule("AlertFrames")
-        else KitnEssentials:DisableModule("AlertFrames") end
-    end
+    yOffset = cardTC:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 1: Enable
+    -- Card 7: Top-Center Position
     ----------------------------------------------------------------
-    local afCard1 = GUIFrame:CreateCard(scrollChild, "Alert Frames", yOffset)
-    afCard1:AddHeaderToggle(afDB.Enabled ~= false, function(checked)
-        afDB.Enabled = checked
-        ApplyState(checked)
-        -- The AdjustAnchors replacements and hooksecurefunc hooks this module
-        -- installs cannot be undone (Modules/QoL/AlertFrames.lua header taint
-        -- note): turning the toggle off would otherwise leave the toast stack
-        -- overridden by a module that reports itself off.
-        if not checked then
-            KE:CreateReloadPrompt("Turning off the alert anchor requires a UI reload to give the toasts back to Blizzard.")
-        end
-    end)
-
-    afCard1:AddLabel("Moves the whole Blizzard toast stack, loot, achievements, dungeon completion, " ..
-        "to a spot you choose. The stack grows upward when the anchor is in the lower half of the " ..
-        "screen and downward when it is in the upper half. Use |cffffd100/kes edit|r to drag it. " ..
-        "Turning it off needs a reload.")
-
-    yOffset = afCard1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if afDB.Enabled == false then return yOffset end
-
-    ----------------------------------------------------------------
-    -- Card 2: Alert Stack Position
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Alert Stack Position",
-        db = afDB,
+    -- db is the TopCenter sub-table, so the card's root keys
+    -- (anchorFrameType/ParentFrame/Strata) land there, not on the module root.
+    local tcPosCard, tcPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Top-Center Position",
+        db = tcDB,
         dbKeys = {
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
@@ -530,76 +392,15 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         },
         showAnchorFrameType = true,
         showStrata = true,
-        onChangeCallback = function()
-            if AF then AF:ApplyPosition() end
-        end,
+        onChangeCallback = ApplyTopCenter,
     })
 
-    if posCard.positionWidgets then
-        afManager:RegisterGroup(posCard.positionWidgets, "all")
+    if tcPosCard.positionWidgets then
+        manager:RegisterGroup(tcPosCard.positionWidgets, "topcenter")
     end
-    afManager:Register(posCard, "all")
-    yOffset = posOffset
+    manager:Register(tcPosCard, "topcenter")
+    yOffset = tcPosOffset
 
-    ----------------------------------------------------------------
-    -- Card 3: Event Toasts
-    ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Event Toasts", yOffset)
-    afManager:Register(card3, "all")
-
-    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local moveToastsCheck = GUIFrame:CreateCheckbox(row3, "Move Recipe and Level-Up Banners", {
-        value = afDB.MoveEventToasts == true,
-        callback = function(checked)
-            afDB.MoveEventToasts = checked
-            if AF then AF:ApplySettings() end
-            RefreshAFStates()
-            -- Decides whether Edit Mode shows the Event Toasts mover.
-            if KE.EditMode then KE.EditMode:RefreshLiveState() end
-        end,
-    })
-    row3:AddWidget(moveToastsCheck, 1)
-    afManager:Register(moveToastsCheck, "all")
-    card3:AddRow(row3, Theme.rowHeightLast, 0)
-
-    yOffset = card3:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 4: Event Toast Position
-    ----------------------------------------------------------------
-    -- positionKey routes this card at db.EventToastPosition instead of the
-    -- default db.Position, which is Card 2's table. Root keys
-    -- (anchorFrameType/ParentFrame/Strata) live at the db ROOT regardless of
-    -- positionKey, so they also need their own names or this card would still
-    -- clobber Card 2's anchor type, parent and strata. The three EventToast*
-    -- root keys are plain scalars that default safely to "SCREEN"/"HIGH" when
-    -- unset, the same way Card 2's un-seeded root keys already do.
-    local toastPosCard, toastPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Event Toast Position",
-        db = afDB,
-        positionKey = "EventToastPosition",
-        dbKeys = {
-            anchorFrameType = "EventToastAnchorFrameType",
-            anchorFrameFrame = "EventToastParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "EventToastStrata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = function()
-            if AF then AF:ApplyEventToastPosition() end
-        end,
-    })
-
-    if toastPosCard.positionWidgets then
-        afManager:RegisterGroup(toastPosCard.positionWidgets, "toasts")
-    end
-    afManager:Register(toastPosCard, "toasts")
-    yOffset = toastPosOffset
-
-    RefreshAFStates()
+    RefreshStates()
     return yOffset
 end)

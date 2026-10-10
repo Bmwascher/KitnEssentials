@@ -358,10 +358,12 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
     GUIFrame:RefreshKitThemeIfNeeded(kit, kit.allWidgets)
 
-    -- Update anchorPoint label based on currentType (matches original).
+    -- Player Frame and Select Frame anchor to a frame; the two screen types
+    -- resolve to UIParent.
     local currentType = kitGetValue(kit, keys.anchorFrameType, defaults.anchorFrameType or "SCREEN")
+    local anchoredToFrame = currentType == "SELECTFRAME" or currentType == "PLAYERFRAME"
     local anchorPointLabel = showAnchorFrameType and
-        (currentType == "SELECTFRAME" and "To Frame's" or "To Screen's") or
+        (anchoredToFrame and "To Frame's" or "To Screen's") or
         "To Frame's"
     kit.anchorPointDropdown.label:SetText(anchorPointLabel)
 

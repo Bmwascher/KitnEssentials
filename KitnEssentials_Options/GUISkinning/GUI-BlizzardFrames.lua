@@ -583,13 +583,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesSkins", function(scrollChild, yOffse
     return yOffset
 end)
 
-GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffset)
+GUIFrame:RegisterContent("SkinBlizzardFramesFontsWindows", function(scrollChild, yOffset)
     local db = GetDB()
     if not db then return yOffset end
     local S = KE.Skins
 
-    local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
-    card:AddLabel("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
+    local card = GUIFrame:CreateCard(scrollChild, "Skinned Windows", yOffset)
+    card:AddLabel("Text inside the windows the Dark Theme skins. Bigger text, such as window titles, keeps its extra size.")
 
     local fontOptions = {}
     if LSM then
@@ -631,7 +631,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     -- instead. FontOffset is still read and still applied, which is what keeps
     -- an existing saved look unchanged -- it just has no control any more.
     local rowSize = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    rowSize:AddWidget(GUIFrame:CreateSlider(rowSize, "Base Font Size", {
+    rowSize:AddWidget(GUIFrame:CreateSlider(rowSize, "Text Size", {
         min = 8, max = 26, step = 1, value = db.FontSize or 12,
         tooltip = "Size of text in skinned windows. Larger elements keep their extra size and move with it. 12 is the designed look.",
         callback = function(val)
@@ -641,15 +641,16 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     }), 1)
     card:AddRow(rowSize, Theme.rowHeightLast, 0)
 
-    yOffset = card:GetNextOffset()
-
-    -- Same subject, wider scope: the game-wide text settings, chained as-is so
-    -- this page stays the one place fonts are configured.
-    local messages = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinMessages"]
-    if messages then yOffset = messages(scrollChild, yOffset) end
-
-    return yOffset
+    return card:GetNextOffset()
 end)
+
+-- The Fonts tab, one sub-tab per font source. Nothing outside this row hands
+-- over one of these ids, so none is registered as a nested id.
+GUIFrame:RegisterTabbedContent("SkinBlizzardFramesFonts", {
+    { id = "SkinBlizzardFramesFontsWindows",  label = "Skinned Windows" },
+    { id = "SkinBlizzardFramesFontsBlizzard", label = "Blizzard Text" },
+    { id = "SkinMessages",                    label = "On-Screen Messages" },
+})
 
 GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffset)
     local db = GetDB()
@@ -702,21 +703,20 @@ end)
 -- This row keeps its own active id. GUIFrame.tabbedPageState is keyed by PAGE,
 -- and this row is not a page.
 local elementTabs = {
-    { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
-    { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
-    { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
-    { id = "VehicleExit",                  label = "Vehicle Exit" },
+    { id = "SkinBlizzardFramesLootRoll",    label = "Loot Roll" },
+    { id = "SkinBlizzardFramesLootWindow",  label = "Loot Window" },
+    { id = "SkinBlizzardFramesWidgets",     label = "UI Widgets" },
+    { id = "SkinBlizzardFramesAlertFrames", label = "Alert Frames" },
+    { id = "VehicleExit",                   label = "Vehicle Exit" },
 }
 local activeElement = elementTabs[1].id
 
 -- Edit Mode's Open Settings hands over one of these nested ids. The page-level
 -- resolver cannot see them, so it needs to know which outer tab owns them.
-GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", {
-    "SkinBlizzardFramesLootRoll",
-    "SkinBlizzardFramesLootWindow",
-    "SkinBlizzardFramesWidgets",
-    "VehicleExit",
-})
+-- Built from the row so the two lists cannot drift.
+local elementIds = {}
+for i, tab in ipairs(elementTabs) do elementIds[i] = tab.id end
+GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", elementIds)
 
 -- No conflict branch here. Every tab on this row configures a module that
 -- stands down under ElvUI, so the whole Elements tab drops out of the strip
@@ -835,8 +835,10 @@ end, {
         else
             card:AddLabel("Skins Blizzard's windows to match the theme. Each window is skinned the " ..
                 "first time you open it, so there is no idle cost. The Frame Skins tab picks the " ..
-                "windows and drops out of the tab row while this is off; Fonts and Elements work " ..
-                "either way. Changes apply after a /reload.")
+                "windows and drops out of the tab row while this is off. Fonts and Elements have " ..
+                "their own switches and keep working with this off. The Skinned Windows size and " ..
+                "outline only show in skinned windows; its font face is also the one Blizzard Text " ..
+                "uses. Changes apply after a /reload.")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own
