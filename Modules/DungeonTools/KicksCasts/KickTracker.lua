@@ -1965,7 +1965,7 @@ end
 function KT:ApplyContainerPosition()
     if not self.containerFrame then return end
     local pos, aft, pf, strata = self:ResolvePositionConfig()
-    local parent = KE:ResolveAnchorFrame(aft, pf)
+    local parent = KE:ResolveAnchorFrame(aft, pf, self.containerFrame, true)
     self.containerFrame:SetParent(parent)
     self.containerFrame:ClearAllPoints()
     self.containerFrame:SetPoint(self:GetSelfPoint(pos), parent,
