@@ -186,7 +186,7 @@ end
 function DN:ApplyContainerPosition()
     if not self.container then return end
     local grow = GROW_ANCHORS[self.db.Grow] or GROW_ANCHORS.DOWN
-    local parent = KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+    local parent = KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame, self.container)
 
     self.container:ClearAllPoints()
     self.container:SetPoint(

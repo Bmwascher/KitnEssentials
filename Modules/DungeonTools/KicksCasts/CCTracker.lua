@@ -402,7 +402,7 @@ function CC:ApplyAnchorPosition()
     if not anchor then return end
     local db = self.db
     local pos = db.Position or {}
-    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame)
+    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame, anchor, true)
     if anchor:GetParent() ~= parent then anchor:SetParent(parent) end
     local box = self:Box(self:GeometrySource())
     anchor:SetSize(box.width, box.height)

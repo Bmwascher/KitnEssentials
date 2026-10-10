@@ -207,7 +207,7 @@ function DC:ApplyAnchorPosition()
     if not self.anchorFrame then return end
     local frameDb = self.db.Frame
     local pos = frameDb.Position
-    local parent = KE:ResolveAnchorFrame(frameDb.anchorFrameType, frameDb.ParentFrame)
+    local parent = KE:ResolveAnchorFrame(frameDb.anchorFrameType, frameDb.ParentFrame, self.anchorFrame, true)
 
     self.anchorFrame:SetParent(parent)
     self.anchorFrame:ClearAllPoints()

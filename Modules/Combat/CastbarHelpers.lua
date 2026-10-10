@@ -305,7 +305,7 @@ end
 function H.CreateFrame(self, opts)
     if self.frame then return end
     local db = self.db
-    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame)
+    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame, nil, true)
     local height = db.Height or opts.defaultHeight
 
     local frame = CreateFrame("Frame", opts.frameName, parent, "BackdropTemplate")
@@ -1320,7 +1320,7 @@ function H.RegWithEditMode(self, opts)
             -- `self` here is the calling module, not the helper table.
             module = self,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db, true) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = opts.guiPath,
         })
