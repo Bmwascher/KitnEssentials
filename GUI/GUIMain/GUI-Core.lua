@@ -1170,28 +1170,25 @@ end
 -- Without a rebuild, the redrawn body's labels still need the label check.
 function GUIFrame:ResizeCardInPlace(card, oldHeight)
     local delta = card:GetContentHeight() - oldHeight
-    if delta == 0 then
-        self:ResetLabelRebuilds()
-        self:QueueLabelRecheck()
-        return
-    end
-    local parent = card:GetParent()
-    local cardTop = card:GetTop()
-    if not parent or not cardTop then
-        RebuildPageLater()
-        return
-    end
-    for _, child in ipairs({ parent:GetChildren() }) do
-        if child ~= card and child:IsShown() then
-            local top = child:GetTop()
-            if not top or top < cardTop then
-                RebuildPageLater()
-                return
+    if delta ~= 0 then
+        local parent = card:GetParent()
+        local cardTop = card:GetTop()
+        if not parent or not cardTop then
+            RebuildPageLater()
+            return
+        end
+        for _, child in ipairs({ parent:GetChildren() }) do
+            if child ~= card and child:IsShown() then
+                local top = child:GetTop()
+                if not top or top < cardTop then
+                    RebuildPageLater()
+                    return
+                end
             end
         end
+        parent:SetHeight(parent:GetHeight() + delta)
     end
     self:ResetLabelRebuilds()
-    parent:SetHeight(parent:GetHeight() + delta)
     self:QueueLabelRecheck()
 end
 
@@ -1361,10 +1358,9 @@ function GUIFrame:RecheckLabels()
                 if height and math.abs(height - laid) > LABEL_HEIGHT_TOLERANCE then
                     self._labelRebuilds = (self._labelRebuilds or 0) + 1
                     self._labelRebuild = true
+                    -- The rebuild queues the next check, which either
+                    -- continues this chain or ends it.
                     self:RefreshContent()
-                    -- The rebuild may flip the scroll bar; the next check
-                    -- either continues this chain or ends it.
-                    self:QueueLabelRecheck()
                     return
                 end
             end
