@@ -295,7 +295,7 @@ local function PlaceAllAnswers(cell, count)
 end
 
 -- A sensor that cannot join the chain is hidden, and the cell stops growing at
--- the sensors it has.
+-- the sensors it has until DT:RetryBuild or the next activation.
 local function Discard(cell, sensor, reason)
     cell.failed = reason
     pcall(sensor.Hide, sensor)
@@ -711,6 +711,15 @@ function DT:RaiseBuildTarget()
     end
 end
 
+-- Clearing the flag alone builds nothing: the runner only walks past the steps
+-- it has, so the walk starts again from slot 1, built steps passing in one frame.
+function DT:RetryBuild()
+    if not self.active or not Rules.BuildRetryOwed(self.cells, #self.list) then return end
+    for i = 1, #self.list do self.cells[i].failed = nil end
+    self.runner:Cancel()
+    self.runner:Run(self.buildTarget)
+end
+
 -- The cap follows the sensors that exist, so no slot is taken before every
 -- shown DoT has a working sensor for it.
 function DT:UpdateCap()
@@ -975,6 +984,8 @@ function DT:Deactivate()
     self.list = {}
     for _, cell in ipairs(self.cells) do
         RetireCell(cell)
+        -- The next activation's build walk retries a refused cell.
+        cell.failed = nil
     end
     if self.root then self.root:Hide() end
     if wasActive and KE.EditMode then KE.EditMode:RefreshLiveState() end
@@ -1005,11 +1016,12 @@ function DT:OnRegenDisabled()
 end
 
 -- Leaving combat is a second chance to drain owed work; the restriction event
--- is the first.
+-- is the first. The retry follows the drain, which may have deactivated.
 function DT:OnRegenEnabled()
     self.inCombat = false
     self:UpdateLive()
     self:DrainGate()
+    self:RetryBuild()
 end
 
 local function SettleNow()
