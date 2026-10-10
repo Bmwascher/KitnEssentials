@@ -835,7 +835,7 @@ function DM:ReapplyBarVisuals(W)
                 local row = entry.row
                 row.fill:SetStatusBarTexture(texPath)
                 KE:ApplyFontToText(row.label, face, size, outline)
-                KE:ApplyFontToText(row.value, face, size, outline)
+                KE:ApplyFontToText(row.value, face, self.DetailSubFontSize(size), outline)
             end
         end
         if W.detail.msg then
