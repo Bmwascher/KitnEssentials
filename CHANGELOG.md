@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.9
+
+### Aura Tracking
+
+- External Tracker and Movement Buffs previews no longer draw the dark
+  cooldown sweep, matching the live display. Any aura display with Swipe
+  off does the same
+- Player Buffs and Player Debuffs previews hide the countdown when Show
+  Timer is off
+- Advanced Debuffs, External Tracker and Movement Buffs, turned off in a
+  vehicle and on again after you leave it, show at once instead of after
+  the next loading screen. Turned on while you sit in a vehicle, they wait
+  until you leave it
+- Player Buffs and Player Debuffs, turned off and on again without a
+  /reload, show the right auras at once
+
+### Dungeon Timers
+
+- In the settings spell list, hovering a spell row now tints it. The
+  selected row keeps its accent color
+
+---
+
 ## v4.10.8
 
 ### Raid Notifications
