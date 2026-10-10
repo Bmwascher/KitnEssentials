@@ -201,15 +201,17 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
     -- attached.
     ----------------------------------------------------------------
     if not attached then
+        -- The module root, so Anchored To lands where SPC:ApplyPosition reads
+        -- it; the points and offsets still land in db.Position.
         local _, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            db = db.Position,
+            db = db,
+            positionKey = "Position",
             dbKeys = {
                 selfPoint   = "AnchorFrom",
                 anchorPoint = "AnchorTo",
                 xOffset     = "XOffset",
                 yOffset     = "YOffset",
             },
-            showAnchorFrameType = false,
             showStrata = false,
             onChangeCallback = ApplySettings,
         })
