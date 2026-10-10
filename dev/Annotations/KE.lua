@@ -505,8 +505,21 @@ function KE:AddBorders(frame, color, borderParent) end
 
 ---@param anchorFrameType string?
 ---@param parentFrame string?
+---@param frame Frame? # the frame being placed; SELECTFRAME refuses it, its children and its dependents
+---@param asParent boolean? # the result becomes a parent, so it must also be a frame
 ---@return Frame?
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrame) end
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent) end
+
+--- True when `candidate` cannot anchor `frame` (or parent it, with `asParent`):
+--- not a region (a secret value, an unreadable table or a forbidden region
+--- counts as not a region), not a frame when a parent is needed, the frame itself, or a
+--- region whose parent or anchor chain reaches it. With no frame, only the
+--- type tests apply.
+---@param frame Frame?
+---@param candidate any
+---@param asParent boolean?
+---@return boolean
+function KE:IsUnsafeAnchor(frame, candidate, asParent) end
 
 ---@param frame Frame
 ---@return boolean
