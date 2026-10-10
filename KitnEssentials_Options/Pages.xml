@@ -1,102 +1,87 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
-    <!-- Combat tabs -->
-    <Script file="GUICombat\GUI-CombatTimer.lua" />
-    <Script file="GUICombat\GUI-CombatCross.lua" />
-    <Script file="GUICombat\GUI-CombatRes.lua" />
-    <Script file="GUICombat\GUI-CombatTexts.lua" />
-    <Script file="GUICombat\GUI-Cursor.lua" />
-    <Script file="GUICombat\GUI-FocusCastbar.lua" />
-    <Script file="GUICombat\GUI-RangeChecker.lua" />
-    <Script file="GUICombat\GUI-StatusTexts.lua" />
-    <Script file="GUICombat\GUI-HealerMana.lua" />
-    <Script file="GUICombat\GUI-AuraDebuffs.lua" />
-    <Script file="GUICombat\GUI-AuraHeaders.lua" />
-    <Script file="GUICombat\GUI-AuraExternals.lua" />
-    <Script file="GUICombat\GUI-PartyBuffs.lua" />
-    <Script file="GUICombat\GUI-AuraMovement.lua" />
-    <Script file="GUICombat\GUI-DamageMeter.lua" />
-    <Script file="GUIDungeons\GUI-KickTracker.lua" />
-
-    <!-- GUIClassUtilities folder -->
-    <Script file="GUIClassUtilities\GUI-ClassTools.lua" />
-    <Script file="GUIClassUtilities\GUI-DisintegrateTicks.lua" />
-    <Script file="GUIClassUtilities\GUI-StasisTracker.lua" />
-    <Script file="GUIClassUtilities\GUI-TotemTracker.lua" />
-    <Script file="GUIClassUtilities\GUI-PetStatusText.lua" />
-    <Script file="GUIClassUtilities\GUI-StanceText.lua" />
-    <Script file="GUIClassUtilities\GUI-HuntersMark.lua" />
-    <Script file="GUIClassUtilities\GUI-HavocTracker.lua" />
-    <Script file="GUIClassUtilities\GUI-ShamanProcCooldowns.lua" />
-    <Script file="GUIClassUtilities\GUI-DoTTracker.lua" />
-    <Script file="GUIClassUtilities\GUI-AlterTime.lua" />
-    <Script file="GUIClassUtilities\GUI-SpellAlerts.lua" />
-    <Script file="GUIClassUtilities\GUI-PIMacroBuilder.lua" />
-    <Script file="GUIClassUtilities\GUI-PIAssist.lua" />
-
-    <!-- Utilities tabs -->
-    <Script file="GUIUtilities\GUI-PlayerAbsorbs.lua" />
-    <Script file="GUIUtilities\GUI-RaidNotifications.lua" />
-    <Script file="GUIUtilities\GUI-NoMovementAlert.lua" />
-    <Script file="GUIUtilities\GUI-TimeSpiral.lua" />
-    <Script file="GUIUtilities\GUI-Recuperate.lua" />
-    <Script file="GUIUtilities\GUI-WorldMarkerCycler.lua" />
-    <Script file="GUIUtilities\GUI-PotionReady.lua" />
-    <Script file="GUIUtilities\GUI-ReadyCheckConsumables.lua" />
-
-    <!-- Dungeons tabs -->
-    <Script file="GUIDungeons\GUI-DungeonCasts.lua" />
-    <Script file="GUIDungeons\GUI-CCTracker.lua" />
-    <Script file="GUIDungeons\GUI-TargetedSpells.lua" />
-    <Script file="GUIDungeons\GUI-EnemyCounter.lua" />
-    <Script file="GUIDungeons\GUI-FocusMarker.lua" />
-    <Script file="GUIDungeons\GUI-GroupFinderPanel.lua" />
-    <Script file="GUIDungeons\GUI-KeystoneHelper.lua" />
-    <Script file="GUIDungeons\GUI-LFGQuickCreate.lua" />
-    <Script file="GUIDungeons\GUI-LFGReminder.lua" />
-    <Script file="GUIDungeons\GUI-DeathNotifications.lua" />
-    <Script file="GUIDungeons\GUI-MythicPlusTimer.lua" />
-    <Script file="GUIDungeons\GUI-DungeonAlerts.lua" />
-    <Script file="GUIDungeons\GUI-KicksCasts.lua" />
-
-    <!-- DungeonsTimers tabs -->
-    <Script file="GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />
-    <Script file="GUIDungeonTimers\GUI-DungeonTimersBars.lua" />
-    <Script file="GUIDungeonTimers\GUI-DungeonTimersTexts.lua" />
-    <Script file="GUIDungeonTimers\GUI-DungeonTimersNameplates.lua" />
-    <Script file="GUIDungeonTimers\GUI-DungeonTimersDungeon.lua" />
-    <Script file="GUIDungeonTimers\GUI-DungeonTimers.lua" />
-
-    <!-- QoL tabs -->
-    <Script file="GUIQoL\GUI-Automation.lua" />
-    <Script file="GUIQoL\GUI-BonusRoll.lua" />
-    <Script file="GUIQoL\GUI-CVars.lua" />
-    <Script file="GUIQoL\GUI-UIScaling.lua" />
-    <Script file="GUIQoL\GUI-SlashCommands.lua" />
-    <Script file="GUIQoL\GUI-DragonRiding.lua" />
-    <Script file="GUIQoL\GUI-CombatLogger.lua" />
-    <Script file="GUIQoL\GUI-GreatVaultAlert.lua" />
-    <Script file="GUIQoL\GUI-CharacterPanel.lua" />
-    <Script file="GUIQoL\GUI-CopyAnything.lua" />
-    <Script file="GUIQoL\GUI-ColorPicker.lua" />
-    <Script file="GUIQoL\GUI-MoveFrames.lua" />
-    <Script file="GUIQoL\GUI-RaidControl.lua" />
-    <Script file="GUIQoL\GUI-QualityOfLife.lua" />
-    <Script file="GUIQoL\GUI-GroupTools.lua" />
-    <Script file="GUIQoL\GUI-SecondaryStats.lua" />
-
-    <!-- Skinning tabs -->
-    <Script file="GUISkinning\GUI-Tooltips.lua" />
-    <Script file="GUISkinning\GUI-BlizzardMessages.lua" />
-    <Script file="GUISkinning\GUI-UIWidgets.lua" />
-    <Script file="GUISkinning\GUI-AlertFrames.lua" />
-    <Script file="GUISkinning\GUI-LootRoll.lua" />
-    <Script file="GUISkinning\GUI-LootFrame.lua" />
-    <Script file="GUISkinning\GUI-VehicleExit.lua" />
-    <Script file="GUISkinning\GUI-Chat.lua" />
-    <Script file="GUISkinning\GUI-BlizzardFrames.lua" />
-
-    <!-- Optimize tab -->
-    <Script file="GUIQoL\GUI-Optimize.lua" />
+    <Script file="Combat\GUI-CombatTimer.lua" />
+    <Script file="Combat\GUI-CombatCross.lua" />
+    <Script file="Combat\GUI-CombatRes.lua" />
+    <Script file="Combat\GUI-CombatTexts.lua" />
+    <Script file="Combat\GUI-Cursor.lua" />
+    <Script file="Combat\GUI-FocusCastbar.lua" />
+    <Script file="Combat\GUI-RangeChecker.lua" />
+    <Script file="Combat\StatusTexts\GUI-StatusTexts.lua" />
+    <Script file="Combat\StatusTexts\GUI-HealerMana.lua" />
+    <Script file="AuraTracking\GUI-AuraDebuffs.lua" />
+    <Script file="AuraTracking\GUI-AuraHeaders.lua" />
+    <Script file="AuraTracking\GUI-AuraExternals.lua" />
+    <Script file="AuraTracking\GUI-PartyBuffs.lua" />
+    <Script file="AuraTracking\GUI-AuraMovement.lua" />
+    <Script file="Skinning\GUI-DamageMeter.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-KickTracker.lua" />
+    <Script file="Combat\ClassTools\GUI-ClassTools.lua" />
+    <Script file="Combat\ClassTools\GUI-DisintegrateTicks.lua" />
+    <Script file="Combat\ClassTools\GUI-StasisTracker.lua" />
+    <Script file="AuraTracking\GUI-TotemTracker.lua" />
+    <Script file="Combat\StatusTexts\GUI-PetStatusText.lua" />
+    <Script file="Combat\ClassTools\GUI-StanceText.lua" />
+    <Script file="Combat\ClassTools\GUI-HuntersMark.lua" />
+    <Script file="Combat\ClassTools\GUI-HavocTracker.lua" />
+    <Script file="Combat\ClassTools\GUI-ShamanProcCooldowns.lua" />
+    <Script file="Combat\ClassTools\GUI-DoTTracker.lua" />
+    <Script file="Combat\ClassTools\GUI-AlterTime.lua" />
+    <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
+    <Script file="Combat\ClassTools\GUI-PIMacroBuilder.lua" />
+    <Script file="Combat\ClassTools\GUI-PIAssist.lua" />
+    <Script file="Combat\StatusTexts\GUI-PlayerAbsorbs.lua" />
+    <Script file="QoL\GroupTools\GUI-RaidNotifications.lua" />
+    <Script file="Combat\StatusTexts\GUI-NoMovementAlert.lua" />
+    <Script file="Combat\ClassTools\GUI-TimeSpiral.lua" />
+    <Script file="Combat\ClassTools\GUI-Recuperate.lua" />
+    <Script file="QoL\GroupTools\GUI-WorldMarkerCycler.lua" />
+    <Script file="Combat\StatusTexts\GUI-PotionReady.lua" />
+    <Script file="QoL\GroupTools\GUI-ReadyCheckConsumables.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-DungeonCasts.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-CCTracker.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-TargetedSpells.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-EnemyCounter.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-FocusMarker.lua" />
+    <Script file="DungeonTools\KeystoneHelper\GUI-GroupFinderPanel.lua" />
+    <Script file="DungeonTools\KeystoneHelper\GUI-KeystoneHelper.lua" />
+    <Script file="DungeonTools\KeystoneHelper\GUI-LFGQuickCreate.lua" />
+    <Script file="DungeonTools\KeystoneHelper\GUI-LFGReminder.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-DeathNotifications.lua" />
+    <Script file="Skinning\GUI-MythicPlusTimer.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-DungeonAlerts.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-KicksCasts.lua" />
+    <Script file="DungeonTools\DungeonTimers\GUI-DungeonTimersCfg.lua" />
+    <Script file="DungeonTools\DungeonTimers\GUI-DungeonTimersBars.lua" />
+    <Script file="DungeonTools\DungeonTimers\GUI-DungeonTimersTexts.lua" />
+    <Script file="DungeonTools\DungeonTimers\GUI-DungeonTimersNameplates.lua" />
+    <Script file="DungeonTools\DungeonTimers\GUI-DungeonTimersDungeon.lua" />
+    <Script file="DungeonTools\DungeonTimers\GUI-DungeonTimers.lua" />
+    <Script file="QoL\Automation\GUI-Automation.lua" />
+    <Script file="QoL\GUI-BonusRoll.lua" />
+    <Script file="Core\CVars\GUI-CVars.lua" />
+    <Script file="Core\CVars\GUI-UIScaling.lua" />
+    <Script file="QoL\QualityOfLife\GUI-SlashCommands.lua" />
+    <Script file="Skinning\GUI-DragonRiding.lua" />
+    <Script file="QoL\Automation\GUI-CombatLogger.lua" />
+    <Script file="QoL\QualityOfLife\GUI-GreatVaultAlert.lua" />
+    <Script file="Skinning\GUI-CharacterPanel.lua" />
+    <Script file="QoL\QualityOfLife\GUI-CopyAnything.lua" />
+    <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
+    <Script file="QoL\QualityOfLife\GUI-MoveFrames.lua" />
+    <Script file="Skinning\DarkTheme\GUI-RaidControl.lua" />
+    <Script file="QoL\QualityOfLife\GUI-QualityOfLife.lua" />
+    <Script file="QoL\GroupTools\GUI-GroupTools.lua" />
+    <Script file="QoL\GUI-SecondaryStats.lua" />
+    <Script file="Skinning\GUI-Tooltips.lua" />
+    <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />
+    <Script file="Skinning\DarkTheme\GUI-UIWidgets.lua" />
+    <Script file="Skinning\DarkTheme\GUI-AlertFrames.lua" />
+    <Script file="Skinning\DarkTheme\GUI-LootRoll.lua" />
+    <Script file="Skinning\DarkTheme\GUI-LootFrame.lua" />
+    <Script file="Skinning\DarkTheme\GUI-VehicleExit.lua" />
+    <Script file="Skinning\GUI-Chat.lua" />
+    <Script file="Skinning\DarkTheme\GUI-BlizzardFrames.lua" />
+    <Script file="Core\GUI-Optimize.lua" />
 </Ui>
