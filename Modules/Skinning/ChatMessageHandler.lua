@@ -261,21 +261,35 @@ function CMH:GetColoredName(event, _, arg2, _, _, _, _, _, arg8, _, _, _, arg12)
     return name
 end
 
--- Get player flags
-function CMH:GetPFlag(specialFlag, _, _)
-    local flag = ''
+local AFK_TAG = '[|cffFF9900AFK|r] '
+local DND_TAG = '[|cffFF3333DND|r] '
 
-    if specialFlag and specialFlag ~= '' then
-        if specialFlag == 'GM' or specialFlag == 'DEV' then
-            flag = '|TInterface\\ChatFrame\\UI-ChatIcon-Blizz:12:20:0:0:32:16:4:28:0:16|t '
-        elseif specialFlag == 'GUIDE' then
-            flag = '|TInterface\\ChatFrame\\UI-ChatIcon-Guide:12:12:0:0|t '
-        elseif specialFlag == 'NEWCOMER' then
-            flag = '|TInterface\\ChatFrame\\UI-ChatIcon-Newcomer:12:12:0:0|t '
-        end
+-- specialFlags is never secret on any chat event, so these comparisons are safe
+-- in chat lockdown.
+---@param specialFlag string?
+---@param showAFKDND boolean
+---@return string
+function CMH.PlayerFlag(specialFlag, showAFKDND)
+    if not specialFlag or specialFlag == '' then return '' end
+    if specialFlag == 'GM' or specialFlag == 'DEV' then
+        return '|TInterface\\ChatFrame\\UI-ChatIcon-Blizz:12:20:0:0:32:16:4:28:0:16|t '
+    elseif specialFlag == 'GUIDE' then
+        return '|TInterface\\ChatFrame\\UI-ChatIcon-Guide:12:12:0:0|t '
+    elseif specialFlag == 'NEWCOMER' then
+        return '|TInterface\\ChatFrame\\UI-ChatIcon-Newcomer:12:12:0:0|t '
+    elseif specialFlag == 'DISCORD' then
+        return '|A:UI-ChatIcon-Discord:0:0:0:0|a '
+    elseif specialFlag == 'AFK' then
+        return showAFKDND and AFK_TAG or ''
+    elseif specialFlag == 'DND' then
+        return showAFKDND and DND_TAG or ''
     end
+    return ''
+end
 
-    return flag
+function CMH:GetPFlag(specialFlag, _, _)
+    local db = KE.db and KE.db.profile.Skinning.Chat
+    return CMH.PlayerFlag(specialFlag, not db or db.AFKDNDTags ~= false)
 end
 
 -- Check if channel should be added

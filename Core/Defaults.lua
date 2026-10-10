@@ -2336,6 +2336,7 @@ local Defaults = {
                 GuildMemberStatus = true,
                 GuildMemberStatusInviteLink = true,
                 RoleIcons = true,
+                AFKDNDTags = true,
                 MergeAchievements = false,
                 HighlightKeywords = "%MYNAME%",
                 HighlightColor = { 0.267, 1, 0.773 },

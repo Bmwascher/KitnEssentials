@@ -109,6 +109,15 @@ local function BuildWhisperSoundOptions()
     return opts
 end
 
+-- manager is nil for a card the state manager leaves alone (Chat Links).
+local function AddSeparatorRow(card, manager)
+    local row = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
+    local sep = GUIFrame:CreateSeparator(row)
+    row:AddWidget(sep, 1)
+    if manager then manager:Register(sep, "all") end
+    card:AddRow(row, Theme.rowHeightSeparator)
+end
+
 GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     if KE:ShouldNotLoadModule() then return end
     local db = KE.db and KE.db.profile.Skinning.Chat
@@ -265,6 +274,21 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card4, "all")
 
+    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
+        value = db.MatchDamageMeterSize == true,
+        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
+            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
+        callback = function(checked)
+            db.MatchDamageMeterSize = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row4match:AddWidget(matchChk, 1)
+    manager:Register(matchChk, "all")
+    card4:AddRow(row4match, Theme.rowHeight)
+
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local widthSlider = GUIFrame:CreateSlider(row4a, "Panel Width", {
         min = 300, max = 900, step = 1,
@@ -289,20 +313,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     manager:Register(heightSlider, "panelsize")
     card4:AddRow(row4a, Theme.rowHeight)
 
-    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
-        value = db.MatchDamageMeterSize == true,
-        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
-            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
-        callback = function(checked)
-            db.MatchDamageMeterSize = checked
-            ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-    })
-    row4match:AddWidget(matchChk, 1)
-    manager:Register(matchChk, "all")
-    card4:AddRow(row4match, Theme.rowHeight)
+    AddSeparatorRow(card4, manager)
 
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local editBoxPosDropdown = GUIFrame:CreateDropdown(row4b, "Edit Box Position", {
@@ -316,17 +327,19 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row4b:AddWidget(editBoxPosDropdown, 0.5)
     manager:Register(editBoxPosDropdown, "all")
 
-    local scrollMsgSlider = GUIFrame:CreateSlider(row4b, "Messages Per Scroll", {
-        min = 1, max = 10, step = 1,
-        value = db.NumScrollMessages or 3,
+    local editBoxFontSlider = GUIFrame:CreateSlider(row4b, "Edit Box Font Size", {
+        min = 8, max = 24, step = 1,
+        value = db.EditBoxFontSize or 14,
         callback = function(value)
-            db.NumScrollMessages = value
+            db.EditBoxFontSize = value
             ApplySettings()
         end,
     })
-    row4b:AddWidget(scrollMsgSlider, 0.5)
-    manager:Register(scrollMsgSlider, "all")
+    row4b:AddWidget(editBoxFontSlider, 0.5)
+    manager:Register(editBoxFontSlider, "all")
     card4:AddRow(row4b, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
 
     local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local maxLinesSlider = GUIFrame:CreateSlider(row4c, "Max History Lines", {
@@ -340,42 +353,19 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row4c:AddWidget(maxLinesSlider, 0.5)
     manager:Register(maxLinesSlider, "all")
 
-    local editBoxFontSlider = GUIFrame:CreateSlider(row4c, "Edit Box Font Size", {
-        min = 8, max = 24, step = 1,
-        value = db.EditBoxFontSize or 14,
+    local scrollMsgSlider = GUIFrame:CreateSlider(row4c, "Messages Per Scroll", {
+        min = 1, max = 10, step = 1,
+        value = db.NumScrollMessages or 3,
         callback = function(value)
-            db.EditBoxFontSize = value
+            db.NumScrollMessages = value
             ApplySettings()
         end,
     })
-    row4c:AddWidget(editBoxFontSlider, 0.5)
-    manager:Register(editBoxFontSlider, "all")
+    row4c:AddWidget(scrollMsgSlider, 0.5)
+    manager:Register(scrollMsgSlider, "all")
     card4:AddRow(row4c, Theme.rowHeight)
 
-    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local shortChannelsCheck = GUIFrame:CreateCheckbox(row4d, "Short Channel Names", {
-        value = db.ShortChannels ~= false,
-        callback = function(checked)
-            db.ShortChannels = checked
-            ApplySettings()
-        end,
-    })
-    row4d:AddWidget(shortChannelsCheck, 0.5)
-    manager:Register(shortChannelsCheck, "all")
-
-    local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
-        value = db.RoleIcons ~= false,
-        tooltip = "Shows tank, healer, and DPS role icons before sender names in party, raid, and instance chat.",
-        callback = function(checked)
-            db.RoleIcons = checked
-            ApplySettings()
-        end,
-    })
-    row4d:AddWidget(roleIconsCheck, 0.5)
-    manager:Register(roleIconsCheck, "all")
-    card4:AddRow(row4d, Theme.rowHeight)
-
-    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local fadeCheck = GUIFrame:CreateCheckbox(row4e, "Fade Chat Text", {
         value = db.FadeEnabled ~= false,
         callback = function(checked)
@@ -396,7 +386,40 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     })
     row4e:AddWidget(fadeTimeSlider, 0.5)
     manager:Register(fadeTimeSlider, "all")
-    card4:AddRow(row4e, Theme.rowHeightLast, 0)
+    card4:AddRow(row4e, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
+
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local shortChannelsCheck = GUIFrame:CreateCheckbox(row4d, "Short Channel Names", {
+        value = db.ShortChannels ~= false,
+        callback = function(checked)
+            db.ShortChannels = checked
+            ApplySettings()
+        end,
+    })
+    row4d:AddWidget(shortChannelsCheck, 0.34)
+    manager:Register(shortChannelsCheck, "all")
+
+    local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
+        value = db.RoleIcons ~= false,
+        tooltip = "Shows tank, healer, and DPS role icons before sender names in party, raid, and instance chat.",
+        callback = function(checked)
+            db.RoleIcons = checked
+            ApplySettings()
+        end,
+    })
+    row4d:AddWidget(roleIconsCheck, 0.33)
+    manager:Register(roleIconsCheck, "all")
+
+    local afkDndCheck = GUIFrame:CreateCheckbox(row4d, "AFK/DND Tags", {
+        value = db.AFKDNDTags ~= false,
+        tooltip = "Shows [AFK] or [DND] before the name of a player who is away or busy, as the default chat does.",
+        callback = function(checked) db.AFKDNDTags = checked end,
+    })
+    row4d:AddWidget(afkDndCheck, 0.33)
+    manager:Register(afkDndCheck, "all")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
 
@@ -460,52 +483,54 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row7b:AddWidget(panelColorPicker, 0.5)
     manager:Register(panelColorPicker, "all")
 
-    local panelBorderColorPicker = GUIFrame:CreateColorPicker(row7b, "Panel Border Color", {
-        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.Backdrop.BorderColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7b:AddWidget(panelBorderColorPicker, 0.5)
-    manager:Register(panelBorderColorPicker, "all")
-    card7:AddRow(row7b, Theme.rowHeight)
-
-    -- Edit Box Border Color has no control here: the edit box border is
-    -- chat-type colored on every header update (say/whisper/channel), same
-    -- so a static color option would be applied then instantly overridden.
-    local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-    local editBoxColorPicker = GUIFrame:CreateColorPicker(row7c, "Edit Box Color", {
-        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
-        callback = function(r, g, b, a)
-            db.EditBox.BackdropColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7c:AddWidget(editBoxColorPicker, 0.5)
-    manager:Register(editBoxColorPicker, "all")
-
-    local tabColorPicker = GUIFrame:CreateColorPicker(row7c, "Tab Bar Color", {
+    local tabColorPicker = GUIFrame:CreateColorPicker(row7b, "Tab Bar Color", {
         color = db.TabBackdrop.Color or { 0, 0, 0, 0.2 },
         callback = function(r, g, b, a)
             db.TabBackdrop.Color = { r, g, b, a }
             ApplySettings()
         end,
     })
-    row7c:AddWidget(tabColorPicker, 0.5)
+    row7b:AddWidget(tabColorPicker, 0.5)
     manager:Register(tabColorPicker, "all")
-    card7:AddRow(row7c, Theme.rowHeight)
+    card7:AddRow(row7b, Theme.rowHeight)
 
-    local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
-    local tabBorderColorPicker = GUIFrame:CreateColorPicker(row7d, "Tab Bar Border Color", {
+    local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local panelBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Panel Border Color", {
+        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a)
+            db.Backdrop.BorderColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7c:AddWidget(panelBorderColorPicker, 0.5)
+    manager:Register(panelBorderColorPicker, "all")
+
+    local tabBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Tab Bar Border Color", {
         color = db.TabBackdrop.BorderColor or { 0, 0, 0, 1 },
         callback = function(r, g, b, a)
             db.TabBackdrop.BorderColor = { r, g, b, a }
             ApplySettings()
         end,
     })
-    row7d:AddWidget(tabBorderColorPicker, 0.5)
+    row7c:AddWidget(tabBorderColorPicker, 0.5)
     manager:Register(tabBorderColorPicker, "all")
+    card7:AddRow(row7c, Theme.rowHeight)
+
+    AddSeparatorRow(card7, manager)
+
+    -- Edit Box Border Color has no control here: the edit box border is
+    -- chat-type colored on every header update (say/whisper/channel), same
+    -- so a static color option would be applied then instantly overridden.
+    local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local editBoxColorPicker = GUIFrame:CreateColorPicker(row7d, "Edit Box Color", {
+        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
+        callback = function(r, g, b, a)
+            db.EditBox.BackdropColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7d:AddWidget(editBoxColorPicker, 0.5)
+    manager:Register(editBoxColorPicker, "all")
     card7:AddRow(row7d, Theme.rowHeightLast, 0)
 
     yOffset = card7:GetNextOffset()
@@ -615,30 +640,10 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     manager:Register(tabTextColorPicker, "all")
     card9:AddRow(row9b, Theme.rowHeight)
 
+    AddSeparatorRow(card9, manager)
+
     local row9c = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
-    local tabSelectedEnabledCheck = GUIFrame:CreateCheckbox(row9c, "Custom Selected Tab Color", {
-        value = db.TabSelectedTextEnabled ~= false,
-        callback = function(checked)
-            db.TabSelectedTextEnabled = checked
-            ApplySettings()
-        end,
-    })
-    row9c:AddWidget(tabSelectedEnabledCheck, 0.5)
-    manager:Register(tabSelectedEnabledCheck, "all")
-
-    local tabSelectedColorPicker = GUIFrame:CreateColorPicker(row9c, "Selected Tab Color", {
-        color = { db.TabSelectedTextColor.r or 1, db.TabSelectedTextColor.g or 0, db.TabSelectedTextColor.b or 0.549, 1 },
-        callback = function(r, g, b)
-            db.TabSelectedTextColor.r, db.TabSelectedTextColor.g, db.TabSelectedTextColor.b = r, g, b
-            ApplySettings()
-        end,
-    })
-    row9c:AddWidget(tabSelectedColorPicker, 0.5)
-    manager:Register(tabSelectedColorPicker, "all")
-    card9:AddRow(row9c, Theme.rowHeight)
-
-    local row9d = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
-    local tabSelectorDropdown = GUIFrame:CreateDropdown(row9d, "Selected Tab Marker", {
+    local tabSelectorDropdown = GUIFrame:CreateDropdown(row9c, "Selected Tab Marker", {
         options = TAB_SELECTOR_STYLES,
         value = db.TabSelector or "NONE",
         callback = function(value)
@@ -646,18 +651,40 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row9d:AddWidget(tabSelectorDropdown, 0.5)
+    row9c:AddWidget(tabSelectorDropdown, 0.5)
     manager:Register(tabSelectorDropdown, "all")
 
-    local tabSelectorColorPicker = GUIFrame:CreateColorPicker(row9d, "Marker Color", {
+    local tabSelectorColorPicker = GUIFrame:CreateColorPicker(row9c, "Marker Color", {
         color = { db.TabSelectorColor.r or 1, db.TabSelectorColor.g or 1, db.TabSelectorColor.b or 1, 1 },
         callback = function(r, g, b)
             db.TabSelectorColor.r, db.TabSelectorColor.g, db.TabSelectorColor.b = r, g, b
             ApplySettings()
         end,
     })
-    row9d:AddWidget(tabSelectorColorPicker, 0.5)
+    row9c:AddWidget(tabSelectorColorPicker, 0.5)
     manager:Register(tabSelectorColorPicker, "all")
+    card9:AddRow(row9c, Theme.rowHeight)
+
+    local row9d = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+    local tabSelectedEnabledCheck = GUIFrame:CreateCheckbox(row9d, "Custom Selected Tab Color", {
+        value = db.TabSelectedTextEnabled ~= false,
+        callback = function(checked)
+            db.TabSelectedTextEnabled = checked
+            ApplySettings()
+        end,
+    })
+    row9d:AddWidget(tabSelectedEnabledCheck, 0.5)
+    manager:Register(tabSelectedEnabledCheck, "all")
+
+    local tabSelectedColorPicker = GUIFrame:CreateColorPicker(row9d, "Selected Tab Color", {
+        color = { db.TabSelectedTextColor.r or 1, db.TabSelectedTextColor.g or 0, db.TabSelectedTextColor.b or 0.549, 1 },
+        callback = function(r, g, b)
+            db.TabSelectedTextColor.r, db.TabSelectedTextColor.g, db.TabSelectedTextColor.b = r, g, b
+            ApplySettings()
+        end,
+    })
+    row9d:AddWidget(tabSelectedColorPicker, 0.5)
+    manager:Register(tabSelectedColorPicker, "all")
     card9:AddRow(row9d, Theme.rowHeightLast, 0)
 
     yOffset = card9:GetNextOffset()
@@ -758,6 +785,8 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             callback = function(val) linksDb.IconWidth = val end,
         }), 0.5)
         card11:AddRow(row11b, Theme.rowHeight)
+
+        AddSeparatorRow(card11)
 
         local row11c = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
         row11c:AddWidget(GUIFrame:CreateCheckbox(row11c, "Clickable Web Addresses", {

@@ -357,11 +357,7 @@ local function BuildURLPopup()
     urlPopup:SetFrameLevel(500)
     urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_MIN_HEIGHT)
     urlPopup:EnableMouse(true)
-    urlPopup:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    KE.Skins.OwnBackdrop(urlPopup)
     urlPopup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
     -- The border color is set per show, not here: the theme accent it takes can
     -- change without a reload.
@@ -377,11 +373,7 @@ local function BuildURLPopup()
     -- hint above it read as one block of text on a flat panel.
     local field = CreateFrame("Frame", nil, urlPopup, "BackdropTemplate")
     field:SetPoint("TOP", hint, "BOTTOM", 0, -POPUP_HINT_GAP)
-    field:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    KE.Skins.OwnBackdrop(field)
     field:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
     field:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     urlPopup.field = field
