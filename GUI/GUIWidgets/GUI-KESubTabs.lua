@@ -231,3 +231,8 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
 
     return strip, yOffset + tabHeight + T.paddingSmall
 end
+
+GUIFrame.HEALER_VIEW_TABS = {
+    { id = "DEFAULT", label = "Default" },
+    { id = "HEALER",  label = "Healer" },
+}

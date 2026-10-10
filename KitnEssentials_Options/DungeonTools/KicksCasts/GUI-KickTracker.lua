@@ -129,10 +129,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     -- A switch moves the preview and the Edit Mode overlay to that view's
     -- position while it applies; the strip rebuilds the page itself.
     local _, viewOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
-        tabs = {
-            { id = "DEFAULT", label = "Default" },
-            { id = "HEALER",  label = "Healer" },
-        },
+        tabs = GUIFrame.HEALER_VIEW_TABS,
         activeId = isHealerView and "HEALER" or "DEFAULT",
         onSwitch = function(key)
             if not KT then return end
