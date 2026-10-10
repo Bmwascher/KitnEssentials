@@ -1,5 +1,43 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.3
+
+### Combat Texts
+
+- **NEW:** Attach to Combat Texts for Hunter's Mark Tracking, Havoc
+  Tracker, Combat Potion Ready and Missing Forms, off by default. Attached,
+  it joins the Combat Texts stack and moves with it, and its Position card
+  and Edit Mode mover hide
+- Attached Hunter's Mark, Havoc and Potion Ready text uses the Combat Texts
+  font and outline in its own color. Missing Forms keeps its own icon size
+  and caption font, with the caption above the icon
+- The stack has a fixed order, top to bottom: the Combat Texts lines, Pet
+  Status, Potion Ready, Missing Forms, No Movement Alert, Hunter's Mark and
+  Havoc. A hidden entry leaves no gap
+- **NEW:** Override Text Size, off by default, for attached Pet Status, No
+  Movement Alert, Hunter's Mark, Havoc and Potion Ready. On, a Text Size
+  slider sets that text's own size
+
+### No Movement Alert
+
+- Attached to Combat Texts, it moves out of the way as soon as a Combat
+  Texts line appears or disappears, or Combat Texts changes its font or
+  spacing. Turning Combat Texts off or on moves it to its own spot and back
+  at once
+
+### Havoc Tracker
+
+- Changing the font, size, outline or color now asks for a /reload when
+  you close the settings window. While attached, so do the attach toggle,
+  the size override and the Combat Texts Font card
+
+### Pet Status
+
+- On a class with no pet, the settings preview follows Attach to Combat
+  Texts and Combat Texts being turned on or off
+
+---
+
 ## v4.10.2
 
 ### Dark Theme
