@@ -418,6 +418,23 @@ describe("dot tracker rules", function()
             end
         end)
 
+        it("owes a build retry only while a shown cell has a refused build", function()
+            -- failed flags by cell, shown, expected
+            local cases = {
+                { { false, false }, 2, false },
+                { { false, true }, 2, true },
+                { { false, true }, 1, false },
+                { { true }, 0, false },
+            }
+            for i, case in ipairs(cases) do
+                local cells = {}
+                for c, failed in ipairs(case[1]) do
+                    cells[c] = { sensors = {}, failed = failed and "refused" or nil }
+                end
+                assert.equals(case[3], Rules.BuildRetryOwed(cells, case[2]), "case " .. i)
+            end
+        end)
+
         it("builds 8 enemies ahead, then 4 past the highest slot taken, never past the cap", function()
             local cases = { { 20, 0, 8 }, { 20, 6, 10 }, { 20, 18, 20 }, { 5, 0, 5 }, { 40, 30, 34 } }
             for i, case in ipairs(cases) do

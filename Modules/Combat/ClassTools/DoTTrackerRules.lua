@@ -440,6 +440,15 @@ function Rules.UsableCap(maxEnemies, cells, shown)
     return cap
 end
 
+-- A refused sensor build stops its cell growing, and that cell caps every
+-- DoT's count; a retry is owed only while a shown cell has one.
+function Rules.BuildRetryOwed(cells, shown)
+    for i = 1, shown do
+        if cells[i].failed ~= nil then return true end
+    end
+    return false
+end
+
 function Rules.BuildTarget(maxEnemies, highestTaken)
     return math_min(maxEnemies, math_max(Rules.BUILD_BASE, highestTaken + Rules.BUILD_AHEAD))
 end
