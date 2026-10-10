@@ -666,8 +666,8 @@ local function guessBefore(a, b, now)
     return partyIndex(a) < partyIndex(b)
 end
 
--- A synced teammate's messages drive their row (KT.RowTakesKick), so a guess
--- never lands there.
+-- While a synced teammate's messages can arrive, they drive the row
+-- (KT.RowTakesKick), so a guess never lands there.
 function KT.GuessKicker(members, cands, allowBusy, now, heard)
     local best, bestMember
     for guid, member in pairs(members) do

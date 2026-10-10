@@ -91,7 +91,7 @@ local CLASS_FALLBACK_INTERRUPTS = {
     WARRIOR     = { id = 6552,   cd = 15, allRoles = true },
 }
 
-local OWN_INTERRUPT_FIRST_WINDOW = 0.4  -- an own cast this soon after a hidden interrupt is its kick
+local OWN_INTERRUPT_FIRST_WINDOW = 0.4  -- an own cast this soon after a hidden interrupt can claim it
 local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
 local HELLO_REPLY_JITTER = 0.6
@@ -514,9 +514,9 @@ end
 -- Every accepted interrupt joins recentKicks, where a KICK message or the
 -- player's cast can claim it. Every one but a readable outsider's also joins
 -- the pairing queue, where it waits for or uses up the meter report its kick
--- causes (KT.PairKicks). A paired interrupt the game hid goes on the row the
--- meter names, else on the likeliest teammate's row (KT.GuessTarget), else
--- nowhere.
+-- causes (KT.PairKicks). A hidden kicker's interrupt still unclaimed when it
+-- pairs goes where KT:ChargeInterrupt puts it: the row the meter names, a
+-- guessed row, or no row.
 
 -- Display-only values of a kicked cast; each may be secret.
 local function InterruptedSpellIcon(spellID)
@@ -539,8 +539,9 @@ end
 
 -- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
 -- truth that someone's kick landed. The player's own goes on the own row; an
--- open KICK claim takes the next one; a teammate the game names plainly takes
--- it on their row at once; a hidden kicker's waits for its meter report.
+-- open KICK claim takes the next one; a teammate the game names plainly is
+-- charged at once unless their messages drive their row; a hidden kicker's
+-- waits for its meter report.
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     -- The payload may be secret while unit spellcasts are restricted; a
@@ -682,8 +683,8 @@ function KT:ChargeKick(entry, guid)
 end
 
 -- A hidden kicker's interrupt and its meter report, paired: the member the
--- report names takes it, else the likeliest teammate (a guess a claim can
--- hand back), else nobody.
+-- report names takes it (a synced teammate through their own KICK), else the
+-- likeliest teammate (a guess a claim can hand back), else nobody.
 function KT:ChargeInterrupt(entry, hit)
     local owner = hit.owner
     if owner then
@@ -794,7 +795,8 @@ function KT:RedrawKicked(guid)
     if member and (member.kicked or (bar and bar.kickedShown)) then self:RefreshMemberRow(guid) end
 end
 
--- Every wipe of the interrupt lists comes here, so they always go together.
+-- Clears the interrupt lists together, so none keeps entries the others
+-- dropped.
 function KT:ClearKickQueues()
     wipe(self.recentKicks)
     wipe(self.pendingKicks)
@@ -823,7 +825,7 @@ function KT:PruneKicks(now)
     while list[1] and now - list[1].startTime > KICK_PAIR_WINDOW do table.remove(list, 1) end
 end
 
--- One reused list, so a KICK message allocates nothing.
+-- One reused list, so a KICK message never allocates a new one.
 function KT:ClaimableKicks()
     local list = wipe(self._claimable)
     for _, entry in ipairs(self.recentKicks) do
@@ -1222,9 +1224,9 @@ function KT:OnChannelStop(_, unit, _, spellID, interruptedBy)
 end
 
 -- The player's kick claims the interrupt it causes when the game hides the
--- kicker. The interrupt can arrive first: it is then the player's, its kicked
--- spell goes onto the own row, and a guess it made is handed back. Returns
--- that interrupt's time.
+-- kicker. The interrupt can arrive first: KT.OwnInterruptIndex finds it, its
+-- kicked spell goes onto the own row, and KT:ClaimKick holds it or hands back
+-- its guess. Returns that interrupt's time, or nil.
 function KT:ClaimOwnKick(now, member)
     -- This cast's readable interrupt already arrived: nothing left to claim,
     -- and its kicked spell is this cast's.
