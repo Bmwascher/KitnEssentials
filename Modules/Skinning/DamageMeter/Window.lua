@@ -1045,6 +1045,17 @@ function DM:HeaderIconLeave(W)
     self:SetHeaderIconAlpha(W, 0)
 end
 
+-- Dock splitters overlap the header strips and take mouse focus, so leaving a
+-- header through one runs HeaderIconLeave while the cursor is still over the
+-- strip, and no later leave of ours follows. The splitter's OnLeave calls this to
+-- re-run that check for every window.
+function DM:RecheckHeaderIcons()
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        self:HeaderIconLeave(W)
+    end
+end
+
 -- Tear down the header-bar hover wiring and release its mouse capture (so it stops
 -- intercepting clicks once mouseover-reveal is off / the icons are hidden entirely).
 -- Mirrors the old W.frame teardown the reveal used before it moved to W.headerBar.
