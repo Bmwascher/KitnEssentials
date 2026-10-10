@@ -876,6 +876,7 @@ local Defaults = {
             Enabled = false,
             OnlyInCombat = true,
             OnlyEnemiesInCombat = true,
+            OnlyEnemiesFightingGroup = true,
             MaxEnemies = 20,
             IconSize = 40,
             Spacing = 1,
@@ -890,6 +891,8 @@ local Defaults = {
             FontOutline = "OUTLINE",
             SomeColor = { 1, 1, 1, 1 },
             AllColor = { 0.35, 1, 0.35, 1 },
+            DoTColors = true,
+            FullCoverageColor = true,
             TimerEnabled = false,
             TimerFontSize = 18,
             TimerColor = { 1, 1, 1, 1 },
@@ -906,8 +909,9 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(-217, -4),
-            -- Overrides and added DoTs, keyed "specID:spellID". The shipped list
-            -- lives in code, so an untouched profile stores nothing here.
+            -- On/off and color overrides and added DoTs, keyed "specID:spellID".
+            -- The shipped list lives in code, so an untouched profile stores
+            -- nothing here.
             Spells = {},
         },
 
