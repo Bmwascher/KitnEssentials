@@ -28,6 +28,10 @@ local ipairs = ipairs
 -- Constants
 ---------------------------------------------------------------------------------
 
+-- Added to the card's usual row gap, so each row's labels clear the controls
+-- of the row above.
+local EXTRA_ROW_GAP = 2
+
 -- In screen order; the dropdown keeps an ordered list's order.
 local ANCHOR_POINT_OPTIONS = {
     { key = "TOPLEFT",     text = "Top Left" },
@@ -418,7 +422,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
         row:SetParent(card.content)
         row:SetPoint("TOPLEFT", card.content, "TOPLEFT", 0, -card.currentY)
         row:SetPoint("TOPRIGHT", card.content, "TOPRIGHT", 0, -card.currentY)
-        card.currentY = card.currentY + height + T.paddingSmall
+        card.currentY = card.currentY + height + T.paddingSmall + EXTRA_ROW_GAP
     end
 
     card.currentY = 0
