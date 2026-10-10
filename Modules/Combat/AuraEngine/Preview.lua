@@ -207,14 +207,28 @@ local function PopulateDispelBadge(frame, dispelType)
     end
 end
 
-local function PopulateEntryContent(frame, entry, now, decimalThreshold)
+-- The live button's Swipe rule (Style.RegisterRegions). Swipe on shows the
+-- cooldown again, since a pooled frame may come from a Swipe-off build; off
+-- clears and hides it, and nothing below arms it.
+local function ApplyPreviewSwipe(frame, swipe)
+    local cooldown = frame.keCooldown
+    if not cooldown then return end
+    if swipe then
+        cooldown:Show()
+    else
+        cooldown:Clear()
+        cooldown:Hide()
+    end
+end
+
+local function PopulateEntryContent(frame, entry, now, decimalThreshold, swipe)
     if frame.keIcon then
         frame.keIcon:SetTexture(entry.icon)
     end
     if frame.keCount then
         frame.keCount:SetText((entry.count and entry.count > 0) and tostring(entry.count) or "")
     end
-    if frame.keCooldown then
+    if swipe and frame.keCooldown then
         frame.keCooldown:SetCooldown(entry.expirationTime - entry.duration, entry.duration)
     end
     UpdateEntryTimer(frame, entry, now, decimalThreshold)
@@ -252,7 +266,7 @@ local function TickPreview(state)
         local entry, frame = item.entry, item.frame
         if now >= entry.expirationTime then
             entry.expirationTime = now + entry.duration
-            if frame.keCooldown then
+            if state.swipe and frame.keCooldown then
                 frame.keCooldown:SetCooldown(now, entry.duration)
             end
         end
@@ -268,6 +282,7 @@ local function BuildFrames(state, handle, display, settings)
     TeardownFrames(state)
 
     state.decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
+    state.swipe = settings.Swipe ~= false
 
     local groupsByKey = GroupsByKey(display)
     local total   = KE.AuraContainer.TotalLimit(display, settings)
@@ -295,9 +310,10 @@ local function BuildFrames(state, handle, display, settings)
             KE.AuraGlow.Apply(frame, settings, group.capabilities)
             RepaintDispelRing(frame, group, settings, entry.dispelType)
             PopulateDispelBadge(frame, entry.dispelType)
+            ApplyPreviewSwipe(frame, state.swipe)
 
             PositionEntryFrame(frame, i, display, settings)
-            PopulateEntryContent(frame, entry, now, state.decimalThreshold)
+            PopulateEntryContent(frame, entry, now, state.decimalThreshold, state.swipe)
 
             state.entries[#state.entries + 1] = { entry = entry, frame = frame }
         end

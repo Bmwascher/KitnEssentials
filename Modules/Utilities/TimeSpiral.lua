@@ -16,7 +16,6 @@ local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
-local UnitHasVehicleUI = UnitHasVehicleUI
 local ipairs = ipairs
 
 ---------------------------------------------------------------------------------
@@ -218,10 +217,6 @@ function TSP:OnEnable()
     else
         KE.AuraEngine.RegisterEvents(self.display)
     end
-
-    -- The engine sets this flag only from vehicle and world events, which a
-    -- disabled module does not receive.
-    self.display.vehicleDisabled = UnitHasVehicleUI("player") or false
 
     KE.AuraEngine.ApplySettings(self.display)
 
