@@ -72,13 +72,6 @@ local function FirstFree(self)
     return slot
 end
 
-local function Take(self, slot, unit)
-    self.unitOf[slot] = unit
-    self.slotOf[unit] = slot
-    self.total = self.total + 1
-    if self.onTake then self.onTake(slot, unit) end
-end
-
 local function Release(self, slot)
     local unit = self.unitOf[slot]
     if not unit then return false end
@@ -87,6 +80,15 @@ local function Release(self, slot)
     self.total = self.total - 1
     if self.onRelease then self.onRelease(slot, unit) end
     return true
+end
+
+-- An onTake that answers false could not bind the plate: the slot goes back at
+-- once, to the next plate in this scan, and the plate is tried on the next one.
+local function Take(self, slot, unit)
+    self.unitOf[slot] = unit
+    self.slotOf[unit] = slot
+    self.total = self.total + 1
+    if self.onTake and self.onTake(slot, unit) == false then Release(self, slot) end
 end
 
 local function ScanDone(self)
