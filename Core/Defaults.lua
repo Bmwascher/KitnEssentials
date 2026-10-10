@@ -312,6 +312,7 @@ local Defaults = {
             PassiveColor = { 1, 0, 0.549, 1 },        -- #FF008C
             WrongColor = { 1, 0.4, 0, 1 },            -- #FF6600
             AttachToCombatTexts = false,
+            AttachOwnFontSize = false,
         },
 
         RaidNotifications = {
@@ -348,6 +349,7 @@ local Defaults = {
             Spacing = 2,
             Scale = 1,
             AttachToCombatTexts = false,
+            AttachOwnFontSize = false,
 
             -- THEME paints all three parts with the addon accent instead.
             ColorMode = "CUSTOM",
@@ -832,6 +834,8 @@ local Defaults = {
             ["258Enabled"] = true,
             ["1473Enabled"] = true,
 
+            AttachToCombatTexts = false,
+
             Strata = "HIGH",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
@@ -847,6 +851,8 @@ local Defaults = {
             FontSize = 16,
             FontOutline = "OUTLINE",
             Color = { 1, 0.82, 0, 1 },
+            AttachToCombatTexts = false,
+            AttachOwnFontSize = false,
         },
 
         HavocTracker = {
@@ -859,6 +865,8 @@ local Defaults = {
             WarningText = "Havoc Target",
             WarningColor = { 1, 0.1, 0.1, 1 },
             WarningFontSize = 24,
+            AttachToCombatTexts = false,
+            AttachOwnFontSize = false,
             -- The keys here are AnchorFrom/AnchorTo/XOffset/YOffset. Any other
             -- spelling falls back to CENTER/CENTER/0/0 without an error.
             WarningPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 180 },
@@ -927,6 +935,8 @@ local Defaults = {
             DisableOnHealer = false,
             Text = "Potion Ready",
             FontSize = 20,
+            AttachToCombatTexts = false,
+            AttachOwnFontSize = false,
             FontOutline = "OUTLINE",
             ColorMode = "theme",
             Color = { 0, 1, 0, 1 },

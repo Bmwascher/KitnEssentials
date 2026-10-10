@@ -70,6 +70,22 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     if db.Enabled ~= true then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
+
+    local attached = db.AttachToCombatTexts == true
+    local attachRow = GUIFrame:CreateRow(card1.content, 40)
+    local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
+        value = attached,
+        tooltip = "Show the icon and its caption in the Combat Texts stack and move with it, "
+            .. "instead of using a separate anchor.",
+        callback = function(checked)
+            db.AttachToCombatTexts = checked
+            ApplySettings()
+            GUIFrame:RefreshContent()
+        end,
+    })
+    attachRow:AddWidget(attachCheck, 1)
+    table_insert(allWidgets, attachCheck)
+    card1:AddRow(attachRow, 40)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ------------------------------------------------------------------
@@ -263,25 +279,27 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     end
 
     ------------------------------------------------------------------
-    -- Position
+    -- Position -- Combat Texts owns the anchor while attached.
     ------------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    table_insert(subCards, posCard)
-    yOffset = posOffset
+    if not attached then
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
+        table_insert(subCards, posCard)
+        yOffset = posOffset
+    end
 
     UpdateAllWidgetStates()
     return yOffset

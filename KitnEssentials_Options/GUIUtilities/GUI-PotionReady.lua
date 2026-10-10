@@ -65,6 +65,32 @@ GUIFrame:RegisterContent("PotionReady", function(scrollChild, yOffset)
 
     card1:AddLabel("Shows a Potion Ready text while a combat potion is in your bags and off cooldown. " ..
         "Can be limited to instances or to combat, and hidden on a healing spec.")
+
+    local attached = db.AttachToCombatTexts == true
+    local attachRow = GUIFrame:CreateRow(card1.content, attached and Theme.rowHeight or Theme.rowHeightLast)
+    local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
+        value = attached,
+        tooltip = "Show the text as a row of the Combat Texts messages and move with them, "
+            .. "instead of using a separate anchor.",
+        callback = function(checked)
+            db.AttachToCombatTexts = checked
+            ApplySettings()
+            GUIFrame:RefreshContent()
+        end,
+    })
+    attachRow:AddWidget(attachCheck, 1)
+    manager:Register(attachCheck, "all")
+    if attached then
+        card1:AddRow(attachRow, Theme.rowHeight)
+        for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
+            sizeKey = "FontSize", default = 20, range = { 8, 72 },
+            onChange = ApplySettings, isLast = true,
+        })) do
+            manager:Register(widget, "all")
+        end
+    else
+        card1:AddRow(attachRow, Theme.rowHeightLast, 0)
+    end
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -107,48 +133,51 @@ GUIFrame:RegisterContent("PotionReady", function(scrollChild, yOffset)
 
     yOffset = card2:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
+    -- Combat Texts owns the anchor and the font while attached.
+    if not attached then
+        ----------------------------------------------------------------
+        -- Card 3: Position Settings
+        ----------------------------------------------------------------
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
 
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+        if posCard.positionWidgets then
+            manager:RegisterGroup(posCard.positionWidgets, "all")
+        end
+        manager:Register(posCard, "all")
+        yOffset = posOffset
 
-    ----------------------------------------------------------------
-    -- Card 4: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+        ----------------------------------------------------------------
+        -- Card 4: Font Settings
+        ----------------------------------------------------------------
+        local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                fontFace = "FontFace",
+                fontSize = "FontSize",
+                fontOutline = "FontOutline",
+            },
+            onChangeCallback = ApplySettings,
+        })
+        manager:Register(fontCard, "all")
+        if fontWidgets then
+            manager:RegisterGroup(fontWidgets, "all")
+        end
+        yOffset = fontOffset
     end
-    yOffset = fontOffset
 
     ----------------------------------------------------------------
     -- Card 5: Colors

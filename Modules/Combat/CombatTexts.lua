@@ -61,6 +61,19 @@ local EXTERNAL_LINE_TYPES = {
 local IS_EXTERNAL_LINE = {}
 for _, key in ipairs(EXTERNAL_LINE_TYPES) do IS_EXTERNAL_LINE[key] = true end
 
+-- Frames other modules attach below the lines, top to bottom. Havoc stays
+-- last: the game draws its text and will not say whether it is shown, so
+-- nothing may sit below it.
+local ATTACHED_FRAME_TYPES = {
+    "potionReady",
+    "stanceText",
+    "noMovement",
+    "huntersMark",
+    "havoc",
+}
+local IS_ATTACHED_FRAME = {}
+for _, key in ipairs(ATTACHED_FRAME_TYPES) do IS_ATTACHED_FRAME[key] = true end
+
 CM.container = nil
 CM.messageFrames = {}
 CM.activeMessages = {}
@@ -81,8 +94,26 @@ CM.aggroEventFrame = nil
 CM.aggroEventsRegistered = false
 CM.aggroSoundBlocked = false
 CM.aggroPulse = nil
--- Sent on enable and disable, so an external line's owner can move its text
--- between its own frame and this stack.
+CM.attachedFrames = {}
+CM.attachedInsets = {}
+CM.arrangedShown = {}
+CM.arrangedHeight = {}
+-- Per attached key: the KE spacer the frame hangs under, whether the frame is
+-- seated on it, and the offset last applied.
+CM.attachSpacers = {}
+-- A zero-height region has no usable bottom edge, so a spacer is always this
+-- much taller than its offset and the frame hangs this far above its bottom.
+CM.SPACER_LIFT = 1
+CM.attachSeated = {}
+CM.attachTop = {}
+-- Per line: the last readable shown state and height, and the top it was
+-- last placed at.
+CM.lineShown = {}
+CM.lineHeight = {}
+CM.lineTop = {}
+-- Sent on enable and disable, and from ApplySettings once the container
+-- exists, so an attached module can move between its own anchor and this
+-- stack and pick up the font.
 CM.CHANGED_MESSAGE = "KitnEssentials_CombatTextsChanged"
 
 ---------------------------------------------------------------------------------
@@ -196,25 +227,92 @@ end
 ---------------------------------------------------------------------------------
 -- Layout
 ---------------------------------------------------------------------------------
+-- In combat the game can refuse a layout write. The engine's Havoc aura button
+-- hangs on an attached frame, so the container is asked as well as the frame.
+local function CanMove(self, frame)
+    return KE:CanReanchorNow(frame) and KE:CanReanchorNow(self.container)
+end
+
+-- A secret read returns the last recorded answer; arithmetic on it would error.
+local function ReadShownHeight(frame, shownCache, heightCache, key)
+    local shown, height = frame:IsShown(), frame:GetHeight()
+    if KE:IsSecretValue(shown) or KE:IsSecretValue(height) then
+        return shownCache[key], heightCache[key]
+    end
+    shownCache[key], heightCache[key] = shown, height
+    return shown, height
+end
+
+-- A refused move leaves a line where it was; what follows starts below both
+-- its old and its new place.
 local function StackFrames(self, types, yOffset, spacing)
     for _, msgType in ipairs(types) do
         local frame = self.messageFrames[msgType]
-        if frame and frame:IsShown() then
-            frame:ClearAllPoints()
-            frame:SetPoint("TOP", self.container, "TOP", 0, -yOffset)
-            yOffset = yOffset + frame:GetHeight() + spacing
+        if frame then
+            local shown, height = ReadShownHeight(frame, self.lineShown, self.lineHeight, msgType)
+            if shown and height then
+                local top = self.lineTop[msgType]
+                if top ~= yOffset and CanMove(self, frame) then
+                    frame:ClearAllPoints()
+                    frame:SetPoint("TOP", self.container, "TOP", 0, -yOffset)
+                    top = yOffset
+                    self.lineTop[msgType] = top
+                end
+                yOffset = math_max(yOffset, top or yOffset) + height + spacing
+            end
         end
     end
     return yOffset
 end
 
+-- Seated once, by SetPoint, under a KE spacer anchored to the container top.
+-- Later moves only resize the spacer, so no arrange re-anchors a frame the
+-- engine's aura button hangs on.
+local function SeatAttached(self, key, frame)
+    if self.attachSeated[key] then return true end
+    local spacer = self.attachSpacers[key]
+    if not CanMove(self, frame) or (spacer and not CanMove(self, spacer)) then return false end
+    if not spacer then
+        spacer = CreateFrame("Frame", nil, self.container)
+        spacer:SetSize(1, self.SPACER_LIFT)
+        spacer:SetPoint("TOP", self.container, "TOP", 0, 0)
+        self.attachSpacers[key] = spacer
+    end
+    frame:ClearAllPoints()
+    frame:SetPoint("TOP", spacer, "BOTTOM", 0, self.SPACER_LIFT)
+    self.attachSeated[key] = true
+    self.attachTop[key] = nil
+    return true
+end
+
 function CM:ArrangeMessages()
+    if not self.container then return end
     local spacing = self.db.Spacing or 4
     local yOffset = StackFrames(self, MESSAGE_TYPES, 0, spacing)
     yOffset = StackFrames(self, EXTERNAL_LINE_TYPES, yOffset, spacing)
 
-    if self.container then
+    -- Lines only: the container can be anchored at its center, so counting
+    -- attached frames would move the lines every time one shows.
+    if KE:CanReanchorNow(self.container) then
         self.container:SetHeight(math_max(30, yOffset - spacing))
+    end
+
+    for _, key in ipairs(ATTACHED_FRAME_TYPES) do
+        local frame = self.attachedFrames[key]
+        if frame then
+            local shown, height = ReadShownHeight(frame, self.arrangedShown, self.arrangedHeight, key)
+            if shown and height then
+                local top = yOffset + (self.attachedInsets[key] or 0)
+                local placed = self.attachTop[key]
+                if placed ~= top and SeatAttached(self, key, frame)
+                    and CanMove(self, self.attachSpacers[key]) then
+                    self.attachSpacers[key]:SetHeight(top + self.SPACER_LIFT)
+                    placed = top
+                    self.attachTop[key] = top
+                end
+                yOffset = math_max(top, placed or top) + height + spacing
+            end
+        end
     end
 end
 
@@ -353,16 +451,37 @@ end
 ---------------------------------------------------------------------------------
 -- External Lines
 ---------------------------------------------------------------------------------
+function CM.AttachWanted(toggleOn, moduleEnabled, dbEnabled, hasContainer)
+    return toggleOn == true and moduleEnabled == true and dbEnabled == true
+        and hasContainer == true
+end
+
+function CM.ResolveAttachedSize(attached, overrideOn, ownSize, ctSize)
+    if attached and not overrideOn and ctSize ~= nil then return ctSize end
+    return ownSize
+end
+
+function CM:AcceptsAttach(toggleOn)
+    return CM.AttachWanted(toggleOn, self:IsEnabled(),
+        self.db ~= nil and self.db.Enabled ~= false, self.container ~= nil)
+end
+
 function CM:AcceptsExternalLines()
-    return self:IsEnabled() and self.db ~= nil and self.db.Enabled ~= false
-        and self.container ~= nil
+    return self:AcceptsAttach(true)
 end
 
 -- Not refused during the preview: the line belongs to its owner, and the
--- preview never repaints or hides it.
-function CM:ShowExternalLine(key, text, r, g, b, a)
+-- preview never repaints or hides it. size is the owner's own text size, or
+-- nil for the Combat Texts size.
+function CM:ShowExternalLine(key, text, r, g, b, a, size)
     if not IS_EXTERNAL_LINE[key] or not self:AcceptsExternalLines() then return false end
     local frame = self:GetMessageFrame(key)
+    if frame.sizeOverride ~= size then
+        frame.sizeOverride = size
+        local lineSize = size or self.db.FontSize or 16
+        KE:ApplyFontToText(frame.text, self.db.FontFace, lineSize, self.db.FontOutline)
+        frame:SetHeight(lineSize + 2)
+    end
     frame.text:SetText(text)
     frame.text:SetTextColor(r or 1, g or 1, b or 1, a or 1)
     frame:SetAlpha(1)
@@ -374,9 +493,62 @@ end
 function CM:HideExternalLine(key)
     if not IS_EXTERNAL_LINE[key] then return end
     local frame = self.messageFrames[key]
-    if not (frame and frame:IsShown()) then return end
+    if not frame then return end
+    local shown = frame:IsShown()
+    if not KE:IsSecretValue(shown) and not shown then return end
     frame:Hide()
     self:ArrangeMessages()
+end
+
+-- A nil frame detaches, which is never refused. topInset is room kept above
+-- the frame for something drawn outside its bounds.
+function CM:SetAttachedFrame(key, frame, topInset)
+    if not IS_ATTACHED_FRAME[key] then return false end
+    if frame == nil then
+        if self.attachedFrames[key] == nil then return false end
+        self.attachedFrames[key] = nil
+        self.attachedInsets[key] = nil
+        self.arrangedShown[key] = nil
+        self.arrangedHeight[key] = nil
+        self.attachSeated[key] = nil
+        self.attachTop[key] = nil
+        if self.container then self:ArrangeMessages() end
+        return false
+    end
+    if not self:AcceptsAttach(true) then return false end
+    -- A different frame for the same slot is seated afresh.
+    if self.attachedFrames[key] ~= frame then
+        self.attachSeated[key] = nil
+        self.attachTop[key] = nil
+    end
+    self.attachedFrames[key] = frame
+    self.attachedInsets[key] = topInset or 0
+    self:ArrangeMessages()
+    return true
+end
+
+-- Owners call this after every show, hide or resize; it re-arranges only when
+-- the frame's shown state or height moved since the last arrange.
+function CM:AttachedFrameChanged(key)
+    local frame = self.attachedFrames[key]
+    if not frame then return end
+    local shown, height = frame:IsShown(), frame:GetHeight()
+    if KE:IsSecretValue(shown) or KE:IsSecretValue(height) then return end
+    if shown == self.arrangedShown[key] and height == self.arrangedHeight[key] then return end
+    self:ArrangeMessages()
+end
+
+-- One subscription rule for every attacher: CHANGED_MESSAGE runs its
+-- ApplySettings only while it is active and its attach toggle is on.
+function CM:SyncAttachSubscription(owner, active)
+    local wanted = active and owner.db ~= nil and owner.db.AttachToCombatTexts == true
+    if wanted and not owner.attachMessage then
+        owner:RegisterMessage(self.CHANGED_MESSAGE, "ApplySettings")
+        owner.attachMessage = self.CHANGED_MESSAGE
+    elseif not wanted and owner.attachMessage then
+        owner:UnregisterMessage(owner.attachMessage)
+        owner.attachMessage = nil
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -590,7 +762,7 @@ function CM:ApplySettings()
     -- Update font settings and frame height for all message frames
     local fontSize = self.db.FontSize or 16
     for _, frame in pairs(self.messageFrames) do
-        frame:SetHeight(fontSize + 2)
+        frame:SetHeight((frame.sizeOverride or fontSize) + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
                 frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
@@ -603,7 +775,8 @@ function CM:ApplySettings()
                     KE:GetFontOutline(self.db.FontOutline))
                 frame.interruptName:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
             else
-                KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+                KE:ApplyFontToText(frame.text, self.db.FontFace,
+                    frame.sizeOverride or self.db.FontSize, self.db.FontOutline)
             end
         end
     end
@@ -633,7 +806,9 @@ function CM:ApplySettings()
     else
         self:CheckNoTarget()
         self:CheckAggro()
+        self:ArrangeMessages()
     end
+    self:SendMessage(self.CHANGED_MESSAGE)
 end
 
 function CM:ApplyPosition()
@@ -710,15 +885,17 @@ function CM:HidePreview()
         if frame then frame:Hide() end
         self.activeMessages[msgType] = nil
     end
-    -- Re-arranged only while such a line is still shown: the arrange shrinks
-    -- the container, which moves anything anchored to its top.
+    -- Re-arranged only while an external line is shown or a frame is attached:
+    -- the arrange shrinks the container, which moves anything anchored to its top.
+    local rearrange = next(self.attachedFrames) ~= nil
     for _, key in ipairs(EXTERNAL_LINE_TYPES) do
         local frame = self.messageFrames[key]
-        if frame and frame:IsShown() then
-            self:ArrangeMessages()
-            break
+        if frame then
+            local shown = frame:IsShown()
+            if KE:IsSecretValue(shown) or shown then rearrange = true end
         end
     end
+    if rearrange then self:ArrangeMessages() end
 
     SetAggroPulse(self.messageFrames.aggro, false)
 
@@ -1018,5 +1195,13 @@ function CM:OnDisable()
     self:UpdateInterruptEventRegistration(true)
     self.interruptAnnounceSpells = nil
     self:UnregisterAllEvents()
+    for _, key in ipairs(ATTACHED_FRAME_TYPES) do
+        self.attachedFrames[key] = nil
+        self.attachedInsets[key] = nil
+        self.arrangedShown[key] = nil
+        self.arrangedHeight[key] = nil
+        self.attachSeated[key] = nil
+        self.attachTop[key] = nil
+    end
     self:SendMessage(self.CHANGED_MESSAGE)
 end

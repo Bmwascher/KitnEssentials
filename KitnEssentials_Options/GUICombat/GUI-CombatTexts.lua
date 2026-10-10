@@ -12,6 +12,39 @@ local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
 local pairs = pairs
 
+-- The size override row every attacher's page shows while attached. Off, the
+-- attached text takes the Combat Texts size; on, the slider writes the
+-- module's own size key. Returns the widgets for the page's state manager.
+function GUIFrame:CreateAttachSizeRow(card, db, opts)
+    local overrideOn = db.AttachOwnFontSize == true
+    local row = self:CreateRow(card.content, 44)
+    local check = self:CreateCheckbox(row, "Override Text Size", {
+        value = overrideOn,
+        tooltip = "Use this module's own text size instead of the Combat Texts size.",
+        callback = function(checked)
+            db.AttachOwnFontSize = checked
+            opts.onChange()
+            self:RefreshContent()
+        end,
+    })
+    row:AddWidget(check, overrideOn and 0.5 or 1)
+    local widgets = { check }
+    if overrideOn then
+        local slider = self:CreateSlider(row, "Text Size", {
+            min = opts.range[1], max = opts.range[2], step = 1,
+            value = db[opts.sizeKey] or opts.default,
+            callback = function(v)
+                db[opts.sizeKey] = v
+                opts.onChange()
+            end,
+        })
+        row:AddWidget(slider, 0.5)
+        widgets[2] = slider
+    end
+    if opts.isLast then card:AddRow(row, 44, 0) else card:AddRow(row, 44) end
+    return widgets
+end
+
 GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.CombatTexts
     if not db then
@@ -127,7 +160,15 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
             min = 0, max = 20, step = 1,
             default = 4,
         },
-        onChangeCallback = ApplySettings,
+        -- An attached Havoc warning takes this font, and the game builds it
+        -- once, so a change here reaches it only after a reload.
+        onChangeCallback = function()
+            local ht = KitnEssentials:GetModule("HavocTracker", true)
+            if ht and ht.container and ht.db and ht.db.AttachToCombatTexts then
+                KE:FlagReloadNeeded()
+            end
+            ApplySettings()
+        end,
     })
     manager:Register(fontCard, "all")
     if fontWidgets then
