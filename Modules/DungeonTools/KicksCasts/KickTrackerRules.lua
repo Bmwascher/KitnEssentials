@@ -268,18 +268,6 @@ function KT.HelloReplyMode(replyFlag)
 end
 
 ---------------------------------------------------------------------------------
--- Record marker
----------------------------------------------------------------------------------
--- A record is a kick no synced teammate claimed; a row cooling for an
--- unconfirmed interrupt (KT:ChargeKick) carries the same mark. The mark is
--- its own text after the name, so no string is built from a name that may
--- be secret.
-function KT.MarkerFor(isRecord, showName)
-    if isRecord and showName then return "*" end
-    return ""
-end
-
----------------------------------------------------------------------------------
 -- The player's own kick
 ---------------------------------------------------------------------------------
 -- The first candidate the player or the active demon knows.

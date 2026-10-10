@@ -467,9 +467,6 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
     if not member or not member.interruptData then return end
 
     local duration = durationOverride or member.interruptData.cd
-    -- Every main cooldown starts here; a confirmed one drops the "*".
-    local wasUnconfirmed = member.unconfirmed
-    member.unconfirmed = nil
     member.kickDuration = duration
     member.kickStart = GetTime() - (remaining and (duration - remaining) or 0)
     KT._chargeSerial = KT._chargeSerial + 1
@@ -491,7 +488,6 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
         if self.db.ShowTimer and bar.timerText then
             SetTimerText(bar, FormatRemaining(remaining or member.kickDuration))
         end
-        if wasUnconfirmed then self:UpdateBarVisuals(bar, member) end
     end
 
     self:LayoutBars()
@@ -1554,7 +1550,6 @@ function KT:CreateBar()
 
     barFrame.iconTex = iconFrame:CreateTexture(nil, "ARTWORK")
     barFrame.nameText = statusBar:CreateFontString(nil, "OVERLAY")
-    barFrame.markerText = statusBar:CreateFontString(nil, "OVERLAY")
     barFrame.timerText = statusBar:CreateFontString(nil, "OVERLAY")
     barFrame.raidMarkTex = statusBar:CreateTexture(nil, "OVERLAY")
     self:ApplyRegionDefaults(barFrame)
@@ -1575,11 +1570,6 @@ function KT:ApplyRegionDefaults(bar)
     bar.nameText:SetDrawLayer("OVERLAY")
     bar.nameText:SetJustifyH("LEFT")
 
-    bar.markerText:SetDrawLayer("OVERLAY")
-    bar.markerText:SetJustifyH("LEFT")
-    bar.markerText:ClearAllPoints()
-    bar.markerText:SetPoint("LEFT", bar.nameText, "RIGHT", 1, 0)
-
     bar.timerText:SetDrawLayer("OVERLAY")
     bar.timerText:SetJustifyH("RIGHT")
     bar.timerText:ClearAllPoints()
@@ -1587,7 +1577,7 @@ function KT:ApplyRegionDefaults(bar)
 
     bar.raidMarkTex:SetDrawLayer("OVERLAY")
     bar.raidMarkTex:ClearAllPoints()
-    bar.raidMarkTex:SetPoint("LEFT", bar.markerText, "RIGHT", 2, 0)
+    bar.raidMarkTex:SetPoint("LEFT", bar.nameText, "RIGHT", 3, 0)
     bar.raidMarkTex:SetTexture(RAID_MARK_SHEET)
     bar.raidMarkTex:Hide()
 end
@@ -1599,7 +1589,6 @@ end
 -- secret, and nothing reads it back.
 function KT:ResetBarRegions(bar)
     bar.nameText:SetToDefaults()
-    bar.markerText:SetToDefaults()
     bar.timerText:SetToDefaults()
     bar.iconTex:SetToDefaults()
     bar.raidMarkTex:SetToDefaults()
@@ -1611,17 +1600,11 @@ function KT:ResetBarRegions(bar)
     self:ApplyRegionDefaults(bar)
 end
 
--- The trailing "*" and the raid marker sit in the name's slot, so both
--- follow ShowName. The marker index may be secret: it is only handed to the
--- C-side sprite-sheet call, shown when that call succeeds.
-function KT:ApplyNameMarks(bar, isRecord, raidMark, hasRaidMark)
+-- The raid marker sits in the name's slot, so it follows ShowName. The
+-- marker index may be secret: it is only handed to the C-side sprite-sheet
+-- call, shown when that call succeeds.
+function KT:ApplyNameMarks(bar, raidMark, hasRaidMark)
     local db = self.db
-    local marker = KT.MarkerFor(isRecord, db.ShowName)
-    KE:ApplyFont(bar.markerText, db.FontFace, db.FontSize, db.FontOutline)
-    bar.markerText:SetTextColor(1, 1, 1, 1)
-    bar.markerText:SetText(marker)
-    bar.markerText:SetShown(marker ~= "")
-
     local markShown = false
     if hasRaidMark and db.ShowName then
         bar.raidMarkTex:SetSize(db.FontSize, db.FontSize)
@@ -1802,12 +1785,10 @@ function KT:UpdateBarVisuals(bar, member)
         end
     end
 
-    -- An unconfirmed cooldown carries a record's "*" while it drives the row.
-    local unconfirmed = member ~= nil and member.unconfirmed == true and not isReady and rowKick == nil
     if kicked then
-        self:ApplyNameMarks(bar, unconfirmed, kicked.mark, kicked.hasMark)
+        self:ApplyNameMarks(bar, kicked.mark, kicked.hasMark)
     else
-        self:ApplyNameMarks(bar, unconfirmed)
+        self:ApplyNameMarks(bar)
     end
 
     -- Timer text
