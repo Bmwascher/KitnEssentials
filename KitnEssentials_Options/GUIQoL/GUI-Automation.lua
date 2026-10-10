@@ -431,7 +431,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Quest Automation", yOffset)
     manager:Register(card1, "all")
-    card1:AddLabel("Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards always prompt.\n\nAuto Voidcores accepts and completes the weekly quest from Decimus for gold even when general auto-accept and turn-in are off; the Hold to Pause modifier still applies.")
+    card1:AddLabel("Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards always prompt.\n\nAuto Complete Voidcores accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off; the Hold to Pause modifier still applies.")
 
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local autoAcceptCheck = GUIFrame:CreateCheckbox(row1a, "Auto Accept Quests", {
@@ -450,23 +450,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     card1:AddRow(row1a, Theme.rowHeight)
 
     local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local autoVoidcoresCheck = GUIFrame:CreateCheckbox(row1b, "Auto Voidcores: Gold (Decimus)", {
-        value = db.AutoVoidcoresGold == true,
-        callback = function(checked) db.AutoVoidcoresGold = checked; ApplySettings() end,
-    })
-    row1b:AddWidget(autoVoidcoresCheck, 0.5)
-    manager:Register(autoVoidcoresCheck, "all")
-
-    local unwatchHiddenCheck = GUIFrame:CreateCheckbox(row1b, "Unwatch Hidden Quests on Login", {
-        value = db.AutoUnwatchHidden ~= false,
-        callback = function(checked) db.AutoUnwatchHidden = checked; ApplySettings() end,
-    })
-    row1b:AddWidget(unwatchHiddenCheck, 0.5)
-    manager:Register(unwatchHiddenCheck, "all")
-    card1:AddRow(row1b, Theme.rowHeight)
-
-    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local modDropdown = GUIFrame:CreateDropdown(row1c, "Hold to Pause Auto-Quest", {
+    local modDropdown = GUIFrame:CreateDropdown(row1b, "Hold to Pause Auto-Quest", {
         options = {
             { key = "SHIFT", text = "Shift" },
             { key = "CTRL",  text = "Ctrl" },
@@ -476,9 +460,44 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
         value = db.QuestModifier or "SHIFT",
         callback = function(val) db.QuestModifier = val end,
     })
-    row1c:AddWidget(modDropdown, 1)
+    row1b:AddWidget(modDropdown, 0.5)
     manager:Register(modDropdown, "all")
-    card1:AddRow(row1c, Theme.rowHeightLast, 0)
+
+    local unwatchHiddenCheck = GUIFrame:CreateCheckbox(row1b, "Unwatch Hidden Quests on Login", {
+        value = db.AutoUnwatchHidden ~= false,
+        callback = function(checked) db.AutoUnwatchHidden = checked; ApplySettings() end,
+    })
+    row1b:AddWidget(unwatchHiddenCheck, 0.5)
+    manager:Register(unwatchHiddenCheck, "all")
+    card1:AddRow(row1b, Theme.rowHeight)
+
+    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+    local sep = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sep, 1)
+    manager:Register(sep, "all")
+    card1:AddRow(sepRow, Theme.rowHeightSeparator)
+
+    GUIFrame:CreatePairedRow(card1, {
+        height = Theme.rowHeightLast,
+        spacing = 0,
+        manager = manager,
+        master = {
+            label = "Auto Complete Voidcores",
+            get = function() return db.AutoVoidcoresGold == true end,
+            callback = function(checked) db.AutoVoidcoresGold = checked; ApplySettings() end,
+        },
+        dependent = {
+            kind = "dropdown",
+            label = "Quest",
+            options = {
+                { key = "Gold",      text = "Gold" },
+                { key = "Mistcrest", text = "Veteran Mistcrest" },
+                { key = "Marl",      text = "Voidlight Marl" },
+            },
+            value = db.AutoVoidcoresQuest or "Gold",
+            callback = function(val) db.AutoVoidcoresQuest = val end,
+        },
+    })
 
     yOffset = card1:GetNextOffset()
 

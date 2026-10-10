@@ -3380,4 +3380,16 @@ function L.loadAlterTime(overrides)
     return modules["AlterTime"]
 end
 
+-- Modules/Utilities/RaidNotifications.lua. Only the pure auto-ready rule is
+-- under test, so nothing past file scope runs; C_Item is the one table the
+-- file indexes at load. Returns the module.
+function L.loadRaidNotifications(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    _G.C_Item = overrides.C_Item or { IsUsableItem = function() return false end }
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/Utilities/RaidNotifications.lua", {})
+    return modules["RaidNotifications"]
+end
+
 return L

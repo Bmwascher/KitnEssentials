@@ -333,6 +333,7 @@ local Defaults = {
             LootBossEnabled = true,
             BenchEnabled = true,
             VoidcoreEnabled = true,
+            AutoReadyBenched = false,
         },
 
         NoMovementAlert = {
@@ -601,6 +602,7 @@ local Defaults = {
             AutoAcceptQuests = false,
             AutoTurnInQuests = false,
             AutoVoidcoresGold = true,
+            AutoVoidcoresQuest = "Gold",   -- "Gold", "Mistcrest" or "Marl"
             AutoUnwatchHidden = true,
             QuestModifier = "SHIFT",
             AutoDeclineDuels = false,

@@ -2034,20 +2034,38 @@ local function IsQuestModifierHeld()
     return IsModifierHeld(AU.db.QuestModifier)
 end
 
--- Targeted weekly quests handled by their own per-quest auto-handler. The
--- generic SetupAutoQuests path yields to these on GOSSIP_SHOW (via
--- ShouldSkipForVoidcores) so its "select first available quest" branch
--- doesn't grab the wrong one and skip the priority quest's dedicated logic.
-local VOIDCORES_GOLD_QUEST_ID = 95279  -- Nebulous Voidcores: Gold (Decimus weekly)
+-- The weekly Voidcore quests, by saved choice.
+local VOIDCORE_QUESTS = {
+    Gold      = 98016,  -- Nebulous Voidcores: Gold
+    Mistcrest = 98012,  -- Nebulous Voidcores: Veteran Mistcrest
+    Marl      = 98015,  -- Nebulous Voidcores: Voidlight Marl
+}
 
-local function ShouldSkipForVoidcores(quests)
-    if not AU.db.AutoVoidcoresGold then return false end
-    if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return false end
-    if not quests then return false end
+local function ChosenVoidcoreQuest()
+    return VOIDCORE_QUESTS[AU.db.AutoVoidcoresQuest] or VOIDCORE_QUESTS.Gold
+end
+
+local VOIDCORE_QUEST_IDS = {}
+for _, questID in pairs(VOIDCORE_QUESTS) do
+    VOIDCORE_QUEST_IDS[questID] = true
+end
+
+-- With the master on, the general pick never takes a Voidcore quest, done
+-- this week or not: the chosen one is the dedicated handler's, and the
+-- others are left for the player.
+local function ShouldSkipForVoidcores(masterOn, quests)
+    if not masterOn or not quests then return false end
     for _, quest in ipairs(quests) do
-        if quest.questID == VOIDCORES_GOLD_QUEST_ID then return true end
+        if VOIDCORE_QUEST_IDS[quest.questID] then return true end
     end
     return false
+end
+
+-- With the master on, the general handler's per-quest steps leave every
+-- Voidcore quest alone: the dedicated handler runs the chosen one's whole
+-- chain, and the others wait for the player.
+local function IsHeldVoidcoreQuest(masterOn, questID)
+    return masterOn == true and VOIDCORE_QUEST_IDS[questID] == true
 end
 
 local questFrame
@@ -2063,6 +2081,14 @@ local function SetupAutoQuests()
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
         if IsQuestModifierHeld() then return end
+        local voidcoresOn = AU.db.AutoVoidcoresGold == true
+
+        if event == "QUEST_DETAIL" or event == "QUEST_PROGRESS"
+            or event == "QUEST_COMPLETE" then
+            if IsHeldVoidcoreQuest(voidcoresOn, GetQuestID()) then
+                return
+            end
+        end
 
         if event == "QUEST_DETAIL" then
             if AU.db.AutoAcceptQuests then
@@ -2100,7 +2126,8 @@ local function SetupAutoQuests()
             if AU.db.AutoTurnInQuests then
                 local activeQuests = C_GossipInfo.GetActiveQuests()
                 for _, quest in ipairs(activeQuests) do
-                    if quest.isComplete then
+                    if quest.isComplete
+                        and not IsHeldVoidcoreQuest(voidcoresOn, quest.questID) then
                         C_GossipInfo.SelectActiveQuest(quest.questID)
                         return
                     end
@@ -2108,9 +2135,7 @@ local function SetupAutoQuests()
             end
             if AU.db.AutoAcceptQuests then
                 local availableQuests = C_GossipInfo.GetAvailableQuests()
-                -- Yield to the voidcores handler so its priority pick isn't
-                -- overridden by the generic "select first available" path.
-                if ShouldSkipForVoidcores(availableQuests) then return end
+                if ShouldSkipForVoidcores(voidcoresOn, availableQuests) then return end
                 if #availableQuests > 0 then
                     C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
                 end
@@ -2119,32 +2144,35 @@ local function SetupAutoQuests()
     end)
 end
 
--- Auto Voidcores: Gold (Decimus Weekly) --
--- Dedicated end-to-end handler for the single weekly quest "Nebulous
--- Voidcores: Gold." Walks the gossip → accept → complete chain without
--- requiring the generic auto-accept/turn-in toggles to be on. Respects
--- the same QuestModifier as the generic handler.
+-- Auto Complete Voidcores --
+-- Dedicated end-to-end handler for the one weekly Voidcore quest the player
+-- chose. Walks the gossip → accept → complete chain without requiring the
+-- generic auto-accept/turn-in toggles to be on. Respects the same
+-- QuestModifier as the generic handler. AutoVoidcoresGold is the master for
+-- all three quests: renaming the key would reset saved settings.
 local voidcoresFrame
-local function SetupAutoVoidcoresGold()
+local function SetupAutoVoidcores()
     if not AU.db.AutoVoidcoresGold then return end
     if voidcoresFrame then return end
     voidcoresFrame = CreateFrame("Frame")
     voidcoresFrame:RegisterEvent("GOSSIP_SHOW")
     voidcoresFrame:RegisterEvent("QUEST_DETAIL")
     voidcoresFrame:RegisterEvent("QUEST_PROGRESS")
+    voidcoresFrame:RegisterEvent("QUEST_COMPLETE")
     voidcoresFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.AutoVoidcoresGold then return end
         if IsQuestModifierHeld() then return end
-        if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return end
+        local chosen = ChosenVoidcoreQuest()
+        if C_QuestLog.IsQuestFlaggedCompleted(chosen) then return end
 
         if event == "GOSSIP_SHOW" then
             -- Active turn-in path: quest already accepted, now ready to hand in
             local activeQuests = C_GossipInfo.GetActiveQuests()
             if activeQuests then
                 for _, quest in ipairs(activeQuests) do
-                    if quest.questID == VOIDCORES_GOLD_QUEST_ID and quest.isComplete then
-                        C_GossipInfo.SelectActiveQuest(VOIDCORES_GOLD_QUEST_ID)
+                    if quest.questID == chosen and quest.isComplete then
+                        C_GossipInfo.SelectActiveQuest(chosen)
                         return
                     end
                 end
@@ -2153,19 +2181,28 @@ local function SetupAutoVoidcoresGold()
             local availableQuests = C_GossipInfo.GetAvailableQuests()
             if availableQuests then
                 for _, quest in ipairs(availableQuests) do
-                    if quest.questID == VOIDCORES_GOLD_QUEST_ID then
-                        C_GossipInfo.SelectAvailableQuest(VOIDCORES_GOLD_QUEST_ID)
+                    if quest.questID == chosen then
+                        C_GossipInfo.SelectAvailableQuest(chosen)
                         return
                     end
                 end
             end
         elseif event == "QUEST_DETAIL" then
-            if GetQuestID() == VOIDCORES_GOLD_QUEST_ID then
+            if GetQuestID() == chosen then
                 AcceptQuest()
             end
         elseif event == "QUEST_PROGRESS" then
-            if GetQuestID() == VOIDCORES_GOLD_QUEST_ID and IsQuestCompletable() then
+            if GetQuestID() == chosen and IsQuestCompletable() then
                 CompleteQuest()
+            end
+        -- CompleteQuest only opens the reward window; the reward is a
+        -- separate call, and the general handler skips Voidcore quests.
+        elseif event == "QUEST_COMPLETE" then
+            if GetQuestID() == chosen then
+                local numChoices = GetNumQuestChoices()
+                if numChoices <= 1 then
+                    GetQuestReward(numChoices)
+                end
             end
         end
     end)
@@ -3243,7 +3280,7 @@ function AU:ApplySettings()
     SetupAutoConfirmLootRoll()
     SetupAutoPassHousing()
     SetupAutoQuests()
-    SetupAutoVoidcoresGold()
+    SetupAutoVoidcores()
     SetupHiddenQuestCleanup()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()

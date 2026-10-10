@@ -3,7 +3,8 @@
 -- ║  Module: Raid Notifications                              ║
 -- ║  Purpose: Multi-alert raid utility notifications —       ║
 -- ║           Gateway, ResetBoss, LootBoss, Bench, and       ║
--- ║           Voidcore, with per-alert toggles.              ║
+-- ║           Voidcore, with per-alert toggles; plus         ║
+-- ║           auto-ready for benched raiders.                ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -24,11 +25,14 @@ local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
 local C_CurrencyInfo = C_CurrencyInfo
 local C_ChallengeMode = C_ChallengeMode
-local C_Map = C_Map
 local UnitName = UnitName
 local IsInInstance = IsInInstance
 local IsInRaid = IsInRaid
 local GetRaidRosterInfo = GetRaidRosterInfo
+local C_PartyInfo = C_PartyInfo
+-- Not in .luacheckrc's read_globals; aliased through _G as
+-- GroupFinderPanel does for C_LFGList.
+local GetReadyCheckStatus = _G.GetReadyCheckStatus
 
 local function IsInRaidInstance()
     local difficultyID = select(3, GetInstanceInfo()) or 0
@@ -40,57 +44,46 @@ end
 ---------------------------------------------------------------------------------
 local GATEWAY_ITEM_ID = 188152
 
--- Nebulous Voidcore — 12.0 Midnight Season 1 currency for bonus rolls in
--- seasonal dungeons + raids. Bought from an NPC; no over-cap possible.
+-- Nebulous Voidcore: the seasonal currency for bonus rolls in seasonal
+-- dungeons and raids. Bought from an NPC; no over-cap possible.
 local VOIDCORE_CURRENCY_ID = 3418
+-- Shown until the first evaluation reads the currency's own icon.
+local VOIDCORE_FALLBACK_ICON = 7658129
 
--- Seasonal zone detection uses uiMapIDs and uiMapGroupIDs (matching the
--- identifier scheme that WeakAuras' Player Location feature exposes). The
--- player is "in a seasonal zone" if their current uiMapID — or any ancestor
--- in the parent-map chain — appears in either table, OR if any ancestor's
--- mapGroupID appears in VOIDCORE_MAP_GROUPS.
---
--- Single-floor dungeons / raids use a uiMapID directly. Multi-floor zones
--- use a mapGroupID umbrella. The "Keystone Dungeons" entry (2266) covers
--- all 8 active M+ rotation dungeons via the keystone-eligibility umbrella.
--- Individual dungeon entries are kept alongside it for belt-and-suspenders
--- coverage when the player walks in via Heroic / Find Group rather than
--- via an active keystone.
---
--- Source: in-game player-location IDs (verified via WeakAuras' Player
--- Location trigger).
-local VOIDCORE_UI_MAPS = {
-    [2266] = true,  -- Keystone Dungeons (umbrella for all 8 active M+ rotation maps)
-    [2501] = true,  -- Maisara Caverns
-    [2556] = true,  -- Nexus-Point Xenas
-    [184]  = true,  -- Pit of Saron
-    [903]  = true,  -- Seat of the Triumvirate
+-- Seasonal raids by instance ID. The journal lists them, but reading it
+-- means loading it and changing its selected tier under the player.
+local VOIDCORE_RAID_INSTANCES = {
+    [2987] = true,  -- The Tidebound Grotto
+    [3004] = true,  -- The Venomous Abyss
 }
 
-local VOIDCORE_MAP_GROUPS = {
-    [469] = true,  -- Magister's Terrace
-    [465] = true,  -- Windrunner Spire
-    [433] = true,  -- Algeth'ar Academy
-    [226] = true,  -- Skyreach
-    [468] = true,  -- The Dreamfit (raid)
-    [466] = true,  -- The Voidspire (raid)
-    [467] = true,  -- March on Quel'Danas (raid)
-}
-
--- Walks the player's current uiMap parent chain. Returns true on the first
--- match against either VOIDCORE_UI_MAPS (direct uiMapID) or VOIDCORE_MAP_GROUPS
--- (the uiMap's group). Sub-area maps within a dungeon (different rooms,
--- different floors) inherit the dungeon's identity through this walk.
-local function IsInSeasonalZone()
-    local cur = C_Map.GetBestMapForUnit("player")
-    while cur and cur > 0 do
-        if VOIDCORE_UI_MAPS[cur] then return true end
-        local groupID = C_Map.GetMapGroupID(cur)
-        if groupID and VOIDCORE_MAP_GROUPS[groupID] then return true end
-        local info = C_Map.GetMapInfo(cur)
-        cur = info and info.parentMapID
+-- Seasonal dungeons by instance ID, from the current M+ map table. Cached
+-- only once it found something: the map table can come back empty before
+-- the map info has arrived.
+local seasonDungeonInstances
+local function SeasonDungeonInstances()
+    if seasonDungeonInstances then return seasonDungeonInstances end
+    local maps = C_ChallengeMode and C_ChallengeMode.GetMapTable
+        and C_ChallengeMode.GetMapTable()
+    if not maps then return nil end
+    local built, found = {}, false
+    for _, cmID in ipairs(maps) do
+        local instanceID = select(6, C_ChallengeMode.GetMapUIInfo(cmID))
+        if instanceID then
+            built[instanceID] = true
+            found = true
+        end
     end
-    return false
+    if found then seasonDungeonInstances = built end
+    return built
+end
+
+local function IsInSeasonalZone()
+    local instanceID = select(8, GetInstanceInfo())
+    if not instanceID or instanceID == 0 then return false end
+    if VOIDCORE_RAID_INSTANCES[instanceID] then return true end
+    local dungeons = SeasonDungeonInstances()
+    return dungeons ~= nil and dungeons[instanceID] == true
 end
 
 local SATED_DEBUFFS = {
@@ -110,7 +103,7 @@ local ALERT_DEFS = {
     -- crop: the head's 105 px square in the 128 px texture; the rest is margin.
     { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true, crop = { 12 / 128, 117 / 128, 8 / 128, 113 / 128 } },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
-    { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = 7658128, enableKey = "VoidcoreEnabled" },
+    { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = VOIDCORE_FALLBACK_ICON, enableKey = "VoidcoreEnabled" },
 }
 
 local ALERT_BY_KEY = {}
@@ -237,8 +230,8 @@ function RN:_UpdateSubscriptions()
     end
 end
 
---- Always-on event dispatcher. Defers 1 frame so APIs (GetInstanceInfo,
---- C_Map.GetBestMapForUnit) return populated data after a zone transition.
+--- Always-on event dispatcher. Defers 1 frame so APIs (GetInstanceInfo)
+--- return populated data after a zone transition.
 --- After subscription re-eval, dispatches the event to any active subsystem
 --- that declared it in handlers.
 function RN:_OnAlwaysOnEvent(event, ...)
@@ -466,7 +459,7 @@ end
 -- combat to avoid mid-pull screen clutter. Subscription to the currency +
 -- combat events is zone-conditional (managed by the subscription orchestrator
 -- via the Voidcore subsystem's shouldSubscribe gate) so we don't pay
--- event-dispatch overhead while the player is outside the relevant 11 instances.
+-- event-dispatch overhead while the player is outside the seasonal instances.
 function RN:OnChallengeModeStart()
     self._voidcoreKeyActive = true
     self:HideAlert("Voidcore")
@@ -502,6 +495,9 @@ function RN:EvaluateVoidcore()
     -- quantity fields (quantityEarnedThisWeek / maxWeeklyQuantity) are both 0
     -- and unused by this currency model.
     if info.totalEarned < info.maxQuantity then
+        if type(info.iconFileID) == "number" then
+            ALERT_BY_KEY.Voidcore.icon = info.iconFileID
+        end
         self:ShowAlert("Voidcore")
     else
         self:HideAlert("Voidcore")
@@ -699,6 +695,42 @@ end
 -- detection is convention-based. Subgroups 1-4 hold the active 20 (5 per group)
 -- across most raid teams; 5-6 are typically left empty as buffer; 7-8 are the
 -- two conventional bench groups. We treat subgroup 7 OR 8 as benched.
+local function IsBenchSubgroup(subgroup)
+    return subgroup == 7 or subgroup == 8
+end
+
+-- The player's raid subgroup, or nil when not found. Each value is tested
+-- for secrecy before any truth test or comparison, and a secret one counts
+-- as not found: the roster API carries no secret-return contract to rely on.
+local function PlayerSubgroup()
+    local playerName = UnitName("player")
+    if KE:IsSecretValue(playerName) or not playerName then return nil end
+    for i = 1, 40 do
+        local name, _, subgroup = GetRaidRosterInfo(i)
+        if not KE:IsSecretValue(name) and name and name == playerName then
+            if KE:IsSecretValue(subgroup) then return nil end
+            return subgroup
+        end
+    end
+    return nil
+end
+
+-- Auto Ready When Benched scope: a raid group in the open world. Inside any
+-- instance groups 7 and 8 can be active players, and a restricted ready-check
+-- confirm there could be refused without an error.
+function RN.AutoReadyInScope(enabled, inRaidGroup, instanceType)
+    return enabled == true and inRaidGroup == true and instanceType == "none"
+end
+
+-- Only a benched raider whose answer is still pending. The status test is
+-- also what skips a check the player started.
+function RN.ShouldAutoReady(enabled, inRaidGroup, instanceType, subgroup, status, inLockdown)
+    return RN.AutoReadyInScope(enabled, inRaidGroup, instanceType)
+        and IsBenchSubgroup(subgroup)
+        and status == "waiting"
+        and not inLockdown
+end
+
 function RN:CheckBench()
     if self.isPreview then return end
     if not self.db or not self.db.Enabled then return end
@@ -721,28 +753,41 @@ function RN:CheckBench()
     -- Mythic-only gate is now in BenchAlert.shouldSubscribe via GetInstanceInfo;
     -- CheckBench only runs when the subsystem is in scope (= mythic raid).
 
-    local playerName = UnitName("player")
-    if not playerName then
+    if IsBenchSubgroup(PlayerSubgroup()) then
+        self:ShowAlert("BenchAlert")
+    else
         self:HideAlert("BenchAlert")
-        return
     end
+end
 
-    -- Walk the raid roster (max 40 slots) to find the player's subgroup.
-    -- GetRaidRosterInfo returns nil for empty slots. Convention: subgroups
-    -- 7 and 8 are the bench (1-4 active 20, 5-6 buffer/unused, 7-8 bench).
-    for i = 1, 40 do
-        local name, _, subgroup = GetRaidRosterInfo(i)
-        if name and name == playerName then
-            if subgroup == 7 or subgroup == 8 then
-                self:ShowAlert("BenchAlert")
-            else
-                self:HideAlert("BenchAlert")
-            end
+--- READY_CHECK handler for Auto Ready When Benched. The payload is never
+--- read: it is secret in chat messaging lockdown. One frame later
+--- Blizzard's window is up, so the hide below closes it as its Ready
+--- button does.
+function RN:_OnAutoReadyCheck()
+    C_Timer.After(0, function()
+        if not self:IsEnabled() then return end
+        -- Re-checked before any roster read: the checkbox or the scope can
+        -- change in the frame since the event.
+        local _, instanceType = GetInstanceInfo()
+        if not RN.AutoReadyInScope(self.db.AutoReadyBenched, IsInRaid(), instanceType) then
             return
         end
-    end
-
-    self:HideAlert("BenchAlert")
+        local status = GetReadyCheckStatus and GetReadyCheckStatus("player")
+        if not KE:IsSafeValue(status) then status = nil end
+        local subgroup = PlayerSubgroup()
+        if not RN.ShouldAutoReady(self.db.AutoReadyBenched, IsInRaid(), instanceType,
+                subgroup, status, InCombatLockdown()) then
+            return
+        end
+        if not (C_PartyInfo and C_PartyInfo.ConfirmReadyCheck) then return end
+        -- A refusal leaves the window for the player, with no error.
+        if not pcall(C_PartyInfo.ConfirmReadyCheck, true) then return end
+        -- Hiding clears the window's initiator, which stops Blizzard printing
+        -- "You were away" when the check ends.
+        if ReadyCheckFrame and ReadyCheckFrame:IsShown() then ReadyCheckFrame:Hide() end
+        KE:Print(string.format("Ready check accepted for you (benched, group %d).", subgroup))
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -930,6 +975,18 @@ SUBSYSTEMS = {
         },
         onScopeEnter = "CheckBench",
         onScopeExit  = function(self) self:HideAlert("BenchAlert") end,
+    },
+
+    -------------------------------------------------------------------------
+    AutoReady = {
+        shouldSubscribe = function(self)
+            if not self.db.AutoReadyBenched then return false end
+            local _, instanceType = GetInstanceInfo()
+            return RN.AutoReadyInScope(self.db.AutoReadyBenched, IsInRaid(), instanceType)
+        end,
+        handlers = {
+            READY_CHECK = "_OnAutoReadyCheck",
+        },
     },
 
     -------------------------------------------------------------------------
