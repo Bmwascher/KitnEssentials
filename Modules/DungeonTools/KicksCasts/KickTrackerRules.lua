@@ -85,9 +85,9 @@ function KT.OwnKickHello(mainChanged, specChanged, extrasChanged)
 end
 
 ---------------------------------------------------------------------------------
--- Pairing a KICK message with a nameplate record
+-- Pairing a KICK message with a nameplate interrupt
 ---------------------------------------------------------------------------------
--- Records are anonymous (the kicker's name may be secret), so a pairing is
+-- Interrupts are anonymous (the kicker may be hidden), so a pairing is
 -- made only when exactly one candidate sits on the other side of the window.
 -- Both tables are keyed by teammate and kick, so a mirrored or repeated
 -- message pairs once while a teammate's second, different kick still pairs.
@@ -121,8 +121,8 @@ function KT.PairComm(pairing, records, key, now, window)
     return "ambiguous"
 end
 
--- True, and the claim's key, when the record about to be created is the kick
--- an open claim announced; the claim is used up.
+-- True, and the claim's key, when the interrupt just arrived is the kick an
+-- open claim announced; the claim is used up.
 function KT.PairRecord(pairing, now, window)
     dropOlder(pairing.claims, now, window)
     dropOlder(pairing.paired, now, window)
@@ -445,25 +445,12 @@ end
 
 -- The player's kick cast and an interrupt whose kicker the game hid are one
 -- kick when the interrupt lands inside the window. The claim is used up either
--- way, so one cast never hides two records.
+-- way, so one cast never claims two interrupts.
 function KT.TakeOwnClaim(claim, now, window)
     local at = claim.at
     if not at then return false end
     claim.at = nil
     return now - at <= window
-end
-
--- The interrupt came first: the newest record with a hidden kicker made
--- inside the window is the player's own kick, unless the meter already put
--- its kick on a teammate's row. Records are in time order.
-function KT.OwnRecordIndex(records, now, window)
-    for i = #records, 1, -1 do
-        local record = records[i]
-        if now - record.startTime > window then return nil end
-        local folded = record.entry ~= nil and record.entry.state == "fold"
-        if record.hiddenKicker and not folded then return i end
-    end
-    return nil
 end
 
 -- Every kick cooldown is far longer than the window, so the same kick again
@@ -484,7 +471,7 @@ function KT.ReducedRemaining(kickStart, kickDuration, now, seconds)
 end
 
 -- Only the player's own units are an own kick. A teammate's token can be
--- plain too ("party1"), and that kick belongs on the record path.
+-- plain too ("party1"), and that kick is the teammate's.
 function KT.IsOwnKickToken(token)
     return token == "player" or token == "pet"
 end
@@ -514,95 +501,18 @@ local function shortOf(name)
     return (name:gsub("%-.*$", ""))
 end
 
-local function hasKey(list, key)
-    for i = 1, #list do
-        if list[i].key == key then return true end
-    end
-    return false
-end
-
--- Keys one interrupt list, read in the client's order, in place. A key is the
--- class, the spec icon and the local-player flag, never the name, which can
--- turn secret or plain between two reads. A repeated key gets "#n" and every
--- entry with it is marked shared, since a position is not an identity
--- (KT.DiffMeterList).
+-- A name is secret in a key, so the class, spec icon and local flag stand in
+-- for it. A repeated key gets "#n": it names a position, not a person.
 function KT.KeyMeterEntries(list)
     local seen = {}
     for i = 1, #list do
         local entry = list[i]
-        entry.base = entry.class .. ":" .. tostring(entry.icon) .. (entry.me and ":me" or "")
-        seen[entry.base] = (seen[entry.base] or 0) + 1
-        entry.key = (seen[entry.base] > 1) and (entry.base .. "#" .. seen[entry.base]) or entry.base
-    end
-    for i = 1, #list do
-        list[i].shared = seen[list[i].base] > 1
+        local base = entry.name and shortOf(entry.name)
+            or (entry.class .. ":" .. tostring(entry.icon) .. (entry.me and ":me" or ""))
+        seen[base] = (seen[base] or 0) + 1
+        entry.key = (seen[base] > 1) and (base .. "#" .. seen[base]) or base
     end
     return list
-end
-
--- The list's order is readable in combat, its amounts are not. A one-entry
--- list names its entry. A member's first kick adds exactly one entry and
--- removes none, and that shape names the added entry. A repeat kick only
--- reorders: with the same entries, the one entry that moved up is named and
--- the second return is true, since equal amounts can also swap on a re-sort
--- another kick caused. Two entries moving up name nothing, nor does an entry
--- whose class, spec icon and local flag another shares: those keys are
--- positions, not identities.
-function KT.DiffMeterList(old, list)
-    if #list == 1 then return list[1] end
-    if not old then return nil end
-    if #list == #old + 1 then
-        for i = 1, #old do
-            if not hasKey(list, old[i].key) then return nil end
-        end
-        for i = 1, #list do
-            local entry = list[i]
-            if not hasKey(old, entry.key) then
-                if entry.shared then return nil end
-                return entry
-            end
-        end
-        return nil
-    end
-    if #list ~= #old then return nil end
-    local oldIndex = {}
-    for i = 1, #old do oldIndex[old[i].key] = i end
-    local climber
-    for i = 1, #list do
-        local was = oldIndex[list[i].key]
-        if not was then return nil end
-        if i < was then
-            if climber then return nil end
-            climber = list[i]
-        end
-    end
-    if not climber or climber.shared then return nil end
-    return climber, true
-end
-
--- How many roster members could be this meter entry, and the last of them.
--- An unreadable field rules no one out. The spec icon never does: a
--- teammate's spec as KE holds it can be stale, and ruling out the true kicker
--- would name the other member of the class.
-function KT.MatchMeterEntry(entry, members)
-    local count, found = 0, nil
-    for guid, member in pairs(members) do
-        local isPlayer = member.unit == "player"
-        local ok
-        if entry.me == true then
-            ok = isPlayer
-        else
-            ok = (member.matchClass == nil or member.matchClass == entry.class)
-                and not (entry.me == false and isPlayer)
-            if ok and entry.name and member.shortName then
-                ok = (entry.name:gsub("%-.*$", "")) == member.shortName
-            end
-        end
-        if ok then
-            count, found = count + 1, guid
-        end
-    end
-    return count, found
 end
 
 -- One kick updates the Current session once, so a second Current update in
@@ -830,121 +740,10 @@ function KT.OwnInterruptIndex(entries, now, window)
     return nil
 end
 
-local function agreedName(named)
-    local owner = nil
-    for i = 1, #named do
-        if owner and named[i] ~= owner then return nil end
-        owner = named[i]
-    end
-    return owner
-end
-
--- The member one read names, and true when only a climb named them. Lists
--- that name someone by a newcomer or a one-entry list (sure) outrank lists
--- that name someone by a climb, since a tie can re-sort without the climber
--- kicking. Names of the winning kind must agree; nobody when they disagree
--- or the burst was shared.
-function KT.MeterReportOwner(sure, climbs, shared)
-    if shared then return nil end
-    if #sure > 0 then return agreedName(sure) end
-    local owner = agreedName(climbs)
-    return owner, (owner ~= nil) or nil
-end
-
 -- A teammate's row takes a kick the game or the meter credits to them when
 -- they have a kick, unless they sync and their messages can arrive: their
--- KICK then claims the record instead.
+-- messages then drive the row.
 function KT.RowTakesKick(member, messagesHeard)
     return member.interruptData ~= nil and not (member.kickVerified and messagesHeard)
-end
-
--- A teammate whose interrupt may be another spell than their row's kick:
--- a Warrior's thrown-weapon talents (a teammate's talents cannot be seen) or
--- a Protection Paladin's Avenger's Shield. Protection is the only Paladin
--- tank spec, and the group role is current where a held spec can be stale,
--- so a tank role counts; a Paladin of unknown spec counts unless the role
--- rules Protection out. An unreadable class counts. role: the member's
--- assigned group role, nil when unknown.
-function KT.UncertainKick(member, role)
-    local class = member.matchClass
-    if class == nil or class == "WARRIOR" then return true end
-    if class ~= "PALADIN" then return false end
-    local specID = member.specID or 0
-    if specID == 66 or role == "TANK" then return true end
-    return specID == 0 and role ~= "DAMAGER" and role ~= "HEALER"
-end
-
--- A report repeating the member a report named less than echoWindow before it
--- is the other list reporting the same kick.
-local function isEcho(hits, i, echoWindow)
-    local hit = hits[i]
-    if not hit.owner then return false end
-    for j = 1, i - 1 do
-        local prev = hits[j]
-        if prev.owner == hit.owner and hit.at - prev.at < echoWindow then return true end
-    end
-    return false
-end
-
-local function othersBetween(entries, entry, from, to)
-    for i = 1, #entries do
-        local other = entries[i]
-        if other ~= entry and other.startTime >= from and other.startTime <= to then return true end
-    end
-    return false
-end
-
--- A hidden kicker's interrupt: "own"; "fold" with the teammate's guid, and
--- true as a fourth return when only a climb named them; "record"; nil when
--- something already took it; or "wait", nil and the time it may resolve. A
--- report is one read of a burst of meter updates, from its first update (at)
--- to its last (last): the read may hold any of them. It folds only when it is
--- the one interrupt within the window of itself and of its report's whole
--- span, and that report is the one near it, naming one member: otherwise a
--- report may belong to another kick, and one report never credits two
--- interrupts. The meter updates in the frame its kick lands, so a report in
--- the interrupt's own frame (within sameFrame) folds at once; an interrupt
--- arriving later finds the fold in its window and stays a record. Any other
--- report waits for its window to close, since a report or interrupt arriving
--- inside it would make the pairing ambiguous; a record never waits. A synced
--- teammate's kick stays on the record path their KICK claims while their
--- messages can arrive (messagesHeard), a name for the player counts only
--- while the player's kick cools, and a climb-only name for a teammate only
--- while their kick was ready when the interrupt landed (the entry's cooling
--- set) and has not started since.
-function KT.ResolveInterrupt(entry, entries, hits, members, messagesHeard, now, window, echoWindow, sameFrame)
-    if entry.state ~= "pending" then return nil end
-    local t = entry.startTime
-    if othersBetween(entries, entry, t - window, t + window) then return "record" end
-    local hit, count = nil, 0
-    for i = 1, #hits do
-        local h = hits[i]
-        if t >= h.at - window and t <= (h.last or h.at) + window and not isEcho(hits, i, echoWindow) then
-            hit, count = h, count + 1
-        end
-    end
-    if count == 0 and now < t + window then return "wait", nil, t + window end
-    if count ~= 1 or not hit.owner then return "record" end
-    local closes = (hit.last or hit.at) + window
-    if othersBetween(entries, entry, hit.at - window, closes) then return "record" end
-    local inFrame = t >= hit.at - sameFrame and t <= (hit.last or hit.at) + sameFrame
-    if not inFrame and now < closes then return "wait", nil, closes end
-    local member = members[hit.owner]
-    if not member then return "record" end
-    if member.unit == "player" then
-        -- The player's row already cools from the cast, so a climb-only name,
-        -- which may be another kicker's re-sort, adds nothing.
-        if hit.uncertain then return "record" end
-        local start, duration = member.kickStart, member.kickDuration
-        if member.interruptData and start and duration and now - start < duration then return "own" end
-        return "record"
-    end
-    if not KT.RowTakesKick(member, messagesHeard) then return "record" end
-    if hit.uncertain then
-        if entry.cooling and entry.cooling[hit.owner] then return "record" end
-        local start, duration = member.kickStart, member.kickDuration
-        if start and duration and t - start < duration then return "record" end
-    end
-    return "fold", hit.owner, nil, hit.uncertain
 end
 
