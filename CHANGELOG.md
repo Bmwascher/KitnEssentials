@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.10.1
+
+### Settings Window
+
+- Position cards replace the two anchor-point grids with two dropdowns on
+  one row: Anchor From, and To Screen's (To Frame's when anchored to a
+  frame). Each lists the nine points, and the cards are shorter
+- **NEW:** Death Notifications, Skyriding UI, Havoc Tracker and Hunter's
+  Mark get Anchored To (Screen Center, Screen (UIParent), Player Frame or
+  Select Frame). Nothing moves until you pick one
+- A card note that wraps onto several lines no longer overlaps the row
+  below it after you resize the window, or after the scroll bar appears or
+  goes
+- Closing the settings window while a World Marker Cycler keybind button
+  reads "Press a key..." cancels the capture. Your next key press works as
+  normal and the saved keybind stays
+
+---
+
 ## v4.10.0
 
 ### DoT Tracker
