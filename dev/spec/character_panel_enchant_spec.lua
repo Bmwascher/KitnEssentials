@@ -52,7 +52,7 @@ local function loadCP(overrides)
         Print = function() end,
         IsSafeValue = function(_, v) return v ~= nil end,
     }
-    helpers.loadModule("Modules/QoL/CharacterPanel.lua", KE)
+    helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", KE)
     return _G.KitnEssentials:GetModule("CharacterPanel"), KE
 end
 

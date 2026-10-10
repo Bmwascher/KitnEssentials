@@ -3,7 +3,7 @@
 -- ║  The Damage Meter side of the Chat size sync.            ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Dock.lua headlessly (L.loadDMDock) and
+-- Loads the REAL Modules/Skinning/DamageMeter/Dock.lua headlessly (L.loadDMDock) and
 -- tests four functions: DM.GetBackdropRectSize, which reports the backdrop
 -- carrier rectangle Chat is sized to; DM.PushSizeToChat, which tells Chat the
 -- rectangle changed; DM.ReleaseChatSize, which hands Chat back its own size

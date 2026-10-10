@@ -1,4 +1,4 @@
--- Tier 2: Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua, the alive
+-- Tier 2: Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua, the alive
 -- snapshot behind OnDeathCountUpdated. The snapshot and both scans are
 -- file-local, so the case drives the public entry point and reads the death
 -- log. The fake is one unit -> { guid, dead } table, because the guard under
@@ -17,7 +17,7 @@ describe("MPT death snapshot identity", function()
         _G.C_ChallengeMode = {
             GetDeathCount = function() return deathCount, 0 end,
         }
-        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+        helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua",
             { Print = function() end, db = { global = {}, profile = {} } })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.OnDeathCountUpdated, "real MythicPlusTimer.lua did not load")

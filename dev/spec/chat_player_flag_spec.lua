@@ -1,4 +1,4 @@
--- Modules/Skinning/ChatMessageHandler.lua: the player flag rule. CMH.PlayerFlag
+-- Modules/Skinning/Chat/ChatMessageHandler.lua: the player flag rule. CMH.PlayerFlag
 -- reads no game state, so the cases call it directly; the last case covers the
 -- saved setting through CMH:GetPFlag.
 local L = require("dev.spec._ke_loader")

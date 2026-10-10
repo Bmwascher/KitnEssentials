@@ -3,7 +3,7 @@
 -- ║  Refusal + secrecy spec for DM.ClockText.                ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
+-- Loads the REAL Modules/Skinning/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests the combat clock's one branching helper: given a duration, does it
 -- render, and does it refuse the cases that must not reach the screen.
 --

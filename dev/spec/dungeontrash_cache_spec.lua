@@ -51,8 +51,8 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
 
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
-        helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashCache.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
 
         -- Output-layer stubs: the cache only needs to CALL these correctly
@@ -389,10 +389,10 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
         -- Inference first (Trash.xml order): the cue's fingerprint filter
         -- and the sampler's pending-advance consult both dereference TI.
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashInference.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashOutput.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashCache.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
 
         -- Config accessors (TrashConfig.lua not loaded) + display sink.
@@ -635,8 +635,8 @@ describe("DungeonTrash — RekeyUnitAlerts destination-key collision (real Trash
         mock.install({ GetTime = function() return 100 end })
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
-        helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashOutput.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         DTrash = modules["DungeonTrash"]
     end)
 

@@ -1,4 +1,4 @@
--- Modules/Utilities/NoMovementAlert.lua -- the layers a later edit breaks
+-- Modules/Combat/StatusTexts/NoMovementAlert.lua -- the layers a later edit breaks
 -- silently: spell resolution end to end (the exported tables and key format,
 -- which spells count as enabled and for which spec, replacement choices, and
 -- alias and category durations), how role colors resolve, how a cooldown reads

@@ -1,4 +1,4 @@
--- Modules/Skinning/ChatRoleIcons.lua — the per-set role icon strings. The old builder
+-- Modules/Skinning/Chat/ChatRoleIcons.lua — the per-set role icon strings. The old builder
 -- memoised one table for the session, so changing the set would have kept the
 -- first set forever; these cases pin the per-set keying that replaces it.
 local loader = require("dev.spec._ke_loader")

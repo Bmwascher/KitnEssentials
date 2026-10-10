@@ -1,4 +1,4 @@
--- Modules/Skinning/UIWidgets.lua -- restyles Blizzard's on-screen UI widget
+-- Modules/Skinning/DarkTheme/UIWidgets.lua -- restyles Blizzard's on-screen UI widget
 -- frames (top-center status bars / text widgets used by M+ timers, event
 -- progress, power bars). Almost everything in this module touches real
 -- widget frames and is only verifiable in-game; the pure decisions (the

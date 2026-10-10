@@ -1,4 +1,4 @@
--- Modules/Skinning/GlobalFonts.lua -- the three refusals and the stock-size
+-- Modules/Skinning/DarkTheme/GlobalFonts.lua -- the three refusals and the stock-size
 -- snapshot. Apply() is the refusal surface: it must write nothing while
 -- Platynator is loaded, since that addon's nameplate setup breaks once the
 -- sweep has rewritten GameFontNormal, nothing while EllesmereUI's Apply to
@@ -71,7 +71,7 @@ describe("GlobalFonts", function()
             end,
             db = { profile = { Skinning = { BlizzardFrames = { FontBaseSize = 14 } } } },
         }
-        helpers.loadModule("Modules/Skinning/GlobalFonts.lua", KE)
+        helpers.loadModule("Modules/Skinning/DarkTheme/GlobalFonts.lua", KE)
     end
 
     before_each(function()

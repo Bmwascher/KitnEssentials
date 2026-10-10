@@ -1,4 +1,4 @@
--- Tier 2: Modules/Skinning/Tooltips.lua. Pure helpers and the CVar lifecycle
+-- Tier 2: Modules/Skinning/Tooltips/Tooltips.lua. Pure helpers and the CVar lifecycle
 -- are reachable headlessly; live tooltip dressing is verified in-game.
 local L = require("dev.spec._ke_loader")
 

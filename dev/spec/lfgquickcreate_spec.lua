@@ -1,6 +1,6 @@
 local loader = require("dev.spec._ke_loader")
 
-describe("Modules/Dungeons/LFGQuickCreate.lua", function()
+describe("Modules/DungeonTools/KeystoneHelper/LFGQuickCreate.lua", function()
 
     describe("UpdateDB sanitizer", function()
 

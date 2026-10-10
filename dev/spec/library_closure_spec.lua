@@ -200,7 +200,7 @@ describe("library closure (every requested mixin is shipped and embeddable)", fu
     it("reads the known mixin request at the site this spec exists for", function()
         local found = false
         for _, r in ipairs(requests) do
-            if r.file == "Modules/DamageMeter/Core.lua" and r.lib == "AceEvent-3.0" then
+            if r.file == "Modules/Skinning/DamageMeter/Core.lua" and r.lib == "AceEvent-3.0" then
                 found = true
             end
         end

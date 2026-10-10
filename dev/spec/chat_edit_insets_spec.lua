@@ -1,4 +1,4 @@
--- Tier 1: Modules/Skinning/Chat.lua, CHAT.EditBoxRightInset. The header hook
+-- Tier 1: Modules/Skinning/Chat/Chat.lua, CHAT.EditBoxRightInset. The header hook
 -- that calls it, and the secret insets themselves, are in-game only.
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
@@ -8,7 +8,7 @@ local SECRET = setmetatable({}, { __tostring = function() return "<secret>" end 
 local function loadChat()
     mock.install({ issecretvalue = function(v) return v == SECRET end })
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Skinning/Chat.lua", {})
+    helpers.loadModule("Modules/Skinning/Chat/Chat.lua", {})
     return modules["Chat"]
 end
 

@@ -5,7 +5,7 @@
 -- read as before; an installed shim keeps the accessor.
 local helpers = require("dev.spec._helpers")
 
-local PAGE = "KitnEssentials_Options/GUIQoL/GUI-MoveFrames.lua"
+local PAGE = "KitnEssentials_Options/QoL/QualityOfLife/GUI-MoveFrames.lua"
 
 describe("spec helper: settings page namespace", function()
     after_each(function()

@@ -14,7 +14,7 @@ setup(function()
     local modules = helpers.installAddonShim()
     -- Seed KE.db: the live-store paths (GetStore) read KE.db.global, unlike the
     -- pure resolver spec which never touches it.
-    KE = helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua",
+    KE = helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Splits.lua",
         { db = { global = {} } })
     MPT = modules["MythicPlusTimer"]
     assert(MPT and MPT.RepairCountSplitsIn, "Splits file did not expose RepairCountSplitsIn")

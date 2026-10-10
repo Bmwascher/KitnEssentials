@@ -17,8 +17,8 @@ local MAP, NPC, SPELL = 658, 252563, 1258820
 local function loadConfig()
     local modules = helpers.installAddonShim()
     local KE = { db = { profile = { DungeonTrash = {} } } }
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE)
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashConfig.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashConfig.lua", KE)
     -- Controlled EMPTY overlay so resolver tests stay independent of the shipped
     -- TrashCurated.lua content (which grows as dungeons are curated). Tests that
     -- need overlay behavior inject KE.TrashCurated[map] themselves.

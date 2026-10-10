@@ -1,4 +1,4 @@
--- Lint: the two frame data tables in Modules/QoL/MoveFrames.lua. A frame
+-- Lint: the two frame data tables in Modules/QoL/QualityOfLife/MoveFrames.lua. A frame
 -- name on the wrong key shape, a duplicate, or a non-Blizzard_ addon key is
 -- silently skipped in game, so the shape is pinned here. The tables are
 -- reached through the loader's debug.getupvalue seam, never exported.

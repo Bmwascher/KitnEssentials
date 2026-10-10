@@ -1,4 +1,4 @@
--- Modules/Dungeons/LFGReminder.lua -- the row's arithmetic and its art
+-- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua -- the row's arithmetic and its art
 -- lookup. The line count sets the button height, so an undercount overlaps
 -- the name with the role line; the art lookup decides whether the row falls
 -- back to the teleport icon. Drawing, the secure click and the texture-load

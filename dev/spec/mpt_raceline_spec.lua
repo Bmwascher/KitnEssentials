@@ -9,7 +9,7 @@ local MPT
 setup(function()
     mock.install()
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua")
+    helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua")
     MPT = modules["MythicPlusTimer"]
     assert(MPT and MPT.ResolveRaceLine, "core file did not expose ResolveRaceLine")
 end)

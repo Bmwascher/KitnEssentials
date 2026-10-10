@@ -76,11 +76,11 @@ local function load(overrides, opts)
             end,
         }
     end
-    helpers.loadModule("Modules/QoL/PanelScaleRegistry.lua", KE)
+    helpers.loadModule("Modules/Core/CVars/PanelScaleRegistry.lua", KE)
     -- busted keeps _G across the cases of one file, so no earlier case's fake
     -- frame may still answer to a registry name.
     for name in pairs(KE.PanelScaleRegistry.byName) do _G[name] = nil end
-    helpers.loadModule("Modules/QoL/PanelScale.lua", KE)
+    helpers.loadModule("Modules/Core/CVars/PanelScale.lua", KE)
 
     local PS = modules.PanelScale
     PS.SetEnabledState = function() end

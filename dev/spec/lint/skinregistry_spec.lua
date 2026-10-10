@@ -5,7 +5,7 @@
 -- ║  filter names an addon a real registration actually uses. ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- The gate this closes: KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua reads
+-- The gate this closes: KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua reads
 -- `Skins[key] ~= false`, so a key nothing registers is always "on" and a
 -- misspelt row controls nothing. Neither direction of that typo shows up any
 -- other way -- it is silent in-game and silent in luacheck.
@@ -14,13 +14,13 @@
 -- dead-filter guard (Task 15) cannot: WINDOW_MAP nests `skins` and `addons`
 -- lists, and a second hand-rolled text parser for that shape would be its
 -- own defect surface. So this file ALSO loads
--- Modules/Skinning/EUIWindows.lua for real, through dev/spec/_ke_loader.lua,
+-- Modules/Skinning/DarkTheme/EUIWindows.lua for real, through dev/spec/_ke_loader.lua,
 -- and reads S.WINDOW_MAP as an actual Lua table.
 
 local lfs = require("lfs")
 local L = require("dev.spec._ke_loader")
 
-local GUI_FILE = "KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua"
+local GUI_FILE = "KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua"
 local SKINNING_ROOT = "Modules/Skinning"
 
 -- Keys that always dispatch with no grid row, cited at

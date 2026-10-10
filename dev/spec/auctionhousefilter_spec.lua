@@ -41,7 +41,7 @@ local function loadModule(filterButton)
         },
     }
 
-    helpers.loadModule("Modules/QoL/AuctionHouseFilter.lua", KE)
+    helpers.loadModule("Modules/QoL/Automation/AuctionHouseFilter.lua", KE)
     local module = modules.AuctionHouseFilter
     module:UpdateDB()
     return module

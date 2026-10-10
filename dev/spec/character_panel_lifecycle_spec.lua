@@ -42,7 +42,7 @@ local function loadCP()
     KE.db = { profile = { CharacterPanel = {
         Enabled = true, SocketHelperEnabled = true, TrackIndicatorsEnabled = true,
     } } }
-    helpers.loadModule("Modules/QoL/CharacterPanel.lua", KE)
+    helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", KE)
 
     local CP = _G.KitnEssentials:GetModule("CharacterPanel")
     -- loadModule does not run OnInitialize, so the module never binds its own db.

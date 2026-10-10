@@ -3,7 +3,7 @@
 -- ║  Refusal-rule spec for DamageMeter/Core.lua.             ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
+-- Loads the REAL Modules/Skinning/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests DM:DetailEligible / DM.PlainOwnRow -- the single gate every detail
 -- path consults before a breakdown may open or stay open in combat.
 --

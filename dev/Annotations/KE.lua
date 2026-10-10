@@ -77,7 +77,7 @@ function KE_FramePool:Acquire(parent) end
 --- hidden holder. Always called at the top of a render.
 function KE_FramePool:ReleaseAll() end
 
---- One curated dungeon entry (Modules/DungeonTimers/DungeonRegistry.lua).
+--- One curated dungeon entry (Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua).
 ---@class KE.DungeonTimerEntry
 ---@field key string
 ---@field name string
@@ -204,7 +204,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
 ---@field PlayerAbsorbsFormat { Format: fun(amount:any, abbreviate:boolean, hideWhenZero:boolean):string }
----@field DungeonTimerDungeons KE.DungeonTimerEntry[] # Modules/DungeonTimers/DungeonRegistry.lua
+---@field DungeonTimerDungeons KE.DungeonTimerEntry[] # Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
@@ -451,7 +451,7 @@ function KE:EncodeForExport(tbl) end
 ---@return table|nil
 function KE:DecodeFromExport(encoded) end
 
--- ─── Dungeon Timers registry (Modules/DungeonTimers/DungeonRegistry.lua) ─
+-- ─── Dungeon Timers registry (Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua) ─
 --- Distinct seasons present in `registry`, ascending.
 ---@param registry KE.DungeonTimerEntry[]
 ---@return number[]
@@ -726,7 +726,7 @@ function KE:FlushPendingReloadPrompt() end
 ---@return string?
 function KE:BuildNicknameKey(rawName, fallbackRealm) end
 
--- ─── Skinning (Modules/Skinning/EUIWindows.lua) ──────────
+-- ─── Skinning (Modules/Skinning/DarkTheme/EUIWindows.lua) ──────────
 --- Pure. Which of our skin keys EllesmereUI already covers.
 ---@param env { loaded: boolean, version: string?, getStyle: (fun(euiKey: string): string?)? }
 ---@return table set # [skinKey] = euiKey (unfiltered row) | resolved record
@@ -738,7 +738,7 @@ function KE:BuildSkinSuppressionSet(env) end
 ---@return table set # [skinKey] = euiKey | resolved record; never nil
 function KE:ResolveSkinSuppression() end
 
---- Nothing outside Modules/Skinning/EUIWindows.lua may index
+--- Nothing outside Modules/Skinning/DarkTheme/EUIWindows.lua may index
 --- KE.Skins.suppressed directly -- these two accessors are the only
 --- shape-safe reads of it.
 --- Is THIS ONE registration suppressed? Returns the owning euiKey string
@@ -769,7 +769,7 @@ function KE.Skins.SetSkinColors(bg, border) end
 ---@param outline string? "NONE" | "OUTLINE" | "THICK", nil to leave unchanged
 function KE.Skins.SetSkinFont(face, size, outline) end
 
--- ─── Skinning (Modules/Skinning/Frames/LFG.lua) ──────────
+-- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
 --- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
 --- "blizzard" or "circle". Falls back to "modern" for anything else.
 ---@return string
@@ -779,7 +779,7 @@ function KE.Skins.GetRoleIconSet() end
 --- current set. Applicant role buttons keep Blizzard's art.
 function KE.Skins.RefreshLFGRoleIcons() end
 
--- ─── Skinning (Modules/Skinning/ChatRoleIcons.lua) ───────
+-- ─── Skinning (Modules/Skinning/Chat/ChatRoleIcons.lua) ───────
 --- Builds the chat role icon escape strings for one set.
 ---@param set string
 ---@return table<string, string>
@@ -816,7 +816,7 @@ function KE.SanitizeCopyLine(text) end
 ---@return string|nil realm
 function KE.AcceptChatMember(role, name, realm) end
 
--- ─── Skinning (Modules/Skinning/RoleIconSamples.lua) ───────
+-- ─── Skinning (Modules/Skinning/DarkTheme/RoleIconSamples.lua) ───────
 --- Builds one role icon set's dropdown label: three inline icons, no text.
 ---@param set string
 ---@return string
@@ -1421,7 +1421,7 @@ function KE:DisablePixelSnap(obj) end
 ---@return Frame?
 function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOffset) end
 
--- Modules/QoL/SlashCommands.lua
+-- Modules/QoL/QualityOfLife/SlashCommands.lua
 ---@return boolean
 function KE:HasAuraAddon() end
 

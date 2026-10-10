@@ -1,4 +1,4 @@
--- Tier 1: Modules/Skinning/ChatCopyText.lua. One table-driven case per byte
+-- Tier 1: Modules/Skinning/Chat/ChatCopyText.lua. One table-driven case per byte
 -- class. Each row is { input, expected, label }; string.char builds the bytes.
 local L = require("dev.spec._ke_loader")
 

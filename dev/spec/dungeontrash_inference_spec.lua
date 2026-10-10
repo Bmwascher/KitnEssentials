@@ -1,4 +1,4 @@
--- Tier 1: DungeonTrash pure inference core (Modules/DungeonTimers/Trash/TrashInference.lua).
+-- Tier 1: DungeonTrash pure inference core (Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua).
 -- The engine's identity-scoring, cast-matching, and cd-scheduling math is pure
 -- Lua — it takes an identity/observation snapshot and returns a decision, with
 -- no WoW API and no per-nameplate state (that lives in DungeonTrash.lua). So it
@@ -14,9 +14,9 @@ local helpers = require("dev.spec._helpers")
 local function loadInference()
     _G.KitnEssentials = _G.KitnEssentials or {}
     local KE = {}
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashTraits.lua", KE)
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE)
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashInference.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
     return KE.TrashInference, KE
 end
 

@@ -53,10 +53,10 @@ local function isNumberArray(v)
     return true
 end
 
-describe("DungeonTimers TrashData (Modules/DungeonTimers/Trash/TrashData.lua)", function()
+describe("DungeonTimers TrashData (Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua)", function()
     local KE
     setup(function()
-        KE = loadTrash("Modules/DungeonTimers/Trash/TrashData.lua")
+        KE = loadTrash("Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua")
     end)
 
     it("keys every dungeon by mapID with a matching valid dungeonKey", function()
@@ -159,10 +159,10 @@ describe("DungeonTimers TrashData (Modules/DungeonTimers/Trash/TrashData.lua)", 
     end)
 end)
 
-describe("DungeonTimers TrashTraits (Modules/DungeonTimers/Trash/TrashTraits.lua)", function()
+describe("DungeonTimers TrashTraits (Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua)", function()
     local KE
     setup(function()
-        KE = loadTrash("Modules/DungeonTimers/Trash/TrashTraits.lua")
+        KE = loadTrash("Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua")
     end)
 
     it("shapes every trait: npcID/mapID/dungeonKey, decoded identity, spellIDs", function()

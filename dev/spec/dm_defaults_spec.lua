@@ -1,4 +1,4 @@
--- Tier 1/2: DamageMeter module-owned defaults seed (Modules/DamageMeter/Core.lua).
+-- Tier 1/2: DamageMeter module-owned defaults seed (Modules/Skinning/DamageMeter/Core.lua).
 -- DM.FillMissingDefaults is the REAL FillMissing body (busted seam at the source);
 -- DM:UpdateDB drives it against the real DM_DEFAULTS table. Pins the MIGRATION
 -- semantics from the v3.0.x AceDB-registered era: AceDB's logout-time

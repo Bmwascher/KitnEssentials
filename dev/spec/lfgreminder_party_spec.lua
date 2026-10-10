@@ -1,4 +1,4 @@
--- Modules/Dungeons/LFGReminder.lua -- the party teleport path's pure pieces:
+-- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua -- the party teleport path's pure pieces:
 -- mapping a teleport to its dungeon and to the player's own teleport, the
 -- scope and send gates, reading a teleport message, the once-a-minute hold
 -- per dungeon, and the gate that decides whether a message prompts. The mock

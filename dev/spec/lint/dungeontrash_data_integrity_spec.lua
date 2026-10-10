@@ -11,8 +11,8 @@ local helpers = require("dev.spec._helpers")
 local function loadData()
     _G.KitnEssentials = _G.KitnEssentials or {}
     local KE = {}
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashTraits.lua", KE)
-    helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua", KE)
     return KE
 end
 
@@ -113,8 +113,8 @@ describe("DungeonTrash data integrity — TrashCurated overlay", function()
 
     setup(function()
         KE2 = select(2, loader.loadDungeonTimers())
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE2)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashCurated.lua", KE2)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua", KE2)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCurated.lua", KE2)
         curated, cdata = KE2.TrashCurated, KE2.TrashData
     end)
 

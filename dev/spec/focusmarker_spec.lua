@@ -12,7 +12,7 @@ describe("FocusMarker ready-check announce gate", function()
     before_each(function()
         mock.install()
         local modules = helpers.installAddonShim()
-        helpers.loadModule("Modules/Dungeons/FocusMarker.lua", { Print = function() end })
+        helpers.loadModule("Modules/DungeonTools/KicksCasts/FocusMarker.lua", { Print = function() end })
         FM = modules["FocusMarker"]
     end)
 
@@ -48,7 +48,7 @@ describe("FocusMarker marker and kick macro rules", function()
     before_each(function()
         mock.install()
         local modules = helpers.installAddonShim()
-        helpers.loadModule("Modules/Dungeons/FocusMarker.lua", { Print = function() end })
+        helpers.loadModule("Modules/DungeonTools/KicksCasts/FocusMarker.lua", { Print = function() end })
         FM = modules["FocusMarker"]
     end)
 

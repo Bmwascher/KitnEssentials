@@ -1,5 +1,5 @@
 -- Pure-helper spec for MPT.FormatTime / ComputeThresholds / ThresholdRemaining.
--- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua headlessly
+-- Loads the REAL Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua headlessly
 -- (no mirrored bodies) so the assertions run against the live implementation.
 -- If the file ever gains load-time C_* calls / event registrations this setup
 -- breaks loudly — that is the intended tripwire; fix the load path, don't re-mirror.
@@ -10,7 +10,7 @@ local MPT
 setup(function()
     mock.install()   -- CreateFrame (tickerFrame), wipe
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua")
+    helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua")
     MPT = modules["MythicPlusTimer"]
     assert(MPT and MPT.FormatTime, "real MythicPlusTimer.lua did not expose FormatTime")
 end)

@@ -6,7 +6,7 @@ local helpers = require("dev.spec._helpers")
 
 local function loadPredicate()
     local S = { Register = function() end }
-    helpers.loadModule("Modules/Skinning/Addons/RCLootCouncil.lua", { Skins = S })
+    helpers.loadModule("Modules/Skinning/DarkTheme/Addons/RCLootCouncil.lua", { Skins = S })
     return S._RCScaleHookNeeded
 end
 

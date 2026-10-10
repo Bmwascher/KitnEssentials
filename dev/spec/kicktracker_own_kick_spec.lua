@@ -1,4 +1,4 @@
--- Modules/Dungeons/KickTracker.lua: the own-kick guard. A secret unit or spell
+-- Modules/DungeonTools/KicksCasts/KickTracker.lua: the own-kick guard. A secret unit or spell
 -- ID on UNIT_SPELLCAST_SUCCEEDED is never compared or used as a table key, so
 -- it never confirms a kick. The mock cannot make a real secret, so each refusal
 -- row declares secret a plain value that would otherwise confirm.

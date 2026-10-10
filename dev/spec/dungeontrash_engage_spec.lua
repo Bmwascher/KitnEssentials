@@ -43,9 +43,9 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
         -- Trash.xml order: inference first, so DungeonTrash's load-time
         -- `local TI = KE.TrashInference` binds.
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashInference.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashCache.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
 
         DTrash.ScheduleAlert = function(_, rt, npcID, spellID, _, nextStart)

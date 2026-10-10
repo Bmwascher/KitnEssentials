@@ -35,7 +35,7 @@ local MODULES = {
     { "TotemTracker", function()
         mock.install({})
         local modules = helpers.installAddonShim()
-        local KE = helpers.loadModule("Modules/ClassUtilities/TotemTracker.lua", {})
+        local KE = helpers.loadModule("Modules/AuraTracking/TotemTracker.lua", {})
         KE.EUIUnlock = recorder()
         local TT = modules["TotemTracker"]
         TT.db = {}
@@ -46,7 +46,7 @@ local MODULES = {
     { "Chat", function()
         mock.install({})
         local modules = helpers.installAddonShim()
-        local KE = helpers.loadModule("Modules/Skinning/Chat.lua", {})
+        local KE = helpers.loadModule("Modules/Skinning/Chat/Chat.lua", {})
         KE.EUIUnlock = recorder()
         local CHAT = modules["Chat"]
         CHAT.db = {}

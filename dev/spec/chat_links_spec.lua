@@ -1,4 +1,4 @@
--- Tier 1: Modules/Skinning/ChatLinks.lua. Covers the secret refusal and the
+-- Tier 1: Modules/Skinning/Chat/ChatLinks.lua. Covers the secret refusal and the
 -- keystone pattern. The other five decorators are ports checked by diff and in
 -- game; where they differ from the source, the plan's deviations list is what
 -- enumerates it.

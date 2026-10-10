@@ -1,5 +1,5 @@
 -- Tier 1/2: the one-shot retired-font-face clear in MPT:UpdateDB
--- (Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua). This module seeds its
+-- (Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua). This module seeds its
 -- own defaults straight into the profile instead of registering them with
 -- AceDB, so the retired "Expressway" seeds are physically stored in every
 -- existing SavedVariables file and would otherwise pin the timer to them
@@ -31,7 +31,7 @@ describe("MPT retired font face clear", function()
         _G.C_ChallengeMode = { GetActiveChallengeMapID = function() return nil end }
         _G.GetInstanceInfo = function() return "Stormwind", "none", 0 end
 
-        KE = helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+        KE = helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua",
             { Print = function() end, db = { global = {}, profile = {} } })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.UpdateDB, "real MythicPlusTimer.lua did not load")

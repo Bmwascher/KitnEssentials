@@ -1,4 +1,4 @@
--- KitnEssentials_Options/GUIClassUtilities/GUI-SpellAlerts.lua — what the per-spec
+-- KitnEssentials_Options/QoL/QualityOfLife/GUI-SpellAlerts.lua — what the per-spec
 -- checkboxes and the opacity slider WRITE.
 --
 -- The page reads KE.GUIFrame only, so it loads against a hand-built stub the
@@ -88,7 +88,7 @@ describe("GUI-SpellAlerts", function()
         _G.KitnEssentials.EnableModule = function() end
         _G.KitnEssentials.DisableModule = function() end
 
-        helpers.loadModule("KitnEssentials_Options/GUIClassUtilities/GUI-SpellAlerts.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/QoL/QualityOfLife/GUI-SpellAlerts.lua", KE)
     end)
 
     local function build()

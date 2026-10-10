@@ -7,8 +7,8 @@
 -- Loads the pure-data source tables by dofile (so every spellID / timing is
 -- copied by the interpreter, never retyped), decodes each mob's packed
 -- identity bitfield with a verbatim port of ExBoss's EXDB._r, then emits:
---   Modules/DungeonTimers/Trash/TrashData.lua    (KE.TrashData)
---   Modules/DungeonTimers/Trash/TrashTraits.lua  (KE.TrashTraits)
+--   Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua    (KE.TrashData)
+--   Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua  (KE.TrashTraits)
 --   dev/docs/dungeon-trash-data-discrepancies.md (cross-build diff)
 --
 -- Sources (References/ is gitignored — present only on the maintainer box):
@@ -31,8 +31,8 @@ local OLD_664    = REF .. "EXBoss-v26.6.4.1821_old/EXBossData/"
 local OLD_6512   = REF .. "EXBoss-v26.5.12.2252_old/EXBossData/"
 local DA_DATA    = "References/DungeonAlerts/Dungeon Alerts v1/Data/"
 
-local OUT_DATA   = "Modules/DungeonTimers/Trash/TrashData.lua"
-local OUT_TRAITS = "Modules/DungeonTimers/Trash/TrashTraits.lua"
+local OUT_DATA   = "Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua"
+local OUT_TRAITS = "Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua"
 local OUT_DIFF   = "dev/docs/dungeon-trash-data-discrepancies.md"
 
 -- mapID -> KE dungeon key + English display name. Keys match the existing

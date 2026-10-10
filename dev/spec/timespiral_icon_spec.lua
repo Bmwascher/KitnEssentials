@@ -1,4 +1,4 @@
--- Modules/Utilities/TimeSpiral.lua -- which movement-spell icon the display
+-- Modules/Combat/ClassTools/TimeSpiral.lua -- which movement-spell icon the display
 -- shows. The spell lookup, the spec read and the paint are smoke.
 local L = require("dev.spec._ke_loader")
 

@@ -1,4 +1,4 @@
--- Modules/Skinning/Addons/RCLootCouncil.lua -- ensurePlan, PageDirection,
+-- Modules/Skinning/DarkTheme/Addons/RCLootCouncil.lua -- ensurePlan, PageDirection,
 -- headerSize.
 --
 -- While its row is on, the skin keeps RC on the KitnUI skin-list entry. The

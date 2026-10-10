@@ -32,7 +32,7 @@ describe("SecondaryStatsFormat", function()
 
     before_each(function()
         _G.KitnEssentials = _G.KitnEssentials or {}
-        KE = helpers.loadModule("Modules/QoL/SecondaryStatsFormat.lua", {})
+        KE = helpers.loadModule("Modules/QoL/SecondaryStats/SecondaryStatsFormat.lua", {})
         F = KE.SecondaryStatsFormat
     end)
 

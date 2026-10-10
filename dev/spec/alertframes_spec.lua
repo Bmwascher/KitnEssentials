@@ -1,6 +1,6 @@
 local loader = require("dev.spec._ke_loader")
 
-describe("Modules/QoL/AlertFrames.lua", function()
+describe("Modules/Skinning/DarkTheme/AlertFrames.lua", function()
 
     -- The refusal half is the one that matters: claiming a subsystem alert drops
     -- it out of the chain UpdateAnchors just built and it renders on top of the

@@ -1,4 +1,4 @@
--- Modules/Skinning/BlizzardFonts.lua -- game-wide replacement of Blizzard's
+-- Modules/Skinning/DarkTheme/BlizzardFonts.lua -- game-wide replacement of Blizzard's
 -- shared font OBJECTS. Loaded directly (not through dev/spec/_ke_loader.lua)
 -- because the module needs _G font-object fakes the loader has no shape for
 -- -- see fontObject() below. KE.GetFontOutline, KE.SlugFlags and
@@ -59,7 +59,7 @@ describe("BlizzardFonts", function()
                 },
             },
         }
-        helpers.loadModule("Modules/Skinning/BlizzardFonts.lua", KE)
+        helpers.loadModule("Modules/Skinning/DarkTheme/BlizzardFonts.lua", KE)
         BF = modules["BlizzardFonts"]
         return KE, BF
     end

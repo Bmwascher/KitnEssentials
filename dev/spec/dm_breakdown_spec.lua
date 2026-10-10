@@ -3,7 +3,7 @@
 -- ║  Pure-helper spec for DamageMeter/Detail.lua aggregation.║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Detail.lua headlessly and tests
+-- Loads the REAL Modules/Skinning/DamageMeter/Detail.lua headlessly and tests
 -- AutoAttackName / MergeSpellsByName / TipHeaderName
 -- through the DM.* seam at its EOF (the helpers are file-locals). If Detail.lua ever gains
 -- load-time C_* calls / event registrations this load breaks loudly — that is
@@ -36,7 +36,7 @@ before_each(function()
     _G.C_Spell = { GetSpellName = function(id) return SPELL[id] end,
                    GetSpellTexture = function() return nil end }
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/DamageMeter/Detail.lua")
+    helpers.loadModule("Modules/Skinning/DamageMeter/Detail.lua")
     DM = modules["DamageMeter"]
     assert(DM.MergeSpellsByName, "Detail.lua seam did not expose MergeSpellsByName")
 end)

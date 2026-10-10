@@ -1,4 +1,4 @@
--- Modules/Skinning/Frames/Communities.lua -- ChatPaneFontSize.
+-- Modules/Skinning/DarkTheme/Frames/Communities.lua -- ChatPaneFontSize.
 --
 -- Nothing else reaches this pane: StyleChat only walks CHAT_FRAMES, and KE
 -- sets chat fonts with a direct SetFont, so Blizzard's own sync never fires

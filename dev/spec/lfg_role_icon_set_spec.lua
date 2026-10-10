@@ -1,4 +1,4 @@
--- Modules/Skinning/Frames/LFG.lua — S.GetRoleIconSet. The resolver is the
+-- Modules/Skinning/DarkTheme/Frames/LFG.lua — S.GetRoleIconSet. The resolver is the
 -- single read path for the saved key: five files would otherwise each decide
 -- what an absent or unrecognized value means, and they would drift.
 local loader = require("dev.spec._ke_loader")

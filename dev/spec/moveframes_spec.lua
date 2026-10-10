@@ -1,4 +1,4 @@
--- Tier 1/2: Modules/QoL/MoveFrames.lua's path resolver and its two public
+-- Tier 1/2: Modules/QoL/QualityOfLife/MoveFrames.lua's path resolver and its two public
 -- methods (IsRunning, SetMovable). GetFrame is exercised against the REAL _G
 -- (the module captures `local _G = _G` at load time, so a stub table swapped
 -- in would not be the same object the module walks) -- tests assign directly

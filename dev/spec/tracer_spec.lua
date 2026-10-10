@@ -1,5 +1,5 @@
 -- luacheck: std lua51+busted
--- Tier 1: Modules/Diagnostics/Tracer.lua. ParseCaller and FormatArg are pure
+-- Tier 1: Modules/Core/Diagnostics/Tracer.lua. ParseCaller and FormatArg are pure
 -- functions; the hooks, the ticker and the slash route are in-game only.
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
@@ -7,21 +7,21 @@ local mock = require("dev.spec._wow_mock")
 local function loadTracer(overrides)
     mock.install(overrides)
     helpers.installAddonShim()
-    return helpers.loadModule("Modules/Diagnostics/Tracer.lua", { Print = function() end })
+    return helpers.loadModule("Modules/Core/Diagnostics/Tracer.lua", { Print = function() end })
 end
 
 local function stack(...)
     return table.concat({ ... }, "\n")
 end
 
-describe("Modules/Diagnostics/Tracer.lua", function()
+describe("Modules/Core/Diagnostics/Tracer.lua", function()
     after_each(function()
         mock.reset()
     end)
 
     describe("Tracer.ParseCaller", function()
         local blizz  = '[string "@Interface/AddOns/Blizzard_UIParent/Mainline/UIParent.lua"]:1234: in function `UIParent_ManageFramePositions\''
-        local tracer = '[string "@Interface/AddOns/KitnEssentials/Modules/Diagnostics/Tracer.lua"]:52: in function <Tracer.lua:50>'
+        local tracer = '[string "@Interface/AddOns/KitnEssentials/Modules/Core/Diagnostics/Tracer.lua"]:52: in function <Tracer.lua:50>'
         local mover  = '[string "@Interface/AddOns/KitnEssentials/Core/EditMode.lua"]:310: in function `Drag\''
         local other  = '[string "@Interface/AddOns/OtherAddon/Core.lua"]:77: in function ?'
 
@@ -31,7 +31,7 @@ describe("Modules/Diagnostics/Tracer.lua", function()
               want = "KitnEssentials/Core/EditMode.lua:310" },
             { name = "falls back to the first addon line when every line is Blizzard or the tracer",
               stack = stack(tracer, blizz),
-              want = "KitnEssentials/Modules/Diagnostics/Tracer.lua:52" },
+              want = "KitnEssentials/Modules/Core/Diagnostics/Tracer.lua:52" },
             { name = "returns ? when no line names an addon file",
               stack = stack("[C]: in function `SetPoint'", "(tail call): ?"),
               want = "?" },

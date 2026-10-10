@@ -3,7 +3,7 @@
 -- ║  Return-shape spec for DM:GetDeathRecap.                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
+-- Loads the REAL Modules/Skinning/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests the fetch three surfaces depend on: the click preflight, the panel
 -- renderer and the hover tip. All three branch on WHICH of three shapes came
 -- back, so the shapes are the contract.

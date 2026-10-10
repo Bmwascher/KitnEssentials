@@ -14,7 +14,7 @@ local MPT
 setup(function()
     mock.install()
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua")
+    helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Splits.lua")
     MPT = modules["MythicPlusTimer"]
     assert(MPT and MPT.ResolvePBFrom, "Splits file did not expose ResolvePBFrom")
 end)
