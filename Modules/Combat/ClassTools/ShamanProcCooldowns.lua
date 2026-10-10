@@ -117,6 +117,9 @@ function SPC:CreateFrame_()
     frame:SetSize(SLOT_WIDTH, 30)
     frame:Hide()
     self.frame = frame
+    KE:RegisterAnchorRepair(frame, function()
+        return Rules.RepairsAtLogin(self:IsAttached(), self.db.anchorFrameType)
+    end, function() self:ApplyPosition() end)
 end
 
 -- The length the next proc would count, or nil while the talent is not known.
