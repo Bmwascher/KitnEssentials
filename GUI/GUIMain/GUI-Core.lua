@@ -1167,9 +1167,14 @@ end
 -- Applies a card's height change to the page without a rebuild. That is only
 -- right while nothing is drawn below the card; otherwise, or when the card has
 -- no parent or position to measure, the page is rebuilt a frame later.
+-- Without a rebuild, the redrawn body's labels still need the label check.
 function GUIFrame:ResizeCardInPlace(card, oldHeight)
     local delta = card:GetContentHeight() - oldHeight
-    if delta == 0 then return end
+    if delta == 0 then
+        self:ResetLabelRebuilds()
+        self:QueueLabelRecheck()
+        return
+    end
     local parent = card:GetParent()
     local cardTop = card:GetTop()
     if not parent or not cardTop then
@@ -1187,6 +1192,7 @@ function GUIFrame:ResizeCardInPlace(card, oldHeight)
     end
     self:ResetLabelRebuilds()
     parent:SetHeight(parent:GetHeight() + delta)
+    self:QueueLabelRecheck()
 end
 
 ---------------------------------------------------------------------------------
@@ -1503,6 +1509,10 @@ function GUIFrame:RefreshContent()
     end
 
     scrollChild:SetHeight(yOffset + T.paddingLarge)
+
+    -- The labels just built were measured before their cards' width settled.
+    -- A check-started rebuild keeps its chain, and the queue holds one check.
+    self:QueueLabelRecheck()
 end
 
 -- Placeholder for tabs with no content builder yet
