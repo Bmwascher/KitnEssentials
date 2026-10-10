@@ -151,7 +151,7 @@ KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview ov
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration, kickVerified }
-KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
+KT.nameSpecCache = {}    -- [playerName or Name-Realm] = specID, fed by LibSpec.RegisterGroup callback
 
 KT.kickRecords = {}       -- array of { id, name, iconID, colorR/G/B, startTime, duration } — teammate kick records
 KT.nextRecordID = 0       -- monotonic; records keyed "record"..id in activeBars (GUIDs may be secret)
@@ -2051,7 +2051,7 @@ function KT:GetActiveContext()
     local db = self.db
     if not db then return "DEFAULT" end
     -- GUI-driven preview honors the configured context. previewContext mirrors
-    -- the dropdown; guiConfigContext is the persistent fallback because the
+    -- the Default / Healer sub-tab; guiConfigContext is the persistent fallback because the
     -- PreviewManager can re-fire ShowPreview on section re-entry (after
     -- HidePreview cleared previewContext) before the page rebuilds. Only
     -- consulted while previewing — live play always uses live spec below.
