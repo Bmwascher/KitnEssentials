@@ -150,8 +150,6 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
         yOffset = posOffset
     end
 
-    -- Ticked, the warning takes the Combat Texts font whether or not that
-    -- module is running.
     if not ticked then
         ----------------------------------------------------------------
         -- Card 4: Font Settings

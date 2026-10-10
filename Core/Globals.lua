@@ -462,13 +462,10 @@ local anchorRecords = setmetatable({}, { __mode = "k" })
 local anchorRepairs = setmetatable({}, { __mode = "k" })
 local anchorPending = setmetatable({}, { __mode = "k" })
 
--- Select Frame can name the frame being placed, a region inside it, a region
--- anchored to it at any depth, or a global that is not a region; each makes
--- SetPoint or SetParent raise a Lua error, and SetParent also rejects a parent
--- that is not a frame. The walk follows parents and anchor targets, each
--- region once. GetParent and GetPoint can return secret regions, which end
--- their branch unread, as do a table addons may not index and a forbidden
--- region. A walk past the limit is refused rather than trusted.
+-- Select Frame can name the frame being placed, a region inside or anchored to
+-- it at any depth, or a global that is not a region; SetPoint and SetParent
+-- raise a Lua error on each, and SetParent also needs a frame. A link that
+-- cannot be read ends its branch; a walk past the limit is refused.
 local ANCHOR_WALK_LIMIT = 64
 local anchorQueue = {}
 local anchorSeen = {}
