@@ -41,7 +41,7 @@ end
 -- take Auction House Filter, Vantus Rune Withdrawer, Merchant Pages and
 -- Combat Logger down with a table this page alone owns.
 --
--- Hide Helptips lives here, not on a gated tab, because it is
+-- Hide Zone Text lives here, not on a gated tab, because it is
 -- master-independent (still applies while Automation itself is off) and this
 -- card is the only surface that renders in every state.
 local function BuildHeader(scrollChild, yOffset)
@@ -67,6 +67,15 @@ local function BuildHeader(scrollChild, yOffset)
             "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
             "and the vendor and auction house windows.")
     end
+
+    local rowZone = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local hideZoneTextCheck = GUIFrame:CreateCheckbox(rowZone, "Hide Zone Text", {
+        value = db.HideZoneText == true,
+        tooltip = "Hides the zone and subzone names shown when you enter a new area. Works whether or not Automation itself is on.",
+        callback = function(checked) db.HideZoneText = checked; ApplySettings() end,
+    })
+    rowZone:AddWidget(hideZoneTextCheck, 1)
+    card1:AddRow(rowZone, Theme.rowHeightLast, 0)
 
     return card1:GetNextOffset(), false
 end
@@ -262,15 +271,8 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
         value = db.HideEventToasts == true,
         callback = function(checked) db.HideEventToasts = checked; ApplySettings() end,
     })
-    row1b:AddWidget(hideEventToastsCheck, 0.5)
+    row1b:AddWidget(hideEventToastsCheck, 1)
     manager:Register(hideEventToastsCheck, "all")
-
-    local hideZoneTextCheck = GUIFrame:CreateCheckbox(row1b, "Hide Zone Text", {
-        value = db.HideZoneText == true,
-        callback = function(checked) db.HideZoneText = checked; ApplySettings() end,
-    })
-    row1b:AddWidget(hideZoneTextCheck, 0.5)
-    manager:Register(hideZoneTextCheck, "all")
     card1:AddRow(row1b, Theme.rowHeight)
 
     local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
