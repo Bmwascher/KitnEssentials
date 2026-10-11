@@ -247,6 +247,12 @@ function KE:GetInterruptAnnounceSpellSet() end
 ---@return boolean
 function KE.DropdownSearchMatches(displayText, key, query) end
 
+--- Countdown text (Core/Globals.lua): "m:ss" from 60 s, whole seconds from
+--- 1 s, one decimal below. Plain numbers only.
+---@param remaining number
+---@return string
+function KE:FormatCountdown(remaining) end
+
 --- The opaque color of `top` drawn at `alpha` over `base`
 --- (Core/AddonTheme.lua). Both inputs' own alpha is ignored.
 ---@param top number[]

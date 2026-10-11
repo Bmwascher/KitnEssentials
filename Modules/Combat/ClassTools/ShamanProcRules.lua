@@ -7,7 +7,6 @@
 ---@class KE
 local KE = select(2, ...)
 
-local string_format = string.format
 local type = type
 
 local Rules = {}
@@ -96,11 +95,6 @@ function Rules.Remaining(now, startedAt, length)
     local left = length - (now - startedAt)
     if left <= 0 then return nil end
     return left
-end
-
-function Rules.FormatTime(remaining)
-    if remaining >= 1 then return string_format("%d", remaining) end
-    return string_format("%.1f", remaining)
 end
 
 -- The login anchor repair moves a display back onto the player frame. An

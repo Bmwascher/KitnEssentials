@@ -454,7 +454,7 @@ function SPC:RenderText(now)
         local line
         if rem then
             running = true
-            line = self.linePrefix[key] .. Rules.FormatTime(rem) .. "|r"
+            line = self.linePrefix[key] .. KE:FormatCountdown(rem) .. "|r"
         elseif db.ShowWhenReady then
             line = self.readyLine[key]
         end
@@ -709,7 +709,7 @@ function SPC:ShowPreview()
         self:LayoutIcons(shown, #shown)
     else
         local counting = self.linePrefix.NaturesGuardian
-            .. Rules.FormatTime(PREVIEW_LENGTH - PREVIEW_ELAPSED) .. "|r"
+            .. KE:FormatCountdown(PREVIEW_LENGTH - PREVIEW_ELAPSED) .. "|r"
         local ready = self.readyLine.ThunderousPaws
         local first, second = self:GetSlot(1), self:GetSlot(2)
         first.text:SetText(counting)

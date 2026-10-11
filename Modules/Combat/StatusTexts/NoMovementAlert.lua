@@ -612,17 +612,6 @@ end
 ------------------------------------------------------------------------
 -- Update loop -- ticker runs ONLY while something is counting down
 ------------------------------------------------------------------------
--- Decimals ONLY below one second -- a ticking tenths place at 8.4s is
--- noise, at 0.4s it is information.
-local function FormatTime(remaining)
-    if remaining >= 60 then
-        return string.format("%d:%02d", remaining / 60, remaining % 60)
-    elseif remaining >= 1 then
-        return string.format("%d", remaining)
-    end
-    return string.format("%.1f", remaining)
-end
-
 -- "Roll - 12" rather than "Roll  12" -- a separator plus its own color
 -- for the countdown, so the eye lands on the number. Colors are
 -- hex-wrapped rather than two FontStrings so the whole line stays a
@@ -828,7 +817,7 @@ function NMA:Update()
                 -- ticker alive to bring it back when the countdown comes down.
                 ---@cast rem number
                 if not (threshold and rem > threshold) then
-                    plainLine = self:ComposeLine(entry.customText or entry.name, FormatTime(rem))
+                    plainLine = self:ComposeLine(entry.customText or entry.name, KE:FormatCountdown(rem))
                 end
             else
                 if self.readyFired and self.readyFired[entry.spellId] then
@@ -1255,7 +1244,7 @@ function NMA:ShowPreview()
     local count = math.min(#samples, math.max(1, db.PreviewCount or 2))
     for i = 1, count do
         local s = samples[i]
-        self:GetSlot(i).text:SetText(self:ComposeLine(s.name, FormatTime(s.remain)))
+        self:GetSlot(i).text:SetText(self:ComposeLine(s.name, KE:FormatCountdown(s.remain)))
     end
     local wasAttached = self.attached
     self:LayoutSlots(count)

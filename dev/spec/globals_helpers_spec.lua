@@ -900,3 +900,24 @@ describe("KE:GetPlayerSpecRole", function()
     end)
 end)
 
+describe("KE:FormatCountdown", function()
+    local KE
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("formats minutes from 60 s, whole seconds from 1 s, tenths below", function()
+        local cases = {
+            { name = "minutes", remaining = 90, want = "1:30" },
+            { name = "a minute exactly", remaining = 60, want = "1:00" },
+            { name = "seconds just under a minute", remaining = 59.5, want = "59" },
+            { name = "seconds", remaining = 12, want = "12" },
+            { name = "a second exactly", remaining = 1, want = "1" },
+            { name = "tenths", remaining = 0.4, want = "0.4" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, KE:FormatCountdown(c.remaining), c.name)
+        end
+    end)
+end)
+
