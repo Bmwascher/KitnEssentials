@@ -11,8 +11,6 @@ local pairs = pairs
 local getmetatable = getmetatable
 local setmetatable = setmetatable
 
-local CreateFrame = CreateFrame
-local WHITE = "Interface\\Buttons\\WHITE8x8"
 -- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
@@ -186,6 +184,18 @@ local function PaintControl(bd)
     return bd
 end
 
+-- AceGUI disables a slider with EnableMouse(false) and never calls Disable,
+-- so the gray state reads the widget's own flag.
+local function AceSliderDisabled(slider)
+    local widget = slider.obj
+    return widget and widget.disabled
+end
+
+local function RefreshAceSliderState(widget)
+    local state = widget.slider and S.data(widget.slider).stepState
+    if state then state() end
+end
+
 local function SkinWidget(widget)
     if not widget or not widget.type then return end
     local t = widget.type
@@ -311,31 +321,13 @@ local function SkinWidget(widget)
     elseif t == "Slider" or t == "Slider-ElvUI" then
 
         local sl = widget.slider
-        if sl and not S.data(sl).skinned then
-            S.data(sl).skinned = true
-            S.StripTextures(sl)
-            local thumb = sl.GetThumbTexture and sl:GetThumbTexture()
-            if thumb then
-                thumb:SetTexture(WHITE)
-                thumb:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], S.palette.brandFillA)
-                thumb:SetSize(10, 14)
-            end
-
-            local bd = PaintControl(S.Backdrop(sl))
-            if bd then
-                bd:ClearAllPoints()
-                bd:SetPoint("TOPLEFT", sl, "TOPLEFT", 2, -3)
-                bd:SetPoint("BOTTOMRIGHT", sl, "BOTTOMRIGHT", -2, 3)
-                if thumb then
-                    local step = CreateFrame("StatusBar", nil, sl)
-                    step:SetFrameLevel(bd:GetFrameLevel() + 1)
-                    step:SetStatusBarTexture(WHITE)
-                    step:SetStatusBarColor(BRAND[1], BRAND[2], BRAND[3], 0.35)
-                    step:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
-                    step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", 1, 1)
-                    step:SetPoint("RIGHT", thumb, "CENTER")
-                    S.data(sl).stepBar = step
-                end
+        if sl then
+            S.Slider(sl, AceSliderDisabled)
+            -- AceGUI copies its methods onto each widget, so this hook touches
+            -- only this widget; a pooled reacquire calls SetDisabled(false).
+            if widget.SetDisabled and not S.data(widget).keDisabledHook then
+                S.data(widget).keDisabledHook = true
+                hooksecurefunc(widget, "SetDisabled", RefreshAceSliderState)
             end
         end
         HookFontBump(widget.label, 13)

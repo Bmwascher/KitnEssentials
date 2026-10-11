@@ -3156,8 +3156,9 @@ local function PaintSliderThumb(thumb)
 end
 
 -- The accent fill from the plate's left edge to the thumb, and the gray both
--- take while the slider is disabled.
-local function AddStepFill(slider, thumb, bd)
+-- take while the slider is disabled. isDisabled(slider), when given, decides
+-- that state for an owner that disables the slider without calling Disable.
+local function AddStepFill(slider, thumb, bd, isDisabled)
     if S.data(slider).stepBar then return end
     local step = CreateFrame("StatusBar", nil, slider)
     step:SetFrameLevel(bd:GetFrameLevel() + 1)
@@ -3172,7 +3173,12 @@ local function AddStepFill(slider, thumb, bd)
     if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
     if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
     local function stateColor()
-        local on = not slider.IsEnabled or slider:IsEnabled()
+        local on
+        if isDisabled then
+            on = not isDisabled(slider)
+        else
+            on = not slider.IsEnabled or slider:IsEnabled()
+        end
         if on then
             S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
             S.PaintBrand(step, "SetStatusBarColor", 0.35)
@@ -3183,6 +3189,7 @@ local function AddStepFill(slider, thumb, bd)
             step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
         end
     end
+    S.data(slider).stepState = stateColor
     if slider.HookScript then
         hooksecurefunc(slider, "Enable", stateColor)
         hooksecurefunc(slider, "Disable", stateColor)
@@ -3235,11 +3242,11 @@ end
 -- comes out at.
 local SLIDER_PLATE_H = 14
 
-function S.Slider(slider)
+function S.Slider(slider, isDisabled)
     if not slider or S.data(slider).skinned then return end
     S.StripTextures(slider)
 
-    local thumb = slider.Thumb
+    local thumb = slider.Thumb or (slider.GetThumbTexture and slider:GetThumbTexture())
     if thumb then PaintSliderThumb(thumb) end
 
     local bd = S.Backdrop(slider)
@@ -3249,7 +3256,7 @@ function S.Slider(slider)
         bd:SetPoint("RIGHT", slider, "RIGHT", -2, 0)
         bd:SetHeight(SLIDER_PLATE_H)
         bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
-        if thumb then AddStepFill(slider, thumb, bd) end
+        if thumb then AddStepFill(slider, thumb, bd, isDisabled) end
     end
     S.data(slider).skinned = true
 end
