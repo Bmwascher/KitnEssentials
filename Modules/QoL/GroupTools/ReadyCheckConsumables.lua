@@ -45,7 +45,6 @@ local GetInventoryItemID    = GetInventoryItemID
 local GetItemInfoInstant    = C_Item.GetItemInfoInstant
 local GetTemporaryEnchantmentInfo = C_PaperDollInfo.GetTemporaryEnchantmentInfo
 local GetSpecialization     = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local IsSpellKnown          = C_SpellBook and C_SpellBook.IsSpellKnown
 local C_Spell               = C_Spell
 local C_UnitAuras           = C_UnitAuras
@@ -1333,13 +1332,9 @@ end
 
 --- _GetSpecFlaskPriority
 --- Returns the SPEC_FLASK_PRIORITY entry for the player's current spec, or
---- nil if no spec / not in the table. Safe APIs in 12.0 — GetSpecialization
---- and GetSpecializationInfo are not combat-restricted and don't return
---- secret values.
+--- nil if no spec / not in the table.
 function RCC:_GetSpecFlaskPriority()
-    local specIndex = GetSpecialization and GetSpecialization()
-    if not specIndex then return nil end
-    local specId = GetSpecializationInfo and GetSpecializationInfo(specIndex)
+    local specId = KE:GetPlayerSpecId()
     if not specId then return nil end
     return SPEC_FLASK_PRIORITY[specId]
 end

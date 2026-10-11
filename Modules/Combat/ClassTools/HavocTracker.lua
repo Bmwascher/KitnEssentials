@@ -31,8 +31,6 @@ HT.classRestriction = "WARLOCK"
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local UnitClass = UnitClass
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local pcall = pcall
 local unpack = unpack
 local UnitExists = UnitExists
@@ -109,9 +107,7 @@ end
 -- The two values the gate decides on.
 local function ReadSpecIdentity()
     local _, class = UnitClass("player")
-    local specIndex = GetSpecialization and GetSpecialization()
-    local specID = specIndex and specIndex > 0 and GetSpecializationInfo(specIndex) or nil
-    return class, specID
+    return class, KE:GetPlayerSpecId()
 end
 
 local function WantsSpec(class, specID)

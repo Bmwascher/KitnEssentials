@@ -921,3 +921,31 @@ describe("KE:FormatCountdown", function()
     end)
 end)
 
+-- The spec id every reader takes from Core. Index 0 is a character with no
+-- specialization yet; the info stub answers for any index, so only the guard
+-- can produce nil.
+describe("KE:GetPlayerSpecId", function()
+    local KE, saved
+    local STUBBED = { "GetSpecialization", "GetSpecializationInfo" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("returns nil with no spec, else the spec id", function()
+        local cases = {
+            { name = "no spec index", index = nil, want = nil },
+            { name = "spec index 0",  index = 0,   want = nil },
+            { name = "a spec",        index = 3,   want = 267 },
+        }
+        for _, c in ipairs(cases) do
+            _G.GetSpecialization = function() return c.index end
+            _G.GetSpecializationInfo = function(index) return index == 3 and 267 or 999 end
+            assert.equals(c.want, KE:GetPlayerSpecId(), c.name)
+        end
+    end)
+end)

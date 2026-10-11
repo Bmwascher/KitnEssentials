@@ -461,8 +461,7 @@ end
 function FM:_AnnounceFocusMarkerOnReadyCheck()
     local db = self.db
     if not db.AnnounceReadyCheck then return end
-    local specIndex = GetSpecialization()
-    local specID = specIndex and GetSpecializationInfo(specIndex)
+    local specID = KE:GetPlayerSpecId()
     if not FM.AnnounceAllowed(specID, IsInGroup(), IsInRaid(), InCombatLockdown(),
         KE:IsChatMessagingLocked()) then
         return

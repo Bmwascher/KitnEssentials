@@ -15,14 +15,11 @@ local CC = KitnEssentials:NewModule("CombatCross", "AceEvent-3.0")
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
-local select = select
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local UnitAffectingCombat = UnitAffectingCombat
 local UIParent = UIParent
 local IsInGroup = IsInGroup
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local C_Spell = C_Spell
 local UnitExists = UnitExists
 
@@ -147,13 +144,7 @@ end
 -- Range Detection
 ---------------------------------------------------------------------------------
 function CC:ResolveRangeAbility()
-    local specIndex = GetSpecialization()
-    if not specIndex then
-        self.rangeAbility = nil
-        self.specType = nil
-        return
-    end
-    local specID = select(1, GetSpecializationInfo(specIndex))
+    local specID = KE:GetPlayerSpecId()
     if not specID then
         self.rangeAbility = nil
         self.specType = nil
