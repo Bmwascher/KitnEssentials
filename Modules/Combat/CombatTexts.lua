@@ -289,6 +289,28 @@ end
 
 local warnedAttachLoop = {}
 
+-- With Combat Texts anchored to this frame, directly or through others,
+-- seating it would close a loop that SetPoint refuses with a Lua error.
+function CM:RefusesLoopingAttach(key, frame)
+    if not KE:IsUnsafeAnchor(frame, self.container) then return false end
+    if not warnedAttachLoop[key] then
+        warnedAttachLoop[key] = true
+        KE:Print("A display cannot join Combat Texts while Combat Texts is anchored to it. "
+            .. "Choose another frame in Combat Texts' Position settings, or untick Attach.")
+    end
+    return true
+end
+
+-- Forgets a slot without arranging.
+local function ClearAttachSlot(self, key)
+    self.attachedFrames[key] = nil
+    self.attachedInsets[key] = nil
+    self.arrangedShown[key] = nil
+    self.arrangedHeight[key] = nil
+    self.attachSeated[key] = nil
+    self.attachTop[key] = nil
+end
+
 -- Seated once, by SetPoint, under a KE spacer anchored to the container top.
 -- Later moves only resize the spacer, so no arrange re-anchors a frame the
 -- engine's aura button hangs on.
@@ -296,14 +318,13 @@ local function SeatAttached(self, key, frame)
     if self.attachSeated[key] then return true end
     local spacer = self.attachSpacers[key]
     if not CanMove(self, frame) or (spacer and not CanMove(self, spacer)) then return false end
-    -- With Combat Texts anchored to this frame, directly or through others,
-    -- the seat would close a loop that SetPoint refuses with a Lua error.
-    if KE:IsUnsafeAnchor(frame, self.container) then
-        if not warnedAttachLoop[key] then
-            warnedAttachLoop[key] = true
-            KE:Print("A display cannot join Combat Texts while Combat Texts is anchored to it. "
-                .. "Choose another frame in Combat Texts' Position settings, or untick Attach.")
-        end
+    -- A loop that appeared after the slot was taken, through another display
+    -- pointed at this one. The owner placed nothing while attached, so the
+    -- slot is given up and the owner told to place the frame itself. The
+    -- message waits a frame so no owner re-arranges inside this arrange.
+    if self:RefusesLoopingAttach(key, frame) then
+        ClearAttachSlot(self, key)
+        C_Timer.After(0, function() self:SendMessage(self.CHANGED_MESSAGE) end)
         return false
     end
     if not spacer then
@@ -344,7 +365,10 @@ function CM:ArrangeMessages()
                     placed = top
                     self.attachTop[key] = top
                 end
-                yOffset = math_max(top, placed or top) + height + spacing
+                -- A slot the seat just gave up takes no room.
+                if self.attachedFrames[key] == frame then
+                    yOffset = math_max(top, placed or top) + height + spacing
+                end
             end
         end
     end
@@ -537,21 +561,20 @@ function CM:HideExternalLine(key)
 end
 
 -- A nil frame detaches, which is never refused. topInset is room kept above
--- the frame for something drawn outside its bounds.
+-- the frame for something drawn outside its bounds. False means the owner
+-- places the frame itself.
 function CM:SetAttachedFrame(key, frame, topInset)
     if not IS_ATTACHED_FRAME[key] then return false end
     if frame == nil then
         if self.attachedFrames[key] == nil then return false end
-        self.attachedFrames[key] = nil
-        self.attachedInsets[key] = nil
-        self.arrangedShown[key] = nil
-        self.arrangedHeight[key] = nil
-        self.attachSeated[key] = nil
-        self.attachTop[key] = nil
+        ClearAttachSlot(self, key)
         if self.container then self:ArrangeMessages() end
         return false
     end
     if not self:AcceptsAttach(true) then return false end
+    -- Refused before the slot is taken, so the owner places the frame itself
+    -- and a frame never placed gets its own position.
+    if self:RefusesLoopingAttach(key, frame) then return false end
     -- A different frame for the same slot is seated afresh.
     if self.attachedFrames[key] ~= frame then
         self.attachSeated[key] = nil
@@ -1239,12 +1262,7 @@ function CM:OnDisable()
     self.interruptAnnounceSpells = nil
     self:UnregisterAllEvents()
     for _, key in ipairs(ATTACHED_FRAME_TYPES) do
-        self.attachedFrames[key] = nil
-        self.attachedInsets[key] = nil
-        self.arrangedShown[key] = nil
-        self.arrangedHeight[key] = nil
-        self.attachSeated[key] = nil
-        self.attachTop[key] = nil
+        ClearAttachSlot(self, key)
     end
     self:SendMessage(self.CHANGED_MESSAGE)
 end
