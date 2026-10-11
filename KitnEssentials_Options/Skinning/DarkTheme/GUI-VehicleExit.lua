@@ -17,7 +17,9 @@ local function GetModule()
 end
 
 GUIFrame:RegisterContent("VehicleExit", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return yOffset end
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "Vehicle Exit Button", "the vehicle exit button")
+    end
     local db = KE.db and KE.db.profile.VehicleExit
     if not db then return yOffset end
 

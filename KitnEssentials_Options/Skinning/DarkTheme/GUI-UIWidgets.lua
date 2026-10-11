@@ -19,9 +19,11 @@ local table_sort = table.sort
 local OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOffset)
-    -- As a nested tab a nil return would reach the outer builder, which then
-    -- draws a placeholder over the header card and tab strips.
-    if KE:ShouldNotLoadModule() then return yOffset end
+    -- As a nested tab this must return an offset: a nil reaches the outer
+    -- builder, which draws a placeholder over the header card and tab strips.
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "UI Widgets", "UI widgets")
+    end
     local db = KE.db and KE.db.profile.Skinning.UIWidgets
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
