@@ -43,7 +43,6 @@ end)
 
 describe("FocusMarker marker and kick macro rules", function()
     local FM
-    local ANY_SPEC = 71 -- a spec with no override
 
     before_each(function()
         mock.install()
@@ -101,25 +100,31 @@ describe("FocusMarker marker and kick macro rules", function()
             { name = "both known", known = { 11, 22 }, want = 11 },
         }
         for _, row in ipairs(rows) do
-            assert.are.equal(row.want, FM.PickKickSpell(ANY_SPEC, candidates, knownSet(row.known)), row.name)
+            assert.are.equal(row.want, FM.PickKickSpell(candidates, nil, knownSet(row.known)), row.name)
         end
     end)
 
-    it("picks from the override list for an override spec", function()
-        local isKnown = knownSet({ 78675, 11 })
-        assert.are.equal(78675, FM.PickKickSpell(102, nil, isKnown), "no shared list")
-        assert.are.equal(78675, FM.PickKickSpell(102, { { id = 11 } }, isKnown), "shared list ignored")
-        assert.is_nil(FM.PickKickSpell(102, { { id = 11 } }, knownSet({ 11 })), "no fallback to the shared list")
+    it("uses the tracker kick only when the spec has no candidate list", function()
+        local tracker = { id = 78675 }
+        local rows = {
+            { name = "no candidate list", known = { 78675 }, want = 78675 },
+            { name = "a known candidate", candidates = { { id = 11 } }, known = { 11, 78675 }, want = 11 },
+            { name = "no candidate known", candidates = { { id = 11 } }, known = { 78675 } },
+        }
+        for _, row in ipairs(rows) do
+            assert.are.equal(row.want, FM.PickKickSpell(row.candidates, tracker, knownSet(row.known)), row.name)
+        end
     end)
 
     it("returns nil when there is nothing to cast", function()
         local rows = {
-            { name = "no candidate list" },
+            { name = "no candidate list, no tracker kick" },
+            { name = "no candidate list, tracker kick unknown", tracker = { id = 78675 } },
             { name = "empty candidate list", candidates = {} },
             { name = "nothing known", candidates = { { id = 11 } } },
         }
         for _, row in ipairs(rows) do
-            assert.is_nil(FM.PickKickSpell(ANY_SPEC, row.candidates, knownSet({})), row.name)
+            assert.is_nil(FM.PickKickSpell(row.candidates, row.tracker, knownSet({})), row.name)
         end
     end)
 
