@@ -837,10 +837,13 @@ local function HookAceGUI(AceGUI, minor, upgrading)
     end
     ArmTrap(AceGUI)
 
-    for n = 1, 20 do
+    -- Pullouts made before the skin installed. Their scroll bar is a child of
+    -- the scroll frame, which SkinPulloutFrame's child loop never reaches.
+    for n = 1, 30 do
         local pf = _G["AceGUI30Pullout" .. n]
         if pf then
             pcall(SkinPulloutFrame, pf)
+            pcall(S.ScrollBar, _G["AceGUI30PulloutScrollbar" .. n])
             if pf.HookScript and not S.data(pf).keShowHooked then
                 S.data(pf).keShowHooked = true
                 pf:HookScript("OnShow", function(f) pcall(SkinPulloutFrame, f) end)

@@ -2561,30 +2561,6 @@ function S.StripParchment(frame, noChildren)
     end
 end
 
-function S.StylePulloutFrames()
-    for n = 1, 30 do
-        local po = _G["AceGUI30Pullout" .. n]
-        if po and not S.data(po).aePulloutNamed then
-            S.data(po).aePulloutNamed = true
-            local function reassert()
-                if po.SetBackdrop then po:SetBackdrop(nil) end
-                local bd = S.GetBackdrop(po)
-                if not bd then
-                    S.StripTextures(po)
-                    bd = S.Template and S.Template(po, "Default") or S.Backdrop(po) -- luacheck: ignore 311/bd
-                else
-                    bd:Show()
-                    bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4])
-                end
-                local sb = _G["AceGUI30PulloutScrollbar" .. n]
-                if sb and S.ScrollBar then S.ScrollBar(sb) end
-            end
-            if po.HookScript then po:HookScript("OnShow", reassert) end
-            if po:IsShown() then reassert() end
-        end
-    end
-end
-
 function S.StyleSharedDropDownList()
     if S._ddListHooked then return end
     S._ddListHooked = true

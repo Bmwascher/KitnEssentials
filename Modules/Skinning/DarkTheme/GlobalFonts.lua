@@ -199,17 +199,6 @@ S:RegisterEarly(Apply, "GlobalFonts")
 
 S:RegisterEarly(function()
     if S.StyleSharedDropDownList then S.StyleSharedDropDownList() end
-
-    if S.StylePulloutFrames and _G.C_Timer then
-        S.StylePulloutFrames()
-        local n = 0
-        local ticker
-        ticker = _G.C_Timer.NewTicker(2, function()
-            S.StylePulloutFrames()
-            n = n + 1
-            if n >= 15 and ticker then ticker:Cancel() end
-        end)
-    end
 end, "SharedDropDownList")
 
 -- File scope because this watcher must exist before any skin module enables
