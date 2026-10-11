@@ -283,8 +283,9 @@ function GUIFrame:CreateMainFrame()
     local T = Theme
 
     local frame = CreateFrame("Frame", "KE_GUIFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
-    frame:SetSize(950, 700)
-    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 50)
+    local defaultW, defaultH, defaultY = 950, 700, 50
+    frame:SetSize(defaultW, defaultH)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, defaultY)
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
     frame:SetMovable(true)
@@ -315,6 +316,24 @@ function GUIFrame:CreateMainFrame()
     end
 
     frame:SetScript("OnSizeChanged", function() resizeLog("size") end)
+
+    local function placeTopLeft(x, y)
+        x, y = KE:PixelSnap(x), KE:PixelSnap(y)
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, y)
+        return x, y
+    end
+
+    -- The size goes on before the anchor: a SetSize on whatever point the game
+    -- re-anchored to would move the top-left corner.
+    local function settleWindow(x, y, w, h)
+        local maxW, maxH = GUIFrame.ResizeRoom(KE:PixelSnap(x), KE:PixelSnap(y),
+            UIParent:GetWidth(), UIParent:GetHeight(), GUIFrame.minWidth, GUIFrame.minHeight)
+        w, h = GUIFrame.FitWindowSize(KE:PixelSnap(w), KE:PixelSnap(h),
+            GUIFrame.minWidth, GUIFrame.minHeight, maxW, maxH)
+        frame:SetSize(w, h)
+        return placeTopLeft(x, y)
+    end
 
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function(f)
@@ -494,14 +513,28 @@ function GUIFrame:CreateMainFrame()
     end)
     frame:EnableKeyboard(true)
 
-    -- Restore saved position and size
-    if KE.db and KE.db.global and KE.db.global.GUIState.frame.point then
-        local gs = KE.db.global.GUIState.frame
-        frame:ClearAllPoints()
-        frame:SetPoint(gs.point, UIParent, gs.relativePoint, gs.xOffset, gs.yOffset)
-        if gs.width and gs.height then
-            frame:SetSize(gs.width, gs.height)
+    -- Restore saved position and size. Worked out from the saved values, not
+    -- measured: the window has not been shown or laid out yet.
+    do
+        local gs = KE.db and KE.db.global and KE.db.global.GUIState.frame
+        local w, h = defaultW, defaultH
+        if gs and gs.width and gs.height then
+            w, h = gs.width, gs.height
         end
+        local screenW, screenH = UIParent:GetWidth(), UIParent:GetHeight()
+        local x, y
+        if gs and gs.point then
+            x, y = GUIFrame.TopLeftFromPoint(gs.point, gs.relativePoint, gs.xOffset, gs.yOffset,
+                w, h, screenW, screenH)
+        end
+        -- A saved name that is not an anchor point would make SetPoint error.
+        if not x then
+            x, y = GUIFrame.TopLeftFromPoint("CENTER", "CENTER", 0, defaultY, w, h, screenW, screenH)
+        end
+        -- A save from a larger screen can put the corner off this one, and the
+        -- room measured from there would not fit the screen.
+        x, y = GUIFrame.ClampCorner(x or 0, y or 0, screenW, screenH, GUIFrame.minWidth, GUIFrame.minHeight)
+        settleWindow(x, y, w, h)
     end
 
     -- One reload prompt per GUI session, raised on the way out. Hooked on the
