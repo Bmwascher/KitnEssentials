@@ -3713,9 +3713,8 @@ end
 -- behaviors that keep one broken skin from taking the rest down.
 S._runList = runList
 
--- "ok" and "disabled" keep their long-standing colors; the three states a
--- multi-registration key can now report (pending/partial/suppressed) each
--- get their own non-red rendering, so only a genuine error string (the
+-- Every non-error status (ok, disabled, suppressed, pending, partial, armed,
+-- skipped) gets its own non-red color, so only a genuine error string (the
 -- "ERROR: ..." shape runList builds) ever reads as one.
 local STATUS_COLOR = {
     ok         = "|cff00ff00",
