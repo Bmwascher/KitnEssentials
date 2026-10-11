@@ -90,19 +90,6 @@ function TT:SetDestroyButtonsArmed(armed)
     end
 end
 
-local function ApplyCooldownTextStyle(cooldown, db)
-    if not cooldown then return end
-
-    for _, region in ipairs({ cooldown:GetRegions() }) do
-        if region:GetObjectType() == "FontString" then
-            KE:ApplyFontToText(region, db.FontFace, db.TimerFontSize, db.FontOutline)
-            region:SetShadowOffset(0, 0)
-            region:ClearAllPoints()
-            region:SetPoint("CENTER", cooldown, "CENTER", 0, 0)
-        end
-    end
-end
-
 function TT:CreateTotemButton(slot)
     local db = self.db
 
@@ -183,7 +170,7 @@ function TT:UpdateButtonSettings(btn)
     btn.cooldown:SetReverse(db.Reverse)
     btn.cooldown:SetHideCountdownNumbers(not db.ShowTimer)
     btn.cooldown:SetCountdownMillisecondsThreshold(db.DecimalThreshold or 0)
-    ApplyCooldownTextStyle(btn.cooldown, db)
+    KE:ApplyCooldownTextStyle(btn.cooldown, db.FontFace, db.TimerFontSize, db.FontOutline)
 end
 
 -- The growth direction, not the stored AnchorFrom, decides which point on the

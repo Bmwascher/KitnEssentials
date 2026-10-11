@@ -234,14 +234,7 @@ function SPC:StyleButton(btn)
     local db = self.db
     btn:SetSize(db.IconSize or 44, db.IconSize or 44)
     btn.cooldown:SetCountdownMillisecondsThreshold(db.DecimalThreshold or 0)
-    for _, region in ipairs({ btn.cooldown:GetRegions() }) do
-        if region:GetObjectType() == "FontString" then
-            KE:ApplyFontToText(region, db.FontFace, db.TimerFontSize, db.FontOutline)
-            region:SetShadowOffset(0, 0)
-            region:ClearAllPoints()
-            region:SetPoint("CENTER", btn.cooldown, "CENTER", 0, 0)
-        end
-    end
+    KE:ApplyCooldownTextStyle(btn.cooldown, db.FontFace, db.TimerFontSize, db.FontOutline)
 end
 
 function SPC:GetButton(tracker)

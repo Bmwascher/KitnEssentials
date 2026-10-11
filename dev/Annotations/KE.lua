@@ -512,6 +512,14 @@ function KE:ApplyIconZoom(tex, zoom) end
 ---@param color number[]?
 function KE:AddIconBorders(frame, color) end
 
+--- Font, zero shadow and a center anchor for every FontString region of a
+--- Cooldown frame (Core/Widgets.lua). A nil cooldown is a no-op.
+---@param cooldown Cooldown?
+---@param fontFace string?
+---@param fontSize number
+---@param fontOutline string?
+function KE:ApplyCooldownTextStyle(cooldown, fontFace, fontSize, fontOutline) end
+
 ---@param frame Frame
 ---@param color number[]?
 ---@param borderParent Frame? # frame level control; defaults to `frame` (Core/Widgets.lua)
