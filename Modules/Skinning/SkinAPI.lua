@@ -531,19 +531,28 @@ local edgeRefresher = CreateFrame("Frame")
 edgeRefresher:RegisterEvent("PLAYER_ENTERING_WORLD")
 edgeRefresher:RegisterEvent("UI_SCALE_CHANGED")
 edgeRefresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+-- An inset client's mode: true insets all four sides, VERTICAL_ONLY only top
+-- and bottom, for a row hover that spans the row's full width.
+local VERTICAL_ONLY = "vertical"
+
+local function PlaceInset(region, bd, e, mode)
+    local x = (mode == VERTICAL_ONLY) and 0 or e
+    region:ClearAllPoints()
+    region:SetPoint("TOPLEFT", bd, "TOPLEFT", x, -e)
+    region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -x, e)
+end
+
 -- hover/selection textures inset by the border THICKNESS; with
 -- per-frame edges that is no longer a literal 1 inside scaled
 -- subtrees, so dependent regions register here and re-fit whenever the
 -- backdrop's edge refits (map min/max flips).
-function S.InsetToEdge(region, bd)
+function S.InsetToEdge(region, bd, verticalOnly)
     if not (region and bd) then return end
-    local e = EdgeFor(bd)
-    region:ClearAllPoints()
-    region:SetPoint("TOPLEFT", bd, "TOPLEFT", e, -e)
-    region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -e, e)
+    local mode = verticalOnly and VERTICAL_ONLY or true
+    PlaceInset(region, bd, EdgeFor(bd), mode)
     local d = S.data(bd)
     d.edgeClients = d.edgeClients or setmetatable({}, { __mode = "k" })
-    d.edgeClients[region] = true
+    d.edgeClients[region] = mode
 end
 
 local function Relayout(bd, info, px)
@@ -567,10 +576,8 @@ local function RefitEdgeClients(bd)
     local clients = state and state.edgeClients
     if not clients then return end
     local e = EdgeFor(bd)
-    for region in pairs(clients) do
-        region:ClearAllPoints()
-        region:SetPoint("TOPLEFT", bd, "TOPLEFT", e, -e)
-        region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -e, e)
+    for region, mode in pairs(clients) do
+        PlaceInset(region, bd, e, mode)
     end
 end
 
@@ -844,7 +851,15 @@ local function killRegisteredHighlight(btn)
     local reg = btn.GetHighlightTexture and btn:GetHighlightTexture()
     if reg then S.KillTexture(reg) end
 end
-local function armHover(button, anchor, l, t, r, b)
+-- A plate or an active own edge is walked by the edge refresher already; any
+-- other anchor is tracked so its inset regions follow scale changes.
+local function FollowEdge(region, anchor, verticalOnly)
+    S.InsetToEdge(region, anchor, verticalOnly)
+    local info = anchor.backdropInfo
+    if not (info and ownedInfo[info]) then S.TrackEdgeClients(anchor) end
+end
+
+local function armHover(button, anchor, verticalOnly)
     local d = S.data(button)
     local hl = d.hover
     if not hl then
@@ -857,13 +872,15 @@ local function armHover(button, anchor, l, t, r, b)
     hl:SetTexture(HOVER_TEX)
     hl:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
     hl:SetAlpha(HOVER_ALPHA)
-    if l == 1 and t == -1 and r == -1 and b == 1 and anchor and anchor.backdropInfo then
-        S.InsetToEdge(hl, anchor)
-    else
-        hl:ClearAllPoints()
-        hl:SetPoint("TOPLEFT", anchor, "TOPLEFT", l, t)
-        hl:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", r, b)
+    -- Left registered under its old anchor too, the highlight would be
+    -- re-placed onto whichever anchor the refresher walks last.
+    local old = d.hoverAnchor
+    if old and old ~= anchor then
+        local oldState = skinState[old]
+        if oldState and oldState.edgeClients then oldState.edgeClients[hl] = nil end
     end
+    d.hoverAnchor = anchor
+    FollowEdge(hl, anchor, verticalOnly)
     if not d.hoverArmed then
         d.hoverArmed = true
         killRegisteredHighlight(button)
@@ -930,7 +947,7 @@ end
 function S.RowHover(row)
     if not row or S.data(row).hover then return end
     if row.SetHighlightTexture then
-        armHover(row, row, 0, -1, 0, 1)
+        armHover(row, row, true)
     elseif row.CreateTexture and row.HookScript then
 
         local tex = row:CreateTexture(nil, "OVERLAY")
@@ -938,8 +955,6 @@ function S.RowHover(row)
         tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
         tex:SetAlpha(HOVER_ALPHA)
         tex:Hide()
-        tex:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
-        tex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
         -- AUDIT: never enable input on a row Blizzard left
         -- mouse-disabled. This is our own hover standard, and it is the
         -- exact call that put AES in the currency-transfer FORBIDDEN:
@@ -950,6 +965,7 @@ function S.RowHover(row)
         if row.IsMouseEnabled and not row:IsMouseEnabled() then
             return
         end
+        FollowEdge(tex, row, true)
         row:HookScript("OnEnter", function() tex:Show() end)
         row:HookScript("OnLeave", function() tex:Hide() end)
         S.data(row).hover = tex
@@ -959,7 +975,7 @@ end
 function S.Hover(button, anchor)
     if not button or not button.SetHighlightTexture then return end
     anchor = anchor or S.GetBackdrop(button) or button
-    armHover(button, anchor, 1, -1, -1, 1)
+    armHover(button, anchor)
 end
 
 -- Blizzard's bevelled Down art reads as a second frame over a flat button.
