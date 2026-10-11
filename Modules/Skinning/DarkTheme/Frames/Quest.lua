@@ -343,7 +343,7 @@ end
 
 local function Skin()
     local frame = _G.QuestFrame
-    if not frame then return end
+    if not frame then return S.Skip("QuestFrame missing") end
 
     for _, sf in next, {
         _G.QuestProgressScrollFrame, _G.QuestRewardScrollFrame,

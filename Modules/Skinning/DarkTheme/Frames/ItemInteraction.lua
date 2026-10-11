@@ -4,7 +4,8 @@ local _G = _G
 
 local function Skin()
     local frame = _G.ItemInteractionFrame
-    if not frame or S.data(frame).ported then return end
+    if not frame then return S.Skip("ItemInteractionFrame missing") end
+    if S.data(frame).ported then return end
 
     S.Frame(frame)
 

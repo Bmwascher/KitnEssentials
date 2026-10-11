@@ -181,7 +181,8 @@ end
 
 local function Skin()
     local frame = _G.SettingsPanel
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("SettingsPanel missing") end
+    if S.data(frame).skinned then return end
 
     S.Frame(frame)
     if frame.Bg then frame.Bg:Hide() end

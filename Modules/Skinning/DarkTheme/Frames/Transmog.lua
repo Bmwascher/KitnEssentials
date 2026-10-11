@@ -66,7 +66,7 @@ end
 
 local function Skin()
     local tf = _G.TransmogFrame
-    if not tf then return end
+    if not tf then return S.Skip("TransmogFrame missing") end
     S.Frame(tf)
 
     local help = tf.HelpPlateButton

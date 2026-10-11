@@ -49,7 +49,8 @@ end
 
 local function SkinMacroUI()
     local frame = _G.MacroFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("MacroFrame missing") end
+    if S.data(frame).skinned then return end
 
     S.Frame(frame)
 

@@ -102,7 +102,7 @@ end
 
 local function Skin()
     local frame = _G.ProfessionsBookFrame
-    if not frame then return end
+    if not frame then return S.Skip("ProfessionsBookFrame missing") end
     S.Frame(frame)
     S.Tabs("SpellBookFrameTabButton", 8)
 

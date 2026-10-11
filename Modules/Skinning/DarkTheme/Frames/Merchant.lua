@@ -57,7 +57,7 @@ end
 
 local function Skin()
     local frame = _G.MerchantFrame
-    if not frame then return end
+    if not frame then return S.Skip("MerchantFrame missing") end
     S.Frame(frame)
     S.Tabs("MerchantFrameTab", 2)
 
@@ -173,7 +173,7 @@ end
 -- so their hooks exist from login.
 local function Arm()
     local frame = _G.MerchantFrame
-    if not frame then return end
+    if not frame then return S.Skip("MerchantFrame missing") end
     if _G.MerchantFrame_UpdateCurrencies and not S.skinIndex.__merchantTokenHook then
         S.skinIndex.__merchantTokenHook = true
         hooksecurefunc("MerchantFrame_UpdateCurrencies", SkinTokens)

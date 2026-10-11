@@ -515,7 +515,7 @@ end
 
 local function Skin()
     local PF = _G.ProfessionsFrame
-    if not PF then return end
+    if not PF then return S.Skip("ProfessionsFrame missing") end
 
     S.Frame(PF)
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end

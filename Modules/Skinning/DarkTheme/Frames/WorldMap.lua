@@ -195,7 +195,7 @@ local navHooked = false
 
 local function Skin()
     local frame = _G.WorldMapFrame
-    if not frame then return end
+    if not frame then return S.Skip("WorldMapFrame missing") end
 
     S.Frame(frame, true)
     if frame.ScrollContainer then

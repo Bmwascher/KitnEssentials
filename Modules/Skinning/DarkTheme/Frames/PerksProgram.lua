@@ -269,7 +269,7 @@ end
 
 local function Skin()
     local frame = _G.PerksProgramFrame
-    if not frame then return end
+    if not frame then return S.Skip("PerksProgramFrame missing") end
 
     if frame.ThemeContainer then frame.ThemeContainer:SetAlpha(0) end
 

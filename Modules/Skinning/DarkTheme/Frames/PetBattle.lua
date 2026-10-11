@@ -90,7 +90,7 @@ end
 
 local function Skin()
     local f = _G.PetBattleFrame
-    if not f then return end
+    if not f then return S.Skip("PetBattleFrame missing") end
     local bf = f.BottomFrame
     local infoBars = { f.ActiveAlly, f.ActiveEnemy }
     local barTex = "Interface\\AddOns\\KitnEssentials\\Media\\Statusbars\\KitnEssentials"

@@ -101,7 +101,7 @@ end
 
 local function Skin()
     local frame = _G.ReputationFrame
-    if not frame then return end
+    if not frame then return S.Skip("ReputationFrame missing") end
     S.StripTextures(frame)
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end

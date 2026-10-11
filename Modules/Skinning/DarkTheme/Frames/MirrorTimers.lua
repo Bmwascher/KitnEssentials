@@ -47,7 +47,8 @@ end
 
 local function Skin()
     local container = _G.MirrorTimerContainer
-    if not container or S.data(container).aeHooked then return end
+    if not container then return S.Skip("MirrorTimerContainer missing") end
+    if S.data(container).aeHooked then return end
     if type(container.SetupTimer) == "function" then
         hooksecurefunc(container, "SetupTimer", SetupTimer)
         S.data(container).aeHooked = true

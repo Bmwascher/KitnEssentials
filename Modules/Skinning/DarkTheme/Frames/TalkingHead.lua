@@ -35,7 +35,7 @@ end
 
 local function Skin()
     local th = _G.TalkingHeadFrame
-    if not th then return end
+    if not th then return S.Skip("TalkingHeadFrame missing") end
     if S.data(th).skinned then return end
 
     if th.BackgroundFrame and th.BackgroundFrame.TextBackground then

@@ -578,7 +578,7 @@ local GROUP_BUTTON_ICONS = { 133076, 133074, 464820 }
 
 local function Skin()
     local frame = _G.PVEFrame
-    if not frame then return end
+    if not frame then return S.Skip("PVEFrame missing") end
     S.Frame(frame)
     if _G.PVEFrameBg then _G.PVEFrameBg:Hide() end
     KillFrame(frame.shadows)
@@ -1164,7 +1164,8 @@ end
 
 local function SkinChallenges()
     local cf = _G.ChallengesFrame
-    if not cf or S.data(cf).skinned then return end
+    if not cf then return S.Skip("ChallengesFrame missing") end
+    if S.data(cf).skinned then return end
     S.data(cf).skinned = true
     cf:DisableDrawLayer("BACKGROUND")
     if _G.ChallengesFrameInset then S.StripTextures(_G.ChallengesFrameInset) end

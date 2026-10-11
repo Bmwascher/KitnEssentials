@@ -4,7 +4,7 @@ local _G = _G
 
 local function Skin()
     local frame = _G.PetitionFrame
-    if not frame then return end
+    if not frame then return S.Skip("PetitionFrame missing") end
     if S.data(frame).skinned then return end
 
     S.Frame(frame)

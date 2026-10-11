@@ -18,7 +18,7 @@ end
 
 local function Skin()
     local frame = _G.InspectFrame
-    if not frame then return end
+    if not frame then return S.Skip("InspectFrame missing") end
     S.Frame(frame)
     if _G.InspectPaperDollFrame and _G.InspectPaperDollFrame.ViewButton then
         S.Button(_G.InspectPaperDollFrame.ViewButton)

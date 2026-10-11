@@ -48,7 +48,7 @@ end
 
 local function Skin()
     local frame = _G.ClassTrainerFrame
-    if not frame then return end
+    if not frame then return S.Skip("ClassTrainerFrame missing") end
     for _, o in next, { _G.ClassTrainerFrameSkillStepButton, _G.ClassTrainerFrameBottomInset } do
         if o then S.StripTextures(o) end
     end

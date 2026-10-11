@@ -5,7 +5,7 @@ local CreateFrame = CreateFrame
 
 local function Skin()
     local frame = _G.TradeFrame
-    if not frame then return end
+    if not frame then return S.Skip("TradeFrame missing") end
     S.Frame(frame)
     if frame.RecipientOverlay then
         if frame.RecipientOverlay.portrait then frame.RecipientOverlay.portrait:SetAlpha(0) end

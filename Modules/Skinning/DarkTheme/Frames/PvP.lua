@@ -63,7 +63,7 @@ end
 
 local function Skin()
     local ui = _G.PVPUIFrame
-    if not ui then return end
+    if not ui then return S.Skip("PVPUIFrame missing") end
     S.StripTextures(ui)
 
     local queueFrame = _G.PVPQueueFrame

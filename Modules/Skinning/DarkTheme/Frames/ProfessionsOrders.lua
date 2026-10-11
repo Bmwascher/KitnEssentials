@@ -221,7 +221,7 @@ end
 
 local function Skin()
     local frame = _G.ProfessionsCustomerOrdersFrame
-    if not frame then return end
+    if not frame then return S.Skip("ProfessionsCustomerOrdersFrame missing") end
     S.Frame(frame)
 
     if frame.Tabs then

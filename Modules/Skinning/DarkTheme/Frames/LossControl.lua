@@ -36,7 +36,8 @@ end
 
 local function Skin()
     local frame = _G.LossOfControlFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("LossOfControlFrame missing") end
+    if S.data(frame).skinned then return end
     if frame.Icon then
 
         local ring = CreateFrame("Frame", nil, frame)
