@@ -509,6 +509,23 @@ function CHAT:OnDisable()
 
     if self.CopyChatFrame then self.CopyChatFrame:Hide() end
     if self.panel then self.panel:Hide() end
+
+    -- Chat is off, so the scale walk stops re-laying these edges until
+    -- CHAT:OnEnable enrolls and repaints each one again.
+    local S = KE.Skins
+    if self.panel then S.ReleaseOwnBackdrop(self.panel.backdrop) end
+    S.ReleaseOwnBackdrop(self.tabBackdrop)
+    local bar = _G.CombatLogQuickButtonFrame_Custom
+    if bar and bar.styled then
+        S.ReleaseOwnBackdrop(bar)
+        bar.styled = nil
+    end
+    local copy = self.CopyChatFrame
+    if copy and not copy.keEdgesReleased then
+        S.ReleaseOwnBackdrop(copy)
+        S.ReleaseOwnBackdrop(copy.scrollbar)
+        copy.keEdgesReleased = true
+    end
 end
 
 ------------------------------------------------------------------------
