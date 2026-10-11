@@ -38,34 +38,29 @@ local function MessageFont(db)
     return KE:GetFontPath(db.Font), KE:GetFontOutline(db.FontOutline or "OUTLINE")
 end
 
+-- Within KE, only Automation's Hide Zone Text changes ZoneTextFrame's event
+-- registration; registering here would undo it.
 function SK:ZoneTextStyling()
     local zoneDB = self.db.ZoneText
-    if zoneDB.Hide then
-        _G.ZoneTextFrame:UnregisterAllEvents()
-    else
-        local fontPath, outline = MessageFont(self.db)
-        ZoneTextString:SetFont(fontPath, zoneDB.MainZone.Size, outline)
-        ZoneTextString:SetShadowColor(0, 0, 0, 0)
-        ZoneTextString:SetShadowOffset(0, 0)
-        SubZoneTextString:SetFont(fontPath, zoneDB.SubZone.Size, outline)
-        SubZoneTextString:SetShadowColor(0, 0, 0, 0)
-        SubZoneTextString:SetShadowOffset(0, 0)
+    local fontPath, outline = MessageFont(self.db)
+    ZoneTextString:SetFont(fontPath, zoneDB.MainZone.Size, outline)
+    ZoneTextString:SetShadowColor(0, 0, 0, 0)
+    ZoneTextString:SetShadowOffset(0, 0)
+    SubZoneTextString:SetFont(fontPath, zoneDB.SubZone.Size, outline)
+    SubZoneTextString:SetShadowColor(0, 0, 0, 0)
+    SubZoneTextString:SetShadowOffset(0, 0)
 
-        PVPArenaTextString:SetFont(fontPath, zoneDB.SubZone.Size, outline)
-        PVPArenaTextString:SetShadowColor(0, 0, 0, 0)
-        PVPArenaTextString:SetShadowOffset(0, 0)
+    PVPArenaTextString:SetFont(fontPath, zoneDB.SubZone.Size, outline)
+    PVPArenaTextString:SetShadowColor(0, 0, 0, 0)
+    PVPArenaTextString:SetShadowOffset(0, 0)
 
-        PVPInfoTextString:SetFont(fontPath, zoneDB.SubZone.Size, outline)
-        PVPInfoTextString:SetShadowColor(0, 0, 0, 0)
-        PVPInfoTextString:SetShadowOffset(0, 0)
+    PVPInfoTextString:SetFont(fontPath, zoneDB.SubZone.Size, outline)
+    PVPInfoTextString:SetShadowColor(0, 0, 0, 0)
+    PVPInfoTextString:SetShadowOffset(0, 0)
 
-        _G.ZoneTextFrame:ClearAllPoints()
-        _G.ZoneTextFrame:SetPoint(zoneDB.MainZone.Anchor, UIParent, zoneDB.MainZone.Anchor,
-            zoneDB.MainZone.X, zoneDB.MainZone.Y)
-        _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED")
-        _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
-        _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    end
+    _G.ZoneTextFrame:ClearAllPoints()
+    _G.ZoneTextFrame:SetPoint(zoneDB.MainZone.Anchor, UIParent, zoneDB.MainZone.Anchor,
+        zoneDB.MainZone.X, zoneDB.MainZone.Y)
 end
 
 function SK:StyleUIErrorsFrame()
@@ -156,17 +151,9 @@ function SK:ResetActionStatusText()
     ActionStatus.Text:SetPoint("TOP", UIParent, "TOP", 0, -150)
 end
 
-function SK:ResetZoneText()
-    if not _G.ZoneTextFrame then return end
-    _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED")
-    _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
-    _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-end
-
 function SK:Reset()
     self:ResetUIErrorsFrame()
     self:ResetActionStatusText()
-    self:ResetZoneText()
 end
 
 ---------------------------------------------------------------------------------
