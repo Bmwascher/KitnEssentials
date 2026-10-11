@@ -76,3 +76,40 @@ describe("zone text carry-over", function()
         end
     end)
 end)
+
+-- The appliers wire the rule in: an import is converted only when it carries
+-- the old key, and the login pass converts every saved profile.
+describe("zone text carry-over appliers", function()
+    after_each(function()
+        _G.KitnEssentialsDB = nil
+    end)
+
+    it("converts an imported profile that carries the old key", function()
+        local KE = helpers.loadModule("Core/Defaults.lua")
+        local profile = {
+            Skinning = { Messages = { Enabled = true, ZoneText = { Hide = true, SubZone = { Size = 20 } } } },
+        }
+        KE:MigrateProfileKeys(profile)
+        assert.is_true(profile.Automation.HideZoneText)
+        assert.is_nil(profile.Skinning.Messages.ZoneText.Hide)
+        assert.equals(20, profile.Skinning.Messages.ZoneText.SubZone.Size)
+    end)
+
+    it("leaves an imported profile without the old key as exported", function()
+        local KE = helpers.loadModule("Core/Defaults.lua")
+        local profile = { Automation = { HideZoneText = true } }
+        KE:MigrateProfileKeys(profile)
+        assert.is_true(profile.Automation.HideZoneText)
+    end)
+
+    it("converts every saved profile at login and creates no table for a false result", function()
+        local KE = helpers.loadModule("Core/Defaults.lua")
+        local ticked = { Automation = { HideZoneText = true } }
+        local empty = {}
+        _G.KitnEssentialsDB = { profiles = { Ticked = ticked, Empty = empty } }
+        KE:MigrateCombatLoggerKeys()
+        assert.is_nil(ticked.Automation.HideZoneText)
+        assert.is_nil(empty.Automation)
+        assert.is_true(_G.KitnEssentialsDB.KeyRenames["ZoneText.HideMerge"])
+    end)
+end)
