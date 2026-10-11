@@ -323,8 +323,8 @@ function GUIFrame:CreateMainFrame()
         return x, y
     end
 
-    -- The size goes on before the anchor: a SetSize on whatever point the game
-    -- re-anchored to would move the top-left corner.
+    -- The corner is anchored explicitly, so whatever point the game anchored to
+    -- cannot shift the window when its size changes.
     local function settleWindow(x, y, w, h)
         local maxW, maxH = GUIFrame.ResizeRoom(KE:PixelSnap(x), KE:PixelSnap(y),
             UIParent:GetWidth(), UIParent:GetHeight(), GUIFrame.minWidth, GUIFrame.minHeight)
@@ -334,8 +334,8 @@ function GUIFrame:CreateMainFrame()
         return placeTopLeft(x, y)
     end
 
-    -- Only on a shown window: a frame that has never been laid out can report
-    -- nil or stale edges.
+    -- Not before the first show: a frame that has never been laid out can
+    -- report nil or stale edges.
     local function readTopLeft()
         local left, top = frame:GetLeft(), frame:GetTop()
         if not (left and top) then return nil end
@@ -632,8 +632,8 @@ function GUIFrame:CreateMainFrame()
         local w, h = GUIFrame.KeepGrabSize(grabW, grabH, frame:GetWidth(), frame:GetHeight())
         grabW, grabH = nil, nil
 
-        -- The game re-anchors to CENTER on stop, so the top-left corner is set
-        -- again after the size, at whole pixels.
+        -- The game re-anchors to a point of its own choosing on stop, so the
+        -- top-left corner is set again after the size, at whole pixels.
         local x, y = readTopLeft()
         if x then
             x, y = settleWindow(x, y, w, h)
