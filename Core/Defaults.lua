@@ -2437,7 +2437,6 @@ local Defaults = {
                     QuestTitleSize = 13,
                 },
                 ZoneText = {
-                    Hide = false,
                     SubZone = {
                         Size = 20,
                     },
