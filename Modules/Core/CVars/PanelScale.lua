@@ -115,8 +115,11 @@ local function Debug(entry, reason, result, desired)
         reason or "-", result, desired and (" at " .. desired) or ""))
 end
 
+-- Tracked inset regions follow the root too. They report nothing, so the
+-- plates alone decide whether the root stays marked.
 local function RefreshSkinEdges(frame)
     local skins = KE.Skins
+    if skins and skins.RefreshOwnEdgesUnder then skins.RefreshOwnEdgesUnder(frame) end
     if not (skins and skins.RefreshEdgesUnder) then return true end
     return skins.RefreshEdgesUnder(frame)
 end
@@ -151,6 +154,9 @@ local function FlushSkinEdges()
     local skins = KE.Skins
     if anyShown and skins and skins.RefreshEdgesUnderRoots then
         settled = skins.RefreshEdgesUnderRoots(roots)
+    end
+    if anyShown and skins and skins.RefreshOwnEdgesUnder then
+        for root in pairs(roots) do skins.RefreshOwnEdgesUnder(root) end
     end
     -- An owed walk cannot say which root the unfinished work sits under, so
     -- every root it covered keeps a mark and tries again on its next show.
