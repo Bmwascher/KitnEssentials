@@ -456,12 +456,12 @@ function GUIFrame.ClampCorner(x, y, screenW, screenH, minW, minH)
     return math.min(math.max(x, 0), screenW - minW), math.max(math.min(y, 0), minH - screenH)
 end
 
--- Pure. The minimum wins when the room is smaller than it.
+-- Pure.
 function GUIFrame.FitWindowSize(w, h, minW, minH, maxW, maxH)
     return math.max(minW, math.min(w, maxW)), math.max(minH, math.min(h, maxH))
 end
 
--- Pure. The game can register a pixel of change on a press with no drag.
+-- Pure.
 function GUIFrame.KeepGrabSize(grabW, grabH, w, h)
     if math.abs(w - grabW) < RESIZE_CLICK_TOLERANCE and math.abs(h - grabH) < RESIZE_CLICK_TOLERANCE then
         return grabW, grabH
