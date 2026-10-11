@@ -805,7 +805,7 @@ local function SkinWarbandScenes()
 end
 
 local function Skin()
-    if not _G.CollectionsJournal then return end
+    if not _G.CollectionsJournal then return S.Skip("CollectionsJournal missing") end
     S.Frame(_G.CollectionsJournal)
     SkinWardrobe()
     SkinJournalTabs()

@@ -5,7 +5,8 @@ local next = next
 
 local function Skin()
     local frame = _G.ArchaeologyFrame
-    if not frame or S.data(frame).ported then return end
+    if not frame then return S.Skip("ArchaeologyFrame missing") end
+    if S.data(frame).ported then return end
 
     S.Frame(frame)
 

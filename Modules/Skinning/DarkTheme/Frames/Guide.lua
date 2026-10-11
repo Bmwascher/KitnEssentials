@@ -25,7 +25,8 @@ end
 
 local function SkinGuide()
     local frame = _G.GuideFrame
-    if not frame or S.data(frame).ported then return end
+    if not frame then return S.Skip("GuideFrame missing") end
+    if S.data(frame).ported then return end
 
     S.Frame(frame)
     if frame.Title then frame.Title:SetTextColor(1, 1, 1) end

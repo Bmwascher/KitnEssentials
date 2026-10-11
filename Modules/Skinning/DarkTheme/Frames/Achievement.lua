@@ -273,7 +273,7 @@ end
 
 local function Skin()
     local frame = _G.AchievementFrame
-    if not frame then return end
+    if not frame then return S.Skip("AchievementFrame missing") end
     S.Frame(frame)
 
     S.StripTextures(frame.Header)

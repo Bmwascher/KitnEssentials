@@ -5,7 +5,8 @@ local hooksecurefunc = hooksecurefunc
 
 local function Skin()
     local frame = _G.GenericTraitFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("GenericTraitFrame missing") end
+    if S.data(frame).skinned then return end
     if frame.Background then frame.Background:SetAlpha(0) end
     if frame.BorderOverlay then frame.BorderOverlay:SetAlpha(0) end
     if frame.NineSlice then

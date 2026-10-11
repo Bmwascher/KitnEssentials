@@ -5,7 +5,7 @@ local next = next
 
 local function Skin()
     local frame = _G.GuildRegistrarFrame
-    if not frame then return end
+    if not frame then return S.Skip("GuildRegistrarFrame missing") end
     if S.data(frame).skinned then return end
 
     S.Frame(frame)

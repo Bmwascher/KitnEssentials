@@ -184,7 +184,8 @@ end
 local hooked = false
 local function Skin()
     local frame = _G.TokenFrame
-    if not frame or hooked then return end
+    if not frame then return S.Skip("TokenFrame missing") end
+    if hooked then return end
     hooked = true
     if frame:IsShown() then
         ApplySkin()

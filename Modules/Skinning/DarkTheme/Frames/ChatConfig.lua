@@ -83,7 +83,7 @@ end
 
 local function Skin()
     local ccf = _G.ChatConfigFrame
-    if not ccf then return end
+    if not ccf then return S.Skip("ChatConfigFrame missing") end
     S.StripTextures(ccf)
     S.Template(ccf, "Window")
     if ccf.Header then S.StripTextures(ccf.Header) end
@@ -199,7 +199,7 @@ end
 -- before the window opens; the held hooks skin them on its first show.
 local function Arm()
     local ccf = _G.ChatConfigFrame
-    if not ccf then return end
+    if not ccf then return S.Skip("ChatConfigFrame missing") end
     local arm = S.Defer(Skin, ccf)
     hooksecurefunc("ChatConfig_UpdateCheckboxes", arm:Late(OnUpdateCheckboxes))
     hooksecurefunc("ChatConfig_CreateTieredCheckboxes", arm:Late(OnCreateTieredCheckboxes))

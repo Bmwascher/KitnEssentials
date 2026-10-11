@@ -198,7 +198,7 @@ end
 
 local function Skin()
     local frame = _G.CommunitiesFrame
-    if not frame then return end
+    if not frame then return S.Skip("CommunitiesFrame missing") end
     S.Frame(frame)
 
     HideDecorations(frame)

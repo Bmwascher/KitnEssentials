@@ -494,7 +494,7 @@ end
 
 local function Skin()
     local frame = _G.CharacterFrame
-    if not frame then return end
+    if not frame then return S.Skip("CharacterFrame missing") end
     S.Frame(frame)
     if _G.CharacterFramePortrait then S.Kill(_G.CharacterFramePortrait) end
 

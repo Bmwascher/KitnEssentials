@@ -230,7 +230,7 @@ end
 
 local function Skin()
     local frame = _G.FriendsFrame
-    if not frame then return end
+    if not frame then return S.Skip("FriendsFrame missing") end
 
     for _, sb in next, {
         _G.FriendsListFrame and _G.FriendsListFrame.ScrollBar,

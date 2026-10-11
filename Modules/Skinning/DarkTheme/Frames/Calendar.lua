@@ -34,7 +34,7 @@ end
 
 local function Skin()
     local cal = _G.CalendarFrame
-    if not cal then return end
+    if not cal then return S.Skip("CalendarFrame missing") end
     cal:DisableDrawLayer("BORDER")
     S.Backdrop(cal)
 

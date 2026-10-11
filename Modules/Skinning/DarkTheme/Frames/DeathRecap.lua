@@ -17,7 +17,8 @@ end
 
 local function Skin()
     local frame = _G.DeathRecapFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("DeathRecapFrame missing") end
+    if S.data(frame).skinned then return end
     S.StripTextures(frame)
     S.Backdrop(frame)
 

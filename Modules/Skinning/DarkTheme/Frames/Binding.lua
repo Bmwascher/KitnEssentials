@@ -74,7 +74,7 @@ end
 
 local function Skin()
     local frame = _G.ClickBindingFrame
-    if not frame then return end
+    if not frame then return S.Skip("ClickBindingFrame missing") end
     S.Frame(frame)
     if frame.TutorialButton then
         if frame.TutorialButton.Ring then frame.TutorialButton.Ring:Hide() end

@@ -4,7 +4,7 @@ local _G = _G
 
 local function Skin()
     local frame = _G.AddonList
-    if not frame then return end
+    if not frame then return S.Skip("AddonList missing") end
     S.Frame(frame)
 
 end

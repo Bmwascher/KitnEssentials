@@ -5,7 +5,7 @@ local next = next
 
 local function Skin()
     local frame = _G.CatalogShopFrame
-    if not frame then return end
+    if not frame then return S.Skip("CatalogShopFrame missing") end
     S.StripTextures(frame)
 
     S.Backdrop(frame, nil, true)
