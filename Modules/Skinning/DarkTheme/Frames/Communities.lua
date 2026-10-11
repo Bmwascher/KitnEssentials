@@ -57,7 +57,7 @@ local function SectionBox(parent, flag, tlx, tly, brx, bry)
     local box = CreateFrame("Frame", nil, parent)
     box:SetPoint("TOPLEFT", parent, "TOPLEFT", tlx, tly)
     box:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", brx, bry)
-    box:SetFrameLevel(math.max((parent:GetFrameLevel() or 1) - 1, 0))
+    S.RelevelPlate(parent, box)
     S.Backdrop(box)
     S.data(parent)[flag] = box
 end

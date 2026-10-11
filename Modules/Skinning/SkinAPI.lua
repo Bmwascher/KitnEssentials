@@ -467,6 +467,16 @@ end
 -- (Chat.lua uses the same).
 local BG_TEX = "Interface\\Buttons\\WHITE8x8"
 
+function S.RelevelPlate(owner, plate)
+    if not owner then return nil end
+    plate = plate or S.GetBackdrop(owner)
+    if not plate then return nil end
+    local level = (owner.GetFrameLevel and owner:GetFrameLevel()) or 1
+    local target = math_max(level - 1, 0)
+    if plate:GetFrameLevel() ~= target then plate:SetFrameLevel(target) end
+    return plate
+end
+
 function S.Backdrop(frame, inset, borderOnly)
     if not frame then return nil end
 
@@ -512,9 +522,7 @@ function S.Backdrop(frame, inset, borderOnly)
     bd:ClearAllPoints()
     bd:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
     bd:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -inset, inset)
-    local ref = isFrame and frame or parent
-    local lvl = (ref.GetFrameLevel and ref:GetFrameLevel()) or 1
-    bd:SetFrameLevel(math_max(lvl - 1, 0))
+    S.RelevelPlate(isFrame and frame or parent, bd)
 
     return bd
 end
@@ -2570,7 +2578,7 @@ function S.StyleSharedDropDownList()
         if list then
             S.StripTextures(list)
             local bd = S.Template and S.Template(list, "Default") or S.Backdrop(list)
-            if bd then bd:SetFrameLevel(math.max(list:GetFrameLevel() - 1, 0)) end
+            if bd then S.RelevelPlate(list, bd) end
             local function scrub()
 
                 for _, suffix in ipairs({ "MenuBackdrop", "Backdrop", "Border" }) do

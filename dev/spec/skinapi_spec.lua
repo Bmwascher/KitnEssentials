@@ -1753,6 +1753,40 @@ describe("SkinAPI first-show deferral", function()
     end)
 end)
 
+describe("SkinAPI RelevelPlate", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    local function leveled(level)
+        local f = { level = level, writes = 0 }
+        function f:GetFrameLevel() return self.level end
+        function f:SetFrameLevel(l)
+            self.level = l
+            self.writes = self.writes + 1
+        end
+        return f
+    end
+
+    it("puts a plate one level under its owner, floored at 0, writing only on a change", function()
+        local cases = {
+            { name = "owner 5, plate 7: one write, to 4", owner = 5, plate = 7, level = 4, writes = 1 },
+            { name = "owner 5, plate 4: no write", owner = 5, plate = 4, level = 4, writes = 0 },
+            { name = "owner 0: the plate ends at 0", owner = 0, plate = 3, level = 0, writes = 1 },
+        }
+        for _, case in ipairs(cases) do
+            local owner, plate = leveled(case.owner), leveled(case.plate)
+            assert.equals(plate, S.RelevelPlate(owner, plate), case.name)
+            assert.equals(case.level, plate.level, case.name)
+            assert.equals(case.writes, plate.writes, case.name)
+        end
+
+        local bare = leveled(5)
+        assert.is_nil(S.RelevelPlate(bare), "no plate: returns nil")
+        assert.equals(0, bare.writes, "no plate: no write")
+        assert.is_nil(S.RelevelPlate(nil), "nil owner: returns nil")
+    end)
+end)
+
 describe("SkinAPI RestoreArt", function()
     local S
     before_each(function() S = L.loadSkinAPI().Skins end)

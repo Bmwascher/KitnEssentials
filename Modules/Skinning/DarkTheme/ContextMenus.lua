@@ -117,8 +117,7 @@ local function SkinFrame(frame)
     bd:SetPoint("TOPLEFT", frame, "TOPLEFT", left, -top)
     bd:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -right, bottom)
 
-    local lvl = (frame.GetFrameLevel and frame:GetFrameLevel()) or 1
-    bd:SetFrameLevel(math_max(lvl - 1, 0))
+    S.RelevelPlate(frame, bd)
     bd:Show()
 
     if DEBUG_CM then

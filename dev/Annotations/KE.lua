@@ -782,6 +782,13 @@ function KE.Skins.SetSkinColors(bg, border) end
 ---@param outline string? "NONE" | "OUTLINE" | "THICK", nil to leave unchanged
 function KE.Skins.SetSkinFont(face, size, outline) end
 
+--- Puts a plate one frame level below its owner, floored at 0. Writes only
+--- when the level differs.
+---@param owner Frame?  nil returns nil
+---@param plate Frame?  defaults to the owner's KE backdrop
+---@return Frame? plate # nil when there is no owner or no plate
+function KE.Skins.RelevelPlate(owner, plate) end
+
 -- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
 --- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
 --- "blizzard" or "circle". Falls back to "modern" for anything else.

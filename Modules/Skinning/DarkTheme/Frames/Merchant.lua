@@ -97,8 +97,7 @@ local function Skin()
             end
         end
         S.Backdrop(button)
-        local bd = S.GetBackdrop(button)
-        if bd then bd:SetFrameLevel(math.max(0, button:GetFrameLevel() - 1)) end
+        S.RelevelPlate(button)
         if icon then
             if atlas then icon:SetAtlas(atlas) end
             icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)

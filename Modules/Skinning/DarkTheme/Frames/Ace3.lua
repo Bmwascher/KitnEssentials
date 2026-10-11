@@ -476,7 +476,7 @@ local function SkinWidget(widget)
                 if bd then
                     bd:Show()
                     bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4])
-                    bd:SetFrameLevel(math.max(pulloutFrame:GetFrameLevel() - 1, 0))
+                    S.RelevelPlate(pulloutFrame, bd)
                 end
 
                 for _, c in ipairs({ pulloutFrame:GetChildren() }) do
@@ -590,17 +590,13 @@ local function SkinContainer(widget)
     end
 end
 
-local math_max = math.max
-
 local SUB_BD_KEYS = { "editbox", "slider", "dropdown", "checkbg", "msgframe", "scrollBG" }
 local function sinkOne(obj)
     if not obj then return end
     local bd = S.GetBackdrop(obj)
     if not bd then return end
-    local ref = obj.GetFrameLevel and obj or (obj.GetParent and obj:GetParent())
-    local lvl = (ref and ref.GetFrameLevel and ref:GetFrameLevel()) or 1
-    local target = math_max(lvl - 1, 0)
-    if bd:GetFrameLevel() ~= target then bd:SetFrameLevel(target) end
+    -- A texture's plate sits under the texture's parent frame.
+    S.RelevelPlate(obj.GetFrameLevel and obj or (obj.GetParent and obj:GetParent()), bd)
 end
 
 local function HasSinkTargets(f, widget)
@@ -681,15 +677,13 @@ function S.AceFixPullout(dropdown)
     local p = dropdown and dropdown.pullout
     if not p or S.data(p).keLevelFix then return end
     S.data(p).keLevelFix = true
-    local math_max = math.max -- luacheck: ignore 431/math_max
     local function Relevel(pull)
         local f = pull.frame
         if not f then return end
         local base = f:GetFrameLevel() or 1
 
         if base >= 9998 then base = 9997; f:SetFrameLevel(base) end
-        local bd = S.GetBackdrop(f)
-        if bd then bd:SetFrameLevel(math_max(base - 1, 0)) end
+        S.RelevelPlate(f)
         if pull.scrollFrame then pull.scrollFrame:SetFrameLevel(base + 1) end
         if pull.itemFrame then pull.itemFrame:SetFrameLevel(base + 2) end
     end
@@ -710,7 +704,7 @@ local function SkinPulloutFrame(pf)
         local sinkPending = false
         local function sink()
             sinkPending = false
-            abd:SetFrameLevel(math.max(pf:GetFrameLevel() - 1, 0))
+            S.RelevelPlate(pf, abd)
         end
         local function queueSink()
             if sinkPending or not _G.C_Timer then return end

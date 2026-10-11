@@ -108,7 +108,7 @@ local function SkinFollowerReward(frame)
         end
 
         local square = CreateFrame("Frame", nil, portrait)
-        square:SetFrameLevel(math.max(portrait:GetFrameLevel() - 1, 0))
+        S.RelevelPlate(portrait, square)
         square:SetPoint("TOPLEFT", 2, -2)
         square:SetPoint("BOTTOMRIGHT", -2, 2)
         S.Backdrop(square)

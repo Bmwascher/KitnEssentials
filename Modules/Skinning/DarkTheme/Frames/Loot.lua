@@ -81,7 +81,7 @@ local function SkinLootRow(button)
         if not d.barBD and button.NameFrame then
             local holder = CreateFrame("Frame", nil, button)
             holder:SetAllPoints(button.NameFrame)
-            holder:SetFrameLevel(math.max(0, button:GetFrameLevel() - 1))
+            S.RelevelPlate(button, holder)
             d.barBD = S.Backdrop(holder)
         end
 
