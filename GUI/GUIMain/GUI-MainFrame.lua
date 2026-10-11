@@ -12,7 +12,6 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local math = math
-local abs, floor = math.abs, math.floor
 
 ---------------------------------------------------------------------------------
 -- Sidebar Data
@@ -297,8 +296,8 @@ function GUIFrame:CreateMainFrame()
     frame:SetResizeBounds(GUIFrame.minWidth, GUIFrame.minHeight)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
-    -- Resize/move instrumentation. The runaway enlarge is intermittent, so the
-    -- log has to be armed before it happens rather than switched on after.
+    -- Resize/move instrumentation. The grip fault is intermittent, so the log
+    -- has to be armed before it happens rather than switched on after.
     -- The flag hangs off the FRAME because that is what has a global name --
     -- the addon table is private to the file scope and unreachable from /run:
     --   /run KE_GUIFrame.DEBUG_RESIZE = true
@@ -335,21 +334,46 @@ function GUIFrame:CreateMainFrame()
         return placeTopLeft(x, y)
     end
 
+    -- Only on a shown window: a frame that has never been laid out can report
+    -- nil or stale edges.
+    local function readTopLeft()
+        local left, top = frame:GetLeft(), frame:GetTop()
+        if not (left and top) then return nil end
+        return left, top - UIParent:GetHeight()
+    end
+
+    local function saveWindowPoint(x, y)
+        if not (KE.db and KE.db.global) then return end
+        local gs = KE.db.global.GUIState.frame
+        if x then
+            gs.point, gs.relativePoint, gs.xOffset, gs.yOffset = "TOPLEFT", "TOPLEFT", x, y
+        else
+            local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
+            gs.point, gs.relativePoint, gs.xOffset, gs.yOffset = point, relativePoint, xOfs, yOfs
+        end
+    end
+
+    local moving = false
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function(f)
+        if GUIFrame.isResizing then
+            resizeLog("moveBlocked")
+            return
+        end
         resizeLog("moveStart")
+        moving = true
         f:StartMoving(true)
     end)
+    -- A collapsed window can be moved, so the size is never touched here.
     frame:SetScript("OnDragStop", function(f)
         resizeLog("moveStop")
+        local wasMoving = moving
+        moving = false
+        if not wasMoving or GUIFrame.isResizing then return end
         f:StopMovingOrSizing()
-        local point, _, relativePoint, xOfs, yOfs = f:GetPoint()
-        if KE.db and KE.db.global then
-            KE.db.global.GUIState.frame.point = point
-            KE.db.global.GUIState.frame.relativePoint = relativePoint
-            KE.db.global.GUIState.frame.xOffset = xOfs
-            KE.db.global.GUIState.frame.yOffset = yOfs
-        end
+        local x, y = readTopLeft()
+        if x then x, y = placeTopLeft(x, y) end
+        saveWindowPoint(x, y)
     end)
 
     -- Backdrop
@@ -594,80 +618,60 @@ function GUIFrame:CreateMainFrame()
     resizeTex:SetAllPoints()
     resizeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomResizeHandle23px.png")
     resizeTex:SetVertexColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.6)
-    -- StartSizing is bound to OnDragStart, NOT OnMouseDown. WoW only fires
-    -- OnDragStart after the cursor moves past the drag threshold, so a plain
-    -- click no longer enters sizing mode. The previous OnMouseDown wiring
-    -- caused rapid-click "spazzing": every click started a size operation,
-    -- WoW's per-frame cursor polling registered 1-2px jitter as a delta, and
-    -- each click contributed cumulative drift to the frame size.
-    --
-    -- Both OnDragStop and OnMouseUp call stopAndSaveResize because WoW
-    -- suppresses OnMouseUp once the drag threshold has tripped (only
-    -- OnDragStop fires for completed drags), but OnMouseUp is still needed
-    -- for clicks that never reached drag threshold. The isResizing guard
-    -- keeps the cleanup idempotent.
-    local sizeAtGrab
+    local grabW, grabH
+    -- OnMouseUp reaches the grip after a drag too, so it and OnHide are the
+    -- only stops; the isResizing guard makes a second call a no-op.
     local function stopAndSaveResize()
-        resizeLog("sizeStop")
         if not GUIFrame.isResizing then return end
+        resizeLog("sizeStop")
         GUIFrame.isResizing = false
         frame:StopMovingOrSizing()
 
-        -- A click that never became a drag must not commit a size. WoW polls
-        -- the cursor every frame while sizing, so even a still hand registers a
-        -- pixel or two, and each stray click used to bank that drift for good.
-        if sizeAtGrab then
-            local w, h = frame:GetWidth(), frame:GetHeight()
-            if abs(w - sizeAtGrab[1]) < 2 and abs(h - sizeAtGrab[2]) < 2 then
-                frame:SetSize(sizeAtGrab[1], sizeAtGrab[2])
-            end
-            sizeAtGrab = nil
-        end
+        -- A press with no drag can still register a pixel of change; a click
+        -- must not commit it.
+        local w, h = GUIFrame.KeepGrabSize(grabW, grabH, frame:GetWidth(), frame:GetHeight())
+        grabW, grabH = nil, nil
 
-        -- Whole pixels only. StartSizing leaves fractions behind, they persist
-        -- into SavedVariables, and they compound across sessions.
-        frame:SetSize(floor(frame:GetWidth() + 0.5), floor(frame:GetHeight() + 0.5))
-        -- StartSizing re-anchors to TOPLEFT internally; persist the new anchor
-        -- alongside size so the next session restores a consistent layout.
-        local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
+        -- The game re-anchors to CENTER on stop, so the top-left corner is set
+        -- again after the size, at whole pixels.
+        local x, y = readTopLeft()
+        if x then
+            x, y = settleWindow(x, y, w, h)
+        else
+            frame:SetSize(KE:PixelSnap(w), KE:PixelSnap(h))
+        end
         if KE.db and KE.db.global then
             local gs = KE.db.global.GUIState.frame
             gs.width = frame:GetWidth()
             gs.height = frame:GetHeight()
-            gs.point = point
-            gs.relativePoint = relativePoint
-            gs.xOffset = xOfs
-            gs.yOffset = yOfs
         end
+        saveWindowPoint(x, y)
+        resizeLog("sizeSaved")
         GUIFrame:ResetLabelRebuilds()
         GUIFrame:QueueLabelRecheck()
     end
-    -- Sizing starts on the PRESS, while the cursor is provably still on the
-    -- grip. StartSizing snaps the dragged corner to wherever the cursor is when
-    -- it runs, so any gap between the two becomes an instant jump -- and
-    -- OnDragStart, by definition, only fires once the cursor has already left.
-    -- That was the runaway enlarge: one discontinuity at the first size event,
-    -- then a perfectly smooth drag.
-    --
-    -- RegisterForDrag stays. The whole window is draggable, so without it the
-    -- press would bubble up and start MOVING the window mid-resize. OnDragStart
-    -- still fires afterward and the isResizing guard makes it a no-op.
-    resizeGrip:RegisterForDrag("LeftButton")
+    -- The maximum is the room to the screen's right and bottom edges, so the
+    -- drag stops there instead of the screen clamp moving the window.
     resizeGrip:SetScript("OnMouseDown", function(_, button)
         if button ~= "LeftButton" or GUIFrame.isResizing then return end
         resizeLog("sizeStart")
+        local x, y = readTopLeft()
+        if x then
+            local maxW, maxH = GUIFrame.ResizeRoom(x, y, UIParent:GetWidth(), UIParent:GetHeight(),
+                GUIFrame.minWidth, GUIFrame.minHeight)
+            frame:SetResizeBounds(GUIFrame.minWidth, GUIFrame.minHeight, maxW, maxH)
+            if frame.DEBUG_RESIZE then
+                resizeLog(string.format("sizeBounds %.1fx%.1f", maxW, maxH))
+            end
+        end
         GUIFrame.isResizing = true
-        sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
+        grabW, grabH = frame:GetWidth(), frame:GetHeight()
         frame:StartSizing("BOTTOMRIGHT")
     end)
-    resizeGrip:SetScript("OnDragStart", function()
-        if GUIFrame.isResizing then return end
-        GUIFrame.isResizing = true
-        sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
-        frame:StartSizing("BOTTOMRIGHT")
+    -- Only the button that started the resize ends it.
+    resizeGrip:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" then stopAndSaveResize() end
     end)
-    resizeGrip:SetScript("OnDragStop", stopAndSaveResize)
-    resizeGrip:SetScript("OnMouseUp", stopAndSaveResize)
     resizeGrip:SetScript("OnHide", stopAndSaveResize)
     resizeGrip:SetScript("OnEnter", function()
         resizeTex:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 0.8)
