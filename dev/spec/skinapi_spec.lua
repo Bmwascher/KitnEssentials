@@ -1751,6 +1751,110 @@ describe("SkinAPI first-show deferral", function()
         assert.equals(1, calls)
         assert.truthy(printed[1]:find("has not run yet", 1, true))
     end)
+
+    local function printedBy(fn, ...)
+        local printed = {}
+        local realPrint = _G.print
+        _G.print = function(msg) printed[#printed + 1] = msg end
+        local ok, err = pcall(fn, ...)
+        _G.print = realPrint
+        assert.is_true(ok, err)
+        return printed
+    end
+
+    local function verifyLine(key)
+        for _, line in ipairs(printedBy(S.DebugVerify)) do
+            if line:find(key .. " #1", 1, true) then return line end
+        end
+        return nil
+    end
+
+    it("reads skipped only for a body that returns S.Skip or defers to no window, below pending arms and errors, and verify prints it out of the error color", function()
+        local later, pending, raising = fakeFrame(), fakeFrame(), fakeFrame()
+        local cases = {
+            { name = "plain return", fn = function() end, status = "ok" },
+            { name = "S.Skip return", fn = function() return S.Skip("x missing") end,
+              status = "skipped", reason = "x missing" },
+            { name = "S.Defer with no usable frame", fn = function() S.Defer(function() end, nil) end,
+              status = "skipped", reason = "deferred window missing" },
+            { name = "deferred body returning S.Skip",
+              fn = function() S.Defer(function() return S.Skip("y missing") end, later) end,
+              status = "armed", show = later, after = "skipped", reason = "y missing" },
+            { name = "S.Skip with its own arm pending",
+              fn = function() S.Defer(function() end, pending) return S.Skip("z missing") end,
+              status = "armed", show = pending, after = "skipped", reason = "z missing" },
+            { name = "S.Skip, then its arm raises",
+              fn = function() S.Defer(function() error("arm broke") end, raising) return S.Skip("w missing") end,
+              status = "armed", show = raising, after = "ERROR:" },
+        }
+        for i, case in ipairs(cases) do
+            local key = "Skip" .. i
+            S:RegisterEarly(case.fn, key)
+            dispatch(key)
+            local record = S.skinRegistrations[key][1]
+            assert.equals(case.status, record.status, case.name)
+            if case.show then
+                case.show:Show()
+                assert.equals(case.after, record.status:sub(1, #case.after), case.name)
+            end
+            if record.status == "skipped" then
+                assert.equals(case.reason, record.skipReason, case.name)
+                local line = verifyLine(key)
+                assert.truthy(line and line:find("skipped (", 1, true), case.name)
+                assert.falsy(line:find("|cffff0000", 1, true), case.name .. ": printed in the error color")
+            end
+        end
+    end)
+
+    it("keeps a shared arm's skip for every registration, whether it attaches before or after the body ran", function()
+        local cases = {
+            { name = "visible frame, the second attaches after the body ran", frame = fakeFrame(true) },
+            { name = "hidden frame, both attach, then Show", frame = fakeFrame(), show = true },
+        }
+        for i, case in ipairs(cases) do
+            local key = "Share" .. i
+            local body = function() return S.Skip("shared missing") end
+            S:RegisterEarly(function() S.Defer(body, case.frame) end, key)
+            S:RegisterEarly(function() S.Defer(body, case.frame) end, key)
+            dispatch(key)
+            if case.show then case.frame:Show() end
+            for n, record in ipairs(S.skinRegistrations[key]) do
+                assert.equals("skipped", record.status, case.name .. ", record " .. n)
+                assert.equals("shared missing", record.skipReason, case.name .. ", record " .. n)
+            end
+            assert.equals("skipped", S.skinStatus[key], case.name)
+        end
+    end)
+
+    it("aggregates all-skipped records to skipped, skipped with ok to partial, and lets an error outrank skipped", function()
+        local cases = {
+            { name = "skipped + skipped", second = function() return S.Skip("b missing") end, want = "skipped" },
+            { name = "skipped + ok", second = function() end, want = "partial" },
+            { name = "skipped + error", second = function() error("b broke") end, want = "ERROR:" },
+        }
+        for i, case in ipairs(cases) do
+            local key = "Agg" .. i
+            S:RegisterEarly(function() return S.Skip("a missing") end, key)
+            S:RegisterEarly(case.second, key)
+            dispatch(key)
+            assert.equals(case.want, S.skinStatus[key]:sub(1, #case.want), case.name)
+        end
+    end)
+
+    it("prints a rerun's skip as skipped with its reason, apart from completed and error", function()
+        local cases = {
+            { name = "S.Skip body", fn = function() return S.Skip("r missing") end, want = "skipped (r missing)" },
+            { name = "plain body", fn = function() end, want = "completed" },
+            { name = "raising body", fn = function() error("r broke") end, want = "ERROR:" },
+        }
+        for i, case in ipairs(cases) do
+            local key = "Rerun" .. i
+            S:RegisterEarly(case.fn, key)
+            dispatch(key)
+            local printed = printedBy(S.DebugRerun, key)
+            assert.truthy(printed[1] and printed[1]:find(case.want, 1, true), case.name)
+        end
+    end)
 end)
 
 describe("SkinAPI RelevelPlate", function()

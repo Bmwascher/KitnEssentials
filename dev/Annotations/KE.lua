@@ -789,6 +789,13 @@ function KE.Skins.SetSkinFont(face, size, outline) end
 ---@return Frame? plate # nil when there is no owner or no plate
 function KE.Skins.RelevelPlate(owner, plate) end
 
+--- A skin body returns this when its window or addon is missing, so verify
+--- reads "skipped (<reason>)" instead of "ok".
+---@param reason string?  defaults to "no reason given"
+---@return table sentinel
+---@return string reason
+function KE.Skins.Skip(reason) end
+
 -- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
 --- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
 --- "blizzard" or "circle". Falls back to "modern" for anything else.

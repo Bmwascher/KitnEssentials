@@ -3423,18 +3423,19 @@ local function aggregateStatus(key)
     if not records or #records == 0 then return nil end
 
     local errorStatus
-    local allPending, allOk, allDisabled, allSuppressed = true, true, true, true
+    local allPending, allOk, allDisabled, allSuppressed, allSkipped = true, true, true, true, true
     local anyArmed, okOrArmed = false, true
     for _, record in ipairs(records) do
         local status = record.status
         if status ~= "pending" and status ~= "ok" and status ~= "armed"
-            and status ~= "disabled" and status ~= "suppressed" then
+            and status ~= "disabled" and status ~= "suppressed" and status ~= "skipped" then
             errorStatus = errorStatus or status
         end
         if status ~= "pending" then allPending = false end
         if status ~= "ok" then allOk = false end
         if status ~= "disabled" then allDisabled = false end
         if status ~= "suppressed" then allSuppressed = false end
+        if status ~= "skipped" then allSkipped = false end
         if status == "armed" then anyArmed = true end
         if status ~= "ok" and status ~= "armed" then okOrArmed = false end
     end
@@ -3445,6 +3446,7 @@ local function aggregateStatus(key)
     if anyArmed and okOrArmed then return "armed" end
     if allDisabled then return "disabled" end
     if allSuppressed then return "suppressed" end
+    if allSkipped then return "skipped" end
     return "partial"
 end
 
@@ -3497,6 +3499,15 @@ end
 S.skinStatus = {}
 S.skinIndex = {}
 
+-- A body whose window or addon is missing returns S.Skip("<what> missing"),
+-- so verify reads "skipped" instead of "ok". A return value, not a write to
+-- the running record: a deferred body runs from its window's OnShow, where no
+-- record is running.
+local SKIP = {}
+function S.Skip(reason)
+    return SKIP, reason or "no reason given"
+end
+
 -- First-show deferral. A registered function arms a body on its window's
 -- OnShow; the body runs once, inside that Show() and after Blizzard's own
 -- handler, which is the only moment a skin may touch a ScrollBox-backed
@@ -3519,7 +3530,7 @@ local function settleRecord(record, errStatus)
         record.armError = record.armError or errStatus
         record.status = record.armError
     elseif record.status == "armed" and pendingArms(record) == 0 then
-        record.status = "ok"
+        record.status = record.skipReason and "skipped" or "ok"
     end
     local key = record.entry.key
     S.skinStatus[key] = aggregateStatus(key)
@@ -3536,6 +3547,7 @@ local function attachArm(arm, record)
     record.arms = record.arms or {}
     record.arms[#record.arms + 1] = arm
     if arm.err then record.armError = record.armError or arm.err end
+    if arm.skipReason then record.skipReason = record.skipReason or arm.skipReason end
 end
 
 local function failArm(arm, err)
@@ -3552,9 +3564,13 @@ Arm.__index = Arm
 function Arm:Run()
     if self.done then return end
     self.done = true
-    local ok, err = pcall(self.body)
+    local ok, err, reason = pcall(self.body)
     if ok then
-        for _, record in ipairs(self.records) do settleRecord(record) end
+        if err == SKIP then self.skipReason = reason end
+        for _, record in ipairs(self.records) do
+            if self.skipReason then record.skipReason = record.skipReason or self.skipReason end
+            settleRecord(record)
+        end
     else
         failArm(self, err)
     end
@@ -3592,7 +3608,8 @@ function Arm:Late(handler)
 end
 
 -- With no usable trigger the window does not exist, so the body can never
--- run: the arm returned is already spent and is not remembered.
+-- run: the arm returned is already spent and is not remembered, and the
+-- registration running it reads skipped.
 function S.Defer(body, ...)
     local arm = armByBody[body]
     if arm then
@@ -3612,6 +3629,9 @@ function S.Defer(body, ...)
         end
     end
     if not hooked then
+        if runningRecord then
+            runningRecord.skipReason = runningRecord.skipReason or "deferred window missing"
+        end
         arm.done, arm.replayed, arm.queue, arm.late = true, true, nil, nil
         return arm
     end
@@ -3633,12 +3653,15 @@ local function runList(list)
             -- whose skins dispatch inside this call.
             local outerRecord = runningRecord
             runningRecord = record
-            local ok, err = pcall(entry.fn)
+            local ok, err, reason = pcall(entry.fn)
             runningRecord = outerRecord
+            local skipped = ok and err == SKIP
+            if skipped and record then record.skipReason = record.skipReason or reason end
             if entry.key then
-                local status = ok and "ok" or ("ERROR: " .. tostring(err))
-                if ok and record and record.arms then
-                    status = record.armError or (pendingArms(record) > 0 and "armed") or "ok"
+                local status = ok and (skipped and "skipped" or "ok") or ("ERROR: " .. tostring(err))
+                if ok and record then
+                    status = record.armError or (pendingArms(record) > 0 and "armed")
+                        or (record.skipReason and "skipped") or "ok"
                 end
                 if record then
                     record.status = status
@@ -3694,6 +3717,7 @@ local STATUS_COLOR = {
     pending    = "|cffffff00",
     partial    = "|cffff9900",
     armed      = "|cffcc99ff",
+    skipped    = "|cffd2b48c",
 }
 local function statusColor(status)
     return STATUS_COLOR[status] or "|cffff0000"
@@ -3727,6 +3751,9 @@ function S.DebugVerify()
                 end
                 if record.status == "armed" then
                     shown = ("armed (%d of %d run)"):format(#record.arms - pendingArms(record), #record.arms)
+                end
+                if record.status == "skipped" then
+                    shown = "skipped (" .. tostring(record.skipReason) .. ")"
                 end
                 local label = key .. " #" .. record.id .. " (" .. (record.addon or "early") .. ")"
                 print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-32s %s%s|r"):format(label, statusColor(record.status), shown))
@@ -3835,8 +3862,16 @@ function S.DebugRerun(key, selector)
         return
     end
 
-    local ok, err = pcall(record.entry.fn)
-    print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. (ok and "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)" or ("|cffff0000ERROR:|r " .. tostring(err))))
+    local ok, err, reason = pcall(record.entry.fn)
+    local result
+    if not ok then
+        result = "|cffff0000ERROR:|r " .. tostring(err)
+    elseif err == SKIP then
+        result = statusColor("skipped") .. "skipped (" .. tostring(reason) .. ")|r"
+    else
+        result = "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)"
+    end
+    print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. result)
 end
 
 local function anyPending()
