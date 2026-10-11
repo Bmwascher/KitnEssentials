@@ -2762,6 +2762,37 @@ end
 
 local function DeleteKey() return nil end
 
+local function SubTable(parent, key)
+    local value = type(parent) == "table" and parent[key] or nil
+    if type(value) == "table" then return value end
+    return nil
+end
+
+-- Hide Zone Text was two settings. Automation's hid zone text only while
+-- Automation was on; On-Screen Messages' only while that module was on and not
+-- standing down for ElvUI. The merged setting is ticked exactly where one of
+-- them was in effect. An import is converted only when it still carries the
+-- old key: an export without it may tick Hide Zone Text with Automation off.
+---@param profile table
+---@param elvuiLoaded boolean
+---@param fromImport boolean
+---@return boolean|nil
+function KE.ZoneTextCarryOver(profile, elvuiLoaded, fromImport)
+    local messages = SubTable(SubTable(profile, "Skinning"), "Messages")
+    local zone = SubTable(messages, "ZoneText")
+    local oldHide = zone and zone.Hide
+    if fromImport and oldHide == nil then return nil end
+
+    local automation = SubTable(profile, "Automation")
+    if automation and automation.Enabled == true and automation.HideZoneText == true then
+        return true
+    end
+    if not (messages and messages.Enabled == true and oldHide == true) then return false end
+    local useElvUI = SubTable(profile, "UseElvUI")
+    local deferring = elvuiLoaded and not (useElvUI and useElvUI.Enabled == false)
+    return not deferring
+end
+
 local KEY_RENAMES = {
     {
         id = "CombatLogger.ScenarioTorghast->Scenario",

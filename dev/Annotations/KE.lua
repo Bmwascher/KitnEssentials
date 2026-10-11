@@ -423,6 +423,14 @@ function KE:MigrateCombatLoggerKeys() end
 ---@param profile table
 function KE:MigrateProfileKeys(profile) end
 
+--- Whether Hide Zone Text ends ticked when the two old zone text settings
+--- merge; nil when an import carries no old key and is left untouched.
+---@param profile table
+---@param elvuiLoaded boolean
+---@param fromImport boolean
+---@return boolean|nil
+function KE.ZoneTextCarryOver(profile, elvuiLoaded, fromImport) end
+
 --- The per-character saved table (KitnEssentialsCharDB), or nil; created
 --- only when `create` is true.
 ---@param create boolean?
