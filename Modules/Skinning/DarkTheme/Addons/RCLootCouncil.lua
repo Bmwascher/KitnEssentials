@@ -436,7 +436,7 @@ end
 
 local function Skin()
     local addon = _G.RCLootCouncil
-    if not (addon and addon.UI and addon.GetModule) then return end
+    if not (addon and addon.UI and addon.GetModule) then return S.Skip("RCLootCouncil missing") end
 
     hooksecurefunc(addon.UI, "New", UI_New)
     hooksecurefunc(addon.UI, "NewNamed", UI_New)

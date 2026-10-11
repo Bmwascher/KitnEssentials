@@ -140,7 +140,7 @@ end
 
 local function Skin()
     local api = _G.Baganator and _G.Baganator.API and _G.Baganator.API.Skins
-    if not (api and api.RegisterListener) then return end
+    if not (api and api.RegisterListener) then return S.Skip("Baganator skin API missing") end
     api.RegisterListener(Dispatch)
 
     -- Catch up on anything built before we registered: each region is handed

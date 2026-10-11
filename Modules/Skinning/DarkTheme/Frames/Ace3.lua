@@ -879,7 +879,7 @@ end
 
 local function SetupAce3()
     local LibStub = _G.LibStub
-    if not LibStub then return end
+    if not LibStub then return S.Skip("LibStub missing") end
     StyleConfigDialog()
 
     local ok, AceGUI = pcall(LibStub, "AceGUI-3.0", true)

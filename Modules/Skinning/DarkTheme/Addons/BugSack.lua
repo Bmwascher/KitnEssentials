@@ -86,7 +86,7 @@ local function OpenSack()
 end
 
 local function Skin()
-    if not _G.BugSack then return end
+    if not _G.BugSack then return S.Skip("BugSack missing") end
     if _G.BugSack.OpenSack then hooksecurefunc(_G.BugSack, "OpenSack", OpenSack) end
 
     local sp = _G.SettingsPanel

@@ -153,7 +153,7 @@ end
 
 local function Skin()
     local f = _G.SimpleAddonManager
-    if not f then return end
+    if not f then return S.Skip("SimpleAddonManager missing") end
     if f.Initialize then hooksecurefunc(f, "Initialize", ReskinModules) end
     S.StripTextures(f, true)
 

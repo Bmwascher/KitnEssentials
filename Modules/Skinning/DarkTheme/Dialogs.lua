@@ -78,7 +78,7 @@ end
 local function Skin()
     if S.skinIndex.__dialogLayoutHook then return end
     local NSU = _G.NineSliceUtil
-    if not (NSU and NSU.ApplyLayout and NSU.GetLayout) then return end
+    if not (NSU and NSU.ApplyLayout and NSU.GetLayout) then return S.Skip("NineSliceUtil missing") end
     S.skinIndex.__dialogLayoutHook = true
 
     local dialogLayout = NSU.GetLayout("Dialog")
