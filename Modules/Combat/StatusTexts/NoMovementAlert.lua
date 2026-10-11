@@ -1059,10 +1059,11 @@ end
 -- Attached means "be a Combat Texts line" -- font face/size/outline and
 -- the stack spacing come from that module, so the alerts match the
 -- messages they sit under instead of drifting from them. The matching
--- GUI rows are hidden while attached for the same reason.
+-- GUI rows are hidden while attached for the same reason. It reads the
+-- placement result, so style changes together with placement and scale.
 function NMA:EffectiveStyle()
     local db = self.db
-    if self:IsAttached() then
+    if self.attached then
         local cm = KitnEssentials:GetModule("CombatTexts", true)
         local c = cm and cm.db
         if c then
@@ -1256,8 +1257,15 @@ function NMA:ShowPreview()
         local s = samples[i]
         self:GetSlot(i).text:SetText(self:ComposeLine(s.name, FormatTime(s.remain)))
     end
+    local wasAttached = self.attached
     self:LayoutSlots(count)
     self:ApplyPosition()
+    -- Style follows the placement result; a preview that just changed it is
+    -- laid out and placed again with the matching font and size.
+    if self.attached ~= wasAttached then
+        self:LayoutSlots(count)
+        self:ApplyPosition()
+    end
     self.frame:Show()
     self:NotifyAttach()
     self:RegisterAnchor()

@@ -545,7 +545,8 @@ end
 
 -- What every attacher reports as attached: its box, Combat Texts taking
 -- displays, and no loop through its frame. A refused display then shows its
--- own settings, mover and font.
+-- own settings and mover, and its own font unless that module's font
+-- follows the saved box (Havoc Tracker).
 function CM:TakesAttached(key, frame, toggleOn)
     return self:AcceptsAttach(toggleOn) and not self:RefusesLoopingAttach(key, frame)
 end

@@ -152,10 +152,11 @@ function SPC:UpdateAttachSubscription()
 end
 
 -- Attached, the text takes the Combat Texts face, outline and spacing, and its
--- size unless Override Text Size is on.
+-- size unless Override Text Size is on. It reads the placement result, so
+-- style and growth direction change together.
 function SPC:EffectiveStyle()
     local db = self.db
-    if self:IsAttached() then
+    if self.attached then
         local cm = KitnEssentials:GetModule("CombatTexts", true)
         local c = cm and cm.db
         if c then
@@ -600,8 +601,8 @@ function SPC:Evaluate()
     if #list > 0 then
         self:CreateFrame_()
         self:SetLive(true)
-        self:ApplyStyle()
         self:ApplyPosition()
+        self:ApplyStyle()
         self:RegisterAnchor()
     else
         self:SetLive(false)
@@ -686,8 +687,8 @@ function SPC:ShowPreview()
     self:CreateFrame_()
     self.isPreview = true
     self:StopTicker()
-    self:ApplyStyle()
     self:ApplyPosition()
+    self:ApplyStyle()
 
     if self.db.DisplayMode == "ICONS" then
         local shown = self.shownButtons

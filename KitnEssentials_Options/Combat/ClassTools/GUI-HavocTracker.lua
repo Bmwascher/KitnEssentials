@@ -77,7 +77,7 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     if ticked then
         card1:AddRow(attachRow, Theme.rowHeight)
         if HT ~= nil and not attached then
-            GUIFrame:AddAttachOffNote(card1)
+            GUIFrame:AddAttachOffNote(card1, true)
         end
         for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
             sizeKey = "WarningFontSize", default = 24, range = { 10, 48 },

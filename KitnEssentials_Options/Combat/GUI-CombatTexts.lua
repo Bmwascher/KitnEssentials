@@ -46,9 +46,13 @@ function GUIFrame:CreateAttachSizeRow(card, db, opts)
 end
 
 -- Under an Attach box that is ticked while Combat Texts is not taking the
--- display: says why the page shows the display's own settings.
-function GUIFrame:AddAttachOffNote(card)
-    card:AddNote("Combat Texts is not taking this display, so it stands alone and uses the settings below.")
+-- display: says why the page shows the display's own settings. keepsFont
+-- adds that the font still follows Combat Texts, for a module whose font
+-- follows the saved box.
+function GUIFrame:AddAttachOffNote(card, keepsFont)
+    local text = "Combat Texts is not taking this display, so it stands alone and uses the settings below."
+    if keepsFont then text = text .. " Its font still follows Combat Texts." end
+    card:AddNote(text)
 end
 
 GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
