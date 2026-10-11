@@ -9,7 +9,6 @@ local function Skin()
     if S.data(frame).skinned then return end
 
     S.Frame(frame)
-    S.TrimScrollBar(frame.ScrollBar)
 
     local editBox = _G.GuildRegistrarFrameEditBox
     if _G.GuildRegistrarGreetingFrame then S.StripTextures(_G.GuildRegistrarGreetingFrame) end

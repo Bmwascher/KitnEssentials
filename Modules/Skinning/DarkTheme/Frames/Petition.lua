@@ -8,7 +8,6 @@ local function Skin()
     if S.data(frame).skinned then return end
 
     S.Frame(frame)
-    S.TrimScrollBar(frame.ScrollBar)
 
     if _G.PetitionFrameSignButton then S.Button(_G.PetitionFrameSignButton) end
     if _G.PetitionFrameRequestButton then S.Button(_G.PetitionFrameRequestButton) end

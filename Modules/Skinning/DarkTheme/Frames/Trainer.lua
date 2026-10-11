@@ -87,7 +87,6 @@ local function Skin()
             frame.ScrollBox.Shadows:SetAlpha(0)
         end
     end
-    if frame.ScrollBar then S.TrimScrollBar(frame.ScrollBar) end
     if frame.FilterDropdown then S.DropDown(frame.FilterDropdown) end
     local step = _G.ClassTrainerFrameSkillStepButton
     if step then

@@ -3037,7 +3037,7 @@ local function skinScrollArrows(frame)
     end
 end
 
-function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpdates
+function S.TrimScrollBar(frame)
     if not frame then return end
     S.StripTextures(frame)
     skinScrollArrows(frame)
@@ -3090,13 +3090,6 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- A trim scroll bar needs NO Update hook -- reskin the steppers once
     -- and they stay. That is the rule here now: skin once, no hook.
     --
-    -- `ignoreUpdates` is kept only so the ~40 call sites keep working; it
-    -- is now inert. It was a misport in the first place: the second arg
-    -- belongs on thumb:CreateBackdrop('Transparent', nil, ignoreUpdates)
-    -- as a backdrop-registration flag, not as a gate on an Update hook
-    -- that should never have existed. Currency passing `true` was
-    -- accidentally the only skin immune to this.
-    --
     -- CORRECTION: an earlier note claimed this hook was the root of the
     -- LootHistory taint and attached a doctrine to it -- "never
     -- hooksecurefunc a method Blizzard calls from the middle of another
@@ -3118,10 +3111,10 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- closure, no behavior change.
 end
 
-function S.ScrollBar(scrollbar, ignoreUpdates)
+function S.ScrollBar(scrollbar)
     if not scrollbar or S.data(scrollbar).skinned then return end
     if scrollbar.GetThumb or scrollbar.Back or scrollbar.Forward then
-        S.TrimScrollBar(scrollbar, ignoreUpdates)
+        S.TrimScrollBar(scrollbar)
     else
 
         local name = scrollbar.GetName and scrollbar:GetName()
