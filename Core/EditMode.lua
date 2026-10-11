@@ -148,7 +148,7 @@ end
 -- The parent a drag measures against, matching where the module's placement
 -- put the frame. getParentFrame does not say whether that placement
 -- reparents, and a reparenting one refuses a text or texture, so such an
--- anchor is kept only when the frame really hangs on it. A cancel finds the
+-- anchor is kept only while the frame is anchored to it. A cancel finds the
 -- frame on UIParent's corner, so it passes the drag's own answer instead.
 local function EffectiveDragParent(frame, parent, dragAnchor)
     if KE:IsUnsafeAnchor(frame, parent) then return UIParent end
