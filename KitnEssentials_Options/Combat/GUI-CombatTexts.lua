@@ -48,7 +48,7 @@ end
 -- Under an Attach box that is ticked while Combat Texts is not taking the
 -- display: says why the page shows the display's own settings.
 function GUIFrame:AddAttachOffNote(card)
-    card:AddNote("Combat Texts is off, so this display stands alone and uses the settings below.")
+    card:AddNote("Combat Texts is not taking this display, so it stands alone and uses the settings below.")
 end
 
 GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)

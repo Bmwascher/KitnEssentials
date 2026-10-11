@@ -1042,7 +1042,7 @@ local ATTACH_KEY = "noMovement"
 
 function NMA:IsAttached()
     local cm = KitnEssentials:GetModule("CombatTexts", true)
-    return cm ~= nil and self.db ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+    return cm ~= nil and self.db ~= nil and cm:TakesAttached(ATTACH_KEY, self.frame, self.db.AttachToCombatTexts == true)
 end
 
 function NMA:NotifyAttach()

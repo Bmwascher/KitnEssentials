@@ -137,7 +137,7 @@ function SPC:IsAttached()
     local db = self.db
     if not db or db.DisplayMode ~= "TEXT" then return false end
     local cm = KitnEssentials:GetModule("CombatTexts", true)
-    return cm ~= nil and cm:AcceptsAttach(db.AttachToCombatTexts == true)
+    return cm ~= nil and cm:TakesAttached(ATTACH_KEY, self.frame, db.AttachToCombatTexts == true)
 end
 
 function SPC:NotifyAttach()

@@ -543,6 +543,13 @@ function CM:AcceptsAttach(toggleOn)
         self.db ~= nil and self.db.Enabled ~= false, self.container ~= nil)
 end
 
+-- What every attacher reports as attached: its box, Combat Texts taking
+-- displays, and no loop through its frame. A refused display then shows its
+-- own settings, mover and font.
+function CM:TakesAttached(key, frame, toggleOn)
+    return self:AcceptsAttach(toggleOn) and not self:RefusesLoopingAttach(key, frame)
+end
+
 function CM:AcceptsExternalLines()
     return self:AcceptsAttach(true)
 end
