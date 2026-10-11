@@ -29,16 +29,6 @@ local GROW_DIRECTIONS = {
     { key = "RIGHT", text = "Right" },
 }
 
-local function BuildSoundOptions()
-    local out = { { key = "None", text = "None" } }
-    if KE.LSM then
-        for _, name in ipairs(KE.LSM:List("sound")) do
-            out[#out + 1] = { key = name, text = name }
-        end
-    end
-    return out
-end
-
 -- The talent's name and a gray tag: the length its next proc would count, or
 -- that the character lacks the talent.
 local function TalentLabel(module, tracker)
@@ -277,7 +267,7 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
     }), 0.5)
     if db.SoundEnabled then
         soundRow:AddWidget(GUIFrame:CreateDropdown(soundRow, "Sound", {
-            options = BuildSoundOptions(),
+            options = GUIFrame.BuildSoundOptions(),
             searchable = true,
             value = db.Sound or "None",
             callback = function(key) db.Sound = key; ApplySettings() end,
