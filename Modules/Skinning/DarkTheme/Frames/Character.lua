@@ -118,9 +118,9 @@ local function SkinStatsPane()
     for _, cat in ipairs(STAT_CATEGORIES) do
         if pane[cat] then
             S.StripTextures(pane[cat])
-            if not pane[cat].aeHeaderBox then
+            if not S.data(pane[cat]).aeHeaderBox then
                 S.Backdrop(pane[cat])
-                pane[cat].aeHeaderBox = true
+                S.data(pane[cat]).aeHeaderBox = true
             end
 
             local bd = S.GetBackdrop(pane[cat])
@@ -151,7 +151,7 @@ end
 local function SkinSidebarTabs()
     for i = 1, 3 do
         local tab = _G["PaperDollSidebarTab" .. i]
-        if tab and not tab.aeTabSkinned then
+        if tab and not S.data(tab).aeTabSkinned then
             -- (art flashed on open): SetAlpha(0) is
             -- state -- Blizzard re-dresses it every show, so TabBg has
             -- to be Killed rather than faded.
@@ -173,18 +173,18 @@ local function SkinSidebarTabs()
                     tab.Hider:SetAllPoints(tab.Icon)
                 end
             end
-            tab.aeTabSkinned = true
+            S.data(tab).aeTabSkinned = true
         end
     end
 end
 
 local function StyleTitleRow(child)
-    if not child or child.aeTitleSkinned then return end
+    if not child or S.data(child).aeTitleSkinned then return end
     if child.DisableDrawLayer then child:DisableDrawLayer("BACKGROUND") end
 
     S.RowHover(child)
     S.FontStrings(child, TITLE_FONT, "")
-    child.aeTitleSkinned = true
+    S.data(child).aeTitleSkinned = true
 end
 
 local function SkinTitlesPane()
@@ -197,7 +197,7 @@ end
 local EQUIP_FONT = 13
 local EQUIP_HOVER_ALPHA = 0.30
 local function StyleEquipRow(child)
-    if not child or not child.icon or child.aeEquipSkinned then return end
+    if not child or not child.icon or S.data(child).aeEquipSkinned then return end
     if child.BgTop then child.BgTop:SetTexture(nil) end
     if child.BgMiddle then child.BgMiddle:SetTexture(nil) end
     if child.BgBottom then child.BgBottom:SetTexture(nil) end
@@ -211,7 +211,7 @@ local function StyleEquipRow(child)
         child.SelectedBar:SetDrawLayer("BACKGROUND")
     end
     S.FontStrings(child, EQUIP_FONT, "")
-    child.aeEquipSkinned = true
+    S.data(child).aeEquipSkinned = true
 end
 
 local function ShrinkSetButtons()
@@ -553,9 +553,9 @@ local function Skin()
     local cf = _G.CharacterModelScene and _G.CharacterModelScene.ControlFrame
     if cf then
         cf:Hide()
-        if not cf.aeHidden then
+        if not S.data(cf).aeHidden then
             cf:HookScript("OnShow", cf.Hide)
-            cf.aeHidden = true
+            S.data(cf).aeHidden = true
         end
     end
 

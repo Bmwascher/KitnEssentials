@@ -128,7 +128,7 @@ local function ReskinPopupFrame(frame)
     S.StripTextures(frame)
     S.Backdrop(frame)
 
-    if not frame.aeClose then
+    if not S.data(frame).aeClose then
         local close = CreateFrame("Button", nil, frame)
         close:SetSize(16, 16)
         close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
@@ -141,7 +141,7 @@ local function ReskinPopupFrame(frame)
         close:SetScript("OnEnter", function() tex:SetVertexColor(BRAND[1], BRAND[2], BRAND[3]) end)
         close:SetScript("OnLeave", function() tex:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3]) end)
         close:SetScript("OnClick", function() frame:Hide() end)
-        frame.aeClose = close
+        S.data(frame).aeClose = close
     end
 end
 
@@ -362,8 +362,8 @@ local function SkinMainFrame()
         tpf:ClearAllPoints()
         tpf:SetPoint("TOPRIGHT", frame, "TOPLEFT", -4, 0)
         tpf:SetClampedToScreen(true)
-        if not tpf.aeDraggable then
-            tpf.aeDraggable = true
+        if not S.data(tpf).aeDraggable then
+            S.data(tpf).aeDraggable = true
             tpf:SetMovable(true)
             local handle = tpf.Header or tpf
             handle:EnableMouse(true)

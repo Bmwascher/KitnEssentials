@@ -53,21 +53,21 @@ local function FlattenSelection(frame, anchor)
 end
 
 local function SectionBox(parent, flag, tlx, tly, brx, bry)
-    if parent[flag] then return end
+    if S.data(parent)[flag] then return end
     local box = CreateFrame("Frame", nil, parent)
     box:SetPoint("TOPLEFT", parent, "TOPLEFT", tlx, tly)
     box:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", brx, bry)
     box:SetFrameLevel(math.max((parent:GetFrameLevel() or 1) - 1, 0))
     S.Backdrop(box)
-    parent[flag] = box
+    S.data(parent)[flag] = box
 end
 
 local function StyleReward(child)
-    if not child or child.aeRow then return end
+    if not child or S.data(child).aeRow then return end
     if child.Icon then S.Icon(child.Icon, true) end
     S.StripTextures(child)
     S.Backdrop(child)
-    child.aeRow = true
+    S.data(child).aeRow = true
 end
 
 local function StyleListEntry(child)
@@ -77,7 +77,7 @@ local function StyleListEntry(child)
     if child.CircleMask and child.CircleMask.Hide then child.CircleMask:Hide() end
     if child.IconRing and child.IconRing.Hide then child.IconRing:Hide() end
     if child.IconBorder and child.IconBorder.Hide then child.IconBorder:Hide() end
-    if not child.aeRow then
+    if not S.data(child).aeRow then
 
         if child.Name then
             S.SetFont(child.Name, nil, "OUTLINE")
@@ -91,7 +91,7 @@ local function StyleListEntry(child)
             bd:SetPoint("TOPLEFT", child, "TOPLEFT", 4, -13)
             bd:SetPoint("BOTTOMRIGHT", child, "BOTTOMRIGHT", -8, 8)
         end
-        child.aeRow = true
+        S.data(child).aeRow = true
     end
     FlattenSelection(child, S.GetBackdrop(child))
 end
@@ -99,10 +99,10 @@ end
 local function StyleMemberRow(child)
     if not child then return end
     FlattenSelection(child)
-    if child.aeMemberRow then return end
+    if S.data(child).aeMemberRow then return end
 
     S.FontStringsDeep(child, 12, "OUTLINE", 2)
-    child.aeMemberRow = true
+    S.data(child).aeMemberRow = true
 end
 
 local function SetEditBoxFontsDeep(frame, size, depth)
@@ -202,9 +202,9 @@ local function Skin()
     S.Frame(frame)
 
     HideDecorations(frame)
-    if not frame.aeDecoHook then
+    if not S.data(frame).aeDecoHook then
         frame:HookScript("OnShow", HideDecorations)
-        frame.aeDecoHook = true
+        S.data(frame).aeDecoHook = true
     end
 
     if frame.CloseButton then S.CloseButton(frame.CloseButton) end
@@ -438,30 +438,30 @@ local function Skin()
                 if col[k] and col[k].Hide then col[k]:Hide() end
             end
         end
-        if not frame.MemberList.aeColHook and frame.MemberList.RefreshListDisplay then
+        if not S.data(frame.MemberList).aeColHook and frame.MemberList.RefreshListDisplay then
             hooksecurefunc(frame.MemberList, "RefreshListDisplay", function(ml)
                 local cd = ml.ColumnDisplay
                 if not cd then return end
                 for _, child in ipairs({ cd:GetChildren() }) do
-                    if not child.aeCol then
+                    if not S.data(child).aeCol then
                         S.StripTextures(child)
                         S.Backdrop(child)
-                        child.aeCol = true
+                        S.data(child).aeCol = true
                     end
                 end
             end)
-            frame.MemberList.aeColHook = true
+            S.data(frame.MemberList).aeColHook = true
         end
 
         local wm = frame.MemberList.WatermarkFrame
         if wm and wm.SetAlpha then wm:SetAlpha(0) end
-        if not frame.MemberList.aeWmHook then
+        if not S.data(frame.MemberList).aeWmHook then
             frame.MemberList:HookScript("OnShow", function(self)
                 if self.WatermarkFrame and self.WatermarkFrame.SetAlpha then
                     self.WatermarkFrame:SetAlpha(0)
                 end
             end)
-            frame.MemberList.aeWmHook = true
+            S.data(frame.MemberList).aeWmHook = true
         end
         if frame.MemberList.ScrollBox then
             S.HookScrollBox(frame.MemberList.ScrollBox, StyleMemberRow)
