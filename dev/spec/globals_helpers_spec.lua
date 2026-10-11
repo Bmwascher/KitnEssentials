@@ -921,9 +921,8 @@ describe("KE:FormatCountdown", function()
     end)
 end)
 
--- The spec id every reader takes from Core. Index 0 is a character with no
--- specialization yet; the info stub answers for any index, so only the guard
--- can produce nil.
+-- Index 0 is a character with no specialization yet; the info stub answers any
+-- index, so only the guard can produce nil.
 describe("KE:GetPlayerSpecId", function()
     local KE, saved
     local STUBBED = { "GetSpecialization", "GetSpecializationInfo" }

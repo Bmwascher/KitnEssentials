@@ -49,11 +49,8 @@ local function noopFrame()
     return setmetatable(f, { __index = function() return function() end end })
 end
 
--- KE:GetPlayerSpecId's contract (Core/Globals.lua, pinned by
--- globals_helpers_spec), read from whatever C_SpecializationInfo the loader
--- installed, at call time. A loader whose module reads the spec through KE
--- assigns this to its stub KE, so the cases that drive GetSpecialization and
--- GetSpecializationInfo keep reaching the module.
+-- KE:GetPlayerSpecId's contract, read from the installed C_SpecializationInfo
+-- at call time, so cases that drive the spec globals still reach the module.
 local function specIdFromMocks()
     local info = _G.C_SpecializationInfo
     local index = info and info.GetSpecialization()
