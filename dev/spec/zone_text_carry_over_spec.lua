@@ -77,8 +77,6 @@ describe("zone text carry-over", function()
     end)
 end)
 
--- The appliers wire the rule in: an import is converted only when it carries
--- the old key, and the login pass converts every saved profile.
 describe("zone text carry-over appliers", function()
     after_each(function()
         _G.KitnEssentialsDB = nil
