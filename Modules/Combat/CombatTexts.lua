@@ -311,6 +311,24 @@ local function ClearAttachSlot(self, key)
     self.attachTop[key] = nil
 end
 
+-- Owners re-apply their placement on CHANGED_MESSAGE, and one owner's anchor
+-- carries a protected aura button, so a refused seat's message waits for
+-- combat to end. One message covers every refusal queued before it goes
+-- out, and it is never sent inside the arrange that refused.
+function CM:QueueAttachChange()
+    if self.attachChangePending then return end
+    self.attachChangePending = true
+    if self.inCombat or InCombatLockdown() then return end
+    C_Timer.After(0, function() self:FlushAttachChange() end)
+end
+
+function CM:FlushAttachChange()
+    if not self.attachChangePending then return end
+    if self.inCombat or InCombatLockdown() then return end
+    self.attachChangePending = false
+    if self:IsEnabled() then self:SendMessage(self.CHANGED_MESSAGE) end
+end
+
 -- Seated once, by SetPoint, under a KE spacer anchored to the container top.
 -- Later moves only resize the spacer, so no arrange re-anchors a frame the
 -- engine's aura button hangs on.
@@ -320,11 +338,10 @@ local function SeatAttached(self, key, frame)
     if not CanMove(self, frame) or (spacer and not CanMove(self, spacer)) then return false end
     -- A loop that appeared after the slot was taken, through another display
     -- pointed at this one. The owner placed nothing while attached, so the
-    -- slot is given up and the owner told to place the frame itself. The
-    -- message waits a frame so no owner re-arranges inside this arrange.
+    -- slot is given up and the owner told to place the frame itself.
     if self:RefusesLoopingAttach(key, frame) then
         ClearAttachSlot(self, key)
-        C_Timer.After(0, function() self:SendMessage(self.CHANGED_MESSAGE) end)
+        self:QueueAttachChange()
         return false
     end
     if not spacer then
@@ -762,6 +779,7 @@ end
 
 function CM:OnExitCombat()
     self.inCombat = false
+    self:FlushAttachChange()
     self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
     self:HidePersistentMessage("noTarget")
     self:ShowFlashMessage("exitCombat")
@@ -1255,6 +1273,7 @@ function CM:OnDisable()
     self.activeMessages = {}
     self.isPreview = false
     self.inCombat = false
+    self.attachChangePending = false
     self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
     SetAggroPulse(self.messageFrames.aggro, false)
     self:UpdateAggroEventRegistration(true)
