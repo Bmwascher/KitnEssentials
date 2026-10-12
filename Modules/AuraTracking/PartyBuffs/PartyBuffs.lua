@@ -771,9 +771,9 @@ function PB:BindCooldowns(k, binding)
         slot.cdMember, slot.cdSpec = m, spec
     end
     local entries = self:CooldownEntries(m)
-    if not Track.Apply(slot.track, binding.token, entries, self.cellStyle) then
-        self.buildPending = true
-    end
+    local clean, restyle = Track.Apply(slot.track, binding.token, entries, self.cellStyle, self.styleSettings)
+    if not clean then self.buildPending = true end
+    if restyle then self:Restyle() end
     if Track.Missing(slot.track) then self:Enqueue(k) end
     self:LayoutCells(slot, #entries)
     self:SyncMembers()
@@ -912,6 +912,9 @@ function PB:BuildStyleSettings()
         local d = DESCRIPTORS[i]
         settings[d.capabilities.ringColorKey] = colored and db[d.category.colorKey] or CLEAR
     end
+    settings.CellRingOffensive = colored and db.ColorBurst or CLEAR
+    settings.CellRingDefensive = colored and db.ColorBigDefensive or CLEAR
+    settings.CellRingTrinket   = colored and db.ColorTrinket or CLEAR
     self.styleSettings = settings
     local cell = self.cellStyle or { colors = {} }
     cell.size     = db.IconSize
@@ -963,6 +966,9 @@ function PB:Restyle()
                     clean = false
                 end
             end
+        end
+        if slot and slot.track and not Track.RestyleOverlay(slot.track, self.styleSettings) then
+            clean = false
         end
     end
     self.restylePending = not clean
@@ -1164,6 +1170,33 @@ function PB:DrawPreviewCells(row, entries, side, step)
             c:Hide()
         end
     end
+    self:DrawPreviewActive(row, entries[2])
+end
+
+-- The active sample: a preview aura frame over cell 2 with a running timer.
+function PB:DrawPreviewActive(row, e)
+    local icon = row.active
+    if not e then
+        if icon then icon:Hide() end
+        return
+    end
+    local settings = self.styleSettings
+    local d = Track.OVERLAY_DESCRIPTORS[e.kind]
+    if icon then
+        KE.AuraStyle.StyleAuraFrame(icon, settings, d.capabilities)
+    else
+        icon = CreateFrame("Frame", nil, row.holder)
+        KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
+        icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
+        row.active = icon
+    end
+    local cell = row.cells[2]
+    icon:SetFrameLevel(cell:GetFrameLevel() + 10)
+    icon:ClearAllPoints()
+    icon:SetPoint("CENTER", cell, "CENTER", 0, 0)
+    icon.keIcon:SetTexture(e.texture)
+    self:RunPreviewTimer(icon, 1, GetTime())
+    icon:Show()
 end
 
 function PB:DrawPreviewRow(k, frame)
@@ -1265,6 +1298,10 @@ function PB:HidePreviewRow(row)
             row.trackers[i] = nil
         end
         c:Hide()
+    end
+    if row.active then
+        row.active.keCooldown.keDuration = nil
+        row.active.keCooldown:Clear()
     end
     row.holder:Hide()
 end

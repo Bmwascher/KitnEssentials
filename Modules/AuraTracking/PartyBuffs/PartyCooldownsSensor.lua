@@ -392,6 +392,7 @@ local function Reveal(st, i, n)
         return fresh
     end
     st.shown[i] = nil
+    Track.EmptyOverlaySlot(st, i)
     Park(st.sensors[i])
     Park(st.shorts[i])
     Track.Forget(t)
@@ -427,7 +428,7 @@ end
 -- Points the slot's cells at entries for unit. Containers are only aimed
 -- here; BuildNext makes the missing ones, one per call. A cell keeps its
 -- running timer while its buffs and length are unchanged.
-function Track.Apply(st, unit, entries, style)
+function Track.Apply(st, unit, entries, style, settings)
     local clean, moved = true, false
     local n = Track.Now()
     if st.unit ~= unit then
@@ -475,6 +476,7 @@ function Track.Apply(st, unit, entries, style)
     end
     for i = #entries + 1, st.count do Retire(st, i) end
     st.entries, st.count = entries, #entries
+    local overlayClean, restyle = Track.ApplyOverlay(st, entries, unit, settings)
     local fresh = false
     for i = 1, st.count do
         if Reveal(st, i, n) then fresh = true end
@@ -484,7 +486,7 @@ function Track.Apply(st, unit, entries, style)
     -- become ready is primed by these reads, however long ago the slot's bind
     -- reads ran.
     if moved then Track.Hold(st, BIND_HOLD) elseif fresh then Track.Arm(st) end
-    return clean
+    return clean and overlayClean, restyle
 end
 
 -- True while a cell of the slot waits for a container.
@@ -494,7 +496,7 @@ function Track.Missing(st)
         local e = st.entries[i]
         if not st.sensors[i] or (e.short and not st.shorts[i]) then return true end
     end
-    return false
+    return Track.OverlayMissing(st)
 end
 
 -- Builds one missing container: each is a full aura scan, so the caller
@@ -518,7 +520,7 @@ function Track.BuildNext(st)
             return true
         end
     end
-    return true
+    return Track.BuildOverlayNext(st)
 end
 
 function Track.Unbind(st)
@@ -526,6 +528,12 @@ function Track.Unbind(st)
     st.unit, st.evtUnit = nil, nil
     st.evt:UnregisterAllEvents()
     for i = 1, st.count do Retire(st, i) end
+    if st.overlay then
+        st.overlayOff = true
+        st.overlayHost:Hide()
+        pcall(st.overlay.SetEnabled, st.overlay, false)
+        st.overlayUnit = nil
+    end
     st.count = 0
 end
 
@@ -543,4 +551,219 @@ function Track.Disable()
         ticker:Cancel()
         ticker = nil
     end
+end
+
+---------------------------------------------------------------------------------
+-- Active state: an engine aura slot per cell, laid over it. While the buff is
+-- up it shows KE's swipe and timer; when the buff falls the engine hides it
+-- and the cooling cell underneath shows.
+---------------------------------------------------------------------------------
+local OVERLAY_DESCRIPTORS = {
+    offensive = { key = "cdOffensive",
+        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingOffensive" } },
+    defensive = { key = "cdDefensive",
+        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingDefensive" } },
+    trinket   = { key = "cdTrinket",
+        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingTrinket" } },
+}
+Track.OVERLAY_DESCRIPTORS = OVERLAY_DESCRIPTORS
+
+-- A slot's key changes after a failed add: a second add of a key asserts, and
+-- the container cannot say whether the first one registered.
+local function SlotKey(st, i)
+    return "cd" .. i .. "." .. (st.overlayGen[i] or 0)
+end
+
+local EMPTY = { includeSpellIDs = {} }
+
+-- Failed slot adds per row while auras are readable. Each can leave a button
+-- the container keeps for good; past this the row's cells work without an
+-- overlay.
+local MAX_OVERLAY_FAILS = 2
+
+local function OverlaySpent(st)
+    return (st.overlayFails or 0) >= MAX_OVERLAY_FAILS
+end
+
+-- Hides every button at once: the host is a KE frame, and hiding it is never
+-- refused. Every cell of the slot stays unready until the drain.
+local function Quarantine(st)
+    st.overlayOff = true
+    st.overlayHost:Hide()
+    pcall(st.overlay.SetEnabled, st.overlay, false)
+    st.overlayUnit = nil
+    local n = Track.Now()
+    for i = 1, st.count do
+        if st.ready[i] then
+            st.ready[i] = false
+            Reveal(st, i, n)
+        end
+    end
+end
+
+-- One slot's filter: buffs, or nothing when buffs is nil. A refused call may
+-- or may not have changed the filter, so it is recorded as unknown.
+local function Point(st, i, buffs)
+    local sig = buffs and table_concat(buffs, ",") or ""
+    if st.overlaySigs[i] == sig then return true end
+    local filters = buffs and { includeSpellIDs = BuffSet(buffs) } or EMPTY
+    if pcall(st.overlay.SetAuraSlotCandidateFilters, st.overlay, SlotKey(st, i), filters) then
+        st.overlaySigs[i] = sig
+        return true
+    end
+    st.overlaySigs[i] = nil
+    return false
+end
+
+-- A hidden cell's button is emptied, so it never shows over nothing.
+function Track.EmptyOverlaySlot(st, i)
+    if st.overlayOff or not (st.overlay and st.overlayButtons[i]) then return end
+    if not Point(st, i, nil) then Quarantine(st) end
+end
+
+function Track.OverlayMissing(st)
+    if not (st.overlay and st.overlaySetUp) then return st.count > 0 end
+    if OverlaySpent(st) then return false end
+    for i = 1, st.count do
+        if not st.overlayButtons[i] then return true end
+    end
+    return false
+end
+
+-- Size, anchor and disable the new container. Until all of it is accepted the
+-- overlay counts as not built and its host stays hidden.
+local function SetUpOverlay(st)
+    local container, host = st.overlay, st.overlayHost
+    st.overlaySetUp = pcall(function()
+        container:SetSize(1, 1)
+        container:ClearAllPoints()
+        container:SetPoint("CENTER", host, "CENTER", 0, 0)
+        container:EnableMouse(false)
+        container:SetEnabled(false)
+    end)
+    return st.overlaySetUp
+end
+
+-- One container or one aura slot per call, like the sensors.
+function Track.BuildOverlayNext(st)
+    if not st.overlay then
+        if st.count == 0 then return true end
+        local host = st.overlayHost
+        if not host then
+            host = CreateFrame("Frame", nil, st.holder)
+            host:SetAllPoints(st.holder)
+            host:Hide()
+            st.overlayHost = host
+        end
+        local ok, container = pcall(CreateFrame, "AuraContainer", nil, host, "CustomAuraContainerTemplate")
+        if not ok or not container then return false end
+        st.overlay, st.overlayOff, st.overlaySetUp = container, true, false
+        st.overlayButtons, st.overlaySigs, st.overlayKinds, st.overlayWant = {}, {}, {}, {}
+        st.overlayGen, st.overlayMax = {}, 0
+        return SetUpOverlay(st)
+    end
+    if not st.overlaySetUp then return SetUpOverlay(st) end
+    if OverlaySpent(st) then return true end
+    local container = st.overlay
+    for i = 1, st.count do
+        if not st.overlayButtons[i] then
+            local e, cell = st.entries[i], st.cells[i]
+            local d, settings, key = OVERLAY_DESCRIPTORS[e.kind], st.overlaySettings, SlotKey(st, i)
+            -- The engine runs this inside the add, before the button's
+            -- restrictions attach, and swallows its errors, so it records its
+            -- own result.
+            local inited = false
+            -- Added empty: a key a failed add left registered never shows,
+            -- and the apply that follows points a good one at its buffs.
+            local added, button = pcall(container.AddAuraSlot, container, key, "HELPFUL", {
+                candidateFilters = EMPTY,
+                initializeFrame = function(b)
+                    inited = pcall(function()
+                        b:ClearAllPoints()
+                        b:SetPoint("CENTER", cell, "CENTER", 0, 0)
+                        KE.AuraStyle.InitializeButton(b, nil, d, settings)
+                        b:SetMouseClickEnabled(false)
+                    end)
+                end,
+            })
+            if added and button and inited then
+                st.overlayButtons[i], st.overlaySigs[i], st.overlayKinds[i] = button, "", e.kind
+                st.overlayMax = math_max(st.overlayMax, i)
+                return true
+            end
+            -- No usable button (none returned, or its setup failed, and
+            -- InitializeButton cannot run twice): whatever the engine kept
+            -- stays empty under this key, and the next add uses a new key.
+            st.overlayGen[i] = (st.overlayGen[i] or 0) + 1
+            -- While auras are hidden a failure may be the restriction, so it is
+            -- retried at each drain without counting.
+            if not KE:AreAuraIdentitiesHidden() then st.overlayFails = (st.overlayFails or 0) + 1 end
+            return false
+        end
+    end
+    return true
+end
+
+-- Re-points the built slots: a ready cell's slot holds its buffs, any other
+-- slot holds nothing. A cell whose slot is not built is not ready. Any refused
+-- call hides the whole overlay and leaves every cell unready until the drain.
+-- Returns whether every call was accepted, and whether a button now stands for
+-- another kind.
+function Track.ApplyOverlay(st, entries, unit, settings)
+    st.overlaySettings = settings
+    local container = st.overlay
+    if not (container and st.overlaySetUp) then
+        for i = 1, #entries do st.ready[i] = false end
+        return true, false
+    end
+    local buttons, kinds, want = st.overlayButtons, st.overlayKinds, st.overlayWant
+    local clean, restyle = true, false
+    local spent = OverlaySpent(st)
+    for i, e in ipairs(entries) do
+        want[i] = e.kind
+        if not buttons[i] then
+            -- With the adds spent the cell works without an overlay: it turns
+            -- gray when the buff appears instead of when it falls.
+            if not spent then st.ready[i] = false end
+        else
+            if not Point(st, i, st.ready[i] and e.buffs or nil) then clean = false end
+            if kinds[i] ~= e.kind then restyle = true end
+        end
+    end
+    for i = #entries + 1, st.overlayMax do
+        want[i] = nil
+        if buttons[i] and not Point(st, i, nil) then clean = false end
+    end
+    clean = clean and pcall(function()
+        if st.overlayUnit ~= unit then
+            container:SetUnit(unit)
+            st.overlayUnit = unit
+        end
+        container:SetFrameStrata(st.holder:GetFrameStrata())
+        container:SetFrameLevel(st.holder:GetFrameLevel() + 10)
+        container:SetEnabled(true)
+    end)
+    if clean then
+        st.overlayOff = false
+        st.overlayHost:Show()
+    else
+        Quarantine(st)
+    end
+    return clean, restyle
+end
+
+-- Behind the caller's gate: the buttons refuse addon writes while auras are
+-- secret.
+function Track.RestyleOverlay(st, settings)
+    local clean = true
+    for i, button in pairs(st.overlayButtons or {}) do
+        local kind = st.overlayWant[i] or st.overlayKinds[i]
+        local d = kind and OVERLAY_DESCRIPTORS[kind]
+        if d then
+            local ok = pcall(KE.AuraStyle.RegisterRegions, button, nil, d, settings)
+            ok = pcall(KE.AuraStyle.StyleAuraFrame, button, settings, d.capabilities) and ok
+            if ok then st.overlayKinds[i] = kind else clean = false end
+        end
+    end
+    return clean
 end
