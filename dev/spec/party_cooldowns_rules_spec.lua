@@ -2,7 +2,32 @@
 -- (Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua): which spells a
 -- spec shows and for how long, the icon a talent picks, where a teammate's
 -- spec comes from, who is inspected next, and which trinkets get a cell.
+-- The rules run on DATA, never the shipped table, and limits are read from
+-- the rules' constants, so a balance or tuning edit fails no case.
 local L = require("dev.spec._ke_loader")
+
+-- Spec 10 lists a talented cast, a cast with a swap for every spec and one
+-- with a swap scoped to spec 10; spec 11 lists only the scoped one. ROLE_SPEC
+-- holds a tank and a healer guess, and a damage cell no guess may use.
+local DATA = {
+    SPELLS = {
+        [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
+        [2] = { kind = "defensive", cd = 60, buffs = { 2 },
+                swap = { id = 20, talents = { [20] = true }, likely = true } },
+        [3] = { kind = "defensive", cd = 90, buffs = { 3 },
+                swap = { id = 30, talents = { [30] = true }, likely = true, specs = { [10] = true } } },
+    },
+    SPECS = {
+        [10] = { { 1, 45 }, 2, 3 },
+        [11] = { 3 },
+    },
+    ROLE_SPEC = {
+        DRUID = { TANK = 10, HEALER = 11 },
+        ROGUE = { DAMAGER = 10 },
+    },
+}
+
+local function loadRules() return L.loadPartyCooldownsRules(DATA) end
 
 local function ids(list)
     local out = {}
@@ -18,47 +43,46 @@ end
 
 describe("PartyCooldownsRules.SpellList", function()
     it("puts saved casts first, keeps table order after them, and drops switched-off ones", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local cases = {
-            { name = "table order", db = {}, want = { 360194, 31224, 5277 } },
-            { name = "saved order first", db = { CooldownOrder = { [259] = { 5277 } } },
-              want = { 5277, 360194, 31224 } },
-            { name = "switched off", db = { CooldownOff = { ["259:31224"] = true } }, want = { 360194, 5277 } },
+            { name = "table order", db = {}, want = { 1, 2, 3 } },
+            { name = "saved order first", db = { CooldownOrder = { [10] = { 3 } } }, want = { 3, 1, 2 } },
+            { name = "switched off", db = { CooldownOff = { ["10:2"] = true } }, want = { 1, 3 } },
             { name = "unknown spec", db = {}, spec = 999, want = {} },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, ids(R.SpellList(case.spec or 259, case.db)), case.name)
+            assert.are.same(case.want, ids(R.SpellList(case.spec or 10, case.db)), case.name)
         end
-        assert.are.same({ 360194, 31224, 5277 },
-            ids(R.SpellList(259, { CooldownOff = { ["259:31224"] = true } }, true)), "all")
+        assert.are.same({ 1, 2, 3 }, ids(R.SpellList(10, { CooldownOff = { ["10:2"] = true } }, true)), "all")
     end)
 end)
 
 describe("PartyCooldownsRules lengths", function()
     it("prefers typed seconds, then the spec's talented length, then the base, clamping the typed one", function()
-        local R = L.loadPartyCooldownsRules()
-        assert.are.same({ 90, 120 }, { entryOf(R, 250, 49028).cd, entryOf(R, 250, 48792).cd })
+        local R = loadRules()
+        assert.are.same({ 45, 60 }, { entryOf(R, 10, 1).cd, entryOf(R, 10, 2).cd })
         local cases = {
-            { typed = 75, want = 75 }, { typed = 3, want = 5 }, { typed = 2000, want = 900 },
-            { typed = 61.7, want = 61 }, { typed = "abc", want = 90 },
+            { typed = 75, want = 75 }, { typed = R.CD_MIN - 2, want = R.CD_MIN },
+            { typed = R.CD_MAX + 1100, want = R.CD_MAX }, { typed = 61.7, want = 61 },
+            { typed = "abc", want = 45 },
         }
         for _, case in ipairs(cases) do
-            local db = { CooldownSeconds = { ["250:49028"] = case.typed } }
-            assert.are.equal(case.want, entryOf(R, 250, 49028, db).cd, tostring(case.typed))
+            local db = { CooldownSeconds = { ["10:1"] = case.typed } }
+            assert.are.equal(case.want, entryOf(R, 10, 1, db).cd, tostring(case.typed))
         end
     end)
 end)
 
 describe("PartyCooldownsRules.ShowID", function()
     it("follows a read talent, falls back to the likely icon, and ignores a swap for another spec", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local cases = {
-            { name = "taken", spec = 64, cast = 45438, taken = true, want = 414658 },
-            { name = "not taken", spec = 64, cast = 45438, taken = false, want = 45438 },
-            { name = "unread, likely", spec = 64, cast = 45438, want = 414658 },
-            { name = "scoped spec, unread", spec = 66, cast = 31884, want = 389539 },
-            { name = "outside the scoped spec", spec = 70, cast = 31884, taken = true, want = 31884 },
-            { name = "no swap", spec = 64, cast = 342245, taken = true, want = 342245 },
+            { name = "taken", spec = 10, cast = 2, taken = true, want = 20 },
+            { name = "not taken", spec = 10, cast = 2, taken = false, want = 2 },
+            { name = "unread, likely", spec = 10, cast = 2, want = 20 },
+            { name = "scoped spec, unread", spec = 10, cast = 3, want = 30 },
+            { name = "outside the scoped spec", spec = 11, cast = 3, taken = true, want = 3 },
+            { name = "no swap", spec = 10, cast = 1, taken = true, want = 1 },
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.ShowID(entryOf(R, case.spec, case.cast), case.spec, case.taken), case.name)
@@ -68,15 +92,15 @@ end)
 
 describe("PartyCooldownsRules.ResolveSpec", function()
     it("takes the first known source and guesses only a single-spec tank or healer", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local cases = {
             { name = "player first", s = { player = 72, lib = 71, inspect = 73 }, spec = 72, src = "player" },
             { name = "library before inspect", s = { lib = 71, inspect = 73 }, spec = 71, src = "lib" },
             { name = "inspect", s = { lib = 0, inspect = 73 }, spec = 73, src = "inspect" },
-            { name = "tank guess", s = { class = "DRUID", role = "TANK" }, spec = 104, src = "guess" },
-            { name = "healer guess", s = { class = "SHAMAN", role = "HEALER" }, spec = 264, src = "guess" },
-            { name = "two healer specs", s = { class = "PRIEST", role = "HEALER" } },
-            { name = "damage never guessed", s = { class = "WARRIOR", role = "DAMAGER" } },
+            { name = "tank guess", s = { class = "DRUID", role = "TANK" }, spec = 10, src = "guess" },
+            { name = "healer guess", s = { class = "DRUID", role = "HEALER" }, spec = 11, src = "guess" },
+            { name = "no single spec for the role", s = { class = "PRIEST", role = "HEALER" } },
+            { name = "damage never guessed", s = { class = "ROGUE", role = "DAMAGER" } },
             { name = "nothing known", s = {} },
         }
         for _, case in ipairs(cases) do
@@ -93,23 +117,23 @@ describe("PartyCooldownsRules.NextInspect", function()
         return m
     end
 
-    it("asks nothing while an inspect view is open, in combat, or within two seconds of the last request", function()
-        local R = L.loadPartyCooldownsRules()
+    it("asks nothing while an inspect view is open, in combat, or within INSPECT_GAP of the last request", function()
+        local R = loadRules()
         local members = { member("a") }
         local cases = {
             { name = "window open", state = { inspectShown = true, now = 10 } },
             { name = "talent view inspecting", state = { talentsInspecting = true, now = 10 } },
             { name = "in combat", state = { inCombat = true, now = 10 } },
-            { name = "within the gap", state = { now = 10, lastRequest = 8.5 } },
+            { name = "within the gap", state = { now = 10, lastRequest = 10.5 - R.INSPECT_GAP } },
         }
         for _, case in ipairs(cases) do
             assert.is_nil(R.NextInspect(case.state, members), case.name)
         end
-        assert.are.equal("a", R.NextInspect({ now = 10, lastRequest = 8 }, members).name)
+        assert.are.equal("a", R.NextInspect({ now = 10, lastRequest = 10 - R.INSPECT_GAP }, members).name)
     end)
 
     it("skips a member that is done, cannot be inspected or is resting", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local members = {
             member("done", { done = true }), member("far", { canInspect = false }),
             member("resting", { waitUntil = 40 }), member("next"),
@@ -117,21 +141,22 @@ describe("PartyCooldownsRules.NextInspect", function()
         assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
     end)
 
-    it("rests a member for 30 seconds after 12 tries", function()
-        local R = L.loadPartyCooldownsRules()
+    it("rests a member for TRY_WAIT seconds after MAX_TRIES tries", function()
+        local R = loadRules()
         local m = member("a")
-        for _ = 1, 11 do R.CountTry(m, 100) end
+        for _ = 1, R.MAX_TRIES - 1 do R.CountTry(m, 100) end
         assert.is_nil(m.waitUntil)
         R.CountTry(m, 100)
-        assert.are.same({ 0, 130 }, { m.tries, m.waitUntil })
-        assert.is_nil(R.NextInspect({ now = 129 }, { m }))
-        assert.are.equal(m, R.NextInspect({ now = 130 }, { m }))
+        local back = 100 + R.TRY_WAIT
+        assert.are.same({ 0, back }, { m.tries, m.waitUntil })
+        assert.is_nil(R.NextInspect({ now = back - 1 }, { m }))
+        assert.are.equal(m, R.NextInspect({ now = back }, { m }))
     end)
 end)
 
 describe("PartyCooldownsRules trinkets", function()
     it("gives a cell to a listed, switched-on trinket with a known length, typed length first, clamped", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local db = {
             ListTrinkets = { [111] = { enabled = true }, [222] = { enabled = false }, [333] = { enabled = true } },
             CooldownSeconds = { ["trinket:333"] = 45 },
@@ -139,7 +164,7 @@ describe("PartyCooldownsRules trinkets", function()
         local got = R.TrinketEntries({ { item = 1, spell = 111 }, { item = 2, spell = 333 } }, { [1] = 120 }, db)
         assert.are.same({ { 111, 120, 1 }, { 333, 45, 2 } },
             { { got[1].id, got[1].cd, got[1].item }, { got[2].id, got[2].cd, got[2].item } })
-        local long = R.TrinketEntries({ { item = 1, spell = 111 } }, { [1] = 1200 }, db)
+        local long = R.TrinketEntries({ { item = 1, spell = 111 } }, { [1] = R.CD_MAX + 300 }, db)
         assert.are.equal(R.CD_MAX, long[1].cd)
         local dropped = {
             { name = "switched off", slots = { { item = 1, spell = 222 } }, lengths = { [1] = 120 } },
@@ -154,7 +179,7 @@ describe("PartyCooldownsRules trinkets", function()
     end)
 
     it("reads the use cooldown from a tooltip line", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local cases = {
             { text = "Use: Gain 2000 Haste for 20 sec. (2 Min Cooldown)", want = 120 },
             { text = "Use: Shield yourself. (1 Min 30 Sec Cooldown)", want = 90 },
@@ -186,7 +211,7 @@ describe("PartyCooldownsRules.Feed", function()
     end
 
     it("stamps only when the buff appears after a read without it", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
             local name, w = wrap[1], wrap[2]
             local steady = run(R, { w(true), w(true) })
@@ -200,16 +225,18 @@ describe("PartyCooldownsRules.Feed", function()
 end)
 
 describe("PartyCooldownsRules.Tick", function()
-    it("clears a plain slot four seconds past zero and never clears a secret one", function()
-        local R = L.loadPartyCooldownsRules()
+    it("clears a plain slot LINGER seconds past zero and never clears a secret one", function()
+        local R = loadRules()
         local isSecret = function(v) return type(v) == "table" end
         local t = R.NewTracker(120, false)
         R.Clear(t, 0)
         R.StartPlain(t, 10)
         local sl = t.slot[t.cur]
-        assert.is_true((R.Tick(t, 133, isSecret)))
+        -- Started at 10, the 120-second slot reaches zero at 130.
+        local cleared = 130 + R.LINGER
+        assert.is_true((R.Tick(t, cleared - 1, isSecret)))
         assert.are.equal(1, sl.v)
-        local running, changed = R.Tick(t, 134, isSecret)
+        local running, changed = R.Tick(t, cleared, isSecret)
         assert.are.same({ false, true, 0 }, { running, changed, sl.v })
         local hidden = R.NewTracker(120, false)
         R.Clear(hidden, 0)
@@ -221,7 +248,7 @@ end)
 
 describe("PartyCooldownsRules.DoorVerdict", function()
     it("opens for exact, close or hidden answers and closes for coarse ones or an error", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local isSecret = function(v) return type(v) == "table" end
         local exact = function(b, a, c)
             if b then return a end
@@ -246,17 +273,20 @@ end)
 
 describe("PartyCooldownsRules.TakeLoadTry", function()
     it("allows LOAD_TRIES requests per item and no more", function()
-        local R = L.loadPartyCooldownsRules()
-        local tries, got = {}, {}
-        for _ = 1, R.LOAD_TRIES + 1 do got[#got + 1] = R.TakeLoadTry(tries, 111) end
-        assert.are.same({ true, true, true, false }, got)
+        local R = loadRules()
+        local tries, got, want = {}, {}, {}
+        for i = 1, R.LOAD_TRIES + 1 do
+            got[i] = R.TakeLoadTry(tries, 111)
+            want[i] = i <= R.LOAD_TRIES
+        end
+        assert.are.same(want, got)
         assert.is_true(R.TakeLoadTry(tries, 222))
     end)
 end)
 
 describe("PartyCooldownsRules.TrinketShow", function()
     it("shows an icon only once the row surely leaves its trinket out", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local steps = {
             { name = "accepted: new icons wait", show = {}, set = { [1] = true }, accepted = true,
               kept = {}, pending = { [1] = true } },
@@ -281,13 +311,14 @@ end)
 
 describe("PartyCooldownsRules.GearEventCounts", function()
     it("ignores a gear event in a key, right after a read, and after repeated same reads until the rest", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
+        local quiet, rest, spent = 10 + R.GEAR_QUIET, 10 + R.TRY_WAIT, R.MAX_SAME_READS
         local cases = {
-            { name = "in a key", args = { true, 100, 10, 0 }, want = false },
-            { name = "within the quiet time", args = { false, 12, 10, 0 }, want = false },
-            { name = "at the end of the quiet time", args = { false, 13, 10, 0 }, want = true },
-            { name = "same reads spent, before the rest", args = { false, 39, 10, 2 }, want = false },
-            { name = "same reads spent, at the rest", args = { false, 40, 10, 2 }, want = true },
+            { name = "in a key", args = { true, quiet, 10, 0 }, want = false },
+            { name = "within the quiet time", args = { false, quiet - 1, 10, 0 }, want = false },
+            { name = "at the end of the quiet time", args = { false, quiet, 10, 0 }, want = true },
+            { name = "same reads spent, before the rest", args = { false, rest - 1, 10, spent }, want = false },
+            { name = "same reads spent, at the rest", args = { false, rest, 10, spent }, want = true },
             { name = "never read", args = { false, 10, nil, 0 }, want = true },
         }
         for _, case in ipairs(cases) do
@@ -299,7 +330,7 @@ end)
 
 describe("PartyCooldownsRules.BuildEventCounts", function()
     it("ignores a teammate's spec or talent event inside a running key, never your own", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local cases = {
             { name = "teammate in a key", inKey = true, want = false },
             { name = "teammate outside a key", inKey = false, want = true },
@@ -313,7 +344,7 @@ end)
 
 describe("PartyCooldownsRules.TrinketReadStands", function()
     it("lets a read with an empty slot stand only once a second read agrees", function()
-        local R = L.loadPartyCooldownsRules()
+        local R = loadRules()
         local cases = {
             { name = "both slots, first read", items = { 1, 2 }, stands = true, same = false },
             { name = "empty slot, first read", items = { 1 }, stands = false, same = false },
@@ -328,12 +359,13 @@ describe("PartyCooldownsRules.TrinketReadStands", function()
 end)
 
 describe("PartyCooldownsRules.ResetsAtKeyStart", function()
-    it("resets a class spell counted at 90 seconds or more, never a trinket", function()
-        local R = L.loadPartyCooldownsRules()
+    it("resets a class spell counted at KEY_RESET_MIN seconds or more, never a trinket", function()
+        local R = loadRules()
+        local threshold = R.KEY_RESET_MIN
         local cases = {
-            { name = "class spell at 90", entry = { cd = 90 }, want = true },
-            { name = "class spell under 90", entry = { cd = 89 }, want = false },
-            { name = "trinket at 120", entry = { cd = 120, trinket = true }, want = false },
+            { name = "class spell at the threshold", entry = { cd = threshold }, want = true },
+            { name = "class spell under it", entry = { cd = threshold - 1 }, want = false },
+            { name = "trinket over it", entry = { cd = threshold + 30, trinket = true }, want = false },
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.ResetsAtKeyStart(case.entry), case.name)

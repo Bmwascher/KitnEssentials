@@ -646,14 +646,13 @@ function L.loadPartyBuffsRules(overrides)
     return KE.PartyBuffsRules, KE
 end
 
--- Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua with its data file
--- and KE.AuraRules, whose list rule it shares. Returns
--- KE.PartyCooldownsRules, KE.
-function L.loadPartyCooldownsRules(overrides)
-    installMock(overrides, {})
-    local KE = {}
+-- Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua and KE.AuraRules,
+-- whose list rule it shares. data stands in for KE.PartyCooldownsData, so no
+-- case depends on the shipped rows. Returns KE.PartyCooldownsRules, KE.
+function L.loadPartyCooldownsRules(data)
+    installMock(nil, {})
+    local KE = { PartyCooldownsData = data }
     helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
-    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsData.lua", KE)
     helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
     return KE.PartyCooldownsRules, KE
 end
