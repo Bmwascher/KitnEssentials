@@ -1000,9 +1000,11 @@ function PB:OnRestrictionChanged()
     end)
 end
 
--- A key's start refreshes every aura; reads wait it out.
+-- A key's start resets the long class cooldowns and refreshes every aura;
+-- reads wait it out.
 function PB:OnKeyStart()
     self:EvaluateGate()
+    Track.KeyStart()
     Track.HoldAll(KEY_HOLD)
 end
 

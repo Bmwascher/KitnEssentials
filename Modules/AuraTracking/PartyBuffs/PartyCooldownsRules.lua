@@ -425,3 +425,12 @@ end
 function Rules.BuildEventCounts(inKey, isPlayer)
     return not inKey or isPlayer == true
 end
+
+-- The game resets class cooldowns of KEY_RESET_MIN seconds or more when a key
+-- starts, and no trinket. The length is the one the cell counts, talents and
+-- typed seconds included.
+Rules.KEY_RESET_MIN = 90
+
+function Rules.ResetsAtKeyStart(entry)
+    return entry.trinket ~= true and type(entry.cd) == "number" and entry.cd >= Rules.KEY_RESET_MIN
+end

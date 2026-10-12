@@ -365,6 +365,22 @@ function Track.HoldAll(seconds)
     for st in pairs(Track.slots) do Track.Hold(st, seconds) end
 end
 
+-- At a key's start the game resets some cooldowns: their counts end and the
+-- cells show ready. Clear only writes, so a count held in secret values is
+-- cleared without being read, and its next read only records.
+function Track.KeyStart()
+    local n = Track.Now()
+    for st in pairs(Track.slots) do
+        for i = 1, st.count do
+            local t, e = st.trackers[i], st.entries[i]
+            if t and e and Rules.ResetsAtKeyStart(e) then
+                Rules.Clear(t, n)
+                Push(t, n)
+            end
+        end
+    end
+end
+
 local function Sig(e)
     return table_concat(e.buffs, ",") .. "/" .. tostring(e.short) .. "/" .. e.cd
 end

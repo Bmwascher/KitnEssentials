@@ -326,3 +326,17 @@ describe("PartyCooldownsRules.TrinketReadStands", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.ResetsAtKeyStart", function()
+    it("resets a class spell counted at 90 seconds or more, never a trinket", function()
+        local R = L.loadPartyCooldownsRules()
+        local cases = {
+            { name = "class spell at 90", entry = { cd = 90 }, want = true },
+            { name = "class spell under 90", entry = { cd = 89 }, want = false },
+            { name = "trinket at 120", entry = { cd = 120, trinket = true }, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.ResetsAtKeyStart(case.entry), case.name)
+        end
+    end)
+end)
