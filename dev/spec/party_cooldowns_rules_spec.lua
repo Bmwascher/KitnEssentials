@@ -400,3 +400,19 @@ describe("PartyCooldownsRules.StartLoop", function()
         assert.are.same({ { 74, 1 }, { 74, 1 } }, { first, { R.Left(t, t.slot[t.cur], again), t.slot[t.cur].v } })
     end)
 end)
+
+describe("PartyCooldownsRules.LibKey", function()
+    it("keys a member of another realm by name-realm only, never by the bare name", function()
+        local R = loadRules()
+        local cases = {
+            { name = "your realm", args = { "Sam" }, want = "Sam" },
+            { name = "empty realm", args = { "Sam", "" }, want = "Sam" },
+            { name = "another realm", args = { "Sam", "Other" }, want = "Sam-Other" },
+            { name = "no name", args = { nil, "Other" } },
+            { name = "realm not a string", args = { "Sam", 5 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.LibKey(case.args[1], case.args[2]), case.name)
+        end
+    end)
+end)

@@ -448,3 +448,12 @@ end
 function Rules.TalentsMoved(prev, talents)
     return type(prev) ~= "string" or type(talents) ~= "string" or prev ~= talents
 end
+
+-- The key the library files a member's answer under: addon comms name a
+-- sender of another realm as name-realm and one of your realm by name alone.
+function Rules.LibKey(name, realm)
+    if type(name) ~= "string" or name == "" then return nil end
+    if realm == nil or realm == "" then return name end
+    if type(realm) ~= "string" then return nil end
+    return name .. "-" .. realm
+end

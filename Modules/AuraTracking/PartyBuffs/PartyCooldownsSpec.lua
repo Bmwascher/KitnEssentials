@@ -86,23 +86,20 @@ function Spec.Member(unit)
     return m
 end
 
--- Names from addon comms carry the realm only for another realm, so a unit
--- has its name and, from another realm, its name-realm as keys.
-local function NameKeys(unit)
+-- The unit's key in the library's answers. None when the name or the realm
+-- cannot be read: a realm read as empty would match a same-named player of
+-- your realm.
+local function LibKey(unit)
     local ok, name, realm = pcall(UnitName, unit)
-    if not ok then return nil end
-    name, realm = Plain(name), Plain(realm)
-    if type(name) ~= "string" then return nil end
-    if type(realm) == "string" and realm ~= "" then return name, name .. "-" .. realm end
-    return name
+    if not ok or KE:IsSecretValue(name) or KE:IsSecretValue(realm) then return nil end
+    return KE.PartyCooldownsRules.LibKey(name, realm)
 end
 
--- Returns the spec and the name it was found under.
+-- Returns the spec and the key it was looked up under.
 local function LibSpecFor(unit)
-    local name, full = NameKeys(unit)
-    if not name then return nil end
-    if full and Spec.libSpecs[full] then return Spec.libSpecs[full], full end
-    return Spec.libSpecs[name], name
+    local key = LibKey(unit)
+    if not key then return nil end
+    return Spec.libSpecs[key], key
 end
 
 -- What the readers stored was read for the old spec.
@@ -235,9 +232,8 @@ function Spec.Prune()
     local present = {}
     local raid = Ask(IsInRaid) == true
     for i = 1, raid and 40 or 4 do
-        local name, full = NameKeys((raid and "raid" or "party") .. i)
-        if name then present[name] = true end
-        if full then present[full] = true end
+        local key = LibKey((raid and "raid" or "party") .. i)
+        if key then present[key] = true end
     end
     for key in pairs(Spec.libSpecs) do
         if not present[key] then Spec.libSpecs[key], Spec.libTalents[key] = nil, nil end
