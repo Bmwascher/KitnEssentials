@@ -43,6 +43,12 @@ local tostring = tostring
 local type = type
 local unpack = unpack
 local table_remove = table.remove
+local math_min = math.min
+
+local CDRules = KE.PartyCooldownsRules
+local Cell = KE.PartyCooldownsCell
+local Spec = KE.PartyCooldownsSpec
+local Track = KE.PartyCooldownsSensor
 
 -- Times each group build and logs every candidate frame, binding and watched
 -- show or hide.
@@ -55,10 +61,16 @@ local PLACEHOLDER_ICON = 134400
 -- The ring color while Border Color by Category is off. Every button has the
 -- ring from creation, so off paints it clear rather than removing it.
 local CLEAR = { 0, 0, 0, 0 }
+local BLACK = { 0, 0, 0, 1 }
+-- Reads pause this long once a key starts: its aura refresh is not a use.
+local KEY_HOLD = 2
+-- One sample spec per stand-in row, and the cooling sample's seconds left.
+local PREVIEW_SPECS = { 72, 258, 63, 261 }
+local PREVIEW_LEFT = 74
+local PREVIEW_CELLS = 3
 
 local GATE_EVENTS = {
     "ZONE_CHANGED_NEW_AREA",
-    "CHALLENGE_MODE_START",
     "CHALLENGE_MODE_COMPLETED",
     "CHALLENGE_MODE_RESET",
     "ACTIVE_DELVE_DATA_UPDATE",
@@ -170,6 +182,9 @@ function PB:Activate()
         self.active = true
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRelease")
         self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
+        self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+        Spec.Activate()
+        Track.ShowSensors()
     end
     self:ResolveAll()
     self:OnRelease()
@@ -184,11 +199,15 @@ function PB:Deactivate()
     for k = 1, MAX_SLOTS do
         self.bindings[k] = nil
         self:DropSlot(k)
+        if self.slots[k] then self.slots[k].member = nil end
     end
+    Spec.Deactivate()
+    Track.HideSensors()
     if not self.active then return end
     self.active = false
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 end
 
 ---------------------------------------------------------------------------------
@@ -302,15 +321,11 @@ end
 ---------------------------------------------------------------------------------
 -- Slots and the build queue
 ---------------------------------------------------------------------------------
-local function RowWidth(db)
-    local _, _, width = KE.PartyBuffsRules.RowLayout(db, 0)
-    return width
-end
-
 function PB:DropSlot(k)
     local slot = self.slots[k]
     if not slot then return end
     if slot.container then pcall(slot.container.SetEnabled, slot.container, false) end
+    if slot.track then Track.Unbind(slot.track) end
     slot.holder:Hide()
     slot.holder:ClearAllPoints()
 end
@@ -333,23 +348,35 @@ function PB:ClearQueue()
     self.queued = {}
 end
 
--- The one every-frame path: at most one group build (about 3 ms) per frame.
--- A slot stays at the head of the queue until BuildSlot reports it finished,
--- so its teammate shows before the next slot starts.
+-- The one every-frame path: at most one container or group build (about 3 ms)
+-- per frame. A slot stays at the head of the queue until BuildSlot reports it
+-- finished, so its teammate shows before the next slot starts. pumping stays
+-- set while BuildSlot runs, so an Enqueue from inside it schedules nothing and
+-- only this function schedules the next pump.
+local function BuildHead()
+    return PB:BuildSlot(PB.queue[1])
+end
+
 local function PumpBuild()
-    PB.pumping = false
     if not (PB:IsEnabled() and PB.active) then
+        PB.pumping = false
         PB:ClearQueue()
         return
     end
     local k = PB.queue[1]
-    if k and PB:BuildSlot(k) then
-        table_remove(PB.queue, 1)
-        PB.queued[k] = nil
+    if k then
+        -- An error is reported and drops the slot from the queue, so pumping
+        -- is never left set; the slot's next bind queues it again.
+        local ok, done = xpcall(BuildHead, geterrorhandler())
+        if done or not ok then
+            table_remove(PB.queue, 1)
+            PB.queued[k] = nil
+        end
     end
     if #PB.queue > 0 then
-        PB.pumping = true
         C_Timer.After(0, PumpBuild)
+    else
+        PB.pumping = false
     end
 end
 
@@ -506,11 +533,13 @@ function PB:AddGroup(k, slot, d)
 end
 
 -- Returns false when any container call was refused, so the caller can retry.
+-- The while-active container starts after the slot's cooldown cells.
 function PB:ApplySlotLayout(slot)
     local db = self.db
     local side = self:Placement()
     local container = slot.container
-    local width = RowWidth(db)
+    local _, offset, width = KE.PartyBuffsRules.RowLayout(db, slot.cellCount or 0)
+    local x = (side.left and -1 or 1) * offset
     slot.holder:SetSize(width, db.IconSize)
     local flow = AnchorUtil.FlowDirection
     local clean = pcall(container.SetFlowLayoutGrowthDirection, container,
@@ -518,13 +547,19 @@ function PB:ApplySlotLayout(slot)
     -- The axis first: the anchor point and the line size are read against it.
     clean = pcall(container.SetFlowLayoutAxis, container, AnchorUtil.FlowLayoutAxis.Horizontal) and clean
     clean = pcall(container.SetFlowLayoutAnchorPoint, container, side.corner) and clean
-    clean = pcall(container.SetFlowLayoutMaximumLineSize, container, width) and clean
-    if slot.corner ~= side.corner then
+    clean = pcall(container.SetFlowLayoutMaximumLineSize, container, width - offset) and clean
+    -- A refused pin may have cleared the old one, so nothing is recorded and
+    -- the next pass pins again.
+    if slot.corner ~= side.corner or slot.pinX ~= x then
         local ok = pcall(function()
             container:ClearAllPoints()
-            container:SetPoint(side.corner, slot.holder, side.corner, 0, 0)
+            container:SetPoint(side.corner, slot.holder, side.corner, x, 0)
         end)
-        if ok then slot.corner = side.corner else clean = false end
+        if ok then
+            slot.corner, slot.pinX = side.corner, x
+        else
+            slot.corner, slot.pinX, clean = nil, nil, false
+        end
     end
     return clean
 end
@@ -583,17 +618,36 @@ function PB:BuildSlot(k)
         slot.container = container
         slot.corner = pinned and corner or nil
     end
+    local built, refused = false, false
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
         if self.db[d.category.trackKey] == true and not slot.groups[d.key] then
             self:AddGroup(k, slot, d)
             if slot.groups[d.key] and not self:SlotComplete(k) then return false end
+            built, refused = true, not slot.groups[d.key]
             break
         end
     end
+    -- Cell containers come after the groups, one build per frame like them,
+    -- so a frame that built a group builds none. A refused one waits for the
+    -- drain instead of retrying every frame; the re-bind still runs, since a
+    -- refused build can change which cells are ready.
+    local track = slot.track
+    if not built and track and slot.holder:IsShown() and Track.Missing(track) then
+        if not Track.BuildNext(track) then
+            self.buildPending = true
+            self:BindCooldowns(k, binding)
+            return true
+        end
+        self:BindCooldowns(k, binding)
+        return not Track.Missing(track)
+    end
     if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
     self:BindSlot(k, binding)
-    return true
+    -- A refused group waits for the drain, and the slot's cell containers
+    -- with it.
+    if refused then return true end
+    return not (slot.track and Track.Missing(slot.track))
 end
 
 -- The SIDES row, X, Y and strata in effect. A preview row follows the
@@ -645,6 +699,8 @@ function PB:BindSlot(k, binding)
     if slot.unit ~= binding.token then
         if not pcall(container.SetUnit, container, binding.token) then
             Debug("slot %d: SetUnit %s refused", k, binding.token)
+            -- The container may already hold the new unit; nothing is assumed.
+            slot.unit = nil
             self.buildPending = true
             return self:DropSlot(k)
         end
@@ -669,10 +725,97 @@ function PB:BindSlot(k, binding)
         Debug("slot %d: strata, level or refresh refused", k)
         self.buildPending = true
     end
+    self:BindCooldowns(k, binding)
     if DEBUG_PB then
         Debug("slot %d -> %s (%s) %s at %s", k, binding.token, binding.family,
             DebugName(binding.frame), DebugPos(binding.frame))
     end
+end
+
+---------------------------------------------------------------------------------
+-- Cooldown cells
+---------------------------------------------------------------------------------
+-- The member's spec list, cut to the icon budget. A member whose spec is not
+-- known yet gets no cooldown cell of any kind.
+function PB:CooldownEntries(m)
+    local db, entries = self.db, {}
+    if not (m and m.spec) then return entries end
+    local specID = m.spec
+    if db.TrackBurst == true then
+        for _, e in ipairs(CDRules.SpellList(specID, db)) do
+            e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, m.talents and m.talents[e.id]))
+            entries[#entries + 1] = e
+        end
+    end
+    for i = #entries, KE.PartyBuffsRules.CellCount(#entries, db) + 1, -1 do entries[i] = nil end
+    return entries
+end
+
+-- Re-run on every bind and on each change to the member's spec, trinkets or
+-- talents. For the same member and spec, a cell whose spell and length did not
+-- change keeps its timer. When the GUID is secret the slot keeps the record it
+-- had for the same token; a roster change or a closed gate clears it first.
+function PB:BindCooldowns(k, binding)
+    local slot = self.slots[k]
+    slot.track = slot.track or Track.NewSlot(slot.holder)
+    local m = Spec.Member(binding.token)
+    if not m and slot.member and slot.member.unit == binding.token then m = slot.member end
+    if m then
+        Spec.Resolve(m)
+        if m.isPlayer then Spec.ReadSelf(m) end
+    end
+    slot.member = m
+    local spec = m and m.spec
+    if slot.cdMember ~= m or slot.cdSpec ~= spec then
+        Track.Reset(slot.track)
+        slot.cdMember, slot.cdSpec = m, spec
+    end
+    local entries = self:CooldownEntries(m)
+    if not Track.Apply(slot.track, binding.token, entries, self.cellStyle) then
+        self.buildPending = true
+    end
+    if Track.Missing(slot.track) then self:Enqueue(k) end
+    self:LayoutCells(slot, #entries)
+    self:SyncMembers()
+end
+
+-- Cells are KE frames: moving them is never refused.
+function PB:LayoutCells(slot, count)
+    local side = self:Placement()
+    local step = KE.PartyBuffsRules.RowLayout(self.db, count)
+    local dir = side.left and -1 or 1
+    local cells = slot.track.cells
+    for i = 1, count do
+        local c = cells[i]
+        c:ClearAllPoints()
+        c:SetPoint(side.corner, slot.holder, side.corner, dir * (i - 1) * step, 0)
+    end
+    if slot.cellCount ~= count then
+        slot.cellCount = count
+        if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
+    end
+end
+
+function PB:SyncMembers()
+    local list = {}
+    for k = 1, MAX_SLOTS do
+        local slot = self.slots[k]
+        if self.bindings[k] and slot and slot.member then list[#list + 1] = slot.member end
+    end
+    Spec.SetMembers(list)
+end
+
+-- Only the changed member's cells are rebuilt. A dropped slot keeps its
+-- member for the next bind but its holder is hidden; that bind rebuilds it.
+function PB:OnMemberChanged(m)
+    if not (self:IsEnabled() and self.active) then return end
+    for k = 1, MAX_SLOTS do
+        local slot, binding = self.slots[k], self.bindings[k]
+        if binding and slot and slot.container and slot.member == m and slot.holder:IsShown() then
+            self:BindCooldowns(k, binding)
+        end
+    end
+    if self.previewing then self:ShowPreview() end
 end
 
 ---------------------------------------------------------------------------------
@@ -686,7 +829,12 @@ function PB:OnRoster()
     for k = 1, MAX_SLOTS do
         self.bindings[k] = nil
         self:DropSlot(k)
+        if self.slots[k] then self.slots[k].member = nil end
     end
+    -- A token can name someone else now; nobody is inspected until the rows
+    -- rebind, and whoever left is read again if they come back.
+    Spec.SetMembers({})
+    Spec.Prune()
     if self._rosterTimer then self._rosterTimer:Cancel() end
     self._rosterTimer = C_Timer.NewTimer(ROSTER_SETTLE, function()
         self._rosterTimer = nil
@@ -716,6 +864,7 @@ end
 -- activation, since a restriction can end while the tracker is off.
 function PB:OnRelease()
     if not self.active then return end
+    Track.Settle()
     if self.buildPending then self:ResolveAll() end
     if self.reconfigurePending then self:ReconfigureAll() end
     if self.restylePending then self:Restyle() end
@@ -727,11 +876,19 @@ function PB:OnRestrictionChanged()
     end)
 end
 
--- Registered only while Use in Healer Specs is on. No healer answer is cached;
+-- A key's start refreshes every aura; reads wait it out.
+function PB:OnKeyStart()
+    self:EvaluateGate()
+    Track.HoldAll(KEY_HOLD)
+end
+
+-- Drops what the member's cells were built from. No healer answer is cached;
 -- the placement reads ask the spec each time.
 function PB:OnSpecChanged(_, unit)
-    if unit ~= "player" then return end
-    self:ApplySettings()
+    if KE:IsSecretValue(unit) then return end
+    local guid = KE:GetSafeUnitGUID(unit)
+    if guid then Spec.ForgetSpec(guid) end
+    if unit == "player" then self:ApplySettings() end
 end
 
 ---------------------------------------------------------------------------------
@@ -756,6 +913,16 @@ function PB:BuildStyleSettings()
         settings[d.capabilities.ringColorKey] = colored and db[d.category.colorKey] or CLEAR
     end
     self.styleSettings = settings
+    local cell = self.cellStyle or { colors = {} }
+    cell.size     = db.IconSize
+    cell.fontName = db.FontFace
+    cell.fontSize = db.CooldownFontSize
+    cell.outline  = db.FontOutline
+    cell.showText = db.ShowCooldownText == true
+    cell.colors.offensive = colored and db.ColorBurst or BLACK
+    cell.colors.defensive = colored and db.ColorBigDefensive or BLACK
+    cell.colors.trinket   = colored and db.ColorTrinket or BLACK
+    self.cellStyle = cell
 end
 
 -- A refused touch leaves the button as it was and is retried when combat or
@@ -818,8 +985,8 @@ function PB:ReconfigureSlot(slot)
     return self:ApplySlotLayout(slot) and clean
 end
 
--- A refused setter leaves the old filter, cap or layout in place, so the
--- whole reconfiguration is retried when combat or the restriction ends.
+-- A refused setter may leave the old or the new filter, cap or layout, so the
+-- whole reconfiguration is issued again when combat or the restriction ends.
 function PB:ReconfigureAll()
     local clean = true
     for k = 1, MAX_SLOTS do
@@ -835,11 +1002,6 @@ end
 function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
-    if self.db.UseHealerPlacement == true then
-        self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
-    else
-        self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    end
     self:BuildStyleSettings()
     self:EvaluateGate()
     self:ReconfigureAll()
@@ -922,23 +1084,108 @@ function PB:EnsurePreviewCells()
     return cells
 end
 
+-- A preview frame registers no engine text, so the widget's own numbers stand
+-- in for it, in the timer's font and number format.
+function PB:RunPreviewTimer(icon, index, now)
+    local settings = self.styleSettings
+    local duration, offset = KE.AuraRules.PreviewTiming(index)
+    local cooldown = icon.keCooldown
+    cooldown.keDuration = duration
+    cooldown:SetShown(settings.Swipe or settings.ShowTimer)
+    cooldown:SetDrawSwipe(settings.Swipe)
+    cooldown:SetHideCountdownNumbers(not settings.ShowTimer)
+    cooldown:SetCountdownFormatter(KE.AuraStyle.GetDurationFormatter(settings))
+    KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
+        settings.FontOutline)
+    cooldown:SetCooldown(now - offset, duration)
+end
+
+-- A known member's spec when grouped, else the stand-in row's sample spec. A
+-- spec with fewer than PREVIEW_CELLS spells is topped up from the sample specs,
+-- so every row can show the ready, active and cooling samples within Max
+-- Cooldown Icons.
+function PB:PreviewEntries(k)
+    local entries, taken = {}, {}
+    if self.db.TrackBurst ~= true then return entries end
+    local binding = self.bindings[k]
+    local m = binding and Spec.Member(binding.token)
+    local specID = (m and m.spec) or PREVIEW_SPECS[(k - 1) % #PREVIEW_SPECS + 1]
+    local want = math_min(KE.PartyBuffsRules.CooldownIconCount(self.db), PREVIEW_CELLS)
+    local function Add(fromSpec, talents)
+        for _, e in ipairs(CDRules.SpellList(fromSpec, self.db)) do
+            if #entries >= want then return end
+            if not taken[e.id] then
+                taken[e.id] = true
+                e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, fromSpec, talents and talents[e.id]))
+                entries[#entries + 1] = e
+            end
+        end
+    end
+    Add(specID, m and m.talents)
+    for i = 1, #PREVIEW_SPECS do Add(PREVIEW_SPECS[i]) end
+    return entries
+end
+
+-- Cell 1 and cell 2 ready, cell 3 cooling with PREVIEW_LEFT seconds to go (one
+-- under the spell's length when that is shorter), started again with the same
+-- time left whenever it has run out. Plain values only.
+function PB:DrawPreviewCells(row, entries, side, step)
+    local n = Track.Now()
+    local dir = side.left and -1 or 1
+    for i = 1, PREVIEW_CELLS do
+        local c, e, old = row.cells[i], entries[i], row.trackers[i]
+        if old then
+            Track.Forget(old)
+            row.trackers[i] = nil
+        end
+        if e then
+            if not c then
+                c = Cell.New(row.holder)
+                row.cells[i] = c
+            end
+            Cell.Dress(c, self.cellStyle, e)
+            c:ClearAllPoints()
+            c:SetPoint(side.corner, row.holder, side.corner, dir * (i - 1) * step, 0)
+            local t = CDRules.NewTracker(e.cd, false)
+            t.cell = c
+            if i == 3 then
+                t.loop = math_min(PREVIEW_LEFT, e.cd - 1)
+                local start = n - (e.cd - t.loop)
+                CDRules.Clear(t, start)
+                CDRules.StartPlain(t, start)
+            else
+                CDRules.Clear(t, n)
+            end
+            Track.Push(t, n)
+            Track.Watch(t)
+            row.trackers[i] = t
+            c:Show()
+        elseif c then
+            c:Hide()
+        end
+    end
+end
+
 function PB:DrawPreviewRow(k, frame)
     local db, settings = self.db, self.styleSettings
     local row = self.previewRows[k]
     if not row then
         local rowHolder = CreateFrame("Frame", nil, UIParent)
         rowHolder:EnableMouse(false)
-        row = { holder = rowHolder, icons = {} }
+        row = { holder = rowHolder, icons = {}, cells = {}, trackers = {} }
         self.previewRows[k] = row
     end
     local holder = row.holder
-    holder:SetSize(RowWidth(db), db.IconSize)
+    local entries = self:PreviewEntries(k)
+    local step, offset, width = KE.PartyBuffsRules.RowLayout(db, #entries)
+    holder:SetSize(width, db.IconSize)
     if not self:PlaceHolder(holder, frame, true) then
-        holder:Hide()
+        self:HidePreviewRow(row)
         return
     end
     local side = self:Placement(true)
-    local step = (db.IconSize + db.IconSpacing) * (side.left and -1 or 1)
+    local dir = side.left and -1 or 1
+    self:DrawPreviewCells(row, entries, side, step)
     local now, shown, limit = GetTime(), 0, KE.PartyBuffsRules.IconCount(db)
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
@@ -953,20 +1200,9 @@ function PB:DrawPreviewRow(k, frame)
                 row.icons[i] = icon
             end
             icon:ClearAllPoints()
-            icon:SetPoint(side.corner, holder, side.corner, shown * step, 0)
+            icon:SetPoint(side.corner, holder, side.corner, dir * (offset + shown * step), 0)
             icon.keIcon:SetTexture(self:PreviewIcon(d))
-            local duration, offset = KE.AuraRules.PreviewTiming(i)
-            local cooldown = icon.keCooldown
-            cooldown.keDuration = duration
-            cooldown:SetShown(settings.Swipe or settings.ShowTimer)
-            cooldown:SetDrawSwipe(settings.Swipe)
-            -- A preview frame registers no engine text, so the widget's own
-            -- numbers stand in for it, in the timer's font and number format.
-            cooldown:SetHideCountdownNumbers(not settings.ShowTimer)
-            cooldown:SetCountdownFormatter(KE.AuraStyle.GetDurationFormatter(settings))
-            KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
-                settings.FontOutline)
-            cooldown:SetCooldown(now - offset, duration)
+            self:RunPreviewTimer(icon, i, now)
             icon:Show()
             shown = shown + 1
         elseif icon then
@@ -1008,23 +1244,35 @@ function PB:ShowPreview()
         if frames[k] then
             self:DrawPreviewRow(k, frames[k])
         elseif self.previewRows[k] then
-            self.previewRows[k].holder:Hide()
+            self:HidePreviewRow(self.previewRows[k])
         end
     end
 end
 
 -- Reached while the module is disabled too (the preview manager hides every
 -- preview module on a section change), so nothing here reads the db.
+-- The only way a preview row stops showing: its looping sample must leave the
+-- ticker with it.
+function PB:HidePreviewRow(row)
+    for _, icon in pairs(row.icons) do
+        icon.keCooldown.keDuration = nil
+        icon.keCooldown:Clear()
+    end
+    for i, c in pairs(row.cells) do
+        local t = row.trackers[i]
+        if t then
+            Track.Forget(t)
+            row.trackers[i] = nil
+        end
+        c:Hide()
+    end
+    row.holder:Hide()
+end
+
 function PB:HidePreviewFrames()
     for k = 1, MAX_SLOTS do
         local row = self.previewRows[k]
-        if row then
-            for _, icon in pairs(row.icons) do
-                icon.keCooldown.keDuration = nil
-                icon.keCooldown:Clear()
-            end
-            row.holder:Hide()
-        end
+        if row then self:HidePreviewRow(row) end
     end
     if self.previewBlock then self.previewBlock:Hide() end
 end
@@ -1045,8 +1293,11 @@ function PB:OnEnable()
     for i = 1, #GATE_EVENTS do
         self:RegisterEvent(GATE_EVENTS[i], "EvaluateGate")
     end
+    self:RegisterEvent("CHALLENGE_MODE_START", "OnKeyStart")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnWorldEntry")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRoster")
+    Spec.Enable(function(m) self:OnMemberChanged(m) end)
+    Track.Enable()
     self:ApplySettings()
 end
 
@@ -1056,4 +1307,6 @@ function PB:OnDisable()
     self:Deactivate()
     self:UnregisterAllEvents()
     self:HidePreview()
+    Spec.Disable()
+    Track.Disable()
 end
