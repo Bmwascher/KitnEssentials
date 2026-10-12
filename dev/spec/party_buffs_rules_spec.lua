@@ -272,3 +272,21 @@ describe("PartyBuffsRules.RowLayout", function()
         assert.are.same({ 37, 0, 147 }, { R.RowLayout(db, 0) })
     end)
 end)
+
+describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
+    it("leaves trinkets with a cooldown icon out of the Trinkets group only", function()
+        local R = L.loadPartyBuffsRules()
+        local byKey = {}
+        for _, category in ipairs(R.CATEGORIES) do byKey[category.key] = category end
+        local cells = { [111] = true }
+        local cases = {
+            { name = "trinket with cells", key = "trinket", cells = cells, want = cells },
+            { name = "trinket without cells", key = "trinket" },
+            { name = "potion ignores cells", key = "potion", cells = cells },
+        }
+        for _, case in ipairs(cases) do
+            local _, candidates = R.BuildGroupConfig(byKey[case.key], makeDb({}), case.cells)
+            assert.are.equal(case.want, candidates.excludeSpellIDs, case.name)
+        end
+    end)
+end)

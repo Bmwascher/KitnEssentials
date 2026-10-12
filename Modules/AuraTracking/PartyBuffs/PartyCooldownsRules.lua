@@ -333,3 +333,33 @@ end
 function Rules.StripBar(cd, u)
     return -(cd - 1 + u), 255 * u
 end
+
+-- Item data loads asked for per item in a session; a load that keeps failing
+-- stops here.
+Rules.LOAD_TRIES = 3
+
+-- True, and counted, while itemID has requests left.
+function Rules.TakeLoadTry(tries, itemID)
+    local n = tries[itemID] or 0
+    if n >= Rules.LOAD_TRIES then return false end
+    tries[itemID] = n + 1
+    return true
+end
+
+-- The trinket icons a row may show after an exclusion call (set: the trinkets
+-- asked to be left out of its while-active Trinkets group), and the set that
+-- may show once the group's buttons have caught up. Accepted: the group's
+-- buttons follow the new filter only on its next pass, so only icons already
+-- shown that stay excluded remain, and set waits. Refused: the group holds any
+-- set issued since the last accepted one, so only icons every one of them
+-- leaves out remain, and nothing waits.
+function Rules.TrinketShow(show, set, accepted)
+    local kept = {}
+    for id in pairs(show or {}) do
+        if set[id] then kept[id] = true end
+    end
+    if not accepted then return kept, nil end
+    local pending = {}
+    for id in pairs(set) do pending[id] = true end
+    return kept, pending
+end

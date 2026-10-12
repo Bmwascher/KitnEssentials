@@ -334,3 +334,150 @@ function Spec.Disable()
     wipe(Spec.byGUID)
     wipe(Spec.libSpecs)
 end
+
+---------------------------------------------------------------------------------
+-- Trinkets: each trinket slot's item and use spell, and the item's use
+-- cooldown read from its tooltip
+---------------------------------------------------------------------------------
+local C_Item = C_Item
+local C_TooltipInfo = C_TooltipInfo
+local GetInventoryItemID = GetInventoryItemID
+local TRINKET_SLOTS = { 13, 14 }
+
+local loadTries = {}
+
+-- Once per item, out of combat. Returns whether the length is settled; an item
+-- whose tooltip has no cooldown line stores false, and gets no cell unless
+-- the player types its seconds.
+local function ReadLength(itemID)
+    if Spec.lengths[itemID] ~= nil then return true end
+    if InCombatLockdown() then return false end
+    local ok, data = pcall(C_TooltipInfo.GetItemByID, itemID)
+    if not ok or type(data) ~= "table" or KE:IsSecretTable(data) or type(data.lines) ~= "table" then
+        return false
+    end
+    for _, line in ipairs(data.lines) do
+        local seconds = type(line) == "table" and KE.PartyCooldownsRules.ParseCooldownText(Plain(line.leftText))
+        if seconds then
+            Spec.lengths[itemID] = seconds
+            return true
+        end
+    end
+    Spec.lengths[itemID] = false
+    return true
+end
+
+-- The slots' spells and lengths from their item IDs. Incomplete while an
+-- item's data is still loading or an on-use item's length is unread; an
+-- empty slot or a passive trinket is complete with no spell. A load is asked
+-- for LOAD_TRIES times at most per item.
+local function Derive(items)
+    local slots, complete = {}, true
+    for i = 1, #TRINKET_SLOTS do
+        local itemID = items[i]
+        local spellID
+        if itemID then
+            if Ask(C_Item.IsItemDataCachedByID, itemID) == true then
+                -- A refused or hidden answer is not "passive": the slot stays
+                -- incomplete and combat's end reads it again.
+                local ok, _, id = pcall(C_Item.GetItemSpell, itemID)
+                if not ok or KE:IsSecretValue(id) then
+                    complete = false
+                else
+                    spellID = id
+                    if spellID and not ReadLength(itemID) then complete = false end
+                end
+            else
+                if KE.PartyCooldownsRules.TakeLoadTry(loadTries, itemID) then
+                    pcall(C_Item.RequestLoadItemDataByID, itemID)
+                end
+                complete = false
+            end
+        end
+        slots[i] = { item = itemID, spell = spellID }
+    end
+    return slots, complete
+end
+
+-- Nil when either slot's answer was refused or hidden; an empty slot answers
+-- a plain nil and reads as empty.
+local function ReadItems(unit)
+    local items = {}
+    for i, slotID in ipairs(TRINKET_SLOTS) do
+        local ok, itemID = pcall(GetInventoryItemID, unit, slotID)
+        if not ok or KE:IsSecretValue(itemID) then return nil end
+        if type(itemID) == "number" then items[i] = itemID end
+    end
+    return items
+end
+
+-- items nil re-derives the IDs already read. With none read the member has
+-- no trinkets yet and stays wanted.
+local function Fill(m, items)
+    if items then m.trinketItems = items end
+    if m.trinketItems then
+        m.trinkets, m.trinketsComplete = Derive(m.trinketItems)
+    else
+        m.trinkets, m.trinketsComplete = nil, nil
+    end
+end
+
+local function HasItem(m, itemID)
+    local items = m.trinketItems
+    return items ~= nil and (items[1] == itemID or items[2] == itemID)
+end
+
+Spec.readers[#Spec.readers + 1] = {
+    events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED", "ITEM_DATA_LOAD_RESULT",
+        "PLAYER_REGEN_ENABLED" },
+    Wanted = function(m) return m.trinketItems == nil end,
+    Read = function(m, unit) Fill(m, ReadItems(unit)) end,
+    Self = function(m)
+        if m.trinketItems == nil then Fill(m, ReadItems("player")) end
+    end,
+    OnEvent = function(event, arg1, arg2)
+        if event == "PLAYER_EQUIPMENT_CHANGED" then
+            local m = Spec.player
+            if m then
+                m.trinketItems = nil
+                Fill(m, ReadItems("player"))
+                Changed(m)
+            end
+        elseif event == "UNIT_INVENTORY_CHANGED" then
+            if KE:IsSecretValue(arg1) then return end
+            local guid = KE:GetSafeUnitGUID(arg1)
+            local m = guid and Spec.byGUID[guid]
+            if m and not m.isPlayer then
+                m.trinketItems, m.trinkets = nil, nil
+                Spec.Wake()
+            end
+        else
+            -- A successful load re-derives the members wearing that item; a
+            -- failed one waits for combat's end or the next read. Leaving
+            -- combat retries every incomplete member. Records, not the bound
+            -- list: during a roster settle nobody is bound, and the rebind
+            -- uses the record as it stands.
+            local itemID
+            if event == "ITEM_DATA_LOAD_RESULT" then
+                if Plain(arg2) ~= true then return end
+                itemID = Plain(arg1)
+                if not itemID then return end
+            else
+                -- Your own slots are never inspected: a refused read is
+                -- retried here.
+                local m = Spec.player
+                if m and m.trinketItems == nil then
+                    Fill(m, ReadItems("player"))
+                    if m.trinketItems then Changed(m) end
+                end
+            end
+            for _, m in pairs(Spec.byGUID) do
+                if m.trinketItems and not m.trinketsComplete
+                    and (not itemID or HasItem(m, itemID)) then
+                    Fill(m)
+                    Changed(m)
+                end
+            end
+        end
+    end,
+}

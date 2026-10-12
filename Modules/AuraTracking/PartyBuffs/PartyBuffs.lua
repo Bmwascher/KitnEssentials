@@ -25,6 +25,7 @@ local UIParent = UIParent
 local C_ChallengeMode = C_ChallengeMode
 local C_DelvesUI = C_DelvesUI
 local C_PvP = C_PvP
+local C_Item = C_Item
 local C_Spell = C_Spell
 local C_Timer = C_Timer
 local GetTime = GetTime
@@ -42,7 +43,9 @@ local select = select
 local tostring = tostring
 local type = type
 local unpack = unpack
+local table_concat = table.concat
 local table_remove = table.remove
+local table_sort = table.sort
 local math_min = math.min
 
 local CDRules = KE.PartyCooldownsRules
@@ -480,7 +483,8 @@ local function RetireButton(button)
 end
 
 function PB:AddGroup(k, slot, d)
-    local filter, candidates, maxFrames, index = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db)
+    local filter, candidates, maxFrames, index =
+        KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, slot.cellBuffs)
     local container = slot.container
     local started = DEBUG_PB and debugprofilestop()
     local ok = pcall(container.AddAuraGroup, container, d.key, filter, {
@@ -747,6 +751,12 @@ function PB:CooldownEntries(m)
             entries[#entries + 1] = e
         end
     end
+    if m.trinkets and db.TrackTrinket == true then
+        for _, e in ipairs(CDRules.TrinketEntries(m.trinkets, Spec.lengths, db)) do
+            e.texture = C_Item.GetItemIconByID(e.item)
+            entries[#entries + 1] = e
+        end
+    end
     for i = #entries, KE.PartyBuffsRules.CellCount(#entries, db) + 1, -1 do entries[i] = nil end
     return entries
 end
@@ -776,7 +786,118 @@ function PB:BindCooldowns(k, binding)
     if restyle then self:Restyle() end
     if Track.Missing(slot.track) then self:Enqueue(k) end
     self:LayoutCells(slot, #entries)
+    self:ExcludeCellTrinkets(k, slot, entries)
     self:SyncMembers()
+end
+
+-- A trinket with a cooldown icon leaves this row's while-active Trinkets
+-- group, so it shows once; every other listed trinket still shows there. A
+-- trinket never shows twice, on screen as well as by filter: the group's
+-- buttons follow a new filter only when its container next processes, in its
+-- own OnUpdate while visible, and the overlay's buttons likewise. So a newly
+-- excluded trinket's icon waits for the settle (SettleCellTrinkets), and a
+-- shown icon that hides keeps its trinket excluded until the settle, while
+-- its emptied overlay button goes. After a refused filter call the group holds
+-- any set issued since the last accepted one (TrinketShow).
+function PB:ExcludeCellTrinkets(k, slot, entries)
+    local track = slot.track
+    slot.cellRelease = slot.cellRelease or {}
+    -- Withholding a cell can hide the whole overlay and with it every cell,
+    -- so a second pass settles the exclusion; after it no cell is ready.
+    for _ = 1, 2 do
+        local set, ids = {}, {}
+        for i, e in ipairs(entries) do
+            if e.trinket and track.ready[i] then set[e.id] = true end
+        end
+        -- Ready again before the settle: it stayed excluded, so it may show.
+        for id in pairs(slot.cellRelease) do
+            if set[id] then slot.cellRelease[id] = nil end
+        end
+        for id in pairs(slot.cellShow or {}) do
+            if not set[id] then slot.cellRelease[id] = true end
+        end
+        for id in pairs(slot.cellRelease) do set[id] = true end
+        for id in pairs(set) do ids[#ids + 1] = id end
+        table_sort(ids)
+        local sig = table_concat(ids, ",")
+        if slot.cellSig ~= sig then
+            local cellBuffs = #ids > 0 and set or nil
+            slot.cellBuffs = cellBuffs
+            local accepted = self:SetTrinketExclusion(slot, cellBuffs)
+            slot.cellShow, slot.cellPending = CDRules.TrinketShow(slot.cellShow, set, accepted)
+            slot.cellSig = accepted and sig or nil
+            if not accepted then
+                self.buildPending = true
+                Debug("trinket exclusion refused")
+            end
+        end
+        -- A release waits for a shown overlay host: the bind that shows it
+        -- comes back here, so nothing polls meanwhile.
+        local host = track.overlayHost
+        if slot.cellPending or (next(slot.cellRelease) and not (host and not host:IsVisible())) then
+            self:SettleCellTrinkets(k, slot)
+        end
+        local off, show = track.overlayOff, slot.cellShow
+        for i, e in ipairs(entries) do
+            if e.trinket and not (show and show[e.id]) then Track.Withhold(track, i) end
+        end
+        if track.overlayOff == off then return end
+    end
+end
+
+-- Two frames with the row visible after the latest bind that left an icon
+-- waiting or a trinket released: by then the row's and the overlay's
+-- containers have processed every filter that bind or an earlier one issued
+-- (RunWhenVisibleOnce), so a waiting icon may show and a released trinket may
+-- go back to the row. Every such bind starts the count again (the generation
+-- in slot.settleGen), and a hidden row stops it until the next bind. Two
+-- callbacks per bind that calls this; nothing runs while settled.
+function PB:SettleCellTrinkets(k, slot)
+    local gen = (slot.settleGen or 0) + 1
+    slot.settleGen = gen
+    local frames = 0
+    local function Step()
+        if slot.settleGen ~= gen then return end
+        if not (self:IsEnabled() and self.active and slot.holder:IsVisible()) then return end
+        frames = frames + 1
+        if frames < 2 then
+            C_Timer.After(0, Step)
+            return
+        end
+        if slot.cellPending then slot.cellShow, slot.cellPending = slot.cellPending, nil end
+        -- A hidden overlay host has not processed its emptied slots either; the
+        -- bind that shows it starts the settle again.
+        local host = slot.track and slot.track.overlayHost
+        if next(slot.cellRelease) and not (host and not host:IsVisible()) then
+            for id in pairs(slot.cellRelease) do
+                slot.cellRelease[id] = nil
+                slot.cellShow[id] = nil
+            end
+            slot.cellSig = nil
+        end
+        local binding = self.bindings[k]
+        if binding and slot.container then self:BindCooldowns(k, binding) end
+    end
+    C_Timer.After(0, Step)
+end
+
+-- True when the Trinkets group is confirmed absent (it takes slot.cellBuffs
+-- when it is built) or the client took the new filter. The engine sets the
+-- filter before its last step (Blizzard_CustomAuraContainer.lua
+-- SetAuraGroupCandidateFilters), so false means any set issued so far. A group
+-- whose registration could not be read counts as refused.
+function PB:SetTrinketExclusion(slot, cellBuffs)
+    if not slot.container then return true end
+    for i = 1, #DESCRIPTORS do
+        local d = DESCRIPTORS[i]
+        if d.category.excludesCells then
+            if slot.unknownGroups[d.key] then return false end
+            if not slot.groups[d.key] then return true end
+            local _, candidates = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, cellBuffs)
+            return pcall(slot.container.SetAuraGroupCandidateFilters, slot.container, d.key, candidates)
+        end
+    end
+    return true
 end
 
 -- Cells are KE frames: moving them is never refused.
@@ -981,7 +1102,8 @@ function PB:ReconfigureSlot(slot)
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
         if slot.groups[d.key] then
-            local filter, candidates, maxFrames, index = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db)
+            local filter, candidates, maxFrames, index =
+                KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, slot.cellBuffs)
             clean = pcall(container.SetAuraGroupFilterString, container, d.key, filter) and clean
             clean = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates) and clean
             clean = pcall(container.SetAuraGroupMaxFrameCount, container, d.key, maxFrames) and clean

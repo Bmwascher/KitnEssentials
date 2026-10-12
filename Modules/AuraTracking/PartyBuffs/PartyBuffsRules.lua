@@ -24,7 +24,7 @@ Rules.CATEGORIES = {
     { key = "potion", filter = "HELPFUL", trackKey = "TrackPotion", listKey = "ListPotions",
       colorKey = "ColorPotion" },
     { key = "trinket", filter = "HELPFUL", trackKey = "TrackTrinket", listKey = "ListTrinkets",
-      colorKey = "ColorTrinket" },
+      colorKey = "ColorTrinket", excludesCells = true },
 }
 for i, category in ipairs(Rules.CATEGORIES) do
     category.index = i
@@ -92,7 +92,7 @@ end
 
 -- The only producer of a group's container settings, for creation and for
 -- every reconfiguration.
-function Rules.BuildGroupConfig(category, db)
+function Rules.BuildGroupConfig(category, db, cellBuffs)
     local auraRules = KE.AuraRules
     local candidates = {}
     if category.listKey then
@@ -101,6 +101,8 @@ function Rules.BuildGroupConfig(category, db)
     if category.excludeBlocklist then
         candidates.excludeSpellIDs = auraRules.BuildExcludeSpellIDs(nil)
     end
+    -- A trinket shown as a cooldown icon on this row is left out here.
+    if category.excludesCells and cellBuffs then candidates.excludeSpellIDs = cellBuffs end
     local maxFrames = 0
     if db[category.trackKey] == true then maxFrames = Rules.IconCount(db) end
     return category.filter, candidates, maxFrames, category.index

@@ -242,3 +242,36 @@ describe("PartyCooldownsRules.DoorVerdict", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.TakeLoadTry", function()
+    it("allows LOAD_TRIES requests per item and no more", function()
+        local R = L.loadPartyCooldownsRules()
+        local tries, got = {}, {}
+        for _ = 1, R.LOAD_TRIES + 1 do got[#got + 1] = R.TakeLoadTry(tries, 111) end
+        assert.are.same({ true, true, true, false }, got)
+        assert.is_true(R.TakeLoadTry(tries, 222))
+    end)
+end)
+
+describe("PartyCooldownsRules.TrinketShow", function()
+    it("shows an icon only once the row surely leaves its trinket out", function()
+        local R = L.loadPartyCooldownsRules()
+        local steps = {
+            { name = "accepted: new icons wait", show = {}, set = { [1] = true }, accepted = true,
+              kept = {}, pending = { [1] = true } },
+            { name = "refused: kept while still requested", show = { [1] = true },
+              set = { [1] = true, [2] = true }, accepted = false, kept = { [1] = true } },
+            { name = "second refusal: intersection, not union", show = { [1] = true },
+              set = { [2] = true }, accepted = false, kept = {} },
+            { name = "accepted after refusals: waits again", show = {}, set = { [2] = true },
+              accepted = true, kept = {}, pending = { [2] = true } },
+            { name = "accepted: a shown icon still excluded stays", show = { [1] = true, [2] = true },
+              set = { [2] = true }, accepted = true, kept = { [2] = true }, pending = { [2] = true } },
+        }
+        for _, s in ipairs(steps) do
+            local kept, pending = R.TrinketShow(s.show, s.set, s.accepted)
+            assert.are.same(s.kept, kept, s.name)
+            assert.are.same(s.pending, pending, s.name)
+        end
+    end)
+end)
