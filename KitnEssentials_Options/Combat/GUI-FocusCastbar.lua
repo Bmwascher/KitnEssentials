@@ -514,10 +514,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local cardSound = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
     manager:Register(cardSound, "all")
 
-    local soundList = { ["None"] = "None" }
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
-    end
+    local soundList = GUIFrame.BuildSoundOptions()
 
     local rowSndA = GUIFrame:CreateRow(cardSound.content, Theme.rowHeight)
     local soundEnable = GUIFrame:CreateCheckbox(rowSndA, "Play Sound on Cast", {

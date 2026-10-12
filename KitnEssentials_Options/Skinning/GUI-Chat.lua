@@ -8,12 +8,8 @@
 local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
-local pairs = pairs
 local ipairs = ipairs
-local table_insert = table.insert
-local table_sort = table.sort
 
 local function GetChatModule()
     if KitnEssentials then
@@ -92,22 +88,6 @@ local HISTORY_LABEL_W = 0.18
 local HISTORY_CELL_W = 0.205
 local HISTORY_CELL_H = 24
 local HISTORY_CELL_SPACING = 2
-
--- Sorted LSM sound list for the whisper dropdowns.
-local function BuildWhisperSoundOptions()
-    local opts = { { value = "None", text = "None" } }
-    if LSM then
-        local names = {}
-        for name in pairs(LSM:HashTable("sound")) do
-            if name ~= "None" then table_insert(names, name) end
-        end
-        table_sort(names)
-        for _, name in ipairs(names) do
-            table_insert(opts, { value = name, text = name })
-        end
-    end
-    return opts
-end
 
 -- manager is nil for a card the state manager leaves alone (Chat Links).
 local function AddSeparatorRow(card, manager)
@@ -697,7 +677,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local card10 = GUIFrame:CreateCard(scrollChild, "Whisper Sounds", yOffset)
     manager:Register(card10, "all")
 
-    local soundOptions = BuildWhisperSoundOptions()
+    local soundOptions = GUIFrame.BuildSoundOptions()
 
     local row10a = GUIFrame:CreateRow(card10.content, Theme.rowHeight)
     local whisperSoundEnabledCheck = GUIFrame:CreateCheckbox(row10a, "Play Sound On Whisper", {

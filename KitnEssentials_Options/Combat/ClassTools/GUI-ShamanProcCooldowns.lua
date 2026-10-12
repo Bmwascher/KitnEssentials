@@ -22,12 +22,7 @@ local MODES = {
     { key = "ICONS", text = "Icons" },
 }
 
-local GROW_DIRECTIONS = {
-    { key = "DOWN",  text = "Down" },
-    { key = "UP",    text = "Up" },
-    { key = "LEFT",  text = "Left" },
-    { key = "RIGHT", text = "Right" },
-}
+local GROW_DIRECTIONS = GUIFrame.GrowDirectionOptions
 
 -- The talent's name and a gray tag: the length its next proc would count, or
 -- that the character lacks the talent.
