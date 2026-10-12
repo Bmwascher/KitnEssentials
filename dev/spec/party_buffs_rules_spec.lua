@@ -188,6 +188,22 @@ describe("PartyBuffsRules.PickFrames", function()
             assert.are.same(case.want, tokens, tostring(case.includeSelf))
         end
     end)
+
+    it("keeps only the first own frame when include-self is on, whatever its token", function()
+        local R = L.loadPartyBuffsRules()
+        local raidSelf = cand("raid3", "eui", true, { raidIndex = 3 })
+        local player = cand("player", "player", true)
+        local mate = cand("party1", "eui", true)
+        local cases = {
+            { name = "raid token first", list = { raidSelf, player, mate }, want = { "raid3", "party1" } },
+            { name = "player first", list = { player, raidSelf, mate }, want = { "player", "party1" } },
+        }
+        for _, case in ipairs(cases) do
+            local tokens = {}
+            for i, binding in ipairs(R.PickFrames(case.list, 2, true)) do tokens[i] = binding.token end
+            assert.are.same(case.want, tokens, case.name)
+        end
+    end)
 end)
 
 describe("PartyBuffsRules.CandidateToken", function()

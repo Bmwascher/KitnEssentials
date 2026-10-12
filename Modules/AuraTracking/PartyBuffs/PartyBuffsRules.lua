@@ -128,19 +128,24 @@ end
 
 -- Candidates arrive in family order, each carrying its token, visibility,
 -- frame, family and the own-frame facts. The own frame is kept only with
--- includeSelf.
+-- includeSelf, and only the first: one frame can show you as player and
+-- another as raid<N>.
 function Rules.PickFrames(candidates, maxSlots, includeSelf)
     local bindings, seen = {}, {}
+    local selfTaken = false
     if type(candidates) ~= "table" then return bindings end
     for i = 1, #candidates do
         if #bindings >= maxSlots then break end
         local candidate = candidates[i]
         if type(candidate) == "table" then
             local token = candidate.token
-            if type(token) == "string" and not seen[token] and candidate.visible == true
-                and (includeSelf == true or not Rules.IsPlayerCandidate(candidate)) then
-                seen[token] = true
-                bindings[#bindings + 1] = { token = token, frame = candidate.frame, family = candidate.family }
+            if type(token) == "string" and not seen[token] and candidate.visible == true then
+                local own = Rules.IsPlayerCandidate(candidate)
+                if not own or (includeSelf == true and not selfTaken) then
+                    seen[token] = true
+                    if own then selfTaken = true end
+                    bindings[#bindings + 1] = { token = token, frame = candidate.frame, family = candidate.family }
+                end
             end
         end
     end

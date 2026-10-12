@@ -216,8 +216,8 @@ end
 
 ---------------------------------------------------------------------------------
 -- Frames: a unit-frame addon's buttons first, then Blizzard's raid-style party
--- frames, then its portrait party frames. Portrait frames are pooled, so every
--- scan looks them up fresh.
+-- frames, then its portrait party frames, then, for Include Yourself, the
+-- player frame. Portrait frames are pooled, so every scan looks them up fresh.
 ---------------------------------------------------------------------------------
 local function PlainString(value)
     if issecretvalue(value) or type(value) ~= "string" then return nil end
@@ -243,8 +243,9 @@ local seen = {}
 -- result is copied only when readable. Every candidate is watched, shown or
 -- not: the right frame can appear after a resolve with no roster event. Only
 -- a shown frame with a unit is kept: the pick reads no other, and the search
--- walks every unit button a unit-frame addon has built.
-local function AddCandidate(list, frame, family, raidIndex)
+-- walks every unit button a unit-frame addon has built. fixedToken, when
+-- given, is the frame's token whatever its unit reads.
+local function AddCandidate(list, frame, family, raidIndex, fixedToken)
     if type(frame) ~= "table" or seen[frame] then return end
     seen[frame] = true
     if PB.active then PB:WatchCell(frame) end
@@ -258,9 +259,13 @@ local function AddCandidate(list, frame, family, raidIndex)
         return
     end
     local candidate = { frame = frame, family = family, raidIndex = raidIndex, visible = true }
-    candidate.unit = PlainString(frame.unit)
-    local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
-    if okAttr then candidate.attrUnit = PlainString(attr) end
+    if fixedToken then
+        candidate.unit = fixedToken
+    else
+        candidate.unit = PlainString(frame.unit)
+        local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
+        if okAttr then candidate.attrUnit = PlainString(attr) end
+    end
     candidate.token = KE.PartyBuffsRules.CandidateToken(candidate)
     if candidate.token then
         local okSame, same = pcall(UnitIsUnit, candidate.token, "player")
@@ -319,7 +324,12 @@ function PB:FindFrames()
             AddCandidate(list, partyFrame["MemberFrame" .. i], "portrait", raidIndex)
         end
     end
-    return KE.PartyBuffsRules.PickFrames(list, MAX_SLOTS, self.db.IncludeSelf == true)
+    -- The portrait party frames never show you, so there your own frame is
+    -- the player frame. Last, so a party frame holding you keeps the row; its
+    -- unit names the vehicle while you ride one, so the token is fixed.
+    local includeSelf = self.db.IncludeSelf == true
+    if includeSelf then AddCandidate(list, _G.PlayerFrame, "player", raidIndex, "player") end
+    return KE.PartyBuffsRules.PickFrames(list, MAX_SLOTS, includeSelf)
 end
 
 ---------------------------------------------------------------------------------
