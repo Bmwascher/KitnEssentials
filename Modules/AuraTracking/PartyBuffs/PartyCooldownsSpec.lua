@@ -309,7 +309,6 @@ local function OnEvent(_, event, arg1, arg2)
     end
 end
 
--- INSPECT_READY and the events of every reader that is on.
 local function RegisterEvents()
     events:UnregisterAllEvents()
     events:RegisterEvent("INSPECT_READY")

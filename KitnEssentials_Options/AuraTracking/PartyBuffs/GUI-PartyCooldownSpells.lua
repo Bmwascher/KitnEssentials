@@ -83,7 +83,6 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         C_Timer.After(0, Redraw)
     end
 
-    -- The first row's up arrow and the last row's down arrow are drawn grayed.
     local function AddSpellRow(specID, list, i)
         local entry = list[i]
         local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)

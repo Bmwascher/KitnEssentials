@@ -633,9 +633,8 @@ function PB:BuildSlot(k)
         end
     end
     -- Cell containers come after the groups, one build per frame like them,
-    -- so a frame that built a group builds none. A refused one waits for the
-    -- drain instead of retrying every frame; the re-bind still runs, since a
-    -- refused build can change which cells are ready.
+    -- so a frame that built a group builds none. The re-bind runs on any
+    -- refusal, since a refused build can change which cells are ready.
     local track = slot.track
     if not built and track and slot.holder:IsShown() and Track.Missing(track) then
         local made, again = Track.BuildNext(track)

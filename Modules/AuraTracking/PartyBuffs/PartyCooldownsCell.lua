@@ -30,8 +30,7 @@ local meter
 local metrics = {}
 local strips = {}
 
--- Every label from cd down to 1, one per line, top to bottom, in the core
--- countdown format.
+-- One label per line from cd down to 1, top to bottom.
 local function StripText(cd)
     local text = strips[cd]
     if text then return text end

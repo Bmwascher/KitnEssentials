@@ -188,7 +188,7 @@ Rules.DOOR_PASSES = 16
 -- A secret read passes the stamp through the client 2 times, 4 with a short
 -- sensor: up to 20320 times over a 900-second cooldown's roll period. At
 -- 0.5 / (1020 * 1270), just over 3.8598e-7, the drift could reach half a strip
--- line (spec 4.3); keep the slack at 3.85e-7 or less.
+-- line; keep the slack at 3.85e-7 or less.
 Rules.DOOR_SLACK = 3e-7
 
 function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
@@ -419,10 +419,9 @@ function Rules.TrinketReadStands(prev, items)
     return same or (items[1] ~= nil and items[2] ~= nil), same
 end
 
--- Whether a spec or talent event may drop what was read of a member. Nobody's
--- spec or talents can change inside a running key, and a teammate's re-read
--- waits for an inspect out of combat, so a teammate's event is ignored there;
--- your own spec and talents are read again at once, so yours always counts.
+-- Whether a spec or talent event may drop what was read of a member. Inside a
+-- running key nobody's spec or talents can change, and a dropped teammate
+-- waits for an out-of-combat inspect; your own are read again at once.
 function Rules.BuildEventCounts(inKey, isPlayer)
     return not inKey or isPlayer == true
 end

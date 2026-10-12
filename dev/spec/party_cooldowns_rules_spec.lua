@@ -229,7 +229,7 @@ describe("PartyCooldownsRules.DoorVerdict", function()
         end
         local cases = {
             { name = "exact", eval = exact, want = "exact", open = true },
-            -- 4.5e-9 a pass reaches the 7.2e-8 PR-4 measured on a live client.
+            -- 4.5e-9 a pass adds up to 7.2e-8, the drift of a live client.
             { name = "close", eval = function(b, a, c) return exact(b, a, c) + 4.5e-9 end, want = "close", open = true },
             { name = "hidden", eval = function() return { secret = true } end, want = "hidden", open = true },
             { name = "coarse", eval = function(b, a, c) return math.floor(exact(b, a, c) * 100 + 0.5) / 100 end,

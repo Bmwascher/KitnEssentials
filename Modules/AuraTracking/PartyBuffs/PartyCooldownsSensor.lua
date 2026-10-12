@@ -481,10 +481,9 @@ function Track.Apply(st, unit, entries, style, settings)
     for i = 1, st.count do
         if Reveal(st, i, n) then fresh = true end
     end
-    -- A sensor bound, re-pointed or re-enabled settles before it is read, on
-    -- the first build and on every later one alike. A cell that has just
-    -- become ready is primed by these reads, however long ago the slot's bind
-    -- reads ran.
+    -- A sensor bound, re-pointed or re-enabled settles before it is read. A
+    -- cell that has just become ready is primed by these reads, however long
+    -- ago the slot's bind reads ran.
     if moved then Track.Hold(st, BIND_HOLD) elseif fresh then Track.Arm(st) end
     return clean and overlayClean, restyle
 end
