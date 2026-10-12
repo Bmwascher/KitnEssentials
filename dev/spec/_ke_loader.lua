@@ -2924,6 +2924,8 @@ function L.loadHealerMana(overrides)
     -- Defaults to a non-healer, so a spec that drives the live roster scan
     -- finds nobody and stops rather than needing the whole snapshot surface.
     _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
+    _G.UnitClass = overrides.UnitClass or function() return "Priest", "PRIEST" end
+    _G.UnitIsConnected = overrides.UnitIsConnected or function() return true end
 
     local profile = {
         Dungeons = {
@@ -2964,7 +2966,13 @@ function L.loadHealerMana(overrides)
         ApplyIconZoom = function() end,
         IsPlayerHealerSpec = function() return false end,
         Print = function() end,
+        GetNicknameOrName = function() return "Healer" end,
+        GetClassColor = function() return { 1, 1, 1 } end,
     }
+    -- The snapshot's spec lookup takes its secret test and its key rule from
+    -- these two files.
+    helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
     helpers.loadModule("Modules/Combat/StatusTexts/HealerMana.lua", KE)
     local HM = modules["HealerMana"]
     HM:UpdateDB()
