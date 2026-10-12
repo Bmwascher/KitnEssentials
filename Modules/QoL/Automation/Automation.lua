@@ -350,17 +350,6 @@ local function ApplyHideZoneText()
     end
 end
 
----------------------------------------------------------------------------------
--- DB Helper
----------------------------------------------------------------------------------
--- A profile switch calls UpdateDB on every module, enabled or not, but
--- ApplySettings only on a module enabled before and after it, so the
--- master-independent zone text hide follows the profile from here.
-function AU:UpdateDB()
-    self.db = KE.db.profile.Automation
-    ApplyHideZoneText()
-end
-
 -- Hide Helptips --
 -- Suppresses Blizzard's tutorial / "Did you know" popups. Fully
 -- live-toggleable and reversible: HelpTip pool hides (acknowledging each
@@ -370,9 +359,8 @@ end
 -- CVars. Hooks install once, only when the feature is first enabled.
 --
 -- Master-independent: this suppression must apply even while the
--- Automation master switch is off, so it is defined above OnInitialize
--- and called from OnInitialize directly, ahead of the module ever being
--- enabled.
+-- Automation master switch is off, so AU:UpdateDB applies it, at
+-- OnInitialize and on every profile switch.
 
 local tutorialsCoreHooked = false
 local tutorialsTooltipHooked = false
@@ -636,9 +624,21 @@ local function ApplyHideHelptips()
     end
 end
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+-- A profile switch calls UpdateDB on every module, enabled or not, but
+-- ApplySettings only on a module enabled before and after it, so the
+-- master-independent zone text hide and helptip suppression follow the
+-- profile from here.
+function AU:UpdateDB()
+    self.db = KE.db.profile.Automation
+    ApplyHideZoneText()
+    ApplyHideHelptips()
+end
+
 function AU:OnInitialize()
     self:UpdateDB()
-    ApplyHideHelptips()
     self:SyncFromCVars()
     self:SetEnabledState(false)
 end
