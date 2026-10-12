@@ -43,7 +43,6 @@ local ORDER = { "player", "party1", "party2", "party3", "party4" }
 -- token that now names someone else is never read before the settle decides.
 local ROSTER_HOLD = 1
 local GRAY = { 0.5, 0.5, 0.5 }
--- The box hangs from the screen at Medium strata.
 local BOX_CONFIG = { anchorFrameType = "UIPARENT", Strata = "MEDIUM" }
 
 -- Preview rows: class, name, share of the length left.

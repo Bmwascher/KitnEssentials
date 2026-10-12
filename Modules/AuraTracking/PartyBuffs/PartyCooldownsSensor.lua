@@ -326,7 +326,8 @@ local function ReadSlot(st)
 end
 
 -- view draws the slot's cells: Cell unless given. A view has Cell's New,
--- Dress, Write, Range and Clear. sensorHost parents the slot's sensors: the
+-- Dress, Write, Range and Clear; Write and Range get values that may be secret,
+-- for setters that accept them. sensorHost parents the slot's sensors: the
 -- shared host unless given.
 function Track.NewSlot(holder, view, sensorHost)
     local st = {
