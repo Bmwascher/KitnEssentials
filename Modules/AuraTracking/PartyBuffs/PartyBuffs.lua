@@ -638,9 +638,13 @@ function PB:BuildSlot(k)
     -- refused build can change which cells are ready.
     local track = slot.track
     if not built and track and slot.holder:IsShown() and Track.Missing(track) then
-        if not Track.BuildNext(track) then
-            self.buildPending = true
+        local made, again = Track.BuildNext(track)
+        if not made then
             self:BindCooldowns(k, binding)
+            -- A failed overlay build is counted and capped, so the slot stays
+            -- queued for the next frame; any other refusal waits for the drain.
+            if again then return false end
+            self.buildPending = true
             return true
         end
         self:BindCooldowns(k, binding)

@@ -576,9 +576,9 @@ end
 
 local EMPTY = { includeSpellIDs = {} }
 
--- Failed slot adds per row while auras are readable. Each can leave a button
--- the container keeps for good; past this the row's cells work without an
--- overlay.
+-- Failed overlay builds per row: the container, its setup or a slot add. An
+-- add can leave a button the container keeps for good; past this the row's
+-- cells work without an overlay.
 local MAX_OVERLAY_FAILS = 2
 
 local function OverlaySpent(st)
@@ -622,8 +622,8 @@ function Track.EmptyOverlaySlot(st, i)
 end
 
 function Track.OverlayMissing(st)
-    if not (st.overlay and st.overlaySetUp) then return st.count > 0 end
     if OverlaySpent(st) then return false end
+    if not (st.overlay and st.overlaySetUp) then return st.count > 0 end
     for i = 1, st.count do
         if not st.overlayButtons[i] then return true end
     end
@@ -644,8 +644,16 @@ local function SetUpOverlay(st)
     return st.overlaySetUp
 end
 
+-- One failed overlay build. The second result asks the caller to try again
+-- next frame, which the cap makes safe.
+local function Failed(st)
+    st.overlayFails = (st.overlayFails or 0) + 1
+    return false, true
+end
+
 -- One container or one aura slot per call, like the sensors.
 function Track.BuildOverlayNext(st)
+    if OverlaySpent(st) then return true end
     if not st.overlay then
         if st.count == 0 then return true end
         local host = st.overlayHost
@@ -656,14 +664,17 @@ function Track.BuildOverlayNext(st)
             st.overlayHost = host
         end
         local ok, container = pcall(CreateFrame, "AuraContainer", nil, host, "CustomAuraContainerTemplate")
-        if not ok or not container then return false end
+        if not ok or not container then return Failed(st) end
         st.overlay, st.overlayOff, st.overlaySetUp = container, true, false
         st.overlayButtons, st.overlaySigs, st.overlayKinds, st.overlayWant = {}, {}, {}, {}
         st.overlayGen, st.overlayMax = {}, 0
-        return SetUpOverlay(st)
+        if SetUpOverlay(st) then return true end
+        return Failed(st)
     end
-    if not st.overlaySetUp then return SetUpOverlay(st) end
-    if OverlaySpent(st) then return true end
+    if not st.overlaySetUp then
+        if SetUpOverlay(st) then return true end
+        return Failed(st)
+    end
     local container = st.overlay
     for i = 1, st.count do
         if not st.overlayButtons[i] then
@@ -695,10 +706,9 @@ function Track.BuildOverlayNext(st)
             -- InitializeButton cannot run twice): whatever the engine kept
             -- stays empty under this key, and the next add uses a new key.
             st.overlayGen[i] = (st.overlayGen[i] or 0) + 1
-            -- While auras are hidden a failure may be the restriction, so it is
-            -- retried at each drain without counting.
-            if not KE:AreAuraIdentitiesHidden() then st.overlayFails = (st.overlayFails or 0) + 1 end
-            return false
+            -- The container takes no access restriction (only its buttons do,
+            -- after this setup), so every failure counts.
+            return Failed(st)
         end
     end
     return true
@@ -712,13 +722,16 @@ end
 function Track.ApplyOverlay(st, entries, unit, settings)
     st.overlaySettings = settings
     local container = st.overlay
+    local spent = OverlaySpent(st)
     if not (container and st.overlaySetUp) then
-        for i = 1, #entries do st.ready[i] = false end
+        -- With the builds spent the cells work without an overlay.
+        if not spent then
+            for i = 1, #entries do st.ready[i] = false end
+        end
         return true, false
     end
     local buttons, kinds, want = st.overlayButtons, st.overlayKinds, st.overlayWant
     local clean, restyle = true, false
-    local spent = OverlaySpent(st)
     for i, e in ipairs(entries) do
         want[i] = e.kind
         if not buttons[i] then
