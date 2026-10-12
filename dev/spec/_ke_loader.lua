@@ -668,6 +668,19 @@ function L.loadPartyPotionsRules()
     return KE.PartyPotionsRules, KE
 end
 
+-- Modules/AuraTracking/PartyBuffs/HealerExternalsRules.lua on the party
+-- cooldowns and party potions rules it builds on. data stands in for
+-- KE.PartyCooldownsData. Returns KE.HealerExternalsRules, KE.
+function L.loadHealerExternalsRules(data)
+    installMock(nil, {})
+    local KE = { PartyCooldownsData = data }
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/HealerExternalsRules.lua", KE)
+    return KE.HealerExternalsRules, KE
+end
+
 -- Modules/AuraTracking/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns

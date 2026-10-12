@@ -43,6 +43,7 @@
     <Script file="AuraTracking\PartyBuffs\PartyBuffsRules.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsData.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsRules.lua" />
+    <Script file="AuraTracking\PartyBuffs\HealerExternalsRules.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsSpec.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsCell.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsSensor.lua" />
