@@ -371,20 +371,28 @@ function Rules.TrinketShow(show, set, accepted)
 end
 
 -- castID -> swap, for the spec's entries whose swap applies to it; nil when
--- none does.
+-- none does. The data never changes, so each spec's answer is built once and
+-- shared; callers only read it. The inspect ticker asks every second.
+local swapsBySpec = {}
+
 function Rules.SwapsFor(specID)
-    local data = KE.PartyCooldownsData
-    local out
-    for _, item in ipairs(data.SPECS[specID] or {}) do
-        local castID = type(item) == "table" and item[1] or item
-        local spell = data.SPELLS[castID]
-        local swap = spell and spell.swap
-        if swap and (not swap.specs or swap.specs[specID]) then
-            out = out or {}
-            out[castID] = swap
+    if specID == nil then return nil end
+    local cached = swapsBySpec[specID]
+    if cached == nil then
+        local data = KE.PartyCooldownsData
+        cached = false
+        for _, item in ipairs(data.SPECS[specID] or {}) do
+            local castID = type(item) == "table" and item[1] or item
+            local spell = data.SPELLS[castID]
+            local swap = spell and spell.swap
+            if swap and (not swap.specs or swap.specs[specID]) then
+                cached = cached or {}
+                cached[castID] = swap
+            end
         end
+        swapsBySpec[specID] = cached
     end
-    return out
+    return cached or nil
 end
 
 -- A gear event within GEAR_QUIET seconds of a teammate's last trinket read
