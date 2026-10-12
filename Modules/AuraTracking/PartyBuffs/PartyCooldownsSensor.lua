@@ -65,10 +65,12 @@ function Track.Now() return math_floor(GetTime() - T0 + 0.5) end
 
 function Track.DoorOpen() return Rules.DoorOpen(Track.door) end
 
+-- A tracker made outside a slot (a preview sample) has no view: Cell draws it.
 local function Push(t, n)
     local c = t.cell
     if not c then return end
-    for k = 1, 2 do pcall(Cell.Write, c, k, t.slot[k], t.u, n) end
+    local view = t.view or Cell
+    for k = 1, 2 do pcall(view.Write, c, k, t.slot[k], t.u, n) end
 end
 Track.Push = Push
 
@@ -89,7 +91,7 @@ local function Tick()
             any = true
             for k = 1, 2 do
                 local sl = t.slot[k]
-                if issecretvalue(sl.v) or sl.v ~= 0 then pcall(Cell.Range, t.cell, k, sl, t.u, n) end
+                if issecretvalue(sl.v) or sl.v ~= 0 then pcall((t.view or Cell).Range, t.cell, k, sl, t.u, n) end
             end
         end
     end
@@ -139,15 +141,16 @@ local function BuffSet(buffs)
     return set
 end
 
--- short makes the sensor see only a proc copy of the buff.
-local function NewSensor(buffs, short)
-    if not sensHost then
+-- short makes the sensor see only a proc copy of the buff. host parents it:
+-- the shared host unless the slot has its own, which its owner hides.
+local function NewSensor(buffs, short, host)
+    if not host and not sensHost then
         sensHost = CreateFrame("Frame", nil, UIParent)
         sensHost:SetSize(1, 1)
         sensHost:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
         sensHost:SetShown(sensorsShown)
     end
-    local ok, sensor = pcall(CreateFrame, "AuraContainer", nil, sensHost, "CustomAuraContainerTemplate")
+    local ok, sensor = pcall(CreateFrame, "AuraContainer", nil, host or sensHost, "CustomAuraContainerTemplate")
     if not ok or not sensor then return nil end
     local grouped = pcall(function()
         sensor:SetSize(1, 1)
@@ -322,9 +325,13 @@ local function ReadSlot(st)
     for i = 1, st.count do pcall(ReadCell, st, i, n) end
 end
 
-function Track.NewSlot(holder)
+-- view draws the slot's cells: Cell unless given. A view has Cell's New,
+-- Dress, Write, Range and Clear. sensorHost parents the slot's sensors: the
+-- shared host unless given.
+function Track.NewSlot(holder, view, sensorHost)
     local st = {
-        holder = holder, entries = {}, cells = {}, trackers = {}, sensors = {}, shorts = {},
+        holder = holder, view = view or Cell, sensorHost = sensorHost,
+        entries = {}, cells = {}, trackers = {}, sensors = {}, shorts = {},
         ready = {}, shown = {}, count = 0, reads = 0, holdUntil = 0,
     }
     st.evt = CreateFrame("Frame")
@@ -390,7 +397,7 @@ end
 
 local function Retire(st, i)
     local c = st.cells[i]
-    if c then Cell.Clear(c) end
+    if c then st.view.Clear(c) end
     Park(st.sensors[i])
     Park(st.shorts[i])
     local t = st.trackers[i]
@@ -416,7 +423,7 @@ local function Reveal(st, i, n)
     Park(st.shorts[i])
     Track.Forget(t)
     t.primed = false
-    Cell.Clear(c)
+    st.view.Clear(c)
     return false
 end
 
@@ -467,16 +474,16 @@ function Track.Apply(st, unit, entries, style, settings)
     for i, e in ipairs(entries) do
         local c = st.cells[i]
         if not c then
-            c = Cell.New(st.holder)
+            c = st.view.New(st.holder)
             st.cells[i] = c
         end
-        Cell.Dress(c, style, e)
+        st.view.Dress(c, style, e)
         local sig = Sig(e)
         local t = st.trackers[i]
         if not t or t.sig ~= sig then
             if t then Track.Forget(t) end
             t = Rules.NewTracker(e.cd, e.short ~= nil)
-            t.sig, t.cell = sig, c
+            t.sig, t.cell, t.view = sig, c, st.view
             Rules.Clear(t, n)
             st.trackers[i] = t
             moved = true
@@ -524,14 +531,14 @@ function Track.BuildNext(st)
     for i = 1, st.count do
         local e = st.entries[i]
         if not st.sensors[i] then
-            local sensor = NewSensor(e.buffs)
+            local sensor = NewSensor(e.buffs, nil, st.sensorHost)
             if not sensor then return false end
             sensor.keSig = Sig(e)
             st.sensors[i] = sensor
             return true
         end
         if e.short and not st.shorts[i] then
-            local short = NewSensor(e.buffs, e.short)
+            local short = NewSensor(e.buffs, e.short, st.sensorHost)
             if not short then return false end
             short.keSig = Sig(e)
             st.shorts[i] = short
@@ -599,8 +606,10 @@ local EMPTY = { includeSpellIDs = {} }
 -- cells work without an overlay.
 local MAX_OVERLAY_FAILS = 2
 
+-- A view with no active state (overlay = false) takes no overlay at all, as if
+-- its builds were spent.
 local function OverlaySpent(st)
-    return (st.overlayFails or 0) >= MAX_OVERLAY_FAILS
+    return st.view.overlay == false or (st.overlayFails or 0) >= MAX_OVERLAY_FAILS
 end
 
 -- Hides every button at once: the host is a KE frame, and hiding it is never
