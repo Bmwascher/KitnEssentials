@@ -1028,8 +1028,7 @@ function S.HoverWash(frame)
     if anchor.backdropInfo then
         S.InsetToEdge(tex, anchor)
     else
-        tex:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
-        tex:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+        FollowEdge(tex, anchor)
     end
     tex:Hide()
     frame:HookScript("OnEnter", function() tex:Show() end)
@@ -2453,9 +2452,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
         if tbd then
             S.InsetToEdge(tab.SelectedTexture, tbd)
         else
-            tab.SelectedTexture:ClearAllPoints()
-            tab.SelectedTexture:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
-            tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+            FollowEdge(tab.SelectedTexture, tab)
         end
     end
     S.KillSideTabArt(tab)

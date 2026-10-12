@@ -247,16 +247,15 @@ local function SkinDashboard()
                 if tbd then
                     S.InsetToEdge(tab.SelectedTexture, tbd)
                 else
-                    tab.SelectedTexture:ClearAllPoints()
-                    tab.SelectedTexture:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
-                    tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+                    S.InsetToEdge(tab.SelectedTexture, tab)
+                    S.TrackEdgeClients(tab)
                 end
             else
                 local selT = tab:CreateTexture(nil, "BACKGROUND", nil, 1)
                 S.PaintBrand(selT, "SetColorTexture", S.palette.selectedA)
                 local tbd = S.GetBackdrop(tab)
-                selT:SetPoint("TOPLEFT", tbd or tab, "TOPLEFT", 1, -1)
-                selT:SetPoint("BOTTOMRIGHT", tbd or tab, "BOTTOMRIGHT", -1, 1)
+                S.InsetToEdge(selT, tbd or tab)
+                if not tbd then S.TrackEdgeClients(tab) end
                 selT:Hide()
                 tab.SelectedTexture = selT
             end

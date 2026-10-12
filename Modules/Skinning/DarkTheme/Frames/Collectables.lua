@@ -59,8 +59,8 @@ end
 local function ApplyRowHover(bu, anchor)
     local hl = bu:CreateTexture(nil, "HIGHLIGHT")
     hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
-    hl:SetPoint("TOPLEFT", anchor or bu, "TOPLEFT", 1, -1)
-    hl:SetPoint("BOTTOMRIGHT", anchor or bu, "BOTTOMRIGHT", -1, 1)
+    S.InsetToEdge(hl, anchor or bu)
+    if not anchor then S.TrackEdgeClients(bu) end
 end
 
 local BRAND_SELECT_INSET = { 1, -1, -1, 1 }

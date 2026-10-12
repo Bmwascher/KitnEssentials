@@ -23,8 +23,7 @@ local function TabSetSelected(tab, selected)
         if not bd then return end
         local t = tab:CreateTexture(nil, "ARTWORK")
         S.PaintBrand(t, "SetColorTexture", S.palette.selectedA)
-        t:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
-        t:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -1, 1)
+        S.InsetToEdge(t, bd)
         t:Hide()
         d.selTex = t
     end
