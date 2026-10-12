@@ -42,7 +42,8 @@ KE.PartyCooldownsSpec = Spec
 -- What an inspect reads beyond the spec, one reader per kind: Wanted(m) while
 -- m still needs it, Read(m, unit) on INSPECT_READY, Self(m) for the player's
 -- own, Forget(m) on a spec change, and events handed to
--- OnEvent(event, arg1, arg2).
+-- OnEvent(event, arg1, arg2). A reader with On() works only while On() is
+-- true, and Clear(m) drops what it stored when it is switched off.
 Spec.readers = {}
 -- Item ID -> use cooldown seconds, read from the item.
 Spec.lengths = {}
@@ -128,20 +129,43 @@ function Spec.Resolve(m)
     return m.spec
 end
 
--- A guessed spec still wants the inspect.
+local C_ChallengeMode = C_ChallengeMode
+
+local function InKey()
+    return Ask(C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive) == true
+end
+
+local function IsOn(reader)
+    return reader.On == nil or reader.On() == true
+end
+
+-- A guessed spec still wants the inspect; with no cooldown cell switched on,
+-- nothing does.
 local function Done(m)
-    if m.isPlayer then return true end
+    if m.isPlayer or not (Spec.trackClass or Spec.trackTrinkets) then return true end
     if m.source == nil or m.source == "guess" then return false end
     for _, reader in ipairs(Spec.readers) do
-        if reader.Wanted(m) then return false end
+        if IsOn(reader) and reader.Wanted(m) then return false end
     end
     return true
 end
 
 function Spec.ReadSelf(m)
     for _, reader in ipairs(Spec.readers) do
-        if reader.Self then reader.Self(m) end
+        if reader.Self and IsOn(reader) then reader.Self(m) end
     end
+end
+
+-- Whether Blizzard's Inspect window is shown, and whether its talent view
+-- shows another player.
+local function InspectViews()
+    local inspectFrame, spells = _G.InspectFrame, _G.PlayerSpellsFrame
+    local talentsInspecting = false
+    if spells and type(spells.IsInspecting) == "function" then
+        local ok, inspecting = pcall(spells.IsInspecting, spells)
+        talentsInspecting = ok and inspecting == true
+    end
+    return inspectFrame ~= nil and inspectFrame:IsShown() == true, talentsInspecting
 end
 
 -- One request at most per tick, and none in the cases NextInspect refuses.
@@ -166,9 +190,10 @@ function Spec.Tick()
         Spec.ticker = nil
         return
     end
-    local inspectFrame = _G.InspectFrame
+    local inspectShown, talentsInspecting = InspectViews()
     local m = rules.NextInspect({
-        inspectShown = inspectFrame ~= nil and inspectFrame:IsShown() == true,
+        inspectShown = inspectShown,
+        talentsInspecting = talentsInspecting,
         inCombat = InCombatLockdown(),
         now = now,
         lastRequest = Spec.lastRequest,
@@ -222,6 +247,7 @@ end
 function Spec.ForgetSpec(guid)
     local m = Spec.byGUID[guid]
     if not m then return end
+    if not KE.PartyCooldownsRules.BuildEventCounts(InKey(), m.isPlayer) then return end
     if m.libKey and Spec.libSpecs[m.libKey] == m.spec then Spec.libSpecs[m.libKey] = nil end
     m.spec, m.source, m.inspected = nil, nil, nil
     ForgetReads(m)
@@ -240,11 +266,10 @@ local function OnInspectReady(guid)
         m.inspected = Ask(GetInspectSpecialization, unit)
         Spec.Resolve(m)
         for _, reader in ipairs(Spec.readers) do
-            if reader.Wanted(m) then reader.Read(m, unit) end
+            if IsOn(reader) and reader.Wanted(m) then reader.Read(m, unit) end
         end
     end
-    local inspectFrame = _G.InspectFrame
-    if not (inspectFrame and inspectFrame:IsShown()) then pcall(ClearInspectPlayer) end
+    if not KE.PartyCooldownsRules.InspectInUse(InspectViews()) then pcall(ClearInspectPlayer) end
     m.done = Done(m)
     if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime()) end
     Changed(m)
@@ -259,7 +284,7 @@ local function OnLibSpec(specID, _, _, playerName)
     if type(specID) ~= "number" or specID <= 0 or type(playerName) ~= "string" then return end
     local same = Spec.libSpecs[playerName] == specID
     Spec.libSpecs[playerName] = specID
-    if same then
+    if same and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
         for _, m in pairs(Spec.byGUID) do
             if not m.isPlayer and m.libKey == playerName then m.talents, m.talentMisses = nil, nil end
         end
@@ -278,8 +303,20 @@ local function OnEvent(_, event, arg1, arg2)
         OnInspectReady(arg1)
         return
     end
+    -- Two readers may share an event.
     for _, reader in ipairs(Spec.readers) do
-        if reader.OnEvent then reader.OnEvent(event, arg1, arg2) end
+        if reader.OnEvent and IsOn(reader) then reader.OnEvent(event, arg1, arg2) end
+    end
+end
+
+-- INSPECT_READY and the events of every reader that is on.
+local function RegisterEvents()
+    events:UnregisterAllEvents()
+    events:RegisterEvent("INSPECT_READY")
+    for _, reader in ipairs(Spec.readers) do
+        if IsOn(reader) then
+            for _, event in ipairs(reader.events or {}) do events:RegisterEvent(event) end
+        end
     end
 end
 
@@ -302,9 +339,21 @@ function Spec.Activate()
         events = CreateFrame("Frame")
         events:SetScript("OnEvent", OnEvent)
     end
-    events:RegisterEvent("INSPECT_READY")
+    RegisterEvents()
+    Spec.Wake()
+end
+
+-- Which cooldown cells can show, from the Class Cooldowns and Trinkets
+-- switches. A reader whose cells cannot show stops hearing its events and
+-- drops what it stored; with neither switch on, nobody is inspected.
+function Spec.SetTracked(class, trinkets)
+    Spec.trackClass, Spec.trackTrinkets = class, trinkets
+    if not Spec.active then return end
+    RegisterEvents()
     for _, reader in ipairs(Spec.readers) do
-        for _, event in ipairs(reader.events or {}) do events:RegisterEvent(event) end
+        if reader.Clear and not IsOn(reader) then
+            for _, m in pairs(Spec.byGUID) do reader.Clear(m) end
+        end
     end
     Spec.Wake()
 end
@@ -344,11 +393,12 @@ local C_TooltipInfo = C_TooltipInfo
 local GetInventoryItemID = GetInventoryItemID
 local TRINKET_SLOTS = { 13, 14 }
 
-local loadTries = {}
+local loadTries, lengthTries = {}, {}
 
--- Once per item, out of combat. Returns whether the length is settled; an item
--- whose tooltip has no cooldown line stores false, and gets no cell unless
--- the player types its seconds.
+-- Out of combat. Returns whether the length is settled. A tooltip with no
+-- cooldown line may not have finished loading, so it is read again at the
+-- next combat end, item load or read; past LOAD_TRIES such reads the item
+-- stores false and gets no cell unless the player types its seconds.
 local function ReadLength(itemID)
     if Spec.lengths[itemID] ~= nil then return true end
     if InCombatLockdown() then return false end
@@ -363,6 +413,7 @@ local function ReadLength(itemID)
             return true
         end
     end
+    if KE.PartyCooldownsRules.TakeLoadTry(lengthTries, itemID) then return false end
     Spec.lengths[itemID] = false
     return true
 end
@@ -427,28 +478,58 @@ local function HasItem(m, itemID)
     return items ~= nil and (items[1] == itemID or items[2] == itemID)
 end
 
+-- Your own slots are read directly. A refused read keeps the trinkets read
+-- before, and the next bind, equipment change or combat end tries again.
+local function ReadOwn(m)
+    local items = ReadItems("player")
+    if not items then
+        m.trinketsStale = true
+        return false
+    end
+    m.trinketsStale = nil
+    Fill(m, items)
+    return true
+end
+
+-- What was read stays until a new read replaces it: a gear event only marks
+-- the record stale, and only when GearEventCounts says it is a change.
 Spec.readers[#Spec.readers + 1] = {
     events = { "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED", "ITEM_DATA_LOAD_RESULT",
         "PLAYER_REGEN_ENABLED" },
-    Wanted = function(m) return m.trinketItems == nil end,
-    Read = function(m, unit) Fill(m, ReadItems(unit)) end,
+    On = function() return Spec.trackTrinkets == true end,
+    Wanted = function(m) return m.trinketItems == nil or m.trinketsStale == true end,
+    Read = function(m, unit)
+        local items = ReadItems(unit)
+        if not items then return end
+        local stands, same = KE.PartyCooldownsRules.TrinketReadStands(m.trinketItems, items)
+        m.trinketsSame = same and (m.trinketsSame or 0) + 1 or 0
+        m.trinketsStale = not stands or nil
+        m.trinketsReadAt = GetTime()
+        Fill(m, items)
+    end,
     Self = function(m)
-        if m.trinketItems == nil then Fill(m, ReadItems("player")) end
+        if m.trinketItems == nil or m.trinketsStale then ReadOwn(m) end
+    end,
+    Clear = function(m)
+        m.trinketItems, m.trinkets, m.trinketsComplete = nil, nil, nil
+        m.trinketsStale, m.trinketsReadAt, m.trinketsSame = nil, nil, nil
     end,
     OnEvent = function(event, arg1, arg2)
         if event == "PLAYER_EQUIPMENT_CHANGED" then
-            local m = Spec.player
-            if m then
-                m.trinketItems = nil
-                Fill(m, ReadItems("player"))
+            local m, slot = Spec.player, Plain(arg1)
+            -- Another slot changes no trinket, unless a read is still owed.
+            if m and (slot == TRINKET_SLOTS[1] or slot == TRINKET_SLOTS[2]
+                or m.trinketItems == nil or m.trinketsStale) then
+                ReadOwn(m)
                 Changed(m)
             end
         elseif event == "UNIT_INVENTORY_CHANGED" then
             if KE:IsSecretValue(arg1) then return end
             local guid = KE:GetSafeUnitGUID(arg1)
             local m = guid and Spec.byGUID[guid]
-            if m and not m.isPlayer then
-                m.trinketItems, m.trinkets = nil, nil
+            if m and not m.isPlayer and m.trinketItems and not m.trinketsStale
+                and KE.PartyCooldownsRules.GearEventCounts(InKey(), GetTime(), m.trinketsReadAt, m.trinketsSame) then
+                m.trinketsStale = true
                 Spec.Wake()
             end
         else
@@ -466,10 +547,7 @@ Spec.readers[#Spec.readers + 1] = {
                 -- Your own slots are never inspected: a refused read is
                 -- retried here.
                 local m = Spec.player
-                if m and m.trinketItems == nil then
-                    Fill(m, ReadItems("player"))
-                    if m.trinketItems then Changed(m) end
-                end
+                if m and (m.trinketItems == nil or m.trinketsStale) and ReadOwn(m) then Changed(m) end
             end
             for _, m in pairs(Spec.byGUID) do
                 if m.trinketItems and not m.trinketsComplete
@@ -551,10 +629,15 @@ local function SelfTaken(specID)
     return out
 end
 
+-- The miss count belongs to the answer: a new spec gets its own three tries.
+local function ForgetTalents(m) m.talents, m.talentMisses = nil, nil end
+
 -- Three unreadable answers in a row store an empty one, which keeps the
--- likely icon.
+-- likely icon. Talents only pick a class cooldown's icon.
 Spec.readers[#Spec.readers + 1] = {
     events = { "TRAIT_CONFIG_UPDATED" },
+    On = function() return Spec.trackClass == true end,
+    Clear = ForgetTalents,
     Wanted = function(m)
         return m.talents == nil and m.spec ~= nil and KE.PartyCooldownsRules.SwapsFor(m.spec) ~= nil
     end,
@@ -570,8 +653,7 @@ Spec.readers[#Spec.readers + 1] = {
     Self = function(m)
         if m.talents == nil and m.spec then m.talents = SelfTaken(m.spec) end
     end,
-    -- The miss count belongs to the answer: a new spec gets its own three tries.
-    Forget = function(m) m.talents, m.talentMisses = nil, nil end,
+    Forget = ForgetTalents,
     OnEvent = function(event)
         local m = Spec.player
         if event == "TRAIT_CONFIG_UPDATED" and m then

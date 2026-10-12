@@ -107,10 +107,16 @@ function Rules.ResolveSpec(sources)
     return nil, nil
 end
 
--- At most one member per call, and none while the Inspect window is open, in
+-- Blizzard's Inspect window, or its talent view of another player, reads the
+-- inspect data too: KE neither asks for an inspect nor clears one then.
+function Rules.InspectInUse(inspectShown, talentsInspecting)
+    return inspectShown == true or talentsInspecting == true
+end
+
+-- At most one member per call, and none while an inspect view is in use, in
 -- combat, or within INSPECT_GAP seconds of the last request.
 function Rules.NextInspect(state, members)
-    if state.inspectShown or state.inCombat then return nil end
+    if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
     if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
     for _, m in ipairs(members) do
         if not m.done and m.canInspect and not (m.waitUntil and state.now < m.waitUntil) then
@@ -352,13 +358,13 @@ end
 -- buttons follow the new filter only on its next pass, so only icons already
 -- shown that stay excluded remain, and set waits. Refused: the group holds any
 -- set issued since the last accepted one, so only icons every one of them
--- leaves out remain, and nothing waits.
+-- leaves out remain, and nothing waits. An empty set has nothing to wait for.
 function Rules.TrinketShow(show, set, accepted)
     local kept = {}
     for id in pairs(show or {}) do
         if set[id] then kept[id] = true end
     end
-    if not accepted then return kept, nil end
+    if not accepted or next(set) == nil then return kept, nil end
     local pending = {}
     for id in pairs(set) do pending[id] = true end
     return kept, pending
@@ -379,4 +385,36 @@ function Rules.SwapsFor(specID)
         end
     end
     return out
+end
+
+-- A gear event within GEAR_QUIET seconds of a teammate's last trinket read
+-- may come from that inspect answer itself. Past MAX_SAME_READS re-reads in a
+-- row that found the same trinkets, one counts only TRY_WAIT seconds after
+-- the last read.
+Rules.GEAR_QUIET = 3
+Rules.MAX_SAME_READS = 2
+
+-- Whether a teammate's gear event asks for a new read. Gear cannot change
+-- inside a running key.
+function Rules.GearEventCounts(inKey, now, readAt, same)
+    if inKey then return false end
+    if not readAt then return true end
+    local quiet = (same or 0) >= Rules.MAX_SAME_READS and Rules.TRY_WAIT or Rules.GEAR_QUIET
+    return now - readAt >= quiet
+end
+
+-- After an inspect read of the trinket slots: whether it stands, and whether
+-- it agrees with the previous read. An empty slot may be data that has not
+-- arrived yet, so a read with one stands only once a second read agrees.
+function Rules.TrinketReadStands(prev, items)
+    local same = prev ~= nil and prev[1] == items[1] and prev[2] == items[2]
+    return same or (items[1] ~= nil and items[2] ~= nil), same
+end
+
+-- Whether a spec or talent event may drop what was read of a member. Nobody's
+-- spec or talents can change inside a running key, and a teammate's re-read
+-- waits for an inspect out of combat, so a teammate's event is ignored there;
+-- your own spec and talents are read again at once, so yours always counts.
+function Rules.BuildEventCounts(inKey, isPlayer)
+    return not inKey or isPlayer == true
 end

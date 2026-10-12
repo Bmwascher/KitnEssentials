@@ -1135,6 +1135,7 @@ function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
     self:BuildStyleSettings()
+    Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true)
     self:EvaluateGate()
     self:ReconfigureAll()
     self:Restyle()

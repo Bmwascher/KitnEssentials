@@ -93,11 +93,12 @@ describe("PartyCooldownsRules.NextInspect", function()
         return m
     end
 
-    it("asks nothing while the Inspect window is open, in combat, or within two seconds of the last request", function()
+    it("asks nothing while an inspect view is open, in combat, or within two seconds of the last request", function()
         local R = L.loadPartyCooldownsRules()
         local members = { member("a") }
         local cases = {
             { name = "window open", state = { inspectShown = true, now = 10 } },
+            { name = "talent view inspecting", state = { talentsInspecting = true, now = 10 } },
             { name = "in combat", state = { inCombat = true, now = 10 } },
             { name = "within the gap", state = { now = 10, lastRequest = 8.5 } },
         }
@@ -267,11 +268,61 @@ describe("PartyCooldownsRules.TrinketShow", function()
               accepted = true, kept = {}, pending = { [2] = true } },
             { name = "accepted: a shown icon still excluded stays", show = { [1] = true, [2] = true },
               set = { [2] = true }, accepted = true, kept = { [2] = true }, pending = { [2] = true } },
+            { name = "accepted, nothing excluded: nothing waits", show = { [2] = true }, set = {},
+              accepted = true, kept = {} },
         }
         for _, s in ipairs(steps) do
             local kept, pending = R.TrinketShow(s.show, s.set, s.accepted)
             assert.are.same(s.kept, kept, s.name)
             assert.are.same(s.pending, pending, s.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.GearEventCounts", function()
+    it("ignores a gear event in a key, right after a read, and after repeated same reads until the rest", function()
+        local R = L.loadPartyCooldownsRules()
+        local cases = {
+            { name = "in a key", args = { true, 100, 10, 0 }, want = false },
+            { name = "within the quiet time", args = { false, 12, 10, 0 }, want = false },
+            { name = "at the end of the quiet time", args = { false, 13, 10, 0 }, want = true },
+            { name = "same reads spent, before the rest", args = { false, 39, 10, 2 }, want = false },
+            { name = "same reads spent, at the rest", args = { false, 40, 10, 2 }, want = true },
+            { name = "never read", args = { false, 10, nil, 0 }, want = true },
+        }
+        for _, case in ipairs(cases) do
+            local a = case.args
+            assert.are.equal(case.want, R.GearEventCounts(a[1], a[2], a[3], a[4]), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.BuildEventCounts", function()
+    it("ignores a teammate's spec or talent event inside a running key, never your own", function()
+        local R = L.loadPartyCooldownsRules()
+        local cases = {
+            { name = "teammate in a key", inKey = true, want = false },
+            { name = "teammate outside a key", inKey = false, want = true },
+            { name = "you in a key", inKey = true, isPlayer = true, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.BuildEventCounts(case.inKey, case.isPlayer), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.TrinketReadStands", function()
+    it("lets a read with an empty slot stand only once a second read agrees", function()
+        local R = L.loadPartyCooldownsRules()
+        local cases = {
+            { name = "both slots, first read", items = { 1, 2 }, stands = true, same = false },
+            { name = "empty slot, first read", items = { 1 }, stands = false, same = false },
+            { name = "empty slot, agrees", prev = { 1 }, items = { 1 }, stands = true, same = true },
+            { name = "empty slot, differs", prev = { 2 }, items = { 1 }, stands = false, same = false },
+        }
+        for _, case in ipairs(cases) do
+            local stands, same = R.TrinketReadStands(case.prev, case.items)
+            assert.are.same({ case.stands, case.same }, { stands, same }, case.name)
         end
     end)
 end)
