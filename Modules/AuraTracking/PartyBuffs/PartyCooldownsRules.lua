@@ -260,6 +260,19 @@ function Rules.StartLoop(t, n)
     Rules.StartPlain(t, start)
 end
 
+-- For each new key, the index of the same key in old, or false. Each old
+-- index is given once: a repeated key matches only its first copy.
+function Rules.MatchKeys(old, new)
+    local at = {}
+    for i = #old, 1, -1 do at[old[i]] = i end
+    local match = {}
+    for i, k in ipairs(new) do
+        match[i] = at[k] or false
+        at[k] = nil
+    end
+    return match
+end
+
 -- Known and up, from plain answers only. A lit short sensor means a proc
 -- copy, which is not a use. A list is up when any of its answers is.
 local function State(lit, short, hasShort, isSecret, multi)

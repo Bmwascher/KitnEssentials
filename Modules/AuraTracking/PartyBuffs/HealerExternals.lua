@@ -277,6 +277,8 @@ function HX.Resolve()
         guids[i] = healer.member.guid
         for _, e in ipairs(healer.entries) do
             e.texture = C_Spell.GetSpellTexture(e.id)
+            -- The group slot keeps a count with its healer when the list shifts.
+            e.owner = healer.member.guid
             entries[#entries + 1] = e
         end
     end

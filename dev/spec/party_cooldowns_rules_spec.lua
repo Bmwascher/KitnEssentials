@@ -569,3 +569,17 @@ describe("PartyCooldownsRules.OwnTaken", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.MatchKeys", function()
+    it("finds each key's old index wherever it moved, and gives each old index once", function()
+        local R = loadRules()
+        local cases = {
+            { name = "the first removed", old = { "a", "b" }, new = { "b" }, want = { 2 } },
+            { name = "one added before", old = { "b" }, new = { "a", "b" }, want = { false, 1 } },
+            { name = "a key repeated", old = { "a" }, new = { "a", "a" }, want = { 1, false } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.MatchKeys(case.old, case.new), case.name)
+        end
+    end)
+end)

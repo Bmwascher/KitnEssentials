@@ -555,10 +555,17 @@ function Track.Apply(st, unit, entries, style, settings)
     return clean and overlayClean, restyle
 end
 
+-- An entry with an owner keeps its count wherever it sits in the list; one
+-- without is kept by its position.
+local function GroupKey(e, i)
+    return tostring(e.owner or i) .. "/" .. Sig(e)
+end
+
 -- A group slot: each cell is read from one sensor per unit, so its buff on
 -- any of them counts. Only this sets st.units, which every group branch
 -- tests. A changed unit list keeps the trackers: a count belongs to its
--- entry. The slot takes no overlay.
+-- entry and its owner. A count that moves to another cell settles first, as
+-- a re-aimed sensor does. The slot takes no overlay.
 function Track.ApplyGroup(st, units, entries, style)
     local clean, moved = true, false
     local n = Track.Now()
@@ -590,6 +597,11 @@ function Track.ApplyGroup(st, units, entries, style)
         st.evts[j]:UnregisterAllEvents()
         st.evtUnits[j] = nil
     end
+    local oldKeys, newKeys = {}, {}
+    for i = 1, st.count do oldKeys[i] = GroupKey(st.entries[i], i) end
+    for i, e in ipairs(entries) do newKeys[i] = GroupKey(e, i) end
+    local match, old, used = Rules.MatchKeys(oldKeys, newKeys), st.trackers, {}
+    st.trackers = {}
     for i, e in ipairs(entries) do
         local c = st.cells[i]
         if not c then
@@ -598,16 +610,19 @@ function Track.ApplyGroup(st, units, entries, style)
         end
         st.view.Dress(c, style, e)
         local sig = Sig(e)
-        local t = st.trackers[i]
-        if not t or t.sig ~= sig then
-            if t then Track.Forget(t) end
+        local at = match[i]
+        local t = at and old[at]
+        if t then
+            used[at] = true
+            if t.cell ~= c then t.cell, moved = c, true end
+        else
             t = Rules.NewTracker(e.cd, false, true)
             t.sig, t.cell, t.view = sig, c, st.view
             t.lists, t.next = { { n = 0 }, { n = 0 } }, 1
             Rules.Clear(t, n)
-            st.trackers[i] = t
             moved = true
         end
+        st.trackers[i] = t
         local sensors = st.group[i] or {}
         st.group[i] = sensors
         local ready = true
@@ -619,6 +634,9 @@ function Track.ApplyGroup(st, units, entries, style)
         end
         for j = #units + 1, #sensors do Park(sensors[j]) end
         st.ready[i] = ready
+    end
+    for j = 1, st.count do
+        if old[j] and not used[j] then Track.Forget(old[j]) end
     end
     for i = #entries + 1, st.count do Retire(st, i) end
     st.entries, st.count = entries, #entries
