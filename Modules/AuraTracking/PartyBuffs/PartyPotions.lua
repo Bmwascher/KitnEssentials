@@ -327,8 +327,9 @@ local function ForgetSamples()
 end
 
 -- Plain sample bars stacked in the box, counting down and starting again.
+-- The preview is redrawn on every roster, resolve and settings change, so a
+-- sample keeps its count unless its length or ready state changed.
 local function DrawSamples()
-    ForgetSamples()
     Pot.sampleLayer = Pot.sampleLayer or NewLayer()
     local s, entry = Pot.style, Pot.entry
     local cd = entry and entry.cd or Rules.DEFAULT_SECONDS
@@ -347,19 +348,22 @@ local function DrawSamples()
         Bar.Dress(bar, s, { texture = texture, cd = cd, name = info.name, color = ClassColor(info.class) })
         bar:ClearAllPoints()
         bar:SetPoint(corner, Pot.sampleLayer, corner, 0, (i - 1) * step)
-        local t = CDRules.NewTracker(cd, false)
-        t.cell, t.view = bar, Bar
         local ready = showReady and i == #SAMPLES
         Bar.SetReady(bar, ready)
-        if ready then
-            CDRules.Clear(t, n)
-        else
-            t.loop = math_max(1, math_floor(cd * info.left))
-            CDRules.StartLoop(t, n)
+        if not (sample.t and sample.cd == cd and sample.ready == ready) then
+            if sample.t then Track.Forget(sample.t) end
+            local t = CDRules.NewTracker(cd, false)
+            t.cell, t.view = bar, Bar
+            if ready then
+                CDRules.Clear(t, n)
+            else
+                t.loop = math_max(1, math_floor(cd * info.left))
+                CDRules.StartLoop(t, n)
+            end
+            Track.Push(t, n)
+            Track.Watch(t)
+            sample.t, sample.cd, sample.ready = t, cd, ready
         end
-        Track.Push(t, n)
-        Track.Watch(t)
-        sample.t = t
         bar:Show()
     end
 end
