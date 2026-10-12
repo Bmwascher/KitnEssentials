@@ -9,11 +9,13 @@
 local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 
+local C_CreatureInfo = C_CreatureInfo
 local C_Spell = C_Spell
 local C_Timer = C_Timer
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local ipairs = ipairs
 local pairs = pairs
+local pcall = pcall
 local table_sort = table.sort
 local tostring = tostring
 local type = type
@@ -36,6 +38,54 @@ local function SpellLabel(spellID, name)
     name = name or C_Spell.GetSpellName(spellID) or ("Spell " .. spellID)
     if icon then return "|T" .. icon .. ":16:16:0:0:64:64:5:59:5:59|t " .. name end
     return name
+end
+
+local function RacialLabel(spellID, raceID)
+    local ok, info = pcall(C_CreatureInfo.GetRaceInfo, raceID)
+    local race = ok and type(info) == "table" and info.raceName or nil
+    local name = C_Spell.GetSpellName(spellID) or ("Spell " .. spellID)
+    if type(race) == "string" and race ~= "" then name = name .. " (" .. race .. ")" end
+    return SpellLabel(spellID, name)
+end
+
+-- An editor row's toggle and seconds box, for an entry with key, off, cd and
+-- listed. A length typed equal to the listed one is stored as no override.
+local function AddToggle(row, label, entry, db, apply)
+    local check = GUIFrame:CreateCompactCheckbox(row, label, {
+        value = not entry.off,
+        callback = function(checked)
+            if checked then db.CooldownOff[entry.key] = nil else db.CooldownOff[entry.key] = true end
+            apply()
+        end,
+    })
+    row:AddWidget(check, 0.5, nil, 0, CHECK_TOP)
+    return check
+end
+
+local function AddSecondsBox(row, entry, db, apply)
+    local box
+    box = GUIFrame:CreateEditBox(row, "Seconds", {
+        value = tostring(entry.cd),
+        callback = function(text)
+            local value = Rules.ClampSeconds(text)
+            if not value then
+                box:SetValue(tostring(entry.cd))
+                return
+            end
+            if value == entry.listed then
+                db.CooldownSeconds[entry.key] = nil
+            else
+                db.CooldownSeconds[entry.key] = value
+            end
+            box:SetValue(tostring(value))
+            if value ~= entry.cd then
+                entry.cd = value
+                apply()
+            end
+        end,
+    })
+    row:AddWidget(box, 0.2)
+    return box
 end
 
 -- ctx: { db, apply }. The caller registers the card under the Class
@@ -86,36 +136,8 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
     local function AddSpellRow(specID, list, i)
         local entry = list[i]
         local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
-        local check = GUIFrame:CreateCompactCheckbox(row, SpellLabel(entry.id), {
-            value = not entry.off,
-            callback = function(checked)
-                if checked then db.CooldownOff[entry.key] = nil else db.CooldownOff[entry.key] = true end
-                apply()
-            end,
-        })
-        row:AddWidget(check, 0.5, nil, 0, CHECK_TOP)
-        local box
-        box = GUIFrame:CreateEditBox(row, "Seconds", {
-            value = tostring(entry.cd),
-            callback = function(text)
-                local value = Rules.ClampSeconds(text)
-                if not value then
-                    box:SetValue(tostring(entry.cd))
-                    return
-                end
-                if value == entry.listed then
-                    db.CooldownSeconds[entry.key] = nil
-                else
-                    db.CooldownSeconds[entry.key] = value
-                end
-                box:SetValue(tostring(value))
-                if value ~= entry.cd then
-                    entry.cd = value
-                    apply()
-                end
-            end,
-        })
-        row:AddWidget(box, 0.2)
+        local check = AddToggle(row, SpellLabel(entry.id), entry, db, apply)
+        local box = AddSecondsBox(row, entry, db, apply)
         local up = GUIFrame:CreateButton(row, "^", {
             height = 24,
             callback = function() Move(specID, list, i, -1) end,
@@ -188,6 +210,50 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         lastEnabled = enabled
         classManager:UpdateAll(enabled)
         rowManager:UpdateAll(enabled)
+    end
+
+    return card, card:GetNextOffset()
+end
+
+-- ctx: { db, apply }. The caller registers the card under the Show Racials
+-- condition. A member has one racial, so the rows have no order arrows.
+function Page.RacialsCard(scrollChild, yOffset, ctx)
+    local db, apply = ctx.db, ctx.apply
+    db.CooldownOff = db.CooldownOff or {}
+    db.CooldownSeconds = db.CooldownSeconds or {}
+    local card = GUIFrame:CreateCard(scrollChild, "Racials", yOffset)
+    card:AddLabel("A party member of one of these races shows the racial after their spec's spells.")
+    local manager = GUIFrame:CreateWidgetStateManager()
+    for _, racial in ipairs(KE.PartyCooldownsData.RACIALS) do
+        local entry = Rules.RacialEntry(racial.id, db, true)
+        if entry then
+            local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
+            manager:Register(AddToggle(row, RacialLabel(racial.id, racial.raceID), entry, db, apply), "all")
+            manager:Register(AddSecondsBox(row, entry, db, apply), "all")
+            card:AddRow(row, ROW_HEIGHT)
+        end
+    end
+    local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
+    local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
+        tooltip = "Restores every racial: switched on, at its listed length.",
+        callback = function()
+            for _, saved in ipairs({ db.CooldownOff, db.CooldownSeconds }) do
+                for key in pairs(saved) do
+                    if type(key) == "string" and key:sub(1, 5) == "race:" then saved[key] = nil end
+                end
+            end
+            apply()
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
+    })
+    footer:AddWidget(defaults, 0.3)
+    manager:Register(defaults, "all")
+    card:AddRow(footer, FOOTER_HEIGHT, 0)
+
+    local baseSetEnabled = card.SetEnabled
+    function card:SetEnabled(enabled)
+        if baseSetEnabled then baseSetEnabled(self, enabled) end
+        manager:UpdateAll(enabled)
     end
 
     return card, card:GetNextOffset()

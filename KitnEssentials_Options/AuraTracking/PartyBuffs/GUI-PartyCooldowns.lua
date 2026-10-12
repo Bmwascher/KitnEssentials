@@ -99,6 +99,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:SetCondition("healerOn", function() return db.UseHealerPlacement == true end)
     manager:SetCondition("classOn", function() return db.TrackBurst == true end)
     manager:SetCondition("trinketOn", function() return db.TrackTrinket == true end)
+    manager:SetCondition("racialsOn", function() return db.ShowRacials == true end)
     -- Without the sensor file the cooldown cells do not exist, and their
     -- settings are grayed. Only the cells use the defensive color.
     manager:SetCondition("cellsOn", function() return KE.PartyCooldownsSensor ~= nil end)
@@ -170,6 +171,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     cardTracked:AddRow(rowT2, Theme.rowHeight)
     local rowT3 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
     AddCheck(rowT3, "Include Yourself", "IncludeSelf", "Adds the same row to your own party frame.")
+    AddCheck(rowT3, "Show Racials", "ShowRacials",
+        "A party member who is a Dwarf, Dark Iron Dwarf or Night Elf also shows their racial.", RefreshStates)
     cardTracked:AddRow(rowT3, Theme.rowHeightLast, 0)
     yOffset = cardTracked:GetNextOffset()
 
@@ -349,6 +352,12 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         })
         manager:Register(classCard, "classOn")
         yOffset = classOffset
+        local racialCard, racialOffset = KE.PartyCooldownsPage.RacialsCard(scrollChild, yOffset, {
+            db = db,
+            apply = ApplySettings,
+        })
+        manager:Register(racialCard, "racialsOn")
+        yOffset = racialOffset
     else
         local listKey = activeList
         db[listKey] = db[listKey] or {}
