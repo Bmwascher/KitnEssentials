@@ -318,6 +318,9 @@ end
 function PB:SlotComplete(k)
     local slot = self.slots[k]
     if not (slot and slot.container) then return false end
+    -- A retired button is lost capacity; the build replaces the container
+    -- once auras are not secret.
+    if slot.dressFailed and not KE:AreAuraIdentitiesHidden() then return false end
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
         if self.db[d.category.trackKey] == true and not slot.groups[d.key] then return false end
@@ -430,6 +433,25 @@ function PB:GroupLayout(index)
     return layout
 end
 
+-- Buttons whose setup failed: true once retired, false while the retire is
+-- owed. Such a button is never drawn and takes no mouse; its regions may be
+-- half made, so it is never restyled.
+local retired = {}
+-- Containers replaced per slot after a failed setup. Past this, a failed
+-- button is kept as the engine made it, which may be blank: only a defect in
+-- the dressing fails setup, and it would fail every replacement the same way.
+local MAX_REPLACEMENTS = 2
+
+local function RetireButton(button)
+    local ok = pcall(function()
+        button:SetAlpha(0)
+        button:EnableMouse(false)
+    end)
+    retired[button] = ok
+    if not ok then PB.restylePending = true end
+    return ok
+end
+
 function PB:AddGroup(k, slot, d)
     local filter, candidates, maxFrames, index = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db)
     local container = slot.container
@@ -446,11 +468,20 @@ function PB:AddGroup(k, slot, d)
         -- The button is a Button and would stop a click meant for the party
         -- frame under or beside it; hover stays on for the tooltip.
         initializeFrame  = function(button)
-            if not pcall(KE.AuraStyle.InitializeButton, button, nil, d, PB.styleSettings) then
-                Debug("slot %d group %s: button dressing failed", k, d.key)
-            end
+            local dressed = pcall(KE.AuraStyle.InitializeButton, button, nil, d, PB.styleSettings)
+            if not dressed then Debug("slot %d group %s: button dressing failed", k, d.key) end
             if not pcall(button.SetMouseClickEnabled, button, false) then
                 Debug("slot %d group %s: click-through failed", k, d.key)
+                dressed = false
+            end
+            if not dressed then
+                if (slot.replacements or 0) < MAX_REPLACEMENTS then
+                    RetireButton(button)
+                    slot.dressFailed = true
+                    PB.buildPending = true
+                else
+                    Debug("slot %d group %s: replacements spent, button kept", k, d.key)
+                end
             end
         end,
         layout           = self:GroupLayout(index),
@@ -462,10 +493,15 @@ function PB:AddGroup(k, slot, d)
     -- The group is registered, with its settings, before the call's last
     -- steps, so a late failure leaves it in place and adding it again would
     -- assert.
+    local unknown = false
     if not ok then
         local okHas, has = pcall(container.HasAuraGroup, container, d.key)
         ok = okHas and has == true
+        unknown = not okHas
     end
+    -- Unreadable: the group may exist with this filter. The next build adds it
+    -- again, which asserts if it exists, and asks again.
+    slot.unknownGroups[d.key] = unknown or nil
     if ok then slot.groups[d.key] = true else self.buildPending = true end
 end
 
@@ -511,8 +547,23 @@ function PB:BuildSlot(k)
         holder:EnableMouse(false)
         holder:SetClipsChildren(true)
         holder:Hide()
-        slot = { holder = holder, groups = {} }
+        slot = { holder = holder, groups = {}, unknownGroups = {} }
         self.slots[k] = slot
+    end
+    if slot.container and slot.dressFailed and not KE:AreAuraIdentitiesHidden() then
+        local old = slot.container
+        if pcall(function()
+            old:SetEnabled(false)
+            old:Hide()
+        end) then
+            Debug("slot %d: container replaced after a failed button setup", k)
+            slot.container, slot.groups, slot.unknownGroups = nil, {}, {}
+            slot.unit, slot.corner, slot.pinX, slot.cellSig = nil, nil, nil, nil
+            slot.replacements, slot.dressFailed = (slot.replacements or 0) + 1, nil
+        else
+            self.buildPending = true
+            return true
+        end
     end
     if not slot.container then
         local corner = self:Placement().corner
@@ -716,8 +767,13 @@ local function RestyleGroup(container, d, settings)
     for i = 1, count do
         local okFrame, button = pcall(container.GetAuraGroupFrame, container, d.key, i)
         if okFrame and button then
-            if not pcall(KE.AuraStyle.RegisterRegions, button, nil, d, settings) then clean = false end
-            if not pcall(KE.AuraStyle.StyleAuraFrame, button, settings, d.capabilities) then clean = false end
+            local r = retired[button]
+            if r == false then
+                if not RetireButton(button) then clean = false end
+            elseif r == nil then
+                if not pcall(KE.AuraStyle.RegisterRegions, button, nil, d, settings) then clean = false end
+                if not pcall(KE.AuraStyle.StyleAuraFrame, button, settings, d.capabilities) then clean = false end
+            end
         else
             clean = false
         end
