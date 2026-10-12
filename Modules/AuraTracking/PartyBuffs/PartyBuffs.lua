@@ -111,6 +111,7 @@ PB.resolvePending = false
 PB.restylePending = false
 PB.reconfigurePending = false
 PB.buildPending = false
+PB.interfaceHidden = false
 PB.slots = {}
 PB.bindings = {}
 PB.queue = {}
@@ -405,6 +406,18 @@ function PB:ResolveAll()
             self:DropSlot(k)
         end
         return
+    end
+    -- Hiding the interface hides every party frame, and every row with
+    -- UIParent, so the bindings and their running counts are kept. The search
+    -- still runs so each frame is watched: their OnShow resolves again.
+    if not UIParent:IsShown() then
+        self.interfaceHidden = true
+        self:FindFrames()
+        return
+    end
+    if self.interfaceHidden then
+        self.interfaceHidden = false
+        Track.InterfaceShown()
     end
     self.buildPending = false
     local bindings = self:FindFrames()

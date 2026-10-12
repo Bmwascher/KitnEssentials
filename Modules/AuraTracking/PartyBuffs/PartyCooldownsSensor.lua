@@ -363,6 +363,12 @@ function Track.HoldAll(seconds)
     for st in pairs(Track.slots) do Track.Hold(st, seconds) end
 end
 
+-- Every sensor sat under the hidden UIParent and scans again once shown, as
+-- after Edit Mode.
+function Track.InterfaceShown()
+    Track.HoldAll(BIND_HOLD)
+end
+
 -- At a key's start the game resets some cooldowns: their counts end and the
 -- cells show ready. Clear only writes, so a count held in secret values is
 -- cleared without being read, and its next read only records.
