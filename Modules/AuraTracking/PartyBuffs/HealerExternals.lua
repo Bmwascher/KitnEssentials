@@ -119,8 +119,8 @@ function HX.ApplyPosition()
     KE:ApplyFramePosition(HX.box, pos, config)
 end
 
--- Edit Mode's writer. While the starting place stands in for an anchor that
--- is missing or refused the mover works on the screen, so a moved position
+-- Edit Mode's writer. While the starting place stands in for an anchor
+-- Placement cannot use, the mover works on the screen, so a moved position
 -- detaches the box and the starting place handed back unchanged keeps the
 -- attachment.
 local function SetPosition(pos)
