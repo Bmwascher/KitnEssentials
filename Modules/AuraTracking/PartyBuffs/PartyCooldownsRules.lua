@@ -39,6 +39,17 @@ function Rules.ClampSeconds(value)
     return math_floor(math_max(Rules.CD_MIN, math_min(Rules.CD_MAX, value)))
 end
 
+-- One cooldown entry: the typed length over the listed one, both clamped.
+local function Entry(castID, spell, key, listed, typed, isOff)
+    return {
+        id = castID, key = key, spell = spell, kind = spell.kind,
+        buffs = spell.buffs, short = spell.short,
+        listed = listed,
+        cd = Rules.ClampSeconds(typed) or Rules.ClampSeconds(listed),
+        off = isOff,
+    }
+end
+
 -- The spec's entries: casts in the saved order first, the rest after them in
 -- table order. A switched-off entry is dropped unless all is set, which the
 -- editor uses to list every one.
@@ -64,14 +75,9 @@ function Rules.SpellList(specID, db, all)
         local key = Rules.CooldownKey(specID, castID)
         local isOff = off[key] == true
         if spell and (all or not isOff) then
-            local listed = talented or spell.cd
-            out[#out + 1] = {
-                id = castID, key = key, spell = spell, kind = spell.kind,
-                buffs = spell.buffs, short = spell.short,
-                listed = listed,
-                cd = Rules.ClampSeconds(seconds[key]) or Rules.ClampSeconds(listed),
-                off = isOff, at = rank and (rank[castID] or #order + i) or i,
-            }
+            local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
+            entry.at = rank and (rank[castID] or #order + i) or i
+            out[#out + 1] = entry
         end
     end
     if rank then table_sort(out, function(a, b) return a.at < b.at end) end
@@ -456,4 +462,41 @@ function Rules.LibKey(name, realm)
     if realm == nil or realm == "" then return name end
     if type(realm) ~= "string" then return nil end
     return name .. "-" .. realm
+end
+
+function Rules.RacialKey(castID) return "race:" .. castID end
+
+-- A racial's entry, built as a spell row's is. A switched-off racial is nil
+-- unless all is set, which the editor uses to list every one.
+function Rules.RacialEntry(castID, db, all)
+    local spell = KE.PartyCooldownsData.SPELLS[castID]
+    if not spell then return nil end
+    db = Table(db)
+    local key = Rules.RacialKey(castID)
+    local isOff = Table(db.CooldownOff)[key] == true
+    if isOff and not all then return nil end
+    return Entry(castID, spell, key, spell.cd, Table(db.CooldownSeconds)[key], isOff)
+end
+
+-- The member's racial: Show Racials on, the race read, and a switched-on
+-- racial for it.
+function Rules.MemberRacial(race, db)
+    db = Table(db)
+    if db.ShowRacials ~= true or type(race) ~= "string" then return nil end
+    for _, racial in ipairs(KE.PartyCooldownsData.RACIALS or {}) do
+        if racial.race == race then return Rules.RacialEntry(racial.id, db) end
+    end
+    return nil
+end
+
+-- Whether a teammate's spec is worth an inspect: a class or trinket cell can
+-- show, or Show Racials is on for a race that has a racial, which shows only
+-- with a known spec. The talent and gear readers stay off for a racial.
+function Rules.SpecWanted(trackClass, trackTrinkets, showRacials, race)
+    if trackClass == true or trackTrinkets == true then return true end
+    if showRacials ~= true or type(race) ~= "string" then return false end
+    for _, racial in ipairs(KE.PartyCooldownsData.RACIALS or {}) do
+        if racial.race == race then return true end
+    end
+    return false
 end

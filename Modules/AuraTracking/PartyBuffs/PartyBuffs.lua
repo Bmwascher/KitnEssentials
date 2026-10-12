@@ -777,6 +777,11 @@ function PB:CooldownEntries(m)
             entries[#entries + 1] = e
         end
     end
+    local racial = CDRules.MemberRacial(m.race, db)
+    if racial then
+        racial.texture = C_Spell.GetSpellTexture(racial.id)
+        entries[#entries + 1] = racial
+    end
     if m.trinkets and db.TrackTrinket == true then
         for _, e in ipairs(CDRules.TrinketEntries(m.trinkets, Spec.lengths, db)) do
             e.texture = C_Item.GetItemIconByID(e.item)
@@ -1159,7 +1164,7 @@ function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
     self:BuildStyleSettings()
-    Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true)
+    Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true, self.db.ShowRacials == true)
     self:EvaluateGate()
     self:ReconfigureAll()
     self:Restyle()

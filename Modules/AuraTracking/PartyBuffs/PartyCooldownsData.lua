@@ -82,6 +82,11 @@ Data.SPELLS = {
     [184364]  = { kind = "defensive", cd = 120 },
     -- Two charges; each use reads as the whole cooldown.
     [23920]   = { kind = "defensive", cd = 25 },
+
+    -- Racials, in no spec list: RACIALS picks one by race.
+    [20594]   = { kind = "defensive", cd = 120, buffs = { 65116 } },
+    [265221]  = { kind = "offensive", cd = 120, buffs = { 265226, 273104 } },
+    [58984]   = { kind = "defensive", cd = 120 },
 }
 for castID, spell in pairs(Data.SPELLS) do
     spell.id = castID
@@ -141,4 +146,12 @@ Data.ROLE_SPEC = {
     PALADIN     = { TANK = 66, HEALER = 65 },
     SHAMAN      = { HEALER = 264 },
     WARRIOR     = { TANK = 73 },
+}
+
+-- Race token to racial, in editor order; raceID names the race on the
+-- settings page.
+Data.RACIALS = {
+    { race = "Dwarf",         raceID = 3,  id = 20594 },
+    { race = "DarkIronDwarf", raceID = 34, id = 265221 },
+    { race = "NightElf",      raceID = 4,  id = 58984 },
 }

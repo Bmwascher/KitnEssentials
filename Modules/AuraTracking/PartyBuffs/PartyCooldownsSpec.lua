@@ -15,6 +15,7 @@ local CanInspect = CanInspect
 local ClearInspectPlayer = ClearInspectPlayer
 local CreateFrame = CreateFrame
 local GetInspectSpecialization = GetInspectSpecialization
+local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
 local IsGUIDInGroup = IsGUIDInGroup
@@ -24,6 +25,7 @@ local UnitClass = UnitClass
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
 local UnitName = UnitName
+local UnitRace = UnitRace
 local ipairs = ipairs
 local pairs = pairs
 local pcall = pcall
@@ -109,8 +111,24 @@ local function ForgetReads(m)
     end
 end
 
+-- The race token, or nil until a source answers; a GUID's race never changes,
+-- so an answer is kept. UnitRace can answer nothing for a unit the client has
+-- not loaded yet.
+local function ReadRace(unit, guid)
+    local ok, _, race = pcall(UnitRace, unit)
+    race = ok and Plain(race) or nil
+    if type(race) == "string" and race ~= "" then return race end
+    if type(guid) ~= "string" then return nil end
+    local found, _, _, _, english = pcall(GetPlayerInfoByGUID, guid)
+    english = found and Plain(english) or nil
+    if type(english) == "string" and english ~= "" then return english end
+    return nil
+end
+
 -- Reads stored for a known spec are dropped here when it moves, whoever calls.
+-- The race is read only while Show Racials is on.
 function Spec.Resolve(m)
+    if m.race == nil and Spec.trackRacials then m.race = ReadRace(m.unit, m.guid) end
     local before = m.spec
     local sources = {}
     if m.isPlayer then
@@ -138,10 +156,12 @@ local function IsOn(reader)
     return reader.On == nil or reader.On() == true
 end
 
--- A guessed spec still wants the inspect; with no cooldown cell switched on,
--- nothing does.
+-- A guessed spec still wants the inspect; with nothing that needs the spec
+-- switched on, nothing does.
 local function Done(m)
-    if m.isPlayer or not (Spec.trackClass or Spec.trackTrinkets) then return true end
+    if m.isPlayer then return true end
+    local rules = KE.PartyCooldownsRules
+    if not rules.SpecWanted(Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials, m.race) then return true end
     if m.source == nil or m.source == "guess" then return false end
     for _, reader in ipairs(Spec.readers) do
         if IsOn(reader) and reader.Wanted(m) then return false end
@@ -293,8 +313,8 @@ local function OnLibSpec(specID, _, _, playerName, talents)
     end
     for _, m in ipairs(Spec.members) do
         if not m.isPlayer then
-            local before = m.spec
-            if Spec.Resolve(m) ~= before then Changed(m) end
+            local before, race = m.spec, m.race
+            if Spec.Resolve(m) ~= before or m.race ~= race then Changed(m) end
         end
     end
     Spec.Wake()
@@ -344,11 +364,12 @@ function Spec.Activate()
     Spec.Wake()
 end
 
--- Which cooldown cells can show, from the Class Cooldowns and Trinkets
--- switches. A reader whose cells cannot show stops hearing its events and
--- drops what it stored; with neither switch on, nobody is inspected.
-function Spec.SetTracked(class, trinkets)
-    Spec.trackClass, Spec.trackTrinkets = class, trinkets
+-- Which cooldown cells can show, from the Class Cooldowns, Trinkets and Show
+-- Racials switches. A reader whose cells cannot show stops hearing its events
+-- and drops what it stored; with all three off, nobody is inspected. Racials
+-- start no reader: they need only the spec and the race.
+function Spec.SetTracked(class, trinkets, racials)
+    Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials = class, trinkets, racials
     if not Spec.active then return end
     RegisterEvents()
     for _, reader in ipairs(Spec.readers) do

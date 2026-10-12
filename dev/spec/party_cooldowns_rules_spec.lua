@@ -8,7 +8,8 @@ local L = require("dev.spec._ke_loader")
 
 -- Spec 10 lists a talented cast, a cast with a swap for every spec and one
 -- with a swap scoped to spec 10; spec 11 lists only the scoped one. ROLE_SPEC
--- holds a tank and a healer guess, and a damage cell no guess may use.
+-- holds a tank and a healer guess, and a damage cell no guess may use. Cast 4
+-- is the racial of the race Dwarf, in no spec list.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -16,6 +17,10 @@ local DATA = {
                 swap = { id = 20, talents = { [20] = true }, likely = true } },
         [3] = { kind = "defensive", cd = 90, buffs = { 3 },
                 swap = { id = 30, talents = { [30] = true }, likely = true, specs = { [10] = true } } },
+        [4] = { kind = "defensive", cd = 120, buffs = { 40 } },
+    },
+    RACIALS = {
+        { race = "Dwarf", raceID = 3, id = 4 },
     },
     SPECS = {
         [10] = { { 1, 45 }, 2, 3 },
@@ -413,6 +418,45 @@ describe("PartyCooldownsRules.LibKey", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.LibKey(case.args[1], case.args[2]), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules racials", function()
+    it("gives a race's racial under its own key only while Show Racials and its row are on", function()
+        local R = loadRules()
+        local on = { ShowRacials = true }
+        local e = R.MemberRacial("Dwarf", on)
+        assert.are.same({ 4, "race:4", 120, { 40 } }, { e.id, e.key, e.cd, e.buffs })
+        local typed = { ShowRacials = true, CooldownSeconds = { ["race:4"] = 90 } }
+        assert.are.equal(90, R.MemberRacial("Dwarf", typed).cd, "typed seconds")
+        local cases = {
+            { name = "Show Racials off", race = "Dwarf", db = { ShowRacials = false } },
+            { name = "race with no racial", race = "Human", db = on },
+            { name = "race not read", race = nil, db = on },
+            { name = "row off", race = "Dwarf", db = { ShowRacials = true, CooldownOff = { ["race:4"] = true } } },
+        }
+        for _, case in ipairs(cases) do
+            assert.is_nil(R.MemberRacial(case.race, case.db), case.name)
+        end
+        assert.is_true(R.RacialEntry(4, { CooldownOff = { ["race:4"] = true } }, true).off, "editor list")
+    end)
+end)
+
+describe("PartyCooldownsRules.SpecWanted", function()
+    it("wants a spec for a cooldown cell, or for a racial the member's race has", function()
+        local R = loadRules()
+        local cases = {
+            { name = "class cells", args = { true, false, false, "Human" }, want = true },
+            { name = "trinket cells", args = { false, true, false, nil }, want = true },
+            { name = "racial of the race", args = { false, false, true, "Dwarf" }, want = true },
+            { name = "race with no racial", args = { false, false, true, "Human" }, want = false },
+            { name = "race not read", args = { false, false, true, nil }, want = false },
+            { name = "Show Racials off", args = { false, false, false, "Dwarf" }, want = false },
+        }
+        for _, case in ipairs(cases) do
+            local a = case.args
+            assert.are.equal(case.want, R.SpecWanted(a[1], a[2], a[3], a[4]), case.name)
         end
     end)
 end)

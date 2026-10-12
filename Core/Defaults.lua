@@ -1546,8 +1546,9 @@ local Defaults = {
             IconSize          = 36,
             IconSpacing       = 1,
             MaxPerMember      = 4,
-            MaxCooldownIcons  = 4,
+            MaxCooldownIcons  = 5,
             IncludeSelf       = false,
+            ShowRacials       = true,
             Side              = "LEFT",
             XOffset           = 0,
             YOffset           = 0,
@@ -1571,7 +1572,8 @@ local Defaults = {
             ShowCooldownText  = true,
             CooldownFontSize  = 12,
             -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
-            -- "trinket:<spellID>". CooldownOrder holds a cast list per spec.
+            -- "trinket:<spellID>" and a racial "race:<castID>". CooldownOrder
+            -- holds a cast list per spec.
             CooldownOff       = {},
             CooldownSeconds   = {},
             CooldownOrder     = {},
