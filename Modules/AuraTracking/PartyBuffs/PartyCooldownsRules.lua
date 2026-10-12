@@ -194,17 +194,21 @@ Rules.DOOR_PASSES = 16
 -- A secret read passes the stamp through the client 2 times, 4 with a short
 -- sensor: up to 20320 times over a 900-second cooldown's roll period. At
 -- 0.5 / (1020 * 1270), just over 3.8598e-7, the drift could reach half a strip
--- line; keep the slack at 3.85e-7 or less.
+-- line; keep the slack at 3.85e-7 or less. A group tracker passes it up to 2
+-- times per watched unit: at 5 units and lengths of 508 seconds or less its
+-- own ceiling is higher, 6.17e-7.
 Rules.DOOR_SLACK = 3e-7
 
 function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
 
 -- Two rolling slots, so a new use can stamp while an older one still counts.
 -- A slot's c is its stamp and v its visibility; either may hold a secret.
-function Rules.NewTracker(cd, hasShort)
+-- A multi tracker reads a list of answers, one per watched unit.
+function Rules.NewTracker(cd, hasShort, multi)
     local u = Rules.Unit(cd)
     return {
         cd = cd, u = u, P = Rules.CODES * u, cur = 1, primed = false, hasShort = hasShort == true,
+        multi = multi == true,
         slot = { { c = 1, v = 0, epoch = 0 }, { c = 1, v = 0, epoch = 0 } },
     }
 end
@@ -257,15 +261,29 @@ function Rules.StartLoop(t, n)
 end
 
 -- Known and up, from plain answers only. A lit short sensor means a proc
--- copy, which is not a use.
-local function State(lit, short, hasShort, isSecret)
+-- copy, which is not a use. A list is up when any of its answers is.
+local function State(lit, short, hasShort, isSecret, multi)
+    if multi then
+        local up = false
+        for j = 1, lit.n do
+            if isSecret(lit[j]) then return false, false end
+            if lit[j] == true then up = true end
+        end
+        return true, up
+    end
     if isSecret(lit) or isSecret(short) then return false, false end
     return true, lit == true and not (hasShort and short == true)
 end
 
 -- pick is the client's EvaluateColorValueFromBoolean. With a short sensor the
--- answer is a only while lit and the short one is not.
-local function Pick(lit, short, hasShort, a, b, pick)
+-- answer is a only while lit and the short one is not; for a list, a while
+-- any answer is lit, each answer one nested evaluation.
+local function Pick(lit, short, hasShort, a, b, pick, multi)
+    if multi then
+        local r = b
+        for j = lit.n, 1, -1 do r = pick(lit[j], a, r) end
+        return r
+    end
     if not hasShort then return pick(lit, a, b) end
     return pick(lit, pick(short, b, a), b)
 end
@@ -275,11 +293,11 @@ end
 -- learning it. Returns true when a slot changed.
 function Rules.Feed(t, lit, short, n, isSecret, pick)
     local changed = false
-    local hasShort = t.hasShort
+    local hasShort, multi = t.hasShort, t.multi
     if t.primed then
         changed = Rules.Roll(t, n)
-        local litKnown, up = State(lit, short, hasShort, isSecret)
-        local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret)
+        local litKnown, up = State(lit, short, hasShort, isSecret, multi)
+        local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret, multi)
         if not ((litKnown and not up) or (prevKnown and was)) then
             if litKnown and prevKnown then
                 Rules.StartPlain(t, n)
@@ -287,10 +305,11 @@ function Rules.Feed(t, lit, short, n, isSecret, pick)
                 local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
                 local prev, prevShort = t.prev, t.prevShort
                 sl.c = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick), sl.c, pick)
-                sl.v = Pick(lit, short, hasShort, Pick(prev, prevShort, hasShort, sl.v, 1, pick), sl.v, pick)
+                    Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi), sl.c, pick, multi)
+                sl.v = Pick(lit, short, hasShort,
+                    Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi), sl.v, pick, multi)
                 other.v = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, other.v, 0, pick), other.v, pick)
+                    Pick(prev, prevShort, hasShort, other.v, 0, pick, multi), other.v, pick, multi)
             end
             changed = true
         end
