@@ -1535,7 +1535,6 @@ local Defaults = {
         PartyBuffs = {
             Enabled           = false,
             TrackExternal     = true,
-            TrackBigDefensive = false,
             TrackBurst        = true,
             TrackPotion       = true,
             TrackTrinket      = true,
@@ -1547,6 +1546,8 @@ local Defaults = {
             IconSize          = 36,
             IconSpacing       = 1,
             MaxPerMember      = 4,
+            MaxCooldownIcons  = 4,
+            IncludeSelf       = false,
             Side              = "LEFT",
             XOffset           = 0,
             YOffset           = 0,
@@ -1567,8 +1568,15 @@ local Defaults = {
             ShowTimer         = true,
             TimerFontSize     = 14,
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
-            -- ListExternals and ListBurst are row copies of the External
-            -- Tracker and PI Assist lists, made below this table.
+            ShowCooldownText  = true,
+            CooldownFontSize  = 12,
+            -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
+            -- "trinket:<spellID>". CooldownOrder holds a cast list per spec.
+            CooldownOff       = {},
+            CooldownSeconds   = {},
+            CooldownOrder     = {},
+            -- ListExternals is a row copy of the External Tracker list, made
+            -- below this table.
             ListPotions = {
                 [1236616] = { enabled = true, default = true }, -- Light's Potential
                 [1236994] = { enabled = true, default = true }, -- Potion of Recklessness
@@ -2607,7 +2615,6 @@ local function CopyAllowlistRows(source)
     return copy
 end
 Defaults.profile.PartyBuffs.ListExternals = CopyAllowlistRows(Defaults.profile.AuraExternals.Allowlist)
-Defaults.profile.PartyBuffs.ListBurst = CopyAllowlistRows(Defaults.profile.PIAssist.Allowlist)
 
 ---------------------------------------------------------------------------------
 -- Public API
