@@ -511,7 +511,7 @@ describe("PartyCooldownsRules racials", function()
 end)
 
 describe("PartyCooldownsRules.SpecWanted", function()
-    it("wants a spec for a cooldown cell, or for a racial the member's race has", function()
+    it("wants a spec for a cooldown cell, a racial the member's race has, or the healer externals box", function()
         local R = loadRules()
         local cases = {
             { name = "class cells", args = { true, false, false, "Human" }, want = true },
@@ -520,10 +520,11 @@ describe("PartyCooldownsRules.SpecWanted", function()
             { name = "race with no racial", args = { false, false, true, "Human" }, want = false },
             { name = "race not read", args = { false, false, true, nil }, want = false },
             { name = "Show Racials off", args = { false, false, false, "Dwarf" }, want = false },
+            { name = "the healer box alone", args = { false, false, false, nil, true }, want = true },
         }
         for _, case in ipairs(cases) do
             local a = case.args
-            assert.are.equal(case.want, R.SpecWanted(a[1], a[2], a[3], a[4]), case.name)
+            assert.are.equal(case.want, R.SpecWanted(a[1], a[2], a[3], a[4], a[5]), case.name)
         end
     end)
 end)

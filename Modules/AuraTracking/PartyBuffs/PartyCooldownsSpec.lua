@@ -139,6 +139,9 @@ function Spec.Resolve(m)
         local ok, _, class = pcall(UnitClass, unit)
         if ok then sources.class = Plain(class) end
         sources.role = Ask(UnitGroupRolesAssigned, unit)
+        -- A hidden read keeps the last plain answer.
+        m.class = sources.class or m.class
+        m.role = sources.role or m.role
     end
     m.spec, m.source = KE.PartyCooldownsRules.ResolveSpec(sources)
     if before ~= nil and m.spec ~= before then ForgetReads(m) end
@@ -160,7 +163,10 @@ end
 local function Done(m)
     if m.isPlayer then return true end
     local rules = KE.PartyCooldownsRules
-    if not rules.SpecWanted(Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials, m.race) then return true end
+    local healer = Spec.trackHealers == true and KE.HealerExternalsRules.Candidate(m.class, m.role)
+    if not rules.SpecWanted(Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials, m.race, healer) then
+        return true
+    end
     if m.source == nil or m.source == "guess" then return false end
     for _, reader in ipairs(Spec.readers) do
         if IsOn(reader) and reader.Wanted(m) then return false end
@@ -364,11 +370,14 @@ function Spec.Activate()
 end
 
 -- Which cooldown cells can show, from the Class Cooldowns, Trinkets and Show
--- Racials switches. A reader whose cells cannot show stops hearing its events
--- and drops what it stored; with all three off, nobody is inspected. Racials
--- start no reader: they need only the spec and the race.
-function Spec.SetTracked(class, trinkets, racials)
+-- Racials switches, and whether the healer externals box wants healers'
+-- specs. A reader whose cells cannot show stops hearing its events and drops
+-- what it stored; with all four off, nobody is inspected. Racials and healers
+-- start no reader: a racial needs only the spec and the race, a healer only
+-- the spec.
+function Spec.SetTracked(class, trinkets, racials, healers)
     Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials = class, trinkets, racials
+    Spec.trackHealers = healers
     if not Spec.active then return end
     RegisterEvents()
     for _, reader in ipairs(Spec.readers) do
