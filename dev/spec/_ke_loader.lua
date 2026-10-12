@@ -657,6 +657,17 @@ function L.loadPartyCooldownsRules(data)
     return KE.PartyCooldownsRules, KE
 end
 
+-- Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua on the party cooldowns
+-- rules whose clock and seconds clamp it uses. Returns KE.PartyPotionsRules, KE.
+function L.loadPartyPotionsRules()
+    installMock(nil, {})
+    local KE = {}
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua", KE)
+    return KE.PartyPotionsRules, KE
+end
+
 -- Modules/AuraTracking/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns
