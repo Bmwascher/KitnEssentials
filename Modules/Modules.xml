@@ -41,6 +41,7 @@
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="AuraTracking\AuraExternals.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyBuffsRules.lua" />
+    <Script file="AuraTracking\PartyBuffs\PartyCooldownsData.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyBuffs.lua" />
     <Script file="AuraTracking\AuraMovement.lua" />
     <Script file="AuraTracking\AuraDebuffs.lua" />
