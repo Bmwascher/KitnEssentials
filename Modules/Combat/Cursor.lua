@@ -1044,10 +1044,7 @@ function C:_TauntFindSpell()
     local currentSpec
     local function SpecID()
         if currentSpec == nil then
-            local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
-            local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo
-            local index = getSpec and getSpec()
-            currentSpec = (index and getInfo and select(1, getInfo(index))) or false
+            currentSpec = KE:GetPlayerSpecId() or false
         end
         return currentSpec
     end

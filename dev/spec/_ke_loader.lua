@@ -1266,6 +1266,7 @@ function L.loadCursor(overrides)
         },
         -- Core/Globals.lua's instance check, answering as the open world.
         InRealInstancedContent = function() return false end,
+        GetPlayerSpecId = specIdFromMocks,
     }
     helpers.loadModule("Modules/Combat/Cursor.lua", KE)
     local C = modules["Cursor"]
