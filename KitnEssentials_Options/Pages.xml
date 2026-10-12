@@ -15,6 +15,7 @@
     <Script file="AuraTracking\GUI-AuraExternals.lua" />
     <Script file="AuraTracking\PartyBuffs\GUI-PartyCooldownSpells.lua" />
     <Script file="AuraTracking\PartyBuffs\GUI-PartyCooldowns.lua" />
+    <Script file="AuraTracking\PartyBuffs\GUI-PartyPotions.lua" />
     <Script file="AuraTracking\PartyBuffs\GUI-PartyBuffs.lua" />
     <Script file="AuraTracking\GUI-AuraMovement.lua" />
     <Script file="Skinning\GUI-DamageMeter.lua" />

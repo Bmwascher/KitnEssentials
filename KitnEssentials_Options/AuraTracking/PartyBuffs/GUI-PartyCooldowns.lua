@@ -12,7 +12,6 @@ local Theme    = KE.Theme
 local LIST_TABS = {
     { id = "ClassCooldowns", label = "Class Cooldowns" },
     { id = "ListTrinkets",   label = "Trinkets" },
-    { id = "ListPotions",    label = "Potions" },
     { id = "ListExternals",  label = "Externals" },
 }
 
@@ -51,12 +50,7 @@ local activePlacement
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
 
-local function ShippedList(listKey)
-    if not KE.GetDefaultDB then return {} end
-    local root = KE:GetDefaultDB()
-    local section = root and root.profile and root.profile.PartyBuffs
-    return (section and section[listKey]) or {}
-end
+local ShippedList = KE.PartyCooldownsPage.ShippedList
 
 local function ListLabel(listKey)
     for i = 1, #LIST_TABS do
@@ -167,7 +161,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     cardTracked:AddRow(rowT1, Theme.rowHeight)
     local rowT2 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
     AddCheck(rowT2, "Externals", "TrackExternal")
-    AddCheck(rowT2, "Potions", "TrackPotion")
+    AddCheck(rowT2, "Potions", "TrackPotion", "Shows a potion's icon while its buff is up. The list is on the Potions tab.")
     cardTracked:AddRow(rowT2, Theme.rowHeight)
     local rowT3 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
     AddCheck(rowT3, "Include Yourself", "IncludeSelf", "Adds the same row to your own party frame.")
