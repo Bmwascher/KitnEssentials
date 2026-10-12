@@ -9,7 +9,7 @@ local KE = select(2, ...)
 
 local ipairs = ipairs
 local math_floor = math.floor
-local pairs = pairs
+local math_min = math.min
 local type = type
 
 local Rules = {}
@@ -21,10 +21,6 @@ KE.PartyBuffsRules = Rules
 Rules.CATEGORIES = {
     { key = "external", filter = "HELPFUL", trackKey = "TrackExternal", listKey = "ListExternals",
       colorKey = "ColorExternal", excludeBlocklist = true },
-    { key = "big", filter = "HELPFUL|BIG_DEFENSIVE", trackKey = "TrackBigDefensive",
-      colorKey = "ColorBigDefensive", excludeBlocklist = true, excludeTrackedExternals = true },
-    { key = "burst", filter = "HELPFUL", trackKey = "TrackBurst", listKey = "ListBurst",
-      colorKey = "ColorBurst" },
     { key = "potion", filter = "HELPFUL", trackKey = "TrackPotion", listKey = "ListPotions",
       colorKey = "ColorPotion" },
     { key = "trinket", filter = "HELPFUL", trackKey = "TrackTrinket", listKey = "ListTrinkets",
@@ -65,12 +61,6 @@ function Rules.ShouldActivate(db, content, inGroup, inRaid)
     return true
 end
 
-local function CopySet(source)
-    local copy = {}
-    for key, value in pairs(source) do copy[key] = value end
-    return copy
-end
-
 -- The container rejects a fractional frame count, and a value typed into the
 -- slider may reach the profile unrounded.
 function Rules.IconCount(db)
@@ -79,9 +69,29 @@ function Rules.IconCount(db)
     return math_floor(count + 0.5)
 end
 
+function Rules.CooldownIconCount(db)
+    local count = type(db) == "table" and db.MaxCooldownIcons
+    if type(count) ~= "number" then return 0 end
+    return math_floor(count + 0.5)
+end
+
+function Rules.CellCount(entryCount, db)
+    return math_min(entryCount, Rules.CooldownIconCount(db))
+end
+
+-- Cooldown cells come first, nearest the frame, one step apart; the
+-- while-active container starts after the last. Returns the step, the
+-- container's offset from the corner and the holder width.
+function Rules.RowLayout(db, cellCount)
+    local step = db.IconSize + db.IconSpacing
+    local count = cellCount + Rules.IconCount(db)
+    local width = 0
+    if count > 0 then width = count * db.IconSize + (count - 1) * db.IconSpacing end
+    return step, cellCount * step, width
+end
+
 -- The only producer of a group's container settings, for creation and for
--- every reconfiguration. While Externals are tracked, a spell that is both
--- tagged and listed shows once, under External.
+-- every reconfiguration.
 function Rules.BuildGroupConfig(category, db)
     local auraRules = KE.AuraRules
     local candidates = {}
@@ -89,16 +99,7 @@ function Rules.BuildGroupConfig(category, db)
         candidates.includeSpellIDs = auraRules.BuildIncludeSpellIDs(db[category.listKey])
     end
     if category.excludeBlocklist then
-        local exclude = auraRules.BuildExcludeSpellIDs(nil)
-        if category.excludeTrackedExternals and db.TrackExternal == true then
-            -- The blocklist set is shared with other displays and must not be
-            -- mutated.
-            exclude = CopySet(exclude)
-            for spellID in pairs(auraRules.BuildIncludeSpellIDs(db.ListExternals)) do
-                exclude[spellID] = true
-            end
-        end
-        candidates.excludeSpellIDs = exclude
+        candidates.excludeSpellIDs = auraRules.BuildExcludeSpellIDs(nil)
     end
     local maxFrames = 0
     if db[category.trackKey] == true then maxFrames = Rules.IconCount(db) end
@@ -124,8 +125,9 @@ function Rules.IsPlayerCandidate(facts)
 end
 
 -- Candidates arrive in family order, each carrying its token, visibility,
--- frame, family and the own-frame facts.
-function Rules.PickFrames(candidates, maxSlots)
+-- frame, family and the own-frame facts. The own frame is kept only with
+-- includeSelf.
+function Rules.PickFrames(candidates, maxSlots, includeSelf)
     local bindings, seen = {}, {}
     if type(candidates) ~= "table" then return bindings end
     for i = 1, #candidates do
@@ -134,7 +136,7 @@ function Rules.PickFrames(candidates, maxSlots)
         if type(candidate) == "table" then
             local token = candidate.token
             if type(token) == "string" and not seen[token] and candidate.visible == true
-                and not Rules.IsPlayerCandidate(candidate) then
+                and (includeSelf == true or not Rules.IsPlayerCandidate(candidate)) then
                 seen[token] = true
                 bindings[#bindings + 1] = { token = token, frame = candidate.frame, family = candidate.family }
             end

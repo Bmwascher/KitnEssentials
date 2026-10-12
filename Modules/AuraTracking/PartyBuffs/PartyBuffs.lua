@@ -52,7 +52,6 @@ local MAX_SLOTS = 5
 local ROSTER_SETTLE = 0.5
 local WORLD_SETTLE = 1
 local PLACEHOLDER_ICON = 134400
-local BIG_PREVIEW_ICON = 136097
 -- The ring color while Border Color by Category is off. Every button has the
 -- ring from creation, so off paints it clear rather than removing it.
 local CLEAR = { 0, 0, 0, 0 }
@@ -297,15 +296,15 @@ function PB:FindFrames()
             AddCandidate(list, partyFrame["MemberFrame" .. i], "portrait", raidIndex)
         end
     end
-    return KE.PartyBuffsRules.PickFrames(list, MAX_SLOTS)
+    return KE.PartyBuffsRules.PickFrames(list, MAX_SLOTS, self.db.IncludeSelf == true)
 end
 
 ---------------------------------------------------------------------------------
 -- Slots and the build queue
 ---------------------------------------------------------------------------------
 local function RowWidth(db)
-    local count = KE.PartyBuffsRules.IconCount(db)
-    return count * db.IconSize + (count - 1) * db.IconSpacing
+    local _, _, width = KE.PartyBuffsRules.RowLayout(db, 0)
+    return width
 end
 
 function PB:DropSlot(k)
@@ -807,9 +806,7 @@ local function RearmPreview(cooldown)
 end
 
 function PB:PreviewIcon(d)
-    local listKey = d.category.listKey
-    if not listKey then return BIG_PREVIEW_ICON end
-    local spellID = KE.AuraRules.FirstIncludeSpellID(self.db[listKey])
+    local spellID = KE.AuraRules.FirstIncludeSpellID(self.db[d.category.listKey])
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 
