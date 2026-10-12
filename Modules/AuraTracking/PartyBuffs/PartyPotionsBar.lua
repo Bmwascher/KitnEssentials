@@ -49,10 +49,9 @@ end
 -- fill edge, which moves one row height and 2 more each second, so the clip is
 -- off the row one second after zero. A narrow range cannot gate it: the
 -- client draws one empty with the value above it.
-local function PlaceGate(c, f, style)
+local function PlaceGate(c, f, style, bottom, height)
     local cd, h = c.cd, style.height
     local jump = h + 2
-    local bottom, height = CDRules.StripBar(cd, CDRules.Unit(cd))
     f.gate:ClearAllPoints()
     f.gate:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 0, bottom * jump)
     f.gate:SetSize(1, height * jump)
@@ -60,11 +59,6 @@ local function PlaceGate(c, f, style)
     f.clip:SetPoint("BOTTOMLEFT", f.gateFill, "TOPLEFT", 0, -1)
     f.clip:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, (cd - 1) * jump + h + 1)
     f.clip:SetWidth(style.width)
-end
-
-local function GateRange(sl, u, n)
-    local m = CDRules.RangeMin(sl, u, n)
-    return m, m + 1
 end
 
 local function NewArt(parent)
@@ -161,6 +155,7 @@ function Bar.Dress(c, style, e)
     local font, size, outline = style.fontName, style.textSize, style.outline
     c:SetSize(style.width, style.height)
     c.cd, c.placed = e.cd, true
+    local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
     Paint(c.ready, style, e, color, px, Cell.TextWidth(font, size, outline, "Ready"))
     KE:ApplyFontToText(c.readyText, font, size, outline)
@@ -173,7 +168,7 @@ function Bar.Dress(c, style, e)
     for k = 1, 2 do
         local f = c.face[k]
         Paint(f.art, style, e, color, px, style.timer and timerWidth or 0)
-        PlaceGate(c, f, style)
+        PlaceGate(c, f, style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.fill)
         f.cover:SetStatusBarColor(color[1] * BG, color[2] * BG, color[3] * BG, 1)
@@ -191,7 +186,6 @@ function Bar.Dress(c, style, e)
     local sig = table_concat({ tostring(font), tostring(size), tostring(outline), e.cd, step, line }, "|")
     if c.sig == sig then return end
     c.sig = sig
-    local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local text = Cell.StripText(e.cd)
     for k = 1, 2 do
         local f = c.face[k]
@@ -210,7 +204,7 @@ local function FaceRange(c, k, sl, u, n)
     local m = CDRules.RangeMin(sl, u, n)
     f.pos:SetMinMaxValues(m, m + 1)
     f.cover:SetMinMaxValues(Rules.CoverRange(sl, u, c.cd, n))
-    f.gate:SetMinMaxValues(GateRange(sl, u, n))
+    f.gate:SetMinMaxValues(m, m + 1)
 end
 
 -- Each range is opened to 0..1 first, so the stamp is stored whole before it

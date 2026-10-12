@@ -65,7 +65,7 @@ function Track.Now() return math_floor(GetTime() - T0 + 0.5) end
 
 function Track.DoorOpen() return Rules.DoorOpen(Track.door) end
 
--- A tracker made outside a slot (a preview sample) has no view: Cell draws it.
+-- PB:DrawPreviewCells makes trackers with no view; Cell draws those.
 local function Push(t, n)
     local c = t.cell
     if not c then return end
