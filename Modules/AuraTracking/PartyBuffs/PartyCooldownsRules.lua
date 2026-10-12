@@ -434,3 +434,10 @@ Rules.KEY_RESET_MIN = 90
 function Rules.ResetsAtKeyStart(entry)
     return entry.trinket ~= true and type(entry.cd) == "number" and entry.cd >= Rules.KEY_RESET_MIN
 end
+
+-- The library also sends unchanged on every group request: only a talent
+-- string that differs from the last one is a change, and a missing one on
+-- either side cannot tell, so it counts.
+function Rules.TalentsMoved(prev, talents)
+    return type(prev) ~= "string" or type(talents) ~= "string" or prev ~= talents
+end

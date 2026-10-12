@@ -372,3 +372,18 @@ describe("PartyCooldownsRules.ResetsAtKeyStart", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.TalentsMoved", function()
+    it("drops a talent answer only for a new talent string, or when either message has none", function()
+        local R = loadRules()
+        local cases = {
+            { name = "sent again unchanged", prev = "AAA", talents = "AAA", want = false },
+            { name = "changed", prev = "AAA", talents = "BBB", want = true },
+            { name = "message without one", prev = "AAA", want = true },
+            { name = "none stored", talents = "AAA", want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentsMoved(case.prev, case.talents), case.name)
+        end
+    end)
+end)

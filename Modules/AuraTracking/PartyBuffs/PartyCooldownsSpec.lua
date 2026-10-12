@@ -49,6 +49,8 @@ Spec.readers = {}
 Spec.lengths = {}
 Spec.byGUID = {}
 Spec.libSpecs = {}
+-- Name -> the talent string of that name's last library message.
+Spec.libTalents = {}
 Spec.members = {}
 
 local events
@@ -238,7 +240,7 @@ function Spec.Prune()
         if full then present[full] = true end
     end
     for key in pairs(Spec.libSpecs) do
-        if not present[key] then Spec.libSpecs[key] = nil end
+        if not present[key] then Spec.libSpecs[key], Spec.libTalents[key] = nil, nil end
     end
 end
 
@@ -248,7 +250,9 @@ function Spec.ForgetSpec(guid)
     local m = Spec.byGUID[guid]
     if not m then return end
     if not KE.PartyCooldownsRules.BuildEventCounts(InKey(), m.isPlayer) then return end
-    if m.libKey and Spec.libSpecs[m.libKey] == m.spec then Spec.libSpecs[m.libKey] = nil end
+    if m.libKey and Spec.libSpecs[m.libKey] == m.spec then
+        Spec.libSpecs[m.libKey], Spec.libTalents[m.libKey] = nil, nil
+    end
     m.spec, m.source, m.inspected = nil, nil, nil
     ForgetReads(m)
     Changed(m)
@@ -275,16 +279,18 @@ local function OnInspectReady(guid)
     Changed(m)
 end
 
--- The library also sends when a teammate changes talents without changing
--- spec, so a message with an unchanged spec drops that teammate's talent
--- answer and the inspect reads it again. Records, not the bound list: during
--- a roster settle nobody is bound.
-local function OnLibSpec(specID, _, _, playerName)
-    specID, playerName = Plain(specID), Plain(playerName)
+-- The library sends a teammate's message again on a talent change, and also,
+-- unchanged, whenever anyone in the group asks, so only a talent string that
+-- moved drops that teammate's talent answer for the inspect to read again.
+-- Records, not the bound list: during a roster settle nobody is bound.
+local function OnLibSpec(specID, _, _, playerName, talents)
+    specID, playerName, talents = Plain(specID), Plain(playerName), Plain(talents)
     if type(specID) ~= "number" or specID <= 0 or type(playerName) ~= "string" then return end
+    local rules = KE.PartyCooldownsRules
     local same = Spec.libSpecs[playerName] == specID
-    Spec.libSpecs[playerName] = specID
-    if same and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
+    local moved = rules.TalentsMoved(Spec.libTalents[playerName], talents)
+    Spec.libSpecs[playerName], Spec.libTalents[playerName] = specID, talents
+    if same and moved and rules.BuildEventCounts(InKey(), false) then
         for _, m in pairs(Spec.byGUID) do
             if not m.isPlayer and m.libKey == playerName then m.talents, m.talentMisses = nil, nil end
         end
@@ -381,6 +387,7 @@ function Spec.Disable()
     Spec.player = nil
     wipe(Spec.byGUID)
     wipe(Spec.libSpecs)
+    wipe(Spec.libTalents)
 end
 
 ---------------------------------------------------------------------------------
