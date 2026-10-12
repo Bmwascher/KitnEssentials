@@ -481,3 +481,102 @@ Spec.readers[#Spec.readers + 1] = {
         end
     end,
 }
+
+---------------------------------------------------------------------------------
+-- Talents that swap an icon: read from the inspected loadout for a teammate,
+-- from the spellbook for the player
+---------------------------------------------------------------------------------
+local C_Spell = C_Spell
+local C_SpellBook = C_SpellBook
+local C_Traits = C_Traits
+local INSPECT_CONFIG = Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
+local MAX_MISSES = 3
+
+-- swap -> the node and entry holding its talent, found once; and the walks
+-- that missed it.
+local located, misses = {}, {}
+
+local function Locate(trees, swap)
+    for _, tree in ipairs(trees) do
+        for _, nodeID in ipairs(C_Traits.GetTreeNodes(tree) or {}) do
+            local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, nodeID)
+            for _, entryID in ipairs(type(node) == "table" and node.entryIDs or {}) do
+                local entry = C_Traits.GetEntryInfo(INSPECT_CONFIG, entryID)
+                local definitionID = type(entry) == "table" and entry.definitionID
+                local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
+                if type(definition) == "table" and definition.spellID and swap.talents[definition.spellID] then
+                    located[swap] = { node = nodeID, entry = entryID }
+                    return located[swap]
+                end
+            end
+        end
+    end
+    misses[swap] = (misses[swap] or 0) + 1
+    return nil
+end
+
+-- castID -> taken for every swap of the spec, or nil when any one cannot be
+-- answered yet (no inspect data, its node not found, or the node unreadable);
+-- the reader counts that as a miss.
+local function ReadTaken(specID)
+    local out = {}
+    local swaps = KE.PartyCooldownsRules.SwapsFor(specID)
+    if not swaps then return out end
+    if C_Traits.HasValidInspectData() ~= true then return nil end
+    local info = C_Traits.GetConfigInfo(INSPECT_CONFIG)
+    local trees = type(info) == "table" and info.treeIDs
+    if type(trees) ~= "table" then return nil end
+    for castID, swap in pairs(swaps) do
+        local at = located[swap]
+        if not at and (misses[swap] or 0) < MAX_MISSES then at = Locate(trees, swap) end
+        if not at then return nil end
+        local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, at.node)
+        if not (type(node) == "table" and type(node.ID) == "number" and node.ID > 0) then return nil end
+        local active = node.activeEntry
+        local rank = type(node.activeRank) == "number" and node.activeRank or 0
+        out[castID] = type(active) == "table" and active.entryID == at.entry and rank > 0
+    end
+    return out
+end
+
+local function SelfTaken(specID)
+    local out = {}
+    for castID, swap in pairs(KE.PartyCooldownsRules.SwapsFor(specID) or {}) do
+        local taken = Ask(C_Spell.GetOverrideSpell, castID) == swap.id
+        for talent in pairs(swap.talents) do
+            if not taken and Ask(C_SpellBook.IsSpellKnown, talent) == true then taken = true end
+        end
+        out[castID] = taken
+    end
+    return out
+end
+
+-- Three unreadable answers in a row store an empty one, which keeps the
+-- likely icon.
+Spec.readers[#Spec.readers + 1] = {
+    events = { "TRAIT_CONFIG_UPDATED" },
+    Wanted = function(m)
+        return m.talents == nil and m.spec ~= nil and KE.PartyCooldownsRules.SwapsFor(m.spec) ~= nil
+    end,
+    Read = function(m)
+        local ok, taken = pcall(ReadTaken, m.spec)
+        if ok and taken then
+            m.talents, m.talentMisses = taken, nil
+            return
+        end
+        m.talentMisses = (m.talentMisses or 0) + 1
+        if m.talentMisses >= MAX_MISSES then m.talents, m.talentMisses = {}, nil end
+    end,
+    Self = function(m)
+        if m.talents == nil and m.spec then m.talents = SelfTaken(m.spec) end
+    end,
+    -- The miss count belongs to the answer: a new spec gets its own three tries.
+    Forget = function(m) m.talents, m.talentMisses = nil, nil end,
+    OnEvent = function(event)
+        local m = Spec.player
+        if event == "TRAIT_CONFIG_UPDATED" and m then
+            m.talents = nil
+            Changed(m)
+        end
+    end,
+}

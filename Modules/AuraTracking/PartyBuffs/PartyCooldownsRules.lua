@@ -363,3 +363,20 @@ function Rules.TrinketShow(show, set, accepted)
     for id in pairs(set) do pending[id] = true end
     return kept, pending
 end
+
+-- castID -> swap, for the spec's entries whose swap applies to it; nil when
+-- none does.
+function Rules.SwapsFor(specID)
+    local data = KE.PartyCooldownsData
+    local out
+    for _, item in ipairs(data.SPECS[specID] or {}) do
+        local castID = type(item) == "table" and item[1] or item
+        local spell = data.SPELLS[castID]
+        local swap = spell and spell.swap
+        if swap and (not swap.specs or swap.specs[specID]) then
+            out = out or {}
+            out[castID] = swap
+        end
+    end
+    return out
+end
