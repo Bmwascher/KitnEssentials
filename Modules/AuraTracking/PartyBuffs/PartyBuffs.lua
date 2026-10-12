@@ -53,6 +53,7 @@ local Cell = KE.PartyCooldownsCell
 local Spec = KE.PartyCooldownsSpec
 local Track = KE.PartyCooldownsSensor
 local Pot = KE.PartyPotions
+local HX = KE.HealerExternals
 
 -- Times each group build and logs every candidate frame, binding and watched
 -- show or hide.
@@ -175,6 +176,8 @@ function PB:EvaluateGate()
     local rules = KE.PartyBuffsRules
     local content = rules.ClassifyContent(self:ReadFacts())
     local inGroup, inRaid = PlainTrue(IsInGroup), PlainTrue(IsInRaid)
+    -- The healer externals box reads this to stay out of raid groups.
+    self.inRaid = inRaid
     local on = rules.ShouldActivate(self.db, content, inGroup, inRaid)
     Debug("gate %s group=%s raid=%s -> %s", content, inGroup, inRaid, on and "activate" or "deactivate")
     if on then self:Activate() else self:Deactivate() end
@@ -191,6 +194,7 @@ function PB:Activate()
         Spec.Activate()
         Track.ShowSensors()
         Pot.Activate()
+        HX.Activate()
     end
     self:ResolveAll()
     self:OnRelease()
@@ -210,6 +214,7 @@ function PB:Deactivate()
     Spec.Deactivate()
     Track.HideSensors()
     Pot.Deactivate()
+    HX.Deactivate()
     if not self.active then return end
     self.active = false
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
@@ -370,9 +375,11 @@ end
 -- finished, so its teammate shows before the next slot starts. pumping stays
 -- set while BuildSlot runs, so an Enqueue from inside it schedules nothing and
 -- only this function schedules the next pump.
--- A unit token is a potion row's key; a number is a party slot's.
+-- HX.QUEUE_KEY is the healer externals box's key, any other string a
+-- potion row's unit token, a number a party slot's.
 local function BuildHead()
     local k = PB.queue[1]
+    if k == HX.QUEUE_KEY then return HX.BuildNext() end
     if type(k) == "string" then return Pot.BuildNext(k) end
     return PB:BuildSlot(k)
 end
@@ -963,6 +970,15 @@ function PB:SyncMembers()
         local slot = self.slots[k]
         if self.bindings[k] and slot and slot.member then list[#list + 1] = slot.member end
     end
+    -- The healer externals box needs its healers' specs whether or not a
+    -- party frame row shows them.
+    for _, m in ipairs(HX.members) do
+        local listed = false
+        for _, have in ipairs(list) do
+            if have == m then listed = true end
+        end
+        if not listed then list[#list + 1] = m end
+    end
     Spec.SetMembers(list)
 end
 
@@ -976,6 +992,7 @@ function PB:OnMemberChanged(m)
             self:BindCooldowns(k, binding)
         end
     end
+    HX.OnMemberChanged(m)
     if self.previewing then self:ShowPreview() end
 end
 
@@ -997,6 +1014,7 @@ function PB:OnRoster()
     Spec.SetMembers({})
     Spec.Prune()
     Pot.OnRoster()
+    HX.OnRoster()
     if self._rosterTimer then self._rosterTimer:Cancel() end
     self._rosterTimer = C_Timer.NewTimer(ROSTER_SETTLE, function()
         self._rosterTimer = nil
@@ -1028,6 +1046,7 @@ function PB:OnRelease()
     if not self.active then return end
     Track.Settle()
     Pot.OnRelease()
+    HX.OnRelease()
     if self.buildPending then self:ResolveAll() end
     if self.reconfigurePending then self:ReconfigureAll() end
     if self.restylePending then self:Restyle() end
@@ -1176,8 +1195,10 @@ function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
     self:BuildStyleSettings()
-    Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true, self.db.ShowRacials == true)
+    Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true, self.db.ShowRacials == true,
+        self.db.HealerExternals == true)
     Pot.ApplySettings()
+    HX.ApplySettings()
     self:EvaluateGate()
     self:ReconfigureAll()
     self:Restyle()
@@ -1420,6 +1441,7 @@ function PB:ShowPreview()
     -- The potion samples sit in their own box, not beside party frames, so a
     -- roster settle does not hold them back.
     Pot.ShowPreview()
+    HX.ShowPreview()
     if self._rosterTimer then
         self:HidePreviewFrames()
         return
@@ -1489,6 +1511,7 @@ function PB:HidePreview()
     self.previewing = false
     self:HidePreviewFrames()
     Pot.HidePreview()
+    HX.HidePreview()
 end
 
 ---------------------------------------------------------------------------------
@@ -1508,6 +1531,7 @@ function PB:OnEnable()
     Spec.Enable(function(m) self:OnMemberChanged(m) end)
     Track.Enable()
     Pot.Enable(self)
+    HX.Enable(self)
     self:ApplySettings()
 end
 
@@ -1520,4 +1544,5 @@ function PB:OnDisable()
     Spec.Disable()
     Track.Disable()
     Pot.Disable()
+    HX.Disable()
 end
