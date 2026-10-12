@@ -292,6 +292,36 @@ local function ReadCell(st, i, n)
     end
 end
 
+-- A group cell: one answer per unit into the tracker's free list. Feed keeps
+-- the list it is given as the previous read, so the lists swap only after it
+-- has run. Any refused read skips the whole read.
+local function ReadGroupCell(st, i, n)
+    local t, sensors = st.trackers[i], st.group[i]
+    if not (st.ready[i] and t and sensors) then return end
+    local list, m = t.lists[t.next], #st.units
+    for j = 1, m do
+        local sensor = sensors[j]
+        if not (sensor and sensor.keOn == true) then return end
+        local ok, lit = Lit(sensor)
+        if not ok then return end
+        list[j] = lit
+    end
+    list.n = m
+    if not Track.DoorOpen() then
+        for j = 1, m do
+            if issecretvalue(list[j]) then
+                t.primed = false
+                return
+            end
+        end
+    end
+    if Rules.Feed(t, list, nil, n, issecretvalue, EvalBool) then
+        Push(t, n)
+        Track.Wake()
+    end
+    t.next = 3 - t.next
+end
+
 -- While the interface is hidden its containers show nothing, so a read then
 -- would look like every buff falling.
 local function ReadSlot(st)
@@ -322,7 +352,8 @@ local function ReadSlot(st)
         st.pending = false
     end
     local n = Track.Now()
-    for i = 1, st.count do pcall(ReadCell, st, i, n) end
+    local read = st.units and ReadGroupCell or ReadCell
+    for i = 1, st.count do pcall(read, st, i, n) end
 end
 
 -- view draws the slot's cells: Cell unless given. A view has Cell's New,
@@ -396,11 +427,21 @@ local function Sig(e)
     return table_concat(e.buffs, ",") .. "/" .. tostring(e.short) .. "/" .. e.cd
 end
 
+-- A cell's sensors: its own and its proc sensor, or one per unit in a group
+-- slot.
+local function ParkCell(st, i)
+    Park(st.sensors[i])
+    Park(st.shorts[i])
+    local group = st.group and st.group[i]
+    if group then
+        for _, sensor in pairs(group) do Park(sensor) end
+    end
+end
+
 local function Retire(st, i)
     local c = st.cells[i]
     if c then st.view.Clear(c) end
-    Park(st.sensors[i])
-    Park(st.shorts[i])
+    ParkCell(st, i)
     local t = st.trackers[i]
     if t then Track.Forget(t) end
     st.trackers[i], st.ready[i], st.shown[i] = nil, nil, nil
@@ -420,8 +461,7 @@ local function Reveal(st, i, n)
     end
     st.shown[i] = nil
     Track.EmptyOverlaySlot(st, i)
-    Park(st.sensors[i])
-    Park(st.shorts[i])
+    ParkCell(st, i)
     Track.Forget(t)
     t.primed = false
     st.view.Clear(c)
@@ -515,9 +555,92 @@ function Track.Apply(st, unit, entries, style, settings)
     return clean and overlayClean, restyle
 end
 
+-- A group slot: each cell is read from one sensor per unit, so its buff on
+-- any of them counts. Only this sets st.units, which every group branch
+-- tests. A changed unit list keeps the trackers: a count belongs to its
+-- entry. The slot takes no overlay.
+function Track.ApplyGroup(st, units, entries, style)
+    local clean, moved = true, false
+    local n = Track.Now()
+    st.group, st.evts, st.evtUnits = st.group or {}, st.evts or {}, st.evtUnits or {}
+    local key = table_concat(units, ",")
+    if st.unit ~= key then
+        st.unit, moved = key, true
+    end
+    st.units = units
+    -- One trigger frame per unit, recorded only once registered, so a refusal
+    -- is retried.
+    for j, unit in ipairs(units) do
+        local evt = st.evts[j]
+        if not evt then
+            evt = CreateFrame("Frame")
+            evt:SetScript("OnEvent", function() Track.Arm(st) end)
+            st.evts[j] = evt
+        end
+        if st.evtUnits[j] ~= unit then
+            evt:UnregisterAllEvents()
+            if pcall(evt.RegisterUnitEvent, evt, "UNIT_AURA", unit) then
+                st.evtUnits[j] = unit
+            else
+                st.evtUnits[j], clean = nil, false
+            end
+        end
+    end
+    for j = #units + 1, #st.evts do
+        st.evts[j]:UnregisterAllEvents()
+        st.evtUnits[j] = nil
+    end
+    for i, e in ipairs(entries) do
+        local c = st.cells[i]
+        if not c then
+            c = st.view.New(st.holder)
+            st.cells[i] = c
+        end
+        st.view.Dress(c, style, e)
+        local sig = Sig(e)
+        local t = st.trackers[i]
+        if not t or t.sig ~= sig then
+            if t then Track.Forget(t) end
+            t = Rules.NewTracker(e.cd, false, true)
+            t.sig, t.cell, t.view = sig, c, st.view
+            t.lists, t.next = { { n = 0 }, { n = 0 } }, 1
+            Rules.Clear(t, n)
+            st.trackers[i] = t
+            moved = true
+        end
+        local sensors = st.group[i] or {}
+        st.group[i] = sensors
+        local ready = true
+        for j, unit in ipairs(units) do
+            local ok, refused, aimed = Ready(sensors[j], sig, e.buffs, nil, unit)
+            if refused then clean = false end
+            if aimed and ok then moved = true end
+            ready = ready and ok
+        end
+        for j = #units + 1, #sensors do Park(sensors[j]) end
+        st.ready[i] = ready
+    end
+    for i = #entries + 1, st.count do Retire(st, i) end
+    st.entries, st.count = entries, #entries
+    local fresh = false
+    for i = 1, st.count do
+        if Reveal(st, i, n) then fresh = true end
+    end
+    if moved then Track.Hold(st, BIND_HOLD) elseif fresh then Track.Arm(st) end
+    return clean
+end
+
 -- True while a cell of the slot waits for a container.
 function Track.Missing(st)
     if not st.unit then return false end
+    if st.units then
+        for i = 1, st.count do
+            for j = 1, #st.units do
+                if not st.group[i][j] then return true end
+            end
+        end
+        return false
+    end
     for i = 1, st.count do
         local e = st.entries[i]
         if not st.sensors[i] or (e.short and not st.shorts[i]) then return true end
@@ -529,6 +652,21 @@ end
 -- spends at most one per frame. Returns false when the build was refused.
 function Track.BuildNext(st)
     if not st.unit then return true end
+    if st.units then
+        for i = 1, st.count do
+            local e, sensors = st.entries[i], st.group[i]
+            for j = 1, #st.units do
+                if not sensors[j] then
+                    local sensor = NewSensor(e.buffs, nil, st.sensorHost)
+                    if not sensor then return false end
+                    sensor.keSig = Sig(e)
+                    sensors[j] = sensor
+                    return true
+                end
+            end
+        end
+        return true
+    end
     for i = 1, st.count do
         local e = st.entries[i]
         if not st.sensors[i] then
@@ -551,8 +689,14 @@ end
 
 function Track.Unbind(st)
     if not st.unit then return end
-    st.unit, st.evtUnit = nil, nil
+    st.unit, st.evtUnit, st.units = nil, nil, nil
     st.evt:UnregisterAllEvents()
+    if st.evts then
+        for j, evt in ipairs(st.evts) do
+            evt:UnregisterAllEvents()
+            st.evtUnits[j] = nil
+        end
+    end
     for i = 1, st.count do Retire(st, i) end
     if st.overlay then
         st.overlayOff = true
