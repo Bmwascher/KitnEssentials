@@ -214,12 +214,9 @@ local function GetSchematicGhost()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    g:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
-    g:SetBackdropBorderColor(1, 1, 1, 1)
     g.text = g:CreateFontString(nil, "OVERLAY")
     g.text:SetPoint("CENTER")
     KE:ApplyThemeFont(g.text, "large")
-    g.text:SetTextColor(1, 1, 1, 1)
     -- Self-heal: if the ghost is ever left shown after the mouse button is
     -- released (e.g. a RefreshContent tore down the dragging box before its
     -- OnDragStop could fire), hide it on the next frame. Runs ONLY while the ghost
@@ -231,6 +228,16 @@ local function GetSchematicGhost()
     g:Hide()
     schematicGhost = g
     return g
+end
+
+-- Painted at each drag start from the live accent, so a theme change since
+-- the ghost was made shows. Dark ink on a light accent.
+local function PaintSchematicGhost(g)
+    local a = Theme.accent
+    local ink = KE.IsLightColor(a[1], a[2], a[3]) and 0 or 1
+    g:SetBackdropColor(a[1], a[2], a[3], 0.9)
+    g:SetBackdropBorderColor(ink, ink, ink, 1)
+    g.text:SetTextColor(ink, ink, ink, 1)
 end
 
 -- The layout map: one box per window, placed to mirror the in-world dock
@@ -438,6 +445,7 @@ local function ConstructSchematic(parent)
             ClearDrop()
             self:SetAlpha(0.4)
             local ghost = GetSchematicGhost()
+            PaintSchematicGhost(ghost)
             local label = tostring(posOf[self.winIdx] or "?")
             local nm = fullLabel and fullLabel(self.winIdx)
             if nm and nm ~= "" then label = label .. "  " .. nm end
@@ -589,7 +597,8 @@ local function ConstructNumberBadge(parent)
         chip:SetBackdropColor(a[1], a[2], a[3], 0.9)
         chip:SetBackdropBorderColor(0, 0, 0, 1)
         KE:ApplyThemeFont(t, "normal")
-        t:SetTextColor(1, 1, 1, 1)
+        local ink = KE.IsLightColor(a[1], a[2], a[3]) and 0 or 1
+        t:SetTextColor(ink, ink, ink, 1)
         t:SetText(tostring(n))
     end
 

@@ -263,6 +263,14 @@ function KE:FormatCountdown(remaining) end
 ---@return number b
 function KE.BlendColor(top, alpha, base) end
 
+--- True when the color's relative luminance is above 0.6
+--- (Core/AddonTheme.lua): dark text reads on it, white does not.
+---@param r number
+---@param g number
+---@param b number
+---@return boolean
+function KE.IsLightColor(r, g, b) end
+
 -- ─── Module utilities ─────────────────────────────────────
 --- True when ElvUI is loaded AND the user has opted into ElvUI handling
 --- this area (db.profile.UseElvUI.Enabled) — module init checks this to

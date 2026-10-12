@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  AddonTheme.lua                                          ║
--- ║  Purpose: Addon-wide theme system — 8 WoW-themed color   ║
+-- ║  Purpose: Addon-wide theme system — 9 WoW-themed color   ║
 -- ║           presets, class color mode, and custom colors.  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -107,10 +107,13 @@ local THEME_PRESETS = {
     ["Twilight"]    = MakePreset(0.608, 0.349, 0.714),     -- #9B59B6 Purple
     ["Sunwell"]     = MakePreset(1.0, 0.843, 0.0),        -- #FFD700 Gold
     ["Torghast"]    = MakePreset(0.627, 0.627, 0.627),     -- #A0A0A0 Gray
+    ["Ulduar"]      = MakePreset(1.0, 1.0, 1.0),           -- #FFFFFF White
 }
 
 KE.ThemePresets = THEME_PRESETS
-KE.ThemePresetOrder = { "KitnUI", "Nighthold", "Firelands", "Icecrown", "Dreamsurge", "Twilight", "Sunwell", "Torghast" }
+KE.ThemePresetOrder = {
+    "KitnUI", "Nighthold", "Firelands", "Icecrown", "Dreamsurge", "Twilight", "Sunwell", "Torghast", "Ulduar",
+}
 
 -- The color skinned Blizzard frames take when the accent is not allowed to
 -- reach them: visible against the near-black windows, not a brand color.
@@ -160,6 +163,20 @@ local function BlendColor(top, alpha, base)
         top[3] * alpha + base[3] * inv
 end
 KE.BlendColor = BlendColor
+
+-- Relative luminance (WCAG 2) above which white text on the color is lost.
+-- It sits between the brightest dark preset (0.455) and Sunwell (0.698).
+local LIGHT_LUMINANCE = 0.6
+
+local function Linear(c)
+    if c <= 0.03928 then return c / 12.92 end
+    return ((c + 0.055) / 1.055) ^ 2.4
+end
+
+local function IsLightColor(r, g, b)
+    return 0.2126 * Linear(r) + 0.7152 * Linear(g) + 0.0722 * Linear(b) > LIGHT_LUMINANCE
+end
+KE.IsLightColor = IsLightColor
 
 ---------------------------------------------------------------------------------
 -- Theme Color Resolution
