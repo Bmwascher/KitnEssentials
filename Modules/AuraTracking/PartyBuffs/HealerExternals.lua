@@ -197,11 +197,18 @@ local function Release()
     HX.bound = false
 end
 
--- Out of a party with the box on: nobody is watched or inspected for it.
+-- Out of a party with the box on, and with the box off: nobody is watched or
+-- inspected for it. Called again before a resolve, it makes no new tables.
 local function Forget()
     Release()
-    HX.members, HX.records, HX.byToken, HX.guids = {}, {}, {}, {}
     HX.rosterPending = false
+    if HX.forgotten then return end
+    local listed = #HX.members > 0
+    HX.members, HX.records, HX.byToken, HX.guids = {}, {}, {}, {}
+    HX.forgotten = true
+    -- The spec module keeps the list it was last handed; the rows' list
+    -- alone takes the box's healers off it.
+    if listed and HX.pb and HX.pb.active then HX.pb:SyncMembers() end
 end
 
 -- While the module's roster settle runs a token may name someone else.
@@ -243,16 +250,23 @@ function HX.Resolve()
     if Settling() then return end
     local units = PotRules.Tokens(true, UnitExists)
     local party, members, records, byToken = {}, {}, {}, {}
+    local moved
     for _, token in ipairs(units) do
         local m = token ~= "player" and (Spec.Member(token) or Kept(token))
         if m then
+            local before = m.spec
             Spec.Resolve(m)
+            if m.spec ~= before then
+                moved = moved or {}
+                moved[#moved + 1] = m
+            end
             records[m], byToken[token] = true, m
             if Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
             party[#party + 1] = { token = token, guid = m.guid, spec = m.spec }
         end
     end
     HX.members, HX.records, HX.byToken = members, records, byToken
+    HX.forgotten = false
     HX.pb:SyncMembers()
     local entries, guids = {}, {}
     for i, healer in ipairs(Rules.Healers(party, HX.pb.db)) do
@@ -269,6 +283,13 @@ function HX.Resolve()
     if #entries > 0 then Bind() else Release() end
     HX.ApplyPosition()
     Show()
+    -- Spec.Resolve announces no change, so the party frame rows showing a
+    -- record whose spec moved here are rebuilt, as a change rebuilds them.
+    -- Their binds find the spec unmoved and call nothing back.
+    if moved then
+        for _, m in ipairs(moved) do HX.pb:RebindMember(m) end
+        if HX.pb.previewing then HX.pb:ShowPreview() end
+    end
 end
 
 -- Reads wait and nobody is inspected for the box until the settle's drain.
@@ -279,7 +300,9 @@ function HX.OnRoster()
     Track.Hold(HX.st, ROSTER_HOLD)
 end
 
+-- Off, the switch has already released the slot and hidden the box.
 function HX.OnRelease()
+    if not HX.on then return end
     HX.Resolve()
 end
 

@@ -817,6 +817,7 @@ function PB:BindCooldowns(k, binding)
     slot.track = slot.track or Track.NewSlot(slot.holder)
     local m = Spec.Member(binding.token)
     if not m and slot.member and slot.member.unit == binding.token then m = slot.member end
+    local before = m and m.spec
     if m then
         Spec.Resolve(m)
         if m.isPlayer then Spec.ReadSelf(m) end
@@ -835,6 +836,9 @@ function PB:BindCooldowns(k, binding)
     self:LayoutCells(slot, #entries)
     self:ExcludeCellTrinkets(k, slot, entries)
     self:SyncMembers()
+    -- Spec.Resolve announces no change, and the healer externals box may read
+    -- this record too. Its resolve then finds the spec unmoved.
+    if m and m.spec ~= before then HX.OnMemberChanged(m) end
 end
 
 -- A trinket with a cooldown icon leaves this row's while-active Trinkets
@@ -984,14 +988,18 @@ end
 
 -- Only the changed member's cells are rebuilt. A dropped slot keeps its
 -- member for the next bind but its holder is hidden; that bind rebuilds it.
-function PB:OnMemberChanged(m)
-    if not (self:IsEnabled() and self.active) then return end
+function PB:RebindMember(m)
     for k = 1, MAX_SLOTS do
         local slot, binding = self.slots[k], self.bindings[k]
         if binding and slot and slot.container and slot.member == m and slot.holder:IsShown() then
             self:BindCooldowns(k, binding)
         end
     end
+end
+
+function PB:OnMemberChanged(m)
+    if not (self:IsEnabled() and self.active) then return end
+    self:RebindMember(m)
     HX.OnMemberChanged(m)
     if self.previewing then self:ShowPreview() end
 end
