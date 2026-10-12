@@ -126,7 +126,6 @@ local function ReadRace(unit, guid)
 end
 
 -- Reads stored for a known spec are dropped here when it moves, whoever calls.
--- The race is read only while Show Racials is on.
 function Spec.Resolve(m)
     if m.race == nil and Spec.trackRacials then m.race = ReadRace(m.unit, m.guid) end
     local before = m.spec
@@ -670,8 +669,6 @@ local function ReadTaken(specID)
     return out
 end
 
--- A rule the client answered nothing for is left out, so it keeps the likely
--- state as a teammate's unread talent does.
 local function SelfTaken(specID)
     local out = {}
     for castID, rule in pairs(KE.PartyCooldownsRules.TalentsFor(specID) or {}) do

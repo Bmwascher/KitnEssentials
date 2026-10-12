@@ -411,8 +411,6 @@ function Rules.TalentsFor(specID)
     return cached or nil
 end
 
--- A row that needs a talent shows while it is taken; unread, only when the
--- talent is likely.
 function Rules.TalentAllows(entry, taken)
     local needs = entry.spell and entry.spell.needs
     if not needs then return true end
@@ -479,9 +477,7 @@ function Rules.ResetsAtKeyStart(entry)
     return entry.trinket ~= true and type(entry.cd) == "number" and entry.cd >= Rules.KEY_RESET_MIN
 end
 
--- The library also sends unchanged on every group request: only a talent
--- string that differs from the last one is a change, and a missing one on
--- either side cannot tell, so it counts.
+-- A missing talent string on either side cannot tell, so it counts as moved.
 function Rules.TalentsMoved(prev, talents)
     return type(prev) ~= "string" or type(talents) ~= "string" or prev ~= talents
 end
@@ -497,8 +493,8 @@ end
 
 function Rules.RacialKey(castID) return "race:" .. castID end
 
--- A racial's entry, built as a spell row's is. A switched-off racial is nil
--- unless all is set, which the editor uses to list every one.
+-- A switched-off racial is nil unless all is set, which the editor uses to
+-- list every one.
 function Rules.RacialEntry(castID, db, all)
     local spell = KE.PartyCooldownsData.SPELLS[castID]
     if not spell then return nil end
@@ -509,8 +505,6 @@ function Rules.RacialEntry(castID, db, all)
     return Entry(castID, spell, key, spell.cd, Table(db.CooldownSeconds)[key], isOff)
 end
 
--- The member's racial: Show Racials on, the race read, and a switched-on
--- racial for it.
 function Rules.MemberRacial(race, db)
     db = Table(db)
     if db.ShowRacials ~= true or type(race) ~= "string" then return nil end
@@ -520,9 +514,8 @@ function Rules.MemberRacial(race, db)
     return nil
 end
 
--- Whether a teammate's spec is worth an inspect: a class or trinket cell can
--- show, or Show Racials is on for a race that has a racial, which shows only
--- with a known spec. The talent and gear readers stay off for a racial.
+-- Whether a teammate's spec is worth an inspect. A racial counts: it shows
+-- only with a known spec.
 function Rules.SpecWanted(trackClass, trackTrinkets, showRacials, race)
     if trackClass == true or trackTrinkets == true then return true end
     if showRacials ~= true or type(race) ~= "string" then return false end

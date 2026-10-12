@@ -80,7 +80,6 @@ local function Tick()
     local any = false
     for t in pairs(Track.live) do
         local running, changed = Rules.Tick(t, n, issecretvalue)
-        -- A preview sample that ran out starts again.
         if t.loop and not running then
             Rules.StartLoop(t, n)
             running, changed = true, true
