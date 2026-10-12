@@ -296,11 +296,16 @@ function Pot.OnRelease()
 end
 
 -- The build queue's call for a token key. Returns true when the row needs no
--- more builds; a refused build waits for the drain.
+-- more builds; a build refused, or skipped because the aura container code
+-- cannot load, waits for the drain.
 function Pot.BuildNext(token)
     local row = Pot.byToken[token]
     if not (row and row.bound and Pot.on and Pot.active) or Settling() then return true end
     if not Track.Missing(row.st) then return true end
+    if not KE:AuraContainersAvailable() then
+        Debug("%s: aura containers unavailable", token)
+        return true
+    end
     local made = Track.BuildNext(row.st)
     Bind(row)
     Stack()
