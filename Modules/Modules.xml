@@ -50,6 +50,7 @@
     <Script file="AuraTracking\PartyBuffs\PartyPotionsRules.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyPotionsBar.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyPotions.lua" />
+    <Script file="AuraTracking\PartyBuffs\HealerExternals.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyBuffs.lua" />
     <Script file="AuraTracking\AuraMovement.lua" />
     <Script file="AuraTracking\AuraDebuffs.lua" />
