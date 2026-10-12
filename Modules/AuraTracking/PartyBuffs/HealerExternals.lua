@@ -96,14 +96,15 @@ local function MakeSlot()
     HX.st = Track.NewSlot(HX.live, HX.VIEW, host)
 end
 
--- An attached box whose anchor does not exist (Healer Mana off since login),
--- or one KE:IsUnsafeAnchor refuses (not a frame, the box itself, or a frame
--- that depends on it), takes its starting place: the attached points against
--- the screen would put it above the top edge. The third return says the
--- starting place is in use.
+-- An attached box whose anchor is unnamed (the Frame field cleared), does not
+-- exist (Healer Mana off since login), or is refused by KE:IsUnsafeAnchor (not
+-- a frame, the box itself, or a frame that depends on it) takes its starting
+-- place: the attached points against the screen would put it above the top
+-- edge. The third return says the starting place is in use.
 local function Placement(db)
     local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
-    if kind == "SELECTFRAME" and type(name) == "string" then
+    if kind == "SELECTFRAME" then
+        if type(name) ~= "string" then return HX.DEFAULT_POSITION, SCREEN, true end
         local frame = _G[name]
         local missing = not issecretvalue(frame) and frame == nil
         if missing or KE:IsUnsafeAnchor(HX.box, frame) then return HX.DEFAULT_POSITION, SCREEN, true end
