@@ -394,8 +394,8 @@ end
 function HM:CreateContainer()
     if self.containerFrame then return self.containerFrame end
 
-    -- Anonymous: EditMode tracks it by frame reference.
-    local frame = CreateFrame("Frame", nil, UIParent)
+    -- Named so another display can be anchored to it by name.
+    local frame = CreateFrame("Frame", "KitnEssentialsHealerMana", UIParent)
     frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
