@@ -166,3 +166,79 @@ describe("PartyCooldownsRules trinkets", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.Feed", function()
+    -- A secret answer is a boxed boolean only the injected evaluator opens,
+    -- as only the client function can read a real one.
+    local function secret(value) return { secret = true, value = value } end
+    local function isSecret(v) return type(v) == "table" and v.secret == true end
+    local function pick(b, a, c)
+        if isSecret(b) then b = b.value end
+        if b then return a end
+        return c
+    end
+    local function run(R, reads, shorts)
+        local t = R.NewTracker(120, shorts ~= nil)
+        R.Clear(t, 0)
+        for i, lit in ipairs(reads) do R.Feed(t, lit, shorts and shorts[i], 10 + i, isSecret, pick) end
+        return t.slot[t.cur]
+    end
+
+    it("stamps only when the buff appears after a read without it", function()
+        local R = L.loadPartyCooldownsRules()
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local name, w = wrap[1], wrap[2]
+            local steady = run(R, { w(true), w(true) })
+            assert.are.equal(0, steady.v, name .. ": a first read only records")
+            local edge = run(R, { w(false), w(true) })
+            assert.are.same({ 1, (255 - 12) / 255 }, { edge.v, edge.c }, name .. ": rising edge")
+            local proc = run(R, { w(false), w(true) }, { w(false), w(true) })
+            assert.are.equal(0, proc.v, name .. ": a proc copy")
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.Tick", function()
+    it("clears a plain slot four seconds past zero and never clears a secret one", function()
+        local R = L.loadPartyCooldownsRules()
+        local isSecret = function(v) return type(v) == "table" end
+        local t = R.NewTracker(120, false)
+        R.Clear(t, 0)
+        R.StartPlain(t, 10)
+        local sl = t.slot[t.cur]
+        assert.is_true((R.Tick(t, 133, isSecret)))
+        assert.are.equal(1, sl.v)
+        local running, changed = R.Tick(t, 134, isSecret)
+        assert.are.same({ false, true, 0 }, { running, changed, sl.v })
+        local hidden = R.NewTracker(120, false)
+        R.Clear(hidden, 0)
+        hidden.slot[1].c, hidden.slot[1].v = { secret = true }, { secret = true }
+        assert.is_true((R.Tick(hidden, 200, isSecret)))
+        assert.is_true(isSecret(hidden.slot[1].v))
+    end)
+end)
+
+describe("PartyCooldownsRules.DoorVerdict", function()
+    it("opens for exact, close or hidden answers and closes for coarse ones or an error", function()
+        local R = L.loadPartyCooldownsRules()
+        local isSecret = function(v) return type(v) == "table" end
+        local exact = function(b, a, c)
+            if b then return a end
+            return c
+        end
+        local cases = {
+            { name = "exact", eval = exact, want = "exact", open = true },
+            -- 4.5e-9 a pass reaches the 7.2e-8 PR-4 measured on a live client.
+            { name = "close", eval = function(b, a, c) return exact(b, a, c) + 4.5e-9 end, want = "close", open = true },
+            { name = "hidden", eval = function() return { secret = true } end, want = "hidden", open = true },
+            { name = "coarse", eval = function(b, a, c) return math.floor(exact(b, a, c) * 100 + 0.5) / 100 end,
+              want = "coarse", open = false },
+            { name = "error", eval = function() error("refused") end, want = "error", open = false },
+            { name = "missing", eval = nil, want = "error", open = false },
+        }
+        for _, case in ipairs(cases) do
+            local verdict = R.DoorVerdict(case.eval, isSecret)
+            assert.are.same({ case.want, case.open }, { verdict, R.DoorOpen(verdict) }, case.name)
+        end
+    end)
+end)

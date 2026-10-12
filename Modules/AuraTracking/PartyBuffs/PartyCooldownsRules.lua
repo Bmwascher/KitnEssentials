@@ -164,3 +164,172 @@ function Rules.TrinketEntries(slots, lengths, db)
     end
     return out
 end
+
+---------------------------------------------------------------------------------
+-- Code clock and latch
+---------------------------------------------------------------------------------
+local math_abs = math.abs
+local math_ceil = math.ceil
+local pcall = pcall
+
+-- A stamp is one of the 255 values k / 255 the latch carries exactly; 254
+-- steps of u seconds make one roll period.
+Rules.CODES = 254
+-- Seconds past zero a plain timer stays before it is cleared.
+Rules.LINGER = 4
+Rules.DOOR_SAMPLES = { 0, 1, 48, 85, 127, 200, 254, 255 }
+Rules.DOOR_PASSES = 16
+-- A secret read passes the stamp through the client 2 times, 4 with a short
+-- sensor: up to 20320 times over a 900-second cooldown's roll period. At
+-- 0.5 / (1020 * 1270), just over 3.8598e-7, the drift could reach half a strip
+-- line (spec 4.3); keep the slack at 3.85e-7 or less.
+Rules.DOOR_SLACK = 3e-7
+
+function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
+
+-- Two rolling slots, so a new use can stamp while an older one still counts.
+-- A slot's c is its stamp and v its visibility; either may hold a secret.
+function Rules.NewTracker(cd, hasShort)
+    local u = Rules.Unit(cd)
+    return {
+        cd = cd, u = u, P = Rules.CODES * u, cur = 1, primed = false, hasShort = hasShort == true,
+        slot = { { c = 1, v = 0, epoch = 0 }, { c = 1, v = 0, epoch = 0 } },
+    }
+end
+
+-- Back to ready; the next read records without stamping.
+function Rules.Clear(t, n)
+    for k = 1, 2 do
+        local sl = t.slot[k]
+        sl.c, sl.v, sl.epoch = 1, 0, n
+    end
+    t.cur, t.primed, t.prev, t.prevShort = 1, false, nil, nil
+end
+
+function Rules.Roll(t, n)
+    if n - t.slot[t.cur].epoch < t.P then return false end
+    t.cur = 3 - t.cur
+    local sl = t.slot[t.cur]
+    sl.c, sl.v, sl.epoch = 1, 0, n
+    return true
+end
+
+function Rules.Stamp(t, n)
+    local code = math_floor((n - t.slot[t.cur].epoch) / t.u)
+    if code < 0 then code = 0 elseif code > Rules.CODES then code = Rules.CODES end
+    return (255 - code) / 255
+end
+
+-- Seconds left on a plain slot; negative once it has run out.
+function Rules.Left(t, sl, n)
+    local code = 255 - math_floor(sl.c * 255 + 0.5)
+    return t.cd - ((n - sl.epoch) - t.u * code)
+end
+
+-- The low bound of a slot's bars this second; the high bound is one more.
+function Rules.RangeMin(sl, u, n)
+    return (254 - (n - sl.epoch) / u) / 255
+end
+
+function Rules.StartPlain(t, n)
+    Rules.Roll(t, n)
+    local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+    sl.c, sl.v, other.v = Rules.Stamp(t, n), 1, 0
+end
+
+-- Known and up, from plain answers only. A lit short sensor means a proc
+-- copy, which is not a use.
+local function State(lit, short, hasShort, isSecret)
+    if isSecret(lit) or isSecret(short) then return false, false end
+    return true, lit == true and not (hasShort and short == true)
+end
+
+-- pick is the client's EvaluateColorValueFromBoolean. With a short sensor the
+-- answer is a only while lit and the short one is not.
+local function Pick(lit, short, hasShort, a, b, pick)
+    if not hasShort then return pick(lit, a, b) end
+    return pick(lit, pick(short, b, a), b)
+end
+
+-- One read. Plain answers decide the edge in Lua. A secret answer is only
+-- passed to pick, which writes the stamp and the visibility without Lua
+-- learning it. Returns true when a slot changed.
+function Rules.Feed(t, lit, short, n, isSecret, pick)
+    local changed = false
+    local hasShort = t.hasShort
+    if t.primed then
+        changed = Rules.Roll(t, n)
+        local litKnown, up = State(lit, short, hasShort, isSecret)
+        local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret)
+        if not ((litKnown and not up) or (prevKnown and was)) then
+            if litKnown and prevKnown then
+                Rules.StartPlain(t, n)
+            else
+                local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+                local prev, prevShort = t.prev, t.prevShort
+                sl.c = Pick(lit, short, hasShort,
+                    Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick), sl.c, pick)
+                sl.v = Pick(lit, short, hasShort, Pick(prev, prevShort, hasShort, sl.v, 1, pick), sl.v, pick)
+                other.v = Pick(lit, short, hasShort,
+                    Pick(prev, prevShort, hasShort, other.v, 0, pick), other.v, pick)
+            end
+            changed = true
+        end
+    end
+    t.prev, t.prevShort, t.primed = lit, short, true
+    return changed
+end
+
+-- The once-a-second pass: rolls, and clears a plain slot LINGER seconds past
+-- zero. Returns whether a slot still shows and whether one was cleared or
+-- rolled.
+function Rules.Tick(t, n, isSecret)
+    local changed = Rules.Roll(t, n)
+    local running = false
+    for k = 1, 2 do
+        local sl = t.slot[k]
+        if isSecret(sl.v) or sl.v ~= 0 then
+            if not isSecret(sl.v) and not isSecret(sl.c) and Rules.Left(t, sl, n) <= -Rules.LINGER then
+                sl.v = 0
+                changed = true
+            else
+                running = true
+            end
+        end
+    end
+    return running, changed
+end
+
+-- Round-trips each sample through eval, alternating its two branches. Exact,
+-- within DOOR_SLACK, or unreadable from here: the latch can carry a stamp.
+function Rules.DoorVerdict(eval, isSecret)
+    if type(eval) ~= "function" then return "error" end
+    local off = 0
+    for _, k in ipairs(Rules.DOOR_SAMPLES) do
+        local want = k / 255
+        local v = want
+        for pass = 1, Rules.DOOR_PASSES do
+            local ok, w
+            if pass % 2 == 1 then ok, w = pcall(eval, true, v, 0) else ok, w = pcall(eval, false, 0, v) end
+            if not ok then return "error" end
+            if isSecret(w) then return "hidden" end
+            if type(w) ~= "number" then return "error" end
+            v = w
+            off = math_max(off, math_abs(v - want))
+        end
+    end
+    if off == 0 then return "exact" end
+    if off <= Rules.DOOR_SLACK then return "close" end
+    return "coarse"
+end
+
+function Rules.DoorOpen(verdict)
+    return verdict == "exact" or verdict == "close" or verdict == "hidden"
+end
+
+-- In lines: how far the strip's bar sits below the window's bottom, and its
+-- height. The strip hangs from the bar's fill edge, so the window shows the
+-- seconds left.
+function Rules.StripBar(cd, u)
+    return -(cd - 1 + u), 255 * u
+end
