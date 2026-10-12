@@ -89,9 +89,10 @@ function Rules.On(db, active, inRaid)
 end
 
 -- Whether an Edit Mode position detaches the box: only a move away from the
--- starting place while that place stands in for a missing anchor. Edit Mode
--- hands back the current position after a canceled drag, and on a revert the
--- position the mover started from, which is the starting place if unmoved.
+-- starting place while that place stands in for an anchor that is missing or
+-- refused. Edit Mode hands back the current position after a canceled drag,
+-- and on a revert the position the mover started from, which is the starting
+-- place if unmoved.
 function Rules.MoverDetaches(fallback, pos, start)
     if fallback ~= true then return false end
     return not (pos.AnchorFrom == start.AnchorFrom and pos.AnchorTo == start.AnchorTo

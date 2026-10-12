@@ -96,14 +96,17 @@ local function MakeSlot()
     HX.st = Track.NewSlot(HX.live, HX.VIEW, host)
 end
 
--- An attached box whose anchor does not exist (Healer Mana off since login)
--- takes its starting place: the attached points against the screen would put
--- it above the top edge. The third return says the starting place is in use.
+-- An attached box whose anchor does not exist (Healer Mana off since login),
+-- or one KE:IsUnsafeAnchor refuses (not a frame, the box itself, or a frame
+-- that depends on it), takes its starting place: the attached points against
+-- the screen would put it above the top edge. The third return says the
+-- starting place is in use.
 local function Placement(db)
     local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
     if kind == "SELECTFRAME" and type(name) == "string" then
         local frame = _G[name]
-        if not issecretvalue(frame) and frame == nil then return HX.DEFAULT_POSITION, SCREEN, true end
+        local missing = not issecretvalue(frame) and frame == nil
+        if missing or KE:IsUnsafeAnchor(HX.box, frame) then return HX.DEFAULT_POSITION, SCREEN, true end
     end
     placement.anchorFrameType, placement.ParentFrame = kind, name
     return db.HealerExtPosition, placement, false
@@ -115,9 +118,10 @@ function HX.ApplyPosition()
     KE:ApplyFramePosition(HX.box, pos, config)
 end
 
--- Edit Mode's writer. While the starting place stands in for a missing
--- anchor the mover works on the screen, so a moved position detaches the box
--- and the starting place handed back unchanged keeps the attachment.
+-- Edit Mode's writer. While the starting place stands in for an anchor that
+-- is missing or refused the mover works on the screen, so a moved position
+-- detaches the box and the starting place handed back unchanged keeps the
+-- attachment.
 local function SetPosition(pos)
     local db = HX.pb.db
     local _, _, fallback = Placement(db)
