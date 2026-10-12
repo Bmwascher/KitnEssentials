@@ -306,7 +306,6 @@ function HX.OnRelease()
     HX.Resolve()
 end
 
--- A party record read here changed spec.
 function HX.OnMemberChanged(m)
     if HX.records[m] then HX.Resolve() end
 end
