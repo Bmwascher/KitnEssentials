@@ -9,7 +9,8 @@ local L = require("dev.spec._ke_loader")
 -- Spec 10 lists a talented cast, a cast with a swap for every spec and one
 -- with a swap scoped to spec 10; spec 11 lists only the scoped one. ROLE_SPEC
 -- holds a tank and a healer guess, and a damage cell no guess may use. Cast 4
--- is the racial of the race Dwarf, in no spec list.
+-- is the racial of the race Dwarf, in no spec list. Spec 12 lists only cast 5,
+-- which needs talent 55 and is not likely taken.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -18,6 +19,7 @@ local DATA = {
         [3] = { kind = "defensive", cd = 90, buffs = { 3 },
                 swap = { id = 30, talents = { [30] = true }, likely = true, specs = { [10] = true } } },
         [4] = { kind = "defensive", cd = 120, buffs = { 40 } },
+        [5] = { kind = "offensive", cd = 60, buffs = { 50 }, needs = { talents = { [55] = true } } },
     },
     RACIALS = {
         { race = "Dwarf", raceID = 3, id = 4 },
@@ -25,6 +27,7 @@ local DATA = {
     SPECS = {
         [10] = { { 1, 45 }, 2, 3 },
         [11] = { 3 },
+        [12] = { 5 },
     },
     ROLE_SPEC = {
         DRUID = { TANK = 10, HEALER = 11 },
@@ -457,6 +460,47 @@ describe("PartyCooldownsRules.SpecWanted", function()
         for _, case in ipairs(cases) do
             local a = case.args
             assert.are.equal(case.want, R.SpecWanted(a[1], a[2], a[3], a[4]), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules talent gate", function()
+    it("shows a row that needs a talent while it is taken, and unread only when likely", function()
+        local R = loadRules()
+        local plain = entryOf(R, 10, 1)
+        local gated = entryOf(R, 12, 5)
+        local likely = { spell = { needs = { talents = {}, likely = true } } }
+        local cases = {
+            { name = "no talent needed", entry = plain, taken = nil, want = true },
+            { name = "taken", entry = gated, taken = true, want = true },
+            { name = "not taken", entry = gated, taken = false, want = false },
+            { name = "unread, not likely", entry = gated, taken = nil, want = false },
+            { name = "unread, likely", entry = likely, taken = nil, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentAllows(case.entry, case.taken), case.name)
+        end
+        assert.are.equal(gated.spell.needs, R.TalentsFor(12)[5], "a needs row")
+        assert.is_not_nil(R.TalentsFor(10)[3], "a swap for its spec")
+        assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")
+    end)
+end)
+
+describe("PartyCooldownsRules.OwnTaken", function()
+    it("answers taken or not taken only from a plain spellbook answer, else nil", function()
+        local R = loadRules()
+        local needs = DATA.SPELLS[5].needs
+        local swap = DATA.SPELLS[2].swap
+        local cases = {
+            { name = "needs, known", rule = needs, known = { [55] = true }, want = true },
+            { name = "needs, not known", rule = needs, known = { [55] = false }, want = false },
+            { name = "needs, unread", rule = needs, known = {}, want = nil },
+            { name = "swap, overridden", rule = swap, override = 20, known = {}, want = true },
+            { name = "swap, other override", rule = swap, override = 2, known = {}, want = false },
+            { name = "swap, nothing read", rule = swap, known = {}, want = nil },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.OwnTaken(case.rule, case.override, case.known), case.name)
         end
     end)
 end)

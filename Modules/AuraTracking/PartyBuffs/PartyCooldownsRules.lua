@@ -383,14 +383,15 @@ function Rules.TrinketShow(show, set, accepted)
     return kept, pending
 end
 
--- castID -> swap, for the spec's entries whose swap applies to it; nil when
--- none does. The data never changes, so each spec's answer is built once and
--- shared; callers only read it. The inspect ticker asks every second.
-local swapsBySpec = {}
+-- castID -> the talent rule of each of the spec's entries that has one: its
+-- swap where the swap applies to the spec, else its needs. Nil when none does.
+-- The data never changes, so each spec's answer is built once and shared;
+-- callers only read it. The inspect ticker asks every second.
+local talentsBySpec = {}
 
-function Rules.SwapsFor(specID)
+function Rules.TalentsFor(specID)
     if specID == nil then return nil end
-    local cached = swapsBySpec[specID]
+    local cached = talentsBySpec[specID]
     if cached == nil then
         local data = KE.PartyCooldownsData
         cached = false
@@ -398,14 +399,44 @@ function Rules.SwapsFor(specID)
             local castID = type(item) == "table" and item[1] or item
             local spell = data.SPELLS[castID]
             local swap = spell and spell.swap
-            if swap and (not swap.specs or swap.specs[specID]) then
+            local rule = spell and spell.needs
+            if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
+            if rule then
                 cached = cached or {}
-                cached[castID] = swap
+                cached[castID] = rule
             end
         end
-        swapsBySpec[specID] = cached
+        talentsBySpec[specID] = cached
     end
     return cached or nil
+end
+
+-- A row that needs a talent shows while it is taken; unread, only when the
+-- talent is likely.
+function Rules.TalentAllows(entry, taken)
+    local needs = entry.spell and entry.spell.needs
+    if not needs then return true end
+    if taken == nil then return needs.likely == true end
+    return taken == true
+end
+
+-- Your own answer for one talent rule: true, false, or nil when the client
+-- answered nothing, so an unreadable spellbook keeps the likely state.
+-- override is the cast's override spell, nil when unread; known maps each
+-- talent to its spellbook answer, nil when unread.
+function Rules.OwnTaken(rule, override, known)
+    local answered = false
+    if rule.id ~= nil and override ~= nil then
+        if override == rule.id then return true end
+        answered = true
+    end
+    for talent in pairs(rule.talents) do
+        local isKnown = known[talent]
+        if isKnown == true then return true end
+        if isKnown ~= nil then answered = true end
+    end
+    if answered then return false end
+    return nil
 end
 
 -- A gear event within GEAR_QUIET seconds of a teammate's last trinket read

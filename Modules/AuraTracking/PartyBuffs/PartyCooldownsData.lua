@@ -16,7 +16,8 @@ KE.PartyCooldownsData = Data
 -- overlay match, the cast when absent; a proc copy of the buff lasts at most
 -- short seconds and starts no cooldown. swap is a talent that changes the
 -- icon only: id is drawn when it is taken, likely until talents are read,
--- and specs limits it to those specs.
+-- and specs limits it to those specs. needs is a talent the row requires: it
+-- shows while the talent is taken, and before talents are read only if likely.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },
@@ -49,6 +50,8 @@ Data.SPELLS = {
     [342245]  = { kind = "defensive", cd = 60, buffs = { 342246 } },
 
     [132578]  = { kind = "offensive", cd = 120 },
+    -- Seen through Celestial Conduit, which every Xuen caster has.
+    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 } },
     [115203]  = { kind = "defensive", cd = 360, buffs = { 115203, 120954 } },
     [122783]  = { kind = "defensive", cd = 90 },
     [122470]  = { kind = "defensive", cd = 90, buffs = { 125174 } },
@@ -72,10 +75,16 @@ Data.SPELLS = {
     [114050]  = { kind = "offensive", cd = 180, buffs = { 114050, 1219480 }, short = 10 },
     [114051]  = { kind = "offensive", cd = 180, short = 10 },
     [108271]  = { kind = "defensive", cd = 120 },
+    -- Seen only through Primordial Bond, so a read without it hides the row.
+    [198103]  = { kind = "defensive", cd = 180, buffs = { 381755 },
+                  needs = { talents = { [1279819] = true }, likely = true } },
 
     [265187]  = { kind = "offensive", cd = 60, buffs = { 1276767 } },
     [104773]  = { kind = "defensive", cd = 180 },
     [108416]  = { kind = "defensive", cd = 60 },
+    -- Seen only through Crashing Chaos, so a read without it hides the row.
+    [1122]    = { kind = "offensive", cd = 120, buffs = { 417282 },
+                  needs = { talents = { [417234] = true }, likely = true } },
 
     [1719]    = { kind = "offensive", cd = 90 },
     [118038]  = { kind = "defensive", cd = 120 },
@@ -114,7 +123,7 @@ Data.SPECS = {
     [63]   = { { 190319, 60 }, { 45438, 150 }, { 342245, 50 } },
     [64]   = { { 45438, 120 }, { 342245, 50 } },
     [268]  = { 132578 },
-    [269]  = { 122470, { 115203, 90 } },
+    [269]  = { 123904, 122470, { 115203, 90 } },
     [270]  = { { 115203, 90 }, 122783 },
     [65]   = { { 31884, 60 }, { 642, 210 }, { 498, 42 } },
     [66]   = { { 31884, 60 }, { 31850, 63 } },
@@ -125,12 +134,12 @@ Data.SPECS = {
     [259]  = { 360194, 31224, 5277 },
     [260]  = { 31224, 5277 },
     [261]  = { 121471, 31224, 5277 },
-    [262]  = { { 114050, 120 }, { 108271, 90 } },
-    [263]  = { { 114051, 120 }, { 108271, 90 } },
-    [264]  = { { 108271, 90 } },
+    [262]  = { { 114050, 120 }, { 108271, 90 }, 198103 },
+    [263]  = { { 114051, 120 }, { 108271, 90 }, 198103 },
+    [264]  = { { 108271, 90 }, 198103 },
     [265]  = { 104773, { 108416, 45 } },
     [266]  = { 265187, 104773, { 108416, 45 } },
-    [267]  = { 104773, { 108416, 45 } },
+    [267]  = { { 1122, 90 }, 104773, { 108416, 45 } },
     [71]   = { { 118038, 108 }, { 23920, 23 } },
     [72]   = { 1719, { 184364, 108 }, { 23920, 23 } },
     [73]   = { { 23920, 23 } },

@@ -584,8 +584,8 @@ Spec.readers[#Spec.readers + 1] = {
 }
 
 ---------------------------------------------------------------------------------
--- Talents that swap an icon: read from the inspected loadout for a teammate,
--- from the spellbook for the player
+-- Talents that swap an icon or that a row needs: read from the inspected
+-- loadout for a teammate, from the spellbook for the player
 ---------------------------------------------------------------------------------
 local C_ClassTalents = C_ClassTalents
 local C_Spell = C_Spell
@@ -644,7 +644,7 @@ end
 -- would run in combat.
 local function ReadTaken(specID)
     local out = {}
-    local swaps = KE.PartyCooldownsRules.SwapsFor(specID)
+    local swaps = KE.PartyCooldownsRules.TalentsFor(specID)
     if not swaps then return out end
     if C_Traits.HasValidInspectData() ~= true then return nil end
     local info = C_Traits.GetConfigInfo(INSPECT_CONFIG)
@@ -670,14 +670,15 @@ local function ReadTaken(specID)
     return out
 end
 
+-- A rule the client answered nothing for is left out, so it keeps the likely
+-- state as a teammate's unread talent does.
 local function SelfTaken(specID)
     local out = {}
-    for castID, swap in pairs(KE.PartyCooldownsRules.SwapsFor(specID) or {}) do
-        local taken = Ask(C_Spell.GetOverrideSpell, castID) == swap.id
-        for talent in pairs(swap.talents) do
-            if not taken and Ask(C_SpellBook.IsSpellKnown, talent) == true then taken = true end
-        end
-        out[castID] = taken
+    for castID, rule in pairs(KE.PartyCooldownsRules.TalentsFor(specID) or {}) do
+        local known = {}
+        for talent in pairs(rule.talents) do known[talent] = Ask(C_SpellBook.IsSpellKnown, talent) end
+        local override = rule.id ~= nil and Ask(C_Spell.GetOverrideSpell, castID) or nil
+        out[castID] = KE.PartyCooldownsRules.OwnTaken(rule, override, known)
     end
     return out
 end
@@ -697,13 +698,14 @@ local function IsClassConfig(configID)
 end
 
 -- Three unreadable answers in a row store an empty one, which keeps the
--- likely icon. Talents only pick a class cooldown's icon.
+-- likely icon, and shows a row that needs a talent only when it is likely.
+-- Talents only concern class cooldowns.
 Spec.readers[#Spec.readers + 1] = {
     events = { "TRAIT_CONFIG_UPDATED" },
     On = function() return Spec.trackClass == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
-        return m.talents == nil and m.spec ~= nil and KE.PartyCooldownsRules.SwapsFor(m.spec) ~= nil
+        return m.talents == nil and m.spec ~= nil and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
     end,
     Read = function(m)
         local ok, taken, skip = pcall(ReadTaken, m.spec)
