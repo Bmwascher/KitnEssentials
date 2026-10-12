@@ -1289,11 +1289,13 @@ function PB:EnsurePreviewCells()
 end
 
 -- A preview frame registers no engine text, so the widget's own numbers stand
--- in for it, in the timer's font and number format.
+-- in for it, in the timer's font and number format. A redraw keeps a running
+-- sample's start, unless its duration changed or it was not showing.
 function PB:RunPreviewTimer(icon, index, now)
     local settings = self.styleSettings
     local duration, offset = KE.AuraRules.PreviewTiming(index)
     local cooldown = icon.keCooldown
+    local keep = cooldown.keDuration == duration and icon:IsShown() and cooldown:IsShown()
     cooldown.keDuration = duration
     cooldown:SetShown(settings.Swipe or settings.ShowTimer)
     cooldown:SetDrawSwipe(settings.Swipe)
@@ -1301,7 +1303,7 @@ function PB:RunPreviewTimer(icon, index, now)
     cooldown:SetCountdownFormatter(KE.AuraStyle.GetDurationFormatter(settings))
     KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
         settings.FontOutline)
-    cooldown:SetCooldown(now - offset, duration)
+    if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
 -- A known member's spec when grouped, else the stand-in row's sample spec. A
@@ -1333,15 +1335,17 @@ end
 
 -- Cell 1 and cell 2 ready, cell 3 cooling with PREVIEW_LEFT seconds to go (one
 -- under the spell's length when that is shorter), started again with the same
--- time left whenever it has run out. Plain values only.
+-- time left whenever it has run out. A redraw keeps a cell's tracker while its
+-- spell and length are the same, so a countdown carries on. Plain values only.
 function PB:DrawPreviewCells(row, entries, side, step)
     local n = Track.Now()
     local dir = side.left and -1 or 1
     for i = 1, PREVIEW_CELLS do
         local c, e, old = row.cells[i], entries[i], row.trackers[i]
-        if old then
+        if old and not (e and old.previewID == e.id and old.cd == e.cd) then
             Track.Forget(old)
             row.trackers[i] = nil
+            old = nil
         end
         if e then
             if not c then
@@ -1351,17 +1355,21 @@ function PB:DrawPreviewCells(row, entries, side, step)
             Cell.Dress(c, self.cellStyle, e)
             c:ClearAllPoints()
             c:SetPoint(side.corner, row.holder, side.corner, dir * (i - 1) * step, 0)
-            local t = CDRules.NewTracker(e.cd, false)
-            t.cell = c
-            if i == 3 then
-                t.loop = math_min(PREVIEW_LEFT, e.cd - 1)
-                CDRules.StartLoop(t, n)
+            if old then
+                Track.Push(old, n)
             else
-                CDRules.Clear(t, n)
+                local t = CDRules.NewTracker(e.cd, false)
+                t.cell, t.previewID = c, e.id
+                if i == 3 then
+                    t.loop = math_min(PREVIEW_LEFT, e.cd - 1)
+                    CDRules.StartLoop(t, n)
+                else
+                    CDRules.Clear(t, n)
+                end
+                Track.Push(t, n)
+                Track.Watch(t)
+                row.trackers[i] = t
             end
-            Track.Push(t, n)
-            Track.Watch(t)
-            row.trackers[i] = t
             c:Show()
         elseif c then
             c:Hide()
