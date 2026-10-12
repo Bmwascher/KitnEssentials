@@ -14,7 +14,9 @@ local C_Timer = C_Timer
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local ipairs = ipairs
 local pairs = pairs
+local table_sort = table.sort
 local tostring = tostring
+local type = type
 
 local Rules = KE.PartyCooldownsRules
 
@@ -187,6 +189,83 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         lastEnabled = enabled
         classManager:UpdateAll(enabled)
         rowManager:UpdateAll(enabled)
+    end
+
+    return card, card:GetNextOffset()
+end
+
+-- One seconds box per switched-on row of the Trinkets list. Empty means the
+-- length is read from the item in the game.
+function Page.TrinketCooldownsCard(scrollChild, yOffset, ctx)
+    local db, apply = ctx.db, ctx.apply
+    db.CooldownSeconds = db.CooldownSeconds or {}
+    local card = GUIFrame:CreateCard(scrollChild, "Trinket Cooldowns", yOffset)
+    card:AddLabel("A trinket's cooldown is read from the item itself. Type seconds only to replace it.")
+    card:AddNote("A row's seconds apply only to a trinket whose use spell is that row's buff. A trinket whose buff has another ID gets no cooldown icon, shows while active, and ignores its row's seconds.")
+    local ids = {}
+    for spellID in pairs(KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)) do ids[#ids + 1] = spellID end
+    table_sort(ids)
+    if #ids == 0 then card:AddLabel("No trinket on the list above is switched on.") end
+    local manager = GUIFrame:CreateWidgetStateManager()
+    for _, spellID in ipairs(ids) do
+        local key = Rules.TrinketKey(spellID)
+        local saved = db.ListTrinkets[spellID]
+        local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
+        local name = GUIFrame:CreateText(row, "", SpellLabel(spellID, saved and saved.label),
+            ROW_HEIGHT + CHECK_TOP, "hide")
+        row:AddWidget(name, 0.6, nil, 0, CHECK_TOP)
+        local function Shown()
+            local typed = db.CooldownSeconds[key]
+            return typed and tostring(typed) or ""
+        end
+        local box
+        box = GUIFrame:CreateEditBox(row, "Seconds", {
+            value = Shown(),
+            callback = function(text)
+                if text == "" then
+                    if db.CooldownSeconds[key] ~= nil then
+                        db.CooldownSeconds[key] = nil
+                        apply()
+                    end
+                    return
+                end
+                local value = Rules.ClampSeconds(text)
+                if not value then
+                    box:SetValue(Shown())
+                    return
+                end
+                if db.CooldownSeconds[key] ~= value then
+                    db.CooldownSeconds[key] = value
+                    apply()
+                end
+                box:SetValue(tostring(value))
+            end,
+        })
+        row:AddWidget(box, 0.2)
+        manager:Register(box, "all")
+        card:AddRow(row, ROW_HEIGHT)
+    end
+    local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
+    local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
+        tooltip = "Clears every typed trinket length, so each is read from the item again.",
+        callback = function()
+            for typedKey in pairs(db.CooldownSeconds) do
+                if type(typedKey) == "string" and typedKey:sub(1, 8) == "trinket:" then
+                    db.CooldownSeconds[typedKey] = nil
+                end
+            end
+            apply()
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
+    })
+    footer:AddWidget(defaults, 0.3)
+    manager:Register(defaults, "all")
+    card:AddRow(footer, FOOTER_HEIGHT, 0)
+
+    local baseSetEnabled = card.SetEnabled
+    function card:SetEnabled(enabled)
+        if baseSetEnabled then baseSetEnabled(self, enabled) end
+        manager:UpdateAll(enabled)
     end
 
     return card, card:GetNextOffset()

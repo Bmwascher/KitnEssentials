@@ -98,6 +98,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:SetCondition("colorsOn", function() return db.CategoryColors == true end)
     manager:SetCondition("healerOn", function() return db.UseHealerPlacement == true end)
     manager:SetCondition("classOn", function() return db.TrackBurst == true end)
+    manager:SetCondition("trinketOn", function() return db.TrackTrinket == true end)
     -- Without the sensor file the cooldown cells do not exist, and their
     -- settings are grayed. Only the cells use the defensive color.
     manager:SetCondition("cellsOn", function() return KE.PartyCooldownsSensor ~= nil end)
@@ -367,9 +368,22 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             infoTitle = "Spell List Info",
             infoText = "An icon in this category shows only when its spell is on this list and its row is switched on. Only helpful auras on your party members can be matched this way.",
             restoreActions = restoreActions,
-            onChangeCallback = ApplySettings,
+            -- The Trinket Cooldowns card below lists this list's switched-on
+            -- rows, so a change to it rebuilds the page.
+            onChangeCallback = listKey == "ListTrinkets" and function()
+                ApplySettings()
+                RebuildPage()
+            end or ApplySettings,
         })
         yOffset = listOffset
+        if listKey == "ListTrinkets" then
+            local trinketCard, trinketOffset = KE.PartyCooldownsPage.TrinketCooldownsCard(scrollChild, yOffset, {
+                db = db,
+                apply = ApplySettings,
+            })
+            manager:Register(trinketCard, "trinketOn")
+            yOffset = trinketOffset
+        end
     end
 
     RefreshStates()
