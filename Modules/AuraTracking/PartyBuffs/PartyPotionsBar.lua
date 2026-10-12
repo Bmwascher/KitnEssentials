@@ -88,7 +88,6 @@ function Bar.New(parent)
     c.ready:Hide()
     c.readyText = c.ready.top:CreateFontString(nil, "OVERLAY")
     c.readyText:SetJustifyH("RIGHT")
-    c.readyText:SetText("Ready")
     c.face = {}
     for k = 1, 2 do
         local f = { gate = NewBar(c, "VERTICAL") }
@@ -159,6 +158,7 @@ function Bar.Dress(c, style, e)
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
     Paint(c.ready, style, e, color, px, Cell.TextWidth(font, size, outline, "Ready"))
     KE:ApplyFontToText(c.readyText, font, size, outline)
+    c.readyText:SetText("Ready")
     c.readyText:SetTextColor(1, 1, 1, 1)
     c.readyText:ClearAllPoints()
     c.readyText:SetPoint("RIGHT", c.ready.fill, "RIGHT", -TEXT_PAD, 0)
