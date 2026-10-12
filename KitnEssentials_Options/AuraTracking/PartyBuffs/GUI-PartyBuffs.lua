@@ -1,8 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PartyBuffs.lua                                      ║
 -- ║  GUI: Party Cooldowns                                    ║
--- ║  Purpose: the page host (header and tab strip) and the   ║
--- ║           Healer Externals placeholder tab.              ║
+-- ║  Purpose: the page host (header and tab strip).          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -15,19 +14,9 @@ local DESCRIPTION = "Shows the cooldowns that matter for your group beside each 
     "\n\nA party member's spec comes from |cffffd100LibSpecialization|r or a quiet automatic inspect; until " ..
     "it is known, that member shows no cooldown icons. Externals and potions your party members receive still " ..
     "show while active, after the cooldown icons. " ..
-    "The Potions tab shows each party member's potion cooldown as a bar." ..
+    "The Potions tab shows each party member's potion cooldown as a bar. " ..
+    "The Healer Externals tab shows each party healer's external cooldown in a box you can move." ..
     "\n\nWorks on Blizzard's party frames and on |cffffd100EllesmereUI|r frames. Not shown in raids."
-
-local function Placeholder(id, title, note)
-    GUIFrame:RegisterContent(id, function(scrollChild, yOffset)
-        local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
-        card:AddNote(note)
-        return card:GetNextOffset()
-    end)
-end
-
-Placeholder("PartyBuffsHealerExternals", "Healer Externals",
-    "A timer on your healer's external cooldowns arrives in a later update.")
 
 GUIFrame:RegisterTabbedContent("PartyBuffs", {
     { id = "PartyBuffsCooldowns",       label = "Cooldowns" },

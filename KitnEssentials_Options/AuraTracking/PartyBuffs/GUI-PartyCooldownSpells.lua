@@ -70,12 +70,14 @@ local function AddToggle(row, label, entry, db, apply)
     return check
 end
 
-local function AddSecondsBox(row, entry, db, apply)
+-- clamp limits a typed length: the party cooldowns clamp unless given.
+local function AddSecondsBox(row, entry, db, apply, clamp)
+    clamp = clamp or Rules.ClampSeconds
     local box
     box = GUIFrame:CreateEditBox(row, "Seconds", {
         value = tostring(entry.cd),
         callback = function(text)
-            local value = Rules.ClampSeconds(text)
+            local value = clamp(text)
             if not value then
                 box:SetValue(tostring(entry.cd))
                 return
@@ -248,6 +250,57 @@ function Page.RacialsCard(scrollChild, yOffset, ctx)
             for _, saved in ipairs({ db.CooldownOff, db.CooldownSeconds }) do
                 for key in pairs(saved) do
                     if type(key) == "string" and key:sub(1, 5) == "race:" then saved[key] = nil end
+                end
+            end
+            apply()
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
+    })
+    footer:AddWidget(defaults, 0.3)
+    manager:Register(defaults, "all")
+    card:AddRow(footer, FOOTER_HEIGHT, 0)
+
+    local baseSetEnabled = card.SetEnabled
+    function card:SetEnabled(enabled)
+        if baseSetEnabled then baseSetEnabled(self, enabled) end
+        manager:UpdateAll(enabled)
+    end
+
+    return card, card:GetNextOffset()
+end
+
+-- ctx: { db, apply }. The caller registers the card under the Healer
+-- Externals condition. One row per healer spec's external, by spec ID (the
+-- data is keyed by spec); a typed length stops at the box's own cap.
+function Page.ExternalsCard(scrollChild, yOffset, ctx)
+    local db, apply = ctx.db, ctx.apply
+    db.CooldownOff = db.CooldownOff or {}
+    db.CooldownSeconds = db.CooldownSeconds or {}
+    local HXRules = KE.HealerExternalsRules
+    local card = GUIFrame:CreateCard(scrollChild, "Externals", yOffset)
+    card:AddLabel("The time counts from the moment the buff appears, for the seconds set here, not the healer's real cooldown.")
+    local manager = GUIFrame:CreateWidgetStateManager()
+    local specs = {}
+    for specID in pairs(KE.PartyCooldownsData.HEALER_SPECS) do specs[#specs + 1] = specID end
+    table_sort(specs)
+    for _, specID in ipairs(specs) do
+        local _, specName = GetSpecializationInfoForSpecID(specID)
+        for _, entry in ipairs(HXRules.Entries(specID, db, true)) do
+            local name = C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)
+            if type(specName) == "string" and specName ~= "" then name = name .. " (" .. specName .. ")" end
+            local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
+            manager:Register(AddToggle(row, SpellLabel(entry.id, name), entry, db, apply), "all")
+            manager:Register(AddSecondsBox(row, entry, db, apply, HXRules.ClampSeconds), "all")
+            card:AddRow(row, ROW_HEIGHT)
+        end
+    end
+    local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
+    local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
+        tooltip = "Restores every external: switched on, at its listed length.",
+        callback = function()
+            for _, saved in ipairs({ db.CooldownOff, db.CooldownSeconds }) do
+                for key in pairs(saved) do
+                    if type(key) == "string" and key:sub(1, 7) == "healer:" then saved[key] = nil end
                 end
             end
             apply()
