@@ -788,6 +788,7 @@ function PB:CooldownEntries(m)
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
             local taken = m.talents and m.talents[e.id]
             if CDRules.TalentAllows(e, taken) then
+                e.cd = CDRules.TalentLength(e, m.talents and m.talents[CDRules.LengthKey(e.id)])
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, taken))
                 entries[#entries + 1] = e
             end
@@ -1323,6 +1324,7 @@ function PB:PreviewEntries(k)
             local has = talents and talents[e.id]
             if not taken[e.id] and CDRules.TalentAllows(e, has) then
                 taken[e.id] = true
+                e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, fromSpec, has))
                 entries[#entries + 1] = e
             end

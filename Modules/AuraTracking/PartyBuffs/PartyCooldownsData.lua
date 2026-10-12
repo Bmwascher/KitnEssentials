@@ -18,6 +18,8 @@ KE.PartyCooldownsData = Data
 -- icon only: id is drawn when it is taken, likely until talents are read,
 -- and specs limits it to those specs. needs is a talent the row requires: it
 -- shows while the talent is taken, and before talents are read only if likely.
+-- lengthNeeds is a talent a spec's paired seconds need: a member read without
+-- it counts the cast's own cd.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },
@@ -83,8 +85,10 @@ Data.SPELLS = {
     [104773]  = { kind = "defensive", cd = 180 },
     [108416]  = { kind = "defensive", cd = 60 },
     -- Seen only through Crashing Chaos, so a read without it hides the row.
+    -- Destruction's 90 s needs Inferno.
     [1122]    = { kind = "offensive", cd = 120, buffs = { 417282 },
-                  needs = { talents = { [417234] = true }, likely = true } },
+                  needs = { talents = { [417234] = true }, likely = true },
+                  lengthNeeds = { talents = { [1280483] = true } } },
 
     [1719]    = { kind = "offensive", cd = 90 },
     [118038]  = { kind = "defensive", cd = 120 },

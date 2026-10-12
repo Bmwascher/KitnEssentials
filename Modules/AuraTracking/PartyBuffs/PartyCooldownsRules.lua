@@ -30,6 +30,9 @@ end
 
 function Rules.CooldownKey(specID, castID) return specID .. ":" .. castID end
 
+-- TalentsFor's key for a cast's length rule, apart from its show rule.
+function Rules.LengthKey(castID) return "len:" .. castID end
+
 function Rules.TrinketKey(spellID) return "trinket:" .. spellID end
 
 -- A typed length, floored and clamped, or nil when it is not a number.
@@ -46,6 +49,7 @@ local function Entry(castID, spell, key, listed, typed, isOff)
         buffs = spell.buffs, short = spell.short,
         listed = listed,
         cd = Rules.ClampSeconds(typed) or Rules.ClampSeconds(listed),
+        typed = Rules.ClampSeconds(typed) ~= nil,
         off = isOff,
     }
 end
@@ -416,9 +420,10 @@ function Rules.TrinketShow(show, set, accepted)
 end
 
 -- castID -> the talent rule of each of the spec's entries that has one: its
--- swap where the swap applies to the spec, else its needs. Nil when none does.
--- The data never changes, so each spec's answer is built once and shared;
--- callers only read it. The inspect ticker asks every second.
+-- swap where the swap applies to the spec, else its needs. A paired cast whose
+-- spell has lengthNeeds also gets that rule under Rules.LengthKey(castID).
+-- Nil when none does. The data never changes, so each spec's answer is built
+-- once and shared; callers only read it. The inspect ticker asks every second.
 local talentsBySpec = {}
 
 function Rules.TalentsFor(specID)
@@ -428,7 +433,8 @@ function Rules.TalentsFor(specID)
         local data = KE.PartyCooldownsData
         cached = false
         for _, item in ipairs(data.SPECS[specID] or {}) do
-            local castID = type(item) == "table" and item[1] or item
+            local paired = type(item) == "table"
+            local castID = paired and item[1] or item
             local spell = data.SPELLS[castID]
             local swap = spell and spell.swap
             local rule = spell and spell.needs
@@ -436,6 +442,10 @@ function Rules.TalentsFor(specID)
             if rule then
                 cached = cached or {}
                 cached[castID] = rule
+            end
+            if paired and spell and spell.lengthNeeds then
+                cached = cached or {}
+                cached[Rules.LengthKey(castID)] = spell.lengthNeeds
             end
         end
         talentsBySpec[specID] = cached
@@ -448,6 +458,14 @@ function Rules.TalentAllows(entry, taken)
     if not needs then return true end
     if taken == nil then return needs.likely == true end
     return taken == true
+end
+
+-- The length a cell counts: the spell's own when its length talent is read as
+-- not taken and no seconds are typed, else the entry's.
+function Rules.TalentLength(entry, taken)
+    local needs = entry.spell and entry.spell.lengthNeeds
+    if not needs or entry.typed or taken ~= false then return entry.cd end
+    return Rules.ClampSeconds(entry.spell.cd)
 end
 
 -- Your own answer for one talent rule: true, false, or nil when the client
