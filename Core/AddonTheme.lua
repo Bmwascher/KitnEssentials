@@ -12,6 +12,7 @@ local ipairs = ipairs
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local UnitClass = UnitClass
 local pcall = pcall
+local geterrorhandler = geterrorhandler
 
 ---------------------------------------------------------------------------------
 -- Theme Defaults
@@ -387,11 +388,17 @@ function KE:AddThemeCallback(fn)
     list[#list + 1] = fn
 end
 
+-- An error reaches the error handler and the loop goes on. The handler call is
+-- pcall'd too: a throwing handler would leave RefreshTheme's isRefreshing set.
+local function Report(ok, err)
+    if not ok then pcall(geterrorhandler(), err) end
+end
+
 function KE:NotifyThemeChange()
     if KitnEssentials then
         for _, module in KitnEssentials:IterateModules() do
             if module.OnThemeChanged then
-                pcall(module.OnThemeChanged, module)
+                Report(pcall(module.OnThemeChanged, module))
             end
         end
     end
@@ -399,7 +406,7 @@ function KE:NotifyThemeChange()
     if not list then return end
     local accent = self.Theme.accent
     for i = 1, #list do
-        pcall(list[i], accent[1], accent[2], accent[3])
+        Report(pcall(list[i], accent[1], accent[2], accent[3]))
     end
 end
 

@@ -194,16 +194,17 @@ function L.loadEditMode(KE)
 end
 
 -- Core/AddonTheme.lua. RAID_CLASS_COLORS and UnitClass are captured as
--- file-scope upvalues by the class-color resolver, so both must exist on _G
--- before the load. Neither is managed by _wow_mock, so they are set here
--- directly rather than through installMock. Returns the KE table; the caller
--- seeds db.global.Theme itself.
+-- file-scope upvalues by the class-color resolver, and geterrorhandler by the
+-- theme-change dispatch, so all three must exist on _G before the load. None
+-- is managed by _wow_mock, so they are set here directly rather than through
+-- installMock. Returns the KE table; the caller seeds db.global.Theme itself.
 function L.loadAddonTheme(env)
     env = env or {}
     _G.RAID_CLASS_COLORS = env.RAID_CLASS_COLORS or {
         WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
     }
     _G.UnitClass = env.UnitClass or function() return "Mock", "WARRIOR" end
+    _G.geterrorhandler = env.geterrorhandler or function() return function() end end
     local KE = {}
     return helpers.loadModule("Core/AddonTheme.lua", KE)
 end
