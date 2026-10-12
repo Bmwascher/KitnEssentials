@@ -387,3 +387,16 @@ describe("PartyCooldownsRules.TalentsMoved", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.StartLoop", function()
+    it("starts a preview sample cooling with its loop seconds left, again each time it restarts", function()
+        local R = loadRules()
+        local t = R.NewTracker(120, false)
+        t.loop = 74
+        R.StartLoop(t, 1000)
+        local first = { R.Left(t, t.slot[t.cur], 1000), t.slot[t.cur].v }
+        local again = 1000 + t.loop + R.LINGER
+        R.StartLoop(t, again)
+        assert.are.same({ { 74, 1 }, { 74, 1 } }, { first, { R.Left(t, t.slot[t.cur], again), t.slot[t.cur].v } })
+    end)
+end)

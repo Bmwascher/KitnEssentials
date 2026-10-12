@@ -1284,9 +1284,7 @@ function PB:DrawPreviewCells(row, entries, side, step)
             t.cell = c
             if i == 3 then
                 t.loop = math_min(PREVIEW_LEFT, e.cd - 1)
-                local start = n - (e.cd - t.loop)
-                CDRules.Clear(t, start)
-                CDRules.StartPlain(t, start)
+                CDRules.StartLoop(t, n)
             else
                 CDRules.Clear(t, n)
             end

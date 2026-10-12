@@ -243,6 +243,13 @@ function Rules.StartPlain(t, n)
     sl.c, sl.v, other.v = Rules.Stamp(t, n), 1, 0
 end
 
+-- A preview sample: cooling at n with t.loop seconds left.
+function Rules.StartLoop(t, n)
+    local start = n - (t.cd - t.loop)
+    Rules.Clear(t, start)
+    Rules.StartPlain(t, start)
+end
+
 -- Known and up, from plain answers only. A lit short sensor means a proc
 -- copy, which is not a use.
 local function State(lit, short, hasShort, isSecret)
