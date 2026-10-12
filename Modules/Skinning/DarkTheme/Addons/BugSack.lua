@@ -3,6 +3,22 @@ local S = KE.Skins
 local _G = _G
 local pairs = pairs
 
+-- A version without the Options tab skips its name.
+local TAB_NAMES = { "BugSackTabAll", "BugSackTabSession", "BugSackTabLast", "BugSackTabOptions" }
+
+-- The options page is an unnamed child of the window: its checkboxes are its
+-- own children, and each of its dropdowns sits in a row frame on it.
+local function SkinOptionsPage(f)
+    for _, page in pairs({ f:GetChildren() }) do
+        for _, row in pairs({ page:GetChildren() }) do
+            if row:IsObjectType("CheckButton") then S.CheckBox(row) end
+            for _, w in pairs({ row:GetChildren() }) do
+                if w.intrinsic == "DropdownButton" then S.DropDown(w) end
+            end
+        end
+    end
+end
+
 local function OpenSack()
     local f = _G.BugSackFrame
     if not f or S.data(f).skinned then return end
@@ -45,24 +61,34 @@ local function OpenSack()
         sendB:SetPoint("RIGHT", nextB, "LEFT", -4, 0)
         S.Button(nextB); S.Button(prevB); S.Button(sendB)
     end
-
-    local tabs = { _G.BugSackTabAll, _G.BugSackTabSession, _G.BugSackTabLast }
-    for i = 1, 3 do
-        if tabs[i] then S.Tab(tabs[i]) end
+    -- The options page shows the wipe button in the send button's place. At
+    -- its own height it reaches the window's bottom border.
+    local wipeB = _G.BugSackWipeButton
+    if nextB and prevB and wipeB then
+        wipeB:SetHeight(32)
+        wipeB:ClearAllPoints()
+        wipeB:SetPoint("LEFT", prevB, "RIGHT", 4, 0)
+        wipeB:SetPoint("RIGHT", nextB, "LEFT", -4, 0)
+        S.Button(wipeB)
     end
+    SkinOptionsPage(f)
 
-    for i = 1, 3 do
-        if tabs[i] then S.TabSetSelected(tabs[i]) end
+    local tabs = {}
+    for i = 1, #TAB_NAMES do
+        local tab = _G[TAB_NAMES[i]]
+        if tab then tabs[#tabs + 1] = tab end
     end
+    for i = 1, #tabs do S.Tab(tabs[i]) end
+    for i = 1, #tabs do S.TabSetSelected(tabs[i]) end
     -- The row hangs from the window's bottom edge by the first tab's top,
     -- whatever anchor the tab was created with; only its x inset is kept.
     -- y = 1 lifts the tab 1 into the window; S.Tab draws its box 2 inside the
     -- tab, so the box starts 1 below the window's edge.
     local function RepositionTabs()
         local prev
-        for i = 1, 3 do
+        for i = 1, #tabs do
             local tab = tabs[i]
-            if tab and tab:IsShown() then
+            if tab:IsShown() then
                 if not prev then
                     local _, _, _, x = tab:GetPoint(1)
                     tab:ClearAllPoints()
@@ -77,17 +103,16 @@ local function OpenSack()
     end
     RepositionTabs()
 
-    for i = 1, 3 do
-        local tab = tabs[i]
-        if tab and tab.HookScript then
-            tab:HookScript("OnClick", RepositionTabs)
-        end
+    for i = 1, #tabs do
+        tabs[i]:HookScript("OnClick", RepositionTabs)
     end
 end
 
 local function Skin()
     if not _G.BugSack then return S.Skip("BugSack missing") end
     if _G.BugSack.OpenSack then hooksecurefunc(_G.BugSack, "OpenSack", OpenSack) end
+    -- Right-clicking the minimap icon opens the window without OpenSack.
+    if _G.BugSack.OpenConfig then hooksecurefunc(_G.BugSack, "OpenConfig", OpenSack) end
 
     local sp = _G.SettingsPanel
     local box = sp and sp.Container and sp.Container.SettingsList and sp.Container.SettingsList.ScrollBox
