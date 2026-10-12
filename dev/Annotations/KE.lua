@@ -895,6 +895,17 @@ function KitnEssentials:DisableModule(name) end
 ---@return KE
 function KitnEssentials:GetNamespace() end
 
+--- The live theme accent (Core/Main.lua), each value from 0 to 1.
+---@return number r
+---@return number g
+---@return number b
+function KitnEssentials:GetThemeAccent() end
+
+--- fn runs with the accent after every theme refresh; registering the same
+--- function again does nothing.
+---@param fn fun(r: number, g: number, b: number)
+function KitnEssentials:RegisterThemeCallback(fn) end
+
 -- AceModule shape (what every KE:NewModule() returns).
 -- Module-specific methods (function MOD:UpdateTicks() etc.) are not
 -- declared here; `undefined-field` is disabled in .wowluarc.json so the
@@ -1012,6 +1023,9 @@ function KE:CopyPresetToCustom() end
 function KE:ResetTheme() end
 
 function KE:NotifyThemeChange() end
+
+---@param fn fun(r: number, g: number, b: number)
+function KE:AddThemeCallback(fn) end
 
 -- Core/Colors.lua
 ---@return number[]

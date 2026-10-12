@@ -27,6 +27,17 @@ function KitnEssentials:GetNamespace()
     return KE
 end
 
+-- Read-only theme surface for other addons: the live accent, and a function
+-- run as fn(r, g, b) after every theme refresh.
+function KitnEssentials:GetThemeAccent()
+    local accent = KE.Theme.accent
+    return accent[1], accent[2], accent[3]
+end
+
+function KitnEssentials:RegisterThemeCallback(fn)
+    KE:AddThemeCallback(fn)
+end
+
 -- Every module enable/disable funnels through these two AceAddon methods
 -- (GUI checkboxes, the profile enable-state sync, and module:Enable()
 -- internally), so this is the one seam that keeps GUI previews honest

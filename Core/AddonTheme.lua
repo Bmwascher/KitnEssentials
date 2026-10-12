@@ -355,12 +355,34 @@ end
 ---------------------------------------------------------------------------------
 -- Theme Change Notification
 ---------------------------------------------------------------------------------
+-- Another addon's function, run with the accent after every refresh. A
+-- second registration of the same function does nothing.
+function KE:AddThemeCallback(fn)
+    if type(fn) ~= "function" then return end
+    local list = self.themeCallbacks
+    if not list then
+        list = {}
+        self.themeCallbacks = list
+    end
+    for i = 1, #list do
+        if list[i] == fn then return end
+    end
+    list[#list + 1] = fn
+end
+
 function KE:NotifyThemeChange()
-    if not KitnEssentials then return end
-    for _, module in KitnEssentials:IterateModules() do
-        if module.OnThemeChanged then
-            pcall(module.OnThemeChanged, module)
+    if KitnEssentials then
+        for _, module in KitnEssentials:IterateModules() do
+            if module.OnThemeChanged then
+                pcall(module.OnThemeChanged, module)
+            end
         end
+    end
+    local list = self.themeCallbacks
+    if not list then return end
+    local accent = self.Theme.accent
+    for i = 1, #list do
+        pcall(list[i], accent[1], accent[2], accent[3])
     end
 end
 
