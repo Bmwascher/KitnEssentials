@@ -40,10 +40,6 @@ end
 -- the master's own tabs while it is off, and collapsing here as well would
 -- take Auction House Filter, Vantus Rune Withdrawer, Merchant Pages and
 -- Combat Logger down with a table this page alone owns.
---
--- Hide Zone Text lives here, not on a gated tab, because it is
--- master-independent (still applies while Automation itself is off) and this
--- card is the only surface that renders in every state.
 local function BuildHeader(scrollChild, yOffset)
     local db = GetDB()
     if not db then return yOffset, false end
@@ -67,15 +63,6 @@ local function BuildHeader(scrollChild, yOffset)
             "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
             "and the vendor and auction house windows.")
     end
-
-    local rowZone = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local hideZoneTextCheck = GUIFrame:CreateCheckbox(rowZone, "Hide Zone Text", {
-        value = db.HideZoneText == true,
-        tooltip = "Hides the zone and subzone names shown when you enter a new area. Works whether or not Automation itself is on.",
-        callback = function(checked) db.HideZoneText = checked; ApplySettings() end,
-    })
-    rowZone:AddWidget(hideZoneTextCheck, 1)
-    card1:AddRow(rowZone, Theme.rowHeightLast, 0)
 
     return card1:GetNextOffset(), false
 end
@@ -266,23 +253,21 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     manager:Register(hideTalkingHeadCheck, "all")
     card1:AddRow(row1a, Theme.rowHeight)
 
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local hideEventToastsCheck = GUIFrame:CreateCheckbox(row1b, "Hide Event Toasts", {
         value = db.HideEventToasts == true,
         callback = function(checked) db.HideEventToasts = checked; ApplySettings() end,
     })
-    row1b:AddWidget(hideEventToastsCheck, 1)
+    row1b:AddWidget(hideEventToastsCheck, 0.5)
     manager:Register(hideEventToastsCheck, "all")
-    card1:AddRow(row1b, Theme.rowHeight)
 
-    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local hideBossBannerLootCheck = GUIFrame:CreateCheckbox(row1c, "Hide Boss Banner Loot", {
+    local hideBossBannerLootCheck = GUIFrame:CreateCheckbox(row1b, "Hide Boss Banner Loot", {
         value = db.HideBossBannerLoot == true,
         callback = function(checked) db.HideBossBannerLoot = checked; ApplySettings() end,
     })
-    row1c:AddWidget(hideBossBannerLootCheck, 1)
+    row1b:AddWidget(hideBossBannerLootCheck, 0.5)
     manager:Register(hideBossBannerLootCheck, "all")
-    card1:AddRow(row1c, Theme.rowHeightLast, 0)
+    card1:AddRow(row1b, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
@@ -310,9 +295,9 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     manager:Register(hideErrorMessagesCheck, "all")
     card2:AddRow(row2, Theme.rowHeight)
 
-    -- Hide Helptips is NOT registered with the manager: it is master-independent
-    -- and keeps working while Automation is off, so it must never be grayed out
-    -- alongside the switches that do follow the master.
+    -- Hide Helptips and Hide Zone Text are NOT registered with the manager: both
+    -- are master-independent and keep working while Automation is off, so they
+    -- must never be grayed out alongside the switches that do follow the master.
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local hideHelptipsCheck = GUIFrame:CreateCheckbox(row2b, "Hide Helptips", {
         value = db.HideHelptips ~= false,
@@ -322,7 +307,17 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row2b:AddWidget(hideHelptipsCheck, 1)
+    row2b:AddWidget(hideHelptipsCheck, 0.5)
+
+    local hideZoneTextCheck = GUIFrame:CreateCheckbox(row2b, "Hide Zone Text", {
+        value = db.HideZoneText == true,
+        tooltip = "Hides the zone and subzone names shown when you enter a new area. Works whether or not Automation itself is on -- but this switch is only reachable while Automation is on.",
+        callback = function(checked)
+            db.HideZoneText = checked
+            ApplySettings()
+        end,
+    })
+    row2b:AddWidget(hideZoneTextCheck, 0.5)
     card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
