@@ -44,7 +44,8 @@ local BIND_HOLD = 0.5
 local HIDDEN_RETRY = 1
 -- 4 dispatches a second so a new second is seen within 0.25 s. Three of them
 -- cost one GetTime and one compare; the fourth walks the live trackers, with
--- 2 SetMinMaxValues per running slot (64 a second at 16 cells).
+-- 2 SetMinMaxValues per running slot (64 a second at 16 cells), 3 on a summon
+-- cell whose glow is on.
 local TICK = 0.25
 
 -- Whole seconds from an origin far enough back that no epoch goes negative.
@@ -968,6 +969,7 @@ function Track.RestyleOverlay(st, settings)
         if d then
             local ok = pcall(KE.AuraStyle.RegisterRegions, button, nil, d, settings)
             ok = pcall(KE.AuraStyle.StyleAuraFrame, button, settings, d.capabilities) and ok
+            ok = pcall(KE.AuraGlow.Apply, button, settings, d.capabilities) and ok
             if ok then st.overlayKinds[i] = kind else clean = false end
         end
     end

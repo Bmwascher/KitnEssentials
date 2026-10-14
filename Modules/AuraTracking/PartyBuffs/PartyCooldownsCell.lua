@@ -148,6 +148,13 @@ function Cell.New(parent)
     return c
 end
 
+-- The hosts play only while the cell shows: a clipped or hidden animation
+-- still costs.
+local function PlayGlow(c)
+    local glow = c:IsVisible() and c.glowOn and c.glowSettings or GLOW_OFF
+    for k = 1, 2 do KE.AuraGlow.Configure(c.glowHost[k], glow) end
+end
+
 -- A summon's glow, made on first need: per slot a third bar whose edge carries
 -- a clipping window, so the glow shows only during the active seconds.
 local function GlowParts(c)
@@ -161,10 +168,11 @@ local function GlowParts(c)
         host:SetAllPoints(c)
         c.glowBar[k], c.glowWin[k], c.glowHost[k] = NewBar(c), win, host
     end
+    c:SetScript("OnShow", PlayGlow)
+    c:SetScript("OnHide", PlayGlow)
 end
 
--- The glow runs only on a cell with an active phase and the setting on: a
--- clipped animation still costs while hidden.
+-- Only a cell with an active phase and the setting on has a running glow.
 local function DressGlow(c, glow, active, level)
     local on = active > 0 and glow ~= nil and glow.GlowEnabled == true
     if on and not c.glowWin then
@@ -175,10 +183,10 @@ local function DressGlow(c, glow, active, level)
     for k = 1, 2 do
         c.glowWin[k]:SetFrameLevel(level + 3)
         c.glowHost[k]:SetFrameLevel(level + 3)
-        KE.AuraGlow.Configure(c.glowHost[k], on and glow or GLOW_OFF)
         if not on then c.glowWin[k]:SetAlpha(0) end
     end
-    c.glowOn = on
+    c.glowOn, c.glowSettings = on, glow
+    PlayGlow(c)
 end
 
 -- Colors, icon and text are applied every time; the bars move only when the

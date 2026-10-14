@@ -1397,6 +1397,7 @@ function PB:DrawPreviewActive(row, e)
     local d = Track.OVERLAY_DESCRIPTORS[e.kind]
     if icon then
         KE.AuraStyle.StyleAuraFrame(icon, settings, d.capabilities)
+        KE.AuraGlow.Apply(icon, settings, d.capabilities)
     else
         icon = CreateFrame("Frame", nil, row.holder)
         KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
