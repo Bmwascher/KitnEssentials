@@ -101,7 +101,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         return db.CategoryColors == true and KE.PartyCooldownsSensor ~= nil
     end)
 
-    local function AddCheck(row, label, key, tooltip, onChange)
+    local function AddCheck(row, label, key, tooltip, onChange, width)
         local check = GUIFrame:CreateCheckbox(row, label, {
             value = db[key] == true,
             callback = function(checked)
@@ -111,7 +111,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             end,
             tooltip = tooltip,
         })
-        row:AddWidget(check, 0.5)
+        row:AddWidget(check, width or 0.5)
         return check
     end
 
@@ -215,14 +215,17 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         "The time left on a gray icon after its buff falls."), "cellsOn")
     manager:Register(AddSlider(rowD3b, "Cooldown Text Size", "CooldownFontSize", 8, 48), "cellsOn")
     cardDisplay:AddRow(rowD3b, Theme.rowHeight)
-    local rowD3c = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddCheck(rowD3c, "Border Color by Category", "CategoryColors", nil, RefreshStates)
-    cardDisplay:AddRow(rowD3c, Theme.rowHeight)
+
+    local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
+    rowDSep2:AddWidget(GUIFrame:CreateSeparator(rowDSep2), 1)
+    cardDisplay:AddRow(rowDSep2, Theme.rowHeightSeparator)
+
     local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    for i = 1, 3 do AddColor(rowD4, COLOR_PICKERS[i]) end
+    AddCheck(rowD4, "Border Color by Category", "CategoryColors", nil, RefreshStates, 1 / 3)
+    for i = 1, 2 do AddColor(rowD4, COLOR_PICKERS[i]) end
     cardDisplay:AddRow(rowD4, Theme.rowHeight)
     local rowD5 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
-    for i = 4, 5 do AddColor(rowD5, COLOR_PICKERS[i]) end
+    for i = 3, 5 do AddColor(rowD5, COLOR_PICKERS[i]) end
     cardDisplay:AddRow(rowD5, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
 

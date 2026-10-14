@@ -14,6 +14,7 @@ local C_Spell = C_Spell
 local C_Timer = C_Timer
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local ipairs = ipairs
+local math_pi = math.pi
 local pairs = pairs
 local pcall = pcall
 local table_sort = table.sort
@@ -40,6 +41,8 @@ local BOX_TOP = -14
 local CHECK_TOP = -15
 local HEADER_HEIGHT = 26
 local FOOTER_HEIGHT = 28
+-- Unrotated, the arrow points down.
+local ARROW_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
 local function SpellLabel(spellID, name)
     local icon = C_Spell.GetSpellTexture(spellID)
@@ -74,7 +77,7 @@ end
 local function AddSecondsBox(row, entry, db, apply, clamp)
     clamp = clamp or Rules.ClampSeconds
     local box
-    box = GUIFrame:CreateEditBox(row, "Seconds", {
+    box = GUIFrame:CreateEditBox(row, "Spell CD", {
         value = tostring(entry.cd),
         callback = function(text)
             local value = clamp(text)
@@ -148,12 +151,14 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
         local check = AddToggle(row, SpellLabel(entry.id), entry, db, apply)
         local box = AddSecondsBox(row, entry, db, apply)
-        local up = GUIFrame:CreateButton(row, "^", {
+        local up = GUIFrame:CreateButton(row, "", {
+            image = ARROW_TEXTURE, imageRotation = math_pi,
             height = 24,
             callback = function() Move(specID, list, i, -1) end,
         })
         row:AddWidget(up, 0.12, nil, 0, BOX_TOP)
-        local down = GUIFrame:CreateButton(row, "v", {
+        local down = GUIFrame:CreateButton(row, "", {
+            image = ARROW_TEXTURE,
             height = 24,
             callback = function() Move(specID, list, i, 1) end,
         })
