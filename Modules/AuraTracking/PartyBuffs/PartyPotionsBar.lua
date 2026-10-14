@@ -30,7 +30,6 @@ local WHITE = "Interface\\Buttons\\WHITE8X8"
 local GRAY = { 0.5, 0.5, 0.5 }
 local DIM = 0.75
 local BG = 0.15
-local ICON_GAP = 2
 local TEXT_PAD = 4
 -- The timer window's width beyond its widest label, "00:00".
 local TIMER_PAD = 6
@@ -63,8 +62,6 @@ end
 
 local function NewArt(parent)
     local art = CreateFrame("Frame", nil, parent)
-    art.iconBorder = art:CreateTexture(nil, "BACKGROUND")
-    art.iconBorder:SetColorTexture(0, 0, 0, 1)
     art.icon = art:CreateTexture(nil, "ARTWORK")
     KE:ApplyIconZoom(art.icon)
     art.border = art:CreateTexture(nil, "BACKGROUND")
@@ -113,28 +110,24 @@ function Bar.New(parent)
     return c
 end
 
--- Icon, border, class fill and name. reserve keeps the name clear of the text
--- on the right.
+-- Border, icon, class fill and name. The icon sits inside the border at the
+-- left end, a border line between it and the fill. reserve keeps the name
+-- clear of the text on the right.
 local function Paint(art, style, e, color, px, reserve)
-    local h = style.height
-    local left = 0
-    art.icon:SetShown(style.icon)
-    art.iconBorder:SetShown(style.icon)
-    if style.icon then
-        art.iconBorder:ClearAllPoints()
-        art.iconBorder:SetPoint("TOPLEFT", art, "TOPLEFT", 0, 0)
-        art.iconBorder:SetSize(h, h)
-        art.icon:ClearAllPoints()
-        art.icon:SetPoint("TOPLEFT", art.iconBorder, "TOPLEFT", px, -px)
-        art.icon:SetPoint("BOTTOMRIGHT", art.iconBorder, "BOTTOMRIGHT", -px, px)
-        art.icon:SetTexture(e.texture)
-        left = h + ICON_GAP
-    end
+    local inner = style.height - 2 * px
+    local left = px
     art.border:ClearAllPoints()
-    art.border:SetPoint("TOPLEFT", art, "TOPLEFT", left, 0)
-    art.border:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", 0, 0)
+    art.border:SetAllPoints(art)
+    art.icon:SetShown(style.icon)
+    if style.icon then
+        art.icon:ClearAllPoints()
+        art.icon:SetPoint("TOPLEFT", art.border, "TOPLEFT", px, -px)
+        art.icon:SetSize(inner, inner)
+        art.icon:SetTexture(e.texture)
+        left = inner + 2 * px
+    end
     art.fill:ClearAllPoints()
-    art.fill:SetPoint("TOPLEFT", art.border, "TOPLEFT", px, -px)
+    art.fill:SetPoint("TOPLEFT", art.border, "TOPLEFT", left, -px)
     art.fill:SetPoint("BOTTOMRIGHT", art.border, "BOTTOMRIGHT", -px, px)
     art.fill:SetColorTexture(color[1] * DIM, color[2] * DIM, color[3] * DIM, 1)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)
