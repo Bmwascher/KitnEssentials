@@ -32,6 +32,8 @@ Data.SPELLS = {
 
     [191427]  = { kind = "offensive", cd = 120, buffs = { 162264 }, short = 10 },
     [198589]  = { kind = "defensive", cd = 60, buffs = { 212800 } },
+    -- Vengeance's Metamorphosis; its cooldown and buff are from game data.
+    [187827]  = { kind = "defensive", cd = 120 },
 
     [194223]  = { kind = "offensive", cd = 180, buffs = { 194223, 102560, 390414 } },
     [106951]  = { kind = "offensive", cd = 180, buffs = { 106951, 102543 } },
@@ -123,6 +125,7 @@ Data.SPECS = {
     [251]  = { 51271, 48792, { 48707, 40 } },
     [252]  = { 42650, 48792, { 48707, 40 } },
     [577]  = { 191427, 198589 },
+    [581]  = { 187827 },
     [1480] = { 198589 },
     [102]  = { { 194223, 120 }, 22812 },
     [103]  = { { 106951, 90 }, 22812, 61336 },
