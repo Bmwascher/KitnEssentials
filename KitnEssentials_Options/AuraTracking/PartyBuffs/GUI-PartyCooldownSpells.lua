@@ -230,7 +230,7 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
     return card, card:GetNextOffset()
 end
 
--- ctx: { db, apply }. The caller registers the card under the Show Racials
+-- ctx: { db, apply }. The caller registers the card under the Racials
 -- condition. A member has one racial, so the rows have no order arrows.
 function Page.RacialsCard(scrollChild, yOffset, ctx)
     local db, apply = ctx.db, ctx.apply

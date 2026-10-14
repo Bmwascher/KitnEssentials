@@ -182,8 +182,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         { "Trinkets", "TrackTrinket", nil, RefreshStates },
         { "Externals", "TrackExternal" },
         { "Potions", "TrackPotion", "Shows a potion's icon while its buff is up. The list is on the Potions tab." },
-        { "Show Racials", "ShowRacials",
-            "A party member who is a Dwarf, Dark Iron Dwarf or Night Elf also shows their racial.", RefreshStates },
+        { "Racials", "ShowRacials",
+            "The racial of a party member who is a Dwarf, Dark Iron Dwarf or Night Elf.", RefreshStates },
     })
     local rowTSep = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightSeparator)
     rowTSep:AddWidget(GUIFrame:CreateSeparator(rowTSep), 1)
