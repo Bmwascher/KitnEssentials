@@ -104,17 +104,17 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Bar Display", yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    local grow = GUIFrame:CreateDropdown(rowD1, "Grow", {
+    AddSlider(rowD1, "Width", "PotionWidth", 80, 400)
+    AddSlider(rowD1, "Height", "PotionHeight", 10, 50)
+    cardDisplay:AddRow(rowD1, Theme.rowHeight)
+    local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
+    local grow = GUIFrame:CreateDropdown(rowD2, "Grow", {
         options = GROW_OPTIONS,
         value = db.PotionGrowth,
         callback = function(choice) db.PotionGrowth = choice; ApplySettings() end,
     })
-    rowD1:AddWidget(grow, 0.5)
+    rowD2:AddWidget(grow, 0.5)
     manager:Register(grow, "barsOn")
-    AddSlider(rowD1, "Width", "PotionWidth", 80, 400)
-    cardDisplay:AddRow(rowD1, Theme.rowHeight)
-    local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD2, "Height", "PotionHeight", 10, 50)
     AddSlider(rowD2, "Spacing", "PotionSpacing", 0, 20)
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
