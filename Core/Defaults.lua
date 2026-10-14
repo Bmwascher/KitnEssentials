@@ -1573,9 +1573,9 @@ local Defaults = {
             -- Glow While Active: a cooldown icon glows while its buff is up.
             GlowEnabled       = true,
             GlowType          = "ants",
-            GlowColor         = { 1, 0.76, 0.1, 1 },
+            GlowColor         = { 1, 0.380, 0.988, 1 }, -- #FF61FC
             GlowLines         = 8,
-            GlowFrequency     = 0.25,
+            GlowFrequency     = 0.5,
             GlowThickness     = 2,
             -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
             -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
