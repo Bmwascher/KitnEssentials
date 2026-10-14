@@ -185,7 +185,11 @@ function Bar.Dress(c, style, e)
         PlaceGate(c, f, style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.area)
-        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, bgAlpha)
+        -- Over a fill that spans the bar, the drained part takes its own color's
+        -- opacity, so a class-colored one stays solid instead of showing the fill.
+        local alpha = bgAlpha
+        if style.ready then alpha = bg[4] or 1 end
+        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, alpha)
         if not style.ready then
             f.art.fill:ClearAllPoints()
             f.art.fill:SetPoint("TOPLEFT", f.art.area, "TOPLEFT")

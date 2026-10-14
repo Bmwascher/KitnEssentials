@@ -148,7 +148,7 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     local rowC1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
     AddCheck(rowC1, "Class Color Bars", "PotionClassBars", "barsOn",
-        "Draws each bar in its player's class color, at the Background Color's opacity. Off: Bar Color and Background Color.",
+        "Draws each bar in its player's class color; the drained part takes the Background Color's opacity. Off: Bar Color and Background Color.",
         RefreshStates)
     AddCheck(rowC1, "Class Color Names", "PotionClassNames", "barsOn",
         "Writes each name in its player's class color instead of white.")
