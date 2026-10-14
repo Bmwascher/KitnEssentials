@@ -82,10 +82,21 @@ local function Measure(fontName, size, outline, spacing)
     end
 end
 
+-- Screen pixels per unit on the meter, read live: the UI scale can change
+-- during login after a measure, before the shared pixel size catches up.
+local function MeterScale()
+    local _, height = GetPhysicalScreenSize()
+    local scale = Meter():GetEffectiveScale()
+    if issecretvalue(scale) or type(scale) ~= "number" or scale <= 0 or type(height) ~= "number" or height <= 0 then
+        return 1
+    end
+    return scale * height / 768
+end
+
 -- Measures are in screen pixels, so a measure taken at another UI scale is
 -- not reused.
 local function FontKey(fontName, size, outline)
-    return tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline) .. "|" .. KE:GetPixelSize()
+    return tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline) .. "|" .. MeterScale()
 end
 
 -- The distance between two strip lines and the height of one, per font, and
@@ -124,10 +135,11 @@ function Cell.StripLayout(fontName, size, outline)
     local step, line = LineMetrics(fontName, size, outline)
     local margin = KE.PartyCooldownsRules.StripMargin(line)
     local spacing = 2 * margin
-    -- The client draws the strip's lines a whole pixel apart, while the measure
-    -- can come back a fraction off; the bar moving by the measure then climbs
-    -- against the drawn labels a little each second.
-    local pitch = KE:PixelSnap(Measure(fontName, size, outline, spacing) or step + spacing)
+    -- The client draws the strip's lines a whole screen pixel apart; a bar
+    -- stepping by a measure a fraction off that climbs against the drawn
+    -- labels a little each second.
+    local ppu = MeterScale()
+    local pitch = math_floor((Measure(fontName, size, outline, spacing) or step + spacing) * ppu + 0.5) / ppu
     layouts[key] = { pitch, line, margin, spacing }
     return pitch, line, margin, spacing
 end
