@@ -1053,6 +1053,9 @@ function PB:OnWorldEntry()
         if not (self:IsEnabled() and self.active) then return end
         Debug("world settle")
         self:QueueResolve()
+        -- The potion and healer externals boxes bind outside the party frame
+        -- resolve; their rows re-dress here once the login UI scale settles.
+        self:OnRelease()
     end)
 end
 
