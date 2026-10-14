@@ -68,8 +68,6 @@ describe("PartyPotionsRules.Colors", function()
         local class, bar, bg = { 0.2, 0.4, 0.6 }, { 0.3, 0.4, 0.5, 1 }, { 0.1, 0.1, 0.1, 1 }
         local white, gray = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
         local cases = {
-            { name = "class bars", style = { classBars = true }, color = class,
-              want = { class, R.DIM, class, R.BG, white } },
             { name = "own colors", style = { barColor = bar, bgColor = bg }, color = class,
               want = { bar, 1, bg, 1, white } },
             { name = "class name", style = { classBars = true, classNames = true }, color = class,

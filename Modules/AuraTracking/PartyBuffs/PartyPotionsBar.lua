@@ -4,7 +4,7 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- Each of the two timer slots has a face: the bar's art in a clip frame that
--- hangs from a gate bar's fill edge, a cover that drains the class fill, and a
+-- hangs from a gate bar's fill edge, a cover that drains the fill, and a
 -- strip of time labels. The slot's values may be secret: they reach only
 -- SetValue and SetAlpha, nothing here reads a bar back, and every fill texture
 -- an anchor uses is fetched in New.
