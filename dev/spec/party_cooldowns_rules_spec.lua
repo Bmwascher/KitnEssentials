@@ -497,7 +497,7 @@ describe("PartyCooldownsRules.LibKey", function()
 end)
 
 describe("PartyCooldownsRules racials", function()
-    it("gives a race's racial under its own key only while Show Racials and its row are on", function()
+    it("gives a race's racial under its own key only while Racials and its row are on", function()
         local R = loadRules()
         local on = { ShowRacials = true }
         local e = R.MemberRacial("Dwarf", on)
@@ -505,7 +505,7 @@ describe("PartyCooldownsRules racials", function()
         local typed = { ShowRacials = true, CooldownSeconds = { ["race:4"] = 90 } }
         assert.are.equal(90, R.MemberRacial("Dwarf", typed).cd, "typed seconds")
         local cases = {
-            { name = "Show Racials off", race = "Dwarf", db = { ShowRacials = false } },
+            { name = "Racials off", race = "Dwarf", db = { ShowRacials = false } },
             { name = "race with no racial", race = "Human", db = on },
             { name = "race not read", race = nil, db = on },
             { name = "row off", race = "Dwarf", db = { ShowRacials = true, CooldownOff = { ["race:4"] = true } } },
@@ -526,7 +526,7 @@ describe("PartyCooldownsRules.SpecWanted", function()
             { name = "racial of the race", args = { false, false, true, "Dwarf" }, want = true },
             { name = "race with no racial", args = { false, false, true, "Human" }, want = false },
             { name = "race not read", args = { false, false, true, nil }, want = false },
-            { name = "Show Racials off", args = { false, false, false, "Dwarf" }, want = false },
+            { name = "Racials off", args = { false, false, false, "Dwarf" }, want = false },
             { name = "the healer box alone", args = { false, false, false, nil, true }, want = true },
         }
         for _, case in ipairs(cases) do
