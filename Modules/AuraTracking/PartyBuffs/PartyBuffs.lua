@@ -69,8 +69,6 @@ local CLEAR = { 0, 0, 0, 0 }
 local BLACK = { 0, 0, 0, 1 }
 -- Reads pause this long once a key starts: its aura refresh is not a use.
 local KEY_HOLD = 2
--- One sample spec per stand-in row, and the cooling sample's seconds left.
-local PREVIEW_SPECS = { 66, 258, 62, 261 }
 -- Per row, the buff each list category's sample shows.
 local PREVIEW_BUFFS = {
     { trinket = 1297761, potion = 1236616, external = 102342 },
@@ -78,6 +76,8 @@ local PREVIEW_BUFFS = {
     { trinket = 1295885, potion = 1236998, external = 116849 },
     { trinket = 1250533, potion = 1295132, external = 47788 },
 }
+-- One sample spec per stand-in row, and the cooling sample's seconds left.
+local PREVIEW_SPECS = { 66, 258, 62, 261 }
 local PREVIEW_LEFT = 74
 local PREVIEW_CELLS = 3
 
@@ -1249,8 +1249,9 @@ end
 function PB:PreviewIcon(d, k)
     local list = self.db[d.category.listKey]
     local spellID = PREVIEW_BUFFS[(k - 1) % #PREVIEW_BUFFS + 1][d.category.key]
-    local row = list and spellID and list[spellID]
-    if not (type(row) == "table" and row.enabled ~= false) then spellID = KE.AuraRules.FirstIncludeSpellID(list) end
+    if not (list and spellID and KE.AuraRules.IsIncluded(spellID, list[spellID])) then
+        spellID = KE.AuraRules.FirstIncludeSpellID(list)
+    end
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 
