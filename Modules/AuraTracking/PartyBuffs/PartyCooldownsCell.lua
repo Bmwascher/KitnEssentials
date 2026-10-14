@@ -25,6 +25,7 @@ KE.PartyCooldownsCell = Cell
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local GRAY = 0.5
 local BLACK = { 0, 0, 0, 1 }
+local GLOW_OFF = { GlowEnabled = false }
 
 local meter
 local metrics = {}
@@ -147,6 +148,39 @@ function Cell.New(parent)
     return c
 end
 
+-- A summon's glow, made on first need: per slot a third bar whose edge carries
+-- a clipping window, so the glow shows only during the active seconds.
+local function GlowParts(c)
+    c.glowBar, c.glowWin, c.glowHost = {}, {}, {}
+    for k = 1, 2 do
+        local win = CreateFrame("Frame", nil, c)
+        win:SetClipsChildren(true)
+        win:SetAlpha(0)
+        local host = KE.AuraGlow.CreateHost(win, GLOW_OFF)
+        host:ClearAllPoints()
+        host:SetAllPoints(c)
+        c.glowBar[k], c.glowWin[k], c.glowHost[k] = NewBar(c), win, host
+    end
+end
+
+-- The glow runs only on a cell with an active phase and the setting on: a
+-- clipped animation still costs while hidden.
+local function DressGlow(c, glow, active, level)
+    local on = active > 0 and glow ~= nil and glow.GlowEnabled == true
+    if on and not c.glowWin then
+        GlowParts(c)
+        c.sig = nil
+    end
+    if not (on or c.glowOn) then return end
+    for k = 1, 2 do
+        c.glowWin[k]:SetFrameLevel(level + 3)
+        c.glowHost[k]:SetFrameLevel(level + 3)
+        KE.AuraGlow.Configure(c.glowHost[k], on and glow or GLOW_OFF)
+        if not on then c.glowWin[k]:SetAlpha(0) end
+    end
+    c.glowOn = on
+end
+
 -- Colors, icon and text are applied every time; the bars move only when the
 -- font, size or length changed.
 function Cell.Dress(c, style, e)
@@ -172,6 +206,7 @@ function Cell.Dress(c, style, e)
     local rules = KE.PartyCooldownsRules
     local cd = e.cd
     local active = rules.ActiveSeconds(e.active, cd)
+    DressGlow(c, style.glow, active, level)
     local sig = table_concat({ tostring(style.fontName), tostring(style.fontSize), tostring(style.outline),
         cd, active, size, px, step, line }, "|")
     if c.sig == sig then return end
@@ -212,6 +247,19 @@ function Cell.Dress(c, style, e)
         veil:SetPoint("TOP", edge, "TOP", 0, (cd - 1 - active) * jump + size + 1)
         veil:SetWidth(size)
     end
+    if not c.glowWin then return end
+    local glowJump, low, high, width = rules.GlowWindow(size, px, cd, active)
+    for k = 1, 2 do
+        local bar, win = c.glowBar[k], c.glowWin[k]
+        local glowEdge = bar:GetStatusBarTexture()
+        bar:ClearAllPoints()
+        bar:SetPoint("BOTTOM", c.clip, "BOTTOM", 0, bottom * glowJump)
+        bar:SetSize(1, height * glowJump)
+        win:ClearAllPoints()
+        win:SetPoint("BOTTOM", glowEdge, "TOP", 0, low)
+        win:SetPoint("TOP", glowEdge, "TOP", 0, high)
+        win:SetWidth(width)
+    end
 end
 
 -- The range is opened to 0..1 first, so the stamp is stored whole before the
@@ -224,6 +272,12 @@ function Cell.Write(c, k, sl, u, n)
     gate:SetValue(sl.c)
     c.text[k]:SetAlpha(sl.v)
     c.veil[k]:SetAlpha(sl.v)
+    if c.glowOn then
+        local bar = c.glowBar[k]
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(sl.c)
+        c.glowWin[k]:SetAlpha(sl.v)
+    end
     Cell.Range(c, k, sl, u, n)
 end
 
@@ -231,6 +285,7 @@ function Cell.Range(c, k, sl, u, n)
     local m = KE.PartyCooldownsRules.RangeMin(sl, u, n)
     c.pos[k]:SetMinMaxValues(m, m + 1)
     c.gate[k]:SetMinMaxValues(m, m + 1)
+    if c.glowOn then c.glowBar[k]:SetMinMaxValues(m, m + 1) end
 end
 
 function Cell.Clear(c)
@@ -238,5 +293,6 @@ function Cell.Clear(c)
     for k = 1, 2 do
         c.text[k]:SetAlpha(0)
         c.veil[k]:SetAlpha(0)
+        if c.glowWin then c.glowWin[k]:SetAlpha(0) end
     end
 end

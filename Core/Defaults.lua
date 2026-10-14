@@ -1571,6 +1571,13 @@ local Defaults = {
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             ShowCooldownText  = true,
             CooldownFontSize  = 12,
+            -- Glow While Active: a cooldown icon glows while its buff is up.
+            GlowEnabled       = true,
+            GlowType          = "ants",
+            GlowColor         = { 1, 0.76, 0.1, 1 },
+            GlowLines         = 8,
+            GlowFrequency     = 0.25,
+            GlowThickness     = 2,
             -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
             -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
             -- external "healer:<specID>:<castID>". CooldownOrder holds a cast

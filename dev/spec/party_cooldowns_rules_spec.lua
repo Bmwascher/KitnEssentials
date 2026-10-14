@@ -495,6 +495,31 @@ describe("PartyCooldownsRules.ActiveSeconds", function()
     end)
 end)
 
+describe("PartyCooldownsRules.GlowWindow", function()
+    -- The bar's fill edge sits (t - cd + 1) steps above the inner area's
+    -- bottom at elapsed second t, as the gate bar's does. The glow reaches 0.8
+    -- sizes either side of the icon's center (the 1.6-size style).
+    it("covers the whole glow during the active seconds and none of it after", function()
+        local R = loadRules()
+        local cases = {
+            { size = 16, px = 1, cd = 120, active = 20 },
+            { size = 36, px = 0.71, cd = 180, active = 30 },
+            { size = 72, px = 1, cd = 90, active = 30 },
+            { size = 36, px = 1, cd = 31, active = 30 },
+        }
+        for _, c in ipairs(cases) do
+            local step, low, high = R.GlowWindow(c.size, c.px, c.cd, c.active)
+            local center = c.size / 2 - c.px
+            local bottom, top = center - 0.8 * c.size, center + 0.8 * c.size
+            local function edge(t) return (t - c.cd + 1) * step end
+            local name = c.size .. "/" .. c.active
+            assert.is_true(edge(0) + high >= top, name .. " first second")
+            assert.is_true(edge(c.active - 1) + low <= bottom, name .. " last active second")
+            assert.is_true(edge(c.active) + low >= top, name .. " first second after")
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.StripLift", function()
     it("raises a strip a whole sixth of its line height, never less than one", function()
         local R = loadRules()

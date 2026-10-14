@@ -397,6 +397,18 @@ function Rules.StripLift(line)
     return math_max(1, math_floor(line / 6 + 0.5))
 end
 
+-- A summon's glow window, in pixels from the bottom of the icon's inner area:
+-- the step its bar moves each second, the window's bottom and top above that
+-- bar's fill edge, and its width. A step is more than the glow's whole reach
+-- (the widest style draws 0.3 sizes past each edge), so the window covers the
+-- glow for the first active seconds and lies above it from then on.
+function Rules.GlowWindow(size, px, cd, active)
+    local over = math_ceil(size * 0.3)
+    local step = size + 2 * over + 2
+    local lead = size - px + over + (cd - 1 - active) * step
+    return step, lead, lead + active * step + 1, step
+end
+
 -- Whole seconds of a summon's active phase, at least one second short of cd so
 -- the gray cover still has a second to show; 0 when there is none.
 function Rules.ActiveSeconds(active, cd)

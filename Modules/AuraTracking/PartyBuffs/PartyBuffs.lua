@@ -1101,6 +1101,13 @@ function PB:BuildStyleSettings()
     settings.TimerFontSize    = db.TimerFontSize
     settings.FontOutline      = db.FontOutline
     settings.DecimalThreshold = db.DecimalThreshold
+    -- Read only by the cooldown icons: the party buff icons have no glow host.
+    settings.GlowEnabled      = db.GlowEnabled == true
+    settings.GlowType         = db.GlowType
+    settings.GlowColor        = db.GlowColor
+    settings.GlowLines        = db.GlowLines
+    settings.GlowFrequency    = db.GlowFrequency
+    settings.GlowThickness    = db.GlowThickness
     local colored = db.CategoryColors == true
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
@@ -1116,6 +1123,7 @@ function PB:BuildStyleSettings()
     cell.fontSize = db.CooldownFontSize
     cell.outline  = db.FontOutline
     cell.showText = db.ShowCooldownText == true
+    cell.glow     = settings
     cell.colors.offensive = colored and db.ColorBurst or BLACK
     cell.colors.defensive = colored and db.ColorBigDefensive or BLACK
     cell.colors.trinket   = colored and db.ColorTrinket or BLACK

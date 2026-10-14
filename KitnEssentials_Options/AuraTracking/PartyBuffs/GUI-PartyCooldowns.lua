@@ -249,6 +249,47 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card: Glow While Active
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+        title = "Glow While Active",
+        db = db,
+        types = {
+            { key = "pixel",    text = "Pixel" },
+            { key = "ants",     text = "Ants" },
+            { key = "procloop", text = "Proc Loop" },
+            { key = "alert",    text = "Alert" },
+        },
+        resolveType = KE.AuraGlowRules.ResolveType,
+        -- The glow is animation-driven and honors neither Length nor Border,
+        -- so their row sits under a key no resolved type equals.
+        typeRows = function(rows)
+            return {
+                pixel       = rows.pixel,
+                unsupported = rows.pixelExtras,
+                autocast    = rows.autocast,
+                proc        = rows.proc,
+                border      = rows.border,
+            }
+        end,
+        showSpeed = function() return true end,
+        speedAdapter = {
+            read = function(readDb, readKeys)
+                return KE.AuraGlowRules.NormalizeFrequency(
+                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
+            end,
+            write   = KE.AuraGlowRules.WriteSpeed,
+            setType = KE.AuraGlowRules.SetType,
+            min     = 0.05,
+            max     = 2,
+        },
+        onChangeCallback = ApplySettings,
+        onHeightChange = RebuildPage,
+    })
+    manager:Register(glowCard, "cellsOn")
+    yOffset = glowOffset
+
+    ----------------------------------------------------------------
     -- Card: Font Settings (the timer, the cooldown text and the stack
     -- count share the font and outline)
     ----------------------------------------------------------------

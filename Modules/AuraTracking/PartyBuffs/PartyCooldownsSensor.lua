@@ -743,16 +743,16 @@ end
 
 ---------------------------------------------------------------------------------
 -- Active state: an engine aura slot per cell, laid over it. While the buff is
--- up it shows KE's swipe and timer; when the buff falls the engine hides it
--- and the cooling cell underneath shows.
+-- up it shows KE's timer and glow; when the buff falls the engine hides it,
+-- the glow with it, and the cooling cell underneath shows.
 ---------------------------------------------------------------------------------
 local OVERLAY_DESCRIPTORS = {
-    offensive = { key = "cdOffensive",
-        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingOffensive" } },
-    defensive = { key = "cdDefensive",
-        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingDefensive" } },
-    trinket   = { key = "cdTrinket",
-        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingTrinket" } },
+    offensive = { key = "cdOffensive", capabilities = { hasBorder = true, hasDispelRing = true,
+        hasGlow = true, ringColorKey = "CellRingOffensive" } },
+    defensive = { key = "cdDefensive", capabilities = { hasBorder = true, hasDispelRing = true,
+        hasGlow = true, ringColorKey = "CellRingDefensive" } },
+    trinket   = { key = "cdTrinket", capabilities = { hasBorder = true, hasDispelRing = true,
+        hasGlow = true, ringColorKey = "CellRingTrinket" } },
 }
 Track.OVERLAY_DESCRIPTORS = OVERLAY_DESCRIPTORS
 
