@@ -14,7 +14,9 @@
 local KE = select(2, ...)
 
 local CreateFrame = CreateFrame
+local GetPhysicalScreenSize = GetPhysicalScreenSize
 local UIParent = UIParent
+local issecretvalue = issecretvalue
 local math_floor = math.floor
 local table_concat = table.concat
 local tostring = tostring
@@ -255,6 +257,7 @@ function Cell.Dress(c, style, e)
     c.win:SetSize(size + 6, pitch)
     -- The label's line box sits centered in the window, whatever the measure.
     local center = math_floor((pitch - line) / 2 + 0.5)
+    c.seat, c.seatBase = nil, pitch / 2 - center
     for k = 1, 2 do
         local pos, gate, strip, veil, edge = c.pos[k], c.gate[k], c.strip[k], c.veil[k], c.edge[k]
         local act = c.act[k]
@@ -321,6 +324,17 @@ function Cell.Range(c, k, sl, u, n)
     c.pos[k]:SetMinMaxValues(m, m + 1)
     c.gate[k]:SetMinMaxValues(m, m + 1)
     if c.glowOn then c.glowBar[k]:SetMinMaxValues(m, m + 1) end
+end
+
+-- Run after a write and each second's re-range, so a placement or scale change
+-- is caught; while the seat holds it only reads. Reads the cell, never a bar.
+function Cell.Seat(c)
+    local _, y = c:GetCenter()
+    local _, height = GetPhysicalScreenSize()
+    local seat = KE.PartyCooldownsRules.Seat(y, c.seatBase, c:GetEffectiveScale(), height, c.seat, issecretvalue)
+    if not seat then return end
+    c.win:SetPoint("CENTER", c, "CENTER", 0, seat)
+    c.seat = seat
 end
 
 function Cell.Clear(c)

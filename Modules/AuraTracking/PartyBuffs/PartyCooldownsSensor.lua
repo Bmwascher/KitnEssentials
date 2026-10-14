@@ -45,7 +45,8 @@ local HIDDEN_RETRY = 1
 -- 4 dispatches a second so a new second is seen within 0.25 s. Three of them
 -- cost one GetTime and one compare; the fourth walks the live trackers, with
 -- 2 SetMinMaxValues per running slot (64 a second at 16 cells), 3 on a summon
--- cell whose glow is on.
+-- cell whose glow is on, plus a seat check per running gray cell (3 reads, an
+-- anchor write only when the seat moved).
 local TICK = 0.25
 
 -- Whole seconds from an origin far enough back that no epoch goes negative.
@@ -72,6 +73,7 @@ local function Push(t, n)
     if not c then return end
     local view = t.view or Cell
     for k = 1, 2 do pcall(view.Write, c, k, t.slot[k], t.u, n) end
+    if view.Seat then pcall(view.Seat, c) end
 end
 Track.Push = Push
 
@@ -90,10 +92,12 @@ local function Tick()
         if changed then Push(t, n) end
         if running then
             any = true
+            local view = t.view or Cell
             for k = 1, 2 do
                 local sl = t.slot[k]
-                if issecretvalue(sl.v) or sl.v ~= 0 then pcall((t.view or Cell).Range, t.cell, k, sl, t.u, n) end
+                if issecretvalue(sl.v) or sl.v ~= 0 then pcall(view.Range, t.cell, k, sl, t.u, n) end
             end
+            if view.Seat and t.cell then pcall(view.Seat, t.cell) end
         end
     end
     if not any and ticker then
