@@ -44,9 +44,11 @@ end
 -- The face shows while its slot has time left: the clip hangs from the gate's
 -- fill edge, which moves one row height and 2 more each second, so the clip is
 -- off the row one second after zero. A narrow range cannot gate it: the
--- client draws one empty with the value above it.
--- The gate hangs from the visibility bar's edge, which a hidden slot lifts by
--- more than the gate's whole travel, so a hidden face is off the row by
+-- client draws one empty with the value above it. The gate spans two of the
+-- pos bar's ranges at twice its height, so its edge sits where a one-range
+-- gate's would but stays inside the range for the slot's whole life.
+-- The gate hangs from the visibility bar's edge, which a hidden slot lifts
+-- until the gate's bottom is above the row, so a hidden face is off the row by
 -- position too, and the Ready clip below the gate's edge covers the row
 -- exactly when no face does. Values 0 and 1 sit inside the bar's range, never
 -- on its ends.
@@ -59,7 +61,7 @@ local function PlaceGate(c, f, ready, style, bottom, height)
     f.vis:SetSize(1, 3 * lift)
     f.gate:ClearAllPoints()
     f.gate:SetPoint("BOTTOMLEFT", f.visFill, "BOTTOMLEFT", 0, bottom * jump)
-    f.gate:SetSize(1, height * jump)
+    f.gate:SetSize(1, 2 * height * jump)
     f.clip:ClearAllPoints()
     f.clip:SetPoint("BOTTOMLEFT", f.gateFill, "TOPLEFT", 0, -1)
     f.clip:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, (cd - 1) * jump + h + 1)
@@ -244,7 +246,7 @@ local function FaceRange(c, k, sl, u, n)
     local m = CDRules.RangeMin(sl, u, n)
     f.pos:SetMinMaxValues(m, m + 1)
     f.cover:SetMinMaxValues(Rules.CoverRange(sl, u, c.cd, n))
-    f.gate:SetMinMaxValues(m, m + 1)
+    f.gate:SetMinMaxValues(m, m + 2)
 end
 
 -- Each range is opened to 0..1 first, so the stamp is stored whole before it
