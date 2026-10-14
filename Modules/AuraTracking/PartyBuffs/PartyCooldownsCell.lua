@@ -82,10 +82,16 @@ local function Measure(fontName, size, outline, spacing)
     end
 end
 
+-- Measures are in screen pixels, so a measure taken at another UI scale is
+-- not reused.
+local function FontKey(fontName, size, outline)
+    return tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline) .. "|" .. KE:GetPixelSize()
+end
+
 -- The distance between two strip lines and the height of one, per font, and
 -- cached.
 local function LineMetrics(fontName, size, outline)
-    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline)
+    local key = FontKey(fontName, size, outline)
     local known = metrics[key]
     if known then return known[1], known[2] end
     local step, line = Measure(fontName, size, outline, 0)
@@ -96,7 +102,7 @@ end
 
 -- The width of text in a font, measured on the meter and cached.
 function Cell.TextWidth(fontName, size, outline, text)
-    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline) .. "|" .. text
+    local key = FontKey(fontName, size, outline) .. "|" .. text
     local known = widths[key]
     if known then return known end
     local m = Meter()
@@ -112,13 +118,16 @@ end
 -- blank above and below: the line pitch, the line height, the margin and the
 -- spacing to set on the strip. The pitch is measured with that spacing.
 function Cell.StripLayout(fontName, size, outline)
-    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline)
+    local key = FontKey(fontName, size, outline)
     local known = layouts[key]
     if known then return known[1], known[2], known[3], known[4] end
     local step, line = LineMetrics(fontName, size, outline)
     local margin = KE.PartyCooldownsRules.StripMargin(line)
     local spacing = 2 * margin
-    local pitch = Measure(fontName, size, outline, spacing) or step + spacing
+    -- The client draws the strip's lines a whole pixel apart, while the measure
+    -- can come back a fraction off; the bar moving by the measure then climbs
+    -- against the drawn labels a little each second.
+    local pitch = KE:PixelSnap(Measure(fontName, size, outline, spacing) or step + spacing)
     layouts[key] = { pitch, line, margin, spacing }
     return pitch, line, margin, spacing
 end
