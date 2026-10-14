@@ -146,9 +146,12 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         title = "Position",
         db = db,
         positionKey = "HealerExtPosition",
-        dbKeys = { anchorFrameType = "HealerExtAnchorFrameType", anchorFrameFrame = "HealerExtParentFrame" },
-        defaults = { anchorFrameType = "UIPARENT" },
-        showStrata = false,
+        dbKeys = {
+            anchorFrameType = "HealerExtAnchorFrameType", anchorFrameFrame = "HealerExtParentFrame",
+            strata = "HealerExtStrata",
+        },
+        defaults = { anchorFrameType = "UIPARENT", strata = "MEDIUM" },
+        showStrata = true,
         onChangeCallback = ApplySettings,
     })
     -- The card's own SetEnabled drives its widgets.

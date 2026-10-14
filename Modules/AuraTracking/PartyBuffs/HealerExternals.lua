@@ -49,7 +49,7 @@ HX.VIEW = {
 -- Reads wait out a roster change, longer than the module's 0.5 s settle.
 local ROSTER_HOLD = 1
 local BLACK = { 0, 0, 0, 1 }
-local SCREEN = { anchorFrameType = "UIPARENT", Strata = "MEDIUM" }
+local SCREEN = { anchorFrameType = "UIPARENT" }
 local EDIT_MODE_KEY = "HealerExternals"
 -- Per grow direction: the box corner the first icon sits in, and the step.
 local GROW = {
@@ -61,7 +61,7 @@ local GROW = {
 -- Preview icons: left is a sample's seconds to go; one without is ready.
 local SAMPLES = { { id = 33206, left = 122 }, { id = 102342 } }
 
-local placement = { Strata = "MEDIUM" }
+local placement = {}
 
 local function Debug(fmt, ...)
     if DEBUG_HX then KE:Print("Healer Externals: " .. string_format(fmt, ...)) end
@@ -103,6 +103,7 @@ end
 -- edge. The third return says the starting place is in use.
 local function Placement(db)
     local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
+    SCREEN.Strata, placement.Strata = db.HealerExtStrata, db.HealerExtStrata
     if kind == "SELECTFRAME" then
         if type(name) ~= "string" then return HX.DEFAULT_POSITION, SCREEN, true end
         local frame = _G[name]

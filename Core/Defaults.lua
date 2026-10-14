@@ -1608,6 +1608,7 @@ local Defaults = {
             HealerExtTextSize = 12,
             HealerExtPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 },
             HealerExtAnchorFrameType = "UIPARENT",
+            HealerExtStrata   = "MEDIUM",
             -- ListExternals is a row copy of the External Tracker list, made
             -- below this table.
             ListPotions = {
