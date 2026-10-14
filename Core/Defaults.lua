@@ -1534,7 +1534,7 @@ local Defaults = {
 
         PartyBuffs = {
             Enabled           = false,
-            TrackExternal     = true,
+            TrackExternal     = false,
             TrackBurst        = true,
             TrackPotion       = true,
             TrackTrinket      = true,

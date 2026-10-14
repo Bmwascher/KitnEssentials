@@ -70,7 +70,14 @@ local BLACK = { 0, 0, 0, 1 }
 -- Reads pause this long once a key starts: its aura refresh is not a use.
 local KEY_HOLD = 2
 -- One sample spec per stand-in row, and the cooling sample's seconds left.
-local PREVIEW_SPECS = { 72, 258, 63, 261 }
+local PREVIEW_SPECS = { 66, 258, 62, 261 }
+-- Per row, the buff each list category's sample shows.
+local PREVIEW_BUFFS = {
+    { trinket = 1297761, potion = 1236616, external = 102342 },
+    { trinket = 1293316, potion = 1236994, external = 6940 },
+    { trinket = 1295885, potion = 1236998, external = 116849 },
+    { trinket = 1250533, potion = 1295132, external = 47788 },
+}
 local PREVIEW_LEFT = 74
 local PREVIEW_CELLS = 3
 
@@ -1237,8 +1244,13 @@ local function RearmPreview(cooldown)
     if cooldown.keDuration then cooldown:SetCooldown(GetTime(), cooldown.keDuration) end
 end
 
-function PB:PreviewIcon(d)
-    local spellID = KE.AuraRules.FirstIncludeSpellID(self.db[d.category.listKey])
+-- The row's own sample while its list has it switched on, else the list's
+-- first switched-on spell.
+function PB:PreviewIcon(d, k)
+    local list = self.db[d.category.listKey]
+    local spellID = PREVIEW_BUFFS[(k - 1) % #PREVIEW_BUFFS + 1][d.category.key]
+    local row = list and spellID and list[spellID]
+    if not (type(row) == "table" and row.enabled ~= false) then spellID = KE.AuraRules.FirstIncludeSpellID(list) end
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 
@@ -1247,7 +1259,7 @@ local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
 -- the center of a box sized for five rows, which fill it from the top.
 local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
 local STAND_IN_ROWS = {
-    { token = "WARRIOR", percent = 100 },
+    { token = "PALADIN", percent = 100 },
     { token = "PRIEST",  percent = 85 },
     { token = "MAGE",    percent = 60 },
     { token = "ROGUE",   percent = 35 },
@@ -1449,7 +1461,7 @@ function PB:DrawPreviewRow(k, frame)
             end
             icon:ClearAllPoints()
             icon:SetPoint(side.corner, holder, side.corner, dir * (offset + shown * step), 0)
-            icon.keIcon:SetTexture(self:PreviewIcon(d))
+            icon.keIcon:SetTexture(self:PreviewIcon(d, k))
             self:RunPreviewTimer(icon, i, now)
             icon:Show()
             shown = shown + 1
