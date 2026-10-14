@@ -73,13 +73,14 @@ describe("PartyPotionsRules.Colors", function()
 end)
 
 describe("PartyPotionsRules.Window", function()
-    it("keeps the window on whole pixels, its offset rounded down, never taller than the line", function()
+    it("keeps the window on whole pixels, its offset rounded down, never taller than the line, with the gap above it", function()
         local R = L.loadPartyPotionsRules()
         local cases = {
-            { name = "odd gap", area = 19, line = 14, want = { 14, 2 } },
-            { name = "even gap", area = 18, line = 14, want = { 14, 2 } },
-            { name = "line a hair under a pixel", area = 19, line = 13.9999998, want = { 14, 2 } },
-            { name = "fractional line", area = 19, line = 13.6, want = { 13, 3 } },
+            { name = "odd gap", area = 19, line = 14, want = { 14, 2, 3 } },
+            { name = "even gap", area = 18, line = 14, want = { 14, 2, 2 } },
+            { name = "line a hair under a pixel", area = 19, line = 13.9999998, want = { 14, 2, 3 } },
+            { name = "fractional line", area = 19, line = 13.6, want = { 13, 3, 3 } },
+            { name = "line taller than the area", area = 8, line = 13, want = { 13, -3, -2 } },
         }
         for _, case in ipairs(cases) do
             assert.are.same(case.want, { R.Window(case.area, case.line) }, case.name)

@@ -155,8 +155,10 @@ end
 
 -- Frame, icon, fill and name. The icon sits inside the frame at the left end,
 -- right against the area the fill drains across. reserve keeps the name clear
--- of the text on the right.
-local function Paint(art, style, e, fill, scale, nameColor, px, reserve)
+-- of the text on the right. The name hangs top pixels below the area's top,
+-- level with the timer window: centered in an odd-height area it starts on a
+-- half pixel, and under the sliding clip it then jumps a pixel every second.
+local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
     local inner = style.height - 2 * px
     PlaceEdges(art, px)
     art.icon:ClearAllPoints()
@@ -174,8 +176,8 @@ local function Paint(art, style, e, fill, scale, nameColor, px, reserve)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)
     art.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3], 1)
     art.name:ClearAllPoints()
-    art.name:SetPoint("LEFT", art.area, "LEFT", TEXT_PAD, 0)
-    art.name:SetPoint("RIGHT", art.area, "RIGHT", -(TEXT_PAD + reserve), 0)
+    art.name:SetPoint("TOPLEFT", art.area, "TOPLEFT", TEXT_PAD, -top * px)
+    art.name:SetPoint("TOPRIGHT", art.area, "TOPRIGHT", -(TEXT_PAD + reserve), -top * px)
     art.name:SetText(e.name)
 end
 
@@ -192,20 +194,20 @@ function Bar.Dress(c, style, e)
     local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
     local step, line = Cell.LineMetrics(font, size, outline)
-    local winPx, raise = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px)
-    Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"))
+    local winPx, raise, top = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px)
+    Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"), top)
     KE:ApplyFontToText(c.readyText, font, size, outline)
     c.readyText:SetText("Ready")
     c.readyText:SetTextColor(1, 1, 1, 1)
     c.readyText:ClearAllPoints()
-    c.readyText:SetPoint("RIGHT", c.ready.area, "RIGHT", -TEXT_PAD, 0)
+    c.readyText:SetPoint("TOPRIGHT", c.ready.area, "TOPRIGHT", -TEXT_PAD, -top * px)
     local level = c:GetFrameLevel()
     for k = 1, 2 do c.readyClip[k]:SetFrameLevel(level + 1) end
     c.ready:SetFrameLevel(level + 1)
     c.ready.top:SetFrameLevel(level + 2)
     for k = 1, 2 do
         local f = c.face[k]
-        Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0)
+        Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0, top)
         PlaceGate(c, f, c.readyClip[k], style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.area)

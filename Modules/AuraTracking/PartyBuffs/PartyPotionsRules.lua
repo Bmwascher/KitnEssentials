@@ -76,14 +76,15 @@ function Rules.Colors(style, color)
     return fill, fillScale, bg, bgScale, style.classNames and color or WHITE, bgAlpha
 end
 
--- The timer window in whole pixels: its height, never above the line, and how
--- far it sits above the bottom of the area, rounded down, so an odd difference
--- puts it half a pixel low. A measured line a hair under a whole pixel counts
--- as that pixel.
+-- The timer window in whole pixels: its height, never above the line, how far
+-- it sits above the bottom of the area, rounded down, so an odd difference
+-- puts it half a pixel low, and how far its top sits below the area's top. A
+-- measured line a hair under a whole pixel counts as that pixel.
 function Rules.Window(areaPx, linePx)
     local win = math_floor(linePx + 0.01)
     local area = math_floor(areaPx + 0.5)
-    return win, math_floor((area - win) / 2)
+    local raise = math_floor((area - win) / 2)
+    return win, raise, area - win - raise
 end
 
 -- The offset from one bar to the next. At no spacing the bars overlap by a
