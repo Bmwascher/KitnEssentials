@@ -340,7 +340,7 @@ end
 
 -- Plain sample bars stacked in the box, counting down and starting again.
 -- The preview is redrawn on every roster, resolve and settings change, so a
--- sample keeps its count unless its ready state changed.
+-- sample keeps its count unless it changed between counting and cleared.
 local function DrawSamples()
     Pot.sampleLayer = Pot.sampleLayer or NewLayer()
     local s = Pot.style
