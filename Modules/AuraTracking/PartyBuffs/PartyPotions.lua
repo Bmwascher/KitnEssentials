@@ -279,8 +279,8 @@ local function ClearCounts()
     end
 end
 
--- A committed potion list change clears every bar, even one whose buffs and
--- length did not change.
+-- A committed potion list change clears every bar, even one whose buffs did
+-- not change.
 function Pot.ClearAll()
     ClearCounts()
 end

@@ -1,7 +1,7 @@
 -- Tier 1: Party Potions' pure rules
 -- (Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua): the bars' entry, the
 -- watched units, the roster keep and the cover range on the party cooldowns
--- stamp. Limits are read from the rules' constants.
+-- stamp.
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
