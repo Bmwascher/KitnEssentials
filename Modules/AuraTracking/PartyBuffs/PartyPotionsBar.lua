@@ -163,6 +163,10 @@ local function PlaceName(art, y)
     art.name:SetPoint("TOPRIGHT", art.area, "TOPRIGHT", art.nameRight, y)
 end
 
+local function PlaceReadyText(c, y)
+    c.readyText:SetPoint("TOPRIGHT", c.ready.area, "TOPRIGHT", -TEXT_PAD, y)
+end
+
 -- Frame, icon, fill and name. The icon sits inside the frame at the left end,
 -- right against the area the fill drains across. reserve keeps the name clear
 -- of the text on the right. The name hangs top pixels below the area's top,
@@ -211,7 +215,7 @@ function Bar.Dress(c, style, e)
     c.readyText:SetText("Ready")
     c.readyText:SetTextColor(1, 1, 1, 1)
     c.readyText:ClearAllPoints()
-    c.readyText:SetPoint("TOPRIGHT", c.ready.area, "TOPRIGHT", -TEXT_PAD, -top * px)
+    PlaceReadyText(c, -top * px)
     local level = c:GetFrameLevel()
     for k = 1, 2 do c.readyClip[k]:SetFrameLevel(level + 1) end
     c.ready:SetFrameLevel(level + 1)
@@ -259,15 +263,19 @@ end
 -- above the pixel grid. On the grid itself a text under the sliding clip
 -- rounds up or down from second to second and jumps a pixel. Each is re-placed
 -- only when the bar has moved off its seat.
-local function Seat(c, f)
+function Bar.Seat(c)
+    if not c.nameLift then return end
     local y = c:GetBottom()
     local scale = c:GetEffectiveScale()
     local _, height = GetPhysicalScreenSize()
-    if f.timer then
-        local seat = CDRules.Seat(y, -f.winLift, scale, height, f.seat, issecretvalue)
-        if seat then
-            f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, f.winY + seat)
-            f.seat = seat
+    for k = 1, 2 do
+        local f = c.face[k]
+        if f.timer then
+            local seat = CDRules.Seat(y, -f.winLift, scale, height, f.seat, issecretvalue)
+            if seat then
+                f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, f.winY + seat)
+                f.seat = seat
+            end
         end
     end
     local seat = CDRules.Seat(y, -c.nameLift, scale, height, c.nameSeat, issecretvalue)
@@ -275,7 +283,7 @@ local function Seat(c, f)
     local nameY = c.nameY + seat
     for k = 1, 2 do PlaceName(c.face[k].art, nameY) end
     PlaceName(c.ready, nameY)
-    c.readyText:SetPoint("TOPRIGHT", c.ready.area, "TOPRIGHT", -TEXT_PAD, nameY)
+    PlaceReadyText(c, nameY)
     c.nameSeat = seat
 end
 
@@ -285,7 +293,6 @@ local function FaceRange(c, k, sl, u, n)
     f.pos:SetMinMaxValues(m, m + 1)
     f.cover:SetMinMaxValues(Rules.CoverRange(sl, u, c.cd, n))
     f.gate:SetMinMaxValues(m, m + 2)
-    if f.winY then Seat(c, f) end
 end
 
 -- Each range is opened to 0..1 first, so the stamp is stored whole before it

@@ -377,6 +377,8 @@ local function DrawSamples()
             Track.Push(t, n)
             Track.Watch(t)
             sample.t, sample.cleared = t, cleared
+        else
+            Bar.Seat(bar)
         end
         bar:Show()
     end
