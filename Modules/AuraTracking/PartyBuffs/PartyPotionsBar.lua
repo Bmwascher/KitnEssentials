@@ -6,14 +6,20 @@
 -- Each of the two timer slots has a face: the bar's art in a clip frame that
 -- hangs from a gate bar's fill edge, a cover that drains the fill, and a
 -- strip of time labels. The slot's values may be secret: they reach only
--- SetValue and SetAlpha, nothing here reads a bar back, and every fill texture
--- an anchor uses is fetched in New.
+-- SetValue and SetAlpha, no gate, cover or fill is read back, and every fill
+-- texture an anchor uses is fetched in New. The one read is the bar's own
+-- position, which hangs from plain anchors, to seat the time window.
 
 ---@class KE
 local KE = select(2, ...)
 
 local CreateFrame = CreateFrame
+local GetPhysicalScreenSize = GetPhysicalScreenSize
+local issecretvalue = issecretvalue
+local math_abs = math.abs
+local math_floor = math.floor
 local math_min = math.min
+local type = type
 local table_concat = table.concat
 local tostring = tostring
 
@@ -218,6 +224,7 @@ function Bar.Dress(c, style, e)
         f.win:ClearAllPoints()
         f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, raise * px)
         f.win:SetSize(timerWidth, winPx * px)
+        f.winY, f.winLift, f.seat = raise * px, (raise + 1) * px, nil
         f.win:SetShown(style.timer)
         f.clip:SetFrameLevel(level + 3)
         f.art:SetFrameLevel(level + 4)
@@ -243,12 +250,44 @@ function Bar.Dress(c, style, e)
     end
 end
 
+local function PerUnit(c)
+    local es = c:GetEffectiveScale()
+    local _, ph = GetPhysicalScreenSize()
+    if type(es) ~= "number" or issecretvalue(es) or es <= 0 or type(ph) ~= "number" or ph <= 0 then return nil end
+    return es * ph / 768
+end
+
+-- The time window's bottom sits a quarter of a screen pixel above the pixel
+-- grid. On the grid itself the window's edge rounds up or down from second to
+-- second as the strip moves, and the time jumps a pixel. Re-placed only when
+-- the bar has moved off the seat.
+local function Seat(c, f)
+    local ppu = PerUnit(c)
+    if not ppu then return end
+    local y = c:GetBottom()
+    local seat = 0.25 / ppu
+    if type(y) == "number" and not issecretvalue(y) then
+        local base = (y + f.winLift) * ppu
+        if f.seat then
+            local at = base + f.seat * ppu
+            if math_abs(at - math_floor(at) - 0.25) < 0.1 then return end
+        end
+        local frac = base - math_floor(base)
+        seat = ((frac < 0.75 and 0.25 or 1.25) - frac) / ppu
+    elseif f.seat then
+        return
+    end
+    f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, f.winY + seat)
+    f.seat = seat
+end
+
 local function FaceRange(c, k, sl, u, n)
     local f = c.face[k]
     local m = CDRules.RangeMin(sl, u, n)
     f.pos:SetMinMaxValues(m, m + 1)
     f.cover:SetMinMaxValues(Rules.CoverRange(sl, u, c.cd, n))
     f.gate:SetMinMaxValues(m, m + 2)
+    if f.winY and f.win:IsShown() then Seat(c, f) end
 end
 
 -- Each range is opened to 0..1 first, so the stamp is stored whole before it
