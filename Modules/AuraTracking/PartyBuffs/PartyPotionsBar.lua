@@ -8,9 +8,9 @@
 -- strip of time labels. The slot's values may be secret: they reach only
 -- SetValue and SetAlpha, no gate, cover or fill is read back, and every fill
 -- texture an anchor uses is fetched in New. The one read is the bar's own
--- position and scale, to seat the time window and the names; the position is
--- secret only when the box hangs from a frame with secret anchoring, and then
--- the last seat stays.
+-- position and scale, to seat the time window and the names; either is secret
+-- only when the box hangs from a frame with secret anchoring or scale, and
+-- then the last seat stays.
 
 ---@class KE
 local KE = select(2, ...)
@@ -158,16 +158,16 @@ local function PlaceEdges(art, px)
     edges[4]:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT")
 end
 
--- Frame, icon, fill and name. The icon sits inside the frame at the left end,
--- right against the area the fill drains across. reserve keeps the name clear
--- of the text on the right. The name hangs top pixels below the area's top,
--- level with the timer window: centered in an odd-height area it starts on a
--- half pixel, and under the sliding clip it then jumps a pixel every second.
 local function PlaceName(art, y)
     art.name:SetPoint("TOPLEFT", art.area, "TOPLEFT", TEXT_PAD, y)
     art.name:SetPoint("TOPRIGHT", art.area, "TOPRIGHT", art.nameRight, y)
 end
 
+-- Frame, icon, fill and name. The icon sits inside the frame at the left end,
+-- right against the area the fill drains across. reserve keeps the name clear
+-- of the text on the right. The name hangs top pixels below the area's top,
+-- level with the timer window: centered in an odd-height area it starts on a
+-- half pixel, and under the sliding clip it then jumps a pixel every second.
 local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
     local inner = style.height - 2 * px
     PlaceEdges(art, px)
