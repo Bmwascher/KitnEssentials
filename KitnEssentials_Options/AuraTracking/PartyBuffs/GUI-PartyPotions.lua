@@ -110,8 +110,6 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     if next(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)) == nil then
         cardBars:AddNote("No potion on the list is switched on, so no bar can start.")
     end
-    cardBars:AddLabel("Move the bars with /kes edit or the Position card below.")
-    cardBars:AddLabel("Healing potions are not shown: they leave no buff to see, and they have their own cooldown.")
     local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
     AddCheck(rowB1, "Include Yourself", "PotionIncludeSelf", "barsOn", "Shows a bar for your own potions too.")
     AddCheck(rowB1, "Show Ready Bars", "PotionShowReady", "barsOn",
