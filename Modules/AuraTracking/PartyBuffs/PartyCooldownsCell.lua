@@ -93,8 +93,8 @@ local function MeterScale()
     return scale * height / 768
 end
 
--- Measures are in screen pixels, so a measure taken at another UI scale is
--- not reused.
+-- The client draws text in whole screen pixels, so a measure holds only for
+-- the UI scale it was taken at.
 local function FontKey(fontName, size, outline)
     return tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline) .. "|" .. MeterScale()
 end
@@ -135,9 +135,9 @@ function Cell.StripLayout(fontName, size, outline)
     local step, line = LineMetrics(fontName, size, outline)
     local margin = KE.PartyCooldownsRules.StripMargin(line)
     local spacing = 2 * margin
-    -- The client draws the strip's lines a whole screen pixel apart; a bar
-    -- stepping by a measure a fraction off that climbs against the drawn
-    -- labels a little each second.
+    -- The client draws the strip's lines a whole number of screen pixels
+    -- apart; a bar stepping by a measure a fraction off that climbs against
+    -- the drawn labels a little each second.
     local ppu = MeterScale()
     local pitch = math_floor((Measure(fontName, size, outline, spacing) or step + spacing) * ppu + 0.5) / ppu
     layouts[key] = { pitch, line, margin, spacing }
