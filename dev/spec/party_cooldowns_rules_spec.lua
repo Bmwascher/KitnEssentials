@@ -499,7 +499,7 @@ describe("PartyCooldownsRules.StripLift", function()
     it("raises a strip a whole sixth of its line height, never less than one", function()
         local R = loadRules()
         local cases = {
-            { name = "small font floors at one", line = 4, want = 1 },
+            { name = "small font floors at one", line = 2, want = 1 },
             { name = "rounds to nearest", line = 9, want = 2 },
             { name = "tested font", line = 12, want = 2 },
             { name = "large font", line = 24, want = 4 },
