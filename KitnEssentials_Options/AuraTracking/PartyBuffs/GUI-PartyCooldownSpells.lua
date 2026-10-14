@@ -283,7 +283,7 @@ function Page.ExternalsCard(scrollChild, yOffset, ctx)
     db.CooldownSeconds = db.CooldownSeconds or {}
     local HXRules = KE.HealerExternalsRules
     local card = GUIFrame:CreateCard(scrollChild, "Externals", yOffset)
-    card:AddLabel("The time counts from the moment the buff appears, for the seconds set here, not the healer's real cooldown.")
+    card:AddLabel("The time counts from the moment the buff appears, for the Spell CD set here, which can differ from the healer's real cooldown.")
     local manager = GUIFrame:CreateWidgetStateManager()
     local specs = {}
     for specID in pairs(KE.PartyCooldownsData.HEALER_SPECS) do specs[#specs + 1] = specID end
