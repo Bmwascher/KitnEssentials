@@ -40,6 +40,10 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket" },
 }
 
+-- The Tracked and Where It Shows picks: three compact boxes a row.
+local PICK_HEIGHT = 24
+local PICK_SPACING = 2
+
 local HEALER_KEY = {}
 for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
 
@@ -101,8 +105,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         return db.CategoryColors == true and KE.PartyCooldownsSensor ~= nil
     end)
 
-    local function AddCheck(row, label, key, tooltip, onChange, width)
-        local check = GUIFrame:CreateCheckbox(row, label, {
+    local function CheckConfig(key, tooltip, onChange)
+        return {
             value = db[key] == true,
             callback = function(checked)
                 db[key] = checked
@@ -110,9 +114,27 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
                 if onChange then onChange() end
             end,
             tooltip = tooltip,
-        })
+        }
+    end
+
+    local function AddCheck(row, label, key, tooltip, onChange, width)
+        local check = GUIFrame:CreateCheckbox(row, label, CheckConfig(key, tooltip, onChange))
         row:AddWidget(check, width or 0.5)
         return check
+    end
+
+    -- picks: { label, key, tooltip, onChange } each; isLast ends the card.
+    local function AddPicks(card, picks, isLast)
+        for i = 1, #picks, 3 do
+            local row = GUIFrame:CreateRow(card.content, PICK_HEIGHT)
+            for j = i, math.min(i + 2, #picks) do
+                local pick = picks[j]
+                row:AddWidget(GUIFrame:CreateCompactCheckbox(row, pick[1],
+                    CheckConfig(pick[2], pick[3], pick[4])), 1 / 3)
+            end
+            local lastRow = isLast and i + 3 > #picks
+            card:AddRow(row, PICK_HEIGHT, lastRow and 0 or PICK_SPACING)
+        end
     end
 
     -- value, when given, is shown in place of db[key].
@@ -154,19 +176,20 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     -- Card: Tracked
     ----------------------------------------------------------------
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked", yOffset)
-    local rowT1 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT1, "Class Cooldowns", "TrackBurst",
-        "Each party member's offensive and personal defensive cooldowns, by spec.", RefreshStates)
-    AddCheck(rowT1, "Trinkets", "TrackTrinket", nil, RefreshStates)
-    cardTracked:AddRow(rowT1, Theme.rowHeight)
-    local rowT2 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT2, "Externals", "TrackExternal")
-    AddCheck(rowT2, "Potions", "TrackPotion", "Shows a potion's icon while its buff is up. The list is on the Potions tab.")
-    cardTracked:AddRow(rowT2, Theme.rowHeight)
+    AddPicks(cardTracked, {
+        { "Class Cooldowns", "TrackBurst",
+            "Each party member's offensive and personal defensive cooldowns, by spec.", RefreshStates },
+        { "Trinkets", "TrackTrinket", nil, RefreshStates },
+        { "Externals", "TrackExternal" },
+        { "Potions", "TrackPotion", "Shows a potion's icon while its buff is up. The list is on the Potions tab." },
+        { "Show Racials", "ShowRacials",
+            "A party member who is a Dwarf, Dark Iron Dwarf or Night Elf also shows their racial.", RefreshStates },
+    })
+    local rowTSep = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightSeparator)
+    rowTSep:AddWidget(GUIFrame:CreateSeparator(rowTSep), 1)
+    cardTracked:AddRow(rowTSep, Theme.rowHeightSeparator)
     local rowT3 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
     AddCheck(rowT3, "Include Yourself", "IncludeSelf", "Adds the same row to your own party frame.")
-    AddCheck(rowT3, "Show Racials", "ShowRacials",
-        "A party member who is a Dwarf, Dark Iron Dwarf or Night Elf also shows their racial.", RefreshStates)
     cardTracked:AddRow(rowT3, Theme.rowHeightLast, 0)
     yOffset = cardTracked:GetNextOffset()
 
@@ -175,17 +198,13 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardPlaces = GUIFrame:CreateCard(scrollChild, "Where It Shows", yOffset)
     cardPlaces:AddLabel("Not shown in raids, battlegrounds or other raid groups.")
-    local rowP1 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
-    AddCheck(rowP1, "Mythic+", "ShowInKeys")
-    AddCheck(rowP1, "All Other Dungeon Types", "ShowInDungeons")
-    cardPlaces:AddRow(rowP1, Theme.rowHeight)
-    local rowP2 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
-    AddCheck(rowP2, "Delves", "ShowInDelves")
-    AddCheck(rowP2, "Open World", "ShowInWorld")
-    cardPlaces:AddRow(rowP2, Theme.rowHeight)
-    local rowP3 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeightLast)
-    AddCheck(rowP3, "Arenas", "ShowInArenas")
-    cardPlaces:AddRow(rowP3, Theme.rowHeightLast, 0)
+    AddPicks(cardPlaces, {
+        { "Mythic+", "ShowInKeys" },
+        { "All Other Dungeon Types", "ShowInDungeons" },
+        { "Delves", "ShowInDelves" },
+        { "Open World", "ShowInWorld" },
+        { "Arenas", "ShowInArenas" },
+    }, true)
     yOffset = cardPlaces:GetNextOffset()
 
     ----------------------------------------------------------------
