@@ -1,7 +1,7 @@
 -- Tier 1: Party Potions' pure rules
 -- (Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua): the bars' entry, the
--- watched units, the roster keep, the bar colors and the cover range on the
--- party cooldowns stamp.
+-- watched units, the roster keep, the bar colors, the timer window, the gap
+-- between bars and the cover range on the party cooldowns stamp.
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
@@ -73,7 +73,7 @@ describe("PartyPotionsRules.Colors", function()
 end)
 
 describe("PartyPotionsRules.Window", function()
-    it("keeps the window on whole pixels, the odd pixel on top, never taller than the line", function()
+    it("keeps the window on whole pixels, its offset rounded down, never taller than the line", function()
         local R = L.loadPartyPotionsRules()
         local cases = {
             { name = "odd gap", area = 19, line = 14, want = { 14, 2 } },
