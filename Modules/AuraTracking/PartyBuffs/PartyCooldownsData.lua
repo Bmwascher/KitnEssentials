@@ -19,7 +19,9 @@ KE.PartyCooldownsData = Data
 -- and specs limits it to those specs. needs is a talent the row requires: it
 -- shows while the talent is taken, and before talents are read only if likely.
 -- lengthNeeds is a talent a spec's paired seconds need: a member read without
--- it counts the cast's own cd.
+-- it counts the cast's own cd. active is set on a summon seen only through a
+-- stand-in buff: its cell takes no aura button, and shows the summon's own icon
+-- with a timer for active seconds from the cast, then the cooldown.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },
@@ -78,7 +80,7 @@ Data.SPELLS = {
     [114051]  = { kind = "offensive", cd = 180, short = 10 },
     [108271]  = { kind = "defensive", cd = 120 },
     -- Seen only through Primordial Bond, so a read without it hides the row.
-    [198103]  = { kind = "defensive", cd = 180, buffs = { 381755 },
+    [198103]  = { kind = "defensive", cd = 180, buffs = { 381755 }, active = 30,
                   needs = { talents = { [1279819] = true }, likely = true } },
 
     [265187]  = { kind = "offensive", cd = 60, buffs = { 1276767 } },

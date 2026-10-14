@@ -480,6 +480,21 @@ describe("PartyCooldownsRules.StartLoop", function()
     end)
 end)
 
+describe("PartyCooldownsRules.ActiveSeconds", function()
+    it("keeps a summon's active seconds whole and at least one second short of its cooldown", function()
+        local R = loadRules()
+        local cases = {
+            { name = "no active phase", args = { nil, 180 }, want = 0 },
+            { name = "fits", args = { 30, 180 }, want = 30 },
+            { name = "fraction dropped", args = { 30.7, 180 }, want = 30 },
+            { name = "cooldown typed shorter", args = { 30, 20 }, want = 19 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.ActiveSeconds(case.args[1], case.args[2]), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.LibKey", function()
     it("keys a member of another realm by name-realm only, never by the bare name", function()
         local R = loadRules()

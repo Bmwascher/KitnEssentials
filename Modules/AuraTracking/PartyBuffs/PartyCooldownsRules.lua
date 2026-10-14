@@ -46,7 +46,7 @@ end
 local function Entry(castID, spell, key, listed, typed, isOff)
     return {
         id = castID, key = key, spell = spell, kind = spell.kind,
-        buffs = spell.buffs, short = spell.short,
+        buffs = spell.buffs, short = spell.short, active = spell.active,
         listed = listed,
         cd = Rules.ClampSeconds(typed) or Rules.ClampSeconds(listed),
         typed = Rules.ClampSeconds(typed) ~= nil,
@@ -387,6 +387,13 @@ end
 -- seconds left.
 function Rules.StripBar(cd, u)
     return -(cd - 1 + u), 255 * u
+end
+
+-- Whole seconds of a summon's active phase, at least one second short of cd so
+-- the gray cover still has a second to show; 0 when there is none.
+function Rules.ActiveSeconds(active, cd)
+    if type(active) ~= "number" or type(cd) ~= "number" then return 0 end
+    return math_max(0, math_min(math_floor(active), cd - 1))
 end
 
 -- Item data loads asked for per item in a session; a load that keeps failing

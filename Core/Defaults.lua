@@ -1557,7 +1557,7 @@ local Defaults = {
             -- No defaults for the Healer* placement keys: turning this on
             -- copies the placement above, so nothing moves until edited.
             UseHealerPlacement = false,
-            Swipe             = true,
+            Swipe             = false,
             CategoryColors    = false,
             ColorExternal     = { 0.949, 0.757, 0.306, 1 },
             ColorBigDefensive = { 0.310, 0.639, 1, 1 },

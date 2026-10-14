@@ -31,14 +31,19 @@ local metrics = {}
 local widths = {}
 local strips = {}
 
--- One label per line from cd down to 1, top to bottom.
-local function StripText(cd)
-    local text = strips[cd]
+-- One label per line from cd down to 1, top to bottom. The first blank lines
+-- are spaces, which keep the line pitch an empty line might not.
+local function StripText(cd, blank)
+    blank = blank or 0
+    local key = cd .. "|" .. blank
+    local text = strips[key]
     if text then return text end
     local lines = {}
-    for r = cd, 1, -1 do lines[#lines + 1] = KE:FormatCountdown(r) end
+    for r = cd, 1, -1 do
+        lines[#lines + 1] = r > cd - blank and " " or KE:FormatCountdown(r)
+    end
     text = table_concat(lines, "\n")
-    strips[cd] = text
+    strips[key] = text
     return text
 end
 
@@ -116,6 +121,7 @@ function Cell.New(parent)
     c.win = CreateFrame("Frame", nil, c)
     c.win:SetClipsChildren(true)
     c.pos, c.gate, c.edge, c.text, c.strip, c.veil, c.gray = {}, {}, {}, {}, {}, {}, {}
+    c.act = {}
     for k = 1, 2 do
         local pos, gate = NewBar(c), NewBar(c)
         local text = CreateFrame("Frame", nil, c.win)
@@ -124,6 +130,9 @@ function Cell.New(parent)
         local strip = text:CreateFontString(nil, "OVERLAY")
         strip:SetJustifyH("CENTER")
         strip:SetPoint("BOTTOM", pos:GetStatusBarTexture(), "TOP", 0, 0)
+        local act = text:CreateFontString(nil, "OVERLAY")
+        act:SetJustifyH("CENTER")
+        c.act[k] = act
         local veil = CreateFrame("Frame", nil, c.clip)
         veil:SetClipsChildren(true)
         veil:SetAlpha(0)
@@ -160,12 +169,13 @@ function Cell.Dress(c, style, e)
         c.text[k]:SetShown(style.showText == true)
     end
     local step, line = LineMetrics(style.fontName, style.fontSize, style.outline)
-    local sig = table_concat({ tostring(style.fontName), tostring(style.fontSize), tostring(style.outline),
-        e.cd, size, px, step, line }, "|")
-    if c.sig == sig then return end
-    c.sig = sig
     local rules = KE.PartyCooldownsRules
     local cd = e.cd
+    local active = rules.ActiveSeconds(e.active, cd)
+    local sig = table_concat({ tostring(style.fontName), tostring(style.fontSize), tostring(style.outline),
+        cd, active, size, px, step, line }, "|")
+    if c.sig == sig then return end
+    c.sig = sig
     local bottom, height = rules.StripBar(cd, rules.Unit(cd))
     -- One step of the gray cover is more than the icon's height, so the
     -- cover is fully off the icon one second after zero.
@@ -178,18 +188,27 @@ function Cell.Dress(c, style, e)
     c.win:SetSize(size + 6, math_min(line, step))
     for k = 1, 2 do
         local pos, gate, strip, veil, edge = c.pos[k], c.gate[k], c.strip[k], c.veil[k], c.edge[k]
+        local act = c.act[k]
         pos:ClearAllPoints()
         pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * step)
         pos:SetSize(1, height * step)
         KE:ApplyFontToText(strip, style.fontName, style.fontSize, style.outline)
         strip:SetTextColor(1, 1, 1, 1)
-        strip:SetText(StripText(cd))
+        strip:SetText(StripText(cd, active))
+        -- The active labels sit where the cooldown strip's blank lines are, so
+        -- the window shows them for the first active seconds.
+        KE:ApplyFontToText(act, style.fontName, style.fontSize, style.outline)
+        act:SetTextColor(1, 1, 1, 1)
+        act:ClearAllPoints()
+        act:SetPoint("BOTTOM", pos:GetStatusBarTexture(), "TOP", 0, (cd - active) * step)
+        act:SetText(active > 0 and StripText(active) or "")
         gate:ClearAllPoints()
         gate:SetPoint("BOTTOM", c.clip, "BOTTOM", 0, bottom * jump)
         gate:SetSize(1, height * jump)
         veil:ClearAllPoints()
         veil:SetPoint("BOTTOM", edge, "TOP", 0, -1)
-        veil:SetPoint("TOP", edge, "TOP", 0, (cd - 1) * jump + size + 1)
+        -- Lowered by the active seconds, so the cover starts once they end.
+        veil:SetPoint("TOP", edge, "TOP", 0, (cd - 1 - active) * jump + size + 1)
         veil:SetWidth(size)
     end
 end

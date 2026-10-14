@@ -929,7 +929,9 @@ function Track.ApplyOverlay(st, entries, unit, settings)
             -- gray when the buff appears instead of when it falls.
             if not spent then st.ready[i] = false end
         else
-            if not Point(st, i, st.ready[i] and e.buffs or nil) then clean = false end
+            -- A summon's stand-in buff never shows its own button.
+            local buffs = st.ready[i] and not e.active and e.buffs or nil
+            if not Point(st, i, buffs) then clean = false end
             if kinds[i] ~= e.kind then restyle = true end
         end
     end
