@@ -40,7 +40,6 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket" },
 }
 
--- The Tracked and Where It Shows picks: compact boxes in a grid.
 local PICK_COLUMNS = 3
 local PICK_HEIGHT = 24
 local PICK_SPACING = 2
