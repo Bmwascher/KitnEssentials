@@ -1295,11 +1295,11 @@ function PB:EnsurePreviewCells()
         fill:SetColorTexture(8 / 255, 12 / 255, 16 / 255, 1)
         local names = _G.LOCALIZED_CLASS_NAMES_MALE
         local name = cell:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFontToText(name, nil, 12, "OUTLINE")
+        KE:ApplyFontToText(name, nil, 14, "OUTLINE")
         name:SetPoint("TOPLEFT", cell, "TOPLEFT", 4, -4)
         name:SetText(KE:ColorTextByClass((names and names[sample.token]) or sample.token, sample.token))
         local health = cell:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFontToText(health, nil, 12, "OUTLINE")
+        KE:ApplyFontToText(health, nil, 14, "OUTLINE")
         health:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -4, -4)
         health:SetText(sample.percent .. "%")
         cells[i] = cell
