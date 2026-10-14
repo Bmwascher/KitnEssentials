@@ -74,8 +74,9 @@ function Rules.Colors(style, color)
 end
 
 -- The timer window in whole pixels: its height, never above the line, and how
--- far it sits above the bottom of the area, the odd pixel going on top. A
--- measured line a hair under a whole pixel counts as that pixel.
+-- far it sits above the bottom of the area, rounded down, so an odd difference
+-- puts it half a pixel low. A measured line a hair under a whole pixel counts
+-- as that pixel.
 function Rules.Window(areaPx, linePx)
     local win = math_floor(linePx + 0.01)
     local area = math_floor(areaPx + 0.5)
