@@ -79,7 +79,6 @@ end
 local function MakeBox()
     if HX.box then return end
     HX.box = CreateFrame("Frame", "KitnEssentialsHealerExternals", UIParent)
-    HX.box:SetFrameStrata("MEDIUM")
     HX.box:Hide()
     HX.live = NewLayer(HX.box)
 end

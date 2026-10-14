@@ -97,7 +97,6 @@ end
 local function MakeBox()
     if Pot.box then return end
     Pot.box = CreateFrame("Frame", "KitnEssentialsPartyPotions", UIParent)
-    Pot.box:SetFrameStrata("MEDIUM")
     Pot.box:Hide()
 end
 
