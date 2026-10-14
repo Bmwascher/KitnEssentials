@@ -155,6 +155,7 @@ local function Layout(cells, count, parent)
         local c = cells[i]
         c:ClearAllPoints()
         c:SetPoint(g.corner, parent, g.corner, g.dx * (i - 1) * step, g.dy * (i - 1) * step)
+        pcall(Cell.Seat, c)
     end
 end
 

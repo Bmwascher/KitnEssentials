@@ -97,7 +97,7 @@ local function Tick()
                 local sl = t.slot[k]
                 if issecretvalue(sl.v) or sl.v ~= 0 then pcall(view.Range, t.cell, k, sl, t.u, n) end
             end
-            if view.Seat and t.cell then pcall(view.Seat, t.cell) end
+            if view.Seat and t.cell and not changed then pcall(view.Seat, t.cell) end
         end
     end
     if not any and ticker then

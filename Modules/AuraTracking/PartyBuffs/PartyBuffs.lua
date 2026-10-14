@@ -968,6 +968,7 @@ function PB:LayoutCells(slot, count)
         local c = cells[i]
         c:ClearAllPoints()
         c:SetPoint(side.corner, slot.holder, side.corner, dir * (i - 1) * step, 0)
+        pcall(Cell.Seat, c)
     end
     if slot.cellCount ~= count then
         slot.cellCount = count

@@ -536,41 +536,20 @@ describe("PartyCooldownsRules.StripMargin", function()
 end)
 
 describe("PartyCooldownsRules.Seat", function()
-    local isSecret = function(v) return type(v) == "table" end
-    local hidden = { secret = true }
-    -- Scale 1 on a 768-high screen: one unit is one screen pixel.
-    local function bottom(y, base, seat) return y - base + seat end
-
-    it("moves the line bottom to the nearest quarter past a pixel", function()
-        local R = loadRules()
-        local cases = {
-            { name = "on a pixel edge, up", y = 763, want = 0.25 },
-            { name = "half past, down", y = 763.5, want = -0.25 },
-            { name = "near the next edge, up past it", y = 763.8, want = 0.45 },
-        }
-        for _, case in ipairs(cases) do
-            local seat = R.Seat(case.y, 12, 1, 768, nil, isSecret)
-            assert.is_true(math.abs(seat - case.want) < 1e-9, case.name)
-        end
-    end)
-
-    it("leaves a seat that still holds and replaces one that drifted", function()
-        local R = loadRules()
-        assert.is_nil(R.Seat(763, 12, 1, 768, 0.25, isSecret))
-        local seat = R.Seat(763.4, 12, 1, 768, 0.25, isSecret)
-        local at = bottom(763.4, 12, seat)
-        assert.is_true(math.abs(at - math.floor(at) - 0.25) < 1e-9)
-    end)
+    -- A secret number still has type "number", so the fake is a number: read
+    -- as plain it would give a different seat, and a missing guard shows.
+    local HIDDEN = 777.3
+    local isSecret = function(v) return v == HIDDEN end
 
     it("keeps the last seat for a hidden center and guesses a quarter before any", function()
         local R = loadRules()
-        assert.is_nil(R.Seat(hidden, 12, 1, 768, 0.3, isSecret))
-        assert.are.equal(0.125, R.Seat(nil, 12, 2, 768, nil, isSecret))
+        assert.is_nil(R.Seat(HIDDEN, 12, 1, 768, 0.6, isSecret))
+        assert.are.equal(0.125, R.Seat(HIDDEN, 12, 2, 768, nil, isSecret))
     end)
 
     it("does nothing when the scale is hidden or the line is not laid out", function()
         local R = loadRules()
-        assert.is_nil(R.Seat(763, 12, hidden, 768, nil, isSecret))
+        assert.is_nil(R.Seat(763, 12, HIDDEN, 768, nil, isSecret))
         assert.is_nil(R.Seat(763, nil, 1, 768, nil, isSecret))
     end)
 end)

@@ -326,8 +326,9 @@ function Cell.Range(c, k, sl, u, n)
     if c.glowOn then c.glowBar[k]:SetMinMaxValues(m, m + 1) end
 end
 
--- Run after a write and each second's re-range, so a placement or scale change
--- is caught; while the seat holds it only reads. Reads the cell, never a bar.
+-- Run after a placement, a write and each second's re-range, so a moved cell
+-- or a scale change is caught; while the seat holds it only reads. Reads the
+-- cell, never a bar.
 function Cell.Seat(c)
     local _, y = c:GetCenter()
     local _, height = GetPhysicalScreenSize()
