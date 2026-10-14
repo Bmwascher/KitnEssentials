@@ -164,7 +164,7 @@ end
 local function Restyle(db)
     local s = Pot.style
     s.width, s.height, s.spacing = db.PotionWidth, db.PotionHeight, db.PotionSpacing
-    s.icon, s.timer = db.PotionShowIcon == true, db.PotionShowTimer == true
+    s.timer = db.PotionShowTimer == true
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
     s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
@@ -226,7 +226,7 @@ local function Bind(row)
     local name, color = Who(row.token)
     local e = {
         id = entry.id, kind = entry.kind, buffs = entry.buffs, cd = entry.cd,
-        texture = entry.texture, name = name, color = color,
+        texture = Pot.icon, name = name, color = color,
     }
     Debug("bind %s", row.token)
     Track.Apply(row.st, row.token, { e }, Pot.style)
@@ -342,9 +342,9 @@ end
 -- sample keeps its count unless its ready state changed.
 local function DrawSamples()
     Pot.sampleLayer = Pot.sampleLayer or NewLayer()
-    local s, entry = Pot.style, Pot.entry
+    local s = Pot.style
     local cd = Rules.SECONDS
-    local texture = entry and entry.texture or Rules.FALLBACK_ICON
+    local texture = Pot.icon
     local showReady = Pot.pb.db.PotionShowReady == true
     local corner = Corners()
     local step = (s.height + s.spacing) * (s.up and 1 or -1)
@@ -432,7 +432,8 @@ function Pot.ApplySettings()
     if not (db.PotionBars == true and Track) then return TurnOff() end
     Pot.on = true
     MakeBox()
-    Pot.entry = Rules.Entry(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions), Texture)
+    Pot.entry = Rules.Entry(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions))
+    Pot.icon = Texture(Rules.ICON_SPELL) or Rules.FALLBACK_ICON
     if Pot.active then
         MakeRows()
         Pot.sensorHost:Show()

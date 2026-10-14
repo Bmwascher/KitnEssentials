@@ -5,20 +5,11 @@
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
-    it("takes the switched-on potions in ID order and the first icon that answers", function()
+    it("takes the switched-on potions in ID order, and nothing when none is on", function()
         local R = L.loadPartyPotionsRules()
-        local icons = { [400] = 44 }
-        local function textureOf(id) return icons[id] end
-        local cases = {
-            { name = "ID order, first answering icon", listed = { [500] = true, [300] = true, [400] = true },
-              want = { { 300, 400, 500 }, 44 } },
-            { name = "no icon", listed = { [300] = true }, want = { { 300 }, R.FALLBACK_ICON } },
-        }
-        for _, case in ipairs(cases) do
-            local e = R.Entry(case.listed, textureOf)
-            assert.are.same(case.want, { e.buffs, e.texture }, case.name)
-        end
-        assert.is_nil(R.Entry({}, textureOf), "nothing switched on")
+        local e = R.Entry({ [500] = true, [300] = true, [400] = true, [200] = false })
+        assert.are.same({ 300, 400, 500 }, e.buffs)
+        assert.is_nil(R.Entry({ [200] = false }), "nothing switched on")
     end)
 end)
 

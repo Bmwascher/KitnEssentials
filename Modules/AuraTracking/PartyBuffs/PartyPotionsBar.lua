@@ -112,19 +112,14 @@ end
 -- the text on the right.
 local function Paint(art, style, e, fill, scale, nameColor, px, reserve)
     local inner = style.height - 2 * px
-    local left = px
     art.border:ClearAllPoints()
     art.border:SetAllPoints(art)
-    art.icon:SetShown(style.icon)
-    if style.icon then
-        art.icon:ClearAllPoints()
-        art.icon:SetPoint("TOPLEFT", art.border, "TOPLEFT", px, -px)
-        art.icon:SetSize(inner, inner)
-        art.icon:SetTexture(e.texture)
-        left = inner + 2 * px
-    end
+    art.icon:ClearAllPoints()
+    art.icon:SetPoint("TOPLEFT", art.border, "TOPLEFT", px, -px)
+    art.icon:SetSize(inner, inner)
+    art.icon:SetTexture(e.texture)
     art.fill:ClearAllPoints()
-    art.fill:SetPoint("TOPLEFT", art.border, "TOPLEFT", left, -px)
+    art.fill:SetPoint("TOPLEFT", art.border, "TOPLEFT", inner + 2 * px, -px)
     art.fill:SetPoint("BOTTOMRIGHT", art.border, "BOTTOMRIGHT", -px, px)
     art.fill:SetColorTexture(fill[1] * scale, fill[2] * scale, fill[3] * scale, fill[4] or 1)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)

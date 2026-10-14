@@ -1588,7 +1588,6 @@ local Defaults = {
             PotionWidth       = 170,
             PotionHeight      = 20,
             PotionSpacing     = 2,
-            PotionShowIcon    = true,
             PotionShowTimer   = true,
             PotionTextSize    = 12,
             PotionClassBars   = true,

@@ -17,6 +17,9 @@ KE.PartyPotionsRules = Rules
 
 Rules.TOKENS = { "party1", "party2", "party3", "party4" }
 Rules.FALLBACK_ICON = "Interface\\Icons\\Trade_Alchemy"
+-- Every bar shows Light's Potential: the sensor sees that a listed potion was
+-- drunk, never which one.
+Rules.ICON_SPELL = 1236616
 -- Combat potions share one 5-minute cooldown.
 Rules.SECONDS = 300
 -- A class-colored bar draws its fill and its drained part darker than the
@@ -27,26 +30,16 @@ Rules.BG = 0.15
 local GRAY = { 0.5, 0.5, 0.5 }
 local WHITE = { 1, 1, 1 }
 
--- The bars' one entry: the switched-on potions in spell ID order and the icon
--- of the first of them that has one. listed is a set of spell IDs. nil when
--- none is switched on.
-function Rules.Entry(listed, textureOf)
+-- The bars' one entry: the switched-on potions in spell ID order. listed is a
+-- set of spell IDs. nil when none is switched on.
+function Rules.Entry(listed)
     local buffs = {}
     for id, on in pairs(listed or {}) do
         if on and type(id) == "number" then buffs[#buffs + 1] = id end
     end
     if #buffs == 0 then return nil end
     table_sort(buffs)
-    local texture
-    for _, id in ipairs(buffs) do
-        texture = textureOf(id)
-        if texture then break end
-    end
-    return {
-        id = "potion", kind = "potion", buffs = buffs,
-        cd = Rules.SECONDS,
-        texture = texture or Rules.FALLBACK_ICON,
-    }
+    return { id = "potion", kind = "potion", buffs = buffs, cd = Rules.SECONDS }
 end
 
 -- The units to watch, in box order. Solo there are none, so nothing shows out
