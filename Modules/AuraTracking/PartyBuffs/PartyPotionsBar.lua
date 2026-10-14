@@ -8,8 +8,9 @@
 -- strip of time labels. The slot's values may be secret: they reach only
 -- SetValue and SetAlpha, no gate, cover or fill is read back, and every fill
 -- texture an anchor uses is fetched in New. The one read is the bar's own
--- position, to seat the time window; it is secret only when the box hangs
--- from a frame with secret anchoring, and then the last seat stays.
+-- position and scale, to seat the time window and the names; the position is
+-- secret only when the box hangs from a frame with secret anchoring, and then
+-- the last seat stays.
 
 ---@class KE
 local KE = select(2, ...)
@@ -17,10 +18,7 @@ local KE = select(2, ...)
 local CreateFrame = CreateFrame
 local GetPhysicalScreenSize = GetPhysicalScreenSize
 local issecretvalue = issecretvalue
-local math_abs = math.abs
-local math_floor = math.floor
 local math_min = math.min
-local type = type
 local table_concat = table.concat
 local tostring = tostring
 
@@ -165,6 +163,11 @@ end
 -- of the text on the right. The name hangs top pixels below the area's top,
 -- level with the timer window: centered in an odd-height area it starts on a
 -- half pixel, and under the sliding clip it then jumps a pixel every second.
+local function PlaceName(art, y)
+    art.name:SetPoint("TOPLEFT", art.area, "TOPLEFT", TEXT_PAD, y)
+    art.name:SetPoint("TOPRIGHT", art.area, "TOPRIGHT", art.nameRight, y)
+end
+
 local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
     local inner = style.height - 2 * px
     PlaceEdges(art, px)
@@ -182,9 +185,9 @@ local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
     art.fill:SetColorTexture(fill[1] * scale, fill[2] * scale, fill[3] * scale, fill[4] or 1)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)
     art.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3], 1)
+    art.nameRight = -(TEXT_PAD + reserve)
     art.name:ClearAllPoints()
-    art.name:SetPoint("TOPLEFT", art.area, "TOPLEFT", TEXT_PAD, -top * px)
-    art.name:SetPoint("TOPRIGHT", art.area, "TOPRIGHT", -(TEXT_PAD + reserve), -top * px)
+    PlaceName(art, -top * px)
     art.name:SetText(e.name)
 end
 
@@ -202,6 +205,7 @@ function Bar.Dress(c, style, e)
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
     local step, line = Cell.LineMetrics(font, size, outline)
     local winPx, raise, top = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px)
+    c.nameY, c.nameLift, c.nameSeat = -top * px, style.height - (top + 1) * px, nil
     Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"), top)
     KE:ApplyFontToText(c.readyText, font, size, outline)
     c.readyText:SetText("Ready")
@@ -251,35 +255,28 @@ function Bar.Dress(c, style, e)
     end
 end
 
-local function PerUnit(c)
-    local es = c:GetEffectiveScale()
-    local _, ph = GetPhysicalScreenSize()
-    if type(es) ~= "number" or issecretvalue(es) or es <= 0 or type(ph) ~= "number" or ph <= 0 then return nil end
-    return es * ph / 768
-end
-
--- The time window's bottom sits a quarter of a screen pixel above the pixel
--- grid. On the grid itself the window's edge rounds up or down from second to
--- second as the strip moves, and the time jumps a pixel. Re-placed only when
--- the bar has moved off the seat.
+-- The time window's bottom and the names' tops sit a quarter of a screen pixel
+-- above the pixel grid. On the grid itself a text under the sliding clip
+-- rounds up or down from second to second and jumps a pixel. Each is re-placed
+-- only when the bar has moved off its seat.
 local function Seat(c, f)
-    local ppu = PerUnit(c)
-    if not ppu then return end
     local y = c:GetBottom()
-    local seat = 0.25 / ppu
-    if type(y) == "number" and not issecretvalue(y) then
-        local base = (y + f.winLift) * ppu
-        if f.seat then
-            local at = base + f.seat * ppu
-            if math_abs(at - math_floor(at) - 0.25) < 0.1 then return end
+    local scale = c:GetEffectiveScale()
+    local _, height = GetPhysicalScreenSize()
+    if f.timer then
+        local seat = CDRules.Seat(y, -f.winLift, scale, height, f.seat, issecretvalue)
+        if seat then
+            f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, f.winY + seat)
+            f.seat = seat
         end
-        local frac = base - math_floor(base)
-        seat = ((frac < 0.75 and 0.25 or 1.25) - frac) / ppu
-    elseif f.seat then
-        return
     end
-    f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, f.winY + seat)
-    f.seat = seat
+    local seat = CDRules.Seat(y, -c.nameLift, scale, height, c.nameSeat, issecretvalue)
+    if not seat then return end
+    local nameY = c.nameY + seat
+    for k = 1, 2 do PlaceName(c.face[k].art, nameY) end
+    PlaceName(c.ready, nameY)
+    c.readyText:SetPoint("TOPRIGHT", c.ready.area, "TOPRIGHT", -TEXT_PAD, nameY)
+    c.nameSeat = seat
 end
 
 local function FaceRange(c, k, sl, u, n)
@@ -288,7 +285,7 @@ local function FaceRange(c, k, sl, u, n)
     f.pos:SetMinMaxValues(m, m + 1)
     f.cover:SetMinMaxValues(Rules.CoverRange(sl, u, c.cd, n))
     f.gate:SetMinMaxValues(m, m + 2)
-    if f.timer then Seat(c, f) end
+    if f.winY then Seat(c, f) end
 end
 
 -- Each range is opened to 0..1 first, so the stamp is stored whole before it
