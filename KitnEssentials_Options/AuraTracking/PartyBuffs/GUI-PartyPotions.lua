@@ -90,7 +90,7 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     if next(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)) == nil then
         cardBars:AddNote("No potion on the list is switched on, so no bar can start.")
     end
-    cardBars:AddLabel("Move the bars with /kes edit.")
+    cardBars:AddLabel("Move the bars with /kes edit or the Position card below.")
     cardBars:AddLabel("Healing potions are not shown: they leave no buff to see, and they have their own cooldown.")
     local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
     AddCheck(rowB1, "Potion Bars", "PotionBars", "sensorOn", nil, RefreshStates)
@@ -139,6 +139,7 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         title = "Position",
         db = db,
         positionKey = "PotionPosition",
+        defaults = { anchorFrameType = "UIPARENT" },
         showAnchorFrameType = false,
         showStrata = false,
         sliderRange = { -reach, reach },

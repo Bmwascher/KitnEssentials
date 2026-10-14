@@ -368,12 +368,11 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     GUIFrame:RefreshKitThemeIfNeeded(kit, kit.allWidgets)
 
     -- Player Frame and Select Frame anchor to a frame; the two screen types
-    -- resolve to UIParent.
+    -- resolve to UIParent. The label follows the type even when the card
+    -- hides its choice.
     local currentType = kitGetValue(kit, keys.anchorFrameType, defaults.anchorFrameType or "SCREEN")
     local anchoredToFrame = currentType == "SELECTFRAME" or currentType == "PLAYERFRAME"
-    local anchorPointLabel = showAnchorFrameType and
-        (anchoredToFrame and "To Frame's" or "To Screen's") or
-        "To Frame's"
+    local anchorPointLabel = anchoredToFrame and "To Frame's" or "To Screen's"
     kit.anchorPointDropdown.label:SetText(anchorPointLabel)
     kit.anchorPointOnlyDropdown.label:SetText(anchorPointLabel)
 
