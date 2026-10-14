@@ -40,7 +40,8 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket" },
 }
 
--- The Tracked and Where It Shows picks: three compact boxes a row.
+-- The Tracked and Where It Shows picks: compact boxes in a grid.
+local PICK_COLUMNS = 3
 local PICK_HEIGHT = 24
 local PICK_SPACING = 2
 
@@ -125,14 +126,14 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
 
     -- picks: { label, key, tooltip, onChange } each; isLast ends the card.
     local function AddPicks(card, picks, isLast)
-        for i = 1, #picks, 3 do
+        for i = 1, #picks, PICK_COLUMNS do
             local row = GUIFrame:CreateRow(card.content, PICK_HEIGHT)
-            for j = i, math.min(i + 2, #picks) do
+            for j = i, math.min(i + PICK_COLUMNS - 1, #picks) do
                 local pick = picks[j]
                 row:AddWidget(GUIFrame:CreateCompactCheckbox(row, pick[1],
-                    CheckConfig(pick[2], pick[3], pick[4])), 1 / 3)
+                    CheckConfig(pick[2], pick[3], pick[4])), 1 / PICK_COLUMNS)
             end
-            local lastRow = isLast and i + 3 > #picks
+            local lastRow = isLast and i + PICK_COLUMNS > #picks
             card:AddRow(row, PICK_HEIGHT, lastRow and 0 or PICK_SPACING)
         end
     end
