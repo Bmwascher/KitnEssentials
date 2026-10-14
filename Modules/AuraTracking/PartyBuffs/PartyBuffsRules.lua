@@ -174,7 +174,6 @@ function Rules.ActivePlacement(db, useHealer)
     return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4])
 end
 
--- Fills absent healer keys from their defaults; an edited copy is kept.
 -- Preview row k's sample spell for a list category. A sample the player
 -- switched off in the list gives way to the list's first switched-on spell,
 -- as the live icons would never show it.
@@ -185,6 +184,7 @@ function Rules.PreviewSample(samples, k, key, list)
     return auraRules.FirstIncludeSpellID(list)
 end
 
+-- Fills absent healer keys from their defaults; an edited copy is kept.
 function Rules.SeedHealerPlacement(db)
     for _, pair in ipairs(Rules.PLACEMENT_KEYS) do
         if db[pair[2]] == nil then db[pair[2]] = db[pair[1]] end
