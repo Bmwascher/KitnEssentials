@@ -905,8 +905,9 @@ function Track.BuildOverlayNext(st)
 end
 
 -- Re-points the built slots: a ready cell's slot holds its buffs unless the
--- entry has an active phase of its own; any other slot holds nothing. A cell whose slot is not built is not ready. Any refused
--- call hides the whole overlay and leaves every cell unready until the drain.
+-- entry has an active phase of its own; any other slot holds nothing. A cell
+-- whose slot is not built is not ready. Any refused call hides the whole
+-- overlay and leaves every cell unready until the drain.
 -- Returns whether every call was accepted, and whether a button now stands for
 -- another kind.
 function Track.ApplyOverlay(st, entries, unit, settings)
