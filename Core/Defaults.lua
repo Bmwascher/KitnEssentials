@@ -1570,7 +1570,6 @@ local Defaults = {
             TimerFontSize     = 14,
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             ShowCooldownText  = true,
-            CooldownFontSize  = 12,
             -- Glow While Active: a cooldown icon glows while its buff is up.
             GlowEnabled       = true,
             GlowType          = "ants",

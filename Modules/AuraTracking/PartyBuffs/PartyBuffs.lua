@@ -1120,7 +1120,8 @@ function PB:BuildStyleSettings()
     local cell = self.cellStyle or { colors = {} }
     cell.size     = db.IconSize
     cell.fontName = db.FontFace
-    cell.fontSize = db.CooldownFontSize
+    -- One size with the active timer, so the two texts match.
+    cell.fontSize = db.TimerFontSize
     cell.outline  = db.FontOutline
     cell.showText = db.ShowCooldownText == true
     cell.glow     = settings

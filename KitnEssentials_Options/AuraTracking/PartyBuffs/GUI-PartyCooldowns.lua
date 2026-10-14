@@ -228,11 +228,10 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     AddCheck(rowD3, "Time-Left Swipe", "Swipe")
     AddCheck(rowD3, "Timer Text", "ShowTimer")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
-    -- The gray icon's text; it shares the Font Settings face and outline.
     local rowD3b = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddCheck(rowD3b, "Cooldown Text", "ShowCooldownText",
-        "The time left on a gray icon after its buff falls."), "cellsOn")
-    manager:Register(AddSlider(rowD3b, "Cooldown Text Size", "CooldownFontSize", 8, 48), "cellsOn")
+        "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size."),
+        "cellsOn")
     cardDisplay:AddRow(rowD3b, Theme.rowHeight)
 
     local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
