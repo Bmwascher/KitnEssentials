@@ -1307,31 +1307,26 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- A known member's spec when grouped, else the stand-in row's sample spec. A
--- spec with fewer than PREVIEW_CELLS spells is topped up from the sample specs,
--- so every row can show the ready, active and cooling samples within Max
--- Cooldown Icons.
+-- A known member's spec when grouped, else the stand-in row's sample spec.
+-- Only that spec's own spells, ticked or not: a spec listing fewer than
+-- PREVIEW_CELLS shows fewer samples rather than another class's spells.
 function PB:PreviewEntries(k)
-    local entries, taken = {}, {}
+    local entries = {}
     if self.db.TrackBurst ~= true then return entries end
     local binding = self.bindings[k]
     local m = binding and Spec.Member(binding.token)
     local specID = (m and m.spec) or PREVIEW_SPECS[(k - 1) % #PREVIEW_SPECS + 1]
+    local talents = m and m.talents
     local want = math_min(KE.PartyBuffsRules.CooldownIconCount(self.db), PREVIEW_CELLS)
-    local function Add(fromSpec, talents)
-        for _, e in ipairs(CDRules.SpellList(fromSpec, self.db)) do
-            if #entries >= want then return end
-            local has = talents and talents[e.id]
-            if not taken[e.id] and CDRules.TalentAllows(e, has) then
-                taken[e.id] = true
-                e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
-                e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, fromSpec, has))
-                entries[#entries + 1] = e
-            end
+    for _, e in ipairs(CDRules.SpellList(specID, self.db, true)) do
+        if #entries >= want then break end
+        local has = talents and talents[e.id]
+        if CDRules.TalentAllows(e, has) then
+            e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
+            e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))
+            entries[#entries + 1] = e
         end
     end
-    Add(specID, m and m.talents)
-    for i = 1, #PREVIEW_SPECS do Add(PREVIEW_SPECS[i]) end
     return entries
 end
 
