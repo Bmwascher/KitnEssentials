@@ -127,6 +127,20 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card: Position (the same saved position /kes edit moves)
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position",
+        db = db,
+        positionKey = "PotionPosition",
+        showAnchorFrameType = false,
+        showStrata = false,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(posCard, "barsOn")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
     -- Card: Potion List (live without Potion Bars: the Cooldowns tab's
     -- while-active potion icons read it too)
     ----------------------------------------------------------------
