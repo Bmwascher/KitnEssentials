@@ -27,9 +27,6 @@ KE.PartyPotionsBar = Bar
 Bar.overlay = false
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local GRAY = { 0.5, 0.5, 0.5 }
-local DIM = 0.75
-local BG = 0.15
 local TEXT_PAD = 4
 -- The timer window's width beyond its widest label, "00:00".
 local TIMER_PAD = 6
@@ -110,10 +107,10 @@ function Bar.New(parent)
     return c
 end
 
--- Border, icon, class fill and name. The icon sits inside the border at the
--- left end, a border line between it and the fill. reserve keeps the name
--- clear of the text on the right.
-local function Paint(art, style, e, color, px, reserve)
+-- Border, icon, fill and name. The icon sits inside the border at the left
+-- end, a border line between it and the fill. reserve keeps the name clear of
+-- the text on the right.
+local function Paint(art, style, e, fill, scale, nameColor, px, reserve)
     local inner = style.height - 2 * px
     local left = px
     art.border:ClearAllPoints()
@@ -129,9 +126,9 @@ local function Paint(art, style, e, color, px, reserve)
     art.fill:ClearAllPoints()
     art.fill:SetPoint("TOPLEFT", art.border, "TOPLEFT", left, -px)
     art.fill:SetPoint("BOTTOMRIGHT", art.border, "BOTTOMRIGHT", -px, px)
-    art.fill:SetColorTexture(color[1] * DIM, color[2] * DIM, color[3] * DIM, 1)
+    art.fill:SetColorTexture(fill[1] * scale, fill[2] * scale, fill[3] * scale, fill[4] or 1)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)
-    art.name:SetTextColor(1, 1, 1, 1)
+    art.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3], 1)
     art.name:ClearAllPoints()
     art.name:SetPoint("LEFT", art.fill, "LEFT", TEXT_PAD, 0)
     art.name:SetPoint("RIGHT", art.fill, "RIGHT", -(TEXT_PAD + reserve), 0)
@@ -143,13 +140,13 @@ end
 -- drained part of the bar shows the background.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
-    local color = e.color or GRAY
+    local fill, fillScale, bg, bgScale, nameColor = Rules.Colors(style, e.color)
     local font, size, outline = style.fontName, style.textSize, style.outline
     c:SetSize(style.width, style.height)
     c.cd, c.placed = e.cd, true
     local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
-    Paint(c.ready, style, e, color, px, Cell.TextWidth(font, size, outline, "Ready"))
+    Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"))
     KE:ApplyFontToText(c.readyText, font, size, outline)
     c.readyText:SetText("Ready")
     c.readyText:SetTextColor(1, 1, 1, 1)
@@ -160,11 +157,11 @@ function Bar.Dress(c, style, e)
     c.ready.top:SetFrameLevel(level + 2)
     for k = 1, 2 do
         local f = c.face[k]
-        Paint(f.art, style, e, color, px, style.timer and timerWidth or 0)
+        Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0)
         PlaceGate(c, f, style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.fill)
-        f.cover:SetStatusBarColor(color[1] * BG, color[2] * BG, color[3] * BG, 1)
+        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, bg[4] or 1)
         f.win:ClearAllPoints()
         f.win:SetPoint("RIGHT", f.art.fill, "RIGHT", -TEXT_PAD / 2, 0)
         f.win:SetShown(style.timer)

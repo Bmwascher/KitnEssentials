@@ -52,13 +52,17 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     -- Without the sensor file no bar can exist; the list still feeds the
     -- Cooldowns tab's while-active potion icons.
     manager:SetCondition("barsOn", function() return Sensor ~= nil and db.PotionBars == true end)
+    manager:SetCondition("ownColors", function()
+        return Sensor ~= nil and db.PotionBars == true and db.PotionClassBars ~= true
+    end)
 
-    local function AddCheck(row, label, key, state, tooltip)
+    local function AddCheck(row, label, key, state, tooltip, onChange)
         local check = GUIFrame:CreateCheckbox(row, label, {
             value = db[key] == true,
             callback = function(checked)
                 db[key] = checked
                 ApplySettings()
+                if onChange then onChange() end
             end,
             tooltip = tooltip,
         })
@@ -74,6 +78,18 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         })
         row:AddWidget(slider, 0.5)
         manager:Register(slider, "barsOn")
+    end
+
+    local function AddColor(row, label, key)
+        local picker = GUIFrame:CreateColorPicker(row, label, {
+            color = db[key],
+            callback = function(r, g, b, a)
+                db[key] = { r, g, b, a }
+                ApplySettings()
+            end,
+        })
+        row:AddWidget(picker, 0.5)
+        manager:Register(picker, "ownColors")
     end
 
     ----------------------------------------------------------------
@@ -129,6 +145,22 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     AddSlider(rowD4, "Text Size", "PotionTextSize", 8, 30)
     cardDisplay:AddRow(rowD4, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Colors
+    ----------------------------------------------------------------
+    local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    local rowC1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
+    AddCheck(rowC1, "Class Color Bars", "PotionClassBars", "barsOn",
+        "Draws each bar in its player's class color. Off: Bar Color and Background Color.", RefreshStates)
+    AddCheck(rowC1, "Class Color Names", "PotionClassNames", "barsOn",
+        "Writes each name in its player's class color instead of white.")
+    cardColors:AddRow(rowC1, Theme.rowHeight)
+    local rowC2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
+    AddColor(rowC2, "Bar Color", "PotionBarColor")
+    AddColor(rowC2, "Background Color", "PotionBgColor")
+    cardColors:AddRow(rowC2, Theme.rowHeightLast, 0)
+    yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card: Position (the same saved position /kes edit moves)

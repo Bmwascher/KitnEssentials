@@ -19,6 +19,13 @@ Rules.TOKENS = { "party1", "party2", "party3", "party4" }
 Rules.FALLBACK_ICON = "Interface\\Icons\\Trade_Alchemy"
 -- Combat potions share one 5-minute cooldown.
 Rules.SECONDS = 300
+-- A class-colored bar draws its fill and its drained part darker than the
+-- class color, by these factors.
+Rules.DIM = 0.75
+Rules.BG = 0.15
+
+local GRAY = { 0.5, 0.5, 0.5 }
+local WHITE = { 1, 1, 1 }
 
 -- The bars' one entry: the switched-on potions in spell ID order and the icon
 -- of the first of them that has one. listed is a set of spell IDs. nil when
@@ -58,6 +65,18 @@ end
 function Rules.KeepOnRoster(old, new, isSecret)
     if isSecret(old) or isSecret(new) or old == nil or new == nil then return false end
     return old == new
+end
+
+-- A bar's fill, drained part and name: each fill color is returned with the
+-- factor its RGB is drawn at. color is the member's class color, nil when the
+-- game hides the class; such a bar is gray and its name white.
+function Rules.Colors(style, color)
+    local class = color or GRAY
+    local fill, fillScale, bg, bgScale = class, Rules.DIM, class, Rules.BG
+    if not style.classBars then
+        fill, fillScale, bg, bgScale = style.barColor, 1, style.bgColor, 1
+    end
+    return fill, fillScale, bg, bgScale, style.classNames and color or WHITE
 end
 
 -- A slot's cover range this second: the cover fills by one cd-th a second.

@@ -1590,6 +1590,10 @@ local Defaults = {
             PotionShowIcon    = true,
             PotionShowTimer   = true,
             PotionTextSize    = 12,
+            PotionClassBars   = true,
+            PotionClassNames  = false,
+            PotionBarColor    = { 0.30, 0.40, 0.55, 1 },
+            PotionBgColor     = { 0.05, 0.06, 0.08, 1 },
             PotionPosition    = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 60 },
             -- Healer externals box (Healer Externals tab). The position card
             -- writes HealerExtParentFrame, which has no default.

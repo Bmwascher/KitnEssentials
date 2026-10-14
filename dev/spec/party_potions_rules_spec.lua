@@ -1,7 +1,7 @@
 -- Tier 1: Party Potions' pure rules
 -- (Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua): the bars' entry, the
--- watched units, the roster keep and the cover range on the party cooldowns
--- stamp.
+-- watched units, the roster keep, the bar colors and the cover range on the
+-- party cooldowns stamp.
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
@@ -58,6 +58,27 @@ describe("PartyPotionsRules.KeepOnRoster", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.KeepOnRoster(case.old, case.new, isSecret), case.name)
+        end
+    end)
+end)
+
+describe("PartyPotionsRules.Colors", function()
+    it("draws the class color darkened unless the bars take their own colors, and a name in it only when known", function()
+        local R = L.loadPartyPotionsRules()
+        local class, bar, bg = { 0.2, 0.4, 0.6 }, { 0.3, 0.4, 0.5, 1 }, { 0.1, 0.1, 0.1, 1 }
+        local white, gray = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
+        local cases = {
+            { name = "class bars", style = { classBars = true }, color = class,
+              want = { class, R.DIM, class, R.BG, white } },
+            { name = "own colors", style = { barColor = bar, bgColor = bg }, color = class,
+              want = { bar, 1, bg, 1, white } },
+            { name = "class name", style = { classBars = true, classNames = true }, color = class,
+              want = { class, R.DIM, class, R.BG, class } },
+            { name = "class hidden", style = { classBars = true, classNames = true },
+              want = { gray, R.DIM, gray, R.BG, white } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.Colors(case.style, case.color) }, case.name)
         end
     end)
 end)

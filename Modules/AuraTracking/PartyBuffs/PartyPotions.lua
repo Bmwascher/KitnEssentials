@@ -42,7 +42,6 @@ local ORDER = { "player", "party1", "party2", "party3", "party4" }
 -- Reads wait out a roster change, longer than the module's 0.5 s settle, so a
 -- token that now names someone else is never read before the settle decides.
 local ROSTER_HOLD = 1
-local GRAY = { 0.5, 0.5, 0.5 }
 local BOX_CONFIG = { anchorFrameType = "UIPARENT", Strata = "MEDIUM" }
 
 -- Preview rows: class, name, share of the length left.
@@ -77,17 +76,17 @@ end
 
 local function ClassColor(class)
     local c = C_ClassColor.GetClassColor(class)
-    if not c then return GRAY end
+    if not c then return nil end
     return { c.r, c.g, c.b }
 end
 
 -- The name may be secret: it only reaches SetText. A class the game hides
--- gives a gray bar.
+-- gives no color.
 local function Who(token)
     local name
     local ok, value = pcall(UnitName, token)
     if ok then name = value end
-    local color = GRAY
+    local color
     local okClass, _, class = pcall(UnitClass, token)
     if okClass and not KE:IsSecretValue(class) and type(class) == "string" then color = ClassColor(class) end
     return name, color
@@ -162,6 +161,8 @@ local function Restyle(db)
     s.icon, s.timer = db.PotionShowIcon == true, db.PotionShowTimer == true
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
+    s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
+    s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
     box:SetSize(s.width, #ORDER * (s.height + s.spacing) - s.spacing)
     KE:ApplyFramePosition(box, db.PotionPosition, BOX_CONFIG)
