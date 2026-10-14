@@ -56,7 +56,7 @@ Data.SPELLS = {
 
     [132578]  = { kind = "offensive", cd = 120 },
     -- Seen through Celestial Conduit, which every Xuen caster has.
-    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 } },
+    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 }, active = 20 },
     [115203]  = { kind = "defensive", cd = 360, buffs = { 115203, 120954 } },
     [122783]  = { kind = "defensive", cd = 90 },
     [122470]  = { kind = "defensive", cd = 90, buffs = { 125174 } },
@@ -89,7 +89,7 @@ Data.SPELLS = {
     [108416]  = { kind = "defensive", cd = 60 },
     -- Seen only through Crashing Chaos, so a read without it hides the row.
     -- Destruction's 90 s needs Inferno.
-    [1122]    = { kind = "offensive", cd = 120, buffs = { 417282 },
+    [1122]    = { kind = "offensive", cd = 120, buffs = { 417282 }, active = 30,
                   needs = { talents = { [417234] = true }, likely = true },
                   lengthNeeds = { talents = { [1280483] = true } } },
 
