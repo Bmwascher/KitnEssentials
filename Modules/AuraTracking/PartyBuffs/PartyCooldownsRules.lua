@@ -389,12 +389,13 @@ function Rules.StripBar(cd, u)
     return -(cd - 1 + u), 255 * u
 end
 
--- How far a strip is raised inside its one-line window. A label's outline inks
--- below its line box, so unraised, the label above shows a sliver at the
--- window's top. The client has no ink measure; a sixth of the line fits.
-function Rules.StripLift(line)
-    if type(line) ~= "number" then return 1 end
-    return math_max(1, math_floor(line / 6 + 0.5))
+-- The blank kept above and below each strip label. A label's ink spills past
+-- its line box, more as the font grows, and packed labels poke into their
+-- neighbor's window. The client has no ink measure; a quarter of the line plus
+-- one is about twice the spill seen at 12.
+function Rules.StripMargin(line)
+    if type(line) ~= "number" then line = 0 end
+    return math_ceil(line / 4) + 1
 end
 
 -- A summon's glow window, in pixels from the bottom of the icon's inner area:

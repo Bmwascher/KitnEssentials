@@ -520,18 +520,17 @@ describe("PartyCooldownsRules.GlowWindow", function()
     end)
 end)
 
-describe("PartyCooldownsRules.StripLift", function()
-    it("raises a strip a whole sixth of its line height, never less than one", function()
+describe("PartyCooldownsRules.StripMargin", function()
+    it("keeps a whole quarter of the line plus one blank around each label", function()
         local R = loadRules()
         local cases = {
-            { name = "small font floors at one", line = 2, want = 1 },
-            { name = "rounds to nearest", line = 9, want = 2 },
-            { name = "tested font", line = 12, want = 2 },
-            { name = "large font", line = 24, want = 4 },
+            { name = "rounds a part pixel up", line = 9, want = 4 },
+            { name = "tested font", line = 12, want = 4 },
+            { name = "largest font", line = 48, want = 13 },
             { name = "no measure", line = nil, want = 1 },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.StripLift(case.line), case.name)
+            assert.are.equal(case.want, R.StripMargin(case.line), case.name)
         end
     end)
 end)

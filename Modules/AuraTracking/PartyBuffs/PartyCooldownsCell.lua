@@ -6,15 +6,15 @@
 --
 -- Each of the two timer slots has a position bar, whose fill edge carries the
 -- strip of labels under a one-line window, and a gate bar, whose fill edge
--- carries the gray cover. Their values may be secret, so nothing here reads
--- a bar back or measures a region under them.
+-- carries the gray cover; a summon cell adds a third bar for its glow window.
+-- Their values may be secret, so nothing here reads a bar back or measures a
+-- region under them.
 
 ---@class KE
 local KE = select(2, ...)
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local math_min = math.min
 local table_concat = table.concat
 local tostring = tostring
 local type = type
@@ -29,6 +29,7 @@ local GLOW_OFF = { GlowEnabled = false }
 
 local meter
 local metrics = {}
+local layouts = {}
 local widths = {}
 local strips = {}
 
@@ -94,6 +95,33 @@ function Cell.TextWidth(fontName, size, outline, text)
     if KE:IsSecretValue(width) or type(width) ~= "number" or width <= 0 then width = size * #text * 0.6 end
     widths[key] = width
     return width
+end
+
+-- A strip spaced so each label sits centered in its own line, with the margin
+-- blank above and below: the line pitch, the line height, the margin and the
+-- spacing to set on the strip. The pitch is measured with that spacing.
+function Cell.StripLayout(fontName, size, outline)
+    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline)
+    local known = layouts[key]
+    if known then return known[1], known[2], known[3], known[4] end
+    local step, line = LineMetrics(fontName, size, outline)
+    local margin = KE.PartyCooldownsRules.StripMargin(line)
+    local spacing = 2 * margin
+    local m = Meter()
+    KE:ApplyFontToText(m, fontName, size, outline)
+    m:SetSpacing(spacing)
+    m:SetText("0")
+    local one = m:GetStringHeight()
+    m:SetText("0\n0\n0\n0\n0\n0\n0\n0\n0")
+    local nine = m:GetStringHeight()
+    m:SetSpacing(0)
+    local pitch = step + spacing
+    if not KE:IsSecretValue(one) and not KE:IsSecretValue(nine)
+        and type(one) == "number" and type(nine) == "number" and nine > one then
+        pitch = (nine - one) / 8
+    end
+    layouts[key] = { pitch, line, margin, spacing }
+    return pitch, line, margin, spacing
 end
 
 Cell.StripText = StripText
@@ -209,17 +237,16 @@ function Cell.Dress(c, style, e)
         c.gray[k]:SetTexture(e.texture)
         c.text[k]:SetShown(style.showText == true)
     end
-    local step, line = LineMetrics(style.fontName, style.fontSize, style.outline)
+    local step, line, margin, spacing = Cell.StripLayout(style.fontName, style.fontSize, style.outline)
     local rules = KE.PartyCooldownsRules
     local cd = e.cd
     local active = rules.ActiveSeconds(e.active, cd)
     DressGlow(c, style.glow, active, level)
     local sig = table_concat({ tostring(style.fontName), tostring(style.fontSize), tostring(style.outline),
-        cd, active, size, px, step, line }, "|")
+        cd, active, size, px, step, line, margin }, "|")
     if c.sig == sig then return end
     c.sig = sig
     local bottom, height = rules.StripBar(cd, rules.Unit(cd))
-    local lift = rules.StripLift(line)
     -- One step of the gray cover is more than the icon's height, so the
     -- cover is fully off the icon one second after zero.
     local jump = size + 2
@@ -228,20 +255,22 @@ function Cell.Dress(c, style, e)
     c.clip:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -px, px)
     c.win:ClearAllPoints()
     c.win:SetPoint("CENTER", c, "CENTER", 0, 0)
-    c.win:SetSize(size + 6, math_min(line, step))
+    c.win:SetSize(size + 6, step)
     for k = 1, 2 do
         local pos, gate, strip, veil, edge = c.pos[k], c.gate[k], c.strip[k], c.veil[k], c.edge[k]
         local act = c.act[k]
         pos:ClearAllPoints()
-        pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * step + lift)
+        pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * step + margin)
         pos:SetSize(1, height * step)
         KE:ApplyFontToText(strip, style.fontName, style.fontSize, style.outline)
         strip:SetTextColor(1, 1, 1, 1)
+        strip:SetSpacing(spacing)
         strip:SetText(StripText(cd, active))
         -- The active labels sit where the cooldown strip's blank lines are, so
         -- the window shows them for the first active seconds.
         KE:ApplyFontToText(act, style.fontName, style.fontSize, style.outline)
         act:SetTextColor(1, 1, 1, 1)
+        act:SetSpacing(spacing)
         act:ClearAllPoints()
         act:SetPoint("BOTTOM", pos:GetStatusBarTexture(), "TOP", 0, (cd - active) * step)
         act:SetText(active > 0 and StripText(active) or "")

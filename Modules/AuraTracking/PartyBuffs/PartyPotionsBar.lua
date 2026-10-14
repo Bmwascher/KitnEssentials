@@ -206,18 +206,19 @@ function Bar.Dress(c, style, e)
         f.win:SetFrameLevel(level + 6)
         f.text:SetFrameLevel(level + 7)
     end
-    local sig = table_concat({ tostring(font), tostring(size), tostring(outline), e.cd, step, line }, "|")
+    local pitch, _, _, spacing = Cell.StripLayout(font, size, outline)
+    local sig = table_concat({ tostring(font), tostring(size), tostring(outline), e.cd, step, line, pitch }, "|")
     if c.sig == sig then return end
     c.sig = sig
     local text = Cell.StripText(e.cd)
-    local lift = CDRules.StripLift(line)
     for k = 1, 2 do
         local f = c.face[k]
         f.pos:ClearAllPoints()
-        f.pos:SetPoint("BOTTOMRIGHT", f.win, "BOTTOMRIGHT", 0, bottom * step + lift)
-        f.pos:SetSize(1, height * step)
+        f.pos:SetPoint("BOTTOMRIGHT", f.win, "BOTTOMRIGHT", 0, bottom * pitch)
+        f.pos:SetSize(1, height * pitch)
         KE:ApplyFontToText(f.strip, font, size, outline)
         f.strip:SetTextColor(1, 1, 1, 1)
+        f.strip:SetSpacing(spacing)
         f.strip:SetText(text)
     end
 end
