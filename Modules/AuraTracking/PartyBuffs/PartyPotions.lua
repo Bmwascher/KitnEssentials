@@ -328,11 +328,11 @@ end
 
 -- Plain sample bars stacked in the box, counting down and starting again.
 -- The preview is redrawn on every roster, resolve and settings change, so a
--- sample keeps its count unless its length or ready state changed.
+-- sample keeps its count unless its ready state changed.
 local function DrawSamples()
     Pot.sampleLayer = Pot.sampleLayer or NewLayer()
     local s, entry = Pot.style, Pot.entry
-    local cd = entry and entry.cd or Rules.DEFAULT_SECONDS
+    local cd = Rules.SECONDS
     local texture = entry and entry.texture or Rules.FALLBACK_ICON
     local showReady = Pot.pb.db.PotionShowReady == true
     local corner = Corners()
@@ -350,7 +350,7 @@ local function DrawSamples()
         bar:SetPoint(corner, Pot.sampleLayer, corner, 0, (i - 1) * step)
         local ready = showReady and i == #SAMPLES
         Bar.SetReady(bar, ready)
-        if not (sample.t and sample.cd == cd and sample.ready == ready) then
+        if not (sample.t and sample.ready == ready) then
             if sample.t then Track.Forget(sample.t) end
             local t = CDRules.NewTracker(cd, false)
             t.cell, t.view = bar, Bar
@@ -362,7 +362,7 @@ local function DrawSamples()
             end
             Track.Push(t, n)
             Track.Watch(t)
-            sample.t, sample.cd, sample.ready = t, cd, ready
+            sample.t, sample.ready = t, ready
         end
         bar:Show()
     end
@@ -421,7 +421,7 @@ function Pot.ApplySettings()
     if not (db.PotionBars == true and Track) then return TurnOff() end
     Pot.on = true
     MakeBox()
-    Pot.entry = Rules.Entry(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions), db.PotionSeconds, Texture)
+    Pot.entry = Rules.Entry(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions), Texture)
     if Pot.active then
         MakeRows()
         Pot.sensorHost:Show()

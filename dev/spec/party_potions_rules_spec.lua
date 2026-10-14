@@ -5,24 +5,20 @@
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
-    it("takes the switched-on potions in ID order, the clamped length and the first icon that answers", function()
-        local R, KE = L.loadPartyPotionsRules()
-        local CD = KE.PartyCooldownsRules
+    it("takes the switched-on potions in ID order and the first icon that answers", function()
+        local R = L.loadPartyPotionsRules()
         local icons = { [400] = 44 }
         local function textureOf(id) return icons[id] end
         local cases = {
             { name = "ID order, first answering icon", listed = { [500] = true, [300] = true, [400] = true },
-              seconds = 300, want = { { 300, 400, 500 }, 300, 44 } },
-            { name = "length above the range, no icon", listed = { [300] = true },
-              seconds = CD.CD_MAX + 100, want = { { 300 }, CD.CD_MAX, R.FALLBACK_ICON } },
-            { name = "length below the range", listed = { [400] = true },
-              seconds = CD.CD_MIN - 2, want = { { 400 }, CD.CD_MIN, 44 } },
+              want = { { 300, 400, 500 }, 44 } },
+            { name = "no icon", listed = { [300] = true }, want = { { 300 }, R.FALLBACK_ICON } },
         }
         for _, case in ipairs(cases) do
-            local e = R.Entry(case.listed, case.seconds, textureOf)
-            assert.are.same(case.want, { e.buffs, e.cd, e.texture }, case.name)
+            local e = R.Entry(case.listed, textureOf)
+            assert.are.same(case.want, { e.buffs, e.texture }, case.name)
         end
-        assert.is_nil(R.Entry({}, 300, textureOf), "nothing switched on")
+        assert.is_nil(R.Entry({}, textureOf), "nothing switched on")
     end)
 end)
 

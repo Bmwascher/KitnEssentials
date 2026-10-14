@@ -1583,7 +1583,6 @@ local Defaults = {
             PotionBars        = true,
             PotionIncludeSelf = true,
             PotionShowReady   = false,
-            PotionSeconds     = 300,
             PotionGrowth      = "DOWN",
             PotionWidth       = 170,
             PotionHeight      = 20,

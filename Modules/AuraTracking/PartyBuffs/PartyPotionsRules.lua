@@ -17,12 +17,13 @@ KE.PartyPotionsRules = Rules
 
 Rules.TOKENS = { "party1", "party2", "party3", "party4" }
 Rules.FALLBACK_ICON = "Interface\\Icons\\Trade_Alchemy"
-Rules.DEFAULT_SECONDS = 300
+-- Combat potions share one 5-minute cooldown.
+Rules.SECONDS = 300
 
--- The bars' one entry: the switched-on potions in spell ID order, the shared
--- length, and the icon of the first of them that has one. listed is a set of
--- spell IDs. nil when none is switched on.
-function Rules.Entry(listed, seconds, textureOf)
+-- The bars' one entry: the switched-on potions in spell ID order and the icon
+-- of the first of them that has one. listed is a set of spell IDs. nil when
+-- none is switched on.
+function Rules.Entry(listed, textureOf)
     local buffs = {}
     for id, on in pairs(listed or {}) do
         if on and type(id) == "number" then buffs[#buffs + 1] = id end
@@ -36,7 +37,7 @@ function Rules.Entry(listed, seconds, textureOf)
     end
     return {
         id = "potion", kind = "potion", buffs = buffs,
-        cd = KE.PartyCooldownsRules.ClampSeconds(seconds) or Rules.DEFAULT_SECONDS,
+        cd = Rules.SECONDS,
         texture = texture or Rules.FALLBACK_ICON,
     }
 end

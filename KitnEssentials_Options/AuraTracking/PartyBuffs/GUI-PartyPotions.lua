@@ -11,7 +11,6 @@ local Theme    = KE.Theme
 
 local C_Timer = C_Timer
 local next = next
-local tostring = tostring
 
 local GROW_OPTIONS = {
     { key = "DOWN", text = "Down" },
@@ -97,24 +96,6 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     local rowB2 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
     AddCheck(rowB2, "Show Ready Bars", "PotionShowReady", "barsOn",
         "Keeps a full bar reading Ready for each party member whose potion is ready.")
-    local box
-    box = GUIFrame:CreateEditBox(rowB2, "Potion Cooldown (sec)", {
-        value = tostring(db.PotionSeconds),
-        callback = function(text)
-            local value = KE.PartyCooldownsRules.ClampSeconds(text)
-            if not value then
-                box:SetValue(tostring(db.PotionSeconds))
-                return
-            end
-            box:SetValue(tostring(value))
-            if value ~= db.PotionSeconds then
-                db.PotionSeconds = value
-                ApplySettings()
-            end
-        end,
-    })
-    rowB2:AddWidget(box, 0.5)
-    manager:Register(box, "barsOn")
     cardBars:AddRow(rowB2, Theme.rowHeightLast, 0)
     yOffset = cardBars:GetNextOffset()
 
