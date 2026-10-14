@@ -172,7 +172,6 @@ local function GlowParts(c)
     c:SetScript("OnHide", PlayGlow)
 end
 
--- Only a cell with an active phase and the setting on has a running glow.
 local function DressGlow(c, glow, active, level)
     local on = active > 0 and glow ~= nil and glow.GlowEnabled == true
     if on and not c.glowWin then
