@@ -61,8 +61,16 @@ local function NewArt(parent)
     local art = CreateFrame("Frame", nil, parent)
     art.icon = art:CreateTexture(nil, "ARTWORK")
     KE:ApplyIconZoom(art.icon)
-    art.border = art:CreateTexture(nil, "BACKGROUND")
-    art.border:SetColorTexture(0, 0, 0, 1)
+    -- A frame, not a backing: the drained part shows what is behind the bar.
+    art.edges = {}
+    for i = 1, 4 do
+        art.edges[i] = art:CreateTexture(nil, "BACKGROUND")
+        art.edges[i]:SetColorTexture(0, 0, 0, 1)
+    end
+    art.area = art:CreateTexture(nil, "BACKGROUND")
+    -- Under the fill only, so a fill below full opacity still sits on black.
+    art.back = art:CreateTexture(nil, "BACKGROUND")
+    art.back:SetColorTexture(0, 0, 0, 1)
     art.fill = art:CreateTexture(nil, "BORDER")
     -- Above the cover, so the drained part never hides the name.
     art.top = CreateFrame("Frame", nil, art)
@@ -93,6 +101,7 @@ function Bar.New(parent)
         f.art:SetAllPoints(c)
         f.cover = NewBar(f.art, "HORIZONTAL")
         f.cover:SetReverseFill(true)
+        f.coverFill = f.cover:GetStatusBarTexture()
         f.win = CreateFrame("Frame", nil, f.art)
         f.win:SetClipsChildren(true)
         f.pos = NewBar(f.art, "VERTICAL")
@@ -107,32 +116,50 @@ function Bar.New(parent)
     return c
 end
 
--- Border, icon, fill and name. The icon sits inside the border at the left
--- end, a border line between it and the fill. reserve keeps the name clear of
--- the text on the right.
+local function PlaceEdges(art, px)
+    local edges = art.edges
+    for i = 1, 4 do edges[i]:ClearAllPoints() end
+    edges[1]:SetPoint("TOPLEFT", art, "TOPLEFT")
+    edges[1]:SetPoint("BOTTOMRIGHT", art, "TOPRIGHT", 0, -px)
+    edges[2]:SetPoint("TOPLEFT", art, "BOTTOMLEFT", 0, px)
+    edges[2]:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT")
+    edges[3]:SetPoint("TOPLEFT", art, "TOPLEFT")
+    edges[3]:SetPoint("BOTTOMRIGHT", art, "BOTTOMLEFT", px, 0)
+    edges[4]:SetPoint("TOPLEFT", art, "TOPRIGHT", -px, 0)
+    edges[4]:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT")
+end
+
+-- Frame, icon, fill and name. The icon sits inside the frame at the left end,
+-- right against the area the fill drains across. reserve keeps the name clear
+-- of the text on the right.
 local function Paint(art, style, e, fill, scale, nameColor, px, reserve)
     local inner = style.height - 2 * px
-    art.border:ClearAllPoints()
-    art.border:SetAllPoints(art)
+    PlaceEdges(art, px)
     art.icon:ClearAllPoints()
-    art.icon:SetPoint("TOPLEFT", art.border, "TOPLEFT", px, -px)
+    art.icon:SetPoint("TOPLEFT", art, "TOPLEFT", px, -px)
     art.icon:SetSize(inner, inner)
     art.icon:SetTexture(e.texture)
+    art.area:ClearAllPoints()
+    art.area:SetPoint("TOPLEFT", art, "TOPLEFT", inner + px, -px)
+    art.area:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", -px, px)
     art.fill:ClearAllPoints()
-    art.fill:SetPoint("TOPLEFT", art.border, "TOPLEFT", inner + 2 * px, -px)
-    art.fill:SetPoint("BOTTOMRIGHT", art.border, "BOTTOMRIGHT", -px, px)
+    art.fill:SetAllPoints(art.area)
+    art.back:ClearAllPoints()
+    art.back:SetAllPoints(art.fill)
     art.fill:SetColorTexture(fill[1] * scale, fill[2] * scale, fill[3] * scale, fill[4] or 1)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)
     art.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3], 1)
     art.name:ClearAllPoints()
-    art.name:SetPoint("LEFT", art.fill, "LEFT", TEXT_PAD, 0)
-    art.name:SetPoint("RIGHT", art.fill, "RIGHT", -(TEXT_PAD + reserve), 0)
+    art.name:SetPoint("LEFT", art.area, "LEFT", TEXT_PAD, 0)
+    art.name:SetPoint("RIGHT", art.area, "RIGHT", -(TEXT_PAD + reserve), 0)
     art.name:SetText(e.name)
 end
 
 -- Look and text are applied every time; the strips move only when the font,
--- size or length changed. The cover is drawn in the background color, so the
--- drained part of the bar shows the background.
+-- size or length changed. The cover is the drained part, drawn in the
+-- background color. The fill ends at its edge, so nothing but the cover sits
+-- behind the drained part, except under Ready bars: the face's fill spans the
+-- bar and hides the Ready bar beneath it.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
     local fill, fillScale, bg, bgScale, nameColor = Rules.Colors(style, e.color)
@@ -141,12 +168,14 @@ function Bar.Dress(c, style, e)
     c.cd, c.placed = e.cd, true
     local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
+    local step, line = Cell.LineMetrics(font, size, outline)
+    local winPx, raise = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px)
     Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"))
     KE:ApplyFontToText(c.readyText, font, size, outline)
     c.readyText:SetText("Ready")
     c.readyText:SetTextColor(1, 1, 1, 1)
     c.readyText:ClearAllPoints()
-    c.readyText:SetPoint("RIGHT", c.ready.fill, "RIGHT", -TEXT_PAD, 0)
+    c.readyText:SetPoint("RIGHT", c.ready.area, "RIGHT", -TEXT_PAD, 0)
     local level = c:GetFrameLevel()
     c.ready:SetFrameLevel(level + 1)
     c.ready.top:SetFrameLevel(level + 2)
@@ -155,10 +184,16 @@ function Bar.Dress(c, style, e)
         Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0)
         PlaceGate(c, f, style, bottom, height)
         f.cover:ClearAllPoints()
-        f.cover:SetAllPoints(f.art.fill)
+        f.cover:SetAllPoints(f.art.area)
         f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, bg[4] or 1)
+        if not style.ready then
+            f.art.fill:ClearAllPoints()
+            f.art.fill:SetPoint("TOPLEFT", f.art.area, "TOPLEFT")
+            f.art.fill:SetPoint("BOTTOMRIGHT", f.coverFill, "BOTTOMLEFT")
+        end
         f.win:ClearAllPoints()
-        f.win:SetPoint("RIGHT", f.art.fill, "RIGHT", -TEXT_PAD / 2, 0)
+        f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, raise * px)
+        f.win:SetSize(timerWidth, winPx * px)
         f.win:SetShown(style.timer)
         f.clip:SetFrameLevel(level + 3)
         f.art:SetFrameLevel(level + 4)
@@ -167,16 +202,15 @@ function Bar.Dress(c, style, e)
         f.win:SetFrameLevel(level + 6)
         f.text:SetFrameLevel(level + 7)
     end
-    local step, line = Cell.LineMetrics(font, size, outline)
     local sig = table_concat({ tostring(font), tostring(size), tostring(outline), e.cd, step, line }, "|")
     if c.sig == sig then return end
     c.sig = sig
     local text = Cell.StripText(e.cd)
+    local lift = CDRules.StripLift(line)
     for k = 1, 2 do
         local f = c.face[k]
-        f.win:SetSize(timerWidth, math_min(line, step))
         f.pos:ClearAllPoints()
-        f.pos:SetPoint("BOTTOMRIGHT", f.win, "BOTTOMRIGHT", 0, bottom * step)
+        f.pos:SetPoint("BOTTOMRIGHT", f.win, "BOTTOMRIGHT", 0, bottom * step + lift)
         f.pos:SetSize(1, height * step)
         KE:ApplyFontToText(f.strip, font, size, outline)
         f.strip:SetTextColor(1, 1, 1, 1)

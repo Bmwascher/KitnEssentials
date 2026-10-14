@@ -114,7 +114,7 @@ end
 -- Placed rows one after another, anchored to each other.
 local function Stack()
     local corner, far = Corners()
-    local gap = Pot.style.up and Pot.style.spacing or -Pot.style.spacing
+    local gap = Pot.style.up and Pot.style.gap or -Pot.style.gap
     local prev
     for _, row in ipairs(Pot.rows) do
         local c = row.bar
@@ -163,14 +163,15 @@ end
 -- that follows it.
 local function Restyle(db)
     local s = Pot.style
-    s.width, s.height, s.spacing = db.PotionWidth, db.PotionHeight, db.PotionSpacing
-    s.timer = db.PotionShowTimer == true
+    s.width, s.height = db.PotionWidth, db.PotionHeight
+    s.gap = Rules.Gap(db.PotionSpacing, KE:GetPixelSize())
+    s.timer, s.ready = db.PotionShowTimer == true, db.PotionShowReady == true
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
     s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
     s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
-    box:SetSize(s.width, #ORDER * (s.height + s.spacing) - s.spacing)
+    box:SetSize(s.width, #ORDER * (s.height + s.gap) - s.gap)
     KE:ApplyFramePosition(box, db.PotionPosition, Placement(db))
 end
 
@@ -347,7 +348,7 @@ local function DrawSamples()
     local texture = Pot.icon
     local showReady = Pot.pb.db.PotionShowReady == true
     local corner = Corners()
-    local step = (s.height + s.spacing) * (s.up and 1 or -1)
+    local step = (s.height + s.gap) * (s.up and 1 or -1)
     local n = Track.Now()
     for i, info in ipairs(SAMPLES) do
         local sample = Pot.samples[i]

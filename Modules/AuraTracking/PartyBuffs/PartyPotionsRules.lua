@@ -7,6 +7,7 @@
 local KE = select(2, ...)
 
 local ipairs = ipairs
+local math_floor = math.floor
 local pairs = pairs
 local table_insert = table.insert
 local table_sort = table.sort
@@ -70,6 +71,22 @@ function Rules.Colors(style, color)
         fill, fillScale, bg, bgScale = style.barColor, 1, style.bgColor, 1
     end
     return fill, fillScale, bg, bgScale, style.classNames and color or WHITE
+end
+
+-- The timer window in whole pixels: its height, never above the line, and how
+-- far it sits above the bottom of the area, the odd pixel going on top. A
+-- measured line a hair under a whole pixel counts as that pixel.
+function Rules.Window(areaPx, linePx)
+    local win = math_floor(linePx + 0.01)
+    local area = math_floor(areaPx + 0.5)
+    return win, math_floor((area - win) / 2)
+end
+
+-- The offset from one bar to the next. At no spacing the bars overlap by a
+-- pixel, so the two touching frame lines are one.
+function Rules.Gap(spacing, px)
+    if spacing == 0 then return -px end
+    return spacing
 end
 
 -- A slot's cover range this second: the cover fills by one cd-th a second.

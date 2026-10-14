@@ -72,6 +72,29 @@ describe("PartyPotionsRules.Colors", function()
     end)
 end)
 
+describe("PartyPotionsRules.Window", function()
+    it("keeps the window on whole pixels, the odd pixel on top, never taller than the line", function()
+        local R = L.loadPartyPotionsRules()
+        local cases = {
+            { name = "odd gap", area = 19, line = 14, want = { 14, 2 } },
+            { name = "even gap", area = 18, line = 14, want = { 14, 2 } },
+            { name = "line a hair under a pixel", area = 19, line = 13.9999998, want = { 14, 2 } },
+            { name = "fractional line", area = 19, line = 13.6, want = { 13, 3 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.Window(case.area, case.line) }, case.name)
+        end
+    end)
+end)
+
+describe("PartyPotionsRules.Gap", function()
+    it("overlaps the bars by a pixel at no spacing and keeps any other spacing", function()
+        local R = L.loadPartyPotionsRules()
+        assert.are.equal(-0.5, R.Gap(0, 0.5), "no spacing")
+        assert.are.equal(3, R.Gap(3, 0.5), "spacing")
+    end)
+end)
+
 describe("PartyPotionsRules.CoverRange", function()
     local function fill(v, lo, hi)
         local f = (v - lo) / (hi - lo)
