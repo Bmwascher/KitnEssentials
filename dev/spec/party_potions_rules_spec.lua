@@ -54,17 +54,17 @@ describe("PartyPotionsRules.KeepOnRoster", function()
 end)
 
 describe("PartyPotionsRules.Colors", function()
-    it("draws the class color darkened unless the bars take their own colors, and a name in it only when known", function()
+    it("draws the class color darkened unless the bars take their own colors, a name in it only when known, and the background's opacity in both", function()
         local R = L.loadPartyPotionsRules()
-        local class, bar, bg = { 0.2, 0.4, 0.6 }, { 0.3, 0.4, 0.5, 1 }, { 0.1, 0.1, 0.1, 1 }
+        local class, bar, bg = { 0.2, 0.4, 0.6 }, { 0.3, 0.4, 0.5, 1 }, { 0.1, 0.1, 0.1, 0.8 }
         local white, gray = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
         local cases = {
             { name = "own colors", style = { barColor = bar, bgColor = bg }, color = class,
-              want = { bar, 1, bg, 1, white } },
-            { name = "class name", style = { classBars = true, classNames = true }, color = class,
-              want = { class, R.DIM, class, R.BG, class } },
-            { name = "class hidden", style = { classBars = true, classNames = true },
-              want = { gray, R.DIM, gray, R.BG, white } },
+              want = { bar, 1, bg, 1, white, 0.8 } },
+            { name = "class name", style = { classBars = true, classNames = true, bgColor = bg }, color = class,
+              want = { class, R.DIM, class, R.BG, class, 0.8 } },
+            { name = "class hidden", style = { classBars = true, classNames = true, bgColor = bg },
+              want = { gray, R.DIM, gray, R.BG, white, 0.8 } },
         }
         for _, case in ipairs(cases) do
             assert.are.same(case.want, { R.Colors(case.style, case.color) }, case.name)

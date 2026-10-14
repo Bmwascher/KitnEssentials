@@ -80,16 +80,17 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         manager:Register(slider, "barsOn")
     end
 
-    local function AddColor(row, label, key)
+    local function AddColor(row, label, key, state, tooltip)
         local picker = GUIFrame:CreateColorPicker(row, label, {
             color = db[key],
             callback = function(r, g, b, a)
                 db[key] = { r, g, b, a }
                 ApplySettings()
             end,
+            tooltip = tooltip,
         })
         row:AddWidget(picker, 0.5)
-        manager:Register(picker, "ownColors")
+        manager:Register(picker, state)
     end
 
     ----------------------------------------------------------------
@@ -147,13 +148,15 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     local rowC1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
     AddCheck(rowC1, "Class Color Bars", "PotionClassBars", "barsOn",
-        "Draws each bar in its player's class color. Off: Bar Color and Background Color.", RefreshStates)
+        "Draws each bar in its player's class color, at the Background Color's opacity. Off: Bar Color and Background Color.",
+        RefreshStates)
     AddCheck(rowC1, "Class Color Names", "PotionClassNames", "barsOn",
         "Writes each name in its player's class color instead of white.")
     cardColors:AddRow(rowC1, Theme.rowHeight)
     local rowC2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
-    AddColor(rowC2, "Bar Color", "PotionBarColor")
-    AddColor(rowC2, "Background Color", "PotionBgColor")
+    AddColor(rowC2, "Bar Color", "PotionBarColor", "ownColors")
+    AddColor(rowC2, "Background Color", "PotionBgColor", "barsOn",
+        "With Class Color Bars on, only its opacity is used.")
     cardColors:AddRow(rowC2, Theme.rowHeightLast, 0)
     yOffset = cardColors:GetNextOffset()
 

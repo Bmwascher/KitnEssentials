@@ -162,7 +162,7 @@ end
 -- bar and hides the Ready bar beneath it.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
-    local fill, fillScale, bg, bgScale, nameColor = Rules.Colors(style, e.color)
+    local fill, fillScale, bg, bgScale, nameColor, bgAlpha = Rules.Colors(style, e.color)
     local font, size, outline = style.fontName, style.textSize, style.outline
     c:SetSize(style.width, style.height)
     c.cd, c.placed = e.cd, true
@@ -185,7 +185,7 @@ function Bar.Dress(c, style, e)
         PlaceGate(c, f, style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.area)
-        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, bg[4] or 1)
+        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, bgAlpha)
         if not style.ready then
             f.art.fill:ClearAllPoints()
             f.art.fill:SetPoint("TOPLEFT", f.art.area, "TOPLEFT")

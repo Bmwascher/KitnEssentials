@@ -62,15 +62,18 @@ function Rules.KeepOnRoster(old, new, isSecret)
 end
 
 -- A bar's fill, drained part and name: each fill color is returned with the
--- factor its RGB is drawn at. color is the member's class color, nil when the
--- game hides the class; such a bar is gray and its name white.
+-- factor its RGB is drawn at, and last the drained part's opacity, which the
+-- Background Color sets for class-colored bars too. color is the member's
+-- class color, nil when the game hides the class; such a bar is gray and its
+-- name white.
 function Rules.Colors(style, color)
     local class = color or GRAY
     local fill, fillScale, bg, bgScale = class, Rules.DIM, class, Rules.BG
     if not style.classBars then
         fill, fillScale, bg, bgScale = style.barColor, 1, style.bgColor, 1
     end
-    return fill, fillScale, bg, bgScale, style.classNames and color or WHITE
+    local bgAlpha = style.bgColor and style.bgColor[4] or 1
+    return fill, fillScale, bg, bgScale, style.classNames and color or WHITE, bgAlpha
 end
 
 -- The timer window in whole pixels: its height, never above the line, and how
