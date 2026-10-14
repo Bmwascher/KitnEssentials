@@ -172,9 +172,12 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         title = "Position",
         db = db,
         positionKey = "PotionPosition",
-        defaults = { anchorFrameType = "UIPARENT" },
-        showAnchorFrameType = false,
-        showStrata = false,
+        dbKeys = {
+            anchorFrameType = "PotionAnchorFrameType", anchorFrameFrame = "PotionParentFrame",
+            strata = "PotionStrata",
+        },
+        defaults = { anchorFrameType = "UIPARENT", strata = "MEDIUM" },
+        showStrata = true,
         sliderRange = { -reach, reach },
         onChangeCallback = ApplySettings,
     })

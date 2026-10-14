@@ -42,7 +42,6 @@ local ORDER = { "player", "party1", "party2", "party3", "party4" }
 -- Reads wait out a roster change, longer than the module's 0.5 s settle, so a
 -- token that now names someone else is never read before the settle decides.
 local ROSTER_HOLD = 1
-local BOX_CONFIG = { anchorFrameType = "UIPARENT", Strata = "MEDIUM" }
 
 -- Preview rows: class, name, share of the length left.
 local SAMPLES = {
@@ -153,6 +152,14 @@ local function MakeRows()
     end
 end
 
+local placement = {}
+
+local function Placement(db)
+    placement.anchorFrameType, placement.ParentFrame = db.PotionAnchorFrameType, db.PotionParentFrame
+    placement.Strata = db.PotionStrata
+    return placement
+end
+
 -- The rows are stacked again by Pot.ApplySettings and re-dressed at the drain
 -- that follows it.
 local function Restyle(db)
@@ -165,7 +172,7 @@ local function Restyle(db)
     s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
     box:SetSize(s.width, #ORDER * (s.height + s.spacing) - s.spacing)
-    KE:ApplyFramePosition(box, db.PotionPosition, BOX_CONFIG)
+    KE:ApplyFramePosition(box, db.PotionPosition, Placement(db))
 end
 
 -- Registering again would cancel a drag in progress.
@@ -180,7 +187,11 @@ local function Register()
         local p = Pot.pb.db.PotionPosition
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
         p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
-        KE:ApplyFramePosition(Pot.box, p, BOX_CONFIG)
+        KE:ApplyFramePosition(Pot.box, p, Placement(Pot.pb.db))
+    end
+    cfg.getParentFrame = function()
+        local config = Placement(Pot.pb.db)
+        return KE:ResolveAnchorFrame(config.anchorFrameType, config.ParentFrame, Pot.box)
     end
     KE.EditMode:RegisterElement(cfg)
     Pot.registered = true
