@@ -15,6 +15,7 @@ local KE = select(2, ...)
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
+local math_floor = math.floor
 local table_concat = table.concat
 local tostring = tostring
 local type = type
@@ -62,23 +63,31 @@ local function Meter()
     return meter
 end
 
--- The distance between two strip lines and the height of one, per font.
--- Measured on the meter, and cached.
+-- The distance between two lines and the height of one, measured on the meter
+-- with the given line spacing; nil when the measure fails.
+local function Measure(fontName, size, outline, spacing)
+    local m = Meter()
+    KE:ApplyFontToText(m, fontName, size, outline)
+    m:SetSpacing(spacing)
+    m:SetText("0")
+    local one = m:GetStringHeight()
+    m:SetText("0\n0\n0\n0\n0\n0\n0\n0\n0")
+    local nine = m:GetStringHeight()
+    m:SetSpacing(0)
+    if not KE:IsSecretValue(one) and not KE:IsSecretValue(nine)
+        and type(one) == "number" and type(nine) == "number" and one > 0 and nine > one then
+        return (nine - one) / 8, one
+    end
+end
+
+-- The distance between two strip lines and the height of one, per font, and
+-- cached.
 local function LineMetrics(fontName, size, outline)
     local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline)
     local known = metrics[key]
     if known then return known[1], known[2] end
-    Meter()
-    KE:ApplyFontToText(meter, fontName, size, outline)
-    meter:SetText("0")
-    local one = meter:GetStringHeight()
-    meter:SetText("0\n0\n0\n0\n0\n0\n0\n0\n0")
-    local nine = meter:GetStringHeight()
-    local step, line = size, size
-    if not KE:IsSecretValue(one) and not KE:IsSecretValue(nine)
-        and type(one) == "number" and type(nine) == "number" and one > 0 and nine > one then
-        step, line = (nine - one) / 8, one
-    end
+    local step, line = Measure(fontName, size, outline, 0)
+    if not step then step, line = size, size end
     metrics[key] = { step, line }
     return step, line
 end
@@ -107,19 +116,7 @@ function Cell.StripLayout(fontName, size, outline)
     local step, line = LineMetrics(fontName, size, outline)
     local margin = KE.PartyCooldownsRules.StripMargin(line)
     local spacing = 2 * margin
-    local m = Meter()
-    KE:ApplyFontToText(m, fontName, size, outline)
-    m:SetSpacing(spacing)
-    m:SetText("0")
-    local one = m:GetStringHeight()
-    m:SetText("0\n0\n0\n0\n0\n0\n0\n0\n0")
-    local nine = m:GetStringHeight()
-    m:SetSpacing(0)
-    local pitch = step + spacing
-    if not KE:IsSecretValue(one) and not KE:IsSecretValue(nine)
-        and type(one) == "number" and type(nine) == "number" and nine > one then
-        pitch = (nine - one) / 8
-    end
+    local pitch = Measure(fontName, size, outline, spacing) or step + spacing
     layouts[key] = { pitch, line, margin, spacing }
     return pitch, line, margin, spacing
 end
@@ -237,13 +234,13 @@ function Cell.Dress(c, style, e)
         c.gray[k]:SetTexture(e.texture)
         c.text[k]:SetShown(style.showText == true)
     end
-    local step, line, margin, spacing = Cell.StripLayout(style.fontName, style.fontSize, style.outline)
+    local pitch, line, _, spacing = Cell.StripLayout(style.fontName, style.fontSize, style.outline)
     local rules = KE.PartyCooldownsRules
     local cd = e.cd
     local active = rules.ActiveSeconds(e.active, cd)
     DressGlow(c, style.glow, active, level)
     local sig = table_concat({ tostring(style.fontName), tostring(style.fontSize), tostring(style.outline),
-        cd, active, size, px, step, line, margin }, "|")
+        cd, active, size, px, pitch, line }, "|")
     if c.sig == sig then return end
     c.sig = sig
     local bottom, height = rules.StripBar(cd, rules.Unit(cd))
@@ -255,13 +252,15 @@ function Cell.Dress(c, style, e)
     c.clip:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -px, px)
     c.win:ClearAllPoints()
     c.win:SetPoint("CENTER", c, "CENTER", 0, 0)
-    c.win:SetSize(size + 6, step)
+    c.win:SetSize(size + 6, pitch)
+    -- The label's line box sits centered in the window, whatever the measure.
+    local center = math_floor((pitch - line) / 2 + 0.5)
     for k = 1, 2 do
         local pos, gate, strip, veil, edge = c.pos[k], c.gate[k], c.strip[k], c.veil[k], c.edge[k]
         local act = c.act[k]
         pos:ClearAllPoints()
-        pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * step + margin)
-        pos:SetSize(1, height * step)
+        pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * pitch + center)
+        pos:SetSize(1, height * pitch)
         KE:ApplyFontToText(strip, style.fontName, style.fontSize, style.outline)
         strip:SetTextColor(1, 1, 1, 1)
         strip:SetSpacing(spacing)
@@ -272,7 +271,7 @@ function Cell.Dress(c, style, e)
         act:SetTextColor(1, 1, 1, 1)
         act:SetSpacing(spacing)
         act:ClearAllPoints()
-        act:SetPoint("BOTTOM", pos:GetStatusBarTexture(), "TOP", 0, (cd - active) * step)
+        act:SetPoint("BOTTOM", pos:GetStatusBarTexture(), "TOP", 0, (cd - active) * pitch)
         act:SetText(active > 0 and StripText(active) or "")
         gate:ClearAllPoints()
         gate:SetPoint("BOTTOM", c.clip, "BOTTOM", 0, bottom * jump)
