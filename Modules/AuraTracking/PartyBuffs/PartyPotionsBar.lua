@@ -8,7 +8,8 @@
 -- strip of time labels. The slot's values may be secret: they reach only
 -- SetValue and SetAlpha, no gate, cover or fill is read back, and every fill
 -- texture an anchor uses is fetched in New. The one read is the bar's own
--- position, which hangs from plain anchors, to seat the time window.
+-- position, to seat the time window; it is secret only when the box hangs
+-- from a frame with secret anchoring, and then the last seat stays.
 
 ---@class KE
 local KE = select(2, ...)
@@ -224,7 +225,7 @@ function Bar.Dress(c, style, e)
         f.win:ClearAllPoints()
         f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, raise * px)
         f.win:SetSize(timerWidth, winPx * px)
-        f.winY, f.winLift, f.seat = raise * px, (raise + 1) * px, nil
+        f.winY, f.winLift, f.seat, f.timer = raise * px, (raise + 1) * px, nil, style.timer
         f.win:SetShown(style.timer)
         f.clip:SetFrameLevel(level + 3)
         f.art:SetFrameLevel(level + 4)
@@ -287,7 +288,7 @@ local function FaceRange(c, k, sl, u, n)
     f.pos:SetMinMaxValues(m, m + 1)
     f.cover:SetMinMaxValues(Rules.CoverRange(sl, u, c.cd, n))
     f.gate:SetMinMaxValues(m, m + 2)
-    if f.winY and f.win:IsShown() then Seat(c, f) end
+    if f.timer then Seat(c, f) end
 end
 
 -- Each range is opened to 0..1 first, so the stamp is stored whole before it
