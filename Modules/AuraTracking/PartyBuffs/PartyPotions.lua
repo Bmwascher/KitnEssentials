@@ -378,6 +378,7 @@ local function DrawSamples()
             Track.Watch(t)
             sample.t, sample.cleared = t, cleared
         else
+            -- Dress put the names back off their seat; only a push seats again.
             Bar.Seat(bar)
         end
         bar:Show()
