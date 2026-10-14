@@ -361,7 +361,9 @@ local function DrawSamples()
         bar:ClearAllPoints()
         bar:SetPoint(corner, Pot.sampleLayer, corner, 0, (i - 1) * step)
         local ready = showReady and i == #SAMPLES
-        Bar.SetReady(bar, ready)
+        -- Every sample has a Ready bar under it, as live rows do, so one that
+        -- ends reads Ready until it starts again.
+        Bar.SetReady(bar, showReady)
         if not (sample.t and sample.ready == ready) then
             if sample.t then Track.Forget(sample.t) end
             local t = CDRules.NewTracker(cd, false)
