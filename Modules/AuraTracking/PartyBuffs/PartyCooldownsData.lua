@@ -20,8 +20,9 @@ KE.PartyCooldownsData = Data
 -- shows while the talent is taken, and before talents are read only if likely.
 -- lengthNeeds is a talent a spec's paired seconds need: a member read without
 -- it counts the cast's own cd. active is set on a summon seen only through a
--- stand-in buff: its cell takes no aura button, and shows the summon's own icon
--- with a timer for active seconds from the cast, then the cooldown.
+-- stand-in buff: its cell's aura button never shows, and the cell shows the
+-- summon's own icon with a timer for active seconds from the cast, then the
+-- cooldown.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },

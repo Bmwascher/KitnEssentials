@@ -1372,7 +1372,10 @@ function PB:DrawPreviewCells(row, entries, side, step)
             c:Hide()
         end
     end
-    self:DrawPreviewActive(row, entries[2])
+    -- A summon with its own active phase never gets an aura button live.
+    local sample = entries[2]
+    if sample and sample.active then sample = nil end
+    self:DrawPreviewActive(row, sample)
 end
 
 -- The active sample: a preview aura frame over cell 2 with a running timer.
