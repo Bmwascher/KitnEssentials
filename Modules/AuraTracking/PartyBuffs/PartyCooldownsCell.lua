@@ -177,6 +177,7 @@ function Cell.Dress(c, style, e)
     if c.sig == sig then return end
     c.sig = sig
     local bottom, height = rules.StripBar(cd, rules.Unit(cd))
+    local lift = rules.StripLift(line)
     -- One step of the gray cover is more than the icon's height, so the
     -- cover is fully off the icon one second after zero.
     local jump = size + 2
@@ -190,7 +191,7 @@ function Cell.Dress(c, style, e)
         local pos, gate, strip, veil, edge = c.pos[k], c.gate[k], c.strip[k], c.veil[k], c.edge[k]
         local act = c.act[k]
         pos:ClearAllPoints()
-        pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * step)
+        pos:SetPoint("BOTTOM", c.win, "BOTTOM", 0, bottom * step + lift)
         pos:SetSize(1, height * step)
         KE:ApplyFontToText(strip, style.fontName, style.fontSize, style.outline)
         strip:SetTextColor(1, 1, 1, 1)

@@ -495,6 +495,22 @@ describe("PartyCooldownsRules.ActiveSeconds", function()
     end)
 end)
 
+describe("PartyCooldownsRules.StripLift", function()
+    it("raises a strip a whole sixth of its line height, never less than one", function()
+        local R = loadRules()
+        local cases = {
+            { name = "small font floors at one", line = 4, want = 1 },
+            { name = "rounds to nearest", line = 9, want = 2 },
+            { name = "tested font", line = 12, want = 2 },
+            { name = "large font", line = 24, want = 4 },
+            { name = "no measure", line = nil, want = 1 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.StripLift(case.line), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.LibKey", function()
     it("keys a member of another realm by name-realm only, never by the bare name", function()
         local R = loadRules()

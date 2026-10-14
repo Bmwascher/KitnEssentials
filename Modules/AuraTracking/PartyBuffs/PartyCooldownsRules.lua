@@ -389,6 +389,14 @@ function Rules.StripBar(cd, u)
     return -(cd - 1 + u), 255 * u
 end
 
+-- How far a strip is raised inside its one-line window. A label's outline inks
+-- below its line box, so unraised, the label above shows a sliver at the
+-- window's top. The client has no ink measure; a sixth of the line fits.
+function Rules.StripLift(line)
+    if type(line) ~= "number" then return 1 end
+    return math_max(1, math_floor(line / 6 + 0.5))
+end
+
 -- Whole seconds of a summon's active phase, at least one second short of cd so
 -- the gray cover still has a second to show; 0 when there is none.
 function Rules.ActiveSeconds(active, cd)
