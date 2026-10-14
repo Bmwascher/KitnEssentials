@@ -360,15 +360,15 @@ local function DrawSamples()
         Bar.Dress(bar, s, { texture = texture, cd = cd, name = info.name, color = ClassColor(info.class) })
         bar:ClearAllPoints()
         bar:SetPoint(corner, Pot.sampleLayer, corner, 0, (i - 1) * step)
-        local ready = showReady and i == #SAMPLES
+        local cleared = showReady and i == #SAMPLES
         -- Every sample has a Ready bar under it, as live rows do, so one that
         -- ends reads Ready until it starts again.
         Bar.SetReady(bar, showReady)
-        if not (sample.t and sample.ready == ready) then
+        if not (sample.t and sample.cleared == cleared) then
             if sample.t then Track.Forget(sample.t) end
             local t = CDRules.NewTracker(cd, false)
             t.cell, t.view = bar, Bar
-            if ready then
+            if cleared then
                 CDRules.Clear(t, n)
             else
                 t.loop = math_max(1, math_floor(cd * info.left))
@@ -376,7 +376,7 @@ local function DrawSamples()
             end
             Track.Push(t, n)
             Track.Watch(t)
-            sample.t, sample.ready = t, ready
+            sample.t, sample.cleared = t, cleared
         end
         bar:Show()
     end
