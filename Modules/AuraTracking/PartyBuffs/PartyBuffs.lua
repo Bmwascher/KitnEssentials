@@ -76,7 +76,7 @@ local PREVIEW_BUFFS = {
     { trinket = 1250533, potion = 1295132, external = 47788 },
 }
 -- One sample spec per stand-in row, and the cooling sample's seconds left.
-local PREVIEW_SPECS = { 66, 258, 62, 261 }
+local PREVIEW_SPECS = { 71, 102, 1473, 266 }
 local PREVIEW_LEFT = 74
 local PREVIEW_CELLS = 3
 
@@ -1254,10 +1254,10 @@ local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
 -- the center of a box sized for five rows, which fill it from the top.
 local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
 local STAND_IN_ROWS = {
-    { token = "PALADIN", percent = 100 },
-    { token = "PRIEST",  percent = 85 },
-    { token = "MAGE",    percent = 60 },
-    { token = "ROGUE",   percent = 35 },
+    { name = "Cheeklord", token = "WARRIOR", percent = 100 },
+    { name = "Cznfik",    token = "DRUID",   percent = 85 },
+    { name = "Bite",      token = "EVOKER",  percent = 60 },
+    { name = "Dunnirat",  token = "WARLOCK", percent = 35 },
 }
 
 -- Built once, on the first solo preview.
@@ -1288,11 +1288,10 @@ function PB:EnsurePreviewCells()
         fill:SetPoint("BOTTOMLEFT", missing, "BOTTOMLEFT", 0, 0)
         fill:SetWidth((STAND_IN_WIDTH - 2 * px) * sample.percent / 100)
         fill:SetColorTexture(8 / 255, 12 / 255, 16 / 255, 1)
-        local names = _G.LOCALIZED_CLASS_NAMES_MALE
         local name = cell:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(name, nil, 14, "OUTLINE")
         name:SetPoint("TOPLEFT", cell, "TOPLEFT", 4, -4)
-        name:SetText(KE:ColorTextByClass((names and names[sample.token]) or sample.token, sample.token))
+        name:SetText(KE:ColorTextByClass(sample.name, sample.token))
         local health = cell:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(health, nil, 14, "OUTLINE")
         health:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -4, -4)
