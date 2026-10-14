@@ -51,16 +51,14 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
 
     -- Without the sensor file no bar can exist; the list still feeds the
     -- Cooldowns tab's while-active potion icons.
-    manager:SetCondition("sensorOn", function() return Sensor ~= nil end)
     manager:SetCondition("barsOn", function() return Sensor ~= nil and db.PotionBars == true end)
 
-    local function AddCheck(row, label, key, state, tooltip, onChange)
+    local function AddCheck(row, label, key, state, tooltip)
         local check = GUIFrame:CreateCheckbox(row, label, {
             value = db[key] == true,
             callback = function(checked)
                 db[key] = checked
                 ApplySettings()
-                if onChange then onChange() end
             end,
             tooltip = tooltip,
         })
@@ -82,6 +80,12 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     -- Card: Potion Bars
     ----------------------------------------------------------------
     local cardBars = GUIFrame:CreateCard(scrollChild, "Potion Bars", yOffset)
+    if Sensor then
+        cardBars:AddHeaderToggle(db.PotionBars == true, function(checked)
+            db.PotionBars = checked
+            ApplySettings()
+        end)
+    end
     if not Sensor then
         cardBars:AddNote("Potion bars need party cooldown timers, which this client cannot show.")
     elseif Sensor.door and not Sensor.DoorOpen() then
@@ -92,14 +96,11 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     end
     cardBars:AddLabel("Move the bars with /kes edit or the Position card below.")
     cardBars:AddLabel("Healing potions are not shown: they leave no buff to see, and they have their own cooldown.")
-    local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
-    AddCheck(rowB1, "Potion Bars", "PotionBars", "sensorOn", nil, RefreshStates)
+    local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
     AddCheck(rowB1, "Include Yourself", "PotionIncludeSelf", "barsOn", "Shows a bar for your own potions too.")
-    cardBars:AddRow(rowB1, Theme.rowHeight)
-    local rowB2 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
-    AddCheck(rowB2, "Show Ready Bars", "PotionShowReady", "barsOn",
+    AddCheck(rowB1, "Show Ready Bars", "PotionShowReady", "barsOn",
         "Keeps a full bar reading Ready for each party member whose potion is ready.")
-    cardBars:AddRow(rowB2, Theme.rowHeightLast, 0)
+    cardBars:AddRow(rowB1, Theme.rowHeightLast, 0)
     yOffset = cardBars:GetNextOffset()
 
     ----------------------------------------------------------------

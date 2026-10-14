@@ -84,6 +84,10 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     -- Card: Healer Externals
     ----------------------------------------------------------------
     local cardMain = GUIFrame:CreateCard(scrollChild, "Healer Externals", yOffset)
+    cardMain:AddHeaderToggle(db.HealerExternals == true, function(checked)
+        db.HealerExternals = checked
+        ApplySettings()
+    end)
     if Sensor and Sensor.door and not Sensor.DoorOpen() then
         cardMain:AddNote("Healer external timers are unavailable on this client.")
     end
@@ -93,8 +97,6 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         "player's cast of the same spell, such as a Retribution Paladin's Blessing of Sacrifice, starts it too.")
     cardMain:AddNote("Move it with /kes edit.")
     local rowM1 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeightLast)
-    AddCheck(rowM1, "Healer Externals", "HealerExternals", "all",
-        "Shows each party healer's external cooldown in its own box.")
     local attach = GUIFrame:CreateButton(rowM1, "Attach to Healer Mana", {
         height = 24,
         tooltip = "Places the box just above the Healer Mana display and keeps it there when that display moves.",
