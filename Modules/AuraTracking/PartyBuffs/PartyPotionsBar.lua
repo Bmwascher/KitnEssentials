@@ -45,16 +45,28 @@ end
 -- fill edge, which moves one row height and 2 more each second, so the clip is
 -- off the row one second after zero. A narrow range cannot gate it: the
 -- client draws one empty with the value above it.
-local function PlaceGate(c, f, style, bottom, height)
+-- The gate hangs from the visibility bar's edge, which a hidden slot lifts by
+-- more than the gate's whole travel, so a hidden face is off the row by
+-- position too, and the Ready clip below the gate's edge covers the row
+-- exactly when no face does. Values 0 and 1 sit inside the bar's range, never
+-- on its ends.
+local function PlaceGate(c, f, ready, style, bottom, height)
     local cd, h = c.cd, style.height
     local jump = h + 2
+    local lift = (cd + CDRules.Unit(cd) + 1) * jump + h
+    f.vis:ClearAllPoints()
+    f.vis:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 0, -lift)
+    f.vis:SetSize(1, 3 * lift)
     f.gate:ClearAllPoints()
-    f.gate:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 0, bottom * jump)
+    f.gate:SetPoint("BOTTOMLEFT", f.visFill, "BOTTOMLEFT", 0, bottom * jump)
     f.gate:SetSize(1, height * jump)
     f.clip:ClearAllPoints()
     f.clip:SetPoint("BOTTOMLEFT", f.gateFill, "TOPLEFT", 0, -1)
     f.clip:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, (cd - 1) * jump + h + 1)
     f.clip:SetWidth(style.width)
+    ready:ClearAllPoints()
+    ready:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, -1)
+    ready:SetSize(style.width, 3 * lift + height * jump)
 end
 
 local function NewArt(parent)
@@ -85,15 +97,25 @@ function Bar.New(parent)
     local c = CreateFrame("Frame", nil, parent)
     c:EnableMouse(false)
     c:Hide()
-    c.ready = NewArt(c)
+    c.readyClip = {}
+    local holder = c
+    for k = 1, 2 do
+        c.readyClip[k] = CreateFrame("Frame", nil, holder)
+        c.readyClip[k]:SetClipsChildren(true)
+        holder = c.readyClip[k]
+    end
+    c.ready = NewArt(holder)
     c.ready:SetAllPoints(c)
     c.ready:Hide()
     c.readyText = c.ready.top:CreateFontString(nil, "OVERLAY")
     c.readyText:SetJustifyH("RIGHT")
     c.face = {}
     for k = 1, 2 do
-        local f = { gate = NewBar(c, "VERTICAL") }
+        local f = { gate = NewBar(c, "VERTICAL"), vis = NewBar(c, "VERTICAL") }
         f.gateFill = f.gate:GetStatusBarTexture()
+        f.vis:SetReverseFill(true)
+        f.vis:SetMinMaxValues(-1, 2)
+        f.visFill = f.vis:GetStatusBarTexture()
         f.clip = CreateFrame("Frame", nil, c)
         f.clip:SetClipsChildren(true)
         f.clip:SetAlpha(0)
@@ -158,8 +180,7 @@ end
 -- Look and text are applied every time; the strips move only when the font,
 -- size or length changed. The cover is the drained part, drawn in the
 -- background color. The fill ends at its edge, so nothing but the cover sits
--- behind the drained part, except under Ready bars: the face's fill spans the
--- bar and hides the Ready bar beneath it.
+-- behind the drained part.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
     local fill, fillScale, bg, bgScale, nameColor, bgAlpha = Rules.Colors(style, e.color)
@@ -177,24 +198,19 @@ function Bar.Dress(c, style, e)
     c.readyText:ClearAllPoints()
     c.readyText:SetPoint("RIGHT", c.ready.area, "RIGHT", -TEXT_PAD, 0)
     local level = c:GetFrameLevel()
+    for k = 1, 2 do c.readyClip[k]:SetFrameLevel(level + 1) end
     c.ready:SetFrameLevel(level + 1)
     c.ready.top:SetFrameLevel(level + 2)
     for k = 1, 2 do
         local f = c.face[k]
         Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0)
-        PlaceGate(c, f, style, bottom, height)
+        PlaceGate(c, f, c.readyClip[k], style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.area)
-        -- Over a fill that spans the bar, the drained part takes its own color's
-        -- opacity, so a class-colored one stays solid instead of showing the fill.
-        local alpha = bgAlpha
-        if style.ready then alpha = bg[4] or 1 end
-        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, alpha)
-        if not style.ready then
-            f.art.fill:ClearAllPoints()
-            f.art.fill:SetPoint("TOPLEFT", f.art.area, "TOPLEFT")
-            f.art.fill:SetPoint("BOTTOMRIGHT", f.coverFill, "BOTTOMLEFT")
-        end
+        f.cover:SetStatusBarColor(bg[1] * bgScale, bg[2] * bgScale, bg[3] * bgScale, bgAlpha)
+        f.art.fill:ClearAllPoints()
+        f.art.fill:SetPoint("TOPLEFT", f.art.area, "TOPLEFT")
+        f.art.fill:SetPoint("BOTTOMRIGHT", f.coverFill, "BOTTOMLEFT")
         f.win:ClearAllPoints()
         f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, raise * px)
         f.win:SetSize(timerWidth, winPx * px)
@@ -241,6 +257,7 @@ function Bar.Write(c, k, sl, u, n)
     f.cover:SetValue(sl.c)
     f.gate:SetMinMaxValues(0, 1)
     f.gate:SetValue(sl.c)
+    f.vis:SetValue(sl.v)
     f.clip:SetAlpha(sl.v)
     FaceRange(c, k, sl, u, n)
 end
@@ -253,7 +270,10 @@ end
 function Bar.Clear(c)
     c:Hide()
     c.placed = false
-    for k = 1, 2 do c.face[k].clip:SetAlpha(0) end
+    for k = 1, 2 do
+        c.face[k].vis:SetValue(0)
+        c.face[k].clip:SetAlpha(0)
+    end
 end
 
 function Bar.SetReady(c, on)

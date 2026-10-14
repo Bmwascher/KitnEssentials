@@ -165,7 +165,7 @@ local function Restyle(db)
     local s = Pot.style
     s.width, s.height = db.PotionWidth, db.PotionHeight
     s.gap = Rules.Gap(db.PotionSpacing, KE:GetPixelSize())
-    s.timer, s.ready = db.PotionShowTimer == true, db.PotionShowReady == true
+    s.timer = db.PotionShowTimer == true
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
     s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
