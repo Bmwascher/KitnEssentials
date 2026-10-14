@@ -69,7 +69,8 @@ local function PlaceGate(c, f, ready, style, bottom, height)
     f.gate:SetSize(1, 2 * height * jump)
     f.clip:ClearAllPoints()
     f.clip:SetPoint("BOTTOMLEFT", f.gateFill, "TOPLEFT", 0, -1)
-    f.clip:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, (cd - 1) * jump + h + 1)
+    c.clipTop, c.clipSeat = (cd - 1) * jump + h + 1, nil
+    f.clip:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, c.clipTop)
     f.clip:SetWidth(style.width)
     ready:ClearAllPoints()
     ready:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, -1)
@@ -259,10 +260,12 @@ function Bar.Dress(c, style, e)
     end
 end
 
--- The time window's bottom and the names' tops sit a quarter of a screen pixel
--- above the pixel grid. On the grid itself a text under the sliding clip
--- rounds up or down from second to second and jumps a pixel. Each is re-placed
--- only when the bar has moved off its seat.
+-- The time window's bottom, the names' tops and the clip frames' edges sit a
+-- quarter of a screen pixel above the pixel grid. On the grid itself each
+-- rounds up or down from second to second as the clips slide, and the text in
+-- them jumps a pixel. The clip edges cannot be read on a live bar, but they
+-- sit a whole number of pixels from the bar's bottom. Each is re-placed only
+-- when the bar has moved off its seat.
 function Bar.Seat(c)
     if not c.nameLift then return end
     local y = c:GetBottom()
@@ -277,6 +280,16 @@ function Bar.Seat(c)
                 f.seat = seat
             end
         end
+    end
+    local clip = CDRules.Seat(y, 1, scale, height, c.clipSeat, issecretvalue)
+    if clip then
+        for k = 1, 2 do
+            local f = c.face[k]
+            f.clip:SetPoint("BOTTOMLEFT", f.gateFill, "TOPLEFT", 0, clip - 1)
+            f.clip:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, c.clipTop + clip)
+            c.readyClip[k]:SetPoint("TOPLEFT", f.gateFill, "TOPLEFT", 0, clip - 1)
+        end
+        c.clipSeat = clip
     end
     local seat = CDRules.Seat(y, -c.nameLift, scale, height, c.nameSeat, issecretvalue)
     if not seat then return end
