@@ -69,7 +69,6 @@ local CLEAR = { 0, 0, 0, 0 }
 local BLACK = { 0, 0, 0, 1 }
 -- Reads pause this long once a key starts: its aura refresh is not a use.
 local KEY_HOLD = 2
--- Per row, the buff each list category's sample shows.
 local PREVIEW_BUFFS = {
     { trinket = 1297761, potion = 1236616, external = 102342 },
     { trinket = 1293316, potion = 1236994, external = 6940 },
@@ -1244,14 +1243,9 @@ local function RearmPreview(cooldown)
     if cooldown.keDuration then cooldown:SetCooldown(GetTime(), cooldown.keDuration) end
 end
 
--- The row's own sample while its list has it switched on, else the list's
--- first switched-on spell.
 function PB:PreviewIcon(d, k)
-    local list = self.db[d.category.listKey]
-    local spellID = PREVIEW_BUFFS[(k - 1) % #PREVIEW_BUFFS + 1][d.category.key]
-    if not (list and spellID and KE.AuraRules.IsIncluded(spellID, list[spellID])) then
-        spellID = KE.AuraRules.FirstIncludeSpellID(list)
-    end
+    local spellID = KE.PartyBuffsRules.PreviewSample(PREVIEW_BUFFS, k, d.category.key,
+        self.db[d.category.listKey])
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 

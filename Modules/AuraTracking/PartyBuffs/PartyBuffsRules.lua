@@ -175,6 +175,16 @@ function Rules.ActivePlacement(db, useHealer)
 end
 
 -- Fills absent healer keys from their defaults; an edited copy is kept.
+-- Preview row k's sample spell for a list category. A sample the player
+-- switched off in the list gives way to the list's first switched-on spell,
+-- as the live icons would never show it.
+function Rules.PreviewSample(samples, k, key, list)
+    local auraRules = KE.AuraRules
+    local spellID = samples[(k - 1) % #samples + 1][key]
+    if list and spellID and auraRules.IsIncluded(spellID, list[spellID]) then return spellID end
+    return auraRules.FirstIncludeSpellID(list)
+end
+
 function Rules.SeedHealerPlacement(db)
     for _, pair in ipairs(Rules.PLACEMENT_KEYS) do
         if db[pair[2]] == nil then db[pair[2]] = db[pair[1]] end

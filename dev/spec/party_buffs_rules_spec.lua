@@ -306,3 +306,25 @@ describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
         end
     end)
 end)
+
+describe("PartyBuffsRules.PreviewSample", function()
+    it("shows a row's own sample only while the list has it switched on", function()
+        local R = L.loadPartyBuffsRules()
+        local samples = { { potion = 30 }, { potion = 40 } }
+        local cases = {
+            { name = "own sample switched on", k = 2, list = { [20] = { enabled = true }, [40] = { enabled = true } },
+              want = 40 },
+            { name = "own sample switched off", k = 2, list = { [20] = { enabled = true }, [40] = { enabled = false } },
+              want = 20 },
+            { name = "own sample not in the list", k = 2, list = { [20] = { enabled = true } }, want = 20 },
+            { name = "own sample's record not a table", k = 2, list = { [20] = { enabled = true }, [40] = true },
+              want = 20 },
+            { name = "nothing switched on", k = 2, list = { [40] = { enabled = false } }, want = nil },
+            { name = "a row past the samples wraps to the first", k = 3,
+              list = { [30] = { enabled = true }, [40] = { enabled = true } }, want = 30 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.PreviewSample(samples, case.k, "potion", case.list), case.name)
+        end
+    end)
+end)
