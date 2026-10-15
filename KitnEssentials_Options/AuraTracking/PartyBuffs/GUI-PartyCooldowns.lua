@@ -138,12 +138,13 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     end
 
     -- value, when given, is shown in place of db[key].
-    local function AddSlider(row, label, key, low, high, value)
+    local function AddSlider(row, label, key, low, high, value, tooltip)
         if value == nil then value = db[key] end
         local slider = GUIFrame:CreateSlider(row, label, {
             min = low, max = high, step = 1,
             value = value,
             callback = function(val) db[key] = val; ApplySettings() end,
+            tooltip = tooltip,
         })
         row:AddWidget(slider, 0.5)
         return slider
@@ -384,10 +385,15 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     AddPlacement(AddDropdown(rowX1, "Side of the Frame", PlacementKey("Side"), SIDE_OPTIONS, PlacementValue("Side")))
     AddPlacement(AddDropdown(rowX1, "Frame Strata", PlacementKey("Strata"), STRATA_OPTIONS, PlacementValue("Strata")))
     cardPosition:AddRow(rowX1, Theme.rowHeight)
-    local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
+    local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
     AddPlacement(AddSlider(rowX2, "X Offset", PlacementKey("XOffset"), -100, 100, PlacementValue("XOffset")))
     AddPlacement(AddSlider(rowX2, "Y Offset", PlacementKey("YOffset"), -100, 100, PlacementValue("YOffset")))
-    cardPosition:AddRow(rowX2, Theme.rowHeightLast, 0)
+    cardPosition:AddRow(rowX2, Theme.rowHeight)
+    local rowX3 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
+    AddPlacement(AddSlider(rowX3, "Icons Per Row", PlacementKey("IconsPerRow"), 1,
+        KE.PartyBuffsRules.MAX_PER_ROW, PlacementValue("IconsPerRow"),
+        "Icons on one line before the row wraps. At 14 it never wraps."))
+    cardPosition:AddRow(rowX3, Theme.rowHeightLast, 0)
     yOffset = cardPosition:GetNextOffset()
 
     ----------------------------------------------------------------
