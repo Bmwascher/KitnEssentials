@@ -326,13 +326,13 @@ local SHOWN_OPS = {
 }
 
 -- The button's own display pass. The aura button offers no direct call for
--- it, but each of its setters ends in one. KE adds nothing else to the
+-- it, but AddPandemicRegion ends in one. KE adds nothing else to the
 -- pandemic list and the region is empty, so adding and removing it changes
--- nothing else.
+-- nothing else. The add inserts before its pass, so the remove runs even
+-- when the add raised.
 local function RunDisplayPass(host, button)
-    if pcall(button.AddPandemicRegion, button, host.passRegion) then
-        pcall(button.RemovePandemicRegion, button, host.passRegion)
-    end
+    pcall(button.AddPandemicRegion, button, host.passRegion)
+    pcall(button.RemovePandemicRegion, button, host.passRegion)
 end
 
 -- Only a marked host has a button to sync with. True when the list holds
@@ -359,7 +359,7 @@ local function Configure(host, settings, width, height)
 end
 
 -- For a caller that owns its host (a cast bar's gate frame, a slot button's
--- border): it passes its plain width and height for the pixel style.
+-- border). A caller may pass a plain width and height for the pixel style.
 Glow.Configure = Configure
 
 -- initializeFrame is the only legally guaranteed window to parent a frame to
