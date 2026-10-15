@@ -242,6 +242,7 @@ describe("PartyBuffsRules.ActivePlacement", function()
             HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4, HealerStrata = "HIGH",
             IconsPerRow = 14, HealerIconsPerRow = 3,
             IconSize = 36, HealerIconSize = 32,
+            Grow = "UP", HealerGrow = "DOWN",
         }
         for key, value in pairs(overrides or {}) do db[key] = value end
         return db
@@ -249,8 +250,8 @@ describe("PartyBuffsRules.ActivePlacement", function()
 
     it("uses the healer copy only while the toggle is on and the healer answer is true", function()
         local R = L.loadPartyBuffsRules()
-        local default = { "LEFT", 0, 0, "FRAME", 14, 36 }
-        local healer = { "RIGHT", 6, -4, "HIGH", 3, 32 }
+        local default = { "LEFT", 0, 0, "FRAME", 14, 36, "UP" }
+        local healer = { "RIGHT", 6, -4, "HIGH", 3, 32, "DOWN" }
         local cases = {
             { name = "toggle off, healer spec", toggle = false, useHealer = true, want = default },
             { name = "toggle on, other spec", toggle = true, useHealer = false, want = default },
@@ -269,7 +270,39 @@ describe("PartyBuffsRules.ActivePlacement", function()
         db.HealerStrata = nil
         db.HealerIconsPerRow = nil
         db.HealerIconSize = nil
-        assert.are.same({ "RIGHT", 0, -4, "FRAME", 14, 36 }, { R.ActivePlacement(db, true) })
+        db.HealerGrow = nil
+        assert.are.same({ "RIGHT", 0, -4, "FRAME", 14, 36, "UP" }, { R.ActivePlacement(db, true) })
+    end)
+end)
+
+describe("PartyBuffsRules.Layout", function()
+    it("gives the layout the side offers for its Grow, the side's first for any other, and Left's list "
+        .. "for an unknown side", function()
+        local R = L.loadPartyBuffsRules()
+        -- want: the grow of the layout expected; nil expects the list's first layout.
+        local cases = {
+            { name = "Left, unset", side = "LEFT", grow = nil, list = "LEFT" },
+            { name = "Above, unset", side = "ABOVE", grow = nil, list = "ABOVE" },
+            { name = "Inside, unset", side = "INSIDE", grow = nil, list = "INSIDE" },
+            { name = "Left offers Up", side = "LEFT", grow = "UP", list = "LEFT", want = "UP" },
+            { name = "Below offers Left", side = "BELOW", grow = "LEFT", list = "BELOW", want = "LEFT" },
+            { name = "Left, toward the frame", side = "LEFT", grow = "RIGHT", list = "LEFT" },
+            { name = "Right, toward the frame", side = "RIGHT", grow = "LEFT", list = "RIGHT" },
+            { name = "Above, toward the frame", side = "ABOVE", grow = "DOWN", list = "ABOVE" },
+            { name = "Below, toward the frame", side = "BELOW", grow = "UP", list = "BELOW" },
+            { name = "Inside, out of the frame", side = "INSIDE", grow = "RIGHT", list = "INSIDE" },
+            { name = "Above, another side's choice", side = "ABOVE", grow = "UP", list = "ABOVE" },
+            { name = "unknown side reads as Left", side = "NOWHERE", grow = "UP", list = "LEFT", want = "UP" },
+        }
+        for _, case in ipairs(cases) do
+            local layout, layouts = R.Layout(case.side, case.grow)
+            assert.are.equal(R.LAYOUTS[case.list], layouts, case.name)
+            if case.want then
+                assert.are.equal(case.want, layout.grow, case.name)
+            else
+                assert.are.equal(layouts[1], layout, case.name)
+            end
+        end
     end)
 end)
 

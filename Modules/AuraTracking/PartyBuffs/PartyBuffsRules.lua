@@ -8,6 +8,7 @@
 local KE = select(2, ...)
 
 local ipairs = ipairs
+local pairs = pairs
 local math_ceil = math.ceil
 local math_floor = math.floor
 local math_max = math.max
@@ -126,6 +127,8 @@ end
 
 -- The spec can move the icons per row and the corner while the tracker is
 -- off, with no event to say so, so each bind compares the last layout's inputs.
+-- The corner fixes every direction inside the holder (LAYOUTS); the holder's
+-- own anchor is set on every bind (PB:PlaceHolder).
 function Rules.NeedsLayout(slot, cellCount, perRow, corner)
     return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutCorner ~= corner
 end
@@ -246,6 +249,43 @@ function Rules.MatchSlots(bindings, units, maxSlots)
     return placed
 end
 
+-- Per side, the layouts its Grow can pick; an unset Grow gets the first.
+-- point/rel place the holder on the party frame, dx/dy scale the icon gap, and
+-- corner is where the container is pinned and grows away from. None grows
+-- toward its frame: Left and Right run their lines outward, Above wraps up and
+-- Below wraps down.
+Rules.LAYOUTS = {
+    LEFT = {
+        { grow = "CENTER", point = "RIGHT",       rel = "LEFT",        dx = -1, dy = 0, corner = "TOPRIGHT" },
+        { grow = "DOWN",   point = "TOPRIGHT",    rel = "TOPLEFT",     dx = -1, dy = 0, corner = "TOPRIGHT" },
+        { grow = "UP",     point = "BOTTOMRIGHT", rel = "BOTTOMLEFT",  dx = -1, dy = 0, corner = "BOTTOMRIGHT" },
+    },
+    RIGHT = {
+        { grow = "CENTER", point = "LEFT",        rel = "RIGHT",       dx = 1,  dy = 0, corner = "TOPLEFT" },
+        { grow = "DOWN",   point = "TOPLEFT",     rel = "TOPRIGHT",    dx = 1,  dy = 0, corner = "TOPLEFT" },
+        { grow = "UP",     point = "BOTTOMLEFT",  rel = "BOTTOMRIGHT", dx = 1,  dy = 0, corner = "BOTTOMLEFT" },
+    },
+    ABOVE = {
+        { grow = "RIGHT", point = "BOTTOMLEFT",  rel = "TOPLEFT",  dx = 1,  dy = 1, corner = "BOTTOMLEFT" },
+        { grow = "LEFT",  point = "BOTTOMRIGHT", rel = "TOPRIGHT", dx = -1, dy = 1, corner = "BOTTOMRIGHT" },
+    },
+    BELOW = {
+        { grow = "RIGHT", point = "TOPLEFT",  rel = "BOTTOMLEFT",  dx = 1,  dy = -1, corner = "TOPLEFT" },
+        { grow = "LEFT",  point = "TOPRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = -1, corner = "TOPRIGHT" },
+    },
+    INSIDE = {
+        { grow = "LEFT", point = "BOTTOMRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = 1, corner = "BOTTOMRIGHT" },
+    },
+}
+-- A layout grows away from its corner, so the corner alone sets its directions,
+-- and two layouts with one corner lay out alike inside the holder.
+for _, layouts in pairs(Rules.LAYOUTS) do
+    for _, layout in ipairs(layouts) do
+        layout.left = layout.corner:sub(-5) == "RIGHT"
+        layout.up = layout.corner:sub(1, 6) == "BOTTOM"
+    end
+end
+
 -- The fields a healer copy can override, as { default key, healer key }, in
 -- the order ActivePlacement returns them.
 Rules.PLACEMENT_KEYS = {
@@ -255,20 +295,39 @@ Rules.PLACEMENT_KEYS = {
     { "Strata", "HealerStrata" },
     { "IconsPerRow", "HealerIconsPerRow" },
     { "IconSize", "HealerIconSize" },
+    { "Grow", "HealerGrow" },
 }
 
--- Side, X, Y, strata, icons per row and icon size to use. A healer key with
--- no profile default reads its default counterpart while unset; the healer
--- icons per row and icon size have profile defaults of their own.
+-- A healer key that is nil or false reads its default counterpart. The
+-- settings page shows its values through this too, so the two agree.
+function Rules.PlacementValue(db, pair, healer)
+    local value = healer and db[pair[2]]
+    if value == nil or value == false then value = db[pair[1]] end
+    return value
+end
+
+-- Side, X, Y, strata, icons per row, icon size and grow to use. A healer key
+-- with no profile default reads its default counterpart while unset; the
+-- healer icons per row and icon size have profile defaults of their own.
 function Rules.ActivePlacement(db, useHealer)
     local healer = useHealer and db.UseHealerPlacement == true
     local function pick(pair)
-        local value = healer and db[pair[2]]
-        if value == nil or value == false then value = db[pair[1]] end
-        return value
+        return Rules.PlacementValue(db, pair, healer)
     end
     local keys = Rules.PLACEMENT_KEYS
-    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5]), pick(keys[6])
+    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5]), pick(keys[6]),
+        pick(keys[7])
+end
+
+-- The layout in effect and its side's list. An unknown side reads as LEFT, and
+-- a Grow the side does not offer, unset included, as the side's first layout;
+-- the stored Grow is never rewritten.
+function Rules.Layout(side, grow)
+    local layouts = Rules.LAYOUTS[side] or Rules.LAYOUTS.LEFT
+    for i = 1, #layouts do
+        if layouts[i].grow == grow then return layouts[i], layouts end
+    end
+    return layouts[1], layouts
 end
 
 -- Preview row k's sample spell for a list category. A sample the player
