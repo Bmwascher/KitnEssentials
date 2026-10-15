@@ -1578,6 +1578,8 @@ local Defaults = {
             ShowCooldownText  = true,
             -- Glow While Active: a cooldown icon glows while its buff is up.
             GlowEnabled       = true,
+            -- The external, potion and trinket buff icons glow too.
+            GlowBuffs         = true,
             GlowType          = "ants",
             GlowColor         = { 1, 0.380, 0.988, 1 }, -- #FF61FC
             GlowLines         = 8,

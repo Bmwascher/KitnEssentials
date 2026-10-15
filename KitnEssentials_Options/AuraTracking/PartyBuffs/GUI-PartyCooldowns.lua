@@ -257,6 +257,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:Register(AddCheck(rowD3b, "Cooldown Text", "ShowCooldownText",
         "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size."),
         "cellsOn")
+    AddCheck(rowD3b, "Glow Buff Icons", "GlowBuffs",
+        "External, potion and trinket buff icons glow while they show, in the Glow While Active style.")
     cardDisplay:AddRow(rowD3b, Theme.rowHeight)
 
     local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
