@@ -36,9 +36,9 @@ local Track = {}
 KE.PartyCooldownsSensor = Track
 
 local SENSOR_GROUP = "cd"
--- Some cooldown buffs (Dark Transformation) are flagged nameplate-only, and
--- plain "HELPFUL" filters those out. The spell-ID list still limits each
--- sensor to its own buffs.
+-- The sensors and the overlay slots both use this. Some cooldown buffs (Dark
+-- Transformation) are flagged nameplate-only, and plain "HELPFUL" filters
+-- those out. The spell-ID list still limits each container to its own buffs.
 local SENSOR_FILTER = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
 -- A lit sensor spans the screen from just off its left edge.
 local SENSOR_WIDTH = 50000
