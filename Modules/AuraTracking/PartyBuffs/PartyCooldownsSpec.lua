@@ -606,11 +606,14 @@ local debugprofilestop = debugprofilestop
 local INSPECT_CONFIG = Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
 local MAX_MISSES = 3
 
--- swap -> the node and entry holding its talent, found once; and the walks
--- that missed it.
+-- spec -> swap -> the node and entry holding its talent, found once; and the
+-- walks that missed it. Per spec: two specs can hold the same talent on
+-- nodes of their own.
 local located, misses = {}, {}
 
+-- A node the inspected spec can see wins; the first match otherwise.
 local function Walk(tree, swap)
+    local fallback
     for _, nodeID in ipairs(C_Traits.GetTreeNodes(tree) or {}) do
         local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, nodeID)
         for _, entryID in ipairs(type(node) == "table" and node.entryIDs or {}) do
@@ -618,24 +621,28 @@ local function Walk(tree, swap)
             local definitionID = type(entry) == "table" and entry.definitionID
             local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
             if type(definition) == "table" and definition.spellID and swap.talents[definition.spellID] then
-                return { node = nodeID, entry = entryID }
+                local at = { node = nodeID, entry = entryID }
+                if node.isVisible == true then return at end
+                fallback = fallback or at
             end
         end
     end
-    return nil
+    return fallback
 end
 
 -- Walks the class tree once per swap; Spec.locateMs keeps the longest walk
 -- in milliseconds, so its cost can be read in game.
-local function Locate(tree, swap)
+local function Locate(specID, tree, swap)
     local start = debugprofilestop()
     local at = Walk(tree, swap)
     local ms = debugprofilestop() - start
     if ms > (Spec.locateMs or 0) then Spec.locateMs = ms end
     if at then
-        located[swap] = at
+        located[specID] = located[specID] or {}
+        located[specID][swap] = at
     else
-        misses[swap] = (misses[swap] or 0) + 1
+        misses[specID] = misses[specID] or {}
+        misses[specID][swap] = (misses[specID][swap] or 0) + 1
     end
     return at
 end
@@ -666,10 +673,10 @@ local function ReadTaken(specID)
     local tree = C_ClassTalents.GetTraitTreeForSpec(specID)
     if not HasTree(trees, tree) then return nil end
     for castID, swap in pairs(swaps) do
-        local at = located[swap]
-        if not at and (misses[swap] or 0) < MAX_MISSES then
+        local at = located[specID] and located[specID][swap]
+        if not at and (misses[specID] and misses[specID][swap] or 0) < MAX_MISSES then
             if InCombatLockdown() then return nil, true end
-            at = Locate(tree, swap)
+            at = Locate(specID, tree, swap)
         end
         if not at then return nil end
         local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, at.node)
