@@ -704,11 +704,12 @@ local function IsClassConfig(configID)
     return info.type == Enum.TraitConfigType.Combat
 end
 
--- Three unreadable answers in a row store an empty one, which keeps the
--- likely icon, and shows a row that needs a talent only when it is likely.
--- Talents only concern class cooldowns. A teammate's talent change fires no
--- event here, so a ready check marks every teammate's answer stale for the
--- inspect to read again; a stale answer stays in use until a read replaces it.
+-- Three unreadable answers in a row keep the answer held, else store an empty
+-- one, which keeps the likely icon, and shows a row that needs a talent only
+-- when it is likely. Talents only concern class cooldowns. A teammate's
+-- talent change fires no event here, so a ready check outside a key marks
+-- every teammate's answer stale for the inspect to read again; a stale answer
+-- stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
     events = { "TRAIT_CONFIG_UPDATED", "READY_CHECK" },
     On = function() return Spec.trackClass == true end,
