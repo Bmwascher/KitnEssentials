@@ -432,6 +432,15 @@ function PB:Enqueue(k)
     end
 end
 
+-- The frame search with each frame in the slot that already holds its token.
+-- The preview reads its member from the slot, so it must place rows the same way.
+function PB:MatchFrames()
+    local found = self:FindFrames()
+    local units = {}
+    for k = 1, MAX_SLOTS do units[k] = self.slots[k] and self.slots[k].unit end
+    return KE.PartyBuffsRules.MatchSlots(found, units, MAX_SLOTS), #found
+end
+
 -- The one place bindings are made: BindSlot and BuildSlot act only on a
 -- binding set here. While a roster change settles, a token can still name a
 -- frame's previous occupant, so a slot stays dropped until the settle timer
@@ -459,11 +468,8 @@ function PB:ResolveAll()
         Track.InterfaceShown()
     end
     self.buildPending = false
-    local found = self:FindFrames()
-    Debug("resolve %d frame(s)", #found)
-    local units = {}
-    for k = 1, MAX_SLOTS do units[k] = self.slots[k] and self.slots[k].unit end
-    local bindings = KE.PartyBuffsRules.MatchSlots(found, units, MAX_SLOTS)
+    local bindings, count = self:MatchFrames()
+    Debug("resolve %d frame(s)", count)
     for k = 1, MAX_SLOTS do
         local binding = bindings[k]
         self.bindings[k] = binding
@@ -1526,8 +1532,8 @@ function PB:ShowPreview()
     -- Solo, the search can find no teammate, so it is skipped.
     local grouped = PlainTrue(IsInGroup)
     if grouped then
-        local bindings = self:FindFrames()
-        for i = 1, #bindings do frames[i] = bindings[i].frame end
+        local bindings = self:MatchFrames()
+        for k = 1, MAX_SLOTS do frames[k] = bindings[k] and bindings[k].frame end
     end
     -- Solo only: grouped with no party frame found, rows beside stand-ins
     -- would stand for teammates the player cannot see.
