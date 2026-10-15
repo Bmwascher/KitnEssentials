@@ -690,11 +690,11 @@ local function SelfTaken(specID)
     return out
 end
 
--- The miss count belongs to the answer: a new spec gets its own three tries.
--- A walk that missed against a member's old spec must not stop the walk for
--- everyone, so its miss counts go too.
+-- A member's unreadable reads belong to the answer: a new spec gets its own
+-- three tries. A walk that missed against a member's old spec must not stop
+-- the walk for everyone, so the walk's misses go too.
 local function ForgetTalents(m)
-    m.talents, m.talentMisses, m.talentsStale = nil, nil, nil
+    m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
     wipe(misses)
 end
 
@@ -711,8 +711,8 @@ end
 
 -- Three unreadable answers in a row keep the answer held, else store an empty
 -- one, which keeps the likely icon, and shows a row that needs a talent only
--- when it is likely; that empty answer is read once more TRY_WAIT seconds
--- later. Talents only concern class cooldowns. A teammate's
+-- when it is likely; that empty answer gets one more round of reads
+-- TRY_WAIT seconds later. Talents only concern class cooldowns. A teammate's
 -- talent change fires no event here, so a ready check outside a key marks
 -- every teammate's answer stale for the inspect to read again; a stale answer
 -- stays in use until a read replaces it.
@@ -722,9 +722,16 @@ Spec.readers[#Spec.readers + 1] = {
     Clear = ForgetTalents,
     Wanted = function(m)
         return (m.talents == nil or m.talentsStale == true) and m.spec ~= nil
+            and not (m.talentsRetryAt and GetTime() < m.talentsRetryAt)
             and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
     end,
     Read = function(m)
+        -- The walk's misses are cleared as the retry reads, not as it waits:
+        -- another member's reads in the wait could use them up again.
+        if m.talentsRetryAt then
+            m.talentsRetryAt = nil
+            wipe(misses)
+        end
         local ok, taken, skip = pcall(ReadTaken, m.spec)
         if ok and taken then
             m.talents, m.talentMisses, m.talentsStale = taken, nil, nil
@@ -736,10 +743,12 @@ Spec.readers[#Spec.readers + 1] = {
             local rules = KE.PartyCooldownsRules
             local answer, retry = rules.AfterTalentMisses(m.talents)
             m.talents, m.talentMisses, m.talentsStale = answer, nil, retry or nil
+            -- A read just after a spec change can find the old talents. The
+            -- wait holds back only the talent read; the timer wakes the queue
+            -- a tick after it ends, so the wait has passed when it runs.
             if retry then
-                -- A read just after a spec change can find the old talents.
-                wipe(misses)
-                m.waitUntil = GetTime() + rules.TRY_WAIT
+                m.talentsRetryAt = GetTime() + rules.TRY_WAIT
+                C_Timer.After(rules.TRY_WAIT + TICK, Spec.Wake)
             end
         end
     end,
