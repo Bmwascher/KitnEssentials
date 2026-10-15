@@ -36,12 +36,25 @@ GlowRules.FLIPBOOKS = {
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.4,
         frameWidth = 0, frameHeight = 0,
     },
+    -- The game's own alert ants loop in about a fifth of a second, so at a
+    -- shared Speed this sheet looked several times slower than the others.
+    -- speedFactor divides the loop; minDuration keeps the slider's top end
+    -- from stepping frames faster than the game's own sheet does.
     alert = {
         texture = [[Interface\SpellActivationOverlay\IconAlertAnts]],
         rows = 5, columns = 5, frames = 22, sizeFactor = 1.25,
         frameWidth = 48, frameHeight = 48,
+        speedFactor = 4, minDuration = 0.22,
     },
 }
+
+-- The loop length a sheet plays at, from the Speed slider's period.
+function GlowRules.FlipbookPeriod(entry, period)
+    local scaled = period / (entry.speedFactor or 1)
+    local floor = entry.minDuration or 0
+    if scaled < floor then return floor end
+    return scaled
+end
 
 -- Every selectable style, and which host draws it. The flipbook host steps a
 -- sheet; the pixel host marches four masked dash strips; the border host

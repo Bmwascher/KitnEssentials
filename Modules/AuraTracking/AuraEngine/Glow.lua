@@ -254,7 +254,7 @@ local function ConfigureHost(host, settings, width, height)
     -- something the flipbook itself reads actually differs. The TEXTURE SOURCE
     -- counts: two styles can share a grid, so comparing the grid alone reports
     -- "unchanged" across a sheet swap and the animation is never replayed.
-    local wanted = GlowRules.FlipbookState(entry, period)
+    local wanted = GlowRules.FlipbookState(entry, GlowRules.FlipbookPeriod(entry, period))
 
     local restarted = GlowRules.NeedsRestart(host.appliedFlip, wanted)
 
