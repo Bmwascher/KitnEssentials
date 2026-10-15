@@ -24,6 +24,7 @@ local NotifyInspect = NotifyInspect
 local UnitClass = UnitClass
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
+local UnitIsConnected = UnitIsConnected
 local UnitName = UnitName
 local UnitRace = UnitRace
 local ipairs = ipairs
