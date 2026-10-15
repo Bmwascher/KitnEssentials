@@ -563,7 +563,8 @@ Spec.readers[#Spec.readers + 1] = {
                 m.trinketsStale = true
                 Spec.Wake()
             end
-        else
+        elseif event == "ITEM_DATA_LOAD_RESULT" or event == "PLAYER_REGEN_ENABLED" then
+            -- Every reader gets every event, so the events are named.
             -- A successful load re-derives the members wearing that item; a
             -- failed one waits for combat's end or the next read. Leaving
             -- combat retries every incomplete member. Records, not the bound
