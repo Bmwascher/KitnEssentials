@@ -650,7 +650,7 @@ describe("PartyCooldownsRules talent gate", function()
 end)
 
 describe("PartyCooldownsRules talent lengths", function()
-    it("counts the spell's own length only when the talent is read as not taken and nothing is typed", function()
+    it("counts the spell's own length when the talent is read as not taken, or unread and not likely, and nothing is typed", function()
         local R = loadRules()
         local paired = entryOf(R, 13, 6)
         local typed = entryOf(R, 13, 6, { CooldownSeconds = { ["13:6"] = 40 } })

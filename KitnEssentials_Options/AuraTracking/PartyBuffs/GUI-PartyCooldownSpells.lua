@@ -193,7 +193,7 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         end
         local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
         local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
-            tooltip = "Restores every spell of this class: switched on, at its listed length, in its listed order.",
+            tooltip = "Restores every spell of this class: switched on or off as it starts, at its listed length, in its listed order.",
             callback = function()
                 for _, specID in ipairs(specs) do
                     for _, entry in ipairs(Rules.SpellList(specID, {}, true)) do
