@@ -348,22 +348,18 @@ describe("PartyBuffsRules.RowLayout", function()
         return { IconSize = 36, IconSpacing = 1, MaxPerMember = buffs or 4, MaxCooldownIcons = 4 }
     end
 
-    it("keeps the whole row on one line at 14, the cells first and the buffs after them", function()
+    it("continues the cells' line while cells plus buffs fit in perRow, as every row does at 14", function()
         local R = L.loadPartyBuffsRules()
         local db = layoutDb()
         assert.are.same({ 4, 2 }, { R.CellCount(6, db), R.CellCount(2, db) })
-        assert.are.same({ 37, 4, 0, 4, 295, 36 }, { R.RowLayout(db, 4, 14) })
-        assert.are.same({ 37, 0, 0, 4, 147, 36 }, { R.RowLayout(db, 0, 14) })
-    end)
-
-    it("continues the cells' line while cells plus buffs fit in perRow", function()
-        local R = L.loadPartyBuffsRules()
         local cases = {
-            { name = "one column to spare", cells = 1, want = { 37, 1, 0, 4, 184, 36 } },
-            { name = "exactly full", cells = 2, want = { 37, 2, 0, 4, 221, 36 } },
+            { name = "at 14, with cells", cells = 4, perRow = 14, want = { 37, 4, 0, 4, 295, 36 } },
+            { name = "at 14, no cells", cells = 0, perRow = 14, want = { 37, 0, 0, 4, 147, 36 } },
+            { name = "one column to spare", cells = 1, perRow = 6, want = { 37, 1, 0, 4, 184, 36 } },
+            { name = "exactly full", cells = 2, perRow = 6, want = { 37, 2, 0, 4, 221, 36 } },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, { R.RowLayout(layoutDb(), case.cells, 6) }, case.name)
+            assert.are.same(case.want, { R.RowLayout(db, case.cells, case.perRow) }, case.name)
         end
     end)
 
@@ -406,6 +402,22 @@ describe("PartyBuffsRules.NeedsPin and RecordPin", function()
         R.RecordPin(slot, false)
         assert.are.same({}, slot)
         assert.is_true(R.NeedsPin(slot, "BOTTOMLEFT", 0, 74))
+    end)
+end)
+
+describe("PartyBuffsRules.NeedsLayout", function()
+    it("lays the row out again when the cell count, the icons per row or the corner alone moved", function()
+        local R = L.loadPartyBuffsRules()
+        local slot = { cellCount = 4, layoutPerRow = 14, layoutCorner = "TOPLEFT" }
+        local cases = {
+            { name = "all match", cells = 4, perRow = 14, corner = "TOPLEFT", want = false },
+            { name = "cell count only", cells = 5, perRow = 14, corner = "TOPLEFT", want = true },
+            { name = "icons per row only", cells = 4, perRow = 3, corner = "TOPLEFT", want = true },
+            { name = "corner only", cells = 4, perRow = 14, corner = "TOPRIGHT", want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.corner), case.name)
+        end
     end)
 end)
 

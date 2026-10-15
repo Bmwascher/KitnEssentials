@@ -609,6 +609,8 @@ function PB:ApplySlotLayout(slot)
     local x = (side.left and -1 or 1) * buffCol * step
     local y = (side.up and 1 or -1) * buffLine * step
     slot.holder:SetSize(width, height)
+    slot.layoutPerRow, slot.layoutCorner = perRow, side.corner
+    self:PlaceCells(slot, side, perRow)
     local flow = AnchorUtil.FlowDirection
     local clean = pcall(container.SetFlowLayoutGrowthDirection, container,
         side.left and flow.Left or flow.Right, side.up and flow.Up or flow.Down)
@@ -978,22 +980,31 @@ function PB:SetTrinketExclusion(slot, cellBuffs)
     return true
 end
 
--- Cells are KE frames: moving them is never refused.
-function PB:LayoutCells(slot, count)
-    local side, _, _, _, perRow = self:Placement()
+-- Cells are KE frames: moving them is never refused. A slot built before its
+-- first bind has no cells yet.
+function PB:PlaceCells(slot, side, perRow)
+    local track = slot.track
+    if not track then return end
+    local count = slot.cellCount or 0
     local step = KE.PartyBuffsRules.RowLayout(self.db, count, perRow)
     local dir, rise = side.left and -1 or 1, side.up and 1 or -1
-    local cells = slot.track.cells
     for i = 1, count do
-        local c = cells[i]
+        local c = track.cells[i]
         local col, line = KE.PartyBuffsRules.GridPosition(i - 1, perRow)
         c:ClearAllPoints()
         c:SetPoint(side.corner, slot.holder, side.corner, dir * col * step, rise * line * step)
         pcall(Cell.Seat, c)
     end
-    if slot.cellCount ~= count then
+end
+
+-- The holder and the cells are laid out together, from one N.
+function PB:LayoutCells(slot, count)
+    local side, _, _, _, perRow = self:Placement()
+    if KE.PartyBuffsRules.NeedsLayout(slot, count, perRow, side.corner) then
         slot.cellCount = count
         if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
+    else
+        self:PlaceCells(slot, side, perRow)
     end
 end
 

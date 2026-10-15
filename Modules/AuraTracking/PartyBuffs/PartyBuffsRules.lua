@@ -108,6 +108,7 @@ end
 
 -- Each category may fill the whole cap, so only the holder's clip holds the
 -- cap: buff lines are at most cap wide and the holder fits the layout exactly.
+-- Returns step, buffCol, buffLine, buffPerLine, width, height.
 function Rules.RowLayout(db, cellCount, perRow)
     local step = db.IconSize + db.IconSpacing
     local buffs = Rules.IconCount(db)
@@ -120,6 +121,12 @@ function Rules.RowLayout(db, cellCount, perRow)
     if perLine > 0 then lines = lines + math_ceil(buffs / perLine) end
     local width = Span(math_max(math_min(cellCount, perRow), perLine), db)
     return step, 0, buffLine, perLine, width, Span(math_max(lines, 1), db)
+end
+
+-- The spec can move the icons per row and the corner while the tracker is
+-- off, with no event to say so, so each bind compares the last layout's inputs.
+function Rules.NeedsLayout(slot, cellCount, perRow, corner)
+    return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutCorner ~= corner
 end
 
 -- A refused pin may have cleared the old one, so a refusal clears the record
