@@ -31,7 +31,7 @@ Data.SPELLS = {
     [51271]   = { kind = "offensive", cd = 45 },
     [42650]   = { kind = "offensive", cd = 90 },
     [1233448] = { kind = "offensive", cd = 45, buffs = { 1235391 } },
-    [1249658] = { kind = "offensive", cd = 90 },
+    [1249658] = { kind = "offensive", cd = 90, needs = { talents = { [1249658] = true }, likely = true } },
     -- Seen only through Chosen of Frostbrood.
     [279302]  = { kind = "offensive", cd = 90, buffs = { 1265630 }, active = 12,
                   needs = { talents = { [279302] = true }, likely = true }, off = true },
