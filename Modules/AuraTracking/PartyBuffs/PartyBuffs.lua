@@ -89,16 +89,6 @@ local GATE_EVENTS = {
     "ACTIVE_DELVE_DATA_UPDATE",
 }
 
--- point/rel place the holder on the party frame, dx/dy scale the icon gap,
--- and corner is where the container is pinned and grows away from.
-local SIDES = {
-    LEFT   = { point = "RIGHT",       rel = "LEFT",        dx = -1, dy = 0,  corner = "TOPRIGHT",    left = true,  up = false },
-    RIGHT  = { point = "LEFT",        rel = "RIGHT",       dx = 1,  dy = 0,  corner = "TOPLEFT",     left = false, up = false },
-    ABOVE  = { point = "BOTTOMLEFT",  rel = "TOPLEFT",     dx = 1,  dy = 1,  corner = "BOTTOMLEFT",  left = false, up = true },
-    BELOW  = { point = "TOPLEFT",     rel = "BOTTOMLEFT",  dx = 1,  dy = -1, corner = "TOPLEFT",     left = false, up = false },
-    INSIDE = { point = "BOTTOMRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = 1,  corner = "BOTTOMRIGHT", left = true,  up = true },
-}
-
 -- One per category, in on-screen order. The border stays black; the category
 -- color is the inner ring's, whose key the dressing reads from the
 -- capabilities.
@@ -729,7 +719,7 @@ function PB:BuildSlot(k)
     return not (slot.track and Track.Missing(slot.track))
 end
 
--- The SIDES row, X, Y, strata, icons per row and icon size in effect. A
+-- The layout record, X, Y, strata, icons per row and icon size in effect. A
 -- preview row follows the settings page's view while it names one; the icons
 -- follow the player's spec.
 function PB:Placement(forPreview)
@@ -739,8 +729,9 @@ function PB:Placement(forPreview)
     else
         useHealer = KE:IsPlayerHealerSpec()
     end
-    local side, x, y, strata, perRow, size = KE.PartyBuffsRules.ActivePlacement(self.db, useHealer)
-    return SIDES[side] or SIDES.LEFT, x, y, strata, KE.PartyBuffsRules.PerRow(perRow), size
+    local rules = KE.PartyBuffsRules
+    local side, x, y, strata, perRow, size, grow = rules.ActivePlacement(self.db, useHealer)
+    return rules.Layout(side, grow), x, y, strata, rules.PerRow(perRow), size
 end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
