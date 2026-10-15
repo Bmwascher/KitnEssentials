@@ -65,7 +65,14 @@ local function AddToggle(row, label, entry, db, apply)
     local check = GUIFrame:CreateCompactCheckbox(row, label, {
         value = not entry.off,
         callback = function(checked)
-            if checked then db.CooldownOff[entry.key] = nil else db.CooldownOff[entry.key] = true end
+            if not checked then
+                db.CooldownOff[entry.key] = true
+            elseif entry.spell and entry.spell.off then
+                -- false keeps a row that starts switched off on.
+                db.CooldownOff[entry.key] = false
+            else
+                db.CooldownOff[entry.key] = nil
+            end
             apply()
         end,
     })

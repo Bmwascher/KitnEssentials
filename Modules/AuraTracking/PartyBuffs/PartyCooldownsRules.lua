@@ -77,7 +77,7 @@ function Rules.SpellList(specID, db, all)
         if type(item) == "table" then castID, talented = item[1], item[2] end
         local spell = data.SPELLS[castID]
         local key = Rules.CooldownKey(specID, castID)
-        local isOff = off[key] == true
+        local isOff = off[key] == true or (off[key] == nil and spell ~= nil and spell.off == true)
         if spell and (all or not isOff) then
             local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
             entry.at = rank and (rank[castID] or #order + i) or i
@@ -514,10 +514,13 @@ function Rules.TalentAllows(entry, taken)
 end
 
 -- The length a cell counts: the spell's own when its length talent is read as
--- not taken and no seconds are typed, else the entry's.
+-- not taken, or unread and not likely, and no seconds are typed; else the
+-- entry's.
 function Rules.TalentLength(entry, taken)
     local needs = entry.spell and entry.spell.lengthNeeds
-    if not needs or entry.typed or taken ~= false then return entry.cd end
+    if not needs or entry.typed then return entry.cd end
+    if taken == nil then taken = needs.likely ~= false end
+    if taken then return entry.cd end
     return Rules.ClampSeconds(entry.spell.cd)
 end
 

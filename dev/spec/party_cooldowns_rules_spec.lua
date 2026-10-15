@@ -12,7 +12,8 @@ local L = require("dev.spec._ke_loader")
 -- is the racial of the race Dwarf, in no spec list. Spec 12 lists only cast 5,
 -- which needs talent 55 and is not likely taken. Cast 6 needs talent 65 and
 -- is likely taken; its paired length needs talent 66. Spec 13 lists it paired
--- at 30 s, spec 14 unpaired.
+-- at 30 s, spec 14 unpaired. Spec 15 lists only cast 7, which starts
+-- switched off.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -25,6 +26,7 @@ local DATA = {
         [6] = { kind = "offensive", cd = 120, buffs = { 60 },
                 needs = { talents = { [65] = true }, likely = true },
                 lengthNeeds = { talents = { [66] = true } } },
+        [7] = { kind = "offensive", cd = 90, buffs = { 70 }, off = true },
     },
     RACIALS = {
         { race = "Dwarf", raceID = 3, id = 4 },
@@ -35,6 +37,7 @@ local DATA = {
         [12] = { 5 },
         [13] = { { 6, 30 } },
         [14] = { 6 },
+        [15] = { 7 },
     },
     ROLE_SPEC = {
         DRUID = { TANK = 10, HEALER = 11 },
@@ -63,6 +66,8 @@ describe("PartyCooldownsRules.SpellList", function()
             { name = "table order", db = {}, want = { 1, 2, 3 } },
             { name = "saved order first", db = { CooldownOrder = { [10] = { 3 } } }, want = { 3, 1, 2 } },
             { name = "switched off", db = { CooldownOff = { ["10:2"] = true } }, want = { 1, 3 } },
+            { name = "off by default", db = {}, spec = 15, want = {} },
+            { name = "off by default, switched on", db = { CooldownOff = { ["15:7"] = false } }, spec = 15, want = { 7 } },
             { name = "unknown spec", db = {}, spec = 999, want = {} },
         }
         for _, case in ipairs(cases) do
@@ -650,10 +655,12 @@ describe("PartyCooldownsRules talent lengths", function()
         local paired = entryOf(R, 13, 6)
         local typed = entryOf(R, 13, 6, { CooldownSeconds = { ["13:6"] = 40 } })
         local plain = entryOf(R, 10, 1)
+        local unlikely = { cd = 30, spell = { cd = 120, lengthNeeds = { talents = {}, likely = false } } }
         local cases = {
             { name = "not taken", entry = paired, taken = false, want = 120 },
             { name = "taken", entry = paired, taken = true, want = 30 },
             { name = "unread", entry = paired, taken = nil, want = 30 },
+            { name = "unread, not likely", entry = unlikely, taken = nil, want = 120 },
             { name = "typed, not taken", entry = typed, taken = false, want = 40 },
             { name = "no length talent", entry = plain, taken = false, want = 45 },
         }
