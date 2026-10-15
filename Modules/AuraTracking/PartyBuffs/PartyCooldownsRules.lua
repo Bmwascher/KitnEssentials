@@ -564,6 +564,13 @@ function Rules.TrinketReadStands(prev, items)
     return same or (items[1] ~= nil and items[2] ~= nil), same
 end
 
+-- The talent answer after three unreadable reads, and whether to read once
+-- more: a member with no answer stores an empty one and is read again; a held
+-- answer, the empty one included, is kept.
+function Rules.AfterTalentMisses(held)
+    return held or {}, held == nil
+end
+
 -- Whether a spec or talent event may drop what was read of a member. Inside a
 -- running key nobody's spec or talents can change, and a dropped teammate
 -- waits for an out-of-combat inspect; your own are read again at once.

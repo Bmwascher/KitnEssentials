@@ -691,7 +691,12 @@ local function SelfTaken(specID)
 end
 
 -- The miss count belongs to the answer: a new spec gets its own three tries.
-local function ForgetTalents(m) m.talents, m.talentMisses, m.talentsStale = nil, nil, nil end
+-- A walk that missed against a member's old spec must not stop the walk for
+-- everyone, so its miss counts go too.
+local function ForgetTalents(m)
+    m.talents, m.talentMisses, m.talentsStale = nil, nil, nil
+    wipe(misses)
+end
 
 -- Companion, skyriding and profession configs fire TRAIT_CONFIG_UPDATED too;
 -- only a class talent config changes your talents. An unreadable answer
@@ -706,7 +711,8 @@ end
 
 -- Three unreadable answers in a row keep the answer held, else store an empty
 -- one, which keeps the likely icon, and shows a row that needs a talent only
--- when it is likely. Talents only concern class cooldowns. A teammate's
+-- when it is likely; that empty answer is read once more TRY_WAIT seconds
+-- later. Talents only concern class cooldowns. A teammate's
 -- talent change fires no event here, so a ready check outside a key marks
 -- every teammate's answer stale for the inspect to read again; a stale answer
 -- stays in use until a read replaces it.
@@ -727,7 +733,14 @@ Spec.readers[#Spec.readers + 1] = {
         if ok and skip then return end
         m.talentMisses = (m.talentMisses or 0) + 1
         if m.talentMisses >= MAX_MISSES then
-            m.talents, m.talentMisses, m.talentsStale = m.talents or {}, nil, nil
+            local rules = KE.PartyCooldownsRules
+            local answer, retry = rules.AfterTalentMisses(m.talents)
+            m.talents, m.talentMisses, m.talentsStale = answer, nil, retry or nil
+            if retry then
+                -- A read just after a spec change can find the old talents.
+                wipe(misses)
+                m.waitUntil = GetTime() + rules.TRY_WAIT
+            end
         end
     end,
     Self = function(m)
