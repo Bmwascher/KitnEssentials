@@ -241,6 +241,7 @@ describe("PartyBuffsRules.ActivePlacement", function()
             Side = "LEFT", XOffset = 0, YOffset = 0, Strata = "FRAME",
             HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4, HealerStrata = "HIGH",
             IconsPerRow = 14, HealerIconsPerRow = 3,
+            IconSize = 36, HealerIconSize = 32,
         }
         for key, value in pairs(overrides or {}) do db[key] = value end
         return db
@@ -248,8 +249,8 @@ describe("PartyBuffsRules.ActivePlacement", function()
 
     it("uses the healer copy only while the toggle is on and the healer answer is true", function()
         local R = L.loadPartyBuffsRules()
-        local default = { "LEFT", 0, 0, "FRAME", 14 }
-        local healer = { "RIGHT", 6, -4, "HIGH", 3 }
+        local default = { "LEFT", 0, 0, "FRAME", 14, 36 }
+        local healer = { "RIGHT", 6, -4, "HIGH", 3, 32 }
         local cases = {
             { name = "toggle off, healer spec", toggle = false, useHealer = true, want = default },
             { name = "toggle on, other spec", toggle = true, useHealer = false, want = default },
@@ -267,7 +268,8 @@ describe("PartyBuffsRules.ActivePlacement", function()
         db.HealerXOffset = nil
         db.HealerStrata = nil
         db.HealerIconsPerRow = nil
-        assert.are.same({ "RIGHT", 0, -4, "FRAME", 14 }, { R.ActivePlacement(db, true) })
+        db.HealerIconSize = nil
+        assert.are.same({ "RIGHT", 0, -4, "FRAME", 14, 36 }, { R.ActivePlacement(db, true) })
     end)
 end)
 
@@ -334,10 +336,11 @@ describe("PartyBuffsRules.LineSize", function()
             { size = 17.3, spacing = 9.7, count = 8 },
         }
         for _, case in ipairs(cases) do
-            local db = { IconSize = case.size, IconSpacing = case.spacing }
+            local db = { IconSpacing = case.spacing }
             local name = case.size .. "/" .. case.spacing .. "/" .. case.count
             assert.are.equal(case.count,
-                iconsOnFirstLine(R.LineSize(db, case.count), case.size, case.spacing, case.count + 1), name)
+                iconsOnFirstLine(R.LineSize(db, case.count, case.size), case.size, case.spacing, case.count + 1),
+                name)
         end
     end)
 end)
@@ -345,7 +348,7 @@ end)
 describe("PartyBuffsRules.RowLayout", function()
     -- Returns: step, buff column, buff line, buffs per line, holder width, holder height.
     local function layoutDb(buffs)
-        return { IconSize = 36, IconSpacing = 1, MaxPerMember = buffs or 4, MaxCooldownIcons = 4 }
+        return { IconSpacing = 1, MaxPerMember = buffs or 4, MaxCooldownIcons = 4 }
     end
 
     it("continues the cells' line while cells plus buffs fit in perRow, as every row does at 14", function()
@@ -359,7 +362,7 @@ describe("PartyBuffsRules.RowLayout", function()
             { name = "exactly full", cells = 2, perRow = 6, want = { 37, 2, 0, 4, 221, 36 } },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, { R.RowLayout(db, case.cells, case.perRow) }, case.name)
+            assert.are.same(case.want, { R.RowLayout(db, case.cells, case.perRow, 36) }, case.name)
         end
     end)
 
@@ -374,7 +377,8 @@ describe("PartyBuffsRules.RowLayout", function()
             { name = "no buffs", cells = 4, buffs = 0, perRow = 3, want = { 37, 0, 2, 0, 110, 73 } },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, { R.RowLayout(layoutDb(case.buffs), case.cells, case.perRow) }, case.name)
+            assert.are.same(case.want, { R.RowLayout(layoutDb(case.buffs), case.cells, case.perRow, 36) },
+                case.name)
         end
     end)
 end)
@@ -417,6 +421,20 @@ describe("PartyBuffsRules.NeedsLayout", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.corner), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.NeedsResize", function()
+    it("re-dresses when never dressed or dressed at another size, and not at the same size", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "never dressed", dressed = nil, size = 32, want = true },
+            { name = "same size", dressed = 32, size = 32, want = false },
+            { name = "another size", dressed = 36, size = 32, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.NeedsResize(case.dressed, case.size), case.name)
         end
     end)
 end)

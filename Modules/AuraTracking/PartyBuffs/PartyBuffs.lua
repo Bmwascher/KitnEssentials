@@ -603,14 +603,16 @@ end
 function PB:ApplySlotLayout(slot)
     local db = self.db
     local side, _, _, _, perRow = self:Placement()
+    -- The dressed size, not a fresh spec read: the holder must fit what it clips.
+    local size = self.styleSettings.IconSize
     local container = slot.container
     local step, buffCol, buffLine, buffPerLine, width, height =
-        KE.PartyBuffsRules.RowLayout(db, slot.cellCount or 0, perRow)
+        KE.PartyBuffsRules.RowLayout(db, slot.cellCount or 0, perRow, size)
     local x = (side.left and -1 or 1) * buffCol * step
     local y = (side.up and 1 or -1) * buffLine * step
     slot.holder:SetSize(width, height)
     slot.layoutPerRow, slot.layoutCorner = perRow, side.corner
-    self:PlaceCells(slot, side, perRow)
+    self:PlaceCells(slot, side, perRow, size)
     local flow = AnchorUtil.FlowDirection
     local clean = pcall(container.SetFlowLayoutGrowthDirection, container,
         side.left and flow.Left or flow.Right, side.up and flow.Up or flow.Down)
@@ -618,7 +620,7 @@ function PB:ApplySlotLayout(slot)
     clean = pcall(container.SetFlowLayoutAxis, container, AnchorUtil.FlowLayoutAxis.Horizontal) and clean
     clean = pcall(container.SetFlowLayoutAnchorPoint, container, side.corner) and clean
     clean = pcall(container.SetFlowLayoutMaximumLineSize, container,
-        KE.PartyBuffsRules.LineSize(db, buffPerLine)) and clean
+        KE.PartyBuffsRules.LineSize(db, buffPerLine, size)) and clean
     if KE.PartyBuffsRules.NeedsPin(slot, side.corner, x, y) then
         local ok = pcall(function()
             container:ClearAllPoints()
@@ -982,11 +984,11 @@ end
 
 -- Cells are KE frames: moving them is never refused. A slot built before its
 -- first bind has no cells yet.
-function PB:PlaceCells(slot, side, perRow)
+function PB:PlaceCells(slot, side, perRow, size)
     local track = slot.track
     if not track then return end
     local count = slot.cellCount or 0
-    local step = KE.PartyBuffsRules.RowLayout(self.db, count, perRow)
+    local step = KE.PartyBuffsRules.RowLayout(self.db, count, perRow, size)
     local dir, rise = side.left and -1 or 1, side.up and 1 or -1
     for i = 1, count do
         local c = track.cells[i]
@@ -1004,7 +1006,7 @@ function PB:LayoutCells(slot, count)
         slot.cellCount = count
         if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
     else
-        self:PlaceCells(slot, side, perRow)
+        self:PlaceCells(slot, side, perRow, self.styleSettings.IconSize)
     end
 end
 
@@ -1496,7 +1498,7 @@ function PB:DrawPreviewRow(k, frame)
     local entries = self:PreviewEntries(k)
     local side, _, _, _, perRow = self:Placement(true)
     local step, buffCol, buffLine, buffPerLine, width, height =
-        KE.PartyBuffsRules.RowLayout(db, #entries, perRow)
+        KE.PartyBuffsRules.RowLayout(db, #entries, perRow, settings.IconSize)
     holder:SetSize(width, height)
     if not self:PlaceHolder(holder, frame, true) then
         self:HidePreviewRow(row)

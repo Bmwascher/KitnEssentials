@@ -95,38 +95,44 @@ function Rules.GridPosition(index, perLine)
     return index % perLine, math_floor(index / perLine)
 end
 
-local function Span(count, db)
+local function Span(count, size, spacing)
     if count <= 0 then return 0 end
-    return count * db.IconSize + (count - 1) * db.IconSpacing
+    return count * size + (count - 1) * spacing
 end
 
 -- The container wraps once its line plus the next icon passes this. The half
 -- icon of slack keeps a fractional icon size from wrapping one icon early.
-function Rules.LineSize(db, count)
-    return Span(count, db) + db.IconSize / 2
+function Rules.LineSize(db, count, size)
+    return Span(count, size, db.IconSpacing) + size / 2
 end
 
 -- Each category may fill the whole cap, so only the holder's clip holds the
 -- cap: buff lines are at most cap wide and the holder fits the layout exactly.
 -- Returns step, buffCol, buffLine, buffPerLine, width, height.
-function Rules.RowLayout(db, cellCount, perRow)
-    local step = db.IconSize + db.IconSpacing
+function Rules.RowLayout(db, cellCount, perRow, size)
+    local spacing = db.IconSpacing
+    local step = size + spacing
     local buffs = Rules.IconCount(db)
     if cellCount + buffs <= perRow then
-        return step, cellCount, 0, buffs, Span(cellCount + buffs, db), Span(1, db)
+        return step, cellCount, 0, buffs, Span(cellCount + buffs, size, spacing), Span(1, size, spacing)
     end
     local buffLine = math_ceil(cellCount / perRow)
     local perLine = math_min(buffs, perRow)
     local lines = buffLine
     if perLine > 0 then lines = lines + math_ceil(buffs / perLine) end
-    local width = Span(math_max(math_min(cellCount, perRow), perLine), db)
-    return step, 0, buffLine, perLine, width, Span(math_max(lines, 1), db)
+    local width = Span(math_max(math_min(cellCount, perRow), perLine), size, spacing)
+    return step, 0, buffLine, perLine, width, Span(math_max(lines, 1), size, spacing)
 end
 
 -- The spec can move the icons per row and the corner while the tracker is
 -- off, with no event to say so, so each bind compares the last layout's inputs.
 function Rules.NeedsLayout(slot, cellCount, perRow, corner)
     return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutCorner ~= corner
+end
+
+-- dressedSize is nil before the first dressing.
+function Rules.NeedsResize(dressedSize, size)
+    return dressedSize ~= size
 end
 
 -- A refused pin may have cleared the old one, so a refusal clears the record
@@ -240,19 +246,20 @@ function Rules.MatchSlots(bindings, units, maxSlots)
     return placed
 end
 
--- The placement fields a healer copy can override, as { default key, healer key },
--- in the order ActivePlacement returns them.
+-- The fields a healer copy can override, as { default key, healer key }, in
+-- the order ActivePlacement returns them.
 Rules.PLACEMENT_KEYS = {
     { "Side", "HealerSide" },
     { "XOffset", "HealerXOffset" },
     { "YOffset", "HealerYOffset" },
     { "Strata", "HealerStrata" },
     { "IconsPerRow", "HealerIconsPerRow" },
+    { "IconSize", "HealerIconSize" },
 }
 
--- Side, X, Y, strata and icons per row to use. An unseeded healer key reads
--- its default counterpart, so a profile with the toggle on and no copy
--- changes nothing.
+-- Side, X, Y, strata, icons per row and icon size to use. A healer key with
+-- no profile default reads its default counterpart while unset; the healer
+-- icons per row and icon size have profile defaults of their own.
 function Rules.ActivePlacement(db, useHealer)
     local healer = useHealer and db.UseHealerPlacement == true
     local function pick(pair)
@@ -261,7 +268,7 @@ function Rules.ActivePlacement(db, useHealer)
         return value
     end
     local keys = Rules.PLACEMENT_KEYS
-    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5])
+    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5]), pick(keys[6])
 end
 
 -- Preview row k's sample spell for a list category. A sample the player
@@ -274,7 +281,9 @@ function Rules.PreviewSample(samples, k, key, list)
     return auraRules.FirstIncludeSpellID(list)
 end
 
--- Fills absent healer keys from their defaults; an edited copy is kept.
+-- Fills absent healer keys from their default counterparts; an edited copy is
+-- kept. A healer key with a profile default is never absent, so it keeps that
+-- default.
 function Rules.SeedHealerPlacement(db)
     for _, pair in ipairs(Rules.PLACEMENT_KEYS) do
         if db[pair[2]] == nil then db[pair[2]] = db[pair[1]] end
