@@ -8,9 +8,9 @@
 -- strip of time labels. The slot's values may be secret: they reach only
 -- SetValue and SetAlpha, no gate, cover or fill is read back, and every fill
 -- texture an anchor uses is fetched in New. The one read is the bar's own
--- position and scale, to seat the time window and the names; either is secret
--- only when the box hangs from a frame with secret anchoring or scale, and
--- then the last seat stays.
+-- position and scale, to seat the time window, the names and the clip frames;
+-- either is secret only when the box hangs from a frame with secret anchoring
+-- or scale, and then the last seat stays.
 
 ---@class KE
 local KE = select(2, ...)
@@ -264,8 +264,8 @@ end
 -- quarter of a screen pixel above the pixel grid. On the grid itself each
 -- rounds up or down from second to second as the clips slide, and the text in
 -- them jumps a pixel. The clip edges cannot be read on a live bar, but they
--- sit a whole number of pixels from the bar's bottom. Each is re-placed only
--- when the bar has moved off its seat.
+-- sit one unit below a whole number of pixels from the bar's bottom. Each is
+-- re-placed only when the bar has moved off its seat.
 function Bar.Seat(c)
     if not c.nameLift then return end
     local y = c:GetBottom()
