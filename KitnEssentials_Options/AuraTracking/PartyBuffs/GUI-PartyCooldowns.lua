@@ -44,6 +44,8 @@ local PICK_COLUMNS = 3
 local PICK_HEIGHT = 24
 local PICK_SPACING = 2
 
+local ICON_SIZE_MIN, ICON_SIZE_MAX = 16, 72
+
 local HEALER_KEY = {}
 for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
 
@@ -213,7 +215,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD1, "Icon Size", "IconSize", 16, 72)
+    AddSlider(rowD1, "Icon Size", "IconSize", ICON_SIZE_MIN, ICON_SIZE_MAX, nil,
+        "In a healer spec with Use in Healer Specs on, the Healer tab's Icon Size is used.")
     AddSlider(rowD1, "Icon Spacing", "IconSpacing", 0, 10)
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
@@ -393,6 +396,10 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     AddPlacement(AddSlider(rowX3, "Icons Per Row", PlacementKey("IconsPerRow"), 1,
         KE.PartyBuffsRules.MAX_PER_ROW, PlacementValue("IconsPerRow"),
         "Icons on one line before the row wraps. At 14 it never wraps."))
+    if healerView then
+        AddPlacement(AddSlider(rowX3, "Icon Size", PlacementKey("IconSize"), ICON_SIZE_MIN, ICON_SIZE_MAX,
+            PlacementValue("IconSize"), "Icon size in a healer spec. Other specs use Icon Size on the Display card."))
+    end
     cardPosition:AddRow(rowX3, Theme.rowHeightLast, 0)
     yOffset = cardPosition:GetNextOffset()
 

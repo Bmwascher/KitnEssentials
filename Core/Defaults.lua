@@ -1555,8 +1555,11 @@ local Defaults = {
             -- FRAME follows the party frame's own strata.
             Strata            = "FRAME",
             IconsPerRow       = 14,
-            -- No defaults for the Healer* placement keys: turning this on
-            -- copies the placement above, so nothing moves until edited.
+            -- Side, offsets and strata have no Healer* default: turning this
+            -- on copies them from above, so they do not move until edited.
+            -- Icons per row and icon size have healer defaults of their own.
+            HealerIconsPerRow = 3,
+            HealerIconSize    = 32,
             UseHealerPlacement = false,
             Swipe             = false,
             CategoryColors    = false,
