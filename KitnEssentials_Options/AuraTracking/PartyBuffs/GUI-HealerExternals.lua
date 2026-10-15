@@ -26,6 +26,9 @@ local ATTACHED = {
     TOP    = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT",    XOffset = 0, YOffset = 1 },
     BOTTOM = { AnchorFrom = "TOPLEFT",    AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -1 },
 }
+-- The box's Icon Size slider range; a copied Healer Mana size is held to it.
+local ICON_MIN, ICON_MAX = 16, 64
+
 local SIDE_OPTIONS = {
     { key = "TOP",    text = "Top" },
     { key = "BOTTOM", text = "Bottom" },
@@ -115,7 +118,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         -- one to match, not its raid twin.
         local hm = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
         local size = hm and tonumber(hm.IconSize)
-        if size then db.HealerExtIconSize = math.min(64, math.max(16, math.floor(size + 0.5))) end
+        if size then db.HealerExtIconSize = math.min(ICON_MAX, math.max(ICON_MIN, math.floor(size + 0.5))) end
         ApplySettings()
         RebuildPage()
     end
@@ -134,7 +137,8 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         options = SIDE_OPTIONS,
         value = db.HealerExtAttachSide,
         tooltip = "The side of the Healer Mana display the box attaches to. Grow is not changed: with Top and " ..
-            "Grow Down, or Bottom and Grow Up, the icons after the first cover Healer Mana.",
+            "Grow Down, or Bottom and Grow Up, the icons after the first cover Healer Mana. While attached, a change " ..
+            "here attaches again and copies Healer Mana's Icon Size again.",
         callback = function(choice)
             db.HealerExtAttachSide = choice
             if db.HealerExtAnchorFrameType == "SELECTFRAME" and db.HealerExtParentFrame == HEALER_MANA then
@@ -153,7 +157,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     cardDisplay:AddLabel("Font face and outline follow the Cooldowns tab's Font Settings.")
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD1, "Icon Size", "HealerExtIconSize", 16, 64, "on")
+    AddSlider(rowD1, "Icon Size", "HealerExtIconSize", ICON_MIN, ICON_MAX, "on")
     AddSlider(rowD1, "Spacing", "HealerExtSpacing", 0, 20, "on")
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
