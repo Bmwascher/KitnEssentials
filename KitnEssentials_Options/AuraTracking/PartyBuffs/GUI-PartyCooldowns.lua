@@ -23,6 +23,19 @@ local SIDE_OPTIONS = {
     { key = "INSIDE", text = "Inside, Bottom-Right" },
 }
 
+-- Each side's own choices, in order, come from PartyBuffsRules.LAYOUTS.
+local GROW_TEXT = {
+    CENTER = "Center",
+    DOWN   = "Down",
+    UP     = "Up",
+    RIGHT  = "Right",
+    LEFT   = "Left",
+}
+local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side of the Frame and never point " ..
+    "at the party frame. Left or Right: Center keeps the icons centered on the frame, Down starts them at its " ..
+    "top edge, Up at its bottom edge. Above or Below: Right starts them at the frame's left edge, Left at its " ..
+    "right edge. Inside has one layout."
+
 local STRATA_OPTIONS = {
     { key = "FRAME",  text = "Same as the Party Frame" },
     { key = "LOW",    text = "Low" },
@@ -46,8 +59,11 @@ local PICK_SPACING = 2
 
 local ICON_SIZE_MIN, ICON_SIZE_MAX = 16, 72
 
-local HEALER_KEY = {}
-for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
+local HEALER_KEY, PLACEMENT_PAIR = {}, {}
+for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do
+    HEALER_KEY[pair[1]] = pair[2]
+    PLACEMENT_PAIR[pair[1]] = pair
+end
 
 -- Both survive the page rebuild a tab switch triggers. activePlacement stays
 -- nil until the first render picks the view the player's spec uses.
@@ -152,12 +168,17 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         return slider
     end
 
-    local function AddDropdown(row, label, key, options, value)
+    local function AddDropdown(row, label, key, options, value, tooltip, onChange)
         if value == nil then value = db[key] end
         local dropdown = GUIFrame:CreateDropdown(row, label, {
             options = options,
             value = value,
-            callback = function(choice) db[key] = choice; ApplySettings() end,
+            callback = function(choice)
+                db[key] = choice
+                ApplySettings()
+                if onChange then onChange() end
+            end,
+            tooltip = tooltip,
         })
         row:AddWidget(dropdown, 0.5)
         return dropdown
@@ -354,10 +375,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     end
 
     local function PlacementValue(key)
-        local value
-        if healerView then value = db[HEALER_KEY[key]] end
-        if value == nil then value = db[key] end
-        return value
+        return KE.PartyBuffsRules.PlacementValue(db, PLACEMENT_PAIR[key], healerView)
     end
 
     local function AddPlacement(widget)
@@ -387,9 +405,24 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         cardPosition:AddRow(rowX0, Theme.rowHeight)
     end
     local rowX1 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
-    AddPlacement(AddDropdown(rowX1, "Side of the Frame", PlacementKey("Side"), SIDE_OPTIONS, PlacementValue("Side")))
-    AddPlacement(AddDropdown(rowX1, "Frame Strata", PlacementKey("Strata"), STRATA_OPTIONS, PlacementValue("Strata")))
+    -- A side change redraws the page, so Grow lists the new side's choices.
+    AddPlacement(AddDropdown(rowX1, "Side of the Frame", PlacementKey("Side"), SIDE_OPTIONS, PlacementValue("Side"),
+        nil, RebuildPage))
+    local layout, layouts = KE.PartyBuffsRules.Layout(PlacementValue("Side"), PlacementValue("Grow"))
+    local growOptions = {}
+    for i = 1, #layouts do
+        growOptions[i] = { key = layouts[i].grow, text = GROW_TEXT[layouts[i].grow] }
+    end
+    -- One group for both reasons to gray it: a widget in two groups is set at random.
+    manager:SetCondition("growOn", function()
+        return #layouts > 1 and (not healerView or db.UseHealerPlacement == true)
+    end)
+    manager:Register(AddDropdown(rowX1, "Grow", PlacementKey("Grow"), growOptions, layout.grow, GROW_TOOLTIP),
+        "growOn")
     cardPosition:AddRow(rowX1, Theme.rowHeight)
+    local rowX1b = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
+    AddPlacement(AddDropdown(rowX1b, "Frame Strata", PlacementKey("Strata"), STRATA_OPTIONS, PlacementValue("Strata")))
+    cardPosition:AddRow(rowX1b, Theme.rowHeight)
     local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
     AddPlacement(AddSlider(rowX2, "X Offset", PlacementKey("XOffset"), -100, 100, PlacementValue("XOffset")))
     AddPlacement(AddSlider(rowX2, "Y Offset", PlacementKey("YOffset"), -100, 100, PlacementValue("YOffset")))
