@@ -320,6 +320,10 @@ function Style.InitializeButton(button, display, group, settings)
 
     Style.CreateRegions(button, group, settings)
 
+    -- Live buttons only: the preview path shares CreateRegions but is not
+    -- an aura button. A group without the glow capability has no host.
+    KE.AuraGlow.MarkAuraButton(button.keGlow, button)
+
     -- Tooltip policy, per button and LIVE ONLY. SetTooltipAnchorPoint and
     -- SetHideTooltipInCombat come from the aura button mixin, so this path
     -- needs a real button. SetMouseMotionEnabled is not one of them -- every

@@ -307,6 +307,7 @@ function PA:InitSlotButton(button)
         host:ClearAllPoints()
         host:SetAllPoints(holder)
         self.glowHost = host
+        KE.AuraGlow.MarkAuraButton(host, button)
     end)
     Debug("slot button built=" .. tostring(ok))
 end

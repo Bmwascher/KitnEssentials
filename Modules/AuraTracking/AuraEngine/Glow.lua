@@ -313,9 +313,54 @@ local function ConfigureHost(host, settings, width, height)
     host:SetShown(settings.GlowEnabled and true or false)
 end
 
--- For hosts that are not aura buttons (a cast bar's gate frame): the caller
--- owns the host and passes its plain width and height for the pixel style.
-Glow.Configure = ConfigureHost
+-- Blizzard's aura-shown list plays these groups when the button's aura
+-- shows and stops them whenever it holds none. Under pcall because each
+-- call's verdict decides whether the list is cleared below.
+local SHOWN_OPS = {
+    add = function(button, group)
+        return pcall(button.AddAuraShownAnimation, button, group)
+    end,
+    remove = function(button, group)
+        return pcall(button.RemoveAuraShownAnimation, button, group)
+    end,
+}
+
+-- The button's own display pass. The aura button offers no direct call for
+-- it, but each of its setters ends in one. KE adds nothing else to the
+-- pandemic list and the region is empty, so adding and removing it changes
+-- nothing else.
+local function RunDisplayPass(host, button)
+    if pcall(button.AddPandemicRegion, button, host.passRegion) then
+        pcall(button.RemovePandemicRegion, button, host.passRegion)
+    end
+end
+
+-- Only a marked host has a button to sync with. True when the list holds
+-- exactly the groups the style runs.
+local function SyncShownList(host)
+    local button = host.auraButton
+    if not button then return false end
+    if GlowRules.SyncShown(host.shownGroups, host.styleGroups, SHOWN_OPS, button) then
+        return true
+    end
+    -- A refused call leaves the list unknown. Emptied, list and record
+    -- agree again: the host drives its own animations, as an unmarked one
+    -- does, and the next sync starts from nothing.
+    pcall(button.ClearAuraShownAnimations, button)
+    wipe(host.shownGroups)
+    return false
+end
+
+-- ConfigureHost plays the style's groups whether or not an aura shows; the
+-- pass stops them where none does.
+local function Configure(host, settings, width, height)
+    ConfigureHost(host, settings, width, height)
+    if SyncShownList(host) then RunDisplayPass(host, host.auraButton) end
+end
+
+-- For a caller that owns its host (a cast bar's gate frame, a slot button's
+-- border): it passes its plain width and height for the pixel style.
+Glow.Configure = Configure
 
 -- initializeFrame is the only legally guaranteed window to parent a frame to
 -- an aura button, and button:GetFrameLevel() is only legal to read here,
@@ -419,6 +464,18 @@ function Glow.CreateHost(button, settings, template)
     return host
 end
 
+-- Called inside initializeFrame, the one window in which a child can still
+-- be parented to the button, so the pass region is made here. No pass: the
+-- provider updates the button's display right after initializeFrame. Only
+-- callers holding a real aura button mark a host; previews and hosts on KE
+-- frames keep driving their own animations.
+function Glow.MarkAuraButton(host, button)
+    if not host or not button then return end
+    host.passRegion = host:CreateTexture()
+    host.auraButton = button
+    SyncShownList(host)
+end
+
 -- Takes the BUTTON, not the host, because Reconfigure iterates buttons and
 -- must not know where a host is stored. Called unconditionally from both
 -- the live button path and the preview-frame path, so it must tolerate a
@@ -431,5 +488,5 @@ function Glow.Apply(button, settings, capabilities)
     local caps = capabilities or {}
     if not caps.hasGlow then return end
 
-    ConfigureHost(host, settings)
+    Configure(host, settings)
 end
