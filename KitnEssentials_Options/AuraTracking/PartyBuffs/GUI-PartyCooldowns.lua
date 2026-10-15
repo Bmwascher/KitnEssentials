@@ -251,13 +251,13 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     cardDisplay:AddRow(rowDSep, Theme.rowHeightSeparator)
 
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddCheck(rowD3, "Time-Left Swipe", "Swipe")
-    AddCheck(rowD3, "Timer Text", "ShowTimer")
+    AddCheck(rowD3, "Timer Text", "ShowTimer", nil, nil, 1 / 3)
+    manager:Register(AddCheck(rowD3, "Cooldown Text", "ShowCooldownText",
+        "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size.",
+        nil, 1 / 3), "cellsOn")
+    AddCheck(rowD3, "Time-Left Swipe", "Swipe", nil, nil, 1 / 3)
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
     local rowD3b = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    manager:Register(AddCheck(rowD3b, "Cooldown Text", "ShowCooldownText",
-        "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size."),
-        "cellsOn")
     manager:Register(AddCheck(rowD3b, "Glow Buff Icons", "GlowBuffs",
         "The external, potion and trinket buff icons beside each party frame glow while they show, "
             .. "in the Glow While Active style. Needs Enable Glow on."),
