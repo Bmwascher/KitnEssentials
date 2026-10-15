@@ -116,6 +116,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:SetCondition("classOn", function() return db.TrackBurst == true end)
     manager:SetCondition("trinketOn", function() return db.TrackTrinket == true end)
     manager:SetCondition("racialsOn", function() return db.ShowRacials == true end)
+    manager:SetCondition("glowOn", function() return db.GlowEnabled == true end)
     -- Without the sensor file the cooldown cells do not exist, and their
     -- settings are grayed. Only the cells use the defensive color.
     manager:SetCondition("cellsOn", function() return KE.PartyCooldownsSensor ~= nil end)
@@ -257,8 +258,10 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:Register(AddCheck(rowD3b, "Cooldown Text", "ShowCooldownText",
         "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size."),
         "cellsOn")
-    AddCheck(rowD3b, "Glow Buff Icons", "GlowBuffs",
-        "External, potion and trinket buff icons glow while they show, in the Glow While Active style.")
+    manager:Register(AddCheck(rowD3b, "Glow Buff Icons", "GlowBuffs",
+        "The external, potion and trinket buff icons beside each party frame glow while they show, "
+            .. "in the Glow While Active style. Needs Enable Glow on."),
+        "glowOn")
     cardDisplay:AddRow(rowD3b, Theme.rowHeight)
 
     local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
@@ -311,10 +314,14 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             min     = 0.05,
             max     = 2,
         },
-        onChangeCallback = ApplySettings,
+        onChangeCallback = function()
+            ApplySettings()
+            RefreshStates()
+        end,
         onHeightChange = RebuildPage,
     })
-    manager:Register(glowCard, "cellsOn")
+    -- The buff icons glow too, so the card applies without the cooldown cells.
+    manager:Register(glowCard, "all")
     yOffset = glowOffset
 
     ----------------------------------------------------------------
