@@ -37,7 +37,7 @@ GlowRules.FLIPBOOKS = {
         frameWidth = 0, frameHeight = 0,
     },
     -- speedFactor: this sheet loops that many times faster than the others
-    -- at the same Speed, to match the game's own alert ants.
+    -- at the same Speed.
     alert = {
         texture = [[Interface\SpellActivationOverlay\IconAlertAnts]],
         rows = 5, columns = 5, frames = 22, sizeFactor = 1.25,
