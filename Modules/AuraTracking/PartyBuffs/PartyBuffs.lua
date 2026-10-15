@@ -43,6 +43,7 @@ local select = select
 local tostring = tostring
 local type = type
 local unpack = unpack
+local wipe = wipe
 local table_concat = table.concat
 local table_remove = table.remove
 local table_sort = table.sort
@@ -53,6 +54,7 @@ local Cell = KE.PartyCooldownsCell
 local Spec = KE.PartyCooldownsSpec
 local Track = KE.PartyCooldownsSensor
 local Pot = KE.PartyPotions
+local PotRules = KE.PartyPotionsRules
 local HX = KE.HealerExternals
 
 -- Times each group build and logs every candidate frame, binding and watched
@@ -122,6 +124,7 @@ PB.buildPending = false
 PB.interfaceHidden = false
 PB.slots = {}
 PB.bindings = {}
+PB.rosterKept = {}
 PB.queue = {}
 PB.queued = {}
 PB.watchedCells = setmetatable({}, { __mode = "k" })
@@ -212,6 +215,7 @@ end
 -- before the roster has settled.
 function PB:Deactivate()
     self:ClearQueue()
+    wipe(self.rosterKept)
     for k = 1, MAX_SLOTS do
         self.bindings[k] = nil
         self:DropSlot(k)
@@ -426,13 +430,15 @@ end
 
 -- The one place bindings are made: BindSlot and BuildSlot act only on a
 -- binding set here. While a roster change settles, a token can still name a
--- frame's previous occupant, so every slot stays dropped until the settle
--- timer resolves.
+-- frame's previous occupant, so a slot stays dropped until the settle timer
+-- resolves unless PB:KeepRosterRows kept it.
 function PB:ResolveAll()
     if self._rosterTimer then
         for k = 1, MAX_SLOTS do
-            self.bindings[k] = nil
-            self:DropSlot(k)
+            if not self.rosterKept[k] then
+                self.bindings[k] = nil
+                self:DropSlot(k)
+            end
         end
         return
     end
@@ -1015,16 +1021,31 @@ end
 ---------------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------------
+-- A row stays up, with its counts, while its token still names the member it
+-- was bound to; every other row is dropped until the settle resolves.
+function PB:KeepRosterRows()
+    for k = 1, MAX_SLOTS do
+        local slot, binding = self.slots[k], self.bindings[k]
+        local m = slot and slot.member
+        local keep = binding ~= nil and m ~= nil
+            and PotRules.KeepOnRoster(m.guid, KE:GetSafeUnitGUID(binding.token), issecretvalue)
+        self.rosterKept[k] = keep or nil
+        if keep then
+            if slot.track then Track.Hold(slot.track, ROSTER_SETTLE) end
+        else
+            self.bindings[k] = nil
+            self:DropSlot(k)
+            if slot then slot.member = nil end
+        end
+    end
+end
+
 -- Frames re-sort after a roster change and a token can name someone else, so
--- every icon and queued build drops at once and the scan waits for the roster
--- to settle. Each update restarts the full delay.
+-- queued builds drop and the scan waits for the roster to settle. Each update
+-- restarts the full delay.
 function PB:OnRoster()
     self:ClearQueue()
-    for k = 1, MAX_SLOTS do
-        self.bindings[k] = nil
-        self:DropSlot(k)
-        if self.slots[k] then self.slots[k].member = nil end
-    end
+    self:KeepRosterRows()
     -- A token can name someone else now; nobody is inspected until the rows
     -- rebind, and whoever left is read again if they come back.
     Spec.SetMembers({})
@@ -1035,6 +1056,9 @@ function PB:OnRoster()
     self._rosterTimer = C_Timer.NewTimer(ROSTER_SETTLE, function()
         self._rosterTimer = nil
         if not self:IsEnabled() then return end
+        -- A token can change hands during the settle too.
+        self:KeepRosterRows()
+        wipe(self.rosterKept)
         self:EvaluateGate()
         if self.previewing then self:ShowPreview() end
     end)
