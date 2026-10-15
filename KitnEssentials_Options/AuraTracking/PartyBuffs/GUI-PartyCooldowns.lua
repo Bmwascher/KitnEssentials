@@ -262,6 +262,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             { key = "ants",     text = "Ants" },
             { key = "procloop", text = "Proc Loop" },
             { key = "alert",    text = "Alert" },
+            { key = "border",   text = "Pulse Border" },
         },
         resolveType = KE.AuraGlowRules.ResolveType,
         -- The glow is animation-driven and honors neither Length nor Border,
@@ -275,7 +276,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
                 border      = rows.border,
             }
         end,
-        showSpeed = function() return true end,
+        -- The pulse runs at a fixed rhythm.
+        showSpeed = function(glowType) return glowType ~= "border" end,
         speedAdapter = {
             read = function(readDb, readKeys)
                 return KE.AuraGlowRules.NormalizeFrequency(

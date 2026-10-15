@@ -1194,6 +1194,7 @@ local function FillStyle(db, size, settings, cell)
     settings.GlowLines        = db.GlowLines
     settings.GlowFrequency    = db.GlowFrequency
     settings.GlowThickness    = db.GlowThickness
+    settings.GlowPulse        = db.GlowPulse
     local colored = db.CategoryColors == true
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
