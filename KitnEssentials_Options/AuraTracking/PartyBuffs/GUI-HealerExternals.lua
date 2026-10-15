@@ -111,6 +111,11 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         local p = db.HealerExtPosition
         p.AnchorFrom, p.AnchorTo = points.AnchorFrom, points.AnchorTo
         p.XOffset, p.YOffset = points.XOffset, points.YOffset
+        -- The box shows only in a party, so Healer Mana's party size is the
+        -- one to match, not its raid twin.
+        local hm = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
+        local size = hm and tonumber(hm.IconSize)
+        if size then db.HealerExtIconSize = math.min(64, math.max(16, math.floor(size + 0.5))) end
         ApplySettings()
         RebuildPage()
     end
@@ -119,7 +124,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     local attach = GUIFrame:CreateButton(rowM1, "Attach to Healer Mana", {
         height = 24,
         tooltip = "Places the box against the chosen side of the Healer Mana display and keeps it there when " ..
-            "that display moves.",
+            "that display moves. Also sets the box's Icon Size to Healer Mana's once; you can change it afterward.",
         callback = Attach,
     })
     -- Level with the Side box, which sits 14 px below the dropdown's top.
