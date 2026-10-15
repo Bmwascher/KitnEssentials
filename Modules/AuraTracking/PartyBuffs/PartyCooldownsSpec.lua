@@ -313,7 +313,9 @@ local function OnLibSpec(specID, _, _, playerName, talents)
     Spec.libSpecs[playerName], Spec.libTalents[playerName] = specID, talents
     if same and moved and rules.BuildEventCounts(InKey(), false) then
         for _, m in pairs(Spec.byGUID) do
-            if not m.isPlayer and m.libKey == playerName then m.talents, m.talentMisses = nil, nil end
+            if not m.isPlayer and m.libKey == playerName then
+                m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
+            end
         end
     end
     for _, m in ipairs(Spec.members) do
