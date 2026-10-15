@@ -292,7 +292,6 @@ Rules.PLACEMENT_KEYS = {
     { "Side", "HealerSide" },
     { "XOffset", "HealerXOffset" },
     { "YOffset", "HealerYOffset" },
-    { "Strata", "HealerStrata" },
     { "IconsPerRow", "HealerIconsPerRow" },
     { "IconSize", "HealerIconSize" },
     { "Grow", "HealerGrow" },
@@ -306,7 +305,7 @@ function Rules.PlacementValue(db, pair, healer)
     return value
 end
 
--- Side, X, Y, strata, icons per row, icon size and grow to use. A healer key
+-- Side, X, Y, icons per row, icon size and grow to use. A healer key
 -- with no profile default reads its default counterpart while unset; the
 -- healer icons per row and icon size have profile defaults of their own.
 function Rules.ActivePlacement(db, useHealer)
@@ -315,8 +314,7 @@ function Rules.ActivePlacement(db, useHealer)
         return Rules.PlacementValue(db, pair, healer)
     end
     local keys = Rules.PLACEMENT_KEYS
-    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5]), pick(keys[6]),
-        pick(keys[7])
+    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5]), pick(keys[6])
 end
 
 -- The layout in effect and its side's list. An unknown side reads as LEFT, and

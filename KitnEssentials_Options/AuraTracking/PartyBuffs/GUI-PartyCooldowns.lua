@@ -36,14 +36,6 @@ local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side 
     "top edge, Up at its bottom edge. Above or Below: Right starts them at the frame's left edge, Left at its " ..
     "right edge. Inside has one layout."
 
-local STRATA_OPTIONS = {
-    { key = "FRAME",  text = "Same as the Party Frame" },
-    { key = "LOW",    text = "Low" },
-    { key = "MEDIUM", text = "Medium" },
-    { key = "HIGH",   text = "High" },
-    { key = "DIALOG", text = "Dialog" },
-}
-
 -- state: the picker's one state group, when not colorsOn.
 local COLOR_PICKERS = {
     { key = "ColorExternal",     label = "Externals" },
@@ -422,9 +414,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:Register(AddDropdown(rowX1, "Grow", PlacementKey("Grow"), growOptions, layout.grow, GROW_TOOLTIP),
         "growOn")
     cardPosition:AddRow(rowX1, Theme.rowHeight)
-    local rowX1b = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
-    AddPlacement(AddDropdown(rowX1b, "Frame Strata", PlacementKey("Strata"), STRATA_OPTIONS, PlacementValue("Strata")))
-    cardPosition:AddRow(rowX1b, Theme.rowHeight)
     local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
     AddPlacement(AddSlider(rowX2, "X Offset", PlacementKey("XOffset"), -100, 100, PlacementValue("XOffset")))
     AddPlacement(AddSlider(rowX2, "Y Offset", PlacementKey("YOffset"), -100, 100, PlacementValue("YOffset")))

@@ -198,7 +198,7 @@ function PB:Activate()
         -- The spec can change the icon size while the tracker is off, with no
         -- event to say so; the drain below reconfigures and restyles.
         local built = self.styleSettings and self.styleSettings.IconSize
-        if KE.PartyBuffsRules.NeedsResize(built, select(6, self:Placement())) then
+        if KE.PartyBuffsRules.NeedsResize(built, select(5, self:Placement())) then
             self:BuildStyleSettings()
             self.reconfigurePending, self.restylePending = true, true
         end
@@ -600,7 +600,7 @@ end
 -- line or the next.
 function PB:ApplySlotLayout(slot)
     local db = self.db
-    local side, _, _, _, perRow = self:Placement()
+    local side, _, _, perRow = self:Placement()
     -- The dressed size, not a fresh spec read: the holder must fit what it clips.
     local size = self.styleSettings.IconSize
     local container = slot.container
@@ -720,7 +720,7 @@ function PB:BuildSlot(k)
     return not (slot.track and Track.Missing(slot.track))
 end
 
--- The layout record, X, Y, strata, icons per row and icon size in effect. A
+-- The layout record, X, Y, icons per row and icon size in effect. A
 -- preview row follows the settings page's view while it names one; the icons
 -- follow the player's spec.
 function PB:Placement(forPreview)
@@ -731,32 +731,30 @@ function PB:Placement(forPreview)
         useHealer = KE:IsPlayerHealerSpec()
     end
     local rules = KE.PartyBuffsRules
-    local side, x, y, strata, perRow, size, grow = rules.ActivePlacement(self.db, useHealer)
-    return rules.Layout(side, grow), x, y, strata, rules.PerRow(perRow), size
+    local side, x, y, perRow, size, grow = rules.ActivePlacement(self.db, useHealer)
+    return rules.Layout(side, grow), x, y, rules.PerRow(perRow), size
 end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
--- and could not be hidden in combat. Returns the strata and level applied, or
+-- and could not be hidden in combat. It takes the party frame's strata, or
+-- MEDIUM when that cannot be read. Returns the strata and level applied, or
 -- nil when the anchor was refused.
 function PB:PlaceHolder(holder, frame, forPreview)
-    local side, x, y, strata = self:Placement(forPreview)
+    local side, x, y = self:Placement(forPreview)
     local gap = self.db.IconSpacing
     holder:ClearAllPoints()
     if not pcall(holder.SetPoint, holder, side.point, frame, side.rel,
         side.dx * gap + x, side.dy * gap + y) then
         return nil
     end
-    local level
-    if strata == "FRAME" then
-        strata = "MEDIUM"
-        local okStrata, frameStrata = pcall(frame.GetFrameStrata, frame)
-        if okStrata and not issecretvalue(frameStrata) and type(frameStrata) == "string" then
-            strata = frameStrata
-        end
-        local okLevel, frameLevel = pcall(frame.GetFrameLevel, frame)
-        if okLevel and not issecretvalue(frameLevel) and type(frameLevel) == "number" then
-            level = frameLevel + 10
-        end
+    local strata, level = "MEDIUM", nil
+    local okStrata, frameStrata = pcall(frame.GetFrameStrata, frame)
+    if okStrata and not issecretvalue(frameStrata) and type(frameStrata) == "string" then
+        strata = frameStrata
+    end
+    local okLevel, frameLevel = pcall(frame.GetFrameLevel, frame)
+    if okLevel and not issecretvalue(frameLevel) and type(frameLevel) == "number" then
+        level = frameLevel + 10
     end
     holder:SetFrameStrata(strata)
     if level then holder:SetFrameLevel(level) end
@@ -1007,7 +1005,7 @@ end
 
 -- The holder and the cells are laid out together, from one N.
 function PB:LayoutCells(slot, count)
-    local side, _, _, _, perRow = self:Placement()
+    local side, _, _, perRow = self:Placement()
     if KE.PartyBuffsRules.NeedsLayout(slot, count, perRow, side.corner) then
         slot.cellCount = count
         if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
@@ -1221,14 +1219,14 @@ end
 -- containers were set to, or one with a retry pending.
 function PB:BuildStyleSettings()
     self.styleSettings, self.cellStyle =
-        FillStyle(self.db, select(6, self:Placement()), self.styleSettings, self.cellStyle)
+        FillStyle(self.db, select(5, self:Placement()), self.styleSettings, self.cellStyle)
     self.buffSettings = FillBuffStyle(self.db, self.styleSettings, self.buffSettings)
 end
 
 -- The preview's own pair, at the size of the settings page's view.
 function PB:BuildPreviewStyle()
     self.previewStyleSettings, self.previewCellStyle =
-        FillStyle(self.db, select(6, self:Placement(true)),
+        FillStyle(self.db, select(5, self:Placement(true)),
             self.previewStyleSettings, self.previewCellStyle)
     self.previewBuffSettings = FillBuffStyle(self.db, self.previewStyleSettings, self.previewBuffSettings)
 end
@@ -1539,7 +1537,7 @@ function PB:DrawPreviewRow(k, frame)
     end
     local holder = row.holder
     local entries = self:PreviewEntries(k)
-    local side, _, _, _, perRow = self:Placement(true)
+    local side, _, _, perRow = self:Placement(true)
     local step, buffCol, buffLine, buffPerLine, width, height =
         KE.PartyBuffsRules.RowLayout(db, #entries, perRow, settings.IconSize)
     holder:SetSize(width, height)

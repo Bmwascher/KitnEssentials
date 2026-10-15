@@ -1552,12 +1552,10 @@ local Defaults = {
             Side              = "LEFT",
             XOffset           = 0,
             YOffset           = 0,
-            -- FRAME follows the party frame's own strata.
-            Strata            = "FRAME",
             IconsPerRow       = 14,
             -- No Grow default: each side keeps its first layout
             -- (PartyBuffsRules.LAYOUTS), and an unset HealerGrow reads Grow.
-            -- Side, offsets and strata have no Healer* default: turning this
+            -- Side and offsets have no Healer* default: turning this
             -- on copies them from above, so they do not move until edited.
             -- Icons per row and icon size have healer defaults of their own.
             HealerIconsPerRow = 3,

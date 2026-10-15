@@ -238,8 +238,8 @@ end)
 describe("PartyBuffsRules.ActivePlacement", function()
     local function placementDb(overrides)
         local db = {
-            Side = "LEFT", XOffset = 0, YOffset = 0, Strata = "FRAME",
-            HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4, HealerStrata = "HIGH",
+            Side = "LEFT", XOffset = 0, YOffset = 0,
+            HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4,
             IconsPerRow = 14, HealerIconsPerRow = 3,
             IconSize = 36, HealerIconSize = 32,
             Grow = "UP", HealerGrow = "DOWN",
@@ -250,8 +250,8 @@ describe("PartyBuffsRules.ActivePlacement", function()
 
     it("uses the healer copy only while the toggle is on and the healer answer is true", function()
         local R = L.loadPartyBuffsRules()
-        local default = { "LEFT", 0, 0, "FRAME", 14, 36, "UP" }
-        local healer = { "RIGHT", 6, -4, "HIGH", 3, 32, "DOWN" }
+        local default = { "LEFT", 0, 0, 14, 36, "UP" }
+        local healer = { "RIGHT", 6, -4, 3, 32, "DOWN" }
         local cases = {
             { name = "toggle off, healer spec", toggle = false, useHealer = true, want = default },
             { name = "toggle on, other spec", toggle = true, useHealer = false, want = default },
@@ -267,11 +267,10 @@ describe("PartyBuffsRules.ActivePlacement", function()
         local R = L.loadPartyBuffsRules()
         local db = placementDb({ UseHealerPlacement = true })
         db.HealerXOffset = nil
-        db.HealerStrata = nil
         db.HealerIconsPerRow = nil
         db.HealerIconSize = nil
         db.HealerGrow = nil
-        assert.are.same({ "RIGHT", 0, -4, "FRAME", 14, 36, "UP" }, { R.ActivePlacement(db, true) })
+        assert.are.same({ "RIGHT", 0, -4, 14, 36, "UP" }, { R.ActivePlacement(db, true) })
     end)
 end)
 
@@ -310,11 +309,11 @@ describe("PartyBuffsRules.SeedHealerPlacement", function()
     it("fills each absent healer key from its default and keeps one already set", function()
         local R = L.loadPartyBuffsRules()
         local db = {
-            Side = "ABOVE", XOffset = 3, YOffset = -2, Strata = "LOW", IconsPerRow = 5, HealerSide = "BELOW",
+            Side = "ABOVE", XOffset = 3, YOffset = -2, IconsPerRow = 5, HealerSide = "BELOW",
         }
         R.SeedHealerPlacement(db)
-        assert.are.same({ "BELOW", 3, -2, "LOW", 5 },
-            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerStrata, db.HealerIconsPerRow })
+        assert.are.same({ "BELOW", 3, -2, 5 },
+            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerIconsPerRow })
     end)
 end)
 
