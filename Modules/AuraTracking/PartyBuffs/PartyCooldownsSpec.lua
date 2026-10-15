@@ -756,6 +756,7 @@ Spec.readers[#Spec.readers + 1] = {
             for _, member in pairs(Spec.byGUID) do
                 if not member.isPlayer and member.talents then member.talentsStale = true end
             end
+            wipe(misses)
             Spec.Wake()
         end
     end,
