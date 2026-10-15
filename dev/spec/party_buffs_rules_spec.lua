@@ -343,12 +343,69 @@ describe("PartyBuffsRules.LineSize", function()
 end)
 
 describe("PartyBuffsRules.RowLayout", function()
-    it("puts the cooldown cells first and the while-active icons after them", function()
+    -- Returns: step, buff column, buff line, buffs per line, holder width, holder height.
+    local function layoutDb(buffs)
+        return { IconSize = 36, IconSpacing = 1, MaxPerMember = buffs or 4, MaxCooldownIcons = 4 }
+    end
+
+    it("keeps the whole row on one line at 14, the cells first and the buffs after them", function()
         local R = L.loadPartyBuffsRules()
-        local db = { IconSize = 36, IconSpacing = 1, MaxPerMember = 4, MaxCooldownIcons = 4 }
+        local db = layoutDb()
         assert.are.same({ 4, 2 }, { R.CellCount(6, db), R.CellCount(2, db) })
-        assert.are.same({ 37, 148, 295 }, { R.RowLayout(db, 4) })
-        assert.are.same({ 37, 0, 147 }, { R.RowLayout(db, 0) })
+        assert.are.same({ 37, 4, 0, 4, 295, 36 }, { R.RowLayout(db, 4, 14) })
+        assert.are.same({ 37, 0, 0, 4, 147, 36 }, { R.RowLayout(db, 0, 14) })
+    end)
+
+    it("continues the cells' line while cells plus buffs fit in perRow", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "one column to spare", cells = 1, want = { 37, 1, 0, 4, 184, 36 } },
+            { name = "exactly full", cells = 2, want = { 37, 2, 0, 4, 221, 36 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.RowLayout(layoutDb(), case.cells, 6) }, case.name)
+        end
+    end)
+
+    it("starts the buffs at column 0 of the line after the cells when the row overflows", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "cells end part-way along a line", cells = 5, perRow = 3, want = { 37, 0, 2, 3, 110, 147 } },
+            { name = "cells fill their last line", cells = 3, perRow = 3, want = { 37, 0, 1, 3, 110, 110 } },
+            { name = "no cells", cells = 0, perRow = 3, want = { 37, 0, 0, 3, 110, 73 } },
+            { name = "fewer buffs than perRow: lines buff-wide, holder exact", cells = 2, buffs = 1, perRow = 2,
+              want = { 37, 0, 1, 1, 73, 73 } },
+            { name = "no buffs", cells = 4, buffs = 0, perRow = 3, want = { 37, 0, 2, 0, 110, 73 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.RowLayout(layoutDb(case.buffs), case.cells, case.perRow) }, case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.NeedsPin and RecordPin", function()
+    it("re-pins when the corner, x or y alone differs and not when all three match", function()
+        local R = L.loadPartyBuffsRules()
+        local slot = { corner = "TOPLEFT", pinX = 37, pinY = 0 }
+        local cases = {
+            { name = "all match", corner = "TOPLEFT", x = 37, y = 0, want = false },
+            { name = "corner only", corner = "TOPRIGHT", x = 37, y = 0, want = true },
+            { name = "x only", corner = "TOPLEFT", x = 74, y = 0, want = true },
+            { name = "y only", corner = "TOPLEFT", x = 37, y = -37, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.NeedsPin(slot, case.corner, case.x, case.y), case.name)
+        end
+    end)
+
+    it("clears the record after a refused pin so the same target pins again, and keeps a placed one", function()
+        local R = L.loadPartyBuffsRules()
+        local slot = {}
+        R.RecordPin(slot, true, "BOTTOMLEFT", 0, 74)
+        assert.is_false(R.NeedsPin(slot, "BOTTOMLEFT", 0, 74))
+        R.RecordPin(slot, false)
+        assert.are.same({}, slot)
+        assert.is_true(R.NeedsPin(slot, "BOTTOMLEFT", 0, 74))
     end)
 end)
 

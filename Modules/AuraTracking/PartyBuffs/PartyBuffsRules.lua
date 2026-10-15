@@ -8,6 +8,7 @@
 local KE = select(2, ...)
 
 local ipairs = ipairs
+local math_ceil = math.ceil
 local math_floor = math.floor
 local math_max = math.max
 local math_min = math.min
@@ -105,15 +106,34 @@ function Rules.LineSize(db, count)
     return Span(count, db) + db.IconSize / 2
 end
 
--- Cooldown cells come first, nearest the frame, one step apart; the
--- while-active container starts after the last. Returns the step, the
--- container's offset from the corner and the holder width.
-function Rules.RowLayout(db, cellCount)
+-- Each category may fill the whole cap, so only the holder's clip holds the
+-- cap: buff lines are at most cap wide and the holder fits the layout exactly.
+function Rules.RowLayout(db, cellCount, perRow)
     local step = db.IconSize + db.IconSpacing
-    local count = cellCount + Rules.IconCount(db)
-    local width = 0
-    if count > 0 then width = count * db.IconSize + (count - 1) * db.IconSpacing end
-    return step, cellCount * step, width
+    local buffs = Rules.IconCount(db)
+    if cellCount + buffs <= perRow then
+        return step, cellCount, 0, buffs, Span(cellCount + buffs, db), Span(1, db)
+    end
+    local buffLine = math_ceil(cellCount / perRow)
+    local perLine = math_min(buffs, perRow)
+    local lines = buffLine
+    if perLine > 0 then lines = lines + math_ceil(buffs / perLine) end
+    local width = Span(math_max(math_min(cellCount, perRow), perLine), db)
+    return step, 0, buffLine, perLine, width, Span(math_max(lines, 1), db)
+end
+
+-- A refused pin may have cleared the old one, so a refusal clears the record
+-- and the next pass pins again.
+function Rules.NeedsPin(slot, corner, x, y)
+    return slot.corner ~= corner or slot.pinX ~= x or slot.pinY ~= y
+end
+
+function Rules.RecordPin(slot, ok, corner, x, y)
+    if ok then
+        slot.corner, slot.pinX, slot.pinY = corner, x, y
+    else
+        slot.corner, slot.pinX, slot.pinY = nil, nil, nil
+    end
 end
 
 -- The only producer of a group's container settings, for creation and for

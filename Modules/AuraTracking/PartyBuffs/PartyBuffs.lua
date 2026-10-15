@@ -598,33 +598,32 @@ function PB:AddGroup(k, slot, d)
 end
 
 -- Returns false when any container call was refused, so the caller can retry.
--- The while-active container starts after the slot's cooldown cells.
+-- The while-active container starts after the slot's cooldown cells, on their
+-- line or the next.
 function PB:ApplySlotLayout(slot)
     local db = self.db
-    local side = self:Placement()
+    local side, _, _, _, perRow = self:Placement()
     local container = slot.container
-    local _, offset, width = KE.PartyBuffsRules.RowLayout(db, slot.cellCount or 0)
-    local x = (side.left and -1 or 1) * offset
-    slot.holder:SetSize(width, db.IconSize)
+    local step, buffCol, buffLine, buffPerLine, width, height =
+        KE.PartyBuffsRules.RowLayout(db, slot.cellCount or 0, perRow)
+    local x = (side.left and -1 or 1) * buffCol * step
+    local y = (side.up and 1 or -1) * buffLine * step
+    slot.holder:SetSize(width, height)
     local flow = AnchorUtil.FlowDirection
     local clean = pcall(container.SetFlowLayoutGrowthDirection, container,
         side.left and flow.Left or flow.Right, side.up and flow.Up or flow.Down)
     -- The axis first: the anchor point and the line size are read against it.
     clean = pcall(container.SetFlowLayoutAxis, container, AnchorUtil.FlowLayoutAxis.Horizontal) and clean
     clean = pcall(container.SetFlowLayoutAnchorPoint, container, side.corner) and clean
-    clean = pcall(container.SetFlowLayoutMaximumLineSize, container, width - offset) and clean
-    -- A refused pin may have cleared the old one, so nothing is recorded and
-    -- the next pass pins again.
-    if slot.corner ~= side.corner or slot.pinX ~= x then
+    clean = pcall(container.SetFlowLayoutMaximumLineSize, container,
+        KE.PartyBuffsRules.LineSize(db, buffPerLine)) and clean
+    if KE.PartyBuffsRules.NeedsPin(slot, side.corner, x, y) then
         local ok = pcall(function()
             container:ClearAllPoints()
-            container:SetPoint(side.corner, slot.holder, side.corner, x, 0)
+            container:SetPoint(side.corner, slot.holder, side.corner, x, y)
         end)
-        if ok then
-            slot.corner, slot.pinX = side.corner, x
-        else
-            slot.corner, slot.pinX, clean = nil, nil, false
-        end
+        KE.PartyBuffsRules.RecordPin(slot, ok, side.corner, x, y)
+        clean = ok and clean
     end
     return clean
 end
@@ -658,7 +657,8 @@ function PB:BuildSlot(k)
         end) then
             Debug("slot %d: container replaced after a failed button setup", k)
             slot.container, slot.groups, slot.unknownGroups = nil, {}, {}
-            slot.unit, slot.corner, slot.pinX, slot.cellSig = nil, nil, nil, nil
+            slot.unit, slot.cellSig = nil, nil
+            KE.PartyBuffsRules.RecordPin(slot, false)
             slot.replacements, slot.dressFailed = (slot.replacements or 0) + 1, nil
         else
             self.buildPending = true
@@ -675,13 +675,13 @@ function PB:BuildSlot(k)
             return true
         end
         -- Pinned before any group exists, when a pin is expected to be
-        -- allowed. A refused pin records no corner, so the layout pass below
+        -- allowed. A refused pin records nothing, so the layout pass below
         -- pins it again.
         local pinned = pcall(container.SetPoint, container, corner, slot.holder, corner, 0, 0)
         pcall(container.EnableMouse, container, false)
         pcall(container.SetEnabled, container, false)
         slot.container = container
-        slot.corner = pinned and corner or nil
+        KE.PartyBuffsRules.RecordPin(slot, pinned, corner, 0, 0)
     end
     local built, refused = false, false
     for i = 1, #DESCRIPTORS do
@@ -718,8 +718,9 @@ function PB:BuildSlot(k)
     return not (slot.track and Track.Missing(slot.track))
 end
 
--- The SIDES row, X, Y and strata in effect. A preview row follows the
--- settings page's view while it names one; the icons follow the player's spec.
+-- The SIDES row, X, Y, strata and icons per row in effect. A preview row
+-- follows the settings page's view while it names one; the icons follow the
+-- player's spec.
 function PB:Placement(forPreview)
     local useHealer
     if forPreview and self.previewContext then
@@ -727,8 +728,8 @@ function PB:Placement(forPreview)
     else
         useHealer = KE:IsPlayerHealerSpec()
     end
-    local side, x, y, strata = KE.PartyBuffsRules.ActivePlacement(self.db, useHealer)
-    return SIDES[side] or SIDES.LEFT, x, y, strata
+    local side, x, y, strata, perRow = KE.PartyBuffsRules.ActivePlacement(self.db, useHealer)
+    return SIDES[side] or SIDES.LEFT, x, y, strata, KE.PartyBuffsRules.PerRow(perRow)
 end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
@@ -979,14 +980,15 @@ end
 
 -- Cells are KE frames: moving them is never refused.
 function PB:LayoutCells(slot, count)
-    local side = self:Placement()
-    local step = KE.PartyBuffsRules.RowLayout(self.db, count)
-    local dir = side.left and -1 or 1
+    local side, _, _, _, perRow = self:Placement()
+    local step = KE.PartyBuffsRules.RowLayout(self.db, count, perRow)
+    local dir, rise = side.left and -1 or 1, side.up and 1 or -1
     local cells = slot.track.cells
     for i = 1, count do
         local c = cells[i]
+        local col, line = KE.PartyBuffsRules.GridPosition(i - 1, perRow)
         c:ClearAllPoints()
-        c:SetPoint(side.corner, slot.holder, side.corner, dir * (i - 1) * step, 0)
+        c:SetPoint(side.corner, slot.holder, side.corner, dir * col * step, rise * line * step)
         pcall(Cell.Seat, c)
     end
     if slot.cellCount ~= count then
@@ -1398,9 +1400,9 @@ end
 -- under the spell's length when that is shorter), started again with the same
 -- time left whenever it has run out. A redraw keeps a cell's tracker while its
 -- spell and length are the same, so a countdown carries on. Plain values only.
-function PB:DrawPreviewCells(row, entries, side, step)
+function PB:DrawPreviewCells(row, entries, side, step, perRow)
     local n = Track.Now()
-    local dir = side.left and -1 or 1
+    local dir, rise = side.left and -1 or 1, side.up and 1 or -1
     for i = 1, PREVIEW_CELLS do
         local c, e, old = row.cells[i], entries[i], row.trackers[i]
         if old and not (e and old.previewID == e.id and old.cd == e.cd) then
@@ -1414,8 +1416,9 @@ function PB:DrawPreviewCells(row, entries, side, step)
                 row.cells[i] = c
             end
             Cell.Dress(c, self.cellStyle, e)
+            local col, line = KE.PartyBuffsRules.GridPosition(i - 1, perRow)
             c:ClearAllPoints()
-            c:SetPoint(side.corner, row.holder, side.corner, dir * (i - 1) * step, 0)
+            c:SetPoint(side.corner, row.holder, side.corner, dir * col * step, rise * line * step)
             if old then
                 Track.Push(old, n)
             else
@@ -1480,15 +1483,16 @@ function PB:DrawPreviewRow(k, frame)
     end
     local holder = row.holder
     local entries = self:PreviewEntries(k)
-    local step, offset, width = KE.PartyBuffsRules.RowLayout(db, #entries)
-    holder:SetSize(width, db.IconSize)
+    local side, _, _, _, perRow = self:Placement(true)
+    local step, buffCol, buffLine, buffPerLine, width, height =
+        KE.PartyBuffsRules.RowLayout(db, #entries, perRow)
+    holder:SetSize(width, height)
     if not self:PlaceHolder(holder, frame, true) then
         self:HidePreviewRow(row)
         return
     end
-    local side = self:Placement(true)
-    local dir = side.left and -1 or 1
-    self:DrawPreviewCells(row, entries, side, step)
+    local dir, rise = side.left and -1 or 1, side.up and 1 or -1
+    self:DrawPreviewCells(row, entries, side, step, perRow)
     local now, shown, limit = GetTime(), 0, KE.PartyBuffsRules.IconCount(db)
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
@@ -1502,8 +1506,11 @@ function PB:DrawPreviewRow(k, frame)
                 icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
                 row.icons[i] = icon
             end
+            -- Where the live container would put the same icon.
+            local col, line = KE.PartyBuffsRules.GridPosition(shown, buffPerLine)
             icon:ClearAllPoints()
-            icon:SetPoint(side.corner, holder, side.corner, dir * (offset + shown * step), 0)
+            icon:SetPoint(side.corner, holder, side.corner, dir * (buffCol + col) * step,
+                rise * (buffLine + line) * step)
             icon.keIcon:SetTexture(self:PreviewIcon(d, k))
             self:RunPreviewTimer(icon, i, now)
             icon:Show()
