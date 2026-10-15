@@ -129,11 +129,18 @@ local function ConfigureBorder(host, settings)
         edge:Show()
     end
     -- Restarted only when stopped: a color or thickness edit must not
-    -- stutter a running pulse.
+    -- stutter a running pulse. Kept in a KE flag rather than asked of the
+    -- group, because an aura button's registered group refuses progress
+    -- queries.
     if settings.GlowPulse ~= false then
-        if not host.pulseGroup:IsPlaying() then host.pulseGroup:Play() end
+        if not host.pulseOn then
+            host.pulseGroup:Play()
+            host.pulseOn = true
+        end
+        host.styleGroups[host.pulseGroup] = true
     else
         host.pulseGroup:Stop()
+        host.pulseOn = false
         host:SetAlpha(1)
     end
 end
@@ -141,6 +148,7 @@ end
 local function HideBorder(host)
     if not host.edges then return end
     host.pulseGroup:Stop()
+    host.pulseOn = false
     host:SetAlpha(1)
     for i = 1, 4 do
         host.edges[EDGES[i]]:Hide()
@@ -151,6 +159,9 @@ end
 -- calls this once to seed a valid starting state, Apply calls it again on
 -- every reconfiguration to pick up changed settings.
 local function ConfigureHost(host, settings, width, height)
+    -- Rebuilt from the branch taken below, so the record of what this style
+    -- runs cannot drift from its Play calls.
+    wipe(host.styleGroups)
     -- Glow off stops every group rather than only hiding the host. A playing
     -- animation on a hidden texture still costs a C-side update, which is the
     -- same reason the pixel branch below stops the sheet layers instead of
@@ -192,6 +203,7 @@ local function ConfigureHost(host, settings, width, height)
         HideBorder(host)
 
         ConfigurePixel(host, settings, period, width, height)
+        for i = 1, 4 do host.styleGroups[host.dashes[i].group] = true end
         host:SetShown(settings.GlowEnabled and true or false)
         return
     end
@@ -214,6 +226,10 @@ local function ConfigureHost(host, settings, width, height)
     HideBorder(host)
 
     local entry = ResolveEntry(settings)
+    host.styleGroups[host.animGroup] = true
+    if host.overlay and entry.atlas then
+        host.styleGroups[host.overlayGroup] = true
+    end
     local texture = host.texture
     texture:Show()
 
@@ -391,6 +407,12 @@ function Glow.CreateHost(button, settings, template)
     pulse:SetDuration(BORDER_PULSE_DURATION)
     pulse:SetSmoothing("IN_OUT")
     host.pulseGroup = pulseGroup
+
+    -- KE's own records: the groups the current style runs, the groups in an
+    -- aura button's aura-shown list, and whether the pulse is meant to run.
+    host.styleGroups = {}
+    host.shownGroups = {}
+    host.pulseOn = false
 
     ConfigureHost(host, settings)
 
