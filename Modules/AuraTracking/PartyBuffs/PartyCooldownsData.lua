@@ -58,7 +58,9 @@ Data.SPELLS = {
 
     [132578]  = { kind = "offensive", cd = 120 },
     -- Seen through Celestial Conduit, which every Xuen caster has.
-    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 }, active = 20 },
+    -- Windwalker's 90 s needs Xuen's Bond.
+    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 }, active = 20,
+                  lengthNeeds = { talents = { [392986] = true } } },
     [115203]  = { kind = "defensive", cd = 360, buffs = { 115203, 120954 } },
     [122783]  = { kind = "defensive", cd = 90 },
     [122470]  = { kind = "defensive", cd = 90, buffs = { 125174 } },
@@ -142,7 +144,7 @@ Data.SPECS = {
     [63]   = { { 190319, 60 }, { 45438, 150 }, { 342245, 50 } },
     [64]   = { { 45438, 120 }, { 342245, 50 } },
     [268]  = { 132578 },
-    [269]  = { 123904, 122470, { 115203, 90 } },
+    [269]  = { { 123904, 90 }, 122470, { 115203, 90 } },
     [270]  = { { 115203, 90 }, 122783 },
     [65]   = { { 31884, 90 }, { 642, 210 }, { 498, 42 } },
     [66]   = { { 31884, 60 }, { 642, 210 }, { 31850, 63 } },
