@@ -19,23 +19,36 @@ KE.PartyCooldownsData = Data
 -- and specs limits it to those specs. needs is a talent the row requires: it
 -- shows while the talent is taken, and before talents are read only if likely.
 -- lengthNeeds is a talent a spec's paired seconds need: a member read without
--- it counts the cast's own cd. active is set on a summon seen only through a
--- stand-in buff: its cell's aura button never shows, and the cell shows the
--- summon's own icon with a timer for active seconds from the cast, then the
--- cooldown.
+-- it counts the cast's own cd, and so does one not yet read when likely is
+-- false. active is set on a summon seen only through a stand-in buff: its
+-- cell's aura button never shows, and the cell shows the summon's own icon
+-- with a timer for active seconds from the cast, then the cooldown. off
+-- starts the row switched off in every spec's spell list.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },
     [48707]   = { kind = "defensive", cd = 60, buffs = { 48707, 444741 } },
     [51271]   = { kind = "offensive", cd = 45 },
     [42650]   = { kind = "offensive", cd = 90 },
+    [1233448] = { kind = "offensive", cd = 45, buffs = { 1235391 } },
+    [1249658] = { kind = "offensive", cd = 90 },
+    -- Seen only through Chosen of Frostbrood.
+    [279302]  = { kind = "offensive", cd = 90, buffs = { 1265630 }, active = 12,
+                  needs = { talents = { [279302] = true }, likely = true }, off = true },
 
     [191427]  = { kind = "offensive", cd = 120, buffs = { 162264 }, short = 10 },
     [198589]  = { kind = "defensive", cd = 60, buffs = { 212800 } },
     -- Vengeance's Metamorphosis; its cooldown and buff are from game data.
     [187827]  = { kind = "defensive", cd = 120 },
 
-    [194223]  = { kind = "offensive", cd = 180, buffs = { 194223, 102560, 390414 } },
+    -- Incarnation's two charges: each use reads as the whole cooldown. It
+    -- shares a choice node with Convoke the Spirits, the less common pick.
+    [194223]  = { kind = "offensive", cd = 180, buffs = { 194223, 102560, 390414 },
+                  swap = { id = 102560, talents = { [102560] = true }, likely = true } },
+    -- Feral's 60 s needs Ashamane's Guidance, which most Ferals skip.
+    [391528]  = { kind = "offensive", cd = 120,
+                  needs = { talents = { [391528] = true }, likely = false },
+                  lengthNeeds = { talents = { [391548] = true }, likely = false } },
     [106951]  = { kind = "offensive", cd = 180, buffs = { 106951, 102543 } },
     [22812]   = { kind = "defensive", cd = 60 },
     [61336]   = { kind = "defensive", cd = 180 },
@@ -73,7 +86,11 @@ Data.SPELLS = {
 
     [200183]  = { kind = "offensive", cd = 120 },
     [228260]  = { kind = "offensive", cd = 120, buffs = { 194249 } },
-    [19236]   = { kind = "defensive", cd = 90 },
+    -- Seen on the priest only through Twins of the Sun Priestess.
+    [10060]   = { kind = "offensive", cd = 120,
+                  needs = { talents = { [373466] = true }, likely = true } },
+    -- The 70 s needs Angel's Mercy.
+    [19236]   = { kind = "defensive", cd = 90, lengthNeeds = { talents = { [238100] = true } } },
     [47585]   = { kind = "defensive", cd = 120 },
 
     [360194]  = { kind = "offensive", cd = 120, buffs = { 1249810 } },
@@ -127,13 +144,13 @@ end
 -- Per spec, in display order. A pair is { cast, the spec's talented seconds }.
 Data.SPECS = {
     [250]  = { { 49028, 90 }, 48792 },
-    [251]  = { 51271, 48792, { 48707, 40 } },
-    [252]  = { 42650, 48792, { 48707, 40 } },
+    [251]  = { 51271, 1249658, 279302, 48792, { 48707, 40 } },
+    [252]  = { 42650, 1233448, 48792, { 48707, 40 } },
     [577]  = { 191427, 198589 },
     [581]  = { 187827 },
     [1480] = { 198589 },
-    [102]  = { { 194223, 120 }, 22812 },
-    [103]  = { { 106951, 90 }, 22812, 61336 },
+    [102]  = { { 194223, 120 }, 391528, 22812 },
+    [103]  = { { 106951, 90 }, { 391528, 60 }, 22812, 61336 },
     [104]  = { { 22812, 34 }, { 61336, 137 } },
     [105]  = { 22812 },
     [1467] = { 375087, 363916 },
@@ -151,9 +168,9 @@ Data.SPECS = {
     [65]   = { { 31884, 90 }, { 642, 210 }, { 498, 42 } },
     [66]   = { { 31884, 60 }, { 642, 210 }, { 31850, 63 } },
     [70]   = { { 31884, 60 }, { 642, 210 }, { 498, 63 } },
-    [256]  = { 19236 },
-    [257]  = { 200183, { 19236, 70 } },
-    [258]  = { 228260, 47585, { 19236, 70 } },
+    [256]  = { 10060, { 19236, 70 } },
+    [257]  = { 200183, 10060, { 19236, 70 } },
+    [258]  = { 228260, 10060, 47585, { 19236, 70 } },
     [259]  = { 360194, 1856, 31224, 5277 },
     [260]  = { 1856, 31224, 5277 },
     [261]  = { 121471, 1856, 31224, 5277 },
