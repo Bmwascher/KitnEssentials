@@ -1340,6 +1340,13 @@ local function RearmPreview(cooldown)
     if cooldown.keDuration then cooldown:SetCooldown(GetTime(), cooldown.keDuration) end
 end
 
+-- A preview frame is a plain frame, so its glow keeps looping once hidden;
+-- each draw applies it again.
+local GLOW_OFF, GLOW_CAPS = { GlowEnabled = false }, { hasGlow = true }
+local function StopPreviewGlow(icon)
+    KE.AuraGlow.Apply(icon, GLOW_OFF, GLOW_CAPS)
+end
+
 function PB:PreviewIcon(d, k)
     local spellID = KE.PartyBuffsRules.PreviewSample(PREVIEW_BUFFS, k, d.category.key,
         self.db[d.category.listKey])
@@ -1495,7 +1502,10 @@ end
 function PB:DrawPreviewActive(row, e)
     local icon = row.active
     if not e then
-        if icon then icon:Hide() end
+        if icon then
+            StopPreviewGlow(icon)
+            icon:Hide()
+        end
         return
     end
     local settings = self.previewStyleSettings
@@ -1563,6 +1573,7 @@ function PB:DrawPreviewRow(k, frame)
             icon:Show()
             shown = shown + 1
         elseif icon then
+            StopPreviewGlow(icon)
             icon:Hide()
         end
     end
@@ -1618,6 +1629,7 @@ function PB:HidePreviewRow(row)
     for _, icon in pairs(row.icons) do
         icon.keCooldown.keDuration = nil
         icon.keCooldown:Clear()
+        StopPreviewGlow(icon)
     end
     for i, c in pairs(row.cells) do
         local t = row.trackers[i]
@@ -1630,6 +1642,7 @@ function PB:HidePreviewRow(row)
     if row.active then
         row.active.keCooldown.keDuration = nil
         row.active.keCooldown:Clear()
+        StopPreviewGlow(row.active)
     end
     row.holder:Hide()
 end
