@@ -204,6 +204,13 @@ function PB:Activate()
         Track.ShowSensors()
         Pot.Activate()
         HX.Activate()
+        -- The spec can change the icon size while the tracker is off, with no
+        -- event to say so; the drain below reconfigures and restyles.
+        local built = self.styleSettings and self.styleSettings.IconSize
+        if KE.PartyBuffsRules.NeedsResize(built, select(6, self:Placement())) then
+            self:BuildStyleSettings()
+            self.reconfigurePending, self.restylePending = true, true
+        end
     end
     self:ResolveAll()
     self:OnRelease()
@@ -722,9 +729,9 @@ function PB:BuildSlot(k)
     return not (slot.track and Track.Missing(slot.track))
 end
 
--- The SIDES row, X, Y, strata and icons per row in effect. A preview row
--- follows the settings page's view while it names one; the icons follow the
--- player's spec.
+-- The SIDES row, X, Y, strata, icons per row and icon size in effect. A
+-- preview row follows the settings page's view while it names one; the icons
+-- follow the player's spec.
 function PB:Placement(forPreview)
     local useHealer
     if forPreview and self.previewContext then
@@ -732,8 +739,8 @@ function PB:Placement(forPreview)
     else
         useHealer = KE:IsPlayerHealerSpec()
     end
-    local side, x, y, strata, perRow = KE.PartyBuffsRules.ActivePlacement(self.db, useHealer)
-    return SIDES[side] or SIDES.LEFT, x, y, strata, KE.PartyBuffsRules.PerRow(perRow)
+    local side, x, y, strata, perRow, size = KE.PartyBuffsRules.ActivePlacement(self.db, useHealer)
+    return SIDES[side] or SIDES.LEFT, x, y, strata, KE.PartyBuffsRules.PerRow(perRow), size
 end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
@@ -861,6 +868,7 @@ function PB:BindCooldowns(k, binding)
     end
     local entries = self:CooldownEntries(m)
     local clean, restyle = Track.Apply(slot.track, binding.token, entries, self.cellStyle, self.styleSettings)
+    slot.cellSize = self.cellStyle.size
     if not clean then self.buildPending = true end
     if restyle then self:Restyle() end
     if Track.Missing(slot.track) then self:Enqueue(k) end
@@ -987,6 +995,12 @@ end
 function PB:PlaceCells(slot, side, perRow, size)
     local track = slot.track
     if not track then return end
+    -- A row kept through a roster settle is laid out again with no bind, so a
+    -- new size reaches its cells here. An unbound track has no cells to dress.
+    if KE.PartyBuffsRules.NeedsResize(slot.cellSize, size) then
+        for i = 1, track.count do track.view.Dress(track.cells[i], self.cellStyle, track.entries[i]) end
+        slot.cellSize = size
+    end
     local count = slot.cellCount or 0
     local step = KE.PartyBuffsRules.RowLayout(self.db, count, perRow, size)
     local dir, rise = side.left and -1 or 1, side.up and 1 or -1
@@ -1146,8 +1160,9 @@ function PB:OnKeyStart()
     Track.HoldAll(KEY_HOLD)
 end
 
--- Drops what the member's cells were built from. No healer answer is cached;
--- the placement reads ask the spec each time.
+-- Drops what the member's cells were built from. The placement reads ask the
+-- spec each time; the icon size is built into the style, which ApplySettings
+-- rebuilds.
 function PB:OnSpecChanged(_, unit)
     if KE:IsSecretValue(unit) then return end
     local guid = KE:GetSafeUnitGUID(unit)
@@ -1158,10 +1173,11 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
-function PB:BuildStyleSettings()
-    local db = self.db
-    local settings = self.styleSettings or {}
-    settings.IconSize         = db.IconSize
+-- Fills one style pair: the aura buttons' settings and the cooldown cells'
+-- style, both at size.
+local function FillStyle(db, size, settings, cell)
+    settings = settings or {}
+    settings.IconSize         = size
     settings.IconSpacing      = db.IconSpacing
     settings.Swipe            = db.Swipe == true
     settings.Reverse          = true
@@ -1186,9 +1202,8 @@ function PB:BuildStyleSettings()
     settings.CellRingOffensive = colored and db.ColorBurst or CLEAR
     settings.CellRingDefensive = colored and db.ColorBigDefensive or CLEAR
     settings.CellRingTrinket   = colored and db.ColorTrinket or CLEAR
-    self.styleSettings = settings
-    local cell = self.cellStyle or { colors = {} }
-    cell.size     = db.IconSize
+    cell = cell or { colors = {} }
+    cell.size     = size
     cell.fontName = db.FontFace
     -- One size with the active timer, so the two texts match.
     cell.fontSize = db.TimerFontSize
@@ -1198,7 +1213,22 @@ function PB:BuildStyleSettings()
     cell.colors.offensive = colored and db.ColorBurst or BLACK
     cell.colors.defensive = colored and db.ColorBigDefensive or BLACK
     cell.colors.trinket   = colored and db.ColorTrinket or BLACK
-    self.cellStyle = cell
+    return settings, cell
+end
+
+-- The live pair. Only ApplySettings and the activation check build it, and
+-- both reconfigure and restyle after, so its size is the one the live
+-- containers were set to, or one with a retry pending.
+function PB:BuildStyleSettings()
+    self.styleSettings, self.cellStyle =
+        FillStyle(self.db, select(6, self:Placement()), self.styleSettings, self.cellStyle)
+end
+
+-- The preview's own pair, at the size of the settings page's view.
+function PB:BuildPreviewStyle()
+    self.previewStyleSettings, self.previewCellStyle =
+        FillStyle(self.db, select(6, self:Placement(true)),
+            self.previewStyleSettings, self.previewCellStyle)
 end
 
 -- A refused touch leaves the button as it was and is retried when combat or
@@ -1372,7 +1402,7 @@ end
 -- in for it, in the timer's font and number format. A redraw keeps a running
 -- sample's start, unless its duration changed or it was not showing.
 function PB:RunPreviewTimer(icon, index, now)
-    local settings = self.styleSettings
+    local settings = self.previewStyleSettings
     local duration, offset = KE.AuraRules.PreviewTiming(index)
     local cooldown = icon.keCooldown
     local keep = cooldown.keDuration == duration and icon:IsShown() and cooldown:IsShown()
@@ -1428,7 +1458,7 @@ function PB:DrawPreviewCells(row, entries, side, step, perRow)
                 c = Cell.New(row.holder)
                 row.cells[i] = c
             end
-            Cell.Dress(c, self.cellStyle, e)
+            Cell.Dress(c, self.previewCellStyle, e)
             local col, line = KE.PartyBuffsRules.GridPosition(i - 1, perRow)
             c:ClearAllPoints()
             c:SetPoint(side.corner, row.holder, side.corner, dir * col * step, rise * line * step)
@@ -1465,7 +1495,7 @@ function PB:DrawPreviewActive(row, e)
         if icon then icon:Hide() end
         return
     end
-    local settings = self.styleSettings
+    local settings = self.previewStyleSettings
     local d = Track.OVERLAY_DESCRIPTORS[e.kind]
     if icon then
         KE.AuraStyle.StyleAuraFrame(icon, settings, d.capabilities)
@@ -1486,7 +1516,7 @@ function PB:DrawPreviewActive(row, e)
 end
 
 function PB:DrawPreviewRow(k, frame)
-    local db, settings = self.db, self.styleSettings
+    local db, settings = self.db, self.previewStyleSettings
     local row = self.previewRows[k]
     if not row then
         local rowHolder = CreateFrame("Frame", nil, UIParent)
@@ -1547,7 +1577,7 @@ function PB:ShowPreview()
         self:HidePreviewFrames()
         return
     end
-    self:BuildStyleSettings()
+    self:BuildPreviewStyle()
     local frames = {}
     -- Solo, the search can find no teammate, so it is skipped.
     local grouped = PlainTrue(IsInGroup)
