@@ -240,6 +240,7 @@ describe("PartyBuffsRules.ActivePlacement", function()
         local db = {
             Side = "LEFT", XOffset = 0, YOffset = 0, Strata = "FRAME",
             HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4, HealerStrata = "HIGH",
+            IconsPerRow = 14, HealerIconsPerRow = 3,
         }
         for key, value in pairs(overrides or {}) do db[key] = value end
         return db
@@ -247,8 +248,8 @@ describe("PartyBuffsRules.ActivePlacement", function()
 
     it("uses the healer copy only while the toggle is on and the healer answer is true", function()
         local R = L.loadPartyBuffsRules()
-        local default = { "LEFT", 0, 0, "FRAME" }
-        local healer = { "RIGHT", 6, -4, "HIGH" }
+        local default = { "LEFT", 0, 0, "FRAME", 14 }
+        local healer = { "RIGHT", 6, -4, "HIGH", 3 }
         local cases = {
             { name = "toggle off, healer spec", toggle = false, useHealer = true, want = default },
             { name = "toggle on, other spec", toggle = true, useHealer = false, want = default },
@@ -265,17 +266,79 @@ describe("PartyBuffsRules.ActivePlacement", function()
         local db = placementDb({ UseHealerPlacement = true })
         db.HealerXOffset = nil
         db.HealerStrata = nil
-        assert.are.same({ "RIGHT", 0, -4, "FRAME" }, { R.ActivePlacement(db, true) })
+        db.HealerIconsPerRow = nil
+        assert.are.same({ "RIGHT", 0, -4, "FRAME", 14 }, { R.ActivePlacement(db, true) })
     end)
 end)
 
 describe("PartyBuffsRules.SeedHealerPlacement", function()
     it("fills each absent healer key from its default and keeps one already set", function()
         local R = L.loadPartyBuffsRules()
-        local db = { Side = "ABOVE", XOffset = 3, YOffset = -2, Strata = "LOW", HealerSide = "BELOW" }
+        local db = {
+            Side = "ABOVE", XOffset = 3, YOffset = -2, Strata = "LOW", IconsPerRow = 5, HealerSide = "BELOW",
+        }
         R.SeedHealerPlacement(db)
-        assert.are.same({ "BELOW", 3, -2, "LOW" },
-            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerStrata })
+        assert.are.same({ "BELOW", 3, -2, "LOW", 5 },
+            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerStrata, db.HealerIconsPerRow })
+    end)
+end)
+
+describe("PartyBuffsRules.PerRow", function()
+    it("rounds a number to a whole count of at least 1 and reads anything else as 14", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { value = 2.6, want = 3 },
+            { value = 2.4, want = 2 },
+            { value = 0, want = 1 },
+            { value = -3, want = 1 },
+            { value = nil, want = 14 },
+            { value = "6", want = 14 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.PerRow(case.value), tostring(case.value))
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.GridPosition", function()
+    it("keeps index perLine - 1 on line 0 and starts line 1 at index perLine", function()
+        local R = L.loadPartyBuffsRules()
+        assert.are.same({ 2, 0 }, { R.GridPosition(2, 3) })
+        assert.are.same({ 0, 1 }, { R.GridPosition(3, 3) })
+    end)
+end)
+
+describe("PartyBuffsRules.LineSize", function()
+    -- The flow layout's wrap test: the running size carries the trailing
+    -- spacing, and an icon wraps when the running size plus it passes the maximum.
+    local function iconsOnFirstLine(maxSize, size, spacing, total)
+        local line, placed = 0, 0
+        for _ = 1, total do
+            local nextSize = line > 0 and line + size or size
+            if line > 0 and nextSize > maxSize then break end
+            line = nextSize + spacing
+            placed = placed + 1
+        end
+        return placed
+    end
+
+    it("lets exactly count icons onto one line and wraps the next", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { size = 16, spacing = 0, count = 1 },
+            { size = 16, spacing = 10, count = 8 },
+            { size = 72, spacing = 0, count = 8 },
+            { size = 72, spacing = 10, count = 1 },
+            { size = 36, spacing = 1, count = 4 },
+            { size = 36.6, spacing = 0.4, count = 7 },
+            { size = 17.3, spacing = 9.7, count = 8 },
+        }
+        for _, case in ipairs(cases) do
+            local db = { IconSize = case.size, IconSpacing = case.spacing }
+            local name = case.size .. "/" .. case.spacing .. "/" .. case.count
+            assert.are.equal(case.count,
+                iconsOnFirstLine(R.LineSize(db, case.count), case.size, case.spacing, case.count + 1), name)
+        end
     end)
 end)
 

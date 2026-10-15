@@ -9,6 +9,7 @@ local KE = select(2, ...)
 
 local ipairs = ipairs
 local math_floor = math.floor
+local math_max = math.max
 local math_min = math.min
 local type = type
 
@@ -77,6 +78,31 @@ end
 
 function Rules.CellCount(entryCount, db)
     return math_min(entryCount, Rules.CooldownIconCount(db))
+end
+
+-- Max Cooldown Icons (6) plus Max Active Buff Icons (8): no row is longer.
+Rules.MAX_PER_ROW = 14
+
+-- Rounded as IconCount is; a value that is not a number never wraps.
+function Rules.PerRow(value)
+    if type(value) ~= "number" then return Rules.MAX_PER_ROW end
+    return math_max(1, math_floor(value + 0.5))
+end
+
+-- Column and line of a 0-based index in a grid perLine wide.
+function Rules.GridPosition(index, perLine)
+    return index % perLine, math_floor(index / perLine)
+end
+
+local function Span(count, db)
+    if count <= 0 then return 0 end
+    return count * db.IconSize + (count - 1) * db.IconSpacing
+end
+
+-- The container wraps once its line plus the next icon passes this. The half
+-- icon of slack keeps a fractional icon size from wrapping one icon early.
+function Rules.LineSize(db, count)
+    return Span(count, db) + db.IconSize / 2
 end
 
 -- Cooldown cells come first, nearest the frame, one step apart; the
@@ -194,10 +220,12 @@ Rules.PLACEMENT_KEYS = {
     { "XOffset", "HealerXOffset" },
     { "YOffset", "HealerYOffset" },
     { "Strata", "HealerStrata" },
+    { "IconsPerRow", "HealerIconsPerRow" },
 }
 
--- Side, X, Y and Strata to use. An unseeded healer key reads its default
--- counterpart, so a profile with the toggle on and no copy changes nothing.
+-- Side, X, Y, strata and icons per row to use. An unseeded healer key reads
+-- its default counterpart, so a profile with the toggle on and no copy
+-- changes nothing.
 function Rules.ActivePlacement(db, useHealer)
     local healer = useHealer and db.UseHealerPlacement == true
     local function pick(pair)
@@ -206,7 +234,7 @@ function Rules.ActivePlacement(db, useHealer)
         return value
     end
     local keys = Rules.PLACEMENT_KEYS
-    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4])
+    return pick(keys[1]), pick(keys[2]), pick(keys[3]), pick(keys[4]), pick(keys[5])
 end
 
 -- Preview row k's sample spell for a list category. A sample the player
