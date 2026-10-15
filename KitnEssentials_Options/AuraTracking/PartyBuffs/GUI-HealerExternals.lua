@@ -122,7 +122,8 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
             "that display moves.",
         callback = Attach,
     })
-    rowM1:AddWidget(attach, 0.5)
+    -- Level with the Side box, which sits 14 px below the dropdown's top.
+    rowM1:AddWidget(attach, 0.5, nil, 0, -14)
     manager:Register(attach, "on")
     local side = GUIFrame:CreateDropdown(rowM1, "Side", {
         options = SIDE_OPTIONS,
