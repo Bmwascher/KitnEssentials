@@ -204,3 +204,23 @@ function GlowRules.PixelPerimeter(count, width, height, period)
         spanV = (height + cycle) / cycle,
     }
 end
+
+-- Brings KE's record of a button's aura-shown list to the set the style
+-- runs. Keys in both make no call, so a restyle that keeps its style leaves
+-- the list alone. Removals run first. False at the first refused call: the
+-- list is then unknown and the caller clears it.
+function GlowRules.SyncShown(registered, wanted, ops, target)
+    for key in pairs(registered) do
+        if not wanted[key] then
+            if not ops.remove(target, key) then return false end
+            registered[key] = nil
+        end
+    end
+    for key in pairs(wanted) do
+        if not registered[key] then
+            if not ops.add(target, key) then return false end
+            registered[key] = true
+        end
+    end
+    return true
+end
