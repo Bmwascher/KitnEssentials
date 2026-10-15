@@ -328,3 +328,45 @@ describe("PartyBuffsRules.PreviewSample", function()
         end
     end)
 end)
+
+describe("PartyBuffsRules.KeepRow", function()
+    it("keeps a row through a roster change only for the same member on a frame still showing its token", function()
+        local R = L.loadPartyBuffsRules()
+        local bound = { token = "party1" }
+        local fixed = { token = "player", fixed = true }
+        local cases = {
+            { name = "same member, same frame unit", binding = bound, frame = "party1", same = true, want = true },
+            { name = "frame re-sorted to another unit", binding = bound, frame = "party2", same = true, want = false },
+            { name = "fixed token, frame shows a vehicle", binding = fixed, frame = "vehicle", same = true, want = true },
+            { name = "token names someone else", binding = bound, frame = "party1", same = false, want = false },
+            { name = "no binding", binding = nil, frame = "party1", same = true, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.KeepRow(case.binding, case.frame, case.same), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.MatchSlots", function()
+    it("returns each binding to the slot holding its token and fills free slots in order", function()
+        local R = L.loadPartyBuffsRules()
+        local function b(token) return { token = token } end
+        local function tokens(placed, n)
+            local out = {}
+            for k = 1, n do out[k] = placed[k] and placed[k].token or "-" end
+            return out
+        end
+        local cases = {
+            { name = "found in a new order", found = { b("party2"), b("party1") }, units = { "party1", "party2" },
+              want = { "party1", "party2", "-" } },
+            { name = "a newcomer takes the freed slot", found = { b("party3"), b("party1") }, units = { "party1", "party2" },
+              want = { "party1", "party3", "-" } },
+            { name = "more frames than slots", found = { b("party1"), b("party2"), b("party3") }, units = {},
+              want = { "party1", "party2" } },
+        }
+        for _, case in ipairs(cases) do
+            local n = #case.want
+            assert.are.same(case.want, tokens(R.MatchSlots(case.found, case.units, n), n), case.name)
+        end
+    end)
+end)

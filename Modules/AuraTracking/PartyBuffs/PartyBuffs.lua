@@ -242,7 +242,7 @@ local function PlainString(value)
     return value
 end
 
--- The unit a frame shows, from its field and its attribute.
+-- The frame search and the roster keep must read a frame's unit alike.
 local function FrameUnits(frame)
     local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
     return PlainString(frame.unit), okAttr and PlainString(attr) or nil
@@ -459,8 +459,11 @@ function PB:ResolveAll()
         Track.InterfaceShown()
     end
     self.buildPending = false
-    local bindings = self:FindFrames()
-    Debug("resolve %d frame(s)", #bindings)
+    local found = self:FindFrames()
+    Debug("resolve %d frame(s)", #found)
+    local units = {}
+    for k = 1, MAX_SLOTS do units[k] = self.slots[k] and self.slots[k].unit end
+    local bindings = KE.PartyBuffsRules.MatchSlots(found, units, MAX_SLOTS)
     for k = 1, MAX_SLOTS do
         local binding = bindings[k]
         self.bindings[k] = binding
@@ -1033,12 +1036,13 @@ function PB:KeepRosterRows()
     for k = 1, MAX_SLOTS do
         local slot, binding = self.slots[k], self.bindings[k]
         local m = slot and slot.member
-        local keep = binding ~= nil and m ~= nil
-        if keep and not binding.fixed then
+        local keep = false
+        if binding and m then
             local unit, attrUnit = FrameUnits(binding.frame)
-            keep = KE.PartyBuffsRules.CandidateToken({ unit = unit, attrUnit = attrUnit }) == binding.token
+            keep = KE.PartyBuffsRules.KeepRow(binding,
+                KE.PartyBuffsRules.CandidateToken({ unit = unit, attrUnit = attrUnit }),
+                PotRules.KeepOnRoster(m.guid, KE:GetSafeUnitGUID(binding.token), issecretvalue))
         end
-        keep = keep and PotRules.KeepOnRoster(m.guid, KE:GetSafeUnitGUID(binding.token), issecretvalue)
         self.rosterKept[k] = keep or nil
         if keep then
             if slot.track then Track.Hold(slot.track, ROSTER_SETTLE) end

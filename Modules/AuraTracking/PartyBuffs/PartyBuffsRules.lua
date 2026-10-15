@@ -144,12 +144,47 @@ function Rules.PickFrames(candidates, maxSlots, includeSelf)
                 if not own or (includeSelf == true and not selfTaken) then
                     seen[token] = true
                     if own then selfTaken = true end
-                    bindings[#bindings + 1] = { token = token, frame = candidate.frame, family = candidate.family }
+                    bindings[#bindings + 1] = {
+                        token = token, frame = candidate.frame, family = candidate.family, fixed = candidate.fixed,
+                    }
                 end
             end
         end
     end
     return bindings
+end
+
+-- After a roster change a row stays up only while its frame still shows its
+-- token (frames can re-sort their units) and the token still names the same
+-- member. A frame bound to a fixed token shows a vehicle while you ride one,
+-- so its own unit is not compared.
+function Rules.KeepRow(binding, frameToken, sameMember)
+    if type(binding) ~= "table" or sameMember ~= true then return false end
+    return binding.fixed == true or frameToken == binding.token
+end
+
+-- The slot each binding takes: back to the slot already holding its token, so
+-- a frame search in a new order does not hand a member's counts to another
+-- slot; the rest fill the free slots in order.
+function Rules.MatchSlots(bindings, units, maxSlots)
+    local placed, used = {}, {}
+    for i = 1, #bindings do
+        for k = 1, maxSlots do
+            if not placed[k] and units[k] == bindings[i].token then
+                placed[k], used[i] = bindings[i], true
+                break
+            end
+        end
+    end
+    local k = 1
+    for i = 1, #bindings do
+        if not used[i] then
+            while k <= maxSlots and placed[k] do k = k + 1 end
+            if k > maxSlots then break end
+            placed[k] = bindings[i]
+        end
+    end
+    return placed
 end
 
 -- The placement fields a healer copy can override, as { default key, healer key },
