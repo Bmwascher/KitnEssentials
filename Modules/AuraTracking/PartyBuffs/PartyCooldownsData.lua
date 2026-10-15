@@ -82,7 +82,9 @@ Data.SPELLS = {
     [31224]   = { kind = "defensive", cd = 120 },
     [5277]    = { kind = "defensive", cd = 120 },
 
-    [114050]  = { kind = "offensive", cd = 180, buffs = { 114050, 1219480 }, short = 10 },
+    -- Elemental's 120 s needs First Ascendant.
+    [114050]  = { kind = "offensive", cd = 180, buffs = { 114050, 1219480 }, short = 10,
+                  lengthNeeds = { talents = { [462440] = true } } },
     [114051]  = { kind = "offensive", cd = 180, short = 10 },
     [108271]  = { kind = "defensive", cd = 120 },
     -- Seen only through Primordial Bond, so a read without it hides the row.
