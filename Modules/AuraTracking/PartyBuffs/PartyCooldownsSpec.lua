@@ -207,6 +207,7 @@ function Spec.Tick()
         if not m.done then
             waiting = true
             m.canInspect = Ask(CanInspect, m.unit) == true
+            m.offline = Ask(UnitIsConnected, m.unit) == false
         end
     end
     if not waiting then

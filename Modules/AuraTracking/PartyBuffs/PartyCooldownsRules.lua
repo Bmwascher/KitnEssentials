@@ -124,12 +124,13 @@ function Rules.InspectInUse(inspectShown, talentsInspecting)
 end
 
 -- At most one member per call, and none while an inspect view is in use, in
--- combat, or within INSPECT_GAP seconds of the last request.
+-- combat, or within INSPECT_GAP seconds of the last request. An offline
+-- member never answers, and asking it would hold back everyone behind it.
 function Rules.NextInspect(state, members)
     if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
     if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
     for _, m in ipairs(members) do
-        if not m.done and m.canInspect and not (m.waitUntil and state.now < m.waitUntil) then
+        if not m.done and m.canInspect and not m.offline and not (m.waitUntil and state.now < m.waitUntil) then
             return m
         end
     end

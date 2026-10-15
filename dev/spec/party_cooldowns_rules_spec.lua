@@ -152,11 +152,11 @@ describe("PartyCooldownsRules.NextInspect", function()
         assert.are.equal("a", R.NextInspect({ now = 10, lastRequest = 10 - R.INSPECT_GAP }, members).name)
     end)
 
-    it("skips a member that is done, cannot be inspected or is resting", function()
+    it("skips a member that is done, cannot be inspected, is offline or is resting", function()
         local R = loadRules()
         local members = {
             member("done", { done = true }), member("far", { canInspect = false }),
-            member("resting", { waitUntil = 40 }), member("next"),
+            member("offline", { offline = true }), member("resting", { waitUntil = 40 }), member("next"),
         }
         assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
     end)
