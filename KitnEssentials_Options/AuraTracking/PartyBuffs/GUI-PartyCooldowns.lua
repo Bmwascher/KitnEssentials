@@ -404,13 +404,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             end,
         })
         rowX0:AddWidget(healerToggle, 0.5)
-        local healerNote = GUIFrame:CreateText(rowX0,
-            KE:ColorTextByTheme("Note"),
-            db.UseHealerPlacement == true
-                and "Used while you are in a healer spec."
-                or "Off: every spec uses the Default placement.",
-            Theme.rowHeight, "hide")
-        rowX0:AddWidget(healerNote, 0.5)
         cardPosition:AddRow(rowX0, Theme.rowHeight)
     end
     local rowX1 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
