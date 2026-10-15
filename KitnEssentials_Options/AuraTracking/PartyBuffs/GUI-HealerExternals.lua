@@ -18,10 +18,18 @@ local GROW_OPTIONS = {
     { key = "DOWN",  text = "Down" },
 }
 
--- Healer Mana's display. Attached, the box's bottom-left corner sits 2 above
--- the display's top-left one, over its first icon.
+-- Healer Mana's display, keyed by the side the box attaches to. Both draw
+-- their borders inside their frames, so an offset of 1 leaves one empty
+-- pixel between the two border lines.
 local HEALER_MANA = "KitnEssentialsHealerMana"
-local ATTACHED = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 2 }
+local ATTACHED = {
+    TOP    = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT",    XOffset = 0, YOffset = 1 },
+    BOTTOM = { AnchorFrom = "TOPLEFT",    AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -1 },
+}
+local SIDE_OPTIONS = {
+    { key = "TOP",    text = "Top" },
+    { key = "BOTTOM", text = "Bottom" },
+}
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
 
@@ -96,22 +104,40 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         "party where the Cooldowns tab's Where It Shows allows, never in a raid or an arena. Another " ..
         "player's cast of the same spell, such as a Retribution Paladin's Blessing of Sacrifice, starts it too.")
     cardMain:AddNote("Move it with /kes edit.")
+    local function Attach()
+        local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
+        db.HealerExtAnchorFrameType = "SELECTFRAME"
+        db.HealerExtParentFrame = HEALER_MANA
+        local p = db.HealerExtPosition
+        p.AnchorFrom, p.AnchorTo = points.AnchorFrom, points.AnchorTo
+        p.XOffset, p.YOffset = points.XOffset, points.YOffset
+        ApplySettings()
+        RebuildPage()
+    end
+
     local rowM1 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeightLast)
     local attach = GUIFrame:CreateButton(rowM1, "Attach to Healer Mana", {
         height = 24,
-        tooltip = "Places the box just above the Healer Mana display and keeps it there when that display moves.",
-        callback = function()
-            db.HealerExtAnchorFrameType = "SELECTFRAME"
-            db.HealerExtParentFrame = HEALER_MANA
-            local p = db.HealerExtPosition
-            p.AnchorFrom, p.AnchorTo = ATTACHED.AnchorFrom, ATTACHED.AnchorTo
-            p.XOffset, p.YOffset = ATTACHED.XOffset, ATTACHED.YOffset
-            ApplySettings()
-            RebuildPage()
-        end,
+        tooltip = "Places the box against the chosen side of the Healer Mana display and keeps it there when " ..
+            "that display moves.",
+        callback = Attach,
     })
     rowM1:AddWidget(attach, 0.5)
     manager:Register(attach, "on")
+    local side = GUIFrame:CreateDropdown(rowM1, "Side", {
+        options = SIDE_OPTIONS,
+        value = db.HealerExtAttachSide,
+        tooltip = "The side of the Healer Mana display the box attaches to. Grow is not changed: with Top and " ..
+            "Grow Down, or Bottom and Grow Up, the icons after the first cover Healer Mana.",
+        callback = function(choice)
+            db.HealerExtAttachSide = choice
+            if db.HealerExtAnchorFrameType == "SELECTFRAME" and db.HealerExtParentFrame == HEALER_MANA then
+                Attach()
+            end
+        end,
+    })
+    rowM1:AddWidget(side, 0.5)
+    manager:Register(side, "on")
     cardMain:AddRow(rowM1, Theme.rowHeightLast, 0)
     yOffset = cardMain:GetNextOffset()
 
