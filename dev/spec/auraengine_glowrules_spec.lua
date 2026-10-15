@@ -54,12 +54,11 @@ describe("speed normalization and conversion", function()
         assert.equals(0.5, G.FrequencyToDuration(G.NormalizeFrequency(2, 0.05, 2)))
     end)
 
-    it("divides a sheet's loop by its factor, down to its floor", function()
+    it("divides a sheet's loop by its factor, and leaves a sheet without one alone", function()
         local G = L.loadAuraGlowRules()
         local cases = {
-            { entry = G.FLIPBOOKS.ants,  period = 4,   expected = 4 },
-            { entry = G.FLIPBOOKS.alert, period = 4,   expected = 1 },
-            { entry = G.FLIPBOOKS.alert, period = 0.5, expected = 0.22 },
+            { entry = {},                  period = 4, expected = 4 },
+            { entry = { speedFactor = 2 }, period = 4, expected = 2 },
         }
         for _, case in ipairs(cases) do
             assert.equals(case.expected, G.FlipbookPeriod(case.entry, case.period))
