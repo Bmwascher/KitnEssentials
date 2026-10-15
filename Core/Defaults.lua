@@ -1589,19 +1589,19 @@ local Defaults = {
             -- PotionParentFrame, which has no default.
             PotionBars        = true,
             PotionIncludeSelf = true,
-            PotionShowReady   = false,
+            PotionShowReady   = true,
             PotionGrowth      = "DOWN",
             PotionWidth       = 225,
-            PotionHeight      = 21,
+            PotionHeight      = 23,
             PotionSpacing     = 0,
             PotionShowTimer   = true,
             PotionTextSize    = 14,
             PotionClassBars   = false,
             PotionClassNames  = true,
-            PotionBarColor    = { 0.431, 0.682, 0.812, 1 },
+            PotionBarColor    = { 0.384, 0.596, 0.714, 1 },
             -- #080808 at 80%, the Chat and Damage Meter backdrop color.
             PotionBgColor     = { 0.031, 0.031, 0.031, 0.80 },
-            PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 122 },
+            PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 },
             PotionAnchorFrameType = "UIPARENT",
             PotionStrata      = "MEDIUM",
             -- Healer externals box (Healer Externals tab). The position card
