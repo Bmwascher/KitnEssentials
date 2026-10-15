@@ -690,7 +690,7 @@ local function SelfTaken(specID)
 end
 
 -- The miss count belongs to the answer: a new spec gets its own three tries.
-local function ForgetTalents(m) m.talents, m.talentMisses = nil, nil end
+local function ForgetTalents(m) m.talents, m.talentMisses, m.talentsStale = nil, nil, nil end
 
 -- Companion, skyriding and profession configs fire TRAIT_CONFIG_UPDATED too;
 -- only a class talent config changes your talents. An unreadable answer
@@ -705,23 +705,28 @@ end
 
 -- Three unreadable answers in a row store an empty one, which keeps the
 -- likely icon, and shows a row that needs a talent only when it is likely.
--- Talents only concern class cooldowns.
+-- Talents only concern class cooldowns. A teammate's talent change fires no
+-- event here, so a ready check marks every teammate's answer stale for the
+-- inspect to read again; a stale answer stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
-    events = { "TRAIT_CONFIG_UPDATED" },
+    events = { "TRAIT_CONFIG_UPDATED", "READY_CHECK" },
     On = function() return Spec.trackClass == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
-        return m.talents == nil and m.spec ~= nil and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
+        return (m.talents == nil or m.talentsStale == true) and m.spec ~= nil
+            and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
     end,
     Read = function(m)
         local ok, taken, skip = pcall(ReadTaken, m.spec)
         if ok and taken then
-            m.talents, m.talentMisses = taken, nil
+            m.talents, m.talentMisses, m.talentsStale = taken, nil, nil
             return
         end
         if ok and skip then return end
         m.talentMisses = (m.talentMisses or 0) + 1
-        if m.talentMisses >= MAX_MISSES then m.talents, m.talentMisses = {}, nil end
+        if m.talentMisses >= MAX_MISSES then
+            m.talents, m.talentMisses, m.talentsStale = m.talents or {}, nil, nil
+        end
     end,
     Self = function(m)
         if m.talents == nil and m.spec then m.talents = SelfTaken(m.spec) end
@@ -732,6 +737,11 @@ Spec.readers[#Spec.readers + 1] = {
         if event == "TRAIT_CONFIG_UPDATED" and m and IsClassConfig(configID) then
             m.talents = nil
             Changed(m)
+        elseif event == "READY_CHECK" and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
+            for _, member in pairs(Spec.byGUID) do
+                if not member.isPlayer and member.talents then member.talentsStale = true end
+            end
+            Spec.Wake()
         end
     end,
 }
