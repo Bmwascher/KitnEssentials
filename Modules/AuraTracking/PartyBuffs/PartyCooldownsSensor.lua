@@ -36,6 +36,10 @@ local Track = {}
 KE.PartyCooldownsSensor = Track
 
 local SENSOR_GROUP = "cd"
+-- Some cooldown buffs (Dark Transformation) are flagged nameplate-only, and
+-- plain "HELPFUL" filters those out. The spell-ID list still limits each
+-- sensor to its own buffs.
+local SENSOR_FILTER = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
 -- A lit sensor spans the screen from just off its left edge.
 local SENSOR_WIDTH = 50000
 local READ_DELAY = 0.2
@@ -161,7 +165,7 @@ local function NewSensor(buffs, short, host)
         sensor:SetSize(1, 1)
         sensor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -11, 0)
         sensor:EnableMouse(false)
-        sensor:AddAuraGroup(SENSOR_GROUP, "HELPFUL", {
+        sensor:AddAuraGroup(SENSOR_GROUP, SENSOR_FILTER, {
             maxFrameCount = 1,
             candidateFilters = { includeSpellIDs = BuffSet(buffs), maxDuration = short },
             initializeFrame = InitSensorButton,
@@ -881,7 +885,7 @@ function Track.BuildOverlayNext(st)
             local inited = false
             -- Added empty: a key a failed add left registered never shows,
             -- and the apply that follows points a good one at its buffs.
-            local added, button = pcall(container.AddAuraSlot, container, key, "HELPFUL", {
+            local added, button = pcall(container.AddAuraSlot, container, key, SENSOR_FILTER, {
                 candidateFilters = EMPTY,
                 initializeFrame = function(b)
                     inited = pcall(function()
