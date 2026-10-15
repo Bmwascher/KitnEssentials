@@ -242,6 +242,12 @@ local function PlainString(value)
     return value
 end
 
+-- The unit a frame shows, from its field and its attribute.
+local function FrameUnits(frame)
+    local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
+    return PlainString(frame.unit), okAttr and PlainString(attr) or nil
+end
+
 local function DebugName(frame)
     local ok, name = pcall(frame.GetName, frame)
     return ok and PlainString(name) or tostring(frame)
@@ -278,11 +284,9 @@ local function AddCandidate(list, frame, family, raidIndex, fixedToken)
     end
     local candidate = { frame = frame, family = family, raidIndex = raidIndex, visible = true }
     if fixedToken then
-        candidate.unit = fixedToken
+        candidate.unit, candidate.fixed = fixedToken, true
     else
-        candidate.unit = PlainString(frame.unit)
-        local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
-        if okAttr then candidate.attrUnit = PlainString(attr) end
+        candidate.unit, candidate.attrUnit = FrameUnits(frame)
     end
     candidate.token = KE.PartyBuffsRules.CandidateToken(candidate)
     if candidate.token then
@@ -1021,14 +1025,20 @@ end
 ---------------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------------
--- A row stays up, with its counts, while its token still names the member it
--- was bound to; every other row is dropped until the settle resolves.
+-- A row stays up, with its counts, while its frame still shows its token and
+-- the token still names the member it was bound to; every other row is
+-- dropped until the settle resolves. Party frames can re-sort their units on
+-- a roster change.
 function PB:KeepRosterRows()
     for k = 1, MAX_SLOTS do
         local slot, binding = self.slots[k], self.bindings[k]
         local m = slot and slot.member
         local keep = binding ~= nil and m ~= nil
-            and PotRules.KeepOnRoster(m.guid, KE:GetSafeUnitGUID(binding.token), issecretvalue)
+        if keep and not binding.fixed then
+            local unit, attrUnit = FrameUnits(binding.frame)
+            keep = KE.PartyBuffsRules.CandidateToken({ unit = unit, attrUnit = attrUnit }) == binding.token
+        end
+        keep = keep and PotRules.KeepOnRoster(m.guid, KE:GetSafeUnitGUID(binding.token), issecretvalue)
         self.rosterKept[k] = keep or nil
         if keep then
             if slot.track then Track.Hold(slot.track, ROSTER_SETTLE) end
@@ -1046,8 +1056,9 @@ end
 function PB:OnRoster()
     self:ClearQueue()
     self:KeepRosterRows()
-    -- A token can name someone else now; nobody is inspected until the rows
-    -- rebind, and whoever left is read again if they come back.
+    -- A token can name someone else now, so the inspect list empties until the
+    -- rows rebind (a kept row can add its member back sooner); whoever left
+    -- is read again if they come back.
     Spec.SetMembers({})
     Spec.Prune()
     Pot.OnRoster()
