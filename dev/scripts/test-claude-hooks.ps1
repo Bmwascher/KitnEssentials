@@ -43,8 +43,8 @@ function Get-TextHash([string]$path) {
     return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
 }
 $liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $root '.claude\hooks') }
-foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1')) {
-    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1')) { 'project' } else { 'user' }
+foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1', 'program-recovery.ps1')) {
+    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1', 'program-recovery.ps1')) { 'project' } else { 'user' }
     $other = if ($scope -eq 'user') { 'project' } else { 'user' }
     $live = Join-Path $liveDir[$scope] $n
     Check "$n has no stale copy in $other scope" (-not (Test-Path (Join-Path $liveDir[$other] $n))) 'run pwsh dev/scripts/install-claude-hooks.ps1'
@@ -266,6 +266,41 @@ try {
         Check 'sync -Check reports a stray mirror file' ($LASTEXITCODE -eq 1)
     } finally {
         $env:CLAUDE_PROJECT_DIR = $savedProjectDir
+    }
+
+    # The compaction hook prints the recovery card only in a session the
+    # master registry names, and only for the compact source.
+    $pr = 'program-recovery.ps1'
+    $pproj = Join-Path $outside 'pproj'
+    foreach ($d in @('.claude\skills\phased-program', 'dev\scripts', 'dev\docs\parsec\programs')) { New-Item -ItemType Directory -Path (Join-Path $pproj $d) -Force | Out-Null }
+    Copy-Item (Join-Path $root 'dev\scripts\program-master.ps1') (Join-Path $pproj 'dev\scripts\')
+    [System.IO.File]::WriteAllText((Join-Path $pproj '.claude\skills\phased-program\recovery-card.md'), "CARD LINE`n")
+    $pdoc = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-program.md'
+    [System.IO.File]::WriteAllText($pdoc, "# p`n`n## Open questions`n`nOQ ROW`n`n---`n`n## Status`n`nSTATUS ROW`n`n---`n`n## At the end`n`nTAIL ROW`n")
+    $saved = @{ dir = $env:CLAUDE_PROJECT_DIR; reg = $env:KE_PROGRAM_MASTERS; sid = $env:CLAUDE_CODE_SESSION_ID; hid = $env:CLAUDE_CODE_HOST_SESSION_ID }
+    $env:CLAUDE_PROJECT_DIR = $pproj
+    $env:KE_PROGRAM_MASTERS = Join-Path $pproj 'dev\docs\parsec\programs\active-masters.tsv'
+    $env:CLAUDE_CODE_HOST_SESSION_ID = "hooktest-host-$tag"
+    try {
+        $env:CLAUDE_CODE_SESSION_ID = "hooktest-master-$tag"
+        & pwsh -NoProfile -File (Join-Path $pproj 'dev\scripts\program-master.ps1') -Register $pdoc *> $null
+        $env:CLAUDE_CODE_SESSION_ID = ''
+        $env:CLAUDE_CODE_HOST_SESSION_ID = "hooktest-other-$tag"
+        $r = Invoke-Hook (Join-Path $templates $pr) @{ session_id = "hooktest-other-$tag"; source = 'compact' }
+        Check "$pr is silent outside a master" ($r.code -eq 0 -and $r.out.Trim() -eq '') $r.out.Trim()
+        $r = Invoke-Hook (Join-Path $templates $pr) @{ session_id = "hooktest-master-$tag"; source = 'startup' }
+        Check "$pr is silent for a non-compact source" ($r.code -eq 0 -and $r.out.Trim() -eq '') $r.out.Trim()
+        $r = Invoke-Hook (Join-Path $templates $pr) @{ session_id = "hooktest-master-$tag"; source = 'compact' }
+        $ok = $r.code -eq 0 -and $r.out -match 'CARD LINE' -and $r.out -match 'OQ ROW' -and $r.out -match 'STATUS ROW' -and $r.out -notmatch 'TAIL ROW'
+        Check "$pr prints the card and both sections in a master" $ok $r.out.Trim()
+        $env:CLAUDE_CODE_HOST_SESSION_ID = "hooktest-host-$tag"
+        $r = Invoke-Hook (Join-Path $templates $pr) @{ session_id = 'resumed-new-id'; source = 'compact' }
+        Check "$pr matches a master by its host id" ($r.out -match 'CARD LINE') $r.out.Trim()
+        $events = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-program-events.log'
+        Check "$pr logs one compact event per recovery" ((Test-Path $events) -and @(Get-Content $events | Where-Object { $_ -match "`tcompact$" }).Count -eq 2)
+    } finally {
+        $env:CLAUDE_PROJECT_DIR = $saved.dir; $env:KE_PROGRAM_MASTERS = $saved.reg
+        $env:CLAUDE_CODE_SESSION_ID = $saved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $saved.hid
     }
 } finally {
     # Each step runs regardless of the others; native git exits are checked

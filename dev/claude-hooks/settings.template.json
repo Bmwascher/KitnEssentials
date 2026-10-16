@@ -51,6 +51,23 @@
             "statusMessage": "artifact retention check"
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/program-recovery.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 30,
+            "statusMessage": "program master recovery card"
+          }
+        ]
       }
     ]
   }
