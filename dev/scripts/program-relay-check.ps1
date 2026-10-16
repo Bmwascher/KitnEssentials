@@ -15,7 +15,10 @@
 #     `### Decision summary` he did not approve) must be covered by
 #     `Decided for you`: quoted there, or `Decided for you` has at least as
 #     many lines as there are such decisions.
-# PASS prints the section's lines exactly, nothing else on stdout, exit 0.
+# PASS prints the relay, nothing else on stdout, exit 0: the section's words
+# unchanged, rendered as markdown (the status line as a `###` heading, each
+# labeled line as a bullet with its label in bold, sub-bullets nested), then
+# `📄 Full report:` and the report.md path. -Raw prints the lines exactly.
 # FAIL prints what is missing on stderr and not the section, exit 1: the
 # section goes back to the phase, it is never rewritten by the master.
 # Matching is by keyword and text, so a FAIL can be a false alarm; read the
@@ -25,7 +28,8 @@
 
 param(
     [Parameter(Mandatory = $true)][string]$FeatureFolder,
-    [string]$Path
+    [string]$Path,
+    [switch]$Raw
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,17 +90,26 @@ $body = if ($lastBody -ge 0) { @($body[0..$lastBody]) } else { @() }
 # as its continuations. The status line comes before any label and is not a field.
 $labels = @("You'll see", 'Needs you', 'Not settled', 'Decided for you', 'Reviews', 'Next')
 $fields = @{}; $fieldLines = @{}; $current = $null
+$rendered = @()
 foreach ($l in $body) {
     $hit = $null
     foreach ($lab in $labels) {
-        $pattern = '^[^\p{L}\p{N}]*' + ([regex]::Escape($lab) -replace "'", ".") + '\s*:\s*(.*)$'
+        $pattern = '^\s*(?<head>[^\p{L}\p{N}\s]*\s*' + ([regex]::Escape($lab) -replace "'", ".") + '\s*:)\s*(?<val>.*)$'
         if ($l -match $pattern) { $hit = $lab; break }
     }
     if ($hit) {
-        $current = $hit; $fields[$hit] = $Matches[1]; $fieldLines[$hit] = @()
-        if ($Matches[1].Trim()) { $fieldLines[$hit] += $Matches[1] }
-    } elseif ($current -and $l.Trim()) {
+        $current = $hit; $fields[$hit] = $Matches['val']; $fieldLines[$hit] = @()
+        if ($Matches['val'].Trim()) { $fieldLines[$hit] += $Matches['val'] }
+        $rendered += ('- **{0}** {1}' -f $Matches['head'].Trim(), $Matches['val']).TrimEnd()
+    } elseif (-not $l.Trim()) {
+        continue
+    } elseif ($current) {
         $fields[$current] += ' ' + $l.Trim(); $fieldLines[$current] += $l.Trim()
+        $rendered += if ($l -match '^\s*[-*+]\s+(.*)$') { "  - $($Matches[1])" } else { "  $($l.Trim())" }
+    } elseif ($rendered.Count -eq 0) {
+        $rendered += "### $($l.Trim())"
+    } else {
+        $rendered += $l.Trim()
     }
 }
 
@@ -169,6 +182,15 @@ if ($problems.Count) {
     exit 1
 }
 
-$body | Write-Output
+if ($Raw) {
+    $body | Write-Output
+} else {
+    $reportPath = (Resolve-Path -LiteralPath $report).Path
+    $shown = if ($reportPath -match '[\\/](dev[\\/]docs[\\/].*)$') { $Matches[1] -replace '\\', '/' } else { $reportPath }
+    # A blank line between bullets would split the list; one before the path ends it.
+    $rendered | Write-Output
+    Write-Output ''
+    Write-Output "📄 Full report: ``$shown``"
+}
 Write-Result 'PASS'
 exit 0
