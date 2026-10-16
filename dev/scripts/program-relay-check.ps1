@@ -11,8 +11,9 @@
 #     waived, degraded, NOT-RUN or RAN-FIX-OPEN must appear in `Not settled`,
 #     word for word (the clause holding the keyword, case and spacing aside);
 #   - a delegated decision (a `delegator for Brandon` line, an item
-#     under `### For Brandon to confirm or reverse`, an item of a
-#     `### Decision summary` he did not approve) must be covered by
+#     under `### Decided without Brandon` (older name: `### For Brandon to
+#     confirm or reverse`), an item of a `### Decision summary` he did not
+#     approve) must be covered by
 #     `Decided for you`: quoted there word for word, its delegation record
 #     aside (case and spacing aside).
 # PASS prints the relay, nothing else on stdout, exit 0: the section's words
@@ -161,7 +162,7 @@ foreach ($r in $restLines) {
     if ($r.text -match '^#' -or -not $r.text.Trim()) { continue }
     $item = Strip-Bullet $r.text
     if ($item -match $isNone) { continue }
-    if ($r.section -eq 'For Brandon to confirm or reverse') { $decisions += $item }
+    if ($r.section -in @('Decided without Brandon', 'For Brandon to confirm or reverse')) { $decisions += $item }
     elseif ($r.section -eq 'Decision summary' -and -not $approved) { $decisions += $item }
     elseif ($r.text -match '(?i)delegator for Brandon') { $decisions += $item }
 }
