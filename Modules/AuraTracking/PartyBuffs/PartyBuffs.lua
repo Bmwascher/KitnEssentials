@@ -80,6 +80,10 @@ local PREVIEW_BUFFS = {
 -- One sample spec per stand-in row, the cooling sample's seconds left, and the
 -- most samples a row draws: the Max Cooldown Icons ceiling.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
+-- Each stand-in row's race for its racial sample; no Evoker racial is tracked.
+local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
+-- No item is read for a stand-in row, so its sample trinkets take this length.
+local PREVIEW_TRINKET_CD = 120
 local PREVIEW_LEFT = 74
 local PREVIEW_CELLS = 6
 
@@ -1415,23 +1419,63 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- A known member's spec when grouped, else the stand-in row's sample spec.
--- Only that spec's own spells, ticked or not: a spec listing fewer than Max
--- Cooldown Icons shows fewer samples rather than another class's spells.
+-- Two of the other rows' trinket buffs, so a row's trinket cell never repeats
+-- its own trinket buff sample. Only spells the Trinkets list switches on.
+local function SampleTrinkets(row, db)
+    local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
+    local out = {}
+    for j = 1, 2 do
+        local spellID = PREVIEW_BUFFS[(row + j - 1) % #PREVIEW_BUFFS + 1].trinket
+        if listed[spellID] then
+            out[#out + 1] = {
+                id = spellID, key = CDRules.TrinketKey(spellID), kind = "trinket", buffs = { spellID },
+                cd = PREVIEW_TRINKET_CD, trinket = true, texture = C_Spell.GetSpellTexture(spellID),
+            }
+        end
+    end
+    return out
+end
+
+-- In the live row's order, cut to Max Cooldown Icons: the spec's spells
+-- (ticked or not, so a spec listing few shows few rather than another class's
+-- spells), then the racial, then the trinkets. A known member's spec, race
+-- and trinkets when grouped; a stand-in row's samples otherwise.
 function PB:PreviewEntries(k)
-    local entries = {}
-    if self.db.TrackBurst ~= true then return entries end
+    local db, entries = self.db, {}
     local binding = self.bindings[k]
     local m = binding and Spec.Member(binding.token)
-    local specID = (m and m.spec) or PREVIEW_SPECS[(k - 1) % #PREVIEW_SPECS + 1]
+    local row = (k - 1) % #PREVIEW_SPECS + 1
+    local specID = (m and m.spec) or PREVIEW_SPECS[row]
     local talents = m and m.talents
-    local want = math_min(KE.PartyBuffsRules.CooldownIconCount(self.db), PREVIEW_CELLS)
-    for _, e in ipairs(CDRules.SpellList(specID, self.db, true)) do
-        if #entries >= want then break end
-        local has = talents and talents[e.id]
-        if CDRules.TalentAllows(e, has) then
-            e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
-            e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))
+    local want = math_min(KE.PartyBuffsRules.CooldownIconCount(db), PREVIEW_CELLS)
+    if db.TrackBurst == true then
+        for _, e in ipairs(CDRules.SpellList(specID, db, true)) do
+            if #entries >= want then break end
+            local has = talents and talents[e.id]
+            if CDRules.TalentAllows(e, has) then
+                e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
+                e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))
+                entries[#entries + 1] = e
+            end
+        end
+    end
+    local race
+    if m then race = m.race else race = PREVIEW_RACES[row] end
+    local racial = CDRules.MemberRacial(race, db)
+    if racial and #entries < want then
+        racial.texture = C_Spell.GetSpellTexture(racial.id)
+        entries[#entries + 1] = racial
+    end
+    if db.TrackTrinket == true then
+        local trinkets
+        if m then
+            trinkets = m.trinkets and CDRules.TrinketEntries(m.trinkets, Spec.lengths, db) or {}
+        else
+            trinkets = SampleTrinkets(row, db)
+        end
+        for _, e in ipairs(trinkets) do
+            if #entries >= want then break end
+            e.texture = e.texture or C_Item.GetItemIconByID(e.item)
             entries[#entries + 1] = e
         end
     end
