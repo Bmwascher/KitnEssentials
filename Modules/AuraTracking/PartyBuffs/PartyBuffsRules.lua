@@ -290,7 +290,6 @@ for _, layouts in pairs(Rules.LAYOUTS) do
     end
 end
 
--- The holder's offset from its anchor on the party frame.
 function Rules.HolderOffset(layout, gap, x, y, size)
     return layout.dx * gap + x, layout.dy * gap + y + (layout.lift or 0) * size
 end
