@@ -1470,7 +1470,7 @@ function PB:PreviewEntries(k)
         end
         for _, e in ipairs(trinkets) do
             if #entries >= want then break end
-            e.texture = e.texture or C_Item.GetItemIconByID(e.item)
+            e.texture = e.texture or (e.item and C_Item.GetItemIconByID(e.item))
             entries[#entries + 1] = e
         end
     end
