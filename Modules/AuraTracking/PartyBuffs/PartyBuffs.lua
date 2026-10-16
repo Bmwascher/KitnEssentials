@@ -77,10 +77,12 @@ local PREVIEW_BUFFS = {
     { trinket = 1295885, potion = 1236998, external = 116849 },
     { trinket = 1250533, potion = 1295132, external = 47788 },
 }
--- One sample spec per stand-in row, and the cooling sample's seconds left.
+-- One sample spec per stand-in row, the cooling sample's seconds left, and the
+-- most samples a row draws: the Max Cooldown Icons ceiling, so the preview
+-- shows as many as the live row can.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
 local PREVIEW_LEFT = 74
-local PREVIEW_CELLS = 3
+local PREVIEW_CELLS = 6
 
 local GATE_EVENTS = {
     "ZONE_CHANGED_NEW_AREA",
@@ -1415,8 +1417,8 @@ function PB:RunPreviewTimer(icon, index, now)
 end
 
 -- A known member's spec when grouped, else the stand-in row's sample spec.
--- Only that spec's own spells, ticked or not: a spec listing fewer than
--- PREVIEW_CELLS shows fewer samples rather than another class's spells.
+-- Only that spec's own spells, ticked or not: a spec listing fewer than Max
+-- Cooldown Icons shows fewer samples rather than another class's spells.
 function PB:PreviewEntries(k)
     local entries = {}
     if self.db.TrackBurst ~= true then return entries end
@@ -1437,7 +1439,7 @@ function PB:PreviewEntries(k)
     return entries
 end
 
--- Cell 1 and cell 2 ready, cell 3 cooling with PREVIEW_LEFT seconds to go (one
+-- Every cell ready but cell 3, cooling with PREVIEW_LEFT seconds to go (one
 -- under the spell's length when that is shorter), started again with the same
 -- time left whenever it has run out. A redraw keeps a cell's tracker while its
 -- spell and length are the same, so a countdown carries on. Plain values only.
