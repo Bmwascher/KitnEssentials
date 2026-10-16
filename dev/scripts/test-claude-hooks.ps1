@@ -174,11 +174,18 @@ try {
     if ($bash) {
         $msgFile = Join-Path $env:TEMP "ke-hooktest-$tag-msg.txt"
         $hook = (Join-Path $root 'dev\githooks\commit-msg') -replace '\\', '/'
+        # Runs in the throwaway worktree on main: a release subject is checked
+        # against the staged .toc version, so the caller's index must not decide it.
         $cm = { param($name, $msg, $expect)
             [System.IO.File]::WriteAllText($msgFile, $msg)
-            & $bash $hook $msgFile 2>&1 | Out-Null
-            Check "commit-msg $expect`: $name" ($LASTEXITCODE -eq $(if ($expect -eq 'block') { 1 } else { 0 }))
+            Push-Location $wt
+            try { & $bash $hook $msgFile 2>&1 | Out-Null; $code_ = $LASTEXITCODE } finally { Pop-Location }
+            Check "commit-msg $expect`: $name" ($code_ -eq $(if ($expect -eq 'block') { 1 } else { 0 }))
         }
+        $tocVer = @((git -C $wt show :KitnEssentials.toc) -match '^## X-Manual-Version:' | ForEach-Object { ($_ -split '\s+')[2] })[0]
+        $verOk = "$tocVer" -match '^(\d+)\.(\d+)\.(\d+)$'
+        Check 'commit-msg: .toc version read for the release cases' $verOk "got '$tocVer'"
+        $otherVer = if ($verOk) { '{0}.{1}.{2}' -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1) } else { '' }
         & $cm 'upstream name'               "port the tracker from norsken`n"                       'block'
         & $cm 'Co-Authored-By'              "fix a thing`n`nCo-Authored-By: Claude <x>`n"            'block'
         & $cm 'indented trailer'            "fix`n`n  Co-Authored-By: Claude`n"                       'block'
@@ -187,7 +194,8 @@ try {
         & $cm 'uppercase subject'           "Fix the show target toggle`n"                            'block'
         & $cm 'default merge subject'       "Merge branch 'codex/x'`n"                                'block'
         & $cm 'clean'                       "fix the show target toggle`n"                            'pass'
-        & $cm 'release commit'              "v4.4.9: fix a thing`n"                                   'pass'
+        & $cm 'release commit'              "v$tocVer`: fix a thing`n"                                'pass'
+        & $cm 'release version not in .toc' "v$otherVer`: fix a thing`n"                              'block'
         & $cm 'human sign-off'              "fix`n`nSigned-off-by: Brandon Wascher <x>`n"             'pass'
         & $cm 'comment lines before subject' "# editor comment`nfix a thing`n"                        'pass'
         & $cm 'blank lines before subject'  "`n`nfix a thing`n"                                       'pass'
