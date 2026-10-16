@@ -305,6 +305,47 @@ describe("PartyCooldownsRules.Feed", function()
         assert.is_true(five > 0 and five <= 2 * m, "five units: " .. five)
         local one = deepest(R.NewTracker(120, false), { secret(true), secret(false) })
         assert.is_true(one > 0 and one <= 2, "one sensor: " .. one)
+        local windowed = R.NewTracker(120, false)
+        R.ArmFall(windowed, 0, 6)
+        local armed = deepest(windowed, { secret(true), secret(false) })
+        assert.is_true(armed > 0 and armed <= 2, "windowed sensor: " .. armed)
+    end)
+
+    -- A 300-second tracker counts in 2-second codes from its clear at 0.
+    local function windowRun(R, reads, armed)
+        local t = R.NewTracker(300, false)
+        R.Clear(t, 0)
+        if armed then R.ArmFall(t, 0, 30) end
+        for _, read in ipairs(reads) do R.Feed(t, read[1], nil, read[2], isSecret, pick) end
+        local sl = t.slot[t.cur]
+        return { sl.v, sl.c }
+    end
+
+    it("stamps a fall 30 seconds back only from fallFrom to fallTo, and never without a window", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a second before the window", at = 31, armed = true, want = { 0, 1 } },
+            { name = "the window's first second", at = 32, armed = true, want = { 1, (255 - 1) / 255 } },
+            { name = "inside the window", at = 40, armed = true, want = { 1, (255 - 5) / 255 } },
+            { name = "the window's last second", at = 61, armed = true, want = { 1, (255 - 15) / 255 } },
+            { name = "a second after the window", at = 62, armed = true, want = { 0, 1 } },
+            { name = "no window", at = 40, armed = false, want = { 0, 1 } },
+        }
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local w = wrap[2]
+            for _, case in ipairs(cases) do
+                local got = windowRun(R, { { w(true), 5 }, { w(false), case.at } }, case.armed)
+                assert.are.same(case.want, got, wrap[1] .. ": " .. case.name)
+            end
+        end
+    end)
+
+    it("still stamps a rise inside the window at the read", function()
+        local R = loadRules()
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local got = windowRun(R, { { wrap[2](false), 35 }, { wrap[2](true), 40 } }, true)
+            assert.are.same({ 1, (255 - 20) / 255 }, got, wrap[1])
+        end
     end)
 end)
 

@@ -252,10 +252,17 @@ function Rules.RangeMin(sl, u, n)
     return (254 - (n - sl.epoch) / u) / 255
 end
 
-function Rules.StartPlain(t, n)
+-- at dates the use before the read n; it defaults to n.
+function Rules.StartPlain(t, n, at)
     Rules.Roll(t, n)
     local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
-    sl.c, sl.v, other.v = Rules.Stamp(t, n), 1, 0
+    sl.c, sl.v, other.v = Rules.Stamp(t, at or n), 1, 0
+end
+
+-- A buff up at a key's start n has fallen by fallFrom. A fall from then to
+-- fallTo ends a buff drunk in the key, length seconds before the fall.
+function Rules.ArmFall(t, n, length)
+    t.fallD, t.fallFrom, t.fallTo = length, n + length + 2, n + 2 * length + 1
 end
 
 -- A preview sample: cooling at n with t.loop seconds left.
@@ -308,7 +315,8 @@ end
 
 -- One read. Plain answers decide the edge in Lua. A secret answer is only
 -- passed to pick, which writes the stamp and the visibility without Lua
--- learning it. Returns true when a slot changed.
+-- learning it. Inside an armed window a fall stamps fallD seconds back.
+-- Returns true when a slot changed.
 function Rules.Feed(t, lit, short, n, isSecret, pick)
     local changed = false
     local hasShort, multi = t.hasShort, t.multi
@@ -316,18 +324,36 @@ function Rules.Feed(t, lit, short, n, isSecret, pick)
         changed = Rules.Roll(t, n)
         local litKnown, up = State(lit, short, hasShort, isSecret, multi)
         local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret, multi)
-        if not ((litKnown and not up) or (prevKnown and was)) then
+        local rise = not ((litKnown and not up) or (prevKnown and was))
+        local fall = t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
+            and not ((litKnown and up) or (prevKnown and not was))
+        if rise or fall then
             if litKnown and prevKnown then
-                Rules.StartPlain(t, n)
+                if rise then
+                    Rules.StartPlain(t, n)
+                else
+                    Rules.StartPlain(t, n, n - t.fallD)
+                end
             else
+                -- The sides are picked by the plain flags; a side that cannot
+                -- happen keeps the slot as it is.
                 local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
                 local prev, prevShort = t.prev, t.prevShort
-                sl.c = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi), sl.c, pick, multi)
-                sl.v = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi), sl.v, pick, multi)
-                other.v = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, other.v, 0, pick, multi), other.v, pick, multi)
+                local riseC, riseV, riseO = sl.c, sl.v, other.v
+                if rise then
+                    riseC = Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi)
+                    riseV = Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi)
+                    riseO = Pick(prev, prevShort, hasShort, other.v, 0, pick, multi)
+                end
+                local fallC, fallV, fallO = sl.c, sl.v, other.v
+                if fall then
+                    fallC = Pick(prev, prevShort, hasShort, Rules.Stamp(t, n - t.fallD), sl.c, pick, multi)
+                    fallV = Pick(prev, prevShort, hasShort, 1, sl.v, pick, multi)
+                    fallO = Pick(prev, prevShort, hasShort, 0, other.v, pick, multi)
+                end
+                sl.c = Pick(lit, short, hasShort, riseC, fallC, pick, multi)
+                sl.v = Pick(lit, short, hasShort, riseV, fallV, pick, multi)
+                other.v = Pick(lit, short, hasShort, riseO, fallO, pick, multi)
             end
             changed = true
         end
