@@ -339,7 +339,7 @@ end
 -- Preview row k's sample spells for a list category, starting from the row's
 -- own sample. Samples the list switches off and spells in skip are left out,
 -- as the live icons would never show them; with none left, the list's first
--- switched-on spell stands in.
+-- switched-on spell not in skip stands in.
 function Rules.PreviewSamples(samples, k, key, list, skip)
     local auraRules = KE.AuraRules
     local out, seen = {}, {}
@@ -352,9 +352,14 @@ function Rules.PreviewSamples(samples, k, key, list, skip)
             out[#out + 1] = spellID
         end
     end
-    if #out == 0 then
-        local first = auraRules.FirstIncludeSpellID(list)
-        if first and not skip[first] then out[1] = first end
+    if #out == 0 and list then
+        local first
+        for spellID, record in pairs(list) do
+            if not skip[spellID] and auraRules.IsIncluded(spellID, record) and (first == nil or spellID < first) then
+                first = spellID
+            end
+        end
+        out[1] = first
     end
     return out
 end

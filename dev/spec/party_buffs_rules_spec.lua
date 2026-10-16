@@ -519,6 +519,8 @@ describe("PartyBuffsRules.PreviewSamples", function()
               want = { 40 } },
             { name = "no sample switched on: the list's first", k = 2, list = { [20] = on, [40] = off },
               want = { 20 } },
+            { name = "the stand-in passes over a skipped spell", k = 2, list = { [20] = on, [25] = on, [40] = off },
+              skip = { [20] = true }, want = { 25 } },
             { name = "nothing switched on", k = 2, list = { [40] = off }, want = {} },
         }
         for _, case in ipairs(cases) do

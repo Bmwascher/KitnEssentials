@@ -81,12 +81,12 @@ local PREVIEW_BUFFS = {
 -- One sample spec per stand-in row, the cooling sample's seconds left, and the
 -- most samples a row draws: the Max Cooldown Icons ceiling.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
+local PREVIEW_LEFT = 74
+local PREVIEW_CELLS = 6
 -- Each stand-in row's race for its racial sample; no Evoker racial is tracked.
 local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
 -- No item is read for a stand-in row, so its sample trinkets take this length.
 local PREVIEW_TRINKET_CD = 120
-local PREVIEW_LEFT = 74
-local PREVIEW_CELLS = 6
 
 local GATE_EVENTS = {
     "ZONE_CHANGED_NEW_AREA",
