@@ -42,7 +42,7 @@ GlowRules.FLIPBOOKS = {
         texture = [[Interface\SpellActivationOverlay\IconAlertAnts]],
         rows = 5, columns = 5, frames = 22, sizeFactor = 1.25,
         frameWidth = 48, frameHeight = 48,
-        speedFactor = 4,
+        speedFactor = 6,
     },
 }
 
