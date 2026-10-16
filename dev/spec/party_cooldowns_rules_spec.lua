@@ -347,6 +347,31 @@ describe("PartyCooldownsRules.Feed", function()
             assert.are.same({ 1, (255 - 20) / 255 }, got, wrap[1])
         end
     end)
+
+    it("takes no rise for CAST_QUIET seconds after a cast stamp, and a clear ends the quiet", function()
+        local R = loadRules()
+        local q = R.CAST_QUIET
+        local cases = {
+            { name = "a rise inside the quiet keeps the cast stamp", rise = 10 + q, clear = false,
+              want = { 1, (255 - 5) / 255 } },
+            { name = "a rise after the quiet stamps", rise = 11 + q, clear = false,
+              want = { 1, (255 - math.floor((11 + q) / 2)) / 255 } },
+            { name = "a rise after a clear stamps", rise = 12, clear = true, want = { 1, (255 - 6) / 255 } },
+        }
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local w = wrap[2]
+            for _, case in ipairs(cases) do
+                local t = R.NewTracker(300, false)
+                R.Clear(t, 0)
+                R.StartCast(t, 10)
+                if case.clear then R.Clear(t, 0) end
+                R.Feed(t, w(false), nil, case.rise - 1, isSecret, pick)
+                R.Feed(t, w(true), nil, case.rise, isSecret, pick)
+                local sl = t.slot[t.cur]
+                assert.are.same(case.want, { sl.v, sl.c }, wrap[1] .. ": " .. case.name)
+            end
+        end
+    end)
 end)
 
 describe("PartyCooldownsRules.Tick", function()

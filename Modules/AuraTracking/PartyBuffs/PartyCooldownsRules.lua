@@ -224,7 +224,7 @@ function Rules.Clear(t, n)
         local sl = t.slot[k]
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
-    t.cur, t.primed, t.prev, t.prevShort = 1, false, nil, nil
+    t.cur, t.primed, t.prev, t.prevShort, t.quietTo = 1, false, nil, nil, nil
 end
 
 function Rules.Roll(t, n)
@@ -263,6 +263,15 @@ end
 -- fallTo ends a buff drunk in the key, length seconds before the fall.
 function Rules.ArmFall(t, n, length)
     t.fallD, t.fallFrom, t.fallTo = length, n + length + 2, n + 2 * length + 1
+end
+
+-- A cast's own buff can reach the reads late, after a read that saw none, so
+-- for these seconds after a cast stamp a rise only records. A clear ends it.
+Rules.CAST_QUIET = 10
+
+function Rules.StartCast(t, n)
+    Rules.StartPlain(t, n)
+    t.quietTo = n + Rules.CAST_QUIET
 end
 
 -- A preview sample: cooling at n with t.loop seconds left.
@@ -315,8 +324,8 @@ end
 
 -- One read. Plain answers decide the edge in Lua. A secret answer is only
 -- passed to pick, which writes the stamp and the visibility without Lua
--- learning it. Inside an armed window a fall stamps fallD seconds back.
--- Returns true when a slot changed.
+-- learning it. Inside an armed window a fall stamps fallD seconds back; in a
+-- cast's quiet a rise only records. Returns true when a slot changed.
 function Rules.Feed(t, lit, short, n, isSecret, pick)
     local changed = false
     local hasShort, multi = t.hasShort, t.multi
@@ -324,7 +333,8 @@ function Rules.Feed(t, lit, short, n, isSecret, pick)
         changed = Rules.Roll(t, n)
         local litKnown, up = State(lit, short, hasShort, isSecret, multi)
         local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret, multi)
-        local rise = not ((litKnown and not up) or (prevKnown and was))
+        local rise = not (t.quietTo ~= nil and n <= t.quietTo)
+            and not ((litKnown and not up) or (prevKnown and was))
         local fall = t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
             and not ((litKnown and up) or (prevKnown and not was))
         if rise or fall then
