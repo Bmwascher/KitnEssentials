@@ -63,9 +63,6 @@ local DEFAULT_TIMER = { 1, 1, 1, 1 }
 local GLOW_OFF = { GlowEnabled = false }
 local SAMPLE_LIT = { 3, 6, 2, 5 }
 local SAMPLE_TIMERS = { "16", "23", "9", "12" }
--- Whole seconds with no unit letter, as the samples show. Without a formatter
--- the game's own adds " s".
-local TIMER_FORMAT = { DecimalThreshold = 0 }
 local SAMPLE_TOTAL = 6
 local NONE = {}
 
@@ -488,6 +485,19 @@ end
 -- place and look are set in initializeFrame, before the restriction attaches,
 -- and otherwise only behind the gate.
 
+-- The game's own countdown text carries a unit (" s", " m"). This one shows
+-- bare seconds at any length, rounding up as the game's does.
+local timerFormatter
+local function TimerFormatter()
+    if not timerFormatter then
+        timerFormatter = C_StringUtil.CreateNumericRuleFormatter()
+        timerFormatter:SetBreakpoints({
+            { threshold = 0, step = 1, rounding = Enum.NumericRuleFormatRounding.Up, format = "%d" },
+        })
+    end
+    return timerFormatter
+end
+
 local function TimerStyleKey(db)
     local color = db.TimerColor or DEFAULT_TIMER
     return table_concat({
@@ -550,7 +560,7 @@ local function EnsureTimer(cell)
                 fontString:SetPoint("CENTER", button, "CENTER", 0, 0)
                 styled = StyleTimerText(fontString)
                 button:SetDurationText(fontString, {
-                    textFormatter = KE.AuraStyle.GetDurationFormatter(TIMER_FORMAT),
+                    textFormatter = TimerFormatter(),
                 })
                 cell.timerText = fontString
             end,
