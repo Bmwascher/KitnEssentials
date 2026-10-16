@@ -1610,8 +1610,8 @@ local Defaults = {
             PotionAnchorFrameType = "UIPARENT",
             PotionStrata      = "MEDIUM",
             -- Healer externals box (Healer Externals tab), attached to the top
-            -- of Healer Mana. With Healer Mana off its frame does not exist and
-            -- the box takes HX.DEFAULT_POSITION on the screen.
+            -- of Healer Mana. While Healer Mana's frame does not exist (off
+            -- since login) the box takes HX.DEFAULT_POSITION on the screen.
             HealerExternals   = true,
             HealerExtIconSize = 38,
             HealerExtSpacing  = 1,

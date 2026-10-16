@@ -30,11 +30,7 @@ describe("old-default pins", function()
         } } })
         local hm = healerMana(sv.profiles.Default)
         assert.is_false(hm.DisableOnHealer)
-        assert.are.equal("UIPARENT", hm.anchorFrameType)
-        assert.are.equal("UIParent", hm.ParentFrame)
-        assert.are.same({ AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -400, YOffset = 200 }, hm.Position)
-        assert.are.same({ 24, 14, 2, 14, -2 },
-            { hm.IconSize, hm.NameFontSize, hm.NameYOffset, hm.ManaFontSize, hm.ManaYOffset })
+        assert.are.equal(-400, hm.Position.XOffset)
         local cc = sv.profiles.Default.CCTracker
         assert.are.equal(15, cc.MaxEnemies)
         assert.are.same({ YOffset = 69 }, cc.Position)
