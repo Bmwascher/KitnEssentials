@@ -19,6 +19,7 @@ local UnitClass = UnitClass
 local UnitExists = UnitExists
 local UnitName = UnitName
 local ipairs = ipairs
+local issecretvalue = issecretvalue
 local math_floor = math.floor
 local math_max = math.max
 local pairs = pairs
@@ -130,6 +131,20 @@ local function Stack()
     end
 end
 
+-- Your own casts are plain, so each listed potion starts your bar, a drink
+-- over a running buff included.
+local function OnCast(_, _, _, _, spellID)
+    if issecretvalue(spellID) then return end
+    if not Pot.listed[spellID] then return end
+    local row = Pot.byToken.player
+    local t = row and row.bound and row.st.trackers[1]
+    if not t then return end
+    local n = Track.Now()
+    CDRules.StartCast(t, n)
+    Track.Push(t, n)
+    Track.Wake()
+end
+
 -- Made at the first activation. Each bar exists before any value reaches it,
 -- so every fill texture its clips and strips anchor to is fetched while plain.
 -- The rows' sensors get a host of their own, shown only while Potion Bars is
@@ -142,6 +157,8 @@ local function MakeRows()
     host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
     host:Hide()
     Pot.sensorHost = host
+    Pot.castFrame = CreateFrame("Frame")
+    Pot.castFrame:SetScript("OnEvent", OnCast)
     for r, token in ipairs(ORDER) do
         local st = Track.NewSlot(Pot.live, Bar, host)
         local bar = Bar.New(Pot.live)
@@ -217,6 +234,7 @@ end
 local function Unbind(row)
     if not row.bound then return end
     Track.Unbind(row.st)
+    if row.token == "player" then Pot.castFrame:UnregisterAllEvents() end
     row.bound, row.guid = false, nil
 end
 
@@ -231,6 +249,9 @@ local function Bind(row)
     }
     Debug("bind %s", row.token)
     Track.Apply(row.st, row.token, { e }, Pot.style)
+    if row.token == "player" then
+        Pot.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    end
     row.bound = true
     row.guid = KE:GetSafeUnitGUID(row.token)
     Bar.SetReady(row.bar, Pot.pb.db.PotionShowReady == true)
@@ -445,7 +466,8 @@ function Pot.ApplySettings()
     if not (db.PotionBars == true and Track) then return TurnOff() end
     Pot.on = true
     MakeBox()
-    Pot.entry = Rules.Entry(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions))
+    Pot.listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)
+    Pot.entry = Rules.Entry(Pot.listed)
     Pot.icon = Texture(Rules.ICON_SPELL) or Rules.FALLBACK_ICON
     if Pot.active then
         MakeRows()
