@@ -21,8 +21,9 @@ Rules.FALLBACK_ICON = "Interface\\Icons\\Trade_Alchemy"
 -- Every bar shows Light's Potential: the sensor sees that a listed potion was
 -- drunk, never which one.
 Rules.ICON_SPELL = 1236616
--- Combat potions share one 5-minute cooldown.
+-- Combat potions share one 5-minute cooldown and a 30-second buff.
 Rules.SECONDS = 300
+Rules.BUFF_SECONDS = 30
 -- A class-colored bar draws its fill and its drained part darker than the
 -- class color, by these factors.
 Rules.DIM = 0.75

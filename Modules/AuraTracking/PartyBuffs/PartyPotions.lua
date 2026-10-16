@@ -297,10 +297,17 @@ function Pot.ClearAll()
     ClearCounts()
 end
 
--- A key's start clears every bar; the module's hold covers the reads.
+-- A key's start clears every bar; the module's hold covers the reads. A
+-- teammate's potion drunk again over a buff from before the start shows only
+-- as that buff's late fall, so their bars watch for one.
 function Pot.OnKeyStart()
     if not (Pot.on and Pot.active) then return end
     ClearCounts()
+    local n = Track.Now()
+    for _, row in ipairs(Pot.rows) do
+        local t = row.st.trackers[1]
+        if t and row.token ~= "player" then CDRules.ArmFall(t, n, Rules.BUFF_SECONDS) end
+    end
 end
 
 function Pot.OnRelease()
