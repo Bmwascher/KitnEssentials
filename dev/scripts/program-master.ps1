@@ -37,8 +37,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Control document rows can hold non-ASCII text; the console code page would print it as '?'.
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+# Control document rows can hold non-ASCII text, which the console code page
+# prints as '?'. A process with no console cannot set it and keeps the default.
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $registry = if ($env:KE_PROGRAM_MASTERS) { $env:KE_PROGRAM_MASTERS } else { Join-Path $root 'dev\docs\parsec\programs\active-masters.tsv' }
 $card = Join-Path $root '.claude\skills\phased-program\recovery-card.md'

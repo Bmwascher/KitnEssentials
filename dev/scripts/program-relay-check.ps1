@@ -35,8 +35,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # The section's status and label marks are emoji; the console code page would turn them into '?'.
-[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+try { [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 
 if (-not (Test-Path -LiteralPath $FeatureFolder -PathType Container)) {
     [Console]::Error.WriteLine("RELAY CHECK ERROR: no feature folder at $FeatureFolder")
