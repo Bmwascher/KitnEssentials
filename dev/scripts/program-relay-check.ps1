@@ -13,8 +13,8 @@
 #   - a delegated decision (a `delegator for Brandon` line, an item
 #     under `### For Brandon to confirm or reverse`, an item of a
 #     `### Decision summary` he did not approve) must be covered by
-#     `Decided for you`: quoted there, or one of its lines whose words
-#     (four letters or more, at least two) are mostly (60%) the decision's.
+#     `Decided for you`: quoted there word for word, its delegation record
+#     aside (case and spacing aside).
 # PASS prints the relay, nothing else on stdout, exit 0: the section's words
 # unchanged, rendered as markdown (the status line as a `###` heading, each
 # labeled line as a bullet with its label in bold, sub-bullets nested), then
@@ -167,20 +167,17 @@ foreach ($r in $restLines) {
     elseif ($r.text -match '(?i)delegator for Brandon') { $decisions += $item }
 }
 $decidedNorm = Get-Norm ([string]$fields['Decided for you'])
-$decidedItems = @($fieldLines['Decided for you'] | ForEach-Object { Strip-Bullet $_ } | Where-Object { $_ -notmatch $isNone })
-function Get-Words([string]$s) { return @((Get-Norm $s) -split '[^\p{L}\p{N}]+' | Where-Object { $_.Length -ge 4 } | Select-Object -Unique) }
-function Test-Decided([string]$d) {
-    if ($decidedNorm.Contains((Get-Norm $d).TrimEnd('.', ';'))) { return $true }
-    $dw = Get-Words $d
-    foreach ($line in $decidedItems) {
-        $lw = Get-Words $line
-        if ($lw.Count -lt 2) { continue }
-        if (@($lw | Where-Object { $dw -contains $_ }).Count / $lw.Count -ge 0.6) { return $true }
-    }
-    return $false
+# The decision itself, without its delegation record: the register's
+# `<date>, delegator for Brandon, <how>, "<words>": <decision>` prefix, or a
+# trailing `(delegator for Brandon, ...)`. Word overlap cannot tell a choice
+# from its opposite, so the remaining text must be quoted.
+function Get-DecisionCore([string]$d) {
+    if ($d -match '(?i)delegator for Brandon.*?"[^"]*"\s*:\s*(.+)$') { $d = $Matches[1] }
+    return ((Get-Norm ($d -replace '(?i)\s*\(delegator for Brandon[^)]*\)', '')).TrimEnd('.', ';', ' '))
 }
 foreach ($d in @($decisions | Select-Object -Unique)) {
-    if (-not (Test-Decided $d)) { $problems += "Decided for you has no line for this decision: $d" }
+    $core = Get-DecisionCore $d
+    if ($core -and -not $decidedNorm.Contains($core)) { $problems += "Decided for you does not quote this decision: $d" }
 }
 
 if ($problems.Count) {
