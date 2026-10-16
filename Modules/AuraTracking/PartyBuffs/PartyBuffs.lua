@@ -78,8 +78,7 @@ local PREVIEW_BUFFS = {
     { trinket = 1250533, potion = 1295132, external = 47788 },
 }
 -- One sample spec per stand-in row, the cooling sample's seconds left, and the
--- most samples a row draws: the Max Cooldown Icons ceiling, so the preview
--- shows as many as the live row can.
+-- most samples a row draws: the Max Cooldown Icons ceiling.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
 local PREVIEW_LEFT = 74
 local PREVIEW_CELLS = 6
