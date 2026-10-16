@@ -47,6 +47,7 @@ local wipe = wipe
 local table_concat = table.concat
 local table_remove = table.remove
 local table_sort = table.sort
+local math_max = math.max
 local math_min = math.min
 
 local CDRules = KE.PartyCooldownsRules
@@ -1340,12 +1341,6 @@ local function StopPreviewGlow(icon)
     KE.AuraGlow.Apply(icon, GLOW_OFF, GLOW_CAPS)
 end
 
-function PB:PreviewIcon(d, k)
-    local spellID = KE.PartyBuffsRules.PreviewSample(PREVIEW_BUFFS, k, d.category.key,
-        self.db[d.category.listKey])
-    return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
-end
-
 local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
 -- The top of a party container whose mover reads -674,-63: the mover names
 -- the center of a box sized for five rows, which fill it from the top.
@@ -1582,11 +1577,27 @@ function PB:DrawPreviewRow(k, frame)
     end
     local dir, rise = side.left and -1 or 1, side.up and 1 or -1
     self:DrawPreviewCells(row, entries, side, step, perRow)
-    local now, shown, limit = GetTime(), 0, KE.PartyBuffsRules.IconCount(db)
+    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs.
+    local skip = {}
+    for _, e in ipairs(entries) do
+        if e.trinket then skip[e.id] = true end
+    end
+    local tracked, pools, available = {}, {}, {}
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
-        local icon = row.icons[i]
-        if db[d.category.trackKey] == true and shown < limit then
+        if db[d.category.trackKey] == true then
+            local ids = KE.PartyBuffsRules.PreviewSamples(PREVIEW_BUFFS, k, d.category.key,
+                db[d.category.listKey], skip)
+            tracked[#tracked + 1], pools[#pools + 1] = d, ids
+            available[#available + 1] = math_max(#ids, 1)
+        end
+    end
+    local counts = KE.PartyBuffsRules.SplitBuffSamples(KE.PartyBuffsRules.IconCount(db), available)
+    local now, shown = GetTime(), 0
+    for i, d in ipairs(tracked) do
+        for j = 1, counts[i] do
+            shown = shown + 1
+            local icon = row.icons[shown]
             if icon then
                 KE.AuraStyle.StyleAuraFrame(icon, settings, d.capabilities)
                 KE.AuraGlow.Apply(icon, settings, d.capabilities)
@@ -1594,21 +1605,22 @@ function PB:DrawPreviewRow(k, frame)
                 icon = CreateFrame("Frame", nil, holder)
                 KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
                 icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
-                row.icons[i] = icon
+                row.icons[shown] = icon
             end
             -- Where the live container would put the same icon.
-            local col, line = KE.PartyBuffsRules.GridPosition(shown, buffPerLine)
+            local col, line = KE.PartyBuffsRules.GridPosition(shown - 1, buffPerLine)
             icon:ClearAllPoints()
             icon:SetPoint(side.corner, holder, side.corner, dir * (buffCol + col) * step,
                 rise * (buffLine + line) * step)
-            icon.keIcon:SetTexture(self:PreviewIcon(d, k))
-            self:RunPreviewTimer(icon, i, now)
+            local spellID = pools[i][j]
+            icon.keIcon:SetTexture(spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON)
+            self:RunPreviewTimer(icon, shown, now)
             icon:Show()
-            shown = shown + 1
-        elseif icon then
-            StopPreviewGlow(icon)
-            icon:Hide()
         end
+    end
+    for i = shown + 1, #row.icons do
+        StopPreviewGlow(row.icons[i])
+        row.icons[i]:Hide()
     end
     holder:Show()
 end

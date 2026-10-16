@@ -336,14 +336,47 @@ function Rules.Layout(side, grow)
     return layouts[1], layouts
 end
 
--- Preview row k's sample spell for a list category. A sample the player
--- switched off in the list gives way to the list's first switched-on spell,
--- as the live icons would never show it.
-function Rules.PreviewSample(samples, k, key, list)
+-- Preview row k's sample spells for a list category, starting from the row's
+-- own sample. Samples the list switches off and spells in skip are left out,
+-- as the live icons would never show them; with none left, the list's first
+-- switched-on spell stands in.
+function Rules.PreviewSamples(samples, k, key, list, skip)
     local auraRules = KE.AuraRules
-    local spellID = samples[(k - 1) % #samples + 1][key]
-    if list and spellID and auraRules.IsIncluded(spellID, list[spellID]) then return spellID end
-    return auraRules.FirstIncludeSpellID(list)
+    local out, seen = {}, {}
+    skip = skip or {}
+    for j = 0, #samples - 1 do
+        local spellID = samples[(k - 1 + j) % #samples + 1][key]
+        if list and spellID and not seen[spellID] and not skip[spellID]
+            and auraRules.IsIncluded(spellID, list[spellID]) then
+            seen[spellID] = true
+            out[#out + 1] = spellID
+        end
+    end
+    if #out == 0 then
+        local first = auraRules.FirstIncludeSpellID(list)
+        if first and not skip[first] then out[1] = first end
+    end
+    return out
+end
+
+-- How many buff samples each tracked category draws, in category order: dealt
+-- one at a time round the categories that still have one, so the cap splits
+-- evenly and a category short of samples passes its share on.
+function Rules.SplitBuffSamples(cap, available)
+    local counts, left = {}, cap
+    for i = 1, #available do counts[i] = 0 end
+    local dealt = true
+    while left > 0 and dealt do
+        dealt = false
+        for i = 1, #available do
+            if left > 0 and counts[i] < available[i] then
+                counts[i] = counts[i] + 1
+                left = left - 1
+                dealt = true
+            end
+        end
+    end
+    return counts
 end
 
 -- Fills absent healer keys from their default counterparts; an edited copy is

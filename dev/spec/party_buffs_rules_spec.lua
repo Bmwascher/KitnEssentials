@@ -505,24 +505,40 @@ describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
     end)
 end)
 
-describe("PartyBuffsRules.PreviewSample", function()
-    it("shows a row's own sample only while the list has it switched on", function()
+describe("PartyBuffsRules.PreviewSamples", function()
+    it("lists the switched-on samples from the row's own, with the list's first as the stand-in", function()
         local R = L.loadPartyBuffsRules()
-        local samples = { { potion = 30 }, { potion = 40 } }
+        local samples = { { potion = 30 }, { potion = 40 }, { potion = 50 } }
+        local on, off = { enabled = true }, { enabled = false }
         local cases = {
-            { name = "own sample switched on", k = 2, list = { [20] = { enabled = true }, [40] = { enabled = true } },
-              want = 40 },
-            { name = "own sample switched off", k = 2, list = { [20] = { enabled = true }, [40] = { enabled = false } },
-              want = 20 },
-            { name = "own sample not in the list", k = 2, list = { [20] = { enabled = true } }, want = 20 },
-            { name = "own sample's record not a table", k = 2, list = { [20] = { enabled = true }, [40] = true },
-              want = 20 },
-            { name = "nothing switched on", k = 2, list = { [40] = { enabled = false } }, want = nil },
-            { name = "a row past the samples wraps to the first", k = 3,
-              list = { [30] = { enabled = true }, [40] = { enabled = true } }, want = 30 },
+            { name = "starts at the row's own and wraps", k = 2, list = { [30] = on, [40] = on, [50] = on },
+              want = { 40, 50, 30 } },
+            { name = "switched off, absent or malformed left out", k = 2,
+              list = { [30] = on, [40] = off, [50] = true }, want = { 30 } },
+            { name = "skip leaves a sample out", k = 1, list = { [30] = on, [40] = on }, skip = { [30] = true },
+              want = { 40 } },
+            { name = "no sample switched on: the list's first", k = 2, list = { [20] = on, [40] = off },
+              want = { 20 } },
+            { name = "nothing switched on", k = 2, list = { [40] = off }, want = {} },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.PreviewSample(samples, case.k, "potion", case.list), case.name)
+            assert.are.same(case.want, R.PreviewSamples(samples, case.k, "potion", case.list, case.skip), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.SplitBuffSamples", function()
+    it("deals the cap evenly over the categories, passing a short category's share on", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "even, remainder to the earlier", cap = 5, available = { 4, 4, 4 }, want = { 2, 2, 1 } },
+            { name = "a short category passes its share on", cap = 6, available = { 1, 4, 4 },
+              want = { 1, 3, 2 } },
+            { name = "a cap past every sample stops at the samples", cap = 8, available = { 1, 2 },
+              want = { 1, 2 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.SplitBuffSamples(case.cap, case.available), case.name)
         end
     end)
 end)
