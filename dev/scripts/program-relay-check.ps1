@@ -13,8 +13,8 @@
 #   - a delegated decision (a `delegator for Brandon` line, an item
 #     under `### For Brandon to confirm or reverse`, an item of a
 #     `### Decision summary` he did not approve) must be covered by
-#     `Decided for you`: quoted there, or `Decided for you` has at least as
-#     many lines as there are such decisions.
+#     `Decided for you`: quoted there, or one of its lines whose words
+#     (four letters or more, at least two) are mostly (60%) the decision's.
 # PASS prints the relay, nothing else on stdout, exit 0: the section's words
 # unchanged, rendered as markdown (the status line as a `###` heading, each
 # labeled line as a bullet with its label in bold, sub-bullets nested), then
@@ -82,6 +82,7 @@ if ($fbStart -lt 0) {
 
 $body = @()
 if ($fbEnd -gt $fbStart + 1) { $body = @($lines[($fbStart + 1)..($fbEnd - 1)]) }
+$sectionLines = $body
 $lastBody = $body.Count - 1
 while ($lastBody -ge 0 -and -not $body[$lastBody].Trim()) { $lastBody-- }
 $body = if ($lastBody -ge 0) { @($body[0..$lastBody]) } else { @() }
@@ -130,7 +131,7 @@ foreach ($r in $restLines) {
 }
 
 $isNone = '^\s*(none|nothing|n/a|-)?\s*\.?\s*$'
-function Strip-Bullet([string]$s) { return ($s -replace '^\s*([-*+]|\d+[.)])\s+', '').Trim() }
+function Strip-Bullet([string]$s) { return ($s -replace '^\s*(#+|[-*+]|\d+[.)])\s+', '').Trim() }
 
 # Lines whose subject belongs in `Not settled`.
 $unsettledRules = @(
@@ -140,7 +141,6 @@ $unsettledRules = @(
 )
 $notSettled = Get-Norm ([string]$fields['Not settled'])
 foreach ($r in $restLines) {
-    if ($r.text -match '^#') { continue }
     foreach ($rule in $unsettledRules) {
         if ($r.text -notmatch $rule.re) { continue }
         $item = Strip-Bullet $r.text
@@ -166,12 +166,21 @@ foreach ($r in $restLines) {
     elseif ($r.section -eq 'Decision summary' -and -not $approved) { $decisions += $item }
     elseif ($r.text -match '(?i)delegator for Brandon') { $decisions += $item }
 }
-$decided = [string]$fields['Decided for you']
-$decidedCount = if ($decided -match $isNone) { 0 } else { @($fieldLines['Decided for you']).Count }
-$decidedNorm = Get-Norm $decided
-$unquoted = @($decisions | Select-Object -Unique | Where-Object { -not $decidedNorm.Contains((Get-Norm $_).TrimEnd('.', ';')) })
-if ($unquoted.Count -and $decidedCount -lt @($decisions | Select-Object -Unique).Count) {
-    foreach ($d in $unquoted) { $problems += "Decided for you ($decidedCount line(s)) does not cover the decision: $d" }
+$decidedNorm = Get-Norm ([string]$fields['Decided for you'])
+$decidedItems = @($fieldLines['Decided for you'] | ForEach-Object { Strip-Bullet $_ } | Where-Object { $_ -notmatch $isNone })
+function Get-Words([string]$s) { return @((Get-Norm $s) -split '[^\p{L}\p{N}]+' | Where-Object { $_.Length -ge 4 } | Select-Object -Unique) }
+function Test-Decided([string]$d) {
+    if ($decidedNorm.Contains((Get-Norm $d).TrimEnd('.', ';'))) { return $true }
+    $dw = Get-Words $d
+    foreach ($line in $decidedItems) {
+        $lw = Get-Words $line
+        if ($lw.Count -lt 2) { continue }
+        if (@($lw | Where-Object { $dw -contains $_ }).Count / $lw.Count -ge 0.6) { return $true }
+    }
+    return $false
+}
+foreach ($d in @($decisions | Select-Object -Unique)) {
+    if (-not (Test-Decided $d)) { $problems += "Decided for you has no line for this decision: $d" }
 }
 
 if ($problems.Count) {
@@ -183,7 +192,7 @@ if ($problems.Count) {
 }
 
 if ($Raw) {
-    $body | Write-Output
+    $sectionLines | Write-Output
 } else {
     $reportPath = (Resolve-Path -LiteralPath $report).Path
     $shown = if ($reportPath -match '[\\/](dev[\\/]docs[\\/].*)$') { $Matches[1] -replace '\\', '/' } else { $reportPath }

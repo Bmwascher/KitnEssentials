@@ -58,6 +58,24 @@ function Test-Mine($entry) {
     return ($cli -and $entry.cli -eq $cli) -or ($hostId -and $entry.host -eq $hostId)
 }
 
+# Read, change and rewrite the registry under a machine-wide lock, so two
+# masters registering at once cannot drop each other's line.
+function Update-Registry([scriptblock]$change) {
+    $mutex = [System.Threading.Mutex]::new($false, 'Local\KitnEssentials-program-masters')
+    try {
+        try { if (-not $mutex.WaitOne(10000)) { throw '[program] registry is locked by another session; try again' } }
+        catch [System.Threading.AbandonedMutexException] { }
+        $kept = @(& $change @(Read-Registry))
+        New-Item -ItemType Directory -Force (Split-Path $registry -Parent) | Out-Null
+        $tmp = "$registry.$PID.tmp"
+        Set-Content -LiteralPath $tmp -Value $kept -Encoding utf8
+        Move-Item -LiteralPath $tmp -Destination $registry -Force
+    } finally {
+        try { $mutex.ReleaseMutex() } catch { }
+        $mutex.Dispose()
+    }
+}
+
 function Resolve-Doc([string]$doc) {
     if ([System.IO.Path]::IsPathRooted($doc)) { return $doc }
     return Join-Path $root $doc
@@ -97,19 +115,17 @@ if ($Register) {
     if (-not (Test-Path -LiteralPath $docPath)) { Write-Error "[program] no control document at $docPath"; exit 1 }
     if (-not $cli -and -not $hostId) { Write-Error '[program] no session id in the environment; run this from the master chat''s own shell'; exit 1 }
     $rel = [System.IO.Path]::GetRelativePath($root, (Resolve-Path -LiteralPath $docPath).Path) -replace '\\', '/'
-    $kept = @(Read-Registry | Where-Object { -not (Test-Mine $_) } | ForEach-Object { $_.line })
-    $kept += "$cli`t$hostId`t$rel"
-    New-Item -ItemType Directory -Force (Split-Path $registry -Parent) | Out-Null
-    Set-Content -LiteralPath $registry -Value $kept -Encoding utf8
+    Update-Registry {
+        param($all)
+        @($all | Where-Object { -not (Test-Mine $_) } | ForEach-Object { $_.line }) + "$cli`t$hostId`t$rel"
+    }
     Write-Output "[program] registered this session as the master of $rel"
     exit 0
 }
 
 if ($Unregister) {
-    $all = @(Read-Registry)
-    $kept = @($all | Where-Object { -not (Test-Mine $_) } | ForEach-Object { $_.line })
-    if ($kept.Count -eq $all.Count) { Write-Output '[program] this session was not registered'; exit 0 }
-    Set-Content -LiteralPath $registry -Value $kept -Encoding utf8
+    if (-not @(Read-Registry | Where-Object { Test-Mine $_ }).Count) { Write-Output '[program] this session was not registered'; exit 0 }
+    Update-Registry { param($all) @($all | Where-Object { -not (Test-Mine $_) } | ForEach-Object { $_.line }) }
     Write-Output '[program] unregistered this session'
     exit 0
 }
