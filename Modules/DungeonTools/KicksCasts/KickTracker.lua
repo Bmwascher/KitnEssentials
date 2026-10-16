@@ -1661,6 +1661,9 @@ end
 ---------------------------------------------------------------------------------
 -- Bar Visual Updates
 ---------------------------------------------------------------------------------
+-- C_ClassColor.GetClassColor accepts a secret classFilename and may return
+-- secret r/g/b. Apply them verbatim; never compare them or compute a shade.
+-- A safety gate on this path once painted every record red.
 local function GetClassColor(classToken)
     if not classToken then return nil end
     return C_ClassColor.GetClassColor(classToken)

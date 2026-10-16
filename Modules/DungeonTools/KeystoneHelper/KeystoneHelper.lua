@@ -401,6 +401,9 @@ function KH:CheckYourKeyCondition()
         return
     end
 
+    -- GetInstanceInfo's eighth return and GetOwnedKeystoneMapID share one ID
+    -- space (probed 2874 / 2874 in a Mythic 0). Do not route either through
+    -- C_ChallengeMode.GetMapUIInfo, which returns nothing for these IDs.
     local ownedMapID = C_MythicPlus.GetOwnedKeystoneMapID()
     if not ownedMapID or instanceMapID ~= ownedMapID then
         self:HideYourKey()

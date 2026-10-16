@@ -9,6 +9,8 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
+-- Coexists with Raid Control's marker bar by design: this module is keybind
+-- driven, that bar is click-to-place.
 local WMC = KitnEssentials:NewModule("WorldMarkerCycler", "AceEvent-3.0")
 
 local InCombatLockdown = InCombatLockdown

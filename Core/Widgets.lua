@@ -1044,6 +1044,9 @@ function KE:AddIconBorders(frame, color)
         local tex = frame:CreateTexture(nil, "OVERLAY", nil, 7)
         tex:SetColorTexture(r, g, b, a)
         tex:SetTexelSnappingBias(0)
+        -- Snap stays off: SetBorderColor re-asserts it on every repaint, and a
+        -- snapped border recolors unlike a fresh one. Ports that turned it on
+        -- were wrong.
         tex:SetSnapToPixelGrid(false)
         tex:SetPoint(point1, frame, rel1, 0, 0)
         tex:SetPoint(point2, frame, rel2, 0, 0)
@@ -1089,6 +1092,7 @@ function KE:AddBorders(frame, color, borderParent)
         local tex = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
         tex:SetColorTexture(cr, cg, cb, ca)
         tex:SetTexelSnappingBias(0)
+        -- Snap stays off for the same reason as AddBorders above.
         tex:SetSnapToPixelGrid(false)
 
         if width then
