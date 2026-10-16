@@ -63,6 +63,9 @@ local DEFAULT_TIMER = { 1, 1, 1, 1 }
 local GLOW_OFF = { GlowEnabled = false }
 local SAMPLE_LIT = { 3, 6, 2, 5 }
 local SAMPLE_TIMERS = { "16", "23", "9", "12" }
+-- Whole seconds with no unit letter, as the samples show. Without a formatter
+-- the game's own adds " s".
+local TIMER_FORMAT = { DecimalThreshold = 0 }
 local SAMPLE_TOTAL = 6
 local NONE = {}
 
@@ -546,7 +549,9 @@ local function EnsureTimer(cell)
                 local fontString = button:CreateFontString(nil, "OVERLAY")
                 fontString:SetPoint("CENTER", button, "CENTER", 0, 0)
                 styled = StyleTimerText(fontString)
-                button:SetDurationText(fontString, {})
+                button:SetDurationText(fontString, {
+                    textFormatter = KE.AuraStyle.GetDurationFormatter(TIMER_FORMAT),
+                })
                 cell.timerText = fontString
             end,
         })
