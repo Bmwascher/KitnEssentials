@@ -42,7 +42,10 @@ $rel = (("$prefix" -replace '/', '\').Trim() + $leaf)
 # Fast-skip paths .luacheckrc excludes anyway (it also self-skips via exclude_files).
 if ($rel -match '^(Libs|References)\\') { exit 0 }
 
-$luacheck = (Get-Command luacheck -ErrorAction SilentlyContinue).Source
+# Windows launchers only: a Git Bash parent puts ~/bin first, and pwsh cannot
+# run the extensionless sh shim there, so it would pass with no lint at all.
+$luacheck = @(Get-Command luacheck -CommandType Application -All -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in '.exe', '.bat', '.cmd' })[0].Source
 if (-not $luacheck) { $luacheck = Join-Path $env:LOCALAPPDATA 'Programs\luacheck\luacheck.exe' }
 if (-not (Test-Path -LiteralPath $luacheck)) { exit 0 }  # tool missing: don't block every edit
 
