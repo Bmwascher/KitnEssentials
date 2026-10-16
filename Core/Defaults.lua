@@ -1577,8 +1577,8 @@ local Defaults = {
             -- Glow While Active: a cooldown icon glows while its buff is up,
             -- and the external, potion and trinket buff icons glow while shown.
             GlowEnabled       = true,
-            GlowType          = "ants",
-            GlowColor         = { 1, 0.380, 0.988, 1 }, -- #FF61FC
+            GlowType          = "border",
+            GlowColor         = { 1, 0.976, 0.122, 1 }, -- #FFF91F
             GlowLines         = 8,
             GlowFrequency     = 0.5,
             GlowThickness     = 2,
@@ -1603,22 +1603,24 @@ local Defaults = {
             PotionTextSize    = 14,
             PotionClassBars   = false,
             PotionClassNames  = true,
-            PotionBarColor    = { 0.384, 0.596, 0.714, 1 },
+            PotionBarColor    = { 0.431, 0.682, 0.812, 1 }, -- #6EAECF
             -- #080808 at 80%, the Chat and Damage Meter backdrop color.
             PotionBgColor     = { 0.031, 0.031, 0.031, 0.80 },
             PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 },
             PotionAnchorFrameType = "UIPARENT",
             PotionStrata      = "MEDIUM",
-            -- Healer externals box (Healer Externals tab). The position card
-            -- writes HealerExtParentFrame, which has no default.
+            -- Healer externals box (Healer Externals tab), attached to the top
+            -- of Healer Mana. With Healer Mana off its frame does not exist and
+            -- the box takes HX.DEFAULT_POSITION on the screen.
             HealerExternals   = true,
-            HealerExtIconSize = 30,
-            HealerExtSpacing  = 2,
+            HealerExtIconSize = 38,
+            HealerExtSpacing  = 1,
             HealerExtGrowth   = "RIGHT",
             HealerExtShowText = true,
-            HealerExtTextSize = 12,
-            HealerExtPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 },
-            HealerExtAnchorFrameType = "UIPARENT",
+            HealerExtTextSize = 14,
+            HealerExtPosition = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 1 },
+            HealerExtAnchorFrameType = "SELECTFRAME",
+            HealerExtParentFrame = "KitnEssentialsHealerMana",
             HealerExtStrata   = "MEDIUM",
             HealerExtAttachSide = "TOP",
             -- ListExternals is a row copy of the External Tracker list, made
