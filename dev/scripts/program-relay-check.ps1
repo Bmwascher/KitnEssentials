@@ -90,7 +90,7 @@ $body = if ($lastBody -ge 0) { @($body[0..$lastBody]) } else { @() }
 # Fields: `<emoji> Label: value`, with the unlabeled lines after it (sub-bullets)
 # as its continuations. The status line comes before any label and is not a field.
 $labels = @("You'll see", 'Needs you', 'Not settled', 'Decided for you', 'Reviews', 'Next')
-$fields = @{}; $fieldLines = @{}; $current = $null
+$fields = @{}; $current = $null
 $rendered = @()
 foreach ($l in $body) {
     $hit = $null
@@ -100,13 +100,12 @@ foreach ($l in $body) {
         if ($l -match $pattern) { $hit = $lab; break }
     }
     if ($hit) {
-        $current = $hit; $fields[$hit] = $Matches['val']; $fieldLines[$hit] = @()
-        if ($Matches['val'].Trim()) { $fieldLines[$hit] += $Matches['val'] }
+        $current = $hit; $fields[$hit] = $Matches['val']
         $rendered += ('- **{0}** {1}' -f $Matches['head'].Trim(), $Matches['val']).TrimEnd()
     } elseif (-not $l.Trim()) {
         continue
     } elseif ($current) {
-        $fields[$current] += ' ' + $l.Trim(); $fieldLines[$current] += $l.Trim()
+        $fields[$current] += ' ' + $l.Trim()
         $rendered += if ($l -match '^\s*[-*+]\s+(.*)$') { "  - $($Matches[1])" } else { "  $($l.Trim())" }
     } elseif ($rendered.Count -eq 0) {
         $rendered += "### $($l.Trim())"
