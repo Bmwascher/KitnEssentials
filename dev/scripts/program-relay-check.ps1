@@ -93,7 +93,8 @@ $fields = @{}; $fieldLines = @{}; $current = $null
 $rendered = @()
 foreach ($l in $body) {
     $hit = $null
-    foreach ($lab in $labels) {
+    # A sub-bullet is a continuation even when it opens with a label word.
+    foreach ($lab in $(if ($l -match '^\s*[-*+]\s') { @() } else { $labels })) {
         $pattern = '^\s*(?<head>[^\p{L}\p{N}\s]*\s*' + ([regex]::Escape($lab) -replace "'", ".") + '\s*:)\s*(?<val>.*)$'
         if ($l -match $pattern) { $hit = $lab; break }
     }
@@ -151,13 +152,12 @@ foreach ($r in $restLines) {
                 $problems += "Not settled leaves out this $($rule.kind): $($r.text.Trim())"
             }
         }
-        break
     }
 }
 
 # Delegated decisions.
 $decisions = @()
-$approved = @($restLines | Where-Object { $_.section -eq 'Decision summary' -and $_.text -match '(?i)approved by Brandon' }).Count -gt 0
+$approved = @($restLines | Where-Object { $_.section -eq 'Decision summary' -and $_.text -match '(?i)^\s*approved by Brandon\s*\.?\s*$' }).Count -gt 0
 foreach ($r in $restLines) {
     if ($r.text -match '^#' -or -not $r.text.Trim()) { continue }
     $item = Strip-Bullet $r.text

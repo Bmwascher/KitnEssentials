@@ -4,6 +4,7 @@
 #   pwsh dev/scripts/program-master.ps1 -Unregister
 #   pwsh dev/scripts/program-master.ps1 -LogEvent '<text>'
 #   pwsh dev/scripts/program-master.ps1 -Recover [-SessionId <id>]
+#   pwsh dev/scripts/program-master.ps1 -EventsLog <control document>
 #
 # A master chat runs -Register once, from its own shell, when it opens the
 # control document (phased-program skill, step 0). The registry,
@@ -22,7 +23,8 @@
 #
 # Events go to <control document stem>-events.log beside the control
 # document (`compact`, `relay PASS|FAIL <folder>`); program-tally.ps1 counts
-# them at close. -Unregister at close removes the session's line.
+# them at close (-EventsLog prints the log's path for it). -Unregister at
+# close removes the session's line.
 # KE_PROGRAM_MASTERS overrides the registry path (hook tests).
 
 param(
@@ -30,10 +32,13 @@ param(
     [switch]$Unregister,
     [string]$LogEvent,
     [switch]$Recover,
-    [string]$SessionId
+    [string]$SessionId,
+    [string]$EventsLog
 )
 
 $ErrorActionPreference = 'Stop'
+# Control document rows can hold non-ASCII text; the console code page would print it as '?'.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $registry = if ($env:KE_PROGRAM_MASTERS) { $env:KE_PROGRAM_MASTERS } else { Join-Path $root 'dev\docs\parsec\programs\active-masters.tsv' }
 $card = Join-Path $root '.claude\skills\phased-program\recovery-card.md'
@@ -80,6 +85,11 @@ function Get-Section([string[]]$lines, [string]$name) {
     while ($last -ge 0 -and -not $out[$last].Trim()) { $last-- }
     if ($last -lt 0) { return @() }
     return $out[0..$last]
+}
+
+if ($EventsLog) {
+    Write-Output (Get-EventsLog (Resolve-Doc $EventsLog))
+    exit 0
 }
 
 if ($Register) {

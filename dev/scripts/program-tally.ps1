@@ -36,8 +36,7 @@ if ($Smoke) {
     else { $smokeNote = " (smoke file not found: $Smoke)" }
 } else { $smokeNote = ' (no smoke file named)' }
 
-$stem = [System.IO.Path]::GetFileNameWithoutExtension($programPath)
-$eventsPath = Join-Path (Split-Path $programPath -Parent) "$stem-events.log"
+$eventsPath = & (Join-Path $PSScriptRoot 'program-master.ps1') -EventsLog $programPath
 $events = if (Test-Path -LiteralPath $eventsPath) { @(Get-Content -LiteralPath $eventsPath) } else { @() }
 $eventsNote = if ($events.Count) { '' } else { ' (no events log)' }
 
@@ -46,7 +45,8 @@ $all = $doc + $smokeLines
 
 $asked = @($all | ForEach-Object { [regex]::Matches($_, $label) | ForEach-Object { $_.Value } } | Sort-Object -Unique)
 $reasked = @($all | ForEach-Object { [regex]::Matches($_, "(?i)\breplaces\s+($label)") | ForEach-Object { $_.Groups[1].Value } } | Sort-Object -Unique)
-$premises = @($all | Where-Object { $_ -match '(?i)\bpremise corrected\b' }).Count
+# The template states the convention in backticks; only an unquoted use is a record.
+$premises = @($all | Where-Object { $_ -match '(?i)(?<!`)\bpremise corrected\b(?!`)' }).Count
 
 # Smoke FAILs: each Result line holding FAIL, under its step heading.
 $hopRe = '(?i)\b(sent|routed|relayed|forwarded)\s+(back\s+)?to\b'
