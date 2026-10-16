@@ -126,7 +126,7 @@ end
 function Rules.StackBox(db, textW, textH)
     local size = db.IconSize or 40
     local spacing = db.RowSpacing or 2
-    local cap = db.MaxEnemies or 15
+    local cap = db.MaxEnemies or 5
     local padX = math_max(0, ceil(((textW or 0) - size) / 2))
     local padY = math_max(0, ceil(((textH or 0) - size) / 2))
     local icons = Rules.CC_PER_ROW * size + (Rules.CC_PER_ROW - 1) * Rules.ICON_GAP

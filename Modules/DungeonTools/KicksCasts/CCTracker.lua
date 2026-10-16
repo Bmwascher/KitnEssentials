@@ -361,7 +361,7 @@ end
 -- The cap follows the rows that exist, so no plate is handed a slot before its
 -- container does.
 function CC:UpdateCap()
-    self.slots:SetCap(math_min(self.db.MaxEnemies or 15, #self.rows))
+    self.slots:SetCap(math_min(self.db.MaxEnemies or 5, #self.rows))
 end
 
 function CC:EnsureSlots()
@@ -492,7 +492,7 @@ function CC:Apply()
         KE:Print("[CC] auras restricted: row changes wait for the drain")
     end
     self:UpdateCap()
-    self:RunBuild(db.MaxEnemies or 15)
+    self:RunBuild(db.MaxEnemies or 5)
     self:UpdateLive()
 end
 
@@ -682,7 +682,7 @@ function CC:PaintSamples()
     local box = self:Box(db)
     local corner = box.corner
     local edge = up and "BOTTOMRIGHT" or "TOPRIGHT"
-    local shown = math_min(#SAMPLES, db.MaxEnemies or 15)
+    local shown = math_min(#SAMPLES, db.MaxEnemies or 5)
     local nameOn = db.NameEnabled ~= false
     local threshold = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold)
     for k, data in ipairs(SAMPLES) do
