@@ -253,15 +253,19 @@ end
 -- point/rel place the holder on the party frame, dx/dy scale the icon gap, and
 -- corner is where the container is pinned and grows away from. None grows
 -- toward its frame: Left and Right run their lines outward, Above wraps up and
--- Below wraps down.
+-- Below wraps down. lift raises the holder by that many icons: a Center
+-- layout pins its top half an icon above the frame's middle, so its first
+-- line centers on the frame and further lines hang below it.
 Rules.LAYOUTS = {
     LEFT = {
-        { grow = "CENTER", point = "RIGHT",       rel = "LEFT",        dx = -1, dy = 0, corner = "TOPRIGHT" },
+        { grow = "CENTER", point = "TOPRIGHT",    rel = "LEFT",        dx = -1, dy = 0, corner = "TOPRIGHT",
+          lift = 0.5 },
         { grow = "DOWN",   point = "TOPRIGHT",    rel = "TOPLEFT",     dx = -1, dy = 0, corner = "TOPRIGHT" },
         { grow = "UP",     point = "BOTTOMRIGHT", rel = "BOTTOMLEFT",  dx = -1, dy = 0, corner = "BOTTOMRIGHT" },
     },
     RIGHT = {
-        { grow = "CENTER", point = "LEFT",        rel = "RIGHT",       dx = 1,  dy = 0, corner = "TOPLEFT" },
+        { grow = "CENTER", point = "TOPLEFT",     rel = "RIGHT",       dx = 1,  dy = 0, corner = "TOPLEFT",
+          lift = 0.5 },
         { grow = "DOWN",   point = "TOPLEFT",     rel = "TOPRIGHT",    dx = 1,  dy = 0, corner = "TOPLEFT" },
         { grow = "UP",     point = "BOTTOMLEFT",  rel = "BOTTOMRIGHT", dx = 1,  dy = 0, corner = "BOTTOMLEFT" },
     },
@@ -284,6 +288,11 @@ for _, layouts in pairs(Rules.LAYOUTS) do
         layout.left = layout.corner:sub(-5) == "RIGHT"
         layout.up = layout.corner:sub(1, 6) == "BOTTOM"
     end
+end
+
+-- The holder's offset from its anchor on the party frame.
+function Rules.HolderOffset(layout, gap, x, y, size)
+    return layout.dx * gap + x, layout.dy * gap + y + (layout.lift or 0) * size
 end
 
 -- The fields a healer copy can override, as { default key, healer key }, in

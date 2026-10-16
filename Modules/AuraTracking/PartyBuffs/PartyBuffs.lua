@@ -739,12 +739,11 @@ end
 -- and could not be hidden in combat. It takes the party frame's strata, or
 -- MEDIUM when that cannot be read. Returns the strata and level applied, or
 -- nil when the anchor was refused.
-function PB:PlaceHolder(holder, frame, forPreview)
+function PB:PlaceHolder(holder, frame, forPreview, size)
     local side, x, y = self:Placement(forPreview)
-    local gap = self.db.IconSpacing
+    local dx, dy = KE.PartyBuffsRules.HolderOffset(side, self.db.IconSpacing, x, y, size)
     holder:ClearAllPoints()
-    if not pcall(holder.SetPoint, holder, side.point, frame, side.rel,
-        side.dx * gap + x, side.dy * gap + y) then
+    if not pcall(holder.SetPoint, holder, side.point, frame, side.rel, dx, dy) then
         return nil
     end
     local strata, level = "MEDIUM", nil
@@ -776,7 +775,7 @@ function PB:BindSlot(k, binding)
         end
         slot.unit = binding.token
     end
-    local strata, level = self:PlaceHolder(slot.holder, binding.frame)
+    local strata, level = self:PlaceHolder(slot.holder, binding.frame, false, self.styleSettings.IconSize)
     if not strata then
         Debug("slot %d: anchor refused", k)
         self.buildPending = true
@@ -789,6 +788,7 @@ function PB:BindSlot(k, binding)
         self.buildPending = true
         return self:DropSlot(k)
     end
+    slot.holder:SetAlpha(self.previewing and 0 or 1)
     slot.holder:Show()
     clean = pcall(container.UpdateAllAuras, container) and clean
     if not clean then
@@ -1541,7 +1541,7 @@ function PB:DrawPreviewRow(k, frame)
     local step, buffCol, buffLine, buffPerLine, width, height =
         KE.PartyBuffsRules.RowLayout(db, #entries, perRow, settings.IconSize)
     holder:SetSize(width, height)
-    if not self:PlaceHolder(holder, frame, true) then
+    if not self:PlaceHolder(holder, frame, true, settings.IconSize) then
         self:HidePreviewRow(row)
         return
     end
@@ -1578,10 +1578,18 @@ function PB:DrawPreviewRow(k, frame)
     holder:Show()
 end
 
+-- The preview rows draw over the live ones, so the live rows go transparent
+-- while it shows. Alpha, not Hide: their shown state gates builds and redraws.
+function PB:ApplyLiveAlpha()
+    local alpha = self.previewing and 0 or 1
+    for _, slot in pairs(self.slots) do slot.holder:SetAlpha(alpha) end
+end
+
 -- Held back while a roster change settles, like the live icons; the settle
 -- timer redraws it.
 function PB:ShowPreview()
     self.previewing = true
+    self:ApplyLiveAlpha()
     -- The potion samples sit in their own box, not beside party frames, so a
     -- roster settle does not hold them back.
     Pot.ShowPreview()
@@ -1655,6 +1663,7 @@ end
 
 function PB:HidePreview()
     self.previewing = false
+    self:ApplyLiveAlpha()
     self:HidePreviewFrames()
     Pot.HidePreview()
     HX.HidePreview()

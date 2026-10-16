@@ -305,6 +305,22 @@ describe("PartyBuffsRules.Layout", function()
     end)
 end)
 
+describe("PartyBuffsRules.HolderOffset", function()
+    it("lifts a Center layout by half an icon and leaves the others at gap plus offset", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { side = "LEFT", grow = "CENTER", want = { 5, 21 } },
+            { side = "RIGHT", grow = "CENTER", want = { 9, 21 } },
+            { side = "LEFT", grow = "DOWN", want = { 5, 3 } },
+            { side = "ABOVE", grow = "RIGHT", want = { 9, 5 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.HolderOffset(R.Layout(case.side, case.grow), 2, 7, 3, 36) },
+                case.side .. " " .. case.grow)
+        end
+    end)
+end)
+
 describe("PartyBuffsRules.SeedHealerPlacement", function()
     it("fills each absent healer key from its default and keeps one already set", function()
         local R = L.loadPartyBuffsRules()
