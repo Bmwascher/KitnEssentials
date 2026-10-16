@@ -1574,10 +1574,9 @@ local Defaults = {
             TimerFontSize     = 14,
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             ShowCooldownText  = true,
-            -- Glow While Active: a cooldown icon glows while its buff is up.
+            -- Glow While Active: a cooldown icon glows while its buff is up,
+            -- and the external, potion and trinket buff icons glow while shown.
             GlowEnabled       = true,
-            -- The external, potion and trinket buff icons glow too.
-            GlowBuffs         = true,
             GlowType          = "ants",
             GlowColor         = { 1, 0.380, 0.988, 1 }, -- #FF61FC
             GlowLines         = 8,

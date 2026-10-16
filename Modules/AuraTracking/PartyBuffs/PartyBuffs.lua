@@ -558,7 +558,7 @@ function PB:AddGroup(k, slot, d)
         -- The button is a Button and would stop a click meant for the party
         -- frame under or beside it; hover stays on for the tooltip.
         initializeFrame  = function(button)
-            local dressed = pcall(KE.AuraStyle.InitializeButton, button, nil, d, PB.buffSettings)
+            local dressed = pcall(KE.AuraStyle.InitializeButton, button, nil, d, PB.styleSettings)
             if not dressed then Debug("slot %d group %s: button dressing failed", k, d.key) end
             if not pcall(button.SetMouseClickEnabled, button, false) then
                 Debug("slot %d group %s: click-through failed", k, d.key)
@@ -1206,21 +1206,12 @@ local function FillStyle(db, size, settings, cell)
     return settings, cell
 end
 
--- The buff icons share the dressing; Glow Buff Icons also gates their glow.
-local function FillBuffStyle(db, settings, buff)
-    buff = buff or {}
-    for key, value in pairs(settings) do buff[key] = value end
-    buff.GlowEnabled = settings.GlowEnabled and db.GlowBuffs == true
-    return buff
-end
-
 -- The live pair. Only ApplySettings and the activation check build it, and
 -- both reconfigure and restyle after, so its size is the one the live
 -- containers were set to, or one with a retry pending.
 function PB:BuildStyleSettings()
     self.styleSettings, self.cellStyle =
         FillStyle(self.db, select(5, self:Placement()), self.styleSettings, self.cellStyle)
-    self.buffSettings = FillBuffStyle(self.db, self.styleSettings, self.buffSettings)
 end
 
 -- The preview's own pair, at the size of the settings page's view.
@@ -1228,7 +1219,6 @@ function PB:BuildPreviewStyle()
     self.previewStyleSettings, self.previewCellStyle =
         FillStyle(self.db, select(5, self:Placement(true)),
             self.previewStyleSettings, self.previewCellStyle)
-    self.previewBuffSettings = FillBuffStyle(self.db, self.previewStyleSettings, self.previewBuffSettings)
 end
 
 -- A refused touch leaves the button as it was and is retried when combat or
@@ -1266,7 +1256,7 @@ function PB:Restyle()
         if slot and slot.container then
             for i = 1, #DESCRIPTORS do
                 local d = DESCRIPTORS[i]
-                if slot.groups[d.key] and not RestyleGroup(slot.container, d, self.buffSettings) then
+                if slot.groups[d.key] and not RestyleGroup(slot.container, d, self.styleSettings) then
                     clean = false
                 end
             end
@@ -1527,7 +1517,7 @@ function PB:DrawPreviewActive(row, e)
 end
 
 function PB:DrawPreviewRow(k, frame)
-    local db, settings = self.db, self.previewBuffSettings
+    local db, settings = self.db, self.previewStyleSettings
     local row = self.previewRows[k]
     if not row then
         local rowHolder = CreateFrame("Frame", nil, UIParent)

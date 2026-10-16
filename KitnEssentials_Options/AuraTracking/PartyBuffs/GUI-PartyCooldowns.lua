@@ -108,7 +108,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:SetCondition("classOn", function() return db.TrackBurst == true end)
     manager:SetCondition("trinketOn", function() return db.TrackTrinket == true end)
     manager:SetCondition("racialsOn", function() return db.ShowRacials == true end)
-    manager:SetCondition("glowOn", function() return db.GlowEnabled == true end)
     -- Without the sensor file the cooldown cells do not exist, and their
     -- settings are grayed. Only the cells use the defensive color.
     manager:SetCondition("cellsOn", function() return KE.PartyCooldownsSensor ~= nil end)
@@ -249,12 +248,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         nil, 1 / 3), "cellsOn")
     AddCheck(rowD3, "Time-Left Swipe", "Swipe", nil, nil, 1 / 3)
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
-    local rowD3b = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    manager:Register(AddCheck(rowD3b, "Glow Buff Icons", "GlowBuffs",
-        "The external, potion and trinket buff icons beside each party frame glow while they show, "
-            .. "in the Glow While Active style. Needs Enable Glow on."),
-        "glowOn")
-    cardDisplay:AddRow(rowD3b, Theme.rowHeight)
 
     local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
     rowDSep2:AddWidget(GUIFrame:CreateSeparator(rowDSep2), 1)
@@ -306,10 +299,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             min     = 0.05,
             max     = 2,
         },
-        onChangeCallback = function()
-            ApplySettings()
-            RefreshStates()
-        end,
+        onChangeCallback = ApplySettings,
         onHeightChange = RebuildPage,
     })
     -- The buff icons glow too, so the card applies without the cooldown cells.
