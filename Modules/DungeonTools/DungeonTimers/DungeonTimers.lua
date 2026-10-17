@@ -2160,7 +2160,7 @@ end
 
 -- Real bars start at 1000 so they always lay out after the 1/2/3 previews.
 DT._barSortCounter = 1000
-DT._timerStateRevision = 73
+DT._timerStateRevision = 74
 -- Hidden occurrences the wind map observes, each with the job that ends it.
 DT._observedRetireJobs = {}
 
