@@ -1018,10 +1018,7 @@ local PREVIEW_MODULES = {
     "DamageMeter",
     "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
     "PlayerAbsorbs",
-    -- Membership means "has ShowPreview/HidePreview". Chat and AlertFrames
-    -- were listed here and define neither, so both were inert; LootRoll
-    -- defines both (Modules/Skinning/DarkTheme/LootRollBars.lua) and was missing, so
-    -- /kes edit showed its mover with no sample bars behind it.
+    -- Membership means "has ShowPreview/HidePreview".
     "LootRoll",
     "BuffTracking", "PlayerDebuffTracking",
     "VehicleExit",

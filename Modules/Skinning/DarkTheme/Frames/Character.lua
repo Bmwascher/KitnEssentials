@@ -21,14 +21,7 @@ local TITLE_FONT = 13
 local STAT_GRAD_WIDTH = 80
 local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 
--- Per-slot item level + gem icons used to be drawn here (EnsureSlotDisplay /
--- UpdateSlotDisplay / GetEmptySocketIcons).
--- Removed: KE already draws all three from Modules/Skinning/CharacterPanel/CharacterPanel.lua, at
--- anchors within 2px of these, so every character slot rendered them TWICE
--- whenever this skin was on.
--- CharacterPanel is the single owner now, and it also covers the inspect
--- frame, which this never did. KE.GetEmptySocketIcons went with them --
--- nothing in KE called it.
+-- Slot item level and gem icons are drawn by CharacterPanel.lua, not here.
 
 -- Two mirrored fades from the row's center outward, replacing the plate rather
 -- than merely hiding it.
