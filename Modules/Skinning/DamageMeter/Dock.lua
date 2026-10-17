@@ -338,7 +338,7 @@ end
 -- called only on structural change (enable, context-swap, add/remove window).
 -- The two ratio conventions differ: WidthRatio multiplies db.Width (hand-built
 -- docks seed 1) while RowRatios sum to 1. The GUI shows both as relative %,
--- which hides a mismatch; RepairSquishedDock fixed profiles seeded 0.5/0.5.
+-- which hides a mismatch; RepairSquishedDock repairs profiles seeded 0.5/0.5.
 ---------------------------------------------------------------------------------
 
 -- Lays out the dock. Hides windows that exist but aren't referenced (or whose
