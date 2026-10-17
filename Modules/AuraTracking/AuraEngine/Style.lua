@@ -1,0 +1,616 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Modules/AuraTracking/AuraEngine/Style.lua               ║
+-- ║  Purpose: button dressing -- hosts, region registration, ║
+-- ║  and the duration formatter. Shared by live and preview. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+---@class KE
+local KE = select(2, ...)
+
+local math_floor = math.floor
+
+local Style = {}
+KE.AuraStyle = Style
+
+-- Fallback colors, shared because KE:ResolveColor only reads them.
+local BLACK = { 0, 0, 0, 1 }
+local WHITE = { 1, 1, 1, 1 }
+local DEFAULT_RING = { 0.8, 0, 0, 1 }
+
+-- The dispel badge is a fixed fraction of the icon, not a setting -- ported
+-- from the modules this engine replaces. A field rather than a local so the
+-- Edit Mode hitbox math can share this one definition instead of copying it.
+Style.DISPEL_ICON_FRACTION = 0.40
+
+---------------------------------------------------------------------------------
+-- Duration formatter -- declarative data, not a callback. The breakpoint set is
+-- chosen from the display's decimal threshold; no display supports a
+-- ColorDurationUnderThreshold setting, so textColor is never populated.
+-- Weak-keyed on the settings table: the same settings table
+-- is reused for every reconfiguration of a display, so this rebuilds a
+-- formatter once per settings table rather than once per button.
+---------------------------------------------------------------------------------
+
+local DurationFormatterCache = setmetatable({}, { __mode = "k" })
+
+local function GetDurationFormatter(settings, roundUp)
+    local decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
+    roundUp = roundUp == true
+
+    local cached = DurationFormatterCache[settings]
+    if cached and cached.decimalThreshold == decimalThreshold and cached.roundUp == roundUp then
+        return cached.formatter
+    end
+
+    local breakpoints = {
+        {
+            threshold = 86400,
+            format    = "%dd",
+            components = {
+                { div = 86400, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
+            },
+        },
+        {
+            threshold = 3600,
+            format    = "%dh",
+            components = {
+                { div = 3600, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
+            },
+        },
+        {
+            threshold = 60,
+            format    = "%dm",
+            components = {
+                { div = 60, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
+            },
+        },
+    }
+
+    -- Down, to agree with the Cooldown Manager. Its icons keep the game's own
+    -- countdown numbers while these displays draw their own text, and rounding
+    -- up read a second higher than the same buff shown there. The tenths rule
+    -- rounds the same way, for the same reason. A display drawn beside the
+    -- nameplate's own countdown opts into Up, which is how that one reads.
+    local rounding = roundUp and Enum.NumericRuleFormatRounding.Up or Enum.NumericRuleFormatRounding.Down
+    if decimalThreshold > 0 then
+        breakpoints[#breakpoints + 1] = {
+            threshold = decimalThreshold,
+            step      = 1,
+            rounding  = rounding,
+            format    = "%d",
+        }
+        breakpoints[#breakpoints + 1] = {
+            threshold = 0,
+            step      = 0.1,
+            rounding  = rounding,
+            format    = "%.1f",
+        }
+    else
+        breakpoints[#breakpoints + 1] = {
+            threshold = 0,
+            step      = 1,
+            rounding  = rounding,
+            format    = "%d",
+        }
+    end
+
+    local formatter = C_StringUtil.CreateNumericRuleFormatter()
+    formatter:SetBreakpoints(breakpoints)
+
+    DurationFormatterCache[settings] = {
+        decimalThreshold = decimalThreshold,
+        roundUp          = roundUp,
+        formatter        = formatter,
+    }
+    return formatter
+end
+Style.GetDurationFormatter = GetDurationFormatter
+
+---------------------------------------------------------------------------------
+-- Host creation -- called once, from initializeFrame.
+---------------------------------------------------------------------------------
+
+-- Deliberately NOT KE:AddIconBorders. That helper registers every frame it
+-- decorates into the weak-keyed KE._borderRegistry, and KE:ResnapAllBorders
+-- later walks that registry reading frame.borders on UI_SCALE_CHANGED -- an
+-- event that can fire while auras are secret, which would be a denied read
+-- from tainted code at an arbitrary later moment.
+--
+-- The trade: a mid-fight UI-scale change leaves these borders unsnapped until
+-- the next reconfiguration. That is the correct side to err on.
+--
+-- Defaults to black, matching the plain border both modules being replaced
+-- draw (their dispel-colored decoration is a SEPARATE region, now the
+-- dispel host below). Sized from settings.IconSize at creation; StyleAuraFrame
+-- re-sizes on every reconfiguration the same way, in case IconSize changed.
+function Style.CreateBorderHost(button, settings, color)
+    local px   = KE:GetPixelSize()
+    local size = settings.IconSize or 0
+    local r, g, b, a = KE:ResolveColor(color, BLACK)
+
+    local function MakeEdge(width, height)
+        local tex = button:CreateTexture(nil, "OVERLAY", nil, 7)
+        tex:SetColorTexture(r, g, b, a)
+        tex:SetTexelSnappingBias(0)
+        tex:SetSnapToPixelGrid(false)
+        tex:SetSize(width, height)
+        return tex
+    end
+
+    local host = {
+        top    = MakeEdge(size, px),
+        bottom = MakeEdge(size, px),
+        left   = MakeEdge(px, size),
+        right  = MakeEdge(px, size),
+    }
+    host.top:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+    host.bottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+    host.left:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+    host.right:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+
+    return host
+end
+
+-- The dispel decoration: a texture (registered via AddDispelTypeTexture,
+-- Blizzard's own vocabulary calls this the aura's "border" -- see the
+-- deprecated SetAuraBorder alias) plus a fontstring (the colorblind-mode
+-- symbol, aliased SetAuraSymbol), created only when the badge is requested.
+-- Both live on their own overlay frame so their level can sit above the
+-- cooldown swipe, and both take no mouse input so decoration can
+-- never swallow a click or the tooltip.
+--
+-- When the badge IS requested, both are sized/fonted here at creation so the
+-- very first UpdateAuraDisplay (fired from inside RegisterRegions's Set*
+-- calls, before StyleAuraFrame's first pass) never calls SetText on a
+-- fontless string or SetPoint on a size-0 texture. StyleAuraFrame re-dresses
+-- both on every reconfiguration.
+function Style.CreateDispelHost(button, settings, wantBadge, wantRing)
+    local host = CreateFrame("Frame", nil, button)
+    host:SetAllPoints(button)
+    host:EnableMouse(false)
+
+    if wantBadge then
+        local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
+
+        local texture = host:CreateTexture(nil, "OVERLAY")
+        texture:SetSize(size, size)
+        texture:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+
+        local text = host:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
+        text:SetPoint("CENTER", texture, "CENTER", 0, 0)
+
+        host.texture = texture
+        host.text    = text
+    end
+
+    if not wantRing then
+        return host
+    end
+
+    -- The dispel-colored ring. Parented directly to the BUTTON, not the
+    -- overlay host above -- sublevel only orders regions of the same frame,
+    -- and this has to sit below CreateBorderHost's plain black edges
+    -- (OVERLAY sublevel 7) rather than above them, which a higher frame
+    -- level would force regardless of sublevel. Two-point corner-to-corner
+    -- anchors, one pixel inset on every edge, with only the thin dimension
+    -- given an explicit size -- that is what lets the ring track the
+    -- button's real size instead of a size fixed at creation.
+    local px      = KE:GetPixelSize()
+    local innerPx = 2 * px
+
+    local function MakeRingEdge()
+        local tex = button:CreateTexture(nil, "OVERLAY", nil, 6)
+        tex:SetTexelSnappingBias(0)
+        -- White: the dispel-mode repaint tints via vertex color, which
+        -- multiplies against the texture's own color, so anything but
+        -- white here would darken or discolor the result.
+        tex:SetColorTexture(1, 1, 1, 1)
+        tex:SetSnapToPixelGrid(false)
+        return tex
+    end
+
+    local ring = {
+        top    = MakeRingEdge(),
+        bottom = MakeRingEdge(),
+        left   = MakeRingEdge(),
+        right  = MakeRingEdge(),
+    }
+
+    ring.top:SetPoint("TOPLEFT", button, "TOPLEFT", px, -px)
+    ring.top:SetPoint("TOPRIGHT", button, "TOPRIGHT", -px, -px)
+    ring.top:SetHeight(innerPx)
+
+    ring.bottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", px, px)
+    ring.bottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -px, px)
+    ring.bottom:SetHeight(innerPx)
+
+    ring.left:SetPoint("TOPLEFT", button, "TOPLEFT", px, -px)
+    ring.left:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", px, px)
+    ring.left:SetWidth(innerPx)
+
+    ring.right:SetPoint("TOPRIGHT", button, "TOPRIGHT", -px, -px)
+    ring.right:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -px, px)
+    ring.right:SetWidth(innerPx)
+
+    host.ring    = ring
+    return host
+end
+
+-- initializeFrame is the only legally guaranteed window to parent a frame to
+-- an aura button: DenyTaintedAccessWhenAurasAreSecret attaches the moment it
+-- returns, and a host created later when a user flips a setting has no such
+-- window.
+--
+-- The rule is per GROUP. Each AddAuraGroup builds its own frame provider from
+-- its own callback, so a group creates the hosts ITS capabilities name and no
+-- others -- that is how only the externals group gets a glow.
+--
+-- CreateRegions is shared with the PREVIEW path, which cannot register
+-- anything. Keeping creation in one function is what lets both paths use the
+-- same dressing function afterward.
+function Style.CreateRegions(frame, group, settings)
+    local caps = group.capabilities or {}
+
+    frame.keIcon = frame:CreateTexture(nil, "ARTWORK")
+    frame.keIcon:SetAllPoints(frame)
+    KE:ApplyIconZoom(frame.keIcon)
+
+    frame.keCooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
+    frame.keCooldown:SetAllPoints(frame)
+    frame.keCooldown:SetDrawEdge(false)
+    frame.keCooldown:EnableMouse(false)
+    -- Blizzard's built-in countdown numbers are superseded by the SEPARATE
+    -- duration-text region below (registered via SetDurationText onto its
+    -- own fontstring), so the cooldown widget's own numbers would double up
+    -- with it if left visible.
+    frame.keCooldown:SetHideCountdownNumbers(true)
+
+    -- The count and timer live on their OWN overlay frame, not on the button.
+    -- A FontString parented to the button sits at the button's frame level,
+    -- so the cooldown swipe and the glow -- both child FRAMES at higher levels
+    -- -- paint straight over it. This overlay is the +4 level, and it takes
+    -- no mouse input so it cannot steal the button's tooltip.
+    frame.keTextOverlay = CreateFrame("Frame", nil, frame)
+    frame.keTextOverlay:SetAllPoints(frame)
+    frame.keTextOverlay:EnableMouse(false)
+
+    frame.keCount = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
+    frame.keCount:SetJustifyH("RIGHT")
+    frame.keTimer = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
+
+    -- On the text overlay so the glow cannot paint over it. Static text from
+    -- settings, never registered with the button.
+    if caps.hasLabel then
+        frame.keCaption = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
+        frame.keCaption:SetJustifyH("CENTER")
+    end
+
+    -- Seeded here for the same reason as the dispel host's fontstring:
+    -- RegisterRegions's Set* calls can trigger an immediate UpdateAuraDisplay,
+    -- and SetText on a fontless string errors.
+    KE:ApplyFontToText(frame.keCount, settings.FontFace, settings.FontSize, settings.FontOutline)
+    KE:ApplyFontToText(frame.keTimer, settings.FontFace, settings.TimerFontSize, settings.FontOutline)
+    if frame.keTimer.SetShadowOffset then frame.keTimer:SetShadowOffset(0, 0) end
+
+    if caps.hasBorder then
+        frame.keBorder = Style.CreateBorderHost(frame, settings,
+            group.borderColorKey and settings[group.borderColorKey] or nil)
+    end
+    if caps.hasDispelBadge or caps.hasDispelRing then
+        frame.keDispel = Style.CreateDispelHost(frame, settings,
+            caps.hasDispelBadge, caps.hasDispelRing)
+    end
+    if caps.hasGlow then
+        frame.keGlow = KE.AuraGlow.CreateHost(frame, settings)
+    end
+
+    -- Frame levels, off the button. Higher levels paint over lower ones
+    -- regardless of creation order, which is what stops the swipe and the
+    -- glow from covering the count/timer text.
+    local baseLevel = frame:GetFrameLevel()
+    frame.keCooldown:SetFrameLevel(baseLevel + 1)
+    if frame.keDispel then frame.keDispel:SetFrameLevel(baseLevel + 2) end
+    if frame.keGlow then frame.keGlow:SetFrameLevel(baseLevel + 3) end
+    frame.keTextOverlay:SetFrameLevel(baseLevel + 4)
+end
+
+function Style.InitializeButton(button, display, group, settings)
+    local caps = group.capabilities or {}
+
+    Style.CreateRegions(button, group, settings)
+
+    -- Tooltip policy, per button and LIVE ONLY. SetTooltipAnchorPoint and
+    -- SetHideTooltipInCombat come from the aura button mixin, so this path
+    -- needs a real button. SetMouseMotionEnabled is not one of them -- every
+    -- frame has it -- and it is set here only to keep the policy in one place.
+    button:SetMouseMotionEnabled(settings.ShowTooltips ~= false)
+    button:SetTooltipAnchorPoint("ANCHOR_BOTTOMLEFT")
+    button:SetHideTooltipInCombat(false)
+
+    -- Canceling is a property of what the display SHOWS, not a setting: a
+    -- debuff cannot be canceled at all, so this is declared per group rather
+    -- than offered as a checkbox.
+    if caps.canCancel then
+        -- The token is stored verbatim and compared for EXACT equality
+        -- against the button name with "Up" or "Down" appended, so a bare
+        -- "RightButton" matches nothing and cancel silently never fires.
+        button:SetCancelAuraButtons("RightButtonUp")
+    end
+
+    Style.RegisterRegions(button, display, group, settings)
+    Style.StyleAuraFrame(button, settings, caps)
+    KE.AuraGlow.Apply(button, settings, caps)
+end
+
+-- The preview path: create and dress, never register.
+function Style.InitializePreviewFrame(frame, _display, group, settings)
+    local caps = group.capabilities or {}
+    Style.CreateRegions(frame, group, settings)
+    Style.StyleAuraFrame(frame, settings, caps)
+    KE.AuraGlow.Apply(frame, settings, caps)
+end
+
+---------------------------------------------------------------------------------
+-- Region registration -- IDEMPOTENT, and re-run on every reconfiguration.
+-- Every registered region pairs with a clear on toggle-off, so an
+-- unregistration is always reachable from an ordinary checkbox.
+---------------------------------------------------------------------------------
+
+function Style.RegisterRegions(button, _display, group, settings)
+    -- A fixed icon is painted by KE and never registered, so the game's aura
+    -- repaint leaves it alone. Writes to it are denied while auras are
+    -- secret; the engine reaches this only before the restriction attaches or
+    -- behind the reconfigure gate.
+    if button.keIcon then
+        local caps = group.capabilities or {}
+        if caps.fixedIcon then
+            button.keIcon:SetTexture(caps.fixedIcon(settings))
+        else
+            button:SetIcon(button.keIcon)
+        end
+    end
+
+    -- Tooltips are a live toggle, so the policy is re-applied here rather
+    -- than only at creation. The guard is belt and braces, NOT a test for a
+    -- real button: this is a script region method every frame carries, so it
+    -- cannot tell a button from anything else that reaches this function.
+    if button.SetMouseMotionEnabled then
+        button:SetMouseMotionEnabled(settings.ShowTooltips ~= false)
+    end
+
+    -- "Swipe" gates the cooldown REGION itself, not just its visual: the
+    -- registration must be reversible, so ClearDurationCooldown has to be
+    -- reachable from the checkbox.
+    if button.keCooldown then
+        if settings.Swipe ~= false then
+            button.keCooldown:Show()
+            button:SetDurationCooldown(button.keCooldown)
+        else
+            button:ClearDurationCooldown()
+            button.keCooldown:Clear()
+            button.keCooldown:Hide()
+        end
+    end
+
+    if button.keTimer then
+        if settings.ShowTimer ~= false then
+            button.keTimer:Show()
+            button:SetDurationText(button.keTimer, {
+                textFormatter = GetDurationFormatter(settings,
+                    group.capabilities and group.capabilities.durationRoundUp),
+                textColor     = nil,
+            })
+        else
+            button:ClearDurationText()
+            button.keTimer:SetText("")
+            button.keTimer:Hide()
+        end
+    end
+
+    if button.keCount then
+        button:SetApplicationCount(button.keCount)
+    end
+
+    -- List-shaped: clear before add, or a reconfiguration stacks a second
+    -- dispel texture on top of the first.
+    if button.keDispel then
+        button:ClearDispelTypeTextures()
+
+        -- Badge: Blizzard's built-in dispel atlases already carry their own
+        -- colors, so no curve here -- the curve goes to the ring instead.
+        if button.keDispel.texture then
+            button:AddDispelTypeTexture(button.keDispel.texture, {
+                style = Enum.CustomAuraButtonDispelTypeTextureStyle.Icon,
+            })
+            button:SetDispelTypeText(button.keDispel.text, {})
+        end
+
+        -- The ring is only a registered dispel texture in "dispel" mode, so
+        -- Blizzard repaints it per aura. Any other mode paints it directly
+        -- in StyleAuraFrame instead, so registering it here would fight
+        -- that paint on every UpdateAuraDisplay.
+        local ring = button.keDispel.ring
+        if ring and settings.BorderColorMode == "dispel" then
+            local ringOptions = {
+                style = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset,
+                -- The old ring never hid itself for an aura with no dispel
+                -- type; this option is the only thing that reproduces that.
+                showWithoutDispelType = true,
+            }
+            if group.getDispelColorCurve then
+                ringOptions.customDispelColorCurve = group.getDispelColorCurve(settings)
+            end
+            button:AddDispelTypeTexture(ring.top, ringOptions)
+            button:AddDispelTypeTexture(ring.bottom, ringOptions)
+            button:AddDispelTypeTexture(ring.left, ringOptions)
+            button:AddDispelTypeTexture(ring.right, ringOptions)
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Dressing -- everything a setting can change. Re-runnable on an existing
+-- button; shared by the live and preview paths.
+---------------------------------------------------------------------------------
+
+-- The ring's flat color outside "dispel" mode, for StyleAuraFrame and the
+-- preview's stand-in repaint alike. A display with one ring color per group
+-- names its key in the capabilities, as the border does.
+function Style.FlatRingColor(settings, caps)
+    local key = caps and caps.ringColorKey
+    return KE:ResolveColor(key and settings[key] or settings.BorderColor, DEFAULT_RING)
+end
+
+function Style.StyleAuraFrame(frame, settings, capabilities)
+    local caps = capabilities or {}
+
+    -- Nothing else sizes an aura button. Blizzard's flow layout only anchors
+    -- its elements, and the group layout's elementWidth feeds spacing
+    -- arithmetic rather than the frame, so without this every SetAllPoints
+    -- region collapses.
+    local iconSize = settings.IconSize
+    if iconSize then
+        frame:SetSize(iconSize, iconSize)
+    end
+
+    if frame.keIcon then
+        KE:ApplyIconZoom(frame.keIcon)
+    end
+
+    if frame.keCooldown then
+        frame.keCooldown:SetReverse(settings.Reverse)
+    end
+
+    if frame.keCount then
+        KE:ApplyFontToText(frame.keCount, settings.FontFace, settings.FontSize, settings.FontOutline)
+        local sc = settings.StackColor
+        if sc then
+            frame.keCount:SetTextColor(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 1)
+        end
+        frame.keCount:ClearAllPoints()
+        local sp = settings.StackPosition
+        if sp then
+            frame.keCount:SetPoint(sp.AnchorFrom, frame, sp.AnchorTo, sp.XOffset, sp.YOffset)
+        else
+            frame.keCount:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+        end
+    end
+
+    if frame.keTimer then
+        if caps.hasTimerFont then
+            KE:ApplyFontToText(frame.keTimer, settings.TimerFontFace, settings.TimerFontSize, settings.TimerFontOutline)
+            frame.keTimer:SetTextColor(KE:ResolveColor(settings.TimerTextColor, WHITE))
+        else
+            KE:ApplyFontToText(frame.keTimer, settings.FontFace, settings.TimerFontSize, settings.FontOutline)
+        end
+        -- Preview frames never pass through RegisterRegions, where live
+        -- buttons take this switch, and the preview writes the text anyway.
+        frame.keTimer:SetShown(settings.ShowTimer ~= false)
+        if frame.keTimer.SetShadowOffset then frame.keTimer:SetShadowOffset(0, 0) end
+        frame.keTimer:ClearAllPoints()
+        local tp = settings.TimerPosition
+        if tp then
+            frame.keTimer:SetPoint(tp.AnchorFrom, frame, tp.AnchorTo, tp.XOffset, tp.YOffset)
+        else
+            -- A display with no configurable timer position keeps it centered,
+            -- which is where the cooldown widget's own countdown draws. Without
+            -- a fallback the ClearAllPoints above leaves the text unanchored.
+            frame.keTimer:SetPoint("CENTER", frame, "CENTER", 0, 0)
+        end
+    end
+
+    if caps.hasLabel and frame.keCaption then
+        local caption = frame.keCaption
+        KE:ApplyFontToText(caption, settings.FontFace, settings.FontSize, settings.FontOutline)
+        caption:SetTextColor(KE:ResolveColor(settings.TextColor, WHITE))
+        caption:SetText(settings.TextLabel or "FREE")
+        caption:ClearAllPoints()
+        caption:SetPoint("TOP", frame, "BOTTOM", 0, -2)
+        caption:SetShown(settings.ShowText ~= false)
+    end
+
+    if caps.hasBorder and frame.keBorder then
+        local px   = KE:GetPixelSize()
+        local size = settings.IconSize or 0
+        local host = frame.keBorder
+        local r, g, b, a = KE:ResolveColor(
+            caps.borderColorKey and settings[caps.borderColorKey] or nil, BLACK)
+
+        host.top:SetColorTexture(r, g, b, a)
+        host.bottom:SetColorTexture(r, g, b, a)
+        host.left:SetColorTexture(r, g, b, a)
+        host.right:SetColorTexture(r, g, b, a)
+
+        host.top:SetSize(size, px)
+        host.bottom:SetSize(size, px)
+        host.left:SetSize(px, size)
+        host.right:SetSize(px, size)
+
+        host.top:ClearAllPoints();    host.top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+        host.bottom:ClearAllPoints(); host.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
+        host.left:ClearAllPoints();   host.left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+        host.right:ClearAllPoints();  host.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    end
+
+    if frame.keDispel and frame.keDispel.texture then
+        local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
+        local tex  = frame.keDispel.texture
+        tex:SetSize(size, size)
+        tex:ClearAllPoints()
+        local dp = settings.DispelPosition
+        if dp then
+            tex:SetPoint(dp.AnchorFrom, frame, dp.AnchorTo, dp.XOffset, dp.YOffset)
+        else
+            tex:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+        end
+
+        local text = frame.keDispel.text
+        KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
+        text:ClearAllPoints()
+        text:SetPoint("CENTER", tex, "CENTER", 0, 0)
+    end
+
+    local dispelRing = frame.keDispel and frame.keDispel.ring
+    if dispelRing then
+        local ring = dispelRing
+        local px      = KE:GetPixelSize()
+        local innerPx = 2 * px
+
+        ring.top:ClearAllPoints()
+        ring.top:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+        ring.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+        ring.top:SetHeight(innerPx)
+
+        ring.bottom:ClearAllPoints()
+        ring.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
+        ring.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+        ring.bottom:SetHeight(innerPx)
+
+        ring.left:ClearAllPoints()
+        ring.left:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+        ring.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
+        ring.left:SetWidth(innerPx)
+
+        ring.right:ClearAllPoints()
+        ring.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+        ring.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+        ring.right:SetWidth(innerPx)
+
+        -- Color: "dispel" mode is Blizzard's to paint, via the vertex
+        -- tint RegisterRegions wires up -- kept white here so that tint
+        -- is never multiplied against a color of ours. Any other mode
+        -- paints the flat setting directly, the same final fallback the
+        -- module this engine replaces used.
+        local r, g, b, a
+        if settings.BorderColorMode == "dispel" then
+            r, g, b, a = 1, 1, 1, 1
+        else
+            r, g, b, a = Style.FlatRingColor(settings, caps)
+        end
+        ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
+        ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)
+        ring.left:SetColorTexture(r, g, b, a);   ring.left:SetSnapToPixelGrid(false)
+        ring.right:SetColorTexture(r, g, b, a);  ring.right:SetSnapToPixelGrid(false)
+    end
+end

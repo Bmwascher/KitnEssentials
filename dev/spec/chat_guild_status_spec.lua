@@ -1,4 +1,4 @@
--- Tier 2: Modules/Skinning/Chat.lua, CHAT:ApplyGuildMemberStatus. The filter's
+-- Tier 2: Modules/Skinning/Chat/Chat.lua, CHAT:ApplyGuildMemberStatus. The filter's
 -- rewrite of a system line is in-game only.
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
@@ -12,7 +12,7 @@ describe("CHAT:ApplyGuildMemberStatus", function()
     it("marks the filter active only once it registers, so a failed apply is retried once", function()
         mock.install({})
         local modules = helpers.installAddonShim()
-        helpers.loadModule("Modules/Skinning/Chat.lua", {})
+        helpers.loadModule("Modules/Skinning/Chat/Chat.lua", {})
         local CHAT = modules["Chat"]
         CHAT.db = { GuildMemberStatus = true }
         CHAT.SecureHook = function() end

@@ -324,17 +324,17 @@ local function loadTaintReport(options)
 
     local function loadProduction(reducedCounter)
         if not reducedCounter then
-            helpers.loadModule("Modules/Diagnostics/TaintReport.lua", KE)
+            helpers.loadModule("Modules/Core/Diagnostics/TaintReport.lua", KE)
             return
         end
 
-        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
+        local handle = assert(io.open("Modules/Core/Diagnostics/TaintReport.lua", "rb"))
         local source = handle:read("*a")
         handle:close()
         local replacements
         source, replacements = source:gsub("MAX_COUNTER%s*=%s*2147483647", "MAX_COUNTER = 7")
         assert.equals(1, replacements)
-        local chunk = assert(loadstring(source, "@Modules/Diagnostics/TaintReport.lua"))
+        local chunk = assert(loadstring(source, "@Modules/Core/Diagnostics/TaintReport.lua"))
         chunk("KitnEssentials", KE)
     end
 
@@ -599,7 +599,7 @@ describe("TaintReport parsing, dedupe, and capture bounds", function()
     it("selects the first non-diagnostic KE frame in every supported path form", function()
         for index, expected in ipairs(pathCases) do
             local state = loadTaintReport({
-                stack = "Interface/AddOns/KitnEssentials/Modules/Diagnostics/TaintReport.lua:900\n"
+                stack = "Interface/AddOns/KitnEssentials/Modules/Core/Diagnostics/TaintReport.lua:900\n"
                     .. expected,
             })
             state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "path" .. index)
@@ -638,7 +638,7 @@ describe("TaintReport parsing, dedupe, and capture bounds", function()
 
     it("reports source frame unavailable when only diagnostic KE frames remain", function()
         local state = loadTaintReport({
-            stack = "Interface/AddOns/KitnEssentials/Modules/Diagnostics/TaintReport.lua:10\n"
+            stack = "Interface/AddOns/KitnEssentials/Modules/Core/Diagnostics/TaintReport.lua:10\n"
                 .. "Interface/AddOns/OtherAddon/Main.lua:20",
         })
         state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "selfOnly")

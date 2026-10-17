@@ -1,5 +1,5 @@
 -- Tier 1/2: the one-shot retired-font-face clear in DM:UpdateDB
--- (Modules/DamageMeter/Core.lua). This module seeds its own defaults straight
+-- (Modules/Skinning/DamageMeter/Core.lua). This module seeds its own defaults straight
 -- into the profile instead of registering them with AceDB, so the retired
 -- "Expressway" seed is physically stored in every existing SavedVariables file
 -- and would otherwise pin those profiles to it forever, defeating the

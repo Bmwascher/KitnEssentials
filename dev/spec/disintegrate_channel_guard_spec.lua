@@ -1,4 +1,4 @@
--- Modules/ClassUtilities/DisintegrateTicks.lua: the channel-start guard. A
+-- Modules/Combat/ClassTools/DisintegrateTicks.lua: the channel-start guard. A
 -- start whose channel info is missing or secret returns before any tick state
 -- is touched. The secret row declares plain times secret, which the unguarded
 -- code would use.

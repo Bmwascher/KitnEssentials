@@ -1,7 +1,7 @@
 -- Tier 1: pure gate/sort helpers on the TargetedSpells module table.
 local L = require("dev.spec._ke_loader")
 
-describe("TargetedSpells helpers (Modules/Dungeons/TargetedSpells.lua)", function()
+describe("TargetedSpells helpers (Modules/DungeonTools/DungeonAlerts/TargetedSpells.lua)", function()
     local TS
     setup(function()
         TS = L.loadTargetedSpells()

@@ -3,7 +3,7 @@
 -- ║  Formatter-contract spec for DamageMeter/Core.lua.       ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
+-- Loads the REAL Modules/Skinning/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests the render layer's (string, isSecret) contract: FormatBarValue /
 -- FormatDeathTime / FormatRecapDelta (cross-chunk exports at Core.lua).
 -- Unlike dm_breakdown_spec's mirror of Detail.lua, these are the shipped

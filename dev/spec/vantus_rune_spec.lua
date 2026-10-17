@@ -6,7 +6,7 @@ local function loadModule(after)
     local KE = {
         db = { profile = { VantusRune = {} } },
     }
-    helpers.loadModule("Modules/QoL/VantusRune.lua", KE)
+    helpers.loadModule("Modules/QoL/Automation/VantusRune.lua", KE)
     return modules.VantusRune, KE
 end
 

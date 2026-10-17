@@ -2,7 +2,7 @@
 -- Selection and format predicates of MythicPlusTimer_Pull.lua: public
 -- eligibility, per-unit admission and the pull label's format choice.
 --
--- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Pull.lua
+-- Loads the REAL Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Pull.lua
 -- headlessly. The unit predicates it captures at load are stubbed per case;
 -- issecretvalue classifies one sentinel value as secret. Honesty boundary:
 -- the mock verifies which branch a secret classification takes, never real
@@ -40,7 +40,7 @@ describe("MPT pull: selection predicates", function()
         _G.C_ScenarioInfo = { GetUnitCriteriaProgressValues = function() return nil end }
         _G.C_StringUtil = { RoundToNearestString = function(v) return tostring(v) end }
         _G.CreateAbbreviateConfig = function() return {} end
-        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Pull.lua",
+        helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Pull.lua",
             { Print = function() end })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.PullEligible, "real MythicPlusTimer_Pull.lua did not load")

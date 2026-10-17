@@ -3,7 +3,7 @@
 -- ║  Spell history cast classifier and ring arithmetic.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/SpellHistory.lua headlessly
+-- Loads the REAL Modules/Skinning/DamageMeter/SpellHistory.lua headlessly
 -- (L.loadDMSpellHistory) and drives its pure functions: DM.SpellHistoryClassify,
 -- which decides whether a cast shows, as what and in which state, and the two
 -- ring helpers the strip positions its icons with.

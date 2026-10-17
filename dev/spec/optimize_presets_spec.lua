@@ -1,4 +1,4 @@
--- Modules/QoL/Optimize.lua -- the preset layer. The cvar TABLES are data and
+-- Modules/Core/Optimize.lua -- the preset layer. The cvar TABLES are data and
 -- get no assertions here (the tiered test policy skips data tables); what is
 -- tested is the branching over them: which value a preset resolves to, and
 -- whether a stored preset still describes the live cvars.

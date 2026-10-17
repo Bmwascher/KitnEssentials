@@ -24,7 +24,7 @@ local function loadSkin()
     }
     _G.CreateColor = function(r, g, b, a) return { r = r, g = g, b = b, a = a } end
 
-    helpers.loadModule("Modules/Skinning/Frames/Character.lua", { Skins = S, Print = function() end })
+    helpers.loadModule("Modules/Skinning/DarkTheme/Frames/Character.lua", { Skins = S, Print = function() end })
     return S
 end
 

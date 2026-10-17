@@ -1,4 +1,4 @@
--- Modules/Skinning/RoleIconSamples.lua — KE.BuildRoleIconSample. The dropdown
+-- Modules/Skinning/DarkTheme/RoleIconSamples.lua — KE.BuildRoleIconSample. The dropdown
 -- entries have no text: each label IS three inline icons, so a wrong escape
 -- letter or a missing separator renders as literal junk in the menu rather
 -- than failing loudly. That is what these cases are for.

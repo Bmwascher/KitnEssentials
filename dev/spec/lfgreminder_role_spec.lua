@@ -1,4 +1,4 @@
--- Modules/Dungeons/LFGReminder.lua -- which role the popup draws. The
+-- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua -- which role the popup draws. The
 -- application role is the one the player was accepted as; the assigned role is
 -- the fallback, and the only source on the leader path. An edit that swaps the
 -- order or accepts "NONE" draws the wrong role with no error. The mock declares

@@ -5,13 +5,13 @@
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
-describe("GreatVaultAlert resting gate (Modules/QoL/GreatVaultAlert.lua)", function()
+describe("GreatVaultAlert resting gate (Modules/QoL/QualityOfLife/GreatVaultAlert.lua)", function()
     local GVA
 
     before_each(function()
         mock.install()
         local modules = helpers.installAddonShim()
-        helpers.loadModule("Modules/QoL/GreatVaultAlert.lua", { Print = function() end })
+        helpers.loadModule("Modules/QoL/QualityOfLife/GreatVaultAlert.lua", { Print = function() end })
         GVA = modules["GreatVaultAlert"]
     end)
 
@@ -28,7 +28,7 @@ describe("GreatVaultAlert resting gate (Modules/QoL/GreatVaultAlert.lua)", funct
     end)
 end)
 
-describe("GreatVaultAlert vault-cast guard (Modules/QoL/GreatVaultAlert.lua)", function()
+describe("GreatVaultAlert vault-cast guard (Modules/QoL/QualityOfLife/GreatVaultAlert.lua)", function()
     local GVA
     local secretValue
 
@@ -36,7 +36,7 @@ describe("GreatVaultAlert vault-cast guard (Modules/QoL/GreatVaultAlert.lua)", f
         secretValue = nil
         mock.install({ issecretvalue = function(v) return secretValue ~= nil and v == secretValue end })
         local modules = helpers.installAddonShim()
-        helpers.loadModule("Modules/QoL/GreatVaultAlert.lua", { Print = function() end })
+        helpers.loadModule("Modules/QoL/QualityOfLife/GreatVaultAlert.lua", { Print = function() end })
         GVA = modules["GreatVaultAlert"]
     end)
 

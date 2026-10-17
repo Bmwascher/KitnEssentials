@@ -3,7 +3,7 @@
 -- just enabled, so a profile switch that turns the module on otherwise keeps
 -- the previous profile's HUD look.
 --
--- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua headlessly.
+-- Loads the REAL Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua headlessly.
 -- Collaborators from sibling files and Ace mixins are stubbed AFTER load: the
 -- spec asserts the enable sequence, never those seams' behavior.
 local helpers = require("dev.spec._helpers")
@@ -26,7 +26,7 @@ describe("MPT OnEnable settings pass", function()
         }
         _G.GetInstanceInfo = function() return "Stormwind", "none", 0 end
 
-        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+        helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua",
             { Print = function() end, WarnRedundantAddon = function() end,
               db = { global = {}, profile = {} } })
         MPT = modules["MythicPlusTimer"]

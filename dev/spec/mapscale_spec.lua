@@ -87,7 +87,7 @@ local function newFixture(opts)
 
     local modules = helpers.installAddonShim()
     local KE = { db = { profile = { MapScale = opts.db or { Enabled = true, Scale = 1.4, MaximizedScale = 1 } } } }
-    helpers.loadModule("Modules/QoL/MapScale.lua", KE)
+    helpers.loadModule("Modules/Core/CVars/MapScale.lua", KE)
     local MS = modules["MapScale"]
 
     -- AceEvent is not mixed in by the bare shim. These cover the module's own

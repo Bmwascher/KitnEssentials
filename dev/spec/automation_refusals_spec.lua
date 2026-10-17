@@ -237,7 +237,7 @@ local function newFixture()
     }
     -- The module indexes C_SpecializationInfo at file scope.
     mock.installSpecInfo()
-    helpers.loadModule("Modules/QoL/Automation.lua", KE)
+    helpers.loadModule("Modules/QoL/Automation/Automation.lua", KE)
     local AU = modules["Automation"]
 
     -- Neither AceEvent nor AceHook is mixed in by the bare shim; stub only

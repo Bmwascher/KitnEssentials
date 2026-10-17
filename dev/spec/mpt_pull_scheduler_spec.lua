@@ -100,7 +100,7 @@ describe("MPT pull: scheduler and lifecycle", function()
         _G.AbbreviateNumbers = function(v) return "p" .. tostring(v) end
         _G.CreateAbbreviateConfig = function() return {} end
 
-        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Pull.lua",
+        helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Pull.lua",
             { Print = function() end })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.SyncPullEstimate, "real MythicPlusTimer_Pull.lua did not load")

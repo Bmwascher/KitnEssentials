@@ -36,10 +36,10 @@ local HOOKS_ALLOWED = {
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnShow"] = 1,
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnHide"] = 1,
     -- The main window's close hook, installed once per session.
-    ["KitnEssentials_Options/GUIQoL/GUI-Optimize.lua|frame|OnHide"] = 1,
+    ["KitnEssentials_Options/Core/GUI-Optimize.lua|frame|OnHide"] = 1,
     -- Installed once by the keybind button's constructor, on the button it
     -- has just made.
-    ["KitnEssentials_Options/GUIUtilities/GUI-WorldMarkerCycler.lua|btn|OnClick"] = 1,
+    ["KitnEssentials_Options/QoL/GroupTools/GUI-WorldMarkerCycler.lua|btn|OnClick"] = 1,
 }
 
 -- "file|receiver" for a SetScript whose receiver is not taken from
@@ -48,7 +48,7 @@ local HOOKS_ALLOWED = {
 local SETSCRIPT_ALLOWED = {
     -- SetupHover(btn): both callers pass buttons the page made with
     -- CreateFrame (applyBtn, revertBtnSmall).
-    ["KitnEssentials_Options/GUIQoL/GUI-Optimize.lua|btn"] = true,
+    ["KitnEssentials_Options/Core/GUI-Optimize.lua|btn"] = true,
     -- The dropdown's own list buttons: it makes them, keeps them on its own
     -- reuse list and never hands one to a page.
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|btn"] = true,

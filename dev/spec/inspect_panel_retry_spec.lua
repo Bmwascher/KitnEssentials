@@ -20,7 +20,7 @@ local function probe() return setmetatable({}, SECRET_MT) end
 local function loadIP()
     local modules = helpers.installAddonShim()
     _G.issecretvalue = function(v) return secrets[v] == true end
-    helpers.loadModule("Modules/QoL/InspectPanel.lua", {})
+    helpers.loadModule("Modules/Skinning/CharacterPanel/InspectPanel.lua", {})
     return modules["InspectPanel"]
 end
 

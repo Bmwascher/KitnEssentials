@@ -70,7 +70,7 @@ local function trackablePointFrame()
 end
 
 -- Fake KE.CombatState (Core/CombatState.lua's public surface only) for
--- Modules/DamageMeter/Core.lua and Window.lua, which read it as a dependency
+-- Modules/Skinning/DamageMeter/Core.lua and Window.lua, which read it as a dependency
 -- rather than build it. A plain mutable table, not the real machine: a spec
 -- drives DM's own glue code (BindCombatState, OnCombatForceStop, the reset
 -- sites, UpdateCombatClock) by setting these fields directly and invoking a
@@ -97,7 +97,7 @@ local function installMock(overrides, defaults)
     return mock.install(merged)
 end
 
--- Modules/DungeonTimers/DungeonTimers.lua. DT is a file-local never assigned
+-- Modules/DungeonTools/DungeonTimers/DungeonTimers.lua. DT is a file-local never assigned
 -- onto KE — the shim registry is the only handle to it. Returns DT, KE.
 -- opts.withEncounterData loads the real EncounterData.lua into the same KE
 -- first (its guard needs the truthy KitnEssentials global the shim sets).
@@ -112,9 +112,9 @@ function L.loadDungeonTimers(opts, overrides)
         GetGlobalFont = function() return "Expressway" end,
     }
     if opts.withEncounterData then
-        helpers.loadModule("Modules/DungeonTimers/EncounterData.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/EncounterData.lua", KE)
     end
-    helpers.loadModule("Modules/DungeonTimers/DungeonTimers.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/DungeonTimers.lua", KE)
     return modules["DungeonTimers"], KE
 end
 
@@ -199,7 +199,7 @@ function L.loadAddonTheme(env)
     return helpers.loadModule("Core/AddonTheme.lua", KE)
 end
 
--- Modules/DamageMeter/Core.lua (KE.DamageMeter is set at file scope).
+-- Modules/Skinning/DamageMeter/Core.lua (KE.DamageMeter is set at file scope).
 -- Secret handling is DECLARED, never real: a table with __secret == true
 -- counts as secret, so specs exercise guard branches only — real 12.0 taint
 -- semantics stay in-game-only (see the _wow_mock header). Returns DM, KE.
@@ -241,20 +241,20 @@ function L.loadDMCore(overrides)
     _G.GetNumGroupMembers = ov.GetNumGroupMembers or function() return 0 end
     _G.UnitClass = ov.UnitClass or function() return "Warrior", "WARRIOR", 1 end
     local KE = { Print = function() end, CombatState = newFakeCombatState() }
-    helpers.loadModule("Modules/DamageMeter/Core.lua", KE)
+    helpers.loadModule("Modules/Skinning/DamageMeter/Core.lua", KE)
     return KE.DamageMeter, KE
 end
 
--- Modules/DamageMeter/History.lua on top of a loaded DM Core. Same honesty
+-- Modules/Skinning/DamageMeter/History.lua on top of a loaded DM Core. Same honesty
 -- boundary as loadDMCore (declared secrets, mocked C_*). Returns DM, KE.
 function L.loadDMHistory(overrides)
     local DM, KE = L.loadDMCore(overrides)
     _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
-    helpers.loadModule("Modules/DamageMeter/History.lua", KE)
+    helpers.loadModule("Modules/Skinning/DamageMeter/History.lua", KE)
     return DM, KE
 end
 
--- Modules/DamageMeter/Dock.lua on top of a loaded DM Core. Dock.lua reads
+-- Modules/Skinning/DamageMeter/Dock.lua on top of a loaded DM Core. Dock.lua reads
 -- KE:PixelSnap at file scope and captures five platform globals as upvalues, so
 -- each must exist BEFORE the load; loadDMCore already supplies three of the
 -- five, and the two here are the remainder. Same honesty boundary as
@@ -269,11 +269,11 @@ function L.loadDMDock(overrides)
     KE.PixelSnap = KE.PixelSnap or function(_, v) return v end
     _G.GetCursorPosition = _G.GetCursorPosition or function() return 0, 0 end
     _G.IsInInstance = _G.IsInInstance or function() return false, "none" end
-    helpers.loadModule("Modules/DamageMeter/Dock.lua", KE)
+    helpers.loadModule("Modules/Skinning/DamageMeter/Dock.lua", KE)
     return DM, KE
 end
 
--- Modules/DamageMeter/Window.lua on top of a loaded DM Core, exposing
+-- Modules/Skinning/DamageMeter/Window.lua on top of a loaded DM Core, exposing
 -- DM:UpdateCombatClock and DM:RepaintCombatClock. ApplyClockTint is file-local
 -- and cannot be exposed; no case needs it directly -- UpdateCombatClock's
 -- branch selection is observable through the clock fake's recorded text.
@@ -283,17 +283,17 @@ end
 -- Same honesty boundary as loadDMCore. Returns DM, KE.
 function L.loadDMClock(overrides)
     local DM, KE = L.loadDMCore(overrides)
-    helpers.loadModule("Modules/DamageMeter/Window.lua", KE)
+    helpers.loadModule("Modules/Skinning/DamageMeter/Window.lua", KE)
     return DM, KE
 end
 
--- Modules/DamageMeter/SpellHistory.lua on top of a loaded DM Core. Specs reach
+-- Modules/Skinning/DamageMeter/SpellHistory.lua on top of a loaded DM Core. Specs reach
 -- only the pure classifier and ring helpers, and every game lookup those use
 -- is injected, so no spell, item or container stub is needed. The file's
 -- runtime reads the game only when called. Returns DM, KE.
 function L.loadDMSpellHistory(overrides)
     local DM, KE = L.loadDMCore(overrides)
-    helpers.loadModule("Modules/DamageMeter/SpellHistory.lua", KE)
+    helpers.loadModule("Modules/Skinning/DamageMeter/SpellHistory.lua", KE)
     return DM, KE
 end
 
@@ -324,24 +324,24 @@ function L.loadNicknames(overrides)
     return helpers.loadModule("Core/Nicknames.lua", {})
 end
 
--- Modules/Dungeons/TargetedSpells.lua pure helpers. Returns TS, KE.
+-- Modules/DungeonTools/DungeonAlerts/TargetedSpells.lua pure helpers. Returns TS, KE.
 function L.loadTargetedSpells(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
     local KE = { Print = function() end, curves = {} }
-    helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonAlerts/TargetedSpells.lua", KE)
     return modules["TargetedSpells"], KE
 end
 
--- Modules/Dungeons/EnemyCounter.lua pure live-token helpers. Returns EC, KE.
+-- Modules/DungeonTools/DungeonAlerts/EnemyCounter.lua pure live-token helpers. Returns EC, KE.
 function L.loadEnemyCounter(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     local KE = { Print = function() end }
-    helpers.loadModule("Modules/Dungeons/EnemyCounter.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonAlerts/EnemyCounter.lua", KE)
     return modules["EnemyCounter"], KE
 end
 
@@ -466,7 +466,7 @@ function L.loadConflicts(overrides)
     return helpers.loadModule("Core/Conflicts.lua", KE), prompts, disabled, printed
 end
 
--- Modules/Skinning/ChatMessageHandler.lua. GetPFlag is pure string logic --
+-- Modules/Skinning/Chat/ChatMessageHandler.lua. GetPFlag is pure string logic --
 -- no WoW API -- so it unit-tests directly against the real KE table the
 -- module writes onto (KE.ChatMessageHandler).
 function L.loadChatMessageHandler(overrides)
@@ -511,7 +511,7 @@ function L.loadChatMessageHandler(overrides)
     -- by the handler. Without this line every new case dies on
     -- "attempt to call method 'NotSecretValue' (a nil value)".
     helpers.loadModule("Core/Secret.lua", KE)
-    return helpers.loadModule("Modules/Skinning/ChatMessageHandler.lua", KE)
+    return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
 -- Modules/Skinning/SkinAPI.lua. Creates frames at file scope (the hidden
@@ -546,7 +546,7 @@ function L.loadSkinAPI(overrides)
     return helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
 end
 
--- Modules/Skinning/Tooltips.lua. TT is a file-local never assigned onto KE --
+-- Modules/Skinning/Tooltips/Tooltips.lua. TT is a file-local never assigned onto KE --
 -- the shim registry is the only handle to it. Returns TT, KE.
 -- `opts` carries globals _wow_mock does not manage; `overrides` is for
 -- mock-managed keys only.
@@ -591,11 +591,11 @@ function L.loadTooltips(opts, overrides)
         db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
-    helpers.loadModule("Modules/Skinning/Tooltips.lua", KE)
+    helpers.loadModule("Modules/Skinning/Tooltips/Tooltips.lua", KE)
     return modules["SkinTooltips"], KE
 end
 
--- Modules/Skinning/EUIWindows.lua. Pure decision layer, so the load needs
+-- Modules/Skinning/DarkTheme/EUIWindows.lua. Pure decision layer, so the load needs
 -- no frames and no DB -- only a KE table to hang the two functions on and a
 -- KE.Skins table for the cache. C_AddOns is left absent on purpose: the
 -- live path must be a no-op when it cannot read an addon version, and a
@@ -603,72 +603,72 @@ end
 function L.loadEUIWindows(overrides)
     installMock(overrides, {})
     local KE = { Skins = {} }
-    return helpers.loadModule("Modules/Skinning/EUIWindows.lua", KE), KE
+    return helpers.loadModule("Modules/Skinning/DarkTheme/EUIWindows.lua", KE), KE
 end
 
--- Modules/Combat/AuraEngine/Rules.lua. Pure decision logic -- no WoW API, no
+-- Modules/AuraTracking/AuraEngine/Rules.lua. Pure decision logic -- no WoW API, no
 -- frames -- so the load needs only a KE table to hang KE.AuraRules on.
 -- Returns KE.AuraRules, KE.
 function L.loadAuraRules(overrides)
     installMock(overrides, {})
     local KE = {}
-    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
     return KE.AuraRules, KE
 end
 
--- Modules/Combat/AuraEngine/GlowRules.lua. Pure decision logic -- no WoW API,
+-- Modules/AuraTracking/AuraEngine/GlowRules.lua. Pure decision logic -- no WoW API,
 -- no frames -- so the load needs only a KE table to hang KE.AuraGlowRules on.
 -- Returns KE.AuraGlowRules, KE.
 function L.loadAuraGlowRules(overrides)
     installMock(overrides, {})
     local KE = {}
-    helpers.loadModule("Modules/Combat/AuraEngine/GlowRules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/GlowRules.lua", KE)
     return KE.AuraGlowRules, KE
 end
 
--- Modules/Combat/PartyBuffsRules.lua. Pure decision logic that builds on
+-- Modules/AuraTracking/PartyBuffs/PartyBuffsRules.lua. Pure decision logic that builds on
 -- KE.AuraRules, so Rules.lua loads first onto the same KE table. Returns
 -- KE.PartyBuffsRules, KE.
 function L.loadPartyBuffsRules(overrides)
     installMock(overrides, {})
     local KE = {}
-    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
-    helpers.loadModule("Modules/Combat/PartyBuffsRules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyBuffsRules.lua", KE)
     return KE.PartyBuffsRules, KE
 end
 
--- Modules/Combat/AuraEngine/Restriction.lua. The predicate is INJECTED
+-- Modules/AuraTracking/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns
 -- KE.AuraRestriction, KE.
 function L.loadAuraRestriction(overrides)
     installMock(overrides, {})
     local KE = {}
-    helpers.loadModule("Modules/Combat/AuraEngine/Restriction.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Restriction.lua", KE)
     return KE.AuraRestriction, KE
 end
 
--- Modules/Combat/AuraEngine/Sound.lua. The api/resolveMedia/isHidden trio is
+-- Modules/AuraTracking/AuraEngine/Sound.lua. The api/resolveMedia/isHidden trio is
 -- INJECTED, so the load needs only the default mock's Enum stub -- no
 -- C_UnitAuras or LibSharedMedia. Returns KE.AuraSound, KE.
 function L.loadAuraSound()
     mock.install()
-    local KE = helpers.loadModule("Modules/Combat/AuraEngine/Sound.lua")
+    local KE = helpers.loadModule("Modules/AuraTracking/AuraEngine/Sound.lua")
     return KE.AuraSound, KE
 end
 
--- Modules/Combat/AuraEngine/Preview.lua. Only PlanEnter/PlanExit are
+-- Modules/AuraTracking/AuraEngine/Preview.lua. Only PlanEnter/PlanExit are
 -- reachable from a spec -- both are pure and sit in a section of the file
 -- with no upvalue dependency on Style/Container/Rules/Glow, so the load
 -- needs only the default mock's Enum stub, same as loadAuraSound. Returns
 -- KE.AuraPreview, KE.
 function L.loadAuraPreview()
     mock.install()
-    local KE = helpers.loadModule("Modules/Combat/AuraEngine/Preview.lua")
+    local KE = helpers.loadModule("Modules/AuraTracking/AuraEngine/Preview.lua")
     return KE.AuraPreview, KE
 end
 
--- Modules/Combat/AuraEngine/Rules.lua, Restriction.lua and Engine.lua on ONE
+-- Modules/AuraTracking/AuraEngine/Rules.lua, Restriction.lua and Engine.lua on ONE
 -- KE, in that order: Engine.lua captures KE.AuraRules as a file-scope local at
 -- load, so loading Rules any later leaves that capture nil.
 --
@@ -714,9 +714,9 @@ function L.loadAuraEngine()
     container.Reconfigure = function() container.reconfigures = container.reconfigures + 1 end
     KE.AuraContainer = container
 
-    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
-    helpers.loadModule("Modules/Combat/AuraEngine/Restriction.lua", KE)
-    helpers.loadModule("Modules/Combat/AuraEngine/Engine.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Restriction.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Engine.lua", KE)
 
     -- Register reads the vehicle state; a spec replaces this to put the
     -- player in a vehicle.
@@ -741,7 +741,7 @@ function L.loadAuraEngine()
     return KE.AuraEngine, KE, display
 end
 
--- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
+-- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/DarkTheme/EUIWindows.lua on the
 -- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
 -- separate KE, so no spec driven through either loader alone can push a real
 -- resolved suppression record through the real dispatcher and diagnostics --
@@ -749,11 +749,11 @@ end
 -- was invisible to busted. Returns the composed KE.
 function L.loadSkinAPI_EUIWindows(overrides)
     local KE = L.loadSkinAPI(overrides)
-    helpers.loadModule("Modules/Skinning/EUIWindows.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/EUIWindows.lua", KE)
     return KE
 end
 
--- Modules/Skinning/Frames/Alerts.lua. The Alerts/LootToast key split lives
+-- Modules/Skinning/DarkTheme/Frames/Alerts.lua. The Alerts/LootToast key split lives
 -- entirely in the two S:RegisterEarly call sites at file scope -- nothing
 -- else in the file needs to run to observe it, so KE.Skins carries only a
 -- recorder for that one method (every Dress*/Skin* function stays merely
@@ -766,7 +766,7 @@ function L.loadAlertsSkin(overrides)
     local KE = { Skins = {
         RegisterEarly = function(_, fn, key) calls[#calls + 1] = { fn = fn, key = key } end,
     } }
-    helpers.loadModule("Modules/Skinning/Frames/Alerts.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/Frames/Alerts.lua", KE)
     return calls
 end
 
@@ -782,7 +782,7 @@ local function findUpvalue(fn, name)
     end
 end
 
--- Modules/Skinning/Frames/Communities.lua. ChatPaneFontSize is a file-local
+-- Modules/Skinning/DarkTheme/Frames/Communities.lua. ChatPaneFontSize is a file-local
 -- with no stored handle, so it is reached the way UIWidgets' locals are: it is
 -- an upvalue of Skin, and S:Register hands Skin over. Recovering it off the
 -- upvalue slot means the whole skin never has to run. Returns the function
@@ -794,11 +794,11 @@ function L.loadCommunitiesSkin(overrides)
         palette = { brand = { 1, 0, 0.55, 1 } },
         Register = function(_, _, fn) captured = fn end,
     } }
-    helpers.loadModule("Modules/Skinning/Frames/Communities.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/Frames/Communities.lua", KE)
     return findUpvalue(captured, "ChatPaneFontSize"), KE
 end
 
--- Modules/Skinning/UIWidgets.lua. Its methods and the pure lookups are
+-- Modules/Skinning/DarkTheme/UIWidgets.lua. Its methods and the pure lookups are
 -- fields on the returned UIW table. Styling a font string installs hooks,
 -- so hooksecurefunc is a no-op here. The module's event registration is
 -- never run: the addon shim's module has no RegisterEvent.
@@ -816,11 +816,11 @@ function L.loadUIWidgets(overrides)
         GetEffectiveFont = function(_, db) return db and db.FontFace end,
         AddBorders = function() end,
     }
-    helpers.loadModule("Modules/Skinning/UIWidgets.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/UIWidgets.lua", KE)
     return modules["UIWidgets"], KE
 end
 
--- Modules/Skinning/LootRoll.lua. LR:UpdateDB/OnInitialize/OnEnable are never
+-- Modules/Skinning/DarkTheme/LootRoll.lua. LR:UpdateDB/OnInitialize/OnEnable are never
 -- run -- specs set LR.db themselves, the same way a real OnInitialize would
 -- have via KE.db.profile.Skinning.LootRoll. GroupLootContainer is a
 -- secure-managed Blizzard frame, headlessly replaced by calling the returned
@@ -849,7 +849,7 @@ function L.loadLootRoll(overrides)
         Skins = {},
         Print = function() end,
     }
-    helpers.loadModule("Modules/Skinning/LootRoll.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/LootRoll.lua", KE)
     local LR = modules["LootRoll"]
 
     local function container(mockContainer)
@@ -865,11 +865,11 @@ function L.loadLootRoll(overrides)
     return LR, container
 end
 
--- Modules/Skinning/LootRoll.lua followed by Modules/Skinning/LootRollBars.lua
+-- Modules/Skinning/DarkTheme/LootRoll.lua followed by Modules/Skinning/DarkTheme/LootRollBars.lua
 -- on the same KE/module instance -- LootRollBars.lua attaches its pool
 -- (RollBar_Get/Create, ShowPreview/HidePreview, SetupRollBars/TeardownRollBars)
 -- onto the LR table LootRoll.lua registered, exactly as they load in-game via
--- Skinning.xml. CreateFrame returns a rich stub whose Get*Texture methods
+-- Modules/Modules.xml. CreateFrame returns a rich stub whose Get*Texture methods
 -- return real (if inert) texture objects -- RollBar_Create's RollTexCoords
 -- pass calls `icon:SetTexCoord(...)` on whatever GetNormalTexture() et al.
 -- return, so a plain nil (the generic noopFrame's metatable fallback) would
@@ -944,8 +944,8 @@ function L.loadLootRollBars(overrides)
     -- debugprofilestop at load, and the suite must not break when that flag is
     -- flipped on for a live probe.
     _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
-    helpers.loadModule("Modules/Skinning/LootRoll.lua", KE)
-    helpers.loadModule("Modules/Skinning/LootRollBars.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/LootRoll.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/LootRollBars.lua", KE)
     local LR = modules["LootRoll"]
     LR:UpdateDB()
     local seams = {
@@ -954,7 +954,7 @@ function L.loadLootRollBars(overrides)
     return LR, iconCalls, seams
 end
 
--- Modules/Skinning/LootFrame.lua. LF:UpdateDB/OnInitialize/OnEnable are never
+-- Modules/Skinning/DarkTheme/LootFrame.lua. LF:UpdateDB/OnInitialize/OnEnable are never
 -- run -- specs set LF.db themselves, the same way a real OnInitialize would
 -- have via KE.db.profile.Skinning.Loot. All the file-scope `local X = X`
 -- captures (CloseLoot, LootSlot, GetNumLootItems, ...) tolerate a nil global
@@ -972,7 +972,7 @@ function L.loadLootFrame(overrides)
         ShouldNotLoadModule = function() return false end,
         Skins = {},
     }
-    helpers.loadModule("Modules/Skinning/LootFrame.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/LootFrame.lua", KE)
     local LF = modules["LootFrame"]
     LF:UpdateDB()
     return LF
@@ -1034,7 +1034,7 @@ local function roleIconArt(PATH, extra)
     return art
 end
 
--- Modules/Skinning/Frames/LFG.lua. Only the role-icon resolver and painters
+-- Modules/Skinning/DarkTheme/Frames/LFG.lua. Only the role-icon resolver and painters
 -- are under test; the S stub carries the minimum the file touches at load,
 -- which is Register (called at file scope) plus the data/PixelSnap pair the
 -- painters use.
@@ -1081,12 +1081,12 @@ function L.loadLFGSkin(overrides)
         return frameData[f]
     end
     helpers.loadModule("Core/Secret.lua", KE)
-    helpers.loadModule("Modules/Skinning/Frames/LFG.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/Frames/LFG.lua", KE)
     return KE, KE.Skins
 end
 
 -- The builder lives in its own file precisely so a spec can load it without
--- Modules/Skinning/Chat.lua, which is far too large to pull in for one pure
+-- Modules/Skinning/Chat/Chat.lua, which is far too large to pull in for one pure
 -- function.
 function L.loadChatRoleIconStrings()
     local helpersLocal = require("dev.spec._helpers")
@@ -1095,7 +1095,7 @@ function L.loadChatRoleIconStrings()
     KE.ROLE_ICONS = KE.ROLE_ICON_ART.modern
     -- loadModule returns the KE table, never the chunk's own return value,
     -- so the builder is taken off KE explicitly.
-    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/Chat/ChatRoleIcons.lua", KE)
     return KE.BuildChatRoleIconStrings
 end
 
@@ -1104,37 +1104,37 @@ end
 function L.loadChatRoleIconKeys()
     local helpersLocal = require("dev.spec._helpers")
     local KE = { PATH = "", ROLE_ICON_ART = {} }
-    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/Chat/ChatRoleIcons.lua", KE)
     return KE.ChatRoleIconKeys
 end
 
--- Modules/Skinning/ChatRecall.lua: two pure rules, loaded without Chat.lua.
+-- Modules/Skinning/Chat/ChatRecall.lua: two pure rules, loaded without Chat.lua.
 -- IsSecureCmd is Blizzard's registry lookup; the spec passes its own.
 function L.loadChatRecall(isSecureCmd)
     local helpersLocal = require("dev.spec._helpers")
     _G.IsSecureCmd = isSecureCmd
     local KE = {}
-    helpersLocal.loadModule("Modules/Skinning/ChatRecall.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/Chat/ChatRecall.lua", KE)
     return KE.ChatRecallStores, KE.ChatRecallRefused
 end
 
--- Modules/Skinning/ChatCopyText.lua: one pure function, loaded without the
+-- Modules/Skinning/Chat/ChatCopyText.lua: one pure function, loaded without the
 -- chat skin.
 function L.loadChatCopyText()
     local helpersLocal = require("dev.spec._helpers")
     local KE = {}
-    helpersLocal.loadModule("Modules/Skinning/ChatCopyText.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/Chat/ChatCopyText.lua", KE)
     return KE.SanitizeCopyLine
 end
 
--- Modules/Skinning/RoleIconSamples.lua. Same reason as the chat builder above:
+-- Modules/Skinning/DarkTheme/RoleIconSamples.lua. Same reason as the chat builder above:
 -- the file holds one pure function and needs no KE.Skins and no frames, so it
 -- loads against a bare KE carrying only the art table.
 function L.loadRoleIconSample()
     local helpersLocal = require("dev.spec._helpers")
     local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }
     KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
-    helpersLocal.loadModule("Modules/Skinning/RoleIconSamples.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/DarkTheme/RoleIconSamples.lua", KE)
     return KE.BuildRoleIconSample, KE.ROLE_ICON_ART
 end
 
@@ -1152,7 +1152,7 @@ function L.loadChatMemberAcceptor(overrides)
     local helpersLocal = require("dev.spec._helpers")
     local KE = { PATH = "", ROLE_ICONS = {}, ROLE_ICON_ART = {} }
     helpersLocal.loadModule("Core/Secret.lua", KE)
-    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/Chat/ChatRoleIcons.lua", KE)
     return KE.AcceptChatMember
 end
 
@@ -1307,7 +1307,7 @@ function L.loadCombatCross(overrides)
     return CC, KE
 end
 
--- Modules/Dungeons/DungeonCasts.lua. UnitAffectingCombat and UnitCanAttack are
+-- Modules/DungeonTools/KicksCasts/DungeonCasts.lua. UnitAffectingCombat and UnitCanAttack are
 -- UNMANAGED (dev/spec/_wow_mock.lua), so they are assigned to _G directly --
 -- handing them to installMock would drop them silently. Nothing creates a
 -- frame at load time. Defaults to OUT of combat and ABLE to attack; a test
@@ -1330,11 +1330,11 @@ function L.loadDungeonCasts(overrides)
     -- assigned before the load, as the cast readers above.
     _G.C_Spell = overrides.C_Spell or {}
     local KE = { Print = function() end, curves = {} }
-    helpers.loadModule("Modules/Dungeons/DungeonCasts.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KicksCasts/DungeonCasts.lua", KE)
     return modules["DungeonCasts"], KE
 end
 
--- Modules/QoL/SlashCommands.lua. The file guards on a truthy KitnEssentials at
+-- Modules/QoL/QualityOfLife/SlashCommands.lua. The file guards on a truthy KitnEssentials at
 -- load, which installAddonShim supplies, and it indexes C_CVar at file scope
 -- (SlashCommands.lua), so C_CVar must exist before load. Nothing registers
 -- a slash command until KE:ApplySlashCommands runs, which this loader
@@ -1369,11 +1369,11 @@ function L.loadSlashCommands(overrides)
     _G.NUM_CHAT_WINDOWS = overrides.NUM_CHAT_WINDOWS or 10
 
     local KE = { db = { profile = { SlashCommands = {} } }, Print = function() end }
-    helpers.loadModule("Modules/QoL/SlashCommands.lua", KE)
+    helpers.loadModule("Modules/QoL/QualityOfLife/SlashCommands.lua", KE)
     return KE
 end
 
--- Modules/Dungeons/LFGReminder.lua. The file-scope `local X = X` captures
+-- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua. The file-scope `local X = X` captures
 -- include C_Spell, C_SpellBook, C_LFGList, GameTooltip and UIParent, and the
 -- file also reads Enum.SpellBookSpellBank.Player at file scope, so all of
 -- them must exist before load or the capture takes nil. `issecretvalue` and
@@ -1513,7 +1513,7 @@ function L.loadLFGReminder(overrides)
     KE.GetChallengeMapIDByName = overrides.GetChallengeMapIDByName or function(_, name)
         return type(name) == "string" and fixtureMaps[name:lower()] or nil
     end
-    helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KeystoneHelper/LFGReminder.lua", KE)
     local LR = modules["LFGReminder"]
     -- ShowPopup/HidePopup (the leader/cooldown-gate work) register and
     -- unregister SPELL_UPDATE_COOLDOWN on every show/hide, and installAddonShim
@@ -1591,7 +1591,7 @@ local function qcFrame(name)
     return f
 end
 
--- Modules/Dungeons/LFGQuickCreate.lua. The file-scope `local X = X` captures
+-- Modules/DungeonTools/KeystoneHelper/LFGQuickCreate.lua. The file-scope `local X = X` captures
 -- include C_Timer, C_LFGList, C_ChallengeMode, C_MythicPlus, GameTooltip,
 -- IsInGroup, LibStub, hooksecurefunc and InCombatLockdown, so every one must
 -- exist BEFORE helpers.loadModule or the capture takes nil. The module reads
@@ -1661,7 +1661,7 @@ function L.loadLFGQuickCreate(overrides)
 
     -- loadModule returns the KE table, so the MODULE comes from the shim's
     -- registry, never from this call's return value.
-    helpers.loadModule("Modules/Dungeons/LFGQuickCreate.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KeystoneHelper/LFGQuickCreate.lua", KE)
     local QC = modules["LFGQuickCreate"]
 
     -- Seed db DIRECTLY rather than calling QC:UpdateDB(). The sibling loader
@@ -1678,7 +1678,7 @@ function L.loadLFGQuickCreate(overrides)
     return QC, KE, seams
 end
 
--- Modules/Dungeons/GroupFinderPanel.lua. The file-scope `local X = X` captures
+-- Modules/DungeonTools/KeystoneHelper/GroupFinderPanel.lua. The file-scope `local X = X` captures
 -- are _G, ipairs, CreateFrame and string.format, so all four must exist BEFORE
 -- helpers.loadModule. C_LFGList, C_MythicPlus, C_ChallengeMode, C_SocialQueue,
 -- C_AddOns, C_Timer, Enum and bit are read at CALL time, not file scope, but
@@ -1752,7 +1752,7 @@ function L.loadGroupFinderPanel(overrides)
     }
     if overrides.profile then KE.db.profile = overrides.profile end
 
-    helpers.loadModule("Modules/Dungeons/GroupFinderPanel.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KeystoneHelper/GroupFinderPanel.lua", KE)
     local GFP = modules["GroupFinderPanel"]
 
     -- Seeded DIRECTLY, not via GFP:UpdateDB(). UpdateDB does not exist until
@@ -1769,7 +1769,7 @@ function L.loadGroupFinderPanel(overrides)
     return GFP, KE, seams
 end
 
--- Modules/QoL/CopyAnything.lua. TryCopy is never invoked by this loader --
+-- Modules/QoL/QualityOfLife/CopyAnything.lua. TryCopy is never invoked by this loader --
 -- CheckModifiers and GetNPCIDFromGUID are file locals with no stored handle,
 -- but TryCopy calls both directly, so they sit in its upvalue slots;
 -- findUpvalue recovers them without running any tooltip logic (so GameTooltip,
@@ -1813,7 +1813,7 @@ function L.loadCopyAnything(overrides)
         db = { profile = { CopyAnything = {} } },
         CreatePrompt = function() end,
     }
-    helpers.loadModule("Modules/QoL/CopyAnything.lua", KE)
+    helpers.loadModule("Modules/QoL/QualityOfLife/CopyAnything.lua", KE)
     local CA = modules["CopyAnything"]
     local seams = {
         checkModifiers = findUpvalue(CA.TryCopy, "CheckModifiers"),
@@ -1822,7 +1822,7 @@ function L.loadCopyAnything(overrides)
     return CA, KE, seams
 end
 
--- Modules/QoL/AlertFrames.lua. AF:PostAlertMove/InstallHooks/OnEnable are
+-- Modules/Skinning/DarkTheme/AlertFrames.lua. AF:PostAlertMove/InstallHooks/OnEnable are
 -- never invoked -- nothing at file scope beyond function definitions and
 -- constant assignments runs on load, so no CreateFrame/hooksecurefunc/Blizzard
 -- frame stubs are needed here. ShouldGrowUp is a file local with no stored
@@ -1839,7 +1839,7 @@ function L.loadAlertFrames()
         CreateReloadPrompt = function() end,
         Print = function() end,
     }
-    helpers.loadModule("Modules/QoL/AlertFrames.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/AlertFrames.lua", KE)
     local AF = modules["AlertFrames"]
     local seams = {
         shouldGrowUp = findUpvalue(AF.PostAlertMove, "ShouldGrowUp"),
@@ -1855,7 +1855,7 @@ function L.loadAlertFrames()
     return AF, KE, seams
 end
 
--- Modules/QoL/AlertFrames.lua with InstallHooks actually RUN, which the loader
+-- Modules/Skinning/DarkTheme/AlertFrames.lua with InstallHooks actually RUN, which the loader
 -- above deliberately avoids. Needed because the guards inside the AddAlertFrame
 -- post-hook are only observable by driving that callback: a spec that calls the
 -- predicates instead still passes when the guard is deleted from the hook.
@@ -1893,7 +1893,7 @@ function L.loadAlertFramesWithHooks()
         if target == alertFrame and name == "AddAlertFrame" then captured = fn end
     end
 
-    helpers.loadModule("Modules/QoL/AlertFrames.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/AlertFrames.lua", KE)
     local AF = modules["AlertFrames"]
 
     local calls = { postAlertMove = 0 }
@@ -1905,7 +1905,7 @@ function L.loadAlertFramesWithHooks()
     return AF, captured, calls, KE
 end
 
--- Modules/QoL/ColorPicker.lua captures WoW string globals as file-scope
+-- Modules/Skinning/DarkTheme/ColorPicker.lua captures WoW string globals as file-scope
 -- upvalues at load time (`local format, strlen, strjoin = format, strlen,
 -- strjoin`, plus gsub/strsub/floor separately), so real Lua equivalents must
 -- exist on _G BEFORE helpers.loadModule runs, exactly like wowStrsplit above.
@@ -1932,7 +1932,7 @@ function L.loadColorPicker(overrides)
     _G.floor = overrides.floor or math.floor
     _G.strjoin = overrides.strjoin or wowStrjoin
     local KE = { db = { profile = { ColorPicker = {} } } }
-    helpers.loadModule("Modules/QoL/ColorPicker.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/ColorPicker.lua", KE)
     local CP = modules["ColorPicker"]
 
     local updateColorTexts = findUpvalue(CP.Enhance, "UpdateColorTexts")
@@ -1949,7 +1949,7 @@ function L.loadColorPicker(overrides)
     return CP, KE, seams
 end
 
--- Modules/QoL/MoveFrames.lua. Every seam is one debug.getupvalue hop from an
+-- Modules/QoL/QualityOfLife/MoveFrames.lua. Every seam is one debug.getupvalue hop from an
 -- exported method except framePaths, which is an upvalue of CanRemember.
 -- strsplit is delimiter-first and not supplied by _wow_mock.lua; the module
 -- captures it as a file-scope local, so a real equivalent must be on _G
@@ -1972,7 +1972,7 @@ function L.loadMoveFrames(overrides)
     _G.IsAltKeyDown = overrides.IsAltKeyDown or function() return false end
     _G.C_AddOns = { IsAddOnLoaded = function() return false end }
     local KE = { db = { profile = { MoveFrames = {} } } }
-    helpers.loadModule("Modules/QoL/MoveFrames.lua", KE)
+    helpers.loadModule("Modules/QoL/QualityOfLife/MoveFrames.lua", KE)
     local MF = modules["MoveFrames"]
 
     local seams = {
@@ -1989,7 +1989,7 @@ function L.loadMoveFrames(overrides)
     return MF, KE, seams
 end
 
--- Modules/QoL/RaidControl.lua captures WoW globals as file-scope upvalues AND
+-- Modules/Skinning/DarkTheme/RaidControl.lua captures WoW globals as file-scope upvalues AND
 -- calls SetGrabCoords three times at file scope, so
 -- GetTexCoordsByGrid, SOUNDKIT and RAID_CLASS_COLORS must exist on _G BEFORE
 -- helpers.loadModule runs or the file errors while loading.
@@ -2049,7 +2049,7 @@ function L.loadRaidControl(overrides)
     local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
     KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
     helpers.loadModule("Core/Secret.lua", KE)
-    helpers.loadModule("Modules/QoL/RaidControl.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/RaidControl.lua", KE)
     local RC = modules["RaidControl"]
 
     local inGroup = findUpvalue(RC.ToggleRaidControl, "InGroup")
@@ -2067,7 +2067,7 @@ function L.loadRaidControl(overrides)
     return RC, KE, seams
 end
 
--- Modules/QoL/GroupSort.lua. The module captures its WoW API functions as
+-- Modules/Skinning/DarkTheme/GroupSort.lua. The module captures its WoW API functions as
 -- file-scope locals at load, so every mock must be on _G BEFORE
 -- helpers.loadModule runs -- setting one afterward leaves the module
 -- holding a stale upvalue. installMock(overrides, {}) is required to seed
@@ -2115,7 +2115,7 @@ function L.loadGroupSort(overrides)
 
     local prints = {}
     local KE = { Print = function(_, msg) prints[#prints + 1] = msg end }
-    helpers.loadModule("Modules/QoL/GroupSort.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/GroupSort.lua", KE)
     local GS = KE.GroupSort
 
     local seams = {
@@ -2126,7 +2126,7 @@ function L.loadGroupSort(overrides)
     return GS, KE, seams
 end
 
--- Modules/Dungeons/KeystoneHelper.lua. The KE seed records the three calls
+-- Modules/DungeonTools/KeystoneHelper/KeystoneHelper.lua. The KE seed records the three calls
 -- ApplyReminderSettings drives (position, both fonts) plus a fake EditMode,
 -- so a spec can read what the module resolved without inspecting a frame.
 -- LibStub returns nil, so LibCustomGlow is absent and the glow paths no-op.
@@ -2194,11 +2194,11 @@ function L.loadKeystoneHelper(overrides)
     }
     KE.EditMode = rec.editMode
 
-    helpers.loadModule("Modules/Dungeons/KeystoneHelper.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KeystoneHelper/KeystoneHelper.lua", KE)
     return modules["KeystoneHelper"], rec, KE
 end
 
--- Modules/QoL/Optimize.lua. The module captures SetCVar/GetCVar as file-scope
+-- Modules/Core/Optimize.lua. The module captures SetCVar/GetCVar as file-scope
 -- locals at load, so the fake cvar store has to exist on _G BEFORE loadModule --
 -- assigning it afterward leaves the module holding a stale upvalue. rec.cvars
 -- IS that store: seed a key to set the live value, read a key to see what the
@@ -2232,7 +2232,7 @@ function L.loadOptimize(overrides)
     _G.KitnEssentialsOptimizeDB = nil
 
     local KE = { Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end }
-    helpers.loadModule("Modules/QoL/Optimize.lua", KE)
+    helpers.loadModule("Modules/Core/Optimize.lua", KE)
 
     local OPT = modules["Optimize"]
     function OPT:RegisterEvent(event) rec.events[event] = true end
@@ -2258,7 +2258,7 @@ function L.loadCombatTimer(overrides)
     return modules["CombatTimer"], KE
 end
 
--- Modules/Utilities/NoMovementAlert.lua. Several layers are reachable
+-- Modules/Combat/StatusTexts/NoMovementAlert.lua. Several layers are reachable
 -- headlessly: the PURE resolution layer (data tables, per-spec override rules,
 -- alias and category duration lookup), the role-color resolver, the cooldown
 -- readback, and the buff-readback refusal rules, which are driven directly
@@ -2348,11 +2348,11 @@ function L.loadMovementAlert(overrides)
 
     -- overrides.specId is what KE:GetPlayerSpecId answers.
     KE.GetPlayerSpecId = function() return overrides.specId end
-    helpers.loadModule("Modules/Utilities/NoMovementAlert.lua", KE)
+    helpers.loadModule("Modules/Combat/StatusTexts/NoMovementAlert.lua", KE)
     return modules["NoMovementAlert"], KE, rec
 end
 
--- Modules/Combat/AuraHeaders.lua. Both MakeHeaderModule calls run at file
+-- Modules/AuraTracking/AuraHeaders.lua. Both MakeHeaderModule calls run at file
 -- scope and only DEFINE methods -- nothing touches a frame or the db until
 -- OnEnable, which this loader never calls -- so the only stubs the spec
 -- needs are KE.ShouldNotLoadModule, driven by overrides.shouldNotLoad, and
@@ -2379,11 +2379,11 @@ function L.loadAuraHeaders(overrides)
     if not overrides.noHelper then
         KE.ShouldNotLoadModule = function() return overrides.shouldNotLoad == true end
     end
-    helpers.loadModule("Modules/Combat/AuraHeaders.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/AuraHeaders.lua", KE)
     return modules["BuffTracking"], KE
 end
 
--- Modules/ClassUtilities/StanceText.lua. EvaluateSpec is a pure decision
+-- Modules/Combat/ClassTools/StanceText.lua. EvaluateSpec is a pure decision
 -- function reading only its own arguments, so the loader needs no
 -- shapeshift/aura stubs -- it exists solely to make the file loadable.
 -- overrides.db seeds KE.db.profile.StanceText for specs that want it.
@@ -2395,11 +2395,11 @@ function L.loadStanceText(overrides)
     local KE = {
         db = { profile = { StanceText = overrides.db or {} } },
     }
-    helpers.loadModule("Modules/ClassUtilities/StanceText.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/StanceText.lua", KE)
     return modules["StanceText"], KE
 end
 
--- Modules/Utilities/TimeSpiral.lua. The file reads Enum.SpellBookSpellBank
+-- Modules/Combat/ClassTools/TimeSpiral.lua. The file reads Enum.SpellBookSpellBank
 -- and C_SpecializationInfo at file scope; nothing reaches the aura engine
 -- until OnEnable. Returns TSP, KE.
 function L.loadTimeSpiral(overrides)
@@ -2409,11 +2409,11 @@ function L.loadTimeSpiral(overrides)
     })
     local modules = helpers.installAddonShim()
     local KE = { db = { profile = { TimeSpiral = overrides.db or {} } } }
-    helpers.loadModule("Modules/Utilities/TimeSpiral.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/TimeSpiral.lua", KE)
     return modules["TimeSpiral"], KE
 end
 
--- Modules/ClassUtilities/PetStatusText.lua. The branch under test lives inside
+-- Modules/Combat/StatusTexts/PetStatusText.lua. The branch under test lives inside
 -- the file-local CheckPetStatus, which is reached from outside only through
 -- PS:UpdatePetText -- so the spec drives that and asserts on what was painted.
 --
@@ -2473,7 +2473,7 @@ function L.loadPetStatusText(overrides)
         ResolveColor = function() return 1, 1, 1, 1 end,
         GetPlayerSpecId = function() return overrides.specID or 265 end,
     }
-    helpers.loadModule("Modules/ClassUtilities/PetStatusText.lua", KE)
+    helpers.loadModule("Modules/Combat/StatusTexts/PetStatusText.lua", KE)
 
     local PS = modules["PetStatusText"]
     PS.SetEnabledState = function() end
@@ -2490,7 +2490,7 @@ function L.loadPetStatusText(overrides)
     return PS, rec
 end
 
--- Modules/ClassUtilities/HavocTracker.lua. Only the GATE is under test. The
+-- Modules/Combat/ClassTools/HavocTracker.lua. Only the GATE is under test. The
 -- loader replaces the two sinks EvaluateGate can reach and counts which one
 -- fired, so a case reads as a decision rather than as frame state. Nothing here
 -- builds a container: the AuraContainer path is engine behavior, verified in
@@ -2521,7 +2521,7 @@ function L.loadHavocTracker(overrides)
         -- Captured at file scope by the target guard.
         PlateSlots = { Ask = function() return nil end },
     }
-    helpers.loadModule("Modules/ClassUtilities/HavocTracker.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/HavocTracker.lua", KE)
 
     local HT = modules["HavocTracker"]
     HT.db = KE.db.profile.HavocTracker
@@ -2530,7 +2530,7 @@ function L.loadHavocTracker(overrides)
     return HT, rec
 end
 
--- Modules/ClassUtilities/PIAssist.lua. Same shape as loadHavocTracker: the
+-- Modules/Combat/ClassTools/PIAssist.lua. Same shape as loadHavocTracker: the
 -- gate's two sinks are replaced by counters, as are Activate's three sinks
 -- and its event registrations, so the real Activate can be driven with
 -- overrides.liveActivate = true. KE:GetPlayerSpecRole answers overrides.role
@@ -2575,7 +2575,7 @@ function L.loadPIAssist(overrides)
             return index and index > 0 and overrides.role or nil
         end,
     }
-    helpers.loadModule("Modules/ClassUtilities/PIAssist.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/PIAssist.lua", KE)
 
     local PA = modules["PIAssist"]
     PA.db = KE.db.profile.PIAssist
@@ -2592,7 +2592,7 @@ function L.loadPIAssist(overrides)
     return PA, rec
 end
 
--- Modules/ClassUtilities/PIMacroBuilder.lua, for the SetTarget policy and
+-- Modules/Combat/ClassTools/PIMacroBuilder.lua, for the SetTarget policy and
 -- the notify-on-change rule. The module localizes InCombatLockdown at file
 -- scope, so it is routed through rec before the load; ApplyMacro is
 -- replaced by a stub that counts its calls and answers rec.writeOk unless
@@ -2624,7 +2624,7 @@ function L.loadPIMacroBuilder(overrides)
         Print = function() end,
         IsSafeValue = function(_, v) return v ~= nil end,
     }
-    helpers.loadModule("Modules/ClassUtilities/PIMacroBuilder.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/PIMacroBuilder.lua", KE)
 
     local PI = modules["PIMacroBuilder"]
     PI.db = KE.db.profile.PIMacroBuilder
@@ -2635,7 +2635,7 @@ function L.loadPIMacroBuilder(overrides)
     return PI, rec
 end
 
--- Modules/QoL/CombatLogger.lua. The module caches its whole API surface at
+-- Modules/QoL/Automation/CombatLogger.lua. The module caches its whole API surface at
 -- file scope, so every name it reads has to exist on _G BEFORE loadModule --
 -- which is the point of loading it this way: a name cached from the wrong
 -- namespace resolves to nil here exactly as it does in game.
@@ -2697,7 +2697,7 @@ function L.loadCombatLogger(overrides)
             }
         end,
     }
-    helpers.loadModule("Modules/QoL/CombatLogger.lua", KE)
+    helpers.loadModule("Modules/QoL/Automation/CombatLogger.lua", KE)
 
     local CL = modules["CombatLogger"]
     CL.ScheduleTimer = function() return {} end
@@ -2726,11 +2726,11 @@ function L.loadBonusRoll(overrides)
     return modules["BonusRoll"], KE
 end
 
--- Modules/DungeonTimers/DungeonRegistry.lua. Pure data + helpers on KE;
+-- Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua. Pure data + helpers on KE;
 -- the shim provides the truthy KitnEssentials global its guard checks.
 function L.loadDungeonRegistry()
     helpers.installAddonShim()
-    return helpers.loadModule("Modules/DungeonTimers/DungeonRegistry.lua")
+    return helpers.loadModule("Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua")
 end
 
 -- Core/EUIUnlockBridge.lua. No EllesmereUI global is installed on purpose: the
@@ -2743,7 +2743,7 @@ function L.loadEUIUnlockBridge(overrides)
     return helpers.loadModule("Core/EUIUnlockBridge.lua", KE)
 end
 
--- Modules/Skinning/ChatLinks.lua. CL is a file-local never assigned onto KE --
+-- Modules/Skinning/Chat/ChatLinks.lua. CL is a file-local never assigned onto KE --
 -- the shim registry is the only handle to it. The module captures the WoW
 -- string aliases and `ceil` as file-scope upvalues, and Core/Secret.lua
 -- captures `issecretvalue` the same way, so every stub must exist BEFORE its
@@ -2759,14 +2759,14 @@ function L.loadChatLinks(overrides)
     _G.strsub = string.sub
     local KE = { db = { profile = { Skinning = { ChatLinks = {} } } } }
     helpers.loadModule("Core/Secret.lua", KE)
-    helpers.loadModule("Modules/Skinning/ChatLinks.lua", KE)
+    helpers.loadModule("Modules/Skinning/Chat/ChatLinks.lua", KE)
     return modules["ChatLinks"], KE
 end
 
 -- Returns the module, the private KE table, the shim registry, and the list the
 -- geterrorhandler stub appends caught errors into.
 --
--- Modules/Skinning/ChatHistory.lua. The module binds KE through select(2, ...),
+-- Modules/Skinning/Chat/ChatHistory.lua. The module binds KE through select(2, ...),
 -- so Core/Secret.lua loads onto the SAME table and db lives there too -- the
 -- addon shim's global is only the NewModule/GetModule registry, and its tables
 -- do not exist until NewModule or GetModule creates them. The shim runs no Ace
@@ -2840,7 +2840,7 @@ function L.loadChatHistory(overrides)
     }
     helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Core/Defaults.lua", KE)
-    helpers.loadModule("Modules/Skinning/ChatHistory.lua", KE)
+    helpers.loadModule("Modules/Skinning/Chat/ChatHistory.lua", KE)
 
     local CH = modules["ChatHistory"]
     CH:UpdateDB()
@@ -2852,7 +2852,7 @@ function L.loadChatHistory(overrides)
     return CH, KE, modules, caught
 end
 
--- Modules/Healer/HealerMana.lua. Mode resolution is the spec target, so
+-- Modules/Combat/StatusTexts/HealerMana.lua. Mode resolution is the spec target, so
 -- IsInRaid is the override that matters. The frame stubs serve the functions
 -- the specs call, not file load: nothing here creates a frame at load.
 function L.loadHealerMana(overrides)
@@ -2920,20 +2920,20 @@ function L.loadHealerMana(overrides)
         IsPlayerHealerSpec = function() return false end,
         Print = function() end,
     }
-    helpers.loadModule("Modules/Healer/HealerMana.lua", KE)
+    helpers.loadModule("Modules/Combat/StatusTexts/HealerMana.lua", KE)
     local HM = modules["HealerMana"]
     HM:UpdateDB()
     return HM, KE
 end
 
--- Modules/Utilities/PotionReady.lua, for its pure gate rule. Nothing creates a
+-- Modules/Combat/StatusTexts/PotionReady.lua, for its pure gate rule. Nothing creates a
 -- frame or registers an event at load. Returns PR, KE.
 function L.loadPotionReady(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     local KE = { Print = function() end }
-    helpers.loadModule("Modules/Utilities/PotionReady.lua", KE)
+    helpers.loadModule("Modules/Combat/StatusTexts/PotionReady.lua", KE)
     return modules["PotionReady"], KE
 end
 
@@ -3002,7 +3002,7 @@ function L.loadContext(overrides)
     return helpers.loadModule("Core/Context.lua", {})
 end
 
--- Modules/Utilities/WorldMarkerCycler.lua. The module captures its secure-handler
+-- Modules/QoL/GroupTools/WorldMarkerCycler.lua. The module captures its secure-handler
 -- and binding functions as file-scope upvalues, so every stub below must exist
 -- BEFORE loadModule; IsRaidMarkerActive is an override rather than a global a
 -- spec reassigns afterward, for the same reason (see loadDMCore's group
@@ -3034,11 +3034,11 @@ function L.loadWorldMarkerCycler(overrides)
     -- shape would receive KE as the closure and error the moment a case reached
     -- OnDisable.
     local KE = { Print = function() end, RunAfterCombat = function(_, fn) fn() end }
-    helpers.loadModule("Modules/Utilities/WorldMarkerCycler.lua", KE)
+    helpers.loadModule("Modules/QoL/GroupTools/WorldMarkerCycler.lua", KE)
     return modules["WorldMarkerCycler"], KE, executed, wrapped
 end
 
--- Modules/ClassUtilities/DisintegrateTicks.lua, for the pure tick-marker
+-- Modules/Combat/ClassTools/DisintegrateTicks.lua, for the pure tick-marker
 -- resolver and the channel-start guard. The module builds frames and registers
 -- a cast-bar provider at file scope, so the mock has to satisfy those before
 -- either is reachable. overrides.UnitChannelInfo feeds the channel events.
@@ -3061,11 +3061,11 @@ function L.loadDisintegrateTicks(overrides)
         IsSafeValue = function() return true end,
         db = { global = {}, profile = { DisintegrateTicks = {} } },
     }
-    helpers.loadModule("Modules/ClassUtilities/DisintegrateTicks.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/DisintegrateTicks.lua", KE)
     return modules["DisintegrateTicks"], KE
 end
 
--- Modules/Dungeons/KickTracker.lua, for the own-kick guard. Plain stubs only:
+-- Modules/DungeonTools/KicksCasts/KickTracker.lua, for the own-kick guard. Plain stubs only:
 -- the file reads C_SpecializationInfo (from the mock) and LibStub at load, and
 -- the spec drives OnSpellcastSucceeded directly. Core/Interrupts.lua loads
 -- first into the same KE: the module takes its kick set from it at load.
@@ -3076,28 +3076,28 @@ function L.loadKickTracker(overrides)
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
     local KE = helpers.loadModule("Core/Interrupts.lua", { Print = function() end })
-    helpers.loadModule("Modules/Dungeons/KickTracker.lua", KE)
-    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KicksCasts/KickTracker.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KicksCasts/KickTrackerRules.lua", KE)
     return modules["KickTracker"]
 end
 
--- Modules/Dungeons/KickTrackerRules.lua alone: the tracker's pure decisions
+-- Modules/DungeonTools/KicksCasts/KickTrackerRules.lua alone: the tracker's pure decisions
 -- call no WoW API, so only the module table the shim hands back is needed.
 -- Returns KT.
 function L.loadKickTrackerRules()
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", {})
+    helpers.loadModule("Modules/DungeonTools/KicksCasts/KickTrackerRules.lua", {})
     return modules["KickTracker"]
 end
 
--- Modules/Dungeons/CCTrackerRules.lua. Pure logic: nothing to stub. Returns
+-- Modules/DungeonTools/KicksCasts/CCTrackerRules.lua. Pure logic: nothing to stub. Returns
 -- Rules, seeds.
 function L.loadCCTrackerRules()
-    local KE = helpers.loadModule("Modules/Dungeons/CCTrackerRules.lua", {})
+    local KE = helpers.loadModule("Modules/DungeonTools/KicksCasts/CCTrackerRules.lua", {})
     return KE.CCTrackerRules, KE.CC_TRACKER_SEEDS
 end
 
--- Modules/Utilities/ReadyCheckConsumables.lua. The module captures its API
+-- Modules/QoL/GroupTools/ReadyCheckConsumables.lua. The module captures its API
 -- surface as upvalues at load, so every global below exists before
 -- loadModule and InCombatLockdown rides mock.install's override as a closure
 -- over seams.combat.inCombat (reassigning _G.InCombatLockdown afterward
@@ -3309,7 +3309,7 @@ function L.loadReadyCheckConsumables(overrides)
             return saved[1] or default[1], saved[2] or default[2], saved[3] or default[3], saved[4] or default[4] or 1
         end,
     }
-    helpers.loadModule("Modules/Utilities/ReadyCheckConsumables.lua", KE)
+    helpers.loadModule("Modules/QoL/GroupTools/ReadyCheckConsumables.lua", KE)
     local RCC = modules["ReadyCheckConsumables"]
     RCC.RegisterEvent = function() end
     RCC.UnregisterEvent = function() end
@@ -3318,7 +3318,7 @@ function L.loadReadyCheckConsumables(overrides)
     return RCC, KE, seams
 end
 
--- Modules/Skinning/Addons/RCLootCouncil.lua. The pure rules are file-locals
+-- Modules/Skinning/DarkTheme/Addons/RCLootCouncil.lua. The pure rules are file-locals
 -- that Skin reaches only through other functions, so each is read off its
 -- caller's upvalues, the way loadCommunitiesSkin reaches its local. Nothing in
 -- the skin runs. Returns ensurePlan, PageDirection, headerSize.
@@ -3328,7 +3328,7 @@ function L.loadRCLootCouncilSkin(overrides)
     local KE = { Skins = {
         Register = function(_, _, fn) captured = fn end,
     } }
-    helpers.loadModule("Modules/Skinning/Addons/RCLootCouncil.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/Addons/RCLootCouncil.lua", KE)
     local pageHook = findUpvalue(findUpvalue(findUpvalue(captured, "VotingFrame_GetFrame"),
         "SkinPageButton"), "PageButton_SetNormalTexture")
     local fitHeaders = findUpvalue(findUpvalue(captured, "SkinScrollTable"), "FitHeaders")
@@ -3347,20 +3347,20 @@ function L.loadPlateSlots(overrides)
     return KE, frames
 end
 
--- Modules/ClassUtilities/DoTTrackerRules.lua on top of Core/PlateSlots.lua, in
+-- Modules/Combat/ClassTools/DoTTrackerRules.lua on top of Core/PlateSlots.lua, in
 -- one KE table. Pure logic: nothing to stub beyond the mock. Returns KE.
 function L.loadDoTTrackerRules(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local KE = helpers.loadModule("Core/PlateSlots.lua", {})
-    helpers.loadModule("Modules/ClassUtilities/DoTTrackerRules.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/DoTTrackerRules.lua", KE)
     return KE
 end
 
--- Modules/ClassUtilities/ShamanProcRules.lua. Pure logic: nothing to stub.
+-- Modules/Combat/ClassTools/ShamanProcRules.lua. Pure logic: nothing to stub.
 -- Returns KE.
 function L.loadShamanProcRules(overrides)
     installMock(overrides, {})
-    return helpers.loadModule("Modules/ClassUtilities/ShamanProcRules.lua", {})
+    return helpers.loadModule("Modules/Combat/ClassTools/ShamanProcRules.lua", {})
 end
 
 -- Core/CDMIcons.lua. The info function is looked up at call time, so a spec
@@ -3374,7 +3374,7 @@ function L.loadCDMIcons(overrides)
     return helpers.loadModule("Core/CDMIcons.lua", {})
 end
 
--- Modules/ClassUtilities/AlterTime.lua. Only Classify is under test, so
+-- Modules/Combat/ClassTools/AlterTime.lua. Only Classify is under test, so
 -- nothing past the module's file scope runs. Returns the module.
 function L.loadAlterTime(overrides)
     overrides = overrides or {}
@@ -3387,11 +3387,11 @@ function L.loadAlterTime(overrides)
         db = { profile = { AlterTime = { Enabled = true } } },
         Print = function() end,
     }
-    helpers.loadModule("Modules/ClassUtilities/AlterTime.lua", KE)
+    helpers.loadModule("Modules/Combat/ClassTools/AlterTime.lua", KE)
     return modules["AlterTime"]
 end
 
--- Modules/Utilities/RaidNotifications.lua. Only the pure auto-ready rule is
+-- Modules/QoL/GroupTools/RaidNotifications.lua. Only the pure auto-ready rule is
 -- under test, so nothing past file scope runs; C_Item is the one table the
 -- file indexes at load. Returns the module.
 function L.loadRaidNotifications(overrides)
@@ -3399,7 +3399,7 @@ function L.loadRaidNotifications(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     _G.C_Item = overrides.C_Item or { IsUsableItem = function() return false end }
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Utilities/RaidNotifications.lua", {})
+    helpers.loadModule("Modules/QoL/GroupTools/RaidNotifications.lua", {})
     return modules["RaidNotifications"]
 end
 

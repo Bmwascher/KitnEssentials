@@ -1,4 +1,4 @@
--- Modules/ClassUtilities/DoTTrackerRules.lua -- the rules a later edit breaks
+-- Modules/Combat/ClassTools/DoTTrackerRules.lua -- the rules a later edit breaks
 -- silently: who counts, the label, color and cap each answer takes, which DoTs
 -- a spec lists, how a saved entry is written, what the add and remove controls
 -- refuse, and the module's guards (what the restriction gate must hold back,

@@ -1,4 +1,4 @@
--- Modules/QoL/CombatLogger.lua -- arena classification and the party guard.
+-- Modules/QoL/Automation/CombatLogger.lua -- arena classification and the party guard.
 --
 -- The arena branch shipped calling nil for months: IsArenaSkirmish is a plain
 -- global and the module cached it off C_PvP, which has no such member. The

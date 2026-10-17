@@ -45,9 +45,9 @@ describe("DungeonTrash — CAST_START start-advance", function()
 
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashInference.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashCache.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
         TI = KE.TrashInference
 

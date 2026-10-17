@@ -5,15 +5,15 @@
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
-describe("Great Vault reward cover rules (Modules/QoL/GreatVaultCover.lua)", function()
+describe("Great Vault reward cover rules (Modules/QoL/QualityOfLife/GreatVaultCover.lua)", function()
     local GVA
 
     before_each(function()
         mock.install()
         local modules = helpers.installAddonShim()
         local KE = { Print = function() end }
-        helpers.loadModule("Modules/QoL/GreatVaultAlert.lua", KE)
-        helpers.loadModule("Modules/QoL/GreatVaultCover.lua", KE)
+        helpers.loadModule("Modules/QoL/QualityOfLife/GreatVaultAlert.lua", KE)
+        helpers.loadModule("Modules/QoL/QualityOfLife/GreatVaultCover.lua", KE)
         GVA = modules["GreatVaultAlert"]
     end)
 

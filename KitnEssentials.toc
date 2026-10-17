@@ -14,18 +14,8 @@
 
 Libs\Init.xml
 
-Modules\Diagnostics\TaintReport.lua
+Modules\Core\Diagnostics\TaintReport.lua
 Core\Core.xml
-Modules\Utilities\Utilities.xml
-Modules\Diagnostics\Diagnostics.xml
-Modules\ClassUtilities\ClassUtilities.xml
-
-Modules\Combat\Combat.xml
-Modules\Dungeons\Dungeons.xml
-Modules\Healer\Healer.xml
-Modules\DungeonTimers\DungeonTimers.xml
-Modules\QoL\QoL.xml
-Modules\Skinning\Skinning.xml
-Modules\DamageMeter\DamageMeter.xml
+Modules\Modules.xml
 
 GUI\GUI.xml

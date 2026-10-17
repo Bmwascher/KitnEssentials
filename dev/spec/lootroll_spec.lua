@@ -1,4 +1,4 @@
--- Modules/Skinning/LootRoll.lua -- the legacy CENTER -> BOTTOM conversion.
+-- Modules/Skinning/DarkTheme/LootRoll.lua -- the legacy CENTER -> BOTTOM conversion.
 --
 -- Why it exists: GroupLootContainer_Update sets the container's height to
 -- reservedSize * (number of rolls) and anchors each roll relative to the

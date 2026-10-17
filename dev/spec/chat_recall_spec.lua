@@ -1,4 +1,4 @@
--- Tier 1: Modules/Skinning/ChatRecall.lua. Two guard rules, one case each,
+-- Tier 1: Modules/Skinning/Chat/ChatRecall.lua. Two guard rules, one case each,
 -- table-driven over the literal that varies:
 --   stores  — secure commands and empty lines stay out of the history
 --   refused — a linked line is refused only while chat is restricted

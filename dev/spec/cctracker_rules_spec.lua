@@ -1,4 +1,4 @@
--- Modules/Dungeons/CCTrackerRules.lua -- the rules a later edit breaks
+-- Modules/DungeonTools/KicksCasts/CCTrackerRules.lua -- the rules a later edit breaks
 -- silently: which ids are tracked, the filter each container gets, which
 -- plates get a row, the size of the box kept on screen, what Add and Remove
 -- refuse, and the preview's countdown text.

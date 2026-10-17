@@ -1,7 +1,7 @@
 -- Tier 2: DungeonTimers override precedence + accessor surface — the pure
 -- db-table logic behind the per-spell/per-phase GUI (show-at chain, clear-on-
 -- default setters, curator-vs-user disable, role gating, phase rule keys,
--- override bookkeeping). Modules/DungeonTimers/DungeonTimers.lua loads for
+-- override bookkeeping). Modules/DungeonTools/DungeonTimers/DungeonTimers.lua loads for
 -- real via L.loadDungeonTimers(); DT is a file-local handed back through the
 -- addon-shim registry. All override state is driven through the public
 -- Set*/Reset* accessors — a raw write to a mistyped db key silently no-ops

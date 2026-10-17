@@ -54,7 +54,7 @@ local function loadCP(overrides, keOverrides)
     }
     for k, v in pairs(keOverrides or {}) do KE[k] = v end
 
-    helpers.loadModule("Modules/QoL/CharacterPanel.lua", KE)
+    helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", KE)
     local CP = modules["CharacterPanel"]
     -- In game this is an AceModule and `IsEnabled` comes from Ace. The spec shim
     -- returns a bare table, so the lifecycle predicate `ExtraWidth` reads has to

@@ -197,7 +197,7 @@ local function loadProfiler(options)
             lifecycle[#lifecycle + 1] = "prompt:" .. title
         end,
     }
-    helpers.loadModule("Modules/Diagnostics/Profiler.lua", KE)
+    helpers.loadModule("Modules/Core/Diagnostics/Profiler.lua", KE)
 
     return {
         KE = KE,

@@ -1,4 +1,4 @@
--- Modules/ClassUtilities/ShamanProcRules.lua -- the rules a later edit breaks
+-- Modules/Combat/ClassTools/ShamanProcRules.lua -- the rules a later edit breaks
 -- silently: which trackers a character gets, how long each counts, whose spec
 -- change re-reads talents, which cooldown announcement starts which tracker,
 -- when an announcement is refused, and how much of a countdown is left. Talent

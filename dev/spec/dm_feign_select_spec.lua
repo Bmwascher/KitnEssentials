@@ -3,7 +3,7 @@
 -- ║  Refusal rules for the Deaths-view feign filter.         ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
+-- Loads the REAL Modules/Skinning/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests its two pure functions: DM.SelectFeignRow, which decides WHICH new
 -- death row is the feign that was just cast, and DM.ScanFeignAmbiguity, which
 -- decides which tagged ids are too ambiguous to act on.

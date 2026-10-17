@@ -1,4 +1,4 @@
--- Modules/QoL/Optimize.lua -- the Stacking Nameplates row. The CVar is a packed
+-- Modules/Core/Optimize.lua -- the Stacking Nameplates row. The CVar is a packed
 -- bitfield the engine decodes; what is tested is KE's mask built from the two
 -- stack-type flags, its label, and the comparison against the row's optimal.
 local L = require("dev.spec._ke_loader")

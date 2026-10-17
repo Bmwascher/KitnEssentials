@@ -23,7 +23,7 @@ local function loadMDTSkin()
         end,
         Register = function(_, _, fn) state.runSkin = fn end,
     }
-    helpers.loadModule("Modules/Skinning/Addons/MythicDungeonTools.lua", { Skins = S })
+    helpers.loadModule("Modules/Skinning/DarkTheme/Addons/MythicDungeonTools.lua", { Skins = S })
     state.skinWidget = S.AceWidgetSkinners[1]
     return state
 end

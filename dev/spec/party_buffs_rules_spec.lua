@@ -1,4 +1,4 @@
--- Tier 1: Party Buffs' pure rules (Modules/Combat/PartyBuffsRules.lua): the
+-- Tier 1: Party Buffs' pure rules (Modules/AuraTracking/PartyBuffs/PartyBuffsRules.lua): the
 -- place gate, each category's container settings, and which party frame a
 -- teammate binds to, including the own-frame fallback that must never hide a
 -- teammate.

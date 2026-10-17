@@ -14,7 +14,7 @@ local Theme = KE.Theme
 
 -- Default colors. Also used by the Reset button to wipe a user override
 -- back to default. Must match the backend DISPEL_DEFAULTS in
--- Modules/Combat/AuraDebuffs.lua so a reset shows the same color the
+-- Modules/AuraTracking/AuraDebuffs.lua so a reset shows the same color the
 -- curve resolves to.
 --   None    #CC0000   Magic   #0081FF   Curse   #9F06E4
 --   Disease #F16A09   Poison  #7BC700   Bleed   #B8000F

@@ -1,4 +1,4 @@
--- Modules/Dungeons/KickTrackerRules.lua: the kick tracker's pure decisions.
+-- Modules/DungeonTools/KicksCasts/KickTrackerRules.lua: the kick tracker's pure decisions.
 -- Frames, bars, the engine timers and event wiring are checked in game.
 local L = require("dev.spec._ke_loader")
 

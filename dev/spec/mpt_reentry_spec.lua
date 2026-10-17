@@ -6,7 +6,7 @@
 -- live run another profile's stale splits. The death log cache is still profile-
 -- scoped (display-only; it cannot poison the improve-only PB store).
 --
--- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua headlessly
+-- Loads the REAL Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua headlessly
 -- (fresh per test — file-local state resets with the reload). Collaborator
 -- methods that live in sibling files or Ace mixins (tracker visibility, overlay,
 -- run-event registration, splits) are stubbed AFTER load: this spec asserts the
@@ -53,7 +53,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
             return instanceInfo[1], instanceInfo[2], instanceInfo[3]
         end
 
-        KE = helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+        KE = helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua",
             { Print = function() end, db = { global = {}, profile = {} } })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.CheckForActiveRun, "real MythicPlusTimer.lua did not load")
@@ -206,7 +206,7 @@ describe("MPT:UpdateForces — forces-cap clock rule", function()
         _G.C_ScenarioInfo = { GetCriteriaInfo = function(i) return criteria[i] end }
         _G.GetWorldElapsedTime = function() return 0, worldElapsed end
 
-        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+        helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer.lua",
             { Print = function() end, db = { global = {}, profile = {} } })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.UpdateForces, "real MythicPlusTimer.lua did not load")

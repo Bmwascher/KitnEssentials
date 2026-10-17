@@ -22,7 +22,7 @@ describe("PlayerAbsorbsFormat.Format", function()
         }
         -- Module-file guard `if not KitnEssentials then return end` needs the global.
         _G.KitnEssentials = _G.KitnEssentials or {}
-        KE = helpers.loadModule("Modules/Utilities/PlayerAbsorbsFormat.lua", {})
+        KE = helpers.loadModule("Modules/Combat/StatusTexts/PlayerAbsorbsFormat.lua", {})
     end
 
     before_each(function() load() end)
