@@ -275,6 +275,7 @@ local DISPLAY_PRESET_ALIASES = {
     ["BAIT ORBS"] = "PULL",
     BEAM         = "AMP",
     ["BIG HIT"]  = "TANK",
+    BLEEDS       = "FRONTAL",
     ["CC ADDS"]  = "ADD",
     CHAINS       = "AOE",
     CLEARS       = "CLEAR",
@@ -291,8 +292,10 @@ local DISPLAY_PRESET_ALIASES = {
     MARKS        = "FRONTAL",
     MINIGAME     = "DANCE",
     ["ORB SPAWN"] = "ADD",
+    PROTECT       = "SOAK",
     SHIELD       = "VULN",
     ["SHIELD INC"] = "VULN",
+    SOAKS         = "SOAK",
     SPLIT        = "AMP",
     SUCC          = "AOE",
     ["TANK FRONTAL"] = "FRONTAL",
@@ -300,6 +303,7 @@ local DISPLAY_PRESET_ALIASES = {
     TOTEMS        = "ADD",
     ["VULN + AOE"] = "AOE",
     VULNERABILITY = "VULN",
+    ["WINDS - CHECK MAP"] = "MOVE",
 }
 
 -- Match by preset key first, then by label. Case-insensitive.
