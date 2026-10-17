@@ -1,5 +1,34 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.4
+
+### Frame Anchoring
+
+- Choosing or typing a Select Frame anchor that is the display itself,
+  sits inside it, is anchored to it, or is not a usable frame no longer
+  causes a Lua error. The display goes to the screen at its saved points,
+  keeps the saved name, and a chat line says why, once per name per session
+- Edit Mode measures a drag against the anchor the display really uses, so
+  a display placed on the screen this way no longer jumps when you let go
+
+### Combat Texts
+
+- Combat Texts no longer takes in an attached display that Combat Texts is
+  itself anchored to. That display keeps its own place, settings and Edit
+  Mode mover, and a chat line explains once combat ends
+- On the No Movement Alert, Combat Potion Ready, Havoc Tracker, Hunter's
+  Mark Tracking, Missing Forms and Pet Status pages, the Position and Font
+  cards follow whether the display is really attached. With Attach to
+  Combat Texts ticked while Combat Texts is off, they show, with a note
+  under the Attach box saying why
+
+### Shaman Proc Cooldowns
+
+- The Position card offers Anchored To, and Edit Mode drags the display in
+  the chosen frame's space. The page also gets the Combat Texts note
+
+---
+
 ## v4.11.3
 
 ### DoT Tracker
