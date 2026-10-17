@@ -646,6 +646,17 @@ function L.loadPartyBuffsRules(overrides)
     return KE.PartyBuffsRules, KE
 end
 
+-- Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua and KE.AuraRules,
+-- whose list rule it shares. data stands in for KE.PartyCooldownsData, so no
+-- case depends on the shipped rows. Returns KE.PartyCooldownsRules, KE.
+function L.loadPartyCooldownsRules(data)
+    installMock(nil, {})
+    local KE = { PartyCooldownsData = data }
+    helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
+    return KE.PartyCooldownsRules, KE
+end
+
 -- Modules/AuraTracking/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns

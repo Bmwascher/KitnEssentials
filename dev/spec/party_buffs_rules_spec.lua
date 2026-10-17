@@ -9,7 +9,6 @@ local function makeDb(overrides)
         Enabled = true,
         MaxPerMember = 4,
         TrackExternal = true,
-        TrackBigDefensive = true,
         TrackBurst = true,
         TrackPotion = true,
         TrackTrinket = true,
@@ -19,7 +18,6 @@ local function makeDb(overrides)
         ShowInWorld = true,
         ShowInArenas = true,
         ListExternals = {},
-        ListBurst = {},
         ListPotions = {},
         ListTrinkets = {},
     }
@@ -111,27 +109,6 @@ describe("PartyBuffsRules.BuildGroupConfig", function()
         end
     end)
 
-    it("gives big defensives the tag filter and excludes externals only while they are tracked", function()
-        local R, KE = L.loadPartyBuffsRules()
-        local big
-        for _, category in ipairs(R.CATEGORIES) do
-            if category.key == "big" then big = category end
-        end
-        local externals = { [33206] = { enabled = true }, [47788] = { enabled = false } }
-
-        local filter, tracked = R.BuildGroupConfig(big, makeDb({ ListExternals = externals }))
-        assert.are.equal("HELPFUL|BIG_DEFENSIVE", filter)
-        assert.is_nil(tracked.includeSpellIDs)
-        local expected = { [33206] = true }
-        for spellID in pairs(KE.AuraRules.HARDCODED_BLOCKLIST_SET) do expected[spellID] = true end
-        assert.are.same(expected, tracked.excludeSpellIDs)
-
-        local untracked = select(2, R.BuildGroupConfig(big,
-            makeDb({ ListExternals = externals, TrackExternal = false })))
-        assert.are.same(KE.AuraRules.HARDCODED_BLOCKLIST_SET, untracked.excludeSpellIDs)
-        assert.is_nil(KE.AuraRules.HARDCODED_BLOCKLIST_SET[33206])
-    end)
-
     it("caps each group at MaxPerMember, rounded, while tracked and at 0 while not", function()
         local R = L.loadPartyBuffsRules()
         local caps = { { set = 6, want = 6 }, { set = 4.4, want = 4 }, { set = 4.6, want = 5 } }
@@ -196,6 +173,36 @@ describe("PartyBuffsRules.PickFrames", function()
     it("returns an empty list when nothing is visible", function()
         local R = L.loadPartyBuffsRules()
         assert.are.same({}, R.PickFrames({ cand("party1", "eui", false), cand("party2", "compact", false) }, 5))
+    end)
+
+    it("keeps the own frame only when include-self is on", function()
+        local R = L.loadPartyBuffsRules()
+        local list = { cand("player", "compact", true), cand("party1", "compact", true) }
+        local cases = {
+            { includeSelf = false, want = { "party1" } },
+            { includeSelf = true, want = { "player", "party1" } },
+        }
+        for _, case in ipairs(cases) do
+            local tokens = {}
+            for i, binding in ipairs(R.PickFrames(list, 5, case.includeSelf)) do tokens[i] = binding.token end
+            assert.are.same(case.want, tokens, tostring(case.includeSelf))
+        end
+    end)
+
+    it("keeps only the first own frame when include-self is on, whatever its token", function()
+        local R = L.loadPartyBuffsRules()
+        local raidSelf = cand("raid3", "eui", true, { raidIndex = 3 })
+        local player = cand("player", "player", true)
+        local mate = cand("party1", "eui", true)
+        local cases = {
+            { name = "raid token first", list = { raidSelf, player, mate }, want = { "raid3", "party1" } },
+            { name = "player first", list = { player, raidSelf, mate }, want = { "player", "party1" } },
+        }
+        for _, case in ipairs(cases) do
+            local tokens = {}
+            for i, binding in ipairs(R.PickFrames(case.list, 2, true)) do tokens[i] = binding.token end
+            assert.are.same(case.want, tokens, case.name)
+        end
     end)
 end)
 
@@ -269,5 +276,33 @@ describe("PartyBuffsRules.SeedHealerPlacement", function()
         R.SeedHealerPlacement(db)
         assert.are.same({ "BELOW", 3, -2, "LOW" },
             { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerStrata })
+    end)
+end)
+
+describe("PartyBuffsRules.RowLayout", function()
+    it("puts the cooldown cells first and the while-active icons after them", function()
+        local R = L.loadPartyBuffsRules()
+        local db = { IconSize = 36, IconSpacing = 1, MaxPerMember = 4, MaxCooldownIcons = 4 }
+        assert.are.same({ 4, 2 }, { R.CellCount(6, db), R.CellCount(2, db) })
+        assert.are.same({ 37, 148, 295 }, { R.RowLayout(db, 4) })
+        assert.are.same({ 37, 0, 147 }, { R.RowLayout(db, 0) })
+    end)
+end)
+
+describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
+    it("leaves trinkets with a cooldown icon out of the Trinkets group only", function()
+        local R = L.loadPartyBuffsRules()
+        local byKey = {}
+        for _, category in ipairs(R.CATEGORIES) do byKey[category.key] = category end
+        local cells = { [111] = true }
+        local cases = {
+            { name = "trinket with cells", key = "trinket", cells = cells, want = cells },
+            { name = "trinket without cells", key = "trinket" },
+            { name = "potion ignores cells", key = "potion", cells = cells },
+        }
+        for _, case in ipairs(cases) do
+            local _, candidates = R.BuildGroupConfig(byKey[case.key], makeDb({}), case.cells)
+            assert.are.equal(case.want, candidates.excludeSpellIDs, case.name)
+        end
     end)
 end)

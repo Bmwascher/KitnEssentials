@@ -13,7 +13,9 @@
     <Script file="AuraTracking\GUI-AuraDebuffs.lua" />
     <Script file="AuraTracking\GUI-AuraHeaders.lua" />
     <Script file="AuraTracking\GUI-AuraExternals.lua" />
-    <Script file="AuraTracking\GUI-PartyBuffs.lua" />
+    <Script file="AuraTracking\PartyBuffs\GUI-PartyCooldownSpells.lua" />
+    <Script file="AuraTracking\PartyBuffs\GUI-PartyCooldowns.lua" />
+    <Script file="AuraTracking\PartyBuffs\GUI-PartyBuffs.lua" />
     <Script file="AuraTracking\GUI-AuraMovement.lua" />
     <Script file="Skinning\GUI-DamageMeter.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-KickTracker.lua" />

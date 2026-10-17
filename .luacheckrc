@@ -195,7 +195,7 @@ read_globals = {
     "UnitShouldDisplaySpellTargetName",
 
     -- Inspect
-    "CanInspect", "NotifyInspect", "GetInspectSpecialization",
+    "CanInspect", "NotifyInspect", "GetInspectSpecialization", "ClearInspectPlayer", "IsGUIDInGroup",
 
     -- Specialization
     "GetSpecializationRole",
