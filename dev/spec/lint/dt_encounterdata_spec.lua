@@ -146,6 +146,36 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
         assert.same({}, failures)
     end)
 
+    -- The settings page places each named row once and skips a name it
+    -- cannot match without a word.
+    it("a rowOrder names only spell rows and phase cues of its own encounter, once each", function()
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            local order = enc.rowOrder
+            if order ~= nil then
+                local ctx = "enc " .. tostring(encId) .. ": rowOrder"
+                if type(order) ~= "table" or #order == 0 then
+                    failures[#failures + 1] = ctx .. " must be a non-empty list"
+                else
+                    local seen = {}
+                    for i, entry in ipairs(order) do
+                        local known = (type(entry) == "number" and type(enc.spells) == "table" and enc.spells[entry] ~= nil)
+                            or (type(entry) == "string" and type(enc.phaseCues) == "table" and enc.phaseCues[entry] ~= nil)
+                        if not known then
+                            failures[#failures + 1] = ctx .. "[" .. i .. "] '" .. tostring(entry) ..
+                                "' is not a spell row or cue of this encounter"
+                        end
+                        if seen[entry] then
+                            failures[#failures + 1] = ctx .. "[" .. i .. "] '" .. tostring(entry) .. "' repeats"
+                        end
+                        seen[entry] = true
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
     -- The stage latch matches a Timer receipt by its curated row and by its
     -- duration rounded to one decimal; a stage cue starts after stage 1.
     it("a stageCue names an explicit Timer row of its own encounter, a one-decimal duration and a later stage", function()

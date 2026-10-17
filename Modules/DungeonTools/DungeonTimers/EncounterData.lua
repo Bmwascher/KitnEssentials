@@ -354,6 +354,13 @@
 -- Garfrost/Tyrannus/Ick&Krick but actual order is
 -- Garfrost/Ick&Krick/Tyrannus).
 --
+-- Optional `rowOrder` field on an encounter orders its
+-- rows on the Dungeon Bosses settings page: numbers name
+-- rows of `spells`, strings name keys of `phaseCues`,
+-- each once. Unnamed rows follow in the default order
+-- (spells by ID, cues by name). The combat path never
+-- reads it.
+--
 -- timerPolicy = "explicit" (optional, encounter-level):
 -- switches this encounter to explicit-only Timer bindings
 -- — a row binds only when its timerSource contract
@@ -965,6 +972,7 @@ KE.EncounterData[3456] = {
     dungeon = "AltarOfFangs",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1307703, 1296050, 1296216, 1296220, 1307894, "pull_stomp" },
     spells = {
         [1296220] = { name = "Triple Shot", castType = "begincast", castDuration = 2, role = "other", displayText = "DOTS + SPREAD", color = { 1.0, 0.6, 0.0 }, sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1000,6 +1008,7 @@ KE.EncounterData[3457] = {
     dungeon = "AltarOfFangs",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1298949, 1299940, "burrowing_charge", "venom_jet", 1299154, 1300686, 1310357, "toxic_atrophy_kicks", 1310547 },
     spells = {
         [1299154] = { name = "Synchronized Venom", castType = "begincast", castDuration = 2, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1041,6 +1050,7 @@ KE.EncounterData[3458] = {
     dungeon = "AltarOfFangs",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1301350, 1300876, 1301111, 1301413 },
     spells = {
         -- The short replacement may arrive before the long forecast's canceled stop.
         [1300876] = { name = "Ritual of the Fang", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "SOAK LINES", color = { 0.2, 1.0, 0.4 }, sound = "Soak",
@@ -1074,6 +1084,7 @@ KE.EncounterData[3207] = {
     dungeon = "DenOfNalorakk",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1234233, 1235118, 1253268 },
     spells = {
         [1234233] = { name = "Spoiled Supplies", castType = "cast", castDuration = 2.3, role = "other", displayText = "SOAKS", sound = "Soaks",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1089,6 +1100,7 @@ KE.EncounterData[3208] = {
     dungeon = "DenOfNalorakk",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1235623, 1235548, 1235783 },
     spells = {
         [1235548] = { name = "Glacial Torment",       castType = "begincast", castDuration = 1, role = "heal",     displayText = "DISPEL", sound = "Dispel",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
@@ -1104,6 +1116,7 @@ KE.EncounterData[3209] = {
     dungeon = "DenOfNalorakk",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1242860, 1243569, 1297797, 1243011 },
     spells = {
         [1242860] = { name = "Echoing Maul",           castType = "begincast", castDuration = 4, role = "other",    displayText = "DROPS", sound = "Drops",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
@@ -1125,6 +1138,7 @@ KE.EncounterData[2139] = {
     dungeon = "KingsRest",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 265910, 265773, 265781, 265923 },
     spells = {
         [265773] = { name = "Spit Gold", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS", sound = "Drops",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1145,6 +1159,7 @@ KE.EncounterData[2142] = {
     dungeon = "KingsRest",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1311956, 267618, 267702, 1312146 },
     spells = {
         [267618] = { name = "Drain Fluids", castType = "begincast", castDuration = 2, role = "other", displayText = "FEET", sound = "Feet",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1166,6 +1181,7 @@ KE.EncounterData[2140] = {
     dungeon = "KingsRest",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 266237, 266231, 266206, 267494, 267273, 267060, 1305810 },
     spells = {
         [266206] = { name = "Whirling Axes", castType = "begincast", castDuration = 2.8, role = "other", displayText = "DODGE", sound = "Dodge",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1190,6 +1206,7 @@ KE.EncounterData[2143] = {
     dungeon = "KingsRest",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 268586, 1303488, 269230, 269369, 1303115, 1303327, 1303267 },
     spells = {
         -- Timeline Finished can arrive late; retain the estimate unless a readable cast confirms its end.
         [269230] = { name = "Hunting Leap", castType = "begincast", castDuration = 2, role = "other", displayText = "ADD FRONTAL", color = { 0.77, 0.17, 0.17 }, sound = "Add Frontal",
@@ -1223,6 +1240,7 @@ KE.EncounterData[3101] = {
     dungeon = "MurderRow",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 474240, 1253811, 1264095, "light_infusion" },
     spells = {
         [1253811] = { name = "Fel Spray", castType = "begincast", castDuration = 3.5, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1258,6 +1276,7 @@ KE.EncounterData[3102] = {
     dungeon = "MurderRow",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1222795, 474478, 474765, 1214357, 1218347 },
     spells = {
         [474478] = { name = "Killing Spree", castType = "cast", castDuration = 0, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
@@ -1289,6 +1308,7 @@ KE.EncounterData[3103] = {
     dungeon = "MurderRow",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 473898, 1214637, 1295453, 474197, "rage_phase" },
     spells = {
         [473898] = { name = "Legion Strike", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", pausedStop = "retire" } },
@@ -1321,6 +1341,7 @@ KE.EncounterData[3105] = {
     dungeon = "MurderRow",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 474408, 1218203, 1224478, "leap", "no_portal" },
     spells = {
         [474408] = { name = "Summon Vilefiend", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1355,6 +1376,7 @@ KE.EncounterData[2609] = {
     dungeon = "RubyLifePools",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1307297, 1307308, "awaken_whelps", 373686 },
     spells = {
         [1307297] = { name = "Hailburst", castType = "begincast", castDuration = 3, role = "other", displayText = "DROPS", sound = "Drops",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1388,6 +1410,7 @@ KE.EncounterData[2606] = {
     dungeon = "RubyLifePools",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 372858, 372864, 372110 },
     spells = {
         [372864] = { name = "Ritual of Blazebinding", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1407,6 +1430,7 @@ KE.EncounterData[2623] = {
     dungeon = "RubyLifePools",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 381512, 381862, 381517, 381525, 381516 },
     spells = {
         -- The cast can start well after the timeline finishes; its confirmed start re-times the cue.
         [381525] = { name = "Roaring Firebreath", castType = "begincast", castDuration = 4, role = "other", displayText = "FRONTAL", sound = "Frontal",
@@ -1444,6 +1468,7 @@ KE.EncounterData[2124] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1311804, 1289059, 1288049, 1311805 },
     spells = {
         [1288049] = { name = "Thunder and Lightning", castType = "begincast", castDuration = 4.5, role = "other", displayText = "STACK + SOAK", color = { 0.2, 1.0, 0.4 }, sound = "Soak",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1470,6 +1495,7 @@ KE.EncounterData[2125] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1290797, 1289109, 1290029, 1293048, 1289205, 264172 },
     spells = {
         [264172] = { name = "Burrow", castType = "begincast", castDuration = 3, role = "other", displayText = "INTERMISSION", color = { 1.0, 1.0, 1.0 }, soundOnHide = "Intermission",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1504,6 +1530,7 @@ KE.EncounterData[2126] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1291618, 1309525 },
     spells = {
         [1309525] = { name = "Induction", castType = "begincast", castDuration = 3, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1521,6 +1548,7 @@ KE.EncounterData[2127] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 1301202, 1273408 },
     spells = {
         [1301202] = { name = "Defiling Taint", castType = "cast", castDuration = 0, role = "other", displayText = "BOSS IMMUNE", color = { 1.0, 1.0, 1.0 }, sound = "Boss Immune",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", soonOnHold = true } },
@@ -1541,6 +1569,7 @@ KE.EncounterData[3199] = {
     dungeon = "TheBlindingVale",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1234753, 1234850, 1235640, 1235564 },
     spells = {
         [1234753] = { name = "Bedrock Slam", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1564,6 +1593,7 @@ KE.EncounterData[3200] = {
     dungeon = "TheBlindingVale",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1236746, 1236709, 1237090 },
     spells = {
         [1236746] = { name = "Verdant Stomp", castType = "begincast", castDuration = 3, role = "other", displayText = "AOE", sound = "Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", suppressConcurrentRestart = { from = 29, duration = 6 } } },
@@ -1583,6 +1613,7 @@ KE.EncounterData[3201] = {
     dungeon = "TheBlindingVale",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1239824, 1240098, 1240210, 1241058, 1239882, "bear_form", "haranir_form" },
     spells = {
         -- Off by default: its forecast ends at the pull.
         [1239882] = { name = "Moonkin Form", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "PHASE 1", color = { 1.0, 1.0, 1.0 }, disabled = true,
@@ -1616,6 +1647,7 @@ KE.EncounterData[3202] = {
     dungeon = "TheBlindingVale",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 1247685, 1246372, 1246607, 1246858 },
     spells = {
         [1246372] = { name = "Awaken the Lightbloom", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "ADDS", sound = "Adds",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1644,6 +1676,7 @@ KE.EncounterData[3285] = {
     dungeon = "VoidscarArena",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1297017, 1222098, 1296963, 1300259 },
     spells = {
         -- Unanchored: this event's timeline finish is not reliably reported.
         [1222098] = { name = "Nether Dash", castType = "cast", castDuration = 0, role = "mechanic", displayText = "LINES", sound = "Spread",
@@ -1665,6 +1698,7 @@ KE.EncounterData[3286] = {
     dungeon = "VoidscarArena",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1222642, 1226120, 1222721, 1262497, 1222371 },
     spells = {
         [1222371] = { name = "Provoke Creeper", castType = "cast", castDuration = 0, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Sequel", parent = 1262497, after = 7 } },
@@ -1689,6 +1723,7 @@ KE.EncounterData[3287] = {
     dungeon = "VoidscarArena",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1311923, "tank_frontal", 1282770, 1227264, 1263982, 1222755 },
     spells = {
         [1222755] = { name = "Void Cascade", castType = "begincast", castDuration = 6, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
