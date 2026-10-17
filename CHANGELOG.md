@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.7
+
+### Automation
+
+- Hide Zone Text is now the only setting that hides zone text, and it
+  works whether Automation is on or off. Your profiles keep zone text
+  hidden wherever it was hidden before
+- Hide Zone Text moves into the Interface Cleanup card, beside Hide
+  Helptips. You can change it only while Automation is on. Cinematics &
+  Dialogs and Interface Cleanup each show their four options in two rows of
+  two
+
+### Dark Theme
+
+- The Hide box on the On-Screen Messages tab's Zone names row is gone. Use
+  Automation's Hide Zone Text instead
+- The Zone names Preview shows the zone names again, and no longer shows
+  the action and error messages with them
+
+---
+
 ## v4.11.6
 
 ### Skinning
