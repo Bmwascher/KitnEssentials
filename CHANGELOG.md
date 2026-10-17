@@ -1,5 +1,43 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.11
+
+### Addon Theme
+
+- **NEW:** Ulduar, a white theme preset. Where text sits on a light accent,
+  it turns dark so it stays readable
+
+### Healer Mana
+
+- A healer from another realm now shows their spec icon
+- New profiles get a new look: Healer Mana sits at the party frames, with
+  larger icons (38) and text, and Hide when my spec is a healer is on. It
+  stays off by default. If you already set up Healer Mana, it keeps its
+  current look, place and setting
+
+### CC Tracker
+
+- New profiles show up to 5 enemies (was 15), 10 pixels lower. It stays off
+  by default. If you already set up CC Tracker, it keeps your values
+
+### Automation
+
+- Hide Helptips now follows a profile switch, as Hide Zone Text does
+
+### Settings Window
+
+- After a UI scale or resolution change, the settings window fits itself
+  to the screen again from its saved size, staying collapsed if it was
+- Sound dropdowns list None first, then the sounds from A to Z, Great
+  Vault Alert's included
+
+### Skinning
+
+- BugSack: the new Options tab, its two dropdowns and its checkboxes take
+  KE's skin, and the wipe button no longer touches the window border
+
+---
+
 ## v4.11.10
 
 ### Party Cooldowns
