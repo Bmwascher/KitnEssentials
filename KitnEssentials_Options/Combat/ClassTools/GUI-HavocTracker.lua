@@ -56,10 +56,14 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled ~= true then return yOffset end
 
-    local attached = db.AttachToCombatTexts == true
-    local attachRow = GUIFrame:CreateRow(card1.content, attached and Theme.rowHeight or Theme.rowHeightLast)
+    -- The font follows the box itself: the game builds the warning once,
+    -- possibly before Combat Texts is up. The position follows the real
+    -- attachment.
+    local ticked = db.AttachToCombatTexts == true
+    local attached = HT ~= nil and HT:IsAttached()
+    local attachRow = GUIFrame:CreateRow(card1.content, ticked and Theme.rowHeight or Theme.rowHeightLast)
     local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
-        value = attached,
+        value = ticked,
         tooltip = "Show the warning last in the Combat Texts stack and move with it, "
             .. "instead of using a separate anchor.",
         callback = function(checked)
@@ -70,8 +74,11 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     })
     attachRow:AddWidget(attachCheck, 1)
     manager:Register(attachCheck, "all")
-    if attached then
+    if ticked then
         card1:AddRow(attachRow, Theme.rowHeight)
+        if HT ~= nil and not attached then
+            GUIFrame:AddAttachOffNote(card1, true)
+        end
         for _, widget in ipairs(GUIFrame:CreateAttachSizeRow(card1, db, {
             sizeKey = "WarningFontSize", default = 24, range = { 10, 48 },
             onChange = ApplyWithReload, isLast = true,
@@ -111,7 +118,7 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
 
     yOffset = card2:GetNextOffset()
 
-    -- Combat Texts owns the anchor and the font while attached.
+    -- Combat Texts owns the anchor while attached.
     if not attached then
         ----------------------------------------------------------------
         -- Card 3: Position Settings
@@ -141,7 +148,9 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
         end
         manager:Register(posCard, "all")
         yOffset = posOffset
+    end
 
+    if not ticked then
         ----------------------------------------------------------------
         -- Card 4: Font Settings
         ----------------------------------------------------------------

@@ -160,7 +160,7 @@ end
 
 function HT:IsAttached()
     local cm = KitnEssentials:GetModule("CombatTexts", true)
-    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+    return cm ~= nil and cm:TakesAttached(ATTACH_KEY, self.anchor, self.db.AttachToCombatTexts == true)
 end
 
 -- Moves only our anchor. The engine's button is centered on it and follows,

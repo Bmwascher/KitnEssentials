@@ -33,3 +33,53 @@ describe("Combat Texts attached size", function()
         end
     end)
 end)
+
+-- A refused seat's change message makes every owner re-apply its placement,
+-- and one owner's anchor carries a protected aura button, so the message is
+-- a combat gate. The real queue and flush run against a captured timer and
+-- an InCombatLockdown override.
+describe("Combat Texts attach-change message", function()
+    local CM, timers, sent, lockdown, enabled
+
+    before_each(function()
+        timers, sent, lockdown, enabled = {}, 0, false, true
+        CM = L.loadCombatTexts({
+            C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end },
+            InCombatLockdown = function() return lockdown end,
+        })
+        CM.IsEnabled = function() return enabled end
+        CM.SendMessage = function() sent = sent + 1 end
+    end)
+
+    it("sends one message for every refusal queued before it goes out", function()
+        CM:QueueAttachChange()
+        CM:QueueAttachChange()
+        assert.equal(1, #timers)
+        timers[1]()
+        assert.equal(1, sent)
+    end)
+
+    it("holds the message until combat ends", function()
+        lockdown = true
+        CM:QueueAttachChange()
+        assert.equal(0, #timers, "queued in combat")
+        lockdown = false
+        CM:FlushAttachChange()
+        assert.equal(1, sent, "queued in combat")
+
+        CM:QueueAttachChange()
+        lockdown = true
+        timers[1]()
+        assert.equal(1, sent, "timer fired in combat")
+        lockdown = false
+        CM:FlushAttachChange()
+        assert.equal(2, sent, "timer fired in combat")
+    end)
+
+    it("drops the message once Combat Texts is disabled", function()
+        CM:QueueAttachChange()
+        enabled = false
+        timers[1]()
+        assert.equal(0, sent)
+    end)
+end)

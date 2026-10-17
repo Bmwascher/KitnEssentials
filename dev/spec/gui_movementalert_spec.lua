@@ -8,9 +8,10 @@
 -- read draws the stored class, the shipped one draws the picker's, and nothing
 -- writes the key back.
 --
--- The page reads KE.GUIFrame only, so it loads against a hand-built stub the way
--- GUI-SecondaryStats does. The real registered builder runs; the stub factories
--- record what it asks for and restate none of its logic.
+-- The page reads KE.GUIFrame and, through the KitnEssentials global, the
+-- module's IsAttached(); both are hand-built stubs, the GUIFrame one the way
+-- GUI-SecondaryStats does it. The real registered builder runs; the stub
+-- factories record what it asks for and restate none of its logic.
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-NoMovementAlert tracked spells card", function()
@@ -20,8 +21,10 @@ describe("GUI-NoMovementAlert tracked spells card", function()
         specHeaders = {}
 
         -- Attached, themed and silent so cards 2-6 take their short branch.
-        -- None of them reaches card 7's class; each one skipped is a widget
-        -- factory the stub does not have to carry.
+        -- The page follows the module's IsAttached(), not the saved box, so
+        -- the stub module reports attached too. None of them reaches card
+        -- 7's class; each one skipped is a widget factory the stub does not
+        -- have to carry.
         db = {
             Enabled = true,
             AttachToCombatTexts = true,
@@ -66,6 +69,17 @@ describe("GUI-NoMovementAlert tracked spells card", function()
             CreateClassPickerRow = function() return noopRow(), "DRUID" end,
         }
 
+        -- Kept in place after the load (loadModule only borrows a global when
+        -- none exists), because the builder looks the module up when it runs.
+        -- ApplySettings is reached only from widget callbacks, which the stub
+        -- factories never fire.
+        _G.KitnEssentials = {
+            GetModule = function(_, name)
+                if name == "NoMovementAlert" then
+                    return { IsAttached = function() return true end }
+                end
+            end,
+        }
         local KE = helpers.loadModule("KitnEssentials_Options/Combat/StatusTexts/GUI-NoMovementAlert.lua", {
             GUIFrame = GUIFrame,
             GetPlayerSpecId = function() return nil end,
@@ -80,6 +94,10 @@ describe("GUI-NoMovementAlert tracked spells card", function()
             MOVEMENT_SPELL_KEY = function(specId, spellId) return specId .. ":" .. spellId end,
         })
         KE.GUIFrame.registeredContent["NoMovementAlert"]({}, 0)
+    end)
+
+    after_each(function()
+        _G.KitnEssentials = nil
     end)
 
     it("draws the picker's class, not the one left in the profile", function()

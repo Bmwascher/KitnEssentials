@@ -1,8 +1,9 @@
 -- Modules/Combat/ClassTools/ShamanProcRules.lua -- the rules a later edit breaks
 -- silently: which trackers a character gets, how long each counts, whose spec
 -- change re-reads talents, which cooldown announcement starts which tracker,
--- when an announcement is refused, and how much of a countdown is left. Talent
--- reads and secret flags are passed in, so no Blizzard fake is needed.
+-- when an announcement is refused, how much of a countdown is left, and when
+-- the login anchor repair may move the display. Talent reads, secret flags and
+-- the attached state are passed in, so no Blizzard fake is needed.
 local L = require("dev.spec._ke_loader")
 
 describe("shaman proc rules", function()
@@ -119,6 +120,18 @@ describe("shaman proc rules", function()
         }
         for i, case in ipairs(cases) do
             assert.equals(case[4], Rules.Remaining(case[1], case[2], case[3]), "case " .. i)
+        end
+    end)
+
+    it("lets the login anchor repair move only a detached display anchored to the player frame", function()
+        -- attached, anchor type, expected
+        local cases = {
+            { false, "PLAYERFRAME", true },
+            { true, "PLAYERFRAME", false },
+            { false, "UIPARENT", false },
+        }
+        for i, case in ipairs(cases) do
+            assert.equals(case[3], Rules.RepairsAtLogin(case[1], case[2]), "case " .. i)
         end
     end)
 end)

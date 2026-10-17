@@ -893,6 +893,10 @@ local Defaults = {
             ReadyColor = { 0.25, 0.82, 0.42, 1 },
             Separator = "-",
 
+            -- UIPARENT resolves to UIParent, where profiles without these keys
+            -- already sit.
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
             Position = DefaultPosition(0, -220),
         },
 

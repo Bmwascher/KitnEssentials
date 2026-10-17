@@ -58,10 +58,15 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
-    local attached = db.AttachToCombatTexts == true
-    local attachRow = GUIFrame:CreateRow(card1.content, attached and Theme.rowHeight or Theme.rowHeightLast)
+    local ticked = db.AttachToCombatTexts == true
+    -- The real attachment, not the saved box: with Combat Texts off the
+    -- warning stands alone and needs its own position and font.
+    local attached = HM ~= nil and HM:IsAttached()
+    local attachNote = ticked and HM ~= nil and not attached
+    local attachRow = GUIFrame:CreateRow(card1.content,
+        (attached or attachNote) and Theme.rowHeight or Theme.rowHeightLast)
     local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
-        value = attached,
+        value = ticked,
         tooltip = "Show the warning as a row of the Combat Texts messages and move with them, "
             .. "instead of using a separate anchor.",
         callback = function(checked)
@@ -80,6 +85,9 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
         })) do
             manager:Register(widget, "all")
         end
+    elseif attachNote then
+        card1:AddRow(attachRow, Theme.rowHeight)
+        GUIFrame:AddAttachOffNote(card1)
     else
         card1:AddRow(attachRow, Theme.rowHeightLast, 0)
     end

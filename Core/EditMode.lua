@@ -135,6 +135,36 @@ local function ReadableRect(frame)
 end
 EditMode._ReadableRect = ReadableRect
 
+local function IsAnchoredTo(frame, region)
+    for i = 1, frame:GetNumPoints() or 0 do
+        local _, relativeTo = frame:GetPoint(i)
+        if not issecretvalue(relativeTo) then
+            if relativeTo == region then return true end
+        end
+    end
+    return false
+end
+
+-- The parent a drag measures against, matching where the module's placement
+-- put the frame. getParentFrame does not say whether that placement
+-- reparents, and a reparenting one refuses a text or texture, so such an
+-- anchor is kept only while the frame is anchored to it. A cancel finds the
+-- frame on UIParent's corner, so it passes the drag's own answer instead.
+local function EffectiveDragParent(frame, parent, dragAnchor)
+    if KE:IsUnsafeAnchor(frame, parent) then return UIParent end
+    if KE:IsUnsafeAnchor(nil, parent, true) then
+        local kept
+        if dragAnchor ~= nil then
+            kept = parent == dragAnchor
+        else
+            kept = IsAnchoredTo(frame, parent)
+        end
+        if not kept then return UIParent end
+    end
+    return parent
+end
+EditMode._EffectiveDragParent = EffectiveDragParent
+
 local function AddCoordinate(list, seen, value)
     if seen[value] then return end
     seen[value] = true
@@ -776,7 +806,9 @@ function EditMode:SetupDragHandlers(overlay)
         dragAnchorFrom = element.getAnchorFrom and element.getAnchorFrom()
             or (currentPos and currentPos.AnchorFrom) or "CENTER"
         dragAnchorTo = (currentPos and currentPos.AnchorTo) or "CENTER"
-        dragParent = (element.getParentFrame and element.getParentFrame()) or UIParent
+        dragParent = EffectiveDragParent(targetFrame,
+            (element.getParentFrame and element.getParentFrame()) or UIParent)
+        self.dragAnchor = dragParent
         -- Overlays are pooled and outlive the drag, and the retire path does
         -- not touch these, so they are cleared next to the position they
         -- describe. Keeping the three together is what stops a later reader
@@ -837,6 +869,7 @@ function EditMode:SetupDragHandlers(overlay)
         local newPos = self.draggedPos
         local usedElement, cachedVersion = self.snapUsedElement, self.snapVersion
         self.draggedPos = nil
+        self.dragAnchor = nil
 
         local element = self.element
         if not element then return end
@@ -1041,6 +1074,8 @@ function EditMode:CancelDrag(overlay)
     -- position is untouched by a drag, so repainting from it is correct
     -- immediately, without waiting for the deferred restore below.
     overlay.draggedPos = nil
+    local dragAnchor = overlay.dragAnchor
+    overlay.dragAnchor = nil
     self:UpdateNudgeFrameInfo()
 
     local element = overlay.element
@@ -1059,7 +1094,8 @@ function EditMode:CancelDrag(overlay)
         if not frame then return end
         local pos = live.getPosition and live.getPosition()
         if not pos then return end
-        local parent = live.getParentFrame and live.getParentFrame() or UIParent
+        local parent = EffectiveDragParent(frame,
+            live.getParentFrame and live.getParentFrame() or UIParent, dragAnchor)
         local anchorFrom = live.getAnchorFrom and live.getAnchorFrom()
             or pos.AnchorFrom or "CENTER"
         frame:ClearAllPoints()

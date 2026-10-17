@@ -102,3 +102,9 @@ function Rules.FormatTime(remaining)
     if remaining >= 1 then return string_format("%d", remaining) end
     return string_format("%.1f", remaining)
 end
+
+-- The login anchor repair moves a display back onto the player frame. An
+-- attached display sits in the Combat Texts stack and must stay there.
+function Rules.RepairsAtLogin(attached, anchorFrameType)
+    return not attached and anchorFrameType == "PLAYERFRAME"
+end

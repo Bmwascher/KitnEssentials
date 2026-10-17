@@ -332,7 +332,7 @@ end
 ---------------------------------------------------------------------------------
 function HM:IsAttached()
     local cm = KitnEssentials:GetModule("CombatTexts", true)
-    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+    return cm ~= nil and cm:TakesAttached(ATTACH_KEY, self.frame, self.db.AttachToCombatTexts == true)
 end
 
 -- Attached, the warning is a Combat Texts row: that module's face and

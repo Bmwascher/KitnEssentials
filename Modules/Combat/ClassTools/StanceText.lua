@@ -329,7 +329,7 @@ end
 
 function ST:IsAttached()
     local cm = KitnEssentials:GetModule("CombatTexts", true)
-    return cm ~= nil and cm:AcceptsAttach(self.db.AttachToCombatTexts == true)
+    return cm ~= nil and cm:TakesAttached(ATTACH_KEY, self.frame, self.db.AttachToCombatTexts == true)
 end
 
 -- Attached, the caption above the icon gets its own room in the stack, so it

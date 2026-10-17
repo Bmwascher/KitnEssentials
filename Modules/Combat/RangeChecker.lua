@@ -82,7 +82,7 @@ end
 ---------------------------------------------------------------------------------
 function RC:CreateFrame()
     if self.frame then return end
-    local parent = KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+    local parent = KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame, nil, true)
 
     local frame = CreateFrame("Frame", "KE_RangeCheckerFrame", parent)
     frame:SetSize(100, 25)
@@ -201,7 +201,7 @@ function RC:RegWithEditMode()
             key = "RangeChecker", displayName = "Range Checker", frame = self.frame,
             module = self,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db, true) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "RangeChecker",
         })

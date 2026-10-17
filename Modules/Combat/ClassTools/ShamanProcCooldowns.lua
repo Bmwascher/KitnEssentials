@@ -117,6 +117,9 @@ function SPC:CreateFrame_()
     frame:SetSize(SLOT_WIDTH, 30)
     frame:Hide()
     self.frame = frame
+    KE:RegisterAnchorRepair(frame, function()
+        return Rules.RepairsAtLogin(self:IsAttached(), self.db.anchorFrameType)
+    end, function() self:ApplyPosition() end)
 end
 
 -- The length the next proc would count, or nil while the talent is not known.
@@ -134,7 +137,7 @@ function SPC:IsAttached()
     local db = self.db
     if not db or db.DisplayMode ~= "TEXT" then return false end
     local cm = KitnEssentials:GetModule("CombatTexts", true)
-    return cm ~= nil and cm:AcceptsAttach(db.AttachToCombatTexts == true)
+    return cm ~= nil and cm:TakesAttached(ATTACH_KEY, self.frame, db.AttachToCombatTexts == true)
 end
 
 function SPC:NotifyAttach()
@@ -149,10 +152,11 @@ function SPC:UpdateAttachSubscription()
 end
 
 -- Attached, the text takes the Combat Texts face, outline and spacing, and its
--- size unless Override Text Size is on.
+-- size unless Override Text Size is on. It reads the placement result, so
+-- style and growth direction change together.
 function SPC:EffectiveStyle()
     local db = self.db
-    if self:IsAttached() then
+    if self.attached then
         local cm = KitnEssentials:GetModule("CombatTexts", true)
         local c = cm and cm.db
         if c then
@@ -208,6 +212,10 @@ function SPC:RegisterAnchor()
     cfg.frame = self.frame
     cfg.module = self
     cfg.getPosition = function() return self.db.Position end
+    -- A drag is computed in the frame Anchored To resolves to.
+    cfg.getParentFrame = function()
+        return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+    end
     cfg.setPosition = function(pos)
         local p = self.db.Position
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
@@ -593,8 +601,8 @@ function SPC:Evaluate()
     if #list > 0 then
         self:CreateFrame_()
         self:SetLive(true)
-        self:ApplyStyle()
         self:ApplyPosition()
+        self:ApplyStyle()
         self:RegisterAnchor()
     else
         self:SetLive(false)
@@ -679,8 +687,8 @@ function SPC:ShowPreview()
     self:CreateFrame_()
     self.isPreview = true
     self:StopTicker()
-    self:ApplyStyle()
     self:ApplyPosition()
+    self:ApplyStyle()
 
     if self.db.DisplayMode == "ICONS" then
         local shown = self.shownButtons

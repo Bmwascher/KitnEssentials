@@ -1137,7 +1137,7 @@ function TT:ApplyPosition()
     if not p then return end
 
     if self.anchorFrame then
-        local parent = KE:ResolveAnchorFrame(p.AnchorFrameType, p.ParentFrame)
+        local parent = KE:ResolveAnchorFrame(p.AnchorFrameType, p.ParentFrame, self.anchorFrame)
         self.anchorFrame:ClearAllPoints()
         self.anchorFrame:SetPoint(p.AnchorFrom or "BOTTOMRIGHT", parent,
             p.AnchorTo or "BOTTOMRIGHT", p.XOffset or -120, p.YOffset or 220)

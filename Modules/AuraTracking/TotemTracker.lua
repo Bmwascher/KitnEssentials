@@ -203,7 +203,7 @@ function TT:UpdateContainerPosition()
 
     local db = self.db
     local position = db.Position
-    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame)
+    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame, containerFrame, true)
     if not parent then return end
 
     containerFrame:SetParent(parent)

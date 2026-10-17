@@ -462,18 +462,119 @@ local anchorRecords = setmetatable({}, { __mode = "k" })
 local anchorRepairs = setmetatable({}, { __mode = "k" })
 local anchorPending = setmetatable({}, { __mode = "k" })
 
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName)
+-- Select Frame can name the frame being placed, a region inside or anchored to
+-- it at any depth, or a global that is not a region; SetPoint and SetParent
+-- raise a Lua error on each, and SetParent also needs a frame. A link that
+-- cannot be read ends its branch; a walk past the limit is refused.
+local ANCHOR_WALK_LIMIT = 64
+local anchorQueue = {}
+local anchorSeen = {}
+local warnedAnchorNames = {}
+
+-- Every widget carries its handle at index 0; a mixin or plain table can carry
+-- the method names but not that. A secret value is never compared, and a
+-- table addons may not read is never indexed. Any other method call on a
+-- forbidden region raises an error, and IsForbidden can answer secret.
+local function IsRegion(value)
+    if issecretvalue(value) then return false end
+    if type(value) ~= "table" or not canaccesstable(value) then return false end
+    if type(rawget(value, 0)) ~= "userdata"
+        or type(value.GetParent) ~= "function"
+        or type(value.GetNumPoints) ~= "function"
+        or type(value.GetPoint) ~= "function"
+        or type(value.IsObjectType) ~= "function"
+        or type(value.IsForbidden) ~= "function" then
+        return false
+    end
+    local forbidden = value:IsForbidden()
+    if issecretvalue(forbidden) then return false end
+    return not forbidden
+end
+
+-- IsObjectType answers secret for a hidden object type, which cannot be
+-- trusted as a frame.
+local function IsFrame(region)
+    local isFrame = region:IsObjectType("Frame")
+    if issecretvalue(isFrame) then return false end
+    return isFrame == true
+end
+
+function KE:IsUnsafeAnchor(frame, candidate, asParent)
+    if not IsRegion(candidate) then return true end
+    if asParent and not IsFrame(candidate) then return true end
+    if frame == nil then return false end
+    if candidate == frame then return true end
+    if candidate == UIParent then return false end
+
+    -- Wiped on entry rather than exit: a walk an error interrupted would
+    -- otherwise leave regions marked seen, and the next walk would skip them.
+    wipe(anchorQueue)
+    wipe(anchorSeen)
+    local top, seen = 1, 1
+    anchorQueue[1] = candidate
+    anchorSeen[candidate] = true
+    while top > 0 do
+        local region = anchorQueue[top]
+        anchorQueue[top] = nil
+        top = top - 1
+
+        local parent = region:GetParent()
+        if issecretvalue(parent) then
+            parent = nil
+        elseif parent ~= nil and not canaccesstable(parent) then
+            parent = nil
+        end
+        -- Link 0 is the parent; links 1..n are the anchor targets.
+        for i = 0, region:GetNumPoints() or 0 do
+            local link = parent
+            if i > 0 then
+                local _, relativeTo = region:GetPoint(i)
+                if issecretvalue(relativeTo) then
+                    relativeTo = nil
+                elseif relativeTo ~= nil and not canaccesstable(relativeTo) then
+                    relativeTo = nil
+                end
+                link = relativeTo
+            end
+            if link == frame then return true end
+            if link ~= nil and link ~= UIParent and not anchorSeen[link] and IsRegion(link) then
+                if seen == ANCHOR_WALK_LIMIT then return true end
+                seen = seen + 1
+                anchorSeen[link] = true
+                top = top + 1
+                anchorQueue[top] = link
+            end
+        end
+    end
+    return false
+end
+
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
     elseif anchorFrameType == "PLAYERFRAME" then
         -- Auto-detect the active unit-frame addon's player frame.
-        local frame = _G.ElvUF_Player or _G.UUF_Player
+        local playerFrame = _G.ElvUF_Player or _G.UUF_Player
             or _G.EllesmereUIUnitFrames_Player or _G.PlayerFrame or UIParent
-        if lastPlayerFrame == nil then lastPlayerFrame = frame end
-        return frame
+        if lastPlayerFrame == nil then lastPlayerFrame = playerFrame end
+        return playerFrame
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
-        local frame = _G[parentFrameName]
-        return frame or UIParent
+        local candidate = _G[parentFrameName]
+        -- A global can hold a cached secret API result, which must not be
+        -- compared; IsUnsafeAnchor refuses it.
+        if not issecretvalue(candidate) then
+            if candidate == nil then return UIParent end
+        end
+        if self:IsUnsafeAnchor(frame, candidate, asParent) then
+            if not warnedAnchorNames[parentFrameName] then
+                warnedAnchorNames[parentFrameName] = true
+                self:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
+                    .. "is the display itself or depends on it, or its anchors could not all be checked. "
+                    .. "Placed on the screen instead.")
+            end
+            return UIParent
+        end
+        return candidate
     end
     return UIParent
 end
@@ -1919,7 +2020,7 @@ end
 
 function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
     if not frame or not posConfig then return end
-    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame)
+    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent)
     if SetParent then
         frame:SetParent(parent)
     end

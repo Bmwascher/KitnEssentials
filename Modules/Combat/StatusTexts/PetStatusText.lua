@@ -318,6 +318,11 @@ local function GetAttachTarget()
     return nil
 end
 
+-- For the settings page: whether the text really is a Combat Texts line.
+function PS:IsAttached()
+    return GetAttachTarget() ~= nil
+end
+
 function PS:HideExternalLine()
     if not self.externalShown then return end
     self.externalShown = false
