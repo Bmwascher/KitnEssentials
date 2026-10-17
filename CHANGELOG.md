@@ -1,5 +1,86 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.8
+
+### Party Cooldowns
+
+- **NEW:** Party Buffs is now Party Cooldowns. Beside each teammate's party
+  frame, a row shows their spec's offensive and personal defensive
+  cooldowns and their racial at all times, and their trinket buffs while
+  active. If you
+  already have Party Buffs on, the new rows show without any change to
+  your settings
+- Each cooldown icon is full color when ready and shows its timer while
+  its buff is up. After the buff falls it turns gray with the time left,
+  such as "1:14"
+- Lengths are listed per spec, since the game hides real cooldowns. When a
+  key starts, class spells with a cooldown of 1:30 or longer go back to
+  ready; trinkets keep counting. A cooldown already running when you
+  /reload or join shows as ready until its next use
+- Earth Elemental, Invoke Xuen and Summon Infernal show their summon's
+  time left (30, 20 and 30 seconds), then go gray for the cooldown
+- Talents are read from teammates. Ice Cold, Sentinel and Incarnation:
+  Chosen of Elune swap their icon. Invoke Xuen (Xuen's Bond), Ascendance
+  (First Ascendant), Summon Infernal (Inferno), Feral's Convoke the
+  Spirits (Ashamane's Guidance) and Desperate Prayer (Angel's Mercy) count
+  the shorter cooldown only with that talent. Earth Elemental, Summon
+  Infernal, Breath of Sindragosa, Convoke the Spirits and Power Infusion
+  show only for a teammate with the talent
+- Frostwyrm's Fury is on the Frost Death Knight list, off by default
+- Stoneform, Fireblood and Shadowmeld show for Dwarf, Dark Iron Dwarf and
+  Night Elf teammates, after their spec's spells. Racials is on the Tracked
+  card, on by default
+- A ready check outside a key reads teammates' talents again, so a talent
+  change made before the key shows. An offline party member no longer
+  delays reading the others
+- Rows stay through zone changes and loading screens, and running
+  cooldowns keep counting
+- **NEW:** Glow While Active, on by default: an icon glows while its buff
+  or summon is up, as a yellow Pulse Border by default. The external,
+  potion and trinket buff icons glow while they show whenever this glow is
+  on
+- The Tracked card lists Class Cooldowns (was Offensive CDs, now with
+  defensives), Trinkets, Externals, Potions and Racials as checkboxes.
+  Include Yourself, off by default, adds the row to your own frame
+- Externals now start off. If you used Party Buffs, external icons stop
+  showing until you tick Externals again
+- Big Defensives is removed; defensives now come from each spec's list.
+  Spells you added by hand to the Offensive CDs list no longer show
+- Time-Left Swipe is now off by default. If you never changed it, tick it
+  on the Display card to get the swipe back
+- **NEW:** Max Cooldown Icons on the Display card sets how many cooldown
+  icons come before the buff icons (default 6). Max Icons Per Member is now
+  Max Active Buff Icons. Timer Text, Cooldown Text and Time-Left Swipe
+  share one row, and Timer Size sets both the timer and the gray countdown
+- **NEW:** Icons Per Row and Grow on the Position card. Icons Per Row wraps
+  a row after that many icons (default 14, one line). Grow picks which way
+  the extra lines go, offering only directions away from the party frame.
+  With Center, the first line sits level with the middle of the party frame
+- The Position card's Healer tab has its own Icons Per Row (default 3),
+  Icon Size (default 32) and Grow. If you use Use in Healer Specs, healer
+  rows now wrap at 3 icons of 32 pixels until you change them. The note
+  beside Use in Healer Specs is gone
+- Frame Strata is removed. Rows always sit at the party frame's strata, so
+  a saved Low, Medium, High or Dialog no longer applies
+- The page has three tabs: Cooldowns, Potions and Healer Externals. The
+  Class Cooldowns list has a class dropdown, a heading per spec, and for
+  each spell an on/off box, a Spell CD box and up and down arrows. The
+  Trinkets list has a Trinket Cooldowns card for each trinket's length
+- The settings preview shows sample teammates with their own spec's
+  spells, racial, trinket, potion and external, filled up to your Max
+  Cooldown Icons and Max Active Buff Icons. The real rows hide while the
+  preview shows
+
+### Glow Settings
+
+- The Alert glow style animates six times faster at the same Speed
+- Glows on aura icons start and stop with their aura (Party Cooldowns, Aura
+  Externals, Time Spiral, Movement Buffs and PI Assist), so a hidden icon
+  no longer runs its glow. A showing glow can restart its animation after a
+  settings change or a zone change
+
+---
+
 ## v4.11.7
 
 ### Automation
