@@ -931,6 +931,7 @@ end
 -- OnInitialize would. Returns LR.
 function L.loadLootRollBars(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
+    _G.C_Item = { GetItemInfo = function() end }
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     -- Missing CapitalCase keys (WoW API methods) resolve to a no-op;
