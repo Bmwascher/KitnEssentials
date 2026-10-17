@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.2
+
+### Damage Meter
+
+- Player names on the bars end just before the damage or healing value, so
+  a long value no longer covers the name. The name is cut short instead
+- Spell and enemy breakdown rows have two lines: the name across the full
+  row, with the numbers below it in smaller, dimmer text. Rows grow taller
+  to fit both lines
+- Death recap rows have two lines: the time and spell, then the numbers and
+  the source in gray. Heal rows now name the healer
+- With Only on Mouseover ticked, the header icons hide again once the
+  cursor leaves the header, even when it leaves across a splitter between
+  docked windows
+
+---
+
 ## v4.11.1
 
 ### Interrupt Tracker
