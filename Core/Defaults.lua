@@ -743,7 +743,6 @@ local Defaults = {
             BarSpacing = 1,
             StatusBarTexture = "KitnUI",
             GrowthDirection = "UP",
-            MaxBars = 5,                    -- records shown beside the rows ("Max Records")
             IconSide = "LEFT",
             IconSize = 20,
             ShowIcon = true,
@@ -761,8 +760,6 @@ local Defaults = {
             -- Ready state
             ShowReadyText = true,
             ReadyText = "Ready",
-            -- Teammate kick records (12.0.5: exact teammate CDs are hidden)
-            KickRecordDuration = 15,        -- seconds a teammate kick record stays visible
             KickSync = true,                -- broadcast own kicks to party KE users (real CD sync)
             -- Sort priorities (1=first, 3=last)
             SortTankPriority = 1,

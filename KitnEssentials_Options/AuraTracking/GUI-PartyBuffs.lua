@@ -41,11 +41,6 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket" },
 }
 
-local PLACEMENT_TABS = {
-    { id = "DEFAULT", label = "Default" },
-    { id = "HEALER",  label = "Healer" },
-}
-
 local HEALER_KEY = {}
 for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
 
@@ -292,7 +287,7 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     end
 
     local _, placementOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
-        tabs = PLACEMENT_TABS,
+        tabs = GUIFrame.HEALER_VIEW_TABS,
         activeId = activePlacement,
         onSwitch = function(newId) activePlacement = newId end,
         fill = true,
