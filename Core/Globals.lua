@@ -575,7 +575,7 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent, followers)
     return false
 end
 
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent)
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent, followers)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
     elseif anchorFrameType == "PLAYERFRAME" then
@@ -591,12 +591,12 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent
         if not issecretvalue(candidate) then
             if candidate == nil then return UIParent end
         end
-        if self:IsUnsafeAnchor(frame, candidate, asParent) then
+        if self:IsUnsafeAnchor(frame, candidate, asParent, followers) then
             if not warnedAnchorNames[parentFrameName] then
                 warnedAnchorNames[parentFrameName] = true
                 self:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
-                    .. "is the display itself or depends on it, or its anchors could not all be checked. "
-                    .. "Placed on the screen instead.")
+                    .. "is the display itself, depends on it or is moved onto it, "
+                    .. "or its anchors could not all be checked. Placed on the screen instead.")
             end
             return UIParent
         end
@@ -2041,9 +2041,9 @@ function KE:ApplyActivePosition(frame, db, setParent)
     self:ApplyFramePosition(frame, posConfig, config, setParent)
 end
 
-function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
+function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
     if not frame or not posConfig then return end
-    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent)
+    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent, followers)
     if SetParent then
         frame:SetParent(parent)
     end

@@ -533,12 +533,15 @@ function KE.CountDungeonTimerCoverage(registry, encounterData, trashData, season
 --- ResolveAnchorFrame) even though the fields themselves are optional.
 --- `SetParent` is an optional boolean; truthy reparents `frame` to the
 --- resolved anchor frame before positioning. Also snaps the frame to the
---- pixel grid at the end (KE:SnapFrameToPixels).
+--- pixel grid at the end (KE:SnapFrameToPixels). `followers` goes to
+--- ResolveAnchorFrame; it is an argument, never a Config field, because Config
+--- is often the saved table and a frame must not be saved.
 ---@param frame Frame
 ---@param posConfig { AnchorFrom: string?, AnchorTo: string?, XOffset: number?, YOffset: number? }
 ---@param Config { anchorFrameType: string?, ParentFrame: string?, Strata: string? }
 ---@param SetParent boolean?
-function KE:ApplyFramePosition(frame, posConfig, Config, SetParent) end
+---@param followers Frame[]?
+function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers) end
 
 ---@param frame Frame
 ---@param config table?
@@ -569,8 +572,9 @@ function KE:AddBorders(frame, color, borderParent) end
 ---@param parentFrame string?
 ---@param frame Frame? # the frame being placed; SELECTFRAME refuses it, its children and its dependents
 ---@param asParent boolean? # the result becomes a parent, so it must also be a frame
+---@param followers Frame[]? # frames moved onto `frame` after placement; SELECTFRAME refuses them and their dependents
 ---@return Frame?
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent) end
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent, followers) end
 
 --- True when `candidate` cannot anchor `frame` (or parent it, with `asParent`):
 --- not a region (a secret value, an unreadable table or a forbidden region

@@ -223,4 +223,16 @@ describe("unsafe anchor guard", function()
         assert.is_true(KE:IsUnsafeAnchor(frame, follower, nil, { follower }))
         assert.is_false(KE:IsUnsafeAnchor(frame, follower), "no list from the previous call")
     end)
+
+    it("ResolveAnchorFrame refuses a follower of the display with the line", function()
+        local printed = {}
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        local frame = region(nil)
+        local follower = region(nil)
+        _G.KE_SpecFollower = follower
+        assert.equal(_G.UIParent, KE:ResolveAnchorFrame("SELECTFRAME", "KE_SpecFollower", frame, nil, { follower }))
+        assert.equal(1, #printed)
+        assert.equal(follower, KE:ResolveAnchorFrame("SELECTFRAME", "KE_SpecFollower", frame))
+        _G.KE_SpecFollower = nil
+    end)
 end)
