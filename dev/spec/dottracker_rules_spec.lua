@@ -418,6 +418,23 @@ describe("dot tracker rules", function()
             end
         end)
 
+        it("owes a build retry only while a shown cell has a refused build", function()
+            -- failed flags by cell, shown, expected
+            local cases = {
+                { { false, false }, 2, false },
+                { { false, true }, 2, true },
+                { { false, true }, 1, false },
+                { { true }, 0, false },
+            }
+            for i, case in ipairs(cases) do
+                local cells = {}
+                for c, failed in ipairs(case[1]) do
+                    cells[c] = { sensors = {}, failed = failed and "refused" or nil }
+                end
+                assert.equals(case[3], Rules.BuildRetryOwed(cells, case[2]), "case " .. i)
+            end
+        end)
+
         it("builds 8 enemies ahead, then 4 past the highest slot taken, never past the cap", function()
             local cases = { { 20, 0, 8 }, { 20, 6, 10 }, { 20, 18, 20 }, { 5, 0, 5 }, { 40, 30, 34 } }
             for i, case in ipairs(cases) do
@@ -438,10 +455,16 @@ describe("dot tracker rules", function()
             end
         end)
 
-        it("scans on a threat change only for an uncounted plate while a slot is free", function()
-            local cases = { { false, 3, 20, true }, { true, 3, 20, false }, { false, 20, 20, false } }
+        it("scans on a threat change only for an uncounted plate not refused this pull, while a slot is free", function()
+            -- holds a slot, refused, total, cap, expected
+            local cases = {
+                { false, false, 3, 20, true },
+                { true, false, 3, 20, false },
+                { false, true, 3, 20, false },
+                { false, false, 20, 20, false },
+            }
             for i, case in ipairs(cases) do
-                assert.equals(case[4], Rules.WantsThreatScan(case[1], case[2], case[3]), "case " .. i)
+                assert.equals(case[5], Rules.WantsThreatScan(case[1], case[2], case[3], case[4]), "case " .. i)
             end
         end)
     end)

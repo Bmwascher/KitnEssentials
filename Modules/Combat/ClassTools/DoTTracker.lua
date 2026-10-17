@@ -29,7 +29,6 @@ local C_Timer = C_Timer
 local UnitClass = UnitClass
 local UnitExists = UnitExists
 local UnitCanAttack = UnitCanAttack
-local UnitCanAssist = UnitCanAssist
 local UnitIsDead = UnitIsDead
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitThreatSituation = UnitThreatSituation
@@ -43,6 +42,7 @@ local table_concat = table.concat
 
 local Rules = KE.DoTTrackerRules
 local Ask = KE.PlateSlots.Ask
+local CanAssist = KE.PlateSlots.CanAssist
 
 -- Flip to true, /reload, repro, read the log. Nothing can print the lit count:
 -- no code knows it.
@@ -105,12 +105,6 @@ end
 ---------------------------------------------------------------------------------
 -- Reads
 ---------------------------------------------------------------------------------
--- The game's spell-id filter guard counts immune and uninteractable units as
--- assistable; asked any other way, a unit it treats as friendly would pass.
-local function CanAssist(unit)
-    return Ask(UnitCanAssist, "player", unit, true, true)
-end
-
 -- A number is a place on the list and nil is none; a secret or an error is
 -- unread.
 local function ThreatRead(watcher, unit)
@@ -301,7 +295,7 @@ local function PlaceAllAnswers(cell, count)
 end
 
 -- A sensor that cannot join the chain is hidden, and the cell stops growing at
--- the sensors it has.
+-- the sensors it has until DT:RetryBuild or the next activation.
 local function Discard(cell, sensor, reason)
     cell.failed = reason
     pcall(sensor.Hide, sensor)
@@ -634,6 +628,8 @@ end
 ---------------------------------------------------------------------------------
 -- Counting
 ---------------------------------------------------------------------------------
+-- False when a sensor refuses the plate: it then counts for no DoT, and the
+-- release that follows switches off the sensors that did bind.
 function DT:BindSlot(slot, unit)
     for i = 1, #self.list do
         local sensor = self.cells[i].sensors[slot]
@@ -643,6 +639,10 @@ function DT:BindSlot(slot, unit)
             -- refused bind stays off rather than count the plate it held before.
             local bound = pcall(sensor.SetUnit, sensor, unit)
             pcall(sensor.SetEnabled, sensor, bound)
+            if not bound then
+                if DEBUG_DOT then KE:Print("[DOT] slot " .. slot .. " bind refused (" .. unit .. ")") end
+                return false
+            end
         end
     end
     if DEBUG_DOT then KE:Print("[DOT] slot " .. slot .. " = " .. unit) end
@@ -711,6 +711,15 @@ function DT:RaiseBuildTarget()
     end
 end
 
+-- Clearing the flag alone builds nothing: the runner only walks past the steps
+-- it has, so the walk starts again from slot 1, built steps passing in one frame.
+function DT:RetryBuild()
+    if not self.active or not Rules.BuildRetryOwed(self.cells, #self.list) then return end
+    for i = 1, #self.list do self.cells[i].failed = nil end
+    self.runner:Cancel()
+    self.runner:Run(self.buildTarget)
+end
+
 -- The cap follows the sensors that exist, so no slot is taken before every
 -- shown DoT has a working sensor for it.
 function DT:UpdateCap()
@@ -719,7 +728,7 @@ end
 
 function DT:OnPlateUnitEvent(slots, event, unit)
     if event == "UNIT_THREAT_LIST_UPDATE"
-        and not Rules.WantsThreatScan(slots:SlotOf(unit) ~= nil, slots:Total(), slots:Cap()) then
+        and not Rules.WantsThreatScan(slots:SlotOf(unit) ~= nil, slots:Refused(unit), slots:Total(), slots:Cap()) then
         return
     end
     slots:QueueScan()
@@ -731,7 +740,7 @@ function DT:EnsureCounting()
         verdict = Verdict,
         relax = function() return DT.inCombat end,
         cap = 0,
-        onTake = function(slot, unit) DT:BindSlot(slot, unit) end,
+        onTake = function(slot, unit) return DT:BindSlot(slot, unit) end,
         onRelease = function(slot, unit) DT:UnbindSlot(slot, unit) end,
         onScanDone = function(total) DT:OnScanDone(total) end,
         tickSeconds = TICK_SECONDS,
@@ -975,6 +984,8 @@ function DT:Deactivate()
     self.list = {}
     for _, cell in ipairs(self.cells) do
         RetireCell(cell)
+        -- The next activation's build walk retries a refused cell.
+        cell.failed = nil
     end
     if self.root then self.root:Hide() end
     if wasActive and KE.EditMode then KE.EditMode:RefreshLiveState() end
@@ -1005,11 +1016,12 @@ function DT:OnRegenDisabled()
 end
 
 -- Leaving combat is a second chance to drain owed work; the restriction event
--- is the first.
+-- is the first. The retry follows the drain, which may have deactivated.
 function DT:OnRegenEnabled()
     self.inCombat = false
     self:UpdateLive()
     self:DrainGate()
+    self:RetryBuild()
 end
 
 local function SettleNow()

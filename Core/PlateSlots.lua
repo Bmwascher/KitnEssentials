@@ -44,6 +44,13 @@ function PlateSlots.Ask(fn, ...)
     return value and true or false
 end
 
+-- The game ignores a spell-id filter for harmful auras on a unit the player can
+-- assist, and its guard counts immune and uninteractable units as assistable;
+-- asked any other way, a unit it treats as friendly would pass.
+function PlateSlots.CanAssist(unit)
+    return PlateSlots.Ask(UnitCanAssist, "player", unit, true, true)
+end
+
 function PlateSlots.PickStrict(relaxAllowed, anyPasses)
     return not relaxAllowed or anyPasses == true
 end
@@ -65,13 +72,6 @@ local function FirstFree(self)
     return slot
 end
 
-local function Take(self, slot, unit)
-    self.unitOf[slot] = unit
-    self.slotOf[unit] = slot
-    self.total = self.total + 1
-    if self.onTake then self.onTake(slot, unit) end
-end
-
 local function Release(self, slot)
     local unit = self.unitOf[slot]
     if not unit then return false end
@@ -80,6 +80,22 @@ local function Release(self, slot)
     self.total = self.total - 1
     if self.onRelease then self.onRelease(slot, unit) end
     return true
+end
+
+-- An onTake that answers false could not bind the plate: the slot goes back at
+-- once, to the next plate in this scan, and the plate is tried on the next one.
+-- It stays marked until it binds or its plate goes, so a consumer can keep the
+-- plate's frequent events from rescanning on every one.
+local function Take(self, slot, unit)
+    self.unitOf[slot] = unit
+    self.slotOf[unit] = slot
+    self.total = self.total + 1
+    if self.onTake and self.onTake(slot, unit) == false then
+        self.refused[unit] = true
+        Release(self, slot)
+    else
+        self.refused[unit] = nil
+    end
 end
 
 local function ScanDone(self)
@@ -98,6 +114,7 @@ local function OnEvent(frame, event, unit)
         -- Let go now, not on the next frame: within this one the token can pass
         -- to another mob, and a later scan would find "the same unit" standing.
         self.up[index] = false
+        self.refused[unit] = nil
         local slot = self.slotOf[unit]
         if slot then Release(self, slot) end
         self:QueueScan()
@@ -123,6 +140,7 @@ function PlateSlots.New(opts)
         cap = Clamp(opts.cap or MAX_PLATES),
         unitOf = {},
         slotOf = {},
+        refused = {},
         up = {},
         total = 0,
         strict = true,
@@ -171,6 +189,10 @@ function Slots:Stop()
         self.ticker = nil
     end
     for slot = 1, MAX_PLATES do Release(self, slot) end
+    -- Plate removals go unheard while stopped, so a token could pass to another
+    -- mob still marked.
+    local refused = self.refused
+    for unit in pairs(refused) do refused[unit] = nil end
     ScanDone(self)
 end
 
@@ -250,6 +272,7 @@ end
 
 function Slots:UnitOf(slot) return self.unitOf[slot] end
 function Slots:SlotOf(unit) return self.slotOf[unit] end
+function Slots:Refused(unit) return self.refused[unit] == true end
 function Slots:Total() return self.total end
 function Slots:Cap() return self.cap end
 function Slots:IsStarted() return self.started end

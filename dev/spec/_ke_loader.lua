@@ -2519,7 +2519,7 @@ function L.loadHavocTracker(overrides)
         db = { profile = { HavocTracker = overrides.db or { Enabled = true } } },
         Print = function() end,
         -- Captured at file scope by the target guard.
-        PlateSlots = { Ask = function() return nil end },
+        PlateSlots = { Ask = function() return nil end, CanAssist = function() return nil end },
     }
     helpers.loadModule("Modules/Combat/ClassTools/HavocTracker.lua", KE)
 

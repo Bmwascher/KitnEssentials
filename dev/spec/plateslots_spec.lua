@@ -90,6 +90,69 @@ describe("plate slots", function()
         assert.is_nil(slots:UnitOf(1))
         assert.same({ "1=nameplate1" }, released)
     end)
+
+    it("gives a refused take's slot to the next plate in the same scan and tries the refused plate on the next; only false refuses", function()
+        -- onTake's answer for nameplate1 on the first scan; then slot 1's unit,
+        -- the total and the releases; then nameplate1's slot after a second scan.
+        local cases = {
+            { false, "nameplate2", 1, { "1=nameplate1" }, 2 },
+            { nil, "nameplate1", 2, {}, 1 },
+            { true, "nameplate1", 2, {}, 1 },
+        }
+        for i, case in ipairs(cases) do
+            up.nameplate1, up.nameplate2 = true, true
+            released = {}
+            local first = true
+            local slots = KE.PlateSlots.New({
+                verdict = function(unit) return reasons[unit] end,
+                cap = 2,
+                onTake = function(_, unit)
+                    if first and unit == "nameplate1" then return case[1] end
+                end,
+                onRelease = function(slot, unit) released[#released + 1] = slot .. "=" .. unit end,
+            })
+            slots:Start()
+            slots:ScanNow()
+            assert.equals(case[2], slots:UnitOf(1), "slot 1, case " .. i)
+            assert.equals(case[3], slots:Total(), "total, case " .. i)
+            assert.same(case[4], released, "released, case " .. i)
+
+            first = false
+            slots:ScanNow()
+            assert.equals(case[5], slots:SlotOf("nameplate1"), "retry, case " .. i)
+        end
+    end)
+
+    it("marks a refused plate until it binds, its plate is removed or counting stops", function()
+        local answer
+        -- How the mark is cleared after the refused take.
+        local clears = {
+            { "binds", function(slots)
+                answer = nil
+                slots:ScanNow()
+            end },
+            { "removed", function()
+                up.nameplate1 = nil
+                frames[#frames]:Fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+            end },
+            { "stopped", function(slots) slots:Stop() end },
+        }
+        for _, row in ipairs(clears) do
+            up.nameplate1 = true
+            answer = false
+            local slots = KE.PlateSlots.New({
+                verdict = function(unit) return reasons[unit] end,
+                cap = 1,
+                onTake = function() return answer end,
+            })
+            slots:Start()
+            assert.is_false(slots:Refused("nameplate1"), "before, " .. row[1])
+            slots:ScanNow()
+            assert.is_true(slots:Refused("nameplate1"), "refused, " .. row[1])
+            row[2](slots)
+            assert.is_false(slots:Refused("nameplate1"), "cleared, " .. row[1])
+        end
+    end)
 end)
 
 describe("plate slots with the next frame queued", function()
