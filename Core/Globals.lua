@@ -484,6 +484,7 @@ local anchorPending = setmetatable({}, { __mode = "k" })
 local ANCHOR_WALK_LIMIT = 64
 local anchorQueue = {}
 local anchorSeen = {}
+local anchorFollowers = {}
 local warnedAnchorNames = {}
 
 -- Every widget carries its handle at index 0; a mixin or plain table can carry
@@ -514,17 +515,27 @@ local function IsFrame(region)
     return isFrame == true
 end
 
-function KE:IsUnsafeAnchor(frame, candidate, asParent)
+function KE:IsUnsafeAnchor(frame, candidate, asParent, followers)
     if not IsRegion(candidate) then return true end
     if asParent and not IsFrame(candidate) then return true end
     if frame == nil then return false end
     if candidate == frame then return true end
-    if candidate == UIParent then return false end
 
     -- Wiped on entry rather than exit: a walk an error interrupted would
     -- otherwise leave regions marked seen, and the next walk would skip them.
     wipe(anchorQueue)
     wipe(anchorSeen)
+    wipe(anchorFollowers)
+    -- A follower is not anchored to the frame yet when the frame is placed,
+    -- so the walk cannot reach it through its links.
+    if followers then
+        for i = 1, #followers do
+            local follower = followers[i]
+            if IsRegion(follower) then anchorFollowers[follower] = true end
+        end
+    end
+    if anchorFollowers[candidate] then return true end
+    if candidate == UIParent then return false end
     local top, seen = 1, 1
     anchorQueue[1] = candidate
     anchorSeen[candidate] = true
@@ -551,7 +562,7 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent)
                 end
                 link = relativeTo
             end
-            if link == frame then return true end
+            if link == frame or anchorFollowers[link] then return true end
             if link ~= nil and link ~= UIParent and not anchorSeen[link] and IsRegion(link) then
                 if seen == ANCHOR_WALK_LIMIT then return true end
                 seen = seen + 1

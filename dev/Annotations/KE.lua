@@ -576,12 +576,15 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent) en
 --- not a region (a secret value, an unreadable table or a forbidden region
 --- counts as not a region), not a frame when a parent is needed, the frame itself, or a
 --- region whose parent or anchor chain reaches it. With no frame, only the
---- type tests apply.
+--- type tests apply. `followers` are frames the caller anchors or parents to
+--- `frame` after placing it; each is refused, and so is any region whose chain
+--- reaches one.
 ---@param frame Frame?
 ---@param candidate any
 ---@param asParent boolean?
+---@param followers Frame[]?
 ---@return boolean
-function KE:IsUnsafeAnchor(frame, candidate, asParent) end
+function KE:IsUnsafeAnchor(frame, candidate, asParent, followers) end
 
 ---@param frame Frame
 ---@return boolean

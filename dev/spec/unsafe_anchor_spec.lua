@@ -196,4 +196,31 @@ describe("unsafe anchor guard", function()
         failing = false
         assert.is_true(KE:IsUnsafeAnchor(frame, region(nil, link)))
     end)
+
+    it("refuses a follower and any region that depends on one", function()
+        local frame = region(nil)
+        local follower = region(nil)
+        local followers = { follower }
+        local rows = {
+            { name = "the follower itself", candidate = follower },
+            { name = "parent chain reaches a follower", candidate = region(region(follower)) },
+            { name = "anchor chain reaches a follower", candidate = region(nil, region(nil, follower)) },
+        }
+        for _, row in ipairs(rows) do
+            assert.is_true(KE:IsUnsafeAnchor(frame, row.candidate, nil, followers), row.name)
+        end
+    end)
+
+    it("accepts a region no follower reaches when followers are given", function()
+        local frame = region(nil)
+        local follower = region(nil)
+        assert.is_false(KE:IsUnsafeAnchor(frame, region(region(nil)), nil, { follower }))
+    end)
+
+    it("carries no follower from one call into the next", function()
+        local frame = region(nil)
+        local follower = region(nil)
+        assert.is_true(KE:IsUnsafeAnchor(frame, follower, nil, { follower }))
+        assert.is_false(KE:IsUnsafeAnchor(frame, follower), "no list from the previous call")
+    end)
 end)
