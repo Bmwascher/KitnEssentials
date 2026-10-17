@@ -247,6 +247,12 @@ function KE:GetInterruptAnnounceSpellSet() end
 ---@return boolean
 function KE.DropdownSearchMatches(displayText, key, query) end
 
+--- Countdown text (Core/Globals.lua): "m:ss" from 60 s, whole seconds from
+--- 1 s, one decimal below. Plain numbers only.
+---@param remaining number
+---@return string
+function KE:FormatCountdown(remaining) end
+
 --- The opaque color of `top` drawn at `alpha` over `base`
 --- (Core/AddonTheme.lua). Both inputs' own alpha is ignored.
 ---@param top number[]
@@ -505,6 +511,14 @@ function KE:ApplyIconZoom(tex, zoom) end
 ---@param frame Frame
 ---@param color number[]?
 function KE:AddIconBorders(frame, color) end
+
+--- Font, zero shadow and a center anchor for every FontString region of a
+--- Cooldown frame (Core/Widgets.lua). A nil cooldown is a no-op.
+---@param cooldown Cooldown?
+---@param fontFace string?
+---@param fontSize number
+---@param fontOutline string?
+function KE:ApplyCooldownTextStyle(cooldown, fontFace, fontSize, fontOutline) end
 
 ---@param frame Frame
 ---@param color number[]?

@@ -399,7 +399,8 @@ local function GetOverlayInset(display, settings)
     end
 
     return KE:CombineOverlayInsets(grid, {
-        textInset(settings.TimerPosition, "timer"),
+        -- A hidden timer takes no room.
+        textInset(settings.ShowTimer ~= false and settings.TimerPosition or nil, "timer"),
         textInset(settings.StackPosition, "stack"),
         { KE:GetTextOverlayInset(
             settings.DispelPosition and settings.DispelPosition.AnchorTo,

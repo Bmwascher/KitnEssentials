@@ -11,8 +11,6 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local CreateFrame = CreateFrame
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local CreateColor = CreateColor
 local C_Spell = C_Spell
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
@@ -266,24 +264,25 @@ function H.CacheInterruptId(self)
     self.interruptId = nil
     self.interruptCD = nil
     self.interruptSpellSet = nil
-    local specIndex = GetSpecialization()
-    if not specIndex then return end
-    local specID = GetSpecializationInfo(specIndex)
-    if not specID then return end
-    -- Full set of valid interrupt spell IDs for this spec, used by the kick-CD
-    -- tracker so any known pet-swap variant (e.g. Demo Warlock with Spell Lock
-    -- in the player spellbook AND Axe Toss in the pet spellbook) counts as a
-    -- cast. Priority-picked interruptId/CD still drive the visible bar.
-    self.interruptSpellSet = KE:GetInterruptSpellSet(specID)
-    local candidates = KE:GetInterruptCandidatesForSpec(specID)
-    if candidates then
-        for i = 1, #candidates do
-            local data = candidates[i]
-            if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
-                or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
-                self.interruptId = data.id
-                self.interruptCD = data.cd
-                break
+    -- With no spec the lookup is skipped, but the mid-cast restart below still
+    -- runs: it is what hides a kick indicator the cleared id no longer backs.
+    local specID = KE:GetPlayerSpecId()
+    if specID then
+        -- Full set of valid interrupt spell IDs for this spec, used by the kick-CD
+        -- tracker so any known pet-swap variant (e.g. Demo Warlock with Spell Lock
+        -- in the player spellbook AND Axe Toss in the pet spellbook) counts as a
+        -- cast. Priority-picked interruptId/CD still drive the visible bar.
+        self.interruptSpellSet = KE:GetInterruptSpellSet(specID)
+        local candidates = KE:GetInterruptCandidatesForSpec(specID)
+        if candidates then
+            for i = 1, #candidates do
+                local data = candidates[i]
+                if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
+                    or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
+                    self.interruptId = data.id
+                    self.interruptCD = data.cd
+                    break
+                end
             end
         end
     end

@@ -1061,6 +1061,17 @@ function KE:AddIconBorders(frame, color)
     _KE_DelayedBorderResnap(frame)
 end
 
+function KE:ApplyCooldownTextStyle(cooldown, fontFace, fontSize, fontOutline)
+    if not cooldown then return end
+    for _, region in ipairs({ cooldown:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            self:ApplyFontToText(region, fontFace, fontSize, fontOutline)
+            region:ClearAllPoints()
+            region:SetPoint("CENTER", cooldown, "CENTER", 0, 0)
+        end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Enhanced Borders (with optional borderParent for frame level control)
 ---------------------------------------------------------------------------------

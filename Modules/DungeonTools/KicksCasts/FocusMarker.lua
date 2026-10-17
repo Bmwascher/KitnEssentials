@@ -58,12 +58,6 @@ local KICK_MACRO_NAME = "!FocusKick"
 local KICK_MACRO_ICON = 134400
 local MACRO_BODY_MAX = 255
 
--- Kept out of the shared candidates: a candidate there would also give the
--- spec a castbar kick bar.
-local KICK_OVERRIDES = {
-    [102] = { 78675 }, -- Balance Druid: Solar Beam
-}
-
 -- The documented caps stand in when the constants table is missing, so the
 -- lookup never indexes nil.
 local MACRO_CONSTS = Constants and Constants.MacroConsts
@@ -236,11 +230,16 @@ local function IsKickKnown(id)
         or C_SpellBook.IsSpellKnownOrInSpellBook(id, Enum.SpellBookSpellBank.Pet)
 end
 
-function FM.PickKickSpell(specID, candidates, isKnown)
-    local list = KICK_OVERRIDES[specID] or candidates
-    if not list then return nil end
-    for i = 1, #list do
-        local entry = list[i]
+-- The tracker kick stands in only for a spec with no candidate list, so a
+-- spec whose candidates are all unknown gets no macro.
+function FM.PickKickSpell(candidates, trackerKick, isKnown)
+    if not candidates then
+        local id = trackerKick and trackerKick.id
+        if id and isKnown(id) then return id end
+        return nil
+    end
+    for i = 1, #candidates do
+        local entry = candidates[i]
         local id = type(entry) == "table" and entry.id or entry
         if id and isKnown(id) then
             return id
@@ -282,7 +281,9 @@ function FM:ComputeKick()
     if not specID or specID == 0 then
         return "nospec"
     end
-    local spellID = FM.PickKickSpell(specID, KE:GetInterruptCandidatesForSpec(specID), IsKickKnown)
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    local trackerKick = not candidates and KE:GetTrackedKickForSpec(specID) or nil
+    local spellID = FM.PickKickSpell(candidates, trackerKick, IsKickKnown)
     if not spellID then
         return "nokick", nil, nil, specName
     end
@@ -461,8 +462,7 @@ end
 function FM:_AnnounceFocusMarkerOnReadyCheck()
     local db = self.db
     if not db.AnnounceReadyCheck then return end
-    local specIndex = GetSpecialization()
-    local specID = specIndex and GetSpecializationInfo(specIndex)
+    local specID = KE:GetPlayerSpecId()
     if not FM.AnnounceAllowed(specID, IsInGroup(), IsInRaid(), InCombatLockdown(),
         KE:IsChatMessagingLocked()) then
         return

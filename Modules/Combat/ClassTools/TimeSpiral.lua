@@ -14,8 +14,6 @@ local TSP = KitnEssentials:NewModule("TimeSpiral", "AceEvent-3.0")
 
 local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local ipairs = ipairs
 
 ---------------------------------------------------------------------------------
@@ -111,7 +109,7 @@ local function IsKnownByPlayer(spellID)
 end
 
 local function CurrentSpecList()
-    local specID = GetSpecializationInfo(GetSpecialization() or 0)
+    local specID = KE:GetPlayerSpecId()
     if not specID then return nil end
     return PRIMARY_BY_SPEC[specID]
 end

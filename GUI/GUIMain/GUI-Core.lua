@@ -1591,3 +1591,17 @@ function GUIFrame:BuildPagesNotLoadedContent(scrollChild, yOffset)
     yOffset = yOffset + card:GetContentHeight() + T.paddingMedium
     return yOffset
 end
+
+---------------------------------------------------------------------------------
+-- Dropdown Options
+---------------------------------------------------------------------------------
+
+function GUIFrame.BuildSoundOptions()
+    local out = { { key = "None", text = "None" } }
+    if KE.LSM then
+        for _, name in ipairs(KE.LSM:List("sound")) do
+            out[#out + 1] = { key = name, text = name }
+        end
+    end
+    return out
+end

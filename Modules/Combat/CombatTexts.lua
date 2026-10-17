@@ -81,6 +81,7 @@ CM.activeMessages = {}
 CM.isPreview = false
 CM.inCombat = false
 CM.noTargetCheckGeneration = 0
+CM.enableGeneration = 0
 CM.interruptCastFrame = nil
 CM.interruptEventsRegistered = false
 CM.interruptAnnounceSpells = nil
@@ -1229,6 +1230,15 @@ function CM:UpdateInterruptEventRegistration(forceDisabled)
     end
 end
 
+-- A disable moves the generation, so a call scheduled before it never runs.
+function CM:DelayWhileEnabled(delay, fn)
+    local myGeneration = self.enableGeneration
+    C_Timer.After(delay, function()
+        if self.enableGeneration ~= myGeneration then return end
+        fn()
+    end)
+end
+
 function CM:OnEnable()
     if self.db.Enabled == false then return end
 
@@ -1242,7 +1252,7 @@ function CM:OnEnable()
         self:GetMessageFrame(msgType)
     end
 
-    C_Timer.After(0.5, function()
+    self:DelayWhileEnabled(0.5, function()
         self:ApplySettings()
     end)
 
@@ -1264,7 +1274,7 @@ function CM:OnEnable()
         self:CheckNoTarget()
         self:CheckAggro()
     else
-        C_Timer.After(1, function() self:CheckDurability() end)
+        self:DelayWhileEnabled(1, function() self:CheckDurability() end)
     end
 
     self:SendMessage(self.CHANGED_MESSAGE)
@@ -1283,6 +1293,7 @@ function CM:OnDisable()
     self.inCombat = false
     self.attachChangePending = false
     self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
+    self.enableGeneration = self.enableGeneration + 1
     SetAggroPulse(self.messageFrames.aggro, false)
     self:UpdateAggroEventRegistration(true)
     self:UpdateInterruptEventRegistration(true)

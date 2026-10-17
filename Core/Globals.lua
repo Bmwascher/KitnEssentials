@@ -13,6 +13,7 @@ local ipairs = ipairs
 local print = print
 local string_gsub = string.gsub
 local string_find = string.find
+local string_format = string.format
 local math_floor = math.floor
 local math_max = math.max
 local table_insert = table.insert
@@ -278,6 +279,17 @@ function KE.DropdownSearchMatches(displayText, key, query)
     local hay = tostring(displayText or key or "")
     hay = hay:gsub("|T.-|t", "")
     return hay:lower():find(tostring(query):lower(), 1, true) ~= nil
+end
+
+-- Decimals only below one second: a tenths place at 8.4 s is noise, at 0.4 s
+-- it is information. Plain numbers only.
+function KE:FormatCountdown(remaining)
+    if remaining >= 60 then
+        return string_format("%d:%02d", remaining / 60, remaining % 60)
+    elseif remaining >= 1 then
+        return string_format("%d", remaining)
+    end
+    return string_format("%.1f", remaining)
 end
 
 ---------------------------------------------------------------------------------

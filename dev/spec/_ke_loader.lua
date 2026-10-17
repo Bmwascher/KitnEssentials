@@ -49,6 +49,15 @@ local function noopFrame()
     return setmetatable(f, { __index = function() return function() end end })
 end
 
+-- KE:GetPlayerSpecId's contract, read from the installed C_SpecializationInfo
+-- at call time, so cases that drive the spec globals still reach the module.
+local function specIdFromMocks()
+    local info = _G.C_SpecializationInfo
+    local index = info and info.GetSpecialization()
+    if not index or index == 0 then return nil end
+    return (info.GetSpecializationInfo(index))
+end
+
 -- Like noopFrame, but SetSize/SetPoint calls are recorded instead of
 -- swallowed. Used wherever a spec needs to inspect a frame CreateFrame
 -- handed back to production code -- e.g. LootRoll's addon-owned stack
@@ -1239,11 +1248,12 @@ function L.loadCursor(overrides)
 end
 
 -- Modules/Combat/CombatCross.lua. The file-scope `local X = X` captures
--- include C_SpecializationInfo.GetSpecialization and C_Spell, so both must
--- exist before load or the index throws. Nothing creates a frame at load time
--- -- CreateFrame only runs from lifecycle methods, which this loader
--- deliberately does not call, so a spec that needs a frame calls
--- CC:CreateFrame() itself.
+-- include C_Spell, so it must exist before load or the index throws. Nothing
+-- creates a frame at load time -- CreateFrame only runs from lifecycle
+-- methods, which this loader deliberately does not call, so a spec that needs
+-- a frame calls CC:CreateFrame() itself. The spec is driven through the bare
+-- GetSpecialization / GetSpecializationInfo globals, which KE.GetPlayerSpecId
+-- reads at call time.
 --
 -- UnitAffectingCombat is UNMANAGED (dev/spec/_wow_mock.lua), so it is assigned
 -- to _G directly; handing it to installMock would silently drop it.
@@ -1300,6 +1310,7 @@ function L.loadCombatCross(overrides)
         ApplyFramePosition = function() end,
         -- Core/Globals.lua's instance check, answering as the open world.
         InRealInstancedContent = function() return false end,
+        GetPlayerSpecId = specIdFromMocks,
     }
     helpers.loadModule("Modules/Combat/CombatCross.lua", KE)
     local CC = modules["CombatCross"]
@@ -2390,7 +2401,6 @@ end
 -- Returns ST, KE.
 function L.loadStanceText(overrides)
     overrides = overrides or {}
-    mock.installSpecInfo()
     local modules = helpers.installAddonShim()
     local KE = {
         db = { profile = { StanceText = overrides.db or {} } },
@@ -2400,8 +2410,7 @@ function L.loadStanceText(overrides)
 end
 
 -- Modules/Combat/ClassTools/TimeSpiral.lua. The file reads Enum.SpellBookSpellBank
--- and C_SpecializationInfo at file scope; nothing reaches the aura engine
--- until OnEnable. Returns TSP, KE.
+-- at file scope; nothing reaches the aura engine until OnEnable. Returns TSP, KE.
 function L.loadTimeSpiral(overrides)
     overrides = overrides or {}
     installMock(overrides, {
@@ -2498,7 +2507,7 @@ end
 --
 -- The spec functions are driven through the bare globals. C_SpecializationInfo
 -- delegates to them at call time, so assigning them after installMock still
--- reaches the module's file-scope upvalues.
+-- reaches KE.GetPlayerSpecId, which reads it at call time.
 -- Returns HT, rec.
 function L.loadHavocTracker(overrides)
     overrides = overrides or {}
@@ -2520,6 +2529,7 @@ function L.loadHavocTracker(overrides)
         Print = function() end,
         -- Captured at file scope by the target guard.
         PlateSlots = { Ask = function() return nil end, CanAssist = function() return nil end },
+        GetPlayerSpecId = specIdFromMocks,
     }
     helpers.loadModule("Modules/Combat/ClassTools/HavocTracker.lua", KE)
 
@@ -3308,6 +3318,7 @@ function L.loadReadyCheckConsumables(overrides)
             if not saved then return default[1], default[2], default[3], default[4] or 1 end
             return saved[1] or default[1], saved[2] or default[2], saved[3] or default[3], saved[4] or default[4] or 1
         end,
+        GetPlayerSpecId = specIdFromMocks,
     }
     helpers.loadModule("Modules/QoL/GroupTools/ReadyCheckConsumables.lua", KE)
     local RCC = modules["ReadyCheckConsumables"]

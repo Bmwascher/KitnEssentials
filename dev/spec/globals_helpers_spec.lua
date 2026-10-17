@@ -900,3 +900,51 @@ describe("KE:GetPlayerSpecRole", function()
     end)
 end)
 
+describe("KE:FormatCountdown", function()
+    local KE
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("formats minutes from 60 s, whole seconds from 1 s, tenths below", function()
+        local cases = {
+            { name = "minutes", remaining = 90, want = "1:30" },
+            { name = "a minute exactly", remaining = 60, want = "1:00" },
+            { name = "seconds just under a minute", remaining = 59.5, want = "59" },
+            { name = "seconds", remaining = 12, want = "12" },
+            { name = "a second exactly", remaining = 1, want = "1" },
+            { name = "tenths", remaining = 0.4, want = "0.4" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, KE:FormatCountdown(c.remaining), c.name)
+        end
+    end)
+end)
+
+-- Index 0 is a character with no specialization yet; the info stub answers any
+-- index, so only the guard can produce nil.
+describe("KE:GetPlayerSpecId", function()
+    local KE, saved
+    local STUBBED = { "GetSpecialization", "GetSpecializationInfo" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("returns nil with no spec, else the spec id", function()
+        local cases = {
+            { name = "no spec index", index = nil, want = nil },
+            { name = "spec index 0",  index = 0,   want = nil },
+            { name = "a spec",        index = 3,   want = 267 },
+        }
+        for _, c in ipairs(cases) do
+            _G.GetSpecialization = function() return c.index end
+            _G.GetSpecializationInfo = function(index) return index == 3 and 267 or 999 end
+            assert.equals(c.want, KE:GetPlayerSpecId(), c.name)
+        end
+    end)
+end)

@@ -234,14 +234,7 @@ function SPC:StyleButton(btn)
     local db = self.db
     btn:SetSize(db.IconSize or 44, db.IconSize or 44)
     btn.cooldown:SetCountdownMillisecondsThreshold(db.DecimalThreshold or 0)
-    for _, region in ipairs({ btn.cooldown:GetRegions() }) do
-        if region:GetObjectType() == "FontString" then
-            KE:ApplyFontToText(region, db.FontFace, db.TimerFontSize, db.FontOutline)
-            region:SetShadowOffset(0, 0)
-            region:ClearAllPoints()
-            region:SetPoint("CENTER", btn.cooldown, "CENTER", 0, 0)
-        end
-    end
+    KE:ApplyCooldownTextStyle(btn.cooldown, db.FontFace, db.TimerFontSize, db.FontOutline)
 end
 
 function SPC:GetButton(tracker)
@@ -454,7 +447,7 @@ function SPC:RenderText(now)
         local line
         if rem then
             running = true
-            line = self.linePrefix[key] .. Rules.FormatTime(rem) .. "|r"
+            line = self.linePrefix[key] .. KE:FormatCountdown(rem) .. "|r"
         elseif db.ShowWhenReady then
             line = self.readyLine[key]
         end
@@ -709,7 +702,7 @@ function SPC:ShowPreview()
         self:LayoutIcons(shown, #shown)
     else
         local counting = self.linePrefix.NaturesGuardian
-            .. Rules.FormatTime(PREVIEW_LENGTH - PREVIEW_ELAPSED) .. "|r"
+            .. KE:FormatCountdown(PREVIEW_LENGTH - PREVIEW_ELAPSED) .. "|r"
         local ready = self.readyLine.ThunderousPaws
         local first, second = self:GetSlot(1), self:GetSlot(2)
         first.text:SetText(counting)
