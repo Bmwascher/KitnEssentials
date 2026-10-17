@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.6
+
+### Skinning
+
+- Ace3 addon settings windows: sliders take KE's slider look, an accent
+  thumb and fill on a dark plate, and turn gray when the option is
+  disabled
+- Ace3 dropdown lists follow the Addon Config Windows (AceGUI) skin. On,
+  they are skinned as soon as they are built; off, they stay as the addon
+  draws them
+- Hover highlights on skinned buttons, icons and list rows stay one pixel
+  inside their border after a UI scale, resolution or Panel Scale change
+- The Mythic+ tab's weekly affixes keep their square skin every time the
+  tab refreshes, not only the first time
+
+---
+
 ## v4.11.5
 
 ### Settings Window
