@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.3
+
+### DoT Tracker
+
+- The target timer shows whole seconds with no unit letter ("12", not
+  "12 s"), rounded up. Timers over 90 seconds also show seconds instead of
+  minutes
+- If the game refuses to build one DoT's display, that DoT builds again
+  when you leave combat or turn the tracker off. One refused DoT no longer
+  holds every DoT's count down until a /reload
+- An enemy whose nameplate the tracker cannot follow counts for no DoT and
+  gives its place to the next enemy at once. It is tried again on the next
+  scan
+
+### CC Tracker
+
+- An enemy whose nameplate the tracker cannot follow no longer holds an
+  empty row. The row goes to the next enemy, and the refused enemy is tried
+  again on the next scan
+
+---
+
 ## v4.11.2
 
 ### Damage Meter
