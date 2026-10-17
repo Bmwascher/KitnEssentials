@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.1
+
+### Interrupt Tracker
+
+- Inside a key, a teammate no longer shows twice, once on a starred bar and
+  once on their Ready row. Every kick now lands on one teammate's row
+- When the game hides who kicked, the kick goes on the row of the teammate
+  the Damage Meter names. If it names no one, the kick goes to the teammate
+  most likely to have used it: one whose kick was ready, then the shortest
+  kick cooldown, then party order. A kick no row can take is not shown
+- These guesses are not marked and can now and then be wrong. The * mark
+  and the separate kick record bars are gone, and the frame is sized for
+  five rows
+- Max Records and Teammate Kick Duration are removed. Warrior and
+  Protection Paladin rows count their kick's own cooldown
+
+---
+
 ## v4.11.0
 
 ### Shaman Proc Cooldowns
