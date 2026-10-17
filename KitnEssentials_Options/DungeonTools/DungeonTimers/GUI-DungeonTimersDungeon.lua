@@ -28,8 +28,9 @@
 -- ║                                                          ║
 -- ║  Memory: list rows come from a KE.FramePool; the detail  ║
 -- ║  pane's frames, captions and widgets come from widget    ║
--- ║  pools, so a spell or tab click rebuilds the page        ║
--- ║  without creating frames.                                ║
+-- ║  pools, so a click rebuilds the page without creating    ║
+-- ║  frames, except the provider notice, aura-sound and      ║
+-- ║  wind-map bodies, which carry their own scripts.         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
