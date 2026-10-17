@@ -26,15 +26,19 @@ function Sound.New(opts)
         currentPath  = nil,
         currentIDs   = nil,
         pending      = false,
+        ruleIDs      = {},
+        rulePending  = false,
     }, Registry)
 end
 
 function Registry:Count()
-    return #self.ids
+    local count = #self.ids
+    for _ in pairs(self.ruleIDs) do count = count + 1 end
+    return count
 end
 
 function Registry:IsPending()
-    return self.pending == true
+    return self.pending == true or self.rulePending == true
 end
 
 -- Removal is the unrestricted half, so it always works and always runs first.
@@ -45,6 +49,11 @@ function Registry:RetireAll()
     end
     self.ids    = {}
     self.pending = false
+    for _, id in pairs(self.ruleIDs) do
+        self.api.Remove(id)
+    end
+    self.ruleIDs     = {}
+    self.rulePending = false
 end
 
 -- The desired registry: every spell registered when ALL of the module's
@@ -149,4 +158,56 @@ function Registry:Sync(declaration, settings, moduleEnabled)
     self.currentPath = path
     self.currentIDs  = idKey
     self.pending     = false
+end
+
+local function ruleKey(rule)
+    return table_concat({
+        tostring(rule.trigger), tostring(rule.unitToken), tostring(rule.spellID),
+        tostring(rule.path), tostring(rule.channel),
+    }, ";")
+end
+
+-- Preserve standing registrations: rebuilding them while restricted would silence them.
+-- A registry uses either Sync or SyncRules, never both.
+function Registry:SyncRules(rules)
+    local wanted = {}
+    for i = 1, #rules do
+        wanted[ruleKey(rules[i])] = true
+    end
+
+    for key, id in pairs(self.ruleIDs) do
+        if not wanted[key] then
+            self.api.Remove(id)
+            self.ruleIDs[key] = nil
+        end
+    end
+
+    self.rulePending = false
+    local hidden
+    for i = 1, #rules do
+        local rule = rules[i]
+        local key = ruleKey(rule)
+        if self.ruleIDs[key] == nil then
+            if hidden == nil then hidden = self.isHidden() and true or false end
+            if hidden then
+                self.rulePending = true
+            else
+                local id = self.api.Add(rule.trigger, {
+                    unitToken     = rule.unitToken,
+                    spellID       = rule.spellID,
+                    soundFileName = rule.path,
+                    outputChannel = rule.channel,
+                })
+                if id == nil then
+                    -- Nilable and not a restriction: no release is coming, so
+                    -- it is not owed. The next ordinary sync retries.
+                    if self.onDiagnostic then
+                        self.onDiagnostic("aura sound rule registration returned no id; rule left unregistered")
+                    end
+                else
+                    self.ruleIDs[key] = id
+                end
+            end
+        end
+    end
 end

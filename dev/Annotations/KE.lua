@@ -81,7 +81,7 @@ function KE_FramePool:ReleaseAll() end
 ---@class KE.DungeonTimerEntry
 ---@field key string
 ---@field name string
----@field iconID number
+---@field iconID number? # nil = no icon; the dropdown label falls back to the question mark
 ---@field instanceID number
 ---@field season number
 
@@ -495,6 +495,30 @@ function KE.GetDungeonTimerDungeonsForSeason(registry, season) end
 ---@return string? dungeonKey
 function KE.ResolveDungeonTimerSelection(registry, instanceID, saved) end
 
+--- Dropdown row label: icon tag + name. Falls back to the question-mark
+--- texture when iconID is absent.
+---@param iconID number?
+---@param name string
+---@return string
+function KE.GetDungeonTimerDungeonLabel(iconID, name) end
+
+--- Groups sorted boss groups for the Dungeon Bosses tab: each boss lists its
+--- timer rows, then its reminder (aura) rows; firstReminder is the index of
+--- the first reminder row. ordinal = bossOrder, else the group's position in
+--- `bosses`; a boss with no rows is left out.
+---@param bosses { id: any, name: string, bossOrder: number?, items: table[] }[]
+---@return { id: any, name: string, ordinal: number, spells: table[], firstReminder: integer? }[]
+function KE.GroupDungeonTimerBossRows(bosses) end
+
+--- Season-scoped coverage counts for the General tab.
+---@param registry KE.DungeonTimerEntry[]
+---@param encounterData table<number, table>
+---@param trashData table<number, table>
+---@param season number
+---@param isReminder fun(rule: table): boolean
+---@return { dungeons: number, bosses: number, timers: number, reminders: number, trashEnemies: number, trashAbilities: number }
+function KE.CountDungeonTimerCoverage(registry, encounterData, trashData, season, isReminder) end
+
 -- ─── Frame / position helpers ────────────────────────────
 --- Real signature (Core/Globals.lua). `Config` is REQUIRED — its
 --- anchorFrameType/ParentFrame fields are indexed unconditionally (via
@@ -698,7 +722,7 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
----@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean?, acceptOnly: boolean? }?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean?, parkKey: string?, acceptOnly: boolean? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts) end
@@ -738,6 +762,29 @@ function KE.PromptQueueRemove(queue, accept) end
 ---@param queue table[]
 ---@return table?
 function KE.PromptQueueTake(queue) end
+
+--- Keeps a prompt the full queue refused, replacing any parked entry with the
+--- same `key` or the same non-nil `accept` (Core/Widgets.lua).
+---@param parked table[]
+---@param entry table
+---@param key string
+function KE.PromptPark(parked, entry, key) end
+
+--- Moves parked entries into `queue`, oldest first, while it holds fewer than
+--- `cap` (Core/Widgets.lua).
+---@param parked table[]
+---@param queue table[]
+---@param cap integer
+function KE.PromptUnpark(parked, queue, cap) end
+
+--- Makes a prompt wait: appended to `queue`, or parked when the queue holds
+--- `cap` entries and `entry.parkKey` is set; false when refused (Core/Widgets.lua).
+---@param queue table[]
+---@param parked table[]
+---@param entry table
+---@param cap integer
+---@return boolean
+function KE.PromptHold(queue, parked, entry, cap) end
 
 --- Closes the prompt, shown or waiting, whose accept callback is `accept`,
 --- running neither callback (Core/Widgets.lua).

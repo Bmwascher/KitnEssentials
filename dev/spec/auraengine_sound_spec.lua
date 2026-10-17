@@ -368,3 +368,59 @@ describe("declarations that build their spell list", function()
         assert.equals(33206, rec.added[1].spellID)
     end)
 end)
+
+describe("keyed rule reconciliation", function()
+    local function rule(spellID, path)
+        return { trigger = "Added", unitToken = "player", spellID = spellID,
+                 path = path or "path/Bell", channel = "Master" }
+    end
+
+    it("leaves standing rules alone, replaces a rule whose path changed, and removes a dropped rule", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:SyncRules({ rule(1), rule(2), rule(3) })
+        reg:SyncRules({ rule(1), rule(2), rule(3) })
+        assert.equals(3, #rec.added)
+        assert.equals(0, #rec.removed)
+
+        reg:SyncRules({ rule(1), rule(2, "path/Horn"), rule(3) })
+        assert.same({ 2 }, rec.removed)
+        assert.equals(4, #rec.added)
+        assert.equals("path/Horn", rec.added[4].soundFileName)
+
+        reg:SyncRules({ rule(1), rule(2, "path/Horn") })
+        assert.same({ 2, 3 }, rec.removed)
+        assert.equals(4, #rec.added)
+        assert.equals(2, reg:Count())
+    end)
+
+    it("while hidden removes unwanted rules, adds nothing, keeps standing matches and pends; a sync after release adds only the missing", function()
+        local rec = apiRecording()
+        local reg, state = registryWith(rec, false)
+        reg:SyncRules({ rule(1), rule(2) })
+        state.hidden = true
+        reg:SyncRules({ rule(1), rule(3) })
+        assert.same({ 2 }, rec.removed)
+        assert.equals(2, #rec.added)
+        assert.equals(1, reg:Count())
+        assert.is_true(reg:IsPending())
+
+        state.hidden = false
+        reg:SyncRules({ rule(1), rule(3) })
+        assert.equals(3, #rec.added)
+        assert.equals(3, rec.added[3].spellID)
+        assert.same({ 2 }, rec.removed)
+        assert.is_false(reg:IsPending())
+    end)
+
+    it("a nil id leaves that one rule unregistered with one diagnostic, the others standing and nothing pending", function()
+        local rec = apiRecording(2)
+        local reg = registryWith(rec, false)
+        reg:SyncRules({ rule(1), rule(2), rule(3) })
+        assert.equals(3, #rec.added)
+        assert.equals(2, reg:Count())
+        assert.equals(1, rec.diagnostics)
+        assert.equals(0, #rec.removed)
+        assert.is_false(reg:IsPending())
+    end)
+end)

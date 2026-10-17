@@ -93,7 +93,7 @@ if KE.LSM then
         "Boss Buffed", "CC", "Clear", "Dance", "Defensive",
         "Dispel", "Dmg Amp", "Dodge", "Drop", "Feet",
         "Fixate Incoming", "Frontal", "Gun1", "Hide",
-        "Intermission", "Interrupt", "Kick", "Knockback", "Leap",
+        "Intermission", "Interrupt", "Kick", "Kick 1", "Kick 2", "Kick 3", "Knockback", "Leap",
         "Move", "Phasing", "Pools", "Pull", "Soak", "Soaks", "Split",
         "Spread", "Stack", "Stop Casting", "Time Spiral", "Totem", "Whisper",
     }

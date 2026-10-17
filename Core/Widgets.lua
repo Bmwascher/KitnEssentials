@@ -182,6 +182,33 @@ function KE.PromptQueueTake(queue)
     return table.remove(queue, 1)
 end
 
+-- Callers use constant keys so repeated raises cannot grow the parked list.
+local promptParked = {}
+
+function KE.PromptPark(parked, entry, key)
+    for i = #parked, 1, -1 do
+        if parked[i].parkKey == key or (entry.accept ~= nil and parked[i].accept == entry.accept) then
+            table.remove(parked, i)
+        end
+    end
+    entry.parkKey = key
+    parked[#parked + 1] = entry
+end
+
+function KE.PromptUnpark(parked, queue, cap)
+    while parked[1] and #queue < cap do
+        queue[#queue + 1] = table.remove(parked, 1)
+    end
+end
+
+function KE.PromptHold(queue, parked, entry, cap)
+    KE.PromptQueueRemove(parked, entry.accept)
+    if KE.PromptQueueAdd(queue, entry, cap) then return true end
+    if not entry.parkKey then return false end
+    KE.PromptPark(parked, entry, entry.parkKey)
+    return true
+end
+
 -- Set by the drain for the one prompt it opens. KE:CreatePrompt reads and
 -- clears it first thing; without it the taken prompt would see the entries
 -- still waiting, rejoin the back, and schedule another drain every frame.
@@ -193,6 +220,7 @@ local openingQueued = false
 local function OpenQueuedPrompt()
     if #promptQueue == 0 or KE.activePrompt or InCombatLockdown() then return end
     local args = KE.PromptQueueTake(promptQueue)
+    KE.PromptUnpark(promptParked, promptQueue, PROMPT_QUEUE_CAP)
     openingQueued = true
     KE:CreatePrompt(unpack(args, 1, args.n))
 end
@@ -246,6 +274,7 @@ local function ClosePrompt(dialog, runCancel)
     local onCancel = dialog._onCancel
     dialog._onAccept = nil
     dialog._onCancel = nil
+    dialog._keyedEntry = nil
     dialog:Hide()
     KE.activePrompt = nil
     if #promptQueue > 0 then C_Timer.After(0, OpenQueuedPrompt) end
@@ -260,6 +289,8 @@ function KE:ClosePromptIfOwner(accept)
     -- A copy prompt carries no accept; nil must not match it.
     if not accept then return end
     KE.PromptQueueRemove(promptQueue, accept)
+    KE.PromptQueueRemove(promptParked, accept)
+    KE.PromptUnpark(promptParked, promptQueue, PROMPT_QUEUE_CAP)
     local dialog = KE.activePrompt
     if dialog and dialog._onAccept == accept then
         ClosePrompt(dialog, false)
@@ -360,7 +391,10 @@ end
 -- onSecondTextChanged(text, dialog) runs on every text change in the second
 -- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
 -- nobody asked for: with another prompt open, in combat, or others waiting, it
--- joins the queue and opens in its turn. It then returns nil.
+-- joins the queue and opens in its turn. It then returns nil. With
+-- opts.parkKey, a constant string, a waiting prompt is never lost: the full
+-- queue keeps it, one per key, until it has room, and a prompt that replaces
+-- it on screen sends it back to wait.
 -- acceptOnly (confirm mode only) shows the accept button alone, centered.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
@@ -371,22 +405,37 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     local Theme = KE.Theme
     if type(opts) ~= "table" then opts = nil end
 
-    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown(),
-        #promptQueue > 0 and not fromQueue) then
-        KE.PromptQueueAdd(promptQueue, {
+    local parkKey = opts and opts.waitIfBusy == true and type(opts.parkKey) == "string" and opts.parkKey or nil
+    local waits = KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown(),
+        #promptQueue > 0 and not fromQueue)
+    -- Packed for a prompt that waits, and for a keyed one that opens, so a
+    -- prompt replacing it can make it wait again.
+    local entry
+    if waits or parkKey then
+        entry = {
             title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
             textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
             showSecondEditBox, secondEditBoxLabel, opts,
-            n = 16, accept = onAccept,
-        }, PROMPT_QUEUE_CAP)
+            n = 16, accept = onAccept, parkKey = parkKey,
+        }
+    end
+    if waits then
+        KE.PromptHold(promptQueue, promptParked, entry, PROMPT_QUEUE_CAP)
         -- Waiting only behind the queue: no close or combat end is coming to
         -- drain it.
         if not KE.activePrompt and not InCombatLockdown() then C_Timer.After(0, OpenQueuedPrompt) end
         return nil
     end
 
-    if KE.activePrompt then
-        KE.activePrompt:Hide()
+    local showing = KE.activePrompt
+    if showing then
+        -- A keyed prompt replaced while showing was not answered: it waits again.
+        local held = showing._keyedEntry
+        showing._keyedEntry = nil
+        if held and held.accept ~= onAccept then
+            KE.PromptHold(promptQueue, promptParked, held, PROMPT_QUEUE_CAP)
+        end
+        showing:Hide()
     end
 
     -- Validate theme colors
@@ -606,6 +655,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     ------------------------------------------------------------------
     dialog._onAccept = onAccept
     dialog._onCancel = onCancel
+    dialog._keyedEntry = parkKey and entry or nil
     dialog._closeIsNeutral = (opts and opts.closeIsNeutral == true) or false
     dialog._showEditBox = showEditBox and true or false
     dialog._showSecondEditBox = twoField
