@@ -3185,6 +3185,7 @@ end
 -- (sessionType, meterType, sessionID) key is memoization, not identity) -- closes the
 -- detail panel (its breakdown/recap was keyed to the old view), closes the selector,
 -- and repaints. meterType is a plain Enum.DamageMeterType value -- never secret.
+-- Must not clear W._curSessionID: one pinned id serves every meter type.
 function DM:SetWindowView(W, meterType)
     if not W then return end
     local windows = self.db and self.db.Windows
