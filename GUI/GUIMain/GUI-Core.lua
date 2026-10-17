@@ -431,6 +431,58 @@ function GUIFrame:ToggleMinimize()
     if self.PaintMinimizeArrow then self:PaintMinimizeArrow() end
 end
 
+---------------------------------------------------------------------------------
+-- Window size rules
+---------------------------------------------------------------------------------
+-- A press that changes neither side by this much is a click, not a resize.
+local RESIZE_CLICK_TOLERANCE = 2
+
+-- UIParent's size is a quotient of the UI scale and can read a hair under a
+-- whole pixel; the room still floors to the pixel the edge really is on.
+local ROOM_FLOAT_TOLERANCE = 0.001
+
+-- Pure. x, y are the window's TOPLEFT offsets from UIParent's TOPLEFT, so y
+-- is zero or negative. Floored, so a size cut to the room is whole pixels
+-- and never past the edge.
+function GUIFrame.ResizeRoom(x, y, screenW, screenH, minW, minH)
+    return math.max(minW, math.floor(screenW - x + ROOM_FLOAT_TOLERANCE)),
+        math.max(minH, math.floor(screenH + y + ROOM_FLOAT_TOLERANCE))
+end
+
+-- Pure. Moves a restored top-left corner onto the screen, far enough from the
+-- right and bottom edges to leave room for the minimum size. A corner that
+-- already fits comes back unchanged.
+function GUIFrame.ClampCorner(x, y, screenW, screenH, minW, minH)
+    return math.min(math.max(x, 0), screenW - minW), math.max(math.min(y, 0), minH - screenH)
+end
+
+-- Pure.
+function GUIFrame.FitWindowSize(w, h, minW, minH, maxW, maxH)
+    return math.max(minW, math.min(w, maxW)), math.max(minH, math.min(h, maxH))
+end
+
+-- Pure.
+function GUIFrame.KeepGrabSize(grabW, grabH, w, h)
+    if math.abs(w - grabW) < RESIZE_CLICK_TOLERANCE and math.abs(h - grabH) < RESIZE_CLICK_TOLERANCE then
+        return grabW, grabH
+    end
+    return w, h
+end
+
+-- Each anchor point's position as a fraction of the width from the left edge
+-- and of the height down from the top edge.
+local POINT_X = { TOPLEFT = 0, LEFT = 0, BOTTOMLEFT = 0, TOP = 0.5, CENTER = 0.5, BOTTOM = 0.5, TOPRIGHT = 1, RIGHT = 1, BOTTOMRIGHT = 1 }
+local POINT_Y = { TOPLEFT = 0, TOP = 0, TOPRIGHT = 0, LEFT = 0.5, CENTER = 0.5, RIGHT = 0.5, BOTTOMLEFT = 1, BOTTOM = 1, BOTTOMRIGHT = 1 }
+
+-- Pure. The top-left corner, as TOPLEFT offsets, of a w x h frame anchored by
+-- point to UIParent's relativePoint. Nil for a name that is not a point.
+function GUIFrame.TopLeftFromPoint(point, relativePoint, xOfs, yOfs, w, h, screenW, screenH)
+    local fx, fy = POINT_X[point], POINT_Y[point]
+    local rx, ry = POINT_X[relativePoint], POINT_Y[relativePoint]
+    if not (fx and fy and rx and ry) then return nil end
+    return rx * screenW + (xOfs or 0) - fx * w, -ry * screenH + (yOfs or 0) + fy * h
+end
+
 -- Hide the GUI
 function GUIFrame:Hide()
     if self.mainFrame then
