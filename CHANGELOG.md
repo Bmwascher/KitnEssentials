@@ -1,5 +1,31 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.9
+
+### Party Cooldowns
+
+- **NEW:** Potion Bars on the Potions tab, on by default. With Party
+  Cooldowns on, in a party, one movable box shows a bar per party member
+  for their combat potion's 5 minute cooldown: a potion icon, their name
+  in class color and the time left. Never in a raid or solo
+- Show Ready Bars, on by default, keeps a full "Ready" bar for each member
+  whose potion is ready. Include Yourself on this tab, on by default, adds
+  your own bar
+- Starting a key clears every bar. A party member's second potion, drunk
+  while the one from before the key started is still up, starts their bar.
+  Your own bar starts from your potion cast. Healing potions are not
+  tracked
+- Bar Display sets width, height, Grow (Down or Up), spacing, Timer Text
+  and text size. Colors sets Bar Color, Background Color (its opacity shows
+  what is behind the bars), Class Color Bars and Class Color Names
+- The Position card places the box, with Anchored To and strata, and the
+  box has an Edit Mode mover. The switch sits in the Potion Bars card's
+  title bar, and the potion list editor moves to this tab
+- By default the bars are 225 by 23 at the left edge of the screen: light
+  blue on a dark background at 80% opacity, with class-colored names
+
+---
+
 ## v4.11.8
 
 ### Party Cooldowns
