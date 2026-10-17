@@ -204,7 +204,80 @@ local function SelectSpellList(src)
     return merged, (merged[1] and merged[1].totalAmount) or 0
 end
 
--- One detail row: [icon] name .......... value. Scripts wired ONCE (pool reuse).
+-- Line 2 of a detail row (the numbers) is three sizes below the bar font, never
+-- below 8. Window.lua's font re-apply uses the same rule through DM.
+local function DetailSubFontSize(fontSize)
+    return math_max(8, (fontSize or 12) - 3)
+end
+DM.DetailSubFontSize = DetailSubFontSize
+
+local math_ceil = math.ceil
+
+-- Rounds up to a whole pixel. The millionth absorbs float noise on an exact
+-- multiple, which would otherwise add a pixel.
+local function SnapUp(v, px)
+    return math_ceil(v / px - 1e-6) * px
+end
+
+-- Two-line row geometry from the window's snapped bar height and spacing. The
+-- row is never shorter than 1.25 x the two font sizes, and the snapped line
+-- centers are pushed down by whole pixels where needed so line 1 starts inside
+-- the row, the two lines do not overlap, and line 2 ends inside the row on any
+-- pixel grid. One reused table: called once per render, never kept by a caller.
+local _detailMetrics = {}
+local function DetailRowMetrics(barH, spacing, fontSize)
+    local m = _detailMetrics
+    local F = fontSize or 12
+    local sub = DetailSubFontSize(fontSize)
+    local px = KE:GetPixelSize()
+    local rowH = math_max(barH + KE:PixelSnap(sub * 0.8), KE:PixelSnap((F + sub) * 1.25))
+    local line1Y = math_max(KE:PixelSnap(rowH * 0.32), SnapUp(F / 2, px))
+    local line2Y = math_max(KE:PixelSnap(rowH * 0.74), line1Y + SnapUp((F + sub) / 2, px))
+    m.barH = barH
+    m.sub = sub
+    m.rowH = math_max(rowH, line2Y + SnapUp(sub / 2, px))
+    m.stride = m.rowH + spacing
+    m.gap = KE:PixelSnap(3)
+    m.line1Y = line1Y
+    m.line2Y = line2Y
+    return m
+end
+
+-- Line 2 is dimmed with region alpha, not text-color alpha, so a font re-apply
+-- (which resets the tint) keeps it.
+local DETAIL_SUB_ALPHA = 0.7
+
+-- Places line 1 (row.label) and line 2 (row.value) in a two-line row. Both are
+-- anchored at both ends, so their widths come from the row, never from the text,
+-- which may be secret. Keyed on the four offsets themselves, so any input that
+-- moves one (bar height, font size, pixel size, icon) re-anchors.
+local function AnchorDetailLines(bar, iconShown, m)
+    local x = iconShown and (m.barH + m.gap) or m.gap
+    if bar._dlX == x and bar._dlGap == m.gap and bar._dlY1 == m.line1Y and bar._dlY2 == m.line2Y then return end
+    bar._dlX = x
+    bar._dlGap = m.gap
+    bar._dlY1 = m.line1Y
+    bar._dlY2 = m.line2Y
+    local row = bar.row
+    row.label:ClearAllPoints()
+    row.label:SetPoint("LEFT", row, "TOPLEFT", x, -m.line1Y)
+    row.label:SetPoint("RIGHT", row, "TOPRIGHT", -m.gap, -m.line1Y)
+    row.value:ClearAllPoints()
+    row.value:SetPoint("LEFT", row, "TOPLEFT", x, -m.line2Y)
+    row.value:SetPoint("RIGHT", row, "TOPRIGHT", -m.gap, -m.line2Y)
+end
+
+-- The gray "(Name)" after a recap event: the enemy on damage rows, and the healer
+-- on heal rows only on the panel's two-line rows (the hover tip keeps its one-line
+-- rows without it). A secret or empty name is never shown.
+local function RecapSourceSuffix(srcName, isHeal, twoLine)
+    if srcName and not issecretvalue(srcName) and srcName ~= "" and (twoLine or not isHeal) then
+        return "  |cff999999(" .. srcName .. ")|r"
+    end
+    return ""
+end
+
+-- One detail row: [icon] name on line 1, the numbers on line 2. Scripts wired ONCE (pool reuse).
 -- Clicking any row closes the panel (the back gesture).
 local function MakeDetailRow(parent)
     local db = DM.db
@@ -239,10 +312,12 @@ local function MakeDetailRow(parent)
     row.label:SetJustifyH("LEFT")
     row.label:SetWordWrap(false)
     KE:ApplyFontToText(row.label, face, size, outline)
+    -- Line 2; AnchorDetailLines places it.
     row.value = row.fill:CreateFontString(nil, "OVERLAY")
-    row.value:SetPoint("RIGHT", row.fill, "RIGHT", -3, 0)
-    row.value:SetJustifyH("RIGHT")
-    KE:ApplyFontToText(row.value, face, size, outline)
+    row.value:SetJustifyH("LEFT")
+    row.value:SetWordWrap(false)
+    row.value:SetAlpha(DETAIL_SUB_ALPHA)
+    KE:ApplyFontToText(row.value, face, DetailSubFontSize(size), outline)
 
     row:SetScript("OnClick", function() DM:CloseDetail(bar.win) end)
     row:Hide()
@@ -286,7 +361,7 @@ function DM:EnsureDetail(W)
     -- secret); no-op when the list fits (maxScroll <= 0).
     d.view:EnableMouseWheel(true)
     d.view:SetScript("OnMouseWheel", function(self, delta)
-        local stride = W._snapStride or 18
+        local stride = d._stride or W._snapStride or 18
         local viewH = self:GetHeight() or 0
         local contentH = d.content:GetHeight() or 0
         local maxScroll = contentH - viewH
@@ -626,8 +701,10 @@ function DM:RenderBreakdown(W)
         return
     end
 
-    local stride = W._snapStride or 18
     local barH = W._snapHeight or 16
+    local m = DetailRowMetrics(barH, W._snapSpacing or 2, self.db and self.db.FontSize)
+    local stride = m.stride
+    d._stride = stride
 
     -- maxAmount came from SelectSpellList alongside the list itself. Percent basis
     -- is the source's whole total (unchanged by either branch); gate it on
@@ -651,7 +728,7 @@ function DM:RenderBreakdown(W)
             local yOff = -(i - 1) * stride
             row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
-            row:SetHeight(barH)
+            row:SetHeight(m.rowH)
 
             -- Icon: a merged-row override (auto-attack -> fixed melee glyph, not the equipped
             -- weapon) wins; else from spellID (safe OUT of combat -- spellID is secret IN
@@ -673,13 +750,7 @@ function DM:RenderBreakdown(W)
             end
             if not iconShown then row.iconFrame:Hide() end
 
-            row.label:ClearAllPoints()
-            if iconShown then
-                row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-            else
-                row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
-            end
-            row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+            AnchorDetailLines(bar, iconShown, m)
 
             -- Sanitize the per-spell amount before any Lua math/format. SetValue
             -- accepts secrets (raw amount feeds the fill), but the percent path and
@@ -736,7 +807,7 @@ end
 
 -- Per-enemy player breakdown (Enemy Damage Taken drill-down; OOC-gated via OpenDetail like
 -- RenderBreakdown). Renders the attacking players (AggregateEnemyPlayers) as class-colored
--- rows: [spec icon] name .......... amount + share-of-this-enemy %. Replaces the (blank)
+-- rows: [spec icon] name on line 1, amount + share-of-this-enemy % on line 2. Replaces the (blank)
 -- per-spell render for this meter type -- the enemy's combatSpells don't resolve to
 -- player-spell names. Mirrors RenderBreakdown's row layout / pool handling.
 function DM:RenderEnemyBreakdown(W, src)
@@ -747,8 +818,10 @@ function DM:RenderEnemyBreakdown(W, src)
         return
     end
 
-    local stride = W._snapStride or 18
     local barH = W._snapHeight or 16
+    local m = DetailRowMetrics(barH, W._snapSpacing or 2, self.db and self.db.FontSize)
+    local stride = m.stride
+    d._stride = stride
 
     -- % denominator: the enemy's whole damage-taken (sanitize defensively). Fill max is the
     -- top attacker's total so the leading bar reads full-width.
@@ -769,7 +842,7 @@ function DM:RenderEnemyBreakdown(W, src)
             local yOff = -(i - 1) * stride
             row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
-            row:SetHeight(barH)
+            row:SetHeight(m.rowH)
 
             -- Class/spec icon (specIconID is NeverSecret); hidden frame on absence.
             local iconShown = false
@@ -783,13 +856,7 @@ function DM:RenderEnemyBreakdown(W, src)
             end
             if not iconShown then row.iconFrame:Hide() end
 
-            row.label:ClearAllPoints()
-            if iconShown then
-                row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-            else
-                row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
-            end
-            row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+            AnchorDetailLines(bar, iconShown, m)
 
             -- Fill width by attacker total; class color when known, else neutral gray.
             row.fill:SetMinMaxValues(0, maxAmount)
@@ -829,7 +896,9 @@ end
 --
 -- Anchoring stays with the callers: the two surfaces anchor to different parents,
 -- and the tip re-anchors its value column between the label's two SetPoints. Only
--- the content is shared.
+-- the content is shared. The caller also picks the text split: with twoLine (the
+-- panel) the gray name follows the numbers on line 2; without it (the tip) it
+-- follows the spell on the label, on damage rows only.
 --
 -- EVERY DeathRecapEventInfo field is treated as possibly secret. The structure is
 -- declared with an EMPTY field list, so there is no annotation to trust either way,
@@ -841,7 +910,7 @@ end
 -- sinkMax and plainMax are the two maxima from DM:GetDeathRecap and are NOT
 -- interchangeable: sinkMax drives the bar and may be secret, plainMax is the only
 -- one the percentage may divide by and is nil when there is no usable maximum.
-local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, deathTime)
+local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, deathTime, twoLine)
     -- Icon: the lookup accepts a secret spell id (AllowedWhenTainted), so a secret one
     -- is still tried -- it just skips the > 0 test, whose only job is rejecting a plain
     -- zero or negative id and which would throw on a secret. pcall'd either way so a
@@ -913,7 +982,7 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
         pctSuffix = format(" (%.0f%%)", hpPct * 100)
     end
 
-    -- Label: "-X.Xs SpellName" (+ " (Source)" when a plain sourceName exists).
+    -- Head: "-X.Xs SpellName"; the gray " (Source)" suffix is placed by the twoLine split below.
     -- A SECRET name is KEPT and displayed: a FontString renders one, and the label is
     -- assembled by concatenation, which is safe on a secret string. Falling back to
     -- "Unknown" would erase a name the engine was able to show, on most rows in
@@ -927,12 +996,8 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
             else spellName = "Unknown" end
         end
     end
-    local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
-    local srcName = ev.sourceName
-    if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
-        label = label .. "  |cff999999(" .. srcName .. ")|r"
-    end
-    row.label:SetText(label)
+    local head = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
+    local suffix = RecapSourceSuffix(ev.sourceName, isHeal, twoLine)
 
     -- Value: the amount goes RAW to the formatter when it is secret. The formatter is
     -- AllowedWhenTainted end to end; math_max and tostring are not, and routing a
@@ -956,18 +1021,27 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
     local crit = critFlag and " |cffffd100*|r" or ""
     -- Overkill is a conditional annotation, not a column: the > 0 test is what decides
     -- whether to show it, and that test cannot run on a secret. Secret means absent.
+    local numbers
     if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
         local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
-        row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
+        numbers = sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix
     else
-        row.value:SetText(sign .. body .. crit .. pctSuffix)
+        numbers = sign .. body .. crit .. pctSuffix
+    end
+    if twoLine then
+        row.label:SetText(head)
+        row.value:SetText(numbers .. suffix)
+    else
+        row.label:SetText(head .. suffix)
+        row.value:SetText(numbers)
     end
 end
 
 -- Death-recap timeline, reachable IN COMBAT as well as out of it. Renders the
 -- source's C_DeathRecap events oldest-first: each row is one combat-log event leading
--- to the death, with the HP-remaining fill, "-Xs SpellName from Source" label, and a
--- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
+-- to the death, with the HP-remaining fill, "-Xs SpellName" on line 1, and line 2 the
+-- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix) then the gray
+-- source or healer when readable. Recap fields
 -- use spellId (lowercase d) -- distinct from combatSpells' spellID.
 --
 -- NOTHING here may assume a readable field. Every per-row value goes through
@@ -992,8 +1066,10 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
         return
     end
 
-    local stride = W._snapStride or 18
     local barH = W._snapHeight or 16
+    local m = DetailRowMetrics(barH, W._snapSpacing or 2, self.db and self.db.FontSize)
+    local stride = m.stride
+    d._stride = stride
     local deathTime = events[#events] and events[#events].timestamp
     local count = math_min(#events, DETAIL_POOL_SIZE)
     EnsureDetailRows(W, count)
@@ -1006,12 +1082,10 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
             local yOff = -(i - 1) * stride
             row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
-            row:SetHeight(barH)
-            row.label:ClearAllPoints()
-            row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-            row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+            row:SetHeight(m.rowH)
+            AnchorDetailLines(bar, true, m)
 
-            RenderRecapRow(self, row, events[i], i, count, barH, sinkMax, plainMax, deathTime)
+            RenderRecapRow(self, row, events[i], i, count, barH, sinkMax, plainMax, deathTime, true)
 
             if not row:IsShown() then row:Show() end
         else
@@ -1217,8 +1291,8 @@ local _tipPaintedRecapID
 -- its size from this; the column/section headers sit one notch below it (TipFontSize - 1).
 local function TipFontSize(s) return math_max(8, (s or 12) - 1) end
 
--- One tip row: [icon] name .......... value. Same anatomy as MakeDetailRow but
--- parented to the tip and laid out by index (the tip is fixed-width, no scroll).
+-- One tip row: [icon] name .......... value, on one line (the panel's MakeDetailRow
+-- rows are two-line), parented to the tip and laid out by index (fixed-width, no scroll).
 -- Scripts are NOT wired here -- the tip is passive (EnableMouse(false)), so a row
 -- never receives clicks; it is a pure display element.
 local function MakeTipRow(parent, rowH)
@@ -2223,7 +2297,7 @@ _tipPoll:SetScript("OnUpdate", function(self, elapsed)
 end)
 
 ---------------------------------------------------------------------------------
--- Busted seam (dev/spec/dm_breakdown_spec.lua). The pure aggregation helpers
+-- Busted seam (dev/spec/dm_breakdown_spec.lua, dm_meter_names_spec.lua). The pure helpers
 -- above are file-locals; expose them as statics on DM so the headless spec
 -- tests the REAL bodies instead of a drifting mirror (same static-helper
 -- pattern as MPT.FormatTime / MPT.ResolvePBFrom). Inert in-game: nothing in
@@ -2233,3 +2307,5 @@ DM.AggregateEnemyPlayers = AggregateEnemyPlayers
 DM.AutoAttackName = AutoAttackName
 DM.MergeSpellsByName = MergeSpellsByName
 DM.TipHeaderName = TipHeaderName
+DM.DetailRowMetrics = DetailRowMetrics
+DM.RecapSourceSuffix = RecapSourceSuffix

@@ -1001,6 +1001,7 @@ function DM:_AcquireSplitter()
         if not self2._dragging then
             self2.hi:Hide()
         end
+        if DM.RecheckHeaderIcons then DM:RecheckHeaderIcons() end
     end)
     s:SetScript("OnMouseDown", SplitterStartDrag)
     s:SetScript("OnMouseUp", SplitterStopDrag)
