@@ -984,7 +984,7 @@ KE.EncounterData[3456] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- No timeline event publishes this estimate; its provider stop follows the encounter warning.
         -- The pull publication can precede KE's encounter start.
-        [1307703] = { name = "Fresh Meat", castType = "cast", castDuration = 0, role = "tank", displayText = "FRESH MEAT", color = { 0.855, 0.357, 1.0 }, soundOnHide = "Boss Buffed",
+        [1307703] = { name = "Fresh Meat", castType = "cast", castDuration = 0, role = "tank", displayText = "FRESH MEAT", color = { 0.855, 0.357, 1.0 }, sound = "Blade", soundOnHide = "Boss Buffed",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", pullReceipt = true, waitAfter = 5 } },
     },
     phaseCues = {
@@ -998,9 +998,9 @@ KE.EncounterData[3456] = {
         { parent = 1296216, baseAmount = 1311783.429, timeout = 60, displayText = "SHIELD" },
     },
     auraSounds = {
-        { spellID = 1296069, trigger = "added", unit = "player", name = "Regurgitate under you", sound = "Move" },
-        { spellID = 1297876, trigger = "added", unit = "player", name = "Triple Shot on you",    sound = "Defensive" },
-        { spellID = 1307915, trigger = "added", unit = "player", name = "Ravenous Stomp on you", sound = "Gun1", disabled = true },
+        { spellID = 1296069, trigger = "added", unit = "player", name = "Regurgitate under you",    sound = "Gun1" },
+        { spellID = 1297876, trigger = "added", unit = "player", name = "Triple Shot on you",       sound = "Defensive" },
+        { spellID = 1307915, trigger = "added", unit = "player", name = "Ravenous Stomp under you", sound = "Move" },
     },
 }
 
@@ -1041,7 +1041,7 @@ KE.EncounterData[3457] = {
             display = "text", displayText = "FRONTAL", sound = "Frontal", showAtSeconds = 0 },
     },
     auraSounds = {
-        { spellID = 1310974, trigger = "added", unit = "player", name = "Toxic Atrophy on you", sound = "Gun1" },
+        { spellID = 1310974, trigger = "added", unit = "player", name = "Toxic Atrophy on you", sound = "GGEZ" },
         { spellID = 1300503, trigger = "added", unit = "player", name = "Spiteful Hunt on you", sound = "Fixate Incoming", disabled = true },
     },
 }
@@ -1073,9 +1073,9 @@ KE.EncounterData[3458] = {
     },
     auraSounds = {
         { spellID = 1300894, trigger = "removed", unit = "player", name = "Ritual Venom Ended",        sound = "Done" },
-        { spellID = 1301231, trigger = "added",   unit = "player", name = "Bloodletting under you",    sound = "Move", disabled = true },
+        { spellID = 1301231, trigger = "added",   unit = "player", name = "Bloodletting under you",    sound = "Move" },
         { spellID = 1300885, trigger = "added",   unit = "player", name = "Ritual of the Fang on you", sound = "Gun1", disabled = true },
-        { spellID = 1301508, trigger = "added",   unit = "player", name = "Boneslicer on you",         sound = "Gun1", disabled = true },
+        { spellID = 1301508, trigger = "added",   unit = "player", name = "Boneslicer on you",         sound = "Gun1" },
     },
 }
 
@@ -1120,10 +1120,10 @@ KE.EncounterData[3208] = {
     auraSounds = {
         { spellID = 1235549, trigger = "added", unit = "player", name = "Glacial Torment on you",     sound = "Dispel" },
         { spellID = 1236289, trigger = "added", unit = "player", name = "Blizzard's Wrath under you", sound = "Move" },
-        { spellID = 1297749, trigger = "added", unit = "player", name = "Frozen Tempest under you",   sound = "Move" },
-        { spellID = 1235829, trigger = "added", unit = "player", name = "Winter's Shroud on you",     sound = "Gun1", disabled = true },
+        { spellID = 1297749, trigger = "added", unit = "player", name = "Frozen Tempest on you",      sound = "Not Safe" },
+        { spellID = 1235841, trigger = "added", unit = "player", name = "Snowdrift under you",        sound = "Safe" },
         { spellID = 1263597, trigger = "added", unit = "player", name = "Rime Detonation on you",     sound = "Gun1", disabled = true },
-        { spellID = 1235841, trigger = "added", unit = "player", name = "Snowdrift on you",           sound = "Gun1", disabled = true },
+        { spellID = 1235829, trigger = "added", unit = "player", name = "Winter's Shroud on you",     sound = "Gun1", disabled = true },
     },
 }
 
@@ -1144,9 +1144,9 @@ KE.EncounterData[3209] = {
                       timerSource = { kind = "Sequel", parent = 1243569, after = 10 } },
     },
     auraSounds = {
-        { spellID = 1255577, trigger = "added", unit = "player", name = "Spectral Slash under you",   sound = "Move" },
-        { spellID = 1242869, trigger = "added", unit = "player", name = "Echoing Maul on you",        sound = "Gun1", disabled = true },
-        { spellID = 1262253, trigger = "added", unit = "player", name = "Demoralizing Scream on you", sound = "Gun1", disabled = true },
+        { spellID = 1255577, trigger = "added", unit = "player", name = "Spectral Slash on you",      sound = "Defensive" },
+        { spellID = 1242869, trigger = "added", unit = "player", name = "Echoing Maul on you",        sound = "Move Out" },
+        { spellID = 1262253, trigger = "added", unit = "player", name = "Demoralizing Scream on you", sound = "GGEZ" },
     },
 }
 
@@ -1172,7 +1172,7 @@ KE.EncounterData[2139] = {
     },
     auraSounds = {
         { spellID = 265914,  trigger = "added", unit = "player", name = "Molten Gold under you", sound = "Move" },
-        { spellID = 1306736, trigger = "added", unit = "player", name = "Spit Gold on you",      sound = "Gun1", disabled = true },
+        { spellID = 1306736, trigger = "added", unit = "player", name = "Spit Gold on you",      sound = "Move Out" },
     },
 }
 
@@ -1222,7 +1222,7 @@ KE.EncounterData[2140] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 266231, trigger = "added", unit = "player", name = "Severing Axe on you", sound = "Gun1" },
+        { spellID = 266231, trigger = "added", unit = "player", name = "Severing Axe on you", sound = "Defensive" },
     },
 }
 
@@ -1255,7 +1255,7 @@ KE.EncounterData[2143] = {
         { unit = "boss1", threshold = 80, lead = 5 },
     },
     auraSounds = {
-        { spellID = 1302945, trigger = "added", unit = "player", name = "Impaling Spear on you", sound = "Gun1", disabled = true },
+        { spellID = 1302945, trigger = "added", unit = "player", name = "Impaling Spear on you", sound = "Bleed" },
     },
 }
 
@@ -1429,8 +1429,8 @@ KE.EncounterData[2609] = {
     },
     auraSounds = {
         { spellID = 372963, trigger = "added", unit = "player", name = "Storm's Eye on you", sound = "Move" },
-        { spellID = 384024, trigger = "added", unit = "player", name = "Hailbombs on you",   sound = "Gun1" },
-        { spellID = 385518, trigger = "added", unit = "player", name = "Chillstorm on you",  sound = "Gun1", disabled = true },
+        { spellID = 384024, trigger = "added", unit = "player", name = "Hailbombs on you",   sound = "GGEZ" },
+        { spellID = 385518, trigger = "added", unit = "player", name = "Chillstorm on you",  sound = "Move Out" },
     },
 }
 
@@ -1450,7 +1450,7 @@ KE.EncounterData[2606] = {
     },
     auraSounds = {
         { spellID = 372820, trigger = "added", unit = "player", name = "Scorched Earth on you",         sound = "Move" },
-        { spellID = 372865, trigger = "added", unit = "player", name = "Ritual of Blazebinding on you", sound = "Gun1", disabled = true },
+        { spellID = 372865, trigger = "added", unit = "player", name = "Ritual of Blazebinding on you", sound = "Spawn Add" },
     },
 }
 
@@ -1486,7 +1486,7 @@ KE.EncounterData[2623] = {
     auraSounds = {
         { spellID = 381526, trigger = "added", unit = "player", name = "Roaring Firebreath on you", sound = "Move" },
         { spellID = 384773, trigger = "added", unit = "player", name = "Flaming Embers on you",     sound = "Move" },
-        { spellID = 381862, trigger = "added", unit = "player", name = "Inferno Spit on you",       sound = "Gun1", disabled = true },
+        { spellID = 381862, trigger = "added", unit = "player", name = "Inferno Spit on you",       sound = "Defensive" },
     },
 }
 
@@ -1517,11 +1517,11 @@ KE.EncounterData[2124] = {
         { unit = "boss2", threshold = 35, lead = 5 },
     },
     auraSounds = {
+        { spellID = 1288074, trigger = "added", unit = "player", name = "Thunder and Lightning on you", sound = "Move In" },
+        { spellID = 1288874, trigger = "added", unit = "player", name = "Tempest Winds on you",         sound = "Move Out" },
         { spellID = 1288885, trigger = "added", unit = "player", name = "Tempest Winds silence on you", sound = "Move" },
-        { spellID = 1288457, trigger = "added", unit = "player", name = "Gust on you",                  sound = "Gun1", disabled = true },
-        { spellID = 1288874, trigger = "added", unit = "player", name = "Tempest Winds on you",         sound = "Gun1", disabled = true },
-        { spellID = 1288074, trigger = "added", unit = "player", name = "Thunder and Lightning on you", sound = "Gun1", disabled = true },
         { spellID = 1289059, trigger = "added", unit = "player", name = "Gale Force on you",            sound = "Gun1", disabled = true },
+        { spellID = 1288457, trigger = "added", unit = "player", name = "Gust on you",                  sound = "Gun1", disabled = true },
     },
 }
 
@@ -1594,9 +1594,9 @@ KE.EncounterData[2127] = {
     auraSounds = {
         { spellID = 1302826, trigger = "removed", unit = "player", name = "Corruption Burst Ended", sound = "Clear", disabled = true },
         { spellID = 1302618, trigger = "added",   unit = "player", name = "Vile Charge on you",     sound = "Gun1", disabled = true },
-        { spellID = 1300714, trigger = "added",   unit = "player", name = "Shadowlash on you",      sound = "Gun1", disabled = true },
-        { spellID = 1311979, trigger = "added",   unit = "player", name = "Latent Hex on you",      sound = "Gun1", disabled = true },
-        { spellID = 1300704, trigger = "added",   unit = "player", name = "Fixate on you",          sound = "Gun1", disabled = true },
+        { spellID = 1300714, trigger = "added",   unit = "player", name = "Shadowlash on you",      sound = "Debuffed", disabled = true },
+        { spellID = 1311979, trigger = "added",   unit = "player", name = "Latent Hex on you",      sound = "Move Out" },
+        { spellID = 1300704, trigger = "added",   unit = "player", name = "Fixate on you",          sound = "Fixated", disabled = true },
     },
 }
 
@@ -1622,11 +1622,11 @@ KE.EncounterData[3199] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1261276, trigger = "added", unit = "player", name = "Thornblade on you",              sound = "Gun1" },
+        { spellID = 1261276, trigger = "added", unit = "player", name = "Thornblade on you",              sound = "Move Out" },
+        { spellID = 1235865, trigger = "added", unit = "player", name = "Thornblade bleed on you",        sound = "Defensive" },
+        { spellID = 1235574, trigger = "added", unit = "player", name = "Lightblossom Beam on you",       sound = "Soaking" },
         { spellID = 1235828, trigger = "added", unit = "player", name = "Light-Scorched Earth under you", sound = "Move" },
         { spellID = 1234802, trigger = "added", unit = "player", name = "Fertile Loam under you",         sound = "Move" },
-        { spellID = 1235865, trigger = "added", unit = "player", name = "Thornblade bleed on you",        sound = "Gun1", disabled = true },
-        { spellID = 1235574, trigger = "added", unit = "player", name = "Lightblossom Beam on you",       sound = "Gun1", disabled = true },
     },
 }
 
@@ -1645,10 +1645,10 @@ KE.EncounterData[3200] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1237267, trigger = "added", unit = "player", name = "Incise on you",   sound = "Gun1" },
-        { spellID = 1272290, trigger = "added", unit = "player", name = "Crunched on you", sound = "Gun1" },
-        { spellID = 1237091, trigger = "added", unit = "player", name = "Bloodthirsty Gaze on you", sound = "Gun1", disabled = true },
-        { spellID = 1259365, trigger = "added", unit = "player", name = "Bloodthorn Roots on you",  sound = "Dispel", disabled = true },
+        { spellID = 1259365, trigger = "added", unit = "player", name = "Bloodthorn Roots on you",  sound = "Rooted" },
+        { spellID = 1237091, trigger = "added", unit = "player", name = "Bloodthirsty Gaze on you", sound = "Fixated" },
+        { spellID = 1237267, trigger = "added", unit = "player", name = "Incise on you",            sound = "Defensive" },
+        { spellID = 1272290, trigger = "added", unit = "player", name = "Crunched on you",          sound = "GGEZ" },
     },
 }
 
@@ -1685,8 +1685,8 @@ KE.EncounterData[3201] = {
         { unit = "boss1", threshold = 40, lead = 5 },
     },
     auraSounds = {
-        { spellID = 1239919, trigger = "added", unit = "player", name = "Lightfire Beams under you", sound = "Move", disabled = true },
-        { spellID = 1239825, trigger = "added", unit = "player", name = "Lightfire on you",          sound = "Gun1", disabled = true },
+        { spellID = 1239919, trigger = "added", unit = "player", name = "Lightfire Beams under you", sound = "Move" },
+        { spellID = 1239825, trigger = "added", unit = "player", name = "Lightfire on you",          sound = "Whisper" },
     },
 }
 
@@ -1765,7 +1765,7 @@ KE.EncounterData[3286] = {
         { spellID = 1263971, trigger = "added", unit = "player", name = "Mind-Numbing Poison on you", sound = "Dispel" },
         { spellID = 1222484, trigger = "added", unit = "player", name = "Poison Pool under you",      sound = "Move" },
         { spellID = 1226031, trigger = "added", unit = "player", name = "Poison Splash on you",       sound = "Dispel", disabled = true },
-        { spellID = 1283506, trigger = "added", unit = "player", name = "Fixate on you",              sound = "Gun1", disabled = true },
+        { spellID = 1283506, trigger = "added", unit = "player", name = "Fixate on you",              sound = "Fixated" },
     },
 }
 
@@ -1796,8 +1796,8 @@ KE.EncounterData[3287] = {
         },
     },
     auraSounds = {
-        { spellID = 1227247, trigger = "added", unit = "player", name = "Void Cascade on you", sound = "Gun1" },
-        { spellID = 1310026, trigger = "added", unit = "player", name = "Atomized on you",     sound = "Gun1" },
-        { spellID = 1263983, trigger = "added", unit = "player", name = "Condensed Mass on you", sound = "Gun1", disabled = true },
+        { spellID = 1263983, trigger = "added", unit = "player", name = "Condensed Mass on you", sound = "Clear" },
+        { spellID = 1227247, trigger = "added", unit = "player", name = "Void Cascade on you",   sound = "Gun1" },
+        { spellID = 1310026, trigger = "added", unit = "player", name = "Atomized on you",       sound = "GGEZ" },
     },
 }

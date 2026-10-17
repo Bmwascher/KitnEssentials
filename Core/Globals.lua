@@ -91,13 +91,14 @@ if KE.LSM then
     local sounds = {
         "Add", "Add Frontal", "Adds", "Aggro", "AoE", "Aoe And Dance", "Aoe And Knockback",
         "Bait", "Blade", "Bleed", "Bleeds", "Block Line", "Boss Buffed", "Boss Shielded", "Boss Immune",
-        "Bouncer", "CC", "Check Map", "Clear", "Clear Bomb", "Cleaner", "Dance", "Defensive",
+        "Bouncer", "CC", "Check Map", "Clear", "Clear Bomb", "Cleaner", "Dance", "Debuffed", "Defensive",
         "Dispel", "Dmg Amp", "Dmg Amp Over", "Dodge", "Done", "Drop", "Drops", "Entertainer", "Feet",
-        "Fixate Incoming", "Frontal", "Frontals", "Gun1", "Hide",
+        "Fixate Incoming", "Fixated", "Frontal", "Frontals", "GGEZ", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Kick 1", "Kick 2", "Kick 3", "Kick Add", "Kicks Inc",
-        "Knockback", "Leap", "Move", "Move Out", "Phase Ending", "Phasing", "Pools", "Protect", "Pull",
-        "Rescue", "Soak", "Soaks", "Split", "Spread", "Stack", "Stop Casting", "Take Gateway",
-        "Time Spiral", "Totem", "Totems", "Under Boss", "Waiter", "Whisper",
+        "Knockback", "Leap", "Move", "Move In", "Move Out", "Not Safe", "Phase Ending", "Phasing", "Pools",
+        "Protect", "Pull", "Rescue", "Rooted", "Safe", "Soak", "Soaking", "Soaks", "Spawn Add", "Split",
+        "Spread", "Stack", "Stop Casting", "Take Gateway", "Time Spiral", "Totem", "Totems", "Under Boss",
+        "Waiter", "Whisper",
     }
     for _, name in ipairs(sounds) do
         KE.LSM:Register("sound", name, SOUND_DIR .. name .. ".ogg")
