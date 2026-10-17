@@ -1,5 +1,33 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.10
+
+### Party Cooldowns
+
+- **NEW:** Healer Externals on its tab, on by default. With Party Cooldowns
+  on, in a party, a small box shows each party healer's external: Pain
+  Suppression, Guardian Spirit, Ironbark, Life Cocoon, Blessing of
+  Sacrifice or Time Dilation. Never solo, in a raid or in an arena
+- An icon is full color while ready. When its buff lands on anyone in the
+  party, you included, it turns gray with the time left in its middle.
+  Your own external is not shown
+- When a key starts, externals with a cooldown of 1:30 or longer go back
+  to ready; Time Dilation keeps counting
+- The tab sets each external's on/off and seconds, the icon size, spacing,
+  Grow, Timer Text and text size. The switch sits in the card's title bar
+- By default the box sits one pixel above Healer Mana. While Healer Mana is
+  off, the box goes to its own spot left of the screen's center
+- Attach to Healer Mana places the box one pixel above or below Healer
+  Mana (Side: Top or Bottom) and copies Healer Mana's icon size. The
+  Position card also offers Anchored To and strata
+
+### Healer Mana
+
+- The Healer Mana display has a frame name, KitnEssentialsHealerMana, so
+  other displays can anchor to it with Select Frame
+
+---
+
 ## v4.11.9
 
 ### Party Cooldowns
