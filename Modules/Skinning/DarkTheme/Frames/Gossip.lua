@@ -90,7 +90,7 @@ end
 
 local function Skin()
     local frame = _G.GossipFrame
-    if not frame then return end
+    if not frame then return S.Skip("GossipFrame missing") end
     S.Frame(frame)
 
     if _G.ItemTextScrollFrame and _G.ItemTextScrollFrame.ScrollBar then

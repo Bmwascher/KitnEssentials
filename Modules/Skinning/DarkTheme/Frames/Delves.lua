@@ -96,7 +96,7 @@ end
 
 local function SkinDifficultyPicker()
     local picker = _G.DelvesDifficultyPickerFrame
-    if not picker then return end
+    if not picker then return S.Skip("DelvesDifficultyPickerFrame missing") end
     S.StripTextures(picker)
     S.Backdrop(picker)
 
@@ -117,7 +117,7 @@ S:Register("Blizzard_DelvesDifficultyPicker", SkinDifficultyPicker, "Delves")
 
 local function SkinDashboard()
     local dashboard = _G.DelvesDashboardFrame
-    if not dashboard then return end
+    if not dashboard then return S.Skip("DelvesDashboardFrame missing") end
     if dashboard.DashboardBackground then dashboard.DashboardBackground:SetAlpha(0) end
     local panel = dashboard.ButtonPanelLayoutFrame
         and dashboard.ButtonPanelLayoutFrame.CompanionConfigButtonPanel

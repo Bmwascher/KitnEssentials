@@ -33,7 +33,7 @@ end
 
 local function Skin()
     local dlg = _G.AdventureMapQuestChoiceDialog
-    if not dlg then return end
+    if not dlg then return S.Skip("AdventureMapQuestChoiceDialog missing") end
     S.StripTextures(dlg)
     local bd = S.Backdrop(dlg)
     if bd then

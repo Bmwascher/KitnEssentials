@@ -73,7 +73,7 @@ end
 
 local function Skin()
     local duf = _G.DressUpFrame
-    if not duf then return end
+    if not duf then return S.Skip("DressUpFrame missing") end
     S.Frame(duf)
     if duf.MaximizeMinimizeFrame then S.MaxMinFrame(duf.MaximizeMinimizeFrame) end
     if _G.DressUpFrameResetButton then S.Button(_G.DressUpFrameResetButton) end

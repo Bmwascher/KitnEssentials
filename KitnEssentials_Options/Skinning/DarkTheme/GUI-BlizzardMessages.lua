@@ -141,11 +141,13 @@ end)
 -- On-Screen Messages: the BlizzardMessages module
 ----------------------------------------------------------------
 GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
-    -- Return the offset, not nil: as a tab, nil propagates out of
+    -- The strip never offers this tab under ElvUI; the note covers a change to
+    -- that gating. As a tab it must return an offset: nil propagates out of
     -- RegisterTabbedContent and the outer builder draws a placeholder over
-    -- the header card and tab strips. The strip never offers this tab under
-    -- ElvUI, so this only keeps the page safe if that gating changes.
-    if KE:ShouldNotLoadModule() then return yOffset end
+    -- the header card and tab strips.
+    if KE:ShouldNotLoadModule() then
+        return GUIFrame:BuildElvUINote(scrollChild, yOffset, "On-Screen Messages", "on-screen messages")
+    end
     local db = KE.db and KE.db.profile.Skinning.Messages
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)

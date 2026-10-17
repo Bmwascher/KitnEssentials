@@ -48,7 +48,7 @@ end
 
 local function Skin()
     local frame = _G.GuildControlUI
-    if not frame then return end
+    if not frame then return S.Skip("GuildControlUI missing") end
     S.StripTextures(frame)
     S.Backdrop(frame)
     if _G.GuildControlUIRankSettingsFrameGoldBox then

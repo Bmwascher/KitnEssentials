@@ -11,7 +11,7 @@ local SLOT_SIZE = 46
 
 local function Skin()
     local frame = _G.ItemUpgradeFrame
-    if not frame then return end
+    if not frame then return S.Skip("ItemUpgradeFrame missing") end
     S.Frame(frame)
 
     -- Chrome to hide beyond the standard frame treatment

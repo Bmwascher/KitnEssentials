@@ -4,7 +4,7 @@ local _G = _G
 
 local function Skin()
     local f = _G.TutorialFrame
-    if not f then return end
+    if not f then return S.Skip("TutorialFrame missing") end
     f:DisableDrawLayer("BORDER")
     S.Template(f, "Window")
     local bg = _G.TutorialFrameBackground

@@ -23,9 +23,9 @@ end
 
 local function Skin()
     local LibStub = _G.LibStub
-    if not LibStub then return end
+    if not LibStub then return S.Skip("LibStub missing") end
     local ok, ace = pcall(LibStub, "AceAddon-3.0")
-    if not ok or not ace then return end
+    if not ok or not ace then return S.Skip("AceAddon-3.0 missing") end
     local addon = ace.GetAddon and ace:GetAddon("Simulationcraft", true)
     if addon and addon.GetMainFrame then
         hooksecurefunc(addon, "GetMainFrame", SkinMainFrame)

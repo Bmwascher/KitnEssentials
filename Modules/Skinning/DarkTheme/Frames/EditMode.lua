@@ -26,7 +26,8 @@ end
 
 local function Skin()
     local editMode = _G.EditModeManagerFrame
-    if not editMode or S.data(editMode).skinned then return end
+    if not editMode then return S.Skip("EditModeManagerFrame missing") end
+    if S.data(editMode).skinned then return end
 
     S.StripTextures(editMode)
     S.Backdrop(editMode)

@@ -74,7 +74,7 @@ end
 
 local function Skin()
     local frame = _G.ClickBindingFrame
-    if not frame then return end
+    if not frame then return S.Skip("ClickBindingFrame missing") end
     S.Frame(frame)
     if frame.TutorialButton then
         if frame.TutorialButton.Ring then frame.TutorialButton.Ring:Hide() end
@@ -90,7 +90,6 @@ local function Skin()
             frame.AddBindingButton:SetPoint(pt, rel, relPt, -2, y or 0)
         end
     end
-    if frame.ScrollBar then S.TrimScrollBar(frame.ScrollBar) end
     if frame.ScrollBoxBackground then frame.ScrollBoxBackground:Hide() end
     if frame.ScrollBox then hooksecurefunc(frame.ScrollBox, "Update", BindingRows) end
     for _, portrait in ipairs(TAB_PORTRAITS) do

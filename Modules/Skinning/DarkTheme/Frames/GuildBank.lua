@@ -24,7 +24,7 @@ end
 
 local function Skin()
     local frame = _G.GuildBankFrame
-    if not frame then return end
+    if not frame then return S.Skip("GuildBankFrame missing") end
     S.StripTextures(frame)
     S.Backdrop(frame)
     if frame.CloseButton then S.CloseButton(frame.CloseButton) end

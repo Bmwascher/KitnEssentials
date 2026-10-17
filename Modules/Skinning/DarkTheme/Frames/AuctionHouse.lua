@@ -224,7 +224,7 @@ end
 
 local function Skin()
     local Frame = _G.AuctionHouseFrame
-    if not Frame then return end
+    if not Frame then return S.Skip("AuctionHouseFrame missing") end
     S.Frame(Frame)
 
     for _, tab in next, { _G.AuctionHouseFrameBuyTab, _G.AuctionHouseFrameSellTab, _G.AuctionHouseFrameAuctionsTab } do

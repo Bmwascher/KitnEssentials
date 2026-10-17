@@ -752,7 +752,7 @@ local function OnWarbandSceneData(frame)
     local plate = CreateFrame("Frame", nil, frame)
     S.data(frame).artBD = plate
 
-    plate:SetFrameLevel(math.max(frame:GetFrameLevel() - 1, 0))
+    S.RelevelPlate(frame, plate)
     plate:ClearAllPoints()
     plate:SetPoint("TOPLEFT", frame.Icon, "TOPLEFT", -SCENE_PLATE_INSET, SCENE_PLATE_INSET)
     plate:SetPoint("BOTTOMRIGHT", frame.Icon, "BOTTOMRIGHT", SCENE_PLATE_INSET, -SCENE_PLATE_INSET)
@@ -805,7 +805,7 @@ local function SkinWarbandScenes()
 end
 
 local function Skin()
-    if not _G.CollectionsJournal then return end
+    if not _G.CollectionsJournal then return S.Skip("CollectionsJournal missing") end
     S.Frame(_G.CollectionsJournal)
     SkinWardrobe()
     SkinJournalTabs()

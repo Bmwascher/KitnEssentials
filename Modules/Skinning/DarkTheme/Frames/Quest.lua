@@ -108,7 +108,7 @@ local function SkinFollowerReward(frame)
         end
 
         local square = CreateFrame("Frame", nil, portrait)
-        square:SetFrameLevel(math.max(portrait:GetFrameLevel() - 1, 0))
+        S.RelevelPlate(portrait, square)
         square:SetPoint("TOPLEFT", 2, -2)
         square:SetPoint("BOTTOMRIGHT", -2, 2)
         S.Backdrop(square)
@@ -343,7 +343,7 @@ end
 
 local function Skin()
     local frame = _G.QuestFrame
-    if not frame then return end
+    if not frame then return S.Skip("QuestFrame missing") end
 
     for _, sf in next, {
         _G.QuestProgressScrollFrame, _G.QuestRewardScrollFrame,

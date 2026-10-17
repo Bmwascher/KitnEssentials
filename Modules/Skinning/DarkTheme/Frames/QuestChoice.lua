@@ -4,7 +4,8 @@ local _G = _G
 
 local function SkinQuestChoice()
     local frame = _G.QuestChoiceFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("QuestChoiceFrame missing") end
+    if S.data(frame).skinned then return end
     S.StripTextures(frame)
     S.Backdrop(frame)
     if frame.CloseButton then S.CloseButton(frame.CloseButton) end

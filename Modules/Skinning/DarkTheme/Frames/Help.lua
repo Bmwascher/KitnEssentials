@@ -4,7 +4,7 @@ local _G = _G
 
 local function Skin()
     local main = _G.HelpFrame
-    if not main then return end
+    if not main then return S.Skip("HelpFrame missing") end
     S.StripTextures(main)
 
     local bd = S.Backdrop(main)

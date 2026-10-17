@@ -101,11 +101,7 @@ local function ApplySkin()
 
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
 
-    -- `true` (ignoreUpdates) stays -- updates to this scrollbar can
-    -- taint transferring currencies. The stepper contact inside
-    -- TrimScrollBar is now state-only (see skinScrollArrows), which was
-    -- the convicted root of the transfer FORBIDDEN.
-    if frame.ScrollBar then S.ScrollBar(frame.ScrollBar, true) end
+    if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end
     if frame.ScrollBox then S.HookScrollBox(frame.ScrollBox, StyleEntry) end
 
     -- TokenFramePopup (the currency options flyout).
@@ -137,7 +133,6 @@ local function ApplySkin()
     if log and not S.data(log).logSkinned then
         S.data(log).logSkinned = true
         S.Frame(log)
-        if log.ScrollBar then S.TrimScrollBar(log.ScrollBar) end
         if log.ScrollBox then S.HookScrollBox(log.ScrollBox, StyleLogLine) end
     end
 
@@ -189,7 +184,8 @@ end
 local hooked = false
 local function Skin()
     local frame = _G.TokenFrame
-    if not frame or hooked then return end
+    if not frame then return S.Skip("TokenFrame missing") end
+    if hooked then return end
     hooked = true
     if frame:IsShown() then
         ApplySkin()

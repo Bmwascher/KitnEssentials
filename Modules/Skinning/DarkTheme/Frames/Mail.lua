@@ -50,7 +50,7 @@ end
 
 local function Skin()
     local frame = _G.MailFrame
-    if not frame then return end
+    if not frame then return S.Skip("MailFrame missing") end
     S.Frame(frame)
 
     if _G.InboxFrame and _G.MailItem1 and _G.MailItem7 then
@@ -164,7 +164,7 @@ end
 -- An inbox update can reach the rows while the window is hidden, so these
 -- hooks exist from login.
 local function Arm()
-    if not _G.MailFrame then return end
+    if not _G.MailFrame then return S.Skip("MailFrame missing") end
     if _G.SendMailFrame_Update then hooksecurefunc("SendMailFrame_Update", SkinSendAttachments) end
     if _G.OpenMail_Update then hooksecurefunc("OpenMail_Update", SkinOpenAttachments) end
     if _G.InboxFrame_Update then hooksecurefunc("InboxFrame_Update", SkinInboxRows) end

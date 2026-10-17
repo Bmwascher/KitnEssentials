@@ -24,7 +24,8 @@ end
 
 local function Skin()
     local frame = _G.StableFrame
-    if not frame or S.data(frame).ported then return end
+    if not frame then return S.Skip("StableFrame missing") end
+    if S.data(frame).ported then return end
 
     S.Frame(frame, true)
     if frame.MainHelpButton then frame.MainHelpButton:Hide() end

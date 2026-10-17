@@ -11,8 +11,6 @@ local pairs = pairs
 local getmetatable = getmetatable
 local setmetatable = setmetatable
 
-local CreateFrame = CreateFrame
-local WHITE = "Interface\\Buttons\\WHITE8x8"
 -- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
@@ -186,6 +184,18 @@ local function PaintControl(bd)
     return bd
 end
 
+-- AceGUI disables a slider with EnableMouse(false) and never calls Disable,
+-- so the gray state reads the widget's own flag.
+local function AceSliderDisabled(slider)
+    local widget = slider.obj
+    return widget and widget.disabled
+end
+
+local function RefreshAceSliderState(widget)
+    local state = widget.slider and S.data(widget.slider).stepState
+    if state then state() end
+end
+
 local function SkinWidget(widget)
     if not widget or not widget.type then return end
     local t = widget.type
@@ -311,31 +321,13 @@ local function SkinWidget(widget)
     elseif t == "Slider" or t == "Slider-ElvUI" then
 
         local sl = widget.slider
-        if sl and not S.data(sl).skinned then
-            S.data(sl).skinned = true
-            S.StripTextures(sl)
-            local thumb = sl.GetThumbTexture and sl:GetThumbTexture()
-            if thumb then
-                thumb:SetTexture(WHITE)
-                thumb:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], S.palette.brandFillA)
-                thumb:SetSize(10, 14)
-            end
-
-            local bd = PaintControl(S.Backdrop(sl))
-            if bd then
-                bd:ClearAllPoints()
-                bd:SetPoint("TOPLEFT", sl, "TOPLEFT", 2, -3)
-                bd:SetPoint("BOTTOMRIGHT", sl, "BOTTOMRIGHT", -2, 3)
-                if thumb then
-                    local step = CreateFrame("StatusBar", nil, sl)
-                    step:SetFrameLevel(bd:GetFrameLevel() + 1)
-                    step:SetStatusBarTexture(WHITE)
-                    step:SetStatusBarColor(BRAND[1], BRAND[2], BRAND[3], 0.35)
-                    step:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
-                    step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", 1, 1)
-                    step:SetPoint("RIGHT", thumb, "CENTER")
-                    S.data(sl).stepBar = step
-                end
+        if sl then
+            S.Slider(sl, AceSliderDisabled)
+            -- AceGUI copies its methods onto each widget, so this hook touches
+            -- only this widget; a pooled reacquire calls SetDisabled(false).
+            if widget.SetDisabled and not S.data(widget).keDisabledHook then
+                S.data(widget).keDisabledHook = true
+                hooksecurefunc(widget, "SetDisabled", RefreshAceSliderState)
             end
         end
         HookFontBump(widget.label, 13)
@@ -476,7 +468,7 @@ local function SkinWidget(widget)
                 if bd then
                     bd:Show()
                     bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4])
-                    bd:SetFrameLevel(math.max(pulloutFrame:GetFrameLevel() - 1, 0))
+                    S.RelevelPlate(pulloutFrame, bd)
                 end
 
                 for _, c in ipairs({ pulloutFrame:GetChildren() }) do
@@ -590,17 +582,13 @@ local function SkinContainer(widget)
     end
 end
 
-local math_max = math.max
-
 local SUB_BD_KEYS = { "editbox", "slider", "dropdown", "checkbg", "msgframe", "scrollBG" }
 local function sinkOne(obj)
     if not obj then return end
     local bd = S.GetBackdrop(obj)
     if not bd then return end
-    local ref = obj.GetFrameLevel and obj or (obj.GetParent and obj:GetParent())
-    local lvl = (ref and ref.GetFrameLevel and ref:GetFrameLevel()) or 1
-    local target = math_max(lvl - 1, 0)
-    if bd:GetFrameLevel() ~= target then bd:SetFrameLevel(target) end
+    -- A texture's plate sits under the texture's parent frame.
+    S.RelevelPlate(obj.GetFrameLevel and obj or (obj.GetParent and obj:GetParent()), bd)
 end
 
 local function HasSinkTargets(f, widget)
@@ -681,15 +669,13 @@ function S.AceFixPullout(dropdown)
     local p = dropdown and dropdown.pullout
     if not p or S.data(p).keLevelFix then return end
     S.data(p).keLevelFix = true
-    local math_max = math.max -- luacheck: ignore 431/math_max
     local function Relevel(pull)
         local f = pull.frame
         if not f then return end
         local base = f:GetFrameLevel() or 1
 
         if base >= 9998 then base = 9997; f:SetFrameLevel(base) end
-        local bd = S.GetBackdrop(f)
-        if bd then bd:SetFrameLevel(math_max(base - 1, 0)) end
+        S.RelevelPlate(f)
         if pull.scrollFrame then pull.scrollFrame:SetFrameLevel(base + 1) end
         if pull.itemFrame then pull.itemFrame:SetFrameLevel(base + 2) end
     end
@@ -710,7 +696,7 @@ local function SkinPulloutFrame(pf)
         local sinkPending = false
         local function sink()
             sinkPending = false
-            abd:SetFrameLevel(math.max(pf:GetFrameLevel() - 1, 0))
+            S.RelevelPlate(pf, abd)
         end
         local function queueSink()
             if sinkPending or not _G.C_Timer then return end
@@ -843,10 +829,13 @@ local function HookAceGUI(AceGUI, minor, upgrading)
     end
     ArmTrap(AceGUI)
 
-    for n = 1, 20 do
+    -- Pullouts made before the skin installed. Their scroll bar is a child of
+    -- the scroll frame, which SkinPulloutFrame's child loop never reaches.
+    for n = 1, 30 do
         local pf = _G["AceGUI30Pullout" .. n]
         if pf then
             pcall(SkinPulloutFrame, pf)
+            pcall(S.ScrollBar, _G["AceGUI30PulloutScrollbar" .. n])
             if pf.HookScript and not S.data(pf).keShowHooked then
                 S.data(pf).keShowHooked = true
                 pf:HookScript("OnShow", function(f) pcall(SkinPulloutFrame, f) end)
@@ -882,7 +871,7 @@ end
 
 local function SetupAce3()
     local LibStub = _G.LibStub
-    if not LibStub then return end
+    if not LibStub then return S.Skip("LibStub missing") end
     StyleConfigDialog()
 
     local ok, AceGUI = pcall(LibStub, "AceGUI-3.0", true)

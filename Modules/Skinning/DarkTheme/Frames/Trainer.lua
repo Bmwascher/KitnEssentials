@@ -48,7 +48,7 @@ end
 
 local function Skin()
     local frame = _G.ClassTrainerFrame
-    if not frame then return end
+    if not frame then return S.Skip("ClassTrainerFrame missing") end
     for _, o in next, { _G.ClassTrainerFrameSkillStepButton, _G.ClassTrainerFrameBottomInset } do
         if o then S.StripTextures(o) end
     end
@@ -87,7 +87,6 @@ local function Skin()
             frame.ScrollBox.Shadows:SetAlpha(0)
         end
     end
-    if frame.ScrollBar then S.TrimScrollBar(frame.ScrollBar) end
     if frame.FilterDropdown then S.DropDown(frame.FilterDropdown) end
     local step = _G.ClassTrainerFrameSkillStepButton
     if step then

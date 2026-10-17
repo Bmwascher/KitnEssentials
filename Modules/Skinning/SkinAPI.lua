@@ -467,6 +467,16 @@ end
 -- (Chat.lua uses the same).
 local BG_TEX = "Interface\\Buttons\\WHITE8x8"
 
+function S.RelevelPlate(owner, plate)
+    if not owner then return nil end
+    plate = plate or S.GetBackdrop(owner)
+    if not plate then return nil end
+    local level = (owner.GetFrameLevel and owner:GetFrameLevel()) or 1
+    local target = math_max(level - 1, 0)
+    if plate:GetFrameLevel() ~= target then plate:SetFrameLevel(target) end
+    return plate
+end
+
 function S.Backdrop(frame, inset, borderOnly)
     if not frame then return nil end
 
@@ -512,9 +522,7 @@ function S.Backdrop(frame, inset, borderOnly)
     bd:ClearAllPoints()
     bd:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
     bd:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -inset, inset)
-    local ref = isFrame and frame or parent
-    local lvl = (ref.GetFrameLevel and ref:GetFrameLevel()) or 1
-    bd:SetFrameLevel(math_max(lvl - 1, 0))
+    S.RelevelPlate(isFrame and frame or parent, bd)
 
     return bd
 end
@@ -523,19 +531,28 @@ local edgeRefresher = CreateFrame("Frame")
 edgeRefresher:RegisterEvent("PLAYER_ENTERING_WORLD")
 edgeRefresher:RegisterEvent("UI_SCALE_CHANGED")
 edgeRefresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+-- An inset client's mode: true insets all four sides, VERTICAL_ONLY only top
+-- and bottom, for a row hover that spans the row's full width.
+local VERTICAL_ONLY = "vertical"
+
+local function PlaceInset(region, bd, e, mode)
+    local x = (mode == VERTICAL_ONLY) and 0 or e
+    region:ClearAllPoints()
+    region:SetPoint("TOPLEFT", bd, "TOPLEFT", x, -e)
+    region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -x, e)
+end
+
 -- hover/selection textures inset by the border THICKNESS; with
 -- per-frame edges that is no longer a literal 1 inside scaled
 -- subtrees, so dependent regions register here and re-fit whenever the
 -- backdrop's edge refits (map min/max flips).
-function S.InsetToEdge(region, bd)
+function S.InsetToEdge(region, bd, verticalOnly)
     if not (region and bd) then return end
-    local e = EdgeFor(bd)
-    region:ClearAllPoints()
-    region:SetPoint("TOPLEFT", bd, "TOPLEFT", e, -e)
-    region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -e, e)
+    local mode = verticalOnly and VERTICAL_ONLY or true
+    PlaceInset(region, bd, EdgeFor(bd), mode)
     local d = S.data(bd)
     d.edgeClients = d.edgeClients or setmetatable({}, { __mode = "k" })
-    d.edgeClients[region] = true
+    d.edgeClients[region] = mode
 end
 
 local function Relayout(bd, info, px)
@@ -559,10 +576,8 @@ local function RefitEdgeClients(bd)
     local clients = state and state.edgeClients
     if not clients then return end
     local e = EdgeFor(bd)
-    for region in pairs(clients) do
-        region:ClearAllPoints()
-        region:SetPoint("TOPLEFT", bd, "TOPLEFT", e, -e)
-        region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -e, e)
+    for region, mode in pairs(clients) do
+        PlaceInset(region, bd, e, mode)
     end
 end
 
@@ -836,7 +851,15 @@ local function killRegisteredHighlight(btn)
     local reg = btn.GetHighlightTexture and btn:GetHighlightTexture()
     if reg then S.KillTexture(reg) end
 end
-local function armHover(button, anchor, l, t, r, b)
+-- A plate or an active own edge is walked by the edge refresher already; any
+-- other anchor is tracked so its inset regions follow scale changes.
+local function FollowEdge(region, anchor, verticalOnly)
+    S.InsetToEdge(region, anchor, verticalOnly)
+    local info = anchor.backdropInfo
+    if not (info and ownedInfo[info]) then S.TrackEdgeClients(anchor) end
+end
+
+local function armHover(button, anchor, verticalOnly)
     local d = S.data(button)
     local hl = d.hover
     if not hl then
@@ -849,13 +872,15 @@ local function armHover(button, anchor, l, t, r, b)
     hl:SetTexture(HOVER_TEX)
     hl:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
     hl:SetAlpha(HOVER_ALPHA)
-    if l == 1 and t == -1 and r == -1 and b == 1 and anchor and anchor.backdropInfo then
-        S.InsetToEdge(hl, anchor)
-    else
-        hl:ClearAllPoints()
-        hl:SetPoint("TOPLEFT", anchor, "TOPLEFT", l, t)
-        hl:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", r, b)
+    -- Left registered under its old anchor too, the highlight would be
+    -- re-placed onto whichever anchor the refresher walks last.
+    local old = d.hoverAnchor
+    if old and old ~= anchor then
+        local oldState = skinState[old]
+        if oldState and oldState.edgeClients then oldState.edgeClients[hl] = nil end
     end
+    d.hoverAnchor = anchor
+    FollowEdge(hl, anchor, verticalOnly)
     if not d.hoverArmed then
         d.hoverArmed = true
         killRegisteredHighlight(button)
@@ -922,7 +947,7 @@ end
 function S.RowHover(row)
     if not row or S.data(row).hover then return end
     if row.SetHighlightTexture then
-        armHover(row, row, 0, -1, 0, 1)
+        armHover(row, row, true)
     elseif row.CreateTexture and row.HookScript then
 
         local tex = row:CreateTexture(nil, "OVERLAY")
@@ -930,8 +955,6 @@ function S.RowHover(row)
         tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
         tex:SetAlpha(HOVER_ALPHA)
         tex:Hide()
-        tex:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
-        tex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
         -- AUDIT: never enable input on a row Blizzard left
         -- mouse-disabled. This is our own hover standard, and it is the
         -- exact call that put AES in the currency-transfer FORBIDDEN:
@@ -942,6 +965,7 @@ function S.RowHover(row)
         if row.IsMouseEnabled and not row:IsMouseEnabled() then
             return
         end
+        FollowEdge(tex, row, true)
         row:HookScript("OnEnter", function() tex:Show() end)
         row:HookScript("OnLeave", function() tex:Hide() end)
         S.data(row).hover = tex
@@ -951,7 +975,7 @@ end
 function S.Hover(button, anchor)
     if not button or not button.SetHighlightTexture then return end
     anchor = anchor or S.GetBackdrop(button) or button
-    armHover(button, anchor, 1, -1, -1, 1)
+    armHover(button, anchor)
 end
 
 -- Blizzard's bevelled Down art reads as a second frame over a flat button.
@@ -2537,30 +2561,6 @@ function S.StripParchment(frame, noChildren)
     end
 end
 
-function S.StylePulloutFrames()
-    for n = 1, 30 do
-        local po = _G["AceGUI30Pullout" .. n]
-        if po and not S.data(po).aePulloutNamed then
-            S.data(po).aePulloutNamed = true
-            local function reassert()
-                if po.SetBackdrop then po:SetBackdrop(nil) end
-                local bd = S.GetBackdrop(po)
-                if not bd then
-                    S.StripTextures(po)
-                    bd = S.Template and S.Template(po, "Default") or S.Backdrop(po) -- luacheck: ignore 311/bd
-                else
-                    bd:Show()
-                    bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4])
-                end
-                local sb = _G["AceGUI30PulloutScrollbar" .. n]
-                if sb and S.ScrollBar then S.ScrollBar(sb) end
-            end
-            if po.HookScript then po:HookScript("OnShow", reassert) end
-            if po:IsShown() then reassert() end
-        end
-    end
-end
-
 function S.StyleSharedDropDownList()
     if S._ddListHooked then return end
     S._ddListHooked = true
@@ -2570,7 +2570,7 @@ function S.StyleSharedDropDownList()
         if list then
             S.StripTextures(list)
             local bd = S.Template and S.Template(list, "Default") or S.Backdrop(list)
-            if bd then bd:SetFrameLevel(math.max(list:GetFrameLevel() - 1, 0)) end
+            if bd then S.RelevelPlate(list, bd) end
             local function scrub()
 
                 for _, suffix in ipairs({ "MenuBackdrop", "Backdrop", "Border" }) do
@@ -3037,7 +3037,7 @@ local function skinScrollArrows(frame)
     end
 end
 
-function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpdates
+function S.TrimScrollBar(frame)
     if not frame then return end
     S.StripTextures(frame)
     skinScrollArrows(frame)
@@ -3090,13 +3090,6 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- A trim scroll bar needs NO Update hook -- reskin the steppers once
     -- and they stay. That is the rule here now: skin once, no hook.
     --
-    -- `ignoreUpdates` is kept only so the ~40 call sites keep working; it
-    -- is now inert. It was a misport in the first place: the second arg
-    -- belongs on thumb:CreateBackdrop('Transparent', nil, ignoreUpdates)
-    -- as a backdrop-registration flag, not as a gate on an Update hook
-    -- that should never have existed. Currency passing `true` was
-    -- accidentally the only skin immune to this.
-    --
     -- CORRECTION: an earlier note claimed this hook was the root of the
     -- LootHistory taint and attached a doctrine to it -- "never
     -- hooksecurefunc a method Blizzard calls from the middle of another
@@ -3118,10 +3111,10 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- closure, no behavior change.
 end
 
-function S.ScrollBar(scrollbar, ignoreUpdates)
+function S.ScrollBar(scrollbar)
     if not scrollbar or S.data(scrollbar).skinned then return end
     if scrollbar.GetThumb or scrollbar.Back or scrollbar.Forward then
-        S.TrimScrollBar(scrollbar, ignoreUpdates)
+        S.TrimScrollBar(scrollbar)
     else
 
         local name = scrollbar.GetName and scrollbar:GetName()
@@ -3163,8 +3156,9 @@ local function PaintSliderThumb(thumb)
 end
 
 -- The accent fill from the plate's left edge to the thumb, and the gray both
--- take while the slider is disabled.
-local function AddStepFill(slider, thumb, bd)
+-- take while the slider is disabled. isDisabled(slider), when given, decides
+-- that state for an owner that disables the slider without calling Disable.
+local function AddStepFill(slider, thumb, bd, isDisabled)
     if S.data(slider).stepBar then return end
     local step = CreateFrame("StatusBar", nil, slider)
     step:SetFrameLevel(bd:GetFrameLevel() + 1)
@@ -3179,7 +3173,12 @@ local function AddStepFill(slider, thumb, bd)
     if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
     if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
     local function stateColor()
-        local on = not slider.IsEnabled or slider:IsEnabled()
+        local on
+        if isDisabled then
+            on = not isDisabled(slider)
+        else
+            on = not slider.IsEnabled or slider:IsEnabled()
+        end
         if on then
             S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
             S.PaintBrand(step, "SetStatusBarColor", 0.35)
@@ -3190,6 +3189,7 @@ local function AddStepFill(slider, thumb, bd)
             step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
         end
     end
+    S.data(slider).stepState = stateColor
     if slider.HookScript then
         hooksecurefunc(slider, "Enable", stateColor)
         hooksecurefunc(slider, "Disable", stateColor)
@@ -3242,11 +3242,11 @@ end
 -- comes out at.
 local SLIDER_PLATE_H = 14
 
-function S.Slider(slider)
+function S.Slider(slider, isDisabled)
     if not slider or S.data(slider).skinned then return end
     S.StripTextures(slider)
 
-    local thumb = slider.Thumb
+    local thumb = slider.Thumb or (slider.GetThumbTexture and slider:GetThumbTexture())
     if thumb then PaintSliderThumb(thumb) end
 
     local bd = S.Backdrop(slider)
@@ -3256,7 +3256,7 @@ function S.Slider(slider)
         bd:SetPoint("RIGHT", slider, "RIGHT", -2, 0)
         bd:SetHeight(SLIDER_PLATE_H)
         bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
-        if thumb then AddStepFill(slider, thumb, bd) end
+        if thumb then AddStepFill(slider, thumb, bd, isDisabled) end
     end
     S.data(slider).skinned = true
 end
@@ -3430,18 +3430,19 @@ local function aggregateStatus(key)
     if not records or #records == 0 then return nil end
 
     local errorStatus
-    local allPending, allOk, allDisabled, allSuppressed = true, true, true, true
+    local allPending, allOk, allDisabled, allSuppressed, allSkipped = true, true, true, true, true
     local anyArmed, okOrArmed = false, true
     for _, record in ipairs(records) do
         local status = record.status
         if status ~= "pending" and status ~= "ok" and status ~= "armed"
-            and status ~= "disabled" and status ~= "suppressed" then
+            and status ~= "disabled" and status ~= "suppressed" and status ~= "skipped" then
             errorStatus = errorStatus or status
         end
         if status ~= "pending" then allPending = false end
         if status ~= "ok" then allOk = false end
         if status ~= "disabled" then allDisabled = false end
         if status ~= "suppressed" then allSuppressed = false end
+        if status ~= "skipped" then allSkipped = false end
         if status == "armed" then anyArmed = true end
         if status ~= "ok" and status ~= "armed" then okOrArmed = false end
     end
@@ -3452,6 +3453,7 @@ local function aggregateStatus(key)
     if anyArmed and okOrArmed then return "armed" end
     if allDisabled then return "disabled" end
     if allSuppressed then return "suppressed" end
+    if allSkipped then return "skipped" end
     return "partial"
 end
 
@@ -3504,6 +3506,15 @@ end
 S.skinStatus = {}
 S.skinIndex = {}
 
+-- A body whose window or addon is missing returns S.Skip("<what> missing"),
+-- so verify reads "skipped" instead of "ok". A return value, not a write to
+-- the running record: a deferred body runs from its window's OnShow, where no
+-- record is running.
+local SKIP = {}
+function S.Skip(reason)
+    return SKIP, reason or "no reason given"
+end
+
 -- First-show deferral. A registered function arms a body on its window's
 -- OnShow; the body runs once, inside that Show() and after Blizzard's own
 -- handler, which is the only moment a skin may touch a ScrollBox-backed
@@ -3526,7 +3537,7 @@ local function settleRecord(record, errStatus)
         record.armError = record.armError or errStatus
         record.status = record.armError
     elseif record.status == "armed" and pendingArms(record) == 0 then
-        record.status = "ok"
+        record.status = record.skipReason and "skipped" or "ok"
     end
     local key = record.entry.key
     S.skinStatus[key] = aggregateStatus(key)
@@ -3543,6 +3554,7 @@ local function attachArm(arm, record)
     record.arms = record.arms or {}
     record.arms[#record.arms + 1] = arm
     if arm.err then record.armError = record.armError or arm.err end
+    if arm.skipReason then record.skipReason = record.skipReason or arm.skipReason end
 end
 
 local function failArm(arm, err)
@@ -3559,9 +3571,13 @@ Arm.__index = Arm
 function Arm:Run()
     if self.done then return end
     self.done = true
-    local ok, err = pcall(self.body)
+    local ok, err, reason = pcall(self.body)
     if ok then
-        for _, record in ipairs(self.records) do settleRecord(record) end
+        if err == SKIP then self.skipReason = reason end
+        for _, record in ipairs(self.records) do
+            if self.skipReason then record.skipReason = record.skipReason or self.skipReason end
+            settleRecord(record)
+        end
     else
         failArm(self, err)
     end
@@ -3599,7 +3615,8 @@ function Arm:Late(handler)
 end
 
 -- With no usable trigger the window does not exist, so the body can never
--- run: the arm returned is already spent and is not remembered.
+-- run: the arm returned is already spent and is not remembered, and the
+-- registration running it reads skipped.
 function S.Defer(body, ...)
     local arm = armByBody[body]
     if arm then
@@ -3619,6 +3636,9 @@ function S.Defer(body, ...)
         end
     end
     if not hooked then
+        if runningRecord then
+            runningRecord.skipReason = runningRecord.skipReason or "deferred window missing"
+        end
         arm.done, arm.replayed, arm.queue, arm.late = true, true, nil, nil
         return arm
     end
@@ -3640,12 +3660,15 @@ local function runList(list)
             -- whose skins dispatch inside this call.
             local outerRecord = runningRecord
             runningRecord = record
-            local ok, err = pcall(entry.fn)
+            local ok, err, reason = pcall(entry.fn)
             runningRecord = outerRecord
+            local skipped = ok and err == SKIP
+            if skipped and record then record.skipReason = record.skipReason or reason end
             if entry.key then
-                local status = ok and "ok" or ("ERROR: " .. tostring(err))
-                if ok and record and record.arms then
-                    status = record.armError or (pendingArms(record) > 0 and "armed") or "ok"
+                local status = ok and (skipped and "skipped" or "ok") or ("ERROR: " .. tostring(err))
+                if ok and record then
+                    status = record.armError or (pendingArms(record) > 0 and "armed")
+                        or (record.skipReason and "skipped") or "ok"
                 end
                 if record then
                     record.status = status
@@ -3690,9 +3713,8 @@ end
 -- behaviors that keep one broken skin from taking the rest down.
 S._runList = runList
 
--- "ok" and "disabled" keep their long-standing colors; the three states a
--- multi-registration key can now report (pending/partial/suppressed) each
--- get their own non-red rendering, so only a genuine error string (the
+-- Every non-error status (ok, disabled, suppressed, pending, partial, armed,
+-- skipped) gets its own non-red color, so only a genuine error string (the
 -- "ERROR: ..." shape runList builds) ever reads as one.
 local STATUS_COLOR = {
     ok         = "|cff00ff00",
@@ -3701,6 +3723,7 @@ local STATUS_COLOR = {
     pending    = "|cffffff00",
     partial    = "|cffff9900",
     armed      = "|cffcc99ff",
+    skipped    = "|cffd2b48c",
 }
 local function statusColor(status)
     return STATUS_COLOR[status] or "|cffff0000"
@@ -3734,6 +3757,9 @@ function S.DebugVerify()
                 end
                 if record.status == "armed" then
                     shown = ("armed (%d of %d run)"):format(#record.arms - pendingArms(record), #record.arms)
+                end
+                if record.status == "skipped" then
+                    shown = "skipped (" .. tostring(record.skipReason) .. ")"
                 end
                 local label = key .. " #" .. record.id .. " (" .. (record.addon or "early") .. ")"
                 print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-32s %s%s|r"):format(label, statusColor(record.status), shown))
@@ -3842,8 +3868,16 @@ function S.DebugRerun(key, selector)
         return
     end
 
-    local ok, err = pcall(record.entry.fn)
-    print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. (ok and "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)" or ("|cffff0000ERROR:|r " .. tostring(err))))
+    local ok, err, reason = pcall(record.entry.fn)
+    local result
+    if not ok then
+        result = "|cffff0000ERROR:|r " .. tostring(err)
+    elseif err == SKIP then
+        result = statusColor("skipped") .. "skipped (" .. tostring(reason) .. ")|r"
+    else
+        result = "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)"
+    end
+    print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. result)
 end
 
 local function anyPending()

@@ -5,7 +5,8 @@ local ipairs = ipairs
 
 local function Skin()
     local frame = _G.RaidInfoFrame
-    if not frame or S.data(frame).raidInfoSkinned then return end
+    if not frame then return S.Skip("RaidInfoFrame missing") end
+    if S.data(frame).raidInfoSkinned then return end
     S.data(frame).raidInfoSkinned = true
 
     S.StripTextures(frame)

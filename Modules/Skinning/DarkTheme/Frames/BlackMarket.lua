@@ -26,7 +26,7 @@ end
 
 local function Skin()
     local frame = _G.BlackMarketFrame
-    if not frame then return end
+    if not frame then return S.Skip("BlackMarketFrame missing") end
     S.StripTextures(frame)
     S.Backdrop(frame)
     if frame.Inset then S.StripTextures(frame.Inset) S.Backdrop(frame.Inset) end

@@ -4,7 +4,7 @@ local _G = _G
 
 local function Skin()
     local frame = _G.ChromieTimeFrame
-    if not frame then return end
+    if not frame then return S.Skip("ChromieTimeFrame missing") end
     S.CloseButton(frame.CloseButton)
     S.Button(frame.SelectButton)
 

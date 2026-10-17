@@ -339,7 +339,7 @@ function UIW:StyleStatusBarWidget(widget)
             if not backdrops[bar] then
 
                 local backdrop = CreateFrame("Frame", nil, bar)
-                backdrop:SetFrameLevel(math_max(bar:GetFrameLevel() - 1, 0))
+                if KE.Skins then KE.Skins.RelevelPlate(bar, backdrop) end
                 backdrop:SetPoint("TOPLEFT", bar, "TOPLEFT", -1, 1)
                 backdrop:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 1, -1)
 

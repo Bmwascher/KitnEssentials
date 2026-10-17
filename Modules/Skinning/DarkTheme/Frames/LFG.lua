@@ -578,7 +578,7 @@ local GROUP_BUTTON_ICONS = { 133076, 133074, 464820 }
 
 local function Skin()
     local frame = _G.PVEFrame
-    if not frame then return end
+    if not frame then return S.Skip("PVEFrame missing") end
     S.Frame(frame)
     if _G.PVEFrameBg then _G.PVEFrameBg:Hide() end
     KillFrame(frame.shadows)
@@ -1162,9 +1162,18 @@ local function SkinAffixes(child)
     end
 end
 
+-- The weekly block builds its affix frames inside its own SetUp, a method it
+-- copied from the mixin when it was created, so the instance is what to hook.
+local function SkinWeeklyAffixes(info)
+    if C_MythicPlus and C_MythicPlus.GetCurrentAffixes and C_MythicPlus.GetCurrentAffixes() then
+        SkinAffixes(info.Child)
+    end
+end
+
 local function SkinChallenges()
     local cf = _G.ChallengesFrame
-    if not cf or S.data(cf).skinned then return end
+    if not cf then return S.Skip("ChallengesFrame missing") end
+    if S.data(cf).skinned then return end
     S.data(cf).skinned = true
     cf:DisableDrawLayer("BACKGROUND")
     if _G.ChallengesFrameInset then S.StripTextures(_G.ChallengesFrameInset) end
@@ -1227,12 +1236,10 @@ local function SkinChallenges()
         end
     end)
 
-    if _G.ChallengesFrameWeeklyInfoMixin then
-        hooksecurefunc(_G.ChallengesFrameWeeklyInfoMixin, "SetUp", function(info)
-            if C_MythicPlus and C_MythicPlus.GetCurrentAffixes and C_MythicPlus.GetCurrentAffixes() then
-                SkinAffixes(info.Child)
-            end
-        end)
+    local weekly = cf.WeeklyInfo
+    if weekly and weekly.SetUp then
+        hooksecurefunc(weekly, "SetUp", SkinWeeklyAffixes)
+        SkinWeeklyAffixes(weekly)
     end
 
     local notice = cf.SeasonChangeNoticeFrame

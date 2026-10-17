@@ -183,18 +183,11 @@ local function SkinScrollTable(lib, cols, _, _, _, parent)
     FitHeaders(name, cols)
 end
 
+-- Every dialog of this library instance is styled: the library pools dialogs
+-- and their controls across popups, so styling one popup styles the pool.
 -- The library parks released controls on a nil parent. Across that round trip
 -- a plate can come back far above its control and cover the label, so every
 -- plate goes back under its owner on each spawn.
-local function RelevelPlate(owner)
-    local bd = S.GetBackdrop(owner)
-    if not bd then return end
-    local target = math_max(owner:GetFrameLevel() - 1, 0)
-    if bd:GetFrameLevel() ~= target then bd:SetFrameLevel(target) end
-end
-
--- Every dialog of this library instance is styled: the library pools dialogs
--- and their controls across popups, so styling one popup styles the pool.
 local function SkinDialogs(lib)
     if not lib.active_dialogs then return end
     for _, dialog in ipairs(lib.active_dialogs) do
@@ -206,23 +199,23 @@ local function SkinDialogs(lib)
             hooksecurefunc(dialog, "Reset", ClearOwnBackdrop)
             S.CloseButton(dialog.close_button)
         end
-        RelevelPlate(dialog)
+        S.RelevelPlate(dialog)
         if dialog.buttons then
             for _, button in ipairs(dialog.buttons) do
                 S.Button(button)
-                RelevelPlate(button)
+                S.RelevelPlate(button)
             end
         end
         if dialog.editboxes then
             for _, editBox in ipairs(dialog.editboxes) do
                 S.EditBox(editBox)
-                RelevelPlate(editBox)
+                S.RelevelPlate(editBox)
             end
         end
         if dialog.checkboxes then
             for _, checkBox in ipairs(dialog.checkboxes) do
                 S.CheckBox(checkBox)
-                RelevelPlate(checkBox)
+                S.RelevelPlate(checkBox)
             end
         end
     end
@@ -443,7 +436,7 @@ end
 
 local function Skin()
     local addon = _G.RCLootCouncil
-    if not (addon and addon.UI and addon.GetModule) then return end
+    if not (addon and addon.UI and addon.GetModule) then return S.Skip("RCLootCouncil missing") end
 
     hooksecurefunc(addon.UI, "New", UI_New)
     hooksecurefunc(addon.UI, "NewNamed", UI_New)

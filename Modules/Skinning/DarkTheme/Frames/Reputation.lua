@@ -23,10 +23,11 @@ end
 
 local DAMPEN = 0.55
 local function DampenBarColor(bar, r, g, b, a)
-    if bar.aeDampening then return end
-    bar.aeDampening = true
+    local d = S.data(bar)
+    if d.aeDampening then return end
+    d.aeDampening = true
     bar:SetStatusBarColor(r * DAMPEN, g * DAMPEN, b * DAMPEN, a or 1)
-    bar.aeDampening = false
+    d.aeDampening = false
 end
 
 local function UpdateToggleAtlas(button)
@@ -46,9 +47,9 @@ local function FixCollapseChevron(child)
     hooksecurefunc(child.Right, "SetAtlas", UpdateCollapse)
 
     child.Right:Show()
-    if not child.Right.aeKeepShown then
+    if not S.data(child.Right).aeKeepShown then
         hooksecurefunc(child.Right, "Hide", function(t) t:Show() end)
-        child.Right.aeKeepShown = true
+        S.data(child.Right).aeKeepShown = true
     end
     if child.HighlightRight then
         UpdateCollapse(child.HighlightRight)
@@ -57,7 +58,7 @@ local function FixCollapseChevron(child)
 end
 
 local function StyleEntry(child)
-    if not child or child.aeRepRow then return end
+    if not child or S.data(child).aeRepRow then return end
     S.RowHover(child)
     S.StripTextures(child)
     FixCollapseChevron(child)
@@ -72,9 +73,9 @@ local function StyleEntry(child)
     end
     local tcb = child.ToggleCollapseButton
     if tcb then
-        if tcb.RefreshIcon and not tcb.aeToggleHooked then
+        if tcb.RefreshIcon and not S.data(tcb).aeToggleHooked then
             hooksecurefunc(tcb, "RefreshIcon", UpdateToggleAtlas)
-            tcb.aeToggleHooked = true
+            S.data(tcb).aeToggleHooked = true
         end
         UpdateToggleAtlas(tcb)
     end
@@ -85,9 +86,9 @@ local function StyleEntry(child)
         if bar.SetStatusBarTexture then bar:SetStatusBarTexture(WHITE) end
         S.StatusBar(bar)
 
-        if not bar.aeDampHooked then
+        if not S.data(bar).aeDampHooked then
             hooksecurefunc(bar, "SetStatusBarColor", DampenBarColor)
-            bar.aeDampHooked = true
+            S.data(bar).aeDampHooked = true
             local r, g, b, a = bar:GetStatusBarColor()
             if r then DampenBarColor(bar, r, g, b, a) end
         end
@@ -95,12 +96,12 @@ local function StyleEntry(child)
         S.FontStrings(content, REP_ROW_FONT, "")
         S.FontStrings(bar, REP_ROW_FONT, "")
     end
-    child.aeRepRow = true
+    S.data(child).aeRepRow = true
 end
 
 local function Skin()
     local frame = _G.ReputationFrame
-    if not frame then return end
+    if not frame then return S.Skip("ReputationFrame missing") end
     S.StripTextures(frame)
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end

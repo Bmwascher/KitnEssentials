@@ -119,7 +119,7 @@ end
 
 local function Skin()
     local frame = _G.PlayerSpellsFrame
-    if not frame then return end
+    if not frame then return S.Skip("PlayerSpellsFrame missing") end
     S.Frame(frame, true)
 
     if frame.TabSystem then

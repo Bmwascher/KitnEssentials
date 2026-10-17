@@ -36,13 +36,14 @@ end
 
 local function Skin()
     local frame = _G.LossOfControlFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("LossOfControlFrame missing") end
+    if S.data(frame).skinned then return end
     if frame.Icon then
 
         local ring = CreateFrame("Frame", nil, frame)
         ring:SetPoint("TOPLEFT", frame.Icon, "TOPLEFT", -1, 1)
         ring:SetPoint("BOTTOMRIGHT", frame.Icon, "BOTTOMRIGHT", 1, -1)
-        ring:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
+        S.RelevelPlate(frame, ring)
         local bd = S.Backdrop(ring)
         if bd then bd:SetFrameLevel(ring:GetFrameLevel()) end
         frame.Icon:SetTexCoord(0.1, 0.9, 0.1, 0.9)

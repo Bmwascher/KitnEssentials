@@ -57,7 +57,7 @@ end
 
 local function Skin()
     local frame = _G.MerchantFrame
-    if not frame then return end
+    if not frame then return S.Skip("MerchantFrame missing") end
     S.Frame(frame)
     S.Tabs("MerchantFrameTab", 2)
 
@@ -97,8 +97,7 @@ local function Skin()
             end
         end
         S.Backdrop(button)
-        local bd = S.GetBackdrop(button)
-        if bd then bd:SetFrameLevel(math.max(0, button:GetFrameLevel() - 1)) end
+        S.RelevelPlate(button)
         if icon then
             if atlas then icon:SetAtlas(atlas) end
             icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -174,7 +173,7 @@ end
 -- so their hooks exist from login.
 local function Arm()
     local frame = _G.MerchantFrame
-    if not frame then return end
+    if not frame then return S.Skip("MerchantFrame missing") end
     if _G.MerchantFrame_UpdateCurrencies and not S.skinIndex.__merchantTokenHook then
         S.skinIndex.__merchantTokenHook = true
         hooksecurefunc("MerchantFrame_UpdateCurrencies", SkinTokens)

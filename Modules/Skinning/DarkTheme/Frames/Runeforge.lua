@@ -5,13 +5,13 @@ local hooksecurefunc = hooksecurefunc
 
 local function Skin()
     local frame = _G.RuneforgeFrame
-    if not frame then return end
+    if not frame then return S.Skip("RuneforgeFrame missing") end
     if frame.Title then S.SetFont(frame.Title, 22, "OUTLINE") end
     S.CloseButton(frame.CloseButton)
     if frame.CreateFrame then S.Button(frame.CreateFrame.CraftItemButton) end
 
     local powerFrame = frame.CraftingFrame and frame.CraftingFrame.PowerFrame
-    if not powerFrame then return end
+    if not powerFrame then return S.Skip("Runeforge PowerFrame missing") end
 
     local pageControl = powerFrame.PageControl
     if pageControl then

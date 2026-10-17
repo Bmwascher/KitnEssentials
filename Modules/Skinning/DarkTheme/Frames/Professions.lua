@@ -216,7 +216,7 @@ local function SinkBackdrop(bd, frame)
 
     local c = S.palette.window
     bd:SetBackdropColor(c[1], c[2], c[3], c[4])
-    bd:SetFrameLevel(math.max((frame:GetFrameLevel() or 1) - 1, 0))
+    S.RelevelPlate(frame, bd)
 end
 
 local schematicHooked = {}
@@ -515,7 +515,7 @@ end
 
 local function Skin()
     local PF = _G.ProfessionsFrame
-    if not PF then return end
+    if not PF then return S.Skip("ProfessionsFrame missing") end
 
     S.Frame(PF)
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end

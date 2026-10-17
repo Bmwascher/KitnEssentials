@@ -4,7 +4,8 @@ local _G = _G
 
 local function Skin()
     local frame = _G.SubscriptionInterstitialFrame
-    if not frame or S.data(frame).skinned then return end
+    if not frame then return S.Skip("SubscriptionInterstitialFrame missing") end
+    if S.data(frame).skinned then return end
     S.StripTextures(frame)
     S.Backdrop(frame)
     if frame.ShadowOverlay then frame.ShadowOverlay:Hide() end

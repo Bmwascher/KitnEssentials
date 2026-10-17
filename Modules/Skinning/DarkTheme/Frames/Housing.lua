@@ -132,7 +132,7 @@ end
 
 local function SkinHouseFinder()
     local finder = _G.HouseFinderFrame
-    if not finder then return end
+    if not finder then return S.Skip("HouseFinderFrame missing") end
     S.StripTextures(finder)
     S.Backdrop(finder)
     if finder.CloseButton then S.CloseButton(finder.CloseButton) end
@@ -181,7 +181,7 @@ end
 
 local function SkinDashboard()
     local dash = _G.HousingDashboardFrame
-    if not dash then return end
+    if not dash then return S.Skip("HousingDashboardFrame missing") end
     S.StripTextures(dash)
     S.Backdrop(dash)
     if dash.CloseButton then S.CloseButton(dash.CloseButton) end
@@ -410,7 +410,7 @@ end
 
 local function SkinHouseList()
     local list = _G.HouseListFrame
-    if not list then return end
+    if not list then return S.Skip("HouseListFrame missing") end
     StripAndPlate(list)
     if list.CloseButton then S.CloseButton(list.CloseButton) end
     if list.ScrollBar then S.TrimScrollBar(list.ScrollBar) end
@@ -421,7 +421,7 @@ end
 
 local function SkinCreateNeighborhood()
     local create = _G.HousingCreateGuildNeighborhoodFrame
-    if not create then return end
+    if not create then return S.Skip("HousingCreateGuildNeighborhoodFrame missing") end
     StripAndPlate(create)
     if create.NeighborhoodNameEditBox then S.EditBox(create.NeighborhoodNameEditBox) end
     if create.ConfirmButton then S.Button(create.ConfirmButton) end
@@ -480,7 +480,7 @@ end
 
 local function SkinHouseEditor()
     local editor = _G.HouseEditorFrame
-    if not editor then return end
+    if not editor then return S.Skip("HouseEditorFrame missing") end
 
     local storageButton = editor.StorageButton
     if storageButton then
@@ -633,7 +633,7 @@ end
 
 local function SkinModelPreview()
     local preview = _G.HousingModelPreviewFrame
-    if not preview then return end
+    if not preview then return S.Skip("HousingModelPreviewFrame missing") end
     StripAndPlate(preview)
     if preview.CloseButton then S.CloseButton(preview.CloseButton) end
     local model = preview.ModelPreview
