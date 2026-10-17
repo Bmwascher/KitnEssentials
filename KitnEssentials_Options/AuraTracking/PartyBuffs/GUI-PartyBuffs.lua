@@ -2,7 +2,7 @@
 -- ║  GUI-PartyBuffs.lua                                      ║
 -- ║  GUI: Party Cooldowns                                    ║
 -- ║  Purpose: the page host (header and tab strip) and the   ║
--- ║           two placeholder tabs.                          ║
+-- ║           Healer Externals placeholder tab.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -14,7 +14,8 @@ local DESCRIPTION = "Shows the cooldowns that matter for your group beside each 
     "when ready, shows the buff's timer while it is up, then turns gray with the time left." ..
     "\n\nA party member's spec comes from |cffffd100LibSpecialization|r or a quiet automatic inspect; until " ..
     "it is known, that member shows no cooldown icons. Externals and potions your party members receive still " ..
-    "show while active, after the cooldown icons." ..
+    "show while active, after the cooldown icons. " ..
+    "The Potions tab shows each party member's potion cooldown as a bar." ..
     "\n\nWorks on Blizzard's party frames and on |cffffd100EllesmereUI|r frames. Not shown in raids."
 
 local function Placeholder(id, title, note)
@@ -25,8 +26,6 @@ local function Placeholder(id, title, note)
     end)
 end
 
-Placeholder("PartyBuffsPotions", "Party Potions",
-    "Party potion cooldowns arrive in a later update. Potions your party uses still show while active, from the Cooldowns tab.")
 Placeholder("PartyBuffsHealerExternals", "Healer Externals",
     "A timer on your healer's external cooldowns arrives in a later update.")
 

@@ -52,6 +52,7 @@ local CDRules = KE.PartyCooldownsRules
 local Cell = KE.PartyCooldownsCell
 local Spec = KE.PartyCooldownsSpec
 local Track = KE.PartyCooldownsSensor
+local Pot = KE.PartyPotions
 
 -- Times each group build and logs every candidate frame, binding and watched
 -- show or hide.
@@ -189,6 +190,7 @@ function PB:Activate()
         self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
         Spec.Activate()
         Track.ShowSensors()
+        Pot.Activate()
     end
     self:ResolveAll()
     self:OnRelease()
@@ -207,6 +209,7 @@ function PB:Deactivate()
     end
     Spec.Deactivate()
     Track.HideSensors()
+    Pot.Deactivate()
     if not self.active then return end
     self.active = false
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
@@ -367,8 +370,11 @@ end
 -- finished, so its teammate shows before the next slot starts. pumping stays
 -- set while BuildSlot runs, so an Enqueue from inside it schedules nothing and
 -- only this function schedules the next pump.
+-- A unit token is a potion row's key; a number is a party slot's.
 local function BuildHead()
-    return PB:BuildSlot(PB.queue[1])
+    local k = PB.queue[1]
+    if type(k) == "string" then return Pot.BuildNext(k) end
+    return PB:BuildSlot(k)
 end
 
 local function PumpBuild()
@@ -990,6 +996,7 @@ function PB:OnRoster()
     -- rebind, and whoever left is read again if they come back.
     Spec.SetMembers({})
     Spec.Prune()
+    Pot.OnRoster()
     if self._rosterTimer then self._rosterTimer:Cancel() end
     self._rosterTimer = C_Timer.NewTimer(ROSTER_SETTLE, function()
         self._rosterTimer = nil
@@ -1020,6 +1027,7 @@ end
 function PB:OnRelease()
     if not self.active then return end
     Track.Settle()
+    Pot.OnRelease()
     if self.buildPending then self:ResolveAll() end
     if self.reconfigurePending then self:ReconfigureAll() end
     if self.restylePending then self:Restyle() end
@@ -1036,6 +1044,7 @@ end
 function PB:OnKeyStart()
     self:EvaluateGate()
     Track.KeyStart()
+    Pot.OnKeyStart()
     Track.HoldAll(KEY_HOLD)
 end
 
@@ -1168,6 +1177,7 @@ function PB:ApplySettings()
     self:UpdateDB()
     self:BuildStyleSettings()
     Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true, self.db.ShowRacials == true)
+    Pot.ApplySettings()
     self:EvaluateGate()
     self:ReconfigureAll()
     self:Restyle()
@@ -1407,6 +1417,9 @@ end
 -- timer redraws it.
 function PB:ShowPreview()
     self.previewing = true
+    -- The potion samples sit in their own box, not beside party frames, so a
+    -- roster settle does not hold them back.
+    Pot.ShowPreview()
     if self._rosterTimer then
         self:HidePreviewFrames()
         return
@@ -1475,6 +1488,7 @@ end
 function PB:HidePreview()
     self.previewing = false
     self:HidePreviewFrames()
+    Pot.HidePreview()
 end
 
 ---------------------------------------------------------------------------------
@@ -1493,6 +1507,7 @@ function PB:OnEnable()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRoster")
     Spec.Enable(function(m) self:OnMemberChanged(m) end)
     Track.Enable()
+    Pot.Enable(self)
     self:ApplySettings()
 end
 
@@ -1504,4 +1519,5 @@ function PB:OnDisable()
     self:HidePreview()
     Spec.Disable()
     Track.Disable()
+    Pot.Disable()
 end

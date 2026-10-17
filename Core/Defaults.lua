@@ -1577,6 +1577,20 @@ local Defaults = {
             CooldownOff       = {},
             CooldownSeconds   = {},
             CooldownOrder     = {},
+            -- Potion bars (Potions tab). They read ListPotions, which the
+            -- while-active potion icons read too.
+            PotionBars        = true,
+            PotionIncludeSelf = true,
+            PotionShowReady   = false,
+            PotionSeconds     = 300,
+            PotionGrowth      = "DOWN",
+            PotionWidth       = 170,
+            PotionHeight      = 20,
+            PotionSpacing     = 2,
+            PotionShowIcon    = true,
+            PotionShowTimer   = true,
+            PotionTextSize    = 12,
+            PotionPosition    = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 60 },
             -- ListExternals is a row copy of the External Tracker list, made
             -- below this table.
             ListPotions = {

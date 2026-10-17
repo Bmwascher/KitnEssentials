@@ -28,6 +28,7 @@ local BLACK = { 0, 0, 0, 1 }
 
 local meter
 local metrics = {}
+local widths = {}
 local strips = {}
 
 -- One label per line from cd down to 1, top to bottom.
@@ -41,12 +42,8 @@ local function StripText(cd)
     return text
 end
 
--- The distance between two strip lines and the height of one, per font.
--- Measured on a frame no secret ever reaches, and cached.
-local function LineMetrics(fontName, size, outline)
-    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline)
-    local known = metrics[key]
-    if known then return known[1], known[2] end
+-- A font string on a frame no secret ever reaches, made on first use.
+local function Meter()
     if not meter then
         local host = CreateFrame("Frame", nil, UIParent)
         host:SetSize(1, 1)
@@ -55,6 +52,16 @@ local function LineMetrics(fontName, size, outline)
         meter = host:CreateFontString(nil, "OVERLAY")
         meter:SetPoint("CENTER")
     end
+    return meter
+end
+
+-- The distance between two strip lines and the height of one, per font.
+-- Measured on the meter, and cached.
+local function LineMetrics(fontName, size, outline)
+    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline)
+    local known = metrics[key]
+    if known then return known[1], known[2] end
+    Meter()
     KE:ApplyFontToText(meter, fontName, size, outline)
     meter:SetText("0")
     local one = meter:GetStringHeight()
@@ -68,6 +75,23 @@ local function LineMetrics(fontName, size, outline)
     metrics[key] = { step, line }
     return step, line
 end
+
+-- The width of text in a font, measured on the meter and cached.
+function Cell.TextWidth(fontName, size, outline, text)
+    local key = tostring(fontName) .. "|" .. tostring(size) .. "|" .. tostring(outline) .. "|" .. text
+    local known = widths[key]
+    if known then return known end
+    local m = Meter()
+    KE:ApplyFontToText(m, fontName, size, outline)
+    m:SetText(text)
+    local width = m:GetStringWidth()
+    if KE:IsSecretValue(width) or type(width) ~= "number" or width <= 0 then width = size * #text * 0.6 end
+    widths[key] = width
+    return width
+end
+
+Cell.StripText = StripText
+Cell.LineMetrics = LineMetrics
 
 local function NewBar(parent)
     local bar = CreateFrame("StatusBar", nil, parent)

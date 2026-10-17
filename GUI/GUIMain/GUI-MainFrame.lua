@@ -60,7 +60,7 @@ GUIFrame.sidebarConfig = {
             { id = "AuraHeaders_Debuffs", text = "Player Debuffs", keywords = { "debuff", "debuffs", "player debuffs", "aura", "auras", "magic", "curse", "poison", "disease", "blizzard", "replace" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
-            { id = "PartyBuffs",    text = "Party Cooldowns", keywords = { "party", "party buffs", "party cooldowns", "cooldowns", "class cooldowns", "spells and cooldowns", "trinket cooldowns", "include yourself", "buff", "buffs", "external", "externals", "healer externals", "defensive", "burst", "potion", "potions", "trinket", "trinkets", "cooldown", "arena" } },
+            { id = "PartyBuffs",    text = "Party Cooldowns", keywords = { "party", "party buffs", "party cooldowns", "cooldowns", "class cooldowns", "spells and cooldowns", "trinket cooldowns", "include yourself", "buff", "buffs", "external", "externals", "healer externals", "defensive", "burst", "potion", "potions", "party potions", "potion bars", "trinket", "trinkets", "cooldown", "arena" } },
             { id = "AuraMovement", text = "Movement Buffs", keywords = { "movement", "speed", "sprint", "buff", "mobility" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
         },

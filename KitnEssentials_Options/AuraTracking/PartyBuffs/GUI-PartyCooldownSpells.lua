@@ -25,6 +25,14 @@ local Rules = KE.PartyCooldownsRules
 local Page = {}
 KE.PartyCooldownsPage = Page
 
+-- A list as Kitn Defaults ships it.
+function Page.ShippedList(listKey)
+    if not KE.GetDefaultDB then return {} end
+    local root = KE:GetDefaultDB()
+    local section = root and root.profile and root.profile.PartyBuffs
+    return (section and section[listKey]) or {}
+end
+
 -- Tall enough for the seconds box under its label; the checkbox and the
 -- arrows sit level with the box.
 local ROW_HEIGHT = 40
