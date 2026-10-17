@@ -1873,15 +1873,10 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.iconFrame:Hide()
     end
 
-    -- Layout (icon / rank / name anchors), dirty-gated on the (hasIcon, ShowRank,
-    -- no-value) combination so a stable config does NO per-tick re-anchor. hasIcon
-    -- (not the raw ShowIcon) is the key so an icon-less enemy row drops the icon
-    -- gutter and the rank/name go flush left. The icon always sits at the row's left
-    -- edge (its factory anchor -- never moved here); when ShowRank is on, the rank
-    -- sits BETWEEN the icon and the name ("[icon] 1. Name"). The name's RIGHT edge
-    -- sits 3 units before the value's LEFT edge: the client re-flows it when the
-    -- value's width changes, and Lua never reads that width (secret once the value
-    -- has held secret text).
+    -- Re-anchored only when (hasIcon, ShowRank, no-value) changes. hasIcon, not
+    -- ShowIcon, so an icon-less enemy row drops the gutter. The name stops 3 units
+    -- before the value; the client re-flows it, so Lua never reads the (possibly
+    -- secret) value width.
     local showRank = db.ShowRank
     -- Overall Deaths renders an always-empty value (the "" branch below), so the
     -- name ends at the edge pad instead of 3 units before an empty string.

@@ -598,7 +598,7 @@ function DTrash:ScheduleAlert(rt, npcID, spellID, spellData, nextStart)
     if lead <= 0 then return end
 
     -- Keyed per casting unit on purpose: several mobs casting the same spell
-    -- show several bars. Collapsing to npcID:spellID is a regression.
+    -- show several bars. Do not collapse the key to npcID:spellID.
     local key = string_format("%s:%d:%d", rt.unit, npcID, spellID)
     local label = self:GetSpellLabel(self.currentMapID, npcID, spellID)
     local color = self:ResolveTrashColor(npcID, spellID)

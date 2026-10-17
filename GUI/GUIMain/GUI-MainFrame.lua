@@ -296,7 +296,7 @@ function GUIFrame:CreateMainFrame()
     frame:SetResizeBounds(GUIFrame.minWidth, GUIFrame.minHeight)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
-    -- Resize/move instrumentation. The grip fault is intermittent, so the log
+    -- Resize/move instrumentation. Faults here are intermittent, so the log
     -- has to be armed before it happens rather than switched on after.
     -- The flag hangs off the FRAME because that is what has a global name --
     -- the addon table is private to the file scope and unreachable from /run:
