@@ -92,6 +92,14 @@ Data.SPELLS = {
     -- Two charges; each use reads as the whole cooldown.
     [23920]   = { kind = "defensive", cd = 25 },
 
+    -- Healer externals, in no spec list: HEALER_SPECS picks them by spec.
+    [33206]   = { kind = "external", cd = 180 }, -- Pain Suppression
+    [47788]   = { kind = "external", cd = 180 }, -- Guardian Spirit
+    [102342]  = { kind = "external", cd = 90 },  -- Ironbark
+    [116849]  = { kind = "external", cd = 120 }, -- Life Cocoon
+    [6940]    = { kind = "external", cd = 120 }, -- Blessing of Sacrifice
+    [357170]  = { kind = "external", cd = 60 },  -- Time Dilation
+
     -- Racials, in no spec list: RACIALS picks one by race.
     [20594]   = { kind = "defensive", cd = 120, buffs = { 65116 } },
     [265221]  = { kind = "offensive", cd = 120, buffs = { 265226, 273104 } },
@@ -155,6 +163,17 @@ Data.ROLE_SPEC = {
     PALADIN     = { TANK = 66, HEALER = 65 },
     SHAMAN      = { HEALER = 264 },
     WARRIOR     = { TANK = 73 },
+}
+
+-- Healer specs whose external the healer externals box shows, with the class
+-- each belongs to.
+Data.HEALER_SPECS = {
+    [256]  = { class = "PRIEST",  casts = { 33206 } },
+    [257]  = { class = "PRIEST",  casts = { 47788 } },
+    [105]  = { class = "DRUID",   casts = { 102342 } },
+    [270]  = { class = "MONK",    casts = { 116849 } },
+    [65]   = { class = "PALADIN", casts = { 6940 } },
+    [1468] = { class = "EVOKER",  casts = { 357170 } },
 }
 
 -- Race token to racial, in editor order; raceID names the race on the

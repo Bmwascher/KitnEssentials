@@ -230,6 +230,70 @@ describe("PartyCooldownsRules.Feed", function()
             assert.are.equal(0, proc.v, name .. ": a proc copy")
         end
     end)
+
+    it("stamps a group tracker when some member's buff appears and none was up at the read before", function()
+        local R = loadRules()
+        local F, T = false, true
+        local function group(reads, w)
+            local t = R.NewTracker(120, false, true)
+            R.Clear(t, 0)
+            for i, answers in ipairs(reads) do
+                local list = { n = #answers }
+                for j, lit in ipairs(answers) do
+                    if j == 1 then list[j] = w(lit) else list[j] = lit end
+                end
+                R.Feed(t, list, nil, 10 + i, isSecret, pick)
+            end
+            local sl = t.slot[t.cur]
+            return { sl.v, sl.c }
+        end
+        local first = (255 - 12) / 255
+        local cases = {
+            { name = "a first read only records", reads = { { T, F, F } }, want = { 0, 1 } },
+            { name = "rising edge", reads = { { F, F, F }, { F, T, F } }, want = { 1, first } },
+            { name = "another member while one stays up",
+              reads = { { F, F, F }, { T, F, F }, { T, T, F } }, want = { 1, first } },
+            { name = "one falls as another rises",
+              reads = { { F, F, F }, { T, F, F }, { F, T, F } }, want = { 1, first } },
+        }
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            for _, case in ipairs(cases) do
+                assert.are.same(case.want, group(case.reads, wrap[2]), wrap[1] .. ": " .. case.name)
+            end
+        end
+    end)
+
+    it("passes the kept stamp through at most two evaluations per watched unit", function()
+        local R = loadRules()
+        local function counting(b, a, c)
+            local out = pick(b, a, c)
+            return { depth = (type(out) == "table" and out.depth or 0) + 1 }
+        end
+        local function deepest(t, lists)
+            local most = 0
+            for _, prev in ipairs(lists) do
+                for _, lit in ipairs(lists) do
+                    R.Clear(t, 0)
+                    t.primed, t.prev = true, prev
+                    t.slot[t.cur].c = { depth = 0 }
+                    R.Feed(t, lit, nil, 12, isSecret, counting)
+                    local c = t.slot[t.cur].c
+                    most = math.max(most, type(c) == "table" and c.depth or 0)
+                end
+            end
+            return most
+        end
+        local m, lists = 5, {}
+        for bits = 0, 2 ^ m - 1 do
+            local list = { n = m }
+            for j = 1, m do list[j] = secret(math.floor(bits / 2 ^ (j - 1)) % 2 == 1) end
+            lists[#lists + 1] = list
+        end
+        local five = deepest(R.NewTracker(120, false, true), lists)
+        assert.is_true(five > 0 and five <= 2 * m, "five units: " .. five)
+        local one = deepest(R.NewTracker(120, false), { secret(true), secret(false) })
+        assert.is_true(one > 0 and one <= 2, "one sensor: " .. one)
+    end)
 end)
 
 describe("PartyCooldownsRules.Tick", function()
@@ -447,7 +511,7 @@ describe("PartyCooldownsRules racials", function()
 end)
 
 describe("PartyCooldownsRules.SpecWanted", function()
-    it("wants a spec for a cooldown cell, or for a racial the member's race has", function()
+    it("wants a spec for a cooldown cell, a racial the member's race has, or the healer externals box", function()
         local R = loadRules()
         local cases = {
             { name = "class cells", args = { true, false, false, "Human" }, want = true },
@@ -456,10 +520,11 @@ describe("PartyCooldownsRules.SpecWanted", function()
             { name = "race with no racial", args = { false, false, true, "Human" }, want = false },
             { name = "race not read", args = { false, false, true, nil }, want = false },
             { name = "Show Racials off", args = { false, false, false, "Dwarf" }, want = false },
+            { name = "the healer box alone", args = { false, false, false, nil, true }, want = true },
         }
         for _, case in ipairs(cases) do
             local a = case.args
-            assert.are.equal(case.want, R.SpecWanted(a[1], a[2], a[3], a[4]), case.name)
+            assert.are.equal(case.want, R.SpecWanted(a[1], a[2], a[3], a[4], a[5]), case.name)
         end
     end)
 end)
@@ -501,6 +566,20 @@ describe("PartyCooldownsRules.OwnTaken", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.OwnTaken(case.rule, case.override, case.known), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.MatchKeys", function()
+    it("finds each key's old index wherever it moved, and gives each old index once", function()
+        local R = loadRules()
+        local cases = {
+            { name = "the first removed", old = { "a", "b" }, new = { "b" }, want = { 2 } },
+            { name = "one added before", old = { "b" }, new = { "a", "b" }, want = { false, 1 } },
+            { name = "a key repeated", old = { "a" }, new = { "a", "a" }, want = { 1, false } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.MatchKeys(case.old, case.new), case.name)
         end
     end)
 end)

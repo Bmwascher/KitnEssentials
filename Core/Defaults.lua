@@ -1572,8 +1572,9 @@ local Defaults = {
             ShowCooldownText  = true,
             CooldownFontSize  = 12,
             -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
-            -- "trinket:<spellID>" and a racial "race:<castID>". CooldownOrder
-            -- holds a cast list per spec.
+            -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
+            -- external "healer:<specID>:<castID>". CooldownOrder holds a cast
+            -- list per spec.
             CooldownOff       = {},
             CooldownSeconds   = {},
             CooldownOrder     = {},
@@ -1591,6 +1592,16 @@ local Defaults = {
             PotionShowTimer   = true,
             PotionTextSize    = 12,
             PotionPosition    = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 60 },
+            -- Healer externals box (Healer Externals tab). The position card
+            -- writes HealerExtParentFrame, which has no default.
+            HealerExternals   = true,
+            HealerExtIconSize = 30,
+            HealerExtSpacing  = 2,
+            HealerExtGrowth   = "RIGHT",
+            HealerExtShowText = true,
+            HealerExtTextSize = 12,
+            HealerExtPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 },
+            HealerExtAnchorFrameType = "UIPARENT",
             -- ListExternals is a row copy of the External Tracker list, made
             -- below this table.
             ListPotions = {
