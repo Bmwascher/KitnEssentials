@@ -355,16 +355,13 @@ Run `pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
 exercises every documented deny and allow case against a throwaway main
 worktree and fails when a live copy differs from its template.
 
-## Multi-model verification (parallax plugin)
+## Multi-model review (parsec plugin)
 
-The multi-model-verify skill (Fable 5 / GPT-5.6 Sol debate gates at plan
-time and diff time), the superpowers review-companion hook, the swappable
-implementer agent, and their eval harness live in the private **parallax**
-plugin — repo `Bmwascher/parallax`, local working copy at
-`Documents/parallax`. It installs user-scope through Claude Code's plugin
-system (`claude plugin install parallax@parallax`), so it works in
-every project with zero per-repo wiring. Evals and CI for the skill run in
-that repo, not here.
+Design debates, the diff gate (Opus pre-review, cross-vendor debate, Fable
+last look), the build lanes and their session records live in the parsec
+plugin, installed user-scope; its per-project config is the gitignored
+`.claude/parsec.toml` (parsec `setup` writes it). Gate order and ledger
+states: `KitnDev/.claude/workflows/multi-model-execution.md`.
 
 ## Adding a spec
 
