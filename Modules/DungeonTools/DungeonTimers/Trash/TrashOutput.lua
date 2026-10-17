@@ -432,9 +432,7 @@ function DTrash:ShowAlert(key, duration, mode, label, color, iconID, sounds, dec
     return frame
 end
 
--- skipLayout: teardown sweeps (HideAllAlerts / HideUnitAlerts) hide in bulk and
--- run ONE layout pass per mode afterward instead of re-sorting/re-anchoring
--- the whole stack per key — the boss renderer's StopAllBars pattern.
+-- Bulk teardown passes skipLayout to avoid laying out the stack for every key.
 function DTrash:HideAlert(key, skipLayout)
     local frame = self.alerts[key]
     if not frame then return end

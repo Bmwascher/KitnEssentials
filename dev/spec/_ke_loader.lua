@@ -123,7 +123,11 @@ function L.loadDungeonTimers(opts, overrides)
     if opts.withEncounterData then
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/EncounterData.lua", KE)
     end
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/TimerState.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMapState.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/DebugTrace.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/DungeonTimers.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMap.lua", KE)
     return modules["DungeonTimers"], KE
 end
 
@@ -140,7 +144,9 @@ function L.loadGlobals(overrides, opts)
     -- Fake LSM: "GoodFont" is a known-valid non-default key so font-repair
     -- specs can tell "kept" apart from "reset to Expressway".
     local lsm = {
-        Register = function() end,
+        Register = function(_, kind, name)
+            if opts.onMediaRegister then opts.onMediaRegister(kind, name) end
+        end,
         Fetch = function(_, _, name) return name and ("path/" .. name) or nil end,
         IsValid = function(_, _, name) return name == "Expressway" or name == "GoodFont" end,
     }
@@ -624,6 +630,16 @@ function L.loadAuraRules(overrides)
     local KE = {}
     helpers.loadModule("Modules/AuraTracking/AuraEngine/Rules.lua", KE)
     return KE.AuraRules, KE
+end
+
+-- Modules/DungeonTools/DungeonTimers/WindMapState.lua. Pure decision logic -- no WoW API,
+-- no frames -- so the load needs only a KE table to hang
+-- KE._DungeonWindMapState on. Returns it, KE.
+function L.loadWindMapState(overrides)
+    installMock(overrides, {})
+    local KE = {}
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMapState.lua", KE)
+    return KE._DungeonWindMapState, KE
 end
 
 -- Modules/AuraTracking/AuraEngine/GlowRules.lua. Pure decision logic -- no WoW API,
@@ -2780,6 +2796,21 @@ end
 function L.loadDungeonRegistry()
     helpers.installAddonShim()
     return helpers.loadModule("Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua")
+end
+
+-- KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersProviderSummary.lua.
+-- Pure helpers on KE.GUI.DungeonTimers; the file touches no frame or WoW API.
+function L.loadDungeonTimersProviderSummary()
+    local KE = helpers.loadModule("KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersProviderSummary.lua", {})
+    return KE.GUI.DungeonTimers
+end
+
+-- Modules/DungeonTools/DungeonTimers/TimerState.lua. Private plain-Lua state, no WoW API
+-- or addon shim needed. Returns KE._DungeonTimerState.
+function L.loadDungeonTimerState()
+    local KE = {}
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/TimerState.lua", KE)
+    return KE._DungeonTimerState
 end
 
 -- Core/EUIUnlockBridge.lua. No EllesmereUI global is installed on purpose: the

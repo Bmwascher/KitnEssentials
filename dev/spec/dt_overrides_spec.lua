@@ -45,6 +45,31 @@ describe("DungeonTimers override accessors", function()
         DT:UpdateDB()
     end)
 
+    it("numbered defaults preserve explicit sound and mute overrides and keep the ordinary fallback", function()
+        local key = "cue:9001:kicks"
+        KE.EncounterData[9001].phaseCues = {
+            kicks = { sound = "Kick", ordinalSounds = { "Kick 1", "Kick 2", "Kick 3" } },
+        }
+        DT:BuildSpellLookup()
+        for _, case in ipairs({
+            { name = "default", numbered = true },
+            { name = "explicit fallback", override = "Kick", expected = "Kick" },
+            { name = "custom", override = "Custom", expected = "Custom" },
+            { name = "mute", override = "None" },
+        }) do
+            DT:SetSpellSoundOnShow(key, case.override)
+            for ordinal = 1, 3 do
+                local expected = case.numbered and ("Kick " .. ordinal) or case.expected
+                assert.equal(expected, DT:GetEffectiveSpellSoundOnShow(key, ordinal), case.name)
+            end
+        end
+        DT:SetSpellSoundOnShow(key, nil)
+        assert.equal("Kick", DT:GetEffectiveSpellSoundOnShow(key))
+        for _, ordinal in ipairs({ 0, 4, "1" }) do
+            assert.equal("Kick", DT:GetEffectiveSpellSoundOnShow(key, ordinal))
+        end
+    end)
+
     describe("GetSpellShowAtSeconds precedence", function()
         it("returns the curator showAtSeconds when no override is stored", function()
             assert.equals(12, DT:GetSpellShowAtSeconds(111))
