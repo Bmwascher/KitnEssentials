@@ -395,9 +395,10 @@ local function CollectEncountersForDungeon(dungeonKey)
                 table_sort(cueNames)
                 for _, cueName in ipairs(cueNames) do
                     table_insert(spellPairs, {
-                        id    = KE._DungeonTimerState.CueKey(encId, cueName),
-                        data  = enc.phaseCues[cueName],
-                        isCue = true,
+                        id      = KE._DungeonTimerState.CueKey(encId, cueName),
+                        data    = enc.phaseCues[cueName],
+                        isCue   = true,
+                        cueName = cueName,
                     })
                 end
             end
@@ -437,7 +438,7 @@ local function CollectEncountersForDungeon(dungeonKey)
                 id        = encId,
                 name      = enc.shortName or enc.name or string_format("Encounter %d", encId),
                 bossOrder = enc.bossOrder,
-                items     = spellPairs,
+                items     = KE.OrderDungeonTimerBossRows(spellPairs, enc.rowOrder),
             })
         end
     end
@@ -511,9 +512,9 @@ local ROW_LABELS = {
     ["cue:3456:pull_stomp"]          = "Ravenous Stomp (Pull)",
     ["cue:3457:toxic_atrophy_kicks"] = "Toxic Atrophy (Boss)",
     ["cue:3103:rage_phase"]          = "Demonic Rage (Phase)",
-    ["cue:3105:leap"]                = "Boss Leap (Guess)",
-    ["cue:3105:no_portal"]           = "Malefic Wave Gateway Timer",
-    ["cue:3287:tank_frontal"]        = "Dark Waves (tank frontal)",
+    ["cue:3105:leap"]                = "Boss Leap (Estimate)",
+    ["cue:3105:no_portal"]           = "Malefic Wave: Gateway Timer",
+    ["cue:3287:tank_frontal"]        = "Dark Waves (Tank Frontal)",
 }
 
 local function ResolveSpellDisplayName(spellId, spell)
@@ -3228,7 +3229,7 @@ local function BuildAuraSoundBody(parent, auraKey, contentWidth, onCaptionResize
     header:SetText("Aura Sound")
     header:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
 
-    local soundDropdown
+    local soundDropdown, testButton
     local enableState = true
     if DT then enableState = not DT:IsSpellDisabled(auraKey) end
     local enableToggle = GUIFrame:CreateCheckbox(body, "Enable this sound", {
@@ -3238,6 +3239,7 @@ local function BuildAuraSoundBody(parent, auraKey, contentWidth, onCaptionResize
             DT:SetSpellDisabled(auraKey, not checked)
             RefreshOverrideStripe(auraKey)
             if soundDropdown and soundDropdown.SetEnabled then soundDropdown:SetEnabled(checked) end
+            if testButton and testButton.SetEnabled then testButton:SetEnabled(checked) end
         end,
     })
     enableToggle:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
@@ -3257,8 +3259,32 @@ local function BuildAuraSoundBody(parent, auraKey, contentWidth, onCaptionResize
         end,
         searchable = true,
     })
-    soundRow:AddWidget(soundDropdown, 1.0)
-    if not enableState and soundDropdown.SetEnabled then soundDropdown:SetEnabled(false) end
+    soundRow:AddWidget(soundDropdown, 0.7)
+
+    -- Plays even when preset sounds are muted: muting is for live encounters,
+    -- not the editor's preview.
+    local function PreviewSound(soundKey)
+        if not soundKey or soundKey == "None" or soundKey == "" then return end
+        local LSM = KE.LSM
+        if not LSM then return end
+        local file = LSM:Fetch("sound", soundKey)
+        if file then
+            local channel = (DT and DT.db and DT.db.SoundChannel) or "Master"
+            PlaySoundFile(file, channel)
+        end
+    end
+    testButton = GUIFrame:CreateButton(soundRow, "Test", {
+        height = 28,
+        callback = function()
+            if not (DT and DT.GetEffectiveSpellSoundOnShow) then return end
+            PreviewSound(DT:GetEffectiveSpellSoundOnShow(auraKey))
+        end,
+    })
+    soundRow:AddWidget(testButton, 0.3, 0, 0, -12)
+    if not enableState then
+        if soundDropdown.SetEnabled then soundDropdown:SetEnabled(false) end
+        if testButton.SetEnabled then testButton:SetEnabled(false) end
+    end
 
     local caption = body:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
