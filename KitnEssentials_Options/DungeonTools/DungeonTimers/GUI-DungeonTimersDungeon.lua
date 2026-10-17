@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DungeonTimersDungeon.lua                            ║
 -- ║  Purpose: Per-dungeon page builder used by the host's    ║
--- ║  Dungeons tab (DTimers_Dungeons) — one registration; the ║
+-- ║  Dungeon Bosses and Trash tabs — one builder; the view,  ║
 -- ║  dungeon key/name are passed in as arguments instead of  ║
 -- ║  one content callback per dungeon. Renders the curated   ║
 -- ║  encounters for that dungeon as a list+detail editor:    ║
@@ -74,10 +74,11 @@ local DETAIL_TABS = {
 -- Layout constants. Left column is fixed-width; right column eats the rest of
 -- the content area. Scrollable behavior is inherited from the GUIFrame's outer
 -- scrollChild — both columns just stack into it.
-local LEFT_COL_WIDTH    = 200
+local LEFT_COL_WIDTH    = 240
 local COL_GAP           = 8
 local LIST_ROW_HEIGHT   = 28
 local ENC_HEADER_HEIGHT = 30
+local REMINDER_HEADER_HEIGHT = 22
 local DETAIL_PADDING    = 12
 
 local CURATED_TAG_COLOR = { 0.65, 0.65, 0.65 }
@@ -282,7 +283,7 @@ end
 
 local function ShowSpellPreview(spellId)
     if not GUIFrame or not GUIFrame:IsShown() then return end
-    -- Only render the preview while the Dungeons tab is active. If the
+    -- Only render the preview while the Dungeon Bosses tab is active. If the
     -- user navigated away mid-build (rare), don't accidentally spawn a
     -- preview into another tab's page.
     if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
@@ -297,17 +298,30 @@ KE.GUI.DungeonTimers.HideSpellPreview = HideSpellPreview
 -- Trash-ability preview thunks — parallel to the boss spell preview above, but
 -- routed to the DungeonTrash module. The preview is a looping sample alert at
 -- the shared bar/text position; ShowTrashPreview only renders while the
--- Dungeons tab is active (same guard as ShowSpellPreview).
+-- Dungeon Trash tab is active.
 local function HideTrashPreview()
     local mod = GetTrashModule()
     if mod and mod.HideTrashPreview then mod:HideTrashPreview() end
 end
 
--- Everything the Dungeons tab can leave on screen: boss spell preview,
--- trash preview, phase preview.
+local function HideWindMapPreview()
+    local mod = GetModule()
+    if mod and mod.HideWindMapPreview then mod:HideWindMapPreview() end
+end
+
+local function ShowWindMapPreview()
+    if not GUIFrame or not GUIFrame:IsShown() then return end
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
+    local mod = GetModule()
+    if mod and mod.ShowWindMapPreview then mod:ShowWindMapPreview() end
+end
+
+-- Everything the Dungeon Bosses and Dungeon Trash tabs can leave on screen:
+-- boss spell preview, trash preview, phase preview, wind map preview.
 function KE.GUI.DungeonTimers.HideDungeonPreviews()
     HideSpellPreview()
     HideTrashPreview()
+    HideWindMapPreview()
     local mod = GetModule()
     if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
 end
@@ -319,23 +333,24 @@ end
 
 local function ShowTrashPreview(mapID, npcID, spellID)
     if not GUIFrame or not GUIFrame:IsShown() then return end
-    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Trash") then return end
     local mod = GetTrashModule()
     if mod and mod.ShowTrashPreview then mod:ShowTrashPreview(mapID, npcID, spellID) end
 end
 
 ---------------------------------------------------------------------------------
--- Per-dungeon sticky state. Survives RefreshContent rebuilds so spell + tab
--- selection persist as the user clicks around. Reset only when EncounterData
--- changes shape (rare; runtime-static).
+-- Sticky state per view and dungeon. Survives RefreshContent rebuilds so the
+-- Dungeon Bosses and Dungeon Trash tabs each keep their own selected row and
+-- detail tab.
 ---------------------------------------------------------------------------------
-local _state = {}
+local _state = { bosses = {}, trash = {} }
 
-local function GetState(dungeonKey)
-    local s = _state[dungeonKey]
+local function GetState(view, dungeonKey)
+    local byDungeon = _state[view]
+    local s = byDungeon[dungeonKey]
     if not s then
         s = { selectedSpellId = nil, selectedTab = "Visibility" }
-        _state[dungeonKey] = s
+        byDungeon[dungeonKey] = s
     end
     return s
 end
@@ -349,7 +364,7 @@ end
 local _encListCache = {}
 
 local function CollectEncountersForDungeon(dungeonKey)
-    if not dungeonKey then return {} end
+    if not dungeonKey then return { bosses = {}, trash = {} } end
     local cached = _encListCache[dungeonKey]
     if cached then return cached end
 
@@ -371,6 +386,32 @@ local function CollectEncountersForDungeon(dungeonKey)
                 if aEnd ~= bEnd then return aEnd < bEnd end
                 return a.id < b.id
             end)
+            -- Phase cues and aura sound rules are appended after the sort and
+            -- never enter it: their keys are strings.
+            if type(enc.phaseCues) == "table" and KE._DungeonTimerState then
+                local cueNames = {}
+                for cueName in pairs(enc.phaseCues) do cueNames[#cueNames + 1] = cueName end
+                table_sort(cueNames)
+                for _, cueName in ipairs(cueNames) do
+                    table_insert(spellPairs, {
+                        id    = KE._DungeonTimerState.CueKey(encId, cueName),
+                        data  = enc.phaseCues[cueName],
+                        isCue = true,
+                    })
+                end
+            end
+            local auraModule = GetModule()
+            if type(enc.auraSounds) == "table" and auraModule and auraModule.MakeAuraKey then
+                for _, rule in ipairs(enc.auraSounds) do
+                    if auraModule.IsWellFormedAuraRule(rule) then
+                        table_insert(spellPairs, {
+                            id     = auraModule.MakeAuraKey(encId, rule.spellID, rule.trigger),
+                            data   = rule,
+                            isAura = true,
+                        })
+                    end
+                end
+            end
             -- Append phase rules after spells. Synthetic id "phase:<encId>:<idx>"
             -- so the same kit pool + selection state path handles both row types.
             if enc.phases then
@@ -384,11 +425,18 @@ local function CollectEncountersForDungeon(dungeonKey)
                     })
                 end
             end
+            if type(enc.windMap) == "table" then
+                table_insert(spellPairs, {
+                    id        = string_format("map:%d:wind", encId),
+                    data      = { name = "Wind Map", spellID = enc.windMap.wind },
+                    isWindMap = true,
+                })
+            end
             table_insert(encList, {
                 id        = encId,
-                name      = enc.name or string_format("Encounter %d", encId),
+                name      = enc.shortName or enc.name or string_format("Encounter %d", encId),
                 bossOrder = enc.bossOrder,
-                spells    = spellPairs,
+                items     = spellPairs,
             })
         end
     end
@@ -403,13 +451,11 @@ local function CollectEncountersForDungeon(dungeonKey)
         return a.id < b.id
     end)
 
-    -- Append ONE flat "Trash" group after the bosses — a single pseudo-encounter
-    -- (isTrash) whose "spells" are every curated trash-ability row for the
-    -- dungeon, keyed "trash:mapID:npcID:spellID". The same list+detail path
-    -- handles them; the render loop skips the "B#" boss prefix for isTrash
-    -- headers. Rows carry mobName so the detail tooltip can name the caster
-    -- (the flat list has no per-mob headers). TrashData is runtime-static like
-    -- EncounterData, so this belongs in the same cache.
+    local bosses = KE.GroupDungeonTimerBossRows(encList)
+
+    -- Trash rows feed the Dungeon Trash tab. TrashData is runtime-static like
+    -- EncounterData, so they share this cache.
+    local trash = {}
     local DTrash = GetTrashModule()
     if DTrash and DTrash.TrashDungeonByKey then
         local dungeon = DTrash:TrashDungeonByKey(dungeonKey)
@@ -442,23 +488,38 @@ local function CollectEncountersForDungeon(dungeonKey)
                 return (a.data.name or "") < (b.data.name or "")
             end)
             if #trashSpells > 0 then
-                table_insert(encList, {
+                trash[1] = {
                     id      = string_format("trash:%d", mapID),
                     name    = "Trash",
                     isTrash = true,
                     spells  = trashSpells,
-                })
+                }
             end
         end
     end
 
-    _encListCache[dungeonKey] = encList
-    return encList
+    local views = { bosses = bosses, trash = trash }
+    _encListCache[dungeonKey] = views
+    return views
 end
 
+-- Settings-only names for rows whose curated name carries an added qualifier.
+-- The curated names stay untouched because the runtime falls back to them.
+local ROW_LABELS = {
+    [1310547]                        = "Toxic Atrophy (Adds)",
+    ["cue:3456:pull_stomp"]          = "Ravenous Stomp (Pull)",
+    ["cue:3457:toxic_atrophy_kicks"] = "Toxic Atrophy (Boss)",
+    ["cue:3103:rage_phase"]          = "Demonic Rage (Phase)",
+    ["cue:3105:leap"]                = "Boss Leap (Guess)",
+    ["cue:3105:no_portal"]           = "Malefic Wave Gateway Timer",
+    ["cue:3287:tank_frontal"]        = "Dark Waves (tank frontal)",
+}
+
 local function ResolveSpellDisplayName(spellId, spell)
+    if ROW_LABELS[spellId] then return ROW_LABELS[spellId] end
     if spell.name and spell.name ~= "" then return spell.name end
     if spell.displayText and spell.displayText ~= "" then return spell.displayText end
+    if type(spellId) ~= "number" then return tostring(spellId) end
     return string_format("Spell %d", spellId)
 end
 
@@ -514,8 +575,20 @@ local function ParseTrashKey(key)
     return tonumber(m), tonumber(n), tonumber(s)
 end
 
+local function IsAuraKey(key)
+    return type(key) == "string" and key:find("^aura:") ~= nil
+end
+
+local function IsWindMapKey(key)
+    return type(key) == "string" and key:find("^map:%d+:wind$") ~= nil
+end
+
 local function ApplyOverrideStripe(kit, spellId)
     if not (kit and kit.overrideStripe) then return end
+    if IsWindMapKey(spellId) then
+        kit.overrideStripe:Hide()
+        return
+    end
     local hasOverrides, isDisabled
     if IsTrashKey(spellId) then
         local DTrash = GetTrashModule()
@@ -572,7 +645,11 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     -- Display-mode tag (Bar / Text). Phase rules read via GetPhaseDisplay;
     -- trash via DTrash:GetSpellDisplay; spells via GetSpellDisplay.
     -- RefreshListRowTag updates on Display tab toggles.
-    if kit.tagLabel then
+    -- An aura sound row draws nothing in game and the wind map row is its own
+    -- panel, so neither has a Bar/Text tag.
+    if kit.tagLabel and item and (item.isAura or item.isWindMap) then
+        kit.tagLabel:SetText("")
+    elseif kit.tagLabel then
         local effectiveDisplay
         if isTrash then
             local DTrash = GetTrashModule()
@@ -594,8 +671,11 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
         end
     end
 
-    -- Sound indicator: "S" if any onShow/onHide sound configured.
-    if kit.soundLabel then
+    -- Sound indicator: "S" if any onShow/onHide sound configured. The wind
+    -- map plays no sound.
+    if kit.soundLabel and item and item.isWindMap then
+        kit.soundLabel:SetText("")
+    elseif kit.soundLabel then
         local hasSound
         if isTrash then
             local DTrash = GetTrashModule()
@@ -625,6 +705,13 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
             local tex = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.spellID))
                         or 134400
             kit.icon:SetTexture(tex)
+        elseif item and (item.isAura or item.isWindMap) then
+            kit.icon:SetTexture(
+                (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spell.spellID)) or 134400)
+        elseif item and item.isCue then
+            local cueModule = GetModule()
+            kit.icon:SetTexture(
+                (cueModule and cueModule.ResolveSpellIcon and cueModule:ResolveSpellIcon(spellId)) or 134400)
         else
             local DT = GetModule()
             local tex = (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(spellId))
@@ -646,6 +733,8 @@ end
 
 local function ResetListRow(kit)
     kit._spellId = nil
+    kit._view = nil
+    kit._dungeonKey = nil
     kit._roleTag = nil
     kit._isPhase = nil
     kit._isTrash = nil
@@ -735,13 +824,13 @@ local function CreateListRowKit(holder)
         end
     end)
 
-    -- Click handler: writes selected spellId to the per-dungeon state and
-    -- triggers RefreshContent so the right detail pane reconfigures. Captures
-    -- `kit._dungeonKey` (set in Configure) so the same factory closure works
-    -- across all 8 dungeon pages — no per-dungeon factory.
+    -- Click handler: writes the selected spellId to the state of this row's
+    -- view and dungeon, then triggers RefreshContent so the right detail pane
+    -- reconfigures. The list loop sets `kit._view` and `kit._dungeonKey` on
+    -- each acquire, so one factory closure serves both tabs and every dungeon.
     row:SetScript("OnClick", function()
-        if not kit._spellId or not kit._dungeonKey then return end
-        local s = GetState(kit._dungeonKey)
+        if not kit._spellId or not kit._dungeonKey or not kit._view then return end
+        local s = GetState(kit._view, kit._dungeonKey)
         if s.selectedSpellId == kit._spellId then return end
         s.selectedSpellId = kit._spellId
         if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
@@ -853,6 +942,7 @@ end
 -- the three labels (Tank / Healer / DPS) line up cleanly without overlap.
 local function BuildVisibilityTabBody(parent, spellId, spell)
     local DT = GetModule()
+    local isCueRow = DT and DT.IsCueKey(spellId) or false
     local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
@@ -888,6 +978,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- erasing the disabled-state read.
     local enableState = true
     if DT then enableState = not DT:IsSpellDisabled(spellId) end
+    local providerNotice = {}
     local enableToggle = GUIFrame:CreateCheckbox(body, "Enable this spell", {
         value = enableState,
         callback = function(checked)
@@ -900,6 +991,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
             for _, w in ipairs(secondaryWidgets) do
                 if w.SetEnabled then w:SetEnabled(checked) end
             end
+            if providerNotice.refresh then providerNotice.refresh(checked) end
         end,
     })
     enableToggle:SetPoint("TOPLEFT", masterHeader, "BOTTOMLEFT", 0, -10)
@@ -907,6 +999,79 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
 
     -- Section: Who Sees It
     local whoHeader = CreateSectionHeader(body, enableToggle, "Who Sees It", 16)
+
+    if DT and DT._GetProviderSetupNotice then
+        local firstStatus, info, firstReason = DT:_GetProviderSetupNotice(spellId)
+        if firstStatus and info then
+            local SATISFIED_CAVEAT = " Role and timer settings in BigWigs can still hide this alert."
+
+            -- Fixed height, so the section below keeps its place when the button hides.
+            local block = CreateFrame("Frame", nil, body)
+            block:SetPoint("TOPLEFT", enableToggle, "BOTTOMLEFT", 0, -8)
+            block:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+            block:SetHeight(78)
+            whoHeader:ClearAllPoints()
+            whoHeader:SetPoint("TOPLEFT", block, "BOTTOMLEFT", 0, -16)
+
+            local noticeText = block:CreateFontString(nil, "OVERLAY")
+            KE:ApplyFontToText(noticeText, "Expressway", 12, "OUTLINE")
+            noticeText:SetPoint("TOPLEFT", block, "TOPLEFT", 0, 0)
+            noticeText:SetPoint("RIGHT", block, "RIGHT", 0, 0)
+            noticeText:SetJustifyH("LEFT")
+            noticeText:SetJustifyV("TOP")
+            noticeText:SetWordWrap(true)
+            noticeText:SetTextColor(0.85, 0.85, 0.85)
+
+            local status = firstStatus
+            local noticeButton
+
+            local function Paint(newStatus, reason)
+                status = newStatus
+                local text, buttonLabel = KE.GUI.DungeonTimers.ProviderSetupText(status, reason, info)
+                if status == "satisfied" then text = text .. SATISFIED_CAVEAT end
+                noticeText:SetText(text)
+                if not buttonLabel then
+                    noticeButton:Hide()
+                    return
+                end
+                noticeButton:SetLabel(buttonLabel)
+                noticeButton:Show()
+            end
+
+            -- Retained pages refresh on show; discarded pages must remain untouched.
+            local function Reconcile()
+                if not block:IsVisible() then return nil end
+                local fresh, _, reason = DT:_GetProviderSetupNotice(spellId)
+                if fresh then Paint(fresh, reason) end
+                return fresh
+            end
+
+            noticeButton = GUIFrame:CreateButton(block, "", {
+                width = 160,
+                height = 24,
+                callback = function()
+                    if status == "missing" then
+                        DT:_OpenCueProviderPrompt(spellId, "explicit")
+                    else
+                        DT:_CheckProviderSetupNow(spellId)
+                    end
+                end,
+            })
+            noticeButton:SetPoint("BOTTOMLEFT", block, "BOTTOMLEFT", 0, 0)
+            Paint(firstStatus, firstReason)
+
+            DT._cueProviderNotice = function(cueKey)
+                if cueKey == spellId then Reconcile() end
+            end
+            block:SetScript("OnShow", function() Reconcile() end)
+
+            providerNotice.refresh = function(checked)
+                if Reconcile() == "missing" and checked then
+                    DT:_OpenCueProviderPrompt(spellId, "explicit")
+                end
+            end
+        end
+    end
 
     -- Sub-label for the role toggles (small gray caption, not a section
     -- header — the section header above already groups this content).
@@ -992,6 +1157,21 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     local groupDefault = (groupCfg and groupCfg.ShowAtSeconds) or 0
     local effectiveValue = (DT and DT:GetSpellShowAtSeconds(spellId)) or groupDefault
 
+    -- Both sliders refresh the caption: the offset slider can zero or grow
+    -- the extension the rule-6 floor is built from.
+    local sliderCaption  -- created below
+    local function RefreshRevealCaption()
+        if not sliderCaption then return end
+        local floor = DT and spell.timerSource and DT:GetSpellRevealFloor(spellId)
+        if floor and DT:GetSpellExtension(spellId) > 0 then
+            sliderCaption:SetText(string_format(
+                "0 = always visible. Group default: %d. Minimum reveal for this estimate: %.2fs.",
+                groupDefault, floor))
+        else
+            sliderCaption:SetText(string_format("0 = always visible. Group default: %d.", groupDefault))
+        end
+    end
+
     local revealSliderRow = GUIFrame:CreateRow(body, 36)
     if whenHeader then
         revealSliderRow:SetPoint("TOPLEFT", whenHeader, "BOTTOMLEFT", 0, -8)
@@ -1012,6 +1192,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
             -- duration (countdown + cast = showAt), so re-render to
             -- match what the user will see in a real fight.
             RefreshSpellPreview()
+            RefreshRevealCaption()
         end,
     })
     revealSliderRow:AddWidget(revealSlider, 1.0, 0)
@@ -1019,73 +1200,73 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
 
     -- Caption under the slider — explains the 0-position semantic and the
     -- group-default fallback so users don't have to guess.
-    local sliderCaption = body:Text()
+    sliderCaption = body:Text()
     KE:ApplyFontToText(sliderCaption, "Expressway", 11, "OUTLINE")
     sliderCaption:SetPoint("TOPLEFT", revealSliderRow, "BOTTOMLEFT", 8, -12)
     sliderCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     sliderCaption:SetJustifyH("LEFT")
     sliderCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
-    sliderCaption:SetText(string_format("0 = always visible. Group default: %d.", groupDefault))
+    RefreshRevealCaption()
 
     -- Inter-slider divider — visually separates the two timing knobs in
     -- the same section so they don't read as one continuous slider stack.
     -- Indented from the section edges so it reads as "inside" rather than
     -- a section break (which would imply a new section header).
-    local sliderSpacer = body:Line()
-    sliderSpacer:SetHeight(1)
-    sliderSpacer:SetColorTexture(KE.Theme.divider[1], KE.Theme.divider[2], KE.Theme.divider[3], 0.35)
-    sliderSpacer:SetPoint("LEFT",  body, "LEFT",  DETAIL_PADDING + 16, 0)
-    sliderSpacer:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING - 16, 0)
-    sliderSpacer:SetPoint("TOP",   sliderCaption, "BOTTOM", 0, -10)
+    -- Cue windows are fixed by their source, so they have no time offset.
+    local resetAnchor = sliderCaption
+    if not isCueRow then
+        local sliderSpacer = body:Line()
+        sliderSpacer:SetHeight(1)
+        sliderSpacer:SetColorTexture(KE.Theme.divider[1], KE.Theme.divider[2], KE.Theme.divider[3], 0.35)
+        sliderSpacer:SetPoint("LEFT",  body, "LEFT",  DETAIL_PADDING + 16, 0)
+        sliderSpacer:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING - 16, 0)
+        sliderSpacer:SetPoint("TOP",   sliderCaption, "BOTTOM", 0, -10)
 
-    -- Time offset slider — per-spell adjustment to the curator's cast
-    -- duration. Negative values shorten the bar's lifetime (curator
-    -- overshot the impact moment); positive values extend it (curator
-    -- undershot). Slider min adapts to the curated value: can't drop
-    -- below -curated (which would create undefined negative-extension
-    -- math). Setter also defensively clamps. Step 0.5 for fractional-
-    -- second precision since cast times are often X.5s.
-    local curatedCast = (DT and DT:GetSpellCuratorCastDuration(spellId)) or 0
-    local timeOffsetMin = math.max(-3, -curatedCast)
-    local timeOffsetMax = 5
-    local timeOffsetValue = (DT and DT:GetSpellTimeOffset(spellId)) or 0
+        -- The offset must not make the curated extension negative.
+        local curatedCast = (DT and DT:GetSpellCuratorCastDuration(spellId)) or 0
+        local timeOffsetMin = math.max(-3, -curatedCast)
+        local timeOffsetMax = 5
+        local timeOffsetValue = (DT and DT:GetSpellTimeOffset(spellId)) or 0
 
-    local timeOffsetRow = GUIFrame:CreateRow(body, 36)
-    timeOffsetRow:SetPoint("TOPLEFT", sliderSpacer, "BOTTOMLEFT", -16, -10)
-    timeOffsetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
-    local timeOffsetSlider = GUIFrame:CreateSlider(timeOffsetRow, "Time offset (s)", {
-        min = timeOffsetMin, max = timeOffsetMax, step = 0.5,
-        value = timeOffsetValue,
-        labelWidth = 140,
-        callback = function(val)
-            if not (DT and DT.SetSpellTimeOffset) then return end
-            DT:SetSpellTimeOffset(spellId, val)
-            RefreshOverrideStripe(spellId)
-            -- Time offset changes the bar's total duration (and
-            -- therefore its visible drain rate during the cast phase),
-            -- so re-render the preview to match.
-            RefreshSpellPreview()
-        end,
-    })
-    timeOffsetRow:AddWidget(timeOffsetSlider, 1.0, 0)
-    secondaryWidgets[#secondaryWidgets + 1] = timeOffsetSlider
+        local timeOffsetRow = GUIFrame:CreateRow(body, 36)
+        timeOffsetRow:SetPoint("TOPLEFT", sliderSpacer, "BOTTOMLEFT", -16, -10)
+        timeOffsetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        local timeOffsetSlider = GUIFrame:CreateSlider(timeOffsetRow, "Time offset (s)", {
+            min = timeOffsetMin, max = timeOffsetMax, step = 0.5,
+            value = timeOffsetValue,
+            labelWidth = 140,
+            callback = function(val)
+                if not (DT and DT.SetSpellTimeOffset) then return end
+                DT:SetSpellTimeOffset(spellId, val)
+                RefreshOverrideStripe(spellId)
+                RefreshSpellPreview()
+                RefreshRevealCaption()
+            end,
+        })
+        timeOffsetRow:AddWidget(timeOffsetSlider, 1.0, 0)
+        secondaryWidgets[#secondaryWidgets + 1] = timeOffsetSlider
 
-    -- Caption: branches on whether the curator set a cast extension at
-    -- all. Spells with curated=0 (channels, no-cast spells) only support
-    -- positive offsets, so the negative half of the explanation would
-    -- mislead. Show only the relevant direction.
-    local timeOffsetCaption = body:Text()
-    KE:ApplyFontToText(timeOffsetCaption, "Expressway", 11, "OUTLINE")
-    timeOffsetCaption:SetPoint("TOPLEFT", timeOffsetRow, "BOTTOMLEFT", 8, -12)
-    timeOffsetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
-    timeOffsetCaption:SetJustifyH("LEFT")
-    timeOffsetCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
-    if curatedCast > 0 then
-        timeOffsetCaption:SetText(string_format(
-            "Negative = ends earlier. Positive = ends later. Built-in cast: %.1fs.",
-            curatedCast))
-    else
-        timeOffsetCaption:SetText("Positive = ends later. No built-in cast extension.")
+        -- Zero-extension rows cannot accept a negative offset.
+        local timeOffsetCaption = body:Text()
+        KE:ApplyFontToText(timeOffsetCaption, "Expressway", 11, "OUTLINE")
+        timeOffsetCaption:SetPoint("TOPLEFT", timeOffsetRow, "BOTTOMLEFT", 8, -12)
+        timeOffsetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        timeOffsetCaption:SetJustifyH("LEFT")
+        timeOffsetCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+        if curatedCast > 0 then
+            if DT and DT:GetSpellAdmittedBinding(spellId) then
+                timeOffsetCaption:SetText(string_format(
+                    "Negative = ends earlier. Positive = ends later. Estimated cast: %.1fs.",
+                    curatedCast))
+            else
+                timeOffsetCaption:SetText(string_format(
+                    "Negative = ends earlier. Positive = ends later. Built-in cast: %.1fs.",
+                    curatedCast))
+            end
+        else
+            timeOffsetCaption:SetText("Positive = ends later. No built-in cast extension.")
+        end
+        resetAnchor = timeOffsetCaption
     end
 
     -- Reset overrides button — clears BOTH role overrides AND disable
@@ -1105,7 +1286,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     local resetRow = GUIFrame:CreateRow(body, 28)
     resetRow:SetPoint("LEFT", body, "LEFT", DETAIL_PADDING, 0)
     resetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
-    resetRow:SetPoint("TOP", timeOffsetCaption, "BOTTOM", 0, -16)
+    resetRow:SetPoint("TOP", resetAnchor, "BOTTOM", 0, -16)
     local resetBtn = GUIFrame:CreateButton(resetRow, "Reset spell to default", {
         height = 26,
         callback = function()
@@ -1145,18 +1326,40 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     return body
 end
 
--- Builds the Actions tab body. Two sound dropdowns: "On Show" plays
--- when the bar becomes visible (after the showAt delay if any); "On
--- Hide" plays when it expires or is canceled. Selecting a sound also
--- previews it so users can hear what they're picking. "None" entry
--- clears the override.
+-- One sound override applies to every delivery of a numbered cue.
 local function BuildActionsTabBody(parent, spellId)
     local DT = GetModule()
     local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
+    -- None is an explicit mute; nil retains the curated defaults.
     local soundList = GUIFrame.BuildSoundOptions()
     local LSM = KE.LSM
+
+    local spellData = DT and DT:GetSpellInfo(spellId)
+    local hasNumberedSounds = spellData and type(spellData.ordinalSounds) == "table"
+    -- The dropdown reads an ordered list by its list part only, so the
+    -- numbered default joins it as the first entry.
+    local showSoundList = soundList
+    if hasNumberedSounds then
+        showSoundList = { { key = 0, text = "Default (numbered)" } }
+        for _, opt in ipairs(soundList) do showSoundList[#showSoundList + 1] = opt end
+    end
+    local defaultSoundHint = hasNumberedSounds and ("Default: " .. table.concat(spellData.ordinalSounds, ", ")
+        .. ". Test previews the first. Choosing a sound applies it to every numbered warning.")
+    local showTestBtn, showCaption
+    local function UsesNumberedDefault()
+        return hasNumberedSounds and DT:GetSpellSoundOnShow(spellId) == nil
+    end
+    local function RefreshShowSoundHint()
+        local numbered = UsesNumberedDefault()
+        if showTestBtn then showTestBtn:SetLabel(numbered and "Test 1" or "Test") end
+        if showCaption then
+            showCaption:SetText(numbered
+                and defaultSoundHint
+                or "Plays when the bar appears on screen (after the Reveal at delay if set).")
+        end
+    end
 
     -- Test buttons always play even when the master mute is on — muting is
     -- about live encounters, not the editor's preview. Channel still tracks
@@ -1195,15 +1398,17 @@ local function BuildActionsTabBody(parent, spellId)
     showRow:SetPoint("TOPLEFT", showHeader, "BOTTOMLEFT", 0, -10)
     showRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     local showDropdown = GUIFrame:CreateDropdown(showRow, "Sound when bar appears", {
-        options = soundList,
-        -- Show the effective sound (override > curated default > None) so the
-        -- dropdown reflects what will actually play, not just whether the user
-        -- has stored an override.
-        value = (DT and DT:GetEffectiveSpellSoundOnShow(spellId)) or "None",
+        options = showSoundList,
+        value = UsesNumberedDefault() and 0 or (DT and DT:GetEffectiveSpellSoundOnShow(spellId)) or "None",
         callback = function(key)
             if not (DT and DT.SetSpellSoundOnShow) then return end
-            DT:SetSpellSoundOnShow(spellId, key)
-            PreviewSound(key)
+            if key == 0 then
+                DT:SetSpellSoundOnShow(spellId, nil)
+            else
+                DT:SetSpellSoundOnShow(spellId, key)
+            end
+            PreviewSound(DT:GetEffectiveSpellSoundOnShow(spellId, 1))
+            RefreshShowSoundHint()
             RefreshOverrideStripe(spellId)
             RefreshListRowSound(spellId)
         end,
@@ -1212,31 +1417,24 @@ local function BuildActionsTabBody(parent, spellId)
     showRow:AddWidget(showDropdown, 0.7)
     secondaryWidgets[#secondaryWidgets + 1] = showDropdown
 
-    -- Test button — replays whatever sound the bar would actually play right
-    -- now (override > curated default). Always reads through the effective
-    -- resolver so it stays in sync with whatever's about to fire on the next
-    -- in-game pull. yOffset=-12 vertically centers the 28px button on the
-    -- dropdown bar (row + (0, -14), 24px tall, center y=-26; button top -12
-    -- puts its center at -26).
-    local showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
+    showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
         height = 28,
         callback = function()
             if not (DT and DT.GetEffectiveSpellSoundOnShow) then return end
-            PreviewSound(DT:GetEffectiveSpellSoundOnShow(spellId))
+            PreviewSound(DT:GetEffectiveSpellSoundOnShow(spellId, 1))
         end,
     })
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
 
-    local showCaption = body:Text()
+    showCaption = body:Text()
     KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
     showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
     showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     showCaption:SetJustifyH("LEFT")
     showCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
                              CURATED_TAG_COLOR[3])
-    showCaption:SetText(
-        "Plays when the bar appears on screen (after the Reveal at delay if set).")
+    RefreshShowSoundHint()
 
     ---------------------------------------------------------------------------
     -- Section: On Hide
@@ -1538,6 +1736,10 @@ local function BuildDisplayTabBody(parent, spellId, _)
     -- doesn't exist when those handlers are first wired up.
     local refreshColorPicker
 
+    -- The renderer puts a curated color ahead of a preset color, so on such a
+    -- row a preset changes the label and not the color.
+    local hasCuratedColor = DT ~= nil and DT:GetSpellCuratorColor(spellId) ~= nil
+
     local currentMode = (DT and DT:GetSpellDisplay(spellId)) or "text"
     local toggle = CreateSegmentedToggle(body,
         { { id = "bar", label = "Bar" }, { id = "text", label = "Text" } },
@@ -1609,8 +1811,9 @@ local function BuildDisplayTabBody(parent, spellId, _)
         end,
         tooltip = "Custom short label for the bar (e.g. DODGE, HIDE, SOAK).\n"
                .. "Empty = use built-in label.\n"
-               .. "Typing a preset name (DODGE, FEET, KICK, etc.) picks up\n"
-               .. "the matching color automatically.",
+               .. (hasCuratedColor
+                   and "This row has a built-in color, so a preset name\nchanges the label only."
+                   or "Typing a preset name (DODGE, FEET, KICK, etc.) picks up\nthe matching color automatically."),
     })
     labelEditRow:AddWidget(labelEdit, 1)
     secondaryWidgets[#secondaryWidgets + 1] = labelEdit
@@ -1713,8 +1916,9 @@ local function BuildDisplayTabBody(parent, spellId, _)
     presetCaption:SetJustifyH("LEFT")
     presetCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
                                CURATED_TAG_COLOR[3])
-    presetCaption:SetText(
-        "Click a preset to use it. Each preset comes with its own color.")
+    presetCaption:SetText(hasCuratedColor
+        and "Click a preset to use its label. This row keeps its built-in color."
+        or "Click a preset to use it. Each preset comes with its own color.")
 
     ---------------------------------------------------------------------------
     -- Section: Time Format
@@ -1762,23 +1966,16 @@ local function BuildDisplayTabBody(parent, spellId, _)
 
     ---------------------------------------------------------------------------
     -- Section: Spell Color
-    -- Per-spell color override. Applies in BOTH display modes — bar mode
-    -- uses it as the StatusBar fill; text mode uses it as the label
-    -- color. ColorPicker shows the EFFECTIVE color (override → preset →
-    -- default) so users see the current color regardless of override
-    -- state. "Reset to default" button clears the override and the
-    -- picker re-syncs to the preset/default chain. Section name avoids
-    -- "Bar Color" because it'd misleadingly suggest bar-mode-only scope.
     ---------------------------------------------------------------------------
     local colorHeader = CreateSectionHeader(body, thresholdCaption, "Color", 22)
 
-    -- Resolve the effective color for the picker's initial value:
-    -- override → preset (from effective displayText) → default blue.
     local DEFAULT_BAR_COLOR_LOCAL = { 0.3, 0.5, 0.9 }
     local function ResolveEffectiveColor()
         if not DT then return DEFAULT_BAR_COLOR_LOCAL end
         local override = DT:GetSpellColorOverride(spellId)
         if override then return override end
+        local curated = DT:GetSpellCuratorColor(spellId)
+        if curated then return curated end
         -- Effective displayText = override → curator. Find a matching
         -- preset and use its color; otherwise fall back to default.
         local effectiveText = DT:GetSpellDisplayText(spellId)
@@ -1825,8 +2022,9 @@ local function BuildDisplayTabBody(parent, spellId, _)
             RefreshSpellPreview()
         end,
         tooltip = "Custom spell color. Applies to the bar fill in Bar mode and the label in Text mode.\n"
-               .. "Overrides the preset color (e.g. DODGE for orange).\n"
-               .. "Click 'Reset to default' to clear the override and use the preset.",
+               .. (hasCuratedColor
+                   and "Overrides this row's built-in color.\nClick 'Reset to default' to clear the override and use the built-in color."
+                   or "Overrides the preset color (e.g. DODGE for orange).\nClick 'Reset to default' to clear the override and use the preset."),
     })
     -- Picker's natural content (label + swatch + hex) is ~120px; pin to
     -- the row's left edge with a fixed width so the swatch lands exactly
@@ -1841,11 +2039,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
         callback = function()
             if not (DT and DT.SetSpellColorOverride) then return end
             DT:SetSpellColorOverride(spellId, nil)
-            -- Re-sync the picker to the now-effective color (preset or
-            -- default). SetColor invokes the picker's UpdateColor which
-            -- fires our callback — but our callback would WRITE that
-            -- color as a new override, defeating the reset. Use silent
-            -- write: temporarily clear _callback, SetColor, restore.
+            -- SetColor must not store the resolved default as a new override.
             local saved = colorPicker._callback
             colorPicker._callback = nil
             local newColor = ResolveEffectiveColor()
@@ -1888,9 +2082,13 @@ local function BuildDisplayTabBody(parent, spellId, _)
     colorCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
                               CURATED_TAG_COLOR[3])
     -- ASCII-only — WoW fonts don't render U+2192 →; use » or plain text.
-    colorCaption:SetText(
-        "Default = the matching preset color (DODGE \194\187 orange, etc.), "
-        .. "or blue if there's no preset.")
+    if hasCuratedColor then
+        colorCaption:SetText("Default = this row's built-in color.")
+    else
+        colorCaption:SetText(
+            "Default = the matching preset color (DODGE \194\187 orange, etc.), "
+            .. "or blue if there's no preset.")
+    end
 
     -- Initial disabled-state propagation. Mirror the Visibility tab:
     -- when the spell starts disabled, the mode toggle is inert and
@@ -2978,6 +3176,240 @@ local function BuildTrashActionsTabBody(parent, item)
     return body
 end
 
+local CUE_TRIGGER_TEXT = {
+    Message = "Starts on a boss mod message.",
+    Timer   = "Runs for the boss mod's own phase timer; its real length comes from the boss mod.",
+    Sequel  = "Follows its parent countdown row.",
+}
+
+local AURA_TRIGGER_TEXT = {
+    ["added:player"]   = "Plays when this lands on you.",
+    ["removed:player"] = "Plays when this leaves you.",
+    ["added:boss"]     = "Plays when this lands on a boss.",
+    ["removed:boss"]   = "Plays when this leaves a boss.",
+    ["increased:player"] = "Plays each time this gains a stack on you.",
+    ["increased:boss"]   = "Plays each time this gains a stack on a boss.",
+}
+
+local AURA_REGISTRATION_TEXT =
+    "Registered when you enter the dungeon. During a key, turning this off or changing its sound stops the old "
+    .. "sound at once; a sound turned on or changed starts when the key ends."
+
+local AURA_ROW_NOTES = {
+    ["aura:3101:1217464:removed"] =
+        "Off by default: it announces the same moment as the Light Infusion cue, which already plays this sound.",
+}
+
+-- Nothing rebuilds the page while the window is resized, but a caption
+-- rewraps, so the pane is told how far its height has to move. A body from an
+-- earlier build is hidden and unparented, so it never reports visible.
+local function FollowCaptionHeight(body, caption, captionHeight, onCaptionResize)
+    return function()
+        if not body:IsVisible() then return end
+        local measured = caption:GetStringHeight() or 0
+        if math.abs(measured - captionHeight) < 0.5 then return end
+        local delta = measured - captionHeight
+        captionHeight = measured
+        onCaptionResize(delta)
+    end
+end
+
+local function BuildAuraSoundBody(parent, auraKey, contentWidth, onCaptionResize)
+    local DT = GetModule()
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    local soundList = GUIFrame.BuildSoundOptions()
+
+    local header = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(header, "Expressway", 13, "OUTLINE")
+    header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    header:SetText("Aura Sound")
+    header:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+
+    local soundDropdown
+    local enableState = true
+    if DT then enableState = not DT:IsSpellDisabled(auraKey) end
+    local enableToggle = GUIFrame:CreateCheckbox(body, "Enable this sound", {
+        value = enableState,
+        callback = function(checked)
+            if not (DT and DT.SetSpellDisabled) then return end
+            DT:SetSpellDisabled(auraKey, not checked)
+            RefreshOverrideStripe(auraKey)
+            if soundDropdown and soundDropdown.SetEnabled then soundDropdown:SetEnabled(checked) end
+        end,
+    })
+    enableToggle:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
+    enableToggle:SetWidth(200)
+
+    local soundRow = GUIFrame:CreateRow(body, 36)
+    soundRow:SetPoint("TOPLEFT", enableToggle, "BOTTOMLEFT", 0, -16)
+    soundRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    soundDropdown = GUIFrame:CreateDropdown(soundRow, "Sound when the aura triggers", {
+        options = soundList,
+        value = (DT and DT:GetEffectiveSpellSoundOnShow(auraKey)) or "None",
+        callback = function(key)
+            if not (DT and DT.SetSpellSoundOnShow) then return end
+            DT:SetSpellSoundOnShow(auraKey, key)
+            RefreshOverrideStripe(auraKey)
+            RefreshListRowSound(auraKey)
+        end,
+        searchable = true,
+    })
+    soundRow:AddWidget(soundDropdown, 1.0)
+    if not enableState and soundDropdown.SetEnabled then soundDropdown:SetEnabled(false) end
+
+    local caption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
+    -- Measured at an explicit width, since the pane's anchors may not have
+    -- resolved yet; the right anchor added after measuring lets it reflow
+    -- when the window is resized.
+    caption:SetPoint("TOPLEFT", soundRow, "BOTTOMLEFT", 0, -8)
+    caption:SetWidth(contentWidth)
+    caption:SetJustifyH("LEFT")
+    caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    caption:SetText(AURA_REGISTRATION_TEXT)
+
+    local resetRow = GUIFrame:CreateRow(body, 28)
+    resetRow:SetPoint("LEFT", body, "LEFT", DETAIL_PADDING, 0)
+    resetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    resetRow:SetPoint("TOP", caption, "BOTTOM", 0, -16)
+    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset sound to default", {
+        height = 26,
+        callback = function()
+            if not (DT and DT.ResetSpellOverrides) then return end
+            KE:CreatePrompt(
+                "Reset sound to default",
+                "Clear the overrides for this aura sound?\n\nIts enable state and sound will revert to curated defaults. This cannot be undone.",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    DT:ResetSpellOverrides(auraKey)
+                    if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
+                end,
+                nil, "Reset", "Cancel"
+            )
+        end,
+    })
+    if resetBtn.text then
+        resetBtn.text:SetTextColor(REMOVE_COLOR[1], REMOVE_COLOR[2], REMOVE_COLOR[3], REMOVE_COLOR[4])
+    end
+    resetRow:AddWidget(resetBtn, 1.0, 0)
+
+    -- Top padding through the reset row; the pane adds the bottom inset itself.
+    local captionHeight = caption:GetStringHeight() or 0
+    local height = DETAIL_PADDING + (header:GetStringHeight() or 0) + 10 + enableToggle:GetHeight() + 16
+        + soundRow:GetHeight() + 8 + captionHeight + 16 + resetRow:GetHeight()
+    caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    body:SetScript("OnSizeChanged", FollowCaptionHeight(body, caption, captionHeight, onCaptionResize))
+    return body, height
+end
+
+local WIND_MAP_TOOLTIP =
+    "Arena map with the next Winds of Change side, where to drop Inferno Spit fire for it and the next "
+    .. "three Winds and Inferno Spit timers in BigWigs order."
+
+local WIND_MAP_DESCRIPTION =
+    "Shows the arena with the next Winds of Change side and where to drop Inferno Spit fire for it, "
+    .. "and below it the next Winds and Inferno Spit timers in BigWigs order. The side holds through a "
+    .. "late wind and moves on one step only once Erkhart's Winds of Change cast succeeds; Inferno Spit "
+    .. "timers never move it. Syncing means the wind sequence was lost; it clears only when a later cast "
+    .. "can be tied to its BigWigs timer, and otherwise lasts the rest of the pull. The fire marker sits "
+    .. "on the edge the wind needs: top for North-West, bottom for "
+    .. "South-East, left for South-West and right for North-East. On the left or right edge it sits lower "
+    .. "while the dragon flies and higher once BigWigs forecasts its landing.\n\n"
+    .. "It reads the timers BigWigs publishes, which needs BigWigs' enhanced timer mode (its default). "
+    .. "Turning their rows off here, or their BigWigs bars, does not stop the map. It plays no sound. Move "
+    .. "it with /kes edit. The 40% phase reminder is this boss's Phase row and works with the map off."
+
+local function BuildWindMapBody(parent, contentWidth, onCaptionResize)
+    local DT = GetModule()
+    local db = GetSettingsDB()
+    local settings = db and db.WindMap
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+    local manager = GUIFrame:CreateWidgetStateManager()
+
+    local function Apply()
+        if DT and DT.ApplyWindMapSettings then DT:ApplyWindMapSettings() end
+    end
+
+    local header = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(header, "Expressway", 13, "OUTLINE")
+    header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    header:SetText("Wind Map")
+    header:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+
+    local enabled = settings ~= nil and settings.Enabled == true
+    local enableToggle = GUIFrame:CreateCheckbox(body, "Show the wind map", {
+        value = enabled,
+        callback = function(checked)
+            if not settings then return end
+            settings.Enabled = checked
+            manager:UpdateAll(checked)
+            Apply()
+        end,
+    })
+    enableToggle:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
+    enableToggle:SetWidth(200)
+
+    local sizeRow = GUIFrame:CreateRow(body, 40)
+    sizeRow:SetPoint("TOPLEFT", enableToggle, "BOTTOMLEFT", 0, -16)
+    sizeRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local scaleSlider = GUIFrame:CreateSlider(sizeRow, "Scale", {
+        min = 0.5, max = 2, step = 0.05,
+        value = settings and settings.Scale or 1,
+        callback = function(value)
+            if not settings then return end
+            settings.Scale = value
+            Apply()
+        end,
+    })
+    sizeRow:AddWidget(scaleSlider, 0.5)
+    manager:Register(scaleSlider, "all")
+    local opacitySlider = GUIFrame:CreateSlider(sizeRow, "Opacity", {
+        min = 0.3, max = 1, step = 0.05,
+        value = settings and settings.Opacity or 0.9,
+        callback = function(value)
+            if not settings then return end
+            settings.Opacity = value
+            Apply()
+        end,
+    })
+    sizeRow:AddWidget(opacitySlider, 0.5)
+    manager:Register(opacitySlider, "all")
+    manager:UpdateAll(enabled)
+
+    -- Not saved and not gated: the preview shows either placement phase
+    -- whether or not the map is on. A rebuilt page starts airborne again.
+    local groundedPreview = GUIFrame:CreateCheckbox(body, "Preview the grounded phase", {
+        value = false,
+        callback = function(checked)
+            if DT and DT.ShowWindMapPreview then
+                DT:ShowWindMapPreview(checked and "grounded" or "airborne")
+            end
+        end,
+    })
+    groundedPreview:SetPoint("TOPLEFT", sizeRow, "BOTTOMLEFT", 0, -8)
+    groundedPreview:SetWidth(200)
+
+    local caption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
+    -- Measured at an explicit width, since the pane's anchors may not have
+    -- resolved yet; the right anchor added after measuring lets it reflow.
+    caption:SetPoint("TOPLEFT", groundedPreview, "BOTTOMLEFT", 0, -8)
+    caption:SetWidth(contentWidth)
+    caption:SetJustifyH("LEFT")
+    caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    caption:SetText(WIND_MAP_DESCRIPTION)
+
+    local captionHeight = caption:GetStringHeight() or 0
+    local height = DETAIL_PADDING + (header:GetStringHeight() or 0) + 10 + enableToggle:GetHeight() + 16
+        + sizeRow:GetHeight() + 8 + groundedPreview:GetHeight() + 8 + captionHeight
+    caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    body:SetScript("OnSizeChanged", FollowCaptionHeight(body, caption, captionHeight, onCaptionResize))
+    return body, height
+end
+
 ---------------------------------------------------------------------------------
 -- Title row of the detail pane: icon and name in one frame, so the whole area
 -- is a single tooltip hover target. The hover reads the fields ConfigureTitle
@@ -3011,6 +3443,29 @@ local function TitleOnEnter(title)
                 GameTooltip:AddLine(string_format("Cast by: %s", mobName), 0.7, 0.7, 0.7)
             end
             GameTooltip:AddLine(string_format("Spell ID: %d", trashSpellID), 1, 1, 1)
+        end
+    elseif title._hoverIsCue then
+        local data = title._hoverData
+        GameTooltip:AddLine(ResolveSpellDisplayName(id, data))
+        local roleTag = title._hoverRoleTag
+        if roleTag then
+            GameTooltip:AddLine(string_format("Curated role: %s", roleTag), 0.7, 0.7, 0.7)
+        end
+        local sourceKind = data.source and data.source.kind
+        if CUE_TRIGGER_TEXT[sourceKind] then
+            GameTooltip:AddLine(CUE_TRIGGER_TEXT[sourceKind], 0.85, 0.85, 0.85, true)
+        end
+    elseif title._hoverIsWindMap then
+        GameTooltip:AddLine(ResolveSpellDisplayName(id, title._hoverData))
+        GameTooltip:AddLine(WIND_MAP_TOOLTIP, 0.85, 0.85, 0.85, true)
+    elseif title._hoverIsAura then
+        local data = title._hoverData
+        GameTooltip:AddLine(ResolveSpellDisplayName(id, data))
+        local triggerText = AURA_TRIGGER_TEXT[tostring(data.trigger) .. ":" .. tostring(data.unit)]
+        if triggerText then GameTooltip:AddLine(triggerText, 0.85, 0.85, 0.85, true) end
+        GameTooltip:AddLine(AURA_REGISTRATION_TEXT, 0.7, 0.7, 0.7, true)
+        if AURA_ROW_NOTES[id] then
+            GameTooltip:AddLine(AURA_ROW_NOTES[id], 0.7, 0.7, 0.7, true)
         end
     else
         GameTooltip:SetSpellByID(id)
@@ -3079,6 +3534,19 @@ local function ConfigureTitle(title, item, data)
             or 134400
         )
         nameText:SetText((data and data.name) or "Trash")
+    elseif item.isAura or item.isWindMap then
+        icon:SetTexture(
+            (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(data.spellID))
+            or 134400
+        )
+        nameText:SetText(ResolveSpellDisplayName(item.id, data))
+    elseif item.isCue then
+        local DT = GetModule()
+        icon:SetTexture(
+            (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(item.id))
+            or 134400
+        )
+        nameText:SetText(ResolveSpellDisplayName(item.id, data))
     else
         local DT = GetModule()
         icon:SetTexture(
@@ -3096,6 +3564,10 @@ local function ConfigureTitle(title, item, data)
     title._hoverRoleTag = (not isPhase and not isTrash) and data and data.role or nil
     title._hoverPhaseRule = isPhase and data or nil
     title._hoverPhaseIdx = isPhase and (item.ruleIndex or 1) or nil
+    title._hoverIsCue = item.isCue == true
+    title._hoverIsAura = item.isAura or false
+    title._hoverIsWindMap = item.isWindMap or false
+    title._hoverData = data or {}
     title:EnableMouse(true)
 end
 
@@ -3105,30 +3577,36 @@ GUIFrame:NewWidgetPool("dtd:title", ConstructTitle, function(title)
 end)
 
 ---------------------------------------------------------------------------------
--- Page builder. Called from the per-dungeon RegisterContent factory below.
+-- Page builder. Called by the Dungeon Bosses ("bosses") and Dungeon Trash
+-- ("trash") tabs with their view.
 ---------------------------------------------------------------------------------
-local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
+local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, view)
     local Theme = KE.Theme
     local db = GetSettingsDB()
     if not db then return yOffset end
 
-    local encounters = CollectEncountersForDungeon(dungeonKey)
+    local isTrashView = view == "trash"
+    local encounters = CollectEncountersForDungeon(dungeonKey)[view]
 
-    -- Empty-state for uncurated dungeons.
+    -- Empty state: no rows for this view. A tab switch is a same-item refresh
+    -- that skips the cleanup callbacks, so the other tab's preview goes here.
     if #encounters == 0 then
+        KE.GUI.DungeonTimers.HideDungeonPreviews()
         local card = GUIFrame:CreateCard(scrollChild, dungeonName, yOffset)
         local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
         local label = row:GetLabel("normal")
         KE:ApplyFontToText(label, "Expressway", 13, "OUTLINE")
         label:SetPoint("LEFT", row, "LEFT", 8, 0)
-        label:SetText("No curated encounters yet for this dungeon.")
+        label:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+        label:SetJustifyH("LEFT")
+        label:SetText(isTrashView
+            and "Trash alerts for this dungeon are not available yet."
+            or "No curated encounters yet for this dungeon.")
         card:AddRow(row, Theme.rowHeightLast, 0)
-        -- #encounters now counts trash-mob groups too, so this branch means the
-        -- dungeon has neither curated bosses NOR curated trash — nothing to add.
         return card:GetNextOffset()
     end
 
-    -- Header card with dungeon name + master-toggle reminder.
+    -- Header card with the dungeon's title + the view's how-to hint.
     local hintCard = GUIFrame:CreateCard(scrollChild, dungeonName, yOffset)
     local hintRow = GUIFrame:CreateRow(hintCard.content, Theme.rowHeightLast)
     local hint = hintRow:GetLabel("normal")
@@ -3136,7 +3614,9 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     hint:SetPoint("LEFT", hintRow, "LEFT", 8, 0)
     hint:SetPoint("RIGHT", hintRow, "RIGHT", -8, 0)
     hint:SetJustifyH("LEFT")
-    hint:SetText("Pick a spell, phase rule, or trash ability on the left to edit its overrides. Boss role filters require the General-page toggle.")
+    hint:SetText(isTrashView
+        and "Pick a trash ability on the left to edit it."
+        or "Pick a timer, cue, health phase or reminder sound on the left to edit it. Boss role filters need the Role Filter toggle on the General tab.")
     hint:SetTextColor(0.85, 0.85, 0.85)
     hintCard:AddRow(hintRow, Theme.rowHeightLast, 0)
     yOffset = hintCard:GetNextOffset()
@@ -3145,7 +3625,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- an existing list item (data shape changed), fall back to first row.
     -- The list now mixes numeric spellIds and string phase keys — both go
     -- through the same selectedSpellId field.
-    local state = GetState(dungeonKey)
+    local state = GetState(view, dungeonKey)
     local validIds = {}
     for _, enc in ipairs(encounters) do
         for _, sItem in ipairs(enc.spells) do validIds[sItem.id] = true end
@@ -3170,6 +3650,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         local mod = GetModule()
         if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
     end
+    if not IsWindMapKey(state.selectedSpellId) then HideWindMapPreview() end
     if not state.selectedSpellId then
         clearBossPreviews()
         HideTrashPreview()
@@ -3184,6 +3665,13 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         if mod and mod.ShowPhasePreview then
             mod:ShowPhasePreview(state.selectedSpellId)
         end
+    elseif IsWindMapKey(state.selectedSpellId) then
+        clearBossPreviews()
+        HideTrashPreview()
+        ShowWindMapPreview()
+    elseif IsAuraKey(state.selectedSpellId) then
+        clearBossPreviews()
+        HideTrashPreview()
     else
         local mod = GetModule()
         if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
@@ -3199,25 +3687,36 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     leftCol:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", Theme.paddingSmall, -yOffset)
 
     local listY = 0
-    local bossNum = 0
     for _, enc in ipairs(encounters) do
-        -- Encounter header. Bosses get a "B1 - ", "B2 - " prefix (BigWigs
-        -- in-fight shorthand); trash-mob groups render the mob name plainly so
-        -- they read as a separate block below the bosses.
+        -- Encounter header. Bosses get their true "B<n> - " ordinal (BigWigs
+        -- in-fight shorthand), a boss with only reminder sounds included; the
+        -- trash group renders plainly. A fixed width makes long names wrap
+        -- inside the column.
         local header = leftCol:Text()
         KE:ApplyFontToText(header, "Expressway", 15, "OUTLINE")
         header:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 4, -listY - 6)
+        header:SetWidth(LEFT_COL_WIDTH - 8)
+        header:SetJustifyH("LEFT")
+        header:SetWordWrap(true)
         if enc.isTrash then
             header:SetText(enc.name)
         else
-            bossNum = bossNum + 1
-            header:SetText(string_format("B%d - %s", bossNum, enc.name))
+            header:SetText(string_format("B%d - %s", enc.ordinal, enc.name))
         end
         header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
-        listY = listY + ENC_HEADER_HEIGHT
+        listY = listY + math.max(ENC_HEADER_HEIGHT, (header:GetStringHeight() or 0) + 12)
 
-        for _, sItem in ipairs(enc.spells) do
+        for index, sItem in ipairs(enc.spells) do
+            if index == enc.firstReminder then
+                local reminderHeader = leftCol:Text()
+                KE:ApplyFontToText(reminderHeader, "Expressway", 12, "OUTLINE")
+                reminderHeader:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 8, -listY - 4)
+                reminderHeader:SetText("Reminders")
+                reminderHeader:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+                listY = listY + REMINDER_HEADER_HEIGHT
+            end
             local kit = listRowPool:Acquire(leftCol)
+            kit._view = view
             kit._dungeonKey = dungeonKey
             kit._currentSelected = state.selectedSpellId  -- for hover paint
             kit.row:SetWidth(LEFT_COL_WIDTH)
@@ -3234,6 +3733,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- RIGHT COLUMN: tab bar + tab body for selected spell.
     ---------------------------------------------------------------------------
     local rightCol = GUIFrame:AcquirePooled("dtd:panel", scrollChild)
+    local panelGen = rightCol._keGen
     rightCol:SetPoint("TOPLEFT", leftCol, "TOPRIGHT", COL_GAP, 0)
     rightCol:SetPoint("RIGHT", scrollChild, "RIGHT", -Theme.paddingSmall, 0)
     rightCol:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], Theme.bgLight[4])
@@ -3256,6 +3756,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- Re-derive in case selection got resolved during validity-fallback above.
     selectedIsPhase = selectedSpell and selectedSpell.isPhase or false
     selectedIsTrash = selectedSpell and selectedSpell.isTrash or false
+    local selectedIsAura = selectedSpell and selectedSpell.isAura or false
+    local selectedIsWindMap = selectedSpell and selectedSpell.isWindMap or false
 
     local titleRow = GUIFrame:AcquirePooled("dtd:title", rightCol)
     titleRow:SetHeight(TITLE_ICON_SIZE)
@@ -3264,17 +3766,22 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     ConfigureTitle(titleRow, selectedSpell, selectedSpellData)
 
     -- Tab bar — uses CreateSubTabs which handles active state + RefreshContent.
-    local tabBar = GUIFrame:AcquirePooled("dtd:host", rightCol)
-    tabBar:SetPoint("TOPLEFT", titleRow, "BOTTOMLEFT", 0, -10)
-    tabBar:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
-    tabBar:SetHeight(28)
-
-    GUIFrame:CreateSubTabs(tabBar, 0, {
-        tabs     = DETAIL_TABS,
-        activeId = state.selectedTab,
-        onSwitch = function(newId) state.selectedTab = newId end,
-        fill     = true,
-    })
+    -- A reminder row has no tabs, so it gets no tab bar and its separator
+    -- follows the title at the title-to-tabs spacing.
+    local separatorAnchor, separatorGap = titleRow, -10
+    if not selectedIsAura and not selectedIsWindMap then
+        local tabBar = GUIFrame:AcquirePooled("dtd:host", rightCol)
+        tabBar:SetPoint("TOPLEFT", titleRow, "BOTTOMLEFT", 0, -10)
+        tabBar:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
+        tabBar:SetHeight(28)
+        GUIFrame:CreateSubTabs(tabBar, 0, {
+            tabs     = DETAIL_TABS,
+            activeId = state.selectedTab,
+            onSwitch = function(newId) state.selectedTab = newId end,
+            fill     = true,
+        })
+        separatorAnchor, separatorGap = tabBar, -4
+    end
 
     -- Subtle 1px line below the tab bar — visually anchors the tabs to
     -- the body content below them so they don't feel like floating
@@ -3284,15 +3791,29 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     tabSeparator:SetColorTexture(Theme.divider[1], Theme.divider[2], Theme.divider[3], Theme.divider[4])
     tabSeparator:SetPoint("LEFT",  rightCol, "LEFT",  DETAIL_PADDING, 0)
     tabSeparator:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
-    tabSeparator:SetPoint("TOP",   tabBar, "BOTTOM", 0, -4)
+    tabSeparator:SetPoint("TOP",   separatorAnchor, "BOTTOM", 0, separatorGap)
 
     -- Tab content area — anchored below the separator, fills remaining height.
     local tabBody = GUIFrame:AcquirePooled("dtd:host", rightCol)
     tabBody:SetPoint("TOPLEFT", tabSeparator, "BOTTOMLEFT", 0, -4)
     tabBody:SetPoint("BOTTOMRIGHT", rightCol, "BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING)
 
+    local auraBodyHeight, refitAuraPane
     if selectedSpell then
-        if selectedIsTrash then
+        if selectedIsAura or selectedIsWindMap then
+            local contentWidth = scrollChild:GetWidth() - Theme.paddingSmall * 2 - LEFT_COL_WIDTH - COL_GAP
+                - DETAIL_PADDING * 4
+            local function onResize(delta)
+                if refitAuraPane then refitAuraPane(delta) end
+            end
+            local _, bodyHeight
+            if selectedIsAura then
+                _, bodyHeight = BuildAuraSoundBody(tabBody, selectedSpell.id, contentWidth, onResize)
+            else
+                _, bodyHeight = BuildWindMapBody(tabBody, contentWidth, onResize)
+            end
+            auraBodyHeight = bodyHeight
+        elseif selectedIsTrash then
             if state.selectedTab == "Visibility" then
                 BuildTrashVisibilityTabBody(tabBody, selectedSpell)
             elseif state.selectedTab == "Display" then
@@ -3320,14 +3841,29 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     end
 
     -- Right column height — match left column so the page footprint is
-    -- predictable. Min sized to fit the tallest tab body:
-    --   Visibility ~408px stack + 97px chrome → 510
-    --   Display    ~640px stack + 97px chrome → 760 (with breathing room)
-    -- Display grew with Available Presets + Time Format + Bar Color
-    -- sections. Below this, content overflows the rightCol's BOTTOM
-    -- anchor and the Reset button row's hit zone.
-    local rightHeight = math.max(listY + Theme.paddingSmall, 760)
+    -- predictable. A tabbed row keeps the minimum that fits the tallest tab
+    -- body (Display: ~640px stack + 97px chrome → 760); below it, content
+    -- overflows the rightCol's BOTTOM anchor and the Reset button row's hit
+    -- zone. A reminder row has no tabs, so its pane fits its own content.
+    local paneHeight = 760
+    if auraBodyHeight then
+        paneHeight = DETAIL_PADDING + TITLE_ICON_SIZE + 10 + 1 + 4 + auraBodyHeight + DETAIL_PADDING
+    end
+    local rightHeight = math.max(listY + Theme.paddingSmall, paneHeight)
     rightCol:SetHeight(rightHeight)
+
+    -- The pane is the page's lowest frame, so the scroll height moves with it.
+    if auraBodyHeight then
+        refitAuraPane = function(delta)
+            -- A later build may hold this panel again; its generation tells them apart.
+            if rightCol._keGen ~= panelGen or rightCol._keState ~= "used" then return end
+            paneHeight = paneHeight + delta
+            local fitted = math.max(listY + Theme.paddingSmall, paneHeight)
+            scrollChild:SetHeight(scrollChild:GetHeight() + fitted - rightHeight)
+            rightHeight = fitted
+            rightCol:SetHeight(fitted)
+        end
+    end
 
     -- Two-column: advances past the taller column, which no GetNextOffset() reports.
     yOffset = yOffset + math.max(listY, rightHeight) + Theme.paddingSmall

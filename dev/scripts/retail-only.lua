@@ -12,6 +12,7 @@ return {
     "KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersCfg.lua",
     "KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersDungeon.lua",
     "KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersNameplates.lua",
+    "KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersProviderSummary.lua",
     "KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersTexts.lua",
     "KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-GroupFinderPanel.lua",
     "KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-LFGQuickCreate.lua",

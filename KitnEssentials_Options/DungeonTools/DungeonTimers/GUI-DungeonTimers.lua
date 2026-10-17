@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DungeonTimers.lua                                   ║
 -- ║  Single "Dungeon Timers" sidebar entry: tabbed host      ║
--- ║  (Dungeons | General | Bars | Texts | Nameplates) plus   ║
--- ║  the Dungeons tab — Dungeon + Season dropdowns over the  ║
--- ║  per-dungeon editor.                                     ║
+-- ║  (Dungeon Bosses | Dungeon Trash | General | Bars |      ║
+-- ║  Texts | Nameplates) plus the two dungeon tabs —         ║
+-- ║  shared Dungeon + Season dropdowns over the editor.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -17,18 +17,23 @@ local GetInstanceInfo = GetInstanceInfo
 KE.GUI = KE.GUI or {}
 KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
+-- Read only by the in-game load check; each source change to these pages
+-- raises it, so the check can tell the final pages from older ones.
+KE.GUI.DungeonTimers.GUIRevision = 14
+
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
     return KE.db.profile.DungeonTimers
 end
 
--- Session-sticky selection: dropdown picks stick across tab switches and
--- in-place refreshes, but the priority (current dungeon > saved >
--- newest-season fallback) re-runs whenever the user LEAVES the page —
--- sidebar navigation or GUI close drops the sticky pick, and a profile
--- switch hands the page a different settings table, which resets it too.
--- The current-dungeon override never writes LastViewed — standing in a
--- dungeon must not erase the selection the user chose deliberately.
+-- Session-sticky selection, shared by the Dungeon Bosses and Dungeon Trash tabs:
+-- dropdown picks stick across tab switches and in-place refreshes, but the
+-- priority (current dungeon > saved > newest-season fallback) re-runs
+-- whenever the user LEAVES the page — sidebar navigation or GUI close drops
+-- the sticky pick, and a profile switch hands the page a different settings
+-- table, which resets it too. The current-dungeon override never writes
+-- LastViewed — standing in a dungeon must not erase the selection the user
+-- chose deliberately.
 local activeSeason, activeDungeon, activeDB
 
 local function ResetActiveSelection()
@@ -65,19 +70,20 @@ local function FindEntry(key)
     end
 end
 
-GUIFrame:RegisterContent("DTimers_Dungeons", function(scrollChild, yOffset)
-    local Theme = KE.Theme
-    local db = GetSettingsDB()
-    if not db then return yOffset end
-
-    -- Tab switches are in-place refreshes (same sidebar item), so the
-    -- cleanup callbacks don't fire — each tab hides the previews the
-    -- other tabs may have left running.
+-- Tab switches are in-place refreshes (same sidebar item), so the cleanup
+-- callbacks don't fire — each tab hides the previews the other tabs may have
+-- left running. The dungeon page itself picks which dungeon preview shows.
+local function HideOtherTabPreviews()
     local DT_GUI = KE.GUI.DungeonTimers
     if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
     if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
     if DT_GUI.HideNameplatePreview then DT_GUI.HideNameplatePreview() end
+end
 
+-- Returns the next offset and the selected registry entry.
+local function BuildSelectionCard(scrollChild, yOffset, db)
+    local Theme = KE.Theme
+    local DT_GUI = KE.GUI.DungeonTimers
     ResolveActive(db)
 
     local registry = KE.DungeonTimerDungeons
@@ -91,7 +97,7 @@ GUIFrame:RegisterContent("DTimers_Dungeons", function(scrollChild, yOffset)
         -- icon renders in the menu rows and the selected label alike.
         dungeonOptions[#dungeonOptions + 1] = {
             key = d.key,
-            text = ("|T%d:16:16:0:0:64:64:5:59:5:59|t %s"):format(d.iconID, d.name),
+            text = KE.GetDungeonTimerDungeonLabel(d.iconID, d.name),
         }
     end
 
@@ -131,17 +137,34 @@ GUIFrame:RegisterContent("DTimers_Dungeons", function(scrollChild, yOffset)
     })
     row:AddWidget(seasonDropdown, 0.5)
     card:AddRow(row, Theme.rowHeightLast, 0)
-    yOffset = card:GetNextOffset()
+    return card:GetNextOffset(), FindEntry(activeDungeon)
+end
 
-    local entry = FindEntry(activeDungeon)
-    if entry and DT_GUI.BuildDungeonPage then
-        yOffset = DT_GUI.BuildDungeonPage(scrollChild, yOffset, entry.key, entry.name)
-    end
-    return yOffset
-end)
+local function RegisterDungeonView(contentId, view)
+    GUIFrame:RegisterContent(contentId, function(scrollChild, yOffset)
+        HideOtherTabPreviews()
+        local db = GetSettingsDB()
+        if not db then return yOffset end
+        local entry
+        yOffset, entry = BuildSelectionCard(scrollChild, yOffset, db)
+        local DT_GUI = KE.GUI.DungeonTimers
+        if entry and DT_GUI.BuildDungeonPage then
+            yOffset = DT_GUI.BuildDungeonPage(scrollChild, yOffset, entry.key, entry.name, view)
+        elseif DT_GUI.HideDungeonPreviews then
+            DT_GUI.HideDungeonPreviews()
+        end
+        return yOffset
+    end)
+end
+
+-- The bosses tab keeps its original id, which FIRST_TAB and the spell-preview
+-- guard read.
+RegisterDungeonView("DTimers_Dungeons", "bosses")
+RegisterDungeonView("DTimers_Trash", "trash")
 
 GUIFrame:RegisterTabbedContent("DTimers_Main", {
-    { id = "DTimers_Dungeons",   label = "Dungeons" },
+    { id = "DTimers_Dungeons",   label = "Dungeon Bosses" },
+    { id = "DTimers_Trash",      label = "Dungeon Trash" },
     { id = "DTimers_General",    label = "General" },
     { id = "DTimers_Bars",       label = "Bars" },
     { id = "DTimers_Texts",      label = "Texts" },
