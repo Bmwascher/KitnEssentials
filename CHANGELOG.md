@@ -1,313 +1,190 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.11.11
-
-### Addon Theme
-
-- **NEW:** Ulduar, a white theme preset. Where text sits on a light accent,
-  it turns dark so it stays readable
-
-### Healer Mana
-
-- A healer from another realm now shows their spec icon
-- New profiles get a new look: Healer Mana sits at the party frames, with
-  larger icons (38) and text, and Hide when my spec is a healer is on. It
-  stays off by default. If you already set up Healer Mana, it keeps its
-  current look, place and setting
-
-### CC Tracker
-
-- New profiles show up to 5 enemies (was 15), 10 pixels lower. It stays off
-  by default. If you already set up CC Tracker, it keeps your values
-
-### Automation
-
-- Hide Helptips now follows a profile switch, as Hide Zone Text does
-
-### Settings Window
-
-- After a UI scale or resolution change, the settings window fits itself
-  to the screen again from its saved size, staying collapsed if it was
-- Sound dropdowns list None first, then the sounds from A to Z, Great
-  Vault Alert's included
-
-### Skinning
-
-- BugSack: the new Options tab, its two dropdowns and its checkboxes take
-  KE's skin, and the wipe button no longer touches the window border
-
----
-
-## v4.11.10
-
-### Party Cooldowns
-
-- **NEW:** Healer Externals on its tab, on by default. With Party Cooldowns
-  on, in a party, a small box shows each party healer's external: Pain
-  Suppression, Guardian Spirit, Ironbark, Life Cocoon, Blessing of
-  Sacrifice or Time Dilation. Never solo, in a raid or in an arena
-- An icon is full color while ready. When its buff lands on anyone in the
-  party, you included, it turns gray with the time left in its middle.
-  Your own external is not shown
-- When a key starts, externals with a cooldown of 1:30 or longer go back
-  to ready; Time Dilation keeps counting
-- The tab sets each external's on/off and seconds, the icon size, spacing,
-  Grow, Timer Text and text size. The switch sits in the card's title bar
-- By default the box sits one pixel above Healer Mana. While Healer Mana is
-  off, the box goes to its own spot left of the screen's center
-- Attach to Healer Mana places the box one pixel above or below Healer
-  Mana (Side: Top or Bottom) and copies Healer Mana's icon size. The
-  Position card also offers Anchored To and strata
-
-### Healer Mana
-
-- The Healer Mana display has a frame name, KitnEssentialsHealerMana, so
-  other displays can anchor to it with Select Frame
-
----
-
-## v4.11.9
-
-### Party Cooldowns
-
-- **NEW:** Potion Bars on the Potions tab, on by default. With Party
-  Cooldowns on, in a party, one movable box shows a bar per party member
-  for their combat potion's 5 minute cooldown: a potion icon, their name
-  in class color and the time left. Never in a raid or solo
-- Show Ready Bars, on by default, keeps a full "Ready" bar for each member
-  whose potion is ready. Include Yourself on this tab, on by default, adds
-  your own bar
-- Starting a key clears every bar. A party member's second potion, drunk
-  while the one from before the key started is still up, starts their bar.
-  Your own bar starts from your potion cast. Healing potions are not
-  tracked
-- Bar Display sets width, height, Grow (Down or Up), spacing, Timer Text
-  and text size. Colors sets Bar Color, Background Color (its opacity shows
-  what is behind the bars), Class Color Bars and Class Color Names
-- The Position card places the box, with Anchored To and strata, and the
-  box has an Edit Mode mover. The switch sits in the Potion Bars card's
-  title bar, and the potion list editor moves to this tab
-- By default the bars are 225 by 23 at the left edge of the screen: light
-  blue on a dark background at 80% opacity, with class-colored names
-
----
-
-## v4.11.8
+## v4.12.0
 
 ### Party Cooldowns
 
 - **NEW:** Party Buffs is now Party Cooldowns. Beside each teammate's party
   frame, a row shows their spec's offensive and personal defensive
-  cooldowns and their racial at all times, and their trinket buffs while
-  active. If you
-  already have Party Buffs on, the new rows show without any change to
-  your settings
-- Each cooldown icon is full color when ready and shows its timer while
-  its buff is up. After the buff falls it turns gray with the time left,
-  such as "1:14"
+  cooldowns and their racial at all times, plus trinket buffs while active.
+  If you already use Party Buffs, the new rows show with no change to your
+  settings
+- An icon is full color when ready, shows its timer while its buff is up,
+  then turns gray with the time left, such as "1:14". Earth Elemental,
+  Invoke Xuen and Summon Infernal show their summon's time left first
 - Lengths are listed per spec, since the game hides real cooldowns. When a
   key starts, class spells with a cooldown of 1:30 or longer go back to
   ready; trinkets keep counting. A cooldown already running when you
   /reload or join shows as ready until its next use
-- Earth Elemental, Invoke Xuen and Summon Infernal show their summon's
-  time left (30, 20 and 30 seconds), then go gray for the cooldown
-- Talents are read from teammates. Ice Cold, Sentinel and Incarnation:
-  Chosen of Elune swap their icon. Invoke Xuen (Xuen's Bond), Ascendance
-  (First Ascendant), Summon Infernal (Inferno), Feral's Convoke the
-  Spirits (Ashamane's Guidance) and Desperate Prayer (Angel's Mercy) count
-  the shorter cooldown only with that talent. Earth Elemental, Summon
-  Infernal, Breath of Sindragosa, Convoke the Spirits and Power Infusion
-  show only for a teammate with the talent
-- Frostwyrm's Fury is on the Frost Death Knight list, off by default
+- Talents are read from teammates, so talent-swapped icons, shorter
+  cooldowns and talent-only spells show correctly. A ready check outside a
+  key reads them again
 - Stoneform, Fireblood and Shadowmeld show for Dwarf, Dark Iron Dwarf and
-  Night Elf teammates, after their spec's spells. Racials is on the Tracked
-  card, on by default
-- A ready check outside a key reads teammates' talents again, so a talent
-  change made before the key shows. An offline party member no longer
-  delays reading the others
-- Rows stay through zone changes and loading screens, and running
-  cooldowns keep counting
+  Night Elf teammates. Frostwyrm's Fury is on the Frost Death Knight list,
+  off by default
 - **NEW:** Glow While Active, on by default: an icon glows while its buff
-  or summon is up, as a yellow Pulse Border by default. The external,
-  potion and trinket buff icons glow while they show whenever this glow is
-  on
+  or summon is up, as a yellow Pulse Border by default. Buff icons glow
+  too while this is on
+- **NEW:** Max Cooldown Icons (default 6) sets how many cooldown icons come
+  before the buff icons. Max Icons Per Member is now Max Active Buff Icons,
+  and Timer Size sets both the timer and the gray countdown
+- **NEW:** Icons Per Row (default 14) wraps a row onto more lines, and Grow
+  picks which way they go. The Healer tab has its own Icons Per Row
+  (default 3), Icon Size (default 32) and Grow, so Use in Healer Specs rows
+  now wrap at 3 icons of 32 pixels until you change them
 - The Tracked card lists Class Cooldowns (was Offensive CDs, now with
   defensives), Trinkets, Externals, Potions and Racials as checkboxes.
-  Include Yourself, off by default, adds the row to your own frame
-- Externals now start off. If you used Party Buffs, external icons stop
-  showing until you tick Externals again
-- Big Defensives is removed; defensives now come from each spec's list.
-  Spells you added by hand to the Offensive CDs list no longer show
-- Time-Left Swipe is now off by default. If you never changed it, tick it
-  on the Display card to get the swipe back
-- **NEW:** Max Cooldown Icons on the Display card sets how many cooldown
-  icons come before the buff icons (default 6). Max Icons Per Member is now
-  Max Active Buff Icons. Timer Text, Cooldown Text and Time-Left Swipe
-  share one row, and Timer Size sets both the timer and the gray countdown
-- **NEW:** Icons Per Row and Grow on the Position card. Icons Per Row wraps
-  a row after that many icons (default 14, one line). Grow picks which way
-  the extra lines go, offering only directions away from the party frame.
-  With Center, the first line sits level with the middle of the party frame
-- The Position card's Healer tab has its own Icons Per Row (default 3),
-  Icon Size (default 32) and Grow. If you use Use in Healer Specs, healer
-  rows now wrap at 3 icons of 32 pixels until you change them. The note
-  beside Use in Healer Specs is gone
-- Frame Strata is removed. Rows always sit at the party frame's strata, so
-  a saved Low, Medium, High or Dialog no longer applies
-- The page has three tabs: Cooldowns, Potions and Healer Externals. The
-  Class Cooldowns list has a class dropdown, a heading per spec, and for
-  each spell an on/off box, a Spell CD box and up and down arrows. The
-  Trinkets list has a Trinket Cooldowns card for each trinket's length
-- The settings preview shows sample teammates with their own spec's
-  spells, racial, trinket, potion and external, filled up to your Max
-  Cooldown Icons and Max Active Buff Icons. The real rows hide while the
-  preview shows
+  Include Yourself, off by default, adds a row to your own frame
+- The Class Cooldowns list has a class dropdown, a heading per spec, and
+  per spell an on/off box, a Spell CD box and up and down arrows. Trinkets
+  have a Trinket Cooldowns card for their lengths
+- The settings preview shows sample teammates filled to your icon limits,
+  and hides the real rows while it shows
+- Changed for Party Buffs users: Externals now start off (tick it again to
+  bring them back); Time-Left Swipe is off by default; Big Defensives and
+  spells added by hand to Offensive CDs are gone; Frame Strata is removed,
+  as rows always sit at the party frame's strata
+
+### Potion Bars
+
+- **NEW:** Potion Bars on the Party Cooldowns page's Potions tab, on by
+  default. In a party, one movable box shows a bar per member for their
+  combat potion's 5 minute cooldown, with their name in class color and the
+  time left. Never in a raid or solo
+- Starting a key clears every bar. A second potion drunk while a potion
+  from before the key is still up starts that member's bar. Your own bar
+  starts from your potion cast. Healing potions are not tracked
+- Show Ready Bars and Include Yourself, both on by default, keep a "Ready"
+  bar for members whose potion is ready and add your own bar
+- Settings for size, Grow, spacing, timer text, bar and background colors
+  (the background can be see-through), class colors, position and strata,
+  with an Edit Mode mover
+
+### Healer Externals
+
+- **NEW:** Healer Externals on the Party Cooldowns page, on by default. In
+  a party, a small box shows each party healer's external: Pain
+  Suppression, Guardian Spirit, Ironbark, Life Cocoon, Blessing of
+  Sacrifice or Time Dilation. Never solo, in a raid or in an arena
+- An icon is full color while ready and turns gray with the time left when
+  its buff lands on anyone in the party. Your own external is not shown.
+  When a key starts, externals of 1:30 or longer go back to ready
+- By default the box sits just above Healer Mana, or left of the screen's
+  center while Healer Mana is off. Attach to Healer Mana places it above or
+  below Healer Mana and matches its icon size
 
 ### Glow Settings
 
-- The Alert glow style animates six times faster at the same Speed
 - Glows on aura icons start and stop with their aura (Party Cooldowns, Aura
   Externals, Time Spiral, Movement Buffs and PI Assist), so a hidden icon
-  no longer runs its glow. A showing glow can restart its animation after a
-  settings change or a zone change
+  no longer runs its glow
+- The Alert glow style animates six times faster at the same Speed
 
----
+### Interrupt Tracker
 
-## v4.11.7
+- Inside a key, a teammate no longer shows twice, on a starred bar and on
+  their Ready row. Every kick lands on one teammate's row
+- When the game hides who kicked, the kick goes to the teammate the Damage
+  Meter names, or else the one most likely to have used it: a ready kick
+  first, then the shortest kick cooldown, then party order. These guesses
+  are not marked and can now and then be wrong
+- The * mark and the separate kick record bars are gone, and the frame is
+  sized for five rows. Max Records and Teammate Kick Duration are removed
+- Warrior and Protection Paladin rows count their kick's own cooldown
 
-### Automation
+### Damage Meter
 
-- Hide Zone Text is now the only setting that hides zone text, and it
-  works whether Automation is on or off. Your profiles keep zone text
-  hidden wherever it was hidden before
-- Hide Zone Text moves into the Interface Cleanup card, beside Hide
-  Helptips. You can change it only while Automation is on. Cinematics &
-  Dialogs and Interface Cleanup each show their four options in two rows of
-  two
+- Player names end just before the damage or healing value, so a long
+  value no longer covers the name
+- Spell, enemy and death recap rows have two lines: the name across the
+  full row, with the numbers below in smaller, dimmer text. Heal rows in
+  the death recap name the healer
+- With Only on Mouseover ticked, the header icons hide again when the
+  cursor leaves the header, even across a splitter between docked windows
 
-### Dark Theme
+### Healer Mana
 
-- The Hide box on the On-Screen Messages tab's Zone names row is gone. Use
-  Automation's Hide Zone Text instead
-- The Zone names Preview shows the zone names again, and no longer shows
-  the action and error messages with them
-
----
-
-## v4.11.6
-
-### Skinning
-
-- Ace3 addon settings windows: sliders take KE's slider look, an accent
-  thumb and fill on a dark plate, and turn gray when the option is
-  disabled
-- Ace3 dropdown lists follow the Addon Config Windows (AceGUI) skin. On,
-  they are skinned as soon as they are built; off, they stay as the addon
-  draws them
-- Hover highlights on skinned buttons, icons and list rows stay one pixel
-  inside their border after a UI scale, resolution or Panel Scale change
-- The Mythic+ tab's weekly affixes keep their square skin every time the
-  tab refreshes, not only the first time
-
----
-
-## v4.11.5
-
-### Settings Window
-
-- Dragging the resize grip grows or shrinks the window from its top-left
-  corner. It stops at the screen's right and bottom edges instead of
-  pushing the window sideways
-- After a resize or a move, and each time it opens, the window sits on
-  whole pixels. A saved position off the screen is moved back onto it, and
-  a saved size too big for the screen is cut down to fit
-- Minimizing the window keeps its title bar where it is
-
----
-
-## v4.11.4
-
-### Frame Anchoring
-
-- Choosing or typing a Select Frame anchor that is the display itself,
-  sits inside it, is anchored to it, or is not a usable frame no longer
-  causes a Lua error. The display goes to the screen at its saved points,
-  keeps the saved name, and a chat line says why, once per name per session
-- Edit Mode measures a drag against the anchor the display really uses, so
-  a display placed on the screen this way no longer jumps when you let go
-
-### Combat Texts
-
-- Combat Texts no longer takes in an attached display that Combat Texts is
-  itself anchored to. That display keeps its own place, settings and Edit
-  Mode mover, and a chat line explains once combat ends
-- On the No Movement Alert, Combat Potion Ready, Havoc Tracker, Hunter's
-  Mark Tracking, Missing Forms and Pet Status pages, the Position and Font
-  cards follow whether the display is really attached. With Attach to
-  Combat Texts ticked while Combat Texts is off, they show, with a note
-  under the Attach box saying why
-
-### Shaman Proc Cooldowns
-
-- The Position card offers Anchored To, and Edit Mode drags the display in
-  the chosen frame's space. The page also gets the Combat Texts note
-
----
-
-## v4.11.3
+- A healer from another realm now shows their spec icon
+- New profiles get a new look: Healer Mana sits at the party frames with
+  larger icons and text, and hides while your spec is a healer. It stays
+  off by default, and an existing setup keeps its look and place
+- Other displays can now pick Healer Mana as their Select Frame anchor
+  (KitnEssentialsHealerMana)
 
 ### DoT Tracker
 
 - The target timer shows whole seconds with no unit letter ("12", not
-  "12 s"), rounded up. Timers over 90 seconds also show seconds instead of
-  minutes
-- If the game refuses to build one DoT's display, that DoT builds again
-  when you leave combat or turn the tracker off. One refused DoT no longer
-  holds every DoT's count down until a /reload
-- An enemy whose nameplate the tracker cannot follow counts for no DoT and
-  gives its place to the next enemy at once. It is tried again on the next
-  scan
+  "12 s"), at every length
+- A DoT the game refuses to build no longer holds every DoT's count down
+  until a /reload: it builds again when you leave combat
+- An enemy whose nameplate the tracker cannot follow gives its place to the
+  next enemy at once
 
 ### CC Tracker
 
 - An enemy whose nameplate the tracker cannot follow no longer holds an
-  empty row. The row goes to the next enemy, and the refused enemy is tried
-  again on the next scan
+  empty row
+- New profiles show up to 5 enemies (was 15), 10 pixels lower. An existing
+  setup keeps its values
 
----
+### Addon Theme
 
-## v4.11.2
+- **NEW:** Ulduar, a white theme preset. Text on a light accent turns dark
+  so it stays readable
 
-### Damage Meter
+### Frame Anchoring
 
-- Player names on the bars end just before the damage or healing value, so
-  a long value no longer covers the name. The name is cut short instead
-- Spell and enemy breakdown rows have two lines: the name across the full
-  row, with the numbers below it in smaller, dimmer text. Rows grow taller
-  to fit both lines
-- Death recap rows have two lines: the time and spell, then the numbers and
-  the source in gray. Heal rows now name the healer
-- With Only on Mouseover ticked, the header icons hide again once the
-  cursor leaves the header, even when it leaves across a splitter between
-  docked windows
+- Choosing a Select Frame anchor that is the display itself, sits inside
+  it, is anchored to it, or is not a usable frame no longer causes a Lua
+  error. The display goes to the screen at its saved points, and a chat line
+  says why
+- Edit Mode measures a drag against the anchor the display really uses, so
+  the display no longer jumps when you let go
 
----
+### Combat Texts
 
-## v4.11.1
+- Combat Texts no longer takes in an attached display that it is itself
+  anchored to. That display keeps its own place and Edit Mode mover
+- On the pages of displays that can attach to Combat Texts, the Position
+  and Font cards follow whether the display is really attached, with a note
+  when Combat Texts is off
 
-### Interrupt Tracker
+### Shaman Proc Cooldowns
 
-- Inside a key, a teammate no longer shows twice, once on a starred bar and
-  once on their Ready row. Every kick now lands on one teammate's row
-- When the game hides who kicked, the kick goes on the row of the teammate
-  the Damage Meter names. If it names no one, the kick goes to the teammate
-  most likely to have used it: one whose kick was ready, then the shortest
-  kick cooldown, then party order. A kick no row can take is not shown
-- These guesses are not marked and can now and then be wrong. The * mark
-  and the separate kick record bars are gone, and the frame is sized for
-  five rows
-- Max Records and Teammate Kick Duration are removed. Warrior and
-  Protection Paladin rows count their kick's own cooldown
+- The Position card offers Anchored To, and Edit Mode drags the display in
+  the chosen frame's space
+
+### Settings Window
+
+- The resize grip grows or shrinks the window from its top-left corner and
+  stops at the screen's right and bottom edges
+- The window stays on whole pixels and on the screen, fits itself again
+  after a UI scale or resolution change, and keeps its title bar in place
+  when minimized
+- Sound dropdowns list None first, then the sounds from A to Z
+
+### Automation
+
+- Hide Zone Text is now the only setting that hides zone text, and works
+  whether Automation is on or off. Your profiles keep zone text hidden
+  wherever it was hidden
+- Hide Zone Text moves into the Interface Cleanup card, beside Hide
+  Helptips; you can change it while Automation is on. Both follow a
+  profile switch
+
+### Dark Theme
+
+- The Zone names row on the On-Screen Messages tab loses its Hide box (use
+  Automation's Hide Zone Text), and its Preview shows only the zone names
+
+### Skinning
+
+- Ace3 settings windows: sliders take KE's slider look, and dropdown lists
+  follow the Addon Config Windows (AceGUI) skin
+- Hover highlights stay one pixel inside their border after a UI scale,
+  resolution or Panel Scale change
+- The Mythic+ tab's weekly affixes keep their square skin on every refresh
+- BugSack: the Options tab, its dropdowns and its checkboxes take KE's skin
 
 ---
 

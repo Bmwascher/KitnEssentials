@@ -2,10 +2,10 @@
 ## Notes: Standalone combat, utilities, quality of life, dungeons, and skinning modules for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## X-Manual-Version: 4.11.11
+## X-Manual-Version: 4.12.0
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
 ## SavedVariablesPerCharacter: KitnEssentialsCharDB
-## Interface: 120100
+## Interface: 120105
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
 ## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
 ## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r

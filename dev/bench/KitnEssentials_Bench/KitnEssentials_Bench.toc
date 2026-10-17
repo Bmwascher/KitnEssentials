@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120105
 ## Title: KitnEssentials Bench
 ## Notes: Benchmark-only staging for the aura glow cost gate. Never shipped.
 ## Dependencies: KitnEssentials
