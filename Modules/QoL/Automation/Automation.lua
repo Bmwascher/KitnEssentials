@@ -314,11 +314,51 @@ function AU:SyncFromCVars()
     end
 end
 
+-- Hide Zone Text --
+
+-- Master-independent, like Hide Helptips. ZoneText_OnEvent is the only code
+-- that shows ZoneTextFrame and SubZoneTextFrame, so without these events no
+-- zone text appears, and a direct Show (the Zone names preview) still draws.
+local ZONE_TEXT_EVENTS = { "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA" }
+-- Only the events KE removed, so an untick never restores one another addon removed.
+local zoneTextTaken
+
+-- Side-effect free so the bookkeeping is testable without a live frame.
+-- Returns the events to unregister, the events to register, and the new record.
+local function ZoneTextEventChanges(hide, taken, frame)
+    if hide then
+        if taken then return nil, nil, taken end
+        local take = {}
+        for _, event in ipairs(ZONE_TEXT_EVENTS) do
+            if frame:IsEventRegistered(event) then take[#take + 1] = event end
+        end
+        return take, nil, take
+    end
+    return nil, taken, nil
+end
+
+local function ApplyHideZoneText()
+    local frame = _G.ZoneTextFrame
+    if not frame then return end
+    local unregister, register
+    unregister, register, zoneTextTaken = ZoneTextEventChanges(AU.db.HideZoneText == true, zoneTextTaken, frame)
+    if unregister then
+        for _, event in ipairs(unregister) do frame:UnregisterEvent(event) end
+    end
+    if register then
+        for _, event in ipairs(register) do frame:RegisterEvent(event) end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
+-- A profile switch calls UpdateDB on every module, enabled or not, but
+-- ApplySettings only on a module enabled before and after it, so the
+-- master-independent zone text hide follows the profile from here.
 function AU:UpdateDB()
     self.db = KE.db.profile.Automation
+    ApplyHideZoneText()
 end
 
 -- Hide Helptips --
@@ -665,24 +705,6 @@ local function SetupHideEventToasts()
                 end
             end)
         end)
-    end
-end
-
--- Hide Zone Text --
-
-local function SetupHideZoneText()
-    if AU._zoneTextHooked then return end
-    AU._zoneTextHooked = true
-    local frames = { ZoneTextFrame, SubZoneTextFrame }
-    for _, frame in ipairs(frames) do
-        if frame then
-            hooksecurefunc(frame, "Show", function(self)
-                if not AU.db or not AU.db.Enabled then return end
-                if AU.db.HideZoneText then
-                    self:Hide()
-                end
-            end)
-        end
     end
 end
 
@@ -3262,11 +3284,11 @@ end
 ---------------------------------------------------------------------------------
 function AU:ApplySettings()
     ApplyHideHelptips()                    -- master-independent, runs first
+    ApplyHideZoneText()                    -- master-independent
     if not self.db.Enabled then return end
     SetupSkipCinematics()
     self:SetupTalkingHeadHider()
     SetupHideEventToasts()
-    SetupHideZoneText()
     SetupAutoSellRepair()
     SetupRepairReport()
     SyncRepairReportEvents()
@@ -3312,8 +3334,8 @@ end
 -- Reverses every effective-state-gated feature with the master now off.
 -- Each apply re-reads AU.db.Enabled itself, so this never flips a db key --
 -- the player's settings survive the module being disabled and come back
--- when it is re-enabled. Hide Helptips is deliberately excluded: it is
--- master-independent and unaffected by this transition.
+-- when it is re-enabled. Hide Helptips and Hide Zone Text are deliberately
+-- excluded: both are master-independent and unaffected by this transition.
 function AU:TeardownPorts()
     ApplyNoBossLoot()
     SetupAutoUnwrapCollections()

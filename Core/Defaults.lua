@@ -2437,7 +2437,6 @@ local Defaults = {
                     QuestTitleSize = 13,
                 },
                 ZoneText = {
-                    Hide = false,
                     SubZone = {
                         Size = 20,
                     },
@@ -2738,12 +2737,13 @@ function KE:MigrateModuleEnableDefaults()
     end
 end
 
--- Saved-value migrations inside blocks AceDB already registers. Two entry
--- shapes: a `block`/`old`/`new` rename, and a `path` array whose last element
--- is converted in place. Same once-only, per-entry marker as the
--- enable-default migration above, but its own record table: an id here names a
--- migration, an id there is a dotted profile path, and one table would leave a
--- later reader unable to tell them apart.
+-- Saved-value migrations inside blocks AceDB already registers. Three entry
+-- shapes: a `block`/`old`/`new` rename, a `path` array whose last element is
+-- converted in place, and a `merge` function that reads the whole profile,
+-- for a setting folded together from two blocks. Same once-only, per-entry
+-- marker as the enable-default migration above, but its own record table: an
+-- id here names a migration, an id there is a dotted profile path, and one
+-- table would leave a later reader unable to tell them apart.
 local KEY_RENAME_RECORD = "KeyRenames"
 
 -- `convert` turns the old saved value into the new one and is called with nil
@@ -2761,6 +2761,53 @@ local function RetireGroupModes(value)
 end
 
 local function DeleteKey() return nil end
+
+local function SubTable(parent, key)
+    local value = type(parent) == "table" and parent[key] or nil
+    if type(value) == "table" then return value end
+    return nil
+end
+
+-- Hide Zone Text was two settings. Automation's hid zone text only while
+-- Automation was on; On-Screen Messages' only while that module was on and not
+-- standing down for ElvUI. The merged setting is ticked exactly where one of
+-- them was in effect. An import is converted only when it still carries the
+-- old key: an export without it may tick Hide Zone Text with Automation off.
+---@param profile table
+---@param elvuiLoaded boolean
+---@param fromImport boolean
+---@return boolean|nil
+function KE.ZoneTextCarryOver(profile, elvuiLoaded, fromImport)
+    local messages = SubTable(SubTable(profile, "Skinning"), "Messages")
+    local zone = SubTable(messages, "ZoneText")
+    local oldHide = zone and zone.Hide
+    if fromImport and oldHide == nil then return nil end
+
+    local automation = SubTable(profile, "Automation")
+    if automation and automation.Enabled == true and automation.HideZoneText == true then
+        return true
+    end
+    if not (messages and messages.Enabled == true and oldHide == true) then return false end
+    local useElvUI = SubTable(profile, "UseElvUI")
+    local deferring = elvuiLoaded and not (useElvUI and useElvUI.Enabled == false)
+    return not deferring
+end
+
+-- The migration specs run the appliers without C_AddOns.
+local function ElvUILoaded()
+    local addons = _G.C_AddOns
+    return addons and addons.IsAddOnLoaded and addons.IsAddOnLoaded("ElvUI") == true or false
+end
+
+local function MergeZoneTextHide(profile, fromImport)
+    local hidden = KE.ZoneTextCarryOver(profile, ElvUILoaded(), fromImport)
+    if hidden == nil then return end
+    if hidden and profile.Automation == nil then profile.Automation = {} end
+    local automation = SubTable(profile, "Automation")
+    if automation then automation.HideZoneText = hidden or nil end
+    local zone = SubTable(SubTable(SubTable(profile, "Skinning"), "Messages"), "ZoneText")
+    if zone then zone.Hide = nil end
+end
 
 local KEY_RENAMES = {
     {
@@ -2876,6 +2923,7 @@ local KEY_RENAMES = {
     { id = "BossDebuffs.Delete", path = { "BossDebuffs" }, convert = DeleteKey },
     { id = "GatewayAlert.Delete", path = { "GatewayAlert" }, convert = DeleteKey },
     { id = "Dungeons.WarpDepleteForces.Delete", block = "Dungeons", old = "WarpDepleteForces", new = "WarpDepleteForces", convert = DeleteKey },
+    { id = "ZoneText.HideMerge", merge = MergeZoneTextHide },
 }
 
 -- Resolves one entry against one profile: the table holding the key, the old
@@ -2903,15 +2951,20 @@ end
 --- absent old key is skipped, not converted: the new key may hold the user's
 --- value, and absence resolves to the new default either way (a rename's
 --- convert(nil) is the new default, an in-place or delete converter's is nil,
---- and FillProfileDefaults supplies the rest).
+--- and FillProfileDefaults supplies the rest). A `merge` entry is told the
+--- profile is an import and applies its own rule.
 ---@param profile table
 function KE:MigrateProfileKeys(profile)
     if type(profile) ~= "table" then return end
     for i = 1, #KEY_RENAMES do
         local entry = KEY_RENAMES[i]
-        local block, oldKey, newKey = ResolveRename(profile, entry)
-        if type(block) == "table" and block[oldKey] ~= nil then
-            ApplyRename(block, oldKey, newKey, entry.convert)
+        if entry.merge then
+            entry.merge(profile, true)
+        else
+            local block, oldKey, newKey = ResolveRename(profile, entry)
+            if type(block) == "table" and block[oldKey] ~= nil then
+                ApplyRename(block, oldKey, newKey, entry.convert)
+            end
         end
     end
 end
@@ -2939,7 +2992,9 @@ function KE:MigrateCombatLoggerKeys()
             record[entry.id] = true
             if type(profiles) == "table" then
                 for _, profile in pairs(profiles) do
-                    if type(profile) == "table" then
+                    if type(profile) == "table" and entry.merge then
+                        entry.merge(profile, false)
+                    elseif type(profile) == "table" then
                         local block, oldKey, newKey = ResolveRename(profile, entry)
                         -- Written whether or not the old key is present. Where
                         -- the converter maps an absent key to a default, AceDB

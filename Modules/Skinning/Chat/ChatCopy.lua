@@ -126,8 +126,25 @@ function CHAT:CopyChatEditBox_OnEscapePressed()
     CHAT.CopyChatFrame:Hide()
 end
 
+-- A fresh enroll's SetBackdrop paints both colors white, so every enroll
+-- repaints them.
+local function EnrollCopyEdges(frame)
+    KE.Skins.OwnBackdrop(frame)
+    frame:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], COPY_FRAME_BG[4])
+    frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    local scrollbar = frame.scrollbar
+    KE.Skins.OwnBackdrop(scrollbar)
+    scrollbar:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], 0.5)
+    scrollbar:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    frame.keEdgesReleased = nil
+end
+
 function CHAT:BuildCopyChatFrame()
-    if self.CopyChatFrame then return end
+    -- CHAT:OnDisable releases the edges; CHAT:OnEnable comes back through here.
+    if self.CopyChatFrame then
+        if self.CopyChatFrame.keEdgesReleased then EnrollCopyEdges(self.CopyChatFrame) end
+        return
+    end
 
     local HEADER_HEIGHT = 32
     local SCROLLBAR_WIDTH = 10
@@ -135,9 +152,6 @@ function CHAT:BuildCopyChatFrame()
 
     local frame = CreateFrame("Frame", "KE_CopyChatFrame", UIParent, "BackdropTemplate")
     tinsert(_G.UISpecialFrames, "KE_CopyChatFrame")
-    KE.Skins.OwnBackdrop(frame)
-    frame:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], COPY_FRAME_BG[4])
-    frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     frame:SetSize(COPY_FRAME_WIDTH, COPY_FRAME_HEIGHT)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
     frame:Hide()
@@ -240,14 +254,12 @@ function CHAT:BuildCopyChatFrame()
     scrollbar:SetWidth(SCROLLBAR_WIDTH)
     scrollbar:SetPoint("TOPRIGHT", contentArea, "TOPRIGHT", 0, 0)
     scrollbar:SetPoint("BOTTOMRIGHT", contentArea, "BOTTOMRIGHT", 0, 0)
-    KE.Skins.OwnBackdrop(scrollbar)
-    scrollbar:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], 0.5)
-    scrollbar:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     scrollbar:SetOrientation("VERTICAL")
     scrollbar:SetMinMaxValues(0, 1)
     scrollbar:SetValue(0)
     scrollbar:Hide()
     frame.scrollbar = scrollbar
+    EnrollCopyEdges(frame)
 
     local thumb = scrollbar:CreateTexture(nil, "OVERLAY")
     thumb:SetSize(SCROLLBAR_WIDTH - 2, 40)

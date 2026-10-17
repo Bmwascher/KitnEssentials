@@ -340,6 +340,19 @@ function CL:HideURLPopup()
     if urlBackdrop then urlBackdrop:Hide() end
 end
 
+-- A fresh enroll's SetBackdrop paints both colors white, so every enroll
+-- repaints them. The popup's border is the exception: it is set per show,
+-- because the theme accent it takes can change without a reload.
+local function EnrollPopupEdges(popup)
+    KE.Skins.OwnBackdrop(popup)
+    popup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
+    local field = popup.field
+    KE.Skins.OwnBackdrop(field)
+    field:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    field:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    popup.keEdgesReleased = nil
+end
+
 local function BuildURLPopup()
     -- A full-screen click catcher behind the popup, so a click that reaches it
     -- dismisses the popup and no close button is needed. A frame at a higher
@@ -357,10 +370,6 @@ local function BuildURLPopup()
     urlPopup:SetFrameLevel(500)
     urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_MIN_HEIGHT)
     urlPopup:EnableMouse(true)
-    KE.Skins.OwnBackdrop(urlPopup)
-    urlPopup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
-    -- The border color is set per show, not here: the theme accent it takes can
-    -- change without a reload.
 
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(hint, nil, 10, "NONE")
@@ -373,10 +382,8 @@ local function BuildURLPopup()
     -- hint above it read as one block of text on a flat panel.
     local field = CreateFrame("Frame", nil, urlPopup, "BackdropTemplate")
     field:SetPoint("TOP", hint, "BOTTOM", 0, -POPUP_HINT_GAP)
-    KE.Skins.OwnBackdrop(field)
-    field:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-    field:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     urlPopup.field = field
+    EnrollPopupEdges(urlPopup)
 
     -- EnableKeyboard is PROTECTED. Focus plus key scripts is how the copy
     -- window takes Ctrl+C, and this follows it.
@@ -493,7 +500,13 @@ function CL:ShowURLPopup(url, sourceFrame)
     -- secret link at exactly this boundary. IsSafeValue checks secrecy before
     -- testing whether the value is nil.
     if not KE:IsSafeValue(url) then return end
-    if not urlPopup then BuildURLPopup() end
+    if not urlPopup then
+        BuildURLPopup()
+    elseif urlPopup.keEdgesReleased then
+        -- The keurl handler outlives CL:OnDisable, so this runs with the module
+        -- off too, and a shown popup still needs edges that follow the scale.
+        EnrollPopupEdges(urlPopup)
+    end
 
     urlPopup.box:SetText(url)
     urlPopup:SetBackdropBorderColor(PopupBorderColor())
@@ -632,4 +645,9 @@ function CL:OnEnable()
 end
 
 function CL:OnDisable()
+    if urlPopup and not urlPopup.keEdgesReleased then
+        KE.Skins.ReleaseOwnBackdrop(urlPopup)
+        KE.Skins.ReleaseOwnBackdrop(urlPopup.field)
+        urlPopup.keEdgesReleased = true
+    end
 end

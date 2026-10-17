@@ -183,9 +183,6 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     manager:SetCondition("bubble", function()
         return db.ChatBubbles and db.ChatBubbles.Enabled ~= false
     end)
-    manager:SetCondition("zone", function()
-        return db.ZoneText and db.ZoneText.Hide == false
-    end)
 
     local function RefreshStates()
         manager:UpdateAll(db.Enabled ~= false)
@@ -397,17 +394,6 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     AddHeading("Zone names")
 
     local rowZone = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local zoneHideCheck = GUIFrame:CreateCheckbox(rowZone, "Hide", {
-        value = zoneDB.Hide == true,
-        callback = function(checked)
-            zoneDB.Hide = checked
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    rowZone:AddWidget(zoneHideCheck, 0.25)
-    manager:Register(zoneHideCheck, "all")
-
     local mainZoneSlider = GUIFrame:CreateSlider(rowZone, "Main Size", {
         min = 8, max = 100, step = 1,
         value = zoneDB.MainZone.Size,
@@ -416,8 +402,8 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    rowZone:AddWidget(mainZoneSlider, 0.25)
-    manager:Register(mainZoneSlider, "zone")
+    rowZone:AddWidget(mainZoneSlider, 0.375)
+    manager:Register(mainZoneSlider, "all")
 
     local subZoneSlider = GUIFrame:CreateSlider(rowZone, "Sub Size", {
         min = 8, max = 100, step = 1,
@@ -427,15 +413,15 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    rowZone:AddWidget(subZoneSlider, 0.25)
-    manager:Register(subZoneSlider, "zone")
+    rowZone:AddWidget(subZoneSlider, 0.375)
+    manager:Register(subZoneSlider, "all")
 
     local previewZoneBtn = GUIFrame:CreateButton(rowZone, "Preview", {
         callback = ShowZonePreview,
         width = 80,
     })
     rowZone:AddWidget(previewZoneBtn, 0.25)
-    manager:Register(previewZoneBtn, "zone")
+    manager:Register(previewZoneBtn, "all")
     card:AddRow(rowZone, Theme.rowHeight)
 
     local rowZonePos = GUIFrame:CreateRow(card.content, Theme.rowHeight)
@@ -448,7 +434,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         end,
     })
     rowZonePos:AddWidget(zoneAnchorDropdown, 0.34)
-    manager:Register(zoneAnchorDropdown, "zone")
+    manager:Register(zoneAnchorDropdown, "all")
 
     local zoneXSlider = GUIFrame:CreateSlider(rowZonePos, "X Offset", {
         min = -500, max = 500, step = 1,
@@ -459,7 +445,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         end,
     })
     rowZonePos:AddWidget(zoneXSlider, 0.33)
-    manager:Register(zoneXSlider, "zone")
+    manager:Register(zoneXSlider, "all")
 
     local zoneYSlider = GUIFrame:CreateSlider(rowZonePos, "Y Offset", {
         min = -500, max = 500, step = 1,
@@ -470,7 +456,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         end,
     })
     rowZonePos:AddWidget(zoneYSlider, 0.33)
-    manager:Register(zoneYSlider, "zone")
+    manager:Register(zoneYSlider, "all")
     card:AddRow(rowZonePos, Theme.rowHeight)
 
     ----------------------------------------------------------------

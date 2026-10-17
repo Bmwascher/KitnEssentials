@@ -23,6 +23,7 @@
 --   * The Great Vault button's gates, including the lifecycle predicate in the
 --     one state a preference key cannot reach.
 --   * The Voidcore quest guard on the general quest handler.
+--   * Hide Zone Text's event bookkeeping, which gives back only what it took.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -1874,6 +1875,58 @@ describe("Automation Voidcore quest guard", function()
         }
         for _, case in ipairs(cases) do
             assert.equals(case.want, ShouldSkip(case.master, case.quests), case.name)
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Hide Zone Text's event bookkeeping. An untick registers only the events the
+-- tick removed: one another addon removed first stays removed, and a second
+-- apply while hidden must not forget what the first one took.
+---------------------------------------------------------------------------------
+describe("Automation Hide Zone Text event bookkeeping", function()
+    local ALL = { "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA" }
+
+    local function seam()
+        local fx = newFixture()
+        local apply = findUpvalue(fx.AU.UpdateDB, "ApplyHideZoneText")
+        local changes = apply and findUpvalue(apply, "ZoneTextEventChanges")
+        assert(changes, "ZoneTextEventChanges seam not found")
+        return changes
+    end
+
+    -- Answers IsEventRegistered from a fixed set; nothing in the case changes it.
+    local function frameWith(registered)
+        local set = {}
+        for _, event in ipairs(registered) do set[event] = true end
+        return { IsEventRegistered = function(_, event) return set[event] == true end }
+    end
+
+    it("takes, keeps and gives back exactly the events it removed", function()
+        local Changes = seam()
+        local partial = { "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA" }
+        local cases = {
+            { name = "a tick with all three registered takes all three",
+              hide = true, taken = nil, registered = ALL,
+              unregister = ALL, register = nil, after = ALL },
+            { name = "a tick after another addon removed one takes only the other two",
+              hide = true, taken = nil, registered = partial,
+              unregister = partial, register = nil, after = partial },
+            { name = "an untick registers only what the tick took",
+              hide = false, taken = partial, registered = {},
+              unregister = nil, register = partial, after = nil },
+            { name = "a second apply while hidden keeps the first record",
+              hide = true, taken = partial, registered = {},
+              unregister = nil, register = nil, after = partial },
+            { name = "an untick with nothing taken registers nothing",
+              hide = false, taken = nil, registered = ALL,
+              unregister = nil, register = nil, after = nil },
+        }
+        for _, case in ipairs(cases) do
+            local unregister, register, after = Changes(case.hide, case.taken, frameWith(case.registered))
+            assert.same(case.unregister, unregister, case.name)
+            assert.same(case.register, register, case.name)
+            assert.same(case.after, after, case.name)
         end
     end)
 end)
