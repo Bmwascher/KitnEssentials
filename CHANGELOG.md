@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.11.5
+
+### Settings Window
+
+- Dragging the resize grip grows or shrinks the window from its top-left
+  corner. It stops at the screen's right and bottom edges instead of
+  pushing the window sideways
+- After a resize or a move, and each time it opens, the window sits on
+  whole pixels. A saved position off the screen is moved back onto it, and
+  a saved size too big for the screen is cut down to fit
+- Minimizing the window keeps its title bar where it is
+
+---
+
 ## v4.11.4
 
 ### Frame Anchoring
