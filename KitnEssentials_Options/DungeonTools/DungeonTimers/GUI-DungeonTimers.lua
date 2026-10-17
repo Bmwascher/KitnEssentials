@@ -19,7 +19,7 @@ KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
 -- Read only by the in-game load check; each source change to these pages
 -- raises it, so the check can tell the final pages from older ones.
-KE.GUI.DungeonTimers.GUIRevision = 14
+KE.GUI.DungeonTimers.GUIRevision = 15
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
