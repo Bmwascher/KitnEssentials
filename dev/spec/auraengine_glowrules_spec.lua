@@ -53,6 +53,17 @@ describe("speed normalization and conversion", function()
         local G = L.loadAuraGlowRules()
         assert.equals(0.5, G.FrequencyToDuration(G.NormalizeFrequency(2, 0.05, 2)))
     end)
+
+    it("divides a sheet's loop by its factor, and leaves a sheet without one alone", function()
+        local G = L.loadAuraGlowRules()
+        local cases = {
+            { entry = {},                  period = 4, expected = 4 },
+            { entry = { speedFactor = 2 }, period = 4, expected = 2 },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.expected, G.FlipbookPeriod(case.entry, case.period))
+        end
+    end)
 end)
 
 describe("speed adapter legacy branch", function()
@@ -223,5 +234,69 @@ describe("pixel glow rules", function()
         local G = L.loadAuraGlowRules()
         local p = G.PixelPerimeter(0, 40, 40, 4)
         assert.equals(8, p.count)
+    end)
+end)
+
+describe("aura-shown list sync", function()
+    -- A set from a list: the shape of both the record and the wanted set.
+    local function set(list)
+        local s = {}
+        for _, key in ipairs(list) do s[key] = true end
+        return s
+    end
+
+    -- Ops that log every call and refuse the one key named.
+    local function recorder(refuse)
+        local calls = {}
+        local ops = {
+            add = function(_, key)
+                calls[#calls + 1] = "add " .. key
+                return key ~= refuse
+            end,
+            remove = function(_, key)
+                calls[#calls + 1] = "remove " .. key
+                return key ~= refuse
+            end,
+        }
+        return ops, calls
+    end
+
+    it("brings the record to the wanted set, calling only for differences", function()
+        local G = L.loadAuraGlowRules()
+        local cases = {
+            { from = {}, to = { "d1", "d2", "d3", "d4" },
+              calls = { "add d1", "add d2", "add d3", "add d4" } },
+            { from = { "d1", "d2", "d3", "d4" }, to = { "flip", "overlay" },
+              calls = { "add flip", "add overlay", "remove d1", "remove d2", "remove d3", "remove d4" } },
+            { from = { "flip", "overlay" }, to = {},
+              calls = { "remove flip", "remove overlay" } },
+            { from = { "pulse" }, to = { "pulse" }, calls = {} },
+        }
+        for _, case in ipairs(cases) do
+            local ops, calls = recorder(nil)
+            local registered = set(case.from)
+            assert.is_true(G.SyncShown(registered, set(case.to), ops, {}))
+            assert.same(set(case.to), registered)
+            table.sort(calls)
+            assert.same(case.calls, calls)
+        end
+    end)
+
+    -- The caller clears the list on this verdict: after a refused call the
+    -- list is unknown, so the sync stops there and says so.
+    it("returns false at a refused call, keeping only the calls that succeeded", function()
+        local G = L.loadAuraGlowRules()
+        local cases = {
+            { refuse = "pulse", left = {}, calls = { "add pulse", "remove flip" } },
+            { refuse = "flip", left = { "flip" }, calls = { "remove flip" } },
+        }
+        for _, case in ipairs(cases) do
+            local ops, calls = recorder(case.refuse)
+            local registered = set({ "flip" })
+            assert.is_false(G.SyncShown(registered, set({ "pulse" }), ops, {}))
+            assert.same(set(case.left), registered)
+            table.sort(calls)
+            assert.same(case.calls, calls)
+        end
     end)
 end)

@@ -515,11 +515,6 @@ function CHAT:OnDisable()
     local S = KE.Skins
     if self.panel then S.ReleaseOwnBackdrop(self.panel.backdrop) end
     S.ReleaseOwnBackdrop(self.tabBackdrop)
-    local bar = _G.CombatLogQuickButtonFrame_Custom
-    if bar and bar.styled then
-        S.ReleaseOwnBackdrop(bar)
-        bar.styled = nil
-    end
     local copy = self.CopyChatFrame
     if copy and not copy.keEdgesReleased then
         S.ReleaseOwnBackdrop(copy)

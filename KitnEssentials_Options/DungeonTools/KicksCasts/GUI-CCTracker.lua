@@ -229,7 +229,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Max Enemies", {
         min = 1, max = 40, step = 1,
-        value = db.MaxEnemies or 15,
+        value = db.MaxEnemies or 5,
         callback = function(value)
             db.MaxEnemies = value
             ApplySettings()

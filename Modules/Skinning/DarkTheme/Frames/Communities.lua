@@ -33,21 +33,13 @@ local function FlattenSelection(frame, anchor)
         if frame.Selection.SetAtlas then frame.Selection:SetAtlas(nil) end
         frame.Selection:SetTexture(WHITE)
         S.PaintBrand(frame.Selection, "SetVertexColor", S.palette.selectedA)
-        if anchor then
-            frame.Selection:ClearAllPoints()
-            frame.Selection:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
-            frame.Selection:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
-        end
+        if anchor then S.InsetToEdge(frame.Selection, anchor) end
     end
     if frame.GetHighlightTexture then
         local hl = frame:GetHighlightTexture()
         if hl then
             hl:SetTexture(WHITE); hl:SetVertexColor(1, 1, 1, 0.12)
-            if anchor then
-                hl:ClearAllPoints()
-                hl:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
-                hl:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
-            end
+            if anchor then S.InsetToEdge(hl, anchor) end
         end
     end
 end

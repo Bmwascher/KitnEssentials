@@ -24,6 +24,7 @@ local NotifyInspect = NotifyInspect
 local UnitClass = UnitClass
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
+local UnitIsConnected = UnitIsConnected
 local UnitName = UnitName
 local UnitRace = UnitRace
 local ipairs = ipairs
@@ -207,6 +208,7 @@ function Spec.Tick()
         if not m.done then
             waiting = true
             m.canInspect = Ask(CanInspect, m.unit) == true
+            m.offline = Ask(UnitIsConnected, m.unit) == false
         end
     end
     if not waiting then
@@ -313,7 +315,9 @@ local function OnLibSpec(specID, _, _, playerName, talents)
     Spec.libSpecs[playerName], Spec.libTalents[playerName] = specID, talents
     if same and moved and rules.BuildEventCounts(InKey(), false) then
         for _, m in pairs(Spec.byGUID) do
-            if not m.isPlayer and m.libKey == playerName then m.talents, m.talentMisses = nil, nil end
+            if not m.isPlayer and m.libKey == playerName then
+                m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
+            end
         end
     end
     for _, m in ipairs(Spec.members) do
@@ -563,7 +567,8 @@ Spec.readers[#Spec.readers + 1] = {
                 m.trinketsStale = true
                 Spec.Wake()
             end
-        else
+        elseif event == "ITEM_DATA_LOAD_RESULT" or event == "PLAYER_REGEN_ENABLED" then
+            -- Every reader gets every event, so the events are named.
             -- A successful load re-derives the members wearing that item; a
             -- failed one waits for combat's end or the next read. Leaving
             -- combat retries every incomplete member. Records, not the bound
@@ -603,11 +608,14 @@ local debugprofilestop = debugprofilestop
 local INSPECT_CONFIG = Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
 local MAX_MISSES = 3
 
--- swap -> the node and entry holding its talent, found once; and the walks
--- that missed it.
+-- spec -> swap -> the node and entry holding its talent, found once; and the
+-- walks that missed it. Per spec: two specs can hold the same talent on
+-- nodes of their own.
 local located, misses = {}, {}
 
+-- A node the inspected spec can see wins; the first match otherwise.
 local function Walk(tree, swap)
+    local fallback
     for _, nodeID in ipairs(C_Traits.GetTreeNodes(tree) or {}) do
         local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, nodeID)
         for _, entryID in ipairs(type(node) == "table" and node.entryIDs or {}) do
@@ -615,24 +623,28 @@ local function Walk(tree, swap)
             local definitionID = type(entry) == "table" and entry.definitionID
             local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
             if type(definition) == "table" and definition.spellID and swap.talents[definition.spellID] then
-                return { node = nodeID, entry = entryID }
+                local at = { node = nodeID, entry = entryID }
+                if node.isVisible == true then return at end
+                fallback = fallback or at
             end
         end
     end
-    return nil
+    return fallback
 end
 
 -- Walks the class tree once per swap; Spec.locateMs keeps the longest walk
 -- in milliseconds, so its cost can be read in game.
-local function Locate(tree, swap)
+local function Locate(specID, tree, swap)
     local start = debugprofilestop()
     local at = Walk(tree, swap)
     local ms = debugprofilestop() - start
     if ms > (Spec.locateMs or 0) then Spec.locateMs = ms end
     if at then
-        located[swap] = at
+        located[specID] = located[specID] or {}
+        located[specID][swap] = at
     else
-        misses[swap] = (misses[swap] or 0) + 1
+        misses[specID] = misses[specID] or {}
+        misses[specID][swap] = (misses[specID][swap] or 0) + 1
     end
     return at
 end
@@ -663,10 +675,10 @@ local function ReadTaken(specID)
     local tree = C_ClassTalents.GetTraitTreeForSpec(specID)
     if not HasTree(trees, tree) then return nil end
     for castID, swap in pairs(swaps) do
-        local at = located[swap]
-        if not at and (misses[swap] or 0) < MAX_MISSES then
+        local at = located[specID] and located[specID][swap]
+        if not at and (misses[specID] and misses[specID][swap] or 0) < MAX_MISSES then
             if InCombatLockdown() then return nil, true end
-            at = Locate(tree, swap)
+            at = Locate(specID, tree, swap)
         end
         if not at then return nil end
         local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, at.node)
@@ -689,8 +701,13 @@ local function SelfTaken(specID)
     return out
 end
 
--- The miss count belongs to the answer: a new spec gets its own three tries.
-local function ForgetTalents(m) m.talents, m.talentMisses = nil, nil end
+-- A member's unreadable reads belong to the answer: a new spec gets its own
+-- three tries. A walk that missed against a member's old spec must not stop
+-- the walk for everyone, so the walk's misses go too.
+local function ForgetTalents(m)
+    m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
+    wipe(misses)
+end
 
 -- Companion, skyriding and profession configs fire TRAIT_CONFIG_UPDATED too;
 -- only a class talent config changes your talents. An unreadable answer
@@ -703,25 +720,48 @@ local function IsClassConfig(configID)
     return info.type == Enum.TraitConfigType.Combat
 end
 
--- Three unreadable answers in a row store an empty one, which keeps the
--- likely icon, and shows a row that needs a talent only when it is likely.
--- Talents only concern class cooldowns.
+-- Three unreadable answers in a row keep the answer held, else store an empty
+-- one, which keeps the likely icon, and shows a row that needs a talent only
+-- when it is likely; that empty answer gets one more round of reads
+-- TRY_WAIT seconds later. Talents only concern class cooldowns. A teammate's
+-- talent change fires no event here, so a ready check outside a key marks
+-- every teammate's answer stale for the inspect to read again; a stale answer
+-- stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
-    events = { "TRAIT_CONFIG_UPDATED" },
+    events = { "TRAIT_CONFIG_UPDATED", "READY_CHECK" },
     On = function() return Spec.trackClass == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
-        return m.talents == nil and m.spec ~= nil and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
+        return (m.talents == nil or m.talentsStale == true) and m.spec ~= nil
+            and not (m.talentsRetryAt and GetTime() < m.talentsRetryAt)
+            and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
     end,
     Read = function(m)
+        -- The walk's misses are cleared as the retry reads, not as it waits:
+        -- another member's reads in the wait could use them up again.
+        if m.talentsRetryAt then
+            m.talentsRetryAt = nil
+            wipe(misses)
+        end
         local ok, taken, skip = pcall(ReadTaken, m.spec)
         if ok and taken then
-            m.talents, m.talentMisses = taken, nil
+            m.talents, m.talentMisses, m.talentsStale = taken, nil, nil
             return
         end
         if ok and skip then return end
         m.talentMisses = (m.talentMisses or 0) + 1
-        if m.talentMisses >= MAX_MISSES then m.talents, m.talentMisses = {}, nil end
+        if m.talentMisses >= MAX_MISSES then
+            local rules = KE.PartyCooldownsRules
+            local answer, retry = rules.AfterTalentMisses(m.talents)
+            m.talents, m.talentMisses, m.talentsStale = answer, nil, retry or nil
+            -- A read just after a spec change can find the old talents. The
+            -- wait holds back only the talent read; the timer wakes the queue
+            -- a tick after it ends, so the wait has passed when it runs.
+            if retry then
+                m.talentsRetryAt = GetTime() + rules.TRY_WAIT
+                C_Timer.After(rules.TRY_WAIT + TICK, Spec.Wake)
+            end
+        end
     end,
     Self = function(m)
         if m.talents == nil and m.spec then m.talents = SelfTaken(m.spec) end
@@ -732,6 +772,12 @@ Spec.readers[#Spec.readers + 1] = {
         if event == "TRAIT_CONFIG_UPDATED" and m and IsClassConfig(configID) then
             m.talents = nil
             Changed(m)
+        elseif event == "READY_CHECK" and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
+            for _, member in pairs(Spec.byGUID) do
+                if not member.isPlayer and member.talents then member.talentsStale = true end
+            end
+            wipe(misses)
+            Spec.Wake()
         end
     end,
 }

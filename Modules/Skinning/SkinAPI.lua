@@ -949,22 +949,22 @@ function S.RowHover(row)
     if row.SetHighlightTexture then
         armHover(row, row, true)
     elseif row.CreateTexture and row.HookScript then
-
-        local tex = row:CreateTexture(nil, "OVERLAY")
-        tex:SetTexture("Interface\\Buttons\\WHITE8x8")
-        tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
-        tex:SetAlpha(HOVER_ALPHA)
-        tex:Hide()
         -- AUDIT: never enable input on a row Blizzard left
         -- mouse-disabled. This is our own hover standard, and it is the
         -- exact call that put AES in the currency-transfer FORBIDDEN:
         -- changing input state on Blizzard's rows drags us into
         -- flows we have no business being in. If a row cannot take the
         -- mouse, it does not get a manufactured hover: backdrop only,
-        -- no input changes.
+        -- no input changes. Tested before the texture is made, so a
+        -- refused row keeps nothing and can still be armed later.
         if row.IsMouseEnabled and not row:IsMouseEnabled() then
             return
         end
+        local tex = row:CreateTexture(nil, "OVERLAY")
+        tex:SetTexture("Interface\\Buttons\\WHITE8x8")
+        tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
+        tex:SetAlpha(HOVER_ALPHA)
+        tex:Hide()
         FollowEdge(tex, row, true)
         row:HookScript("OnEnter", function() tex:Show() end)
         row:HookScript("OnLeave", function() tex:Hide() end)
@@ -1028,8 +1028,7 @@ function S.HoverWash(frame)
     if anchor.backdropInfo then
         S.InsetToEdge(tex, anchor)
     else
-        tex:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
-        tex:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+        FollowEdge(tex, anchor)
     end
     tex:Hide()
     frame:HookScript("OnEnter", function() tex:Show() end)
@@ -2453,9 +2452,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
         if tbd then
             S.InsetToEdge(tab.SelectedTexture, tbd)
         else
-            tab.SelectedTexture:ClearAllPoints()
-            tab.SelectedTexture:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
-            tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+            FollowEdge(tab.SelectedTexture, tab)
         end
     end
     S.KillSideTabArt(tab)

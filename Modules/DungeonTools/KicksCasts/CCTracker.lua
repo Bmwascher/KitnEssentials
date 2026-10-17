@@ -35,6 +35,7 @@ local UnitIsBossMob = UnitIsBossMob
 local UnitName = UnitName
 local GetScreenHeight = GetScreenHeight
 local issecretvalue = issecretvalue
+local canaccesstable = canaccesstable
 local ipairs, pairs, pcall, tostring, type = ipairs, pairs, pcall, tostring, type
 local math_floor, math_max, math_min = math.floor, math.max, math.min
 
@@ -360,7 +361,7 @@ end
 -- The cap follows the rows that exist, so no plate is handed a slot before its
 -- container does.
 function CC:UpdateCap()
-    self.slots:SetCap(math_min(self.db.MaxEnemies or 15, #self.rows))
+    self.slots:SetCap(math_min(self.db.MaxEnemies or 5, #self.rows))
 end
 
 function CC:EnsureSlots()
@@ -403,7 +404,12 @@ function CC:ApplyAnchorPosition()
     local db = self.db
     local pos = db.Position or {}
     local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame, anchor, true)
-    if anchor:GetParent() ~= parent then anchor:SetParent(parent) end
+    -- GetParent's answer can be secret; a secret or unreadable parent counts as
+    -- different, and setting the same parent again is harmless.
+    local current = anchor:GetParent()
+    if issecretvalue(current) or (current ~= nil and not canaccesstable(current)) or current ~= parent then
+        anchor:SetParent(parent)
+    end
     local box = self:Box(self:GeometrySource())
     anchor:SetSize(box.width, box.height)
     anchor:ClearAllPoints()
@@ -486,7 +492,7 @@ function CC:Apply()
         KE:Print("[CC] auras restricted: row changes wait for the drain")
     end
     self:UpdateCap()
-    self:RunBuild(db.MaxEnemies or 15)
+    self:RunBuild(db.MaxEnemies or 5)
     self:UpdateLive()
 end
 
@@ -676,7 +682,7 @@ function CC:PaintSamples()
     local box = self:Box(db)
     local corner = box.corner
     local edge = up and "BOTTOMRIGHT" or "TOPRIGHT"
-    local shown = math_min(#SAMPLES, db.MaxEnemies or 15)
+    local shown = math_min(#SAMPLES, db.MaxEnemies or 5)
     local nameOn = db.NameEnabled ~= false
     local threshold = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold)
     for k, data in ipairs(SAMPLES) do

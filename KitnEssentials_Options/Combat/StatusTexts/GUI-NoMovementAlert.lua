@@ -17,12 +17,7 @@ local function GetModule()
     return nil
 end
 
-local GROW_DIRECTIONS = {
-    { key = "DOWN",  text = "Down" },
-    { key = "UP",    text = "Up" },
-    { key = "LEFT",  text = "Left" },
-    { key = "RIGHT", text = "Right" },
-}
+local GROW_DIRECTIONS = GUIFrame.GrowDirectionOptions
 
 GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.NoMovementAlert

@@ -217,6 +217,7 @@ local function ConstructButton(parent)
         end
         local TT = Theme
         textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        iconWidget:SetVertexColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
         selectedFill:SetColorTexture(TT.selectedBg[1], TT.selectedBg[2], TT.selectedBg[3], TT.selectedBg[4])
     end
 
@@ -249,6 +250,8 @@ local function ConfigureButton(button, labelText, config)
     if image then
         iconWidget:SetSize(imageSize, imageSize)
         iconWidget:SetTexture(image)
+        -- Pooled buttons keep a rotation from their last use unless reset.
+        iconWidget:SetRotation(config.imageRotation or 0)
         iconWidget:Show()
         contentWidth = contentWidth + imageSize
         button.icon = iconWidget

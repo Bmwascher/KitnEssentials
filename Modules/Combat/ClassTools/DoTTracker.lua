@@ -485,6 +485,19 @@ end
 -- place and look are set in initializeFrame, before the restriction attaches,
 -- and otherwise only behind the gate.
 
+-- The game's own countdown text carries a unit (" s", " m"). This one shows
+-- bare seconds at any length, rounding up as the game's does.
+local timerFormatter
+local function TimerFormatter()
+    if not timerFormatter then
+        timerFormatter = C_StringUtil.CreateNumericRuleFormatter()
+        timerFormatter:SetBreakpoints({
+            { threshold = 0, step = 1, rounding = Enum.NumericRuleFormatRounding.Up, format = "%d" },
+        })
+    end
+    return timerFormatter
+end
+
 local function TimerStyleKey(db)
     local color = db.TimerColor or DEFAULT_TIMER
     return table_concat({
@@ -546,7 +559,9 @@ local function EnsureTimer(cell)
                 local fontString = button:CreateFontString(nil, "OVERLAY")
                 fontString:SetPoint("CENTER", button, "CENTER", 0, 0)
                 styled = StyleTimerText(fontString)
-                button:SetDurationText(fontString, {})
+                button:SetDurationText(fontString, {
+                    textFormatter = TimerFormatter(),
+                })
                 cell.timerText = fontString
             end,
         })

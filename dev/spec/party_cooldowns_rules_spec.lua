@@ -10,7 +10,10 @@ local L = require("dev.spec._ke_loader")
 -- with a swap scoped to spec 10; spec 11 lists only the scoped one. ROLE_SPEC
 -- holds a tank and a healer guess, and a damage cell no guess may use. Cast 4
 -- is the racial of the race Dwarf, in no spec list. Spec 12 lists only cast 5,
--- which needs talent 55 and is not likely taken.
+-- which needs talent 55 and is not likely taken. Cast 6 needs talent 65 and
+-- is likely taken; its paired length needs talent 66. Spec 13 lists it paired
+-- at 30 s, spec 14 unpaired. Spec 15 lists only cast 7, which starts
+-- switched off.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -20,6 +23,10 @@ local DATA = {
                 swap = { id = 30, talents = { [30] = true }, likely = true, specs = { [10] = true } } },
         [4] = { kind = "defensive", cd = 120, buffs = { 40 } },
         [5] = { kind = "offensive", cd = 60, buffs = { 50 }, needs = { talents = { [55] = true } } },
+        [6] = { kind = "offensive", cd = 120, buffs = { 60 },
+                needs = { talents = { [65] = true }, likely = true },
+                lengthNeeds = { talents = { [66] = true } } },
+        [7] = { kind = "offensive", cd = 90, buffs = { 70 }, off = true },
     },
     RACIALS = {
         { race = "Dwarf", raceID = 3, id = 4 },
@@ -28,6 +35,9 @@ local DATA = {
         [10] = { { 1, 45 }, 2, 3 },
         [11] = { 3 },
         [12] = { 5 },
+        [13] = { { 6, 30 } },
+        [14] = { 6 },
+        [15] = { 7 },
     },
     ROLE_SPEC = {
         DRUID = { TANK = 10, HEALER = 11 },
@@ -56,6 +66,8 @@ describe("PartyCooldownsRules.SpellList", function()
             { name = "table order", db = {}, want = { 1, 2, 3 } },
             { name = "saved order first", db = { CooldownOrder = { [10] = { 3 } } }, want = { 3, 1, 2 } },
             { name = "switched off", db = { CooldownOff = { ["10:2"] = true } }, want = { 1, 3 } },
+            { name = "off by default", db = {}, spec = 15, want = {} },
+            { name = "off by default, switched on", db = { CooldownOff = { ["15:7"] = false } }, spec = 15, want = { 7 } },
             { name = "unknown spec", db = {}, spec = 999, want = {} },
         }
         for _, case in ipairs(cases) do
@@ -140,11 +152,11 @@ describe("PartyCooldownsRules.NextInspect", function()
         assert.are.equal("a", R.NextInspect({ now = 10, lastRequest = 10 - R.INSPECT_GAP }, members).name)
     end)
 
-    it("skips a member that is done, cannot be inspected or is resting", function()
+    it("skips a member that is done, cannot be inspected, is offline or is resting", function()
         local R = loadRules()
         local members = {
             member("done", { done = true }), member("far", { canInspect = false }),
-            member("resting", { waitUntil = 40 }), member("next"),
+            member("offline", { offline = true }), member("resting", { waitUntil = 40 }), member("next"),
         }
         assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
     end)
@@ -293,6 +305,72 @@ describe("PartyCooldownsRules.Feed", function()
         assert.is_true(five > 0 and five <= 2 * m, "five units: " .. five)
         local one = deepest(R.NewTracker(120, false), { secret(true), secret(false) })
         assert.is_true(one > 0 and one <= 2, "one sensor: " .. one)
+        local windowed = R.NewTracker(120, false)
+        R.ArmFall(windowed, 0, 6)
+        local armed = deepest(windowed, { secret(true), secret(false) })
+        assert.is_true(armed > 0 and armed <= 2, "windowed sensor: " .. armed)
+    end)
+
+    -- A 300-second tracker counts in 2-second codes from its clear at 0.
+    local function windowRun(R, reads, armed)
+        local t = R.NewTracker(300, false)
+        R.Clear(t, 0)
+        if armed then R.ArmFall(t, 0, 30) end
+        for _, read in ipairs(reads) do R.Feed(t, read[1], nil, read[2], isSecret, pick) end
+        local sl = t.slot[t.cur]
+        return { sl.v, sl.c }
+    end
+
+    it("stamps a fall 30 seconds back only from fallFrom to fallTo, and never without a window", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a second before the window", at = 31, armed = true, want = { 0, 1 } },
+            { name = "the window's first second", at = 32, armed = true, want = { 1, (255 - 1) / 255 } },
+            { name = "inside the window", at = 40, armed = true, want = { 1, (255 - 5) / 255 } },
+            { name = "the window's last second", at = 61, armed = true, want = { 1, (255 - 15) / 255 } },
+            { name = "a second after the window", at = 62, armed = true, want = { 0, 1 } },
+            { name = "no window", at = 40, armed = false, want = { 0, 1 } },
+        }
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local w = wrap[2]
+            for _, case in ipairs(cases) do
+                local got = windowRun(R, { { w(true), 5 }, { w(false), case.at } }, case.armed)
+                assert.are.same(case.want, got, wrap[1] .. ": " .. case.name)
+            end
+        end
+    end)
+
+    it("still stamps a rise inside the window at the read", function()
+        local R = loadRules()
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local got = windowRun(R, { { wrap[2](false), 35 }, { wrap[2](true), 40 } }, true)
+            assert.are.same({ 1, (255 - 20) / 255 }, got, wrap[1])
+        end
+    end)
+
+    it("takes no rise for CAST_QUIET seconds after a cast stamp, and a clear ends the quiet", function()
+        local R = loadRules()
+        local q = R.CAST_QUIET
+        local cases = {
+            { name = "a rise inside the quiet keeps the cast stamp", rise = 10 + q, clear = false,
+              want = { 1, (255 - 5) / 255 } },
+            { name = "a rise after the quiet stamps", rise = 11 + q, clear = false,
+              want = { 1, (255 - math.floor((11 + q) / 2)) / 255 } },
+            { name = "a rise after a clear stamps", rise = 12, clear = true, want = { 1, (255 - 6) / 255 } },
+        }
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local w = wrap[2]
+            for _, case in ipairs(cases) do
+                local t = R.NewTracker(300, false)
+                R.Clear(t, 0)
+                R.StartCast(t, 10)
+                if case.clear then R.Clear(t, 0) end
+                R.Feed(t, w(false), nil, case.rise - 1, isSecret, pick)
+                R.Feed(t, w(true), nil, case.rise, isSecret, pick)
+                local sl = t.slot[t.cur]
+                assert.are.same(case.want, { sl.v, sl.c }, wrap[1] .. ": " .. case.name)
+            end
+        end
     end)
 end)
 
@@ -414,6 +492,18 @@ describe("PartyCooldownsRules.BuildEventCounts", function()
     end)
 end)
 
+describe("PartyCooldownsRules.AfterTalentMisses", function()
+    it("retries an unread member once, then keeps the empty answer", function()
+        local R = loadRules()
+        local first, retry = R.AfterTalentMisses(nil)
+        assert.are.same({}, first)
+        assert.is_true(retry)
+        local second, again = R.AfterTalentMisses(first)
+        assert.are.equal(first, second)
+        assert.is_false(again)
+    end)
+end)
+
 describe("PartyCooldownsRules.TrinketReadStands", function()
     it("lets a read with an empty slot stand only once a second read agrees", function()
         local R = loadRules()
@@ -473,6 +563,80 @@ describe("PartyCooldownsRules.StartLoop", function()
     end)
 end)
 
+describe("PartyCooldownsRules.ActiveSeconds", function()
+    it("keeps a summon's active seconds whole and at least one second short of its cooldown", function()
+        local R = loadRules()
+        local cases = {
+            { name = "no active phase", args = { nil, 180 }, want = 0 },
+            { name = "fits", args = { 30, 180 }, want = 30 },
+            { name = "fraction dropped", args = { 30.7, 180 }, want = 30 },
+            { name = "cooldown typed shorter", args = { 30, 20 }, want = 19 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.ActiveSeconds(case.args[1], case.args[2]), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.GlowWindow", function()
+    -- The bar's fill edge sits (t - cd + 1) steps above the inner area's
+    -- bottom at elapsed second t, as the gate bar's does. The glow reaches 0.8
+    -- sizes either side of the icon's center (the 1.6-size style).
+    it("covers the whole glow during the active seconds and none of it after", function()
+        local R = loadRules()
+        local cases = {
+            { size = 16, px = 1, cd = 120, active = 20 },
+            { size = 36, px = 0.71, cd = 180, active = 30 },
+            { size = 72, px = 1, cd = 90, active = 30 },
+            { size = 36, px = 1, cd = 31, active = 30 },
+        }
+        for _, c in ipairs(cases) do
+            local step, low, high = R.GlowWindow(c.size, c.px, c.cd, c.active)
+            local center = c.size / 2 - c.px
+            local bottom, top = center - 0.8 * c.size, center + 0.8 * c.size
+            local function edge(t) return (t - c.cd + 1) * step end
+            local name = c.size .. "/" .. c.active
+            assert.is_true(edge(0) + high >= top, name .. " first second")
+            assert.is_true(edge(c.active - 1) + low <= bottom, name .. " last active second")
+            assert.is_true(edge(c.active) + low >= top, name .. " first second after")
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.StripMargin", function()
+    it("keeps a whole quarter of the line plus one blank around each label", function()
+        local R = loadRules()
+        local cases = {
+            { name = "rounds a part pixel up", line = 9, want = 4 },
+            { name = "tested font", line = 12, want = 4 },
+            { name = "largest font", line = 48, want = 13 },
+            { name = "no measure", line = nil, want = 1 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.StripMargin(case.line), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.Seat", function()
+    -- A secret number still has type "number", so the fake is a number: read
+    -- as plain it would give a different seat, and a missing guard shows.
+    local HIDDEN = 777.3
+    local isSecret = function(v) return v == HIDDEN end
+
+    it("keeps the last seat for a hidden center and guesses a quarter before any", function()
+        local R = loadRules()
+        assert.is_nil(R.Seat(HIDDEN, 12, 1, 768, 0.6, isSecret))
+        assert.are.equal(0.125, R.Seat(HIDDEN, 12, 2, 768, nil, isSecret))
+    end)
+
+    it("does nothing when the scale is hidden or the line is not laid out", function()
+        local R = loadRules()
+        assert.is_nil(R.Seat(763, 12, HIDDEN, 768, nil, isSecret))
+        assert.is_nil(R.Seat(763, nil, 1, 768, nil, isSecret))
+    end)
+end)
+
 describe("PartyCooldownsRules.LibKey", function()
     it("keys a member of another realm by name-realm only, never by the bare name", function()
         local R = loadRules()
@@ -490,7 +654,7 @@ describe("PartyCooldownsRules.LibKey", function()
 end)
 
 describe("PartyCooldownsRules racials", function()
-    it("gives a race's racial under its own key only while Show Racials and its row are on", function()
+    it("gives a race's racial under its own key only while Racials and its row are on", function()
         local R = loadRules()
         local on = { ShowRacials = true }
         local e = R.MemberRacial("Dwarf", on)
@@ -498,7 +662,7 @@ describe("PartyCooldownsRules racials", function()
         local typed = { ShowRacials = true, CooldownSeconds = { ["race:4"] = 90 } }
         assert.are.equal(90, R.MemberRacial("Dwarf", typed).cd, "typed seconds")
         local cases = {
-            { name = "Show Racials off", race = "Dwarf", db = { ShowRacials = false } },
+            { name = "Racials off", race = "Dwarf", db = { ShowRacials = false } },
             { name = "race with no racial", race = "Human", db = on },
             { name = "race not read", race = nil, db = on },
             { name = "row off", race = "Dwarf", db = { ShowRacials = true, CooldownOff = { ["race:4"] = true } } },
@@ -519,7 +683,7 @@ describe("PartyCooldownsRules.SpecWanted", function()
             { name = "racial of the race", args = { false, false, true, "Dwarf" }, want = true },
             { name = "race with no racial", args = { false, false, true, "Human" }, want = false },
             { name = "race not read", args = { false, false, true, nil }, want = false },
-            { name = "Show Racials off", args = { false, false, false, "Dwarf" }, want = false },
+            { name = "Racials off", args = { false, false, false, "Dwarf" }, want = false },
             { name = "the healer box alone", args = { false, false, false, nil, true }, want = true },
         }
         for _, case in ipairs(cases) do
@@ -548,6 +712,35 @@ describe("PartyCooldownsRules talent gate", function()
         assert.are.equal(gated.spell.needs, R.TalentsFor(12)[5], "a needs row")
         assert.is_not_nil(R.TalentsFor(10)[3], "a swap for its spec")
         assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")
+    end)
+end)
+
+describe("PartyCooldownsRules talent lengths", function()
+    it("counts the spell's own length when the talent is read as not taken, or unread and not likely, and nothing is typed", function()
+        local R = loadRules()
+        local paired = entryOf(R, 13, 6)
+        local typed = entryOf(R, 13, 6, { CooldownSeconds = { ["13:6"] = 40 } })
+        local plain = entryOf(R, 10, 1)
+        local unlikely = { cd = 30, spell = { cd = 120, lengthNeeds = { talents = {}, likely = false } } }
+        local cases = {
+            { name = "not taken", entry = paired, taken = false, want = 120 },
+            { name = "taken", entry = paired, taken = true, want = 30 },
+            { name = "unread", entry = paired, taken = nil, want = 30 },
+            { name = "unread, not likely", entry = unlikely, taken = nil, want = 120 },
+            { name = "typed, not taken", entry = typed, taken = false, want = 40 },
+            { name = "no length talent", entry = plain, taken = false, want = 45 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentLength(case.entry, case.taken), case.name)
+        end
+    end)
+
+    it("adds a length rule under its own key only for a paired cast", function()
+        local R = loadRules()
+        local spell = DATA.SPELLS[6]
+        assert.are.equal(spell.lengthNeeds, R.TalentsFor(13)[R.LengthKey(6)], "paired")
+        assert.are.equal(spell.needs, R.TalentsFor(13)[6], "the show rule stays under the cast")
+        assert.is_nil(R.TalentsFor(14)[R.LengthKey(6)], "unpaired")
     end)
 end)
 

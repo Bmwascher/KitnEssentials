@@ -43,13 +43,13 @@ HX.DEFAULT_POSITION = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -4
 -- The cooldown icon with no active state laid over it.
 HX.VIEW = {
     New = Cell.New, Dress = Cell.Dress, Write = Cell.Write, Range = Cell.Range, Clear = Cell.Clear,
-    overlay = false,
+    Seat = Cell.Seat, overlay = false,
 }
 
 -- Reads wait out a roster change, longer than the module's 0.5 s settle.
 local ROSTER_HOLD = 1
 local BLACK = { 0, 0, 0, 1 }
-local SCREEN = { anchorFrameType = "UIPARENT", Strata = "MEDIUM" }
+local screen = { anchorFrameType = "UIPARENT" }
 local EDIT_MODE_KEY = "HealerExternals"
 -- Per grow direction: the box corner the first icon sits in, and the step.
 local GROW = {
@@ -61,7 +61,7 @@ local GROW = {
 -- Preview icons: left is a sample's seconds to go; one without is ready.
 local SAMPLES = { { id = 33206, left = 122 }, { id = 102342 } }
 
-local placement = { Strata = "MEDIUM" }
+local placement = {}
 
 local function Debug(fmt, ...)
     if DEBUG_HX then KE:Print("Healer Externals: " .. string_format(fmt, ...)) end
@@ -79,7 +79,6 @@ end
 local function MakeBox()
     if HX.box then return end
     HX.box = CreateFrame("Frame", "KitnEssentialsHealerExternals", UIParent)
-    HX.box:SetFrameStrata("MEDIUM")
     HX.box:Hide()
     HX.live = NewLayer(HX.box)
 end
@@ -96,18 +95,20 @@ local function MakeSlot()
     HX.st = Track.NewSlot(HX.live, HX.VIEW, host)
 end
 
--- An attached box whose anchor is unnamed (the Frame field cleared), does not
--- exist (Healer Mana off since login), or is refused by KE:IsUnsafeAnchor (not
--- a frame, the box itself, or a frame that depends on it) takes its starting
--- place: the attached points against the screen would put it above the top
--- edge. The third return says the starting place is in use.
+-- An attached box whose anchor is unnamed (the Frame field cleared, until the
+-- default name returns at the next login), does not exist (Healer Mana off
+-- since login), or is refused by KE:IsUnsafeAnchor (not a frame, the box
+-- itself, or a frame that depends on it) takes its starting place: the
+-- attached points against the screen would put it above the top edge. The
+-- third return says the starting place is in use.
 local function Placement(db)
     local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
+    screen.Strata, placement.Strata = db.HealerExtStrata, db.HealerExtStrata
     if kind == "SELECTFRAME" then
-        if type(name) ~= "string" then return HX.DEFAULT_POSITION, SCREEN, true end
+        if type(name) ~= "string" then return HX.DEFAULT_POSITION, screen, true end
         local frame = _G[name]
         local missing = not issecretvalue(frame) and frame == nil
-        if missing or KE:IsUnsafeAnchor(HX.box, frame) then return HX.DEFAULT_POSITION, SCREEN, true end
+        if missing or KE:IsUnsafeAnchor(HX.box, frame) then return HX.DEFAULT_POSITION, screen, true end
     end
     placement.anchorFrameType, placement.ParentFrame = kind, name
     return db.HealerExtPosition, placement, false
@@ -155,6 +156,7 @@ local function Layout(cells, count, parent)
         local c = cells[i]
         c:ClearAllPoints()
         c:SetPoint(g.corner, parent, g.corner, g.dx * (i - 1) * step, g.dy * (i - 1) * step)
+        pcall(Cell.Seat, c)
     end
 end
 

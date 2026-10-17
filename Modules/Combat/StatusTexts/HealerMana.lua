@@ -78,7 +78,7 @@ HM._lastMode = nil
 HM.mode = "DUNGEON"     -- held mode; only RefreshMode writes it
 HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
 HM.isPreview = false
-HM.libSpecCache = {}  -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
+HM.libSpecCache = {}  -- [name, or name-realm for another realm] = specID, fed by LibSpec.RegisterGroup callback
 
 ---------------------------------------------------------------------------------
 -- Helpers
@@ -490,22 +490,26 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
--- Build one healer snapshot (class/name/connection/spec) using KE's LibSpec
--- name-keyed cache. UnitName can be secret in restricted contexts; only use as
--- cache key when safe. specID stays nil if unknown -> class-default icon.
+-- The key the library files a member's spec under. None when the name or
+-- realm cannot be read: a realm read as empty would match a same-named player
+-- of your realm.
+local function LibKey(unit)
+    local ok, name, realm = pcall(UnitName, unit)
+    if not ok or KE:IsSecretValue(name) or KE:IsSecretValue(realm) then return nil end
+    return KE.PartyCooldownsRules.LibKey(name, realm)
+end
+
+-- Build one healer snapshot (class/name/connection/spec) from the LibSpec
+-- cache. specID stays nil if unknown -> class-default icon.
 function HM:BuildHealerSnapshot(unit)
     local _, class = UnitClass(unit)
     local displayName = KE:GetNicknameOrName(unit)
     local connected = UnitIsConnected(unit)
-    local rawName = UnitName(unit)
-    local cachedSpecID
-    if KE:IsSafeValue(rawName) then
-        cachedSpecID = self.libSpecCache[rawName]
-    end
+    local key = LibKey(unit)
     return {
         unit = unit,
         name = displayName,
-        specID = cachedSpecID,
+        specID = key and self.libSpecCache[key],
         class = class,
         classColor = KE:GetClassColor(class),
         connected = connected,

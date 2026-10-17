@@ -221,9 +221,6 @@ function SK:PreviewZone()
         PVPInfoTextString.fadingOut = false
         PVPInfoTextString.startTime = GetTime()
     end
-
-    SK:PreviewUIErrors()
-    SK:PreviewActionStatus()
 end
 
 ---------------------------------------------------------------------------------

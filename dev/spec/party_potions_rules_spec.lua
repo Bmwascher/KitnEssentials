@@ -1,28 +1,15 @@
 -- Tier 1: Party Potions' pure rules
 -- (Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua): the bars' entry, the
--- watched units, the roster keep and the cover range on the party cooldowns
--- stamp. Limits are read from the rules' constants.
+-- watched units, the roster keep, the bar colors, the timer window, the gap
+-- between bars and the cover range on the party cooldowns stamp.
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
-    it("takes the switched-on potions in ID order, the clamped length and the first icon that answers", function()
-        local R, KE = L.loadPartyPotionsRules()
-        local CD = KE.PartyCooldownsRules
-        local icons = { [400] = 44 }
-        local function textureOf(id) return icons[id] end
-        local cases = {
-            { name = "ID order, first answering icon", listed = { [500] = true, [300] = true, [400] = true },
-              seconds = 300, want = { { 300, 400, 500 }, 300, 44 } },
-            { name = "length above the range, no icon", listed = { [300] = true },
-              seconds = CD.CD_MAX + 100, want = { { 300 }, CD.CD_MAX, R.FALLBACK_ICON } },
-            { name = "length below the range", listed = { [400] = true },
-              seconds = CD.CD_MIN - 2, want = { { 400 }, CD.CD_MIN, 44 } },
-        }
-        for _, case in ipairs(cases) do
-            local e = R.Entry(case.listed, case.seconds, textureOf)
-            assert.are.same(case.want, { e.buffs, e.cd, e.texture }, case.name)
-        end
-        assert.is_nil(R.Entry({}, 300, textureOf), "nothing switched on")
+    it("takes the switched-on potions in ID order, and nothing when none is on", function()
+        local R = L.loadPartyPotionsRules()
+        local e = R.Entry({ [500] = true, [300] = true, [400] = true, [200] = false })
+        assert.are.same({ 300, 400, 500 }, e.buffs)
+        assert.is_nil(R.Entry({ [200] = false }), "nothing switched on")
     end)
 end)
 
@@ -63,6 +50,49 @@ describe("PartyPotionsRules.KeepOnRoster", function()
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.KeepOnRoster(case.old, case.new, isSecret), case.name)
         end
+    end)
+end)
+
+describe("PartyPotionsRules.Colors", function()
+    it("draws the class color darkened unless the bars take their own colors, a name in it only when known, and the background's opacity in both", function()
+        local R = L.loadPartyPotionsRules()
+        local class, bar, bg = { 0.2, 0.4, 0.6 }, { 0.3, 0.4, 0.5, 1 }, { 0.1, 0.1, 0.1, 0.8 }
+        local white, gray = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
+        local cases = {
+            { name = "own colors", style = { barColor = bar, bgColor = bg }, color = class,
+              want = { bar, 1, bg, 1, white, 0.8 } },
+            { name = "class name", style = { classBars = true, classNames = true, bgColor = bg }, color = class,
+              want = { class, R.DIM, class, R.BG, class, 0.8 } },
+            { name = "class hidden", style = { classBars = true, classNames = true, bgColor = bg },
+              want = { gray, R.DIM, gray, R.BG, white, 0.8 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.Colors(case.style, case.color) }, case.name)
+        end
+    end)
+end)
+
+describe("PartyPotionsRules.Window", function()
+    it("keeps the window on whole pixels, its offset rounded down, never taller than the line, with the gap above it", function()
+        local R = L.loadPartyPotionsRules()
+        local cases = {
+            { name = "odd gap", area = 19, line = 14, want = { 14, 2, 3 } },
+            { name = "even gap", area = 18, line = 14, want = { 14, 2, 2 } },
+            { name = "line a hair under a pixel", area = 19, line = 13.9999998, want = { 14, 2, 3 } },
+            { name = "fractional line", area = 19, line = 13.6, want = { 13, 3, 3 } },
+            { name = "line taller than the area", area = 8, line = 13, want = { 13, -3, -2 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.Window(case.area, case.line) }, case.name)
+        end
+    end)
+end)
+
+describe("PartyPotionsRules.Gap", function()
+    it("overlaps the bars by a pixel at no spacing and keeps any other spacing", function()
+        local R = L.loadPartyPotionsRules()
+        assert.are.equal(-0.5, R.Gap(0, 0.5), "no spacing")
+        assert.are.equal(3, R.Gap(3, 0.5), "spacing")
     end)
 end)
 

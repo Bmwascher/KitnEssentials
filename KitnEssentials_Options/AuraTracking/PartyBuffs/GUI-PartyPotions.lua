@@ -10,8 +10,10 @@ local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 
 local C_Timer = C_Timer
+local UIParent = UIParent
+local math_ceil = math.ceil
+local math_max = math.max
 local next = next
-local tostring = tostring
 
 local GROW_OPTIONS = {
     { key = "DOWN", text = "Down" },
@@ -49,8 +51,10 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
 
     -- Without the sensor file no bar can exist; the list still feeds the
     -- Cooldowns tab's while-active potion icons.
-    manager:SetCondition("sensorOn", function() return Sensor ~= nil end)
     manager:SetCondition("barsOn", function() return Sensor ~= nil and db.PotionBars == true end)
+    manager:SetCondition("ownColors", function()
+        return Sensor ~= nil and db.PotionBars == true and db.PotionClassBars ~= true
+    end)
 
     local function AddCheck(row, label, key, state, tooltip, onChange)
         local check = GUIFrame:CreateCheckbox(row, label, {
@@ -76,10 +80,29 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         manager:Register(slider, "barsOn")
     end
 
+    local function AddColor(row, label, key, state, tooltip)
+        local picker = GUIFrame:CreateColorPicker(row, label, {
+            color = db[key],
+            callback = function(r, g, b, a)
+                db[key] = { r, g, b, a }
+                ApplySettings()
+            end,
+            tooltip = tooltip,
+        })
+        row:AddWidget(picker, 0.5)
+        manager:Register(picker, state)
+    end
+
     ----------------------------------------------------------------
     -- Card: Potion Bars
     ----------------------------------------------------------------
     local cardBars = GUIFrame:CreateCard(scrollChild, "Potion Bars", yOffset)
+    if Sensor then
+        cardBars:AddHeaderToggle(db.PotionBars == true, function(checked)
+            db.PotionBars = checked
+            ApplySettings()
+        end)
+    end
     if not Sensor then
         cardBars:AddNote("Potion bars need party cooldown timers, which this client cannot show.")
     elseif Sensor.door and not Sensor.DoorOpen() then
@@ -88,34 +111,11 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     if next(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)) == nil then
         cardBars:AddNote("No potion on the list is switched on, so no bar can start.")
     end
-    cardBars:AddLabel("Move the bars with /kes edit.")
-    cardBars:AddLabel("Healing potions are not shown: they leave no buff to see, and they have their own cooldown.")
-    local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
-    AddCheck(rowB1, "Potion Bars", "PotionBars", "sensorOn", nil, RefreshStates)
+    local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
     AddCheck(rowB1, "Include Yourself", "PotionIncludeSelf", "barsOn", "Shows a bar for your own potions too.")
-    cardBars:AddRow(rowB1, Theme.rowHeight)
-    local rowB2 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
-    AddCheck(rowB2, "Show Ready Bars", "PotionShowReady", "barsOn",
+    AddCheck(rowB1, "Show Ready Bars", "PotionShowReady", "barsOn",
         "Keeps a full bar reading Ready for each party member whose potion is ready.")
-    local box
-    box = GUIFrame:CreateEditBox(rowB2, "Potion Cooldown (sec)", {
-        value = tostring(db.PotionSeconds),
-        callback = function(text)
-            local value = KE.PartyCooldownsRules.ClampSeconds(text)
-            if not value then
-                box:SetValue(tostring(db.PotionSeconds))
-                return
-            end
-            box:SetValue(tostring(value))
-            if value ~= db.PotionSeconds then
-                db.PotionSeconds = value
-                ApplySettings()
-            end
-        end,
-    })
-    rowB2:AddWidget(box, 0.5)
-    manager:Register(box, "barsOn")
-    cardBars:AddRow(rowB2, Theme.rowHeightLast, 0)
+    cardBars:AddRow(rowB1, Theme.rowHeightLast, 0)
     yOffset = cardBars:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -123,27 +123,64 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Bar Display", yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    local grow = GUIFrame:CreateDropdown(rowD1, "Grow", {
+    AddSlider(rowD1, "Width", "PotionWidth", 80, 400)
+    AddSlider(rowD1, "Height", "PotionHeight", 10, 50)
+    cardDisplay:AddRow(rowD1, Theme.rowHeight)
+    local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
+    local grow = GUIFrame:CreateDropdown(rowD2, "Grow", {
         options = GROW_OPTIONS,
         value = db.PotionGrowth,
         callback = function(choice) db.PotionGrowth = choice; ApplySettings() end,
     })
-    rowD1:AddWidget(grow, 0.5)
+    rowD2:AddWidget(grow, 0.5)
     manager:Register(grow, "barsOn")
-    AddSlider(rowD1, "Width", "PotionWidth", 80, 400)
-    cardDisplay:AddRow(rowD1, Theme.rowHeight)
-    local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD2, "Height", "PotionHeight", 10, 50)
     AddSlider(rowD2, "Spacing", "PotionSpacing", 0, 20)
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
-    local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddCheck(rowD3, "Icon", "PotionShowIcon", "barsOn")
+    local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
     AddCheck(rowD3, "Timer Text", "PotionShowTimer", "barsOn")
-    cardDisplay:AddRow(rowD3, Theme.rowHeight)
-    local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
-    AddSlider(rowD4, "Text Size", "PotionTextSize", 8, 30)
-    cardDisplay:AddRow(rowD4, Theme.rowHeightLast, 0)
+    AddSlider(rowD3, "Text Size", "PotionTextSize", 8, 30)
+    cardDisplay:AddRow(rowD3, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Colors
+    ----------------------------------------------------------------
+    local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    local rowC1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
+    AddCheck(rowC1, "Class Color Bars", "PotionClassBars", "barsOn",
+        "Draws each bar in its player's class color; the drained part takes the Background Color's opacity. Off: Bar Color and Background Color.",
+        RefreshStates)
+    AddCheck(rowC1, "Class Color Names", "PotionClassNames", "barsOn",
+        "Writes each name in its player's class color instead of white.")
+    cardColors:AddRow(rowC1, Theme.rowHeight)
+    local rowC2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
+    AddColor(rowC2, "Bar Color", "PotionBarColor", "ownColors")
+    AddColor(rowC2, "Background Color", "PotionBgColor", "barsOn",
+        "With Class Color Bars on, only its opacity is used.")
+    cardColors:AddRow(rowC2, Theme.rowHeightLast, 0)
+    yOffset = cardColors:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Position (the same saved position /kes edit moves)
+    ----------------------------------------------------------------
+    -- A box dragged in Edit Mode can sit up to a screen's size from its anchor,
+    -- so the sliders span the screen rather than the card's default 1000.
+    local reach = math_ceil(math_max(UIParent:GetWidth(), UIParent:GetHeight()))
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position",
+        db = db,
+        positionKey = "PotionPosition",
+        dbKeys = {
+            anchorFrameType = "PotionAnchorFrameType", anchorFrameFrame = "PotionParentFrame",
+            strata = "PotionStrata",
+        },
+        defaults = { anchorFrameType = "UIPARENT", strata = "MEDIUM" },
+        showStrata = true,
+        sliderRange = { -reach, reach },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(posCard, "barsOn")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card: Potion List (live without Potion Bars: the Cooldowns tab's

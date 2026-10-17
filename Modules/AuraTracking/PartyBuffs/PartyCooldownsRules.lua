@@ -30,6 +30,9 @@ end
 
 function Rules.CooldownKey(specID, castID) return specID .. ":" .. castID end
 
+-- TalentsFor's key for a cast's length rule, apart from its show rule.
+function Rules.LengthKey(castID) return "len:" .. castID end
+
 function Rules.TrinketKey(spellID) return "trinket:" .. spellID end
 
 -- A typed length, floored and clamped, or nil when it is not a number.
@@ -43,9 +46,10 @@ end
 local function Entry(castID, spell, key, listed, typed, isOff)
     return {
         id = castID, key = key, spell = spell, kind = spell.kind,
-        buffs = spell.buffs, short = spell.short,
+        buffs = spell.buffs, short = spell.short, active = spell.active,
         listed = listed,
         cd = Rules.ClampSeconds(typed) or Rules.ClampSeconds(listed),
+        typed = Rules.ClampSeconds(typed) ~= nil,
         off = isOff,
     }
 end
@@ -73,7 +77,7 @@ function Rules.SpellList(specID, db, all)
         if type(item) == "table" then castID, talented = item[1], item[2] end
         local spell = data.SPELLS[castID]
         local key = Rules.CooldownKey(specID, castID)
-        local isOff = off[key] == true
+        local isOff = off[key] == true or (off[key] == nil and spell ~= nil and spell.off == true)
         if spell and (all or not isOff) then
             local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
             entry.at = rank and (rank[castID] or #order + i) or i
@@ -120,12 +124,13 @@ function Rules.InspectInUse(inspectShown, talentsInspecting)
 end
 
 -- At most one member per call, and none while an inspect view is in use, in
--- combat, or within INSPECT_GAP seconds of the last request.
+-- combat, or within INSPECT_GAP seconds of the last request. An offline
+-- member never answers, and asking it would hold back everyone behind it.
 function Rules.NextInspect(state, members)
     if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
     if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
     for _, m in ipairs(members) do
-        if not m.done and m.canInspect and not (m.waitUntil and state.now < m.waitUntil) then
+        if not m.done and m.canInspect and not m.offline and not (m.waitUntil and state.now < m.waitUntil) then
             return m
         end
     end
@@ -219,7 +224,7 @@ function Rules.Clear(t, n)
         local sl = t.slot[k]
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
-    t.cur, t.primed, t.prev, t.prevShort = 1, false, nil, nil
+    t.cur, t.primed, t.prev, t.prevShort, t.quietTo = 1, false, nil, nil, nil
 end
 
 function Rules.Roll(t, n)
@@ -247,10 +252,26 @@ function Rules.RangeMin(sl, u, n)
     return (254 - (n - sl.epoch) / u) / 255
 end
 
-function Rules.StartPlain(t, n)
+-- at dates the use before the read n; it defaults to n.
+function Rules.StartPlain(t, n, at)
     Rules.Roll(t, n)
     local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
-    sl.c, sl.v, other.v = Rules.Stamp(t, n), 1, 0
+    sl.c, sl.v, other.v = Rules.Stamp(t, at or n), 1, 0
+end
+
+-- A buff up at a key's start n has fallen by fallFrom. A fall from then to
+-- fallTo ends a buff drunk in the key, length seconds before the fall.
+function Rules.ArmFall(t, n, length)
+    t.fallD, t.fallFrom, t.fallTo = length, n + length + 2, n + 2 * length + 1
+end
+
+-- A cast's own buff can reach the reads late, after a read that saw none, so
+-- for these seconds after a cast stamp a rise only records. A clear ends it.
+Rules.CAST_QUIET = 10
+
+function Rules.StartCast(t, n)
+    Rules.StartPlain(t, n)
+    t.quietTo = n + Rules.CAST_QUIET
 end
 
 -- A preview sample: cooling at n with t.loop seconds left.
@@ -303,7 +324,8 @@ end
 
 -- One read. Plain answers decide the edge in Lua. A secret answer is only
 -- passed to pick, which writes the stamp and the visibility without Lua
--- learning it. Returns true when a slot changed.
+-- learning it. Inside an armed window a fall stamps fallD seconds back; in a
+-- cast's quiet a rise only records. Returns true when a slot changed.
 function Rules.Feed(t, lit, short, n, isSecret, pick)
     local changed = false
     local hasShort, multi = t.hasShort, t.multi
@@ -311,18 +333,37 @@ function Rules.Feed(t, lit, short, n, isSecret, pick)
         changed = Rules.Roll(t, n)
         local litKnown, up = State(lit, short, hasShort, isSecret, multi)
         local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret, multi)
-        if not ((litKnown and not up) or (prevKnown and was)) then
+        local rise = not (t.quietTo ~= nil and n <= t.quietTo)
+            and not ((litKnown and not up) or (prevKnown and was))
+        local fall = t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
+            and not ((litKnown and up) or (prevKnown and not was))
+        if rise or fall then
             if litKnown and prevKnown then
-                Rules.StartPlain(t, n)
+                if rise then
+                    Rules.StartPlain(t, n)
+                else
+                    Rules.StartPlain(t, n, n - t.fallD)
+                end
             else
+                -- The sides are picked by the plain flags; a side that cannot
+                -- happen keeps the slot as it is.
                 local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
                 local prev, prevShort = t.prev, t.prevShort
-                sl.c = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi), sl.c, pick, multi)
-                sl.v = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi), sl.v, pick, multi)
-                other.v = Pick(lit, short, hasShort,
-                    Pick(prev, prevShort, hasShort, other.v, 0, pick, multi), other.v, pick, multi)
+                local riseC, riseV, riseO = sl.c, sl.v, other.v
+                if rise then
+                    riseC = Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi)
+                    riseV = Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi)
+                    riseO = Pick(prev, prevShort, hasShort, other.v, 0, pick, multi)
+                end
+                local fallC, fallV, fallO = sl.c, sl.v, other.v
+                if fall then
+                    fallC = Pick(prev, prevShort, hasShort, Rules.Stamp(t, n - t.fallD), sl.c, pick, multi)
+                    fallV = Pick(prev, prevShort, hasShort, 1, sl.v, pick, multi)
+                    fallO = Pick(prev, prevShort, hasShort, 0, other.v, pick, multi)
+                end
+                sl.c = Pick(lit, short, hasShort, riseC, fallC, pick, multi)
+                sl.v = Pick(lit, short, hasShort, riseV, fallV, pick, multi)
+                other.v = Pick(lit, short, hasShort, riseO, fallO, pick, multi)
             end
             changed = true
         end
@@ -385,6 +426,59 @@ function Rules.StripBar(cd, u)
     return -(cd - 1 + u), 255 * u
 end
 
+-- The blank kept above and below each strip label. A label's ink spills past
+-- its line box, more as the font grows, and packed labels poke into their
+-- neighbor's window. The client has no ink measure; a quarter of the line plus
+-- one is about twice the spill seen at 12.
+function Rules.StripMargin(line)
+    if type(line) ~= "number" then line = 0 end
+    return math_ceil(line / 4) + 1
+end
+
+-- The gray window's y offset that lands its label's line bottom a quarter of a
+-- screen pixel above the grid, away from the edge where drawing can round to
+-- either pixel; nil leaves the window where it is. y is the cell's center,
+-- base the line bottom's depth below it, scale and height the cell's
+-- effective scale and the screen's physical height. A center that cannot be
+-- read keeps the last seat; before any seat, a quarter pixel is the guess.
+function Rules.Seat(y, base, scale, height, seat, isSecret)
+    if isSecret(scale) or type(scale) ~= "number" or scale <= 0
+        or type(height) ~= "number" or height <= 0 or type(base) ~= "number" then
+        return nil
+    end
+    local ppu = scale * height / 768
+    if isSecret(y) or type(y) ~= "number" then
+        if seat then return nil end
+        return 0.25 / ppu
+    end
+    local at = (y - base) * ppu
+    if seat then
+        local seated = at + seat * ppu
+        if math_abs(seated - math_floor(seated) - 0.25) < 0.1 then return nil end
+    end
+    local f = at - math_floor(at)
+    return ((f < 0.75 and 0.25 or 1.25) - f) / ppu
+end
+
+-- A summon's glow window, in pixels from the bottom of the icon's inner area:
+-- the step its bar moves each second, the window's bottom and top above that
+-- bar's fill edge, and its width. A step is more than the glow's whole reach
+-- (the widest style draws 0.3 sizes past each edge), so the window covers the
+-- glow for the first active seconds and lies above it from then on.
+function Rules.GlowWindow(size, px, cd, active)
+    local over = math_ceil(size * 0.3)
+    local step = size + 2 * over + 2
+    local lead = size - px + over + (cd - 1 - active) * step
+    return step, lead, lead + active * step + 1, step
+end
+
+-- Whole seconds of a summon's active phase, at least one second short of cd so
+-- the gray cover still has a second to show; 0 when there is none.
+function Rules.ActiveSeconds(active, cd)
+    if type(active) ~= "number" or type(cd) ~= "number" then return 0 end
+    return math_max(0, math_min(math_floor(active), cd - 1))
+end
+
 -- Item data loads asked for per item in a session; a load that keeps failing
 -- stops here.
 Rules.LOAD_TRIES = 3
@@ -416,9 +510,10 @@ function Rules.TrinketShow(show, set, accepted)
 end
 
 -- castID -> the talent rule of each of the spec's entries that has one: its
--- swap where the swap applies to the spec, else its needs. Nil when none does.
--- The data never changes, so each spec's answer is built once and shared;
--- callers only read it. The inspect ticker asks every second.
+-- swap where the swap applies to the spec, else its needs. A paired cast whose
+-- spell has lengthNeeds also gets that rule under Rules.LengthKey(castID).
+-- Nil when none does. The data never changes, so each spec's answer is built
+-- once and shared; callers only read it. The inspect ticker asks every second.
 local talentsBySpec = {}
 
 function Rules.TalentsFor(specID)
@@ -428,7 +523,8 @@ function Rules.TalentsFor(specID)
         local data = KE.PartyCooldownsData
         cached = false
         for _, item in ipairs(data.SPECS[specID] or {}) do
-            local castID = type(item) == "table" and item[1] or item
+            local paired = type(item) == "table"
+            local castID = paired and item[1] or item
             local spell = data.SPELLS[castID]
             local swap = spell and spell.swap
             local rule = spell and spell.needs
@@ -436,6 +532,10 @@ function Rules.TalentsFor(specID)
             if rule then
                 cached = cached or {}
                 cached[castID] = rule
+            end
+            if paired and spell and spell.lengthNeeds then
+                cached = cached or {}
+                cached[Rules.LengthKey(castID)] = spell.lengthNeeds
             end
         end
         talentsBySpec[specID] = cached
@@ -448,6 +548,17 @@ function Rules.TalentAllows(entry, taken)
     if not needs then return true end
     if taken == nil then return needs.likely == true end
     return taken == true
+end
+
+-- The length a cell counts: the spell's own when its length talent is read as
+-- not taken, or unread and not likely, and no seconds are typed; else the
+-- entry's.
+function Rules.TalentLength(entry, taken)
+    local needs = entry.spell and entry.spell.lengthNeeds
+    if not needs or entry.typed then return entry.cd end
+    if taken == nil then taken = needs.likely ~= false end
+    if taken then return entry.cd end
+    return Rules.ClampSeconds(entry.spell.cd)
 end
 
 -- Your own answer for one talent rule: true, false, or nil when the client
@@ -491,6 +602,13 @@ end
 function Rules.TrinketReadStands(prev, items)
     local same = prev ~= nil and prev[1] == items[1] and prev[2] == items[2]
     return same or (items[1] ~= nil and items[2] ~= nil), same
+end
+
+-- The talent answer after three unreadable reads, and whether to read once
+-- more: a member with no answer stores an empty one and is read again; a held
+-- answer, the empty one included, is kept.
+function Rules.AfterTalentMisses(held)
+    return held or {}, held == nil
 end
 
 -- Whether a spec or talent event may drop what was read of a member. Inside a

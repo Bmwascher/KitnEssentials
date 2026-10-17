@@ -777,7 +777,7 @@ local Defaults = {
             CustomIDs = {},
             IconSize = 40,
             RowSpacing = 2,
-            MaxEnemies = 15,
+            MaxEnemies = 5,
             GrowDirection = "DOWN",
             Strata = "MEDIUM",
             TimerFontFace = nil,
@@ -797,7 +797,7 @@ local Defaults = {
             ShowTooltips = false,
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 0, YOffset = 69 },
+            Position = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 0, YOffset = 59 },
         },
 
         StanceText = {
@@ -1534,7 +1534,7 @@ local Defaults = {
 
         PartyBuffs = {
             Enabled           = false,
-            TrackExternal     = true,
+            TrackExternal     = false,
             TrackBurst        = true,
             TrackPotion       = true,
             TrackTrinket      = true,
@@ -1546,18 +1546,22 @@ local Defaults = {
             IconSize          = 36,
             IconSpacing       = 1,
             MaxPerMember      = 4,
-            MaxCooldownIcons  = 5,
+            MaxCooldownIcons  = 6,
             IncludeSelf       = false,
             ShowRacials       = true,
             Side              = "LEFT",
             XOffset           = 0,
             YOffset           = 0,
-            -- FRAME follows the party frame's own strata.
-            Strata            = "FRAME",
-            -- No defaults for the Healer* placement keys: turning this on
-            -- copies the placement above, so nothing moves until edited.
+            IconsPerRow       = 14,
+            -- No Grow default: each side keeps its first layout
+            -- (PartyBuffsRules.LAYOUTS), and an unset HealerGrow reads Grow.
+            -- Side and offsets have no Healer* default: turning this
+            -- on copies them from above, so they do not move until edited.
+            -- Icons per row and icon size have healer defaults of their own.
+            HealerIconsPerRow = 3,
+            HealerIconSize    = 32,
             UseHealerPlacement = false,
-            Swipe             = true,
+            Swipe             = false,
             CategoryColors    = false,
             ColorExternal     = { 0.949, 0.757, 0.306, 1 },
             ColorBigDefensive = { 0.310, 0.639, 1, 1 },
@@ -1570,7 +1574,14 @@ local Defaults = {
             TimerFontSize     = 14,
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             ShowCooldownText  = true,
-            CooldownFontSize  = 12,
+            -- Glow While Active: a cooldown icon glows while its buff is up,
+            -- and the external, potion and trinket buff icons glow while shown.
+            GlowEnabled       = true,
+            GlowType          = "border",
+            GlowColor         = { 1, 0.976, 0.122, 1 }, -- #FFF91F
+            GlowLines         = 8,
+            GlowFrequency     = 0.5,
+            GlowThickness     = 2,
             -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
             -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
             -- external "healer:<specID>:<castID>". CooldownOrder holds a cast
@@ -1579,29 +1590,39 @@ local Defaults = {
             CooldownSeconds   = {},
             CooldownOrder     = {},
             -- Potion bars (Potions tab). They read ListPotions, which the
-            -- while-active potion icons read too.
+            -- while-active potion icons read too. The position card writes
+            -- PotionParentFrame, which has no default.
             PotionBars        = true,
             PotionIncludeSelf = true,
-            PotionShowReady   = false,
-            PotionSeconds     = 300,
+            PotionShowReady   = true,
             PotionGrowth      = "DOWN",
-            PotionWidth       = 170,
-            PotionHeight      = 20,
-            PotionSpacing     = 2,
-            PotionShowIcon    = true,
+            PotionWidth       = 225,
+            PotionHeight      = 23,
+            PotionSpacing     = 0,
             PotionShowTimer   = true,
-            PotionTextSize    = 12,
-            PotionPosition    = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 60 },
-            -- Healer externals box (Healer Externals tab). The position card
-            -- writes HealerExtParentFrame, which has no default.
+            PotionTextSize    = 14,
+            PotionClassBars   = false,
+            PotionClassNames  = true,
+            PotionBarColor    = { 0.431, 0.682, 0.812, 1 }, -- #6EAECF
+            -- #080808 at 80%, the Chat and Damage Meter backdrop color.
+            PotionBgColor     = { 0.031, 0.031, 0.031, 0.80 },
+            PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 },
+            PotionAnchorFrameType = "UIPARENT",
+            PotionStrata      = "MEDIUM",
+            -- Healer externals box (Healer Externals tab), attached to the top
+            -- of Healer Mana. While Healer Mana's frame does not exist (off
+            -- since login) the box takes HX.DEFAULT_POSITION on the screen.
             HealerExternals   = true,
-            HealerExtIconSize = 30,
-            HealerExtSpacing  = 2,
+            HealerExtIconSize = 38,
+            HealerExtSpacing  = 1,
             HealerExtGrowth   = "RIGHT",
             HealerExtShowText = true,
-            HealerExtTextSize = 12,
-            HealerExtPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 },
-            HealerExtAnchorFrameType = "UIPARENT",
+            HealerExtTextSize = 14,
+            HealerExtPosition = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 1 },
+            HealerExtAnchorFrameType = "SELECTFRAME",
+            HealerExtParentFrame = "KitnEssentialsHealerMana",
+            HealerExtStrata   = "MEDIUM",
+            HealerExtAttachSide = "TOP",
             -- ListExternals is a row copy of the External Tracker list, made
             -- below this table.
             ListPotions = {
@@ -1987,11 +2008,13 @@ local Defaults = {
             },
             HealerMana = {
                 Enabled = false,
-                DisableOnHealer = false,
+                DisableOnHealer = true,
                 Strata = "MEDIUM",
-                anchorFrameType = "UIPARENT",
-                ParentFrame = "UIParent",
-                Position = DefaultPosition(-400, 200),
+                -- Without this frame the display takes the same points on the
+                -- screen (KE:ResolveAnchorFrame).
+                anchorFrameType = "SELECTFRAME",
+                ParentFrame = "ERFPartyHeader",
+                Position = { AnchorFrom = "TOP", AnchorTo = "TOP", XOffset = -50, YOffset = -251 },
                 -- Raid/Dungeon mode
                 EnableInRaid = true,        -- master toggle: Raid Mode active at all
                 MaxHealers = 6,             -- cap on raid healers shown
@@ -2004,15 +2027,15 @@ local Defaults = {
                 RaidAnchorFrameType = "UIPARENT",  -- Raid's own Anchored To (Dungeon uses anchorFrameType)
                 RaidParentFrame = "UIParent",
                 FrameWidth = 120,
-                IconSize = 24,
+                IconSize = 38,
                 IconType = "spec",
 
-                NameFontSize = 14,
+                NameFontSize = 17,
                 NameXOffset = 4,
-                NameYOffset = 2,
-                ManaFontSize = 14,
+                NameYOffset = 6,
+                ManaFontSize = 16,
                 ManaXOffset = 4,
-                ManaYOffset = -2,
+                ManaYOffset = -9,
                 FontOutline = "OUTLINE",
                 HighManaColor = { 1, 1, 1, 1 },
                 -- No Raid* keys here on purpose: AceDB rawsets every declared default into
@@ -2802,6 +2825,35 @@ local function SubTable(parent, key)
     return nil
 end
 
+-- For defaults changed after release. A profile that already holds the block
+-- keeps the old value of every changed key it never set; a profile without the
+-- block, and every profile made later, takes the new default. An import keeps
+-- what it carries. `old` mirrors the block: a table value is filled leaf by
+-- leaf, so a moved display keeps its saved offsets and pins only the rest.
+local function PinOldDefaults(path, old)
+    return function(profile, fromImport)
+        if fromImport then return end
+        local block = profile
+        for i = 1, #path do
+            block = SubTable(block, path[i])
+            if not block then return end
+        end
+        for key, value in pairs(old) do
+            if type(value) == "table" then
+                if block[key] == nil then block[key] = {} end
+                local saved = SubTable(block, key)
+                if saved then
+                    for leaf, leafValue in pairs(value) do
+                        if saved[leaf] == nil then saved[leaf] = leafValue end
+                    end
+                end
+            elseif block[key] == nil then
+                block[key] = value
+            end
+        end
+    end
+end
+
 -- Hide Zone Text was two settings. Automation's hid zone text only while
 -- Automation was on; On-Screen Messages' only while that module was on and not
 -- standing down for ElvUI. The merged setting is ticked exactly where one of
@@ -2958,6 +3010,24 @@ local KEY_RENAMES = {
     { id = "GatewayAlert.Delete", path = { "GatewayAlert" }, convert = DeleteKey },
     { id = "Dungeons.WarpDepleteForces.Delete", block = "Dungeons", old = "WarpDepleteForces", new = "WarpDepleteForces", convert = DeleteKey },
     { id = "ZoneText.HideMerge", merge = MergeZoneTextHide },
+    {
+        id = "Dungeons.HealerMana.PinPartyDefaults",
+        merge = PinOldDefaults({ "Dungeons", "HealerMana" }, {
+            DisableOnHealer = false,
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -400, YOffset = 200 },
+            IconSize = 24,
+            NameFontSize = 14,
+            NameYOffset = 2,
+            ManaFontSize = 14,
+            ManaYOffset = -2,
+        }),
+    },
+    {
+        id = "CCTracker.PinDefaults",
+        merge = PinOldDefaults({ "CCTracker" }, { MaxEnemies = 15, Position = { YOffset = 69 } }),
+    },
 }
 
 -- Resolves one entry against one profile: the table holding the key, the old

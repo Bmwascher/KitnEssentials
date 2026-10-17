@@ -1596,11 +1596,23 @@ end
 -- Dropdown Options
 ---------------------------------------------------------------------------------
 
+-- One table shared by every page: the dropdown only reads its options.
+GUIFrame.GrowDirectionOptions = {
+    { key = "DOWN",  text = "Down" },
+    { key = "UP",    text = "Up" },
+    { key = "LEFT",  text = "Left" },
+    { key = "RIGHT", text = "Right" },
+}
+
+-- "None" first, then the library's sounds in its sorted order. A library
+-- sound named "None" is skipped, so the entry is listed once.
 function GUIFrame.BuildSoundOptions()
     local out = { { key = "None", text = "None" } }
     if KE.LSM then
         for _, name in ipairs(KE.LSM:List("sound")) do
-            out[#out + 1] = { key = name, text = name }
+            if name ~= "None" then
+                out[#out + 1] = { key = name, text = name }
+            end
         end
     end
     return out

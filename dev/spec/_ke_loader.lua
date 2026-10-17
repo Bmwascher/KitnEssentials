@@ -194,16 +194,17 @@ function L.loadEditMode(KE)
 end
 
 -- Core/AddonTheme.lua. RAID_CLASS_COLORS and UnitClass are captured as
--- file-scope upvalues by the class-color resolver, so both must exist on _G
--- before the load. Neither is managed by _wow_mock, so they are set here
--- directly rather than through installMock. Returns the KE table; the caller
--- seeds db.global.Theme itself.
+-- file-scope upvalues by the class-color resolver, and geterrorhandler by the
+-- theme-change dispatch, so all three must exist on _G before the load. None
+-- is managed by _wow_mock, so they are set here directly rather than through
+-- installMock. Returns the KE table; the caller seeds db.global.Theme itself.
 function L.loadAddonTheme(env)
     env = env or {}
     _G.RAID_CLASS_COLORS = env.RAID_CLASS_COLORS or {
         WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
     }
     _G.UnitClass = env.UnitClass or function() return "Mock", "WARRIOR" end
+    _G.geterrorhandler = env.geterrorhandler or function() return function() end end
     local KE = {}
     return helpers.loadModule("Core/AddonTheme.lua", KE)
 end
@@ -657,8 +658,9 @@ function L.loadPartyCooldownsRules(data)
     return KE.PartyCooldownsRules, KE
 end
 
--- Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua on the party cooldowns
--- rules whose clock and seconds clamp it uses. Returns KE.PartyPotionsRules, KE.
+-- Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua beside the party
+-- cooldowns rules, whose stamp the cover range reads. Returns
+-- KE.PartyPotionsRules, KE.
 function L.loadPartyPotionsRules()
     installMock(nil, {})
     local KE = {}
@@ -1266,6 +1268,7 @@ function L.loadCursor(overrides)
         },
         -- Core/Globals.lua's instance check, answering as the open world.
         InRealInstancedContent = function() return false end,
+        GetPlayerSpecId = specIdFromMocks,
     }
     helpers.loadModule("Modules/Combat/Cursor.lua", KE)
     local C = modules["Cursor"]
@@ -2924,6 +2927,8 @@ function L.loadHealerMana(overrides)
     -- Defaults to a non-healer, so a spec that drives the live roster scan
     -- finds nobody and stops rather than needing the whole snapshot surface.
     _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
+    _G.UnitClass = overrides.UnitClass or function() return "Priest", "PRIEST" end
+    _G.UnitIsConnected = overrides.UnitIsConnected or function() return true end
 
     local profile = {
         Dungeons = {
@@ -2964,7 +2969,13 @@ function L.loadHealerMana(overrides)
         ApplyIconZoom = function() end,
         IsPlayerHealerSpec = function() return false end,
         Print = function() end,
+        GetNicknameOrName = function() return "Healer" end,
+        GetClassColor = function() return { 1, 1, 1 } end,
     }
+    -- The snapshot's spec lookup takes its secret test and its key rule from
+    -- these two files.
+    helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
     helpers.loadModule("Modules/Combat/StatusTexts/HealerMana.lua", KE)
     local HM = modules["HealerMana"]
     HM:UpdateDB()

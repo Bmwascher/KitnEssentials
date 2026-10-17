@@ -36,12 +36,20 @@ GlowRules.FLIPBOOKS = {
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.4,
         frameWidth = 0, frameHeight = 0,
     },
+    -- speedFactor: this sheet loops that many times faster than the others
+    -- at the same Speed.
     alert = {
         texture = [[Interface\SpellActivationOverlay\IconAlertAnts]],
         rows = 5, columns = 5, frames = 22, sizeFactor = 1.25,
         frameWidth = 48, frameHeight = 48,
+        speedFactor = 6,
     },
 }
+
+-- The loop length a sheet plays at, from the Speed slider's period.
+function GlowRules.FlipbookPeriod(entry, period)
+    return period / (entry.speedFactor or 1)
+end
 
 -- Every selectable style, and which host draws it. The flipbook host steps a
 -- sheet; the pixel host marches four masked dash strips; the border host
@@ -203,4 +211,24 @@ function GlowRules.PixelPerimeter(count, width, height, period)
         spanH = (width + cycle) / cycle,
         spanV = (height + cycle) / cycle,
     }
+end
+
+-- Brings KE's record of a button's aura-shown list to the set the style
+-- runs. Keys in both make no call, so a restyle that keeps its style leaves
+-- the list alone. Removals run first. False at the first refused call: the
+-- list is then unknown and the caller clears it.
+function GlowRules.SyncShown(registered, wanted, ops, target)
+    for key in pairs(registered) do
+        if not wanted[key] then
+            if not ops.remove(target, key) then return false end
+            registered[key] = nil
+        end
+    end
+    for key in pairs(wanted) do
+        if not registered[key] then
+            if not ops.add(target, key) then return false end
+            registered[key] = true
+        end
+    end
+    return true
 end

@@ -36,6 +36,10 @@ local Track = {}
 KE.PartyCooldownsSensor = Track
 
 local SENSOR_GROUP = "cd"
+-- The sensors and the overlay slots both use this. Some cooldown buffs (Dark
+-- Transformation) are flagged nameplate-only, and plain "HELPFUL" filters
+-- those out. The spell-ID list still limits each container to its own buffs.
+local SENSOR_FILTER = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
 -- A lit sensor spans the screen from just off its left edge.
 local SENSOR_WIDTH = 50000
 local READ_DELAY = 0.2
@@ -44,7 +48,9 @@ local BIND_HOLD = 0.5
 local HIDDEN_RETRY = 1
 -- 4 dispatches a second so a new second is seen within 0.25 s. Three of them
 -- cost one GetTime and one compare; the fourth walks the live trackers, with
--- 2 SetMinMaxValues per running slot (64 a second at 16 cells).
+-- 2 SetMinMaxValues per running slot (64 a second at 16 cells), 3 on a summon
+-- cell whose glow is on, plus a seat check per running gray cell (3 reads, an
+-- anchor write only when the seat moved).
 local TICK = 0.25
 
 -- Whole seconds from an origin far enough back that no epoch goes negative.
@@ -71,6 +77,7 @@ local function Push(t, n)
     if not c then return end
     local view = t.view or Cell
     for k = 1, 2 do pcall(view.Write, c, k, t.slot[k], t.u, n) end
+    if view.Seat then pcall(view.Seat, c) end
 end
 Track.Push = Push
 
@@ -89,10 +96,12 @@ local function Tick()
         if changed then Push(t, n) end
         if running then
             any = true
+            local view = t.view or Cell
             for k = 1, 2 do
                 local sl = t.slot[k]
-                if issecretvalue(sl.v) or sl.v ~= 0 then pcall((t.view or Cell).Range, t.cell, k, sl, t.u, n) end
+                if issecretvalue(sl.v) or sl.v ~= 0 then pcall(view.Range, t.cell, k, sl, t.u, n) end
             end
+            if view.Seat and t.cell and not changed then pcall(view.Seat, t.cell) end
         end
     end
     if not any and ticker then
@@ -156,7 +165,7 @@ local function NewSensor(buffs, short, host)
         sensor:SetSize(1, 1)
         sensor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -11, 0)
         sensor:EnableMouse(false)
-        sensor:AddAuraGroup(SENSOR_GROUP, "HELPFUL", {
+        sensor:AddAuraGroup(SENSOR_GROUP, SENSOR_FILTER, {
             maxFrameCount = 1,
             candidateFilters = { includeSpellIDs = BuffSet(buffs), maxDuration = short },
             initializeFrame = InitSensorButton,
@@ -743,16 +752,16 @@ end
 
 ---------------------------------------------------------------------------------
 -- Active state: an engine aura slot per cell, laid over it. While the buff is
--- up it shows KE's swipe and timer; when the buff falls the engine hides it
--- and the cooling cell underneath shows.
+-- up it shows KE's timer and glow; when the buff falls the engine hides it,
+-- the glow with it, and the cooling cell underneath shows.
 ---------------------------------------------------------------------------------
 local OVERLAY_DESCRIPTORS = {
-    offensive = { key = "cdOffensive",
-        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingOffensive" } },
-    defensive = { key = "cdDefensive",
-        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingDefensive" } },
-    trinket   = { key = "cdTrinket",
-        capabilities = { hasBorder = true, hasDispelRing = true, ringColorKey = "CellRingTrinket" } },
+    offensive = { key = "cdOffensive", capabilities = { hasBorder = true, hasDispelRing = true,
+        hasGlow = true, ringColorKey = "CellRingOffensive" } },
+    defensive = { key = "cdDefensive", capabilities = { hasBorder = true, hasDispelRing = true,
+        hasGlow = true, ringColorKey = "CellRingDefensive" } },
+    trinket   = { key = "cdTrinket", capabilities = { hasBorder = true, hasDispelRing = true,
+        hasGlow = true, ringColorKey = "CellRingTrinket" } },
 }
 Track.OVERLAY_DESCRIPTORS = OVERLAY_DESCRIPTORS
 
@@ -876,7 +885,7 @@ function Track.BuildOverlayNext(st)
             local inited = false
             -- Added empty: a key a failed add left registered never shows,
             -- and the apply that follows points a good one at its buffs.
-            local added, button = pcall(container.AddAuraSlot, container, key, "HELPFUL", {
+            local added, button = pcall(container.AddAuraSlot, container, key, SENSOR_FILTER, {
                 candidateFilters = EMPTY,
                 initializeFrame = function(b)
                     inited = pcall(function()
@@ -904,9 +913,10 @@ function Track.BuildOverlayNext(st)
     return true
 end
 
--- Re-points the built slots: a ready cell's slot holds its buffs, any other
--- slot holds nothing. A cell whose slot is not built is not ready. Any refused
--- call hides the whole overlay and leaves every cell unready until the drain.
+-- Re-points the built slots: a ready cell's slot holds its buffs unless the
+-- entry has an active phase of its own; any other slot holds nothing. A cell
+-- whose slot is not built is not ready. Any refused call hides the whole
+-- overlay and leaves every cell unready until the drain.
 -- Returns whether every call was accepted, and whether a button now stands for
 -- another kind.
 function Track.ApplyOverlay(st, entries, unit, settings)
@@ -929,7 +939,9 @@ function Track.ApplyOverlay(st, entries, unit, settings)
             -- gray when the buff appears instead of when it falls.
             if not spent then st.ready[i] = false end
         else
-            if not Point(st, i, st.ready[i] and e.buffs or nil) then clean = false end
+            -- A summon's stand-in buff never shows its own button.
+            local buffs = st.ready[i] and not e.active and e.buffs or nil
+            if not Point(st, i, buffs) then clean = false end
             if kinds[i] ~= e.kind then restyle = true end
         end
     end
@@ -965,6 +977,7 @@ function Track.RestyleOverlay(st, settings)
         if d then
             local ok = pcall(KE.AuraStyle.RegisterRegions, button, nil, d, settings)
             ok = pcall(KE.AuraStyle.StyleAuraFrame, button, settings, d.capabilities) and ok
+            ok = pcall(KE.AuraGlow.Apply, button, settings, d.capabilities) and ok
             if ok then st.overlayKinds[i] = kind else clean = false end
         end
     end

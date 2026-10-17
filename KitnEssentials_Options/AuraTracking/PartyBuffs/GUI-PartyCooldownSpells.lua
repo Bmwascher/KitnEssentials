@@ -14,6 +14,7 @@ local C_Spell = C_Spell
 local C_Timer = C_Timer
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local ipairs = ipairs
+local math_pi = math.pi
 local pairs = pairs
 local pcall = pcall
 local table_sort = table.sort
@@ -40,6 +41,8 @@ local BOX_TOP = -14
 local CHECK_TOP = -15
 local HEADER_HEIGHT = 26
 local FOOTER_HEIGHT = 28
+-- Unrotated, the arrow points down.
+local ARROW_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
 local function SpellLabel(spellID, name)
     local icon = C_Spell.GetSpellTexture(spellID)
@@ -62,7 +65,14 @@ local function AddToggle(row, label, entry, db, apply)
     local check = GUIFrame:CreateCompactCheckbox(row, label, {
         value = not entry.off,
         callback = function(checked)
-            if checked then db.CooldownOff[entry.key] = nil else db.CooldownOff[entry.key] = true end
+            if not checked then
+                db.CooldownOff[entry.key] = true
+            elseif entry.spell and entry.spell.off then
+                -- false keeps a row that starts switched off on.
+                db.CooldownOff[entry.key] = false
+            else
+                db.CooldownOff[entry.key] = nil
+            end
             apply()
         end,
     })
@@ -74,7 +84,7 @@ end
 local function AddSecondsBox(row, entry, db, apply, clamp)
     clamp = clamp or Rules.ClampSeconds
     local box
-    box = GUIFrame:CreateEditBox(row, "Seconds", {
+    box = GUIFrame:CreateEditBox(row, "Spell CD", {
         value = tostring(entry.cd),
         callback = function(text)
             local value = clamp(text)
@@ -109,7 +119,7 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
     local card = GUIFrame:CreateCard(scrollChild, "Spells and Cooldowns", yOffset)
     local Sensor = KE.PartyCooldownsSensor
     if not Sensor then
-        card:AddNote("This client cannot show cooldown timers, so a ticked spell shows only while its buff is up. Seconds and order do not apply, and every class buff uses the Offensive CDs border color.")
+        card:AddNote("This client cannot show cooldown timers, so a ticked spell shows only while its buff is up. Spell CD and order do not apply, and every class buff uses the Offensive CDs border color.")
     elseif Sensor.door and not Sensor.DoorOpen() then
         card:AddNote("Cooldown timers for party members are unavailable on this client: their uses show while active but start no gray count.")
     end
@@ -148,12 +158,14 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
         local check = AddToggle(row, SpellLabel(entry.id), entry, db, apply)
         local box = AddSecondsBox(row, entry, db, apply)
-        local up = GUIFrame:CreateButton(row, "^", {
+        local up = GUIFrame:CreateButton(row, "", {
+            image = ARROW_TEXTURE, imageRotation = math_pi,
             height = 24,
             callback = function() Move(specID, list, i, -1) end,
         })
         row:AddWidget(up, 0.12, nil, 0, BOX_TOP)
-        local down = GUIFrame:CreateButton(row, "v", {
+        local down = GUIFrame:CreateButton(row, "", {
+            image = ARROW_TEXTURE,
             height = 24,
             callback = function() Move(specID, list, i, 1) end,
         })
@@ -181,7 +193,7 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
         end
         local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
         local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
-            tooltip = "Restores every spell of this class: switched on, at its listed length, in its listed order.",
+            tooltip = "Restores every spell of this class: switched on or off as it starts, at its listed length, in its listed order.",
             callback = function()
                 for _, specID in ipairs(specs) do
                     for _, entry in ipairs(Rules.SpellList(specID, {}, true)) do
@@ -225,8 +237,8 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
     return card, card:GetNextOffset()
 end
 
--- ctx: { db, apply }. The caller registers the card under the Show Racials
--- condition. A member has one racial, so the rows have no order arrows.
+-- ctx: { db, apply }. The caller registers the card under the racialsOn
+-- state group. A member has one racial, so the rows have no order arrows.
 function Page.RacialsCard(scrollChild, yOffset, ctx)
     local db, apply = ctx.db, ctx.apply
     db.CooldownOff = db.CooldownOff or {}
@@ -278,7 +290,7 @@ function Page.ExternalsCard(scrollChild, yOffset, ctx)
     db.CooldownSeconds = db.CooldownSeconds or {}
     local HXRules = KE.HealerExternalsRules
     local card = GUIFrame:CreateCard(scrollChild, "Externals", yOffset)
-    card:AddLabel("The time counts from the moment the buff appears, for the seconds set here, not the healer's real cooldown.")
+    card:AddLabel("The time counts from the moment the buff appears, for the Spell CD set here, which can differ from the healer's real cooldown.")
     local manager = GUIFrame:CreateWidgetStateManager()
     local specs = {}
     for specID in pairs(KE.PartyCooldownsData.HEALER_SPECS) do specs[#specs + 1] = specID end

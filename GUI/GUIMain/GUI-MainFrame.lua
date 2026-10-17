@@ -538,8 +538,9 @@ function GUIFrame:CreateMainFrame()
     frame:EnableKeyboard(true)
 
     -- Restore saved position and size. Worked out from the saved values, not
-    -- measured: the window has not been shown or laid out yet.
-    do
+    -- measured: at creation the window has not been shown or laid out, and at
+    -- a later refit it may be hidden.
+    local function restoreFromSaved()
         local gs = KE.db and KE.db.global and KE.db.global.GUIState.frame
         local w, h = defaultW, defaultH
         if gs and gs.width and gs.height then
@@ -560,6 +561,34 @@ function GUIFrame:CreateMainFrame()
         x, y = GUIFrame.ClampCorner(x or 0, y or 0, screenW, screenH, GUIFrame.minWidth, GUIFrame.minHeight)
         settleWindow(x, y, w, h)
     end
+    restoreFromSaved()
+
+    -- A resolution or UI-scale change refits the window from the saved values,
+    -- one frame later so the pixel cache has caught up. Nothing is saved, so
+    -- going back to the larger screen restores the saved size.
+    local refitPending = false
+    local function refit()
+        refitPending = false
+        -- The grip's own stop settles the window.
+        if GUIFrame.isResizing then return end
+        local collapsed = GUIFrame.minimized and frame:GetHeight()
+        restoreFromSaved()
+        if collapsed then
+            GUIFrame._savedHeight = frame:GetHeight()
+            frame:SetHeight(collapsed)
+        end
+        -- Labels were measured at the old width. A hidden or collapsed
+        -- window defers the check to its next show.
+        GUIFrame:ResetLabelRebuilds()
+        GUIFrame:QueueLabelRecheck()
+    end
+    frame:RegisterEvent("UI_SCALE_CHANGED")
+    frame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+    frame:SetScript("OnEvent", function()
+        if refitPending then return end
+        refitPending = true
+        C_Timer.After(0, refit)
+    end)
 
     -- One reload prompt per GUI session, raised on the way out. Hooked on the
     -- FRAME rather than GUIFrame:Hide so no close path can skip it -- the

@@ -52,13 +52,7 @@ function GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, config)
     innerManager:Register(sep5, "all")
     card:AddRow(row5sep, Theme.rowHeightSeparator)
 
-    local soundList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do
-            soundList[name] = name
-        end
-    end
-    soundList["None"] = "None"
+    local soundList = GUIFrame.BuildSoundOptions()
 
     local row5b = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local soundDropdown = GUIFrame:CreateDropdown(row5b, config.soundLabel or "On Application Sound", {

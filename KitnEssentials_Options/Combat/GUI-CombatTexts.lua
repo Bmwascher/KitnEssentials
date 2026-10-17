@@ -10,8 +10,6 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
-local pairs = pairs
-
 -- The size override row every attacher's page shows while attached. Off, the
 -- attached text takes the Combat Texts size; on, the slider writes the
 -- module's own size key. Returns the widgets for the page's state manager.
@@ -382,10 +380,7 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     manager:Register(sepAggroB, "aggro")
     cardAggro:AddRow(rowAggroSep2, Theme.rowHeightSeparator)
 
-    local aggroSoundList = { ["None"] = "None" }
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do aggroSoundList[name] = name end
-    end
+    local aggroSoundList = GUIFrame.BuildSoundOptions()
 
     local rowAggroC = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
     local aggroSoundCheck = GUIFrame:CreateCheckbox(rowAggroC, "Play Sound", {

@@ -23,13 +23,18 @@ local SIDE_OPTIONS = {
     { key = "INSIDE", text = "Inside, Bottom-Right" },
 }
 
-local STRATA_OPTIONS = {
-    { key = "FRAME",  text = "Same as the Party Frame" },
-    { key = "LOW",    text = "Low" },
-    { key = "MEDIUM", text = "Medium" },
-    { key = "HIGH",   text = "High" },
-    { key = "DIALOG", text = "Dialog" },
+-- Each side's own choices, in order, come from PartyBuffsRules.LAYOUTS.
+local GROW_TEXT = {
+    CENTER = "Center",
+    DOWN   = "Down",
+    UP     = "Up",
+    RIGHT  = "Right",
+    LEFT   = "Left",
 }
+local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side of the Frame and never point " ..
+    "at the party frame. Left or Right: Center keeps the icons centered on the frame, Down starts them at its " ..
+    "top edge, Up at its bottom edge. Above or Below: Right starts them at the frame's left edge, Left at its " ..
+    "right edge. Inside has one layout."
 
 -- state: the picker's one state group, when not colorsOn.
 local COLOR_PICKERS = {
@@ -40,8 +45,17 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket" },
 }
 
-local HEALER_KEY = {}
-for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do HEALER_KEY[pair[1]] = pair[2] end
+local PICK_COLUMNS = 3
+local PICK_HEIGHT = 24
+local PICK_SPACING = 2
+
+local ICON_SIZE_MIN, ICON_SIZE_MAX = 16, 72
+
+local HEALER_KEY, PLACEMENT_PAIR = {}, {}
+for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do
+    HEALER_KEY[pair[1]] = pair[2]
+    PLACEMENT_PAIR[pair[1]] = pair
+end
 
 -- Both survive the page rebuild a tab switch triggers. activePlacement stays
 -- nil until the first render picks the view the player's spec uses.
@@ -101,8 +115,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         return db.CategoryColors == true and KE.PartyCooldownsSensor ~= nil
     end)
 
-    local function AddCheck(row, label, key, tooltip, onChange)
-        local check = GUIFrame:CreateCheckbox(row, label, {
+    local function CheckConfig(key, tooltip, onChange)
+        return {
             value = db[key] == true,
             callback = function(checked)
                 db[key] = checked
@@ -110,29 +124,53 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
                 if onChange then onChange() end
             end,
             tooltip = tooltip,
-        })
-        row:AddWidget(check, 0.5)
+        }
+    end
+
+    local function AddCheck(row, label, key, tooltip, onChange, width)
+        local check = GUIFrame:CreateCheckbox(row, label, CheckConfig(key, tooltip, onChange))
+        row:AddWidget(check, width or 0.5)
         return check
     end
 
+    -- picks: { label, key, tooltip, onChange } each; isLast ends the card.
+    local function AddPicks(card, picks, isLast)
+        for i = 1, #picks, PICK_COLUMNS do
+            local row = GUIFrame:CreateRow(card.content, PICK_HEIGHT)
+            for j = i, math.min(i + PICK_COLUMNS - 1, #picks) do
+                local pick = picks[j]
+                row:AddWidget(GUIFrame:CreateCompactCheckbox(row, pick[1],
+                    CheckConfig(pick[2], pick[3], pick[4])), 1 / PICK_COLUMNS)
+            end
+            local lastRow = isLast and i + PICK_COLUMNS > #picks
+            card:AddRow(row, PICK_HEIGHT, lastRow and 0 or PICK_SPACING)
+        end
+    end
+
     -- value, when given, is shown in place of db[key].
-    local function AddSlider(row, label, key, low, high, value)
+    local function AddSlider(row, label, key, low, high, value, tooltip)
         if value == nil then value = db[key] end
         local slider = GUIFrame:CreateSlider(row, label, {
             min = low, max = high, step = 1,
             value = value,
             callback = function(val) db[key] = val; ApplySettings() end,
+            tooltip = tooltip,
         })
         row:AddWidget(slider, 0.5)
         return slider
     end
 
-    local function AddDropdown(row, label, key, options, value)
+    local function AddDropdown(row, label, key, options, value, tooltip, onChange)
         if value == nil then value = db[key] end
         local dropdown = GUIFrame:CreateDropdown(row, label, {
             options = options,
             value = value,
-            callback = function(choice) db[key] = choice; ApplySettings() end,
+            callback = function(choice)
+                db[key] = choice
+                ApplySettings()
+                if onChange then onChange() end
+            end,
+            tooltip = tooltip,
         })
         row:AddWidget(dropdown, 0.5)
         return dropdown
@@ -154,19 +192,20 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     -- Card: Tracked
     ----------------------------------------------------------------
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked", yOffset)
-    local rowT1 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT1, "Class Cooldowns", "TrackBurst",
-        "Each party member's offensive and personal defensive cooldowns, by spec.", RefreshStates)
-    AddCheck(rowT1, "Trinkets", "TrackTrinket", nil, RefreshStates)
-    cardTracked:AddRow(rowT1, Theme.rowHeight)
-    local rowT2 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT2, "Externals", "TrackExternal")
-    AddCheck(rowT2, "Potions", "TrackPotion", "Shows a potion's icon while its buff is up. The list is on the Potions tab.")
-    cardTracked:AddRow(rowT2, Theme.rowHeight)
+    AddPicks(cardTracked, {
+        { "Class Cooldowns", "TrackBurst",
+            "Each party member's offensive and personal defensive cooldowns, by spec.", RefreshStates },
+        { "Trinkets", "TrackTrinket", nil, RefreshStates },
+        { "Externals", "TrackExternal" },
+        { "Potions", "TrackPotion", "Shows a potion's icon while its buff is up. The list is on the Potions tab." },
+        { "Racials", "ShowRacials",
+            "The racial of a party member who is a Dwarf, Dark Iron Dwarf or Night Elf.", RefreshStates },
+    })
+    local rowTSep = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightSeparator)
+    rowTSep:AddWidget(GUIFrame:CreateSeparator(rowTSep), 1)
+    cardTracked:AddRow(rowTSep, Theme.rowHeightSeparator)
     local rowT3 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
     AddCheck(rowT3, "Include Yourself", "IncludeSelf", "Adds the same row to your own party frame.")
-    AddCheck(rowT3, "Show Racials", "ShowRacials",
-        "A party member who is a Dwarf, Dark Iron Dwarf or Night Elf also shows their racial.", RefreshStates)
     cardTracked:AddRow(rowT3, Theme.rowHeightLast, 0)
     yOffset = cardTracked:GetNextOffset()
 
@@ -175,17 +214,13 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardPlaces = GUIFrame:CreateCard(scrollChild, "Where It Shows", yOffset)
     cardPlaces:AddLabel("Not shown in raids, battlegrounds or other raid groups.")
-    local rowP1 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
-    AddCheck(rowP1, "Mythic+", "ShowInKeys")
-    AddCheck(rowP1, "All Other Dungeon Types", "ShowInDungeons")
-    cardPlaces:AddRow(rowP1, Theme.rowHeight)
-    local rowP2 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
-    AddCheck(rowP2, "Delves", "ShowInDelves")
-    AddCheck(rowP2, "Open World", "ShowInWorld")
-    cardPlaces:AddRow(rowP2, Theme.rowHeight)
-    local rowP3 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeightLast)
-    AddCheck(rowP3, "Arenas", "ShowInArenas")
-    cardPlaces:AddRow(rowP3, Theme.rowHeightLast, 0)
+    AddPicks(cardPlaces, {
+        { "Mythic+", "ShowInKeys" },
+        { "All Other Dungeon Types", "ShowInDungeons" },
+        { "Delves", "ShowInDelves" },
+        { "Open World", "ShowInWorld" },
+        { "Arenas", "ShowInArenas" },
+    }, true)
     yOffset = cardPlaces:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -193,7 +228,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD1, "Icon Size", "IconSize", 16, 72)
+    AddSlider(rowD1, "Icon Size", "IconSize", ICON_SIZE_MIN, ICON_SIZE_MAX, nil,
+        "In a healer spec with Use in Healer Specs on, the Healer tab's Icon Size is used.")
     AddSlider(rowD1, "Icon Spacing", "IconSpacing", 0, 10)
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
@@ -206,25 +242,69 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     cardDisplay:AddRow(rowDSep, Theme.rowHeightSeparator)
 
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddCheck(rowD3, "Time-Left Swipe", "Swipe")
-    AddCheck(rowD3, "Timer Text", "ShowTimer")
+    AddCheck(rowD3, "Timer Text", "ShowTimer", nil, nil, 1 / 3)
+    manager:Register(AddCheck(rowD3, "Cooldown Text", "ShowCooldownText",
+        "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size.",
+        nil, 1 / 3), "cellsOn")
+    AddCheck(rowD3, "Time-Left Swipe", "Swipe", nil, nil, 1 / 3)
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
-    -- The gray icon's text; it shares the Font Settings face and outline.
-    local rowD3b = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    manager:Register(AddCheck(rowD3b, "Cooldown Text", "ShowCooldownText",
-        "The time left on a gray icon after its buff falls."), "cellsOn")
-    manager:Register(AddSlider(rowD3b, "Cooldown Text Size", "CooldownFontSize", 8, 48), "cellsOn")
-    cardDisplay:AddRow(rowD3b, Theme.rowHeight)
-    local rowD3c = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddCheck(rowD3c, "Border Color by Category", "CategoryColors", nil, RefreshStates)
-    cardDisplay:AddRow(rowD3c, Theme.rowHeight)
+
+    local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
+    rowDSep2:AddWidget(GUIFrame:CreateSeparator(rowDSep2), 1)
+    cardDisplay:AddRow(rowDSep2, Theme.rowHeightSeparator)
+
     local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    for i = 1, 3 do AddColor(rowD4, COLOR_PICKERS[i]) end
+    AddCheck(rowD4, "Border Color by Category", "CategoryColors", nil, RefreshStates, 1 / 3)
+    for i = 1, 2 do AddColor(rowD4, COLOR_PICKERS[i]) end
     cardDisplay:AddRow(rowD4, Theme.rowHeight)
     local rowD5 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
-    for i = 4, 5 do AddColor(rowD5, COLOR_PICKERS[i]) end
+    for i = 3, 5 do AddColor(rowD5, COLOR_PICKERS[i]) end
     cardDisplay:AddRow(rowD5, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Glow While Active
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+        title = "Glow While Active",
+        db = db,
+        types = {
+            { key = "pixel",    text = "Pixel" },
+            { key = "ants",     text = "Ants" },
+            { key = "procloop", text = "Proc Loop" },
+            { key = "alert",    text = "Alert" },
+            { key = "border",   text = "Pulse Border" },
+        },
+        resolveType = KE.AuraGlowRules.ResolveType,
+        -- The glow is animation-driven and honors neither Length nor Border,
+        -- so their row sits under a key no resolved type equals.
+        typeRows = function(rows)
+            return {
+                pixel       = rows.pixel,
+                unsupported = rows.pixelExtras,
+                autocast    = rows.autocast,
+                proc        = rows.proc,
+                border      = rows.border,
+            }
+        end,
+        -- The pulse runs at a fixed rhythm.
+        showSpeed = function(glowType) return glowType ~= "border" end,
+        speedAdapter = {
+            read = function(readDb, readKeys)
+                return KE.AuraGlowRules.NormalizeFrequency(
+                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
+            end,
+            write   = KE.AuraGlowRules.WriteSpeed,
+            setType = KE.AuraGlowRules.SetType,
+            min     = 0.05,
+            max     = 2,
+        },
+        onChangeCallback = ApplySettings,
+        onHeightChange = RebuildPage,
+    })
+    -- The buff icons glow too, so the card applies without the cooldown cells.
+    manager:Register(glowCard, "all")
+    yOffset = glowOffset
 
     ----------------------------------------------------------------
     -- Card: Font Settings (the timer, the cooldown text and the stack
@@ -286,10 +366,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     end
 
     local function PlacementValue(key)
-        local value
-        if healerView then value = db[HEALER_KEY[key]] end
-        if value == nil then value = db[key] end
-        return value
+        return KE.PartyBuffsRules.PlacementValue(db, PLACEMENT_PAIR[key], healerView)
     end
 
     local function AddPlacement(widget)
@@ -309,23 +386,37 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             end,
         })
         rowX0:AddWidget(healerToggle, 0.5)
-        local healerNote = GUIFrame:CreateText(rowX0,
-            KE:ColorTextByTheme("Note"),
-            db.UseHealerPlacement == true
-                and "Used while you are in a healer spec."
-                or "Off: every spec uses the Default placement.",
-            Theme.rowHeight, "hide")
-        rowX0:AddWidget(healerNote, 0.5)
         cardPosition:AddRow(rowX0, Theme.rowHeight)
     end
     local rowX1 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
-    AddPlacement(AddDropdown(rowX1, "Side of the Frame", PlacementKey("Side"), SIDE_OPTIONS, PlacementValue("Side")))
-    AddPlacement(AddDropdown(rowX1, "Frame Strata", PlacementKey("Strata"), STRATA_OPTIONS, PlacementValue("Strata")))
+    -- A side change redraws the page, so Grow lists the new side's choices.
+    AddPlacement(AddDropdown(rowX1, "Side of the Frame", PlacementKey("Side"), SIDE_OPTIONS, PlacementValue("Side"),
+        nil, RebuildPage))
+    local layout, layouts = KE.PartyBuffsRules.Layout(PlacementValue("Side"), PlacementValue("Grow"))
+    local growOptions = {}
+    for i = 1, #layouts do
+        growOptions[i] = { key = layouts[i].grow, text = GROW_TEXT[layouts[i].grow] }
+    end
+    -- One group for both reasons to gray it: a widget in two groups is set at random.
+    manager:SetCondition("growOn", function()
+        return #layouts > 1 and (not healerView or db.UseHealerPlacement == true)
+    end)
+    manager:Register(AddDropdown(rowX1, "Grow", PlacementKey("Grow"), growOptions, layout.grow, GROW_TOOLTIP),
+        "growOn")
     cardPosition:AddRow(rowX1, Theme.rowHeight)
-    local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
+    local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
     AddPlacement(AddSlider(rowX2, "X Offset", PlacementKey("XOffset"), -100, 100, PlacementValue("XOffset")))
     AddPlacement(AddSlider(rowX2, "Y Offset", PlacementKey("YOffset"), -100, 100, PlacementValue("YOffset")))
-    cardPosition:AddRow(rowX2, Theme.rowHeightLast, 0)
+    cardPosition:AddRow(rowX2, Theme.rowHeight)
+    local rowX3 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
+    AddPlacement(AddSlider(rowX3, "Icons Per Row", PlacementKey("IconsPerRow"), 1,
+        KE.PartyBuffsRules.MAX_PER_ROW, PlacementValue("IconsPerRow"),
+        "Icons on one line before the row wraps. At 14 it never wraps."))
+    if healerView then
+        AddPlacement(AddSlider(rowX3, "Icon Size", PlacementKey("IconSize"), ICON_SIZE_MIN, ICON_SIZE_MAX,
+            PlacementValue("IconSize"), "Icon size in a healer spec. Other specs use Icon Size on the Display card."))
+    end
+    cardPosition:AddRow(rowX3, Theme.rowHeightLast, 0)
     yOffset = cardPosition:GetNextOffset()
 
     ----------------------------------------------------------------

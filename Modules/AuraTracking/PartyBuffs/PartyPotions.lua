@@ -19,6 +19,7 @@ local UnitClass = UnitClass
 local UnitExists = UnitExists
 local UnitName = UnitName
 local ipairs = ipairs
+local issecretvalue = issecretvalue
 local math_floor = math.floor
 local math_max = math.max
 local pairs = pairs
@@ -42,8 +43,6 @@ local ORDER = { "player", "party1", "party2", "party3", "party4" }
 -- Reads wait out a roster change, longer than the module's 0.5 s settle, so a
 -- token that now names someone else is never read before the settle decides.
 local ROSTER_HOLD = 1
-local GRAY = { 0.5, 0.5, 0.5 }
-local BOX_CONFIG = { anchorFrameType = "UIPARENT", Strata = "MEDIUM" }
 
 -- Preview rows: class, name, share of the length left.
 local SAMPLES = {
@@ -77,17 +76,17 @@ end
 
 local function ClassColor(class)
     local c = C_ClassColor.GetClassColor(class)
-    if not c then return GRAY end
+    if not c then return nil end
     return { c.r, c.g, c.b }
 end
 
 -- The name may be secret: it only reaches SetText. A class the game hides
--- gives a gray bar.
+-- gives no color.
 local function Who(token)
     local name
     local ok, value = pcall(UnitName, token)
     if ok then name = value end
-    local color = GRAY
+    local color
     local okClass, _, class = pcall(UnitClass, token)
     if okClass and not KE:IsSecretValue(class) and type(class) == "string" then color = ClassColor(class) end
     return name, color
@@ -99,7 +98,6 @@ end
 local function MakeBox()
     if Pot.box then return end
     Pot.box = CreateFrame("Frame", "KitnEssentialsPartyPotions", UIParent)
-    Pot.box:SetFrameStrata("MEDIUM")
     Pot.box:Hide()
 end
 
@@ -117,7 +115,7 @@ end
 -- Placed rows one after another, anchored to each other.
 local function Stack()
     local corner, far = Corners()
-    local gap = Pot.style.up and Pot.style.spacing or -Pot.style.spacing
+    local gap = Pot.style.up and Pot.style.gap or -Pot.style.gap
     local prev
     for _, row in ipairs(Pot.rows) do
         local c = row.bar
@@ -133,6 +131,20 @@ local function Stack()
     end
 end
 
+-- Your own casts are plain, so each listed potion starts your bar, a drink
+-- over a running buff included.
+local function OnCast(_, _, _, _, spellID)
+    if issecretvalue(spellID) then return end
+    if not Pot.listed[spellID] then return end
+    local row = Pot.byToken.player
+    local t = row and row.bound and row.st.trackers[1]
+    if not t then return end
+    local n = Track.Now()
+    CDRules.StartCast(t, n)
+    Track.Push(t, n)
+    Track.Wake()
+end
+
 -- Made at the first activation. Each bar exists before any value reaches it,
 -- so every fill texture its clips and strips anchor to is fetched while plain.
 -- The rows' sensors get a host of their own, shown only while Potion Bars is
@@ -145,6 +157,8 @@ local function MakeRows()
     host:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
     host:Hide()
     Pot.sensorHost = host
+    Pot.castFrame = CreateFrame("Frame")
+    Pot.castFrame:SetScript("OnEvent", OnCast)
     for r, token in ipairs(ORDER) do
         local st = Track.NewSlot(Pot.live, Bar, host)
         local bar = Bar.New(Pot.live)
@@ -154,17 +168,28 @@ local function MakeRows()
     end
 end
 
+local placement = {}
+
+local function Placement(db)
+    placement.anchorFrameType, placement.ParentFrame = db.PotionAnchorFrameType, db.PotionParentFrame
+    placement.Strata = db.PotionStrata
+    return placement
+end
+
 -- The rows are stacked again by Pot.ApplySettings and re-dressed at the drain
 -- that follows it.
 local function Restyle(db)
     local s = Pot.style
-    s.width, s.height, s.spacing = db.PotionWidth, db.PotionHeight, db.PotionSpacing
-    s.icon, s.timer = db.PotionShowIcon == true, db.PotionShowTimer == true
+    s.width, s.height = db.PotionWidth, db.PotionHeight
+    s.gap = Rules.Gap(db.PotionSpacing, KE:GetPixelSize())
+    s.timer = db.PotionShowTimer == true
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
+    s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
+    s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
-    box:SetSize(s.width, #ORDER * (s.height + s.spacing) - s.spacing)
-    KE:ApplyFramePosition(box, db.PotionPosition, BOX_CONFIG)
+    box:SetSize(s.width, #ORDER * (s.height + s.gap) - s.gap)
+    KE:ApplyFramePosition(box, db.PotionPosition, Placement(db))
 end
 
 -- Registering again would cancel a drag in progress.
@@ -179,7 +204,11 @@ local function Register()
         local p = Pot.pb.db.PotionPosition
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
         p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
-        KE:ApplyFramePosition(Pot.box, p, BOX_CONFIG)
+        KE:ApplyFramePosition(Pot.box, p, Placement(Pot.pb.db))
+    end
+    cfg.getParentFrame = function()
+        local config = Placement(Pot.pb.db)
+        return KE:ResolveAnchorFrame(config.anchorFrameType, config.ParentFrame, Pot.box)
     end
     KE.EditMode:RegisterElement(cfg)
     Pot.registered = true
@@ -205,6 +234,7 @@ end
 local function Unbind(row)
     if not row.bound then return end
     Track.Unbind(row.st)
+    if row.token == "player" then Pot.castFrame:UnregisterAllEvents() end
     row.bound, row.guid = false, nil
 end
 
@@ -215,10 +245,13 @@ local function Bind(row)
     local name, color = Who(row.token)
     local e = {
         id = entry.id, kind = entry.kind, buffs = entry.buffs, cd = entry.cd,
-        texture = entry.texture, name = name, color = color,
+        texture = Pot.icon, name = name, color = color,
     }
     Debug("bind %s", row.token)
     Track.Apply(row.st, row.token, { e }, Pot.style)
+    if row.token == "player" then
+        Pot.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    end
     row.bound = true
     row.guid = KE:GetSafeUnitGUID(row.token)
     Bar.SetReady(row.bar, Pot.pb.db.PotionShowReady == true)
@@ -279,16 +312,23 @@ local function ClearCounts()
     end
 end
 
--- A committed potion list change clears every bar, even one whose buffs and
--- length did not change.
+-- A committed potion list change clears every bar, even one whose buffs did
+-- not change.
 function Pot.ClearAll()
     ClearCounts()
 end
 
--- A key's start clears every bar; the module's hold covers the reads.
+-- A key's start clears every bar; the module's hold covers the reads. A
+-- teammate's potion drunk again over a buff from before the start shows only
+-- as that buff's late fall, so their bars watch for one.
 function Pot.OnKeyStart()
     if not (Pot.on and Pot.active) then return end
     ClearCounts()
+    local n = Track.Now()
+    for _, row in ipairs(Pot.rows) do
+        local t = row.st.trackers[1]
+        if t and row.token ~= "player" then CDRules.ArmFall(t, n, Rules.BUFF_SECONDS) end
+    end
 end
 
 function Pot.OnRelease()
@@ -328,15 +368,15 @@ end
 
 -- Plain sample bars stacked in the box, counting down and starting again.
 -- The preview is redrawn on every roster, resolve and settings change, so a
--- sample keeps its count unless its length or ready state changed.
+-- sample keeps its count unless it changed between counting and cleared.
 local function DrawSamples()
     Pot.sampleLayer = Pot.sampleLayer or NewLayer()
-    local s, entry = Pot.style, Pot.entry
-    local cd = entry and entry.cd or Rules.DEFAULT_SECONDS
-    local texture = entry and entry.texture or Rules.FALLBACK_ICON
+    local s = Pot.style
+    local cd = Rules.SECONDS
+    local texture = Pot.icon
     local showReady = Pot.pb.db.PotionShowReady == true
     local corner = Corners()
-    local step = (s.height + s.spacing) * (s.up and 1 or -1)
+    local step = (s.height + s.gap) * (s.up and 1 or -1)
     local n = Track.Now()
     for i, info in ipairs(SAMPLES) do
         local sample = Pot.samples[i]
@@ -348,13 +388,15 @@ local function DrawSamples()
         Bar.Dress(bar, s, { texture = texture, cd = cd, name = info.name, color = ClassColor(info.class) })
         bar:ClearAllPoints()
         bar:SetPoint(corner, Pot.sampleLayer, corner, 0, (i - 1) * step)
-        local ready = showReady and i == #SAMPLES
-        Bar.SetReady(bar, ready)
-        if not (sample.t and sample.cd == cd and sample.ready == ready) then
+        local cleared = showReady and i == #SAMPLES
+        -- Every sample has a Ready bar under it, as live rows do, so one that
+        -- ends reads Ready until it starts again.
+        Bar.SetReady(bar, showReady)
+        if not (sample.t and sample.cleared == cleared) then
             if sample.t then Track.Forget(sample.t) end
             local t = CDRules.NewTracker(cd, false)
             t.cell, t.view = bar, Bar
-            if ready then
+            if cleared then
                 CDRules.Clear(t, n)
             else
                 t.loop = math_max(1, math_floor(cd * info.left))
@@ -362,7 +404,10 @@ local function DrawSamples()
             end
             Track.Push(t, n)
             Track.Watch(t)
-            sample.t, sample.cd, sample.ready = t, cd, ready
+            sample.t, sample.cleared = t, cleared
+        else
+            -- Dress undid the bar's seats; only a push seats again.
+            Bar.Seat(bar)
         end
         bar:Show()
     end
@@ -421,7 +466,9 @@ function Pot.ApplySettings()
     if not (db.PotionBars == true and Track) then return TurnOff() end
     Pot.on = true
     MakeBox()
-    Pot.entry = Rules.Entry(KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions), db.PotionSeconds, Texture)
+    Pot.listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)
+    Pot.entry = Rules.Entry(Pot.listed)
+    Pot.icon = Texture(Rules.ICON_SPELL) or Rules.FALLBACK_ICON
     if Pot.active then
         MakeRows()
         Pot.sensorHost:Show()

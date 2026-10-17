@@ -74,10 +74,7 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "Alert Settings", yOffset)
     manager:Register(card2, "all")
 
-    local soundList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
-    end
+    local soundList = GUIFrame.BuildSoundOptions()
 
     -- Alert modes (chat + sound on/off)
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)

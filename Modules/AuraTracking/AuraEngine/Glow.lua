@@ -129,11 +129,18 @@ local function ConfigureBorder(host, settings)
         edge:Show()
     end
     -- Restarted only when stopped: a color or thickness edit must not
-    -- stutter a running pulse.
+    -- stutter a running pulse. Kept in a KE flag rather than asked of the
+    -- group, because an aura button's registered group refuses progress
+    -- queries.
     if settings.GlowPulse ~= false then
-        if not host.pulseGroup:IsPlaying() then host.pulseGroup:Play() end
+        if not host.pulseOn then
+            host.pulseGroup:Play()
+            host.pulseOn = true
+        end
+        host.styleGroups[host.pulseGroup] = true
     else
         host.pulseGroup:Stop()
+        host.pulseOn = false
         host:SetAlpha(1)
     end
 end
@@ -141,6 +148,7 @@ end
 local function HideBorder(host)
     if not host.edges then return end
     host.pulseGroup:Stop()
+    host.pulseOn = false
     host:SetAlpha(1)
     for i = 1, 4 do
         host.edges[EDGES[i]]:Hide()
@@ -151,6 +159,9 @@ end
 -- calls this once to seed a valid starting state, Apply calls it again on
 -- every reconfiguration to pick up changed settings.
 local function ConfigureHost(host, settings, width, height)
+    -- Rebuilt from the branch taken below, so the record of what this style
+    -- runs cannot drift from its Play calls.
+    wipe(host.styleGroups)
     -- Glow off stops every group rather than only hiding the host. A playing
     -- animation on a hidden texture still costs a C-side update, which is the
     -- same reason the pixel branch below stops the sheet layers instead of
@@ -192,6 +203,7 @@ local function ConfigureHost(host, settings, width, height)
         HideBorder(host)
 
         ConfigurePixel(host, settings, period, width, height)
+        for i = 1, 4 do host.styleGroups[host.dashes[i].group] = true end
         host:SetShown(settings.GlowEnabled and true or false)
         return
     end
@@ -214,6 +226,10 @@ local function ConfigureHost(host, settings, width, height)
     HideBorder(host)
 
     local entry = ResolveEntry(settings)
+    host.styleGroups[host.animGroup] = true
+    if host.overlay and entry.atlas then
+        host.styleGroups[host.overlayGroup] = true
+    end
     local texture = host.texture
     texture:Show()
 
@@ -238,7 +254,7 @@ local function ConfigureHost(host, settings, width, height)
     -- something the flipbook itself reads actually differs. The TEXTURE SOURCE
     -- counts: two styles can share a grid, so comparing the grid alone reports
     -- "unchanged" across a sheet swap and the animation is never replayed.
-    local wanted = GlowRules.FlipbookState(entry, period)
+    local wanted = GlowRules.FlipbookState(entry, GlowRules.FlipbookPeriod(entry, period))
 
     local restarted = GlowRules.NeedsRestart(host.appliedFlip, wanted)
 
@@ -297,9 +313,54 @@ local function ConfigureHost(host, settings, width, height)
     host:SetShown(settings.GlowEnabled and true or false)
 end
 
--- For hosts that are not aura buttons (a cast bar's gate frame): the caller
--- owns the host and passes its plain width and height for the pixel style.
-Glow.Configure = ConfigureHost
+-- Blizzard's aura-shown list plays these groups when the button's aura
+-- shows and stops them whenever it holds none. Under pcall because each
+-- call's verdict decides whether the list is cleared below.
+local SHOWN_OPS = {
+    add = function(button, group)
+        return pcall(button.AddAuraShownAnimation, button, group)
+    end,
+    remove = function(button, group)
+        return pcall(button.RemoveAuraShownAnimation, button, group)
+    end,
+}
+
+-- The button's own display pass. The aura button offers no direct call for
+-- it, but AddPandemicRegion ends in one. KE adds nothing else to the
+-- pandemic list and the region is empty, so adding and removing it changes
+-- nothing else. The add inserts before its pass, so the remove runs even
+-- when the add raised.
+local function RunDisplayPass(host, button)
+    pcall(button.AddPandemicRegion, button, host.passRegion)
+    pcall(button.RemovePandemicRegion, button, host.passRegion)
+end
+
+-- Only a marked host has a button to sync with. True when the list holds
+-- exactly the groups the style runs.
+local function SyncShownList(host)
+    local button = host.auraButton
+    if not button then return false end
+    if GlowRules.SyncShown(host.shownGroups, host.styleGroups, SHOWN_OPS, button) then
+        return true
+    end
+    -- A refused call leaves the list unknown. Emptied, list and record
+    -- agree again: the host drives its own animations, as an unmarked one
+    -- does, and the next sync starts from nothing.
+    pcall(button.ClearAuraShownAnimations, button)
+    wipe(host.shownGroups)
+    return false
+end
+
+-- ConfigureHost plays the style's groups whether or not an aura shows; the
+-- pass stops them where none does.
+local function Configure(host, settings, width, height)
+    ConfigureHost(host, settings, width, height)
+    if SyncShownList(host) then RunDisplayPass(host, host.auraButton) end
+end
+
+-- For a caller that owns its host (a cast bar's gate frame, a slot button's
+-- border). A caller may pass a plain width and height for the pixel style.
+Glow.Configure = Configure
 
 -- initializeFrame is the only legally guaranteed window to parent a frame to
 -- an aura button, and button:GetFrameLevel() is only legal to read here,
@@ -392,9 +453,27 @@ function Glow.CreateHost(button, settings, template)
     pulse:SetSmoothing("IN_OUT")
     host.pulseGroup = pulseGroup
 
+    -- KE's own records: the groups the current style runs, the groups in an
+    -- aura button's aura-shown list, and whether the pulse is meant to run.
+    host.styleGroups = {}
+    host.shownGroups = {}
+    host.pulseOn = false
+
     ConfigureHost(host, settings)
 
     return host
+end
+
+-- Called inside initializeFrame, the one window in which a child can still
+-- be parented to the button, so the pass region is made here. No pass: the
+-- provider updates the button's display right after initializeFrame. Only
+-- callers holding a real aura button mark a host; previews and hosts on KE
+-- frames keep driving their own animations.
+function Glow.MarkAuraButton(host, button)
+    if not host or not button then return end
+    host.passRegion = host:CreateTexture()
+    host.auraButton = button
+    SyncShownList(host)
 end
 
 -- Takes the BUTTON, not the host, because Reconfigure iterates buttons and
@@ -409,5 +488,5 @@ function Glow.Apply(button, settings, capabilities)
     local caps = capabilities or {}
     if not caps.hasGlow then return end
 
-    ConfigureHost(host, settings)
+    Configure(host, settings)
 end

@@ -238,8 +238,11 @@ end)
 describe("PartyBuffsRules.ActivePlacement", function()
     local function placementDb(overrides)
         local db = {
-            Side = "LEFT", XOffset = 0, YOffset = 0, Strata = "FRAME",
-            HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4, HealerStrata = "HIGH",
+            Side = "LEFT", XOffset = 0, YOffset = 0,
+            HealerSide = "RIGHT", HealerXOffset = 6, HealerYOffset = -4,
+            IconsPerRow = 14, HealerIconsPerRow = 3,
+            IconSize = 36, HealerIconSize = 32,
+            Grow = "UP", HealerGrow = "DOWN",
         }
         for key, value in pairs(overrides or {}) do db[key] = value end
         return db
@@ -247,8 +250,8 @@ describe("PartyBuffsRules.ActivePlacement", function()
 
     it("uses the healer copy only while the toggle is on and the healer answer is true", function()
         local R = L.loadPartyBuffsRules()
-        local default = { "LEFT", 0, 0, "FRAME" }
-        local healer = { "RIGHT", 6, -4, "HIGH" }
+        local default = { "LEFT", 0, 0, 14, 36, "UP" }
+        local healer = { "RIGHT", 6, -4, 3, 32, "DOWN" }
         local cases = {
             { name = "toggle off, healer spec", toggle = false, useHealer = true, want = default },
             { name = "toggle on, other spec", toggle = true, useHealer = false, want = default },
@@ -264,28 +267,223 @@ describe("PartyBuffsRules.ActivePlacement", function()
         local R = L.loadPartyBuffsRules()
         local db = placementDb({ UseHealerPlacement = true })
         db.HealerXOffset = nil
-        db.HealerStrata = nil
-        assert.are.same({ "RIGHT", 0, -4, "FRAME" }, { R.ActivePlacement(db, true) })
+        db.HealerIconsPerRow = nil
+        db.HealerIconSize = nil
+        db.HealerGrow = nil
+        assert.are.same({ "RIGHT", 0, -4, 14, 36, "UP" }, { R.ActivePlacement(db, true) })
+    end)
+end)
+
+describe("PartyBuffsRules.Layout", function()
+    it("gives the layout the side offers for its Grow, the side's first for any other, and Left's list "
+        .. "for an unknown side", function()
+        local R = L.loadPartyBuffsRules()
+        -- want: the grow of the layout expected; nil expects the list's first layout.
+        local cases = {
+            { name = "Left, unset", side = "LEFT", grow = nil, list = "LEFT" },
+            { name = "Above, unset", side = "ABOVE", grow = nil, list = "ABOVE" },
+            { name = "Inside, unset", side = "INSIDE", grow = nil, list = "INSIDE" },
+            { name = "Left offers Up", side = "LEFT", grow = "UP", list = "LEFT", want = "UP" },
+            { name = "Below offers Left", side = "BELOW", grow = "LEFT", list = "BELOW", want = "LEFT" },
+            { name = "Left, toward the frame", side = "LEFT", grow = "RIGHT", list = "LEFT" },
+            { name = "Right, toward the frame", side = "RIGHT", grow = "LEFT", list = "RIGHT" },
+            { name = "Above, toward the frame", side = "ABOVE", grow = "DOWN", list = "ABOVE" },
+            { name = "Below, toward the frame", side = "BELOW", grow = "UP", list = "BELOW" },
+            { name = "Inside, out of the frame", side = "INSIDE", grow = "RIGHT", list = "INSIDE" },
+            { name = "Above, another side's choice", side = "ABOVE", grow = "UP", list = "ABOVE" },
+            { name = "unknown side reads as Left", side = "NOWHERE", grow = "UP", list = "LEFT", want = "UP" },
+        }
+        for _, case in ipairs(cases) do
+            local layout, layouts = R.Layout(case.side, case.grow)
+            assert.are.equal(R.LAYOUTS[case.list], layouts, case.name)
+            if case.want then
+                assert.are.equal(case.want, layout.grow, case.name)
+            else
+                assert.are.equal(layouts[1], layout, case.name)
+            end
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.HolderOffset", function()
+    it("lifts a Center layout by half an icon and leaves the others at gap plus offset", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { side = "LEFT", grow = "CENTER", want = { 5, 21 } },
+            { side = "RIGHT", grow = "CENTER", want = { 9, 21 } },
+            { side = "LEFT", grow = "DOWN", want = { 5, 3 } },
+            { side = "ABOVE", grow = "RIGHT", want = { 9, 5 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.HolderOffset(R.Layout(case.side, case.grow), 2, 7, 3, 36) },
+                case.side .. " " .. case.grow)
+        end
     end)
 end)
 
 describe("PartyBuffsRules.SeedHealerPlacement", function()
     it("fills each absent healer key from its default and keeps one already set", function()
         local R = L.loadPartyBuffsRules()
-        local db = { Side = "ABOVE", XOffset = 3, YOffset = -2, Strata = "LOW", HealerSide = "BELOW" }
+        local db = {
+            Side = "ABOVE", XOffset = 3, YOffset = -2, IconsPerRow = 5, HealerSide = "BELOW",
+        }
         R.SeedHealerPlacement(db)
-        assert.are.same({ "BELOW", 3, -2, "LOW" },
-            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerStrata })
+        assert.are.same({ "BELOW", 3, -2, 5 },
+            { db.HealerSide, db.HealerXOffset, db.HealerYOffset, db.HealerIconsPerRow })
+    end)
+end)
+
+describe("PartyBuffsRules.PerRow", function()
+    it("rounds a number to a whole count of at least 1 and reads anything else as 14", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { value = 2.6, want = 3 },
+            { value = 2.4, want = 2 },
+            { value = 0, want = 1 },
+            { value = -3, want = 1 },
+            { value = nil, want = 14 },
+            { value = "6", want = 14 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.PerRow(case.value), tostring(case.value))
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.GridPosition", function()
+    it("keeps index perLine - 1 on line 0 and starts line 1 at index perLine", function()
+        local R = L.loadPartyBuffsRules()
+        assert.are.same({ 2, 0 }, { R.GridPosition(2, 3) })
+        assert.are.same({ 0, 1 }, { R.GridPosition(3, 3) })
+    end)
+end)
+
+describe("PartyBuffsRules.LineSize", function()
+    -- The flow layout's wrap test: the running size carries the trailing
+    -- spacing, and an icon wraps when the running size plus it passes the maximum.
+    local function iconsOnFirstLine(maxSize, size, spacing, total)
+        local line, placed = 0, 0
+        for _ = 1, total do
+            local nextSize = line > 0 and line + size or size
+            if line > 0 and nextSize > maxSize then break end
+            line = nextSize + spacing
+            placed = placed + 1
+        end
+        return placed
+    end
+
+    it("lets exactly count icons onto one line and wraps the next", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { size = 16, spacing = 0, count = 1 },
+            { size = 16, spacing = 10, count = 8 },
+            { size = 72, spacing = 0, count = 8 },
+            { size = 72, spacing = 10, count = 1 },
+            { size = 36, spacing = 1, count = 4 },
+            { size = 36.6, spacing = 0.4, count = 7 },
+            { size = 17.3, spacing = 9.7, count = 8 },
+        }
+        for _, case in ipairs(cases) do
+            local db = { IconSpacing = case.spacing }
+            local name = case.size .. "/" .. case.spacing .. "/" .. case.count
+            assert.are.equal(case.count,
+                iconsOnFirstLine(R.LineSize(db, case.count, case.size), case.size, case.spacing, case.count + 1),
+                name)
+        end
     end)
 end)
 
 describe("PartyBuffsRules.RowLayout", function()
-    it("puts the cooldown cells first and the while-active icons after them", function()
+    -- Returns: step, buff column, buff line, buffs per line, holder width, holder height.
+    local function layoutDb(buffs)
+        return { IconSpacing = 1, MaxPerMember = buffs or 4, MaxCooldownIcons = 4 }
+    end
+
+    it("continues the cells' line while cells plus buffs fit in perRow, as every row does at 14", function()
         local R = L.loadPartyBuffsRules()
-        local db = { IconSize = 36, IconSpacing = 1, MaxPerMember = 4, MaxCooldownIcons = 4 }
+        local db = layoutDb()
         assert.are.same({ 4, 2 }, { R.CellCount(6, db), R.CellCount(2, db) })
-        assert.are.same({ 37, 148, 295 }, { R.RowLayout(db, 4) })
-        assert.are.same({ 37, 0, 147 }, { R.RowLayout(db, 0) })
+        local cases = {
+            { name = "at 14, with cells", cells = 4, perRow = 14, want = { 37, 4, 0, 4, 295, 36 } },
+            { name = "at 14, no cells", cells = 0, perRow = 14, want = { 37, 0, 0, 4, 147, 36 } },
+            { name = "one column to spare", cells = 1, perRow = 6, want = { 37, 1, 0, 4, 184, 36 } },
+            { name = "exactly full", cells = 2, perRow = 6, want = { 37, 2, 0, 4, 221, 36 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.RowLayout(db, case.cells, case.perRow, 36) }, case.name)
+        end
+    end)
+
+    it("starts the buffs at column 0 of the line after the cells when the row overflows", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "cells end part-way along a line", cells = 5, perRow = 3, want = { 37, 0, 2, 3, 110, 147 } },
+            { name = "cells fill their last line", cells = 3, perRow = 3, want = { 37, 0, 1, 3, 110, 110 } },
+            { name = "no cells", cells = 0, perRow = 3, want = { 37, 0, 0, 3, 110, 73 } },
+            { name = "fewer buffs than perRow: lines buff-wide, holder exact", cells = 2, buffs = 1, perRow = 2,
+              want = { 37, 0, 1, 1, 73, 73 } },
+            { name = "no buffs", cells = 4, buffs = 0, perRow = 3, want = { 37, 0, 2, 0, 110, 73 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, { R.RowLayout(layoutDb(case.buffs), case.cells, case.perRow, 36) },
+                case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.NeedsPin and RecordPin", function()
+    it("re-pins when the corner, x or y alone differs and not when all three match", function()
+        local R = L.loadPartyBuffsRules()
+        local slot = { corner = "TOPLEFT", pinX = 37, pinY = 0 }
+        local cases = {
+            { name = "all match", corner = "TOPLEFT", x = 37, y = 0, want = false },
+            { name = "corner only", corner = "TOPRIGHT", x = 37, y = 0, want = true },
+            { name = "x only", corner = "TOPLEFT", x = 74, y = 0, want = true },
+            { name = "y only", corner = "TOPLEFT", x = 37, y = -37, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.NeedsPin(slot, case.corner, case.x, case.y), case.name)
+        end
+    end)
+
+    it("clears the record after a refused pin so the same target pins again, and keeps a placed one", function()
+        local R = L.loadPartyBuffsRules()
+        local slot = {}
+        R.RecordPin(slot, true, "BOTTOMLEFT", 0, 74)
+        assert.is_false(R.NeedsPin(slot, "BOTTOMLEFT", 0, 74))
+        R.RecordPin(slot, false)
+        assert.are.same({}, slot)
+        assert.is_true(R.NeedsPin(slot, "BOTTOMLEFT", 0, 74))
+    end)
+end)
+
+describe("PartyBuffsRules.NeedsLayout", function()
+    it("lays the row out again when the cell count, the icons per row or the corner alone moved", function()
+        local R = L.loadPartyBuffsRules()
+        local slot = { cellCount = 4, layoutPerRow = 14, layoutCorner = "TOPLEFT" }
+        local cases = {
+            { name = "all match", cells = 4, perRow = 14, corner = "TOPLEFT", want = false },
+            { name = "cell count only", cells = 5, perRow = 14, corner = "TOPLEFT", want = true },
+            { name = "icons per row only", cells = 4, perRow = 3, corner = "TOPLEFT", want = true },
+            { name = "corner only", cells = 4, perRow = 14, corner = "TOPRIGHT", want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.corner), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.NeedsResize", function()
+    it("re-dresses when never dressed or dressed at another size, and not at the same size", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "never dressed", dressed = nil, size = 32, want = true },
+            { name = "same size", dressed = 32, size = 32, want = false },
+            { name = "another size", dressed = 36, size = 32, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.NeedsResize(case.dressed, case.size), case.name)
+        end
     end)
 end)
 
@@ -303,6 +501,88 @@ describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
         for _, case in ipairs(cases) do
             local _, candidates = R.BuildGroupConfig(byKey[case.key], makeDb({}), case.cells)
             assert.are.equal(case.want, candidates.excludeSpellIDs, case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.PreviewSamples", function()
+    it("lists the switched-on samples from the row's own, with the list's first as the stand-in", function()
+        local R = L.loadPartyBuffsRules()
+        local samples = { { potion = 30 }, { potion = 40 }, { potion = 50 } }
+        local on, off = { enabled = true }, { enabled = false }
+        local cases = {
+            { name = "starts at the row's own and wraps", k = 2, list = { [30] = on, [40] = on, [50] = on },
+              want = { 40, 50, 30 } },
+            { name = "switched off, absent or malformed left out", k = 2,
+              list = { [30] = on, [40] = off, [50] = true }, want = { 30 } },
+            { name = "skip leaves a sample out", k = 1, list = { [30] = on, [40] = on }, skip = { [30] = true },
+              want = { 40 } },
+            { name = "no sample switched on: the list's first", k = 2, list = { [20] = on, [40] = off },
+              want = { 20 } },
+            { name = "the stand-in passes over a skipped spell", k = 2, list = { [20] = on, [25] = on, [40] = off },
+              skip = { [20] = true }, want = { 25 } },
+            { name = "nothing switched on", k = 2, list = { [40] = off }, want = {} },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.PreviewSamples(samples, case.k, "potion", case.list, case.skip), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.SplitBuffSamples", function()
+    it("deals the cap evenly over the categories, passing a short category's share on", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "even, remainder to the earlier", cap = 5, available = { 4, 4, 4 }, want = { 2, 2, 1 } },
+            { name = "a short category passes its share on", cap = 6, available = { 1, 4, 4 },
+              want = { 1, 3, 2 } },
+            { name = "a cap past every sample stops at the samples", cap = 8, available = { 1, 2 },
+              want = { 1, 2 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.SplitBuffSamples(case.cap, case.available), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.KeepRow", function()
+    it("keeps a row through a roster change only for the same member on a frame still showing its token", function()
+        local R = L.loadPartyBuffsRules()
+        local bound = { token = "party1" }
+        local fixed = { token = "player", fixed = true }
+        local cases = {
+            { name = "same member, same frame unit", binding = bound, frame = "party1", same = true, want = true },
+            { name = "frame re-sorted to another unit", binding = bound, frame = "party2", same = true, want = false },
+            { name = "fixed token, frame shows a vehicle", binding = fixed, frame = "vehicle", same = true, want = true },
+            { name = "token names someone else", binding = bound, frame = "party1", same = false, want = false },
+            { name = "no binding", binding = nil, frame = "party1", same = true, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.KeepRow(case.binding, case.frame, case.same), case.name)
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.MatchSlots", function()
+    it("returns each binding to the slot holding its token and fills free slots in order", function()
+        local R = L.loadPartyBuffsRules()
+        local function b(token) return { token = token } end
+        local function tokens(placed, n)
+            local out = {}
+            for k = 1, n do out[k] = placed[k] and placed[k].token or "-" end
+            return out
+        end
+        local cases = {
+            { name = "found in a new order", found = { b("party2"), b("party1") }, units = { "party1", "party2" },
+              want = { "party1", "party2", "-" } },
+            { name = "a newcomer takes the freed slot", found = { b("party3"), b("party1") }, units = { "party1", "party2" },
+              want = { "party1", "party3", "-" } },
+            { name = "more frames than slots", found = { b("party1"), b("party2"), b("party3") }, units = {},
+              want = { "party1", "party2" } },
+        }
+        for _, case in ipairs(cases) do
+            local n = #case.want
+            assert.are.same(case.want, tokens(R.MatchSlots(case.found, case.units, n), n), case.name)
         end
     end)
 end)

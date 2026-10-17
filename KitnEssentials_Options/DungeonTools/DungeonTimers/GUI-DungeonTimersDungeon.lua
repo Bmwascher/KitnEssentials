@@ -1155,14 +1155,8 @@ local function BuildActionsTabBody(parent, spellId)
     local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
-    -- Build sound list from LibSharedMedia. "None" prepended explicitly
-    -- since LSM doesn't include it; the setter recognizes "None" as
-    -- "no sound" and prunes the entry.
-    local soundList = { ["None"] = "None" }
+    local soundList = GUIFrame.BuildSoundOptions()
     local LSM = KE.LSM
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
-    end
 
     -- Test buttons always play even when the master mute is on — muting is
     -- about live encounters, not the editor's preview. Channel still tracks
@@ -2232,11 +2226,8 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
-    local soundList = { ["None"] = "None" }
+    local soundList = GUIFrame.BuildSoundOptions()
     local LSM = KE.LSM
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
-    end
 
     -- Test buttons always play even when the master mute is on — muting is
     -- about live encounters, not the editor's preview. Channel still tracks
@@ -2831,11 +2822,8 @@ local function BuildTrashActionsTabBody(parent, item)
     local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
-    local soundList = { ["None"] = "None" }
+    local soundList = GUIFrame.BuildSoundOptions()
     local LSM = KE.LSM
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
-    end
 
     -- Preview always plays (editor preview, not gated by the live mute). Channel
     -- tracks the DungeonTimers SoundChannel so it matches in-encounter playback.

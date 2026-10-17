@@ -19,9 +19,19 @@ local CHIP = 24
 local GAP = 6
 
 local function UpdateChip(btn)
+    local chosen = not btn.disabled and btn._strip._value == btn.presetName
+    -- On a light chip the white selected border meets a light fill; one more
+    -- pixel of inset shows the dark backing as a ring between them.
+    local inset = (chosen and btn.light) and 2 or 1
+    if btn.swatchInset ~= inset then
+        btn.swatchInset = inset
+        btn.swatch:ClearAllPoints()
+        btn.swatch:SetPoint("TOPLEFT", btn, "TOPLEFT", inset, -inset)
+        btn.swatch:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -inset, inset)
+    end
     if btn.disabled then
         btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 0.6)
-    elseif btn._strip._value == btn.presetName then
+    elseif chosen then
         btn:SetBackdropBorderColor(1, 1, 1, 1)
     elseif btn.hover then
         btn:SetBackdropBorderColor(Theme.accentDim[1], Theme.accentDim[2], Theme.accentDim[3], 1)
@@ -58,6 +68,9 @@ local function ConstructPresetSwatches(parent)
         swatch:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
         swatch:SetTexture("Interface\\BUTTONS\\WHITE8X8")
         btn.swatch = swatch
+        btn.swatchInset = 1
+        local presetAccent = KE.ThemePresets[presetName].accent
+        btn.light = KE.IsLightColor(presetAccent[1], presetAccent[2], presetAccent[3])
 
         btn:SetScript("OnEnter", function(self)
             self.hover = true

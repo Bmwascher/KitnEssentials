@@ -617,10 +617,7 @@ end
 -- hex-wrapped rather than two FontStrings so the whole line stays a
 -- single centered string that the bar/icon modes can ignore.
 local function Hex(c)
-    return string.format("%02x%02x%02x",
-        math.floor((c[1] or 1) * 255 + 0.5),
-        math.floor((c[2] or 1) * 255 + 0.5),
-        math.floor((c[3] or 1) * 255 + 0.5))
+    return KE:RGBAToHex(c[1], c[2], c[3])
 end
 
 -- Color-wrapped line with a printf slot for the time, so a secret

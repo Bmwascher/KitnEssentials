@@ -123,6 +123,7 @@ end
 local function IsIncluded(spellID, record)
     return IsPositiveInteger(spellID) and type(record) == "table" and record.enabled ~= false
 end
+Rules.IsIncluded = IsIncluded
 
 --
 -- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a

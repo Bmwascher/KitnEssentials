@@ -18,10 +18,21 @@ local GROW_OPTIONS = {
     { key = "DOWN",  text = "Down" },
 }
 
--- Healer Mana's display. Attached, the box's bottom-left corner sits 2 above
--- the display's top-left one, over its first icon.
+-- Healer Mana's display, keyed by the side the box attaches to. Both draw
+-- their borders inside their frames, so an offset of 1 leaves one empty
+-- pixel between the two border lines.
 local HEALER_MANA = "KitnEssentialsHealerMana"
-local ATTACHED = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 2 }
+local ATTACHED = {
+    TOP    = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT",    XOffset = 0, YOffset = 1 },
+    BOTTOM = { AnchorFrom = "TOPLEFT",    AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -1 },
+}
+-- The box's Icon Size slider range; a copied Healer Mana size is held to it.
+local ICON_MIN, ICON_MAX = 16, 64
+
+local SIDE_OPTIONS = {
+    { key = "TOP",    text = "Top" },
+    { key = "BOTTOM", text = "Bottom" },
+}
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
 
@@ -84,6 +95,10 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     -- Card: Healer Externals
     ----------------------------------------------------------------
     local cardMain = GUIFrame:CreateCard(scrollChild, "Healer Externals", yOffset)
+    cardMain:AddHeaderToggle(db.HealerExternals == true, function(checked)
+        db.HealerExternals = checked
+        ApplySettings()
+    end)
     if Sensor and Sensor.door and not Sensor.DoorOpen() then
         cardMain:AddNote("Healer external timers are unavailable on this client.")
     end
@@ -92,24 +107,47 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         "party where the Cooldowns tab's Where It Shows allows, never in a raid or an arena. Another " ..
         "player's cast of the same spell, such as a Retribution Paladin's Blessing of Sacrifice, starts it too.")
     cardMain:AddNote("Move it with /kes edit.")
+    local function Attach()
+        local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
+        db.HealerExtAnchorFrameType = "SELECTFRAME"
+        db.HealerExtParentFrame = HEALER_MANA
+        local p = db.HealerExtPosition
+        p.AnchorFrom, p.AnchorTo = points.AnchorFrom, points.AnchorTo
+        p.XOffset, p.YOffset = points.XOffset, points.YOffset
+        -- The box shows only in a party, so Healer Mana's party size is the
+        -- one to match, not its raid twin.
+        local hm = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
+        local size = hm and tonumber(hm.IconSize)
+        if size then db.HealerExtIconSize = math.min(ICON_MAX, math.max(ICON_MIN, math.floor(size + 0.5))) end
+        ApplySettings()
+        RebuildPage()
+    end
+
     local rowM1 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeightLast)
-    AddCheck(rowM1, "Healer Externals", "HealerExternals", "all",
-        "Shows each party healer's external cooldown in its own box.")
     local attach = GUIFrame:CreateButton(rowM1, "Attach to Healer Mana", {
         height = 24,
-        tooltip = "Places the box just above the Healer Mana display and keeps it there when that display moves.",
-        callback = function()
-            db.HealerExtAnchorFrameType = "SELECTFRAME"
-            db.HealerExtParentFrame = HEALER_MANA
-            local p = db.HealerExtPosition
-            p.AnchorFrom, p.AnchorTo = ATTACHED.AnchorFrom, ATTACHED.AnchorTo
-            p.XOffset, p.YOffset = ATTACHED.XOffset, ATTACHED.YOffset
-            ApplySettings()
-            RebuildPage()
+        tooltip = "Places the box against the chosen side of the Healer Mana display and keeps it there when " ..
+            "that display moves. Also sets the box's Icon Size to Healer Mana's once; you can change it afterward.",
+        callback = Attach,
+    })
+    -- Level with the Side box, which sits 14 px below the dropdown's top.
+    rowM1:AddWidget(attach, 0.5, nil, 0, -14)
+    manager:Register(attach, "on")
+    local side = GUIFrame:CreateDropdown(rowM1, "Side", {
+        options = SIDE_OPTIONS,
+        value = db.HealerExtAttachSide,
+        tooltip = "The side of the Healer Mana display the box attaches to. Grow is not changed: with Top and " ..
+            "Grow Down, or Bottom and Grow Up, the icons after the first cover Healer Mana. While attached, a change " ..
+            "here attaches again and copies Healer Mana's Icon Size again.",
+        callback = function(choice)
+            db.HealerExtAttachSide = choice
+            if db.HealerExtAnchorFrameType == "SELECTFRAME" and db.HealerExtParentFrame == HEALER_MANA then
+                Attach()
+            end
         end,
     })
-    rowM1:AddWidget(attach, 0.5)
-    manager:Register(attach, "on")
+    rowM1:AddWidget(side, 0.5)
+    manager:Register(side, "on")
     cardMain:AddRow(rowM1, Theme.rowHeightLast, 0)
     yOffset = cardMain:GetNextOffset()
 
@@ -119,7 +157,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     cardDisplay:AddLabel("Font face and outline follow the Cooldowns tab's Font Settings.")
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD1, "Icon Size", "HealerExtIconSize", 16, 64, "on")
+    AddSlider(rowD1, "Icon Size", "HealerExtIconSize", ICON_MIN, ICON_MAX, "on")
     AddSlider(rowD1, "Spacing", "HealerExtSpacing", 0, 20, "on")
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
@@ -144,9 +182,12 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         title = "Position",
         db = db,
         positionKey = "HealerExtPosition",
-        dbKeys = { anchorFrameType = "HealerExtAnchorFrameType", anchorFrameFrame = "HealerExtParentFrame" },
-        defaults = { anchorFrameType = "UIPARENT" },
-        showStrata = false,
+        dbKeys = {
+            anchorFrameType = "HealerExtAnchorFrameType", anchorFrameFrame = "HealerExtParentFrame",
+            strata = "HealerExtStrata",
+        },
+        defaults = { anchorFrameType = "UIPARENT", strata = "MEDIUM" },
+        showStrata = true,
         onChangeCallback = ApplySettings,
     })
     -- The card's own SetEnabled drives its widgets.
