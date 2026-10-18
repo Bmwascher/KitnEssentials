@@ -1445,10 +1445,9 @@ local function SampleTrinkets(row, db)
     return out
 end
 
--- In the live row's order, cut to Max Cooldown Icons: the spec's spells
--- (ticked or not, so a spec listing few shows few rather than another class's
--- spells), then the racial, then the trinkets. A known member's spec, race
--- and trinkets when grouped; a stand-in row's samples otherwise.
+-- In the live row's order, cut to Max Cooldown Icons: the spec's switched-on
+-- spells, then the racial, then the trinkets. A known member's spec, race and
+-- trinkets when grouped; a stand-in row's samples otherwise.
 function PB:PreviewEntries(k)
     local db, entries = self.db, {}
     local binding = self.bindings[k]
@@ -1458,7 +1457,7 @@ function PB:PreviewEntries(k)
     local talents = m and m.talents
     local want = math_min(KE.PartyBuffsRules.CooldownIconCount(db), PREVIEW_CELLS)
     if db.TrackBurst == true then
-        for _, e in ipairs(CDRules.SpellList(specID, db, true)) do
+        for _, e in ipairs(CDRules.SpellList(specID, db)) do
             if #entries >= want then break end
             local has = talents and talents[e.id]
             if CDRules.TalentAllows(e, has) then
