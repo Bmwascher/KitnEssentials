@@ -233,8 +233,9 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     AddSlider(rowD1, "Icon Spacing", "IconSpacing", 0, 10)
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    manager:Register(AddSlider(rowD2, "Max Cooldown Icons", "MaxCooldownIcons", 1, 6), "cellsOn")
-    AddSlider(rowD2, "Max Active Buff Icons", "MaxPerMember", 1, 8)
+    manager:Register(AddSlider(rowD2, "Max Cooldown Icons", "MaxCooldownIcons", 1,
+        KE.PartyBuffsRules.MAX_COOLDOWN_ICONS), "cellsOn")
+    AddSlider(rowD2, "Max Active Buff Icons", "MaxPerMember", 1, KE.PartyBuffsRules.MAX_BUFF_ICONS)
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
 
     local rowDSep = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
@@ -389,7 +390,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     local rowX3 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
     AddPlacement(AddSlider(rowX3, "Icons Per Row", PlacementKey("IconsPerRow"), 1,
         KE.PartyBuffsRules.MAX_PER_ROW, PlacementValue("IconsPerRow"),
-        "Icons on one line before the row wraps. At 14 it never wraps."))
+        "Icons on one line before the row wraps. At " .. KE.PartyBuffsRules.MAX_PER_ROW
+            .. " it never wraps."))
     if healerView then
         AddPlacement(AddSlider(rowX3, "Icon Size", PlacementKey("IconSize"), ICON_SIZE_MIN, ICON_SIZE_MAX,
             PlacementValue("IconSize"), "Icon size in a healer spec. Other specs use Icon Size on the Display card."))
