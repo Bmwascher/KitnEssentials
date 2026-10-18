@@ -471,9 +471,11 @@ describe("PartyBuffsRules.SlotGeometry and IconOffset", function()
             { name = "not centered, today's numbers", layout = aboveRight, cells = 4, buffs = 4, perRow = 6,
               want = { x0 = 0, width = 147, height = 73, buffIndex = 0, buffLine = 1, buffPerLine = 4 },
               pin = { 0, 37 } },
+            { name = "centered row, list on", layout = aboveCenter, cells = 2, buffs = 4, perRow = 14, list = true,
+              want = { x0 = 148, width = 369, height = 73 }, pin = { 148, 37 } },
         }
         for _, case in ipairs(cases) do
-            local db = { IconSpacing = case.spacing or 1, MaxPerMember = case.buffs }
+            local db = { IconSpacing = case.spacing or 1, MaxPerMember = case.buffs, ActiveCooldownsFirst = case.list }
             local g = R.SlotGeometry(db, case.layout, case.cells, case.perRow, 36)
             for key, value in pairs(case.want) do
                 assert.are.equal(value, g[key], case.name .. ": " .. key)
@@ -486,6 +488,22 @@ describe("PartyBuffsRules.SlotGeometry and IconOffset", function()
                 assert.are.same(case.pin, { R.IconOffset(g, case.layout, g.buffIndex, g.buffLine) },
                     case.name .. ": pin")
             end
+        end
+    end)
+end)
+
+describe("PartyBuffsRules.BuffAreaCount", function()
+    it("adds one place per cooldown cell to Max Active Buff Icons while the active list is on", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "off", db = { MaxPerMember = 4 }, cells = 4, want = 4 },
+            { name = "on, with cells", db = { MaxPerMember = 4, ActiveCooldownsFirst = true }, cells = 4, want = 8 },
+            { name = "on, no cell", db = { MaxPerMember = 4, ActiveCooldownsFirst = true }, cells = 0, want = 4 },
+            { name = "on, a fractional cap", db = { MaxPerMember = 4.6, ActiveCooldownsFirst = true }, cells = 2,
+              want = 7 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.BuffAreaCount(case.db, case.cells), case.name)
         end
     end)
 end)

@@ -82,13 +82,28 @@ function Rules.CellCount(entryCount, db)
     return math_min(entryCount, Rules.CooldownIconCount(db))
 end
 
+-- Active Cooldowns First: the cooldowns whose buff is up show in sorted lists
+-- at the start of the active buff icons.
+function Rules.ListOn(db)
+    return type(db) == "table" and db.ActiveCooldownsFirst == true
+end
+
+-- The active buff area's places: Max Active Buff Icons, plus one per cooldown
+-- cell while the active list is on, so the list never pushes the other buffs
+-- out. Never the live count, which is secret.
+function Rules.BuffAreaCount(db, cellCount)
+    return Rules.IconCount(db) + (Rules.ListOn(db) and cellCount or 0)
+end
+
 -- The Max Cooldown Icons and Max Active Buff Icons slider ceilings. A row
--- holds both, so no row is longer than their sum.
+-- holds both, so no row is longer than their sum unless the active list adds
+-- its places (BuffAreaCount).
 Rules.MAX_COOLDOWN_ICONS = 6
 Rules.MAX_BUFF_ICONS = 8
 Rules.MAX_PER_ROW = Rules.MAX_COOLDOWN_ICONS + Rules.MAX_BUFF_ICONS
 
--- Rounded as IconCount is; a value that is not a number never wraps.
+-- Rounded as IconCount is; a value that is not a number reads as the widest
+-- row the sliders allow.
 function Rules.PerRow(value)
     if type(value) ~= "number" then return Rules.MAX_PER_ROW end
     return math_max(1, math_floor(value + 0.5))
@@ -110,14 +125,15 @@ function Rules.LineSize(db, count, size)
     return Span(count, size, db.IconSpacing) + size / 2
 end
 
--- Each category may fill the whole cap, so only the holder's clip holds the
--- cap: buff lines are at most cap wide and the holder fits the layout exactly.
+-- Each group may fill its own cap, so only the holder's clip holds the buff
+-- area (BuffAreaCount): buff lines are at most that wide and the holder fits
+-- the layout exactly.
 -- ownLine starts the buffs on a line of their own whenever the row has a cell.
 -- Returns step, buffCol, buffLine, buffPerLine, width, height.
 function Rules.RowLayout(db, cellCount, perRow, size, ownLine)
     local spacing = db.IconSpacing
     local step = size + spacing
-    local buffs = Rules.IconCount(db)
+    local buffs = Rules.BuffAreaCount(db, cellCount)
     if cellCount + buffs <= perRow and not (ownLine and cellCount > 0) then
         return step, cellCount, 0, buffs, Span(cellCount + buffs, size, spacing), Span(1, size, spacing)
     end
