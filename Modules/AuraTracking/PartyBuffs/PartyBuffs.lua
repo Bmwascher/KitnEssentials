@@ -367,7 +367,8 @@ function PB:DropSlot(k)
     if slot.container then pcall(slot.container.SetEnabled, slot.container, false) end
     if slot.track then Track.Unbind(slot.track) end
     slot.holder:Hide()
-    slot.holder:ClearAllPoints()
+    -- A skipped clear leaves only a hidden frame's old point.
+    if KE:CanReanchorNow(slot.holder) then slot.holder:ClearAllPoints() end
 end
 
 function PB:SlotComplete(k)
@@ -744,8 +745,9 @@ end
 -- Anchored, never parented: a child of a party frame inherits its protection
 -- and could not be hidden in combat. It takes the party frame's strata, or
 -- MEDIUM when that cannot be read. Returns the strata and level applied, or
--- nil when the anchor was refused.
+-- nil when the anchor was refused or the holder may not move now.
 function PB:PlaceHolder(holder, frame, forPreview, size)
+    if not KE:CanReanchorNow(holder) then return nil end
     local side, x, y = self:Placement(forPreview)
     local dx, dy = KE.PartyBuffsRules.HolderOffset(side, self.db.IconSpacing, x, y, size)
     holder:ClearAllPoints()
