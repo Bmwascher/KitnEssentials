@@ -161,6 +161,20 @@ describe("PartyCooldownsRules.NextInspect", function()
         assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
     end)
 
+    it("asks nobody within FOREIGN_GAP seconds of another addon's inspect request", function()
+        local R = loadRules()
+        local members = { member("a") }
+        local cases = {
+            { name = "inside the gap", foreignAt = 10.5 - R.FOREIGN_GAP },
+            { name = "at the gap", foreignAt = 10 - R.FOREIGN_GAP, want = "a" },
+            { name = "no foreign request", want = "a" },
+        }
+        for _, case in ipairs(cases) do
+            local got = R.NextInspect({ now = 10, foreignAt = case.foreignAt }, members)
+            assert.are.equal(case.want, got and got.name, case.name)
+        end
+    end)
+
     it("rests a member for TRY_WAIT seconds after MAX_TRIES tries, or STALE_TRIES when only stale", function()
         local R = loadRules()
         local cases = {

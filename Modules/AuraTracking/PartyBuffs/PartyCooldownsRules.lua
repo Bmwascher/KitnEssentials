@@ -23,6 +23,9 @@ Rules.INSPECT_GAP = 2
 Rules.MAX_TRIES = 12
 Rules.STALE_TRIES = 3
 Rules.TRY_WAIT = 30
+-- Seconds after another addon's inspect request in which nobody is asked and
+-- no answer is cleared: that request may still be reading the data.
+Rules.FOREIGN_GAP = 3
 
 local function Table(value)
     if type(value) == "table" then return value end
@@ -124,12 +127,21 @@ function Rules.InspectInUse(inspectShown, talentsInspecting)
     return inspectShown == true or talentsInspecting == true
 end
 
+-- Whether another addon's inspect request, made at foreignAt, may still be in
+-- use.
+function Rules.ForeignBusy(now, foreignAt)
+    if type(foreignAt) ~= "number" then return false end
+    return now - foreignAt < Rules.FOREIGN_GAP
+end
+
 -- At most one member per call, and none while an inspect view is in use, in
--- combat, or within INSPECT_GAP seconds of the last request. An offline
--- member never answers, and asking it would hold back everyone behind it.
+-- combat, within INSPECT_GAP seconds of the last request or within
+-- FOREIGN_GAP seconds of another addon's. An offline member never answers,
+-- and asking it would hold back everyone behind it.
 function Rules.NextInspect(state, members)
     if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
     if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
+    if Rules.ForeignBusy(state.now, state.foreignAt) then return nil end
     for _, m in ipairs(members) do
         if not m.done and m.canInspect and not m.offline and not (m.waitUntil and state.now < m.waitUntil) then
             return m

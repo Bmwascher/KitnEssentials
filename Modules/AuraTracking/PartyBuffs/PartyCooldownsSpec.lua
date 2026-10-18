@@ -56,7 +56,7 @@ Spec.libSpecs = {}
 Spec.libTalents = {}
 Spec.members = {}
 
-local events
+local events, foreignHooked
 
 local function Plain(value)
     if KE:IsSecretValue(value) then return nil end
@@ -241,6 +241,7 @@ function Spec.Tick()
         inCombat = InCombatLockdown(),
         now = now,
         lastRequest = Spec.lastRequest,
+        foreignAt = Spec.foreignAt,
     }, Spec.members)
     if not m then return end
     Spec.lastRequest = now
@@ -314,7 +315,10 @@ local function OnInspectReady(guid)
             if IsOn(reader) and reader.Wanted(m) then reader.Read(m, unit) end
         end
     end
-    if not KE.PartyCooldownsRules.InspectInUse(InspectViews()) then pcall(ClearInspectPlayer) end
+    local rules = KE.PartyCooldownsRules
+    if not (rules.InspectInUse(InspectViews()) or rules.ForeignBusy(GetTime(), Spec.foreignAt)) then
+        pcall(ClearInspectPlayer)
+    end
     m.done = Done(m)
     if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime(), OnlyStale(m)) end
     Changed(m)
@@ -376,11 +380,25 @@ function Spec.Enable(onChange)
     if LibSpec then LibSpec.RegisterGroup(Spec, OnLibSpec) end
 end
 
+-- Another addon's inspect request. KE's own never reach the hook: they call
+-- the local captured at load, and the hook wraps only the global.
+local function OnForeignInspect()
+    if Spec.active then Spec.foreignAt = GetTime() end
+end
+
 -- The content gate: every event and the inspect ticker live only between
--- these two.
+-- these two. The inspect hook is installed on the first activation and is
+-- inert while inactive; a hook cannot be removed.
 function Spec.Activate()
     if Spec.active or not Spec.enabled then return end
     Spec.active = true
+    if not foreignHooked then
+        local notify = _G.NotifyInspect
+        if type(notify) == "function" then
+            hooksecurefunc("NotifyInspect", OnForeignInspect)
+            foreignHooked = true
+        end
+    end
     if not events then
         events = CreateFrame("Frame")
         events:SetScript("OnEvent", OnEvent)
