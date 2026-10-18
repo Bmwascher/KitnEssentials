@@ -2820,6 +2820,8 @@ function L.loadEUIUnlockBridge(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     _G.CreateFrame = function() return noopFrame() end
     local KE = {}
+    -- The re-apply passes call through KE:SafeCall.
+    helpers.loadModule("Core/Secret.lua", KE)
     return helpers.loadModule("Core/EUIUnlockBridge.lua", KE)
 end
 

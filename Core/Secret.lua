@@ -244,6 +244,35 @@ function KE:GetSafeText(fontString)
 end
 
 ---------------------------------------------------------------------------------
+-- Protected Dispatch
+---------------------------------------------------------------------------------
+
+-- A failed call reports once per label, so a callback that fails on every
+-- page switch shows one error, not one per switch. The error value is tested
+-- before it is joined: it can be secret.
+local reportedLabels = {}
+
+local function Finish(label, ok, ...)
+    if not ok and not reportedLabels[label] then
+        reportedLabels[label] = true
+        local err = ...
+        local message
+        if not (issecretvalue and issecretvalue(err)) and type(err) == "string" then
+            message = label .. ": " .. err
+        else
+            message = label .. ": failed with an unreadable error"
+        end
+        local handler = geterrorhandler and geterrorhandler()
+        if handler then pcall(handler, message) end
+    end
+    return ok, ...
+end
+
+function KE:SafeCall(label, fn, ...)
+    return Finish(label, pcall(fn, ...))
+end
+
+---------------------------------------------------------------------------------
 -- Restriction State Management
 ---------------------------------------------------------------------------------
 

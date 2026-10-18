@@ -20,6 +20,18 @@ local table_insert = table.insert
 
 local Theme = KE.Theme
 
+-- One label per callback key, built the first time the key fires.
+local callbackLabels = { close = {}, cleanup = {}, rebuild = {} }
+
+local function CallbackLabel(set, prefix, key)
+    local label = set[key]
+    if not label then
+        label = prefix .. tostring(key)
+        set[key] = label
+    end
+    return label
+end
+
 ---------------------------------------------------------------------------------
 -- Frame Creation
 ---------------------------------------------------------------------------------
@@ -139,8 +151,8 @@ function GUIFrame:RegisterOnCloseCallback(key, callback)
 end
 
 function GUIFrame:FireOnCloseCallbacks()
-    for _, callback in pairs(self.onCloseCallbacks) do
-        pcall(callback)
+    for key, callback in pairs(self.onCloseCallbacks) do
+        KE:SafeCall(CallbackLabel(callbackLabels.close, "GUI close callback ", key), callback)
     end
 end
 
@@ -495,8 +507,8 @@ function GUIFrame:Hide()
     end
     self.searchFilter = ""
     -- Fire cleanup
-    for _, callback in pairs(self.contentCleanupCallbacks) do
-        pcall(callback)
+    for key, callback in pairs(self.contentCleanupCallbacks) do
+        KE:SafeCall(CallbackLabel(callbackLabels.cleanup, "GUI cleanup callback ", key), callback)
     end
     self:FireOnCloseCallbacks()
     KE.GUIOpen = false
@@ -1490,8 +1502,8 @@ function GUIFrame:RefreshContent()
     -- orphan them. Always fires regardless of in-place vs.
     -- item-switch — pools need to release every render, not just on
     -- item changes.
-    for _, callback in pairs(self.contentRebuildCallbacks) do
-        pcall(callback)
+    for key, callback in pairs(self.contentRebuildCallbacks) do
+        KE:SafeCall(CallbackLabel(callbackLabels.rebuild, "GUI rebuild callback ", key), callback)
     end
 
     local itemId = self.selectedSidebarItem or "HomePage"
@@ -1503,8 +1515,8 @@ function GUIFrame:RefreshContent()
     -- Fire content cleanup callbacks ONLY on real item switch — same-item
     -- refreshes shouldn't tear down preview state.
     if not sameItem then
-        for _, callback in pairs(self.contentCleanupCallbacks) do
-            pcall(callback)
+        for key, callback in pairs(self.contentCleanupCallbacks) do
+            KE:SafeCall(CallbackLabel(callbackLabels.cleanup, "GUI cleanup callback ", key), callback)
         end
     end
 
