@@ -519,7 +519,10 @@ local function RefreshAll()
 
     for name, module in KitnEssentials:IterateModules() do
         local wasEnabled = module:IsEnabled()
-        local wantEnabled = module.db and module.db.Enabled
+        -- A withheld module is rebound above but never enabled or re-applied,
+        -- whatever its saved flag says.
+        local available = KE:IsFeatureAvailable(name)
+        local wantEnabled = available and module.db and module.db.Enabled
         local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
             and (not wantEnabled) ~= (not wasEnabled)
         local skinDeferred = false
@@ -551,7 +554,7 @@ local function RefreshAll()
         -- profile's config). Same for reload-deferred modules: the new
         -- profile wants this module OFF, so applying its settings now would
         -- configure a module that's about to be torn down by /reload.
-        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred and not reloadDeferred then
+        if available and wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred and not reloadDeferred then
             module:ApplySettings()
         end
     end

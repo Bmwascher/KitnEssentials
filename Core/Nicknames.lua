@@ -150,8 +150,14 @@ end
 -- fires this event.
 
 local nsrtHooked = false
-local function RegisterNSRTCallback()
+local function RegisterNSRTCallback(frame)
     if nsrtHooked then return end
+    -- Nothing that reads nicknames runs where the provider is withheld, even
+    -- when another addon supplies it, so the boot frame stops listening.
+    if not KE:IsFeatureAvailable("NicknameProvider") then
+        frame:UnregisterAllEvents()
+        return
+    end
     local api = _G.NSAPI
     if not api or not api.RegisterCallback then return end
     -- Dot call, not colon: CallbackHandler keys on the first argument, and a

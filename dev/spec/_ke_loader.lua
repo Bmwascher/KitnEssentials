@@ -187,6 +187,11 @@ function L.loadGlobals(overrides, opts)
             return issecretvalue and issecretvalue(value)
         end,
     }
+    -- Core/Availability.lua loads before Globals in-game. opts.forever seeds
+    -- a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end
 
@@ -417,7 +422,9 @@ function L.loadProfileManager(overrides)
     _G.KitnEssentials.IterateModules = _G.KitnEssentials.IterateModules or function() return pairs({}) end
     _G.KitnEssentials.EnableModule = _G.KitnEssentials.EnableModule or function() end
     _G.KitnEssentials.DisableModule = _G.KitnEssentials.DisableModule or function() end
+    -- No BASELINE_LOAD: a retail load, so Core/Availability.lua admits everything.
     local KE = { db = db }
+    helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Core/ProfileManager.lua", KE)
     return KE.ProfileManager, KE, db
 end

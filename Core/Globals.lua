@@ -1818,7 +1818,7 @@ function PreviewManager:ShowSectionPreviews(sectionId, extras)
     for _, moduleName in ipairs(PREVIEW_MODULES) do
         local module = Addon:GetModule(moduleName, true)
         if module then
-            local wantPreview = wantedSet[moduleName]
+            local wantPreview = wantedSet[moduleName] and KE:IsFeatureAvailable(moduleName)
                 and module.ShowPreview and module.db and module.db.Enabled
                 and (not module.classRestriction or classMatch[module.classRestriction])
             if wantPreview then
@@ -1843,7 +1843,7 @@ function PreviewManager:ShowModules(moduleList)
     local states = self._moduleStates
     for _, moduleName in ipairs(moduleList) do
         local module = Addon:GetModule(moduleName, true)
-        if module and module.ShowPreview and module.db and module.db.Enabled then
+        if module and KE:IsFeatureAvailable(moduleName) and module.ShowPreview and module.db and module.db.Enabled then
             if not module.classRestriction or classMatch[module.classRestriction] then
                 if states[moduleName] ~= "preview" then
                     module:ShowPreview()

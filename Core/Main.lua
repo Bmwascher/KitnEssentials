@@ -202,8 +202,8 @@ local function OnEncounterStart()
 end
 
 local function OnPlayerEnteringWorld()
-    for _, module in KitnEssentials:IterateModules() do
-        if module:IsEnabled() and module.ApplySettings then
+    for name, module in KitnEssentials:IterateModules() do
+        if module:IsEnabled() and module.ApplySettings and KE:IsFeatureAvailable(name) then
             module:ApplySettings()
         end
     end
@@ -220,7 +220,8 @@ function KitnEssentials:OnEnable()
     -- Enable modules based on saved settings
     local skipSkinning = KE:ShouldNotLoadModule()
     for name, module in self:IterateModules() do
-        if module.db and module.db.Enabled then
+        -- A withheld module stays off whatever its saved flag says.
+        if module.db and module.db.Enabled and KE:IsFeatureAvailable(name) then
             -- Skip skinning modules when ElvUI handles skinning
             if not (skipSkinning and (name:find("^Skin") or module.keDeferToReload)) then
                 self:EnableModule(name)

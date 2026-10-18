@@ -49,3 +49,39 @@ describe("Forever availability: admission", function()
         end
     end)
 end)
+
+describe("Forever availability: refresh and previews", function()
+    -- Two states a withheld module can be in: dormant with its flag on, and
+    -- running under its own enable management. Neither may be enabled,
+    -- re-applied or previewed; the rebind still runs, as the refresh
+    -- contract requires for every loaded module.
+    it("rebinds a withheld module on a profile refresh but never enables, applies or previews it", function()
+        for _, row in ipairs({
+            { name = "dormant with its flag on", enabled = false },
+            { name = "running, self-managed",    enabled = true, selfManaged = true },
+        }) do
+            local KE = L.loadGlobals(nil, { forever = true })
+            local calls = {}
+            local module = {
+                db = { Enabled = true },
+                keSelfManagedEnable = row.selfManaged,
+                IsEnabled = function() return row.enabled end,
+                UpdateDB = function() calls[#calls + 1] = "rebind" end,
+                ApplySettings = function() calls[#calls + 1] = "apply" end,
+                ShowPreview = function() calls[#calls + 1] = "preview" end,
+                HidePreview = function() end,
+            }
+            _G.KitnEssentials = {
+                IterateModules = function() return pairs({ CombatTimer = module }) end,
+                GetModule = function(_, name) return name == "CombatTimer" and module or nil end,
+                EnableModule = function(_, name) calls[#calls + 1] = "enable " .. name end,
+                DisableModule = function(_, name) calls[#calls + 1] = "disable " .. name end,
+            }
+            helpers.loadModule("Core/ProfileManager.lua", KE)
+            KE.ProfileManager:RefreshAllModules()
+            KE.PreviewManager:ShowModules({ "CombatTimer" })
+            KE.PreviewManager:ShowSectionPreviews("combat_section")
+            assert.same({ "rebind" }, calls, row.name)
+        end
+    end)
+end)
