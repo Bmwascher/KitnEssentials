@@ -17,7 +17,7 @@ function KE:GetPlayerIdentityParts()
     local charKey = keys and keys.char
     if self:IsSecretValue(charKey) or type(charKey) ~= "string" or charKey == "" then return nil end
     local regionalNames = _G.RegionalUniqueNamesEnabled
-    if not (regionalNames and regionalNames() == true) then
+    if not (regionalNames and regionalNames()) then
         return { charKey = charKey, regional = false }
     end
     local name = UnitNameUnmodified("player")
