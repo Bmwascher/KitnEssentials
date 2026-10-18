@@ -584,6 +584,66 @@ describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
     end)
 end)
 
+describe("PartyBuffsRules.ListGroupConfig and the category exclusion", function()
+    it("gives each kind's list group its cells' buffs without summons, and leaves the list out of every category", function()
+        local R, KE = L.loadPartyBuffsRules()
+        local on, off = makeDb({ ActiveCooldownsFirst = true }), makeDb({})
+        local entries = {
+            { kind = "offensive", buffs = { 10, 11 } },
+            { kind = "offensive", buffs = { 20 }, active = 12 },
+            { kind = "defensive", buffs = { 30 } },
+            { kind = "trinket", buffs = { 40 }, trinket = true },
+        }
+        local byKind = {}
+        for _, group in ipairs(R.LIST_GROUPS) do byKind[group.kind] = group end
+        local cases = {
+            { name = "offensive, a summon left out", kind = "offensive", db = on, entries = entries,
+              include = { [10] = true, [11] = true }, max = 1, index = -2 },
+            { name = "defensive", kind = "defensive", db = on, entries = entries,
+              include = { [30] = true }, max = 1, index = -1 },
+            { name = "trinket", kind = "trinket", db = on, entries = entries,
+              include = { [40] = true }, max = 1, index = 0 },
+            { name = "only a summon", kind = "offensive", db = on, entries = { entries[2] },
+              include = {}, max = 0, index = -2 },
+            { name = "switch off: nothing included", kind = "offensive", db = off, entries = entries,
+              include = {}, max = 0, index = -2 },
+        }
+        for _, case in ipairs(cases) do
+            local filter, candidates, max, index = R.ListGroupConfig(byKind[case.kind], case.db, case.entries)
+            assert.are.equal(R.LIST_FILTER, filter, case.name)
+            assert.are.same(case.include, candidates.includeSpellIDs, case.name)
+            assert.are.equal(case.max, max, case.name)
+            assert.are.equal(case.index, index, case.name)
+        end
+        local blocklist = KE.AuraRules.BuildExcludeSpellIDs(nil)
+        local cells = { [50] = true }
+        local listed = R.ListBuffs(on, entries)
+        local external
+        for _, category in ipairs(R.CATEGORIES) do
+            if category.excludeBlocklist then external = category end
+            local _, merged = R.BuildGroupConfig(category, on, cells, listed)
+            for _, id in ipairs({ 10, 11, 30, 40 }) do
+                assert.is_true(merged.excludeSpellIDs[id], category.key .. " leaves out " .. id)
+            end
+            assert.is_nil(merged.excludeSpellIDs[20], category.key .. ": a summon's buff stays")
+            if category.excludeBlocklist then
+                for id in pairs(blocklist) do
+                    assert.is_true(merged.excludeSpellIDs[id], "blocklist " .. id)
+                end
+            end
+            if category.excludesCells then
+                assert.is_true(merged.excludeSpellIDs[50], "a trinket cell stays left out")
+            end
+        end
+        for _, id in ipairs({ 10, 11, 30, 40 }) do
+            assert.is_nil(blocklist[id], "shared blocklist untouched " .. id)
+            assert.is_nil(cells[id], "cell set untouched " .. id)
+        end
+        local _, plain = R.BuildGroupConfig(external, off, nil, R.ListBuffs(off, entries))
+        assert.are.equal(blocklist, plain.excludeSpellIDs, "switch off: the blocklist itself")
+    end)
+end)
+
 describe("PartyBuffsRules.PreviewSamples", function()
     it("lists the switched-on samples from the row's own, with the list's first as the stand-in", function()
         local R = L.loadPartyBuffsRules()
