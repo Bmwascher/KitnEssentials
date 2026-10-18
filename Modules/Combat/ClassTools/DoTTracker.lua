@@ -195,7 +195,6 @@ local function Geometry(db, attached)
         left, top = size / 2 - tw / 2, size / 2 - th / 2
     end
     left, top = left + tx, top + ty
-    -- An attached cell has no glow.
     local padX, padY = 0, 0
     if not attached then padX, padY = GlowMargins(db, w, h) end
     local boxL, boxT = math_min(0, left) - padX, math_min(0, top) - padY
