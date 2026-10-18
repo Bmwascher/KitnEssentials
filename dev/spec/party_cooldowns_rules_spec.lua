@@ -804,6 +804,38 @@ describe("PartyCooldownsRules.TalentsFor box rows", function()
     end)
 end)
 
+describe("PartyCooldownsRules talent read guards", function()
+    it("wants a member's talents only for a switched-on part that names one", function()
+        local R = loadRules()
+        local rowsOnly = { rows = true, box = false, boxOnly = {} }
+        local boxOnly = { rows = false, box = true, boxOnly = { [60] = true } }
+        local cases = {
+            { name = "no talents", class = true, box = true, want = false },
+            { name = "own casts, Class Cooldowns on", talents = rowsOnly, class = true, box = false, want = true },
+            { name = "own casts, only the box on", talents = rowsOnly, class = false, box = true, want = false },
+            { name = "box rows, the box on", talents = boxOnly, class = false, box = true, want = true },
+            { name = "box rows, only Class Cooldowns on", talents = boxOnly, class = true, box = false,
+              want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentsWanted(case.talents, case.class, case.box), case.name)
+        end
+    end)
+
+    it("skips a talent only box rows name while the box is off", function()
+        local R = loadRules()
+        local talents = { boxOnly = { [77] = true } }
+        local cases = {
+            { name = "box-only, box off", talent = 77, box = false, want = false },
+            { name = "box-only, box on", talent = 77, box = true, want = true },
+            { name = "its own cast's, box off", talent = 55, box = false, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentRead(talents, case.talent, case.box), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.CellLength", function()
     it("counts the talented length once every length talent is read, the listed one until then", function()
         local R = loadRules()

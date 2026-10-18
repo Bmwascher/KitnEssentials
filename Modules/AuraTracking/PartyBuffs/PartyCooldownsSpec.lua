@@ -180,12 +180,10 @@ local function Done(m)
     return true
 end
 
--- Whether the member's talents count for a switched-on cell: Class Cooldowns,
--- or the externals box for a healer spec on its list.
+-- Whether the member's talents count for a switched-on cell.
 local function TalentsWanted(m)
-    if KE.PartyCooldownsRules.TalentsFor(m.spec) == nil then return false end
-    if Spec.trackClass == true then return true end
-    return Spec.trackHealers == true and KE.PartyCooldownsData.HEALER_SPECS[m.spec] ~= nil
+    local rules = KE.PartyCooldownsRules
+    return rules.TalentsWanted(rules.TalentsFor(m.spec), Spec.trackClass, Spec.trackHealers)
 end
 
 -- Every answer the member is still wanted for is in hand and only marked
@@ -418,6 +416,7 @@ end
 -- start no reader: a racial needs only the spec and the race, a healer only
 -- the spec.
 function Spec.SetTracked(class, trinkets, racials, healers)
+    local boxChanged = Spec.trackHealers ~= healers
     Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials = class, trinkets, racials
     Spec.trackHealers = healers
     if not Spec.active then return end
@@ -426,6 +425,11 @@ function Spec.SetTracked(class, trinkets, racials, healers)
         if reader.Clear and not IsOn(reader) then
             for _, m in pairs(Spec.byGUID) do reader.Clear(m) end
         end
+    end
+    -- The box's switch changes which talents a read keeps, so every answer
+    -- is read again.
+    if boxChanged then
+        for _, m in pairs(Spec.byGUID) do ClearTalents(m) end
     end
     Spec.Wake()
 end
@@ -693,15 +697,19 @@ local function HasTree(trees, tree)
 end
 
 -- Every wanted talent's rank in config: the active entry's rank, the largest
--- over the talent's nodes, 0 when not taken. Nil when it cannot be answered
--- yet: no inspect data, a loadout not of this spec's class, no wanted talent
--- found, or a node unreadable; the reader counts that as a miss. A second
--- result true means the answer is skipped without a miss: a first walk would
--- run in combat.
+-- over the talent's nodes, 0 when not taken. While the box is off, a talent
+-- only box rows name is not read; the walk still keeps it, since the walk
+-- visits every node either way. Nil when it cannot be answered yet: no
+-- inspect data, a loadout not of this spec's class, no wanted talent found,
+-- or a node unreadable; the reader counts that as a miss. A second result
+-- true means the answer is skipped without a miss: a first walk would run in
+-- combat.
 local function ReadRanks(specID, config)
     local out = {}
-    local talents = KE.PartyCooldownsRules.TalentsFor(specID)
-    if not talents then return out end
+    local rules = KE.PartyCooldownsRules
+    local talents = rules.TalentsFor(specID)
+    local boxOn = Spec.trackHealers == true
+    if not (talents and (talents.rows or boxOn)) then return out end
     if config == INSPECT_CONFIG and C_Traits.HasValidInspectData() ~= true then return nil end
     local info = C_Traits.GetConfigInfo(config)
     local trees = type(info) == "table" and info.treeIDs
@@ -718,17 +726,19 @@ local function ReadRanks(specID, config)
         if not found then return nil end
     end
     for talent, spots in pairs(found) do
-        local rank = 0
-        for _, at in ipairs(spots) do
-            local node = C_Traits.GetNodeInfo(config, at.node)
-            if not (type(node) == "table" and type(node.ID) == "number" and node.ID > 0) then return nil end
-            local active = node.activeEntry
-            if node.subTreeActive ~= false and type(active) == "table" and active.entryID == at.entry
-                and type(node.activeRank) == "number" and node.activeRank > rank then
-                rank = node.activeRank
+        if rules.TalentRead(talents, talent, boxOn) then
+            local rank = 0
+            for _, at in ipairs(spots) do
+                local node = C_Traits.GetNodeInfo(config, at.node)
+                if not (type(node) == "table" and type(node.ID) == "number" and node.ID > 0) then return nil end
+                local active = node.activeEntry
+                if node.subTreeActive ~= false and type(active) == "table" and active.entryID == at.entry
+                    and type(node.activeRank) == "number" and node.activeRank > rank then
+                    rank = node.activeRank
+                end
             end
+            out[talent] = rank
         end
-        out[talent] = rank
     end
     return out
 end

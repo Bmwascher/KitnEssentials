@@ -976,6 +976,20 @@ function Rules.TalentsFor(specID)
     return cached or nil
 end
 
+-- Whether a member's talents are worth a read, from TalentsFor's answer:
+-- Class Cooldowns is on and the spec's own casts or healer externals name a
+-- talent, or the box is on and its externals or box rows do.
+function Rules.TalentsWanted(talents, trackClass, trackHealers)
+    if not talents then return false end
+    if trackClass == true and talents.rows then return true end
+    return trackHealers == true and talents.box == true
+end
+
+-- Whether a read keeps the talent: one only box rows name waits for the box.
+function Rules.TalentRead(talents, talent, boxOn)
+    return boxOn == true or not talents.boxOnly[talent]
+end
+
 function Rules.TalentAllows(entry, taken)
     local needs = entry.spell and entry.spell.needs
     if not needs then return true end
