@@ -12,7 +12,6 @@ local Theme = KE.Theme
 local UnitName = UnitName
 local UnitClass = UnitClass
 local ipairs = ipairs
-local string_format = string.format
 local ReloadUI = ReloadUI
 local pairs = pairs
 
@@ -48,8 +47,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local card1 = GUIFrame:CreateCard(scrollChild, "Welcome to " .. KE:ColorTextByTheme("Kitn") .. "Essentials", yOffset)
 
     -- Player greeting with class color
-    local colorHex = string_format("%02x%02x%02x", classColor.r * 255, classColor.g * 255, classColor.b * 255)
-    card1:AddLabel("Hello, |cff" .. colorHex .. playerName .. "|r!")
+    card1:AddLabel("Hello, " .. KE:WrapColor(playerName, classColor.r, classColor.g, classColor.b) .. "!")
     card1:AddSpacing(4)
 
     -- Version and author

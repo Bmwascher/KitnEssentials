@@ -18,10 +18,9 @@ local format = string.format
 local GetTimePreciseSec = GetTimePreciseSec
 local GetLocale = GetLocale
 
--- Color array → "|cffRRGGBB" prefix (used by RenderObjectives per-row).
--- floor already declared above; do NOT re-declare it.
+-- Color array → "|cffrrggbb" prefix (used by RenderObjectives per-row).
 local function Hex(c)
-    return format("|cff%02x%02x%02x", floor((c[1] or 1) * 255), floor((c[2] or 1) * 255), floor((c[3] or 1) * 255))
+    return KE:ColorCode(c[1], c[2], c[3])
 end
 
 -- Capitalize the first letter of every word. Used only on count objectives

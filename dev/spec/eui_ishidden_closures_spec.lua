@@ -46,7 +46,7 @@ local MODULES = {
     { "Chat", function()
         mock.install({})
         local modules = helpers.installAddonShim()
-        local KE = helpers.loadModule("Modules/Skinning/Chat/Chat.lua", {})
+        local KE = helpers.loadModule("Modules/Skinning/Chat/Chat.lua", helpers.loadModule("Core/Colors.lua", {}))
         KE.EUIUnlock = recorder()
         local CHAT = modules["Chat"]
         CHAT.db = {}

@@ -1120,7 +1120,7 @@ function CHAT:RGBToHex(r, g, b)
     r = r <= 1 and r >= 0 and r or 1
     g = g <= 1 and g >= 0 and g or 1
     b = b <= 1 and b >= 0 and b or 1
-    return format("|cff%02x%02x%02x", r * 255, g * 255, b * 255)
+    return KE:ColorCode(r, g, b)
 end
 
 -- Handed to gsub as the replacement function, so `self` is the captured
@@ -1220,7 +1220,7 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
         local prefix
         if db.TimestampColorEnabled and db.TimestampColor then
             local c = db.TimestampColor
-            local colorCode = format("|cff%02x%02x%02x", (c.r or 0.6) * 255, (c.g or 0.6) * 255, (c.b or 0.6) * 255)
+            local colorCode = KE:ColorCode(c.r or 0.6, c.g or 0.6, c.b or 0.6)
             prefix = format("|Hketime|h%s%s|r|h ", colorCode, timestamp)
         else
             prefix = format("|Hketime|h%s|h ", timestamp)

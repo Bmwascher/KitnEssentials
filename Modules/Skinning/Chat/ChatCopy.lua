@@ -62,7 +62,7 @@ do
 end
 
 local function ColorizeLine(text, r, g, b)
-    return format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, text)
+    return KE:WrapColor(text, r, g, b)
 end
 
 function CHAT:GetChatLines(frame)
@@ -239,7 +239,7 @@ function CHAT:BuildCopyChatFrame()
     hint:SetPoint("RIGHT", closeBtn, "LEFT", -12, 0)
     do
         local a = Theme.accent
-        local hex = format("%02x%02x%02x", (a[1] or 1) * 255, (a[2] or 1) * 255, (a[3] or 1) * 255)
+        local hex = KE:RGBAToHex(a[1], a[2], a[3])
         hint:SetFormattedText("Press |cff%sCtrl+C|r to copy", hex)
     end
     hint:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.8)

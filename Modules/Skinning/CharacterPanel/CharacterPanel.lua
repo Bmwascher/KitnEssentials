@@ -1600,7 +1600,7 @@ local function UpgradeSpan(w, showLetter, showUpgrade)
     if showUpgrade and w.cur and w.max then inner = inner .. w.cur .. "/" .. w.max end
     if inner == "" then return nil end
     local c = w.track.color or { 1, 1, 1 }
-    return ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, inner)
+    return KE:WrapColor(inner, c[1], c[2], c[3])
 end
 CP._UpgradeSpan = UpgradeSpan
 

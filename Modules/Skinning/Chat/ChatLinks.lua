@@ -242,8 +242,7 @@ end
 function CL.URLColor()
     local c = CL.db and CL.db.WebAddressColor
     if not c then return URL_COLOR_FALLBACK end
-    return format("|cff%02x%02x%02x", (c[1] or 0.31) * 255, (c[2] or 0.71) * 255,
-        (c[3] or 1) * 255)
+    return KE:ColorCode(c[1] or 0.31, c[2] or 0.71, c[3] or 1)
 end
 
 local function WrapSpan(span, substitution)

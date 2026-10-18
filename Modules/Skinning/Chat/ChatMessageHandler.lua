@@ -707,7 +707,7 @@ local function Blocked(s, e, protectCount)
 end
 
 local function HexFrom(r, g, b)
-    return format("|cff%02x%02x%02x", (r or 1) * 255, (g or 1) * 255, (b or 0) * 255)
+    return KE:ColorCode(r or 1, g or 1, b or 0)
 end
 
 local function ClassColorString(class)

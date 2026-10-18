@@ -6,6 +6,9 @@
 -- ║  Note: ElvUI only. Skips loading if ElvUI is absent.     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
+---@class KE
+local KE = select(2, ...)
+
 if not ElvUI then return end
 
 local E = unpack(ElvUI)
@@ -20,7 +23,6 @@ local UnitInPartyIsAI = UnitInPartyIsAI
 local IsInRaid = IsInRaid
 local GetNumGroupMembers = GetNumGroupMembers
 local GetRaidRosterInfo = GetRaidRosterInfo
-local format = string.format
 local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local math_floor = math.floor
@@ -33,7 +35,7 @@ local ElvUF_colors_reaction = ElvUF.colors.reaction
 ---------------------------------------------------------------------------------
 
 local function Hex(r, g, b)
-    return format('|cff%02x%02x%02x', r * 255, g * 255, b * 255)
+    return KE:ColorCode(r, g, b)
 end
 
 local function GetUnitColor(unit)

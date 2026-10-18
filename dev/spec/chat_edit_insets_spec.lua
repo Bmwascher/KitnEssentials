@@ -8,7 +8,7 @@ local SECRET = setmetatable({}, { __tostring = function() return "<secret>" end 
 local function loadChat()
     mock.install({ issecretvalue = function(v) return v == SECRET end })
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Skinning/Chat/Chat.lua", {})
+    helpers.loadModule("Modules/Skinning/Chat/Chat.lua", helpers.loadModule("Core/Colors.lua", {}))
     return modules["Chat"]
 end
 

@@ -160,8 +160,8 @@ describe("RaidControl", function()
             local out = {}
             seams.roleIconsAddNames(out, "Kitn-Ravencrest", "MAGE")
             assert.equals(1, #out)
-            -- 0.25*255 = 63.75 -> %02x truncates to 3f; 0.78*255 -> c6; 0.92*255 -> ea
-            assert.equals("|cff3fc6eaKitn*", out[1])
+            -- Each channel rounds: 0.25*255 = 63.75 -> 40; 0.78*255 -> c7; 0.92*255 -> eb
+            assert.equals("|cff40c7ebKitn*", out[1])
         end)
 
         it("falls back to the priest color for an unknown class", function()
@@ -187,7 +187,7 @@ describe("RaidControl", function()
         it("leaves a realmless name untouched apart from the color prefix", function()
             local out = {}
             seams.roleIconsAddNames(out, "Kitn", "MAGE")
-            assert.equals("|cff3fc6eaKitn", out[1])
+            assert.equals("|cff40c7ebKitn", out[1])
         end)
     end)
 

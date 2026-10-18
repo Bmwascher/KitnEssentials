@@ -824,18 +824,17 @@ function TT:OnTooltipSetUnit(tt, data)
             local realLevel = UnitLevel(unit)
             local race = UnitRace(unit)
             local diff = GetCreatureDifficultyColor(level)
-            local r = (diff and diff.r or 1) * 255
-            local g = (diff and diff.g or 1) * 255
-            local b = (diff and diff.b or 1) * 255
+            local r = diff and diff.r
+            local g = diff and diff.g
+            local b = diff and diff.b
 
             local shown = (level and level > 0) and level or "??"
             local text
             if level and realLevel and level < realLevel then
-                text = format("|cff%02x%02x%02x%s|r |cffFFFFFF(%s)|r %s",
-                    r, g, b, tostring(shown), tostring(realLevel), race or "")
+                text = KE:WrapColor(tostring(shown), r, g, b)
+                    .. format(" |cffFFFFFF(%s)|r %s", tostring(realLevel), race or "")
             else
-                text = format("|cff%02x%02x%02x%s|r %s",
-                    r, g, b, tostring(shown), race or "")
+                text = KE:WrapColor(tostring(shown), r, g, b) .. format(" %s", race or "")
             end
             levelLine:SetText(text)
         end

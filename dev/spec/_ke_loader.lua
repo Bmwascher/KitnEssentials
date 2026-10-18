@@ -527,6 +527,7 @@ function L.loadChatMessageHandler(overrides)
     -- by the handler. Without this line every new case dies on
     -- "attempt to call method 'NotSecretValue' (a nil value)".
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
@@ -607,6 +608,7 @@ function L.loadTooltips(opts, overrides)
         db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/Tooltips/Tooltips.lua", KE)
     return modules["SkinTooltips"], KE
 end
@@ -2115,6 +2117,7 @@ function L.loadRaidControl(overrides)
     local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
     KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/DarkTheme/RaidControl.lua", KE)
     local RC = modules["RaidControl"]
 
@@ -2841,6 +2844,7 @@ function L.loadChatLinks(overrides)
     _G.strsub = string.sub
     local KE = { db = { profile = { Skinning = { ChatLinks = {} } } } }
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/Chat/ChatLinks.lua", KE)
     return modules["ChatLinks"], KE
 end

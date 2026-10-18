@@ -88,6 +88,23 @@ function KE:RGBAToHex(r, g, b)
     return string_format("%02X%02X%02X", r, g, b)
 end
 
+-- Lowercase digits, unlike RGBAToHex: the chat code and its specs build and
+-- match lowercase codes.
+function KE:ColorCode(r, g, b)
+    return string_format("|cff%02x%02x%02x",
+        math_floor((r or 1) * 255 + 0.5),
+        math_floor((g or 1) * 255 + 0.5),
+        math_floor((b or 1) * 255 + 0.5))
+end
+
+function KE:WrapColor(text, r, g, b)
+    return string_format("|cff%02x%02x%02x%s|r",
+        math_floor((r or 1) * 255 + 0.5),
+        math_floor((g or 1) * 255 + 0.5),
+        math_floor((b or 1) * 255 + 0.5),
+        text)
+end
+
 function KE:GetThemeColorHex()
     if Theme and Theme.accent then
         return self:RGBAToHex(Theme.accent[1], Theme.accent[2], Theme.accent[3])
