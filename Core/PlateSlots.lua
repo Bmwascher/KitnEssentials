@@ -277,6 +277,9 @@ end
 function Slots:UnitOf(slot) return self.unitOf[slot] end
 function Slots:SlotOf(unit) return self.slotOf[unit] end
 function Slots:Refused(unit) return self.refused[unit] == true end
+
+-- The verdict under the last scan's strictness, without taking a slot.
+function Slots:WouldCount(unit) return Counts(self, unit, self.strict) end
 function Slots:Total() return self.total end
 function Slots:Cap() return self.cap end
 function Slots:IsStarted() return self.started end

@@ -455,16 +455,22 @@ describe("dot tracker rules", function()
             end
         end)
 
-        it("scans on a threat change only for an uncounted plate not refused this pull, while a slot is free", function()
-            -- holds a slot, refused, total, cap, expected
+        it("scans on a threat change only for an uncounted plate not refused this pull that would count now, while a slot is free", function()
+            -- holds a slot, refused, total, cap, would count now, expected
             local cases = {
-                { false, false, 3, 20, true },
-                { true, false, 3, 20, false },
-                { false, true, 3, 20, false },
-                { false, false, 20, 20, false },
+                { false, false, 3, 20, true, true },
+                { true, false, 3, 20, true, false },
+                { false, true, 3, 20, true, false },
+                { false, false, 20, 20, true, false },
+                { false, false, 3, 20, false, false },
             }
             for i, case in ipairs(cases) do
-                assert.equals(case[5], Rules.WantsThreatScan(case[1], case[2], case[3], case[4]), "case " .. i)
+                local function wouldCount(unit)
+                    assert.equals("nameplate1", unit, "unit, case " .. i)
+                    return case[5]
+                end
+                assert.equals(case[6], Rules.WantsThreatScan(case[1], case[2], case[3], case[4], wouldCount, "nameplate1"),
+                    "case " .. i)
             end
         end)
     end)
