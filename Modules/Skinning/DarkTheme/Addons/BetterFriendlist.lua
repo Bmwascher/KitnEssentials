@@ -197,14 +197,53 @@ local function SkinHeaderRow(button)
     S.Backdrop(button, 1)
 end
 
-local function InvitePlusPaint(tp)
-    local plus = S.data(tp).invitePlus
-    if not plus then return end
-    if tp:IsEnabled() then
-        plus:SetTextColor(1, 1, 1, 0.9)
-    else
-        plus:SetTextColor(0.4, 0.4, 0.4, 0.6)
+local INVITE_GLYPH_SIZE = 16
+local INVITE_GLYPH_DISABLED = 0.55
+
+-- The Modern layout's own in-group test. Each field is checked for secrecy
+-- before it is tested, and a secret GUID never reaches the call: the API
+-- rejects secret arguments from addon code.
+local function FriendInGroup(friend)
+    if type(friend) ~= "table" then return false end
+    local connected = friend.connected
+    if KE:IsSecretValue(connected) or not connected then return false end
+    local guid = friend.guid
+    if KE:IsSecretValue(guid) then return false end
+    if not guid then
+        local info = friend.gameAccountInfo
+        if type(info) ~= "table" then return false end
+        guid = info.playerGuid
+        if KE:IsSecretValue(guid) or not guid then return false end
     end
+    local sq = _G.C_SocialQueue
+    if not (sq and sq.IsSystemSupported and sq.GetGroupForPlayer) or not sq.IsSystemSupported() then
+        return false
+    end
+    local ok, group = pcall(sq.GetGroupForPlayer, guid)
+    return ok and group ~= nil
+end
+
+-- Full alpha: the color alone shows the disabled state.
+local function TintInviteGlyph(glyph, enabled)
+    if not glyph then return end
+    glyph:SetDesaturated(true)
+    glyph:SetAlpha(1)
+    if enabled then
+        glyph:SetVertexColor(1, 1, 1)
+    else
+        glyph:SetVertexColor(INVITE_GLYPH_DISABLED, INVITE_GLYPH_DISABLED, INVITE_GLYPH_DISABLED)
+    end
+end
+
+local function PaintLegacyInviteGlyph(tp)
+    local glyph = S.data(tp).inviteGlyph
+    if not glyph or IsModern() then return end
+    local enabled = tp:IsEnabled()
+    local atlas = FriendInGroup(tp.friendData) and "friends-icon-friendsInGroup" or "friends-icon-friendsAvailable"
+    glyph:SetAtlas(enabled and atlas or (atlas .. "-dis"))
+    glyph:SetSize(INVITE_GLYPH_SIZE, INVITE_GLYPH_SIZE)
+    TintInviteGlyph(glyph, enabled)
+    glyph:Show()
 end
 
 -- BFL re-fonts raid names with its own font object and smooth scaling on
@@ -218,22 +257,10 @@ local function RefontRaidName(button)
     if name.SetSmoothScaling then pcall(name.SetSmoothScaling, name, false) end
 end
 
--- (BFL's original invite art comes back on top of ours
--- after clicking invite): this built once and then bailed on every
--- later call -- but we are hooked to UpdateFriendButton/InitializeEntry,
--- which is BFL RE-DRESSING the button. It re-set the button's art on
--- invite-state change and nothing re-cleared it, so the original + drew
--- over ours. Two changes:
---   * the art removal now re-asserts on every update instead of once.
---     We are already hooked to the re-dresser; we were just declining
---     to do anything with it.
---   * S.KillAllTextures -> StripTextures + ClearButtonArt. The kill was
---     `Show = Hide` slot surgery, which never stopped this anyway: BFL
---     re-dresses through SetNormalTexture/SetAtlas, and a button's state
---     art is drawn by the button, not by a :Show() we can intercept.
---     ClearButtonArt is the permanence idiom (ClearTexture + hooked
---     setters that re-clear, self-terminating) and it survives re-dress
---     on its own -- the per-update re-assert covers plain regions too.
+-- The addon re-dresses this button on every row update, so the art removal
+-- and the glyph are re-applied each time; the strip clears the glyph's atlas
+-- too. The Recent Allies party button also wears the Modern treatment, so the
+-- Legacy box is re-placed after a layout switch.
 local function FlattenInviteButton(tp)
     if not tp then return end
     local d = S.data(tp)
@@ -242,21 +269,22 @@ local function FlattenInviteButton(tp)
         d.bflSkinned = true
         local w, h = tp:GetSize()
         if w and h then tp:SetSize(math.floor(w + 0.5), math.floor(h + 0.5)) end
+        local glyph = tp:CreateTexture(nil, "OVERLAY")
+        glyph:SetPoint("CENTER", 0, 0)
+        d.inviteGlyph = glyph
+        tp:HookScript("OnEnable", PaintLegacyInviteGlyph)
+        tp:HookScript("OnDisable", PaintLegacyInviteGlyph)
+    end
+    if d.inviteLayout ~= "legacy" then
+        d.inviteLayout = "legacy"
         S.Backdrop(tp, 4)
-        local plus = tp:CreateFontString(nil, "OVERLAY")
-        plus:SetPoint("CENTER", 0, 0)
-        S.SetFont(plus, 16, "")
-        plus:SetText("+")
-        d.invitePlus = plus
-        tp:HookScript("OnEnable", InvitePlusPaint)
-        tp:HookScript("OnDisable", InvitePlusPaint)
     end
 
     S.StripTextures(tp)
     S.ClearButtonArt(tp)
     -- After the strip, which clears the hover highlight too.
     S.Hover(tp, S.GetBackdrop(tp))
-    InvitePlusPaint(tp)
+    PaintLegacyInviteGlyph(tp)
 end
 
 local function HookLazy(module, creatorNames, skinFn)
