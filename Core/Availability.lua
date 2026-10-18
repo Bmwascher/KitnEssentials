@@ -64,8 +64,8 @@ function KE:FilterAvailableEntries(entries)
 end
 
 -- Skin registration keys a baseline load runs: the admitted window skins,
--- plus Dialogs. Kept apart from the feature ids above so a skin key can never collide with
--- a module or page id.
+-- plus Dialogs. Kept apart from the feature ids above so a skin key can
+-- never collide with a module or page id.
 local FOREVER_FRAME_SKINS = {
     AddonManager = true,
     Battlenet = true,
