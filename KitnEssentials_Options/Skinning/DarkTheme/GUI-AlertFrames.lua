@@ -43,9 +43,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAlertFrames", function(scrollChild, 
         afDB.Enabled = checked
         ApplyState(checked)
         -- The AdjustAnchors replacements and hooksecurefunc hooks this module
-        -- installs cannot be undone (Modules/Skinning/DarkTheme/AlertFrames.lua header taint
-        -- note): turning the toggle off would otherwise leave the toast stack
-        -- overridden by a module that reports itself off.
+        -- installs cannot be undone (Modules/Skinning/DarkTheme/AlertFrames.lua
+        -- header taint note): turning the toggle off would otherwise leave the
+        -- toast stack overridden by a module that reports itself off.
         if not checked then
             KE:CreateReloadPrompt("Turning off the alert anchor requires a UI reload to give the toasts back to Blizzard.")
         end

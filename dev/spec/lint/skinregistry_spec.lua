@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  dev/spec/skinregistry_spec.lua                          ║
+-- ║  dev/spec/lint/skinregistry_spec.lua                     ║
 -- ║  Proves the config grid and the S:Register dispatcher    ║
 -- ║  agree on every key, AND that every WINDOW_MAP addon     ║
 -- ║  filter names an addon a real registration actually uses. ║
