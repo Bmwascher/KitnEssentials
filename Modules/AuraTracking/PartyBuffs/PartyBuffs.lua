@@ -87,6 +87,8 @@ local PREVIEW_CELLS = KE.PartyBuffsRules.MAX_COOLDOWN_ICONS
 local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
 -- No item is read for a stand-in row, so its sample trinkets take this length.
 local PREVIEW_TRINKET_CD = 120
+-- Levels a preview row sits above a live one, above its container's buttons.
+local PREVIEW_LEVEL_LIFT = 10
 
 local GATE_EVENTS = {
     "ZONE_CHANGED_NEW_AREA",
@@ -452,10 +454,15 @@ end
 -- resolves unless PB:KeepRosterRows kept it.
 function PB:ResolveAll()
     if self._rosterTimer then
+        -- A kept row is placed again: the icon size may have changed.
         for k = 1, MAX_SLOTS do
+            local slot, binding = self.slots[k], self.bindings[k]
             if not self.rosterKept[k] then
                 self.bindings[k] = nil
                 self:DropSlot(k)
+            elseif slot and binding
+                and not self:PlaceHolder(slot.holder, binding.frame, false, self.styleSettings.IconSize) then
+                self.buildPending = true
             end
         end
         return
@@ -744,12 +751,17 @@ end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
 -- and could not be hidden in combat. It takes the party frame's strata, or
--- MEDIUM when that cannot be read. Returns the strata and level applied, or
--- nil when the anchor was refused or the holder may not move now.
+-- MEDIUM when that cannot be read; a preview row sits PREVIEW_LEVEL_LIFT
+-- levels higher, so a hover stops at the preview and not at the live button
+-- under it. size is the icon size the Center lift is measured in. Returns the
+-- strata and level applied, or nil when the anchor was refused or the holder
+-- may not move now.
 function PB:PlaceHolder(holder, frame, forPreview, size)
     if not KE:CanReanchorNow(holder) then return nil end
     local side, x, y = self:Placement(forPreview)
     local dx, dy = KE.PartyBuffsRules.HolderOffset(side, self.db.IconSpacing, x, y, size)
+    -- The Center lift is half an icon: a half pixel at an odd size.
+    dy = KE:PixelSnap(dy)
     holder:ClearAllPoints()
     if not pcall(holder.SetPoint, holder, side.point, frame, side.rel, dx, dy) then
         return nil
@@ -761,7 +773,7 @@ function PB:PlaceHolder(holder, frame, forPreview, size)
     end
     local okLevel, frameLevel = pcall(frame.GetFrameLevel, frame)
     if okLevel and not issecretvalue(frameLevel) and type(frameLevel) == "number" then
-        level = frameLevel + 10
+        level = frameLevel + 10 + (forPreview and PREVIEW_LEVEL_LIFT or 0)
     end
     holder:SetFrameStrata(strata)
     if level then holder:SetFrameLevel(level) end
@@ -1496,6 +1508,7 @@ function PB:DrawPreviewCells(row, entries, side, step, perRow)
         if e then
             if not c then
                 c = Cell.New(row.holder)
+                c:EnableMouse(true)
                 row.cells[i] = c
             end
             Cell.Dress(c, self.previewCellStyle, e)
@@ -1545,6 +1558,7 @@ function PB:DrawPreviewActive(row, e)
         KE.AuraGlow.Apply(icon, settings, d.capabilities)
     else
         icon = CreateFrame("Frame", nil, row.holder)
+        icon:EnableMouse(true)
         KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
         icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
         row.active = icon
@@ -1605,6 +1619,7 @@ function PB:DrawPreviewRow(k, frame)
                 KE.AuraGlow.Apply(icon, settings, d.capabilities)
             else
                 icon = CreateFrame("Frame", nil, holder)
+                icon:EnableMouse(true)
                 KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
                 icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
                 row.icons[shown] = icon
