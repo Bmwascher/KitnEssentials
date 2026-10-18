@@ -607,6 +607,8 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             { key = "alert",    text = "Alert" },
         },
         typeTooltip = "Shows on a DoT's icon while every counted enemy has it (6/6).",
+        -- The pulse runs at a fixed rhythm.
+        showSpeed = function(glowType) return glowType ~= "border" end,
         speedMax = 1,
         onChangeCallback = ApplySettings,
         -- Pixel and Pulse Border show a row of controls and the sheet styles
