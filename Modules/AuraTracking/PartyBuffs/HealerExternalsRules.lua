@@ -15,8 +15,9 @@ local Rules = {}
 KE.HealerExternalsRules = Rules
 
 -- A group tracker's read passes its stamp through up to two client
--- evaluations per watched unit, so the door bound needs Unit(cd) <= 2, which
--- holds up to 508 seconds. Never raise this above 508.
+-- evaluations per watched unit, a charge cell's two more plus five a second
+-- from its tick, so the door bound needs Unit(cd) <= 2, which holds up to 508
+-- seconds. Never raise this above 508.
 Rules.CD_MAX = 300
 
 local function Table(value)
