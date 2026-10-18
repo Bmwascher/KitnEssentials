@@ -1010,15 +1010,47 @@ describe("PartyCooldownsRules charges", function()
         end
     end)
 
-    it("reports a change when a lost count reads plain again, on a read with no use", function()
+    it("recounts a lost count on plain state at the next tick; an idle read leaves it lost", function()
         local R = loadRules()
         local t = R.NewTracker(60, false, false, 2)
         R.Clear(t, 0)
         R.Feed(t, false, nil, 9, isSecret, choose, nil)
         R.ChargeLose(t)
-        local changed = R.Feed(t, false, nil, 12, isSecret, choose, nil)
-        assert.are.same({ true, 2 }, { changed, count(t) })
+        local read = R.Feed(t, false, nil, 12, isSecret, choose, nil)
+        local lost = t.legacy == true
+        local ticked = R.ChargeTick(t, 13, isSecret, choose, nil, nil)
+        assert.are.same({ false, true, true, 2 }, { read, lost, ticked, count(t) })
         assert.is_nil(t.legacy)
+    end)
+
+    it("finds a read idle only when no unit can have risen, from plain answers", function()
+        local R = loadRules()
+        local cases = {
+            { name = "single, not lit now", prev = secret(true), lit = false, want = true },
+            { name = "single, lit before", prev = true, lit = secret(true), want = true },
+            { name = "single, a rise", prev = false, lit = true, want = false },
+            { name = "single, hidden now after an unlit read", prev = false, lit = secret(true), want = false },
+            { name = "group, a second unit rising while the first is lit", multi = true,
+                prev = { true, false, n = 2 }, lit = { true, true, n = 2 }, want = false },
+            { name = "group, every unit off now or lit before", multi = true,
+                prev = { true, false, n = 2 }, lit = { secret(true), false, n = 2 }, want = true },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(60, false, case.multi == true, 2)
+            t.prev, t.prevShort = case.prev, nil
+            assert.are.equal(case.want, R.ChargeIdle(t, case.lit, nil, isSecret), case.name)
+        end
+    end)
+
+    it("only records an idle read on hidden state after the verdict, losing no count", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, false, 2)
+        R.Clear(t, 0)
+        local function unreadable() return false, nil end
+        R.Feed(t, secret(true), nil, 9, isSecret, choose, unreadable, true)
+        t.slot[t.cur].c = secret(t.slot[t.cur].c)
+        local changed = R.Feed(t, false, nil, 12, isSecret, choose, unreadable, true)
+        assert.are.same({ false, false }, { changed, t.legacy == true })
     end)
 end)
 

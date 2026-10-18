@@ -330,7 +330,9 @@ local function NeverSecret() return false end
 -- shows no charge left.
 function Rules.StartLoop(t, n)
     local start = n - (t.cd - t.loop)
-    Rules.Clear(t, start)
+    -- A charge stamp starts at code 1, so a charge sample's slot starts one
+    -- second before the use.
+    Rules.Clear(t, t.charges and start - 1 or start)
     Rules.StartPlain(t, start)
     if t.charges then
         t.b = 1
@@ -595,6 +597,26 @@ local function PlainRises(t, lit, short, isSecret)
     return 0
 end
 
+-- Whether a read cannot hold a use, from plain answers only: a single sensor
+-- not lit now, or lit in the read before; a group when every unit is. A
+-- secret answer never makes its side idle, so a read that might hold a use
+-- still goes on.
+function Rules.ChargeIdle(t, lit, short, isSecret)
+    if t.multi then
+        local prev = t.prev
+        for j = 1, lit.n do
+            local now, before = lit[j], prev[j]
+            local off = not isSecret(now) and now ~= true
+            local on = not isSecret(before) and before == true
+            if not (off or on) then return false end
+        end
+        return true
+    end
+    local litKnown, up = State(lit, short, t.hasShort, isSecret, false)
+    local prevKnown, was = State(t.prev, t.prevShort, t.hasShort, isSecret, false)
+    return (litKnown and not up) or (prevKnown and was)
+end
+
 -- old with no use in the read, new with one: a lit read after one that was
 -- not.
 local function OnRise(t, lit, short, old, new, pick)
@@ -639,20 +661,22 @@ function Rules.ChargeLegacyUse(t, lit, short, n, isSecret, pick)
 end
 
 -- A read of a charge tracker: whether this path took it, and whether a value
--- changed. Plain reads on plain state change the state in Lua; otherwise each
--- new value is picked by the reads and the finished answers, and none is
--- written until every pick has run, so an error leaves the state whole. With
--- the count lost, or lost here because a finished answer cannot be read, the
--- use is timed as one cooldown (ChargeLegacyUse). A lost count that reads
--- plain again comes back and counts as a change. A group read with another
--- unit count than the read before only records, as the first read after
--- Track.ApplyGroup's hold does; that hold unprimes the tracker whenever the
--- unit list changes, so a primed read never meets one. checked is the
--- read-back's self-check: until it decides, a read that would need a hidden
--- value only records, so no count is lost without a cast; a use in those
--- seconds is not seen.
+-- changed. A read that cannot hold a use (ChargeIdle) only records, so it
+-- never reaches the read-back. Plain reads on plain state change the state in
+-- Lua; otherwise each new value is picked by the reads and the finished
+-- answers, and none is written until every pick has run, so an error leaves
+-- the state whole. With the count lost, or lost here because a finished
+-- answer cannot be read, the use is timed as one cooldown (ChargeLegacyUse).
+-- A lost count that reads plain again comes back and counts as a change. A
+-- group read with another unit count than the read before only records, as
+-- the first read after Track.ApplyGroup's hold does; that hold unprimes the
+-- tracker whenever the unit list changes, so a primed read never meets one.
+-- checked is the read-back's self-check: until it decides, a read that would
+-- need a hidden value only records, so no count is lost without a cast; a use
+-- in those seconds is not seen.
 function Rules.ChargeUse(t, lit, short, n, isSecret, pick, past, checked)
     if t.multi and t.prev.n ~= lit.n then return true, false end
+    if Rules.ChargeIdle(t, lit, short, isSecret) then return true, false end
     local plain = Rules.ChargePlain(t, isSecret)
     local resumed = plain and t.legacy == true
     if resumed then Rules.ChargeResume(t, n, isSecret) end
