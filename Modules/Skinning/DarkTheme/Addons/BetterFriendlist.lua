@@ -876,6 +876,9 @@ local function SkinModernCard(card)
     ZeroAlpha(card.CardBackground)
     ZeroAlpha(card.ThemeTint)
     ZeroAlpha(card.FactionTint)
+    -- The dark theme's row backdrop, which the sweep finds already showing.
+    local rowBd = card.BFL_DarkBackdrop
+    if rowBd then rowBd:Hide() end
     CardHover(card)
     FlattenModernInvite(card.travelPassButton)
     local cues = CardCues(card)
