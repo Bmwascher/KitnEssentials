@@ -274,7 +274,7 @@ function Rules.Clear(t, n)
         local sl = t.slot[k]
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
-    t.cur, t.primed, t.prev, t.prevShort, t.quietTo = 1, false, nil, nil, nil
+    t.cur, t.primed, t.prev, t.prevShort, t.quietTo, t.restartTo = 1, false, nil, nil, nil, nil
     if t.charges then
         t.b, t.a0, t.a1, t.a2 = 0, 0, 0, 1
         t.f1, t.f2, t.p1, t.p2, t.fRead, t.legacy, t.lb = nil, nil, nil, nil, nil, nil, nil
@@ -391,7 +391,8 @@ end
 -- One read. Plain answers decide the edge in Lua. A secret answer is only
 -- passed to pick, which writes the stamp and the visibility without Lua
 -- learning it. Inside an armed window a fall stamps fallD seconds back; in a
--- cast's quiet a rise only records. A charge tracker's read goes to
+-- cast's quiet a rise only records, and so does a plain rise for t.quiet
+-- seconds after a plain start. A charge tracker's read goes to
 -- ChargeUse, past reading its finished state back and checked the read-back's
 -- self-check (nil while undecided); the edge below never sees it. An error
 -- there loses the count, times the read as one cooldown, per unit for a
@@ -416,7 +417,8 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
                 taken, moved, held = true, true, not timed
             end
         end
-        local rise = not taken and not quiet
+        local restarting = litKnown and prevKnown and t.restartTo ~= nil and n <= t.restartTo
+        local rise = not taken and not quiet and not restarting
             and not ((litKnown and not up) or (prevKnown and was))
         local fall = not taken and t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
             and not ((litKnown and up) or (prevKnown and not was))
@@ -426,6 +428,7 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
             if litKnown and prevKnown then
                 if rise then
                     Rules.StartPlain(t, n)
+                    if t.quiet then t.restartTo = n + t.quiet end
                 else
                     Rules.StartPlain(t, n, n - t.fallD)
                 end

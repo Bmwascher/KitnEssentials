@@ -426,6 +426,36 @@ describe("PartyCooldownsRules.Feed", function()
             end
         end
     end)
+
+    it("takes no plain rise for a tracker's quiet seconds after a plain start, and leaves hidden reads alone", function()
+        local R = loadRules()
+        local q = 15
+        local plain = function(v) return v end
+        -- s wraps the start's two reads, r the rise's two.
+        local cases = {
+            { name = "a plain rise inside the quiet keeps the start", s = plain, r = plain, quiet = q,
+              rise = 10 + q, want = { 1, (255 - 5) / 255 } },
+            { name = "a plain rise after the quiet stamps", s = plain, r = plain, quiet = q, rise = 11 + q,
+              want = { 1, (255 - math.floor((11 + q) / 2)) / 255 } },
+            { name = "no quiet: the next rise stamps", s = plain, r = plain, rise = 10 + q,
+              want = { 1, (255 - math.floor((10 + q) / 2)) / 255 } },
+            { name = "a hidden start opens no quiet", s = secret, r = plain, quiet = q, rise = 10 + q,
+              want = { 1, (255 - math.floor((10 + q) / 2)) / 255 } },
+            { name = "a hidden rise inside the quiet still stamps", s = plain, r = secret, quiet = q,
+              rise = 10 + q, want = { 1, (255 - math.floor((10 + q) / 2)) / 255 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(300, false)
+            t.quiet = case.quiet
+            R.Clear(t, 0)
+            R.Feed(t, case.s(false), nil, 9, isSecret, pick)
+            R.Feed(t, case.s(true), nil, 10, isSecret, pick)
+            R.Feed(t, case.r(false), nil, case.rise - 1, isSecret, pick)
+            R.Feed(t, case.r(true), nil, case.rise, isSecret, pick)
+            local sl = t.slot[t.cur]
+            assert.are.same(case.want, { sl.v, sl.c }, case.name)
+        end
+    end)
 end)
 
 describe("PartyCooldownsRules.Tick", function()
