@@ -127,6 +127,33 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
+    -- Card: Show In
+    ----------------------------------------------------------------
+    local cardShow = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
+
+    local function ShowInCheckbox(row, label, key)
+        return GUIFrame:CreateCheckbox(row, label, {
+            value = db[key] ~= false,
+            callback = function(checked)
+                db[key] = checked
+                ApplySettings()
+            end,
+        })
+    end
+
+    local rowShow1 = GUIFrame:CreateRow(cardShow.content, Theme.rowHeight)
+    rowShow1:AddWidget(ShowInCheckbox(rowShow1, "Dungeons", "ShowInDungeons"), 0.33)
+    rowShow1:AddWidget(ShowInCheckbox(rowShow1, "Delves", "ShowInDelves"), 0.33)
+    rowShow1:AddWidget(ShowInCheckbox(rowShow1, "Raids", "ShowInRaids"), 0.33)
+    cardShow:AddRow(rowShow1, Theme.rowHeight)
+
+    local rowShow2 = GUIFrame:CreateRow(cardShow.content, Theme.rowHeightLast)
+    rowShow2:AddWidget(ShowInCheckbox(rowShow2, "Open World", "ShowInOpenWorld"), 0.5)
+    rowShow2:AddWidget(ShowInCheckbox(rowShow2, "Arenas / Battlegrounds", "ShowInPvP"), 0.5)
+    cardShow:AddRow(rowShow2, Theme.rowHeightLast, 0)
+    yOffset = cardShow:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Your DoTs
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Your DoTs", yOffset)

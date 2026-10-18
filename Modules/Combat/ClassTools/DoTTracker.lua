@@ -35,6 +35,8 @@ local UnitThreatSituation = UnitThreatSituation
 local UnitPlayerControlled = UnitPlayerControlled
 local IsInRaid = IsInRaid
 local GetNumGroupMembers = GetNumGroupMembers
+local IsInInstance = IsInInstance
+local GetInstanceInfo = GetInstanceInfo
 local issecretvalue = issecretvalue
 local ipairs, pcall, tostring, type = ipairs, pcall, tostring, type
 local math_ceil, math_max, math_min = math.ceil, math.max, math.min
@@ -82,6 +84,7 @@ DT.active = false
 DT.applying = false
 DT.previewing = false
 DT.inCombat = false
+DT.shownHere = true
 DT.paintedTotal = -1
 DT.editModeRegistered = false
 DT.someColor = DEFAULT_SOME
@@ -881,13 +884,28 @@ function DT:Apply(list, allowed, class, specID, held)
     self.paintedTotal = -1
     self:OnScanDone(self.slots and self.slots:Total() or 0)
     if self.previewing then self:PaintPreview() end
+    self:UpdateShowHere()
     self:UpdateLive()
+end
+
+-- Read on zone changes and settings passes, never in a hot path. A failed read
+-- keeps the last answer rather than show or hide on a guess. True when the
+-- answer changed.
+function DT:UpdateShowHere()
+    local okIn, inInstance, instanceType = pcall(IsInInstance)
+    local okInfo, _, _, difficultyID = pcall(GetInstanceInfo)
+    if not okIn or not okInfo then return false end
+    local shown = Rules.ShowHere(self.db, inInstance, instanceType, difficultyID)
+    if shown == self.shownHere then return false end
+    self.shownHere = shown
+    return true
 end
 
 function DT:UpdateLive()
     if not self.root then return end
     local db = self.db
-    local live = self.active and not self.previewing and (self.inCombat or db.OnlyInCombat == false)
+    local live = self.active and not self.previewing and self.shownHere
+        and (self.inCombat or db.OnlyInCombat == false)
     for i = 1, #self.list do
         local cell = self.cells[i]
         -- A hidden window switches its sensors off: a container that is not
@@ -1059,6 +1077,16 @@ function DT:OnSpecChanged(event, unit)
     self.specTimer = C_Timer.NewTimer(SPEC_SETTLE_DELAY, SettleNow)
 end
 
+function DT:OnEnteringWorld(event)
+    self:UpdateShowHere()
+    self:OnSpecChanged(event)
+end
+
+-- Hidden here, the plate slots stop (UpdateLive), so nothing is counted.
+function DT:OnZoneChanged()
+    if self:UpdateShowHere() and self.active then self:UpdateLive() end
+end
+
 local function ReResolveNow()
     DT.reResolveQueued = false
     DT:ReResolve()
@@ -1106,9 +1134,11 @@ function DT:OnEnable()
     self.gate = self.gate or KE.AuraRestriction.New({})
     self.requestGate = self.requestGate or function() return DT.gate:Request("general") end
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpellsChanged")
     self:RegisterEvent("SPELLS_CHANGED", "OnSpellsChanged")
+    self:UpdateShowHere()
     self:Evaluate()
 end
 
