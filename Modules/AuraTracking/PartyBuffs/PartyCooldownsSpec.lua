@@ -113,6 +113,11 @@ local function ForgetReads(m)
     end
 end
 
+-- A talent answer and the state of its reads.
+local function ClearTalents(m)
+    m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
+end
+
 -- The race token, or nil until a source answers; a GUID's race never changes,
 -- so an answer is kept. UnitRace can answer nothing for a unit the client has
 -- not loaded yet.
@@ -316,9 +321,7 @@ local function OnLibSpec(specID, _, _, playerName, talents)
     Spec.libSpecs[playerName], Spec.libTalents[playerName] = specID, talents
     if same and moved and rules.BuildEventCounts(InKey(), false) then
         for _, m in pairs(Spec.byGUID) do
-            if not m.isPlayer and m.libKey == playerName then
-                m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
-            end
+            if not m.isPlayer and m.libKey == playerName then ClearTalents(m) end
         end
     end
     for _, m in ipairs(Spec.members) do
@@ -710,7 +713,7 @@ end
 -- three tries. A walk that missed against a member's old spec must not stop
 -- the walk for everyone, so the walk's misses go too.
 local function ForgetTalents(m)
-    m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
+    ClearTalents(m)
     wipe(misses)
 end
 
