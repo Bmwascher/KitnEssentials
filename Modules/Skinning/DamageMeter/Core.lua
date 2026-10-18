@@ -191,7 +191,6 @@ local RETIRED_FONT_FACE = "Expressway"
 
 local DM_DEFAULTS = {
     Enabled = false,
-    Locked = true,              -- when true, disables EditMode drag of the dock
     RefreshRate = 0.5,
     UIBudgetMs = 1.2,
     MaxWindows = 5,
@@ -453,8 +452,7 @@ end
 ---------------------------------------------------------------------------------
 -- EditMode registration
 --
--- The dock is the positioned frame. Registered only when not Locked; the GUI Lock
--- toggle calls RegWithEditMode / UnregisterEditMode to add/remove the mover.
+-- The dock is the positioned frame, registered whenever the module is on.
 -- getPosition / setPosition read+write the SAME db.Position table (no drift).
 ---------------------------------------------------------------------------------
 
@@ -484,12 +482,10 @@ function DM:RegWithEditMode()
         }
     end
 
-    -- Published regardless of the lock, and never withdrawn: EUI elements
-    -- anchored to the dock must keep following it after the meter is locked.
-    -- isHidden therefore does NOT report the lock. It reports the two states
-    -- that should cost the element its mover: no dock, or the module disabled.
-    -- OnDisable hides the dock without destroying it, so existence alone is not
-    -- enough.
+    -- Never withdrawn: EUI elements anchored to the dock must keep following
+    -- it. isHidden reports the two states that should cost the element its
+    -- mover: no dock, or the module disabled. OnDisable hides the dock without
+    -- destroying it, so existence alone is not enough.
     if KE.EUIUnlock then
         KE.EUIUnlock:Register(self.editModeConfig, {
             label = "Damage Meter",
@@ -500,7 +496,6 @@ function DM:RegWithEditMode()
         })
     end
 
-    if self.db and self.db.Locked then return end
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement(self.editModeConfig)
         self.editModeRegistered = true
@@ -513,23 +508,6 @@ function DM:UnregisterEditMode()
     end
     self.editModeRegistered = false
     -- The EllesmereUI element deliberately stays registered; see RegWithEditMode.
-end
-
--- GUI Lock toggle entry point: register or unregister the dock mover and refresh
--- any live overlay so the change is visible immediately in /kes edit.
-function DM:ApplyLockState()
-    -- Dismiss any open view-selector before (un)registering the mover so the picker
-    -- doesn't sit over the bars while the dock is repositioned in EditMode.
-    if self.CloseAllSelectors then self:CloseAllSelectors() end
-    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
-    if self.db and self.db.Locked then
-        self:UnregisterEditMode()
-    else
-        self:RegWithEditMode()
-    end
-    if KE.EditMode and KE.EditMode.isActive and KE.EditMode.RefreshOverlays then
-        KE.EditMode:RefreshOverlays()
-    end
 end
 
 ---------------------------------------------------------------------------------
@@ -886,7 +864,7 @@ function DM:OnEnable()
     self:_ScheduleContextCheck()
 
     -- Suppress Blizzard's built-in meter when configured, and register the dock
-    -- with EditMode (unless Locked). Both are idempotent / guarded.
+    -- with EditMode. Both are idempotent / guarded.
     self:ApplyReplaceBlizzard()
     self:RegWithEditMode()
 
