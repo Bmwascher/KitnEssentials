@@ -55,8 +55,6 @@ local function RacialLabel(spellID, raceID)
     return SpellLabel(spellID, name)
 end
 
--- " (2 charges)" for a spell the spec always gives two, " (2 charges with
--- <talent>)" for one a talent gives a second, "" otherwise.
 local function ChargeText(entry, specID)
     if (entry.charges or 1) >= 2 then return " (2 charges)" end
     for _, mod in ipairs(entry.spell and entry.spell.mods or {}) do
@@ -69,7 +67,6 @@ local function ChargeText(entry, specID)
     return ""
 end
 
--- An editor row's toggle, for an entry with key and off, width wide.
 local function AddToggle(row, label, entry, db, apply, width)
     local check = GUIFrame:CreateCompactCheckbox(row, label, {
         value = not entry.off,
