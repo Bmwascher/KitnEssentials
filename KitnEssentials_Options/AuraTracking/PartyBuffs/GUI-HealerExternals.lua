@@ -192,7 +192,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card: Externals
+    -- Card: Spells
     ----------------------------------------------------------------
     local listCard, listOffset = KE.PartyCooldownsPage.ExternalsCard(scrollChild, yOffset, {
         db = db, apply = ApplySettings,

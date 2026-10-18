@@ -252,16 +252,36 @@ function Page.RacialsCard(scrollChild, yOffset, ctx)
     return card, card:GetNextOffset()
 end
 
--- ctx: { db, apply }. The caller registers the card under the Healer
--- Externals condition. One row per healer spec's external, by spec ID (the
--- data is keyed by spec).
+-- A box row's owner as its label names it: the spec with one spec, else the
+-- class.
+local function BoxRowOwner(row)
+    local only, count = nil, 0
+    for specID in pairs(row.specs) do
+        only, count = specID, count + 1
+    end
+    if count == 1 then
+        local _, specName = GetSpecializationInfoForSpecID(only)
+        if type(specName) == "string" and specName ~= "" then return specName end
+    end
+    local names = _G.LOCALIZED_CLASS_NAMES_MALE
+    return (names and names[row.class]) or row.class
+end
+
+-- ctx: { db, apply }. The caller registers the card under the Raid
+-- Cooldowns condition. One row per healer spec's external, by spec ID (the
+-- data is keyed by spec), then one per box row in table order.
 function Page.ExternalsCard(scrollChild, yOffset, ctx)
     local db, apply = ctx.db, ctx.apply
     db.CooldownOff = db.CooldownOff or {}
     local HXRules = KE.HealerExternalsRules
-    local card = GUIFrame:CreateCard(scrollChild, "Externals", yOffset)
-    card:AddLabel("The time counts from the moment the buff appears, for the healer's cooldown with their talents once they are read.")
+    local card = GUIFrame:CreateCard(scrollChild, "Spells", yOffset)
+    card:AddLabel("The time counts from the moment the buff appears, for the caster's cooldown with their talents once they are read.")
     local manager = GUIFrame:CreateWidgetStateManager()
+    local function AddSpell(entry, name)
+        local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
+        manager:Register(AddToggle(row, SpellLabel(entry.id, name), entry, db, apply, 1), "all")
+        card:AddRow(row, ROW_HEIGHT)
+    end
     local specs = {}
     for specID in pairs(KE.PartyCooldownsData.HEALER_SPECS) do specs[#specs + 1] = specID end
     table_sort(specs)
@@ -271,17 +291,28 @@ function Page.ExternalsCard(scrollChild, yOffset, ctx)
             local name = C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)
             name = name .. ChargeText(entry, specID)
             if type(specName) == "string" and specName ~= "" then name = name .. " (" .. specName .. ")" end
-            local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
-            manager:Register(AddToggle(row, SpellLabel(entry.id, name), entry, db, apply, 1), "all")
-            card:AddRow(row, ROW_HEIGHT)
+            AddSpell(entry, name)
+        end
+    end
+    for _, boxRow in ipairs(KE.PartyCooldownsData.BOX_ROWS) do
+        local entry = HXRules.BoxEntry(boxRow, nil, db, true)
+        if entry then
+            local name = (C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)) .. " (" .. BoxRowOwner(boxRow) .. ")"
+            local swap = entry.spell.swap
+            if swap then
+                name = name .. " (" .. (C_Spell.GetSpellName(swap.id) or ("Spell " .. swap.id)) .. " with that talent)"
+            end
+            AddSpell(entry, name)
         end
     end
     local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
     local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
-        tooltip = "Restores every external: switched on.",
+        tooltip = "Restores every spell: switched on.",
         callback = function()
             for key in pairs(db.CooldownOff) do
-                if type(key) == "string" and key:sub(1, 7) == "healer:" then db.CooldownOff[key] = nil end
+                if type(key) == "string" and (key:sub(1, 7) == "healer:" or key:sub(1, 4) == "box:") then
+                    db.CooldownOff[key] = nil
+                end
             end
             apply()
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
