@@ -141,7 +141,6 @@ local function Debug(fmt, ...)
     KE:Print("[PB] " .. fmt:format(unpack(args, 1, count)))
 end
 
--- The Party Frame Icons switch: off, no row is built beside party frames.
 local function IconsOn()
     return PB.db.FrameIcons == true
 end
@@ -1745,7 +1744,6 @@ function PB:ShowPreview()
     -- roster settle does not hold them back.
     Pot.ShowPreview()
     HX.ShowPreview()
-    -- Off, no party sample row is drawn and no frame is searched.
     if not IconsOn() then
         self:HidePreviewFrames()
         return
