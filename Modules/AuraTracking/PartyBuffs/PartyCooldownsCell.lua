@@ -8,7 +8,8 @@
 -- strip of labels under a one-line window, and a gate bar, whose fill edge
 -- carries the gray cover; a summon cell adds a third bar for its glow window.
 -- Their values may be secret, so nothing here reads a bar back or measures a
--- region under them.
+-- region under them. A charge cell adds a count digit, and shows its gray
+-- cover and strip only at no charge.
 
 ---@class KE
 local KE = select(2, ...)
@@ -18,6 +19,7 @@ local GetPhysicalScreenSize = GetPhysicalScreenSize
 local UIParent = UIParent
 local issecretvalue = issecretvalue
 local math_floor = math.floor
+local math_max = math.max
 local table_concat = table.concat
 local tostring = tostring
 local type = type
@@ -236,6 +238,40 @@ local function DressGlow(c, glow, active, level)
     PlayGlow(c)
 end
 
+-- A charge cell's three count digits, made on first need and shown by alpha;
+-- a plain cell hides them and shows its cover and strip whole.
+local function DressCharges(c, style, e, px, level)
+    if not (e.charges and e.charges >= 2) then
+        if c.cnt then
+            for i = 1, 3 do c.cnt[i]:SetAlpha(0) end
+        end
+        c.clip:SetAlpha(1)
+        c.win:SetAlpha(1)
+        return
+    end
+    if not c.cnt then
+        c.cnt = {}
+        for i = 1, 3 do
+            local f = CreateFrame("Frame", nil, c)
+            f:SetAllPoints(c)
+            f:SetAlpha(0)
+            f.text = f:CreateFontString(nil, "OVERLAY")
+            f.text:SetJustifyH("RIGHT")
+            f.text:SetText(tostring(i - 1))
+            c.cnt[i] = f
+        end
+    end
+    local size = math_max(8, math_floor(style.fontSize * 0.85 + 0.5))
+    for i = 1, 3 do
+        local f = c.cnt[i]
+        f:SetFrameLevel(level + 6)
+        KE:ApplyFontToText(f.text, style.fontName, size, style.outline)
+        f.text:SetTextColor(1, 1, 1, 1)
+        f.text:ClearAllPoints()
+        f.text:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -px, px)
+    end
+end
+
 -- Colors, icon and text are applied every time; the bars move only when the
 -- font, size or length changed.
 function Cell.Dress(c, style, e)
@@ -264,6 +300,7 @@ function Cell.Dress(c, style, e)
     local cd = e.cd
     local active = rules.ActiveSeconds(e.active, cd)
     DressGlow(c, style.glow, active, level)
+    DressCharges(c, style, e, px, level)
     local sig = table_concat({ tostring(style.fontName), tostring(style.fontSize), tostring(style.outline),
         cd, active, size, px, pitch, line }, "|")
     if c.sig == sig then return end
@@ -349,6 +386,20 @@ function Cell.Range(c, k, sl, u, n)
     if c.glowOn then c.glowBar[k]:SetMinMaxValues(m, m + 1) end
 end
 
+-- A charge cell's count: the cover and strip show only at no charge (b), and
+-- one digit by its alpha. With the count lost, no digit, and the cover the
+-- single timer's (lb). Every value may be secret and only reaches SetAlpha.
+function Cell.WriteCharges(c, t)
+    if not (c.cnt and t.charges) then return end
+    local b, a0, a1, a2 = t.b, t.a0, t.a1, t.a2
+    if t.legacy then b, a0, a1, a2 = t.lb, 0, 0, 0 end
+    c.clip:SetAlpha(b)
+    c.win:SetAlpha(b)
+    c.cnt[1]:SetAlpha(a0)
+    c.cnt[2]:SetAlpha(a1)
+    c.cnt[3]:SetAlpha(a2)
+end
+
 -- Run after a placement, a write and each second's re-range, so a moved cell
 -- or a scale change is caught; while the seat holds it only reads. Reads the
 -- cell, never a bar.
@@ -368,4 +419,9 @@ function Cell.Clear(c)
         c.veil[k]:SetAlpha(0)
         if c.glowWin then c.glowWin[k]:SetAlpha(0) end
     end
+    if c.cnt then
+        for i = 1, 3 do c.cnt[i]:SetAlpha(0) end
+    end
+    c.clip:SetAlpha(1)
+    c.win:SetAlpha(1)
 end

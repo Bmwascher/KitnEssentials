@@ -41,7 +41,7 @@ HX.DEFAULT_POSITION = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -4
 -- The cooldown icon with no active state laid over it.
 HX.VIEW = {
     New = Cell.New, Dress = Cell.Dress, Write = Cell.Write, Range = Cell.Range, Clear = Cell.Clear,
-    Seat = Cell.Seat, overlay = false,
+    Seat = Cell.Seat, WriteCharges = Cell.WriteCharges, overlay = false,
 }
 
 -- Reads wait out a roster change, longer than the module's 0.5 s settle.
