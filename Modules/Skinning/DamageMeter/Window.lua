@@ -270,9 +270,11 @@ local function MakeBar(parent, db)
     -- for secret reads and shows a "secret while in combat" message in combat.
     row:SetScript("OnEnter", function()
         if DM.ShowHoverTip then DM:ShowHoverTip(bar.win, bar, true) end  -- isInitial: anchor the tip once on hover
+        if bar.win then DM:NoteWindowHover(bar.win, true) end
     end)
     row:SetScript("OnLeave", function()
         if DM.HideHoverTip then DM:HideHoverTip() end
+        if bar.win then DM:NoteWindowHover(bar.win, false) end
     end)
 
     row:Hide()
@@ -449,11 +451,13 @@ function DM:CreateWindow(winIdx)
             GameTooltip:SetText(tooltip)
             GameTooltip:Show()
             DM:RevealHeaderIcons(W)
+            DM:NoteWindowHover(W, true)
         end)
         b:SetScript("OnLeave", function(btn)
             btn.icon:SetVertexColor(0.8, 0.8, 0.8)
             GameTooltip:Hide()
             DM:HeaderIconLeave(W)
+            DM:NoteWindowHover(W, false)
         end)
         b:SetScript("OnClick", onClick)
         return b
@@ -483,11 +487,13 @@ function DM:CreateWindow(winIdx)
             btn.icon:SetVertexColor(1, 1, 1)
             DM:RevealHeaderIcons(W)
             if DM.OpenSegmentMenu then DM:OpenSegmentMenu(W) end
+            DM:NoteWindowHover(W, true)
         end)
         seg:SetScript("OnLeave", function(btn)
             btn.icon:SetVertexColor(0.8, 0.8, 0.8)
             DM:HeaderIconLeave(W)
             if DM.ScheduleSegmentClose then DM:ScheduleSegmentClose(W) end
+            DM:NoteWindowHover(W, false)
         end)
     end
 
@@ -536,6 +542,9 @@ function DM:CreateWindow(winIdx)
             DM:OnWindowRightClick(W)
         end
     end)
+    -- The empty body counts as the window for the settings hover link.
+    W.body:SetScript("OnEnter", function() DM:NoteWindowHover(W, true) end)
+    W.body:SetScript("OnLeave", function() DM:NoteWindowHover(W, false) end)
 
     -- Mouse-wheel scroll. A short pane (e.g. a 35%-height stacked window) shows fewer
     -- rows than the meter holds, so the wheel scrolls the bar list to reach the
@@ -996,8 +1005,14 @@ function DM:ApplyHeaderIcons(W)
             -- and keeps them up while an overlay is open. The icons' own OnEnter/OnLeave
             -- call the same pair, so entering/leaving directly on an icon is covered too.
             W.headerBar:EnableMouse(true)
-            W.headerBar:SetScript("OnEnter", function() DM:RevealHeaderIcons(W) end)
-            W.headerBar:SetScript("OnLeave", function() DM:HeaderIconLeave(W) end)
+            W.headerBar:SetScript("OnEnter", function()
+                DM:RevealHeaderIcons(W)
+                DM:NoteWindowHover(W, true)
+            end)
+            W.headerBar:SetScript("OnLeave", function()
+                DM:HeaderIconLeave(W)
+                DM:NoteWindowHover(W, false)
+            end)
             W._headerIconHover = true
         end
         -- Re-derive the reveal from the LIVE overlay/hover state: the alpha-0 loop

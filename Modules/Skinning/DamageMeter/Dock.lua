@@ -604,6 +604,13 @@ function DM:LayoutDock()
     -- Position the drag splitters over the boundaries emitted above (also hides
     -- any pooled splitter the new layout no longer needs).
     self:_LayoutSplitters()
+
+    -- This pass can place or drop a lit window (a Show box ticked under the
+    -- pointer, a content change), so the highlight is redone from _dockPlaced.
+    -- Then the settings page reads its sizes and ranges from this pass.
+    if self._litSet then self:HighlightWindows(self._litSet) end
+    local link = self._settingsLink
+    if link and link.OnDockLayout then link.OnDockLayout() end
 end
 
 ---------------------------------------------------------------------------------

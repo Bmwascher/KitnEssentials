@@ -567,12 +567,116 @@ function DM:HidePreview()
     -- The dock is persistent (must NOT hide the user's real dock); only the
     -- preview-only window badges are turned off here.
     self:SetWindowBadges(false)
+    self:HighlightWindows(nil)
     -- GUI closed: drop the preview override and re-evaluate the hide conditions so the
     -- meter re-hides if HideOutOfCombat / OnlyInInstances now say it should. UpdateBackdrop
     -- (Dock.lua) is resolved at runtime; guard for load order.
     self._guiPreview = false
     if self.UpdateBackdrop then self:UpdateBackdrop() end
     if self.ApplySpellHistory then self:ApplySpellHistory() end
+end
+
+-- The settings page's link: link.OnDockLayout() after each dock layout, and
+-- link.OnWindowHover(idx or nil) as the pointer moves onto or off a window.
+-- nil ends the link and puts every window back to full opacity.
+function DM:SetSettingsLink(link)
+    self._settingsLink = link
+    self._hoverW = nil
+    self._hoverWanted = false
+    if not link then self:HighlightWindows(nil) end
+end
+
+local DIMMED_ALPHA = 0.35
+
+-- Made on a window's first highlight: a 2 px theme-color edge over its frame.
+local function GetLitOutline(W)
+    local lit = W.litOutline
+    if not lit then
+        lit = CreateFrame("Frame", nil, W.frame, "BackdropTemplate")
+        lit:SetAllPoints(W.frame)
+        lit:SetFrameLevel(W.frame:GetFrameLevel() + 8)
+        lit:SetBackdrop({
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 2 * KE:GetPixelSize(),
+        })
+        W.litOutline = lit
+    end
+    return lit
+end
+
+-- set holds storage indices (set[idx] = true). Each placed window in it gets
+-- the outline and every other window fades. nil, or a set with no placed
+-- window, puts every window back. The set is kept so LayoutDock can redo the
+-- highlight when a window is placed or dropped while the set is lit.
+function DM:HighlightWindows(set)
+    self._litSet = set
+    local wins, placed = self.windows_rt, self._dockPlaced
+    if not wins then return end
+    local any = false
+    if set and placed then
+        for idx in pairs(set) do
+            if placed[idx] then
+                any = true
+                break
+            end
+        end
+    end
+    local r, g, b = KE:GetAccentColor("theme")
+    for idx, W in pairs(wins) do
+        if W.frame then
+            if any and set[idx] then
+                local lit = GetLitOutline(W)
+                lit:SetBackdropBorderColor(r, g, b, 1)
+                lit:Show()
+                W.frame:SetAlpha(1)
+            else
+                if W.litOutline then W.litOutline:Hide() end
+                W.frame:SetAlpha(any and DIMMED_ALPHA or 1)
+            end
+        end
+    end
+end
+
+-- Repeats each frame while the pointer is still on the window: a child frame
+-- with no hover report of its own sends no leave when the pointer goes
+-- straight off the window, so only the geometric test can end the hover.
+-- An enter stops the repeat. Hoisted, so no closure per event.
+local function HoverCheck()
+    DM._hoverLooping = false
+    if not DM._hoverWanted then return end
+    local W = DM._hoverW
+    local f = W and W.frame
+    if f and f:IsVisible() and f:IsMouseOver() then
+        DM._hoverLooping = true
+        C_Timer.After(0, HoverCheck)
+        return
+    end
+    DM._hoverWanted = false
+    if not W then return end
+    DM._hoverW = nil
+    local link = DM._settingsLink
+    if link and link.OnWindowHover then link.OnWindowHover(nil) end
+end
+
+-- Called from the window's own hover scripts. A leave is settled by the
+-- geometric test above, so a move between two of its child frames is not a
+-- leave, whichever of the two events arrives first.
+function DM:NoteWindowHover(W, entering)
+    local link = self._settingsLink
+    if not link then return end
+    if entering then
+        self._hoverWanted = false
+        if self._hoverW ~= W then
+            self._hoverW = W
+            if link.OnWindowHover then link.OnWindowHover(W.idx) end
+        end
+    else
+        self._hoverWanted = true
+        if not self._hoverLooping then
+            self._hoverLooping = true
+            C_Timer.After(0, HoverCheck)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
