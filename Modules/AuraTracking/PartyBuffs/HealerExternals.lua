@@ -110,8 +110,9 @@ local function Placement(db)
     return db.HealerExtPosition, placement, false
 end
 
+-- Every drain's resolve places the box again, so a refused move waits for it.
 function HX.ApplyPosition()
-    if not HX.box then return end
+    if not HX.box or not KE:CanReanchorNow(HX.box) then return end
     local pos, config = Placement(HX.pb.db)
     KE:ApplyFramePosition(HX.box, pos, config)
 end

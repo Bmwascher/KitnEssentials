@@ -188,7 +188,14 @@ local function Placement(db)
     return db.PotionPosition, placement, false
 end
 
+-- A box anchored where the game restricts moves in combat is placed at the
+-- next drain instead.
 local function Place(db)
+    if not KE:CanReanchorNow(Pot.box) then
+        Pot.placePending = true
+        return
+    end
+    Pot.placePending = nil
     local pos, config = Placement(db)
     KE:ApplyFramePosition(Pot.box, pos, config)
 end
@@ -359,6 +366,7 @@ function Pot.OnKeyStart()
 end
 
 function Pot.OnRelease()
+    if Pot.placePending and Pot.box then Place(Pot.pb.db) end
     Pot.Resolve()
 end
 
