@@ -46,3 +46,46 @@ function KE:FilterAvailableEntries(entries)
     end
     return kept
 end
+
+-- Skin registration keys a baseline load runs: the admitted window skins,
+-- plus Dialogs. Kept apart from the feature ids above so a skin key can never collide with
+-- a module or page id.
+local FOREVER_FRAME_SKINS = {
+    AddonManager = true,
+    Battlenet = true,
+    DeathRecap = true,
+    Dialogs = true,
+    FlightMap = true,
+    GenericTrait = true,
+    Gossip = true,
+    Guild = true,
+    GuildRegistrar = true,
+    Help = true,
+    Loot = true,
+    LossControl = true,
+    Macro = true,
+    Mail = true,
+    Merchant = true,
+    MirrorTimers = true,
+    Misc = true,
+    Petition = true,
+    PvPMatch = true,
+    Quest = true,
+    Raid = true,
+    Socket = true,
+    SubscriptionInterstitial = true,
+    Taxi = true,
+    TimeManager = true,
+    Trade = true,
+    Trainer = true,
+    TutorialFrame = true,
+}
+
+-- Whether a skin registered under `key` may run and show a Frame Skins row.
+-- A retail load admits every key.
+---@param key string?
+---@return boolean available
+function KE:IsFrameSkinAvailable(key)
+    if RETAIL then return true end
+    return key ~= nil and FOREVER_FRAME_SKINS[key] == true
+end

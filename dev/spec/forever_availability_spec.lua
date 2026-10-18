@@ -17,16 +17,16 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HomePage",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "Profiles",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "ProfilesReset",    want = true },
-            { load = "baseline",            seed = BASELINE,             id = "SkinTooltips",     want = false },
+            { load = "baseline",            seed = BASELINE,             id = "Chat",             want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "NotAFeature",      want = false },
             { load = "baseline",            seed = BASELINE,             id = nil,                want = false },
             { load = "baseline, no iface",  seed = BASELINE_UNREADABLE,  id = "HomePage",         want = true },
             { load = "baseline, no iface",  seed = BASELINE_UNREADABLE,  id = "LibDualSpec",      want = false },
             { load = "baseline, no iface",  seed = BASELINE_UNREADABLE,  id = "NicknameProvider", want = false },
-            { load = "retail",              seed = RETAIL,               id = "SkinTooltips",     want = true },
+            { load = "retail",              seed = RETAIL,               id = "Chat",             want = true },
             { load = "retail",              seed = RETAIL,               id = "NotAFeature",      want = true },
-            { load = "retail, Forever iface", seed = RETAIL_FOREVER_IFACE, id = "SkinTooltips",   want = true },
+            { load = "retail, Forever iface", seed = RETAIL_FOREVER_IFACE, id = "Chat",           want = true },
         }) do
             local seed = { BASELINE_LOAD = row.seed.BASELINE_LOAD, IS_FOREVER = row.seed.IS_FOREVER }
             local KE = helpers.loadModule("Core/Availability.lua", seed)
@@ -41,8 +41,8 @@ describe("Forever availability: admission", function()
         }) do
             local KE = L.loadConflicts(nil, { forever = row.forever })
             local queue = KE:BuildConflictQueue({
-                profile = { Skinning = { Tooltips = { Enabled = true } } },
-                isLoaded = function(name) return name == "TipTac" end,
+                profile = { Skinning = { Chat = { Enabled = true } } },
+                isLoaded = function(name) return name == "Prat-3.0" end,
                 shouldNotLoad = false,
             })
             assert.equals(row.prompts, #queue, row.name)
@@ -104,7 +104,7 @@ describe("Forever availability: dual-spec profiles", function()
 end)
 
 describe("Forever availability: tab resolution", function()
-    -- SkinTooltips stands for any withheld page and sits first, so a missing
+    -- Chat stands for any withheld page and sits first, so a missing
     -- filter renders it in every row.
     it("lands a withheld remembered, nested or default tab on the first admitted tab", function()
         local rendered
@@ -115,22 +115,22 @@ describe("Forever availability: tab resolution", function()
         }
         local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = true, IS_FOREVER = true, GUIFrame = GUIFrame })
         helpers.loadModule("GUI/GUIMain/GUI-TabbedContent.lua", KE)
-        for _, id in ipairs({ "SkinTooltips", "ProfilesSharing", "ProfilesMain" }) do
+        for _, id in ipairs({ "Chat", "ProfilesSharing", "ProfilesMain" }) do
             GUIFrame.registeredContent[id] = function(_, yOffset)
                 rendered = id
                 return yOffset
             end
         end
-        GUIFrame:RegisterNestedTabs("SkinTooltips", { "STForms" })
+        GUIFrame:RegisterNestedTabs("Chat", { "ChatForms" })
         local TABS = {
-            { id = "SkinTooltips",    label = "Withheld" },
+            { id = "Chat",            label = "Withheld" },
             { id = "ProfilesSharing", label = "Sharing" },
             { id = "ProfilesMain",    label = "Profile" },
         }
         for _, row in ipairs({
-            { name = "remembered", remembered = "SkinTooltips" },
-            { name = "nested",     remembered = "STForms" },
-            { name = "default",    default = "SkinTooltips" },
+            { name = "remembered", remembered = "Chat" },
+            { name = "nested",     remembered = "ChatForms" },
+            { name = "default",    default = "Chat" },
         }) do
             rendered = nil
             GUIFrame.tabbedPageState["Profiles"] = row.remembered
@@ -139,6 +139,24 @@ describe("Forever availability: tab resolution", function()
             } or nil)
             GUIFrame.registeredContent["Profiles"](nil, 0)
             assert.equals("ProfilesSharing", rendered, row.name)
+        end
+    end)
+end)
+
+describe("Forever availability: frame skins", function()
+    -- Mail stands for an admitted window, Friends for a withheld one and
+    -- ContextMenus for a row backed by its own module.
+    it("admits only the listed skin keys after a baseline load and every key after a retail load", function()
+        for _, row in ipairs({
+            { load = "baseline", baseline = true, key = "Mail",         want = true },
+            { load = "baseline", baseline = true, key = "Friends",      want = false },
+            { load = "baseline", baseline = true, key = "ContextMenus", want = false },
+            { load = "baseline", baseline = true, key = nil,            want = false },
+            { load = "retail",   baseline = nil,  key = "Friends",      want = true },
+            { load = "retail",   baseline = nil,  key = "ContextMenus", want = true },
+        }) do
+            local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = row.baseline })
+            assert.equals(row.want, KE:IsFrameSkinAvailable(row.key), row.load .. " " .. tostring(row.key))
         end
     end)
 end)

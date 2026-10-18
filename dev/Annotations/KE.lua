@@ -1238,6 +1238,12 @@ function KE:EnhanceDualSpec(db) end
 ---@return table[]
 function KE:FilterAvailableEntries(entries) end
 
+--- Whether a skin registered under key may run and show a Frame Skins row.
+--- A retail load admits every key; a baseline load only its admitted windows.
+---@param key string?
+---@return boolean available
+function KE:IsFrameSkinAvailable(key) end
+
 ---@param value any
 ---@return number
 function KE:RoundOffset(value) end
