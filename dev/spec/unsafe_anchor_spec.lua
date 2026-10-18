@@ -281,4 +281,13 @@ describe("unsafe anchor guard", function()
         end
         _G.KE_SpecDeadRoot = nil
     end)
+
+    it("ResolveAnchorFrame refuses an Edit Mode box by name, whatever the global holds", function()
+        local printed = {}
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        _G.KE_EditMode_SpecBox = region(nil)
+        assert.equal(_G.UIParent, KE:ResolveAnchorFrame("SELECTFRAME", "KE_EditMode_SpecBox", region(nil)))
+        assert.equal(1, #printed)
+        _G.KE_EditMode_SpecBox = nil
+    end)
 end)

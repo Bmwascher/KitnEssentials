@@ -575,6 +575,13 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent, followers)
     return false
 end
 
+KE.EDIT_MODE_BOX_PREFIX = "KE_EditMode_"
+
+-- A plain find, so the chooser's per-frame call allocates no substring.
+function KE:IsEditModeBoxName(name)
+    return type(name) == "string" and string_find(name, KE.EDIT_MODE_BOX_PREFIX, 1, true) == 1
+end
+
 -- Select Frame names an unnamed child Parent.key, printing the key with
 -- tostring. Child keys are raw fields, so rawget finds them and never a
 -- widget method. The second return is true when the first name is not a
@@ -618,19 +625,25 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent
         if lastPlayerFrame == nil then lastPlayerFrame = playerFrame end
         return playerFrame
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
-        local candidate, rootMissing = ResolveFrameName(parentFrameName)
-        local refused = false
-        -- A global can hold a cached secret API result, which must not be
-        -- compared; IsUnsafeAnchor refuses it.
-        if not issecretvalue(candidate) and candidate == nil then
-            if rootMissing then return UIParent end
-            refused = true
+        -- Refused by name, so the answer does not depend on whether Edit Mode
+        -- has built its boxes yet.
+        local refused = self:IsEditModeBoxName(parentFrameName)
+        local candidate
+        if not refused then
+            local rootMissing
+            candidate, rootMissing = ResolveFrameName(parentFrameName)
+            -- A global can hold a cached secret API result, which must not be
+            -- compared; IsUnsafeAnchor refuses it.
+            if not issecretvalue(candidate) and candidate == nil then
+                if rootMissing then return UIParent end
+                refused = true
+            end
         end
         if refused or self:IsUnsafeAnchor(frame, candidate, asParent, followers) then
             if not warnedAnchorNames[parentFrameName] then
                 warnedAnchorNames[parentFrameName] = true
                 self:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
-                    .. "is the display itself, depends on it or is moved onto it, "
+                    .. "is an Edit Mode box, is the display itself, depends on it or is moved onto it, "
                     .. "or its anchors could not all be checked. Placed on the screen instead.")
             end
             return UIParent

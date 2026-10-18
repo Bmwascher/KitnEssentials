@@ -364,6 +364,9 @@ function KE:GetGlobalFont() end
 --- The list key every font dropdown offers as its first entry. Never stored.
 KE.FONT_FOLLOW_GLOBAL = "*global*"
 
+--- The name prefix of every Edit Mode box (Core/EditMode.lua).
+KE.EDIT_MODE_BOX_PREFIX = "KE_EditMode_"
+
 --- Adds the follow-the-global entry to an LSM font list and returns the list.
 --- Handles both the hash and the ordered-array list shapes. effectiveName
 --- overrides the label's font name where the pick inherits from a module face
@@ -589,6 +592,11 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent, fo
 ---@param followers Frame[]?
 ---@return boolean
 function KE:IsUnsafeAnchor(frame, candidate, asParent, followers) end
+
+--- True when `name` is an Edit Mode box's name, or a dotted name inside one.
+---@param name any
+---@return boolean
+function KE:IsEditModeBoxName(name) end
 
 ---@param frame Frame
 ---@return boolean

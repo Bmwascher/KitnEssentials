@@ -421,7 +421,7 @@ function EditMode:CreateOverlayFrame(element)
     if not targetFrame then return nil end
 
     -- Create overlay frame
-    local overlay = CreateFrame("Frame", "KE_EditMode_" .. element.key, UIParent, "BackdropTemplate")
+    local overlay = CreateFrame("Frame", KE.EDIT_MODE_BOX_PREFIX .. element.key, UIParent, "BackdropTemplate")
     overlay:SetFrameStrata("TOOLTIP")
     overlay:SetFrameLevel(1000)
 
