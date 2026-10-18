@@ -8,6 +8,8 @@ local KE = select(2, ...)
 
 local ipairs = ipairs
 local math_floor = math.floor
+local math_max = math.max
+local math_min = math.min
 local pairs = pairs
 local table_insert = table.insert
 local table_sort = table.sort
@@ -80,12 +82,17 @@ end
 -- The timer window in whole pixels: its height, never above the line, how far
 -- it sits above the bottom of the area, rounded down, so an odd difference
 -- puts it half a pixel low, and how far its top sits below the area's top. A
--- measured line a hair under a whole pixel counts as that pixel.
-function Rules.Window(areaPx, linePx)
+-- measured line or margin a hair under a whole pixel counts as that pixel.
+-- Last, how far the window may open below and above the line, so ink past the
+-- line box is not cut: at most one strip margin, and never past the area. A
+-- line taller than the area gets no opening and keeps its overflow.
+function Rules.Window(areaPx, linePx, marginPx)
     local win = math_floor(linePx + 0.01)
     local area = math_floor(areaPx + 0.5)
     local raise = math_floor((area - win) / 2)
-    return win, raise, area - win - raise
+    local top = area - win - raise
+    local margin = math_floor(marginPx + 0.01)
+    return win, raise, top, math_max(0, math_min(margin, raise)), math_max(0, math_min(margin, top))
 end
 
 -- The offset from one bar to the next. At no spacing the bars overlap by a

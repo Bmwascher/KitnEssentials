@@ -197,9 +197,9 @@ local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
 end
 
 -- Look and text are applied every time; the strips move only when the font,
--- size or length changed. The cover is the drained part, drawn in the
--- background color. The fill ends at its edge, so nothing but the cover sits
--- behind the drained part.
+-- size, length or the window's opening below changed. The cover is the
+-- drained part, drawn in the background color. The fill ends at its edge, so
+-- nothing but the cover sits behind the drained part.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
     local fill, fillScale, bg, bgScale, nameColor, bgAlpha = Rules.Colors(style, e.color)
@@ -209,7 +209,9 @@ function Bar.Dress(c, style, e)
     local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
     local step, line = Cell.LineMetrics(font, size, outline)
-    local winPx, raise, top = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px)
+    local pitch, _, margin, spacing = Cell.StripLayout(font, size, outline)
+    local winPx, raise, top, below, above = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px,
+        margin / px)
     c.nameY, c.nameLift, c.nameSeat = -top * px, style.height - (top + 1) * px, nil
     Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"), top)
     KE:ApplyFontToText(c.readyText, font, size, outline)
@@ -232,9 +234,9 @@ function Bar.Dress(c, style, e)
         f.art.fill:SetPoint("TOPLEFT", f.art.area, "TOPLEFT")
         f.art.fill:SetPoint("BOTTOMRIGHT", f.coverFill, "BOTTOMLEFT")
         f.win:ClearAllPoints()
-        f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, raise * px)
-        f.win:SetSize(timerWidth, winPx * px)
-        f.winY, f.winLift, f.seat, f.timer = raise * px, (raise + 1) * px, nil, style.timer
+        f.win:SetPoint("BOTTOMRIGHT", f.art.area, "BOTTOMRIGHT", -TEXT_PAD / 2, (raise - below) * px)
+        f.win:SetSize(timerWidth, (winPx + below + above) * px)
+        f.winY, f.winLift, f.seat, f.timer = (raise - below) * px, (raise + 1) * px, nil, style.timer
         f.win:SetShown(style.timer)
         f.clip:SetFrameLevel(level + 3)
         f.art:SetFrameLevel(level + 4)
@@ -243,15 +245,16 @@ function Bar.Dress(c, style, e)
         f.win:SetFrameLevel(level + 6)
         f.text:SetFrameLevel(level + 7)
     end
-    local pitch, _, _, spacing = Cell.StripLayout(font, size, outline)
-    local sig = table_concat({ tostring(font), tostring(size), tostring(outline), e.cd, step, line, pitch }, "|")
+    local sig = table_concat({ tostring(font), tostring(size), tostring(outline), e.cd, step, line, pitch,
+        below * px }, "|")
     if c.sig == sig then return end
     c.sig = sig
     local text = Cell.StripText(e.cd)
     for k = 1, 2 do
         local f = c.face[k]
         f.pos:ClearAllPoints()
-        f.pos:SetPoint("BOTTOMRIGHT", f.win, "BOTTOMRIGHT", 0, bottom * pitch)
+        -- Raised by the window's opening below, so the label stays where it was.
+        f.pos:SetPoint("BOTTOMRIGHT", f.win, "BOTTOMRIGHT", 0, bottom * pitch + below * px)
         f.pos:SetSize(1, height * pitch)
         KE:ApplyFontToText(f.strip, font, size, outline)
         f.strip:SetTextColor(1, 1, 1, 1)

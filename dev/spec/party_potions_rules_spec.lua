@@ -73,17 +73,21 @@ describe("PartyPotionsRules.Colors", function()
 end)
 
 describe("PartyPotionsRules.Window", function()
-    it("keeps the window on whole pixels, its offset rounded down, never taller than the line, with the gap above it", function()
+    it("places the window on whole pixels and opens it by at most the margin inside the area", function()
         local R = L.loadPartyPotionsRules()
         local cases = {
-            { name = "odd gap", area = 19, line = 14, want = { 14, 2, 3 } },
-            { name = "even gap", area = 18, line = 14, want = { 14, 2, 2 } },
-            { name = "line a hair under a pixel", area = 19, line = 13.9999998, want = { 14, 2, 3 } },
-            { name = "fractional line", area = 19, line = 13.6, want = { 13, 3, 3 } },
-            { name = "line taller than the area", area = 8, line = 13, want = { 13, -3, -2 } },
+            { name = "odd gap", area = 19, line = 14, margin = 5, want = { 14, 2, 3, 2, 3 } },
+            { name = "even gap", area = 18, line = 14, margin = 5, want = { 14, 2, 2, 2, 2 } },
+            { name = "line a hair under a pixel", area = 19, line = 13.9999998, margin = 5, want = { 14, 2, 3, 2, 3 } },
+            { name = "fractional line", area = 19, line = 13.6, margin = 5, want = { 13, 3, 3, 3, 3 } },
+            { name = "line taller than the area", area = 8, line = 13, margin = 5, want = { 13, -3, -2, 0, 0 } },
+            { name = "default bar", area = 21, line = 14, margin = 5, want = { 14, 3, 4, 3, 4 } },
+            { name = "margin under both gaps", area = 30, line = 14, margin = 3, want = { 14, 8, 8, 3, 3 } },
+            { name = "no room under the line", area = 15, line = 14, margin = 5, want = { 14, 0, 1, 0, 1 } },
+            { name = "fractional margin", area = 30, line = 14, margin = 3.7, want = { 14, 8, 8, 3, 3 } },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, { R.Window(case.area, case.line) }, case.name)
+            assert.are.same(case.want, { R.Window(case.area, case.line, case.margin) }, case.name)
         end
     end)
 end)
