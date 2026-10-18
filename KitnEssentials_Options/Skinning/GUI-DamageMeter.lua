@@ -570,9 +570,22 @@ local function ConstructSchematic(parent)
         if schematicGhost then schematicGhost:Hide() end
     end
 
-    -- Geometric, so moving from the box onto its own remove button keeps it.
-    local function HideRemoveUnlessOver(box)
-        if not box:IsMouseOver() then box.removeBtn:Hide() end
+    -- Geometric, so moving from the box onto its own remove button keeps it,
+    -- whichever event arrives first. A gap handle covers the box's last 2 px
+    -- and sits above it, so the pointer can be inside the box and on a handle
+    -- at once; that counts as off the box.
+    function container.HideRemoveUnlessOver(box)
+        local over = box:IsMouseOver()
+        if over then
+            for i = 1, #handles do
+                local h = handles[i]
+                if h:IsShown() and h:IsMouseOver() then
+                    over = false
+                    break
+                end
+            end
+        end
+        if not over then box.removeBtn:Hide() end
     end
 
     local function NewBox()
@@ -615,7 +628,7 @@ local function ConstructSchematic(parent)
         end)
         removeBtn:SetScript("OnLeave", function()
             GameTooltip:Hide()
-            HideRemoveUnlessOver(box)
+            container.HideRemoveUnlessOver(box)
             if container._onHover then container._onHover("box", box, false) end
         end)
         removeBtn:SetScript("OnClick", function()
@@ -635,11 +648,11 @@ local function ConstructSchematic(parent)
 
         box:EnableMouse(true)
         box:SetScript("OnEnter", function(self)
-            if self._removable and not container._dragWin then self.removeBtn:Show() end
+            if self._removable and not (container._dragWin or gapDrag.handle) then self.removeBtn:Show() end
             if container._onHover then container._onHover("box", self, true) end
         end)
         box:SetScript("OnLeave", function(self)
-            HideRemoveUnlessOver(self)
+            container.HideRemoveUnlessOver(self)
             if container._onHover then container._onHover("box", self, false) end
         end)
         box:RegisterForDrag("LeftButton")
