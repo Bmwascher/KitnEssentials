@@ -363,10 +363,14 @@ local function SyncShownList(host)
 end
 
 -- ConfigureHost plays the style's groups whether or not an aura shows; the
--- pass stops them where none does.
+-- pass stops them where none does. False when a marked host's list call was
+-- refused, so the caller can try again later; true otherwise.
 local function Configure(host, settings, width, height)
     ConfigureHost(host, settings, width, height)
-    if SyncShownList(host) then RunDisplayPass(host, host.auraButton) end
+    if not host.auraButton then return true end
+    if not SyncShownList(host) then return false end
+    RunDisplayPass(host, host.auraButton)
+    return true
 end
 
 -- For a caller that owns its host (a cast bar's gate frame, a slot button's

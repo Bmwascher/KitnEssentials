@@ -340,12 +340,13 @@ function PA:ApplyFilters()
         { includeSpellIDs = self:IncludeSpellIDs() })
 end
 
--- The host is a child of the engine's button, so the touch can be refused
--- while the bound unit's auras are secret; a refusal is retried on release.
+-- The host is a child of the engine's button, so the touch, or the button's
+-- aura-shown list call, can be refused while the bound unit's auras are
+-- secret; either refusal is retried on release.
 function PA:ApplyGlow()
     if not self.glowHost then return end
-    local ok = pcall(KE.AuraGlow.Configure, self.glowHost, self.db)
-    self.glowPending = not ok
+    local ok, synced = pcall(KE.AuraGlow.Configure, self.glowHost, self.db)
+    self.glowPending = not ok or synced == false
 end
 
 -- The cell can go away without the unit changing: another addon swaps its
