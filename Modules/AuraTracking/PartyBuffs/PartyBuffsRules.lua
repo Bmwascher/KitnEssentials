@@ -164,12 +164,12 @@ function Rules.IconOffset(g, layout, index, line)
     return g.x0 + h * p, v * q
 end
 
--- The spec can move the icons per row and the corner while the tracker is
+-- The spec can move the icons per row and the layout while the tracker is
 -- off, with no event to say so, so each bind compares the last layout's inputs.
--- The corner fixes every direction inside the holder (LAYOUTS); the holder's
--- own anchor is set on every bind (PB:PlaceHolder).
-function Rules.NeedsLayout(slot, cellCount, perRow, corner)
-    return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutCorner ~= corner
+-- Two layouts can share a corner, so the layout record itself is compared; the
+-- holder's own anchor is set on every bind (PB:PlaceHolder).
+function Rules.NeedsLayout(slot, cellCount, perRow, layout)
+    return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutRecord ~= layout
 end
 
 -- dressedSize is nil before the first dressing.
@@ -294,7 +294,11 @@ end
 -- toward its frame: Left and Right run their lines outward, Above wraps up and
 -- Below wraps down. lift raises the holder by that many icons: a Center
 -- layout pins its top half an icon above the frame's middle, so its first
--- line centers on the frame and further lines hang below it.
+-- line centers on the frame and further lines hang below it. A centered
+-- layout pins the holder by its edge center on the frame's edge center; a
+-- vertical one runs a column away from the frame, further columns to its
+-- right. Their keys are new to the list, so a Grow saved for another side
+-- never turns into one of them.
 Rules.LAYOUTS = {
     LEFT = {
         { grow = "CENTER", point = "TOPRIGHT",    rel = "LEFT",        dx = -1, dy = 0, corner = "TOPRIGHT",
@@ -311,17 +315,25 @@ Rules.LAYOUTS = {
     ABOVE = {
         { grow = "RIGHT", point = "BOTTOMLEFT",  rel = "TOPLEFT",  dx = 1,  dy = 1, corner = "BOTTOMLEFT" },
         { grow = "LEFT",  point = "BOTTOMRIGHT", rel = "TOPRIGHT", dx = -1, dy = 1, corner = "BOTTOMRIGHT" },
+        { grow = "CENTER_ROW", point = "BOTTOM", rel = "TOP", dx = 0, dy = 1, corner = "BOTTOMLEFT",
+          centered = true },
+        { grow = "COLUMN_UP", point = "BOTTOM", rel = "TOP", dx = 0, dy = 1, corner = "BOTTOMLEFT",
+          centered = true, vertical = true },
     },
     BELOW = {
         { grow = "RIGHT", point = "TOPLEFT",  rel = "BOTTOMLEFT",  dx = 1,  dy = -1, corner = "TOPLEFT" },
         { grow = "LEFT",  point = "TOPRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = -1, corner = "TOPRIGHT" },
+        { grow = "CENTER_ROW", point = "TOP", rel = "BOTTOM", dx = 0, dy = -1, corner = "TOPLEFT",
+          centered = true },
+        { grow = "COLUMN_DOWN", point = "TOP", rel = "BOTTOM", dx = 0, dy = -1, corner = "TOPLEFT",
+          centered = true, vertical = true },
     },
     INSIDE = {
         { grow = "LEFT", point = "BOTTOMRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = 1, corner = "BOTTOMRIGHT" },
     },
 }
--- A layout grows away from its corner, so the corner alone sets its directions,
--- and two layouts with one corner lay out alike inside the holder.
+-- A layout grows away from its corner, so the corner sets its directions;
+-- centered and vertical set the rest (SlotGeometry).
 for _, layouts in pairs(Rules.LAYOUTS) do
     for _, layout in ipairs(layouts) do
         layout.left = layout.corner:sub(-5) == "RIGHT"

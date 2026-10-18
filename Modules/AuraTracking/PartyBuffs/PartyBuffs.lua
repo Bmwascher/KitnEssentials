@@ -611,34 +611,35 @@ end
 
 -- Returns false when any container call was refused, so the caller can retry.
 -- The while-active container starts after the slot's cooldown cells, on their
--- line or the next.
+-- line or the next (SlotGeometry).
 function PB:ApplySlotLayout(slot)
     local db = self.db
-    local side, _, _, perRow = self:Placement()
+    local layout, _, _, perRow = self:Placement()
     -- The dressed size, not a fresh spec read: the holder must fit what it clips.
     local size = self.styleSettings.IconSize
     local container = slot.container
-    local step, buffCol, buffLine, buffPerLine, width, height =
-        KE.PartyBuffsRules.RowLayout(db, slot.cellCount or 0, perRow, size)
-    local x = (side.left and -1 or 1) * buffCol * step
-    local y = (side.up and 1 or -1) * buffLine * step
-    slot.holder:SetSize(width, height)
-    slot.layoutPerRow, slot.layoutCorner = perRow, side.corner
-    self:PlaceCells(slot, side, perRow, size)
+    -- Unrounded: snapping one offset alone would push the last icon past the
+    -- clipping holder when a typed size is fractional.
+    local g = KE.PartyBuffsRules.SlotGeometry(db, layout, slot.cellCount or 0, perRow, size)
+    local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex, g.buffLine)
+    slot.holder:SetSize(g.width, g.height)
+    slot.layoutPerRow, slot.layoutRecord = perRow, layout
+    self:PlaceCells(slot, layout, perRow, size)
     local flow = AnchorUtil.FlowDirection
     local clean = pcall(container.SetFlowLayoutGrowthDirection, container,
-        side.left and flow.Left or flow.Right, side.up and flow.Up or flow.Down)
+        layout.left and flow.Left or flow.Right, layout.up and flow.Up or flow.Down)
     -- The axis first: the anchor point and the line size are read against it.
-    clean = pcall(container.SetFlowLayoutAxis, container, AnchorUtil.FlowLayoutAxis.Horizontal) and clean
-    clean = pcall(container.SetFlowLayoutAnchorPoint, container, side.corner) and clean
+    local axis = layout.vertical and AnchorUtil.FlowLayoutAxis.Vertical or AnchorUtil.FlowLayoutAxis.Horizontal
+    clean = pcall(container.SetFlowLayoutAxis, container, axis) and clean
+    clean = pcall(container.SetFlowLayoutAnchorPoint, container, layout.corner) and clean
     clean = pcall(container.SetFlowLayoutMaximumLineSize, container,
-        KE.PartyBuffsRules.LineSize(db, buffPerLine, size)) and clean
-    if KE.PartyBuffsRules.NeedsPin(slot, side.corner, x, y) then
+        KE.PartyBuffsRules.LineSize(db, g.buffPerLine, size)) and clean
+    if KE.PartyBuffsRules.NeedsPin(slot, layout.corner, x, y) then
         local ok = pcall(function()
             container:ClearAllPoints()
-            container:SetPoint(side.corner, slot.holder, side.corner, x, y)
+            container:SetPoint(layout.corner, slot.holder, layout.corner, x, y)
         end)
-        KE.PartyBuffsRules.RecordPin(slot, ok, side.corner, x, y)
+        KE.PartyBuffsRules.RecordPin(slot, ok, layout.corner, x, y)
         clean = ok and clean
     end
     return clean
@@ -1004,7 +1005,7 @@ end
 
 -- Cells are KE frames: moving them is never refused. A slot built before its
 -- first bind has no cells yet.
-function PB:PlaceCells(slot, side, perRow, size)
+function PB:PlaceCells(slot, layout, perRow, size)
     local track = slot.track
     if not track then return end
     -- A row kept through a roster settle is laid out again with no bind, so a
@@ -1014,25 +1015,24 @@ function PB:PlaceCells(slot, side, perRow, size)
         slot.cellSize = size
     end
     local count = slot.cellCount or 0
-    local step = KE.PartyBuffsRules.RowLayout(self.db, count, perRow, size)
-    local dir, rise = side.left and -1 or 1, side.up and 1 or -1
+    local g = KE.PartyBuffsRules.SlotGeometry(self.db, layout, count, perRow, size)
     for i = 1, count do
         local c = track.cells[i]
-        local col, line = KE.PartyBuffsRules.GridPosition(i - 1, perRow)
+        local x, y = KE.PartyBuffsRules.IconOffset(g, layout, KE.PartyBuffsRules.GridPosition(i - 1, perRow))
         c:ClearAllPoints()
-        c:SetPoint(side.corner, slot.holder, side.corner, dir * col * step, rise * line * step)
+        c:SetPoint(layout.corner, slot.holder, layout.corner, x, y)
         pcall(Cell.Seat, c)
     end
 end
 
 -- The holder and the cells are laid out together, from one N.
 function PB:LayoutCells(slot, count)
-    local side, _, _, perRow = self:Placement()
-    if KE.PartyBuffsRules.NeedsLayout(slot, count, perRow, side.corner) then
+    local layout, _, _, perRow = self:Placement()
+    if KE.PartyBuffsRules.NeedsLayout(slot, count, perRow, layout) then
         slot.cellCount = count
         if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
     else
-        self:PlaceCells(slot, side, perRow, self.styleSettings.IconSize)
+        self:PlaceCells(slot, layout, perRow, self.styleSettings.IconSize)
     end
 end
 
@@ -1518,9 +1518,8 @@ end
 -- under the spell's length when that is shorter), started again with the same
 -- time left whenever it has run out. A redraw keeps a cell's tracker while its
 -- spell and length are the same, so a countdown carries on. Plain values only.
-function PB:DrawPreviewCells(row, entries, side, step, perRow)
+function PB:DrawPreviewCells(row, entries, layout, g, perRow)
     local n = Track.Now()
-    local dir, rise = side.left and -1 or 1, side.up and 1 or -1
     for i = 1, PREVIEW_CELLS do
         local c, e, old = row.cells[i], entries[i], row.trackers[i]
         if old and not (e and old.previewID == e.id and old.cd == e.cd
@@ -1536,9 +1535,9 @@ function PB:DrawPreviewCells(row, entries, side, step, perRow)
                 row.cells[i] = c
             end
             Cell.Dress(c, self.previewCellStyle, e)
-            local col, line = KE.PartyBuffsRules.GridPosition(i - 1, perRow)
+            local x, y = KE.PartyBuffsRules.IconOffset(g, layout, KE.PartyBuffsRules.GridPosition(i - 1, perRow))
             c:ClearAllPoints()
-            c:SetPoint(side.corner, row.holder, side.corner, dir * col * step, rise * line * step)
+            c:SetPoint(layout.corner, row.holder, layout.corner, x, y)
             if old then
                 Track.Push(old, n)
             else
@@ -1607,16 +1606,14 @@ function PB:DrawPreviewRow(k, frame)
     end
     local holder = row.holder
     local entries = self:PreviewEntries(k)
-    local side, _, _, perRow = self:Placement(true)
-    local step, buffCol, buffLine, buffPerLine, width, height =
-        KE.PartyBuffsRules.RowLayout(db, #entries, perRow, settings.IconSize)
-    holder:SetSize(width, height)
+    local layout, _, _, perRow = self:Placement(true)
+    local g = KE.PartyBuffsRules.SlotGeometry(db, layout, #entries, perRow, settings.IconSize)
+    holder:SetSize(g.width, g.height)
     if not self:PlaceHolder(holder, frame, true, settings.IconSize) then
         self:HidePreviewRow(row)
         return
     end
-    local dir, rise = side.left and -1 or 1, side.up and 1 or -1
-    self:DrawPreviewCells(row, entries, side, step, perRow)
+    self:DrawPreviewCells(row, entries, layout, g, perRow)
     -- The live row leaves a trinket drawn as a cooldown icon out of its buffs.
     local skip = {}
     for _, e in ipairs(entries) do
@@ -1649,10 +1646,10 @@ function PB:DrawPreviewRow(k, frame)
                 row.icons[shown] = icon
             end
             -- Where the live container would put the same icon.
-            local col, line = KE.PartyBuffsRules.GridPosition(shown - 1, buffPerLine)
+            local col, line = KE.PartyBuffsRules.GridPosition(shown - 1, g.buffPerLine)
+            local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex + col, g.buffLine + line)
             icon:ClearAllPoints()
-            icon:SetPoint(side.corner, holder, side.corner, dir * (buffCol + col) * step,
-                rise * (buffLine + line) * step)
+            icon:SetPoint(layout.corner, holder, layout.corner, x, y)
             local spellID = pools[i][j]
             icon.keIcon:SetTexture(spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON)
             self:RunPreviewTimer(icon, shown, now)

@@ -25,16 +25,21 @@ local SIDE_OPTIONS = {
 
 -- Each side's own choices, in order, come from PartyBuffsRules.LAYOUTS.
 local GROW_TEXT = {
-    CENTER = "Center",
-    DOWN   = "Down",
-    UP     = "Up",
-    RIGHT  = "Right",
-    LEFT   = "Left",
+    CENTER      = "Center",
+    DOWN        = "Down",
+    UP          = "Up",
+    RIGHT       = "Right",
+    LEFT        = "Left",
+    CENTER_ROW  = "Center",
+    COLUMN_UP   = "Up",
+    COLUMN_DOWN = "Down",
 }
 local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side of the Frame and never point " ..
-    "at the party frame. Left or Right: Center keeps the icons centered on the frame, Down starts them at its " ..
-    "top edge, Up at its bottom edge. Above or Below: Right starts them at the frame's left edge, Left at its " ..
-    "right edge. Inside has one layout."
+    "at the party frame. Left or Right: Center centers the first line on the frame with further lines below " ..
+    "it, Down starts at its top edge, Up at its bottom edge. Above or Below: Right starts at the frame's left " ..
+    "edge, Left at its right edge, Center centers the cooldown icons on the frame with the active buffs on " ..
+    "the next line, Up or Down stacks the icons in a column centered on the frame, further columns to its " ..
+    "right. Inside has one layout."
 
 -- state: the picker's one state group, when not colorsOn.
 local COLOR_PICKERS = {
@@ -394,8 +399,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     local rowX3 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
     AddPlacement(AddSlider(rowX3, "Icons Per Row", PlacementKey("IconsPerRow"), 1,
         KE.PartyBuffsRules.MAX_PER_ROW, PlacementValue("IconsPerRow"),
-        "Icons on one line before the row wraps. At " .. KE.PartyBuffsRules.MAX_PER_ROW
-            .. " it never wraps."))
+        "Icons on one line before the row wraps; in an Up or Down column, icons per column. At "
+            .. KE.PartyBuffsRules.MAX_PER_ROW .. " it never wraps."))
     if healerView then
         AddPlacement(AddSlider(rowX3, "Icon Size", PlacementKey("IconSize"), ICON_SIZE_MIN, ICON_SIZE_MAX,
             PlacementValue("IconSize"), "Icon size in a healer spec. Other specs use Icon Size on the Display card."))

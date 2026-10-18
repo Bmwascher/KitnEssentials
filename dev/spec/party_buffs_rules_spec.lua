@@ -304,6 +304,7 @@ describe("PartyBuffsRules.Layout", function()
             { name = "Below, toward the frame", side = "BELOW", grow = "UP", list = "BELOW" },
             { name = "Inside, out of the frame", side = "INSIDE", grow = "RIGHT", list = "INSIDE" },
             { name = "Above, another side's choice", side = "ABOVE", grow = "UP", list = "ABOVE" },
+            { name = "Above, a stale Center", side = "ABOVE", grow = "CENTER", list = "ABOVE" },
             { name = "unknown side reads as Left", side = "NOWHERE", grow = "UP", list = "LEFT", want = "UP" },
         }
         for _, case in ipairs(cases) do
@@ -516,17 +517,19 @@ describe("PartyBuffsRules.NeedsPin and RecordPin", function()
 end)
 
 describe("PartyBuffsRules.NeedsLayout", function()
-    it("lays the row out again when the cell count, the icons per row or the corner alone moved", function()
+    it("lays the row out again when the cell count, the icons per row or the layout alone moved", function()
         local R = L.loadPartyBuffsRules()
-        local slot = { cellCount = 4, layoutPerRow = 14, layoutCorner = "TOPLEFT" }
+        local right = R.Layout("ABOVE", "RIGHT")
+        local slot = { cellCount = 4, layoutPerRow = 14, layoutRecord = right }
         local cases = {
-            { name = "all match", cells = 4, perRow = 14, corner = "TOPLEFT", want = false },
-            { name = "cell count only", cells = 5, perRow = 14, corner = "TOPLEFT", want = true },
-            { name = "icons per row only", cells = 4, perRow = 3, corner = "TOPLEFT", want = true },
-            { name = "corner only", cells = 4, perRow = 14, corner = "TOPRIGHT", want = true },
+            { name = "all match", cells = 4, perRow = 14, layout = right, want = false },
+            { name = "cell count only", cells = 5, perRow = 14, layout = right, want = true },
+            { name = "icons per row only", cells = 4, perRow = 3, layout = right, want = true },
+            { name = "layout only, one corner", cells = 4, perRow = 14, layout = R.Layout("ABOVE", "COLUMN_UP"),
+              want = true },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.corner), case.name)
+            assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.layout), case.name)
         end
     end)
 end)
