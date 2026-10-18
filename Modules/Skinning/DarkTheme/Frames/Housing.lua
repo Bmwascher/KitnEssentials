@@ -193,12 +193,7 @@ local function SkinDashboard()
         end
     end
 
-    -- parentArray="TabButtons" is the whole set; the hardcoded pair silently
-    -- skipped the Collection tab 12.1 added.
-    local sideTabs = dash.TabButtons
-    if not sideTabs or #sideTabs == 0 then
-        sideTabs = { dash.HouseInfoTabButton, dash.CatalogTabButton }
-    end
+    local sideTabs = dash.TabButtons or {}
     for i, tab in ipairs(sideTabs) do
         if tab then
             S.Backdrop(tab)
@@ -214,8 +209,6 @@ local function SkinDashboard()
                 tab:SetPoint("TOPLEFT", sideTabs[i - 1], "BOTTOMLEFT", 0, -1)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab2)
             end
-            -- Pre-12.1 name; S.KillSideTabArt covers the 12.1 one.
-            if tab.Highlight then S.KillTexture(tab.Highlight) end
             S.HoverWash(tab)
             local icon = tab.Icon
             if icon then
@@ -238,26 +231,11 @@ local function SkinDashboard()
             -- Background is Blizzard's gold frame, drawn over our backdrop.
             if tab.Background then tab.Background:SetAlpha(0) end
 
-            -- SelectedTexture is Blizzard's own key on 12.1, carrying the gold
-            -- selected atlas. Recolor theirs; only build ours when absent.
+            -- Blizzard's SelectedTexture carries the gold selected atlas; recolor it.
             if tab.SelectedTexture then
                 tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
                 S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
-                local tbd = S.GetBackdrop(tab)
-                if tbd then
-                    S.InsetToEdge(tab.SelectedTexture, tbd)
-                else
-                    S.InsetToEdge(tab.SelectedTexture, tab)
-                    S.TrackEdgeClients(tab)
-                end
-            else
-                local selT = tab:CreateTexture(nil, "BACKGROUND", nil, 1)
-                S.PaintBrand(selT, "SetColorTexture", S.palette.selectedA)
-                local tbd = S.GetBackdrop(tab)
-                S.InsetToEdge(selT, tbd or tab)
-                if not tbd then S.TrackEdgeClients(tab) end
-                selT:Hide()
-                tab.SelectedTexture = selT
+                S.InsetToEdge(tab.SelectedTexture, S.GetBackdrop(tab))
             end
         end
     end

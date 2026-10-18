@@ -1020,16 +1020,13 @@ end
 
 function S.HoverWash(frame)
     if not frame or S.data(frame).hoverWash then return end
-    local anchor = S.GetBackdrop(frame) or frame
+    local plate = S.GetBackdrop(frame)
+    if not plate then return end
     local tex = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
     tex:SetTexture(HOVER_TEX)
     tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
     tex:SetAlpha(HOVER_ALPHA)
-    if anchor.backdropInfo then
-        S.InsetToEdge(tex, anchor)
-    else
-        FollowEdge(tex, anchor)
-    end
+    S.InsetToEdge(tex, plate)
     tex:Hide()
     frame:HookScript("OnEnter", function() tex:Show() end)
     frame:HookScript("OnLeave", function() tex:Hide() end)
@@ -2448,12 +2445,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     if tab.SelectedTexture then
         tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
         S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
-        local tbd = S.GetBackdrop(tab)
-        if tbd then
-            S.InsetToEdge(tab.SelectedTexture, tbd)
-        else
-            FollowEdge(tab.SelectedTexture, tab)
-        end
+        S.InsetToEdge(tab.SelectedTexture, S.GetBackdrop(tab))
     end
     S.KillSideTabArt(tab)
     S.HoverWash(tab)
