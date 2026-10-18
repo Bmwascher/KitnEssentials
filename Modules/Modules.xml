@@ -28,6 +28,7 @@
     <Script file="Combat\ClassTools\DoTTracker.lua" />
     <Script file="Combat\ClassTools\AlterTime.lua" />
     <Script file="Combat\ClassTools\CustomCooldownsRules.lua" />
+    <Script file="Combat\ClassTools\CustomCooldowns.lua" />
     <Script file="QoL\QualityOfLife\SpellAlerts.lua" />
     <Script file="Combat\ClassTools\PIMacroBuilder.lua" />
     <Script file="Combat\ClassTools\PIAssist.lua" />
