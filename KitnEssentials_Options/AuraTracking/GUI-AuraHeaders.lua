@@ -106,19 +106,13 @@ local function BuildPage(opts)
 
         local rowC = GUIFrame:CreateRow(card2.content, 40)
         local growH = GUIFrame:CreateDropdown(rowC, "Grow Sideways", {
-            options = {
-                { text = "Right", value = "RIGHT" },
-                { text = "Left",  value = "LEFT" },
-            },
+            options = GUIFrame.GrowHorizontalOptions,
             value = db.GrowHorizontal,
             callback = function(v) db.GrowHorizontal = v; ApplySettings() end,
         })
         rowC:AddWidget(growH, 0.34)
         local growV = GUIFrame:CreateDropdown(rowC, "Grow Vertically", {
-            options = {
-                { text = "Down", value = "DOWN" },
-                { text = "Up",   value = "UP" },
-            },
+            options = GUIFrame.GrowVerticalOptions,
             value = db.GrowVertical,
             callback = function(v) db.GrowVertical = v; ApplySettings() end,
         })

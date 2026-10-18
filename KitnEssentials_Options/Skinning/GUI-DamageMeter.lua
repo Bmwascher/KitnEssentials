@@ -2348,12 +2348,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     -- meter steps that way into it instead.
     local effectiveGrow = DM and DM.SpellHistoryEffectiveGrow
     local growOptions = {}
-    for _, option in ipairs({
-        { key = "LEFT",  text = "Left" },
-        { key = "RIGHT", text = "Right" },
-        { key = "UP",    text = "Up" },
-        { key = "DOWN",  text = "Down" },
-    }) do
+    for _, option in ipairs(GUIFrame.GrowDirectionOptions) do
         if not effectiveGrow or effectiveGrow(sh.Attach, sh.AttachEdge, option.key) == option.key then
             growOptions[#growOptions + 1] = option
         end

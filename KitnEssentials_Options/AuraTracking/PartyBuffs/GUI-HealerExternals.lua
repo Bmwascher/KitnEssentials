@@ -11,12 +11,7 @@ local Theme    = KE.Theme
 
 local C_Timer = C_Timer
 
-local GROW_OPTIONS = {
-    { key = "RIGHT", text = "Right" },
-    { key = "LEFT",  text = "Left" },
-    { key = "UP",    text = "Up" },
-    { key = "DOWN",  text = "Down" },
-}
+local GROW_OPTIONS = GUIFrame.GrowDirectionOptions
 
 -- Healer Mana's display, keyed by the side the box attaches to. Both draw
 -- their borders inside their frames, so an offset of 1 leaves one empty

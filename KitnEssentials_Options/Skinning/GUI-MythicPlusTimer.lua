@@ -974,17 +974,7 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     local card2 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Position", yOffset)
     manager:Register(card2, "overlayNP")
 
-    local anchorOptions = {
-        { key = "CENTER",      text = "Center"       },
-        { key = "TOP",         text = "Top"          },
-        { key = "BOTTOM",      text = "Bottom"       },
-        { key = "LEFT",        text = "Left"         },
-        { key = "RIGHT",       text = "Right"        },
-        { key = "TOPLEFT",     text = "Top Left"     },
-        { key = "TOPRIGHT",    text = "Top Right"    },
-        { key = "BOTTOMLEFT",  text = "Bottom Left"  },
-        { key = "BOTTOMRIGHT", text = "Bottom Right" },
-    }
+    local anchorOptions = GUIFrame.AnchorPointOptions
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local anchorDropdown = GUIFrame:CreateDropdown(row2a, "Anchor", {

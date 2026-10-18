@@ -157,7 +157,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
 
     local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local growthDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", {
-        options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
+        options = GUIFrame.GrowVerticalOptions,
         value = db.Frame.GrowthDirection or "DOWN",
         callback = function(key) db.Frame.GrowthDirection = key; ApplyVisuals() end,
     })

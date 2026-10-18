@@ -25,10 +25,7 @@ local SOURCE_OPTIONS = {
     { key = "MINE",   text = "Mine Only" },
 }
 
-local GROW_OPTIONS = {
-    { key = "DOWN", text = "Down" },
-    { key = "UP",   text = "Up" },
-}
+local GROW_OPTIONS = GUIFrame.GrowVerticalOptions
 
 local SEEDS_PER_ROW = 3
 local SEED_CELL_H = 24

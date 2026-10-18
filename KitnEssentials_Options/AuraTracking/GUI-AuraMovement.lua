@@ -145,10 +145,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
 
     local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local growHorizDropdown = GUIFrame:CreateDropdown(row3c, "Grow Horizontal", {
-        options = {
-            { key = "LEFT",  text = "Left" },
-            { key = "RIGHT", text = "Right" },
-        },
+        options = GUIFrame.GrowHorizontalOptions,
         value = db.GrowHorizontal or "LEFT",
         callback = function(key) db.GrowHorizontal = key; ApplySettings() end,
     })
@@ -156,10 +153,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     manager:Register(growHorizDropdown, "all")
 
     local growVertDropdown = GUIFrame:CreateDropdown(row3c, "Grow Vertical", {
-        options = {
-            { key = "UP",   text = "Up" },
-            { key = "DOWN", text = "Down" },
-        },
+        options = GUIFrame.GrowVerticalOptions,
         value = db.GrowVertical or "UP",
         callback = function(key) db.GrowVertical = key; ApplySettings() end,
     })

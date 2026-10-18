@@ -17,12 +17,7 @@ local function GetModule()
     return nil
 end
 
-local GROW_OPTIONS = {
-    { key = "DOWN",  text = "Down" },
-    { key = "UP",    text = "Up" },
-    { key = "LEFT",  text = "Left" },
-    { key = "RIGHT", text = "Right" },
-}
+local GROW_OPTIONS = GUIFrame.GrowDirectionOptions
 
 local COUNT_POSITIONS = {
     { key = "CENTER", text = "On Icon" },

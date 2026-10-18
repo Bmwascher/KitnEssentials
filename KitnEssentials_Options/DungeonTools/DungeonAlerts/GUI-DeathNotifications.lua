@@ -286,7 +286,7 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
 
     local dRow2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
     local growDropdown = GUIFrame:CreateDropdown(dRow2, "Grow Direction", {
-        options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
+        options = GUIFrame.GrowVerticalOptions,
         value = db.Grow or "DOWN",
         callback = function(key) db.Grow = key; ApplySettings() end,
     })
