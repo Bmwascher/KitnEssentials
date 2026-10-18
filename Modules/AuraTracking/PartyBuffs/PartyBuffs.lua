@@ -141,6 +141,11 @@ local function Debug(fmt, ...)
     KE:Print("[PB] " .. fmt:format(unpack(args, 1, count)))
 end
 
+-- The Party Frame Icons switch: off, no row is built beside party frames.
+local function IconsOn()
+    return PB.db.FrameIcons == true
+end
+
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
@@ -453,6 +458,24 @@ end
 -- frame's previous occupant, so a slot stays dropped until the settle timer
 -- resolves unless PB:KeepRosterRows kept it.
 function PB:ResolveAll()
+    -- Off, no row is built and no frame is searched; the potion rows and the
+    -- externals box bind on their own and share the build queue, so it is
+    -- not cleared. The watcher holds their reads after the interface shows.
+    if not IconsOn() then
+        self:EnsureUIWatcher()
+        if not UIParent:IsShown() then self.interfaceHidden = true end
+        self.buildPending = false
+        local had = false
+        for k = 1, MAX_SLOTS do
+            if self.bindings[k] then had = true end
+            self.bindings[k] = nil
+            self:DropSlot(k)
+            if self.slots[k] then self.slots[k].member = nil end
+        end
+        wipe(self.rosterKept)
+        if had then self:SyncMembers() end
+        return
+    end
     if self._rosterTimer then
         -- A kept row is placed again: the icon size may have changed.
         for k = 1, MAX_SLOTS do
@@ -508,7 +531,9 @@ function PB:QueueResolve()
 end
 
 local function OnCellChanged(frame, change)
-    if not (PB:IsEnabled() and PB.active) then return end
+    -- A hook cannot be removed, so a frame watched while the switch was on
+    -- stops here while it is off.
+    if not (PB:IsEnabled() and PB.active and IconsOn()) then return end
     if DEBUG_PB then Debug("cell %s %s", DebugName(frame), change) end
     PB:QueueResolve()
 end
@@ -1334,8 +1359,10 @@ function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
     self:BuildStyleSettings()
-    Spec.SetTracked(self.db.TrackBurst == true, self.db.TrackTrinket == true, self.db.ShowRacials == true,
-        self.db.HealerExternals == true)
+    -- Off, only the healer externals box still needs specs read.
+    local icons = IconsOn()
+    Spec.SetTracked(icons and self.db.TrackBurst == true, icons and self.db.TrackTrinket == true,
+        icons and self.db.ShowRacials == true, self.db.HealerExternals == true)
     Pot.ApplySettings()
     HX.ApplySettings()
     self:EvaluateGate()
@@ -1671,17 +1698,26 @@ function PB:ApplyLiveAlpha()
 end
 
 -- A plain frame that stays shown under UIParent, so its scripts run when the
--- whole interface hides and shows. Made on the first preview; with the
--- preview closed both return at once.
+-- whole interface hides and shows. Made on the first preview, or on the first
+-- resolve with Party Frame Icons off: then no party frame's show resolves, so
+-- the watcher holds the potion rows' and the externals box's reads after the
+-- interface shows, as ResolveAll does with the switch on.
 local function OnInterfaceHidden()
-    if not (PB:IsEnabled() and PB.previewing) then return end
+    if not PB:IsEnabled() then return end
+    if PB.active and not IconsOn() then PB.interfaceHidden = true end
+    if not PB.previewing then return end
     PB:HidePreviewFrames()
     Pot.HidePreview()
     HX.HidePreview()
 end
 
 local function OnInterfaceShown()
-    if PB:IsEnabled() and PB.previewing then PB:ShowPreview() end
+    if not PB:IsEnabled() then return end
+    if PB.active and PB.interfaceHidden and not IconsOn() then
+        PB.interfaceHidden = false
+        Track.InterfaceShown()
+    end
+    if PB.previewing then PB:ShowPreview() end
 end
 
 function PB:EnsureUIWatcher()
@@ -1709,6 +1745,11 @@ function PB:ShowPreview()
     -- roster settle does not hold them back.
     Pot.ShowPreview()
     HX.ShowPreview()
+    -- Off, no party sample row is drawn and no frame is searched.
+    if not IconsOn() then
+        self:HidePreviewFrames()
+        return
+    end
     if self._rosterTimer then
         self:HidePreviewFrames()
         return
