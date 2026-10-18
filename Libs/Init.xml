@@ -14,6 +14,6 @@
     <Script file="LibRangeCheck-3.0/LibRangeCheck-3.0.lua" />
     <Script file="LibCustomGlow-1.0/LibCustomGlow-1.0.lua" />
     <Script file="LibKeystone/LibKeystone.lua" />
-    <Include file="LibSpecialization/LibSpecialization.xml" />
+    <Script file="LibSpecialization/LibSpecialization.lua" />
     <Include file="TaintLess/TaintLess.xml" />
 </Ui>
