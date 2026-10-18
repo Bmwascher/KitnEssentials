@@ -287,17 +287,21 @@ local function FlattenInviteButton(tp)
     PaintLegacyInviteGlyph(tp)
 end
 
+local function HookIf(owner, name, fn)
+    if type(owner) == "table" and type(owner[name]) == "function" then
+        -- The checker infers this parameter from its call sites and cannot
+        -- see the table guard above.
+        ---@diagnostic disable-next-line: type-mismatch
+        hooksecurefunc(owner, name, fn)
+    end
+end
+
 local function HookLazy(module, creatorNames, skinFn)
     -- Callers pass whatever GetModule or a namespace field returns, which is
     -- not always a table to hook onto.
     if type(module) ~= "table" then return end
     for _, name in ipairs(creatorNames) do
-        if type(module[name]) == "function" then
-            -- The checker infers this parameter from its call sites and cannot
-            -- see the table guard above.
-            ---@diagnostic disable-next-line: type-mismatch
-            hooksecurefunc(module, name, function() pcall(skinFn) end)
-        end
+        HookIf(module, name, function() pcall(skinFn) end)
     end
     pcall(skinFn)
 end
@@ -491,6 +495,212 @@ local function CenterBattlenetRow(bnet)
     bnet:SetPoint(p, rel, rp, 0, y)
 end
 
+local MODERN_SURFACES = {
+    "ContentBackground", "ContentInsetTint", "TopFade", "BottomFade", "TopDivider", "BottomDivider",
+}
+local SIDE_TAB_ICON_IDLE = 0.651
+local THEME_CONTROL_STYLERS = {
+    "SkinButton", "SkinDropdown", "SkinDropdownIndicator", "SkinEditBox", "SkinCheckButton", "SkinFrame",
+}
+local ownedControls = setmetatable({}, { __mode = "k" })
+local INVITE_STATE_ART = {
+    { "NormalTexture", "GetNormalTexture" },
+    { "PushedTexture", "GetPushedTexture" },
+    { "DisabledTexture", "GetDisabledTexture" },
+    { "HighlightTexture", "GetHighlightTexture" },
+}
+
+local function ZeroAlpha(region)
+    if region and region.SetAlpha then region:SetAlpha(0) end
+end
+
+-- The addon shows, hides and tints these backgrounds, and creates the inset
+-- tint at its first theme apply, but never sets their alpha, so alpha 0 holds
+-- and KE's window backdrop shows through.
+local function ModernSurfaces()
+    local ui = GetFriendsUI()
+    local root = type(ui) == "table" and ui.root
+    if not root then return end
+    for _, key in ipairs(MODERN_SURFACES) do
+        ZeroAlpha(root[key])
+    end
+    ZeroAlpha(root.FilterBar and root.FilterBar.Background)
+    ZeroAlpha(root.BattleNetBar and root.BattleNetBar.Background)
+end
+
+local function DressSideTab(tab)
+    local d = S.data(tab)
+    if d.bflSideTab then return end
+    d.bflSideTab = true
+    -- The dark theme's own opt-out flag; its skin engine skips the tab.
+    tab.BFL_DarkNoButtonChrome = true
+    ownedControls[tab] = true
+    S.Hover(tab, S.Template(tab, "Default"))
+end
+
+-- Every pass: the addon's selection refresh shows its tab backdrop again after
+-- the opt-out hid it, and a theme apply resets the tab art and icon color.
+local function PaintSideTabs()
+    local ui = GetFriendsUI()
+    local tabs = type(ui) == "table" and ui.sideTabs
+    if not tabs then return end
+    for _, tab in ipairs(tabs) do
+        DressSideTab(tab)
+        if tab.BFL_DarkBackdrop then tab.BFL_DarkBackdrop:Hide() end
+        ZeroAlpha(tab.Background)
+        ZeroAlpha(tab.SelectedTexture)
+        ZeroAlpha(tab.HighlightTexture)
+        local selected = tab:IsEnabled() and tab.sectionID ~= nil and tab.sectionID == ui.selectedSection
+        local bd = S.GetBackdrop(tab)
+        if bd then
+            if selected then
+                S.PaintBrand(bd, "SetBackdropBorderColor", 1)
+            else
+                S.ForgetBrand(bd)
+                bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+            end
+        end
+        local icon = tab.Icon or tab.icon
+        if icon and icon.SetVertexColor then
+            local v = selected and 1 or SIDE_TAB_ICON_IDLE
+            icon:SetVertexColor(v, v, v)
+        end
+    end
+end
+
+-- The addon sets the bar art back to full alpha on every pass.
+local function SkinModernHeaderBar(button, hover)
+    if not button then return end
+    local d = S.data(button)
+    if not d.bflModernHeader then
+        d.bflModernHeader = true
+        local bd = S.Backdrop(button, 1)
+        if hover then S.Hover(button, bd) end
+    end
+    ZeroAlpha(button.GetNormalTexture and button:GetNormalTexture())
+    ZeroAlpha(button.GetPushedTexture and button:GetPushedTexture())
+end
+
+-- The dark theme styles a control again after KE has dressed it, on a first
+-- section visit and a theme switch, and a color change re-shows its backdrop.
+-- On a control KE claimed, that backdrop and the arrow box are hidden and
+-- KE's caret is shown again.
+local function ReassertControl(ctl)
+    if ctl.BFL_DarkBackdrop then ctl.BFL_DarkBackdrop:Hide() end
+    if ctl.BFL_DarkDropdownIndicator then ctl.BFL_DarkDropdownIndicator:Hide() end
+    local caret = S.data(ctl).caret
+    if caret then caret:SetAlpha(1) end
+end
+
+-- Claims a control KE dressed. A plain button also takes the opt-out flag so
+-- later passes skip it; a dropdown does not, so it keeps the addon's own menu.
+local function OwnControl(ctl)
+    if not (ctl and S.GetBackdrop(ctl)) then return end
+    ownedControls[ctl] = true
+    if ctl.GetObjectType and ctl:GetObjectType() == "Button" and ctl.SetupMenu == nil then
+        ctl.BFL_DarkNoButtonChrome = true
+    end
+    ReassertControl(ctl)
+end
+
+local function ModernButton(btn, keep)
+    S.Button(btn, keep)
+    OwnControl(btn)
+end
+
+local function SkinRequestCard(button)
+    if not button then return end
+    ModernButton(button.AcceptButton)
+    local decline = button.DeclineButton
+    if decline then ModernButton(decline, decline:GetNormalTexture()) end
+end
+
+-- The addon re-atlases the state art and recolors the glyph on every pass, so
+-- this runs after it each time. The opt-out flag stops its dark theme
+-- recoloring the glyph on hover and press. A strip would clear the glyph too.
+local function FlattenModernInvite(btn)
+    if not btn then return end
+    local d = S.data(btn)
+    if d.inviteLayout ~= "modern" then
+        d.inviteLayout = "modern"
+        btn.BFL_DarkNoButtonChrome = true
+        ownedControls[btn] = true
+        local bd = S.Backdrop(btn, 0)
+        if bd then
+            local c = S.palette.control
+            bd:SetBackdropColor(c[1], c[2], c[3], c[4])
+        end
+        S.Hover(btn, bd)
+        if d.inviteGlyph then d.inviteGlyph:Hide() end
+    end
+    for _, art in ipairs(INVITE_STATE_ART) do
+        local region = btn[art[1]]
+        if not region and btn[art[2]] then region = btn[art[2]](btn) end
+        ZeroAlpha(region)
+    end
+    TintInviteGlyph(btn.ActionIcon, btn:IsEnabled())
+end
+
+local function RetintInvite(btn)
+    if btn and S.data(btn).inviteLayout == "modern" then
+        TintInviteGlyph(btn.ActionIcon, btn:IsEnabled())
+    end
+end
+
+local function ModernPass(frame)
+    local ui = GetFriendsUI()
+    local root = type(ui) == "table" and ui.root
+    if not (frame and root) then return end
+    ModernSurfaces()
+    if root.BattleNetBar then ModernButton(root.BattleNetBar.MenuButton) end
+    ModernButton(frame.StreamerModeButton)
+    local filters = root.FilterBar
+    if filters then
+        for _, key in ipairs({ "SortButton", "FilterDropdown", "RecentFilterDropdown" }) do
+            pcall(S.DropDown, filters[key], true)
+            OwnControl(filters[key])
+        end
+    end
+    if root.BottomActionBar then ModernButton(root.BottomActionBar.AddFriendButton) end
+    local requests = root.RequestsFrame
+    if requests then
+        S.ScrollBar(requests.ScrollBar)
+        local warning = requests.RealIDWarning
+        if warning then
+            ModernButton(warning.ContinueButton)
+            S.ScrollBar(warning.ScrollBar)
+        end
+    end
+    local who = frame.WhoFrame
+    if who then
+        ModernButton(who.BFL_ModernWhoButton)
+        ModernButton(who.BFL_ModernAddFriendButton)
+        ModernButton(who.BFL_ModernGroupInviteButton)
+    end
+    local raid = frame.RaidFrame
+    if raid then
+        ModernButton(raid.BFL_ModernConvertToRaidButton)
+        ModernButton(raid.BFL_ModernRaidToolsButton)
+        local cp = raid.ControlPanel
+        if cp then
+            ModernButton(cp.BFL_ModernRaidInfoButton)
+            local readyCheck = cp.BFL_ModernReadyCheckButton
+            ModernButton(readyCheck, readyCheck and readyCheck.Icon)
+        end
+    end
+    -- Dressed by the shared code, and styled by the dark theme inside the
+    -- application, before the control hooks exist.
+    OwnControl(frame)
+    OwnControl(frame.Inset)
+    local hdr = frame.FriendsTabHeader
+    if hdr then
+        OwnControl(hdr.StatusDropdown)
+        OwnControl(hdr.SearchBox)
+        OwnControl(hdr.BattlenetFrame)
+    end
+    PaintSideTabs()
+end
+
 local function ReStrip()
     local frame = _G.BetterFriendsFrame
     if frame then
@@ -498,7 +708,10 @@ local function ReStrip()
 
         local hdr = frame.FriendsTabHeader
         local bnet = hdr and hdr.BattlenetFrame
-        if bnet and not IsModern() then
+        if IsModern() then
+            ModernSurfaces()
+            PaintSideTabs()
+        elseif bnet then
             for _, b in ipairs({ bnet.SettingsButton, bnet.ContactsMenuButton }) do
                 if b then S.FixSubPixelEdge(b) end
             end
@@ -864,11 +1077,10 @@ local function Skin()
             end
         end
         local RecentAllies = BFLNS:GetModule("RecentAllies")
-        if RecentAllies then
-            pcall(hooksecurefunc, RecentAllies, "InitializeEntry", function(_, button)
-                FlattenInviteButton(button and button.PartyButton)
-            end)
-        end
+        HookIf(RecentAllies, "InitializeEntry", function(_, button)
+            local party = button and button.PartyButton
+            if IsModern() then FlattenModernInvite(party) else FlattenInviteButton(party) end
+        end)
         HookLazy(BFLNS:GetModule("Changelog"), { "CreateChangelogWindow" }, SkinChangelog)
 
         HookLazy(BFLNS:GetModule("RaidTools"), { "CreateFrame" }, SkinRaidTools)
@@ -938,8 +1150,107 @@ local function Skin()
         end)
     end
 
+    local function OnFriendCard(_, card)
+        if IsModern() and card then FlattenModernInvite(card.travelPassButton) end
+    end
+
+    local function OnGroupHeader(_, button)
+        if not IsModern() then return end
+        SkinModernHeaderBar(button, true)
+    end
+
+    local function OnRequestHeader(_, button)
+        if IsModern() then SkinModernHeaderBar(button, false) end
+    end
+
+    local function OnRequestCard(_, button)
+        if IsModern() then SkinRequestCard(button) end
+    end
+
+    -- The addon's dark theme restyles each row after the hooks above, so KE's
+    -- look goes back on after its pass.
+    local function OnThemeRow(_, row)
+        if not (row and IsModern()) then return end
+        RetintInvite(row.travelPassButton or row.PartyButton)
+    end
+
+    local function OnThemeControl(_, ctl)
+        if IsModern() then OwnControl(ctl) end
+    end
+
+    -- Rows get a backdrop here too, so only claimed controls are touched.
+    local function OnThemeBackdrop(_, target)
+        if target and ownedControls[target] and IsModern() then ReassertControl(target) end
+    end
+
+    -- Its tree walk and theme removal put an opted-out button's own art back.
+    local function OnThemeRestore(_, btn)
+        if not (btn and IsModern()) then return end
+        local d = S.data(btn)
+        if d.inviteLayout == "modern" then
+            FlattenModernInvite(btn)
+        elseif d.bflSideTab then
+            PaintSideTabs()
+        end
+    end
+
+    -- The addon fills the lists inside the application this follows, before
+    -- the first hooks exist. The sweep dresses those rows by the addon's own
+    -- row keys and only reads the frames the scroll boxes hold.
+    local function SweepModern()
+        local ui = GetFriendsUI()
+        local list = GetBFLModule("FriendsList")
+        EachFrame(list and list.scrollBox, function(row)
+            if row.CardBackground then
+                OnFriendCard(nil, row)
+            elseif row.HeaderText then
+                OnGroupHeader(nil, row)
+            end
+        end)
+        local root = type(ui) == "table" and ui.root
+        local requests = root and root.RequestsFrame
+        EachFrame(requests and requests.ScrollBox, function(row)
+            if row.Background then
+                OnRequestCard(nil, row)
+            elseif row.ButtonText then
+                OnRequestHeader(nil, row)
+            end
+        end)
+        local recent = frame.RecentAlliesFrame
+        EachFrame(recent and recent.ScrollBox, function(row)
+            if row.PartyButton then FlattenModernInvite(row.PartyButton) end
+        end)
+    end
+
+    local modernReady = false
+    local function EnsureModern()
+        if modernReady then return end
+        modernReady = true
+        local ui = GetFriendsUI()
+        HookIf(ui, "RefreshModernSideTabSelection", function()
+            if IsModern() then PaintSideTabs() end
+        end)
+        HookIf(ui, "StyleGroupHeader", OnGroupHeader)
+        HookIf(ui, "InitializeRequestHeader", OnRequestHeader)
+        HookIf(ui, "InitializeRequestCard", OnRequestCard)
+        HookIf(ui, "StyleFriendCard", OnFriendCard)
+        local engine = GetBFLModule("SkinEngine")
+        HookIf(engine, "SkinRow", OnThemeRow)
+        HookIf(engine, "RefreshRow", OnThemeRow)
+        HookIf(engine, "RestoreFrame", OnThemeRestore)
+        HookIf(engine, "CreateBackdrop", OnThemeBackdrop)
+        for _, name in ipairs(THEME_CONTROL_STYLERS) do
+            HookIf(engine, name, OnThemeControl)
+        end
+    end
+
     local function OnLayoutApplied()
-        if LayoutFor(GetFriendsUI()) == "legacy" then
+        local layout = LayoutFor(GetFriendsUI())
+        if layout == "modern" then
+            EnsureModern()
+            ModernPass(frame)
+            SweepModern()
+        elseif layout == "legacy" then
             EnsureLegacy()
             SweepLegacy()
         end
