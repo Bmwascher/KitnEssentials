@@ -598,6 +598,18 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent, followers) end
 ---@return boolean
 function KE:IsEditModeBoxName(name) end
 
+--- A Select Frame name's region, or nil when the name cannot anchor `frame`
+--- (an Edit Mode box, a missing root or child, or an unsafe candidate). Any
+--- region can anchor; with `asParent` only a frame passes. The second return
+--- is true only when the name's first part is not a global yet.
+---@param name any
+---@param frame Frame?
+---@param asParent boolean?
+---@param followers Frame[]?
+---@return Region? candidate
+---@return boolean rootMissing
+function KE:ResolveSelectFrame(name, frame, asParent, followers) end
+
 ---@param frame Frame
 ---@return boolean
 function KE:CanReanchorNow(frame) end
