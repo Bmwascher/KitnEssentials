@@ -106,12 +106,33 @@ for i, category in ipairs(KE.PartyBuffsRules.CATEGORIES) do
     DESCRIPTORS[i] = {
         key = category.key,
         category = category,
+        trackKey = category.trackKey,
+        sort = "AuraInstanceIDOnly",
         capabilities = {
             hasBorder = true, hasGlow = true, hasDispelBadge = false, hasDispelRing = true,
             ringColorKey = "Ring" .. category.colorKey:sub(6),
         },
     }
 end
+
+-- The active list's groups, one per cooldown kind, dressed as the cells'
+-- overlay buttons are: their ring keys are the cells' (FillStyle).
+local LIST_DESCRIPTORS = {}
+for i, group in ipairs(KE.PartyBuffsRules.LIST_GROUPS) do
+    LIST_DESCRIPTORS[i] = {
+        key = group.key,
+        list = group,
+        trackKey = "ActiveCooldownsFirst",
+        sort = "ExpirationOnly",
+        capabilities = Track.OVERLAY_DESCRIPTORS[group.kind].capabilities,
+    }
+end
+
+-- Every group of a row's container: the active list's, then the categories.
+-- trackKey gates the build; sort names the group's AuraContainerSortMethod.
+local GROUPS = {}
+for _, d in ipairs(LIST_DESCRIPTORS) do GROUPS[#GROUPS + 1] = d end
+for _, d in ipairs(DESCRIPTORS) do GROUPS[#GROUPS + 1] = d end
 
 PB.active = false
 PB.previewing = false
@@ -383,9 +404,9 @@ function PB:SlotComplete(k)
     -- A retired button is lost capacity; the build replaces the container
     -- once auras are not secret.
     if slot.dressFailed and not KE:AreAuraIdentitiesHidden() then return false end
-    for i = 1, #DESCRIPTORS do
-        local d = DESCRIPTORS[i]
-        if self.db[d.category.trackKey] == true and not slot.groups[d.key] then return false end
+    for i = 1, #GROUPS do
+        local d = GROUPS[i]
+        if self.db[d.trackKey] == true and not slot.groups[d.key] then return false end
     end
     return true
 end
@@ -579,15 +600,36 @@ local function RetireButton(button)
     return ok
 end
 
+-- Never written.
+local EMPTY_ENTRIES = {}
+
+-- Every group's container settings, for creation and every reconfiguration.
+-- A list group follows the row's last bound cells, none before the first
+-- bind; every category leaves out the list's spells (listBuffs).
+local function GroupConfig(db, slot, d)
+    if d.list then
+        return KE.PartyBuffsRules.ListGroupConfig(d.list, db, slot.listEntries or EMPTY_ENTRIES)
+    end
+    return KE.PartyBuffsRules.BuildGroupConfig(d.category, db, slot.cellBuffs, slot.listBuffs)
+end
+
+-- A set's members, sorted and joined: one filter told from the next.
+local function SetSig(set)
+    if not set then return "" end
+    local ids = {}
+    for id in pairs(set) do ids[#ids + 1] = id end
+    table_sort(ids)
+    return table_concat(ids, ",")
+end
+
 function PB:AddGroup(k, slot, d)
-    local filter, candidates, maxFrames, index =
-        KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, slot.cellBuffs)
+    local filter, candidates, maxFrames, index = GroupConfig(self.db, slot, d)
     local container = slot.container
     local started = DEBUG_PB and debugprofilestop()
     local ok = pcall(container.AddAuraGroup, container, d.key, filter, {
         candidateFilters = candidates,
         maxFrameCount    = maxFrames,
-        sortMethod       = AuraContainerSortMethod.AuraInstanceIDOnly,
+        sortMethod       = AuraContainerSortMethod[d.sort],
         sortDirection    = AuraContainerSortDirection.Normal,
         -- Reads the live settings: buttons made in a later batch are dressed
         -- from the profile current at that time. Blizzard applies the
@@ -725,9 +767,9 @@ function PB:BuildSlot(k)
         KE.PartyBuffsRules.RecordPin(slot, pinned, corner, 0, 0)
     end
     local built, refused = false, false
-    for i = 1, #DESCRIPTORS do
-        local d = DESCRIPTORS[i]
-        if self.db[d.category.trackKey] == true and not slot.groups[d.key] then
+    for i = 1, #GROUPS do
+        local d = GROUPS[i]
+        if self.db[d.trackKey] == true and not slot.groups[d.key] then
             self:AddGroup(k, slot, d)
             if slot.groups[d.key] and not self:SlotComplete(k) then return false end
             built, refused = true, not slot.groups[d.key]
@@ -904,17 +946,75 @@ function PB:BindCooldowns(k, binding)
         slot.cdMember, slot.cdSpec = m, spec
     end
     local entries = self:CooldownEntries(m)
+    Track.HoldOverlay(slot.track, KE.PartyBuffsRules.ListOn(self.db))
     local clean, restyle = Track.Apply(slot.track, binding.token, entries, self.cellStyle, self.styleSettings)
     slot.cellSize = self.cellStyle.size
     if not clean then self.buildPending = true end
     if restyle then self:Restyle() end
     if Track.Missing(slot.track) then self:Enqueue(k) end
     self:LayoutCells(slot, #entries)
+    slot.listEntries = entries
     self:ExcludeCellTrinkets(k, slot, entries)
+    self:ApplyActiveList(slot, entries)
     self:SyncMembers()
     -- Spec.Resolve announces no change, and the healer externals box may read
     -- this record too. Its resolve then finds the spec unmoved.
     if m and m.spec ~= before then HX.OnMemberChanged(m) end
+end
+
+-- A trinket release waits for the overlay to process its emptied slots; a
+-- held-off overlay shows nothing, so nothing waits for it.
+local function OverlayWaits(track)
+    local host = track.overlayHost
+    return host ~= nil and not track.overlayHeld and not host:IsVisible()
+end
+
+-- The active list's include sets and caps follow the row's cells on every
+-- bind, and every category leaves the list's spells out. A refused call waits
+-- for the drain, as the trinket exclusion does; until then a buff can show
+-- twice or not at all. A group built later takes the same settings at its
+-- creation (GroupConfig).
+function PB:ApplyActiveList(slot, entries)
+    local container = slot.container
+    if not container then return end
+    local db = self.db
+    local listBuffs = KE.PartyBuffsRules.ListBuffs(db, entries)
+    -- Off, with the list's buffs dropped and every filter taken: nothing to
+    -- issue. slot.listBuffs is tested too: a reconfiguration clears the
+    -- signatures while the list may still be on.
+    if not (listBuffs or slot.listBuffs or slot.listSigs) then return end
+    slot.listBuffs = listBuffs
+    slot.listSigs = slot.listSigs or {}
+    slot.listExcludeSigs = slot.listExcludeSigs or {}
+    local settled = true
+    for i = 1, #LIST_DESCRIPTORS do
+        local d = LIST_DESCRIPTORS[i]
+        if slot.groups[d.key] then
+            local _, candidates, maxFrames = GroupConfig(db, slot, d)
+            local sig = SetSig(candidates.includeSpellIDs) .. ":" .. maxFrames
+            if slot.listSigs[d.key] ~= sig then
+                local ok = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates)
+                ok = pcall(container.SetAuraGroupMaxFrameCount, container, d.key, maxFrames) and ok
+                slot.listSigs[d.key] = ok and sig or nil
+                if not ok then settled = false end
+            end
+        end
+    end
+    local sig = SetSig(listBuffs)
+    for i = 1, #DESCRIPTORS do
+        local d = DESCRIPTORS[i]
+        if slot.groups[d.key] and slot.listExcludeSigs[d.key] ~= sig then
+            local _, candidates = GroupConfig(db, slot, d)
+            local ok = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates)
+            slot.listExcludeSigs[d.key] = ok and sig or nil
+            if not ok then settled = false end
+        end
+    end
+    if not settled then
+        self.buildPending = true
+    elseif not listBuffs then
+        slot.listSigs, slot.listExcludeSigs = nil, nil
+    end
 end
 
 -- A trinket with a cooldown icon leaves this row's while-active Trinkets
@@ -932,7 +1032,7 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
     -- Withholding a cell can hide the whole overlay and with it every cell,
     -- so a second pass settles the exclusion; after it no cell is ready.
     for _ = 1, 2 do
-        local set, ids = {}, {}
+        local set = {}
         for i, e in ipairs(entries) do
             if e.trinket and track.ready[i] then set[e.id] = true end
         end
@@ -944,11 +1044,9 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
             if not set[id] then slot.cellRelease[id] = true end
         end
         for id in pairs(slot.cellRelease) do set[id] = true end
-        for id in pairs(set) do ids[#ids + 1] = id end
-        table_sort(ids)
-        local sig = table_concat(ids, ",")
+        local sig = SetSig(set)
         if slot.cellSig ~= sig then
-            local cellBuffs = #ids > 0 and set or nil
+            local cellBuffs = sig ~= "" and set or nil
             slot.cellBuffs = cellBuffs
             local accepted = self:SetTrinketExclusion(slot, cellBuffs)
             slot.cellShow, slot.cellPending = CDRules.TrinketShow(slot.cellShow, set, accepted)
@@ -960,8 +1058,7 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
         end
         -- A release waits for a shown overlay host: the bind that shows it
         -- comes back here, so nothing polls meanwhile.
-        local host = track.overlayHost
-        if slot.cellPending or (next(slot.cellRelease) and not (host and not host:IsVisible())) then
+        if slot.cellPending or (next(slot.cellRelease) and not OverlayWaits(track)) then
             self:SettleCellTrinkets(k, slot)
         end
         local off, show = track.overlayOff, slot.cellShow
@@ -994,8 +1091,7 @@ function PB:SettleCellTrinkets(k, slot)
         if slot.cellPending then slot.cellShow, slot.cellPending = slot.cellPending, nil end
         -- A hidden overlay host has not processed its emptied slots either; the
         -- bind that shows it starts the settle again.
-        local host = slot.track and slot.track.overlayHost
-        if next(slot.cellRelease) and not (host and not host:IsVisible()) then
+        if next(slot.cellRelease) and not (slot.track and OverlayWaits(slot.track)) then
             for id in pairs(slot.cellRelease) do
                 slot.cellRelease[id] = nil
                 slot.cellShow[id] = nil
@@ -1020,7 +1116,8 @@ function PB:SetTrinketExclusion(slot, cellBuffs)
         if d.category.excludesCells then
             if slot.unknownGroups[d.key] then return false end
             if not slot.groups[d.key] then return true end
-            local _, candidates = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, cellBuffs)
+            local _, candidates = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, cellBuffs,
+                slot.listBuffs)
             return pcall(slot.container.SetAuraGroupCandidateFilters, slot.container, d.key, candidates)
         end
     end
@@ -1308,8 +1405,8 @@ function PB:Restyle()
     for k = 1, MAX_SLOTS do
         local slot = self.slots[k]
         if slot and slot.container then
-            for i = 1, #DESCRIPTORS do
-                local d = DESCRIPTORS[i]
+            for i = 1, #GROUPS do
+                local d = GROUPS[i]
                 if slot.groups[d.key] and not RestyleGroup(slot.container, d, self.styleSettings) then
                     clean = false
                 end
@@ -1322,21 +1419,23 @@ function PB:Restyle()
     self.restylePending = not clean
 end
 
--- Returns false when any setter was refused.
+-- Returns false when any setter was refused. It issues every group's whole
+-- config, so the list's signatures no longer say what a group holds; the next
+-- bind that has a list issues them again.
 function PB:ReconfigureSlot(slot)
     local container = slot.container
     local clean = true
-    for i = 1, #DESCRIPTORS do
-        local d = DESCRIPTORS[i]
+    for i = 1, #GROUPS do
+        local d = GROUPS[i]
         if slot.groups[d.key] then
-            local filter, candidates, maxFrames, index =
-                KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, slot.cellBuffs)
+            local filter, candidates, maxFrames, index = GroupConfig(self.db, slot, d)
             clean = pcall(container.SetAuraGroupFilterString, container, d.key, filter) and clean
             clean = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates) and clean
             clean = pcall(container.SetAuraGroupMaxFrameCount, container, d.key, maxFrames) and clean
             clean = pcall(container.SetAuraGroupLayout, container, d.key, self:GroupLayout(index)) and clean
         end
     end
+    slot.listSigs, slot.listExcludeSigs = nil, nil
     return self:ApplySlotLayout(slot) and clean
 end
 
