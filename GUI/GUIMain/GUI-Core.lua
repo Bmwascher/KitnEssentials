@@ -1640,6 +1640,13 @@ GUIFrame.AnchorPointOptions = {
     { key = "BOTTOMRIGHT", text = "Bottom Right" },
 }
 
+-- Where a text sits on a Cooldown Manager icon.
+GUIFrame.IconPositionOptions = {
+    { key = "ABOVE",  text = "Above" },
+    { key = "CENTER", text = "Center" },
+    { key = "BELOW",  text = "Below" },
+}
+
 -- "None" first, then the library's sounds in its sorted order. A library
 -- sound named "None" is skipped, so the entry is listed once.
 function GUIFrame.BuildSoundOptions()

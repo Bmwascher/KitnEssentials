@@ -14,11 +14,7 @@ local ATTACH_OPTIONS = {
     { key = "SCREEN", text = "Screen Position" },
 }
 
-local ICON_POSITIONS = {
-    { key = "ABOVE",  text = "Above" },
-    { key = "CENTER", text = "Center" },
-    { key = "BELOW",  text = "Below" },
-}
+local ICON_POSITIONS = GUIFrame.IconPositionOptions
 
 local function GetModule()
     if KitnEssentials then
