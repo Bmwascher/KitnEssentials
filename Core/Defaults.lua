@@ -1623,12 +1623,10 @@ local Defaults = {
             GlowFrequency     = 0.5,
             GlowThickness     = 2,
             GlowPulse         = true,
-            -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
-            -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
-            -- external "healer:<specID>:<castID>". CooldownOrder holds a cast
-            -- list per spec.
+            -- Keyed "<specID>:<castID>"; a racial "race:<castID>" and a
+            -- healer's external "healer:<specID>:<castID>". CooldownOrder
+            -- holds a cast list per spec.
             CooldownOff       = {},
-            CooldownSeconds   = {},
             CooldownOrder     = {},
             -- Potion bars (Potions tab). They read ListPotions, which the
             -- while-active potion icons read too. The position card writes

@@ -466,7 +466,7 @@ local loadTries, lengthTries = {}, {}
 -- Out of combat. Returns whether the length is settled. A tooltip with no
 -- cooldown line may not have finished loading, so it is read again at the
 -- next combat end, item load or read; past LOAD_TRIES such reads the item
--- stores false and gets no cell unless the player types its seconds.
+-- stores false and gets no cell.
 local function ReadLength(itemID)
     if Spec.lengths[itemID] ~= nil then return true end
     if InCombatLockdown() then return false end

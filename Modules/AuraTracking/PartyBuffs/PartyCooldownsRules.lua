@@ -39,21 +39,20 @@ function Rules.LengthKey(castID) return "len:" .. castID end
 
 function Rules.TrinketKey(spellID) return "trinket:" .. spellID end
 
--- A typed length, floored and clamped, or nil when it is not a number.
+-- A length, floored and clamped, or nil when it is not a number.
 function Rules.ClampSeconds(value)
     value = tonumber(value)
     if not value or value ~= value then return nil end
     return math_floor(math_max(Rules.CD_MIN, math_min(Rules.CD_MAX, value)))
 end
 
--- One cooldown entry: the typed length over the listed one, both clamped.
-local function Entry(castID, spell, key, listed, typed, isOff)
+-- One cooldown entry at its listed length, clamped.
+local function Entry(castID, spell, key, listed, isOff)
     return {
         id = castID, key = key, spell = spell, kind = spell.kind,
         buffs = spell.buffs, short = spell.short, active = spell.active,
         listed = listed,
-        cd = Rules.ClampSeconds(typed) or Rules.ClampSeconds(listed),
-        typed = Rules.ClampSeconds(typed) ~= nil,
+        cd = Rules.ClampSeconds(listed),
         off = isOff,
     }
 end
@@ -73,7 +72,7 @@ function Rules.SpellList(specID, db, all)
     local source = data.SPECS[specID]
     if not source then return out end
     db = Table(db)
-    local off, seconds = Table(db.CooldownOff), Table(db.CooldownSeconds)
+    local off = Table(db.CooldownOff)
     local order = Table(db.CooldownOrder)[specID]
     local rank
     if type(order) == "table" then
@@ -89,7 +88,7 @@ function Rules.SpellList(specID, db, all)
         local key = Rules.CooldownKey(specID, castID)
         local isOff = Rules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
-            local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
+            local entry = Entry(castID, spell, key, talented or spell.cd, isOff)
             entry.at = rank and (rank[castID] or #order + i) or i
             out[#out + 1] = entry
         end
@@ -180,19 +179,18 @@ end
 
 -- slots holds slot 13's and slot 14's { item, spell }; lengths, the read use
 -- cooldown per item. A trinket gets a cell when its use spell is a switched-on
--- row of the Trinkets list and a length is known, the typed one first.
+-- row of the Trinkets list and its length is known.
 function Rules.TrinketEntries(slots, lengths, db)
     local out = {}
     db = Table(db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
-    local seconds = Table(db.CooldownSeconds)
     for i = 1, 2 do
         local slot = slots[i]
         local spellID = slot and slot.spell
         if spellID and listed[spellID] then
             local key = Rules.TrinketKey(spellID)
             -- Every length is clamped to CD_MAX: the door bound assumes u <= 4.
-            local cd = Rules.ClampSeconds(seconds[key]) or Rules.ClampSeconds(lengths[slot.item])
+            local cd = Rules.ClampSeconds(lengths[slot.item])
             if cd then
                 out[#out + 1] = {
                     id = spellID, item = slot.item, key = key, kind = "trinket",
@@ -573,11 +571,10 @@ function Rules.TalentAllows(entry, taken)
 end
 
 -- The length a cell counts: the spell's own when its length talent is read as
--- not taken, or unread and not likely, and no seconds are typed; else the
--- entry's.
+-- not taken, or unread and not likely; else the entry's.
 function Rules.TalentLength(entry, taken)
     local needs = entry.spell and entry.spell.lengthNeeds
-    if not needs or entry.typed then return entry.cd end
+    if not needs then return entry.cd end
     if taken == nil then taken = needs.likely ~= false end
     if taken then return entry.cd end
     return Rules.ClampSeconds(entry.spell.cd)
@@ -641,8 +638,8 @@ function Rules.BuildEventCounts(inKey, isPlayer)
 end
 
 -- The game resets class cooldowns of KEY_RESET_MIN seconds or more when a key
--- starts, and no trinket. The length is the one the cell counts, talents and
--- typed seconds included.
+-- starts, and no trinket. The length is the one the cell counts, talents
+-- included.
 Rules.KEY_RESET_MIN = 90
 
 function Rules.ResetsAtKeyStart(entry)
@@ -674,7 +671,7 @@ function Rules.RacialEntry(castID, db, all)
     local key = Rules.RacialKey(castID)
     local isOff = Rules.IsOff(Table(db.CooldownOff), key, spell)
     if isOff and not all then return nil end
-    return Entry(castID, spell, key, spell.cd, Table(db.CooldownSeconds)[key], isOff)
+    return Entry(castID, spell, key, spell.cd, isOff)
 end
 
 function Rules.MemberRacial(race, db)

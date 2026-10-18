@@ -92,22 +92,6 @@ describe("PartyCooldownsRules.IsOff", function()
     end)
 end)
 
-describe("PartyCooldownsRules lengths", function()
-    it("prefers typed seconds, then the spec's talented length, then the base, clamping the typed one", function()
-        local R = loadRules()
-        assert.are.same({ 45, 60 }, { entryOf(R, 10, 1).cd, entryOf(R, 10, 2).cd })
-        local cases = {
-            { typed = 75, want = 75 }, { typed = R.CD_MIN - 2, want = R.CD_MIN },
-            { typed = R.CD_MAX + 1100, want = R.CD_MAX }, { typed = 61.7, want = 61 },
-            { typed = "abc", want = 45 },
-        }
-        for _, case in ipairs(cases) do
-            local db = { CooldownSeconds = { ["10:1"] = case.typed } }
-            assert.are.equal(case.want, entryOf(R, 10, 1, db).cd, tostring(case.typed))
-        end
-    end)
-end)
-
 describe("PartyCooldownsRules.ShowID", function()
     it("follows a read talent, falls back to the likely icon, and ignores a swap for another spec", function()
         local R = loadRules()
@@ -210,13 +194,12 @@ describe("PartyCooldownsRules.NextInspect", function()
 end)
 
 describe("PartyCooldownsRules trinkets", function()
-    it("gives a cell to a listed, switched-on trinket with a known length, typed length first, clamped", function()
+    it("gives a cell to a listed, switched-on trinket with a known length, clamped", function()
         local R = loadRules()
         local db = {
             ListTrinkets = { [111] = { enabled = true }, [222] = { enabled = false }, [333] = { enabled = true } },
-            CooldownSeconds = { ["trinket:333"] = 45 },
         }
-        local got = R.TrinketEntries({ { item = 1, spell = 111 }, { item = 2, spell = 333 } }, { [1] = 120 }, db)
+        local got = R.TrinketEntries({ { item = 1, spell = 111 }, { item = 2, spell = 333 } }, { [1] = 120, [2] = 45 }, db)
         assert.are.same({ { 111, 120, 1 }, { 333, 45, 2 } },
             { { got[1].id, got[1].cd, got[1].item }, { got[2].id, got[2].cd, got[2].item } })
         local long = R.TrinketEntries({ { item = 1, spell = 111 } }, { [1] = R.CD_MAX + 300 }, db)
@@ -696,8 +679,6 @@ describe("PartyCooldownsRules racials", function()
         local on = { ShowRacials = true }
         local e = R.MemberRacial("Dwarf", on)
         assert.are.same({ 4, "race:4", 120, { 40 } }, { e.id, e.key, e.cd, e.buffs })
-        local typed = { ShowRacials = true, CooldownSeconds = { ["race:4"] = 90 } }
-        assert.are.equal(90, R.MemberRacial("Dwarf", typed).cd, "typed seconds")
         local cases = {
             { name = "Racials off", race = "Dwarf", db = { ShowRacials = false } },
             { name = "race with no racial", race = "Human", db = on },
@@ -753,10 +734,9 @@ describe("PartyCooldownsRules talent gate", function()
 end)
 
 describe("PartyCooldownsRules talent lengths", function()
-    it("counts the spell's own length when the talent is read as not taken, or unread and not likely, and nothing is typed", function()
+    it("counts the spell's own length when the talent is read as not taken, or unread and not likely", function()
         local R = loadRules()
         local paired = entryOf(R, 13, 6)
-        local typed = entryOf(R, 13, 6, { CooldownSeconds = { ["13:6"] = 40 } })
         local plain = entryOf(R, 10, 1)
         local unlikely = { cd = 30, spell = { cd = 120, lengthNeeds = { talents = {}, likely = false } } }
         local cases = {
@@ -764,7 +744,6 @@ describe("PartyCooldownsRules talent lengths", function()
             { name = "taken", entry = paired, taken = true, want = 30 },
             { name = "unread", entry = paired, taken = nil, want = 30 },
             { name = "unread, not likely", entry = unlikely, taken = nil, want = 120 },
-            { name = "typed, not taken", entry = typed, taken = false, want = 40 },
             { name = "no length talent", entry = plain, taken = false, want = 45 },
         }
         for _, case in ipairs(cases) do

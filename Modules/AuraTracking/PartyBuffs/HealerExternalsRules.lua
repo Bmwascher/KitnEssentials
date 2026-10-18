@@ -33,7 +33,7 @@ end
 
 function Rules.Key(specID, castID) return "healer:" .. KE.PartyCooldownsRules.CooldownKey(specID, castID) end
 
--- The spec's externals in table order, typed seconds over listed ones. A
+-- The spec's externals in table order, at their listed lengths. A
 -- switched-off entry is dropped unless all is set, which the editor uses to
 -- list every one.
 function Rules.Entries(specID, db, all)
@@ -42,7 +42,7 @@ function Rules.Entries(specID, db, all)
     local row = Table(data.HEALER_SPECS)[specID]
     if not row then return out end
     db = Table(db)
-    local off, seconds = Table(db.CooldownOff), Table(db.CooldownSeconds)
+    local off = Table(db.CooldownOff)
     for _, castID in ipairs(row.casts) do
         local spell = data.SPELLS[castID]
         local key = Rules.Key(specID, castID)
@@ -51,7 +51,7 @@ function Rules.Entries(specID, db, all)
             out[#out + 1] = {
                 id = castID, key = key, spell = spell, kind = spell.kind, buffs = spell.buffs,
                 listed = spell.cd,
-                cd = Rules.ClampSeconds(seconds[key]) or Rules.ClampSeconds(spell.cd),
+                cd = Rules.ClampSeconds(spell.cd),
                 off = isOff,
             }
         end
