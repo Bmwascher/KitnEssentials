@@ -87,7 +87,7 @@ local InviteAtlas = {
 -- our own icon. The link lives in S.data rather than as a field on Blizzard's
 -- texture -- we do not write onto their objects.
 local function MirrorInviteAtlas(normalTexture, atlas)
-    local icon = S.data(normalTexture).aeIcon
+    local icon = S.data(normalTexture).keInviteIcon
     local file = InviteAtlas[atlas]
 
     if icon and file then icon:SetTexture(file) end
@@ -138,7 +138,7 @@ local function SkinFriendRow(button)
         S.data(button).inviteIcon = icon
 
         if invite.NormalTexture then
-            S.data(invite.NormalTexture).aeIcon = icon
+            S.data(invite.NormalTexture).keInviteIcon = icon
             hooksecurefunc(invite.NormalTexture, "SetAtlas", MirrorInviteAtlas)
         end
     end

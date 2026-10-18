@@ -14,9 +14,9 @@ local function SetupTimer(container, timer)
     if not bar then return end
 
     local d = S.data(bar)
-    if not d.aeAtlasHolder then
+    if not d.keAtlasHolder then
         local holder = CreateFrame("Frame", nil, bar)
-        d.aeAtlasHolder = holder
+        d.keAtlasHolder = holder
         holder:SetClipsChildren(true)
         holder:SetPoint("TOPLEFT", 1, -1)
         holder:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -48,10 +48,10 @@ end
 local function Skin()
     local container = _G.MirrorTimerContainer
     if not container then return S.Skip("MirrorTimerContainer missing") end
-    if S.data(container).aeHooked then return end
+    if S.data(container).keHooked then return end
     if type(container.SetupTimer) == "function" then
         hooksecurefunc(container, "SetupTimer", SetupTimer)
-        S.data(container).aeHooked = true
+        S.data(container).keHooked = true
     end
 end
 

@@ -26,12 +26,12 @@ local function StyleQuestLog()
     if qsf.headerFramePool and qsf.headerFramePool.EnumerateActive then
         for button in qsf.headerFramePool:EnumerateActive() do
             local d = S.data(button)
-            if button.ButtonText and not d.aeRow then
+            if button.ButtonText and not d.keRow then
                 S.StripTextures(button)
                 S.Backdrop(button)
                 S.SetFont(button.ButtonText, 15, "OUTLINE")
                 RestyleRowHighlight(button)
-                d.aeRow = true
+                d.keRow = true
             end
             if button.CollapseButton then S.Collapse(button.CollapseButton) end
         end
@@ -40,11 +40,11 @@ local function StyleQuestLog()
     if qsf.campaignHeaderFramePool and qsf.campaignHeaderFramePool.EnumerateActive then
         for header in qsf.campaignHeaderFramePool:EnumerateActive() do
             local d = S.data(header)
-            if not d.aeRow then
+            if not d.keRow then
 
                 if header.Text then S.SetFont(header.Text, 16, "OUTLINE") end
                 if header.Progress then S.SetFont(header.Progress, 13, "OUTLINE") end
-                d.aeRow = true
+                d.keRow = true
             end
             if header.CollapseButton then S.Collapse(header.CollapseButton) end
         end
@@ -52,13 +52,13 @@ local function StyleQuestLog()
     if qsf.campaignHeaderMinimalFramePool and qsf.campaignHeaderMinimalFramePool.EnumerateActive then
         for header in qsf.campaignHeaderMinimalFramePool:EnumerateActive() do
             local d = S.data(header)
-            if header.CollapseButton and not d.aeRow then
+            if header.CollapseButton and not d.keRow then
                 S.StripTextures(header)
                 if header.Background then S.Backdrop(header.Background) end
                 if header.Highlight then
                     header.Highlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                 end
-                d.aeRow = true
+                d.keRow = true
             end
             if header.CollapseButton then S.Collapse(header.CollapseButton) end
         end
@@ -66,21 +66,21 @@ local function StyleQuestLog()
     if qsf.objectiveFramePool and qsf.objectiveFramePool.EnumerateActive then
         for obj in qsf.objectiveFramePool:EnumerateActive() do
             local d = S.data(obj)
-            if not d.aeFont then
+            if not d.keFont then
                 BumpFS(obj.Text)
-                d.aeFont = true
+                d.keFont = true
             end
         end
     end
     if qsf.titleFramePool and qsf.titleFramePool.EnumerateActive then
         for button in qsf.titleFramePool:EnumerateActive() do
             local d = S.data(button)
-            if not d.aeFont then
+            if not d.keFont then
                 BumpFS(button.Text)
                 BumpFS(button.ButtonText)
-                d.aeFont = true
+                d.keFont = true
             end
-            if button.Checkbox and not d.aeRow then
+            if button.Checkbox and not d.keRow then
                 S.StripTextures(button.Checkbox)
                 local bd = S.Backdrop(button.Checkbox)
 
@@ -96,7 +96,7 @@ local function StyleQuestLog()
                     button:HookScript("OnLeave", sync)
                     sync()
                 end
-                d.aeRow = true
+                d.keRow = true
             end
         end
     end
@@ -105,7 +105,7 @@ end
 local function SkinStoryHeader(header)
     if not header then return end
     local d = S.data(header)
-    if d.aeHeader then return end
+    if d.keHeader then return end
     if header.Background then header.Background:SetAlpha(0.7) end
     if header.TopFiligree then header.TopFiligree:Hide() end
     if header.Divider then header.Divider:Hide() end
@@ -115,7 +115,7 @@ local function SkinStoryHeader(header)
         if header.Background then header.HighlightTexture:SetAllPoints(header.Background) end
     end
     if header.CollapseButton then S.Collapse(header.CollapseButton) end
-    d.aeHeader = true
+    d.keHeader = true
 end
 
 local function HandleSideTabs(qmf)
@@ -126,14 +126,14 @@ local function HandleSideTabs(qmf)
 end
 
 local function SkinFloorDropdown(f)
-    if f and not S.data(f).aeOverlay then
+    if f and not S.data(f).keOverlay then
         S.DropDown(f, true)
-        S.data(f).aeOverlay = true
+        S.data(f).keOverlay = true
     end
 end
 
 local function SkinTrackingOptions(f)
-    if f and f.Icon and not S.data(f).aeOverlay then
+    if f and f.Icon and not S.data(f).keOverlay then
         S.StripTextures(f)
         f.Icon:SetTexture(136460)
         if f.SetHighlightTexture then
@@ -141,12 +141,12 @@ local function SkinTrackingOptions(f)
             local hl = f:GetHighlightTexture()
             if hl then hl:SetAllPoints(f.Icon) end
         end
-        S.data(f).aeOverlay = true
+        S.data(f).keOverlay = true
     end
 end
 
 local function SkinPinToggle(f)
-    if f and f.Icon and f.ActiveTexture and not S.data(f).aeOverlay then
+    if f and f.Icon and f.ActiveTexture and not S.data(f).keOverlay then
         S.StripTextures(f)
         f.Icon:SetAtlas("Waypoint-MapPin-Untracked")
         f.ActiveTexture:SetAtlas("Waypoint-MapPin-Tracked")
@@ -159,7 +159,7 @@ local function SkinPinToggle(f)
                 hl:SetTexCoord(0.3203125, 0.5546875, 0.015625, 0.484375)
             end
         end
-        S.data(f).aeOverlay = true
+        S.data(f).keOverlay = true
     end
 end
 
@@ -207,14 +207,14 @@ local function Skin()
     -- so hook that (script hook: our execution, after Blizzard's
     -- handler, touches only our own backdrop frames) and re-fit every
     -- border under it. Debounced to the next frame.
-    if not S.data(frame).aeEdgeHook then
-        S.data(frame).aeEdgeHook = true
+    if not S.data(frame).keEdgeHook then
+        S.data(frame).keEdgeHook = true
         frame:HookScript("OnSizeChanged", function()
             local d = S.data(frame)
-            if d.aeEdgePending then return end
-            d.aeEdgePending = true
+            if d.keEdgePending then return end
+            d.keEdgePending = true
             C_Timer.After(0, function()
-                d.aeEdgePending = nil
+                d.keEdgePending = nil
                 S.RefreshEdgesUnder(frame)
             end)
         end)
@@ -236,12 +236,12 @@ local function Skin()
         if overflow then
             S.NavCrumb(overflow)
 
-            if not S.data(overflow).aeArrow then
+            if not S.data(overflow).keArrow then
                 local t = overflow:CreateTexture(nil, "OVERLAY")
                 t:SetPoint("CENTER")
                 S.ArrowTexture(t, "left", 14)
                 t:SetAlpha(1)
-                S.data(overflow).aeArrow = t
+                S.data(overflow).keArrow = t
             end
         end
         if nav.navList then
@@ -253,12 +253,12 @@ local function Skin()
                     S.NavCrumb(navBar.navList[#navBar.navList])
 
                     local ofb = navBar.overflowButton or navBar.overflow or _G.WorldMapFrameOverflowButton
-                    if ofb and not S.data(ofb).aeArrow then
+                    if ofb and not S.data(ofb).keArrow then
                         local t = ofb:CreateTexture(nil, "OVERLAY")
                         t:SetPoint("CENTER")
                         S.ArrowTexture(t, "left", 14)
                         t:SetAlpha(1)
-                        S.data(ofb).aeArrow = t
+                        S.data(ofb).keArrow = t
                     end
                 end
             end)
@@ -332,7 +332,7 @@ local function Skin()
                     [d.TrackButton] = true,
                 }
                 for b in next, sibs do
-                    if not S.data(b).aeSeamed then
+                    if not S.data(b).keSeamed then
                         for i = 1, b:GetNumPoints() do
                             local point, rel, relPoint, x, y = b:GetPoint(i)
                             if rel and sibs[rel] then
@@ -347,7 +347,7 @@ local function Skin()
                                 end
                             end
                         end
-                        S.data(b).aeSeamed = true
+                        S.data(b).keSeamed = true
                     end
                 end
             end

@@ -47,7 +47,7 @@ end
 -- Each tab hangs off the one BEFORE it. 12.1 added a third, and anchoring
 -- them all to tab 1 stacks them in one place.
 local function AnchorDashboardTab2(tab, _, _, _, x, y)
-    local prev = S.data(tab).aePrevTab
+    local prev = S.data(tab).kePrevTab
     if prev and (x ~= 0 or y ~= -1) then
         tab:ClearAllPoints()
         tab:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -1)
@@ -91,8 +91,8 @@ end
 local function HookCatalogTiles(optionsContainer)
     if not optionsContainer then return end
     local sb = optionsContainer.ScrollBox
-    if sb and sb.Update and sb.ForEachFrame and not S.data(sb).aeTileHook then
-        S.data(sb).aeTileHook = true
+    if sb and sb.Update and sb.ForEachFrame and not S.data(sb).keTileHook then
+        S.data(sb).keTileHook = true
         hooksecurefunc(sb, "Update", Catalog_Update)
         Catalog_Update(sb)
     end
@@ -166,8 +166,8 @@ local function SkinHouseFinder()
 
         for _, sf in next, { list.ScrollFrame, list.BNetScrollFrame } do
             local layoutList = sf and sf.NeighborhoodList
-            if layoutList and layoutList.Layout and not S.data(layoutList).aeRowHook then
-                S.data(layoutList).aeRowHook = true
+            if layoutList and layoutList.Layout and not S.data(layoutList).keRowHook then
+                S.data(layoutList).keRowHook = true
                 hooksecurefunc(layoutList, "Layout", TreatNeighborhoodList)
                 TreatNeighborhoodList(layoutList)
             end
@@ -204,7 +204,7 @@ local function SkinDashboard()
                 tab:SetPoint("TOPLEFT", dash, "TOPRIGHT", 1, 0)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab)
             else
-                S.data(tab).aePrevTab = sideTabs[i - 1]
+                S.data(tab).kePrevTab = sideTabs[i - 1]
                 tab:ClearAllPoints()
                 tab:SetPoint("TOPLEFT", sideTabs[i - 1], "BOTTOMLEFT", 0, -1)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab2)

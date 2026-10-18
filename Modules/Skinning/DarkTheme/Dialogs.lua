@@ -60,8 +60,8 @@ local function SkinDialogBorder(nineSlice)
     end
 
     local d = S.data(owner)
-    if not d.aeDialog then
-        d.aeDialog = true
+    if not d.keDialog then
+        d.keDialog = true
         S.Backdrop(owner)
         SweepButtons()
 

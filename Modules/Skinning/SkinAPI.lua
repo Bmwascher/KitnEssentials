@@ -752,7 +752,7 @@ function S.FixSubPixelEdge(frame, outsetPx)
     local d = S.data(bd)
 
     local function snap()
-        d.aeSnapPending = nil
+        d.keSnapPending = nil
         if not (frame.GetRect and frame.GetEffectiveScale) then return end
         local eff = frame:GetEffectiveScale()
         local _, ph = GetPhysicalScreenSize()
@@ -792,13 +792,13 @@ function S.FixSubPixelEdge(frame, outsetPx)
         -- painted unsnapped and then shifted. Immediate + queued keeps
         -- both cases correct with no visible adjustment.
         snap()
-        if d.aeSnapPending then return end
-        d.aeSnapPending = true
+        if d.keSnapPending then return end
+        d.keSnapPending = true
         if _G.C_Timer then _G.C_Timer.After(0, snap) else snap() end
     end
 
-    if not d.aeSnapHooked and frame.HookScript then
-        d.aeSnapHooked = true
+    if not d.keSnapHooked and frame.HookScript then
+        d.keSnapHooked = true
         frame:HookScript("OnShow", queueSnap)
     end
     queueSnap()
@@ -1199,10 +1199,10 @@ function S.Button(button, keepRegion)
     S.RestoreArt(keepRegion, keepAtlas, keepTex)
 
     if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
-    local aeBD = S.Backdrop(button)
-    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+    local keBD = S.Backdrop(button)
+    if keBD then keBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
 
-    S.Hover(button, aeBD)
+    S.Hover(button, keBD)
     S.data(button).skinned = true
 end
 
@@ -1293,7 +1293,7 @@ function S.ArrowTexture(tex, dir, size)
 end
 
 function S.RotateButton(button, direction)
-    if not button or S.data(button).aeRotate then return end
+    if not button or S.data(button).keRotate then return end
     button:SetSize(24, 24)
     S.StripTextures(button)
     S.Backdrop(button)
@@ -1320,7 +1320,7 @@ function S.RotateButton(button, direction)
         hl:SetAllPoints(norm)
         hl:SetColorTexture(1, 1, 1, 0.3)
     end
-    S.data(button).aeRotate = true
+    S.data(button).keRotate = true
 end
 
 function S.ArrowButton(button, dir, size)
@@ -1500,7 +1500,7 @@ end
 function S.CheckRefresh(check)
     if not check or not S.data(check).skinned then return end
     S.ClearButtonArt(check)
-    local aeBD = S.GetBackdrop(check)
+    local keBD = S.GetBackdrop(check)
     -- NOOP surgery removed here too (see S.CheckBox). CheckRefresh IS
     -- the re-assert path; it re-runs from the SetCheckedTexture hook,
     -- which is what keeps check art alive through Blizzard's repaints.
@@ -1512,8 +1512,8 @@ function S.CheckRefresh(check)
         S.PaintBrand(region, "SetVertexColor", S.palette.brandRestA)
         region:ClearAllPoints()
 
-        region:SetPoint("TOPLEFT", aeBD or check, "TOPLEFT", 1, -1)
-        region:SetPoint("BOTTOMRIGHT", aeBD or check, "BOTTOMRIGHT", -1, 1)
+        region:SetPoint("TOPLEFT", keBD or check, "TOPLEFT", 1, -1)
+        region:SetPoint("BOTTOMRIGHT", keBD or check, "BOTTOMRIGHT", -1, 1)
     end
     if check.SetCheckedTexture and check.GetCheckedTexture and not check:GetCheckedTexture() then
         check:SetCheckedTexture("Interface\\Buttons\\WHITE8x8")
@@ -1543,8 +1543,8 @@ function S.CheckBox(check)
     if not check or S.data(check).skinned then return end
     S.ClearButtonArt(check)
 
-    local aeBD = S.Backdrop(check, 4)
-    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+    local keBD = S.Backdrop(check, 4)
+    if keBD then keBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
 
     -- Replace the check ASSET via the official setters and re-assert
     -- through hooksecurefunc(frame, "SetCheckedTexture", ...) -- never
@@ -1560,8 +1560,8 @@ function S.CheckBox(check)
         S.PaintBrand(region, "SetVertexColor", S.palette.brandRestA)
         region:ClearAllPoints()
 
-        region:SetPoint("TOPLEFT", aeBD or check, "TOPLEFT", 1, -1)
-        region:SetPoint("BOTTOMRIGHT", aeBD or check, "BOTTOMRIGHT", -1, 1)
+        region:SetPoint("TOPLEFT", keBD or check, "TOPLEFT", 1, -1)
+        region:SetPoint("BOTTOMRIGHT", keBD or check, "BOTTOMRIGHT", -1, 1)
     end
 
     if check.SetCheckedTexture and check.GetCheckedTexture and not check:GetCheckedTexture() then
@@ -1681,8 +1681,8 @@ function S.EditBox(editbox, keepFont)
     if editbox.NineSlice and editbox.NineSlice.SetAlpha then
         editbox.NineSlice:SetAlpha(0)
     end
-    local aeBD = S.Backdrop(editbox)
-    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+    local keBD = S.Backdrop(editbox)
+    if keBD then keBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
 
     if not keepFont then
 
@@ -1875,9 +1875,9 @@ function S.Tab(tab)
     if tab.SetPushedTextOffset then tab:SetPushedTextOffset(0, 0) end
     S.StripTextures(tab)
 
-    local aeBD = S.Template(tab, "Default", 2)
+    local keBD = S.Template(tab, "Default", 2)
 
-    S.Hover(tab, aeBD)
+    S.Hover(tab, keBD)
 
     -- A managed tab keeps Blizzard's font SIZE. TabSystemButtonMixin:
     -- UpdateTabWidth() sizes each tab from its text, so forcing 12pt made
@@ -2101,8 +2101,8 @@ function S.DropDown(dropdown, withCaret)
             if r.IsObjectType and r:IsObjectType("Texture") then S.KillTexture(r) end
         end
     end
-    local aeBD = S.Backdrop(dropdown)
-    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+    local keBD = S.Backdrop(dropdown)
+    if keBD then keBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
 
     local arrow = dropdown.Arrow
     if arrow and arrow.SetAlpha then arrow:SetAlpha(0) end
@@ -2163,16 +2163,6 @@ function S.OverlayButton(button, width, height, text, level, strata)
     buttonOverlays[button] = o
 end
 
--- dedupe flag moved OFF the Blizzard texture and into S.data.
--- `icon.aeIcon = true` was an AES-named field write on a Blizzard object
--- -- banned by our own doctrine three functions down (S.ItemButton:
--- "NO AES-named fields on Blizzard frames, ever -- S.data only").
--- S.Icon is the highest-traffic primitive we have and it was the one
--- place still doing it; it runs on the LootHistory row icons, which is
--- inside the Midnight secret-value path that is currently throwing on
--- roll tooltips. Whether that is the cause of the loot errors is NOT
--- established -- this is a doctrine fix that is free and correct either
--- way. Do not record it as the loot fix without a raid retest.
 -- Blizzard's slot art sits flush with the button; ours bleeds a pixel past it
 -- so the border reads as an outline rather than an inset.
 function S.BleedOutside(tex, frame)
@@ -2260,7 +2250,7 @@ function S.SlotIcon(icon, border, withBackdrop)
 end
 
 function S.Icon(icon, withBackdrop)
-    if not icon or S.data(icon).aeIcon then return end
+    if not icon or S.data(icon).keIconSkinned then return end
     if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 
     S.PixelSnap(icon)
@@ -2272,7 +2262,7 @@ function S.Icon(icon, withBackdrop)
             bd:SetFrameLevel(parent:GetFrameLevel() + 1)
         end
     end
-    S.data(icon).aeIcon = true
+    S.data(icon).keIconSkinned = true
 end
 
 function S.ItemButton(button, opts)
@@ -2336,8 +2326,8 @@ function S.HookScrollBox(scrollBox, styleRow)
         box:ForEachFrame(styleRow)
     end
     apply(scrollBox)
-    if scrollBox.Update and not S.data(scrollBox).aeRowHook then
-        S.data(scrollBox).aeRowHook = true
+    if scrollBox.Update and not S.data(scrollBox).keRowHook then
+        S.data(scrollBox).keRowHook = true
         hooksecurefunc(scrollBox, "Update", apply)
     end
 end
@@ -2354,9 +2344,9 @@ function S.HookScrollBoxIcons(scrollBox, getIcon, withBackdrop)
     apply()
     -- same doctrine fix -- this planted an AES key directly on
     -- a Blizzard ScrollBox, the exact object class cleaned up earlier.
-    if scrollBox.Update and not S.data(scrollBox).aeIconHook then
+    if scrollBox.Update and not S.data(scrollBox).keIconHook then
         hooksecurefunc(scrollBox, "Update", apply)
-        S.data(scrollBox).aeIconHook = true
+        S.data(scrollBox).keIconHook = true
     end
 end
 
@@ -2382,7 +2372,7 @@ function S.KillSideTabArt(tab)
 end
 
 function S.SideTab(tab, anchorParent, prevTab, iconSize)
-    if not tab or S.data(tab).aeSideTab then return end
+    if not tab or S.data(tab).keSideTab then return end
     iconSize = iconSize or 20
     S.Backdrop(tab)
     tab:SetSize(30, 40)
@@ -2449,7 +2439,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     end
     S.KillSideTabArt(tab)
     S.HoverWash(tab)
-    S.data(tab).aeSideTab = true
+    S.data(tab).keSideTab = true
 end
 
 function S.NavCrumb(btn)

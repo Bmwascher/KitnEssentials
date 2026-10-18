@@ -103,8 +103,8 @@ local function ReskinModules(frame)
         -- resize-handle element (MainFrame footer) for an identical
         -- look: custom 23px grip texture, muted gray @ 0.6.
         local sizer = frame.Sizer
-        if not S.data(sizer).aeGrip then
-            S.data(sizer).aeGrip = true
+        if not S.data(sizer).keGrip then
+            S.data(sizer).keGrip = true
             sizer:SetSize(16, 16)
             local tex = sizer:CreateTexture(nil, "OVERLAY")
             tex:SetAllPoints()
