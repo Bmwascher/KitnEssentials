@@ -5,7 +5,7 @@
 ## X-Manual-Version: 4.12.1
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
 ## SavedVariablesPerCharacter: KitnEssentialsCharDB
-## Interface: 120105
+## Interface: 120105, 16001
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
 ## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
 ## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r
@@ -14,10 +14,12 @@
 
 Core\Client.lua
 Core\BaselineLoad.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
-Libs\Init.xml
+Libs\Init.xml [AllowLoadGameType standard]
+Libs\Init-Camelot.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 
 Modules\Core\Diagnostics\TaintReport.lua
 Core\Core.xml
-Modules\Modules.xml
+Modules\Modules.xml [AllowLoadGameType standard]
+Modules\Modules-Camelot.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 
 GUI\GUI.xml
