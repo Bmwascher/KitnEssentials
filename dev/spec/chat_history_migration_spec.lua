@@ -92,10 +92,11 @@ describe("stale chat cleanup", function()
         local NOW = 1000 * DAY
         _G.GetServerTime = function() return NOW end
         local printed = {}
-        local KE = helpers.loadModule("Core/Defaults.lua", {
+        local KE = helpers.loadModule("Core/Identity.lua", {
             IsSecretValue = function() return false end,
             Print = function(_, msg) printed[#printed + 1] = msg end,
         })
+        helpers.loadModule("Core/Defaults.lua", KE)
         local account = {
             [ME] = { ChatHistory = { { "mine", time = NOW - 200 * DAY } } },
             ["Old - Realm"] = {
@@ -121,5 +122,50 @@ describe("stale chat cleanup", function()
         assert.equals(1, #account["Undated - Realm"].ChatTypingHistory)
         assert.equals(1, #account[ME].ChatHistory)
         assert.same({ "Removed saved chat older than 90 days for 1 characters." }, printed)
+    end)
+end)
+
+describe("chat cleanup and unresolved records", function()
+    after_each(function()
+        _G.GetServerTime = nil
+        _G.UnitNameUnmodified = nil
+        _G.RegionalUniqueNamesEnabled = nil
+    end)
+
+    -- Every record is over 90 days old, so the old any-other-key rule would
+    -- delete every record but the current one on both clients.
+    it("both cleanups keep records whose owner cannot be told, and retail keeps its rule", function()
+        local DAY = 24 * 60 * 60
+        local NOW = 1000 * DAY
+        local function old() return { ChatHistory = { { "a", time = NOW - 120 * DAY } } } end
+        for _, row in ipairs({
+            { name = "regional", regional = true, me = "Me Surname",
+              kept = { "Me Surname", "Me - Classic Beta PvP 2", "Me Other" }, cleared = { "Alt Other" } },
+            { name = "retail", regional = false, me = ME,
+              kept = { ME }, cleared = { "Alt - Realm", "Old - Realm" } },
+        }) do
+            for _, clear in ipairs({ "ClearStaleChatHistory", "ClearOtherCharsChatHistory" }) do
+                _G.GetServerTime = function() return NOW end
+                _G.UnitNameUnmodified = function() return "Me" end
+                _G.RegionalUniqueNamesEnabled = function() return row.regional end
+                local KE = helpers.loadModule("Core/Identity.lua", {
+                    IsSecretValue = function() return false end,
+                    Print = function() end,
+                })
+                helpers.loadModule("Core/Defaults.lua", KE)
+                local account = {}
+                for _, key in ipairs(row.kept) do account[key] = old() end
+                for _, key in ipairs(row.cleared) do account[key] = old() end
+                KE.db = { sv = { char = account }, keys = { char = row.me } }
+                KE[clear](KE)
+                local label = row.name .. " " .. clear .. " "
+                for _, key in ipairs(row.kept) do
+                    assert.is_table(account[key] and account[key].ChatHistory, label .. "kept " .. key)
+                end
+                for _, key in ipairs(row.cleared) do
+                    assert.is_nil(account[key] and account[key].ChatHistory, label .. "cleared " .. key)
+                end
+            end
+        end
     end)
 end)

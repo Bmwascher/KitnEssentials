@@ -460,14 +460,30 @@ function KE:GetCharStore(create) end
 --- the per-character store. Runs right after AceDB:New.
 function KE:MigrateChatHistoryToCharStore() end
 
---- Deletes every other character's chat history from the account file.
+--- Deletes the chat history of every account record proven to be another
+--- character's (KE:ClassifyLegacyCharacterRecord); does nothing without an
+--- identity.
 ---@return number characters
 ---@return number lines
 function KE:ClearOtherCharsChatHistory() end
 
 --- Deletes another character's chat history from the account file when its
 --- newest dated line is over 90 days old; prints once when it clears any.
+--- Unresolved records are kept.
 function KE:ClearStaleChatHistory() end
+
+--- AceDB's key for this character plus the name parts the record classifier
+--- needs; nil when the database or a regional name cannot be read.
+---@return { charKey: string, name: string?, regional: boolean }|nil
+function KE:GetPlayerIdentityParts() end
+
+--- "owned" for the current key, "other" for a record proven to be another
+--- character's, "unresolved" when nothing tells them apart.
+---@param key any
+---@param entry any
+---@param identity table?
+---@return "owned"|"other"|"unresolved"
+function KE:ClassifyLegacyCharacterRecord(key, entry, identity) end
 
 -- Core/ProfileManager.lua export string codec
 ---@param tbl table

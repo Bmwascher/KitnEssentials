@@ -3187,12 +3187,13 @@ end
 ---@return number characters
 ---@return number lines
 function KE:ClearOtherCharsChatHistory()
-    local sv, charKey = AccountChars(self.db)
-    if not sv then return 0, 0 end
+    local sv = AccountChars(self.db)
+    local identity = self:GetPlayerIdentityParts()
+    if not (sv and identity) then return 0, 0 end
 
     local characters, lines = 0, 0
     for key, entry in pairs(sv.char) do
-        if key ~= charKey and type(entry) == "table" then
+        if self:ClassifyLegacyCharacterRecord(key, entry, identity) == "other" then
             local removed = false
             for i = 1, #CHAR_STORE_KEYS do
                 local storeKey = CHAR_STORE_KEYS[i]
@@ -3240,8 +3241,9 @@ end
 -- Other characters only; per-character files are out of reach here. AceDB's
 -- logout pass drops the entries this leaves empty.
 function KE:ClearStaleChatHistory()
-    local sv, charKey = AccountChars(self.db)
-    if not sv then return end
+    local sv = AccountChars(self.db)
+    local identity = self:GetPlayerIdentityParts()
+    if not (sv and identity) then return end
 
     local now
     if GetServerTime then now = GetServerTime() end
@@ -3253,7 +3255,7 @@ function KE:ClearStaleChatHistory()
 
     local cleared = 0
     for key, entry in pairs(sv.char) do
-        if key ~= charKey and type(entry) == "table"
+        if self:ClassifyLegacyCharacterRecord(key, entry, identity) == "other"
             and IsStale(entry.ChatHistory, now, STALE_CHAT_SECONDS) then
             entry.ChatHistory, entry.ChatTypingHistory = nil, nil
             cleared = cleared + 1

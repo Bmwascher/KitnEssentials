@@ -3,6 +3,7 @@
 
     <Script file="Secret.lua" />
     <Script file="Availability.lua" />
+    <Script file="Identity.lua" />
     <Script file="CombatState.lua" />
     <Script file="Context.lua" />
     <Script file="Interrupts.lua" />
