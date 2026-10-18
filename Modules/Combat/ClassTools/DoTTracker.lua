@@ -561,7 +561,8 @@ end
 -- Whether a pooled icon holds the cell's slot and cooldown. A secret id never
 -- matches.
 local function HoldsSlot(icon, cell)
-    if icon.layoutIndex ~= cell.attachSlot or not icon.GetCooldownID then return false end
+    local slot = icon.layoutIndex
+    if issecretvalue(slot) or slot ~= cell.attachSlot or not icon.GetCooldownID then return false end
     local id = icon:GetCooldownID()
     return id ~= nil and not issecretvalue(id) and id == cell.attachID
 end
@@ -963,10 +964,14 @@ function DT:PlaceAttached(force)
         local was = cell.attachIcon
         local icon, viewerKey
         if on then icon, viewerKey = FindIcon(cell) end
+        local id = icon and icon:GetCooldownID()
+        local slot = icon and icon.layoutIndex
+        -- HoldsSlot compares these inside Blizzard's refresh, so only a plain
+        -- id and slot are recorded; otherwise the cell stays in the row.
+        if id == nil or issecretvalue(id) or issecretvalue(slot) then icon = nil end
         if icon then
-            -- Find matched a plain id, so the id read here is plain.
             cell.attachIcon, cell.attachViewer = icon, viewerKey
-            cell.attachID, cell.attachSlot = icon:GetCooldownID(), icon.layoutIndex
+            cell.attachID, cell.attachSlot = id, slot
             if icon ~= was or force then
                 if not pcall(AttachCell, cell, icon) then PullBack(cell) end
             else
@@ -1090,6 +1095,11 @@ function DT:UpdateShowHere()
     local okIn, inInstance, instanceType = pcall(IsInInstance)
     local okInfo, _, _, difficultyID = pcall(GetInstanceInfo)
     if not okIn or not okInfo then return false end
+    -- Not declared secret; checked so a secret would keep the last answer
+    -- rather than raise on the comparisons in Rules.ShowHere.
+    if issecretvalue(inInstance) or issecretvalue(instanceType) or issecretvalue(difficultyID) then
+        return false
+    end
     local shown = Rules.ShowHere(self.db, inInstance, instanceType, difficultyID)
     if shown == self.shownHere then return false end
     self.shownHere = shown
