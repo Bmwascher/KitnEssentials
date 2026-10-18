@@ -402,7 +402,7 @@ local function SkinWidget(widget)
     elseif t == "Icon" then
         if frame then S.StripTextures(frame) end
 
-    elseif t == "SharedDropdown" or t == "BigWigsSharedDropdown" then
+    elseif t == "BigWigsSharedDropdown" then
 
         local dd = widget.dropdown
         if dd and dd.GetName and not S.data(dd).keSharedSkinned then
@@ -726,11 +726,11 @@ S.SkinPulloutFrame = SkinPulloutFrame
 
 -- A list owner can add a search box after the list is skinned, and can raise
 -- every descendant a level on each open; the plate goes back under the box on
--- every show.
+-- every show. Lists are pooled, so a list shown earlier without a box can gain
+-- one later: look again on each show until one is found.
 local function SkinPulloutSearch(pf)
     local d = S.data(pf)
-    if not d.keSearchScanned then
-        d.keSearchScanned = true
+    if not d.keSearchBox then
         for _, c in ipairs({ pf:GetChildren() }) do
             if c.IsObjectType and c:IsObjectType("EditBox") then
                 S.EditBox(c)
