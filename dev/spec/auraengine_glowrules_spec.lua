@@ -237,6 +237,25 @@ describe("pixel glow rules", function()
     end)
 end)
 
+describe("pixel restart predicate", function()
+    it("restarts with no record or one changed input, and not on an equal state", function()
+        local G = L.loadAuraGlowRules()
+        local base = G.PixelState(8, 2, 40, 30, 4)
+        local cases = {
+            { name = "nothing applied", applied = nil,  wanted = base,                          want = true },
+            { name = "equal state",     applied = base, wanted = G.PixelState(8, 2, 40, 30, 4), want = false },
+            { name = "count",           applied = base, wanted = G.PixelState(9, 2, 40, 30, 4), want = true },
+            { name = "thickness",       applied = base, wanted = G.PixelState(8, 3, 40, 30, 4), want = true },
+            { name = "width",           applied = base, wanted = G.PixelState(8, 2, 41, 30, 4), want = true },
+            { name = "height",          applied = base, wanted = G.PixelState(8, 2, 40, 31, 4), want = true },
+            { name = "period",          applied = base, wanted = G.PixelState(8, 2, 40, 30, 5), want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, G.PixelNeedsRestart(case.applied, case.wanted), case.name)
+        end
+    end)
+end)
+
 describe("aura-shown list sync", function()
     -- A set from a list: the shape of both the record and the wanted set.
     local function set(list)

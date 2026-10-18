@@ -49,9 +49,18 @@ local function ConfigurePixel(host, settings, period, width, height)
 
     local w = width or settings.IconSize or 32
     local h = height or settings.IconSize or 32
-    local thickness = GlowRules.NormalizePixelThickness(settings.GlowThickness)
-    local p = GlowRules.PixelPerimeter(settings.GlowLines, w, h, period)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 0, 1, 0, 1 })
+    for i = 1, 4 do
+        dashes[i].strip:SetVertexColor(r, g, b, a)
+    end
+
+    -- Stopping and replaying on a pass that changed none of the dashes'
+    -- inputs restarts the march from its first frame for nothing.
+    local wanted = GlowRules.PixelState(settings.GlowLines, settings.GlowThickness, w, h, period)
+    if not GlowRules.PixelNeedsRestart(host.appliedPixel, wanted) then return end
+
+    local thickness = wanted.thickness
+    local p = GlowRules.PixelPerimeter(wanted.count, w, h, period)
 
     local edges = {
         { texture = DASH_H, vertical = false, dx =  p.cycle, dy = 0 },
@@ -67,7 +76,6 @@ local function ConfigurePixel(host, settings, period, width, height)
 
         d.group:Stop()
         d.strip:SetTexture(e.texture, "REPEAT", "REPEAT")
-        d.strip:SetVertexColor(r, g, b, a)
         d.mask:ClearAllPoints()
         d.strip:ClearAllPoints()
 
@@ -100,14 +108,17 @@ local function ConfigurePixel(host, settings, period, width, height)
         d.move:SetDuration(p.step)
         d.group:Play()
     end
+    host.appliedPixel = wanted
 end
 
+-- Clears the record so a later return to Pixel restarts the dashes.
 local function HidePixel(host)
     if not host.dashes then return end
     for i = 1, 4 do
         host.dashes[i].group:Stop()
         host.dashes[i].strip:Hide()
     end
+    host.appliedPixel = nil
 end
 
 -- Four edges anchored to the host follow it at any size with no size read.
