@@ -194,7 +194,7 @@ local function EnsureStyler(tt)
     s.edges = { top, bottom, left, right }
 
     function s.SetColors(bgC, bdC)
-        bg:SetColorTexture(bgC[1], bgC[2], bgC[3], bgC[4] or 0.9)
+        bg:SetColorTexture(bgC[1], bgC[2], bgC[3], bgC[4] or 0.86)
         for _, e in ipairs(s.edges) do
             e:SetColorTexture(bdC[1], bdC[2], bdC[3], bdC[4] or 1)
         end
@@ -282,7 +282,7 @@ function TT:SyncAuraTooltip(forceOff)
             edgeSize = KE:GetPixelSize(),
             insets = { left = 0, right = 0, top = 0, bottom = 0 },
         },
-        centerColor = CreateColor(bg[1], bg[2], bg[3], bg[4] or 0.9),
+        centerColor = CreateColor(bg[1], bg[2], bg[3], bg[4] or 0.86),
         borderColor = CreateColor(bd[1], bd[2], bd[3], bd[4] or 1),
     })
 end

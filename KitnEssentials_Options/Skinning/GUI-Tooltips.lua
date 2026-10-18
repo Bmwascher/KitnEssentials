@@ -419,7 +419,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     local row7a = GUIFrame:CreateRow(card7.content, 46)
     local backdrop = db.BackdropColor
     local backdropPicker = GUIFrame:CreateColorPicker(row7a, "Backdrop Color", {
-        color = { backdrop[1] or 0, backdrop[2] or 0, backdrop[3] or 0, backdrop[4] or 0.9 },
+        color = { backdrop[1] or 0, backdrop[2] or 0, backdrop[3] or 0, backdrop[4] or 0.86 },
         callback = function(r, g, b, a)
             backdrop[1], backdrop[2], backdrop[3], backdrop[4] = r, g, b, a
             ApplySettings()
