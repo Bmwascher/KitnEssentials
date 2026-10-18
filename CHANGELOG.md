@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.1
+
+### Profiles
+
+- A profile name longer than 50 characters, or made only of spaces, is now
+  refused with a message instead of causing an error. A saved global
+  profile with such a name falls back to Default
+
+### Libraries
+
+- Bundled libraries are locked to exact versions, so every download runs
+  the same code. Range Checker's range library is updated to its current
+  version
+
+---
+
 ## v4.12.0
 
 ### Party Cooldowns
