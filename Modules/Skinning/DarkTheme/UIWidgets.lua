@@ -500,6 +500,16 @@ end
 -- no hook on the container is needed (a post-hook there would run inside
 -- UIWidgetManager's pass and taint the widgets it lays out next).
 
+-- The container is moved onto the holder after the holder is placed, so the
+-- placement is told about it (KE:IsUnsafeAnchor).
+---@type Frame[]
+local topCenterFollowers = {}
+
+local function TopCenterFollowers()
+    topCenterFollowers[1] = _G.UIWidgetTopCenterContainerFrame
+    return topCenterFollowers
+end
+
 function UIW:EnsureTopCenterHolder()
     if self.topCenterHolder then return end
     self.topCenterHolder = CreateFrame("Frame", "KE_TopCenterWidgetHolder", UIParent)
@@ -534,7 +544,7 @@ function UIW:ApplyTopCenter()
         }
     end
 
-    KE:ApplyFramePosition(self.topCenterHolder, tc.Position, tc)
+    KE:ApplyFramePosition(self.topCenterHolder, tc.Position, tc, nil, TopCenterFollowers())
     container:ClearAllPoints()
     container:SetPoint("TOP", self.topCenterHolder, "TOP", 0, 0)
     container:SetScale(tc.Scale or 1)
@@ -565,7 +575,8 @@ function UIW:RegisterEditMode()
         end,
         getParentFrame = function()
             local tc = self.db.TopCenter
-            return KE:ResolveAnchorFrame(tc.anchorFrameType, tc.ParentFrame)
+            return KE:ResolveAnchorFrame(tc.anchorFrameType, tc.ParentFrame,
+                self.topCenterHolder, nil, TopCenterFollowers())
         end,
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesWidgets",

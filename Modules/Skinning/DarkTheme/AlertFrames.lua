@@ -56,7 +56,7 @@ end
 ---------------------------------------------------------------------------------
 function AF:ApplyPosition()
     if not (self.holder and self.db and self.db.Position) then return end
-    KE:ApplyFramePosition(self.holder, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.holder, self.db.Position, self.db, nil, self:AlertFollowers())
     self:PostAlertMove()
 end
 
@@ -72,7 +72,7 @@ function AF:ApplyEventToastPosition()
         anchorFrameType = self.db.EventToastAnchorFrameType,
         ParentFrame = self.db.EventToastParentFrame,
         Strata = self.db.EventToastStrata,
-    })
+    }, nil, self:ToastFollowers())
 end
 
 -- Replace-mode LootRoll owns the BonusRollFrame PROMPT (it anchors it to its
@@ -151,6 +151,31 @@ end
 -- ordinary children, so their anchors are ours to write. GroupLootContainer
 -- is absent from .luacheckrc's read_globals, so it is reached through _G.
 local BONUS_ROLL_FRAMES = { "BonusRollFrame", "BonusRollLootWonFrame", "BonusRollMoneyWonFrame" }
+
+-- These frames are moved onto the holders after the holders are placed, so
+-- the placement is told about them (KE:IsUnsafeAnchor).
+---@type Frame[]
+local alertFollowers = {}
+---@type Frame[]
+local toastFollowers = {}
+
+function AF:AlertFollowers()
+    wipe(alertFollowers)
+    local af = _G.AlertFrame
+    if af then alertFollowers[#alertFollowers + 1] = af end
+    for _, name in ipairs(BONUS_ROLL_FRAMES) do
+        local f = _G[name]
+        if f then alertFollowers[#alertFollowers + 1] = f end
+    end
+    return alertFollowers
+end
+
+-- Passed whether or not MoveEventToasts is on: a pick saved while routing is
+-- off would close a loop at the first toast after it is turned on.
+function AF:ToastFollowers()
+    toastFollowers[1] = _G.EventToastManagerFrame
+    return toastFollowers
+end
 
 -- The only two frames GroupLootFrame.lua hands to AddAlertFrame directly. Every
 -- other alert arrives via AlertFrameQueueMixin:ShowAlert, which runs
@@ -385,7 +410,8 @@ function AF:RegisterEditMode()
             self:ApplyPosition()
         end,
         getParentFrame = function()
-            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame,
+                self.holder, nil, self:AlertFollowers())
         end,
         -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row of
         -- its own -- its config cards live on Dark Theme's Alert Frames tab, so
@@ -414,7 +440,7 @@ function AF:RegisterEditMode()
         -- so the drag has to resolve the parent from its own roots.
         getParentFrame = function()
             return KE:ResolveAnchorFrame(self.db.EventToastAnchorFrameType,
-                self.db.EventToastParentFrame)
+                self.db.EventToastParentFrame, self.toastHolder, nil, self:ToastFollowers())
         end,
         -- Same page as the AlertFrames element above -- see its comment.
         guiPath = "SkinBlizzardFrames",
