@@ -419,6 +419,26 @@ describe("SkinAPI skin registry", function()
     end)
 end)
 
+describe("SkinAPI client availability gate", function()
+    -- An empty Skins table is every row saved on. Friends stands for a
+    -- withheld window and Mail for an admitted one.
+    it("never runs a withheld skin after a baseline load, whatever its saved row", function()
+        for _, row in ipairs({
+            { name = "baseline, withheld", forever = true,  key = "Friends", ran = false, status = "disabled" },
+            { name = "baseline, admitted", forever = true,  key = "Mail",    ran = true,  status = "ok" },
+            { name = "retail, withheld",   forever = false, key = "Friends", ran = true,  status = "ok" },
+        }) do
+            local KE = L.loadSkinAPI(nil, { forever = row.forever })
+            KE.ShouldNotLoadModule = function() return false end
+            KE.db.profile.Skinning.BlizzardFrames = { Enabled = true, Skins = {} }
+            local ran = false
+            KE.Skins._runList({ { fn = function() ran = true end, key = row.key } })
+            assert.equals(row.ran, ran, row.name)
+            assert.equals(row.status, KE.Skins.skinStatus[row.key], row.name)
+        end
+    end)
+end)
+
 -- Task 0B: per-registration bookkeeping (skinRegistrations), the truthful
 -- skinStatus aggregate, and the two diagnostics that read them. Every case
 -- here runs on the composed loader and dispatches through the production

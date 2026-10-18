@@ -3452,6 +3452,10 @@ end
 
 local function SkinEnabled(key, addon)
     if not key then return true end
+    -- A skin this client withholds never runs, whatever its saved row says.
+    -- Guarded like the accessor below: a headless spec can load this file
+    -- without Core.
+    if KE.IsFrameSkinAvailable and not KE:IsFrameSkinAvailable(key) then return false end
     -- EllesmereUI already skins this window. Two engines backdropping one
     -- frame gives it two borders. This is a SEPARATE axis from the user's
     -- own toggle below and never writes to it, so a skin comes straight

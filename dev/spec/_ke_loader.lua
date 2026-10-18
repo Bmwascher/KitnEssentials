@@ -553,7 +553,7 @@ local SKINAPI_THEME = {
     accentHover = { 1.0, 0.0, 0.549, 0.25 },
 }
 
-function L.loadSkinAPI(overrides)
+function L.loadSkinAPI(overrides, opts)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
     _G.GetPhysicalScreenSize = function() return 2560, 1440 end
@@ -573,6 +573,11 @@ function L.loadSkinAPI(overrides)
         db = { profile = { Skinning = { BlizzardFrames = {} } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    -- Core/Availability.lua loads before the module lists in-game. opts.forever
+    -- seeds a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts ~= nil and opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
 end
 
