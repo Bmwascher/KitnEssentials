@@ -364,6 +364,15 @@ describe("ProfileManager profile-name refusal", function()
         assert.is_nil(db.global.GlobalProfile)
     end)
 
+    it("falls back to Default when the saved global profile name is refused", function()
+        local PM, _, db = L.loadProfileManager()
+        db.global.GlobalProfile = long
+        db:SetProfile("A")
+        assert.is_true(PM:SetUseGlobalProfile(true))
+        assert.equals("Default", PM:GetCurrentProfile())
+        assert.is_nil(db.profiles[long])
+    end)
+
     it("refuses an import whose de-duplicated name grows past 50", function()
         local PM, _, db = L.loadProfileManager()
         local base = string.rep("b", 48)

@@ -48,8 +48,7 @@ local NAME_RULE = "Profile names must be 1 to 50 characters and not only spaces"
 ---@return string|nil error
 function ProfileManager.ProfileNameError(name)
     if type(name) ~= "string" then return NAME_RULE end
-    -- UTF-8 characters: every byte that is not a continuation byte.
-    local length = select(2, name:gsub("[^\128-\191]", ""))
+    local length = strlenutf8(name)
     if length == 0 or length > 50 or name:find("^ +$") then return NAME_RULE end
     return nil
 end
@@ -270,6 +269,7 @@ function ProfileManager:SetUseGlobalProfile(enabled)
     -- Switch to global profile
     if enabled then
         local globalProfile = KE.db.global.GlobalProfile or DEFAULT_PROFILE
+        if ProfileNameError(globalProfile) then globalProfile = DEFAULT_PROFILE end
         KE.db:SetProfile(globalProfile)
     end
 
@@ -404,8 +404,6 @@ function ProfileManager:InstallProfile(profileData, targetName)
     if not KE.db then return false, "Database not initialized" end
 
     local finalName = targetName or "Imported"
-    local nameErr = ProfileNameError(finalName)
-    if nameErr then return false, nameErr end
 
     -- Check if profile exists and generate unique name if needed
     local profiles = self:GetProfiles()
@@ -425,8 +423,13 @@ function ProfileManager:InstallProfile(profileData, targetName)
         end
     end
 
-    nameErr = ProfileNameError(finalName)
-    if nameErr then return false, nameErr end
+    local nameErr = ProfileNameError(finalName)
+    if nameErr then
+        if finalName ~= baseName then
+            nameErr = nameErr .. "; adding \" (" .. counter .. ")\" to keep it unique made it too long"
+        end
+        return false, nameErr
+    end
 
     -- Before the copy, so a string exported before a rename lands converted
     -- and no old key reaches KE.db.
