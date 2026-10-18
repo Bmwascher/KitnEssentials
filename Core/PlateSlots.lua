@@ -11,7 +11,7 @@
 ---@class KE
 local KE = select(2, ...)
 
-local math_floor, math_max, math_min = math.floor, math.max, math.min
+local math_floor, math_clamp = math.floor, math.clamp
 local pcall, setmetatable, tonumber = pcall, setmetatable, tonumber
 
 local MAX_PLATES = 40
@@ -32,7 +32,7 @@ local function EnsureTokens()
 end
 
 local function Clamp(n)
-    return math_max(0, math_min(MAX_PLATES, math_floor(tonumber(n) or 0)))
+    return math_clamp(math_floor(tonumber(n) or 0), 0, MAX_PLATES)
 end
 
 -- true, false, or nil when the call errors or answers with a secret. The
