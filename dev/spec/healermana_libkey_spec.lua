@@ -15,11 +15,11 @@ describe("HealerMana spec lookup key", function()
             { name = "another realm", unitName = function() return "Healer", "Other" end, want = 257 },
             { name = "secret name", unitName = function() return SECRET, nil end, want = nil },
             { name = "secret realm", unitName = function() return "Healer", SECRET end, want = nil },
-            { name = "UnitName raises", unitName = function() error("restricted") end, want = nil },
+            { name = "UnitNameUnmodified raises", unitName = function() error("restricted") end, want = nil },
         }
         for _, case in ipairs(cases) do
             local HM = L.loadHealerMana({
-                UnitName = case.unitName,
+                UnitNameUnmodified = case.unitName,
                 issecretvalue = function(v) return v == SECRET end,
             })
             HM.libSpecCache = {

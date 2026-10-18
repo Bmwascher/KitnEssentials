@@ -25,7 +25,7 @@ local UnitClass = UnitClass
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
 local UnitIsConnected = UnitIsConnected
-local UnitName = UnitName
+local UnitNameUnmodified = UnitNameUnmodified
 local UnitRace = UnitRace
 local ipairs = ipairs
 local pairs = pairs
@@ -93,7 +93,7 @@ end
 -- cannot be read: a realm read as empty would match a same-named player of
 -- your realm.
 local function LibKey(unit)
-    local ok, name, realm = pcall(UnitName, unit)
+    local ok, name, realm = pcall(UnitNameUnmodified, unit)
     if not ok or KE:IsSecretValue(name) or KE:IsSecretValue(realm) then return nil end
     return KE.PartyCooldownsRules.LibKey(name, realm)
 end

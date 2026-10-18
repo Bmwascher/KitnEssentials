@@ -2967,6 +2967,9 @@ function L.loadHealerMana(overrides)
     _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
     _G.UnitClass = overrides.UnitClass or function() return "Priest", "PRIEST" end
     _G.UnitIsConnected = overrides.UnitIsConnected or function() return true end
+    -- Captured at file scope by PartyCooldownsSpec.lua, whose LibKey the
+    -- snapshot calls. Not a managed mock key, so it is assigned here.
+    _G.UnitNameUnmodified = overrides.UnitNameUnmodified or function() return "Tester" end
     -- Read at file scope by PartyCooldownsSpec.lua; the client's value.
     _G.Constants = { TraitConsts = { INSPECT_TRAIT_CONFIG_ID = -1 } }
 
