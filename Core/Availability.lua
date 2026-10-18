@@ -32,3 +32,17 @@ function KE:IsFeatureAvailable(featureId)
     if featureId and FOREVER_ALLOWED[featureId] then return true end
     return false, "withheld on this client"
 end
+
+-- Entries are { id = ... } tables: sidebar rows and sub-tabs. The same list
+-- comes back when nothing is withheld.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableEntries(entries)
+    if RETAIL then return entries end
+    local kept = {}
+    for i = 1, #entries do
+        local entry = entries[i]
+        if self:IsFeatureAvailable(entry.id) then kept[#kept + 1] = entry end
+    end
+    return kept
+end

@@ -104,10 +104,13 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     card2:AddRow(row1, Theme.rowHeightLast)
 
     card2:AddSpacing(4)
+    -- /rl is registered by the slash command feature, which some clients
+    -- withhold; the client's own /reload works everywhere.
+    local reloadCommand = KE:IsFeatureAvailable("SlashCommands") and "/rl" or "/reload"
     local tipLabel = card2:AddLabel(
         "Use " .. KE:ColorTextByTheme("/kes") .. " to open settings, " ..
         KE:ColorTextByTheme("/kes edit") .. " to toggle Edit Mode, " ..
-        KE:ColorTextByTheme("/rl") .. " to reload.")
+        KE:ColorTextByTheme(reloadCommand) .. " to reload.")
     tipLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
     local sepRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)

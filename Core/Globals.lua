@@ -309,6 +309,35 @@ end
 -- Slash Commands
 ---------------------------------------------------------------------------------
 
+-- A command served by a feature this load can withhold names that feature,
+-- so help never lists a command that does nothing here. With every feature
+-- admitted the line is the full list.
+local HELP_ENTRIES = {
+    { text = "/kes or gui (settings)" },
+    { text = "edit or unlock" },
+    { text = "wa [on|off]", feature = "SlashCommands" },
+    { text = "profiler or prof" },
+    { text = "trace [Frame] [secs]" },
+    { text = "taint [clear]" },
+    { text = "dm [reset | report [count] [channel]]", feature = "DamageMeter" },
+    { text = "mt [clearsplits]", feature = "MythicPlusTimer" },
+    { text = "skins [verify | rerun <key>]", feature = "SkinAPI" },
+    { text = "trash", feature = "DungeonTrash" },
+    { text = "conflicts" },
+    { text = "resetgui" },
+}
+
+local function HelpLine()
+    local parts = {}
+    for i = 1, #HELP_ENTRIES do
+        local entry = HELP_ENTRIES[i]
+        if not entry.feature or KE:IsFeatureAvailable(entry.feature) then
+            parts[#parts + 1] = entry.text
+        end
+    end
+    return "Commands: " .. table.concat(parts, " | ")
+end
+
 SLASH_KITNESSENTIALS1 = "/kes"
 SLASH_KITNESSENTIALS2 = "/kitnessentials"
 SLASH_KITNESSENTIALS3 = "/dunnigan"
@@ -452,8 +481,8 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE:ScanAddonConflicts()
         end
     else
-        -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | trace [Frame] [secs] | taint [clear] | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
+        -- "help" and anything unrecognized: list every subcommand this load runs.
+        KE:Print(HelpLine())
     end
 end
 

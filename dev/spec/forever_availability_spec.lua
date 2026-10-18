@@ -102,3 +102,43 @@ describe("Forever availability: dual-spec profiles", function()
         end
     end)
 end)
+
+describe("Forever availability: tab resolution", function()
+    -- SkinTooltips stands for any withheld page and sits first, so a missing
+    -- filter renders it in every row.
+    it("lands a withheld remembered, nested or default tab on the first admitted tab", function()
+        local rendered
+        local GUIFrame = {
+            registeredContent = {},
+            RegisterContent = function(self, id, fn) self.registeredContent[id] = fn end,
+            CreateSubTabs = function(_, _, yOffset) return nil, yOffset end,
+        }
+        local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = true, IS_FOREVER = true, GUIFrame = GUIFrame })
+        helpers.loadModule("GUI/GUIMain/GUI-TabbedContent.lua", KE)
+        for _, id in ipairs({ "SkinTooltips", "ProfilesSharing", "ProfilesMain" }) do
+            GUIFrame.registeredContent[id] = function(_, yOffset)
+                rendered = id
+                return yOffset
+            end
+        end
+        GUIFrame:RegisterNestedTabs("SkinTooltips", { "STForms" })
+        local TABS = {
+            { id = "SkinTooltips",    label = "Withheld" },
+            { id = "ProfilesSharing", label = "Sharing" },
+            { id = "ProfilesMain",    label = "Profile" },
+        }
+        for _, row in ipairs({
+            { name = "remembered", remembered = "SkinTooltips" },
+            { name = "nested",     remembered = "STForms" },
+            { name = "default",    default = "SkinTooltips" },
+        }) do
+            rendered = nil
+            GUIFrame.tabbedPageState["Profiles"] = row.remembered
+            GUIFrame:RegisterTabbedContent("Profiles", TABS, row.default and {
+                defaultTab = function() return row.default end,
+            } or nil)
+            GUIFrame.registeredContent["Profiles"](nil, 0)
+            assert.equals("ProfilesSharing", rendered, row.name)
+        end
+    end)
+end)

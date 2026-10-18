@@ -1216,6 +1216,12 @@ function KE:IsFeatureAvailable(featureId) end
 ---@return boolean enhanced
 function KE:EnhanceDualSpec(db) end
 
+--- The entries ({ id = ... }) this client admits; the same list when it
+--- withholds nothing.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableEntries(entries) end
+
 ---@param value any
 ---@return number
 function KE:RoundOffset(value) end
