@@ -59,8 +59,9 @@ end
 
 local function StyleEntry(child)
     if not child or S.data(child).aeRepRow then return end
-    S.RowHover(child)
+    -- StripTextures clears every texture region, so the hover is added after it.
     S.StripTextures(child)
+    S.RowHover(child)
     FixCollapseChevron(child)
 
     if child.Right then
