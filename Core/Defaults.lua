@@ -1575,7 +1575,7 @@ local Defaults = {
         PartyBuffs = {
             Enabled           = false,
             -- The Party Frame Icons switch: off, nothing is built beside party
-            -- frames; Potion bars and Healer Externals still work.
+            -- frames; Potion bars and Raid Cooldowns still work.
             FrameIcons        = true,
             TrackExternal     = false,
             TrackBurst        = true,
@@ -1655,8 +1655,8 @@ local Defaults = {
             PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 },
             PotionAnchorFrameType = "UIPARENT",
             PotionStrata      = "MEDIUM",
-            -- Healer externals box (Healer Externals tab), attached to the top
-            -- of Healer Mana. While Healer Mana's frame does not exist (off
+            -- Raid Cooldowns box (Raid Cooldowns tab), attached to the top of
+            -- Healer Mana. While Healer Mana's frame does not exist (off
             -- since login) the box takes HX.DEFAULT_POSITION on the screen.
             HealerExternals   = true,
             HealerExtIconSize = 38,

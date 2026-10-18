@@ -63,7 +63,7 @@ local SAMPLES = { { id = 33206, left = 122 }, { id = 102342 }, { id = 97462 } }
 local placement = {}
 
 local function Debug(fmt, ...)
-    if DEBUG_HX then KE:Print("Healer Externals: " .. string_format(fmt, ...)) end
+    if DEBUG_HX then KE:Print("Raid Cooldowns: " .. string_format(fmt, ...)) end
 end
 
 ---------------------------------------------------------------------------------
@@ -168,7 +168,7 @@ local function Register()
     if HX.registered then return end
     KE.EditMode:RegisterElement({
         key = EDIT_MODE_KEY,
-        displayName = "Healer Externals",
+        displayName = "Raid Cooldowns",
         frame = HX.box,
         module = HX.pb,
         getPosition = function() return (Placement(HX.pb.db)) end,
