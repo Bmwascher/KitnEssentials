@@ -355,8 +355,8 @@ end
 -- live-toggleable and reversible: HelpTip pool hides (acknowledging each
 -- tip's cvarBitfield so it stays dismissed), "i" help-plate buttons
 -- matched by mixin-method fingerprint and alpha-hidden (restored on
--- disable), HelpPlate tooltip hooks, and the hideHelptips/showTutorials
--- CVars. Hooks install once, only when the feature is first enabled.
+-- disable), HelpPlate tooltip hooks, and the showTutorials CVar. Hooks
+-- install once, only when the feature is first enabled.
 --
 -- Master-independent: this suppression must apply even while the
 -- Automation master switch is off, so AU:UpdateDB applies it, at
@@ -602,14 +602,12 @@ local function ApplyHideHelptips()
     if TutorialsEnabled() then
         InstallTutorialCoreHooks()
         InstallTutorialTooltipHook()
-        pcall(SetCVar, "hideHelptips", "1")
         pcall(SetCVar, "showTutorials", "0")
         tutorialsWeSetCVar = true
         TutorialSweepAll()
         HideOpenTips()
     else
         if tutorialsWeSetCVar then
-            pcall(SetCVar, "hideHelptips", "0")
             pcall(SetCVar, "showTutorials", "1")
             tutorialsWeSetCVar = false
         end

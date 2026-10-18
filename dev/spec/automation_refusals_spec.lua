@@ -476,7 +476,6 @@ describe("Automation Hide Helptips master-off startup (Task 3 Step 10b)", functi
         local AU = fx.AU
         fx.KE.db = { profile = { Automation = { Enabled = false, HideHelptips = true } } }
         AU:OnInitialize()
-        assert.equals("1", fx.cvarSets.hideHelptips)
         assert.equals("0", fx.cvarSets.showTutorials)
         assert.is_not_nil(fx.hookedMethods[_G.HelpTip] and fx.hookedMethods[_G.HelpTip]["Show"])
     end)
@@ -486,7 +485,7 @@ describe("Automation Hide Helptips master-off startup (Task 3 Step 10b)", functi
         local AU = fx.AU
         fx.KE.db = { profile = { Automation = { Enabled = false, HideHelptips = false } } }
         AU:OnInitialize()
-        assert.is_nil(fx.cvarSets.hideHelptips)
+        assert.is_nil(fx.cvarSets.showTutorials)
     end)
 end)
 
