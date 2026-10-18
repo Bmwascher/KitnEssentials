@@ -353,6 +353,7 @@ describe("ProfileManager profile-name refusal", function()
             function() return PM:RenameProfile("A", long) end,
             function() return PM:SetProfile(long) end,
             function() return PM:SetGlobalProfile(long) end,
+            function() return PM:CopyProfile("A", long) end,
             function() return PM:InstallProfile({}, long) end,
         }
         for i, call in ipairs(calls) do

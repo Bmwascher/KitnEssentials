@@ -128,6 +128,8 @@ function ProfileManager:CopyProfile(sourceProfile, targetProfile)
     if not KE.db then return false, "Database not initialized" end
 
     targetProfile = targetProfile or self:GetCurrentProfile()
+    local nameErr = ProfileNameError(targetProfile)
+    if nameErr then return false, nameErr end
 
     -- Check if source profile exists
     local profiles = self:GetProfiles()
