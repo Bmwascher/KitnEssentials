@@ -56,7 +56,8 @@ function Rules.Entries(specID, db, all, ranks)
                 cd = Rules.ClampSeconds(spell.cd),
                 off = isOff,
             }
-            entry.cd = Rules.ClampSeconds(cdRules.CellLength(entry, specID, ranks))
+            entry.charges = cdRules.CellCharges(entry, specID, ranks)
+            entry.cd = Rules.ClampSeconds(cdRules.CellLength(entry, specID, ranks, entry.charges))
             out[#out + 1] = entry
         end
     end

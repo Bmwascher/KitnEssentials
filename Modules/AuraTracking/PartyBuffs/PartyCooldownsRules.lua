@@ -49,13 +49,15 @@ function Rules.ClampSeconds(value)
     return math_floor(math_max(Rules.CD_MIN, math_min(Rules.CD_MAX, value)))
 end
 
--- One cooldown entry at its listed length, clamped.
-local function Entry(castID, spell, key, listed, isOff)
+-- One cooldown entry at its listed length, clamped, with the charges its spec
+-- always gives.
+local function Entry(castID, spell, key, listed, isOff, charges)
     return {
         id = castID, key = key, spell = spell, kind = spell.kind,
         buffs = spell.buffs, short = spell.short, active = spell.active,
         listed = listed,
         cd = Rules.ClampSeconds(listed),
+        charges = charges,
         off = isOff,
     }
 end
@@ -85,13 +87,12 @@ function Rules.SpellList(specID, db, all)
         end
     end
     for i, item in ipairs(source) do
-        local castID, talented = item, nil
-        if type(item) == "table" then castID, talented = item[1], item[2] end
+        local castID, talented, charges = Rules.UnpackItem(item)
         local spell = data.SPELLS[castID]
         local key = Rules.CooldownKey(specID, castID)
         local isOff = Rules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
-            local entry = Entry(castID, spell, key, talented or spell.cd, isOff)
+            local entry = Entry(castID, spell, key, talented or spell.cd, isOff, charges)
             entry.at = rank and (rank[castID] or #order + i) or i
             out[#out + 1] = entry
         end
@@ -959,6 +960,22 @@ function Rules.CellLength(entry, specID, ranks, charges)
     local cd = spell and spell.mods and Rules.ModLength(spell.cd, spell.mods, ranks, specID) or entry.cd
     if type(charges) == "number" and charges >= 2 then cd = math_min(cd, Rules.CHARGE_CD_MAX) end
     return cd
+end
+
+-- The most charges a cell counts: one per timer slot.
+Rules.MAX_CHARGES = 2
+
+-- The charges a cell counts: the entry's own, plus one per charge talent read
+-- as taken for the spec; an unread one adds nothing.
+function Rules.CellCharges(entry, specID, ranks)
+    local charges = entry.charges or 1
+    for _, mod in ipairs(entry.spell and entry.spell.mods or {}) do
+        local rank = mod.charges and mod[1] and ranks and ranks[mod[1]]
+        if type(rank) == "number" and rank > 0 and not (mod.spec and mod.spec ~= specID) then
+            charges = charges + mod.charges
+        end
+    end
+    return math_min(charges, Rules.MAX_CHARGES)
 end
 
 -- A talent rule's answer from ranks: true when any of its talents is taken,

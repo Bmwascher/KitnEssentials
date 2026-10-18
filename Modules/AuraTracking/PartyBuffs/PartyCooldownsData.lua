@@ -39,8 +39,8 @@ Data.SPELLS = {
     -- Vengeance's Metamorphosis; its cooldown and buff are from game data.
     [187827]  = { kind = "defensive", cd = 120 },
 
-    -- Incarnation's two charges: each use reads as the whole cooldown. It
-    -- shares a choice node with Convoke the Spirits, the less common pick.
+    -- With Whirling Stars it has two charges. Incarnation shares a choice node
+    -- with Convoke the Spirits, the less common pick.
     [194223]  = { kind = "offensive", cd = 180, buffs = { 194223, 102560, 390414 },
                   swap = { id = 102560, talents = { [102560] = true }, likely = true } },
     -- Feral's 60 s needs Ashamane's Guidance, which most Ferals skip.
@@ -114,7 +114,6 @@ Data.SPELLS = {
     [1719]    = { kind = "offensive", cd = 90 },
     [118038]  = { kind = "defensive", cd = 120 },
     [184364]  = { kind = "defensive", cd = 120 },
-    -- Two charges; each use reads as the whole cooldown.
     [23920]   = { kind = "defensive", cd = 25 },
 
     -- Healer externals, in no spec list: HEALER_SPECS picks them by spec.
@@ -180,7 +179,25 @@ local MODS = {
 }
 for castID, mods in pairs(MODS) do Data.SPELLS[castID].mods = mods end
 
--- Per spec, in display order. A pair is { cast, the spec's talented seconds }.
+-- Talents that give a cast its second charge. A cell counts it once the
+-- talent is read as taken; unread, it counts nothing.
+local CHARGES = {
+    [33206]  = { 373035 },   -- Pain Suppression: Protector of the Frail
+    [357170] = { 376204 },   -- Time Dilation: Just in Time
+    [194223] = { 468743 },   -- Celestial Alignment: Whirling Stars
+    [45438]  = { 1244110 },  -- Ice Block: Glacial Bulwark
+    [363916] = { 375406 },   -- Obsidian Scales: Obsidian Bulwark
+    [198589] = { 1266307 },  -- Blur: Demonic Resilience
+    [264735] = { 459450 },   -- Survival of the Fittest: Padded Armor
+}
+for castID, talents in pairs(CHARGES) do
+    local spell = Data.SPELLS[castID]
+    spell.mods = spell.mods or {}
+    for _, talent in ipairs(talents) do spell.mods[#spell.mods + 1] = { talent, charges = 1 } end
+end
+
+-- Per spec, in display order. A pair is { cast, the spec's listed seconds },
+-- with charges = n where the spec always has n charges.
 Data.SPECS = {
     [250]  = { { 49028, 90 }, 48792 },
     [251]  = { 51271, 1249658, 279302, 48792, { 48707, 40 } },
@@ -190,7 +207,7 @@ Data.SPECS = {
     [1480] = { 198589 },
     [102]  = { { 194223, 120 }, 391528, 22812 },
     [103]  = { { 106951, 90 }, 391528, 22812, 61336 },
-    [104]  = { { 22812, 34 }, { 61336, 137 } },
+    [104]  = { { 22812, 34 }, { 61336, 137, charges = 2 } },
     [105]  = { 22812 },
     [1467] = { 375087, 363916 },
     [1468] = { 363916 },

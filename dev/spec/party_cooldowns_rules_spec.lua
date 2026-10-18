@@ -13,7 +13,8 @@ local L = require("dev.spec._ke_loader")
 -- which needs talent 55 and is not likely taken. Spec 15 lists only cast 7,
 -- which starts switched off. Cast 8 has talent mods, a spec-only one for spec
 -- 16 and two charge talents; spec 16 lists it paired at 100 s, spec 17
--- unpaired. Cast 9 has only a charge talent; spec 19 lists it paired at 50 s.
+-- unpaired, spec 18 with two charges. Cast 9 has only a charge talent; spec
+-- 19 lists it paired at 50 s.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -39,6 +40,7 @@ local DATA = {
         [15] = { 7 },
         [16] = { { 8, 100 } },
         [17] = { 8 },
+        [18] = { { 8, charges = 2 } },
         [19] = { { 9, 50 } },
     },
     ROLE_SPEC = {
@@ -782,6 +784,24 @@ describe("PartyCooldownsRules.CellLength", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.CellLength(case.entry, case.spec, case.ranks, case.charges), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.CellCharges", function()
+    it("adds a charge for a charge talent read as taken in its spec, none unread, and caps the count", function()
+        local R = loadRules()
+        local plain, based = entryOf(R, 16, 8), entryOf(R, 18, 8)
+        local cases = {
+            { name = "base count from the list", entry = based, ranks = {}, want = 2 },
+            { name = "talent taken", entry = plain, ranks = { [83] = 1 }, want = 2 },
+            { name = "talent read, not taken", entry = plain, ranks = { [83] = 0 }, want = 1 },
+            { name = "talent unread", entry = plain, ranks = {}, want = 1 },
+            { name = "talent for another spec", entry = plain, ranks = { [84] = 1 }, want = 1 },
+            { name = "a base of two and a talent", entry = based, ranks = { [83] = 1 }, want = R.MAX_CHARGES },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.CellCharges(case.entry, 16, case.ranks), case.name)
         end
     end)
 end)
