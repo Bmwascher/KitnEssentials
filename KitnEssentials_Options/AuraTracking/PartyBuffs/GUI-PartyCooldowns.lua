@@ -265,7 +265,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card: Glow While Active
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow While Active",
         db = db,
         types = {
@@ -275,30 +275,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             { key = "alert",    text = "Alert" },
             { key = "border",   text = "Pulse Border" },
         },
-        resolveType = KE.AuraGlowRules.ResolveType,
-        -- The glow is animation-driven and honors neither Length nor Border,
-        -- so their row sits under a key no resolved type equals.
-        typeRows = function(rows)
-            return {
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-                border      = rows.border,
-            }
-        end,
         -- The pulse runs at a fixed rhythm.
         showSpeed = function(glowType) return glowType ~= "border" end,
-        speedAdapter = {
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 2,
-        },
         onChangeCallback = ApplySettings,
         onHeightChange = RebuildPage,
     })

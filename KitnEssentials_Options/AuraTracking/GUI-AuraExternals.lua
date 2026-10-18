@@ -217,70 +217,13 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Glow Settings
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow Settings",
         db = db,
-        dbKeys = {
-            enabled   = "GlowEnabled",
-            type      = "GlowType",
-            color     = "GlowColor",
-            lines     = "GlowLines",
-            frequency = "GlowFrequency",
-            length    = "GlowLength",
-            thickness = "GlowThickness",
-            border    = "GlowBorder",
-            scale     = "GlowScale",
-            startAnim = "GlowStartAnim",
-            duration  = "GlowDuration",
-        },
-        types = {
-            { key = "pixel",    text = "Pixel" },
-            { key = "ants",     text = "Ants" },
-            { key = "procloop", text = "Proc Loop" },
-            { key = "alert",    text = "Alert" },
-        },
-        resolveType = KE.AuraGlowRules.ResolveType,
         -- Measured, not guessed. Ants and Proc Loop each play two animations
         -- per icon, the main flipbook and its additive overlay; Alert plays
         -- one; Pixel plays four, one per edge.
         typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
-        -- Pixel is now a real resolved type, so the card's default lookup
-        -- would show its Length and Border controls too. This display's
-        -- border is animation-driven and honors neither, so the override
-        -- maps `pixel` to the one row carrying the two controls it does
-        -- honor, Lines and Thickness, and omits every other
-        -- group -- which is also what keeps the retired autocast and proc
-        -- geometry rows hidden.
-        -- Every group must stay REACHABLE by the visibility loop, including the
-        -- ones that must never show: the loop is what calls SetShown(false),
-        -- so a group left out of this table is a group nothing ever hides.
-        -- Length and Border therefore move to a key no resolved type equals,
-        -- rather than being dropped.
-        typeRows = function(rows)
-            return {
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-                border      = rows.border,
-            }
-        end,
-        showSpeed = function() return true end,
-        speedAdapter = {
-            -- WRAPPED, not passed bare. The read rule's result needs
-            -- normalizing -- nil or zero becomes 0.25, then clamp -- and the
-            -- glow card is shared and generic, so it has no access to these
-            -- rules. Passing ReadSpeed directly hands the slider a nil on a
-            -- profile with no stored frequency.
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 2, -- keeps the old 0.5s proc period reachable
-        },
         onChangeCallback = ApplySettings,
         onHeightChange = function() C_Timer.After(0, RefreshPage) end,
     })

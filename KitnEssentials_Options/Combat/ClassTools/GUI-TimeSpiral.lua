@@ -89,48 +89,9 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2b: Glow
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow",
         db = db,
-        dbKeys = {
-            enabled   = "GlowEnabled",
-            type      = "GlowType",
-            color     = "GlowColor",
-            lines     = "GlowLines",
-            frequency = "GlowFrequency",
-            thickness = "GlowThickness",
-            duration  = "GlowDuration",
-        },
-        types = {
-            { key = "pixel",    text = "Pixel" },
-            { key = "ants",     text = "Ants" },
-            { key = "procloop", text = "Proc Loop" },
-            { key = "alert",    text = "Alert" },
-        },
-        resolveType = KE.AuraGlowRules.ResolveType,
-        -- Length and Border need a Lua-driven pixel glow; the engine's is not.
-        typeRows = function(rows)
-            return {
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-                border      = rows.border,
-            }
-        end,
-        showSpeed = function() return true end,
-        -- SetType, not a plain write: a stored "proc" keeps its loop speed in
-        -- GlowDuration, and a plain write would drop it.
-        speedAdapter = {
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 2,
-        },
         onChangeCallback = ApplySettings,
         -- Pixel shows a row of controls the other styles do not; the cards
         -- below sit at fixed offsets, so the page is rebuilt.

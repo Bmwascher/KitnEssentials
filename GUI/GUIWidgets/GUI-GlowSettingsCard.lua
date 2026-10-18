@@ -359,3 +359,55 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
 
     return card, card:GetNextOffset(), widgets
 end
+
+local AURA_GLOW_TYPES = {
+    { key = "pixel",    text = "Pixel" },
+    { key = "ants",     text = "Ants" },
+    { key = "procloop", text = "Proc Loop" },
+    { key = "alert",    text = "Alert" },
+}
+
+local function AlwaysShowSpeed()
+    return true
+end
+
+-- The aura engine's glow host honors neither Length nor Border, so that row
+-- sits under a key no resolved type equals. Every group stays in the table:
+-- the visibility loop is what hides a group, so one left out is never hidden.
+local function AuraGlowTypeRows(rows)
+    return {
+        pixel       = rows.pixel,
+        unsupported = rows.pixelExtras,
+        autocast    = rows.autocast,
+        proc        = rows.proc,
+        border      = rows.border,
+    }
+end
+
+-- The card for a glow drawn by the aura engine's glow host. The speed read is
+-- normalized because ReadSpeed returns nil on a profile with no stored
+-- frequency, and SetType keeps a stored proc speed when the type changes.
+function GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, config)
+    local rules = KE.AuraGlowRules
+    local speedMax = config.speedMax or 2
+    return self:CreateGlowSettingsCard(scrollChild, yOffset, {
+        title = config.title,
+        db = config.db,
+        types = config.types or AURA_GLOW_TYPES,
+        typeTooltip = config.typeTooltip,
+        resolveType = rules.ResolveType,
+        typeRows = AuraGlowTypeRows,
+        showSpeed = config.showSpeed or AlwaysShowSpeed,
+        speedAdapter = {
+            read = function(readDb, readKeys)
+                return rules.NormalizeFrequency(rules.ReadSpeed(readDb, readKeys), 0.05, speedMax)
+            end,
+            write   = rules.WriteSpeed,
+            setType = rules.SetType,
+            min     = 0.05,
+            max     = speedMax,
+        },
+        onChangeCallback = config.onChangeCallback,
+        onHeightChange = config.onHeightChange,
+    })
+end

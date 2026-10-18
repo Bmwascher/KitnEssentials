@@ -569,19 +569,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 7: Glow (engine styles)
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow",
         db = db,
-        dbKeys = {
-            enabled   = "GlowEnabled",
-            type      = "GlowType",
-            color     = "GlowColor",
-            lines     = "GlowLines",
-            frequency = "GlowFrequency",
-            thickness = "GlowThickness",
-            pulse     = "GlowPulse",
-            duration  = "GlowDuration",
-        },
         types = {
             { key = "pixel",    text = "Pixel" },
             { key = "border",   text = "Pulse Border" },
@@ -589,28 +579,8 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             { key = "procloop", text = "Proc Loop" },
             { key = "alert",    text = "Alert" },
         },
-        resolveType = KE.AuraGlowRules.ResolveType,
         typeTooltip = "Shows on a DoT's icon while every counted enemy has it (6/6).",
-        typeRows = function(rows)
-            return {
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-                border      = rows.border,
-            }
-        end,
-        showSpeed = function() return true end,
-        speedAdapter = {
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 1)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 1,
-        },
+        speedMax = 1,
         onChangeCallback = ApplySettings,
         -- Pixel and Pulse Border show a row of controls and the sheet styles
         -- none; the cards below sit at fixed offsets, so the page is rebuilt.

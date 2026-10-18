@@ -547,46 +547,18 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 10: Targeting You (glow engine card; Pulse Border or Pixel)
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Targeting You",
         db = db.TargetGlow,
-        dbKeys = {
-            enabled   = "GlowEnabled",
-            type      = "GlowType",
-            color     = "GlowColor",
-            lines     = "GlowLines",
-            frequency = "GlowFrequency",
-            thickness = "GlowThickness",
-            pulse     = "GlowPulse",
-        },
         types = {
             { key = "border", text = "Pulse Border" },
             { key = "pixel",  text = "Pixel" },
         },
-        resolveType = KE.AuraGlowRules.ResolveType,
         typeTooltip = "A glow around the bar while the caster is targeting you. The game "
             .. "decides who is targeted and draws it, so nothing a dungeon hides is read.\n\n"
             .. "Off on tank specs: everything targets the tank, so it would never go out.",
-        typeRows = function(rows)
-            return {
-                border      = rows.border,
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-            }
-        end,
         showSpeed = function(glowType) return glowType == "pixel" end,
-        speedAdapter = {
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 1)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 1,
-        },
+        speedMax = 1,
         onChangeCallback = ApplyVisuals,
     })
     manager:Register(glowCard, "all")
