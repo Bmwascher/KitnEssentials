@@ -13,7 +13,9 @@ local L = require("dev.spec._ke_loader")
 -- which needs talent 55 and is not likely taken. Cast 6 needs talent 65 and
 -- is likely taken; its paired length needs talent 66. Spec 13 lists it paired
 -- at 30 s, spec 14 unpaired. Spec 15 lists only cast 7, which starts
--- switched off.
+-- switched off. Cast 8 has talent mods, a spec-only one for spec 16 and two
+-- charge talents; spec 16 lists it paired at 100 s, spec 17 unpaired. Cast 9
+-- has only a charge talent; spec 19 lists it paired at 50 s.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -27,6 +29,10 @@ local DATA = {
                 needs = { talents = { [65] = true }, likely = true },
                 lengthNeeds = { talents = { [66] = true } } },
         [7] = { kind = "offensive", cd = 90, buffs = { 70 }, off = true },
+        [8] = { kind = "offensive", cd = 180, buffs = { 80 },
+                mods = { { 81, add = -30 }, { 82, pct = -50 }, { spec = 16, add = -60 },
+                         { 83, charges = 1 }, { 84, spec = 99, charges = 1 } } },
+        [9] = { kind = "defensive", cd = 60, buffs = { 90 }, mods = { { 85, charges = 1 } } },
     },
     RACIALS = {
         { race = "Dwarf", raceID = 3, id = 4 },
@@ -38,6 +44,9 @@ local DATA = {
         [13] = { { 6, 30 } },
         [14] = { 6 },
         [15] = { 7 },
+        [16] = { { 8, 100 } },
+        [17] = { 8 },
+        [19] = { { 9, 50 } },
     },
     ROLE_SPEC = {
         DRUID = { TANK = 10, HEALER = 11 },
@@ -730,6 +739,43 @@ describe("PartyCooldownsRules talent gate", function()
         assert.are.equal(gated.spell.needs, R.TalentsFor(12)[5], "a needs row")
         assert.is_not_nil(R.TalentsFor(10)[3], "a swap for its spec")
         assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")
+    end)
+end)
+
+describe("PartyCooldownsRules.CellLength", function()
+    it("counts the talented length once every length talent is read, the listed one until then", function()
+        local R = loadRules()
+        local paired, unpaired = entryOf(R, 16, 8), entryOf(R, 17, 8)
+        local long = { cd = 900, spell = { cd = 900 } }
+        local cases = {
+            { name = "every length talent read", entry = paired, spec = 16, ranks = { [81] = 1, [82] = 1 }, want = 45 },
+            { name = "one of two read", entry = paired, spec = 16, ranks = { [81] = 1 }, want = 100 },
+            { name = "none read", entry = paired, spec = 16, want = 100 },
+            { name = "unpaired, none read", entry = unpaired, spec = 17, want = 180 },
+            { name = "only a charge mod, read", entry = entryOf(R, 19, 9), spec = 19, ranks = { [85] = 1 }, want = 50 },
+            { name = "a charge cell over the cap", entry = long, spec = 16, charges = 2, want = R.CHARGE_CD_MAX },
+            { name = "a one-charge cell, no cap", entry = long, spec = 16, charges = 1, want = 900 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.CellLength(case.entry, case.spec, case.ranks, case.charges), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.Taken", function()
+    it("takes a rule when any of its talents is taken, and answers nil only when none is read", function()
+        local R = loadRules()
+        local rule = { talents = { [91] = true, [92] = true } }
+        local cases = {
+            { name = "one taken", ranks = { [91] = 0, [92] = 2 }, want = true },
+            { name = "all read, none taken", ranks = { [91] = 0, [92] = 0 }, want = false },
+            { name = "some read, none taken", ranks = { [91] = 0 }, want = false },
+            { name = "none read", ranks = {}, want = nil },
+            { name = "no answer", ranks = nil, want = nil },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.Taken(rule, case.ranks), case.name)
+        end
     end)
 end)
 

@@ -570,6 +570,59 @@ function Rules.TalentAllows(entry, taken)
     return taken == true
 end
 
+-- A spell's cooldown with talents applied: flat seconds add and percents
+-- multiply, each per rank, and a mod limited to another spec counts nothing.
+-- Nil while any talent a length mod names is unread, and when no mod changes
+-- a length: a mod that adds a charge is skipped.
+function Rules.ModLength(base, mods, ranks, specID)
+    local cd, mul, any = base, 1, false
+    for _, mod in ipairs(mods) do
+        if not mod.charges then
+            any = true
+            local rank = 1
+            if mod[1] then
+                rank = ranks and ranks[mod[1]]
+                if type(rank) ~= "number" then return nil end
+            end
+            if mod.spec and mod.spec ~= specID then rank = 0 end
+            if rank > 0 then
+                cd, mul = cd + (mod.add or 0) * rank, mul * (1 + (mod.pct or 0) * rank / 100)
+            end
+        end
+    end
+    if not any then return nil end
+    return math_floor(math_max(Rules.CD_MIN, math_min(Rules.CD_MAX, cd * mul)) + 0.5)
+end
+
+-- A charge cell counts at most this long: its tick and read passes need
+-- Unit(cd) <= 3 under DOOR_SLACK.
+Rules.CHARGE_CD_MAX = 3 * Rules.CODES
+
+-- The length a cell counts: the spell's cooldown with the member's talents
+-- once every one its length mods name is read, the listed length until then.
+function Rules.CellLength(entry, specID, ranks, charges)
+    local spell = entry.spell
+    local cd = spell and spell.mods and Rules.ModLength(spell.cd, spell.mods, ranks, specID) or entry.cd
+    if type(charges) == "number" and charges >= 2 then cd = math_min(cd, Rules.CHARGE_CD_MAX) end
+    return cd
+end
+
+-- A talent rule's answer from ranks: true when any of its talents is taken,
+-- false when some are read and none is, nil when none is read.
+function Rules.Taken(rule, ranks)
+    if not (rule and ranks) then return nil end
+    local read = false
+    for talent in pairs(rule.talents) do
+        local rank = ranks[talent]
+        if type(rank) == "number" then
+            if rank > 0 then return true end
+            read = true
+        end
+    end
+    if read then return false end
+    return nil
+end
+
 -- The length a cell counts: the spell's own when its length talent is read as
 -- not taken, or unread and not likely; else the entry's.
 function Rules.TalentLength(entry, taken)
