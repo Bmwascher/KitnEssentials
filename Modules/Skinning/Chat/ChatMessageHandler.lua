@@ -51,9 +51,8 @@ local strjoin = strjoin
 local tinsert = tinsert
 local tconcat = table.concat
 
--- Blizzard globals not on KE's read_globals allowlist -- read through _G.
--- per family convention rather than growing .luacheckrc for this port
--- (Modules/Skinning/Chat/Chat.lua is the sibling precedent).
+-- Blizzard globals not on KE's read_globals allowlist are read through _G
+-- rather than added to .luacheckrc.
 local ChatEditSetLastTellTarget = _G.ChatFrameUtil and _G.ChatFrameUtil.SetLastTellTarget
 local ShouldColorChatByClass = _G.ChatFrameUtil and _G.ChatFrameUtil.ShouldColorChatByClass
 local ResolvePrefixedChannelName = _G.ChatFrameUtil and _G.ChatFrameUtil.ResolvePrefixedChannelName
