@@ -402,6 +402,7 @@ function DM:ApplySettings()
         if W.frame then
             self:ApplyWindowGeometry(W)
             self:ReapplyBarVisuals(W)
+            self:PaintIndexBadge(W)
         end
     end
 
@@ -540,16 +541,31 @@ end
 -- dock). ShowPreview/HidePreview are idempotent per the PreviewManager cache.
 ---------------------------------------------------------------------------------
 
--- Toggles the large per-window index badges (a GUI preview / edit aid so the
--- "Window N" config rows map to the numbered window on screen). Sets _badgesShown
--- so a window built later (AddWindow during preview) shows its badge immediately.
--- A badge is a child of its window frame, so a hidden (disabled-context) window's
--- badge stays hidden regardless.
+-- Near-black (#111111): the chip number on a light theme color.
+local CHIP_DARK_INK = 0.067
+
+-- The look of every window number chip, on the meter and in the settings: the
+-- theme color with the ink that reads on it. White ink takes a black outline;
+-- on dark ink an outline fills the glyphs in, so it gets none.
+function DM:GetChipStyle()
+    local r, g, b = KE:GetAccentColor("theme")
+    if KE.IsLightColor(r, g, b) then
+        return r, g, b, CHIP_DARK_INK, "NONE"
+    end
+    return r, g, b, 1, "OUTLINE"
+end
+
+-- Shows or hides the window number chips (a settings and /kes edit aid, so a
+-- numbered row maps to the numbered window). _badgesShown lets a window built
+-- later (AddWindow during preview) match, and moves each title clear of its
+-- chip. A chip is a child of its window frame, so a hidden window's stays hidden.
 function DM:SetWindowBadges(show)
     self._badgesShown = show
     if not self.windows_rt then return end
     for _, W in pairs(self.windows_rt) do
         if W.indexBadge then
+            self:PaintIndexBadge(W)
+            self:AnchorHeaderStart(W)
             if show then W.indexBadge:Show() else W.indexBadge:Hide() end
         end
     end
