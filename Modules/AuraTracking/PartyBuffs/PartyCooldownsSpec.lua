@@ -734,7 +734,7 @@ end
 -- every teammate's answer stale for the inspect to read again; a stale answer
 -- stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
-    events = { "TRAIT_CONFIG_UPDATED", "READY_CHECK" },
+    events = { "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "READY_CHECK" },
     On = function() return Spec.trackClass == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
@@ -769,8 +769,12 @@ Spec.readers[#Spec.readers + 1] = {
             end
         end
     end,
+    -- Before the talent configs load every spellbook answer reads not taken,
+    -- so the read waits for TRAIT_CONFIG_LIST_UPDATED.
     Self = function(m)
-        if m.talents == nil and m.spec then m.talents = SelfTaken(m.spec) end
+        if m.talents == nil and m.spec and Ask(C_ClassTalents.GetActiveConfigID) ~= nil then
+            m.talents = SelfTaken(m.spec)
+        end
     end,
     Forget = ForgetTalents,
     OnEvent = function(event, configID)
@@ -778,6 +782,8 @@ Spec.readers[#Spec.readers + 1] = {
         if event == "TRAIT_CONFIG_UPDATED" and m and IsClassConfig(configID) then
             m.talents = nil
             Changed(m)
+        elseif event == "TRAIT_CONFIG_LIST_UPDATED" then
+            if m and m.talents == nil then Changed(m) end
         elseif event == "READY_CHECK" and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
             for _, member in pairs(Spec.byGUID) do
                 if not member.isPlayer and member.talents then member.talentsStale = true end
