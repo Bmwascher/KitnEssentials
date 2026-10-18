@@ -34,7 +34,6 @@ local UnitGUID = UnitGUID
 local UnitIsConnected = UnitIsConnected
 local UnitIsPlayer = UnitIsPlayer
 local UnitClass = UnitClass
-local UnitName = UnitName
 local UnitPowerPercent = UnitPowerPercent
 local UnitPowerMax = UnitPowerMax
 ---@type fun(unit: string): string
@@ -490,22 +489,13 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
--- The key the library files a member's spec under. None when the name or
--- realm cannot be read: a realm read as empty would match a same-named player
--- of your realm.
-local function LibKey(unit)
-    local ok, name, realm = pcall(UnitName, unit)
-    if not ok or KE:IsSecretValue(name) or KE:IsSecretValue(realm) then return nil end
-    return KE.PartyCooldownsRules.LibKey(name, realm)
-end
-
 -- Build one healer snapshot (class/name/connection/spec) from the LibSpec
 -- cache. specID stays nil if unknown -> class-default icon.
 function HM:BuildHealerSnapshot(unit)
     local _, class = UnitClass(unit)
     local displayName = KE:GetNicknameOrName(unit)
     local connected = UnitIsConnected(unit)
-    local key = LibKey(unit)
+    local key = KE.PartyCooldownsSpec.LibKey(unit)
     return {
         unit = unit,
         name = displayName,

@@ -97,6 +97,7 @@ local function LibKey(unit)
     if not ok or KE:IsSecretValue(name) or KE:IsSecretValue(realm) then return nil end
     return KE.PartyCooldownsRules.LibKey(name, realm)
 end
+Spec.LibKey = LibKey
 
 -- Returns the spec and the key it was looked up under.
 local function LibSpecFor(unit)
