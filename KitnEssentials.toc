@@ -12,6 +12,7 @@
 ## X-Curse-Project-ID: 1485435
 ## X-Wago-ID: n6VLEEGd
 
+Core\Client.lua
 Libs\Init.xml
 
 Modules\Core\Diagnostics\TaintReport.lua

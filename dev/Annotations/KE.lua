@@ -205,6 +205,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
 ---@field PlayerAbsorbsFormat { Format: fun(amount:any, abbreviate:boolean, hideWhenZero:boolean):string }
 ---@field DungeonTimerDungeons KE.DungeonTimerEntry[] # Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua
+---@field IS_FOREVER boolean # Core/Client.lua: true on the Forever client, decided once from the interface version
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
