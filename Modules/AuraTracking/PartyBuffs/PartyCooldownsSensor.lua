@@ -632,10 +632,8 @@ function Track.KeyStart()
     end
 end
 
--- No restriction left: a charge cell counted from hidden reads keeps hidden
--- state, which no plain read can recount, so it goes back to full, in party
--- rows and the externals box alike. Its digit can read one charge high for up
--- to one cooldown.
+-- Party rows and the externals box alike; a reset digit can read one charge
+-- high for up to one cooldown.
 function Track.ChargeRestrictionsEnded()
     local n = Track.Now()
     for st in pairs(Track.slots) do

@@ -661,19 +661,15 @@ function Rules.ChargeLegacyUse(t, lit, short, n, isSecret, pick)
 end
 
 -- A read of a charge tracker: whether this path took it, and whether a value
--- changed. A read that cannot hold a use (ChargeIdle) only records, so it
--- never reaches the read-back. Plain reads on plain state change the state in
--- Lua; otherwise each new value is picked by the reads and the finished
--- answers, and none is written until every pick has run, so an error leaves
--- the state whole. With the count lost, or lost here because a finished
--- answer cannot be read, the use is timed as one cooldown (ChargeLegacyUse).
--- A lost count that reads plain again comes back and counts as a change. A
--- group read with another unit count than the read before only records, as
--- the first read after Track.ApplyGroup's hold does; that hold unprimes the
--- tracker whenever the unit list changes, so a primed read never meets one.
--- checked is the read-back's self-check: until it decides, a read that would
--- need a hidden value only records, so no count is lost without a cast; a use
--- in those seconds is not seen.
+-- changed. A read that cannot hold a use (ChargeIdle) only records. On hidden
+-- state each new value is picked by the reads and the finished answers, and
+-- none is written until every pick has run, so an error leaves the state
+-- whole. With the count lost, or a finished answer unreadable, the use is
+-- timed as one cooldown (ChargeLegacyUse). A group read with another unit
+-- count only records; Track.ApplyGroup's hold unprimes the tracker whenever
+-- the unit list changes. checked is the read-back's self-check: until it
+-- decides, a read that needs a hidden value only records, so no count is lost
+-- without a cast.
 function Rules.ChargeUse(t, lit, short, n, isSecret, pick, past, checked)
     if t.multi and t.prev.n ~= lit.n then return true, false end
     if Rules.ChargeIdle(t, lit, short, isSecret) then return true, false end
@@ -1081,8 +1077,8 @@ function Rules.KeyStartClear(t, entry, n)
 end
 
 -- Every restriction kind can hide a sensor's answer but Chat, which limits
--- addon messages only. Combat counts: aura reads are hidden in any combat,
--- the open world included.
+-- addon messages only. A kind that hid no read resets nothing: only cells on
+-- hidden state are reset.
 Rules.HIDING_KINDS = { "Combat", "Encounter", "ChallengeMode", "PvPMatch", "Map" }
 
 -- Whether no restriction that can hide a read is active. kinds is the

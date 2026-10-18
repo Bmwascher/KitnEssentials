@@ -1157,10 +1157,8 @@ function PB:OnRelease()
     if self.restylePending then self:Restyle() end
 end
 
--- Once no restriction that can hide a read is left, a charge cell counted
--- from hidden reads is still on hidden state, which no plain read can
--- recount, so those cells go back to full. IsAddOnRestrictionActive answers
--- false while this event dispatches, so the test waits for the next frame.
+-- IsAddOnRestrictionActive answers false while this event dispatches, so the
+-- test waits for the next frame.
 function PB:OnRestrictionChanged()
     C_Timer.After(0, function()
         if not self:IsEnabled() then return end
