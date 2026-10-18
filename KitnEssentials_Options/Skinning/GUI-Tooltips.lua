@@ -227,23 +227,33 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     manager:Register(targetLineCheck, "all")
     card4:AddRow(row4a, 40)
 
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local mythicPlusCheck = GUIFrame:CreateCheckbox(row4b, "Mythic+ Score", {
-        value = db.MythicPlusLine == true,
-        tooltip = "Adds the player's current season Mythic+ rating, colored by score. Only shows for players the game already has rating data for.",
-        callback = function(checked) db.MythicPlusLine = checked; ApplySettings() end,
-    })
-    row4b:AddWidget(mythicPlusCheck, 0.5)
-    manager:Register(mythicPlusCheck, "all")
+    -- A client can withhold these options; the module then ignores their
+    -- saved values, so their controls are left out rather than grayed.
+    local showMythicPlus = KE:IsFeatureAvailable("TooltipMythicPlus")
+    local showRealm = KE:IsFeatureAvailable("TooltipRealmNames")
+    if showMythicPlus or showRealm then
+        local row4b = GUIFrame:CreateRow(card4.content, 40)
+        if showMythicPlus then
+            local mythicPlusCheck = GUIFrame:CreateCheckbox(row4b, "Mythic+ Score", {
+                value = db.MythicPlusLine == true,
+                tooltip = "Adds the player's current season Mythic+ rating, colored by score. Only shows for players the game already has rating data for.",
+                callback = function(checked) db.MythicPlusLine = checked; ApplySettings() end,
+            })
+            row4b:AddWidget(mythicPlusCheck, 0.5)
+            manager:Register(mythicPlusCheck, "all")
+        end
 
-    local alwaysRealmCheck = GUIFrame:CreateCheckbox(row4b, "Always Show Realm", {
-        value = db.AlwaysShowRealm == true,
-        tooltip = "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow.",
-        callback = function(checked) db.AlwaysShowRealm = checked; ApplySettings() end,
-    })
-    row4b:AddWidget(alwaysRealmCheck, 0.5)
-    manager:Register(alwaysRealmCheck, "all")
-    card4:AddRow(row4b, 40)
+        if showRealm then
+            local alwaysRealmCheck = GUIFrame:CreateCheckbox(row4b, "Always Show Realm", {
+                value = db.AlwaysShowRealm == true,
+                tooltip = "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow.",
+                callback = function(checked) db.AlwaysShowRealm = checked; ApplySettings() end,
+            })
+            row4b:AddWidget(alwaysRealmCheck, 0.5)
+            manager:Register(alwaysRealmCheck, "all")
+        end
+        card4:AddRow(row4b, 40)
+    end
 
     local row4c = GUIFrame:CreateRow(card4.content, 40)
     local hideFactionCheck = GUIFrame:CreateCheckbox(row4c, "Hide Faction Line", {
@@ -266,13 +276,15 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     row4d:AddWidget(guildRankCheck, 0.5)
     manager:Register(guildRankCheck, "all")
 
-    local hideGuildRealmCheck = GUIFrame:CreateCheckbox(row4d, "Hide Guild Realm", {
-        value = db.HideGuildRealm == true,
-        tooltip = "Trims the realm from cross-realm guild names: 'Instant Dollars - Mal'Ganis' becomes 'Instant Dollars'.",
-        callback = function(checked) db.HideGuildRealm = checked; ApplySettings() end,
-    })
-    row4d:AddWidget(hideGuildRealmCheck, 0.5)
-    manager:Register(hideGuildRealmCheck, "all")
+    if KE:IsFeatureAvailable("TooltipGuildRealm") then
+        local hideGuildRealmCheck = GUIFrame:CreateCheckbox(row4d, "Hide Guild Realm", {
+            value = db.HideGuildRealm == true,
+            tooltip = "Trims the realm from cross-realm guild names: 'Instant Dollars - Mal'Ganis' becomes 'Instant Dollars'.",
+            callback = function(checked) db.HideGuildRealm = checked; ApplySettings() end,
+        })
+        row4d:AddWidget(hideGuildRealmCheck, 0.5)
+        manager:Register(hideGuildRealmCheck, "all")
+    end
     card4:AddRow(row4d, 40)
 
     local row4e = GUIFrame:CreateRow(card4.content, 46)

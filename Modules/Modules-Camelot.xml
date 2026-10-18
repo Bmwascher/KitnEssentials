@@ -9,5 +9,7 @@
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
+    <Script file="Skinning\Tooltips\Tooltips.lua" />
+    <Script file="Skinning\Tooltips\TooltipStatusBar.lua" />
     <Include file="Skinning\DarkTheme\Frames\Frames-Camelot.xml" />
 </Ui>

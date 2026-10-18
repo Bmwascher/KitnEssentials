@@ -33,6 +33,9 @@ local FOREVER_ALLOWED = {
     SkinBlizzardFramesFontsWindows = true,
     SkinBlizzardFramesSkins = true,
     SkinBlizzardFramesFrames = true,
+    -- Tooltips: the module and its page. Its realm-name, guild-realm and
+    -- Mythic+ options stay withheld.
+    SkinTooltips = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
