@@ -516,13 +516,19 @@ local function ReadCell(st, i, n)
     end
 end
 
--- A group cell: one answer per unit into the tracker's free list. Feed keeps
--- the list it is given as the previous read, so the lists swap only after it
--- has run. Any refused read skips the whole read.
+-- The units a group cell watches: its entry's own, else every unit of the
+-- slot.
+local function Watched(st, i)
+    return st.entries[i].units or st.units
+end
+
+-- A group cell: one answer per watched unit into the tracker's free list.
+-- Feed keeps the list it is given as the previous read, so the lists swap
+-- only after it has run. Any refused read skips the whole read.
 local function ReadGroupCell(st, i, n)
     local t, sensors = st.trackers[i], st.group[i]
     if not (st.ready[i] and t and sensors) then return end
-    local list, m = t.lists[t.next], #st.units
+    local list, m = t.lists[t.next], #Watched(st, i)
     for j = 1, m do
         local sensor = sensors[j]
         if not (sensor and sensor.keOn == true) then return end
@@ -815,8 +821,10 @@ local function GroupKey(e, i)
     return tostring(e.owner or i) .. "/" .. Sig(e)
 end
 
--- A group slot: each cell is read from one sensor per unit, so its buff on
--- any of them counts. Only this sets st.units, which every group branch
+-- A group slot: each cell is read from one sensor per unit it watches, so
+-- its buff on any of them counts. An entry's units name the ones it watches,
+-- else it watches all of units, which also lists the units whose aura
+-- changes trigger a read. Only this sets st.units, which every group branch
 -- tests. A changed unit list keeps the trackers: a count belongs to its
 -- entry and its owner. A count that moves to another cell settles first, as
 -- a re-aimed sensor does. The slot takes no overlay.
@@ -879,16 +887,18 @@ function Track.ApplyGroup(st, units, entries, style)
             moved = true
         end
         st.trackers[i] = t
+        t.quiet = e.quiet
         local sensors = st.group[i] or {}
         st.group[i] = sensors
         local ready = true
-        for j, unit in ipairs(units) do
+        local watched = e.units or units
+        for j, unit in ipairs(watched) do
             local ok, refused, aimed = Ready(sensors[j], sig, e.buffs, nil, unit)
             if refused then clean = false end
             if aimed and ok then moved = true end
             ready = ready and ok
         end
-        for j = #units + 1, #sensors do Park(sensors[j]) end
+        for j = #watched + 1, #sensors do Park(sensors[j]) end
         st.ready[i] = ready
     end
     for j = 1, st.count do
@@ -918,7 +928,7 @@ function Track.Missing(st)
     if st.units then
         if SensorsSpent(st) then return false end
         for i = 1, st.count do
-            for j = 1, #st.units do
+            for j = 1, #Watched(st, i) do
                 if not st.group[i][j] then return true end
             end
         end
@@ -949,7 +959,7 @@ function Track.BuildNext(st)
     if st.units then
         for i = 1, st.count do
             local e, sensors = st.entries[i], st.group[i]
-            for j = 1, #st.units do
+            for j = 1, #Watched(st, i) do
                 if not sensors[j] then
                     local sensor = NewSensor(e.buffs, nil, st.sensorHost)
                     if not sensor then return SensorFailed(st) end
