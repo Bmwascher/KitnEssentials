@@ -77,6 +77,21 @@ describe("PartyCooldownsRules.SpellList", function()
     end)
 end)
 
+describe("PartyCooldownsRules.IsOff", function()
+    it("takes a saved switch over the data default, and the data default while unset", function()
+        local R = loadRules()
+        local cases = {
+            { name = "saved off", off = { k = true }, spell = {}, want = true },
+            { name = "saved on over a default off", off = { k = false }, spell = { off = true }, want = false },
+            { name = "unset, default off", off = {}, spell = { off = true }, want = true },
+            { name = "unset, no default", off = {}, spell = {}, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.IsOff(case.off, "k", case.spell), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules lengths", function()
     it("prefers typed seconds, then the spec's talented length, then the base, clamping the typed one", function()
         local R = loadRules()

@@ -58,6 +58,12 @@ local function Entry(castID, spell, key, listed, typed, isOff)
     }
 end
 
+-- A saved switch wins; an entry never switched takes its data row's default.
+function Rules.IsOff(off, key, spell)
+    if off[key] ~= nil then return off[key] == true end
+    return spell ~= nil and spell.off == true
+end
+
 -- The spec's entries: casts in the saved order first, the rest after them in
 -- table order. A switched-off entry is dropped unless all is set, which the
 -- editor uses to list every one.
@@ -81,7 +87,7 @@ function Rules.SpellList(specID, db, all)
         if type(item) == "table" then castID, talented = item[1], item[2] end
         local spell = data.SPELLS[castID]
         local key = Rules.CooldownKey(specID, castID)
-        local isOff = off[key] == true or (off[key] == nil and spell ~= nil and spell.off == true)
+        local isOff = Rules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
             local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
             entry.at = rank and (rank[castID] or #order + i) or i
@@ -666,7 +672,7 @@ function Rules.RacialEntry(castID, db, all)
     if not spell then return nil end
     db = Table(db)
     local key = Rules.RacialKey(castID)
-    local isOff = Table(db.CooldownOff)[key] == true
+    local isOff = Rules.IsOff(Table(db.CooldownOff), key, spell)
     if isOff and not all then return nil end
     return Entry(castID, spell, key, spell.cd, Table(db.CooldownSeconds)[key], isOff)
 end

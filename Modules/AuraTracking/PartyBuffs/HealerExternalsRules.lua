@@ -46,7 +46,7 @@ function Rules.Entries(specID, db, all)
     for _, castID in ipairs(row.casts) do
         local spell = data.SPELLS[castID]
         local key = Rules.Key(specID, castID)
-        local isOff = off[key] == true
+        local isOff = KE.PartyCooldownsRules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
             out[#out + 1] = {
                 id = castID, key = key, spell = spell, kind = spell.kind, buffs = spell.buffs,
