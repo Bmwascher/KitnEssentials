@@ -40,6 +40,21 @@ function ProfileManager:IsRefreshSuppressed()
     return suppressRefresh
 end
 
+-- AceDB raises a Lua error for any other name, so every path that names a
+-- profile refuses it first.
+local NAME_RULE = "Profile names must be 1 to 50 characters and not only spaces"
+
+---@param name any
+---@return string|nil error
+function ProfileManager.ProfileNameError(name)
+    if type(name) ~= "string" then return NAME_RULE end
+    -- UTF-8 characters: every byte that is not a continuation byte.
+    local length = select(2, name:gsub("[^\128-\191]", ""))
+    if length == 0 or length > 50 or name:find("^ +$") then return NAME_RULE end
+    return nil
+end
+local ProfileNameError = ProfileManager.ProfileNameError
+
 ---------------------------------------------------------------------------------
 -- Profile CRUD
 ---------------------------------------------------------------------------------
@@ -65,6 +80,8 @@ end
 ---@return string|nil error
 function ProfileManager:SetProfile(profileName)
     if not profileName or profileName == "" then return false, "Invalid profile name" end
+    local nameErr = ProfileNameError(profileName)
+    if nameErr then return false, nameErr end
     if not KE.db then return false, "Database not initialized" end
 
     -- SetProfile handles creation if profile doesn't exist
@@ -79,6 +96,8 @@ end
 ---@return string|nil error
 function ProfileManager:CreateProfile(profileName)
     if not profileName or profileName == "" then return false, "Profile name cannot be empty" end
+    local nameErr = ProfileNameError(profileName)
+    if nameErr then return false, nameErr end
     if not KE.db then return false, "Database not initialized" end
 
     -- Check if profile with the same name already exists
@@ -183,6 +202,8 @@ function ProfileManager:RenameProfile(oldName, newName)
     if not oldName or oldName == "" then return false, "Current name cannot be empty" end
     if not newName or newName == "" then return false, "New name cannot be empty" end
     if oldName == newName then return false, "Names are identical" end
+    local nameErr = ProfileNameError(newName)
+    if nameErr then return false, nameErr end
     if not KE.db then return false, "Database not initialized" end
 
     -- Check if old profile exists
@@ -268,6 +289,8 @@ end
 ---@return string|nil error
 function ProfileManager:SetGlobalProfile(profileName)
     if not profileName or profileName == "" then return false, "Profile name cannot be empty" end
+    local nameErr = ProfileNameError(profileName)
+    if nameErr then return false, nameErr end
     if not KE.db or not KE.db.global then return false, "Database not initialized" end
 
     KE.db.global.GlobalProfile = profileName
@@ -380,11 +403,9 @@ end
 function ProfileManager:InstallProfile(profileData, targetName)
     if not KE.db then return false, "Database not initialized" end
 
-    -- Before the copy, so a string exported before a rename lands converted
-    -- and no old key reaches KE.db.
-    KE:MigrateProfileKeys(profileData)
-
     local finalName = targetName or "Imported"
+    local nameErr = ProfileNameError(finalName)
+    if nameErr then return false, nameErr end
 
     -- Check if profile exists and generate unique name if needed
     local profiles = self:GetProfiles()
@@ -403,6 +424,13 @@ function ProfileManager:InstallProfile(profileData, targetName)
             end
         end
     end
+
+    nameErr = ProfileNameError(finalName)
+    if nameErr then return false, nameErr end
+
+    -- Before the copy, so a string exported before a rename lands converted
+    -- and no old key reaches KE.db.
+    KE:MigrateProfileKeys(profileData)
 
     -- Create the profile
     local currentProfile = self:GetCurrentProfile()
@@ -622,7 +650,7 @@ end
 --- Set the active profile
 ---@param profileKey string The profile to activate
 function KitnEssentialsAPI:SetProfile(profileKey)
-    if not profileKey or profileKey == "" then return end
+    if ProfileNameError(profileKey) then return end
     if not KE.db then return end
 
     KE.db:SetProfile(profileKey)

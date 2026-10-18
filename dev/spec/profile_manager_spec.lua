@@ -323,3 +323,52 @@ describe("ProfileManager:DecodeImportString embedded name", function()
         end
     end)
 end)
+
+-- AceDB raises a Lua error for a profile name outside 1-50 characters or made
+-- only of spaces; every naming path refuses it before reaching AceDB.
+describe("ProfileManager profile-name refusal", function()
+    local long = string.rep("a", 51)
+
+    it("accepts 1-50 characters and refuses the rest", function()
+        local PM = L.loadProfileManager()
+        local cases = {
+            { name = "Default",                  ok = true,  label = "plain" },
+            { name = string.rep("a", 50),        ok = true,  label = "50 bytes" },
+            { name = string.rep("\195\169", 50), ok = true,  label = "50 two-byte characters" },
+            { name = "",                         ok = false, label = "empty" },
+            { name = long,                       ok = false, label = "51 characters" },
+            { name = "   ",                      ok = false, label = "spaces only" },
+            { name = 7,                          ok = false, label = "not a string" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.ok, PM.ProfileNameError(c.name) == nil, c.label)
+        end
+    end)
+
+    it("creates, renames, switches and sets nothing for a refused name", function()
+        local PM, _, db = L.loadProfileManager()
+        db:SetProfile("A"); db:SetProfile("Default")
+        local calls = {
+            function() return PM:CreateProfile(long) end,
+            function() return PM:RenameProfile("A", long) end,
+            function() return PM:SetProfile(long) end,
+            function() return PM:SetGlobalProfile(long) end,
+            function() return PM:InstallProfile({}, long) end,
+        }
+        for i, call in ipairs(calls) do
+            assert.is_false(call(), "call " .. i)
+        end
+        assert.is_nil(db.profiles[long])
+        assert.is_table(db.profiles.A)
+        assert.equals("Default", PM:GetCurrentProfile())
+        assert.is_nil(db.global.GlobalProfile)
+    end)
+
+    it("refuses an import whose de-duplicated name grows past 50", function()
+        local PM, _, db = L.loadProfileManager()
+        local base = string.rep("b", 48)
+        db:SetProfile(base); db:SetProfile("Default")
+        assert.is_false(PM:InstallProfile({}, base))
+        assert.is_nil(db.profiles[base .. " (2)"])
+    end)
+end)
