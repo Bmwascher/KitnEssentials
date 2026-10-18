@@ -10,9 +10,6 @@ local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 
 local C_Timer = C_Timer
-local UIParent = UIParent
-local math_ceil = math.ceil
-local math_max = math.max
 local next = next
 
 local GROW_OPTIONS = GUIFrame.GrowVerticalOptions
@@ -165,9 +162,6 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card: Position (the same saved position /kes edit moves)
     ----------------------------------------------------------------
-    -- A box dragged in Edit Mode can sit up to a screen's size from its anchor,
-    -- so the sliders span the screen rather than the card's default 1000.
-    local reach = math_ceil(math_max(UIParent:GetWidth(), UIParent:GetHeight()))
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position",
         db = db,
@@ -178,7 +172,6 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         },
         defaults = { anchorFrameType = "UIPARENT", strata = "MEDIUM" },
         showStrata = true,
-        sliderRange = { -reach, reach },
         onChangeCallback = ApplySettings,
     })
     manager:Register(posCard, "barsOn")
