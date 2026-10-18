@@ -75,10 +75,16 @@ local unsettled = setmetatable({}, { __mode = "k" })
 -- Read-only seam: the in-game check counts backdrops left unsettled.
 S._unsettled = unsettled
 
+---@type fun()
+local EnsureShared
+
 local skinState = setmetatable({}, { __mode = "k" })
 function S.data(obj)
     local d = skinState[obj]
-    if not d then d = {}; skinState[obj] = d end
+    if not d then
+        EnsureShared()
+        d = {}; skinState[obj] = d
+    end
     return d
 end
 
@@ -263,14 +269,12 @@ local BLIZZARD_REGIONS = {
 -- S.KillTexture now routes through S.Kill.
 -- The flyout no longer uses it -- that path moved to the ClearTexture
 -- idiom via S.ClearButtonArt, which is surgery-free.
-S.HiddenFrame = S.HiddenFrame or CreateFrame("Frame", nil, _G.UIParent)
-S.HiddenFrame:Hide()
-
 function S.Kill(object)
     if not object then return end
+    EnsureShared()
     if object.UnregisterAllEvents then
         object:UnregisterAllEvents()
-        if object.SetParent then object:SetParent(S.HiddenFrame) end
+        if object.SetParent and S.HiddenFrame then object:SetParent(S.HiddenFrame) end
     elseif object.Hide then
         object.Show = object.Hide
     end
@@ -515,6 +519,7 @@ function S.Backdrop(frame, inset, borderOnly)
         S.PixelSnap(bd)
         bd:SetBackdropBorderColor(unpack(S.borderColor))
         backdropCache[frame] = bd
+        EnsureShared()
     end
 
     bd:SetBackdropColor(S.bgColor[1], S.bgColor[2], S.bgColor[3], borderOnly and 0 or S.bgColor[4])
@@ -527,10 +532,6 @@ function S.Backdrop(frame, inset, borderOnly)
     return bd
 end
 
-local edgeRefresher = CreateFrame("Frame")
-edgeRefresher:RegisterEvent("PLAYER_ENTERING_WORLD")
-edgeRefresher:RegisterEvent("UI_SCALE_CHANGED")
-edgeRefresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
 -- An inset client's mode: true insets all four sides, VERTICAL_ONLY only top
 -- and bottom, for a row hover that spans the row's full width.
 local VERTICAL_ONLY = "vertical"
@@ -639,7 +640,10 @@ S._RefreshOwnEdge = RefreshOwnEdge
 -- For a frame that hosts S.InsetToEdge regions but wears no KE edge: no
 -- refresher walks it otherwise, so its regions would keep an old edge size.
 function S.TrackEdgeClients(frame)
-    if frame and ownEdges[frame] == nil then ownEdges[frame] = false end
+    if frame and ownEdges[frame] == nil then
+        ownEdges[frame] = false
+        EnsureShared()
+    end
 end
 
 -- A 1 px KE edge on the frame itself, for frames whose owner colors their own
@@ -654,6 +658,7 @@ function S.OwnBackdrop(frame, edgeOnly)
         info = { edgeFile = BG_TEX, bgFile = (not edgeOnly) and BG_TEX or nil }
         ownedInfo[info] = true
         ownEdges[frame] = info
+        EnsureShared()
     end
     if frame.backdropInfo == info then
         RefreshOwnEdge(frame)
@@ -673,14 +678,39 @@ function S.ReleaseOwnBackdrop(frame)
     unsettled[frame] = nil
 end
 
-edgeRefresher:SetScript("OnEvent", function()
+local function RefreshAllEdges()
     -- One frame that refuses a geometry read must not abort the sweep:
     -- that would leave every backdrop after it in the iteration order
     -- stale, and pairs order is arbitrary, so the damage would move
     -- around between sessions.
     for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
     for frame in pairs(ownEdges) do pcall(RefreshOwnEdge, frame) end
-end)
+end
+
+-- The parking frame, the edge refresher and the radio-button hook start with
+-- the first skin work, so a client whose skins are all off pays nothing.
+-- Before then there is no backdrop to refresh and no skinned button. A frame
+-- made by a start that could not finish is kept, so a retry makes no second.
+local sharedStarted, refresher = false, nil
+EnsureShared = function()
+    if sharedStarted then return end
+    if not S.HiddenFrame then
+        S.HiddenFrame = CreateFrame("Frame", nil, _G.UIParent)
+        if S.HiddenFrame then S.HiddenFrame:Hide() end
+    end
+    refresher = refresher or CreateFrame("Frame")
+    if not (S.HiddenFrame and refresher) then return end
+    sharedStarted = true
+    refresher:RegisterEvent("PLAYER_ENTERING_WORLD")
+    refresher:RegisterEvent("UI_SCALE_CHANGED")
+    refresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+    refresher:SetScript("OnEvent", RefreshAllEdges)
+    if _G.SetCheckButtonIsRadio then
+        hooksecurefunc("SetCheckButtonIsRadio", function(button)
+            S.CheckRefresh(button)
+        end)
+    end
+end
 
 -- True when this backdrop owes nothing to the roots. The climb shares the
 -- pcall with the refresh, so a parent read that raises costs this backdrop,
@@ -1531,12 +1561,6 @@ function S.CheckRefresh(check)
     S.SweepCheckChildren(check)
     flat(checked)
     flat(disabledChecked)
-end
-
-if _G.SetCheckButtonIsRadio then
-    hooksecurefunc("SetCheckButtonIsRadio", function(button)
-        S.CheckRefresh(button)
-    end)
 end
 
 function S.CheckBox(check)

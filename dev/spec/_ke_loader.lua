@@ -544,9 +544,9 @@ function L.loadChatMessageHandler(overrides)
     return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
--- Modules/Skinning/SkinAPI.lua. Creates frames at file scope (the hidden
--- parking frame and the edge refresher), so CreateFrame must exist before
--- the load. GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
+-- Modules/Skinning/SkinAPI.lua. Creates its parking frame and edge refresher
+-- at the first skin work, so CreateFrame must exist before any case skins.
+-- GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
 -- which would drag in the whole profile stack for two color lookups.
 local SKINAPI_THEME = {
     accent      = { 1.0, 0.0, 0.549, 1 },
