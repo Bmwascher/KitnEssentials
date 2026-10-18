@@ -181,6 +181,18 @@ local function Done(m)
     return true
 end
 
+-- Every answer the member is still wanted for is in hand and only marked
+-- stale, so an inspect that never answers costs fewer tries.
+local function OnlyStale(m)
+    if m.source == nil or m.source == "guess" then return false end
+    if Spec.trackTrinkets == true and m.trinketItems == nil then return false end
+    if Spec.trackClass == true and m.talents == nil
+        and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil then
+        return false
+    end
+    return true
+end
+
 function Spec.ReadSelf(m)
     for _, reader in ipairs(Spec.readers) do
         if reader.Self and IsOn(reader) then reader.Self(m) end
@@ -205,7 +217,7 @@ function Spec.Tick()
     local rules = KE.PartyCooldownsRules
     if Spec.pending then
         if now - Spec.lastRequest < INSPECT_TIMEOUT then return end
-        rules.CountTry(Spec.pending, now)
+        rules.CountTry(Spec.pending, now, OnlyStale(Spec.pending))
         Spec.pending = nil
     end
     local waiting = false
@@ -235,7 +247,7 @@ function Spec.Tick()
     if pcall(NotifyInspect, m.unit) then
         Spec.pending = m
     else
-        rules.CountTry(m, now)
+        rules.CountTry(m, now, OnlyStale(m))
     end
 end
 
@@ -304,7 +316,7 @@ local function OnInspectReady(guid)
     end
     if not KE.PartyCooldownsRules.InspectInUse(InspectViews()) then pcall(ClearInspectPlayer) end
     m.done = Done(m)
-    if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime()) end
+    if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime(), OnlyStale(m)) end
     Changed(m)
 end
 

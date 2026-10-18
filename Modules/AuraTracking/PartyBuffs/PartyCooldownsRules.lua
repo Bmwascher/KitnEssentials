@@ -21,6 +21,7 @@ KE.PartyCooldownsRules = Rules
 Rules.CD_MIN, Rules.CD_MAX = 5, 900
 Rules.INSPECT_GAP = 2
 Rules.MAX_TRIES = 12
+Rules.STALE_TRIES = 3
 Rules.TRY_WAIT = 30
 
 local function Table(value)
@@ -137,10 +138,11 @@ function Rules.NextInspect(state, members)
     return nil
 end
 
--- A request with no answer is a try; MAX_TRIES of them rest the member.
-function Rules.CountTry(m, now)
+-- A request with no answer is a try; MAX_TRIES of them rest the member, or
+-- STALE_TRIES when every answer it is wanted for is in hand and only stale.
+function Rules.CountTry(m, now, stale)
     m.tries = (m.tries or 0) + 1
-    if m.tries >= Rules.MAX_TRIES then
+    if m.tries >= (stale and Rules.STALE_TRIES or Rules.MAX_TRIES) then
         m.tries, m.waitUntil = 0, now + Rules.TRY_WAIT
     end
 end

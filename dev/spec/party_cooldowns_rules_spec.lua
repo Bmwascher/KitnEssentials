@@ -161,16 +161,22 @@ describe("PartyCooldownsRules.NextInspect", function()
         assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
     end)
 
-    it("rests a member for TRY_WAIT seconds after MAX_TRIES tries", function()
+    it("rests a member for TRY_WAIT seconds after MAX_TRIES tries, or STALE_TRIES when only stale", function()
         local R = loadRules()
-        local m = member("a")
-        for _ = 1, R.MAX_TRIES - 1 do R.CountTry(m, 100) end
-        assert.is_nil(m.waitUntil)
-        R.CountTry(m, 100)
-        local back = 100 + R.TRY_WAIT
-        assert.are.same({ 0, back }, { m.tries, m.waitUntil })
-        assert.is_nil(R.NextInspect({ now = back - 1 }, { m }))
-        assert.are.equal(m, R.NextInspect({ now = back }, { m }))
+        local cases = {
+            { name = "unread", stale = false, cap = R.MAX_TRIES },
+            { name = "stale", stale = true, cap = R.STALE_TRIES },
+        }
+        for _, case in ipairs(cases) do
+            local m = member("a")
+            for _ = 1, case.cap - 1 do R.CountTry(m, 100, case.stale) end
+            assert.is_nil(m.waitUntil, case.name)
+            R.CountTry(m, 100, case.stale)
+            local back = 100 + R.TRY_WAIT
+            assert.are.same({ 0, back }, { m.tries, m.waitUntil }, case.name)
+            assert.is_nil(R.NextInspect({ now = back - 1 }, { m }), case.name)
+            assert.are.equal(m, R.NextInspect({ now = back }, { m }), case.name)
+        end
     end)
 end)
 
