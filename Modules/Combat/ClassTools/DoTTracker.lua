@@ -557,13 +557,15 @@ local function PullBack(cell)
     cell.frame:SetPoint("TOPLEFT", DT.root, "TOPLEFT", 0, 0)
 end
 
--- Whether a pooled icon holds the cell's slot and cooldown. A secret id never
--- matches.
+-- Whether a pooled icon holds the cell's slot and cooldown. A nil or secret id
+-- or slot never matches; a released icon has neither.
 local function HoldsSlot(icon, cell)
     local slot = icon.layoutIndex
-    if issecretvalue(slot) or slot ~= cell.attachSlot or not icon.GetCooldownID then return false end
+    if issecretvalue(slot) or slot == nil or slot ~= cell.attachSlot or not icon.GetCooldownID then
+        return false
+    end
     local id = icon:GetCooldownID()
-    return id ~= nil and not issecretvalue(id) and id == cell.attachID
+    return not issecretvalue(id) and id ~= nil and id == cell.attachID
 end
 
 local function FindSlot(viewer, cell)
@@ -965,9 +967,9 @@ function DT:PlaceAttached(force)
         if on then icon, viewerKey = FindIcon(cell) end
         local id = icon and icon:GetCooldownID()
         local slot = icon and icon.layoutIndex
-        -- HoldsSlot compares these inside Blizzard's refresh, so only a plain
-        -- id and slot are recorded; otherwise the cell stays in the row.
-        if id == nil or issecretvalue(id) or issecretvalue(slot) then icon = nil end
+        -- HoldsSlot compares these inside Blizzard's refresh, so only a plain,
+        -- present id and slot are recorded; otherwise the cell stays in the row.
+        if issecretvalue(id) or issecretvalue(slot) or id == nil or slot == nil then icon = nil end
         if icon then
             cell.attachIcon, cell.attachViewer = icon, viewerKey
             cell.attachID, cell.attachSlot = id, slot
