@@ -91,13 +91,14 @@ describe("plate slots", function()
         assert.same({ "1=nameplate1" }, released)
     end)
 
-    it("gives a refused take's slot to the next plate in the same scan and tries the refused plate on the next; only false refuses", function()
-        -- onTake's answer for nameplate1 on the first scan; then slot 1's unit,
-        -- the total and the releases; then nameplate1's slot after a second scan.
+    it("skips a slot that refused a plate for the rest of the scan and tries the plate on the next; only false refuses", function()
+        -- Slot 1's onTake answer on the first scan; then slot 1's and slot 2's
+        -- units, the total and the releases; then nameplate1's slot after a
+        -- second scan. The refusal belongs to the slot, as a broken sensor's would.
         local cases = {
-            { false, "nameplate2", 1, { "1=nameplate1" }, 2 },
-            { nil, "nameplate1", 2, {}, 1 },
-            { true, "nameplate1", 2, {}, 1 },
+            { false, nil, "nameplate2", 1, { "1=nameplate1" }, 1 },
+            { nil, "nameplate1", "nameplate2", 2, {}, 1 },
+            { true, "nameplate1", "nameplate2", 2, {}, 1 },
         }
         for i, case in ipairs(cases) do
             up.nameplate1, up.nameplate2 = true, true
@@ -106,20 +107,21 @@ describe("plate slots", function()
             local slots = KE.PlateSlots.New({
                 verdict = function(unit) return reasons[unit] end,
                 cap = 2,
-                onTake = function(_, unit)
-                    if first and unit == "nameplate1" then return case[1] end
+                onTake = function(slot)
+                    if first and slot == 1 then return case[1] end
                 end,
                 onRelease = function(slot, unit) released[#released + 1] = slot .. "=" .. unit end,
             })
             slots:Start()
             slots:ScanNow()
             assert.equals(case[2], slots:UnitOf(1), "slot 1, case " .. i)
-            assert.equals(case[3], slots:Total(), "total, case " .. i)
-            assert.same(case[4], released, "released, case " .. i)
+            assert.equals(case[3], slots:UnitOf(2), "slot 2, case " .. i)
+            assert.equals(case[4], slots:Total(), "total, case " .. i)
+            assert.same(case[5], released, "released, case " .. i)
 
             first = false
             slots:ScanNow()
-            assert.equals(case[5], slots:SlotOf("nameplate1"), "retry, case " .. i)
+            assert.equals(case[6], slots:SlotOf("nameplate1"), "retry, case " .. i)
         end
     end)
 
