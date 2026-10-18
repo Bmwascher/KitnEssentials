@@ -1649,11 +1649,41 @@ function PB:ApplyLiveAlpha()
     for _, slot in pairs(self.slots) do slot.holder:SetAlpha(alpha) end
 end
 
+-- A plain frame that stays shown under UIParent, so its scripts run when the
+-- whole interface hides and shows. Made on the first preview; with the
+-- preview closed both return at once.
+local function OnInterfaceHidden()
+    if not (PB:IsEnabled() and PB.previewing) then return end
+    PB:HidePreviewFrames()
+    Pot.HidePreview()
+    HX.HidePreview()
+end
+
+local function OnInterfaceShown()
+    if PB:IsEnabled() and PB.previewing then PB:ShowPreview() end
+end
+
+function PB:EnsureUIWatcher()
+    if self.uiWatcher then return end
+    local watcher = CreateFrame("Frame", nil, UIParent)
+    watcher:SetSize(1, 1)
+    watcher:EnableMouse(false)
+    watcher:SetScript("OnHide", OnInterfaceHidden)
+    watcher:SetScript("OnShow", OnInterfaceShown)
+    self.uiWatcher = watcher
+end
+
 -- Held back while a roster change settles, like the live icons; the settle
--- timer redraws it.
+-- timer redraws it. With the whole interface hidden nothing is drawn, so no
+-- glow loops under it; the watcher redraws when it shows.
 function PB:ShowPreview()
+    self:EnsureUIWatcher()
     self.previewing = true
     self:ApplyLiveAlpha()
+    if not UIParent:IsShown() then
+        self:HidePreviewFrames()
+        return
+    end
     -- The potion samples sit in their own box, not beside party frames, so a
     -- roster settle does not hold them back.
     Pot.ShowPreview()
