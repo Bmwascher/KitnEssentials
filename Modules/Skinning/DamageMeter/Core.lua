@@ -2740,8 +2740,16 @@ DM.RATE_METER_TYPES = RATE_METER_TYPES
 
 function DM:ReportView(rest, winIdx)
     -- winIdx selects which window to report: the header Report button passes the clicked
-    -- window's index; the slash command omits it -> the primary window (1).
-    winIdx = winIdx or 1
+    -- window's index; the slash command omits it -> the window numbered 1 on screen,
+    -- which need not be storage index 1 once windows are moved or removed. Dock.lua
+    -- loads after this file, so the lookup is guarded.
+    if not winIdx then
+        winIdx = 1
+        if self.DockWindowIndices then
+            self._reportScratch = self._reportScratch or {}
+            winIdx = self:DockWindowIndices(self._reportScratch)[1] or 1
+        end
+    end
     -- Guard the captured chat API: a missing namespace is a clean no-op, not a nil call.
     if not SendChat then return end
     -- SendChatMessage is refused under a chat lock; say why instead of sending.
