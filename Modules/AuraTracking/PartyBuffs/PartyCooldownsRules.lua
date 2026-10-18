@@ -268,13 +268,15 @@ function Rules.NewTracker(cd, hasShort, multi, charges)
     return t
 end
 
--- Back to ready, both charges full; the next read records without stamping.
+-- Back to ready, both charges full, with no late-fall window; the next read
+-- records without stamping.
 function Rules.Clear(t, n)
     for k = 1, 2 do
         local sl = t.slot[k]
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
     t.cur, t.primed, t.prev, t.prevShort, t.quietTo, t.restartTo = 1, false, nil, nil, nil, nil
+    t.fallD, t.fallFrom, t.fallTo = nil, nil, nil
     if t.charges then
         t.b, t.a0, t.a1, t.a2 = 0, 0, 0, 1
         t.f1, t.f2, t.p1, t.p2, t.fRead, t.legacy, t.lb = nil, nil, nil, nil, nil, nil, nil

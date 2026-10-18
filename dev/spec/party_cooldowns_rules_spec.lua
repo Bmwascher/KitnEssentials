@@ -394,6 +394,22 @@ describe("PartyCooldownsRules.Feed", function()
         end
     end)
 
+    it("takes no fall after a clear in a window armed before it", function()
+        local R = loadRules()
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local w = wrap[2]
+            local t = R.NewTracker(300, false)
+            R.Clear(t, 0)
+            R.ArmFall(t, 0, 30)
+            -- A potion list change mid-key: the window's seconds are 32 to 61.
+            R.Clear(t, 10)
+            R.Feed(t, w(true), nil, 15, isSecret, pick)
+            R.Feed(t, w(false), nil, 40, isSecret, pick)
+            local sl = t.slot[t.cur]
+            assert.are.same({ 0, 1 }, { sl.v, sl.c }, wrap[1])
+        end
+    end)
+
     it("still stamps a rise inside the window at the read", function()
         local R = loadRules()
         for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
