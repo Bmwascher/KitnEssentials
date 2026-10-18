@@ -413,7 +413,7 @@ local function ConstructSchematic(parent)
     local gapDriver = CreateFrame("Frame", nil, container)
 
     local function PaintHandle(h)
-        h.line:SetShown(h._hover or gapDrag.handle == h)
+        h.line:SetShown(h._hover or h._lit or gapDrag.handle == h)
     end
 
     local function StopGapDrag()
@@ -487,10 +487,12 @@ local function ConstructSchematic(parent)
         h:SetScript("OnEnter", function(self)
             self._hover = true
             PaintHandle(self)
+            if container._onHover then container._onHover("gap", self, true) end
         end)
         h:SetScript("OnLeave", function(self)
             self._hover = false
             PaintHandle(self)
+            if container._onHover then container._onHover("gap", self, false) end
         end)
         h:SetScript("OnMouseDown", function(self, button)
             if button == "LeftButton" then StartGapDrag(self) end
@@ -609,10 +611,12 @@ local function ConstructSchematic(parent)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText("Remove window " .. tostring(box.pos or "?"), 1, 1, 1, 1, true)
             GameTooltip:Show()
+            if container._onHover then container._onHover("box", box, true) end
         end)
         removeBtn:SetScript("OnLeave", function()
             GameTooltip:Hide()
             HideRemoveUnlessOver(box)
+            if container._onHover then container._onHover("box", box, false) end
         end)
         removeBtn:SetScript("OnClick", function()
             local dm = GetDM()
@@ -621,11 +625,23 @@ local function ConstructSchematic(parent)
         end)
         box.removeBtn = removeBtn
 
+        -- The 2 px mark for a window the pointer is on, here or on the meter.
+        local lit = CreateFrame("Frame", nil, box, "BackdropTemplate")
+        lit:SetAllPoints(box)
+        lit:SetFrameLevel(box:GetFrameLevel() + 1)
+        lit:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
+        lit:Hide()
+        box.lit = lit
+
         box:EnableMouse(true)
         box:SetScript("OnEnter", function(self)
             if self._removable and not container._dragWin then self.removeBtn:Show() end
+            if container._onHover then container._onHover("box", self, true) end
         end)
-        box:SetScript("OnLeave", HideRemoveUnlessOver)
+        box:SetScript("OnLeave", function(self)
+            HideRemoveUnlessOver(self)
+            if container._onHover then container._onHover("box", self, false) end
+        end)
         box:RegisterForDrag("LeftButton")
         box:SetScript("OnDragStart", function(self)
             local posOf, infoOf = container._posOf, container._infoOf
@@ -728,6 +744,37 @@ local function ConstructSchematic(parent)
     -- For the Sizing sliders: the columns table is the live saved one, so a
     -- relayout picks up a ratio the slider has just written.
     container.Relayout = function() Layout(container:GetWidth()) end
+
+    -- fn(kind, frame, entering): kind "box" for a box (frame.winIdx), "gap" for a
+    -- gap handle (frame.kind, frame.c, frame.r). Setting it clears every mark.
+    function container.SetHover(fn)
+        container._onHover = fn
+        container.LightBoxes(nil)
+        container.LightGap(nil)
+    end
+
+    -- set[idx] = true lights those windows' boxes; nil lights none.
+    function container.LightBoxes(set)
+        local accent = Theme.accent
+        for i = 1, #boxes do
+            local box = boxes[i]
+            if set and i <= (container._count or 0) and set[box.winIdx] then
+                box.lit:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
+                box.lit:Show()
+            else
+                box.lit:Hide()
+            end
+        end
+    end
+
+    -- gap is a split target ({ gapKind, c, r }) or nil.
+    function container.LightGap(gap)
+        for i = 1, #handles do
+            local h = handles[i]
+            h._lit = gap ~= nil and h.kind == gap.gapKind and h.c == gap.c and h.r == gap.r
+            PaintHandle(h)
+        end
+    end
 
     -- infoOf(idx) returns the window's type text, segment text and full label.
     function container.Configure(_, cols, posOf, infoOf, removable)
@@ -862,6 +909,180 @@ local function ConstructWindowHeader(parent)
 end
 
 GUIFrame:NewWidgetPool("dm:hdr", ConstructWindowHeader, function() end)
+
+---------------------------------------------------------------------------------
+-- Hover link
+---------------------------------------------------------------------------------
+-- Pointing at a window's row or map box, or at a split's slider or map gap,
+-- lights it here and outlines its windows on the meter. Pointing at a meter
+-- window lights its row and box. Filled by each Windows tab build and emptied
+-- by every rebuild and by leaving the page.
+local HOVER_ROW_ALPHA = 0.06
+
+local Hover = { targets = {}, gaps = {}, set = {} }
+
+-- r is nil for a column split; AddSplit passes nil for every column gap.
+---@param kind string
+---@param c integer
+---@param r integer|nil
+---@return string
+function Hover.GapKey(kind, c, r)
+    if kind == "col" or not r then return "c" .. c end
+    return "r" .. c .. ":" .. r
+end
+
+-- The target's windows as a set, in one reused table.
+function Hover.SetOf(target)
+    local set = Hover.set
+    wipe(set)
+    if target then
+        for i = 1, #target.wins do set[target.wins[i]] = true end
+    end
+    return set
+end
+
+function Hover.Paint(target)
+    for _, t in pairs(Hover.targets) do t.catcher:SetLit(t == target) end
+    for _, t in pairs(Hover.gaps) do t.catcher:SetLit(t == target) end
+    local map = Hover.schematic
+    if not map then return end
+    if target and target.kind == "win" then
+        map.LightBoxes(Hover.SetOf(target))
+    else
+        map.LightBoxes(nil)
+    end
+    map.LightGap(target and target.kind == "gap" and target or nil)
+end
+
+function Hover.Highlight(target)
+    local DM = GetDM()
+    if DM and DM.HighlightWindows then
+        DM:HighlightWindows(target and Hover.SetOf(target) or nil)
+    end
+end
+
+-- Repeats each frame while the pointer is still on the focused frame. A frame
+-- with no hover report of its own (a pooled widget's part this page does not
+-- wire, a dropdown's open list) sends no leave when the pointer goes straight
+-- off the element, so only this geometric test can end the focus. An enter
+-- stops the repeat.
+function Hover.Check()
+    Hover.looping = false
+    if not Hover.wanted then return end
+    local frame = Hover.frame
+    if Hover.focus and frame and frame:IsVisible() and frame:IsMouseOver() then
+        Hover.looping = true
+        C_Timer.After(0, Hover.Check)
+        return
+    end
+    Hover.wanted = false
+    if not Hover.focus then return end
+    Hover.focus, Hover.frame = nil, nil
+    Hover.Paint(Hover.meterTarget)
+    Hover.Highlight(nil)
+end
+
+-- An enter takes the focus at once. A leave is settled by the geometric test
+-- above, so a move between a row's own widgets, or from a box onto its remove
+-- button, keeps the focus.
+function Hover.Note(target, frame, entering)
+    if not Hover.active then return end
+    if entering then
+        Hover.wanted = false
+        Hover.frame = frame
+        if Hover.focus ~= target then
+            Hover.focus = target
+            Hover.Paint(target)
+            Hover.Highlight(target)
+        end
+    else
+        Hover.wanted = true
+        if not Hover.looping then
+            Hover.looping = true
+            C_Timer.After(0, Hover.Check)
+        end
+    end
+end
+
+-- The meter side: idx is the window under the pointer on the meter, or nil.
+function Hover.OnWindowHover(idx)
+    Hover.meterTarget = idx and Hover.targets[idx] or nil
+    if not Hover.focus then Hover.Paint(Hover.meterTarget) end
+end
+
+function Hover.Begin(schematic)
+    Hover.schematic = schematic
+    Hover.active = true
+end
+
+function Hover.Clear()
+    Hover.active, Hover.wanted = false, false
+    Hover.focus, Hover.frame, Hover.meterTarget, Hover.schematic = nil, nil, nil, nil
+    wipe(Hover.targets)
+    wipe(Hover.gaps)
+end
+
+-- A row-sized frame under the row's widgets that reports the pointer on the
+-- row's chip, its widgets or the gaps between them.
+local function ConstructRowHover(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    -- Motion only: clicks and the wheel reach the widgets and the scroll frame.
+    f:SetMouseMotionEnabled(true)
+    f:SetMouseClickEnabled(false)
+    local tex = f:CreateTexture(nil, "BACKGROUND")
+    tex:SetAllPoints(f)
+    tex:SetColorTexture(1, 1, 1, HOVER_ROW_ALPHA)
+    tex:Hide()
+
+    function f.SetLit(_, on)
+        tex:SetShown(on and true or false)
+    end
+
+    -- At the row's own level, so each widget above it keeps its own mouse.
+    function f.Bind(_, row, target)
+        f._target = target
+        f:ClearAllPoints()
+        f:SetAllPoints(row)
+        f:SetFrameLevel(row:GetFrameLevel())
+        tex:Hide()
+    end
+
+    f:SetScript("OnEnter", function(self)
+        if self._target then Hover.Note(self._target, self, true) end
+    end)
+    f:SetScript("OnLeave", function(self)
+        if self._target then Hover.Note(self._target, self, false) end
+    end)
+
+    f._keOwned = { f }
+    return f
+end
+
+GUIFrame:NewWidgetPool("dm:rowhover", ConstructRowHover, function(f)
+    f._target = nil
+    f:SetLit(false)
+end)
+
+local function BindTarget(row, target)
+    target.catcher = GUIFrame:AcquirePooled("dm:rowhover", row)
+    target.catcher:Bind(row, target)
+    return target
+end
+
+function Hover.AddWindow(idx, row)
+    local target = BindTarget(row, { kind = "win", wins = { idx } })
+    Hover.targets[idx] = target
+    return target
+end
+
+function Hover.AddGap(kind, c, r, leftList, rightList, row)
+    local wins = {}
+    for i = 1, #leftList do wins[#wins + 1] = leftList[i] end
+    for i = 1, #rightList do wins[#wins + 1] = rightList[i] end
+    local target = BindTarget(row, { kind = "gap", gapKind = kind, c = c, r = r, wins = wins })
+    Hover.gaps[Hover.GapKey(kind, c, r)] = target
+    return target
+end
 
 -- An empty slot in a row of buttons. Pooled: a frame the page made itself and
 -- put on a pooled row would retire that row.
@@ -1208,6 +1429,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
         label:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
         split.label = label
+        local target = Hover.AddGap(kind, c, r, leftList, rightList, row)
         split.leftPx, split.rightPx = ReadSplitPx(split)
         -- The neighbors that share a pane follow on the next layout, through
         -- OnDockLayout below.
@@ -1216,6 +1438,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             value = ShareOf(split) / 100,
             tooltip = SPLIT_TOOLTIP,
             onValueChanged = function(val) PaintSplit(split, val) end,
+            onHover = function(entering) Hover.Note(target, target.catcher, entering) end,
             callback = function(val)
                 if kind == "col" then
                     DM:SetColumnBoundaryShare(c, val * 100)
@@ -1339,6 +1562,8 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
             local isLast = (n == #order)
             local rowW = GUIFrame:CreateRow(cardDisplay.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
+            local target = Hover.AddWindow(idx, rowW)
+            local function RowHover(entering) Hover.Note(target, target.catcher, entering) end
 
             local badge = GUIFrame:AcquirePooled("dm:badge", rowW)
             badge:Configure(n)
@@ -1348,6 +1573,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 value = cfg.Enabled ~= false,
                 tooltip = "Shows this window in the content picked above.",
                 callback = function(checked) writeField("Enabled", checked) end,
+                onHover = RowHover,
             })
             rowW:AddWidget(enChk, COL_ENABLE)
             manager:Register(enChk, "all")
@@ -1356,6 +1582,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 options = METER_TYPE_OPTIONS,
                 value = cfg.MeterType or Enum.DamageMeterType.DamageDone,
                 callback = function(key) writeField("MeterType", key) end,
+                onHover = RowHover,
             })
             rowW:AddWidget(typeDd, COL_TYPE)
             manager:Register(typeDd, "all")
@@ -1366,6 +1593,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 tooltip = "Current is the fight in progress, or the last one. Overall adds up every fight " ..
                     "since the last reset.",
                 callback = function(key) writeField("SessionType", key) end,
+                onHover = RowHover,
             })
             rowW:AddWidget(segDd, COL_SEG)
             manager:Register(segDd, "all")
@@ -1401,7 +1629,21 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         end
         if schematic then schematic.Relayout() end
     end
-    if DM.SetSettingsLink then DM:SetSettingsLink({ OnDockLayout = OnDockLayout }) end
+    if schematic then
+        schematic.SetHover(function(kind, frame, entering)
+            local target
+            if kind == "box" then
+                target = Hover.targets[frame.winIdx]
+            else
+                target = Hover.gaps[Hover.GapKey(frame.kind, frame.c, frame.r)]
+            end
+            if target then Hover.Note(target, frame, entering) end
+        end)
+    end
+    Hover.Begin(schematic)
+    if DM.SetSettingsLink then
+        DM:SetSettingsLink({ OnDockLayout = OnDockLayout, OnWindowHover = Hover.OnWindowHover })
+    end
     windowsLinked = true
     OnDockLayout()
 
@@ -2248,6 +2490,7 @@ local function ClearSettingsLink()
     windowsLinked = false
     local DM = GetDM()
     if DM and DM.SetSettingsLink then DM:SetSettingsLink(nil) end
+    Hover.Clear()
     -- GUIFrame:Show puts back the hidden page without building it, which would
     -- leave the tab unlinked. A refresh asked for while hidden is held and run
     -- by the next Show, so the tab builds and links again.
