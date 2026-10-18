@@ -180,15 +180,20 @@ local function Done(m)
     return true
 end
 
+-- Whether the member's talents count for a switched-on cell: Class Cooldowns,
+-- or the externals box for a healer spec on its list.
+local function TalentsWanted(m)
+    if KE.PartyCooldownsRules.TalentsFor(m.spec) == nil then return false end
+    if Spec.trackClass == true then return true end
+    return Spec.trackHealers == true and KE.PartyCooldownsData.HEALER_SPECS[m.spec] ~= nil
+end
+
 -- Every answer the member is still wanted for is in hand and only marked
 -- stale, so an inspect that never answers costs fewer tries.
 local function OnlyStale(m)
     if m.source == nil or m.source == "guess" then return false end
     if Spec.trackTrinkets == true and m.trinketItems == nil then return false end
-    if Spec.trackClass == true and m.talents == nil
-        and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil then
-        return false
-    end
+    if m.talents == nil and TalentsWanted(m) then return false end
     return true
 end
 
@@ -751,18 +756,18 @@ end
 -- Three unreadable answers in a row keep the answer held, else store an empty
 -- one, which keeps the likely icon, and shows a row that needs a talent only
 -- when it is likely; that empty answer gets one more round of reads
--- TRY_WAIT seconds later. Talents only concern class cooldowns. A teammate's
--- talent change fires no event here, so a ready check outside a key marks
--- every teammate's answer stale for the inspect to read again; a stale answer
--- stays in use until a read replaces it.
+-- TRY_WAIT seconds later. Talents concern class cooldowns and the externals
+-- box. A teammate's talent change fires no event here, so a ready check
+-- outside a key marks every teammate's answer stale for the inspect to read
+-- again; a stale answer stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
     events = { "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "READY_CHECK", "PLAYER_REGEN_ENABLED" },
-    On = function() return Spec.trackClass == true end,
+    On = function() return Spec.trackClass == true or Spec.trackHealers == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
         return (m.talents == nil or m.talentsStale == true) and m.spec ~= nil
             and not (m.talentsRetryAt and GetTime() < m.talentsRetryAt)
-            and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil
+            and TalentsWanted(m)
     end,
     Read = function(m)
         -- The walk's misses are cleared as the retry reads, not as it waits:

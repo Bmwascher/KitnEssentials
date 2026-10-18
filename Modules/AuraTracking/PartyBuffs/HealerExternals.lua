@@ -263,7 +263,7 @@ function HX.Resolve()
             end
             records[m], byToken[token] = true, m
             if Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
-            party[#party + 1] = { token = token, guid = m.guid, spec = m.spec }
+            party[#party + 1] = { token = token, guid = m.guid, spec = m.spec, talents = m.talents }
         end
     end
     HX.members, HX.records, HX.byToken = members, records, byToken
