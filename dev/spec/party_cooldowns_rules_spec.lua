@@ -1052,6 +1052,22 @@ describe("PartyCooldownsRules charges", function()
         local changed = R.Feed(t, false, nil, 12, isSecret, choose, unreadable, true)
         assert.are.same({ false, false }, { changed, t.legacy == true })
     end)
+
+    it("reads a charge tracker as plain only when every value its plain pass reads is plain", function()
+        local R = loadRules()
+        local cases = {
+            { name = "all plain", want = true },
+            { name = "a secret digit alpha", field = "a1", want = false },
+            { name = "a secret lost-count cover", field = "lb", want = false },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(60, false, false, 2)
+            R.Clear(t, 0)
+            t.lb = 1
+            if case.field then t[case.field] = secret(t[case.field]) end
+            assert.are.equal(case.want, R.ChargePlain(t, isSecret), case.name)
+        end
+    end)
 end)
 
 describe("PartyCooldownsRules.MatchKeys", function()

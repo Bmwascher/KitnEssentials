@@ -331,8 +331,8 @@ local function NeverSecret() return false end
 function Rules.StartLoop(t, n)
     local start = n - (t.cd - t.loop)
     -- A charge stamp starts at code 1, so a charge sample's slot starts one
-    -- second before the use.
-    Rules.Clear(t, t.charges and start - 1 or start)
+    -- code unit before the use.
+    Rules.Clear(t, t.charges and start - t.u or start)
     Rules.StartPlain(t, start)
     if t.charges then
         t.b = 1
@@ -473,9 +473,12 @@ end
 ---------------------------------------------------------------------------------
 -- Charges: two, recharged one after the other
 ---------------------------------------------------------------------------------
--- Plain while b and both slots' stamps and visibilities can be read.
+-- Plain while b, both slots' stamps and visibilities, the digit alphas and the
+-- lost count's cover can be read; the plain pass compares the alphas.
 function Rules.ChargePlain(t, isSecret)
-    if isSecret(t.b) then return false end
+    if isSecret(t.b) or isSecret(t.a0) or isSecret(t.a1) or isSecret(t.a2) or isSecret(t.lb) then
+        return false
+    end
     for k = 1, 2 do
         local sl = t.slot[k]
         if isSecret(sl.c) or isSecret(sl.v) then return false end

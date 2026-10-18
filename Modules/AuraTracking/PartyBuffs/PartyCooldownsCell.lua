@@ -249,23 +249,27 @@ local function DressCharges(c, style, e, px, level)
         c.win:SetAlpha(1)
         return
     end
+    -- Stored only once all three exist, so a refused frame never leaves a
+    -- partial table for the next dress or clear.
     if not c.cnt then
-        c.cnt = {}
+        local cnt = {}
         for i = 1, 3 do
             local f = CreateFrame("Frame", nil, c)
             f:SetAllPoints(c)
             f:SetAlpha(0)
             f.text = f:CreateFontString(nil, "OVERLAY")
             f.text:SetJustifyH("RIGHT")
-            f.text:SetText(tostring(i - 1))
-            c.cnt[i] = f
+            cnt[i] = f
         end
+        c.cnt = cnt
     end
     local size = math_max(8, math_floor(style.fontSize * 0.85 + 0.5))
     for i = 1, 3 do
         local f = c.cnt[i]
         f:SetFrameLevel(level + 6)
+        -- SetText throws "Font not set" on a font string with no font.
         KE:ApplyFontToText(f.text, style.fontName, size, style.outline)
+        f.text:SetText(tostring(i - 1))
         f.text:SetTextColor(1, 1, 1, 1)
         f.text:ClearAllPoints()
         f.text:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -px, px)

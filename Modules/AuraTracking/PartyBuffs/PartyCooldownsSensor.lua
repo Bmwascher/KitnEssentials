@@ -84,6 +84,8 @@ local CMP_LO, CMP_HI, CMP_HEIGHT = -0.02, 1.02, 520
 local CHECK_TRIES = 6
 local cmpLayer
 local cmpPool = {}
+-- A bar whose probe was refused, kept for the next pair.
+local spareBar
 
 -- Made only for two-charge cells: the self-check's pair when the first is
 -- bound, three per cell when it is revealed. The layer is shown so the hit
@@ -96,17 +98,22 @@ local function NewCompare()
         cmpLayer:SetSize(1, 1)
         cmpLayer:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
-    local bar = CreateFrame("StatusBar", nil, cmpLayer)
-    bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    bar:SetStatusBarColor(0, 0, 0, 0)
-    bar:SetOrientation("VERTICAL")
-    bar:SetSize(1, CMP_HEIGHT)
-    bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
-    bar:SetMinMaxValues(CMP_LO, CMP_HI)
-    bar:SetValue(1)
+    local bar = spareBar
+    if not bar then
+        bar = CreateFrame("StatusBar", nil, cmpLayer)
+        bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        bar:SetStatusBarColor(0, 0, 0, 0)
+        bar:SetOrientation("VERTICAL")
+        bar:SetSize(1, CMP_HEIGHT)
+        bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+        bar:SetMinMaxValues(CMP_LO, CMP_HI)
+        bar:SetValue(1)
+        spareBar = bar
+    end
     local probe = CreateFrame("Frame", nil, cmpLayer)
     probe:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
     probe:SetPoint("TOPRIGHT", bar:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
+    spareBar = nil
     return { bar = bar, probe = probe }
 end
 
@@ -169,7 +176,16 @@ function Track.EnsureCompare(t)
     if not t.charges then return end
     Track.StartCheck()
     if t.cmp then return end
-    t.cmp = { NewCompare(), NewCompare(), b = NewCompare() }
+    local made = {}
+    for i = 1, 3 do
+        local ok, cmp = pcall(NewCompare)
+        if not ok then
+            for _, back in ipairs(made) do cmpPool[#cmpPool + 1] = back end
+            return
+        end
+        made[i] = cmp
+    end
+    t.cmp = { made[1], made[2], b = made[3] }
     WriteCompare(t)
 end
 
