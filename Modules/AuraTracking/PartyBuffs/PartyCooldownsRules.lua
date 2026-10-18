@@ -146,9 +146,11 @@ function Rules.CountTry(m, now)
 end
 
 -- An item tooltip names its use cooldown as "(2 Min Cooldown)",
--- "(1 Min 30 Sec Cooldown)" or "(90 Sec Cooldown)".
+-- "(1 Min 30 Sec Cooldown)" or "(90 Sec Cooldown)". The raw text can carry the
+-- client's |4singular:plural; escape, which reads as its first form.
 function Rules.ParseCooldownText(text)
     if type(text) ~= "string" then return nil end
+    text = text:gsub("|4([^:;]*):[^;]*;", "%1")
     local inner = text:match("%(([^()]-) Cooldown%)")
     if not inner then return nil end
     local total = (tonumber(inner:match("(%d+) Min")) or 0) * 60 + (tonumber(inner:match("(%d+) Sec")) or 0)

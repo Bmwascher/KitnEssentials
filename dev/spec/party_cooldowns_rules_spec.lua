@@ -204,6 +204,8 @@ describe("PartyCooldownsRules trinkets", function()
             { text = "Use: Gain 2000 Haste for 20 sec. (2 Min Cooldown)", want = 120 },
             { text = "Use: Shield yourself. (1 Min 30 Sec Cooldown)", want = 90 },
             { text = "Use: Burst (scales with level). (90 Sec Cooldown)", want = 90 },
+            { text = "Use: Gain 2000 Haste for 20 sec. (2 |4Min:Min; Cooldown)", want = 120 },
+            { text = "Use: Shield yourself. (1 |4Min:Min; 30 |4Sec:Sec; Cooldown)", want = 90 },
             { text = "Equip: Your attacks sometimes do more." },
             { text = nil },
         }
