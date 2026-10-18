@@ -586,13 +586,17 @@ Spec.readers[#Spec.readers + 1] = {
                 local m = Spec.player
                 if m and (m.trinketItems == nil or m.trinketsStale) and ReadOwn(m) then Changed(m) end
             end
+            -- Changed can add a record, and a key added during a pairs walk
+            -- is undefined.
+            local changed = {}
             for _, m in pairs(Spec.byGUID) do
                 if m.trinketItems and not m.trinketsComplete
                     and (not itemID or HasItem(m, itemID)) then
                     Fill(m)
-                    Changed(m)
+                    changed[#changed + 1] = m
                 end
             end
+            for _, m in ipairs(changed) do Changed(m) end
         end
     end,
 }
