@@ -270,7 +270,7 @@ function HX.Resolve()
     HX.forgotten = false
     HX.pb:SyncMembers()
     local entries, guids = {}, {}
-    for i, healer in ipairs(Rules.Healers(party, HX.pb.db)) do
+    for i, healer in ipairs(Rules.Sources(party, HX.pb.db)) do
         guids[i] = healer.member.guid
         for _, e in ipairs(healer.entries) do
             e.texture = C_Spell.GetSpellTexture(e.id)

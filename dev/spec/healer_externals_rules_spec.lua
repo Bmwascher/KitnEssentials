@@ -1,28 +1,52 @@
--- Tier 1: the healer externals box's pure rules
+-- Tier 1: the raid cooldowns box's pure rules
 -- (Modules/AuraTracking/PartyBuffs/HealerExternalsRules.lua): a spec's
--- externals and their lengths, who counts as a healer, who is inspected for
--- the box, when the box is on, when a roster change keeps the counts, and
--- when an Edit Mode move detaches the box. The rules run on DATA, never the
--- shipped table.
+-- externals and their lengths, the box rows a member owns and shows, the
+-- order of the box's cells, who is inspected for the box, when the box is
+-- on, when a roster change keeps the counts, and when an Edit Mode move
+-- detaches the box. The rules run on DATA, never the shipped table.
 local L = require("dev.spec._ke_loader")
 
--- Specs 10 and 11 are two healer specs of one class, spec 20 one of another;
--- spec 99 has no row. Cast 4's listed length is above the box's cap.
+-- Specs 10 and 11 are two healer specs of one class, spec 20 one of another,
+-- spec 30 a Paladin spec with an external; spec 99 has no row. Cast 4's
+-- listed length is above the box's cap. Box rows: cast 8 for any Paladin, a
+-- target row whose icon swaps to talent 80; cast 5 for any Warrior, an owner
+-- row with no talent rule; cast 6 for spec 20 (healer role), an owner row
+-- needing likely talent 60; cast 7 for spec 50 (tank role), a target row
+-- needing unlikely talent 70.
 local DATA = {
     SPELLS = {
         [1] = { kind = "external", cd = 180, buffs = { 1 } },
         [2] = { kind = "external", cd = 90, buffs = { 2 } },
         [3] = { kind = "external", cd = 120, buffs = { 3 } },
         [4] = { kind = "external", cd = 600, buffs = { 4 } },
+        [5] = { kind = "external", cd = 180, buffs = { 5 } },
+        [6] = { kind = "external", cd = 120, buffs = { 6 }, needs = { talents = { [60] = true }, likely = true } },
+        [7] = { kind = "external", cd = 120, buffs = { 7 }, needs = { talents = { [70] = true }, likely = false } },
+        [8] = { kind = "external", cd = 300, buffs = { 8, 80 },
+                swap = { id = 80, talents = { [80] = true }, likely = false } },
     },
+    SPECS = {},
     HEALER_SPECS = {
         [10] = { class = "PRIEST", casts = { 1, 4 } },
         [11] = { class = "PRIEST", casts = { 2 } },
         [20] = { class = "DRUID", casts = { 3 } },
+        [30] = { class = "PALADIN", casts = { 2 } },
+    },
+    BOX_ROWS = {
+        { id = 8, class = "PALADIN", specs = { [30] = true, [31] = true }, anySpec = true, watch = "target" },
+        { id = 5, class = "WARRIOR", specs = { [40] = true, [41] = true }, anySpec = true, watch = "owner" },
+        { id = 6, class = "DRUID", specs = { [20] = true }, roles = { HEALER = true }, watch = "owner" },
+        { id = 7, class = "SHAMAN", specs = { [50] = true }, roles = { TANK = true }, watch = "target" },
     },
 }
 
 local function loadRules() return L.loadHealerExternalsRules(DATA) end
+
+local function ids(list)
+    local out = {}
+    for i, e in ipairs(list) do out[i] = e.id end
+    return out
+end
 
 describe("HealerExternalsRules.Entries", function()
     it("lists a spec's externals in table order under healer keys, with clamped lengths", function()
@@ -50,40 +74,97 @@ describe("HealerExternalsRules.Entries", function()
     end)
 end)
 
-describe("HealerExternalsRules.Healers", function()
-    it("finds party healers by spec in party order, never you and never an unknown spec", function()
+describe("HealerExternalsRules.BoxEntries", function()
+    it("gives a member the rows its class and spec own, by class alone while the spec is unknown", function()
         local R = loadRules()
-        local function who(list)
-            local out = {}
-            for i, h in ipairs(list) do out[i] = { h.member.token, h.entries[1].id } end
-            return out
-        end
         local cases = {
-            { name = "two healers, party order", db = {},
-              members = { { token = "party1", spec = 20 }, { token = "party2", spec = 11 } },
-              want = { { "party1", 3 }, { "party2", 2 } } },
-            { name = "you", db = {}, members = { { token = "player", spec = 11 } }, want = {} },
-            { name = "spec unknown", db = {}, members = { { token = "party1" } }, want = {} },
-            { name = "no row", db = {}, members = { { token = "party1", spec = 99 } }, want = {} },
-            { name = "every entry off", db = { CooldownOff = { ["healer:11:2"] = true } },
-              members = { { token = "party1", spec = 11 } }, want = {} },
+            { name = "class-wide, spec unknown", class = "WARRIOR", want = { 5 } },
+            { name = "spec row, spec unknown", class = "DRUID", want = {} },
+            { name = "spec row, its spec", class = "DRUID", spec = 20, want = { 6 } },
+            { name = "spec row, another spec of its class", class = "DRUID", spec = 21, want = {} },
+            { name = "another class", class = "MAGE", spec = 20, want = {} },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, who(R.Healers(case.members, case.db)), case.name)
+            assert.are.same(case.want, ids(R.BoxEntries(case.class, case.spec, {})), case.name)
+        end
+    end)
+
+    it("drops a row its talent rule refuses or its switch turns off, unless every row is asked for", function()
+        local R = loadRules()
+        local off = { CooldownOff = { ["box:5"] = true } }
+        local cases = {
+            { name = "likely, unread", class = "DRUID", spec = 20, want = { 6 } },
+            { name = "unlikely, unread", class = "SHAMAN", spec = 50, want = {} },
+            { name = "read as taken", class = "SHAMAN", spec = 50, ranks = { [70] = 1 }, want = { 7 } },
+            { name = "read as not taken", class = "DRUID", spec = 20, ranks = { [60] = 0 }, want = {} },
+            { name = "no talent rule", class = "WARRIOR", spec = 40, ranks = {}, want = { 5 } },
+            { name = "switched off", class = "WARRIOR", spec = 40, db = off, want = {} },
+            { name = "switched off, editor list", class = "WARRIOR", spec = 40, db = off, all = true,
+              want = { 5 } },
+        }
+        for _, case in ipairs(cases) do
+            local got = R.BoxEntries(case.class, case.spec, case.db or {}, case.all, case.ranks)
+            assert.are.same(case.want, ids(got), case.name)
         end
     end)
 end)
 
+describe("HealerExternalsRules.BoxEntry", function()
+    it("draws a swap row's talent icon once the talent is read as taken, the cast's otherwise", function()
+        local R = loadRules()
+        local row = DATA.BOX_ROWS[1]
+        local cases = {
+            { name = "taken", ranks = { [80] = 1 }, want = 80 },
+            { name = "unread", want = 8 },
+            { name = "not taken", ranks = { [80] = 0 }, want = 8 },
+        }
+        for _, case in ipairs(cases) do
+            local entry = R.BoxEntry(row, 30, {}, false, case.ranks)
+            assert.are.equal(case.want, entry.show, case.name)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.Sources and Order", function()
+    it("lists target cells member by member before owner cells, an owner cell watching its owner alone", function()
+        local R = loadRules()
+        local members = {
+            { token = "player", guid = "P", class = "WARRIOR", spec = 40 },
+            { token = "party1", guid = "A", class = "WARRIOR", spec = 40 },
+            { token = "party2", guid = "B", class = "PALADIN", spec = 30 },
+            { token = "party3", guid = "C", class = "DRUID", spec = 20 },
+            { token = "party4", guid = "D", class = "MAGE" },
+        }
+        local sources = R.Sources(members, {})
+        local who = {}
+        for i, s in ipairs(sources) do who[i] = s.member.token end
+        assert.are.same({ "party1", "party2", "party3" }, who, "never you, never a member with nothing")
+        local cells = {}
+        for i, e in ipairs(R.Order(sources)) do
+            cells[i] = { e.id, e.owner, e.units and e.units[1] or "all", e.quiet or 0 }
+        end
+        local q = R.RAID_QUIET
+        assert.are.same({
+            { 2, "B", "all", 0 }, { 8, "B", "all", 0 }, { 3, "C", "all", 0 },
+            { 5, "A", "party1", q }, { 6, "C", "party3", q },
+        }, cells, "target cells, then owner cells")
+    end)
+end)
+
 describe("HealerExternalsRules.Candidate", function()
-    it("inspects a member whose class has a healer row unless the role says damage or tank", function()
+    it("inspects a class-wide owner in any role, and a spec-row owner in its rows' roles or an unassigned one", function()
         local R = loadRules()
         local cases = {
-            { name = "healer role", class = "DRUID", role = "HEALER", want = true },
+            { name = "class-wide, tank", class = "WARRIOR", role = "TANK", want = true },
+            { name = "class-wide, damage", class = "PALADIN", role = "DAMAGER", want = true },
+            { name = "healer row, healer role", class = "DRUID", role = "HEALER", want = true },
+            { name = "spec row's role", class = "SHAMAN", role = "TANK", want = true },
+            { name = "role unread", class = "SHAMAN", want = true },
             { name = "no role", class = "PRIEST", role = "NONE", want = true },
-            { name = "role unread", class = "PRIEST", want = true },
-            { name = "damage", class = "PRIEST", role = "DAMAGER", want = false },
-            { name = "tank", class = "DRUID", role = "TANK", want = false },
-            { name = "class with no row", class = "SHAMAN", role = "HEALER", want = false },
+            { name = "healer row, damage", class = "PRIEST", role = "DAMAGER", want = false },
+            { name = "healer row, tank", class = "DRUID", role = "TANK", want = false },
+            { name = "spec row, another role", class = "SHAMAN", role = "HEALER", want = false },
+            { name = "class with no row", class = "MAGE", role = "HEALER", want = false },
             { name = "class unread", role = "HEALER", want = false },
         }
         for _, case in ipairs(cases) do
