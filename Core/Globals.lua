@@ -31,6 +31,16 @@ KE.LSM = LibStub("LibSharedMedia-3.0")
 ---@type LibDualSpec-1.0?
 KE.LDS = LibStub("LibDualSpec-1.0", true)
 
+-- Another addon's copy of the library answers the lookup above as well, so
+-- presence alone never turns on per-spec profiles.
+---@param db AceDB
+---@return boolean enhanced
+function KE:EnhanceDualSpec(db)
+    if not (self.LDS and self:IsFeatureAvailable("LibDualSpec")) then return false end
+    self.LDS:EnhanceDatabase(db, "KitnEssentials")
+    return true
+end
+
 KE.PATH = ([[Interface\AddOns\%s\Media\]]):format(addonName)
 KE.FONT = KE.PATH .. [[Fonts\]] .. "Expressway.TTF"
 

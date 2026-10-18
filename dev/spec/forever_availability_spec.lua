@@ -85,3 +85,20 @@ describe("Forever availability: refresh and previews", function()
         end
     end)
 end)
+
+describe("Forever availability: dual-spec profiles", function()
+    -- KE.LDS is set by hand to stand for a copy another addon loaded: the
+    -- library lookup finds either, so presence alone must not decide.
+    it("enhances the database only where dual-spec profiles are admitted", function()
+        for _, row in ipairs({
+            { name = "Forever", forever = true,  calls = 0, enhanced = false },
+            { name = "retail",  forever = false, calls = 1, enhanced = true },
+        }) do
+            local KE = L.loadGlobals(nil, { forever = row.forever })
+            local calls = 0
+            KE.LDS = { EnhanceDatabase = function() calls = calls + 1 end }
+            assert.equals(row.enhanced, KE:EnhanceDualSpec({}), row.name)
+            assert.equals(row.calls, calls, row.name)
+        end
+    end)
+end)

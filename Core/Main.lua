@@ -97,9 +97,7 @@ function KitnEssentials:OnInitialize()
     KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true) --[[@as AceDB]]
     KE:MigrateChatHistoryToCharStore()
     KE:ClearStaleChatHistory()
-    if KE.LDS then
-        KE.LDS:EnhanceDatabase(KE.db, "KitnEssentials")
-    end
+    KE:EnhanceDualSpec(KE.db)
     if KE.db.global and KE.db.global.UseGlobalProfile then
         local profileName = KE.db.global.GlobalProfile or DEFAULT_PROFILE
         if KE.ProfileManager.ProfileNameError(profileName) then profileName = DEFAULT_PROFILE end

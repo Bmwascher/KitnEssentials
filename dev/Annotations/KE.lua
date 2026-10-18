@@ -1210,6 +1210,12 @@ function KE:GetSectionForItem(itemId) end
 ---@return string? reason
 function KE:IsFeatureAvailable(featureId) end
 
+--- Turns on per-spec profiles for db where this client admits them; false
+--- when the library is absent or the feature is withheld.
+---@param db AceDB
+---@return boolean enhanced
+function KE:EnhanceDualSpec(db) end
+
 ---@param value any
 ---@return number
 function KE:RoundOffset(value) end
