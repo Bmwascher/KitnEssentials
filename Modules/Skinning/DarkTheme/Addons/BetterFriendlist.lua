@@ -650,6 +650,215 @@ local function CardHover(card)
     hl:SetAlpha(c[4])
 end
 
+local STATUS_FIELDS = { "connected", "isAFK", "afk", "isDND", "dnd" }
+local STATUS_EDGE_COLORS = {
+    online = { 0.184, 0.82, 0.184 },
+    away = { 1, 0.69, 0 },
+    busy = { 0.9, 0.2, 0.2 },
+}
+local STATUS_EDGE_WIDTH = 2
+local CLASS_ICON_SIZE = 16
+local EUI_CLASS_SHEET = "Interface\\AddOns\\EllesmereUI\\media\\icons\\class-full\\modern.tga"
+local WHITE = "Interface\\Buttons\\WHITE8x8"
+
+-- Set in EnsureModern; nothing reads them in the Legacy layout.
+local playerZone, euiClassCoords
+
+-- The addon's own status precedence: away before busy. A secret field leaves
+-- the edge off rather than being tested.
+local function StatusEdge(friend)
+    if type(friend) ~= "table" then return nil end
+    for _, key in ipairs(STATUS_FIELDS) do
+        if KE:IsSecretValue(friend[key]) then return nil end
+    end
+    if not friend.connected then return nil end
+    if friend.isAFK or friend.afk then return "away" end
+    if friend.isDND or friend.dnd then return "busy" end
+    return "online"
+end
+S._BFLStatusEdge = StatusEdge
+
+local function SameZone(area, zone)
+    if KE:IsSecretValue(area) or KE:IsSecretValue(zone) then return false end
+    -- Empty before the world loads, and for a friend outside the game.
+    return area ~= nil and area ~= "" and area == zone
+end
+S._BFLSameZone = SameZone
+
+local function ReadPlayerZone()
+    local zone = _G.GetRealZoneText and _G.GetRealZoneText()
+    if KE:IsSecretValue(zone) then zone = nil end
+    playerZone = zone
+end
+
+local function FriendClassFile(friend)
+    local ns = _G.BetterFriendlist
+    local utils = ns and ns.ClassUtils
+    if type(utils) ~= "table" or type(utils.GetClassFileForFriend) ~= "function" then return nil end
+    local ok, classFile = pcall(utils.GetClassFileForFriend, utils, friend)
+    if not ok or KE:IsSecretValue(classFile) or type(classFile) ~= "string" or classFile == "" then return nil end
+    return classFile
+end
+
+local function PaintClassIcon(icon, classFile)
+    local coords = euiClassCoords and euiClassCoords[classFile]
+    if type(coords) == "table" then
+        icon:SetTexture(EUI_CLASS_SHEET)
+        icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+    else
+        local atlasFor = _G.GetClassAtlas
+        if not atlasFor then
+            icon:Hide()
+            return
+        end
+        icon:SetTexCoord(0, 1, 0, 1)
+        icon:SetAtlas(atlasFor(classFile:lower()))
+    end
+    icon:Show()
+end
+
+local function SameColor(r, g, b, a, c)
+    return math.abs(r - c[1]) < 0.01 and math.abs(g - c[2]) < 0.01
+        and math.abs(b - c[3]) < 0.01 and math.abs(a - c[4]) < 0.01
+end
+
+-- The addon recolors the zone line only when its font settings change. KE
+-- puts back the color it covered; a color that is not KE's own tint, alpha
+-- included, is the addon's new one, which becomes the color to put back and is
+-- never overwritten. d is KE's record for one line, r, g, b, a its current
+-- color; returns the color to write, or nil.
+local function ZoneColor(d, inZone, r, g, b, a, brand)
+    local ink = d.zoneInk
+    local mine = d.zoneTinted and ink ~= nil and SameColor(r, g, b, a, ink)
+    if inZone then
+        if not mine then
+            local rest = d.zoneRest or {}
+            rest[1], rest[2], rest[3], rest[4] = r, g, b, a
+            d.zoneRest = rest
+        end
+        ink = ink or {}
+        ink[1], ink[2], ink[3], ink[4] = brand[1], brand[2], brand[3], 1
+        d.zoneInk, d.zoneTinted = ink, true
+        return ink
+    end
+    if not d.zoneTinted then return nil end
+    d.zoneTinted = nil
+    if mine then return d.zoneRest end
+    return nil
+end
+S._BFLZoneColor = ZoneColor
+
+-- The addon's own selection test, for rows built before the selection hook
+-- existed. A secret ID matches nothing.
+local function RowSelected(list, friend)
+    if type(list) ~= "table" or type(friend) ~= "table" then return false end
+    if list.selectedFriend == friend then return true end
+    local want = list.selectedFriendUID
+    if KE:IsSecretValue(want) or want == nil then return false end
+    local uid = friend.uid
+    if KE:IsSecretValue(uid) then return false end
+    if uid == nil and type(list.GetFriendUID) == "function" then
+        local ok, value = pcall(list.GetFriendUID, list, friend)
+        if ok then uid = value end
+    end
+    if KE:IsSecretValue(uid) or uid == nil then return false end
+    return uid == want
+end
+S._BFLRowSelected = RowSelected
+
+local function TintZoneLine(card, friend)
+    local info = card.Info
+    if not info then return end
+    local area
+    if friend then
+        local kind = friend.type
+        if KE:IsSecretValue(kind) then
+            area = nil
+        elseif kind == "bnet" then
+            area = friend.areaName
+        else
+            area = friend.area
+        end
+    end
+    local d = S.data(info)
+    local inZone = SameZone(area, playerZone)
+    if not (inZone or d.zoneTinted) then return end
+    local r, g, b, a = info:GetTextColor()
+    local c = ZoneColor(d, inZone, r, g, b, a, S.palette.brand)
+    if c then info:SetTextColor(c[1], c[2], c[3], c[4]) end
+end
+
+-- The first number of a count in the accent. d keeps the plain text and KE's
+-- last output, so a pass that did not rebuild the text recolors KE's own span;
+-- any other color code is left alone.
+local function AccentCount(d, text, r, g, b)
+    if KE:IsSecretValue(text) or type(text) ~= "string" then return nil end
+    if text == d.countOut then text = d.countPlain end
+    if text:find("|c", 1, true) then return nil end
+    local pre, num, rest = text:match("^(%D*)(%d+)(.*)$")
+    if not num then return nil end
+    local out = string.format("%s|cff%02x%02x%02x%s|r%s", pre,
+        math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5), num, rest)
+    d.countPlain, d.countOut = text, out
+    return out
+end
+S._BFLAccentCount = AccentCount
+
+-- A color code adds no width, so the addon's measurement of the count holds.
+local function TintHeaderCount(button)
+    local fs = button and button.CountText
+    if not (fs and fs.GetText) then return end
+    local brand = S.palette.brand
+    local out = AccentCount(S.data(fs), fs:GetText(), brand[1], brand[2], brand[3])
+    if out then fs:SetText(out) end
+end
+
+-- Drawn on KE's own row backdrop, one level under the card, never on the
+-- addon's regions.
+local function CardCues(card)
+    local d = S.data(card)
+    if d.cueEdge then return d end
+    local bd = S.GetBackdrop(card)
+    if not (bd and card.status) then return nil end
+    local fill = bd:CreateTexture(nil, "ARTWORK")
+    fill:SetTexture(WHITE)
+    S.InsetToEdge(fill, bd)
+    S.PaintBrand(fill, "SetVertexColor", S.palette.selectedA)
+    fill:Hide()
+    local edge = bd:CreateTexture(nil, "OVERLAY")
+    edge:SetTexture(WHITE)
+    edge:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
+    edge:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", 1, 1)
+    edge:SetWidth(STATUS_EDGE_WIDTH)
+    edge:Hide()
+    local icon = bd:CreateTexture(nil, "OVERLAY")
+    icon:SetSize(CLASS_ICON_SIZE, CLASS_ICON_SIZE)
+    icon:SetPoint("LEFT", card.status, "RIGHT", 1, 0)
+    icon:Hide()
+    d.cueFill, d.cueEdge, d.cueIcon = fill, edge, icon
+    return d
+end
+
+local function PaintCardCues(card, d)
+    local friend = card.friendData
+    local state = StatusEdge(friend)
+    local color = state and STATUS_EDGE_COLORS[state]
+    if color then
+        d.cueEdge:SetVertexColor(color[1], color[2], color[3])
+        d.cueEdge:Show()
+    else
+        d.cueEdge:Hide()
+    end
+    local classFile = state and FriendClassFile(friend)
+    if classFile then
+        PaintClassIcon(d.cueIcon, classFile)
+    else
+        d.cueIcon:Hide()
+    end
+    TintZoneLine(card, state and friend or nil)
+    d.cueFill:SetShown(d.cueSelected == true)
+end
+
 -- The addon sets the card art's alpha and recolors its highlight on every
 -- pass, so KE writes after it. Row height and anchors stay the addon's.
 local function SkinModernCard(card)
@@ -669,6 +878,8 @@ local function SkinModernCard(card)
     ZeroAlpha(card.FactionTint)
     CardHover(card)
     FlattenModernInvite(card.travelPassButton)
+    local cues = CardCues(card)
+    if cues then PaintCardCues(card, cues) end
 end
 
 local function RetintInvite(btn)
@@ -1187,6 +1398,7 @@ local function Skin()
     local function OnGroupHeader(_, button)
         if not IsModern() then return end
         SkinModernHeaderBar(button, true)
+        TintHeaderCount(button)
     end
 
     local function OnRequestHeader(_, button)
@@ -1239,6 +1451,7 @@ local function Skin()
         local list = GetBFLModule("FriendsList")
         EachFrame(list and list.scrollBox, function(row)
             if row.CardBackground then
+                S.data(row).cueSelected = RowSelected(list, row.friendData)
                 OnFriendCard(nil, row)
             elseif row.HeaderText then
                 OnGroupHeader(nil, row)
@@ -1264,6 +1477,24 @@ local function Skin()
         if modernReady then return end
         modernReady = true
         local ui = GetFriendsUI()
+        -- EllesmereUI does not load or unload mid-session.
+        local eui = _G.EllesmereUI
+        local coords = type(eui) == "table" and eui.CLASS_ICON_SPRITE_COORDS
+        euiClassCoords = type(coords) == "table" and coords or nil
+        local zoneWatch = CreateFrame("Frame")
+        zoneWatch:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+        zoneWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+        zoneWatch:SetScript("OnEvent", ReadPlayerZone)
+        ReadPlayerZone()
+        -- A click changes the selection without restyling the row. The state
+        -- is kept per row: the addon's own selected-row pointer can still name
+        -- a row that was recycled for another friend.
+        HookIf(GetBFLModule("FriendsList"), "SetButtonSelectionVisual", function(_, button, selected)
+            if not IsModern() or not button then return end
+            local d = S.data(button)
+            d.cueSelected = selected == true
+            if d.cueFill then d.cueFill:SetShown(d.cueSelected) end
+        end)
         HookIf(ui, "RefreshModernSideTabSelection", function()
             if IsModern() then PaintSideTabs() end
         end)
