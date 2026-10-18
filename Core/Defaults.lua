@@ -1480,7 +1480,6 @@ local Defaults = {
 
         AuraExternals = {
             Enabled           = false,
-            -- A name under each icon is a new look, so it waits to be chosen.
             ShowCasterName    = false,
             ShowBigDefensives = false,
             HideSelfCast      = false,
