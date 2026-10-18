@@ -82,6 +82,10 @@ local PREVIEW_BUFFS = {
 -- most samples a row draws: the Max Cooldown Icons ceiling.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
 local PREVIEW_LEFT = 74
+-- Seconds since the active sample's use, about how long its timer has run
+-- (AuraRules.PreviewTiming(1)): cell 2 counts from then while the active list
+-- shows its buff.
+local PREVIEW_USED = 5
 local PREVIEW_CELLS = KE.PartyBuffsRules.MAX_COOLDOWN_ICONS
 -- Each stand-in row's race for its racial sample; no Evoker racial is tracked.
 local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
@@ -1639,16 +1643,36 @@ function PB:PreviewEntries(k)
     return entries
 end
 
--- Every cell ready but cell 3, cooling with PREVIEW_LEFT seconds to go (one
--- under the spell's length when that is shorter), started again with the same
--- time left whenever it has run out. A redraw keeps a cell's tracker while its
--- spell and length are the same, so a countdown carries on. Plain values only.
+-- The active sample: cell 2's buff, unless cell 2 is a summon, whose active
+-- phase never shows as a buff.
+local function ActiveSample(entries)
+    local e = entries[2]
+    if e and e.active then return nil end
+    return e
+end
+
+-- The seconds a preview cell cools from, nil for a ready one: cell 3 with
+-- PREVIEW_LEFT to go (one under the spell's length when that is shorter), and
+-- cell 2 while the active list shows its buff, used PREVIEW_USED ago.
+local function PreviewLoop(i, e, listed)
+    if i == 3 then return math_min(PREVIEW_LEFT, e.cd - 1) end
+    if i == 2 and listed then return math_max(1, e.cd - PREVIEW_USED) end
+    return nil
+end
+
+-- Every cell ready but the cooling ones (PreviewLoop), each started again with
+-- the same time left whenever it has run out. A redraw keeps a cell's tracker
+-- while its spell, length, charges and loop are the same, so a countdown
+-- carries on. Plain values only.
 function PB:DrawPreviewCells(row, entries, layout, g, perRow)
     local n = Track.Now()
+    local sample = ActiveSample(entries)
+    local listed = KE.PartyBuffsRules.ListOn(self.db) and sample ~= nil
     for i = 1, PREVIEW_CELLS do
         local c, e, old = row.cells[i], entries[i], row.trackers[i]
+        local loop = e and PreviewLoop(i, e, listed)
         if old and not (e and old.previewID == e.id and old.cd == e.cd
-            and (old.charges or 1) == (e.charges or 1)) then
+            and (old.charges or 1) == (e.charges or 1) and old.loop == loop) then
             Track.Forget(old)
             row.trackers[i] = nil
             old = nil
@@ -1668,8 +1692,8 @@ function PB:DrawPreviewCells(row, entries, layout, g, perRow)
             else
                 local t = CDRules.NewTracker(e.cd, false, false, e.charges)
                 t.cell, t.previewID = c, e.id
-                if i == 3 then
-                    t.loop = math_min(PREVIEW_LEFT, e.cd - 1)
+                t.loop = loop
+                if loop then
                     CDRules.StartLoop(t, n)
                 else
                     CDRules.Clear(t, n)
@@ -1683,14 +1707,12 @@ function PB:DrawPreviewCells(row, entries, layout, g, perRow)
             c:Hide()
         end
     end
-    -- A summon with its own active phase never gets an aura button live.
-    local sample = entries[2]
-    if sample and sample.active then sample = nil end
-    self:DrawPreviewActive(row, sample)
+    self:DrawPreviewActive(row, sample, layout, g)
 end
 
--- The active sample: a preview aura frame over cell 2 with a running timer.
-function PB:DrawPreviewActive(row, e)
+-- The active sample: a preview aura frame with a running timer, over cell 2,
+-- or first in the buff area while the active list is on.
+function PB:DrawPreviewActive(row, e, layout, g)
     local icon = row.active
     if not e then
         if icon then
@@ -1711,10 +1733,17 @@ function PB:DrawPreviewActive(row, e)
         icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
         row.active = icon
     end
-    local cell = row.cells[2]
-    icon:SetFrameLevel(cell:GetFrameLevel() + 10)
     icon:ClearAllPoints()
-    icon:SetPoint("CENTER", cell, "CENTER", 0, 0)
+    if KE.PartyBuffsRules.ListOn(self.db) then
+        -- Where the live list puts its first icon.
+        local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex, g.buffLine)
+        icon:SetFrameLevel(row.holder:GetFrameLevel() + 1)
+        icon:SetPoint(layout.corner, row.holder, layout.corner, x, y)
+    else
+        local cell = row.cells[2]
+        icon:SetFrameLevel(cell:GetFrameLevel() + 10)
+        icon:SetPoint("CENTER", cell, "CENTER", 0, 0)
+    end
     icon.keIcon:SetTexture(e.texture)
     self:RunPreviewTimer(icon, 1, GetTime())
     icon:Show()
@@ -1739,8 +1768,9 @@ function PB:DrawPreviewRow(k, frame)
         return
     end
     self:DrawPreviewCells(row, entries, layout, g, perRow)
-    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs.
-    local skip = {}
+    -- The live row leaves a trinket drawn as a cooldown icon, and every spell
+    -- of the active list, out of its other groups.
+    local skip = KE.PartyBuffsRules.ListBuffs(db, entries) or {}
     for _, e in ipairs(entries) do
         if e.trinket then skip[e.id] = true end
     end
@@ -1755,6 +1785,8 @@ function PB:DrawPreviewRow(k, frame)
         end
     end
     local counts = KE.PartyBuffsRules.SplitBuffSamples(KE.PartyBuffsRules.IconCount(db), available)
+    -- The active list's sample takes the buff area's first place.
+    local lead = (KE.PartyBuffsRules.ListOn(db) and ActiveSample(entries)) and 1 or 0
     local now, shown = GetTime(), 0
     for i, d in ipairs(tracked) do
         for j = 1, counts[i] do
@@ -1771,7 +1803,7 @@ function PB:DrawPreviewRow(k, frame)
                 row.icons[shown] = icon
             end
             -- Where the live container would put the same icon.
-            local col, line = KE.PartyBuffsRules.GridPosition(shown - 1, g.buffPerLine)
+            local col, line = KE.PartyBuffsRules.GridPosition(lead + shown - 1, g.buffPerLine)
             local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex + col, g.buffLine + line)
             icon:ClearAllPoints()
             icon:SetPoint(layout.corner, holder, layout.corner, x, y)
