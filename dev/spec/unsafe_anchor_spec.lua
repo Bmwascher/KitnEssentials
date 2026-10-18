@@ -235,4 +235,50 @@ describe("unsafe anchor guard", function()
         assert.equal(follower, KE:ResolveAnchorFrame("SELECTFRAME", "KE_SpecFollower", frame))
         _G.KE_SpecFollower = nil
     end)
+
+    it("ResolveAnchorFrame walks a dotted name to the child it names", function()
+        local printed = {}
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        local child = region(nil)
+        local numbered = region(nil)
+        local root = region(nil)
+        root.Content = child
+        root[1] = numbered
+        _G.KE_SpecDotRoot = root
+        local rows = {
+            { name = "raw child key", path = "KE_SpecDotRoot.Content", want = child },
+            { name = "numeric key", path = "KE_SpecDotRoot.1", want = numbered },
+        }
+        for _, row in ipairs(rows) do
+            assert.equal(row.want, KE:ResolveAnchorFrame("SELECTFRAME", row.path, region(nil)), row.name)
+        end
+        assert.equal(0, #printed)
+        _G.KE_SpecDotRoot = nil
+    end)
+
+    it("ResolveAnchorFrame refuses a dotted dead end with the line, and waits silently for a missing first frame", function()
+        local printed = {}
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        local hidden = region(nil)
+        secret[hidden] = true
+        local unreadable = {}
+        locked[unreadable] = true
+        local root = region(nil)
+        root.Hidden = hidden
+        root.Unreadable = unreadable
+        _G.KE_SpecDeadRoot = root
+        local rows = {
+            { name = "missing key", path = "KE_SpecDeadRoot.Missing", lines = 1 },
+            { name = "secret step", path = "KE_SpecDeadRoot.Hidden.Child", lines = 1 },
+            { name = "unreadable step", path = "KE_SpecDeadRoot.Unreadable.Child", lines = 1 },
+            { name = "missing first frame", path = "KE_SpecNoRoot.Child", lines = 0 },
+            { name = "name that is not a string", path = true, lines = 0 },
+        }
+        for _, row in ipairs(rows) do
+            local before = #printed
+            assert.equal(_G.UIParent, KE:ResolveAnchorFrame("SELECTFRAME", row.path, region(nil)), row.name)
+            assert.equal(row.lines, #printed - before, row.name)
+        end
+        _G.KE_SpecDeadRoot = nil
+    end)
 end)

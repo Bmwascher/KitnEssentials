@@ -575,6 +575,39 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent, followers)
     return false
 end
 
+-- Select Frame names an unnamed child Parent.key, printing the key with
+-- tostring. Child keys are raw fields, so rawget finds them and never a
+-- widget method. The second return is true when the first name is not a
+-- global yet: its owner may build it later, so that stays as quiet as a
+-- missing plain name.
+local function ResolveFrameName(name)
+    local value = _G[name]
+    if issecretvalue(value) or value ~= nil then return value, false end
+    -- A hand-edited profile can hold any type here; only a string is split.
+    if type(name) ~= "string" then return nil, true end
+    local stop = string_find(name, ".", 1, true)
+    if not stop then return nil, true end
+    local current = _G[string.sub(name, 1, stop - 1)]
+    if issecretvalue(current) then return nil, false end
+    if current == nil then return nil, true end
+    while stop do
+        if type(current) ~= "table" or not canaccesstable(current) then return nil, false end
+        local start = stop + 1
+        stop = string_find(name, ".", start, true)
+        local key = string.sub(name, start, stop and stop - 1 or -1)
+        local child = rawget(current, key)
+        if issecretvalue(child) then return nil, false end
+        local number = tonumber(key)
+        if child == nil and number then
+            child = rawget(current, number)
+            if issecretvalue(child) then return nil, false end
+        end
+        if child == nil then return nil, false end
+        current = child
+    end
+    return current, false
+end
+
 function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent, followers)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
@@ -585,13 +618,15 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent
         if lastPlayerFrame == nil then lastPlayerFrame = playerFrame end
         return playerFrame
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
-        local candidate = _G[parentFrameName]
+        local candidate, rootMissing = ResolveFrameName(parentFrameName)
+        local refused = false
         -- A global can hold a cached secret API result, which must not be
         -- compared; IsUnsafeAnchor refuses it.
-        if not issecretvalue(candidate) then
-            if candidate == nil then return UIParent end
+        if not issecretvalue(candidate) and candidate == nil then
+            if rootMissing then return UIParent end
+            refused = true
         end
-        if self:IsUnsafeAnchor(frame, candidate, asParent, followers) then
+        if refused or self:IsUnsafeAnchor(frame, candidate, asParent, followers) then
             if not warnedAnchorNames[parentFrameName] then
                 warnedAnchorNames[parentFrameName] = true
                 self:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
