@@ -36,6 +36,11 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         if PB and PB.ApplySettings then PB:ApplySettings() end
     end
 
+    -- A color drag calls back on every mouse move.
+    local function QueueApply()
+        if PB and PB.QueueApplySettings then PB:QueueApplySettings() end
+    end
+
     local function RefreshStates()
         manager:UpdateAll(db.Enabled == true)
     end
@@ -82,7 +87,7 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
             color = db[key],
             callback = function(r, g, b, a)
                 db[key] = { r, g, b, a }
-                ApplySettings()
+                QueueApply()
             end,
             tooltip = tooltip,
         })

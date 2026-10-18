@@ -1334,6 +1334,19 @@ function PB:ApplySettings()
     if self.previewing then self:ShowPreview() end
 end
 
+-- A color drag calls back on every mouse move; its applies run once per
+-- frame at most.
+local function RunQueuedApply()
+    PB.applyPending = false
+    PB:ApplySettings()
+end
+
+function PB:QueueApplySettings()
+    if self.applyPending then return end
+    self.applyPending = true
+    C_Timer.After(0, RunQueuedApply)
+end
+
 function PB:SeedHealerPlacement()
     self:UpdateDB()
     KE.PartyBuffsRules.SeedHealerPlacement(self.db)
