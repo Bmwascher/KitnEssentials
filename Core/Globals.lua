@@ -460,7 +460,9 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         end
     elseif msg == "resetgui" then
         if KE.db and KE.db.global then
-            KE.db.global.GUIState = nil
+            -- Empty, not nil: where the reload waits on a prompt that can be
+            -- declined, the settings window still reads and saves this state.
+            KE.db.global.GUIState = { frame = {} }
             KE.db.global._guiReset = true
         end
         KE:ReloadUI()
