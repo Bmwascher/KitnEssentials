@@ -17,7 +17,6 @@ local string_format = string.format
 local math_floor = math.floor
 local math_max = math.max
 local table_insert = table.insert
-local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local EditModeManagerFrame = EditModeManagerFrame
@@ -464,7 +463,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE.db.global.GUIState = nil
             KE.db.global._guiReset = true
         end
-        ReloadUI()
+        KE:ReloadUI()
     elseif msg == "trash" then
         -- Diagnostic snapshot of the Dungeon Trash tracker (see DTrash:DumpState).
         local dt = KitnEssentials and KitnEssentials:GetModule("DungeonTrash", true)

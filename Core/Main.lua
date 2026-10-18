@@ -166,7 +166,7 @@ function KE:SetupMinimapIcon()
             elseif button == "RightButton" then
                 if KE.EditMode then KE.EditMode:Toggle() end
             elseif button == "MiddleButton" then
-                ReloadUI()
+                KE:ReloadUI()
             end
         end,
         OnTooltipShow = function(tt)

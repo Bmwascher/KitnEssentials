@@ -264,6 +264,75 @@ local function ResetPromptKeyboard(dialog)
     dialog:SetPropagateKeyboardInput(true)
 end
 
+-- A client can refuse ReloadUI from addon code. There a click on a secure
+-- macro button still reloads, so one such button lies over the reload
+-- prompt's Reload Now. It is parented to UIParent and lifted off before
+-- lockdown: a protected frame anchored to the dialog would stop the dialog
+-- moving or hiding in combat.
+local secureReload, reloadTarget
+
+local function AddonReloadAllowed()
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable("AddonReload") == true
+end
+
+-- A protected frame's attributes and anchors cannot change in lockdown.
+---@param isReloadPrompt boolean?
+---@param addonReloadAllowed boolean
+---@param inLockdown boolean
+---@return boolean
+function KE.SecureReloadWanted(isReloadPrompt, addonReloadAllowed, inLockdown)
+    return isReloadPrompt == true and not addonReloadAllowed and not inLockdown
+end
+
+local function ForwardHover(script)
+    return function()
+        local handler = reloadTarget and reloadTarget:GetScript(script)
+        if handler then handler(reloadTarget) end
+    end
+end
+
+local function LiftSecureReload()
+    if not secureReload or InCombatLockdown() then return end
+    secureReload:Hide()
+    secureReload:ClearAllPoints()
+    reloadTarget = nil
+end
+
+local function SyncSecureReload(dialog)
+    local target = dialog and dialog.acceptBtn
+    if not (target and KE.SecureReloadWanted(dialog._isReloadPrompt, AddonReloadAllowed(), InCombatLockdown())) then
+        LiftSecureReload()
+        return
+    end
+    if not secureReload then
+        local button = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+        if not button then return end
+        button:SetAttribute("type", "macro")
+        button:SetAttribute("macrotext", "/reload")
+        button:RegisterForClicks("AnyUp", "AnyDown")
+        button:SetScript("OnEnter", ForwardHover("OnEnter"))
+        button:SetScript("OnLeave", ForwardHover("OnLeave"))
+        secureReload = button
+    end
+    reloadTarget = target
+    secureReload:SetFrameStrata(target:GetFrameStrata())
+    secureReload:SetFrameLevel(target:GetFrameLevel() + 5)
+    secureReload:ClearAllPoints()
+    secureReload:SetAllPoints(target)
+    secureReload:Show()
+end
+
+-- Reload Now's accept. Where addon reloads are refused the secure button takes
+-- the click, so this runs there only when combat kept the button off, and it
+-- never reopens the prompt.
+local function ReloadAccept()
+    if AddonReloadAllowed() then
+        ReloadUI()
+    else
+        KE:Print("Type /reload to reload the interface.")
+    end
+end
+
 -- Closes the singleton prompt. Snapshots and NILS the callback fields
 -- before invoking — the immortal dialog would otherwise pin multi-KB
 -- export-string closures, and the close-then-invoke order lets a chained
@@ -276,6 +345,7 @@ local function ClosePrompt(dialog, runCancel)
     dialog._onCancel = nil
     dialog._keyedEntry = nil
     dialog:Hide()
+    LiftSecureReload()
     KE.activePrompt = nil
     if #promptQueue > 0 then C_Timer.After(0, OpenQueuedPrompt) end
     if runCancel and onCancel then onCancel() end
@@ -655,6 +725,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     ------------------------------------------------------------------
     dialog._onAccept = onAccept
     dialog._onCancel = onCancel
+    dialog._isReloadPrompt = onAccept == ReloadAccept
     dialog._keyedEntry = parkKey and entry or nil
     dialog._closeIsNeutral = (opts and opts.closeIsNeutral == true) or false
     dialog._showEditBox = showEditBox and true or false
@@ -913,6 +984,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- keeps what it inherited: propagation on (an Escape close restores it the
     -- next frame), or no keyboard at all when the dialog was built in combat.
     ResetPromptKeyboard(dialog)
+    SyncSecureReload(dialog)
 
     dialog:Show()
     KE.activePrompt = dialog
@@ -932,7 +1004,7 @@ function KE:CreateReloadPrompt(reason)
         nil,
         nil,
         nil,
-        function() ReloadUI() end,
+        ReloadAccept,
         nil,
         "Reload Now",
         "Later"
@@ -943,17 +1015,34 @@ function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
 end
 
+-- ReloadUI where the client lets addon code call it; elsewhere the reload
+-- prompt, whose Reload Now reloads through the secure button.
+function KE:ReloadUI()
+    if AddonReloadAllowed() then
+        ReloadUI()
+    else
+        self:CreateReloadPrompt()
+    end
+end
+
 -- Both combat edges restore the dialog's keyboard, shown or hidden. Entry
 -- catches an Escape close in the frame a fight starts, when it still runs
 -- before lockdown; end arms a dialog built in combat and repairs the rest.
 -- Neither edge disarms: that needs EnableKeyboard(false), which is protected.
--- A prompt that waited through the fight opens at the end.
+-- Entry also lifts the secure reload button, still before lockdown, and end
+-- lays it back over an open reload prompt. A prompt that waited through the
+-- fight opens at the end.
 local promptCombatWatcher = CreateFrame("Frame")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 promptCombatWatcher:SetScript("OnEvent", function(_, event)
     ResetPromptKeyboard(KE.promptDialog)
-    if event == "PLAYER_REGEN_ENABLED" then OpenQueuedPrompt() end
+    if event == "PLAYER_REGEN_ENABLED" then
+        if KE.activePrompt then SyncSecureReload(KE.activePrompt) end
+        OpenQueuedPrompt()
+    else
+        LiftSecureReload()
+    end
 end)
 
 -- Skinning toggles FLAG instead of prompting, so ticking eight windows gives one

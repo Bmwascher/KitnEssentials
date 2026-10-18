@@ -840,6 +840,18 @@ function KE:CreateReloadPrompt(reason) end
 
 function KE:SkinningReloadPrompt() end
 
+--- ReloadUI where the client lets addon code call it; elsewhere the reload
+--- prompt, whose Reload Now reloads through a secure button (Core/Widgets.lua).
+function KE:ReloadUI() end
+
+--- Whether the secure reload button lies over Reload Now: the reload prompt,
+--- a client that refuses addon reloads, out of lockdown (Core/Widgets.lua).
+---@param isReloadPrompt boolean?
+---@param addonReloadAllowed boolean
+---@param inLockdown boolean
+---@return boolean
+function KE.SecureReloadWanted(isReloadPrompt, addonReloadAllowed, inLockdown) end
+
 --- Marks a reload as owed. Skinning toggles call this instead of prompting;
 --- the GUI frame's OnHide raises one prompt for the whole session.
 function KE:FlagReloadNeeded() end

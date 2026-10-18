@@ -13,7 +13,6 @@ local UnitName = UnitName
 local UnitClass = UnitClass
 local ipairs = ipairs
 local string_format = string.format
-local ReloadUI = ReloadUI
 local pairs = pairs
 
 ---------------------------------------------------------------------------------
@@ -96,7 +95,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         width = 140,
         height = 32,
         callback = function()
-            ReloadUI()
+            KE:ReloadUI()
         end
     })
     row1:AddWidget(reloadBtn, 0.5)
