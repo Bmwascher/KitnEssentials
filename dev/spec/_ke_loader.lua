@@ -364,6 +364,8 @@ end
 function L.loadProfileManager(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
+    -- WoW's UTF-8 character count: every byte that is not a continuation byte.
+    _G.strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
     local callbacks = {}
     local db = {
         profiles = { Default = {} },
