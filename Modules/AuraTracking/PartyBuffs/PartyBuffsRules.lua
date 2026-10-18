@@ -309,8 +309,10 @@ Rules.PLACEMENT_KEYS = {
 }
 
 -- A healer key that is nil or false reads its default counterpart. The
--- settings page shows its values through this too, so the two agree.
+-- settings page shows its values through this too, so the two agree. A key
+-- with no pair gives nil.
 function Rules.PlacementValue(db, pair, healer)
+    if type(pair) ~= "table" then return nil end
     local value = healer and db[pair[2]]
     if value == nil or value == false then value = db[pair[1]] end
     return value
