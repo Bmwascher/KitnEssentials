@@ -836,10 +836,11 @@ end
 
 -- The gray window's y offset that lands its label's line bottom a quarter of a
 -- screen pixel above the grid, away from the edge where drawing can round to
--- either pixel; nil leaves the window where it is. y is the cell's center,
--- base the line bottom's depth below it, scale and height the cell's
--- effective scale and the screen's physical height. A center that cannot be
--- read keeps the last seat; before any seat, a quarter pixel is the guess.
+-- either pixel; nil leaves the window where it is. y is the edge the caller
+-- measures from (a cell's center, a potion bar's bottom), base the line
+-- bottom's depth below it, scale and height the frame's effective scale and
+-- the screen's physical height. An edge that cannot be read keeps the last
+-- seat; before any seat, a quarter pixel is the guess.
 function Rules.Seat(y, base, scale, height, seat, isSecret)
     if isSecret(scale) or type(scale) ~= "number" or scale <= 0
         or type(height) ~= "number" or height <= 0 or type(base) ~= "number" then

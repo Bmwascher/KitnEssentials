@@ -735,6 +735,25 @@ describe("PartyCooldownsRules.Seat", function()
         assert.is_nil(R.Seat(763, 12, HIDDEN, 768, nil, isSecret))
         assert.is_nil(R.Seat(763, nil, 1, 768, nil, isSecret))
     end)
+
+    it("lands the line a quarter pixel above the grid, rolls up from 0.75, and keeps a seat within a tenth", function()
+        local R = loadRules()
+        local cases = {
+            { name = "lands at a quarter", y = 100.5, want = -0.25 },
+            { name = "lands at a quarter, two pixels a unit", y = 100.25, scale = 2, want = -0.125 },
+            { name = "rolls at 0.75", y = 100.75, want = 0.5 },
+            { name = "seated within tolerance", y = 100.5, seat = -0.2 },
+        }
+        for _, case in ipairs(cases) do
+            local got = R.Seat(case.y, 0, case.scale or 1, 768, case.seat, isSecret)
+            if case.want == nil then
+                assert.is_nil(got, case.name)
+            else
+                assert.is_number(got, case.name)
+                assert.is_true(math.abs(got - case.want) < 1e-9, case.name)
+            end
+        end
+    end)
 end)
 
 describe("PartyCooldownsRules.LibKey", function()
