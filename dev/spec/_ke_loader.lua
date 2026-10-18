@@ -626,6 +626,11 @@ function L.loadTooltips(opts, overrides)
         db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    -- Core/Availability.lua loads before the module lists in-game. opts.forever
+    -- seeds a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Modules/Skinning/Tooltips/Tooltips.lua", KE)
     return modules["SkinTooltips"], KE
 end

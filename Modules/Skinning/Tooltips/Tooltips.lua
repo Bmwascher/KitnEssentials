@@ -60,6 +60,16 @@ local CreateColor = CreateColor
 local type = type
 local S = KE.Skins
 
+-- Unit-line options a client can withhold, read once: the answers cannot
+-- change during a session. A headless load without the availability policy
+-- reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local REALM_NAMES = Admitted("TooltipRealmNames")
+local GUILD_REALM_TRIM = Admitted("TooltipGuildRealm")
+local MYTHIC_PLUS_LINE = Admitted("TooltipMythicPlus")
+
 local RESTYLE_INTERVAL = 0.1
 
 local function DebugIsSecret(value)
@@ -563,6 +573,49 @@ local function AwayLabel(unit)
     return ""
 end
 
+-- Line 1's name before the away label. Where realm names are admitted the
+-- second UnitName return is a realm: AlwaysShowRealm spells it out, and
+-- otherwise Blizzard's compact marker says "different realm", except on a
+-- virtual realm, which is effectively your own (GetUnitName's rule). There is
+-- no coalesced-realm branch: that constant does not exist, and comparing
+-- against a nil constant would make a nil relationship match by accident.
+-- Where realm names are withheld the second return is a surname, so it joins
+-- with a space and no realm marker can follow.
+--
+-- AlwaysShowRealm is a SETTING and not a Shift modifier: MODIFIER_STATE_CHANGED
+-- refuses to refresh unit tooltips (see the note there), so a modifier would
+-- be read once on hover and never again.
+---@param name string
+---@param second string?
+---@param pvpName string?
+---@param isVirtual boolean?
+---@param alwaysShowRealm boolean?
+---@param realmNames boolean
+---@return string
+local function ComposeNameLine(name, second, pvpName, isVirtual, alwaysShowRealm, realmNames)
+    if pvpName and pvpName ~= "" then
+        name = pvpName
+    elseif not realmNames and second and second ~= "" then
+        return name .. " " .. second
+    end
+    if not realmNames or not second or second == "" then return name end
+    if alwaysShowRealm then return name .. "-" .. second end
+    if not isVirtual then return name .. (_G.FOREIGN_SERVER_LABEL or "") end
+    return name
+end
+
+-- The saved unit-line options this client admits. A withheld one reads off
+-- whatever the profile says, so a shared or imported profile cannot turn it on.
+---@param db table
+---@return boolean alwaysShowRealm
+---@return boolean hideGuildRealm
+---@return boolean mythicPlusLine
+local function EffectiveLineOptions(db)
+    return REALM_NAMES and db.AlwaysShowRealm == true,
+        GUILD_REALM_TRIM and db.HideGuildRealm == true,
+        MYTHIC_PLUS_LINE and db.MythicPlusLine == true
+end
+
 -- Embedded tooltips (UIWidgetBaseItemEmbeddedTooltip*, the reward previews
 -- inside UI widgets) must not be written to. Blizzard sizes the host widget
 -- from them -- Blizzard_UIWidgetTemplateBase.lua does
@@ -648,6 +701,7 @@ function TT:OnTooltipSetUnit(tt, data)
     if IsEmbeddedTip(tt) then return end
     local db = self.db
     if not db or tt ~= _G.GameTooltip or tt:IsForbidden() then return end
+    local alwaysShowRealm, hideGuildRealm, mythicPlusLine = EffectiveLineOptions(db)
 
     if db.HideInCombat and InCombatLockdown() and not IsModifierKeyDown() then
         tt:Hide()
@@ -682,40 +736,16 @@ function TT:OnTooltipSetUnit(tt, data)
     if UnitIsPlayer(unit) and CanReadIdentity(unit) then
         -- CanReadIdentity is the predicate the checker cannot see through; the
         -- casts record its answer.
-        local name, realm = UnitName(unit)
-        ---@cast realm string?
+        local name, second = UnitName(unit)
+        ---@cast second string?
         if name then
             local pvpName = UnitPVPName(unit)
             ---@cast pvpName string?
-            if pvpName and pvpName ~= "" then name = pvpName end
-
-            -- AlwaysShowRealm spells the realm out in full; otherwise
-            -- Blizzard's own compact marker says "different realm" without
-            -- the width.
-            --
-            -- Deliberately a SETTING and not a Shift modifier.
-            -- MODIFIER_STATE_CHANGED below refuses to
-            -- refresh unit tooltips on purpose (see the note there: the
-            -- refresh re-runs Blizzard's line builders on our tainted
-            -- execution and throws on a secret unit), so a modifier would be
-            -- read once on hover and never again -- a dead control.
-            --
-            -- Shaped after Blizzard's GetUnitName
-            -- (Blizzard_UnitFrame/Mainline/UnitFrame.lua): a
-            -- virtual realm is one you are effectively already on, so it
-            -- gets no marker, and every other cross-realm case gets the
-            -- foreign-server suffix. No second branch on
-            -- INTERACTIVE_SERVER_LABEL / LE_REALM_RELATION_COALESCED:
-            -- neither name exists in 12.0.7, and
-            -- comparing against a nil constant would also make a nil
-            -- relationship match by accident.
-            if realm and realm ~= "" then
-                if db.AlwaysShowRealm then
-                    name = name .. "-" .. realm
-                elseif UnitRealmRelationship(unit) ~= _G.LE_REALM_RELATION_VIRTUAL then
-                    name = name .. (_G.FOREIGN_SERVER_LABEL or "")
-                end
-            end
+            -- Only a realm name that is not spelled out needs the relationship.
+            local isVirtual = REALM_NAMES and not alwaysShowRealm
+                and second ~= nil and second ~= ""
+                and UnitRealmRelationship(unit) == _G.LE_REALM_RELATION_VIRTUAL
+            name = ComposeNameLine(name, second, pvpName, isVirtual, alwaysShowRealm, REALM_NAMES)
 
             local line1 = _G.GameTooltipTextLeft1
             if line1 then line1:SetText(name .. AwayLabel(unit)) end
@@ -740,7 +770,7 @@ function TT:OnTooltipSetUnit(tt, data)
     -- text, which is only safe once it is known not to be a secret value --
     -- everywhere else this module recolors rather than rewrites for exactly
     -- that reason.
-    if (db.GuildRankLine or db.HideGuildRealm) and UnitIsPlayer(unit) then
+    if (db.GuildRankLine or hideGuildRealm) and UnitIsPlayer(unit) then
         local guildName, rankName, _, guildRealm = GetGuildInfo(unit)
         if guildName
             and not KE:IsSecretValue(guildName)
@@ -767,7 +797,7 @@ function TT:OnTooltipSetUnit(tt, data)
                     and text:find(guildName, 1, true) then
 
                     local out = text
-                    if db.HideGuildRealm and guildRealm and guildRealm ~= "" then
+                    if hideGuildRealm and guildRealm and guildRealm ~= "" then
                         local at = out:find(guildRealm, 1, true)
                         if at then
                             out = out:sub(1, at - 1)
@@ -874,7 +904,7 @@ function TT:OnTooltipSetUnit(tt, data)
     -- Mythic+ score. Blizzard only fills this in for units it already has
     -- rating data for (group members, inspected players), so a stranger
     -- returns nothing and the line is simply skipped rather than showing 0.
-    if db.MythicPlusLine and UnitIsPlayer(unit) and C_PlayerInfo
+    if mythicPlusLine and UnitIsPlayer(unit) and C_PlayerInfo
         and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
         local ok, summary = pcall(C_PlayerInfo.GetPlayerMythicPlusRatingSummary, unit)
         local score = ok and summary and summary.currentSeasonScore
@@ -1356,3 +1386,5 @@ TT._UnitColor = UnitColor
 TT._AddAuraIDLine = AddAuraIDLine
 TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
 TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "petaction-setter" end
+TT._ComposeNameLine = ComposeNameLine
+TT._EffectiveLineOptions = EffectiveLineOptions
