@@ -55,6 +55,20 @@ local function RacialLabel(spellID, raceID)
     return SpellLabel(spellID, name)
 end
 
+-- " (2 charges)" for a spell the spec always gives two, " (2 charges with
+-- <talent>)" for one a talent gives a second, "" otherwise.
+local function ChargeText(entry, specID)
+    if (entry.charges or 1) >= 2 then return " (2 charges)" end
+    for _, mod in ipairs(entry.spell and entry.spell.mods or {}) do
+        if mod.charges and mod[1] and not (mod.spec and mod.spec ~= specID) then
+            local talent = C_Spell.GetSpellName(mod[1])
+            if type(talent) ~= "string" or talent == "" then talent = "a talent" end
+            return " (2 charges with " .. talent .. ")"
+        end
+    end
+    return ""
+end
+
 -- An editor row's toggle, for an entry with key and off, width wide.
 local function AddToggle(row, label, entry, db, apply, width)
     local check = GUIFrame:CreateCompactCheckbox(row, label, {
@@ -122,7 +136,8 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
     local function AddSpellRow(specID, list, i)
         local entry = list[i]
         local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
-        local check = AddToggle(row, SpellLabel(entry.id), entry, db, apply, 0.76)
+        local name = (C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)) .. ChargeText(entry, specID)
+        local check = AddToggle(row, SpellLabel(entry.id, name), entry, db, apply, 0.76)
         local up = GUIFrame:CreateButton(row, "", {
             image = ARROW_TEXTURE, imageRotation = math_pi,
             height = 24,
@@ -257,6 +272,7 @@ function Page.ExternalsCard(scrollChild, yOffset, ctx)
         local _, specName = GetSpecializationInfoForSpecID(specID)
         for _, entry in ipairs(HXRules.Entries(specID, db, true)) do
             local name = C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)
+            name = name .. ChargeText(entry, specID)
             if type(specName) == "string" and specName ~= "" then name = name .. " (" .. specName .. ")" end
             local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
             manager:Register(AddToggle(row, SpellLabel(entry.id, name), entry, db, apply, 1), "all")
