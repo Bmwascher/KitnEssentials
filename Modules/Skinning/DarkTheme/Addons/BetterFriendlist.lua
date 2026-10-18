@@ -7,6 +7,51 @@ local pcall = pcall
 local hooksecurefunc = hooksecurefunc
 local function NOOP() end
 
+local function GetFriendsUI()
+    local ns = _G.BetterFriendlist
+    return ns and ns.FriendsUI
+end
+
+-- nil while the addon has applied no layout yet, or holds one deferred in
+-- combat; it applies that one again after combat or at the next show.
+local function LayoutFor(ui)
+    if type(ui) ~= "table" or type(ui.IsModernActive) ~= "function" then return "legacy" end
+    if ui.appliedStyle == nil or ui.pendingStyle ~= nil then return nil end
+    return ui:IsModernActive() and "modern" or "legacy"
+end
+S._BFLLayoutFor = LayoutFor
+
+local function IsModern()
+    local ui = GetFriendsUI()
+    return type(ui) == "table" and type(ui.IsModernActive) == "function" and ui:IsModernActive() == true
+end
+
+-- The Modern layout swaps these action buttons for runtime copies and keeps
+-- the originals under a BFL_Legacy key.
+local function LegacyButton(owner, key)
+    return owner and (owner["BFL_Legacy" .. key] or owner[key])
+end
+
+local function GetBFLModule(name)
+    local ns = _G.BetterFriendlist
+    local mod = ns and ns.GetModule and ns:GetModule(name)
+    return type(mod) == "table" and mod or nil
+end
+
+-- pcall: a scroll box the addon has not set up yet may have no view to walk.
+local function EachFrame(box, fn)
+    if type(box) == "table" and type(box.ForEachFrame) == "function" then
+        pcall(box.ForEachFrame, box, fn)
+    end
+end
+
+local function DressInviteRow(button)
+    if not button or S.data(button).bflSkinned then return end
+    S.data(button).bflSkinned = true
+    S.Button(button.AcceptButton)
+    S.Button(button.DeclineButton)
+end
+
 local normalizePending = false
 local function NormalizeRaidGrid(passes)
     if normalizePending then return end
@@ -139,7 +184,6 @@ local function SkinInset(inset)
         bd:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -4)
         bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, 4)
     end
-    S.data(inset).keBD = bd
 end
 
 local function SkinHeaderRow(button)
@@ -402,12 +446,12 @@ local function StripPanelShell(frame)
     end
 end
 
--- The whole account row hangs off BattlenetFrame: the status dropdown anchors
--- to its LEFT and the contacts and settings buttons chain off its RIGHT, so one
--- anchor moves all four. BFL's modern XML gives that anchor x = 10 against the
--- title bar's center, which widens the left margin by 10 and runs the settings
--- cog against the frame edge. 0 is BFL's own value for the same row in their
--- Classic layout.
+-- Legacy layout only. The whole account row hangs off BattlenetFrame: the
+-- status dropdown anchors to its LEFT and the contacts and settings buttons
+-- chain off its RIGHT, so one anchor moves all four. The Legacy XML gives that
+-- anchor x = 10 against the title bar's center, which widens the left margin
+-- by 10 and runs the settings cog against the frame edge. The Modern layout
+-- anchors the row on both sides, and rewriting point 1 there drops the right.
 --
 -- Only the X is rewritten; point, relative frame and Y go straight back down,
 -- so a later version moving the row vertically is not undone.
@@ -426,7 +470,7 @@ local function ReStrip()
 
         local hdr = frame.FriendsTabHeader
         local bnet = hdr and hdr.BattlenetFrame
-        if bnet then
+        if bnet and not IsModern() then
             for _, b in ipairs({ bnet.SettingsButton, bnet.ContactsMenuButton }) do
                 if b then S.FixSubPixelEdge(b) end
             end
@@ -453,113 +497,131 @@ local function Skin()
     S.Frame(frame)
     StripPanelShell(frame)
 
-    local pb = frame.PortraitButton
-    if pb then
-        pb:ClearAllPoints()
-        pb:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
-        pb:SetSize(26, 26)
-        pb:SetFrameLevel(frame:GetFrameLevel() + 5)
-        local bd = S.Backdrop(pb, 0)
-        if not pb.Icon then
-            pb.Icon = pb:CreateTexture(nil, "ARTWORK")
-            pb.Icon:SetTexture("Interface\\AddOns\\BetterFriendlist\\Textures\\PortraitIcon")
+    -- The Legacy title bar and tabs; the Modern layout hides all of it.
+    local function DressLegacyChrome()
+        local pb = frame.PortraitButton
+        if pb then
+            pb:ClearAllPoints()
+            pb:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
+            pb:SetSize(26, 26)
+            pb:SetFrameLevel(frame:GetFrameLevel() + 5)
+            local bd = S.Backdrop(pb, 0)
+            if not pb.Icon then
+                pb.Icon = pb:CreateTexture(nil, "ARTWORK")
+                pb.Icon:SetTexture("Interface\\AddOns\\BetterFriendlist\\Textures\\PortraitIcon")
+            end
+            pb.Icon:ClearAllPoints()
+            pb.Icon:SetPoint("TOPLEFT", pb, "TOPLEFT", 1, -1)
+            pb.Icon:SetPoint("BOTTOMRIGHT", pb, "BOTTOMRIGHT", -1, 1)
+            pb.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            pb.Icon:Show()
+            if pb.Glow then
+                pb.Glow:ClearAllPoints()
+                pb.Glow:SetPoint("TOPLEFT", pb, "TOPLEFT", 1, -1)
+                pb.Glow:SetPoint("BOTTOMRIGHT", pb, "BOTTOMRIGHT", -1, 1)
+                pb.Glow:SetDrawLayer("OVERLAY")
+            end
+            S.Hover(pb, bd)
         end
-        pb.Icon:ClearAllPoints()
-        pb.Icon:SetPoint("TOPLEFT", pb, "TOPLEFT", 1, -1)
-        pb.Icon:SetPoint("BOTTOMRIGHT", pb, "BOTTOMRIGHT", -1, 1)
-        pb.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        pb.Icon:Show()
-        if pb.Glow then
-            pb.Glow:ClearAllPoints()
-            pb.Glow:SetPoint("TOPLEFT", pb, "TOPLEFT", 1, -1)
-            pb.Glow:SetPoint("BOTTOMRIGHT", pb, "BOTTOMRIGHT", -1, 1)
-            pb.Glow:SetDrawLayer("OVERLAY")
+
+        -- The seam is the anchor offset plus four: S.Tab draws its backdrop through
+        -- S.Template(tab, "Default", 2), inset 2 a side, so two chained tabs show
+        -- offset + 4 pixels of daylight. -3 is the 1px seam used everywhere else.
+        --
+        -- Whether a tab is chained decides, not how many anchor points it has:
+        -- every tab carries a single point at +3.
+        local TAB_CHAIN_OFFSET = -3
+
+        local function IsTabButton(f)
+            return (f and f.GetObjectType and f:GetObjectType() == "Button"
+                and tostring(f:GetName() or ""):find("Tab") ~= nil) or false
         end
-        S.Hover(pb, bd)
-    end
 
-    -- The seam is the anchor offset plus four: S.Tab draws its backdrop through
-    -- S.Template(tab, "Default", 2), inset 2 a side, so two chained tabs show
-    -- offset + 4 pixels of daylight. -3 is the 1px seam used everywhere else.
-    --
-    -- This used to run only on a tab with more than one anchor point, which was
-    -- true of BFL's old XML and stopped being true in 2.8.2 -- every tab now
-    -- carries a single point at +3, so the shim silently did nothing and the
-    -- row opened up. A guard on the shape of someone else's anchors is a guard
-    -- on their implementation; ask whether the tab is chained instead.
-    local TAB_CHAIN_OFFSET = -3
+        local function CleanTabAnchors(tab)
+            local p, rel, rp, x, y = tab:GetPoint(1)
+            if not p then return end
 
-    local function IsTabButton(f)
-        return (f and f.GetObjectType and f:GetObjectType() == "Button"
-            and tostring(f:GetName() or ""):find("Tab") ~= nil) or false
-    end
+            local wantX = x
+            if IsTabButton(rel) then wantX = TAB_CHAIN_OFFSET end
 
-    local function CleanTabAnchors(tab)
-        local p, rel, rp, x, y = tab:GetPoint(1)
-        if not p then return end
+            -- Nothing to do is the common case once it has settled, and returning
+            -- here is what stops our own SetPoint re-arming the hook forever.
+            if tab:GetNumPoints() == 1 and wantX == x then return end
 
-        local wantX = x
-        if IsTabButton(rel) then wantX = TAB_CHAIN_OFFSET end
+            tab:ClearAllPoints()
+            tab:SetPoint(p, rel, rp, wantX, y)
+        end
 
-        -- Nothing to do is the common case once it has settled, and returning
-        -- here is what stops our own SetPoint re-arming the hook forever.
-        if tab:GetNumPoints() == 1 and wantX == x then return end
+        local function ArmBottomHeadY(tab)
+            if S.data(tab).yArmor then return end
+            S.data(tab).yArmor = true
+            local function Pin(t, _, _, _, x, y)
+                if y ~= -32 or x ~= -2 then
+                    local p, rel, rp = t:GetPoint(1)
+                    if p and rel == _G.BetterFriendsFrame then
+                        t:ClearAllPoints()
+                        t:SetPoint(p, rel, rp, -2, -32)
+                    end
+                end
+            end
+            Pin(tab, nil, nil, nil, select(4, tab:GetPoint(1)), select(5, tab:GetPoint(1)))
+            hooksecurefunc(tab, "SetPoint", Pin)
+        end
+        local function ArmAnchorShim(tab)
+            if S.data(tab).anchorShim then return end
+            S.data(tab).anchorShim = true
+            -- Inline, not deferred: CleanTabAnchors measures nothing, and a
+            -- deferred answer drew the row at Blizzard's offset for one frame on
+            -- every tab click. Its early-out is the re-entry guard.
+            hooksecurefunc(tab, "SetPoint", CleanTabAnchors)
+            CleanTabAnchors(tab)
+        end
+        -- BFL's dark theme backdrops each tab edge to edge and borders the selected
+        -- one, two pixels outside KE's inset box and over the next tab. Its opt-out
+        -- flag hides that backdrop on every state pass; the Hide removes one built
+        -- before this ran.
+        local function MuteDarkTabChrome(tab)
+            tab.BFL_DarkNoButtonChrome = true
+            if tab.BFL_DarkBackdrop then tab.BFL_DarkBackdrop:Hide() end
+        end
 
-        tab:ClearAllPoints()
-        tab:SetPoint(p, rel, rp, wantX, y)
-    end
+        for i = 1, 4 do
+            local tab = _G["BetterFriendsFrameTab" .. i]
+            if tab then
+                S.data(tab).noGeometry = true
+                S.Tab(tab)
+                ArmAnchorShim(tab)
+                MuteDarkTabChrome(tab)
+            end
+        end
+        for i = 1, 4 do
+            local tab = _G["BetterFriendsFrameBottomTab" .. i]
+            if tab then
+                S.data(tab).noGeometry = true
+                S.Tab(tab)
+                ArmAnchorShim(tab)
+                MuteDarkTabChrome(tab)
+                if i == 1 then ArmBottomHeadY(tab) end
+            end
+        end
 
-    local function ArmBottomHeadY(tab)
-        if S.data(tab).yArmor then return end
-        S.data(tab).yArmor = true
-        local function Pin(t, _, _, _, x, y)
-            if y ~= -32 or x ~= -2 then
-                local p, rel, rp = t:GetPoint(1)
-                if p and rel == _G.BetterFriendsFrame then
-                    t:ClearAllPoints()
-                    t:SetPoint(p, rel, rp, -2, -32)
+        local hdr = frame.FriendsTabHeader
+        if hdr then
+            pcall(S.DropDown, hdr.QuickFilterDropdown, true)
+            pcall(S.DropDown, hdr.PrimarySortDropdown, true)
+            pcall(S.DropDown, hdr.SecondarySortDropdown, true)
+            local bnet = hdr.BattlenetFrame
+            if bnet then
+                for _, b in ipairs({ bnet.SettingsButton, bnet.ContactsMenuButton }) do
+                    if b then
+                        S.Button(b, b.Icon)
+                        S.FixSubPixelEdge(b)
+                    end
                 end
             end
         end
-        Pin(tab, nil, nil, nil, select(4, tab:GetPoint(1)), select(5, tab:GetPoint(1)))
-        hooksecurefunc(tab, "SetPoint", Pin)
-    end
-    local function ArmAnchorShim(tab)
-        if S.data(tab).anchorShim then return end
-        S.data(tab).anchorShim = true
-        -- Inline, not deferred: CleanTabAnchors measures nothing, and a
-        -- deferred answer drew the row at Blizzard's offset for one frame on
-        -- every tab click. Its early-out is the re-entry guard.
-        hooksecurefunc(tab, "SetPoint", CleanTabAnchors)
-        CleanTabAnchors(tab)
-    end
-    -- BFL's dark theme backdrops each tab edge to edge and borders the selected
-    -- one, two pixels outside KE's inset box and over the next tab. Its opt-out
-    -- flag hides that backdrop on every state pass; the Hide removes one built
-    -- before this ran.
-    local function MuteDarkTabChrome(tab)
-        tab.BFL_DarkNoButtonChrome = true
-        if tab.BFL_DarkBackdrop then tab.BFL_DarkBackdrop:Hide() end
-    end
-
-    for i = 1, 4 do
-        local tab = _G["BetterFriendsFrameTab" .. i]
-        if tab then
-            S.data(tab).noGeometry = true
-            S.Tab(tab)
-            ArmAnchorShim(tab)
-            MuteDarkTabChrome(tab)
-        end
-    end
-    for i = 1, 4 do
-        local tab = _G["BetterFriendsFrameBottomTab" .. i]
-        if tab then
-            S.data(tab).noGeometry = true
-            S.Tab(tab)
-            ArmAnchorShim(tab)
-            MuteDarkTabChrome(tab)
-            if i == 1 then ArmBottomHeadY(tab) end
-        end
+        S.Button(frame.AddFriendButton)
+        S.Button(frame.SendMessageButton)
     end
 
     SkinInset(frame.Inset)
@@ -627,13 +689,11 @@ local function Skin()
         end
     end
 
-    S.Button(frame.AddFriendButton)
-    S.Button(frame.SendMessageButton)
     S.Button(frame.RecruitmentButton)
     if frame.WhoFrame then
-        S.Button(frame.WhoFrame.WhoButton)
-        S.Button(frame.WhoFrame.AddFriendButton)
-        S.Button(frame.WhoFrame.GroupInviteButton)
+        S.Button(LegacyButton(frame.WhoFrame, "WhoButton"))
+        S.Button(LegacyButton(frame.WhoFrame, "AddFriendButton"))
+        S.Button(LegacyButton(frame.WhoFrame, "GroupInviteButton"))
         S.EditBox(frame.WhoFrame.EditBox)
 
         KillSearchPlates(frame.WhoFrame.EditBox)
@@ -643,12 +703,13 @@ local function Skin()
         pcall(S.DropDown, frame.WhoFrame.ColumnDropdown, true)
     end
     if frame.RaidFrame then
-        S.Button(frame.RaidFrame.ConvertToRaidButton)
-        S.Button(frame.RaidFrame.RaidToolsButton)
+        S.Button(LegacyButton(frame.RaidFrame, "ConvertToRaidButton"))
+        S.Button(LegacyButton(frame.RaidFrame, "RaidToolsButton"))
         if frame.RaidFrame.ControlPanel then
-            S.Button(frame.RaidFrame.ControlPanel.RaidInfoButton)
+            S.Button(LegacyButton(frame.RaidFrame.ControlPanel, "RaidInfoButton"))
 
-            S.Button(frame.RaidFrame.ControlPanel.ReadyCheckButton, frame.RaidFrame.ControlPanel.ReadyCheckButton.Icon)
+            local readyCheck = LegacyButton(frame.RaidFrame.ControlPanel, "ReadyCheckButton")
+            S.Button(readyCheck, readyCheck and readyCheck.Icon)
 
             local cp = frame.RaidFrame.ControlPanel
             if cp.EveryoneAssistCheckbox then S.CheckBox(cp.EveryoneAssistCheckbox) end
@@ -679,22 +740,11 @@ local function Skin()
 
         KillSearchPlates(header.SearchBox)
         pcall(S.DropDown, header.StatusDropdown, true)
-        pcall(S.DropDown, header.QuickFilterDropdown, true)
-        pcall(S.DropDown, header.PrimarySortDropdown, true)
-        pcall(S.DropDown, header.SecondarySortDropdown, true)
 
         local bnet = header.BattlenetFrame
         if bnet then
             S.StripTextures(bnet)
             S.Backdrop(bnet)
-
-            for _, b in ipairs({ bnet.SettingsButton, bnet.ContactsMenuButton }) do
-                if b then
-                    S.Button(b, b.Icon)
-
-                    S.FixSubPixelEdge(b)
-                end
-            end
 
             if not S.data(frame).keBnetDragHook and frame.HookScript then
                 S.data(frame).keBnetDragHook = true
@@ -732,53 +782,58 @@ local function Skin()
         S.Button(ign.UnignorePlayerButton)
     end
 
+    local HookLegacy = NOOP
     local BFLNS = _G.BetterFriendlist
     if BFLNS and BFLNS.GetModule then
-        -- The muted dark-theme chrome carried the selected-tab cue, an accent
-        -- border; KE's own border carries it now, in the brand color.
-        local function PaintTabBorder(tab, selected)
-            local bd = S.GetBackdrop(tab)
-            if not bd then return end
-            if selected then
-                bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1)
-            else
-                bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+        HookLegacy = function()
+            -- The dark theme's tab chrome is muted, so KE's own border carries the
+            -- selected-tab cue, in the brand color.
+            local function PaintTabBorder(tab, selected)
+                local bd = S.GetBackdrop(tab)
+                if not bd then return end
+                if selected then
+                    bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1)
+                else
+                    bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+                end
             end
-        end
-        if type(BFLNS.ApplyTabVisualState) == "function" then
-            hooksecurefunc(BFLNS, "ApplyTabVisualState", function(_, tab, selected)
-                if tab and S.data(tab).anchorShim then PaintTabBorder(tab, selected) end
-            end)
-            -- A palette sweep repaints any border still matching the old default,
-            -- and a brand change leaves the cue in the old color; both rows
-            -- repaint through the addon's own state pass.
-            local function RepaintTabs()
-                pcall(BFLNS.RefreshBottomTabVisualState, BFLNS)
-                pcall(BFLNS.RefreshTopTabVisualState, BFLNS)
+            if type(BFLNS.ApplyTabVisualState) == "function" then
+                hooksecurefunc(BFLNS, "ApplyTabVisualState", function(_, tab, selected)
+                    if tab and not IsModern() and S.data(tab).anchorShim then PaintTabBorder(tab, selected) end
+                end)
+                -- A palette sweep repaints any border still matching the old default,
+                -- and a brand change leaves the cue in the old color; both rows
+                -- repaint through the addon's own state pass.
+                local function RepaintTabs()
+                    if IsModern() then return end
+                    pcall(BFLNS.RefreshBottomTabVisualState, BFLNS)
+                    pcall(BFLNS.RefreshTopTabVisualState, BFLNS)
+                end
+                hooksecurefunc(S, "SetSkinColors", RepaintTabs)
+                hooksecurefunc(S, "RefreshPalette", RepaintTabs)
+                RepaintTabs()
             end
-            hooksecurefunc(S, "SetSkinColors", RepaintTabs)
-            hooksecurefunc(S, "RefreshPalette", RepaintTabs)
-            RepaintTabs()
-        end
-        local FriendsList = BFLNS:GetModule("FriendsList")
-        if FriendsList then
-            pcall(function()
-                hooksecurefunc(FriendsList, "UpdateGroupHeaderButton", function(_, button)
-                    SkinHeaderRow(button)
+            local FriendsList = BFLNS:GetModule("FriendsList")
+            if FriendsList then
+                pcall(function()
+                    hooksecurefunc(FriendsList, "UpdateGroupHeaderButton", function(_, button)
+                        if IsModern() then return end
+                        SkinHeaderRow(button)
+                    end)
+                    hooksecurefunc(FriendsList, "UpdateInviteHeaderButton", function(_, button)
+                        if IsModern() then return end
+                        SkinHeaderRow(button)
+                    end)
+                    hooksecurefunc(FriendsList, "UpdateFriendButton", function(_, button)
+                        if IsModern() then return end
+                        FlattenInviteButton(button and button.travelPassButton)
+                    end)
+                    hooksecurefunc(FriendsList, "UpdateInviteButton", function(_, button)
+                        if IsModern() then return end
+                        DressInviteRow(button)
+                    end)
                 end)
-                hooksecurefunc(FriendsList, "UpdateInviteHeaderButton", function(_, button)
-                    SkinHeaderRow(button)
-                end)
-                hooksecurefunc(FriendsList, "UpdateFriendButton", function(_, button)
-                    FlattenInviteButton(button and button.travelPassButton)
-                end)
-                hooksecurefunc(FriendsList, "UpdateInviteButton", function(_, button)
-                    if not button or S.data(button).bflSkinned then return end
-                    S.data(button).bflSkinned = true
-                    S.Button(button.AcceptButton)
-                    S.Button(button.DeclineButton)
-                end)
-            end)
+            end
         end
         local RecentAllies = BFLNS:GetModule("RecentAllies")
         if RecentAllies then
@@ -825,6 +880,50 @@ local function Skin()
         end
 
         DeferredReStrip()
+    end
+
+    local legacyReady = false
+    local function EnsureLegacy()
+        if legacyReady then return end
+        legacyReady = true
+        DressLegacyChrome()
+        HookLegacy()
+    end
+
+    -- The addon fills the list inside the application this follows, before
+    -- the first hooks exist. The sweep dresses those rows by the addon's own
+    -- row keys and only reads the frames the scroll boxes hold.
+    local function SweepLegacy()
+        local list = GetBFLModule("FriendsList")
+        EachFrame(list and list.scrollBox, function(row)
+            if row.AcceptButton then
+                DressInviteRow(row)
+            elseif row.travelPassButton then
+                FlattenInviteButton(row.travelPassButton)
+            elseif row.BG then
+                SkinHeaderRow(row)
+            end
+        end)
+        local recent = frame.RecentAlliesFrame
+        EachFrame(recent and recent.ScrollBox, function(row)
+            if row.PartyButton then FlattenInviteButton(row.PartyButton) end
+        end)
+    end
+
+    local function OnLayoutApplied()
+        if LayoutFor(GetFriendsUI()) == "legacy" then
+            EnsureLegacy()
+            SweepLegacy()
+        end
+    end
+
+    local ui = GetFriendsUI()
+    if type(ui) == "table" and type(ui.ApplyEffectiveStyle) == "function" then
+        hooksecurefunc(ui, "ApplyEffectiveStyle", OnLayoutApplied)
+        OnLayoutApplied()
+    else
+        EnsureLegacy()
+        SweepLegacy()
     end
 end
 
