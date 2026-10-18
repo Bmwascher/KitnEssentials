@@ -981,6 +981,7 @@ local function SyncMover(want)
                     KE:ApplyFramePosition(frame, sh.Position, sh)
                 end,
                 guiPath = "DamageMeter",
+                guiTab = "DamageMeter_SpellHistory",
             }
         end
         editMode:RegisterElement(editConfig)

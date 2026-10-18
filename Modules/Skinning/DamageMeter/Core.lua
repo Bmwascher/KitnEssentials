@@ -479,6 +479,7 @@ function DM:RegWithEditMode()
                 return KE:ResolveAnchorFrame(self.db and self.db.anchorFrameType, self.db and self.db.ParentFrame)
             end,
             guiPath = "DamageMeter",
+            guiTab = "DamageMeter_Windows",
         }
     end
 
