@@ -402,11 +402,165 @@ local function ConstructSchematic(parent)
         end
     end
 
+    -- Gap handles: an 8 px hit frame over each 4 px gap between two boxes.
+    -- Dragging one moves that split as its slider and the in-world splitter
+    -- do, clamped to the same range.
+    local handles = {}
+    local gapDrag = {}
+    -- Carries the gap drag's OnUpdate. A handle's scripts are set once, in
+    -- NewHandle, and never changed: the map is pooled, so a script swapped on
+    -- a handle later would outlive the page that swapped it.
+    local gapDriver = CreateFrame("Frame", nil, container)
+
+    local function PaintHandle(h)
+        h.line:SetShown(h._hover or gapDrag.handle == h)
+    end
+
+    local function StopGapDrag()
+        local h = gapDrag.handle
+        if not h then return end
+        gapDrag.handle = nil
+        gapDriver:SetScript("OnUpdate", nil)
+        PaintHandle(h)
+    end
+
+    -- The pointer's place across the pair, less half the gap, is the left or
+    -- top side's share. The pair's outer edges do not move during the drag: a
+    -- split move keeps the pair's ratio sum.
+    local function GapDragUpdate()
+        local h = gapDrag.handle
+        local dm = GetDM()
+        if not (h and dm) then return end
+        if not IsMouseButtonDown("LeftButton") then StopGapDrag() return end
+        local cs = container:GetEffectiveScale()
+        if cs <= 0 then cs = 1 end
+        local mx, my = GetCursorPosition()
+        local pct
+        if h.kind == "col" then
+            pct = (mx / cs - gapDrag.start - MAP_GAP / 2) / gapDrag.span * 100
+        else
+            pct = (gapDrag.start - my / cs - MAP_GAP / 2) / gapDrag.span * 100
+        end
+        if pct < gapDrag.lo then pct = gapDrag.lo elseif pct > gapDrag.hi then pct = gapDrag.hi end
+        if h.kind == "col" then
+            dm:SetColumnBoundaryShare(h.c, pct)
+        else
+            dm:SetRowBoundaryShare(h.c, h.r, pct)
+        end
+        container.Relayout()
+    end
+
+    local function StartGapDrag(h)
+        local dm = GetDM()
+        local boxAt = container._boxAt
+        local col = boxAt and boxAt[h.c]
+        if not (dm and col) then return end
+        local a, b, start, far, lo, hi
+        if h.kind == "col" then
+            local nextCol = boxAt[h.c + 1]
+            a, b = col[1], nextCol and nextCol[1]
+            if not (a and b) then return end
+            start, far = a:GetLeft(), b:GetRight()
+            if not (start and far) then return end
+            gapDrag.span = far - start - MAP_GAP
+            lo, hi = dm:GetColumnBoundaryRange(h.c)
+        else
+            a, b = col[h.r], col[h.r + 1]
+            if not (a and b) then return end
+            start, far = a:GetTop(), b:GetBottom()
+            if not (start and far) then return end
+            gapDrag.span = start - far - MAP_GAP
+            lo, hi = dm:GetRowBoundaryRange(h.c, h.r)
+        end
+        if gapDrag.span <= 0 then return end
+        gapDrag.start, gapDrag.lo, gapDrag.hi = start, lo, hi
+        gapDrag.handle = h
+        PaintHandle(h)
+        gapDriver:SetScript("OnUpdate", GapDragUpdate)
+    end
+
+    local function NewHandle()
+        local h = CreateFrame("Frame", nil, container)
+        h:EnableMouse(true)
+        h.line = h:CreateTexture(nil, "OVERLAY")
+        h.line:Hide()
+        h:SetScript("OnEnter", function(self)
+            self._hover = true
+            PaintHandle(self)
+        end)
+        h:SetScript("OnLeave", function(self)
+            self._hover = false
+            PaintHandle(self)
+        end)
+        h:SetScript("OnMouseDown", function(self, button)
+            if button == "LeftButton" then StartGapDrag(self) end
+        end)
+        h:SetScript("OnMouseUp", function(_, button)
+            if button == "LeftButton" then StopGapDrag() end
+        end)
+        h:SetScript("OnHide", StopGapDrag)
+        handles[#handles + 1] = h
+        GUIFrame:PoolGrow(container, container, 1, 0)
+        GUIFrame:PoolOwn(container, h)
+        return h
+    end
+
+    -- One handle per gap, anchored to the box before it, so a relayout carries
+    -- the handles along. A column handle spans the map's height; a row handle
+    -- spans its column.
+    function container.ConfigureHandles()
+        local cols, boxAt = container._cols, container._boxAt
+        local accent = Theme.accent
+        local level = container:GetFrameLevel() + 4
+        local n = 0
+        for c = 1, #cols do
+            local col, nextCol = boxAt[c], boxAt[c + 1]
+            if col and col[1] and nextCol and nextCol[1] then
+                n = n + 1
+                local h = handles[n] or NewHandle()
+                h.kind, h.c, h.r = "col", c, nil
+                h:ClearAllPoints()
+                h:SetPoint("TOPLEFT", col[1], "TOPRIGHT", MAP_GAP / 2 - 4, 0)
+                h:SetSize(8, container._height)
+                h.line:ClearAllPoints()
+                h.line:SetSize(2, container._height)
+                h.line:SetPoint("CENTER", h, "CENTER", 0, 0)
+                h.line:SetColorTexture(accent[1], accent[2], accent[3], 1)
+                h:SetFrameLevel(level)
+                h._hover = false
+                h:Show()
+                PaintHandle(h)
+            end
+            if col then
+                for r = 1, #col - 1 do
+                    n = n + 1
+                    local h = handles[n] or NewHandle()
+                    h.kind, h.c, h.r = "row", c, r
+                    h:ClearAllPoints()
+                    h:SetPoint("TOPLEFT", col[r], "BOTTOMLEFT", 0, 4 - MAP_GAP / 2)
+                    h:SetPoint("TOPRIGHT", col[r], "BOTTOMRIGHT", 0, 4 - MAP_GAP / 2)
+                    h:SetHeight(8)
+                    h.line:ClearAllPoints()
+                    h.line:SetHeight(2)
+                    h.line:SetPoint("LEFT", h, "LEFT", 0, 0)
+                    h.line:SetPoint("RIGHT", h, "RIGHT", 0, 0)
+                    h.line:SetColorTexture(accent[1], accent[2], accent[3], 1)
+                    h:SetFrameLevel(level)
+                    h._hover = false
+                    h:Show()
+                    PaintHandle(h)
+                end
+            end
+        end
+        for i = n + 1, #handles do handles[i]:Hide() end
+    end
+
     -- Ends a drag with nothing moved. Also the pool's reset, so a page
-    -- rebuilt under a drag leaves no ghost, line or dimmed box.
+    -- rebuilt under a drag leaves no ghost, line, dimmed box or gap drag.
     function container.CancelDrag()
         container:SetScript("OnUpdate", nil)
         container._dragWin = nil
+        StopGapDrag()
         ClearDrop()
         dropLine:Hide()
         for i = 1, #boxes do boxes[i]:SetAlpha(1) end
@@ -621,6 +775,7 @@ local function ConstructSchematic(parent)
 
         container._boxAt = boxAt
         container._count = count
+        container.ConfigureHandles()
         Layout(container._keWidth)
     end
 
