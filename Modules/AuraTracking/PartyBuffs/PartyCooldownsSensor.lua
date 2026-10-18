@@ -432,9 +432,9 @@ function Track.KeyStart()
     end
 end
 
-local function Sig(e)
-    return table_concat(e.buffs, ",") .. "/" .. tostring(e.short) .. "/" .. e.cd
-end
+-- Sensors take it as their filter signature too, so a new length does not
+-- re-aim them.
+local Sig = Rules.TrackerKey
 
 -- A cell's sensors: its own and its proc sensor, or one per unit in a group
 -- slot.
@@ -503,7 +503,8 @@ end
 
 -- Points the slot's cells at entries for unit. Containers are only aimed
 -- here; BuildNext makes the missing ones, one per call. A cell keeps its
--- running timer while its buffs and length are unchanged.
+-- count while its buffs, charges and code unit are unchanged; a new length in
+-- the same unit re-dresses it.
 function Track.Apply(st, unit, entries, style, settings)
     local clean, moved = true, false
     local n = Track.Now()
@@ -537,6 +538,8 @@ function Track.Apply(st, unit, entries, style, settings)
             Rules.Clear(t, n)
             st.trackers[i] = t
             moved = true
+        elseif t.cd ~= e.cd then
+            t.cd = e.cd
         end
         local ready, refused, aimed = Ready(st.sensors[i], sig, e.buffs, nil, unit)
         if e.short then
@@ -623,6 +626,7 @@ function Track.ApplyGroup(st, units, entries, style)
         local t = at and old[at]
         if t then
             used[at] = true
+            t.cd = e.cd
             if t.cell ~= c then t.cell, moved = c, true end
         else
             t = Rules.NewTracker(e.cd, false, true)

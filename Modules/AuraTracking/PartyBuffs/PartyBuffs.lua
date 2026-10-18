@@ -857,9 +857,10 @@ function PB:CooldownEntries(m)
 end
 
 -- Re-run on every bind and on each change to the member's spec, trinkets or
--- talents. For the same member and spec, a cell whose spell and length did not
--- change keeps its timer. When the GUID is secret the slot keeps the record it
--- had for the same token; a roster change or a closed gate clears it first.
+-- talents. For the same member and spec, a cell whose spell, charges and code
+-- unit did not change keeps its count. When the GUID is secret the slot keeps
+-- the record it had for the same token; a roster change or a closed gate
+-- clears it first.
 function PB:BindCooldowns(k, binding)
     local slot = self.slots[k]
     slot.track = slot.track or Track.NewSlot(slot.holder)

@@ -773,6 +773,22 @@ describe("PartyCooldownsRules.Taken", function()
     end)
 end)
 
+describe("PartyCooldownsRules.TrackerKey", function()
+    it("keeps a count across a new length in the same code unit, never across a new unit, charges or buffs", function()
+        local R = loadRules()
+        local base = { buffs = { 1 }, cd = 120 }
+        local cases = {
+            { name = "shorter, same unit", e = { buffs = { 1 }, cd = 90 }, same = true },
+            { name = "a new unit", from = { buffs = { 1 }, cd = 240 }, e = { buffs = { 1 }, cd = 300 }, same = false },
+            { name = "a new charge count", e = { buffs = { 1 }, cd = 120, charges = 2 }, same = false },
+            { name = "other buffs", e = { buffs = { 2 }, cd = 120 }, same = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.same, R.TrackerKey(case.from or base) == R.TrackerKey(case.e), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.MatchKeys", function()
     it("finds each key's old index wherever it moved, and gives each old index once", function()
         local R = loadRules()

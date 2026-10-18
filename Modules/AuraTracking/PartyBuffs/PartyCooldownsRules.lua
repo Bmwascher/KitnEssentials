@@ -211,6 +211,8 @@ end
 local math_abs = math.abs
 local math_ceil = math.ceil
 local pcall = pcall
+local table_concat = table.concat
+local tostring = tostring
 
 -- A stamp is one of the 255 values k / 255 the latch carries exactly; 254
 -- steps of u seconds make one roll period.
@@ -228,6 +230,14 @@ Rules.DOOR_PASSES = 16
 Rules.DOOR_SLACK = 3e-7
 
 function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
+
+-- What a cell's count is kept by: its buffs, proc length, charges and code
+-- unit. A new length in the same unit keeps the stamps valid, so the count
+-- carries on.
+function Rules.TrackerKey(e)
+    return table_concat(e.buffs, ",") .. "/" .. tostring(e.short) .. "/" .. tostring(e.charges)
+        .. "/" .. Rules.Unit(e.cd)
+end
 
 -- Two rolling slots, so a new use can stamp while an older one still counts.
 -- A slot's c is its stamp and v its visibility; either may hold a secret.
