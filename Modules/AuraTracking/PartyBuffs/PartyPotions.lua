@@ -116,7 +116,8 @@ local function Corners()
     return "TOPLEFT", "BOTTOMLEFT"
 end
 
--- Placed rows one after another, anchored to each other.
+-- Placed rows one after another, anchored to each other. Each is seated where
+-- it lands, so a restack leaves no text off the pixel grid.
 local function Stack()
     local corner, far = Corners()
     local gap = Pot.style.up and Pot.style.gap or -Pot.style.gap
@@ -130,6 +131,7 @@ local function Stack()
             else
                 c:SetPoint(corner, Pot.live, corner, 0, 0)
             end
+            Bar.Seat(c)
             prev = c
         end
     end
@@ -187,6 +189,18 @@ local function Placement(db)
     return db.PotionPosition, placement, false
 end
 
+-- A move takes every bar off its seat: the live rows and, while the preview
+-- shows, its samples.
+local function SeatAll()
+    for _, row in ipairs(Pot.rows) do
+        if row.bar.placed then Bar.Seat(row.bar) end
+    end
+    if not Pot.previewing then return end
+    for _, sample in ipairs(Pot.samples) do
+        if sample.bar:IsShown() then Bar.Seat(sample.bar) end
+    end
+end
+
 -- A box anchored where the game restricts moves in combat is placed at the
 -- next drain instead.
 local function Place(db)
@@ -197,6 +211,7 @@ local function Place(db)
     Pot.placePending = nil
     local pos, config = Placement(db)
     KE:ApplyFramePosition(Pot.box, pos, config)
+    SeatAll()
 end
 
 -- The rows are stacked again by Pot.ApplySettings and re-dressed at the drain
