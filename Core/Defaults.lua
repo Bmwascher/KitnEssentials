@@ -3054,6 +3054,8 @@ local KEY_RENAMES = {
     { id = "Skinning.Details.Delete",     block = "Skinning", old = "Details",     new = "Details",     convert = DeleteKey },
     { id = "Dungeons.InstanceReset.Delete", block = "Dungeons", old = "InstanceReset", new = "InstanceReset", convert = DeleteKey },
     { id = "Dungeons.DungeonTimers.Delete", block = "Dungeons", old = "DungeonTimers", new = "DungeonTimers", convert = DeleteKey },
+    -- Typed cooldown lengths: lengths follow talents, and no box sets one.
+    { id = "PartyBuffs.CooldownSeconds.Delete", block = "PartyBuffs", old = "CooldownSeconds", new = "CooldownSeconds", convert = DeleteKey },
     -- Blocks of modules folded into a replacement. These run before the
     -- replacement's own copy, so a block it never copied is lost with them.
     { id = "BossDebuffs.Delete", path = { "BossDebuffs" }, convert = DeleteKey },
