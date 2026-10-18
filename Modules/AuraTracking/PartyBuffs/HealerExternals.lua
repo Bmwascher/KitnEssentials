@@ -93,13 +93,10 @@ local function MakeSlot()
     HX.st = Track.NewSlot(HX.live, HX.VIEW, host)
 end
 
--- An attached box whose anchor the shared resolution refuses takes its
--- starting place: unnamed (the Frame field cleared, until the default name
--- returns at the next login), missing (Healer Mana off since login) or
--- unsafe. The attached points against the screen would put it above the top
--- edge. Every name the resolution accepts, a child's Parent.key included,
--- keeps its saved position. The third return says the starting place is in
--- use.
+-- An attached box whose anchor the shared resolution refuses (unnamed,
+-- missing or unsafe) takes its starting place: the attached points against
+-- the screen would put it above the top edge. The third return says the
+-- starting place is in use.
 local function Placement(db)
     local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
     screen.Strata, placement.Strata = db.HealerExtStrata, db.HealerExtStrata

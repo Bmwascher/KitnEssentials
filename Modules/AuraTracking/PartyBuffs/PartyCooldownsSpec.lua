@@ -113,7 +113,6 @@ local function ForgetReads(m)
     end
 end
 
--- A talent answer and the state of its reads.
 local function ClearTalents(m)
     m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
 end

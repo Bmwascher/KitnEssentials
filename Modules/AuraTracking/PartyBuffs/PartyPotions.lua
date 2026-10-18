@@ -175,9 +175,8 @@ end
 local placement, screen = {}, { anchorFrameType = "UIPARENT" }
 
 -- A Select Frame anchor the shared resolution refuses (unnamed, missing or
--- unsafe) takes the starting place on the screen; every name it accepts,
--- a child's Parent.key included, keeps its saved position. The third return
--- says the starting place is in use.
+-- unsafe) takes the starting place on the screen. The third return says the
+-- starting place is in use.
 local function Placement(db)
     local kind, name = db.PotionAnchorFrameType, db.PotionParentFrame
     screen.Strata, placement.Strata = db.PotionStrata, db.PotionStrata
