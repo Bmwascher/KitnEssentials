@@ -92,8 +92,6 @@ function Rules.CellCount(entryCount, db)
     return math_min(entryCount, Rules.CooldownIconCount(db))
 end
 
--- Active Cooldowns First: the cooldowns whose buff is up show in sorted lists
--- at the start of the active buff icons.
 function Rules.ListOn(db)
     return type(db) == "table" and db.ActiveCooldownsFirst == true
 end

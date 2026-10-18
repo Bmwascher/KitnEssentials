@@ -617,7 +617,6 @@ local function GroupConfig(db, slot, d)
     return KE.PartyBuffsRules.BuildGroupConfig(d.category, db, slot.cellBuffs, slot.listBuffs)
 end
 
--- A set's members, sorted and joined: one filter told from the next.
 local function SetSig(set)
     if not set then return "" end
     local ids = {}
