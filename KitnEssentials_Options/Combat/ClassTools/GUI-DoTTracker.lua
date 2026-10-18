@@ -33,6 +33,8 @@ local COUNT_FORMATS = {
     { key = "MISSING",  text = "Missing (3)" },
 }
 
+local ICON_POSITIONS = GUIFrame.IconPositionOptions
+
 local function SpellLabel(id)
     local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
     return name or ("Spell " .. id)
@@ -91,6 +93,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("icon", function() return db.ShowIcon ~= false end)
     manager:SetCondition("fullCoverage", function() return db.FullCoverageColor ~= false end)
+    manager:SetCondition("attach", function() return db.AttachToCDM == true end)
 
     local function ApplySettings()
         if DT then DT:ApplySettings() end
@@ -472,6 +475,57 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     }), 1 / 3)
     card4:AddRow(row4c, Theme.rowHeight)
     yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Cooldown Manager
+    ----------------------------------------------------------------
+    local cardCDM = GUIFrame:CreateCard(scrollChild, "Cooldown Manager", yOffset)
+    local rowCDM1 = GUIFrame:CreateRow(cardCDM.content, Theme.rowHeight)
+    rowCDM1:AddWidget(GUIFrame:CreateCheckbox(rowCDM1, "Attach to Cooldown Manager", {
+        value = db.AttachToCDM == true,
+        callback = function(checked)
+            db.AttachToCDM = checked
+            manager:UpdateAll(true)
+            ApplySettings()
+        end,
+    }), 0.5)
+    local iconPosition = GUIFrame:CreateDropdown(rowCDM1, "Position on Icon", {
+        options = ICON_POSITIONS,
+        value = db.IconPosition or "ABOVE",
+        callback = function(key)
+            db.IconPosition = key
+            ApplySettings()
+        end,
+    })
+    rowCDM1:AddWidget(iconPosition, 0.5)
+    manager:Register(iconPosition, "attach")
+    cardCDM:AddRow(rowCDM1, Theme.rowHeight)
+
+    local rowCDM2 = GUIFrame:CreateRow(cardCDM.content, Theme.rowHeight)
+    local iconX = GUIFrame:CreateSlider(rowCDM2, "X Offset", {
+        min = -50, max = 50, step = 1,
+        value = db.IconX or 0,
+        callback = function(value)
+            db.IconX = value
+            ApplySettings()
+        end,
+    })
+    rowCDM2:AddWidget(iconX, 0.5)
+    manager:Register(iconX, "attach")
+    local iconY = GUIFrame:CreateSlider(rowCDM2, "Y Offset", {
+        min = -50, max = 50, step = 1,
+        value = db.IconY or 2,
+        callback = function(value)
+            db.IconY = value
+            ApplySettings()
+        end,
+    })
+    rowCDM2:AddWidget(iconY, 0.5)
+    manager:Register(iconY, "attach")
+    cardCDM:AddRow(rowCDM2, Theme.rowHeight)
+    cardCDM:AddNote("DoTs in the Cooldown Manager's Essential, Utility or Tracked Buffs icons show their " ..
+        "count on that icon, with no glow or target timer. The others stay in the row.")
+    yOffset = cardCDM:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 5: Count Text, then its font

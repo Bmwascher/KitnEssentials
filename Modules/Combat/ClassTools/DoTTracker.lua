@@ -21,6 +21,7 @@ if not KitnEssentials then return end
 ---@class DoTTracker: AceModule
 local DT = KitnEssentials:NewModule("DoTTracker", "AceEvent-3.0")
 
+local _G = _G
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local C_Spell = C_Spell
@@ -67,6 +68,11 @@ local SAMPLE_LIT = { 3, 6, 2, 5 }
 local SAMPLE_TIMERS = { "16", "23", "9", "12" }
 local SAMPLE_TOTAL = 6
 local NONE = {}
+-- Searched in this order; the first viewer showing a DoT takes its count.
+local VIEWER_ORDER = { "Essential", "Utility", "BuffIcon" }
+-- Above the icon's cooldown swipe and countdown when centered on it.
+local ICON_LEVEL_OFFSET = 30
+local WATCH_KEY = "DoTTracker"
 
 DT.root = nil
 DT.cells = {}
@@ -90,6 +96,8 @@ DT.editModeRegistered = false
 DT.someColor = DEFAULT_SOME
 DT.allColor = DEFAULT_ALL
 DT.watchers = nil
+DT.rowGeo = nil
+DT.attachGeo = nil
 
 local measureFS
 
@@ -159,17 +167,20 @@ local function GlowMargins(db, w, h)
 end
 
 -- Pixels from the cell's top left, y growing downward. The cell is the icon,
--- or with the icon hidden the count's own box. The window is the smallest box
--- holding the cell and the text, and stays narrower than a stride so the
--- answers on either side are clipped.
-local function Geometry(db)
+-- or, with the icon hidden or the cell on a Cooldown Manager icon, the count's
+-- own box. The window is the smallest box holding the cell and the text, and
+-- stays narrower than a stride so the answers on either side are clipped.
+local function Geometry(db, attached)
     local size = db.IconSize or 40
     local tw, th = TextBox(db)
     local tx, ty = db.CountX or 0, -(db.CountY or 0)
     local where = db.CountPosition
     local w, h = size, size
     local left, top
-    if db.ShowIcon == false then
+    -- An attached cell takes Icon X and Y where it is anchored instead.
+    if attached then tx, ty = 0, 0 end
+    local iconShown = db.ShowIcon ~= false and not attached
+    if not iconShown then
         w, h = tw, th
         left, top = 0, 0
     elseif where == "TOP" then
@@ -184,15 +195,17 @@ local function Geometry(db)
         left, top = size / 2 - tw / 2, size / 2 - th / 2
     end
     left, top = left + tx, top + ty
-    local padX, padY = GlowMargins(db, w, h)
+    -- An attached cell has no glow.
+    local padX, padY = 0, 0
+    if not attached then padX, padY = GlowMargins(db, w, h) end
     local boxL, boxT = math_min(0, left) - padX, math_min(0, top) - padY
     local boxR, boxB = math_max(w, left + tw) + padX, math_max(h, top + th) + padY
     -- Beside the icon the count is anchored by its near edge, COUNT_GAP off the
     -- icon, so a short count sits as close as the widest one.
     local point, labelX = "CENTER", left + tw / 2
-    if db.ShowIcon ~= false and where == "RIGHT" then
+    if iconShown and where == "RIGHT" then
         point, labelX = "LEFT", left + COUNT_GAP
-    elseif db.ShowIcon ~= false and where == "LEFT" then
+    elseif iconShown and where == "LEFT" then
         point, labelX = "RIGHT", left + tw - COUNT_GAP
     end
     return {
@@ -267,7 +280,7 @@ local function PlaceGlow(cell, total)
     local host, geo = cell.glow, cell.geo
     if not host or not geo then return end
     local _, d = Rules.Capped(0, total, cell.cap)
-    local on = DT.db.GlowEnabled == true and d > 0
+    local on = DT.db.GlowEnabled == true and d > 0 and not cell.attachIcon
     if on then
         host:SetPoint("TOPLEFT", cell.tail, "TOPLEFT", AnswerX(cell, d) + geo.iconX, -geo.iconY)
     end
@@ -431,7 +444,7 @@ local function StyleCell(cell, geo)
     else
         cell.border:SetColorTexture(0, 0, 0, 1)
     end
-    local alpha = db.ShowIcon == false and 0 or 1
+    local alpha = (db.ShowIcon == false or cell.attachIcon) and 0 or 1
     cell.icon:SetAlpha(alpha)
     cell.border:SetAlpha(alpha)
     cell.view:ClearAllPoints()
@@ -453,7 +466,8 @@ local function StyleCell(cell, geo)
 end
 
 -- The root is the first cell, not the row, so the row grows from where it was
--- put however long the list is.
+-- put however long the list is. Cells on a Cooldown Manager icon leave the
+-- row, and the rest close up from the root.
 local function LayoutCells(geo)
     local db = DT.db
     local gap = db.Spacing or 4
@@ -462,16 +476,136 @@ local function LayoutCells(geo)
     local stepX, stepY = geo.w + gap, geo.h + gap
     local dx = (grow == "LEFT" and -stepX) or (grow == "RIGHT" and stepX) or 0
     local dy = (grow == "UP" and stepY) or (grow == "DOWN" and -stepY) or 0
+    local slot = 0
     for i = 1, #DT.list do
-        local frame = DT.cells[i].frame
-        frame:ClearAllPoints()
-        frame:SetPoint("TOPLEFT", DT.root, "TOPLEFT", (i - 1) * dx, (i - 1) * dy)
+        local cell = DT.cells[i]
+        if not cell.attachIcon then
+            local frame = cell.frame
+            frame:ClearAllPoints()
+            frame:SetPoint("TOPLEFT", DT.root, "TOPLEFT", slot * dx, slot * dy)
+            slot = slot + 1
+        end
     end
+end
+
+---------------------------------------------------------------------------------
+-- Cooldown Manager
+---------------------------------------------------------------------------------
+-- Rank map for KE.CDMIcons.Find: the DoT's own id first, its extra ids after.
+local function CdmIds(id, also)
+    local ids = { [id] = 1 }
+    for i = 1, #also do ids[also[i]] = 2 end
+    return ids
+end
+
+local function FindIcon(cell)
+    if not cell.cdmIds then return nil end
+    for i = 1, #VIEWER_ORDER do
+        local key = VIEWER_ORDER[i]
+        local icon = KE.CDMIcons.Find(key, cell.cdmIds)
+        if icon then return icon, key end
+    end
+    return nil
+end
+
+-- A Center count needs the icon's strata and a higher level to draw above the
+-- icon. Each write is made only on a mismatch, so a refused one is simply tried
+-- again by the next attach pass. The level is never lowered.
+local function RaiseCell(cell, icon)
+    local frame = cell.frame
+    local strata = icon:GetFrameStrata()
+    if strata and not issecretvalue(strata) and frame:GetFrameStrata() ~= strata then
+        pcall(frame.SetFrameStrata, frame, strata)
+    end
+    local level = icon:GetFrameLevel()
+    if level and not issecretvalue(level) and level + ICON_LEVEL_OFFSET > frame:GetFrameLevel() then
+        pcall(frame.SetFrameLevel, frame, level + ICON_LEVEL_OFFSET)
+    end
+end
+
+-- Anchored, never parented: a hidden icon must not hide the cell, whose sensors
+-- stop with it.
+local function AttachCell(cell, icon)
+    local db, frame = DT.db, cell.frame
+    local x, y = db.IconX or 0, db.IconY or 2
+    frame:ClearAllPoints()
+    if db.IconPosition == "CENTER" then
+        frame:SetPoint("CENTER", icon, "CENTER", x, y)
+    elseif db.IconPosition == "BELOW" then
+        frame:SetPoint("TOP", icon, "BOTTOM", x, -y)
+    else
+        frame:SetPoint("BOTTOM", icon, "TOP", x, y)
+    end
+    RaiseCell(cell, icon)
+end
+
+-- Styles the cell for where it now is. The look is recorded only once every
+-- write went through; nil after a refusal, so the next attach pass retries.
+local function StyleAsPlaced(cell)
+    local attached = cell.attachIcon ~= nil
+    if pcall(StyleCell, cell, attached and DT.attachGeo or DT.rowGeo) then
+        cell.styledAttached = attached
+        return true
+    end
+    cell.styledAttached = nil
+    return false
+end
+
+-- Back to the row's origin; LayoutCells gives it its place in the row.
+local function PullBack(cell)
+    cell.attachIcon, cell.attachViewer, cell.attachID, cell.attachSlot = nil, nil, nil, nil
+    cell.frame:ClearAllPoints()
+    cell.frame:SetPoint("TOPLEFT", DT.root, "TOPLEFT", 0, 0)
+end
+
+-- Whether a pooled icon holds the cell's slot and cooldown. A secret id never
+-- matches.
+local function HoldsSlot(icon, cell)
+    if icon.layoutIndex ~= cell.attachSlot or not icon.GetCooldownID then return false end
+    local id = icon:GetCooldownID()
+    return id ~= nil and not issecretvalue(id) and id == cell.attachID
+end
+
+local function FindSlot(viewer, cell)
+    local pool = viewer.itemFramePool
+    if not pool then return nil end
+    for frame in pool:EnumerateActive() do
+        if HoldsSlot(frame, cell) then return frame end
+    end
+    return nil
+end
+
+-- Inside Blizzard's refresh, before the re-dealt icons draw. A cell whose icon
+-- now carries another cooldown moves to the icon that holds its slot, or goes
+-- back to the row until the next frame's search. Writes only to KE's frames.
+local function CheckIcons()
+    for i = 1, #DT.list do
+        local cell = DT.cells[i]
+        if cell.attachIcon then
+            local viewer = _G[KE.CDMIcons.VIEWERS[cell.attachViewer]]
+            local shown = viewer and viewer:IsShown()
+            if issecretvalue(shown) or not shown then
+                PullBack(cell)
+            elseif not HoldsSlot(cell.attachIcon, cell) then
+                local moved = FindSlot(viewer, cell)
+                if moved and pcall(AttachCell, cell, moved) then
+                    cell.attachIcon = moved
+                else
+                    PullBack(cell)
+                end
+            end
+        end
+    end
+end
+
+local function ReplaceAttached()
+    if DT.active then DT:PlaceAttached() end
 end
 
 -- A cell past the list, or every cell when the display stops: hidden and kept
 -- for the next DoT, with nothing left running on it.
 local function RetireCell(cell)
+    if cell.attachIcon then PullBack(cell) end
     cell.frame:Hide()
     if cell.timer then pcall(cell.timer.SetEnabled, cell.timer, false) end
     if cell.glowOn ~= false and pcall(KE.AuraGlow.Configure, cell.glow, GLOW_OFF) then
@@ -624,12 +758,14 @@ function DT:UpdateTimers()
         local cell = self.cells[i]
         local timer = cell.timer
         if timer then
+            -- The Cooldown Manager icon already shows an attached DoT's time.
+            local cellShown = shown and not cell.attachIcon
             -- A refused bind is retried here; an unbound timer stays off.
-            if want and not cell.timerBound then
+            if want and cellShown and not cell.timerBound then
                 cell.timerBound = pcall(timer.SetUnit, timer, "target")
             end
-            local enable = want and cell.timerBound
-            pcall(timer.SetShown, timer, shown)
+            local enable = want and cellShown and cell.timerBound
+            pcall(timer.SetShown, timer, cellShown)
             pcall(timer.SetEnabled, timer, enable)
             if enable then pcall(timer.UpdateAllAuras, timer) end
         end
@@ -815,6 +951,62 @@ function DT:ResolveList()
     return Rules.ResolveList(KE.DOT_TRACKER_SEEDS, self.db.Spells, class, specID, IsKnown), class, specID
 end
 
+-- Every listed DoT the Cooldown Manager shows as an icon sits on that icon as
+-- its count alone; the rest close up in the row. `force` re-anchors cells that
+-- stay on the same icon, for a settings pass or the end of combat.
+function DT:PlaceAttached(force)
+    local db = self.db
+    local on = db.AttachToCDM == true
+    local changed = false
+    for i = 1, #self.list do
+        local cell = self.cells[i]
+        local was = cell.attachIcon
+        local icon, viewerKey
+        if on then icon, viewerKey = FindIcon(cell) end
+        if icon then
+            -- Find matched a plain id, so the id read here is plain.
+            cell.attachIcon, cell.attachViewer = icon, viewerKey
+            cell.attachID, cell.attachSlot = icon:GetCooldownID(), icon.layoutIndex
+            if icon ~= was or force then
+                if not pcall(AttachCell, cell, icon) then PullBack(cell) end
+            else
+                RaiseCell(cell, icon)
+            end
+        elseif was then
+            PullBack(cell)
+        end
+        if cell.styledAttached ~= (cell.attachIcon ~= nil) then
+            changed = true
+            if not StyleAsPlaced(cell) and DEBUG_DOT then
+                KE:Print("[DOT] style refused for " .. tostring(cell.id))
+            end
+            pcall(PlaceGlow, cell, self.paintedTotal)
+            if DEBUG_DOT then
+                KE:Print("[DOT] " .. tostring(cell.id)
+                    .. (cell.attachIcon and (" on " .. tostring(cell.attachViewer)) or " in the row"))
+            end
+        end
+    end
+    -- A row cell goes back to the tracker's strata and its siblings' level, so
+    -- a cell that was on an icon does not draw over the row; a refused write is
+    -- retried on the next pass.
+    local strata = db.Strata or "MEDIUM"
+    local level = self.root:GetFrameLevel() + 1
+    for i = 1, #self.list do
+        local frame = self.cells[i].frame
+        if not self.cells[i].attachIcon then
+            if frame:GetFrameStrata() ~= strata then pcall(frame.SetFrameStrata, frame, strata) end
+            if frame:GetFrameLevel() ~= level then pcall(frame.SetFrameLevel, frame, level) end
+        end
+    end
+    LayoutCells(self.rowGeo)
+    if changed then
+        self:UpdateTimers()
+        -- The sample timer and preview glow follow the attach state too.
+        if self.previewing then self:PaintPreview() end
+    end
+end
+
 -- `list` comes from Rules.PlanApply, so a changed id or set of extra ids
 -- reaches Refilter only with the gate's yes. `class` and `specID` are the ones
 -- the list was resolved for: for a row the gate kept on screen (`held`), the
@@ -840,11 +1032,13 @@ function DT:Apply(list, allowed, class, specID, held)
         local also = Rules.AlsoOf(row)
         if cell.id == nil then
             cell.id, cell.also = id, also
+            cell.cdmIds = CdmIds(id, also)
         elseif cell.id ~= id or not Rules.SameList(cell.also, also) then
             -- Reached only with the gate's yes: Reconcile asked it through
             -- NeedsRefilter for exactly this difference.
             cell.also = also
             Refilter(cell, id)
+            cell.cdmIds = CdmIds(id, also)
         end
         cell.row, cell.cap = row, row and row.cap
         if not (held and cell.iconId) then cell.iconId = Rules.IconOf(row, id, IsKnown) end
@@ -861,13 +1055,14 @@ function DT:Apply(list, allowed, class, specID, held)
     self.allColor = { KE:ResolveColor(db.AllColor, DEFAULT_ALL) }
     self.root:SetFrameStrata(db.Strata or "MEDIUM")
     KE:ApplyFramePosition(self.root, db.Position, db)
-    local geo = Geometry(db)
+    self.rowGeo, self.attachGeo = Geometry(db, false), Geometry(db, true)
     for i = 1, #list do
-        if not pcall(StyleCell, self.cells[i], geo) and DEBUG_DOT then
-            KE:Print("[DOT] style refused for " .. tostring(self.cells[i].id))
+        local cell = self.cells[i]
+        if not StyleAsPlaced(cell) and DEBUG_DOT then
+            KE:Print("[DOT] style refused for " .. tostring(cell.id))
         end
     end
-    LayoutCells(geo)
+    self:PlaceAttached(true)
     self:StyleTimers(list, TimerStyleKey(db), allowed)
 
     local listKey = table_concat(list, ",") .. "@" .. tostring(db.MaxEnemies)
@@ -1004,6 +1199,11 @@ function DT:Activate(list, allowed, class, specID, held)
         -- Turning the toggle on again then finds a new list and rescans.
         self.watchers = nil
     end
+    if self.db.AttachToCDM == true then
+        KE.CDMIcons.Watch(WATCH_KEY, ReplaceAttached, CheckIcons)
+    else
+        KE.CDMIcons.Unwatch(WATCH_KEY)
+    end
     self:Apply(list, allowed, class, specID, held)
     if starting and KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
@@ -1016,6 +1216,7 @@ function DT:Deactivate()
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
     self:UnregisterEvent("UNIT_FACTION")
     self:UnregisterEvent("GROUP_ROSTER_UPDATE")
+    KE.CDMIcons.Unwatch(WATCH_KEY)
     if self.runner then self.runner:Cancel() end
     if self.slots then self.slots:Stop() end
     self.buildTarget = 0
@@ -1061,6 +1262,8 @@ function DT:OnRegenEnabled()
     self:UpdateLive()
     self:DrainGate()
     self:RetryBuild()
+    -- Retries any anchor, strata or level write refused in combat.
+    if self.active and self.db.AttachToCDM == true then self:PlaceAttached(true) end
 end
 
 local function SettleNow()
@@ -1194,8 +1397,8 @@ function DT:PaintPreview()
         cell.sample:SetText(Rules.Label(shown, d, db.CountFormat))
         cell.sample:Show()
         cell.sampleTimer:SetText(SAMPLE_TIMERS[((i - 1) % #SAMPLE_TIMERS) + 1])
-        cell.sampleTimer:SetShown(db.TimerEnabled ~= false)
-        if db.GlowEnabled and shown == d then
+        cell.sampleTimer:SetShown(db.TimerEnabled ~= false and not cell.attachIcon)
+        if db.GlowEnabled and shown == d and not cell.attachIcon then
             KE.AuraGlow.Configure(cell.previewGlow, db, cell.geo.w, cell.geo.h)
         else
             KE.AuraGlow.Configure(cell.previewGlow, GLOW_OFF)
