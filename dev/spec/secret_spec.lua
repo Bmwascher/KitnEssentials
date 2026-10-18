@@ -626,4 +626,3 @@ describe("Secret.lua protected dispatch", function()
         assert.same({ "label S: failed with an unreadable error" }, reports)
     end)
 end)
-
