@@ -1487,6 +1487,13 @@ function KE:HasSecretValues(object) end
 ---@return boolean
 function KE:NoSecretValues(object) end
 
+--- True when `frame`'s parent is `parent`. A secret or unreadable parent
+--- counts as not the same.
+---@param frame any a region
+---@param parent any
+---@return boolean
+function KE:SameParent(frame, parent) end
+
 ---@param body any text to wrap, secret or not
 ---@param prefix string|nil
 ---@param suffix string|nil

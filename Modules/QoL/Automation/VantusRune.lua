@@ -297,7 +297,7 @@ function VR:CreateGuildBankButton()
     if not parent then return end
 
     if self.vantusButton then
-        if self.vantusButton:GetParent() ~= parent then
+        if not KE:SameParent(self.vantusButton, parent) then
             self.vantusButton:SetParent(parent)
             self.vantusButton:ClearAllPoints()
             self.vantusButton:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -1, -2)

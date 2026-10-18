@@ -35,7 +35,6 @@ local UnitIsBossMob = UnitIsBossMob
 local UnitName = UnitName
 local GetScreenHeight = GetScreenHeight
 local issecretvalue = issecretvalue
-local canaccesstable = canaccesstable
 local ipairs, pairs, pcall, tostring, type = ipairs, pairs, pcall, tostring, type
 local math_floor, math_max, math_min = math.floor, math.max, math.min
 
@@ -404,12 +403,7 @@ function CC:ApplyAnchorPosition()
     local db = self.db
     local pos = db.Position or {}
     local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame, anchor, true)
-    -- GetParent's answer can be secret; a secret or unreadable parent counts as
-    -- different, and setting the same parent again is harmless.
-    local current = anchor:GetParent()
-    if issecretvalue(current) or (current ~= nil and not canaccesstable(current)) or current ~= parent then
-        anchor:SetParent(parent)
-    end
+    if not KE:SameParent(anchor, parent) then anchor:SetParent(parent) end
     local box = self:Box(self:GeometrySource())
     anchor:SetSize(box.width, box.height)
     anchor:ClearAllPoints()

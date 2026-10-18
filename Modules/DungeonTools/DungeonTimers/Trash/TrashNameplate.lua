@@ -722,7 +722,7 @@ end
 -- host is left with no child.
 function DTrash:DetachNameplatePreview(host)
     local stage = self._npPreviewStage
-    if stage and stage:GetParent() == host then
+    if stage and KE:SameParent(stage, host) then
         stage:Hide()
         stage:SetParent(nil)
     end

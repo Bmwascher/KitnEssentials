@@ -567,3 +567,28 @@ describe("Secret.lua restriction listener", function()
         assert.equals(2, nextCalls)
     end)
 end)
+
+-- GetParent's answer can be secret, and comparing a secret is the hazard, so
+-- every parent compare goes through this guard.
+describe("Secret.lua parent compare guard", function()
+    it("answers same only for a readable parent equal to the expected one", function()
+        local SECRET, LOCKED, expected = {}, {}, {}
+        mock.install({
+            issecretvalue = function(v) return v == SECRET end,
+            canaccesstable = function(t) return t ~= LOCKED end,
+        })
+        local KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+        local function child(parent) return { GetParent = function() return parent end } end
+        local rows = {
+            { name = "same parent",              frame = child(expected), parent = expected, same = true },
+            { name = "different parent",         frame = child({}),       parent = expected, same = false },
+            { name = "secret parent",            frame = child(SECRET),   parent = SECRET,   same = false },
+            { name = "inaccessible table",       frame = child(LOCKED),   parent = LOCKED,   same = false },
+            { name = "nil parent, nil expected", frame = child(nil),      parent = nil,      same = true },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.same, KE:SameParent(row.frame, row.parent), row.name)
+        end
+    end)
+end)
+

@@ -780,7 +780,7 @@ end
 -- does; a child something else has since taken is left alone. Regions are never
 -- reparented: they stay and fail their container's check.
 function GUIFrame:ReleaseTracked(child, container)
-    if child:GetParent() ~= container then return end
+    if not KE:SameParent(child, container) then return end
     local pool = child._kePool
     if pool then
         if child._keState == "used" then pool:Release(child) end

@@ -928,7 +928,7 @@ end
 function CHAT:OnFCFTab_UpdateColors(tab, selected)
     if not tab then return end
 
-    if tab:GetParent() == _G.ChatConfigFrameChatTabManager then
+    if KE:SameParent(tab, _G.ChatConfigFrameChatTabManager) then
         if selected then tab.Text:SetTextColor(1, 1, 1) end
 
         local name = _G.GetChatWindowInfo(tab:GetID())

@@ -28,6 +28,7 @@ local CreateFrame = CreateFrame
 local issecretvalue = issecretvalue
 local issecrettable = issecrettable
 local canaccessvalue = canaccessvalue
+local canaccesstable = canaccesstable
 local UnitGUID = UnitGUID
 local UnitName = UnitName
 
@@ -71,6 +72,17 @@ end
 
 function KE:NoSecretValues(object)
     return not self:HasSecretValues(object)
+end
+
+-- GetParent's answer can be secret, and comparing a secret is the hazard: a
+-- secret or unreadable parent counts as not the same.
+function KE:SameParent(frame, parent)
+    local current = frame:GetParent()
+    if issecretvalue and issecretvalue(current) then return false end
+    if current ~= nil and canaccesstable and not canaccesstable(current) then
+        return false
+    end
+    return current == parent
 end
 
 -- Join text around a body that may be secret. C_StringUtil.WrapString is
