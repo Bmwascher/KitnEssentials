@@ -731,9 +731,10 @@ local function Ready(sensor, sig, buffs, short, unit)
 end
 
 -- Points the slot's cells at entries for unit. Containers are only aimed
--- here; BuildNext makes the missing ones, one per call. A cell keeps its
--- count while its buffs, charges and code unit are unchanged; a new length in
--- the same unit re-dresses it.
+-- here; BuildNext makes the missing ones, one per call. A count belongs to its
+-- entry, not its position: it keeps running while its buffs, charges and code
+-- unit are unchanged, a new length re-dresses it, and a count that moves to
+-- another cell settles first, as a re-aimed sensor does.
 function Track.Apply(st, unit, entries, style, settings)
     local clean, moved = true, false
     local n = Track.Now()
@@ -751,6 +752,11 @@ function Track.Apply(st, unit, entries, style, settings)
             st.evtUnit, clean = nil, false
         end
     end
+    local oldKeys, newKeys = {}, {}
+    for i = 1, st.count do oldKeys[i] = Rules.CellKey(st.entries[i], i) end
+    for i, e in ipairs(entries) do newKeys[i] = Rules.CellKey(e, i) end
+    local match, old, used = Rules.MatchKeys(oldKeys, newKeys), st.trackers, {}
+    st.trackers = {}
     for i, e in ipairs(entries) do
         local c = st.cells[i]
         if not c then
@@ -759,18 +765,20 @@ function Track.Apply(st, unit, entries, style, settings)
         end
         st.view.Dress(c, style, e)
         local sig = Sig(e)
-        local t = st.trackers[i]
-        if not t or t.sig ~= sig then
-            if t then Track.Forget(t) end
+        local at = match[i]
+        local t = at and old[at]
+        if t then
+            used[at] = true
+            t.cd = e.cd
+            if t.cell ~= c then t.cell, moved = c, true end
+        else
             t = Rules.NewTracker(e.cd, e.short ~= nil, false, e.charges)
             if t.charges then Track.StartCheck() end
             t.sig, t.cell, t.view = sig, c, st.view
             Rules.Clear(t, n)
-            st.trackers[i] = t
             moved = true
-        elseif t.cd ~= e.cd then
-            t.cd = e.cd
         end
+        st.trackers[i] = t
         local ready, refused, aimed = Ready(st.sensors[i], sig, e.buffs, nil, unit)
         if e.short then
             local shortReady, shortRefused, shortAimed = Ready(st.shorts[i], sig, e.buffs, e.short, unit)
@@ -783,6 +791,10 @@ function Track.Apply(st, unit, entries, style, settings)
         if aimed and ready then moved = true end
         st.ready[i] = ready
     end
+    for j = 1, st.count do
+        if old[j] and not used[j] then Track.Forget(old[j]) end
+    end
+    -- Retire reads the new list, so a count that moved from here is kept.
     for i = #entries + 1, st.count do Retire(st, i) end
     st.entries, st.count = entries, #entries
     local overlayClean, restyle = Track.ApplyOverlay(st, entries, unit, settings)

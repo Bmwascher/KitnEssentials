@@ -1070,6 +1070,26 @@ describe("PartyCooldownsRules charges", function()
     end)
 end)
 
+describe("PartyCooldownsRules.CellKey", function()
+    it("keeps a count with its entry when a spell before it goes, never across a new code unit", function()
+        local R = loadRules()
+        local a = { key = "1:10", buffs = { 10 }, cd = 120 }
+        local b = { key = "1:20", buffs = { 20 }, cd = 120 }
+        local cases = {
+            { name = "a spell before it switched off", old = { a, b }, new = { b }, want = { 2 } },
+            { name = "the same key across a new code unit",
+              old = { { key = "1:10", buffs = { 10 }, cd = 240 } },
+              new = { { key = "1:10", buffs = { 10 }, cd = 300 } }, want = { false } },
+        }
+        for _, case in ipairs(cases) do
+            local oldKeys, newKeys = {}, {}
+            for i, e in ipairs(case.old) do oldKeys[i] = R.CellKey(e, i) end
+            for i, e in ipairs(case.new) do newKeys[i] = R.CellKey(e, i) end
+            assert.are.same(case.want, R.MatchKeys(oldKeys, newKeys), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.MatchKeys", function()
     it("finds each key's old index wherever it moved, and gives each old index once", function()
         local R = loadRules()
