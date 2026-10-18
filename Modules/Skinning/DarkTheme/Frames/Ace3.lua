@@ -402,7 +402,7 @@ local function SkinWidget(widget)
     elseif t == "Icon" then
         if frame then S.StripTextures(frame) end
 
-    elseif t == "SharedDropdown" then
+    elseif t == "SharedDropdown" or t == "BigWigsSharedDropdown" then
 
         local dd = widget.dropdown
         if dd and dd.GetName and not S.data(dd).keSharedSkinned then
@@ -724,6 +724,29 @@ local function SkinPulloutFrame(pf)
 end
 S.SkinPulloutFrame = SkinPulloutFrame
 
+-- A list owner can add a search box after the list is skinned, and can raise
+-- every descendant a level on each open; the plate goes back under the box on
+-- every show.
+local function SkinPulloutSearch(pf)
+    local d = S.data(pf)
+    if not d.keSearchScanned then
+        d.keSearchScanned = true
+        for _, c in ipairs({ pf:GetChildren() }) do
+            if c.IsObjectType and c:IsObjectType("EditBox") then
+                S.EditBox(c)
+                d.keSearchBox = c
+                break
+            end
+        end
+    end
+    if d.keSearchBox then S.RelevelPlate(d.keSearchBox) end
+end
+
+local function OnPulloutShow(f)
+    pcall(SkinPulloutFrame, f)
+    pcall(SkinPulloutSearch, f)
+end
+
 -- BigWigs 419 "stock yellow config" regression. BigWigs_Options
 -- (LoD) embeds its own AceGUI-3.0. It is often the FIRST -- or a
 -- NEWER -- AceGUI-3.0 in the session: LibStub:NewLibrary succeeds and the
@@ -766,7 +789,7 @@ local function WrapCreate(orig)
             -- recycled pullouts don't accumulate duplicate OnShow hooks.
             if w.frame.HookScript and not S.data(w.frame).keShowHooked then
                 S.data(w.frame).keShowHooked = true
-                w.frame:HookScript("OnShow", function(f) pcall(SkinPulloutFrame, f) end)
+                w.frame:HookScript("OnShow", OnPulloutShow)
             end
         end
         return w
@@ -837,7 +860,7 @@ local function HookAceGUI(AceGUI, minor, upgrading)
             pcall(S.ScrollBar, _G["AceGUI30PulloutScrollbar" .. n])
             if pf.HookScript and not S.data(pf).keShowHooked then
                 S.data(pf).keShowHooked = true
-                pf:HookScript("OnShow", function(f) pcall(SkinPulloutFrame, f) end)
+                pf:HookScript("OnShow", OnPulloutShow)
             end
         end
     end
