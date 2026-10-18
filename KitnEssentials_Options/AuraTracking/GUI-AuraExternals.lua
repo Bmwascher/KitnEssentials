@@ -192,7 +192,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     manager:Register(sep3b, "all")
     card3:AddRow(row3sep2, Theme.rowHeightSeparator)
 
-    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local swipeCheck = GUIFrame:CreateCheckbox(row3d, "Swipe (Cooldown Spiral)", {
         value = db.Swipe ~= false,
         callback = function(checked)
@@ -210,7 +210,18 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     })
     row3d:AddWidget(reverseCheck, 0.5)
     manager:Register(reverseCheck, "swipeOn")
-    card3:AddRow(row3d, Theme.rowHeightLast, 0)
+    card3:AddRow(row3d, Theme.rowHeight)
+
+    local row3e = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local casterCheck = GUIFrame:CreateCheckbox(row3e, "Show Caster Name", {
+        value = db.ShowCasterName == true,
+        callback = function(checked) db.ShowCasterName = checked; ApplySettings() end,
+        tooltip = "Writes the name of the player who cast each buff under its icon, in class color. "
+            .. "A long name is cut at the icon's width.",
+    })
+    row3e:AddWidget(casterCheck, 0.5)
+    manager:Register(casterCheck, "all")
+    card3:AddRow(row3e, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 

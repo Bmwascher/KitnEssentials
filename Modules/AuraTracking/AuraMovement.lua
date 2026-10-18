@@ -49,6 +49,7 @@ local DECLARATION = {
                 hasDispelBadge = false,
                 hasDispelRing = false,
                 hasGlow = true,
+                hasCasterName = true,
             },
         },
     },

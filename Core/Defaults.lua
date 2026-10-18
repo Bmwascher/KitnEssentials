@@ -1480,6 +1480,8 @@ local Defaults = {
 
         AuraExternals = {
             Enabled           = false,
+            -- A name under each icon is a new look, so it waits to be chosen.
+            ShowCasterName    = false,
             ShowBigDefensives = false,
             HideSelfCast      = false,
             Strata            = "MEDIUM",
@@ -1701,6 +1703,7 @@ local Defaults = {
 
         AuraMovement = {
             Enabled = false,
+            ShowCasterName = false,
             Strata = "MEDIUM",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
