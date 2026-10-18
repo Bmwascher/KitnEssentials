@@ -1,12 +1,13 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  HealerExternals.lua                                     ║
--- ║  Purpose: each party healer's external cooldown as one   ║
--- ║           icon in a movable box.                         ║
+-- ║  Purpose: party members' externals and raid cooldowns as ║
+-- ║           icons in a movable box.                        ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- One group slot of the party cooldowns pipeline: a cell per external, read
--- from one sensor per party member, so its buff landing on anyone starts the
--- count. The game names no caster, so another player's cast of the same
+-- One group slot of the party cooldowns pipeline. A cell for a spell cast on
+-- one target is read from one sensor per party member, so its buff landing on
+-- anyone starts the count; a raid cooldown's cell is read from its caster
+-- alone. The game names no caster, so another player's cast of the same
 -- spell starts it too.
 
 ---@class KE
@@ -57,7 +58,7 @@ local GROW = {
     UP    = { corner = "BOTTOMLEFT", dx = 0,  dy = 1 },
 }
 -- Preview icons: left is a sample's seconds to go; one without is ready.
-local SAMPLES = { { id = 33206, left = 122 }, { id = 102342 } }
+local SAMPLES = { { id = 33206, left = 122 }, { id = 102342 }, { id = 97462 } }
 
 local placement = {}
 
@@ -240,8 +241,23 @@ local function Kept(token)
     return nil
 end
 
+-- The units the cells watch, in token order: every one once a cell watches
+-- them all, else each owner's.
+local function WatchedUnits(units, entries)
+    local want = {}
+    for _, e in ipairs(entries) do
+        if not e.units then return units end
+        want[e.units[1]] = true
+    end
+    local out = {}
+    for _, token in ipairs(units) do
+        if want[token] then out[#out + 1] = token end
+    end
+    return out
+end
+
 -- Runs at every drain. A roster change is decided here, at the first drain
--- after the settle: the counts stay only for the same healers.
+-- after the settle: the counts stay only for the same members.
 function HX.Resolve()
     if not On() then
         Forget()
@@ -263,26 +279,22 @@ function HX.Resolve()
             end
             records[m], byToken[token] = true, m
             if Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
-            party[#party + 1] = { token = token, guid = m.guid, spec = m.spec, talents = m.talents }
+            party[#party + 1] = {
+                token = token, guid = m.guid, spec = m.spec, class = m.class, talents = m.talents,
+            }
         end
     end
     HX.members, HX.records, HX.byToken = members, records, byToken
     HX.forgotten = false
     HX.pb:SyncMembers()
-    local entries, guids = {}, {}
-    for i, healer in ipairs(Rules.Sources(party, HX.pb.db)) do
-        guids[i] = healer.member.guid
-        for _, e in ipairs(healer.entries) do
-            e.texture = C_Spell.GetSpellTexture(e.id)
-            -- The group slot keeps a count with its healer when the list shifts.
-            e.owner = healer.member.guid
-            entries[#entries + 1] = e
-        end
-    end
+    local sources, guids = Rules.Sources(party, HX.pb.db), {}
+    for i, source in ipairs(sources) do guids[i] = source.member.guid end
+    local entries = Rules.Order(sources)
+    for _, e in ipairs(entries) do e.texture = C_Spell.GetSpellTexture(e.show or e.id) end
     if HX.rosterPending and not Rules.KeepOnRoster(HX.guids, guids, issecretvalue) then Track.Reset(HX.st) end
     HX.rosterPending, HX.guids = false, guids
-    HX.units, HX.entries = units, entries
-    Debug("units %d healers %d icons %d", #units, #guids, #entries)
+    HX.units, HX.entries = WatchedUnits(units, entries), entries
+    Debug("units %d sources %d icons %d", #HX.units, #guids, #entries)
     if #entries > 0 then Bind() else Release() end
     HX.ApplyPosition()
     Show()
