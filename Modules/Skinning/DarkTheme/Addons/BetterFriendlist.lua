@@ -641,6 +641,36 @@ local function FlattenModernInvite(btn)
     TintInviteGlyph(btn.ActionIcon, btn:IsEnabled())
 end
 
+local function CardHover(card)
+    local hl = card.highlight
+    if not hl then return end
+    local c = S.palette.hover
+    hl:SetDesaturated(true)
+    hl:SetVertexColor(c[1], c[2], c[3])
+    hl:SetAlpha(c[4])
+end
+
+-- The addon sets the card art's alpha and recolors its highlight on every
+-- pass, so KE writes after it. Row height and anchors stay the addon's.
+local function SkinModernCard(card)
+    if not card then return end
+    local d = S.data(card)
+    if not d.bflModernCard then
+        d.bflModernCard = true
+        ownedControls[card] = true
+        local bd = S.Backdrop(card)
+        if bd then
+            local p = S.palette.panel
+            bd:SetBackdropColor(p[1], p[2], p[3], p[4])
+        end
+    end
+    ZeroAlpha(card.CardBackground)
+    ZeroAlpha(card.ThemeTint)
+    ZeroAlpha(card.FactionTint)
+    CardHover(card)
+    FlattenModernInvite(card.travelPassButton)
+end
+
 local function RetintInvite(btn)
     if btn and S.data(btn).inviteLayout == "modern" then
         TintInviteGlyph(btn.ActionIcon, btn:IsEnabled())
@@ -1151,7 +1181,7 @@ local function Skin()
     end
 
     local function OnFriendCard(_, card)
-        if IsModern() and card then FlattenModernInvite(card.travelPassButton) end
+        if IsModern() then SkinModernCard(card) end
     end
 
     local function OnGroupHeader(_, button)
@@ -1171,6 +1201,13 @@ local function Skin()
     -- look goes back on after its pass.
     local function OnThemeRow(_, row)
         if not (row and IsModern()) then return end
+        if row.CardBackground then
+            -- Its hover backdrop sits over the card, and its first pass on a
+            -- card clears the highlight.
+            if row.BFL_DarkBackdrop then row.BFL_DarkBackdrop:Hide() end
+            local hl = row.highlight
+            if hl and hl:GetAlpha() == 0 then CardHover(row) end
+        end
         RetintInvite(row.travelPassButton or row.PartyButton)
     end
 
