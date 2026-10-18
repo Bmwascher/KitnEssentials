@@ -444,6 +444,51 @@ describe("PartyBuffsRules.RowLayout", function()
     end)
 end)
 
+describe("PartyBuffsRules.SlotGeometry and IconOffset", function()
+    it("centers a row's cells and a column on the frame, and keeps every other layout's numbers", function()
+        local R = L.loadPartyBuffsRules()
+        local aboveCenter = { corner = "BOTTOMLEFT", up = true, centered = true }
+        local belowCenter = { corner = "TOPLEFT", centered = true }
+        local aboveUp = { corner = "BOTTOMLEFT", up = true, centered = true, vertical = true }
+        local belowDown = { corner = "TOPLEFT", centered = true, vertical = true }
+        local aboveRight = { corner = "BOTTOMLEFT", up = true }
+        -- at: an icon's index, line and where it sits; pin: where the buffs start.
+        local cases = {
+            { name = "centered row, cells only", layout = aboveCenter, cells = 3, buffs = 0, perRow = 14,
+              want = { x0 = 0, width = 110, height = 36 }, at = { 2, 0, 74, 0 } },
+            { name = "centered row, cells and buffs", layout = aboveCenter, cells = 2, buffs = 4, perRow = 14,
+              want = { x0 = 74, width = 221, height = 73 }, pin = { 74, 37 } },
+            { name = "centered row, a typed fractional spacing", layout = aboveCenter, cells = 2, buffs = 4,
+              perRow = 14, spacing = 1.25,
+              want = { x0 = 74.5, width = 222.25, height = 73.25 }, pin = { 74.5, 37.25 } },
+            { name = "centered row, no cell", layout = belowCenter, cells = 0, buffs = 4, perRow = 14,
+              want = { x0 = 0, width = 147, height = 36 }, pin = { 0, 0 } },
+            { name = "centered column, one column", layout = aboveUp, cells = 4, buffs = 4, perRow = 14,
+              want = { x0 = 0, width = 36, height = 295 }, pin = { 0, 148 } },
+            { name = "centered column, two columns", layout = belowDown, cells = 4, buffs = 4, perRow = 6,
+              want = { x0 = 37, width = 110, height = 147 }, at = { 3, 0, 37, -111 }, pin = { 74, 0 } },
+            { name = "not centered, today's numbers", layout = aboveRight, cells = 4, buffs = 4, perRow = 6,
+              want = { x0 = 0, width = 147, height = 73, buffIndex = 0, buffLine = 1, buffPerLine = 4 },
+              pin = { 0, 37 } },
+        }
+        for _, case in ipairs(cases) do
+            local db = { IconSpacing = case.spacing or 1, MaxPerMember = case.buffs }
+            local g = R.SlotGeometry(db, case.layout, case.cells, case.perRow, 36)
+            for key, value in pairs(case.want) do
+                assert.are.equal(value, g[key], case.name .. ": " .. key)
+            end
+            if case.at then
+                assert.are.same({ case.at[3], case.at[4] },
+                    { R.IconOffset(g, case.layout, case.at[1], case.at[2]) }, case.name .. ": icon")
+            end
+            if case.pin then
+                assert.are.same(case.pin, { R.IconOffset(g, case.layout, g.buffIndex, g.buffLine) },
+                    case.name .. ": pin")
+            end
+        end
+    end)
+end)
+
 describe("PartyBuffsRules.NeedsPin and RecordPin", function()
     it("re-pins when the corner, x or y alone differs and not when all three match", function()
         local R = L.loadPartyBuffsRules()

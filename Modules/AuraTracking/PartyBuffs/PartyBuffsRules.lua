@@ -112,12 +112,13 @@ end
 
 -- Each category may fill the whole cap, so only the holder's clip holds the
 -- cap: buff lines are at most cap wide and the holder fits the layout exactly.
+-- ownLine starts the buffs on a line of their own whenever the row has a cell.
 -- Returns step, buffCol, buffLine, buffPerLine, width, height.
-function Rules.RowLayout(db, cellCount, perRow, size)
+function Rules.RowLayout(db, cellCount, perRow, size, ownLine)
     local spacing = db.IconSpacing
     local step = size + spacing
     local buffs = Rules.IconCount(db)
-    if cellCount + buffs <= perRow then
+    if cellCount + buffs <= perRow and not (ownLine and cellCount > 0) then
         return step, cellCount, 0, buffs, Span(cellCount + buffs, size, spacing), Span(1, size, spacing)
     end
     local buffLine = math_ceil(cellCount / perRow)
@@ -126,6 +127,41 @@ function Rules.RowLayout(db, cellCount, perRow, size)
     if perLine > 0 then lines = lines + math_ceil(buffs / perLine) end
     local width = Span(math_max(math_min(cellCount, perRow), perLine), size, spacing)
     return step, 0, buffLine, perLine, width, Span(math_max(lines, 1), size, spacing)
+end
+
+-- The row's geometry for any layout, live and preview alike, from plain counts
+-- only: the buff count is secret, so the buffs' cap stands in for it. A
+-- centered row puts its first cell line on the frame's center and starts the
+-- buffs from that line's left edge; a centered column puts its first column
+-- there, further columns to its right. x0 is the cells' offset from the
+-- holder's corner.
+function Rules.SlotGeometry(db, layout, cellCount, perRow, size)
+    local step, buffIndex, buffLine, buffPerLine, primary, cross =
+        Rules.RowLayout(db, cellCount, perRow, size, layout.centered and not layout.vertical)
+    local g = {
+        step = step, buffIndex = buffIndex, buffLine = buffLine, buffPerLine = buffPerLine,
+        x0 = 0, width = primary, height = cross,
+    }
+    if layout.vertical then
+        g.width, g.height, g.x0 = 2 * cross - size, primary, cross - size
+    elseif layout.centered then
+        local spacing = db.IconSpacing
+        local bs = Span(buffPerLine, size, spacing)
+        local cs = bs
+        if cellCount > 0 then cs = Span(math_min(cellCount, perRow), size, spacing) end
+        g.x0, g.width = math_max(0, bs - cs), math_max(cs, 2 * bs - cs)
+    end
+    return g
+end
+
+-- Where an icon sits from the holder's corner: index along its line, line
+-- across. A column's lines run up or down, and its columns open to the right.
+function Rules.IconOffset(g, layout, index, line)
+    local h = layout.left and -1 or 1
+    local v = layout.up and 1 or -1
+    local p, q = index * g.step, line * g.step
+    if layout.vertical then return g.x0 + h * q, v * p end
+    return g.x0 + h * p, v * q
 end
 
 -- The spec can move the icons per row and the corner while the tracker is
