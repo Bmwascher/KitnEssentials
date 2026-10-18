@@ -260,7 +260,7 @@ local DM_DEFAULTS = {
 
     -- Shared backdrop (flat); arrangement is owned by Dock below
     BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border
-    BackdropBorderStyle = "neutral",            -- neutral | accent | theme
+    BackdropBorderStyle = "neutral",            -- neutral | theme
     BackdropBorderColor = { 0, 0, 0, 1 },        -- solid black
     BackdropColor = { 0.031, 0.031, 0.031, 0.8 }, -- #080808 @ 80% opacity
     BackdropPadding = 1,

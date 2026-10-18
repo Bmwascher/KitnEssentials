@@ -616,18 +616,16 @@ end
 
 -- Resolves the backdrop border color (r,g,b,a) from db.BackdropBorderStyle into
 -- the reused self._dockBorderColor table, so KE:ApplyBackdrop reads a {r,g,b,a}
--- array. "neutral" -> db.BackdropBorderColor ; "accent" -> KE:GetAccentColor() ;
--- "theme" -> KE:GetAccentColor("theme") ; anything else falls back to neutral.
+-- array. "neutral" -> db.BackdropBorderColor ; "theme" -> the theme color ;
+-- anything else falls back to neutral. "accent" is no longer offered: a profile
+-- that saved it reads as theme, and the saved value is left as it is.
 function DM:_ResolveDockBorderColor()
     local db = self.db
     self._dockBorderColor = self._dockBorderColor or {}
     local out = self._dockBorderColor
 
     local style = db and db.BackdropBorderStyle
-    if style == "accent" then
-        local r, g, b, a = KE:GetAccentColor()
-        out[1], out[2], out[3], out[4] = r, g, b, a or 1
-    elseif style == "theme" then
+    if style == "theme" or style == "accent" then
         local r, g, b, a = KE:GetAccentColor("theme")
         out[1], out[2], out[3], out[4] = r, g, b, a or 1
     else
