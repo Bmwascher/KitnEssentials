@@ -1200,7 +1200,7 @@ function Rules.MemberRacial(race, db)
 end
 
 -- Whether a teammate's spec is worth an inspect. A racial counts: it shows
--- only with a known spec. healer is the healer externals box's own demand.
+-- only with a known spec. healer is the raid cooldowns box's own demand.
 function Rules.SpecWanted(trackClass, trackTrinkets, showRacials, race, healer)
     if trackClass == true or trackTrinkets == true or healer == true then return true end
     if showRacials ~= true or type(race) ~= "string" then return false end

@@ -410,11 +410,11 @@ function Spec.Activate()
 end
 
 -- Which cooldown cells can show, from the Class Cooldowns, Trinkets and Show
--- Racials switches, and whether the healer externals box wants healers'
--- specs. A reader whose cells cannot show stops hearing its events and drops
--- what it stored; with all four off, nobody is inspected. Racials and healers
--- start no reader: a racial needs only the spec and the race, a healer only
--- the spec.
+-- Racials switches, and whether the raid cooldowns box is on. A reader whose
+-- cells cannot show stops hearing its events and drops what it stored; with
+-- all four off, nobody is inspected. Racials and the box start no reader: a
+-- racial needs only the spec and the race, the box the spec and the talents
+-- its rows name.
 function Spec.SetTracked(class, trinkets, racials, healers)
     local boxChanged = Spec.trackHealers ~= healers
     Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials = class, trinkets, racials
