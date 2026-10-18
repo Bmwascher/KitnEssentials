@@ -1,6 +1,13 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
-    <!-- Forever's module list: diagnostics only until a category is admitted. -->
+    <!-- Forever's module list: diagnostics and the admitted categories, in the
+         retail list's relative order, because load order is behavior
+         (Modules.xml). -->
     <Include file="Core\Diagnostics\Diagnostics.xml" />
+    <Script file="Skinning\DarkTheme\ColorPicker.lua" />
+    <Script file="Skinning\SkinAPI.lua" />
+    <Script file="Skinning\DarkTheme\EUIWindows.lua" />
+    <Script file="Skinning\DarkTheme\Dialogs.lua" />
+    <Include file="Skinning\DarkTheme\Frames\Frames-Camelot.xml" />
 </Ui>

@@ -20,6 +20,19 @@ local FOREVER_ALLOWED = {
     ProfilesMain = true,
     ProfilesSharing = true,
     ProfilesReset = true,
+    -- Dark Theme: the engine, Color Picker, the skins command, and the page
+    -- with the tabs that configure what loads. Elements, Group Finder, Addon
+    -- Skins, Blizzard Text and On-Screen Messages stay withheld.
+    BlizzardFrames = true,
+    ColorPicker = true,
+    SkinAPI = true,
+    SkinBlizzardFrames = true,
+    SkinBlizzardFramesGeneral = true,
+    SkinBlizzardFramesColors = true,
+    SkinBlizzardFramesFonts = true,
+    SkinBlizzardFramesFontsWindows = true,
+    SkinBlizzardFramesSkins = true,
+    SkinBlizzardFramesFrames = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.

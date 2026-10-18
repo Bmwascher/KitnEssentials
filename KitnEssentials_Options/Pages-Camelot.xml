@@ -1,6 +1,8 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
-    <!-- Forever has no settings pages until a category is admitted. Home and
-         Profile Manager load with the main addon. -->
+    <!-- Forever's settings pages: the admitted categories', in Pages.xml
+         order. Home and Profile Manager load with the main addon. -->
+    <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
+    <Script file="Skinning\DarkTheme\GUI-BlizzardFrames.lua" />
 </Ui>

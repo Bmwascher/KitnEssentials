@@ -1,0 +1,34 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\..\FrameXML\UI.xsd">
+
+    <!-- The windows a baseline load skins, in Frames.xml order. Each key also
+         needs its entry in Core/Availability.lua's frame skin list, or it
+         never dispatches. -->
+    <Script file="AddonManager.lua" />
+    <Script file="Battlenet.lua" />
+    <Script file="DeathRecap.lua" />
+    <Script file="FlightMap.lua" />
+    <Script file="GenericTrait.lua" />
+    <Script file="Gossip.lua" />
+    <Script file="Guild.lua" />
+    <Script file="GuildRegistrar.lua" />
+    <Script file="Help.lua" />
+    <Script file="Loot.lua" />
+    <Script file="LossControl.lua" />
+    <Script file="Macro.lua" />
+    <Script file="Mail.lua" />
+    <Script file="Merchant.lua" />
+    <Script file="MirrorTimers.lua" />
+    <Script file="Misc.lua" />
+    <Script file="Petition.lua" />
+    <Script file="PvPMatch.lua" />
+    <Script file="Quest.lua" />
+    <Script file="Raid.lua" />
+    <Script file="Socket.lua" />
+    <Script file="SubscriptionInterstitial.lua" />
+    <Script file="Taxi.lua" />
+    <Script file="TimeManager.lua" />
+    <Script file="Trade.lua" />
+    <Script file="Trainer.lua" />
+    <Script file="TutorialFrame.lua" />
+</Ui>
