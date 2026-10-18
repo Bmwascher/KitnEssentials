@@ -715,11 +715,12 @@ local function ForgetTalents(m)
 end
 
 -- Companion, skyriding and profession configs fire TRAIT_CONFIG_UPDATED too;
--- only a class talent config changes your talents. An unreadable answer
--- counts as one.
+-- only a class talent config changes your talents, and the inspect config
+-- holds another player's. An unreadable answer counts as one.
 local function IsClassConfig(configID)
     configID = Plain(configID)
     if type(configID) ~= "number" then return true end
+    if configID == INSPECT_CONFIG then return false end
     local ok, info = pcall(C_Traits.GetConfigInfo, configID)
     if not ok or type(info) ~= "table" then return true end
     return info.type == Enum.TraitConfigType.Combat
