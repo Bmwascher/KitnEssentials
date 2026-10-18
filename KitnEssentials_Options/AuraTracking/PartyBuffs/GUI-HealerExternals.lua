@@ -13,9 +13,9 @@ local C_Timer = C_Timer
 
 local GROW_OPTIONS = GUIFrame.GrowDirectionOptions
 
--- Healer Mana's display, keyed by the side the box attaches to. Both draw
--- their borders inside their frames, so an offset of 1 leaves one empty
--- pixel between the two border lines.
+-- The box's place against Healer Mana's display, keyed by the side it
+-- attaches to. Both frames draw their borders inside, so an offset of 1
+-- leaves one empty pixel between the two border lines.
 local HEALER_MANA = "KitnEssentialsHealerMana"
 local ATTACHED = {
     TOP    = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT",    XOffset = 0, YOffset = 1 },
