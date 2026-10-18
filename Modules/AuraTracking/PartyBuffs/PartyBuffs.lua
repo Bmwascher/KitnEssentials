@@ -1734,7 +1734,6 @@ function PB:DrawPreviewActive(row, e, layout, g)
     end
     icon:ClearAllPoints()
     if KE.PartyBuffsRules.ListOn(self.db) then
-        -- Where the live list puts its first icon.
         local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex, g.buffLine)
         icon:SetFrameLevel(row.holder:GetFrameLevel() + 1)
         icon:SetPoint(layout.corner, row.holder, layout.corner, x, y)
