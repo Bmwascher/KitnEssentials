@@ -695,7 +695,8 @@ function GUIFrame:CreateMainFrame()
         end
         GUIFrame.isResizing = true
         grabW, grabH = frame:GetWidth(), frame:GetHeight()
-        frame:StartSizing("BOTTOMRIGHT")
+        local alwaysStartFromMouse = true
+        frame:StartSizing("BOTTOMRIGHT", alwaysStartFromMouse)
     end)
     -- Only the button that started the resize ends it.
     resizeGrip:SetScript("OnMouseUp", function(_, button)
