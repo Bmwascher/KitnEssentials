@@ -833,9 +833,9 @@ function PB:CooldownEntries(m)
     local specID = m.spec
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
-            local taken = m.talents and m.talents[e.id]
+            local taken = CDRules.CastTaken(specID, e.id, m.talents)
             if CDRules.TalentAllows(e, taken) then
-                e.cd = CDRules.TalentLength(e, m.talents and m.talents[CDRules.LengthKey(e.id)])
+                e.cd = CDRules.CellLength(e, specID, m.talents)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, taken))
                 entries[#entries + 1] = e
             end
@@ -1472,9 +1472,9 @@ function PB:PreviewEntries(k)
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
             if #entries >= want then break end
-            local has = talents and talents[e.id]
+            local has = CDRules.CastTaken(specID, e.id, talents)
             if CDRules.TalentAllows(e, has) then
-                e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
+                e.cd = CDRules.CellLength(e, specID, talents)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))
                 entries[#entries + 1] = e
             end

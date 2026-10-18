@@ -634,56 +634,49 @@ Spec.readers[#Spec.readers + 1] = {
 }
 
 ---------------------------------------------------------------------------------
--- Talents that swap an icon or that a row needs: read from the inspected
--- loadout for a teammate, from the spellbook for the player
+-- Talent ranks for swaps, rows, lengths and charges: from the inspected
+-- loadout for a teammate, from your active loadout for you
 ---------------------------------------------------------------------------------
 local C_ClassTalents = C_ClassTalents
-local C_Spell = C_Spell
-local C_SpellBook = C_SpellBook
 local C_Traits = C_Traits
 local debugprofilestop = debugprofilestop
 local INSPECT_CONFIG = Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
 local MAX_MISSES = 3
 
--- spec -> swap -> the node and entry holding its talent, found once; and the
--- walks that missed it. Per spec: two specs can hold the same talent on
--- nodes of their own.
-local located, misses = {}, {}
+-- spec -> talent -> the nodes and entries holding it, found by one walk of
+-- the class tree; and per spec, the walks that found none. Per spec: two
+-- specs can hold the same talent on nodes of their own.
+local index, misses = {}, {}
 
--- A node the inspected spec can see wins; the first match otherwise.
-local function Walk(tree, swap)
-    local fallback
+-- One walk of the tree, keeping the spec's wanted talents. Spec.locateMs keeps
+-- the longest walk in milliseconds, so its cost can be read in game. A hero
+-- selection entry has no definition and is skipped.
+local function Index(specID, tree, config, want)
+    local start = debugprofilestop()
+    local found, any = {}, false
     for _, nodeID in ipairs(C_Traits.GetTreeNodes(tree) or {}) do
-        local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, nodeID)
+        local node = C_Traits.GetNodeInfo(config, nodeID)
         for _, entryID in ipairs(type(node) == "table" and node.entryIDs or {}) do
-            local entry = C_Traits.GetEntryInfo(INSPECT_CONFIG, entryID)
+            local entry = C_Traits.GetEntryInfo(config, entryID)
             local definitionID = type(entry) == "table" and entry.definitionID
             local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
-            if type(definition) == "table" and definition.spellID and swap.talents[definition.spellID] then
-                local at = { node = nodeID, entry = entryID }
-                if node.isVisible == true then return at end
-                fallback = fallback or at
+            local talent = type(definition) == "table" and definition.spellID
+            if talent and want[talent] then
+                local spots = found[talent] or {}
+                found[talent] = spots
+                spots[#spots + 1] = { node = nodeID, entry = entryID }
+                any = true
             end
         end
     end
-    return fallback
-end
-
--- Walks the class tree once per swap; Spec.locateMs keeps the longest walk
--- in milliseconds, so its cost can be read in game.
-local function Locate(specID, tree, swap)
-    local start = debugprofilestop()
-    local at = Walk(tree, swap)
     local ms = debugprofilestop() - start
     if ms > (Spec.locateMs or 0) then Spec.locateMs = ms end
-    if at then
-        located[specID] = located[specID] or {}
-        located[specID][swap] = at
-    else
-        misses[specID] = misses[specID] or {}
-        misses[specID][swap] = (misses[specID][swap] or 0) + 1
+    if not any then
+        misses[specID] = (misses[specID] or 0) + 1
+        return nil
     end
-    return at
+    index[specID] = found
+    return found
 end
 
 local function HasTree(trees, tree)
@@ -694,46 +687,43 @@ local function HasTree(trees, tree)
     return false
 end
 
--- castID -> taken for every swap of the spec, or nil when any one cannot be
--- answered yet: no inspect data, a loadout not of this spec's class, its node
--- not found, or the node unreadable; the reader counts that as a miss. A
--- second result true means the answer is skipped without a miss: a first walk
--- would run in combat.
-local function ReadTaken(specID)
+-- Every wanted talent's rank in config: the active entry's rank, the largest
+-- over the talent's nodes, 0 when not taken. Nil when it cannot be answered
+-- yet: no inspect data, a loadout not of this spec's class, no wanted talent
+-- found, or a node unreadable; the reader counts that as a miss. A second
+-- result true means the answer is skipped without a miss: a first walk would
+-- run in combat.
+local function ReadRanks(specID, config)
     local out = {}
-    local swaps = KE.PartyCooldownsRules.TalentsFor(specID)
-    if not swaps then return out end
-    if C_Traits.HasValidInspectData() ~= true then return nil end
-    local info = C_Traits.GetConfigInfo(INSPECT_CONFIG)
+    local talents = KE.PartyCooldownsRules.TalentsFor(specID)
+    if not talents then return out end
+    if config == INSPECT_CONFIG and C_Traits.HasValidInspectData() ~= true then return nil end
+    local info = C_Traits.GetConfigInfo(config)
     local trees = type(info) == "table" and info.treeIDs
     if type(trees) ~= "table" then return nil end
     -- The inspect config names no player; a loadout of another class is not
-    -- this member's and must not cost the swap a walk.
+    -- this member's and must not cost the spec a walk.
     local tree = C_ClassTalents.GetTraitTreeForSpec(specID)
     if not HasTree(trees, tree) then return nil end
-    for castID, swap in pairs(swaps) do
-        local at = located[specID] and located[specID][swap]
-        if not at and (misses[specID] and misses[specID][swap] or 0) < MAX_MISSES then
-            if InCombatLockdown() then return nil, true end
-            at = Locate(specID, tree, swap)
-        end
-        if not at then return nil end
-        local node = C_Traits.GetNodeInfo(INSPECT_CONFIG, at.node)
-        if not (type(node) == "table" and type(node.ID) == "number" and node.ID > 0) then return nil end
-        local active = node.activeEntry
-        local rank = type(node.activeRank) == "number" and node.activeRank or 0
-        out[castID] = type(active) == "table" and active.entryID == at.entry and rank > 0
+    local found = index[specID]
+    if not found then
+        if (misses[specID] or 0) >= MAX_MISSES then return nil end
+        if InCombatLockdown() then return nil, true end
+        found = Index(specID, tree, config, talents.want)
+        if not found then return nil end
     end
-    return out
-end
-
-local function SelfTaken(specID)
-    local out = {}
-    for castID, rule in pairs(KE.PartyCooldownsRules.TalentsFor(specID) or {}) do
-        local known = {}
-        for talent in pairs(rule.talents) do known[talent] = Ask(C_SpellBook.IsSpellKnown, talent) end
-        local override = rule.id ~= nil and Ask(C_Spell.GetOverrideSpell, castID) or nil
-        out[castID] = KE.PartyCooldownsRules.OwnTaken(rule, override, known)
+    for talent, spots in pairs(found) do
+        local rank = 0
+        for _, at in ipairs(spots) do
+            local node = C_Traits.GetNodeInfo(config, at.node)
+            if not (type(node) == "table" and type(node.ID) == "number" and node.ID > 0) then return nil end
+            local active = node.activeEntry
+            if node.subTreeActive ~= false and type(active) == "table" and active.entryID == at.entry
+                and type(node.activeRank) == "number" and node.activeRank > rank then
+                rank = node.activeRank
+            end
+        end
+        out[talent] = rank
     end
     return out
 end
@@ -766,7 +756,7 @@ end
 -- every teammate's answer stale for the inspect to read again; a stale answer
 -- stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
-    events = { "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "READY_CHECK" },
+    events = { "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "READY_CHECK", "PLAYER_REGEN_ENABLED" },
     On = function() return Spec.trackClass == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
@@ -781,9 +771,9 @@ Spec.readers[#Spec.readers + 1] = {
             m.talentsRetryAt = nil
             wipe(misses)
         end
-        local ok, taken, skip = pcall(ReadTaken, m.spec)
-        if ok and taken then
-            m.talents, m.talentMisses, m.talentsStale = taken, nil, nil
+        local ok, ranks, skip = pcall(ReadRanks, m.spec, INSPECT_CONFIG)
+        if ok and ranks then
+            m.talents, m.talentMisses, m.talentsStale = ranks, nil, nil
             return
         end
         if ok and skip then return end
@@ -801,11 +791,18 @@ Spec.readers[#Spec.readers + 1] = {
             end
         end
     end,
-    -- Before the talent configs load every spellbook answer reads not taken,
-    -- so the read waits for TRAIT_CONFIG_LIST_UPDATED.
+    -- Before the talent configs load no active config is reported, so the
+    -- read waits for TRAIT_CONFIG_LIST_UPDATED. A first walk due in combat
+    -- waits for its end.
     Self = function(m)
-        if m.talents == nil and m.spec and Ask(C_ClassTalents.GetActiveConfigID) ~= nil then
-            m.talents = SelfTaken(m.spec)
+        if m.talents ~= nil or not m.spec then return end
+        local config = Ask(C_ClassTalents.GetActiveConfigID)
+        if config == nil then return end
+        local ok, ranks, skip = pcall(ReadRanks, m.spec, config)
+        if ok and ranks then
+            m.talents = ranks
+        elseif ok and skip then
+            Spec.selfOwed = true
         end
     end,
     Forget = ForgetTalents,
@@ -816,6 +813,11 @@ Spec.readers[#Spec.readers + 1] = {
             Changed(m)
         elseif event == "TRAIT_CONFIG_LIST_UPDATED" then
             if m and m.talents == nil then Changed(m) end
+        elseif event == "PLAYER_REGEN_ENABLED" then
+            if Spec.selfOwed and m then
+                Spec.selfOwed = nil
+                Changed(m)
+            end
         elseif event == "READY_CHECK" and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
             for _, member in pairs(Spec.byGUID) do
                 if not member.isPlayer and member.talents then member.talentsStale = true end

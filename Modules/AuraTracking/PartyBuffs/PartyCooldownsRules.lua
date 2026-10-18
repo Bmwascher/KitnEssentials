@@ -34,8 +34,11 @@ end
 
 function Rules.CooldownKey(specID, castID) return specID .. ":" .. castID end
 
--- TalentsFor's key for a cast's length rule, apart from its show rule.
-function Rules.LengthKey(castID) return "len:" .. castID end
+-- A spec list item: a cast, or { cast, seconds, charges = n }.
+function Rules.UnpackItem(item)
+    if type(item) == "table" then return item[1], item[2], item.charges end
+    return item, nil, nil
+end
 
 function Rules.TrinketKey(spellID) return "trinket:" .. spellID end
 
@@ -529,35 +532,46 @@ function Rules.TrinketShow(show, set, accepted)
     return kept, pending
 end
 
--- castID -> the talent rule of each of the spec's entries that has one: its
--- swap where the swap applies to the spec, else its needs. A paired cast whose
--- spell has lengthNeeds also gets that rule under Rules.LengthKey(castID).
--- Nil when none does. The data never changes, so each spec's answer is built
--- once and shared; callers only read it. The inspect ticker asks every second.
+-- A spec's talents: rules maps castID to the talent rule of each entry that
+-- has one (its swap where the swap applies to the spec, else its needs); ids
+-- and want list every talent those rules and the mods of the spec's casts
+-- name, the externals box's casts included. Nil when there is none. The data
+-- never changes, so each spec's answer is built once and shared; callers only
+-- read it. The inspect ticker asks every second.
 local talentsBySpec = {}
+
+local function AddTalent(out, talent)
+    if talent and not out.want[talent] then
+        out.want[talent] = true
+        out.ids[#out.ids + 1] = talent
+    end
+end
+
+local function AddModTalents(out, spell)
+    for _, mod in ipairs(spell and spell.mods or {}) do AddTalent(out, mod[1]) end
+end
 
 function Rules.TalentsFor(specID)
     if specID == nil then return nil end
     local cached = talentsBySpec[specID]
     if cached == nil then
         local data = KE.PartyCooldownsData
-        cached = false
+        local out = { rules = {}, ids = {}, want = {} }
         for _, item in ipairs(data.SPECS[specID] or {}) do
-            local paired = type(item) == "table"
-            local castID = paired and item[1] or item
+            local castID = Rules.UnpackItem(item)
             local spell = data.SPELLS[castID]
             local swap = spell and spell.swap
             local rule = spell and spell.needs
             if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
             if rule then
-                cached = cached or {}
-                cached[castID] = rule
+                out.rules[castID] = rule
+                for talent in pairs(rule.talents) do AddTalent(out, talent) end
             end
-            if paired and spell and spell.lengthNeeds then
-                cached = cached or {}
-                cached[Rules.LengthKey(castID)] = spell.lengthNeeds
-            end
+            AddModTalents(out, spell)
         end
+        local healer = data.HEALER_SPECS and data.HEALER_SPECS[specID]
+        for _, castID in ipairs(healer and healer.casts or {}) do AddModTalents(out, data.SPELLS[castID]) end
+        cached = #out.ids > 0 and out or false
         talentsBySpec[specID] = cached
     end
     return cached or nil
@@ -623,33 +637,11 @@ function Rules.Taken(rule, ranks)
     return nil
 end
 
--- The length a cell counts: the spell's own when its length talent is read as
--- not taken, or unread and not likely; else the entry's.
-function Rules.TalentLength(entry, taken)
-    local needs = entry.spell and entry.spell.lengthNeeds
-    if not needs then return entry.cd end
-    if taken == nil then taken = needs.likely ~= false end
-    if taken then return entry.cd end
-    return Rules.ClampSeconds(entry.spell.cd)
-end
-
--- Your own answer for one talent rule: true, false, or nil when the client
--- answered nothing, so an unreadable spellbook keeps the likely state.
--- override is the cast's override spell, nil when unread; known maps each
--- talent to its spellbook answer, nil when unread.
-function Rules.OwnTaken(rule, override, known)
-    local answered = false
-    if rule.id ~= nil and override ~= nil then
-        if override == rule.id then return true end
-        answered = true
-    end
-    for talent in pairs(rule.talents) do
-        local isKnown = known[talent]
-        if isKnown == true then return true end
-        if isKnown ~= nil then answered = true end
-    end
-    if answered then return false end
-    return nil
+-- Whether a cast's talent rule is taken, from a member's ranks; nil when the
+-- cast has no rule or nothing of it is read.
+function Rules.CastTaken(specID, castID, ranks)
+    local talents = Rules.TalentsFor(specID)
+    return Rules.Taken(talents and talents.rules[castID], ranks)
 end
 
 -- A gear event within GEAR_QUIET seconds of a teammate's last trinket read

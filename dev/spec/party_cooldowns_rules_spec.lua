@@ -10,12 +10,10 @@ local L = require("dev.spec._ke_loader")
 -- with a swap scoped to spec 10; spec 11 lists only the scoped one. ROLE_SPEC
 -- holds a tank and a healer guess, and a damage cell no guess may use. Cast 4
 -- is the racial of the race Dwarf, in no spec list. Spec 12 lists only cast 5,
--- which needs talent 55 and is not likely taken. Cast 6 needs talent 65 and
--- is likely taken; its paired length needs talent 66. Spec 13 lists it paired
--- at 30 s, spec 14 unpaired. Spec 15 lists only cast 7, which starts
--- switched off. Cast 8 has talent mods, a spec-only one for spec 16 and two
--- charge talents; spec 16 lists it paired at 100 s, spec 17 unpaired. Cast 9
--- has only a charge talent; spec 19 lists it paired at 50 s.
+-- which needs talent 55 and is not likely taken. Spec 15 lists only cast 7,
+-- which starts switched off. Cast 8 has talent mods, a spec-only one for spec
+-- 16 and two charge talents; spec 16 lists it paired at 100 s, spec 17
+-- unpaired. Cast 9 has only a charge talent; spec 19 lists it paired at 50 s.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -25,9 +23,6 @@ local DATA = {
                 swap = { id = 30, talents = { [30] = true }, likely = true, specs = { [10] = true } } },
         [4] = { kind = "defensive", cd = 120, buffs = { 40 } },
         [5] = { kind = "offensive", cd = 60, buffs = { 50 }, needs = { talents = { [55] = true } } },
-        [6] = { kind = "offensive", cd = 120, buffs = { 60 },
-                needs = { talents = { [65] = true }, likely = true },
-                lengthNeeds = { talents = { [66] = true } } },
         [7] = { kind = "offensive", cd = 90, buffs = { 70 }, off = true },
         [8] = { kind = "offensive", cd = 180, buffs = { 80 },
                 mods = { { 81, add = -30 }, { 82, pct = -50 }, { spec = 16, add = -60 },
@@ -41,8 +36,6 @@ local DATA = {
         [10] = { { 1, 45 }, 2, 3 },
         [11] = { 3 },
         [12] = { 5 },
-        [13] = { { 6, 30 } },
-        [14] = { 6 },
         [15] = { 7 },
         [16] = { { 8, 100 } },
         [17] = { 8 },
@@ -736,9 +729,10 @@ describe("PartyCooldownsRules talent gate", function()
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.TalentAllows(case.entry, case.taken), case.name)
         end
-        assert.are.equal(gated.spell.needs, R.TalentsFor(12)[5], "a needs row")
-        assert.is_not_nil(R.TalentsFor(10)[3], "a swap for its spec")
+        assert.are.equal(gated.spell.needs, R.TalentsFor(12).rules[5], "a needs row")
+        assert.is_not_nil(R.TalentsFor(10).rules[3], "a swap for its spec")
         assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")
+        assert.is_true(R.TalentsFor(16).want[81], "a mod's talent")
     end)
 end)
 
@@ -775,52 +769,6 @@ describe("PartyCooldownsRules.Taken", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.Taken(rule, case.ranks), case.name)
-        end
-    end)
-end)
-
-describe("PartyCooldownsRules talent lengths", function()
-    it("counts the spell's own length when the talent is read as not taken, or unread and not likely", function()
-        local R = loadRules()
-        local paired = entryOf(R, 13, 6)
-        local plain = entryOf(R, 10, 1)
-        local unlikely = { cd = 30, spell = { cd = 120, lengthNeeds = { talents = {}, likely = false } } }
-        local cases = {
-            { name = "not taken", entry = paired, taken = false, want = 120 },
-            { name = "taken", entry = paired, taken = true, want = 30 },
-            { name = "unread", entry = paired, taken = nil, want = 30 },
-            { name = "unread, not likely", entry = unlikely, taken = nil, want = 120 },
-            { name = "no length talent", entry = plain, taken = false, want = 45 },
-        }
-        for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.TalentLength(case.entry, case.taken), case.name)
-        end
-    end)
-
-    it("adds a length rule under its own key only for a paired cast", function()
-        local R = loadRules()
-        local spell = DATA.SPELLS[6]
-        assert.are.equal(spell.lengthNeeds, R.TalentsFor(13)[R.LengthKey(6)], "paired")
-        assert.are.equal(spell.needs, R.TalentsFor(13)[6], "the show rule stays under the cast")
-        assert.is_nil(R.TalentsFor(14)[R.LengthKey(6)], "unpaired")
-    end)
-end)
-
-describe("PartyCooldownsRules.OwnTaken", function()
-    it("answers taken or not taken only from a plain spellbook answer, else nil", function()
-        local R = loadRules()
-        local needs = DATA.SPELLS[5].needs
-        local swap = DATA.SPELLS[2].swap
-        local cases = {
-            { name = "needs, known", rule = needs, known = { [55] = true }, want = true },
-            { name = "needs, not known", rule = needs, known = { [55] = false }, want = false },
-            { name = "needs, unread", rule = needs, known = {}, want = nil },
-            { name = "swap, overridden", rule = swap, override = 20, known = {}, want = true },
-            { name = "swap, other override", rule = swap, override = 2, known = {}, want = false },
-            { name = "swap, nothing read", rule = swap, known = {}, want = nil },
-        }
-        for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.OwnTaken(case.rule, case.override, case.known), case.name)
         end
     end)
 end)
