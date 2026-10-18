@@ -12,7 +12,6 @@
 ---@class KE
 local KE = select(2, ...)
 
-local _G = _G
 local C_Spell = C_Spell
 local CreateFrame = CreateFrame
 local UIParent = UIParent
@@ -20,7 +19,6 @@ local UnitExists = UnitExists
 local ipairs = ipairs
 local issecretvalue = issecretvalue
 local string_format = string.format
-local type = type
 
 local Rules = KE.HealerExternalsRules
 local CDRules = KE.PartyCooldownsRules
@@ -95,20 +93,18 @@ local function MakeSlot()
     HX.st = Track.NewSlot(HX.live, HX.VIEW, host)
 end
 
--- An attached box whose anchor is unnamed (the Frame field cleared, until the
--- default name returns at the next login), does not exist (Healer Mana off
--- since login), or is refused by KE:IsUnsafeAnchor (not a frame, the box
--- itself, or a frame that depends on it) takes its starting place: the
--- attached points against the screen would put it above the top edge. The
--- third return says the starting place is in use.
+-- An attached box whose anchor the shared resolution refuses takes its
+-- starting place: unnamed (the Frame field cleared, until the default name
+-- returns at the next login), missing (Healer Mana off since login) or
+-- unsafe. The attached points against the screen would put it above the top
+-- edge. Every name the resolution accepts, a child's Parent.key included,
+-- keeps its saved position. The third return says the starting place is in
+-- use.
 local function Placement(db)
     local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
     screen.Strata, placement.Strata = db.HealerExtStrata, db.HealerExtStrata
-    if kind == "SELECTFRAME" then
-        if type(name) ~= "string" then return HX.DEFAULT_POSITION, screen, true end
-        local frame = _G[name]
-        local missing = not issecretvalue(frame) and frame == nil
-        if missing or KE:IsUnsafeAnchor(HX.box, frame) then return HX.DEFAULT_POSITION, screen, true end
+    if kind == "SELECTFRAME" and KE:ResolveSelectFrame(name, HX.box) == nil then
+        return HX.DEFAULT_POSITION, screen, true
     end
     placement.anchorFrameType, placement.ParentFrame = kind, name
     return db.HealerExtPosition, placement, false

@@ -88,7 +88,7 @@ function Rules.On(db, active, inRaid)
     return Table(db).HealerExternals == true and active == true and inRaid ~= true
 end
 
--- Whether an Edit Mode position detaches the box: only a move away from the
+-- Whether an Edit Mode position detaches a box: only a move away from the
 -- starting place while that place stands in for an anchor that is unnamed,
 -- missing or refused. Edit Mode hands back the current position after a canceled drag,
 -- and on a revert the position the mover started from, which is the starting
