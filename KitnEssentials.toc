@@ -13,6 +13,7 @@
 ## X-Wago-ID: n6VLEEGd
 
 Core\Client.lua
+Core\BaselineLoad.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 Libs\Init.xml
 
 Modules\Core\Diagnostics\TaintReport.lua

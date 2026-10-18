@@ -287,7 +287,10 @@ function KE:BuildConflictQueue(env)
     end
 
     for _, conflict in ipairs(CONFLICTS) do
-        if not (conflict.skinGated and env.shouldNotLoad) then
+        -- A module this client withholds never prompts, even with its saved
+        -- flag on: answering would disable the rival for a module not running.
+        if not (conflict.skinGated and env.shouldNotLoad)
+            and KE:IsFeatureAvailable(conflict.module) then
             local moduleDB = ResolveDB(env.profile, conflict.dbPath)
             if moduleDB and moduleDB.Enabled then
                 for _, addonName in ipairs(conflict.addons) do

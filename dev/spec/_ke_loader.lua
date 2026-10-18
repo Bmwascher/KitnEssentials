@@ -15,8 +15,8 @@
 --   local DM = L.loadDMCore({ issecretvalue = myFn })
 --
 -- Loaders taking opts (loadDungeonTimers, loadPixelPerfect) accept mock
--- overrides as a second arg; the rest take overrides first (loadGlobals takes
--- overrides first AND an optional opts second). Override keys
+-- overrides as a second arg; the rest take overrides first (loadGlobals and
+-- loadConflicts take overrides first AND an optional opts second). Override keys
 -- _wow_mock manages (issecretvalue, C_Timer, AbbreviateNumbers, ...) win
 -- over the loader defaults; stubs _wow_mock does NOT manage live on _G and
 -- can simply be reassigned after the loader returns.
@@ -427,7 +427,7 @@ end
 -- KE, prompts (every CreatePrompt/CreateReloadPrompt call, in order),
 -- disabled (addon names passed to C_AddOns.DisableAddOn), and printed (chat
 -- lines, kept separate so prompt-count assertions stay exact).
-function L.loadConflicts(overrides)
+function L.loadConflicts(overrides, opts)
     installMock(overrides, {})
     local disabled = {}
     -- Models production: DisableAddOn flips the enable state while the addon
@@ -481,6 +481,11 @@ function L.loadConflicts(overrides)
         -- break every "#prompts" assertion, since each choice prints.
         Print = function(_, msg) printed[#printed + 1] = msg end,
     }
+    -- Core/Availability.lua loads before Conflicts in-game. opts.forever seeds
+    -- a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts ~= nil and opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Core/Conflicts.lua", KE), prompts, disabled, printed
 end
 
