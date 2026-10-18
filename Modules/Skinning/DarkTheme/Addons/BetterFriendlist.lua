@@ -827,8 +827,8 @@ local function CardCues(card)
     fill:Hide()
     local edge = bd:CreateTexture(nil, "OVERLAY")
     edge:SetTexture(WHITE)
-    edge:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
-    edge:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", 1, 1)
+    edge:SetPoint("TOPLEFT", fill, "TOPLEFT")
+    edge:SetPoint("BOTTOMLEFT", fill, "BOTTOMLEFT")
     edge:SetWidth(STATUS_EDGE_WIDTH)
     edge:Hide()
     local icon = bd:CreateTexture(nil, "OVERLAY")
@@ -979,7 +979,8 @@ local function Skin()
     S.Frame(frame)
     StripPanelShell(frame)
 
-    -- The Legacy title bar and tabs; the Modern layout hides all of it.
+    -- The Legacy title bar, tabs and action buttons; the Modern layout hides
+    -- all of it.
     local function DressLegacyChrome()
         local pb = frame.PortraitButton
         if pb then
@@ -1104,6 +1105,17 @@ local function Skin()
         end
         S.Button(frame.AddFriendButton)
         S.Button(frame.SendMessageButton)
+
+        local who, raid = frame.WhoFrame, frame.RaidFrame
+        local cp = raid and raid.ControlPanel
+        S.Button(LegacyButton(who, "WhoButton"))
+        S.Button(LegacyButton(who, "AddFriendButton"))
+        S.Button(LegacyButton(who, "GroupInviteButton"))
+        S.Button(LegacyButton(raid, "ConvertToRaidButton"))
+        S.Button(LegacyButton(raid, "RaidToolsButton"))
+        S.Button(LegacyButton(cp, "RaidInfoButton"))
+        local readyCheck = LegacyButton(cp, "ReadyCheckButton")
+        S.Button(readyCheck, readyCheck and readyCheck.Icon)
     end
 
     SkinInset(frame.Inset)
@@ -1173,9 +1185,6 @@ local function Skin()
 
     S.Button(frame.RecruitmentButton)
     if frame.WhoFrame then
-        S.Button(LegacyButton(frame.WhoFrame, "WhoButton"))
-        S.Button(LegacyButton(frame.WhoFrame, "AddFriendButton"))
-        S.Button(LegacyButton(frame.WhoFrame, "GroupInviteButton"))
         S.EditBox(frame.WhoFrame.EditBox)
 
         KillSearchPlates(frame.WhoFrame.EditBox)
@@ -1185,14 +1194,7 @@ local function Skin()
         pcall(S.DropDown, frame.WhoFrame.ColumnDropdown, true)
     end
     if frame.RaidFrame then
-        S.Button(LegacyButton(frame.RaidFrame, "ConvertToRaidButton"))
-        S.Button(LegacyButton(frame.RaidFrame, "RaidToolsButton"))
         if frame.RaidFrame.ControlPanel then
-            S.Button(LegacyButton(frame.RaidFrame.ControlPanel, "RaidInfoButton"))
-
-            local readyCheck = LegacyButton(frame.RaidFrame.ControlPanel, "ReadyCheckButton")
-            S.Button(readyCheck, readyCheck and readyCheck.Icon)
-
             local cp = frame.RaidFrame.ControlPanel
             if cp.EveryoneAssistCheckbox then S.CheckBox(cp.EveryoneAssistCheckbox) end
             if cp.EveryoneAssistLabel then S.SetFont(cp.EveryoneAssistLabel, 12, "OUTLINE") end
@@ -1443,9 +1445,7 @@ local function Skin()
         end
     end
 
-    -- The addon fills the lists inside the application this follows, before
-    -- the first hooks exist. The sweep dresses those rows by the addon's own
-    -- row keys and only reads the frames the scroll boxes hold.
+    -- The Modern lists, for the reason given above SweepLegacy.
     local function SweepModern()
         local ui = GetFriendsUI()
         local list = GetBFLModule("FriendsList")
