@@ -585,36 +585,40 @@ describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
 end)
 
 describe("PartyBuffsRules.ListGroupConfig and the category exclusion", function()
-    it("gives each kind's list group its cells' buffs without summons, and leaves the list out of every category", function()
-        local R, KE = L.loadPartyBuffsRules()
+    local entries = {
+        { kind = "offensive", buffs = { 10, 11 } },
+        { kind = "offensive", buffs = { 20 }, active = 12 },
+        { kind = "defensive", buffs = { 30 } },
+        { kind = "trinket", buffs = { 40 }, trinket = true },
+    }
+
+    it("gives each kind's list group its cells' buffs without summons, one place per such cell", function()
+        local R = L.loadPartyBuffsRules()
         local on, off = makeDb({ ActiveCooldownsFirst = true }), makeDb({})
-        local entries = {
-            { kind = "offensive", buffs = { 10, 11 } },
-            { kind = "offensive", buffs = { 20 }, active = 12 },
-            { kind = "defensive", buffs = { 30 } },
-            { kind = "trinket", buffs = { 40 }, trinket = true },
-        }
         local byKind = {}
         for _, group in ipairs(R.LIST_GROUPS) do byKind[group.kind] = group end
         local cases = {
             { name = "offensive, a summon left out", kind = "offensive", db = on, entries = entries,
-              include = { [10] = true, [11] = true }, max = 1, index = -2 },
+              include = { [10] = true, [11] = true }, max = 1 },
             { name = "defensive", kind = "defensive", db = on, entries = entries,
-              include = { [30] = true }, max = 1, index = -1 },
+              include = { [30] = true }, max = 1 },
             { name = "trinket", kind = "trinket", db = on, entries = entries,
-              include = { [40] = true }, max = 1, index = 0 },
+              include = { [40] = true }, max = 1 },
             { name = "only a summon", kind = "offensive", db = on, entries = { entries[2] },
-              include = {}, max = 0, index = -2 },
+              include = {}, max = 0 },
             { name = "switch off: nothing included", kind = "offensive", db = off, entries = entries,
-              include = {}, max = 0, index = -2 },
+              include = {}, max = 0 },
         }
         for _, case in ipairs(cases) do
-            local filter, candidates, max, index = R.ListGroupConfig(byKind[case.kind], case.db, case.entries)
-            assert.are.equal(R.LIST_FILTER, filter, case.name)
+            local _, candidates, max = R.ListGroupConfig(byKind[case.kind], case.db, case.entries)
             assert.are.same(case.include, candidates.includeSpellIDs, case.name)
             assert.are.equal(case.max, max, case.name)
-            assert.are.equal(case.index, index, case.name)
         end
+    end)
+
+    it("leaves the list's buffs out of every category and never writes the shared sets", function()
+        local R, KE = L.loadPartyBuffsRules()
+        local on, off = makeDb({ ActiveCooldownsFirst = true }), makeDb({})
         local blocklist = KE.AuraRules.BuildExcludeSpellIDs(nil)
         local cells = { [50] = true }
         local listed = R.ListBuffs(on, entries)
