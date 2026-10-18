@@ -768,6 +768,42 @@ describe("PartyCooldownsRules talent gate", function()
     end)
 end)
 
+describe("PartyCooldownsRules.TalentsFor box rows", function()
+    it("flags the talents a spec's box rows name apart from its own casts', with each row's rule", function()
+        -- Spec 20 lists no cast; its box rows give cast 6, which needs talent
+        -- 60, and cast 13, whose swap to talent 130 applies to every spec.
+        -- Specs 12 and 14 list cast 5, which needs talent 55; spec 12 also
+        -- owns box row 7, which needs talent 55 or 77.
+        local data = {
+            SPELLS = {
+                [5] = { kind = "offensive", cd = 60, buffs = { 50 }, needs = { talents = { [55] = true } } },
+                [6] = { kind = "external", cd = 180, buffs = { 6 },
+                        needs = { talents = { [60] = true }, likely = true } },
+                [7] = { kind = "external", cd = 120, buffs = { 7 },
+                        needs = { talents = { [55] = true, [77] = true }, likely = true } },
+                [13] = { kind = "external", cd = 300, buffs = { 13, 130 },
+                         swap = { id = 130, talents = { [130] = true }, likely = false } },
+            },
+            SPECS = { [12] = { 5 }, [14] = { 5 } },
+            BOX_ROWS = {
+                { id = 6, class = "DRUID", specs = { [20] = true }, watch = "owner" },
+                { id = 13, class = "DRUID", specs = { [20] = true }, watch = "target" },
+                { id = 7, class = "MONK", specs = { [12] = true }, watch = "owner" },
+            },
+        }
+        local R = L.loadPartyCooldownsRules(data)
+        local box, mixed, own = R.TalentsFor(20), R.TalentsFor(12), R.TalentsFor(14)
+        assert.are.same({ false, true }, { box.rows, box.box }, "box rows only")
+        assert.are.equal(data.SPELLS[6].needs, box.rules[6], "a box row's needs rule")
+        assert.are.equal(data.SPELLS[13].swap, box.rules[13], "a box row's swap")
+        assert.are.same({ [60] = true, [130] = true }, box.boxOnly, "every talent box-only")
+        assert.are.same({ true, true }, { mixed.rows, mixed.box }, "own casts and a box row")
+        assert.are.same({ [77] = true }, mixed.boxOnly, "a talent its own cast names is not box-only")
+        assert.are.same({ true, false }, { own.rows, own.box }, "its own casts only")
+        assert.are.same({}, own.boxOnly, "no box-only talent")
+    end)
+end)
+
 describe("PartyCooldownsRules.CellLength", function()
     it("counts the talented length once every length talent is read, the listed one until then", function()
         local R = loadRules()

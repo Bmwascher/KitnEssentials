@@ -906,9 +906,12 @@ end
 -- A spec's talents: rules maps castID to the talent rule of each entry that
 -- has one (its swap where the swap applies to the spec, else its needs); ids
 -- and want list every talent those rules and the mods of the spec's casts
--- name, the externals box's casts included. Nil when there is none. The data
--- never changes, so each spec's answer is built once and shared; callers only
--- read it. The inspect ticker asks every second.
+-- name, the externals box's casts and box rows included. rows is set when the
+-- spec's own casts or its healer externals name a talent, box when its
+-- healer externals or its box rows do; boxOnly holds the talents only box
+-- rows name, which a read skips while the box is off. Nil when there is
+-- none. The data never changes, so each spec's answer is built once and
+-- shared; callers only read it. The inspect ticker asks every second.
 local talentsBySpec = {}
 
 local function AddTalent(out, talent)
@@ -918,8 +921,33 @@ local function AddTalent(out, talent)
     end
 end
 
+-- Returns whether the spell's mods name a talent.
 local function AddModTalents(out, spell)
-    for _, mod in ipairs(spell and spell.mods or {}) do AddTalent(out, mod[1]) end
+    local named = false
+    for _, mod in ipairs(spell and spell.mods or {}) do
+        if mod[1] then
+            AddTalent(out, mod[1])
+            named = true
+        end
+    end
+    return named
+end
+
+-- A cast's talent rule and its mods' talents. Returns whether it names a
+-- talent.
+local function AddCast(out, castID, spell, specID)
+    local swap = spell and spell.swap
+    local rule = spell and spell.needs
+    if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
+    local named = false
+    if rule then
+        out.rules[castID] = rule
+        for talent in pairs(rule.talents) do
+            AddTalent(out, talent)
+            named = true
+        end
+    end
+    return AddModTalents(out, spell) or named
 end
 
 function Rules.TalentsFor(specID)
@@ -927,21 +955,21 @@ function Rules.TalentsFor(specID)
     local cached = talentsBySpec[specID]
     if cached == nil then
         local data = KE.PartyCooldownsData
-        local out = { rules = {}, ids = {}, want = {} }
+        local out = { rules = {}, ids = {}, want = {}, rows = false, box = false, boxOnly = {} }
         for _, item in ipairs(data.SPECS[specID] or {}) do
             local castID = Rules.UnpackItem(item)
-            local spell = data.SPELLS[castID]
-            local swap = spell and spell.swap
-            local rule = spell and spell.needs
-            if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
-            if rule then
-                out.rules[castID] = rule
-                for talent in pairs(rule.talents) do AddTalent(out, talent) end
-            end
-            AddModTalents(out, spell)
+            if AddCast(out, castID, data.SPELLS[castID], specID) then out.rows = true end
         end
         local healer = data.HEALER_SPECS and data.HEALER_SPECS[specID]
-        for _, castID in ipairs(healer and healer.casts or {}) do AddModTalents(out, data.SPELLS[castID]) end
+        for _, castID in ipairs(healer and healer.casts or {}) do
+            if AddModTalents(out, data.SPELLS[castID]) then out.rows, out.box = true, true end
+        end
+        -- ids lists each talent once, in the order first named.
+        local own = #out.ids
+        for _, row in ipairs(data.BOX_ROWS or {}) do
+            if row.specs[specID] and AddCast(out, row.id, data.SPELLS[row.id], specID) then out.box = true end
+        end
+        for k = own + 1, #out.ids do out.boxOnly[out.ids[k]] = true end
         cached = #out.ids > 0 and out or false
         talentsBySpec[specID] = cached
     end
