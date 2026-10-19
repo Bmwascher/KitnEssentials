@@ -753,7 +753,7 @@ end
 
 -- A new list frame starts shown, so its first Open fires no OnShow.
 local function HookPulloutOpen(p)
-    if p and p.Open and p.frame and not S.data(p).keOpenHooked then
+    if p and type(p.Open) == "function" and p.frame and not S.data(p).keOpenHooked then
         S.data(p).keOpenHooked = true
         hooksecurefunc(p, "Open", OnPulloutOpen)
     end
