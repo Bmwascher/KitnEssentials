@@ -39,7 +39,7 @@ local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
 local issecretvalue = issecretvalue
-local ipairs, pcall, tostring, type = ipairs, pcall, tostring, type
+local ipairs, pairs, pcall, tostring, type = ipairs, pairs, pcall, tostring, type
 local math_ceil, math_max, math_min = math.ceil, math.max, math.min
 local table_concat = table.concat
 
@@ -72,6 +72,9 @@ local NONE = {}
 local VIEWER_ORDER = { "Essential", "Utility", "BuffIcon" }
 -- Above the icon's cooldown swipe and countdown when centered on it.
 local ICON_LEVEL_OFFSET = 30
+-- How soon a count looks again at an icon that is up but still transparent:
+-- another addon may reveal it on its own timer.
+local REVEAL_RECHECK = 0.25
 local WATCH_KEY = "DoTTracker"
 
 DT.root = nil
@@ -92,6 +95,7 @@ DT.previewing = false
 DT.inCombat = false
 DT.shownHere = true
 DT.paintedTotal = -1
+DT.revealPending = false
 DT.editModeRegistered = false
 DT.someColor = DEFAULT_SOME
 DT.allColor = DEFAULT_ALL
@@ -240,6 +244,7 @@ end
 local function BuildAnswer(cell, k)
     local answer = { label = cell.tail:CreateFontString(nil, "OVERLAY") }
     answer.label:Hide()
+    if cell.masked then answer.label:SetAlpha(0) end
     cell.answers[k] = answer
     return answer
 end
@@ -550,8 +555,18 @@ local function StyleAsPlaced(cell)
     return false
 end
 
+-- The labels alone, so no frame above the sensors changes. Every label, kept
+-- ones past a discarded sensor included.
+local function MaskCell(cell, masked)
+    if cell.masked == masked then return end
+    local alpha = masked and 0 or 1
+    for _, answer in pairs(cell.answers) do answer.label:SetAlpha(alpha) end
+    cell.masked = masked
+end
+
 -- Back to the row's origin; LayoutCells gives it its place in the row.
 local function PullBack(cell)
+    MaskCell(cell, false)
     cell.attachIcon, cell.attachViewer, cell.attachID, cell.attachSlot = nil, nil, nil, nil
     cell.frame:ClearAllPoints()
     cell.frame:SetPoint("TOPLEFT", DT.root, "TOPLEFT", 0, 0)
@@ -602,6 +617,45 @@ end
 
 local function ReplaceAttached()
     if DT.active then DT:PlaceAttached() end
+end
+
+-- An attached count shows only while its icon can be seen: another addon may
+-- draw its own icon and leave this one fully transparent. True while an icon
+-- is up but still transparent, so it may be revealed shortly.
+local function UpdateMasks()
+    local waiting = false
+    for i = 1, #DT.list do
+        local cell = DT.cells[i]
+        local icon = cell.attachIcon
+        if icon then
+            -- The read can be refused with an error; a refusal or a secret keeps
+            -- the last answer.
+            local ok, alpha = pcall(icon.GetEffectiveAlpha, icon)
+            if ok and not issecretvalue(alpha) then MaskCell(cell, alpha <= 0) end
+            if cell.masked then
+                local up = icon:IsShown()
+                if issecretvalue(up) or up then waiting = true end
+            end
+        else
+            MaskCell(cell, false)
+        end
+    end
+    return waiting
+end
+
+-- One pending look at a time, and none once nothing waits: a transparent icon
+-- that is not up costs nothing until its next refresh.
+local Recheck
+local function WatchReveal()
+    if UpdateMasks() and not DT.revealPending then
+        DT.revealPending = true
+        C_Timer.After(REVEAL_RECHECK, Recheck)
+    end
+end
+
+function Recheck()
+    DT.revealPending = false
+    if DT.active then WatchReveal() end
 end
 
 -- A cell past the list, or every cell when the display stops: hidden and kept
@@ -1006,6 +1060,7 @@ function DT:PlaceAttached(force)
         end
     end
     LayoutCells(self.rowGeo)
+    WatchReveal()
     if changed then
         self:UpdateTimers()
         -- The sample timer and preview glow follow the attach state too.
