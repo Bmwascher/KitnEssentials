@@ -27,6 +27,7 @@ local MAP_HEIGHT = 140
 local MAP_GAP = 4
 -- A split row: the label line, then the slider below it.
 local SPLIT_ROW_H = 44
+local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
 
 -- Ordered option lists for the per-context default-display rows.
 -- Order mirrors the in-world view-selector grid (Selector.lua VIEW_GRID) so the GUI
@@ -617,16 +618,22 @@ local function ConstructSchematic(parent)
         removeBtn:SetSize(16, 16)
         removeBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -4)
         removeBtn:SetFrameLevel(box:GetFrameLevel() + 2)
-        removeBtn.text = removeBtn:CreateFontString(nil, "OVERLAY")
-        removeBtn.text:SetPoint("CENTER")
+        -- KE's close glyph is a plus; rotated 45 degrees it draws the X.
+        local icon = removeBtn:CreateTexture(nil, "OVERLAY")
+        icon:SetAllPoints()
+        icon:SetTexture(CLOSE_TEX)
+        icon:SetRotation(math.rad(45))
+        removeBtn.icon = icon
         removeBtn:Hide()
         removeBtn:SetScript("OnEnter", function(self)
+            icon:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText("Remove window " .. tostring(box.pos or "?"), 1, 1, 1, 1, true)
             GameTooltip:Show()
             if container._onHover then container._onHover("box", box, true) end
         end)
         removeBtn:SetScript("OnLeave", function()
+            icon:SetVertexColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
             GameTooltip:Hide()
             container.HideRemoveUnlessOver(box)
             if container._onHover then container._onHover("box", box, false) end
@@ -823,9 +830,7 @@ local function ConstructSchematic(parent)
                 KE:ApplyThemeFont(box.segText, 12)
                 box.segText:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
                 box.segText:SetText(segName or "")
-                KE:ApplyThemeFont(box.removeBtn.text, 13)
-                box.removeBtn.text:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
-                box.removeBtn.text:SetText("x")
+                box.removeBtn.icon:SetVertexColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
                 box.removeBtn:Hide()
                 box:Show()
                 boxAt[c][r] = box
