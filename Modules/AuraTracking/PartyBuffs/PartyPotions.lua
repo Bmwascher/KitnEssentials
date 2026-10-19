@@ -224,6 +224,7 @@ local function Restyle(db)
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
     s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
+    s.dark = db.PotionDarkMode == true
     s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
     box:SetSize(s.width, #ORDER * (s.height + s.gap) - s.gap)

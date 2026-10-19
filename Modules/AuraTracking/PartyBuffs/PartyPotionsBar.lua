@@ -173,7 +173,7 @@ end
 -- of the text on the right. The name hangs top pixels below the area's top,
 -- level with the timer window: centered in an odd-height area it starts on a
 -- half pixel, and under the sliding clip it then jumps a pixel every second.
-local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
+local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top, back)
     local inner = style.height - 2 * px
     PlaceEdges(art, px)
     art.icon:ClearAllPoints()
@@ -187,6 +187,7 @@ local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top)
     art.fill:SetAllPoints(art.area)
     art.back:ClearAllPoints()
     art.back:SetAllPoints(art.fill)
+    art.back:SetShown(back)
     art.fill:SetColorTexture(fill[1] * scale, fill[2] * scale, fill[3] * scale, fill[4] or 1)
     KE:ApplyFontToText(art.name, style.fontName, style.textSize, style.outline)
     art.name:SetTextColor(nameColor[1], nameColor[2], nameColor[3], 1)
@@ -202,7 +203,8 @@ end
 -- nothing but the cover sits behind the drained part.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
-    local fill, fillScale, bg, bgScale, nameColor, bgAlpha = Rules.Colors(style, e.color)
+    local fill, fillScale, bg, bgScale, nameColor, bgAlpha, readyFill, readyScale, readyName, readyBack =
+        Rules.Colors(style, e.color)
     local font, size, outline = style.fontName, style.textSize, style.outline
     c:SetSize(style.width, style.height)
     c.cd, c.placed = e.cd, true
@@ -213,7 +215,8 @@ function Bar.Dress(c, style, e)
     local winPx, raise, top, below, above = Rules.Window((style.height - 2 * px) / px, math_min(line, step) / px,
         margin / px)
     c.nameY, c.nameLift, c.nameSeat = -top * px, style.height - (top + 1) * px, nil
-    Paint(c.ready, style, e, fill, fillScale, nameColor, px, Cell.TextWidth(font, size, outline, "Ready"), top)
+    Paint(c.ready, style, e, readyFill, readyScale, readyName, px, Cell.TextWidth(font, size, outline, "Ready"), top,
+        readyBack)
     KE:ApplyFontToText(c.readyText, font, size, outline)
     c.readyText:SetText("Ready")
     c.readyText:SetTextColor(1, 1, 1, 1)
@@ -225,7 +228,7 @@ function Bar.Dress(c, style, e)
     c.ready.top:SetFrameLevel(level + 2)
     for k = 1, 2 do
         local f = c.face[k]
-        Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0, top)
+        Paint(f.art, style, e, fill, fillScale, nameColor, px, style.timer and timerWidth or 0, top, true)
         PlaceGate(c, f, c.readyClip[k], style, bottom, height)
         f.cover:ClearAllPoints()
         f.cover:SetAllPoints(f.art.area)
