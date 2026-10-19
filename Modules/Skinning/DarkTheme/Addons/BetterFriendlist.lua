@@ -962,13 +962,29 @@ end
 
 local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
 local BFL_CLOSE_SIZE = 20
+-- The dark theme's square portrait is 42 and crops the art's edges; KE draws
+-- the whole logo larger and lower in its place.
+local LOGO_SQUARE_SIZE = 56
+local LOGO_SQUARE_DROP = 2
 
 local function PaintPortrait()
     if not IsModern() then return end
     local ui = GetFriendsUI()
     local overlay = type(ui) == "table" and ui.root and ui.root.PortraitOverlay
     local icon = overlay and overlay.Icon
-    if icon and icon.SetTexture then icon:SetTexture(KITN_LOGO) end
+    if not (icon and icon.SetTexture) then return end
+    icon:SetTexture(KITN_LOGO)
+    local square = overlay.BFL_ModernSquarePortrait == true
+    local d = S.data(overlay)
+    if square and not d.kitnLogo then
+        local logo = overlay:CreateTexture(nil, "ARTWORK", nil, 7)
+        logo:SetTexture(KITN_LOGO)
+        logo:SetSize(LOGO_SQUARE_SIZE, LOGO_SQUARE_SIZE)
+        logo:SetPoint("TOP", overlay, "TOP", 0, -LOGO_SQUARE_DROP)
+        d.kitnLogo = logo
+    end
+    if d.kitnLogo then d.kitnLogo:SetShown(square) end
+    icon:SetAlpha(square and 0 or 1)
 end
 
 local function ModernPass(frame)
