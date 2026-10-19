@@ -138,9 +138,10 @@ local function Stack()
     end
 end
 
--- Your own casts are plain, so each listed potion starts your bar, a drink
--- over a running buff included, and puts that potion's icon on it until the
--- bar is cleared or unbound.
+-- A plain cast of a listed potion starts your bar, a drink over a running buff
+-- included, and puts that potion's icon on it until the bar is cleared or
+-- unbound. A secret cast ID is skipped: the buff sensor still starts the bar,
+-- and the icon stays as it was.
 local function OnCast(_, _, _, _, spellID)
     if issecretvalue(spellID) then return end
     if not Pot.listed[spellID] then return end

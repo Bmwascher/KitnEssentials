@@ -199,8 +199,8 @@ end
 
 -- Look and text are applied every time; the strips move only when the font,
 -- size, length or the window's opening below changed. The cover is the
--- drained part, drawn in the background color. The fill ends at its edge, so
--- nothing but the cover sits behind the drained part.
+-- drained part, in the drained color Rules.Colors gives. The fill ends at its
+-- edge, so nothing but the cover sits behind the drained part.
 function Bar.Dress(c, style, e)
     local px = KE:GetPixelSize()
     local fill, fillScale, bg, bgScale, nameColor, bgAlpha, readyFill, readyScale, readyName, readyBack =
