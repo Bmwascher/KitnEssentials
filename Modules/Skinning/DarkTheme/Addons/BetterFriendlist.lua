@@ -951,10 +951,13 @@ local function ShowListLine(frame)
         tex:SetAllPoints(line)
         line:SetPoint("TOPLEFT", scroll, "BOTTOMLEFT", 0, 0)
         line:SetPoint("TOPRIGHT", scroll, "BOTTOMRIGHT", 0, 0)
+        -- The other sections hide the list and leave the inset shown.
+        scroll:HookScript("OnShow", function() line:SetShown(IsModern()) end)
+        scroll:HookScript("OnHide", function() line:Hide() end)
         d.listLine = line
     end
     line:SetHeight(KE:GetPixelSize())
-    line:Show()
+    line:SetShown(scroll:IsShown())
 end
 
 local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
