@@ -1184,16 +1184,22 @@ end
 
 GUIFrame:NewWidgetPool("dm:splitlabel", ConstructSplitLabel, function() end)
 
--- "Whole meter" and the accent-colored dock size.
+-- "Meter Size", then "Whole meter" and the accent-colored dock size.
 local function ConstructReadout(parent)
     local f = CreateFrame("Frame", nil, parent)
+    local title = f:CreateFontString(nil, "OVERLAY")
+    title:SetPoint("LEFT", f, "LEFT", 0, 0)
     local label = f:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("LEFT", f, "LEFT", 0, 0)
+    label:SetPoint("LEFT", title, "RIGHT", 12, 0)
     local value = f:CreateFontString(nil, "OVERLAY")
     value:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    f.title = title
 
     function f.Configure()
         local T = Theme
+        KE:ApplyThemeFont(title, "normal")
+        title:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        title:SetText("Meter Size")
         KE:ApplyThemeFont(label, "normal")
         label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
         label:SetText("Whole meter")
@@ -1325,7 +1331,6 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     local cardSize = GUIFrame:CreateCard(scrollChild, "Sizing", yOffset)
     manager:Register(cardSize, "all")
-    cardSize:AddLabel("Meter Size")
 
     local rowMeter = GUIFrame:CreateRow(cardSize.content, 24)
     local readout = GUIFrame:AcquirePooled("dm:readout", rowMeter)
@@ -1381,6 +1386,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     rowBars:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
     cardSize:AddRow(rowBars, barsLast and Theme.rowHeightLast or Theme.rowHeight, barsLast and 0 or nil)
+    if not barsLast then cardSize:AddSeparator() end
 
     local splits = {}
 
