@@ -186,6 +186,16 @@ local function SkinInset(inset)
     end
 end
 
+-- The Modern list clips its rows 2 below the inset, so the plate's bottom
+-- border sits on that line.
+local function PlaceInsetPlate(inset)
+    local bd = inset and S.GetBackdrop(inset)
+    if not bd then return end
+    bd:ClearAllPoints()
+    bd:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -4)
+    bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, IsModern() and -2 or 4)
+end
+
 local function SkinHeaderRow(button)
     if not button then return end
     if button.BG then
@@ -553,6 +563,9 @@ local function PaintSideTabs()
         local selected = tab:IsEnabled() and tab.sectionID ~= nil and tab.sectionID == ui.selectedSection
         local bd = S.GetBackdrop(tab)
         if bd then
+            -- Opaque: the dark theme pulls the column 3 over the panel's edge.
+            local c = S.palette.control
+            bd:SetBackdropColor(c[1], c[2], c[3], 1)
             if selected then
                 S.PaintBrand(bd, "SetBackdropBorderColor", 1)
             else
@@ -913,6 +926,16 @@ local function PaintBattleTag()
     end
 end
 
+-- The dark theme draws its own X on the close button, shows it again on hover,
+-- and fades KE's X with the rest of the button's art.
+local function KeepKitnClose(_, btn)
+    local x = btn and S.data(btn).closeX
+    if not x then return end
+    if btn.BFL_DarkIcon then btn.BFL_DarkIcon:SetTexture(nil) end
+    if btn.BFL_DarkHoverIcon then btn.BFL_DarkHoverIcon:SetTexture(nil) end
+    x:SetAlpha(1)
+end
+
 local function ModernPass(frame)
     local ui = GetFriendsUI()
     local root = type(ui) == "table" and ui.root
@@ -966,6 +989,8 @@ local function ModernPass(frame)
     end
     PaintSideTabs()
     PaintBattleTag()
+    PlaceInsetPlate(frame.Inset)
+    KeepKitnClose(nil, frame.CloseButton)
 end
 
 local function ReStrip()
@@ -985,14 +1010,7 @@ local function ReStrip()
             CenterBattlenetRow(bnet)
         end
 
-        local ins = frame.Inset
-
-        local ibd = ins and S.GetBackdrop and S.GetBackdrop(ins)
-        if ibd then
-            ibd:ClearAllPoints()
-            ibd:SetPoint("TOPLEFT", ins, "TOPLEFT", 4, -4)
-            ibd:SetPoint("BOTTOMRIGHT", ins, "BOTTOMRIGHT", -4, 4)
-        end
+        PlaceInsetPlate(frame.Inset)
     end
     StripPanelShell(_G.BetterFriendlistSettingsFrame)
 end
@@ -1536,6 +1554,7 @@ local function Skin()
         HookIf(engine, "RefreshRow", OnThemeRow)
         HookIf(engine, "RestoreFrame", OnThemeRestore)
         HookIf(engine, "CreateBackdrop", OnThemeBackdrop)
+        HookIf(engine, "SkinCloseButton", KeepKitnClose)
         for _, name in ipairs(THEME_CONTROL_STYLERS) do
             HookIf(engine, name, OnThemeControl)
         end
@@ -1550,6 +1569,7 @@ local function Skin()
         elseif layout == "legacy" then
             EnsureLegacy()
             SweepLegacy()
+            PlaceInsetPlate(frame.Inset)
         end
     end
 
