@@ -507,6 +507,37 @@ local Defaults = {
             GlowDuration = 1, -- loop period a stored "proc" glow type reads
         },
 
+        DivineArbiter = {
+            Enabled = false,
+            SoundEnabled = false,
+            SoundName = "AoE",
+            IconSize = 40,
+            ShowTimer = true,
+            TimerFontSize = 16,
+            TimerFontOutline = "OUTLINE",
+            TimerTextColor = { 1, 1, 1, 1 },
+            GlowEnabled = true,
+            GlowType = "proc",
+            GlowColor = { 0, 1, 0, 1 },
+            GlowLines = 8,
+            GlowThickness = 1,
+            FontSize = 14,
+            FontOutline = "OUTLINE",
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -200),
+            IconSpacing = 4,
+            -- One-icon box; a second buff wraps below it.
+            IconsPerRow = 1,
+            MaxRows = 1,
+            Swipe = true,
+            Reverse = true,
+            DecimalThreshold = 10,
+            ShowTooltips = false,
+            GlowDuration = 1,
+        },
+
         PlayerAbsorbs = {
             Enabled = false,
             Strata = "MEDIUM",

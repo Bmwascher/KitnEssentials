@@ -2480,6 +2480,20 @@ function L.loadTimeSpiral(overrides)
     return modules["TimeSpiral"], KE
 end
 
+-- Modules/Combat/ClassTools/DivineArbiter.lua. Only the two pure gate functions
+-- and the engine-settings view are under test; nothing reaches the aura engine
+-- until OnEnable. Returns DA, KE.
+function L.loadDivineArbiter(overrides)
+    overrides = overrides or {}
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+    })
+    local modules = helpers.installAddonShim()
+    local KE = { db = { profile = { DivineArbiter = overrides.db or {} } } }
+    helpers.loadModule("Modules/Combat/ClassTools/DivineArbiter.lua", KE)
+    return modules["DivineArbiter"], KE
+end
+
 -- Modules/Combat/StatusTexts/PetStatusText.lua. The branch under test lives inside
 -- the file-local CheckPetStatus, which is reached from outside only through
 -- PS:UpdatePetText -- so the spec drives that and asserts on what was painted.

@@ -22,6 +22,7 @@ return {
     "KitnEssentials_Options/Skinning/GUI-DragonRiding.lua",
     "KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua",
     "Modules/Combat/ClassTools/DisintegrateTicks.lua",
+    "Modules/Combat/ClassTools/DivineArbiter.lua",
     "Modules/Combat/ClassTools/HavocTracker.lua",
     "Modules/Combat/ClassTools/StasisTracker.lua",
     "Modules/Combat/ClassTools/TimeSpiral.lua",
