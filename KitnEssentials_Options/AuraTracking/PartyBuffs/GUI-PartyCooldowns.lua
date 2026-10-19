@@ -255,7 +255,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddSlider(rowD1, "Icon Size", "IconSize", ICON_SIZE_MIN, ICON_SIZE_MAX, nil,
         "In a healer spec with Use in Healer Specs on, the Healer tab's Icon Size is used."), "iconsOn")
-    manager:Register(AddSlider(rowD1, "Icon Spacing", "IconSpacing", 0, 10), "iconsOn")
+    manager:Register(AddSlider(rowD1, "Icon Spacing", "IconSpacing", -1, 10), "iconsOn")
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddSlider(rowD2, "Max Cooldown Icons", "MaxCooldownIcons", 1,

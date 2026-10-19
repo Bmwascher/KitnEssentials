@@ -417,7 +417,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     row4a:AddWidget(GUIFrame:CreateSlider(row4a, "Spacing", {
-        min = 0, max = 20, step = 1,
+        min = -1, max = 20, step = 1,
         value = db.Spacing or 4,
         callback = function(value)
             db.Spacing = value

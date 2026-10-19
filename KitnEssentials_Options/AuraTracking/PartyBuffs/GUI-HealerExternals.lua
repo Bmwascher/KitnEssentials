@@ -155,7 +155,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     cardDisplay:AddLabel("Font face and outline follow the Cooldowns tab's Font Settings.")
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddSlider(rowD1, "Icon Size", "HealerExtIconSize", ICON_MIN, ICON_MAX, "on")
-    AddSlider(rowD1, "Spacing", "HealerExtSpacing", 0, 20, "on")
+    AddSlider(rowD1, "Spacing", "HealerExtSpacing", -1, 20, "on")
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     local grow = GUIFrame:CreateDropdown(rowD2, "Grow", {

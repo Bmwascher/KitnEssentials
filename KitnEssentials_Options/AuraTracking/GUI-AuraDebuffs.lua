@@ -146,7 +146,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     manager:Register(iconSizeSlider, "all")
 
     local spacingSlider = GUIFrame:CreateSlider(row4a, "Icon Spacing", {
-        min = 0, max = 10, step = 1,
+        min = -1, max = 10, step = 1,
         value = db.IconSpacing or 1,
         callback = function(val) db.IconSpacing = val; ApplySettings() end,
     })

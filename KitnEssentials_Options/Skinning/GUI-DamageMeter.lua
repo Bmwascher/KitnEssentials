@@ -2337,7 +2337,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
 
     local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
     local spacingSlider = GUIFrame:CreateSlider(rowSpacing, "Spacing", {
-        min = 0, max = 10, step = 1,
+        min = -1, max = 10, step = 1,
         value = sh.Spacing or 2,
         callback = function(val) ResizeStrip("Spacing", val) end,
     })
