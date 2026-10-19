@@ -333,6 +333,11 @@ describe("PartyBuffsRules.HolderOffset", function()
                 case.side .. " " .. case.grow)
         end
     end)
+
+    it("places the holder for a negative icon gap where a zero gap does", function()
+        local R = L.loadPartyBuffsRules()
+        assert.are.same({ 7, 3 }, { R.HolderOffset(R.Layout("ABOVE", "RIGHT"), -1, 7, 3, 36) })
+    end)
 end)
 
 describe("PartyBuffsRules.SeedHealerPlacement", function()

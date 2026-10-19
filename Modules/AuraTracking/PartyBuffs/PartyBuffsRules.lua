@@ -406,7 +406,9 @@ for _, layouts in pairs(Rules.LAYOUTS) do
     end
 end
 
+-- The icon gap may go below zero; the holder never sits on the party frame.
 function Rules.HolderOffset(layout, gap, x, y, size)
+    gap = math_max(0, gap)
     return layout.dx * gap + x, layout.dy * gap + y + (layout.lift or 0) * size
 end
 
