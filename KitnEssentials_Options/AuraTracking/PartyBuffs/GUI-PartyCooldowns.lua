@@ -55,10 +55,6 @@ local COLOR_PICKERS = {
     { key = "ColorTrinket",      label = "Trinket", state = "rowColorsOn" },
 }
 
-local PICK_COLUMNS = 3
-local PICK_HEIGHT = 24
-local PICK_SPACING = 2
-
 local ICON_SIZE_MIN, ICON_SIZE_MAX = 16, 72
 
 local HEALER_KEY, PLACEMENT_PAIR = {}, {}
@@ -160,17 +156,12 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     -- picks: { label, key, tooltip, onChange } each; isLast ends the card;
     -- state, when given, is each pick's one state group.
     local function AddPicks(card, picks, isLast, state)
-        for i = 1, #picks, PICK_COLUMNS do
-            local row = GUIFrame:CreateRow(card.content, PICK_HEIGHT)
-            for j = i, math.min(i + PICK_COLUMNS - 1, #picks) do
-                local pick = picks[j]
-                local check = GUIFrame:CreateCompactCheckbox(row, pick[1], CheckConfig(pick[2], pick[3], pick[4]))
-                row:AddWidget(check, 1 / PICK_COLUMNS)
-                if state then manager:Register(check, state) end
-            end
-            local lastRow = isLast and i + PICK_COLUMNS > #picks
-            card:AddRow(row, PICK_HEIGHT, lastRow and 0 or PICK_SPACING)
+        local grid = {}
+        for i, pick in ipairs(picks) do
+            grid[i] = { label = pick[1], config = CheckConfig(pick[2], pick[3], pick[4]) }
         end
+        local cells = card:AddCheckboxGrid(grid, { isLast = isLast })
+        if state then manager:RegisterGroup(cells, state) end
     end
 
     -- value, when given, is shown in place of db[key].

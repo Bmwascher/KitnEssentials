@@ -922,6 +922,31 @@ function CardMethods:AddRow(widget, height, spacing)
     return widget
 end
 
+GUIFrame.CheckboxRowHeight = 24
+GUIFrame.CheckboxRowGap = 2
+
+-- picks: { label = text, config = a CreateCompactCheckbox config } each.
+-- opts.columns is for a page whose labels would clip at three: the compact
+-- label does not wrap. opts.isLast ends the card, so the last row takes no
+-- gap. Returns the cells in pick order for the page's state manager.
+function CardMethods:AddCheckboxGrid(picks, opts)
+    opts = opts or {}
+    local columns = opts.columns or 3
+    local height, gap = GUIFrame.CheckboxRowHeight, GUIFrame.CheckboxRowGap
+    local cells = {}
+    for i = 1, #picks, columns do
+        local row = GUIFrame:CreateRow(self.content, height)
+        for j = i, math.min(i + columns - 1, #picks) do
+            local cell = GUIFrame:CreateCompactCheckbox(row, picks[j].label, picks[j].config)
+            row:AddWidget(cell, 1 / columns)
+            cells[#cells + 1] = cell
+        end
+        local lastRow = opts.isLast and i + columns > #picks
+        self:AddRow(row, height, lastRow and 0 or gap)
+    end
+    return cells
+end
+
 -- Labels and separators are regions, which cannot be orphaned; a card keeps
 -- the ones it has made and hands them out again.
 local function TakeRegion(card, kind)
