@@ -27,6 +27,7 @@ local MAP_HEIGHT = 140
 local MAP_GAP = 4
 -- A split row: the label line, then the slider below it.
 local SPLIT_ROW_H = 44
+
 local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
 
 -- Ordered option lists for the per-context default-display rows.
