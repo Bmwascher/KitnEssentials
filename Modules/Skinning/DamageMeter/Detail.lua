@@ -802,7 +802,7 @@ function DM:RenderBreakdown(W)
     end
 
     -- Size the scroll child so the wheel can scroll long lists.
-    d.content:SetHeight(math_max(10, count * stride))
+    d.content:SetHeight(math_max(10, DM.RowSpan(count, stride, W._snapSpacing)))
 end
 
 -- Per-enemy player breakdown (Enemy Damage Taken drill-down; OOC-gated via OpenDetail like
@@ -886,7 +886,7 @@ function DM:RenderEnemyBreakdown(W, src)
             if row:IsShown() then row:Hide() end
         end
     end
-    d.content:SetHeight(math_max(10, count * stride))
+    d.content:SetHeight(math_max(10, DM.RowSpan(count, stride, W._snapSpacing)))
 end
 
 -- One recap row's CONTENT: icon, fill, label, value. Both recap surfaces -- the
@@ -1092,7 +1092,7 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
             if row:IsShown() then row:Hide() end
         end
     end
-    d.content:SetHeight(math_max(10, count * stride))
+    d.content:SetHeight(math_max(10, DM.RowSpan(count, stride, W._snapSpacing)))
     -- Painted, so the tick refresh can skip an unchanged repaint. Set only here, at
     -- the end of a successful paint; the message branch above deliberately does not.
     W._detailPaintedRecapID = W._detailRecapID

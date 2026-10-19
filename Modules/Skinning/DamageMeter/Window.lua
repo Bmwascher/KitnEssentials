@@ -629,15 +629,18 @@ function DM:LayoutWindow(W)
     local stride = W._snapStride or 1
 
     -- Input-identity short-circuit. The header band derives ONLY from HeaderFontSize, and
-    -- the content height from VisibleBars + the snapped stride -- all plain numbers, never
-    -- secret. RenderWindow calls this every tick; when none of those changed the
-    -- PixelSnap / min / multiply below reproduce the identical result, so skip them.
+    -- the content height from VisibleBars + the snapped stride and spacing -- all plain
+    -- numbers, never secret. RenderWindow calls this every tick; when none of those changed
+    -- the PixelSnap / min / multiply below reproduce the identical result, so skip them.
     -- ApplyWindowGeometry updates _snapStride before calling here, so keying on it
-    -- keeps a bar-size change from being short-circuited away.
-    if W._lwHeaderFontSize == headerFontSize and W._lwVisibleBars == visibleDB and W._lwStride == stride then
+    -- keeps a bar-size change from being short-circuited away. Spacing is keyed too: a
+    -- profile can keep the stride while the spacing changes, and the height follows both.
+    if W._lwHeaderFontSize == headerFontSize and W._lwVisibleBars == visibleDB and W._lwStride == stride
+        and W._lwSpacing == W._snapSpacing then
         return
     end
     W._lwHeaderFontSize, W._lwVisibleBars, W._lwStride = headerFontSize, visibleDB, stride
+    W._lwSpacing = W._snapSpacing
 
     -- Fixed header band (header-font-size driven, snapped). The header FontString is
     -- anchored TOPLEFT inside this band; the body starts immediately below it.
@@ -646,7 +649,7 @@ function DM:LayoutWindow(W)
     -- Body height fits VisibleBars rows (clamped to the pool). Guard a 0 stride.
     local visible = math_min(visibleDB, BAR_POOL_SIZE)
     if stride <= 0 then stride = 1 end
-    local barsH = visible * stride
+    local barsH = DM.RowSpan(visible, stride, W._snapSpacing)
     self:EnsureBars(W, visible)
 
     -- Re-anchor the body only when the header band changes (first call always
@@ -1610,8 +1613,9 @@ function DM:RenderWindow(W)
     -- the body edge (no bleed into the next stacked window).
     local stride = W._snapStride or 1
     if stride <= 0 then stride = 1 end
+    local span = DM.RowSpan(count, stride, W._snapSpacing)
     local viewH = (W.body and W.body:GetHeight()) or 0
-    W._scrollMax = math_max(0, count * stride - viewH)
+    W._scrollMax = math_max(0, span - viewH)
     if W.body then
         local cur = W.body:GetVerticalScroll() or 0
         if cur > W._scrollMax then W.body:SetVerticalScroll(W._scrollMax) end
@@ -1623,7 +1627,7 @@ function DM:RenderWindow(W)
     -- and make the overflow unreachable. Never shrink below the base height (a
     -- short list keeps the body's full hit area for the right-click catcher).
     -- Dirty-gated; LayoutWindow nils the cache when it re-sets the base height.
-    local contentH = count * stride
+    local contentH = span
     if contentH < (W._contentH or 0) then contentH = W._contentH or 0 end
     if W._renderContentH ~= contentH then
         W._renderContentH = contentH
@@ -1635,7 +1639,7 @@ function DM:RenderWindow(W)
     -- scrolled out of view are just hidden, skipping their per-tick render work. This is
     -- the steady-state win in a dock pane SHORTER than the bar list (a raid with many
     -- sources, stacked into a short pane). When every row fits -- a standalone window or a
-    -- tall pane self-sizes so count*stride <= viewH -- the range is the full 1..count, so
+    -- tall pane self-sizes so the rows' span <= viewH -- the range is the full 1..count, so
     -- this is identical to rendering all (no behavior change for the common case). A 1-row
     -- margin each side keeps a partially scrolled row painted. The mouse-wheel handler
     -- (CreateWindow) re-renders this window on scroll so a row revealed by scrolling is
@@ -1643,7 +1647,7 @@ function DM:RenderWindow(W)
     -- secret (only the amount FIELDS are secret, and those go through RenderBar's setters).
     local scroll = 0
     local firstVis, lastVis = 1, count
-    if viewH > 0 and count * stride > viewH + 0.5 then
+    if viewH > 0 and span > viewH + 0.5 then
         scroll = (W.body and W.body:GetVerticalScroll()) or 0
         firstVis = math_max(1, math_floor(scroll / stride))
         lastVis = math_min(count, math_ceil((scroll + viewH) / stride) + 1)
@@ -1690,9 +1694,11 @@ function DM:RenderWindow(W)
                     end
                 end
                 if pinSource then
-                    -- Last slot whose row bottom still fits inside the viewport (slot i
-                    -- spans [(i-1)*stride, i*stride], so bottom <= scroll + viewH).
-                    pinSlot = math_min(count, math_max(firstVis, math_floor((scroll + viewH) / stride)))
+                    -- Last slot whose whole row fits inside the viewport. Slot i's bottom
+                    -- is at most i*stride plus the overhang a negative spacing adds
+                    -- (DM.RowSpan), so that overhang comes off the view first.
+                    local overhang = DM.RowSpan(0, stride, W._snapSpacing)
+                    pinSlot = math_min(count, math_max(firstVis, math_floor((scroll + viewH - overhang) / stride)))
                 end
             end
         end

@@ -1821,6 +1821,15 @@ function DM.PlainOwnRow(isLocalPlayer)
     return isLocalPlayer == true
 end
 
+-- The height count rows need. Rows sit stride apart and each is stride - spacing
+-- tall: a positive spacing keeps its trailing gap in the height, and a negative
+-- one adds back what the last row reaches past its stride, so nothing clips it.
+function DM.RowSpan(count, stride, spacing)
+    local span = count * stride
+    if spacing and spacing < 0 then span = span - spacing end
+    return span
+end
+
 -- The combat test is deliberately BROADER than InCombatLockdown(). That flag drops
 -- to false the moment the player dies or feign-deaths mid-pull (see GroupInCombat),
 -- while the fight -- and the API's secrecy -- continues. Restricting on the union of

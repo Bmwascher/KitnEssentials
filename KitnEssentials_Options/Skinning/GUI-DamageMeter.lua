@@ -1374,7 +1374,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     manager:Register(heightSlider, "all")
 
     local spacingSlider = GUIFrame:CreateSlider(rowBars, "Bar Spacing", {
-        min = 0, max = 10, step = 1,
+        min = -1, max = 10, step = 1,
         value = db.BarSpacing or 2,
         callback = function(val) db.BarSpacing = val; ApplySettings() end,
     })
