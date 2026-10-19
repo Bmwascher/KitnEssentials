@@ -867,7 +867,8 @@ local function PaintCardCues(card, d)
     -- The stripe carries the status; the addon re-shows the dot every pass.
     ZeroAlpha(card.status)
     local lane = card.bflControlRowHeight
-    local size = type(lane) == "number" and math.min(CLASS_ICON_MAX, lane - CLASS_ICON_LANE_GAP) or CLASS_ICON_MAX
+    local size = type(lane) == "number" and math.max(1, math.min(CLASS_ICON_MAX, lane - CLASS_ICON_LANE_GAP))
+        or CLASS_ICON_MAX
     d.cueIcon:SetSize(size, size)
     local classFile = state and FriendClassFile(friend)
     if classFile then
