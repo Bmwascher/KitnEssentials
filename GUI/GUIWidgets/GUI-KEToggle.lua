@@ -393,7 +393,8 @@ end
 
 -- A square checkbox for DENSE lists, where the sliding toggle above is too tall
 -- and too wide to fit three to a row. Config-table API, matching every other
--- widget here: { value, tooltip, callback, disabled }.
+-- widget here: { value, tooltip, callback, disabled, msgPopup, msgText, msgOn,
+-- msgOff }. The msg fields print the chat line the sliding toggle prints.
 --
 -- The disabled state belongs to the widget, not the caller: it owns the alpha
 -- and the click refusal so no call site has to remember both. The fill is
@@ -476,11 +477,24 @@ local function ConstructCompactCheckbox(parent)
     cell:SetScript("OnClick", function(self)
         -- The refusal rule. A fully suppressed row must not be writable: its
         -- saved value is the user's real choice, kept intact until the row is
-        -- enabled again.
+        -- enabled again. A refused click prints no chat line either.
         if not self._enabled then return end
         self:SetChecked(not self._checked)
+        -- Read before the callback runs: a callback can rebuild the page and
+        -- hand this cell to another setting.
+        local checked = self._checked
         local callback = self._callback
-        if callback then callback(self._checked) end
+        local msgPopup, msgText, msgOn, msgOff = self._msgPopup, self._msgText, self._msgOn, self._msgOff
+        if callback then callback(checked) end
+        if msgPopup then
+            local onOrOff
+            if checked then
+                onOrOff = "|cff4DCC66" .. msgOn .. "|r"
+            else
+                onOrOff = "|cffE64D4D" .. msgOff .. "|r"
+            end
+            KE:Print(msgText .. ": " .. onOrOff)
+        end
     end)
 
     cell:SetScript("OnEnter", function(self)
@@ -536,6 +550,11 @@ local function ConfigureCompactCheckbox(cell, labelText, config)
     ApplyCompactHitRect(cell)
     cell._tooltip = config.tooltip
     cell._callback = config.callback
+    -- Every use: a pooled cell keeps no chat line from its last owner.
+    cell._msgPopup = config.msgPopup
+    cell._msgText = config.msgText
+    cell._msgOn = config.msgOn
+    cell._msgOff = config.msgOff
     cell:ApplyThemeColors()
     cell:SetChecked(config.value)
     cell:SetEnabled(not config.disabled)
