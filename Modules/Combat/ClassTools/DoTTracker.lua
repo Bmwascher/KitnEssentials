@@ -619,21 +619,59 @@ local function ReplaceAttached()
     if DT.active then DT:PlaceAttached() end
 end
 
+-- EllesmereUI's Cooldown Manager moves each Blizzard icon it shows into its own
+-- bars; one it has not taken yet stays in Blizzard's viewer, where nothing is
+-- drawn. Read on every mask update, so switching it on or off applies at once.
+local function OtherManagerOn()
+    local db = _G._ECME_AceDB
+    local profile = type(db) == "table" and db.profile
+    local bars = type(profile) == "table" and profile.cdmBars
+    return type(bars) == "table" and bars.enabled == true
+end
+
+-- Whether the icon is anchored outside its own viewer, as an icon moved into
+-- another addon's bar is. nil when the anchor cannot be read.
+local function AnchoredAway(icon, viewer)
+    local ok, _, rel = pcall(icon.GetPoint, icon, 1)
+    if not ok or issecretvalue(rel) or rel == nil then return nil end
+    while rel do
+        if rel == viewer then return false end
+        local okParent, parent = pcall(rel.GetParent, rel)
+        if not okParent or issecretvalue(parent) then return nil end
+        rel = parent
+    end
+    return true
+end
+
 -- An attached count shows only while its icon can be seen: another addon may
--- draw its own icon and leave this one fully transparent. True while a count
--- is hidden this way.
+-- leave this icon fully transparent, or hidden in a viewer it does not draw.
+-- nil when a read is refused or secret, which keeps the last answer.
+local function HideCount(cell, icon, otherOn)
+    local ok, alpha = pcall(icon.GetEffectiveAlpha, icon)
+    if not ok or issecretvalue(alpha) or type(alpha) ~= "number" then return nil end
+    if alpha <= 0 then return true end
+    if not otherOn then return false end
+    -- Shown icons are drawn wherever they are; a hidden one counts as seen
+    -- only once moved into the other addon's bar, where it keeps its slot.
+    local shown = icon:IsShown()
+    if issecretvalue(shown) then return nil end
+    if shown then return false end
+    local viewer = _G[KE.CDMIcons.VIEWERS[cell.attachViewer]]
+    local away = AnchoredAway(icon, viewer)
+    if away == nil then return nil end
+    return not away
+end
+
+-- True while a count is hidden this way.
 local function UpdateMasks()
     local waiting = false
+    local otherOn = OtherManagerOn()
     for i = 1, #DT.list do
         local cell = DT.cells[i]
         local icon = cell.attachIcon
         if icon then
-            -- The read can be refused with an error; a refusal or a secret keeps
-            -- the last answer.
-            local ok, alpha = pcall(icon.GetEffectiveAlpha, icon)
-            if ok and not issecretvalue(alpha) and type(alpha) == "number" then
-                MaskCell(cell, alpha <= 0)
-            end
+            local hide = HideCount(cell, icon, otherOn)
+            if hide ~= nil then MaskCell(cell, hide) end
             if cell.masked then waiting = true end
         else
             MaskCell(cell, false)
