@@ -17,6 +17,8 @@ KE.CCTrackerRules = Rules
 Rules.NAME_GAP = 6
 Rules.CC_PER_ROW = 3
 Rules.ICON_GAP = 2
+Rules.TRACKED_ENEMIES = 15
+Rules.SHOWN_DEFAULT = 5
 
 -- Debuff ids, which for several spells differ from the cast's id. `group` is
 -- the class token the settings page lists the spell under. Mind Control is
@@ -114,19 +116,26 @@ function Rules.Verdict(unit, api)
     return nil
 end
 
--- The largest stack that can draw: every row's icons, countdowns and name fall
--- inside it. A countdown is centered on its icon and not clipped, so text
--- wider or taller than the icon (textW, textH) pads the box on both sides and
--- the first row hangs that far inside the corner. A name taller than the icon
--- is clipped to its window, which runs from the icon's near edge to the
--- container's far edge (the row spacing and 1 px past the icon), so the last
--- row's name can reach that far past the stack's far end.
+function Rules.NormalizeShown(value)
+    if type(value) ~= "number" or value ~= value or value == huge or value == -huge then
+        return Rules.SHOWN_DEFAULT
+    end
+    return math_max(1, math_min(Rules.TRACKED_ENEMIES, floor(value)))
+end
+
+-- The shown rows' stack: each row's icons, countdowns and name fall inside it.
+-- A countdown is centered on its icon, so text wider or taller than the icon
+-- (textW, textH) pads the box on both sides and the first row hangs that far
+-- inside the corner. A name taller than the icon is clipped to its window,
+-- which runs from the icon's near edge to the container's far edge (the row
+-- spacing and 1 px past the icon), so the last row's name can reach that far
+-- past the stack's far end.
 -- No taller than MaxHeight, the screen's height: a clamp moves a frame and
 -- cannot shrink it, so a taller box could not be kept on screen.
 function Rules.StackBox(db, textW, textH)
     local size = db.IconSize or 40
     local spacing = db.RowSpacing or 2
-    local cap = db.MaxEnemies or 5
+    local rows = db.ShownRows or Rules.SHOWN_DEFAULT
     local padX = math_max(0, ceil(((textW or 0) - size) / 2))
     local padY = math_max(0, ceil(((textH or 0) - size) / 2))
     local icons = Rules.CC_PER_ROW * size + (Rules.CC_PER_ROW - 1) * Rules.ICON_GAP
@@ -142,7 +151,7 @@ function Rules.StackBox(db, textW, textH)
     local from = type(pos) == "table" and pos.AnchorFrom
     if type(from) ~= "string" then from = "" end
     local side = from:find("LEFT") and "LEFT" or (from:find("RIGHT") and "RIGHT" or "")
-    local height = cap * size + (cap - 1) * spacing + 2 * padY + nameFar
+    local height = rows * size + (rows - 1) * spacing + 2 * padY + nameFar
     local maxHeight = db.MaxHeight
     if type(maxHeight) == "number" and maxHeight > 0 then height = math_min(height, maxHeight) end
     return {

@@ -239,12 +239,12 @@ function CC:GeometrySource()
     return self.applied
 end
 
--- The cap, the name, the position and strata are always current: a cap change
--- builds or releases rows at once, and the name window and the anchor are ours.
+-- The shown count, the name, the position and strata are always current: the
+-- shown count changes no row, and the name window and the anchor are ours.
 function CC:Box(src)
     local db = self.db
     boxInput.MaxHeight = ScreenHeight()
-    boxInput.MaxEnemies = db.MaxEnemies
+    boxInput.ShownRows = Rules.NormalizeShown(db.ShownRows)
     boxInput.NameEnabled = db.NameEnabled
     boxInput.NameWidth = db.NameWidth
     boxInput.NameFontSize = db.NameFontSize
@@ -361,7 +361,7 @@ end
 -- The cap follows the rows that exist, so no plate is handed a slot before its
 -- container does.
 function CC:UpdateCap()
-    self.slots:SetCap(math_min(self.db.MaxEnemies or 5, #self.rows))
+    self.slots:SetCap(math_min(Rules.TRACKED_ENEMIES, #self.rows))
 end
 
 function CC:EnsureSlots()
@@ -487,7 +487,7 @@ function CC:Apply()
         KE:Print("[CC] auras restricted: row changes wait for the drain")
     end
     self:UpdateCap()
-    self:RunBuild(db.MaxEnemies or 5)
+    self:RunBuild(Rules.TRACKED_ENEMIES)
     self:UpdateLive()
 end
 
@@ -677,7 +677,7 @@ function CC:PaintSamples()
     local box = self:Box(db)
     local corner = box.corner
     local edge = up and "BOTTOMRIGHT" or "TOPRIGHT"
-    local shown = math_min(#SAMPLES, db.MaxEnemies or 5)
+    local shown = math_min(#SAMPLES, Rules.NormalizeShown(db.ShownRows))
     local nameOn = db.NameEnabled ~= false
     local threshold = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold)
     for k, data in ipairs(SAMPLES) do

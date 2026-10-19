@@ -1,7 +1,7 @@
 -- Modules/DungeonTools/KicksCasts/CCTrackerRules.lua -- the rules a later edit breaks
 -- silently: which ids are tracked, the filter each container gets, which
--- plates get a row, the size of the box kept on screen, what Add and Remove
--- refuse, and the preview's countdown text.
+-- plates get a row, the size of the box kept on screen, the shown count, what
+-- Add and Remove refuse, and the preview's countdown text.
 -- The shipped seed table is data and gets no case; these cases use their own.
 local L = require("dev.spec._ke_loader")
 
@@ -109,11 +109,11 @@ describe("cc tracker rules", function()
     end)
 
     describe("the box kept on screen", function()
-        it("sizes it from the cap, three icons and two gaps, the spacing and the name", function()
+        it("sizes it from the shown rows, three icons and two gaps, the spacing and the name", function()
             local cases = {
-                { { MaxEnemies = 15, IconSize = 40, RowSpacing = 2, NameEnabled = true, NameWidth = 150 }, 280, 628 },
-                { { MaxEnemies = 3, IconSize = 40, RowSpacing = 2, NameEnabled = true, NameWidth = 150 }, 280, 124 },
-                { { MaxEnemies = 1, IconSize = 30, RowSpacing = 5, NameEnabled = false, NameWidth = 150 }, 94, 30 },
+                { { ShownRows = 15, IconSize = 40, RowSpacing = 2, NameEnabled = true, NameWidth = 150 }, 280, 628 },
+                { { ShownRows = 3, IconSize = 40, RowSpacing = 2, NameEnabled = true, NameWidth = 150 }, 280, 124 },
+                { { ShownRows = 1, IconSize = 30, RowSpacing = 5, NameEnabled = false, NameWidth = 150 }, 94, 30 },
             }
             for i, case in ipairs(cases) do
                 local box = Rules.StackBox(case[1])
@@ -132,7 +132,7 @@ describe("cc tracker rules", function()
             }
             for i, case in ipairs(cases) do
                 local box = Rules.StackBox({
-                    MaxEnemies = 1, IconSize = 40, RowSpacing = 2, NameEnabled = true, NameWidth = 150,
+                    ShownRows = 1, IconSize = 40, RowSpacing = 2, NameEnabled = true, NameWidth = 150,
                     GrowDirection = case[1], Position = { AnchorFrom = case[2] },
                 })
                 assert.equals(case[3], box.corner, "case " .. i)
@@ -141,7 +141,7 @@ describe("cc tracker rules", function()
         end)
 
         it("pads the box and insets the first row by a countdown that stands out past an icon", function()
-            local db = { MaxEnemies = 2, IconSize = 16, RowSpacing = 2, NameEnabled = false }
+            local db = { ShownRows = 2, IconSize = 16, RowSpacing = 2, NameEnabled = false }
             local cases = {
                 { 48, 40, 84, 58, 16, 12 },
                 { 17, 10, 54, 34, 1, 0 },
@@ -165,7 +165,7 @@ describe("cc tracker rules", function()
             }
             for i, case in ipairs(cases) do
                 local box = Rules.StackBox({
-                    MaxEnemies = 1, IconSize = 16, RowSpacing = case[1],
+                    ShownRows = 1, IconSize = 16, RowSpacing = case[1],
                     NameEnabled = case[3], NameWidth = 150, NameFontSize = 30,
                 }, 8, case[2])
                 assert.equals(case[4], box.height, "case " .. i)
@@ -176,18 +176,34 @@ describe("cc tracker rules", function()
         it("caps the height at the screen's height, only above it, and never with no positive cap", function()
             local cases = {
                 { 15, 768, 628 },
-                { 40, 768, 768 },
-                { 40, 0, 1678 },
+                { 15, 500, 500 },
+                { 15, 0, 628 },
             }
             for i, case in ipairs(cases) do
                 local box = Rules.StackBox({
-                    MaxEnemies = case[1], IconSize = 40, RowSpacing = 2,
+                    ShownRows = case[1], IconSize = 40, RowSpacing = 2,
                     NameEnabled = true, NameWidth = 150, MaxHeight = case[2],
                 })
                 assert.equals(case[3], box.height, "case " .. i)
                 assert.equals(280, box.width, "case " .. i)
             end
         end)
+    end)
+
+    it("reads a missing or junk shown count as 5 and clamps the rest to 1 to 15", function()
+        local cases = {
+            { nil, 5 },
+            { "7", 5 },
+            { 0 / 0, 5 },
+            { math.huge, 5 },
+            { 0, 1 },
+            { 16, 15 },
+            { 7.6, 7 },
+            { 15, 15 },
+        }
+        for i, case in ipairs(cases) do
+            assert.equals(case[2], Rules.NormalizeShown(case[1]), "case " .. i)
+        end
     end)
 
     it("refuses what Add cannot take, in order, and accepts a new spell id", function()
