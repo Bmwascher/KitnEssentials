@@ -19,6 +19,8 @@ Rules.CC_PER_ROW = 3
 Rules.ICON_GAP = 2
 Rules.TRACKED_ENEMIES = 15
 Rules.SHOWN_DEFAULT = 5
+Rules.BUILD_BASE = 5
+Rules.BUILD_AHEAD = 3
 
 -- Debuff ids, which for several spells differ from the cast's id. `group` is
 -- the class token the settings page lists the spell under. Mind Control is
@@ -121,6 +123,10 @@ function Rules.NormalizeShown(value)
         return Rules.SHOWN_DEFAULT
     end
     return math_max(1, math_min(Rules.TRACKED_ENEMIES, floor(value)))
+end
+
+function Rules.BuildTarget(highestHeld)
+    return math_min(Rules.TRACKED_ENEMIES, math_max(Rules.BUILD_BASE, highestHeld + Rules.BUILD_AHEAD))
 end
 
 -- The shown rows' stack: each row's icons, countdowns and name fall inside it.

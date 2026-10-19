@@ -1,7 +1,8 @@
 -- Modules/DungeonTools/KicksCasts/CCTrackerRules.lua -- the rules a later edit breaks
 -- silently: which ids are tracked, the filter each container gets, which
--- plates get a row, the size of the box kept on screen, the shown count, what
--- Add and Remove refuse, and the preview's countdown text.
+-- plates get a row, the size of the box kept on screen, the shown count, the
+-- rows built ahead of the enemies held, what Add and Remove refuse, and the
+-- preview's countdown text.
 -- The shipped seed table is data and gets no case; these cases use their own.
 local L = require("dev.spec._ke_loader")
 
@@ -203,6 +204,19 @@ describe("cc tracker rules", function()
         }
         for i, case in ipairs(cases) do
             assert.equals(case[2], Rules.NormalizeShown(case[1]), "case " .. i)
+        end
+    end)
+
+    it("builds 5 rows, then 3 past the highest held enemy, never past 15", function()
+        local cases = {
+            { 0, 5 },
+            { 1, 5 },
+            { 4, 7 },
+            { 12, 15 },
+            { 15, 15 },
+        }
+        for i, case in ipairs(cases) do
+            assert.equals(case[2], Rules.BuildTarget(case[1]), "case " .. i)
         end
     end)
 

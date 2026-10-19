@@ -76,6 +76,8 @@ CC.previewing = false
 CC.applyQueued = false
 CC.editModeRegistered = false
 CC.buildTarget = 0
+CC.runTarget = 0
+CC.buildQueued = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -371,6 +373,8 @@ function CC:EnsureSlots()
         cap = 0,
         onTake = function(slot, unit) return CC:Take(slot, unit) end,
         onRelease = function(slot, unit) CC:Release(slot, unit) end,
+        -- A stop reports a scan too, so a tracker turning off builds nothing.
+        onScanDone = function() if CC.active then CC:RaiseBuildTarget() end end,
         unitEvents = UNIT_EVENTS,
         onUnitEvent = function(slots, event, unit) CC:OnPlateUnitEvent(slots, event, unit) end,
     })
@@ -487,17 +491,40 @@ function CC:Apply()
         KE:Print("[CC] auras restricted: row changes wait for the drain")
     end
     self:UpdateCap()
-    self:RunBuild(Rules.TRACKED_ENEMIES)
+    self:RaiseBuildTarget()
     self:UpdateLive()
 end
 
--- The runner only raises its target, so a lower cap restarts the walk: it
--- passes the rows already built in one frame and stops at the new cap. Rows
--- above it stay, released and unused, until /reload.
-function CC:RunBuild(target)
-    if target < self.buildTarget then self.runner:Cancel() end
-    self.buildTarget = target
-    self.runner:Run(target)
+local function StartBuild()
+    CC.buildQueued = false
+    if not CC.active then return end
+    CC.runTarget = CC.buildTarget
+    CC.runner:Run(CC.buildTarget)
+end
+
+-- A frame cannot be destroyed, so built rows are kept for reuse and the target
+-- only rises; each scan keeps it a few rows past the highest held enemy.
+-- An idle runner builds as soon as it is run, possibly in the frame its last
+-- walk just built in, so it is started on the next frame; a walking one only
+-- takes the higher target. Either way no frame builds two rows.
+function CC:RaiseBuildTarget()
+    local highest = 0
+    for slot = self.slots:Cap(), 1, -1 do
+        if self.slots:UnitOf(slot) then
+            highest = slot
+            break
+        end
+    end
+    local want = Rules.BuildTarget(highest)
+    if want <= self.buildTarget then return end
+    self.buildTarget = want
+    if self.runner:Built() < self.runTarget then
+        self.runTarget = want
+        self.runner:Run(want)
+    elseif not self.buildQueued then
+        self.buildQueued = true
+        C_Timer.After(0, StartBuild)
+    end
 end
 
 function CC:UpdateLive()
@@ -554,6 +581,7 @@ function CC:Deactivate()
     self.active = false
     if self.runner then self.runner:Cancel() end
     self.buildTarget = 0
+    self.runTarget = 0
     -- A refused build blocks every later row; the next activation retries.
     self.failed = nil
     if self.slots then self.slots:Stop() end
