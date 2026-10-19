@@ -962,8 +962,8 @@ end
 
 local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
 local BFL_CLOSE_SIZE = 20
--- The dark theme's square portrait is 42 and crops the art's edges; KE draws
--- the whole logo larger and lower in its place.
+-- The flat themes' square portrait is 42 and its crop cuts the art's sides;
+-- KE draws the whole logo larger and lower in its place.
 local LOGO_SQUARE_SIZE = 56
 local LOGO_SQUARE_DROP = 2
 
