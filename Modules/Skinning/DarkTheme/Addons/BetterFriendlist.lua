@@ -991,6 +991,21 @@ local function SetIdleBarsHidden(frame, hide)
     end
 end
 
+-- The Modern header row starts 2 below the list's top, above KE's plate.
+local function PlaceWhoPlate(frame, modern)
+    local who = frame.WhoFrame
+    local inset = who and who.ListInset
+    local bd = inset and S.GetBackdrop(inset)
+    if not bd then return end
+    local top = modern and who.NameHeader
+    bd:ClearAllPoints()
+    if top then
+        bd:SetPoint("TOPLEFT", top, "TOPLEFT", 0, 0)
+    else
+        bd:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -4)
+    end
+    bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, 4)
+end
 
 local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
 local BFL_CLOSE_SIZE = 20
@@ -1075,6 +1090,7 @@ local function ModernPass(frame)
     PaintPortrait()
     ShowListLine(frame)
     SetIdleBarsHidden(frame, true)
+    PlaceWhoPlate(frame, true)
     KeepKitnClose(nil, frame.CloseButton)
 end
 
@@ -1666,6 +1682,7 @@ local function Skin()
             local line = S.data(frame).listLine
             if line then line:Hide() end
             SetIdleBarsHidden(frame, false)
+            PlaceWhoPlate(frame, false)
         end
     end
 
