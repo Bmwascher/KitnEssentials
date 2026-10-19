@@ -960,19 +960,28 @@ local function ShowListLine(frame)
     line:SetShown(scroll:IsShown())
 end
 
--- The addon shows these bars again on every section switch, after the scroll
--- bar last decided to hide.
+-- The scroll bar shows itself whenever its list scrolls, and the addon shows
+-- these bars on every section switch, so a show is checked against both.
 local function HideIdleBar(bar)
-    if S.data(bar).hideIdle and not bar:HasScrollableExtent() then bar:Hide() end
+    local d = S.data(bar)
+    if not d.hideIdle then return end
+    if not bar:HasScrollableExtent() or (d.idleList and not d.idleList:IsShown()) then bar:Hide() end
 end
 
 -- Modern lists hide their scroll bar while nothing scrolls; Legacy keeps the
--- bar with its disabled arrows.
+-- bar with its disabled arrows. The friends bar is not inside its list, so it
+-- also hides with the list on the other sections.
 local function SetIdleBarsHidden(frame, hide)
     local recent, who = frame.RecentAlliesFrame, frame.WhoFrame
     local quickJoin = frame.QuickJoinFrame and frame.QuickJoinFrame.ContentInset
-    for _, bar in ipairs({ frame.MinimalScrollBar or false, recent and recent.ScrollBar or false,
-        quickJoin and quickJoin.ScrollBar or false, who and who.ScrollBar or false }) do
+    local pairsList = {
+        { frame.MinimalScrollBar, frame.ScrollFrame },
+        { recent and recent.ScrollBar, recent and recent.ScrollBox },
+        { quickJoin and quickJoin.ScrollBar, quickJoin and (quickJoin.ScrollBoxContainer or quickJoin.ScrollBox) },
+        { who and who.ScrollBar, who and who.ScrollBox },
+    }
+    for _, pair in ipairs(pairsList) do
+        local bar, list = pair[1], pair[2]
         if bar and type(bar.SetHideIfUnscrollable) == "function" and type(bar.HasScrollableExtent) == "function" then
             local d = S.data(bar)
             if hide then
@@ -980,18 +989,20 @@ local function SetIdleBarsHidden(frame, hide)
                     d.idleHooked = true
                     bar:HookScript("OnShow", HideIdleBar)
                 end
-                d.hideIdle = true
+                d.hideIdle, d.idleList = true, list or nil
                 bar:SetHideIfUnscrollable(true)
+                HideIdleBar(bar)
             elseif d.hideIdle then
                 d.hideIdle = nil
                 bar:SetHideIfUnscrollable(false)
-                bar:Show()
+                bar:SetShown(not list or list:IsShown())
             end
         end
     end
 end
 
--- The Modern header row starts 2 below the list's top, above KE's plate.
+-- The addon puts the Modern header row 2 below the top of the list frame, so
+-- KE's plate starts at the headers there.
 local function PlaceWhoPlate(frame, modern)
     local who = frame.WhoFrame
     local inset = who and who.ListInset
