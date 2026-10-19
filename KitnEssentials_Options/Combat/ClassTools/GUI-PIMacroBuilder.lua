@@ -132,29 +132,28 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     manager:Register(cardCore, "all")
 
     local abilityDefs = {
-        { key = "Trinket1", label = TrinketIcon(13) .. "Trinket 1  |cff888888- Add /use 13 to the macro.|r", default = true },
-        { key = "Trinket2", label = TrinketIcon(14) .. "Trinket 2  |cff888888- Add /use 14 to the macro.|r", default = false },
-        { key = "VampiricEmbrace", label = SpellIcon(15286, "Vampiric Embrace") .. "  |cff888888- Add Vampiric Embrace to the macro.|r", default = true },
+        { key = "Trinket1", label = TrinketIcon(13) .. "Trinket 1",
+          tooltip = "Add /use 13 to the macro.", default = true },
+        { key = "Trinket2", label = TrinketIcon(14) .. "Trinket 2",
+          tooltip = "Add /use 14 to the macro.", default = false },
+        { key = "VampiricEmbrace", label = SpellIcon(15286, "Vampiric Embrace"),
+          tooltip = "Add Vampiric Embrace to the macro.", default = true },
     }
 
+    local abilityPicks = {}
     for i, def in ipairs(abilityDefs) do
         local checked = db[def.key]
         if checked == nil then checked = def.default end
-        local isLast = i == #abilityDefs
-        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(cardCore.content, rowHeight)
-        local checkbox = GUIFrame:CreateCheckbox(row, def.label, {
-            value = checked,
-            callback = function(val) db[def.key] = val; ApplySettings() end,
-        })
-        row:AddWidget(checkbox, 1)
-        manager:Register(checkbox, "all")
-        if isLast then
-            cardCore:AddRow(row, rowHeight, 0)
-        else
-            cardCore:AddRow(row, rowHeight)
-        end
+        abilityPicks[i] = {
+            label = def.label,
+            config = {
+                value = checked,
+                callback = function(val) db[def.key] = val; ApplySettings() end,
+                tooltip = def.tooltip,
+            },
+        }
     end
+    manager:RegisterGroup(cardCore:AddCheckboxGrid(abilityPicks, { isLast = true }), "all")
 
     yOffset = cardCore:GetNextOffset()
 
