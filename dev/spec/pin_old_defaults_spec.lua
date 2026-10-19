@@ -4,7 +4,8 @@
 -- file stripped default-equal leaves at logout. A profile that already holds
 -- the block gets that old value written back; any key the player set is left
 -- alone; a profile without the block, a profile made after the first run and an
--- import all take the new defaults.
+-- import all take the new defaults. CC Tracker's pin holds its position only:
+-- its retired Max Enemies is deleted, set or not.
 local helpers = require("dev.spec._helpers")
 
 local function migrate(sv)
@@ -32,11 +33,11 @@ describe("old-default pins", function()
         assert.is_false(hm.DisableOnHealer)
         assert.are.equal(-400, hm.Position.XOffset)
         local cc = sv.profiles.Default.CCTracker
-        assert.are.equal(15, cc.MaxEnemies)
+        assert.is_nil(cc.MaxEnemies)
         assert.are.same({ YOffset = 69 }, cc.Position)
     end)
 
-    it("keeps every value the player set, a partly saved position included", function()
+    it("keeps every value the player set but the retired Max Enemies, a partly saved position included", function()
         local sv = migrate({ profiles = { Default = {
             Dungeons = { HealerMana = {
                 DisableOnHealer = true,
@@ -55,7 +56,7 @@ describe("old-default pins", function()
         assert.are.equal(38, hm.IconSize)
         assert.are.equal(14, hm.NameFontSize)
         local cc = sv.profiles.Default.CCTracker
-        assert.are.equal(5, cc.MaxEnemies)
+        assert.is_nil(cc.MaxEnemies)
         assert.are.equal(59, cc.Position.YOffset)
     end)
 

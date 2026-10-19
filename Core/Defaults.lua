@@ -3119,8 +3119,10 @@ local KEY_RENAMES = {
     },
     {
         id = "CCTracker.PinDefaults",
-        merge = PinOldDefaults({ "CCTracker" }, { MaxEnemies = 15, Position = { YOffset = 69 } }),
+        merge = PinOldDefaults({ "CCTracker" }, { Position = { YOffset = 69 } }),
     },
+    -- No reader: up to 15 enemies are always tracked.
+    { id = "CCTracker.MaxEnemies.Delete", block = "CCTracker", old = "MaxEnemies", new = "MaxEnemies", convert = DeleteKey },
 }
 
 -- Resolves one entry against one profile: the table holding the key, the old
