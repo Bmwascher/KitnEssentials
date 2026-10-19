@@ -77,21 +77,22 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     local soundList = GUIFrame.BuildSoundOptions()
 
     -- Alert modes (chat + sound on/off)
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local chatCheck = GUIFrame:CreateCheckbox(row2a, "Show Chat Message", {
-        value = db.ShowChatMessage ~= false,
-        callback = function(checked) db.ShowChatMessage = checked end,
-    })
-    row2a:AddWidget(chatCheck, 0.5)
-    manager:Register(chatCheck, "all")
-
-    local soundCheck = GUIFrame:CreateCheckbox(row2a, "Play Sound", {
-        value = db.PlaySound ~= false,
-        callback = function(checked) db.PlaySound = checked end,
-    })
-    row2a:AddWidget(soundCheck, 0.5)
-    manager:Register(soundCheck, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
+    manager:RegisterGroup(card2:AddCheckboxGrid({
+        {
+            label = "Show Chat Message",
+            config = {
+                value = db.ShowChatMessage ~= false,
+                callback = function(checked) db.ShowChatMessage = checked end,
+            },
+        },
+        {
+            label = "Play Sound",
+            config = {
+                value = db.PlaySound ~= false,
+                callback = function(checked) db.PlaySound = checked end,
+            },
+        },
+    }), "all")
 
     local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
     local sep2 = GUIFrame:CreateSeparator(row2sep)

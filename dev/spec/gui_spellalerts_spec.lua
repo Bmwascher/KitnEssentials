@@ -68,7 +68,7 @@ describe("GUI-SpellAlerts", function()
                 sliders[#sliders + 1] = slider
                 return slider
             end,
-            CreateCheckbox = function(_, _, label, config)
+            CreateCompactCheckbox = function(_, _, label, config)
                 local checkbox = { label = label, value = config.value, callback = config.callback }
                 checkboxes[#checkboxes + 1] = checkbox
                 return checkbox
