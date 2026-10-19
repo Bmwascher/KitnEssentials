@@ -72,8 +72,8 @@ local NONE = {}
 local VIEWER_ORDER = { "Essential", "Utility", "BuffIcon" }
 -- Above the icon's cooldown swipe and countdown when centered on it.
 local ICON_LEVEL_OFFSET = 30
--- How soon a count looks again at an icon that is up but still transparent:
--- another addon may reveal it on its own timer.
+-- How often a count hidden on a transparent icon looks at it again: another
+-- addon may reveal it on its own timer.
 local REVEAL_RECHECK = 0.25
 local WATCH_KEY = "DoTTracker"
 
@@ -620,8 +620,8 @@ local function ReplaceAttached()
 end
 
 -- An attached count shows only while its icon can be seen: another addon may
--- draw its own icon and leave this one fully transparent. True while an icon
--- is up but still transparent, so it may be revealed shortly.
+-- draw its own icon and leave this one fully transparent. True while a count
+-- is hidden this way.
 local function UpdateMasks()
     local waiting = false
     for i = 1, #DT.list do
@@ -631,11 +631,10 @@ local function UpdateMasks()
             -- The read can be refused with an error; a refusal or a secret keeps
             -- the last answer.
             local ok, alpha = pcall(icon.GetEffectiveAlpha, icon)
-            if ok and not issecretvalue(alpha) then MaskCell(cell, alpha <= 0) end
-            if cell.masked then
-                local up = icon:IsShown()
-                if issecretvalue(up) or up then waiting = true end
+            if ok and not issecretvalue(alpha) and type(alpha) == "number" then
+                MaskCell(cell, alpha <= 0)
             end
+            if cell.masked then waiting = true end
         else
             MaskCell(cell, false)
         end
@@ -643,11 +642,12 @@ local function UpdateMasks()
     return waiting
 end
 
--- One pending look at a time, and none once nothing waits: a transparent icon
--- that is not up costs nothing until its next refresh.
+-- One pending look at a time, while a count is hidden and the tracker is on
+-- screen. Applying a DoT shows its icon without a viewer refresh, so the look
+-- cannot wait for one.
 local Recheck
 local function WatchReveal()
-    if UpdateMasks() and not DT.revealPending then
+    if UpdateMasks() and DT.root:IsShown() and not DT.revealPending then
         DT.revealPending = true
         C_Timer.After(REVEAL_RECHECK, Recheck)
     end
@@ -1175,6 +1175,7 @@ function DT:UpdateLive()
         cell.over:SetShown(self.previewing)
     end
     self.root:SetShown(live or (self.previewing and #self.list > 0))
+    if live then WatchReveal() end
     self:UpdateTimers()
     if self.slots then
         if live then self.slots:Start() else self.slots:Stop() end
