@@ -139,7 +139,8 @@ local function Stack()
 end
 
 -- Your own casts are plain, so each listed potion starts your bar, a drink
--- over a running buff included.
+-- over a running buff included, and puts that potion's icon on it until the
+-- bar is cleared or unbound.
 local function OnCast(_, _, _, _, spellID)
     if issecretvalue(spellID) then return end
     if not Pot.listed[spellID] then return end
@@ -150,6 +151,8 @@ local function OnCast(_, _, _, _, spellID)
     CDRules.StartCast(t, n)
     Track.Push(t, n)
     Track.Wake()
+    Pot.ownIcon = Texture(spellID) or Pot.icon
+    Bar.SetIcon(row.bar, Pot.ownIcon)
 end
 
 -- Made at the first activation. Each bar exists before any value reaches it,
@@ -281,10 +284,14 @@ end
 ---------------------------------------------------------------------------------
 -- Binding
 ---------------------------------------------------------------------------------
+-- Your bar's count ends with its bind, and its potion icon with it.
 local function Unbind(row)
     if not row.bound then return end
     Track.Unbind(row.st)
-    if row.token == "player" then Pot.castFrame:UnregisterAllEvents() end
+    if row.token == "player" then
+        Pot.castFrame:UnregisterAllEvents()
+        Pot.ownIcon = nil
+    end
     row.bound, row.guid = false, nil
 end
 
@@ -295,7 +302,7 @@ local function Bind(row)
     local name, color = Who(row.token)
     local e = {
         id = entry.id, kind = entry.kind, buffs = entry.buffs, cd = entry.cd,
-        texture = Pot.icon, name = name, color = color,
+        texture = row.token == "player" and Pot.ownIcon or Pot.icon, name = name, color = color,
     }
     Debug("bind %s", row.token)
     Track.Apply(row.st, row.token, { e }, Pot.style)
@@ -354,11 +361,14 @@ function Pot.OnRoster()
     end
 end
 
--- Every bound row's count back to ready, drawn at once. The trackers stay, so
--- a clear during a roster settle shows at once and a key start then still
--- finds them.
+-- Every bound row's count back to ready, drawn at once, and your bar's icon
+-- back to the shared one. The trackers stay, so a clear during a roster
+-- settle shows at once and a key start then still finds them.
 local function ClearCounts()
     local n = Track.Now()
+    Pot.ownIcon = nil
+    local me = Pot.byToken.player
+    if me then Bar.SetIcon(me.bar, Pot.icon) end
     for _, row in ipairs(Pot.rows) do
         local t = row.st.trackers[1]
         if t then

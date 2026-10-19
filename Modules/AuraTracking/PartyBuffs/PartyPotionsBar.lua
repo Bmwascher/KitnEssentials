@@ -346,3 +346,8 @@ end
 function Bar.SetReady(c, on)
     c.ready:SetShown(on == true)
 end
+
+function Bar.SetIcon(c, texture)
+    c.ready.icon:SetTexture(texture)
+    for k = 1, 2 do c.face[k].art.icon:SetTexture(texture) end
+end
