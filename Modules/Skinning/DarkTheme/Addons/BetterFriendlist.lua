@@ -670,7 +670,10 @@ local STATUS_EDGE_COLORS = {
     busy = { 0.9, 0.2, 0.2 },
 }
 local STATUS_EDGE_WIDTH = 2
-local CLASS_ICON_SIZE = 16
+-- The class icon takes the hidden status dot's place: the room before the name
+-- in a normal row, 4 under the control lane in a compact one.
+local CLASS_ICON_MAX = 28
+local CLASS_ICON_LANE_GAP = 4
 local EUI_CLASS_SHEET = "Interface\\AddOns\\EllesmereUI\\media\\icons\\class-full\\modern.tga"
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 
@@ -845,8 +848,7 @@ local function CardCues(card)
     edge:SetWidth(STATUS_EDGE_WIDTH)
     edge:Hide()
     local icon = bd:CreateTexture(nil, "OVERLAY")
-    icon:SetSize(CLASS_ICON_SIZE, CLASS_ICON_SIZE)
-    icon:SetPoint("LEFT", card.status, "RIGHT", 1, 0)
+    icon:SetPoint("LEFT", card.status, "LEFT", 0, 0)
     icon:Hide()
     d.cueFill, d.cueEdge, d.cueIcon = fill, edge, icon
     return d
@@ -862,6 +864,11 @@ local function PaintCardCues(card, d)
     else
         d.cueEdge:Hide()
     end
+    -- The stripe carries the status; the addon re-shows the dot every pass.
+    ZeroAlpha(card.status)
+    local lane = card.bflControlRowHeight
+    local size = type(lane) == "number" and math.min(CLASS_ICON_MAX, lane - CLASS_ICON_LANE_GAP) or CLASS_ICON_MAX
+    d.cueIcon:SetSize(size, size)
     local classFile = state and FriendClassFile(friend)
     if classFile then
         PaintClassIcon(d.cueIcon, classFile)
@@ -936,6 +943,17 @@ local function KeepKitnClose(_, btn)
     x:SetAlpha(1)
 end
 
+local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
+local BFL_CLOSE_SIZE = 20
+
+local function PaintPortrait()
+    if not IsModern() then return end
+    local ui = GetFriendsUI()
+    local overlay = type(ui) == "table" and ui.root and ui.root.PortraitOverlay
+    local icon = overlay and overlay.Icon
+    if icon and icon.SetTexture then icon:SetTexture(KITN_LOGO) end
+end
+
 local function ModernPass(frame)
     local ui = GetFriendsUI()
     local root = type(ui) == "table" and ui.root
@@ -989,6 +1007,7 @@ local function ModernPass(frame)
     end
     PaintSideTabs()
     PaintBattleTag()
+    PaintPortrait()
     PlaceInsetPlate(frame.Inset)
     KeepKitnClose(nil, frame.CloseButton)
 end
@@ -1020,6 +1039,7 @@ local function Skin()
     if not frame or S.data(frame).bflSkinned then return end
     S.data(frame).bflSkinned = true
 
+    S.CloseButton(frame.CloseButton, BFL_CLOSE_SIZE)
     S.Frame(frame)
     StripPanelShell(frame)
 
@@ -1545,6 +1565,7 @@ local function Skin()
         -- The theme pass recolors the tag after rebuilding its text.
         HookIf(ui, "RefreshBattleTag", PaintBattleTag)
         HookIf(ui, "ApplyTheme", PaintBattleTag)
+        HookIf(ui, "ApplyModernPortrait", PaintPortrait)
         HookIf(ui, "StyleGroupHeader", OnGroupHeader)
         HookIf(ui, "InitializeRequestHeader", OnRequestHeader)
         HookIf(ui, "InitializeRequestCard", OnRequestCard)
