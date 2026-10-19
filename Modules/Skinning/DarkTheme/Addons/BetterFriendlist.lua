@@ -891,6 +891,28 @@ local function RetintInvite(btn)
     end
 end
 
+-- Both themes show the Blizzard theme's tag colors; the dark theme writes the
+-- tag white and drops the darker number.
+local BATTLETAG_R, BATTLETAG_G, BATTLETAG_B = 0.345, 0.667, 0.867
+local BATTLETAG_NUMBER_CODE = "|cff416380"
+
+local function PaintBattleTag()
+    if not IsModern() then return end
+    local frame = _G.BetterFriendsFrame
+    local hdr = frame and frame.FriendsTabHeader
+    local tag = hdr and hdr.BattlenetFrame and hdr.BattlenetFrame.Tag
+    if not (tag and tag.GetText) then return end
+    tag:SetTextColor(BATTLETAG_R, BATTLETAG_G, BATTLETAG_B, 1)
+    local streamer = GetBFLModule("StreamerMode")
+    if streamer and type(streamer.IsActive) == "function" and streamer:IsActive() then return end
+    local text = tag:GetText()
+    if KE:IsSecretValue(text) or type(text) ~= "string" then return end
+    local marker = text:find("#", 1, true)
+    if marker and not text:find("|", 1, true) then
+        tag:SetText(text:sub(1, marker - 1) .. BATTLETAG_NUMBER_CODE .. text:sub(marker) .. "|r")
+    end
+end
+
 local function ModernPass(frame)
     local ui = GetFriendsUI()
     local root = type(ui) == "table" and ui.root
@@ -943,6 +965,7 @@ local function ModernPass(frame)
         OwnControl(hdr.BattlenetFrame)
     end
     PaintSideTabs()
+    PaintBattleTag()
 end
 
 local function ReStrip()
@@ -1501,6 +1524,9 @@ local function Skin()
         HookIf(ui, "RefreshModernSideTabSelection", function()
             if IsModern() then PaintSideTabs() end
         end)
+        -- The theme pass recolors the tag after rebuilding its text.
+        HookIf(ui, "RefreshBattleTag", PaintBattleTag)
+        HookIf(ui, "ApplyTheme", PaintBattleTag)
         HookIf(ui, "StyleGroupHeader", OnGroupHeader)
         HookIf(ui, "InitializeRequestHeader", OnRequestHeader)
         HookIf(ui, "InitializeRequestCard", OnRequestCard)
