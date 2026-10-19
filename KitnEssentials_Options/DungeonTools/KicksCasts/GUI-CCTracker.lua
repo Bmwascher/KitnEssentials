@@ -229,7 +229,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         value = Rules.NormalizeShown(db.ShownRows),
         callback = function(value)
             db.ShownRows = value
-            ApplySettings()
+            if CC then CC:ApplyShown() end
         end,
     }), 0.5)
     row3b:AddWidget(GUIFrame:CreateDropdown(row3b, "Grow Direction", {

@@ -642,6 +642,15 @@ function CC:ApplySettings()
     C_Timer.After(0, ApplyQueued)
 end
 
+-- The shown count changes only the box and the preview, never a row.
+function CC:ApplyShown()
+    if not self:IsEnabled() then return end
+    self:UpdateDB()
+    if not self.active then return end
+    self:ApplyAnchorPosition()
+    if self.previewing then self:PaintSamples() end
+end
+
 function CC:OnEnable()
     self:UpdateDB()
     if not self.db.Enabled then return end
