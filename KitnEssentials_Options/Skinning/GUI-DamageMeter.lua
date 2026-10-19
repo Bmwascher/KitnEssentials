@@ -2277,33 +2277,34 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local cardCasts = GUIFrame:CreateCard(scrollChild, "Casts", yOffset)
     manager:Register(cardCasts, "all")
 
-    local rowCasts = GUIFrame:CreateRow(cardCasts.content, Theme.rowHeight)
-    local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items and Toys", {
-        value = sh.IncludeItems ~= false,
-        tooltip = "Potions, trinkets and other items used from your bags or equipped gear, plus " ..
-            "toys and other abilities you press that are outside your spellbook.",
-        callback = function(checked) sh.IncludeItems = checked; ApplyStrip() end,
-    })
-    rowCasts:AddWidget(itemsChk, 0.33)
-    manager:Register(itemsChk, "all")
-
-    local petChk = GUIFrame:CreateCheckbox(rowCasts, "Include Pet Spells", {
-        value = sh.IncludePet ~= false,
-        tooltip = "Your pet's spells, with a green border. Spells left on autocast do not show.",
-        callback = function(checked) sh.IncludePet = checked; ApplyStrip() end,
-    })
-    rowCasts:AddWidget(petChk, 0.33)
-    manager:Register(petChk, "all")
-
-    local failedChk = GUIFrame:CreateCheckbox(rowCasts, "Show Failed Casts", {
-        value = sh.ShowFailed ~= false,
-        tooltip = "Casts interrupted or failed after they started, grayed with a red X. Instant " ..
-            "presses that fail do not show.",
-        callback = function(checked) sh.ShowFailed = checked; ApplyStrip() end,
-    })
-    rowCasts:AddWidget(failedChk, 0.34)
-    manager:Register(failedChk, "all")
-    cardCasts:AddRow(rowCasts, Theme.rowHeight)
+    manager:RegisterGroup(cardCasts:AddCheckboxGrid({
+        {
+            label = "Include Items and Toys",
+            config = {
+                value = sh.IncludeItems ~= false,
+                tooltip = "Potions, trinkets and other items used from your bags or equipped gear, plus " ..
+                    "toys and other abilities you press that are outside your spellbook.",
+                callback = function(checked) sh.IncludeItems = checked; ApplyStrip() end,
+            },
+        },
+        {
+            label = "Include Pet Spells",
+            config = {
+                value = sh.IncludePet ~= false,
+                tooltip = "Your pet's spells, with a green border. Spells left on autocast do not show.",
+                callback = function(checked) sh.IncludePet = checked; ApplyStrip() end,
+            },
+        },
+        {
+            label = "Show Failed Casts",
+            config = {
+                value = sh.ShowFailed ~= false,
+                tooltip = "Casts interrupted or failed after they started, grayed with a red X. Instant " ..
+                    "presses that fail do not show.",
+                callback = function(checked) sh.ShowFailed = checked; ApplyStrip() end,
+            },
+        },
+    }), "all")
     cardCasts:AddNote("Effects the game casts for you without a press never show.")
 
     yOffset = cardCasts:GetNextOffset()

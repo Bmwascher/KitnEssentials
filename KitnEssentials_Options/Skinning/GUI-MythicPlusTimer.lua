@@ -711,35 +711,44 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     -- Card 4: Affixes & Key (display toggles; colors live on the Display tab)
     local affixCard = GUIFrame:CreateCard(scrollChild, "Affixes & Key", yOffset)
     manager:Register(affixCard, "all")
-    local rowA1 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeight)
-    local affixCheck = GUIFrame:CreateCheckbox(rowA1, "Show Affixes", {
-        value = db.ShowAffixes ~= false,
-        callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
-    })
-    rowA1:AddWidget(affixCheck, 1 / 3)
-    manager:Register(affixCheck, "all")
-    local keyLvlCheck = GUIFrame:CreateCheckbox(rowA1, "Show Key Level", {
-        value = db.ShowKeyLevel ~= false,
-        callback = function(checked) db.ShowKeyLevel = checked; ApplySettings() end,
-    })
-    rowA1:AddWidget(keyLvlCheck, 1 / 3)
-    manager:Register(keyLvlCheck, "all")
-    local affixModeDrop = GUIFrame:CreateDropdown(rowA1, "Affix Display", {
+    manager:RegisterGroup(affixCard:AddCheckboxGrid({
+        {
+            label = "Show Affixes",
+            config = {
+                value = db.ShowAffixes ~= false,
+                callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
+            },
+        },
+        {
+            label = "Show Key Level",
+            config = {
+                value = db.ShowKeyLevel ~= false,
+                callback = function(checked) db.ShowKeyLevel = checked; ApplySettings() end,
+            },
+        },
+        {
+            label = "Show Dungeon Name",
+            config = {
+                value = db.ShowDungeonName == true,
+                callback = function(checked) db.ShowDungeonName = checked; ApplySettings() end,
+            },
+        },
+    }), "all")
+
+    local rowASep = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightSeparator)
+    local sepA = GUIFrame:CreateSeparator(rowASep)
+    rowASep:AddWidget(sepA, 1)
+    manager:Register(sepA, "all")
+    affixCard:AddRow(rowASep, Theme.rowHeightSeparator)
+
+    local rowA2 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
+    local affixModeDrop = GUIFrame:CreateDropdown(rowA2, "Affix Display", {
         options = { { key = "TEXT", text = "Text" }, { key = "ICON", text = "Icons" } },
         value = db.AffixMode or "TEXT",
         callback = function(key) db.AffixMode = key; ApplySettings() end,
     })
-    rowA1:AddWidget(affixModeDrop, 1 / 3)
+    rowA2:AddWidget(affixModeDrop, 1 / 3)
     manager:Register(affixModeDrop, "all")
-    affixCard:AddRow(rowA1, Theme.rowHeight)
-
-    local rowA2 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
-    local dungeonNameCheck = GUIFrame:CreateCheckbox(rowA2, "Show Dungeon Name", {
-        value = db.ShowDungeonName == true,
-        callback = function(checked) db.ShowDungeonName = checked; ApplySettings() end,
-    })
-    rowA2:AddWidget(dungeonNameCheck, 1)
-    manager:Register(dungeonNameCheck, "all")
     affixCard:AddRow(rowA2, Theme.rowHeightLast, 0)
     yOffset = affixCard:GetNextOffset()
 

@@ -256,43 +256,37 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local cardSD = GUIFrame:CreateCard(scrollChild, "Slot Details", yOffset)
     manager:Register(cardSD, "all")
 
-    local rowSD1 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeight)
-    local ilvlCheck = GUIFrame:CreateCheckbox(rowSD1, "Show Item Level", {
-        value = db.ShowSlotItemLevel,
-        callback = function(checked)
-            db.ShowSlotItemLevel = checked
-            local CP = GetModule()
-            if CP then CP:RefreshSlotDisplays() end
-        end,
-        tooltip = "Shows the item level on each equipped gear slot.",
-    })
-    rowSD1:AddWidget(ilvlCheck, 1 / 3)
-    manager:Register(ilvlCheck, "all")
+    local function SlotPick(label, key, value, tooltip)
+        return {
+            label = label,
+            config = {
+                value = value,
+                callback = function(checked)
+                    db[key] = checked
+                    local CP = GetModule()
+                    if CP then CP:RefreshSlotDisplays() end
+                end,
+                tooltip = tooltip,
+            },
+        }
+    end
 
-    local enchantNameCheck = GUIFrame:CreateCheckbox(rowSD1, "Show Enchant Names", {
-        value = db.ShowEnchantNames,
-        callback = function(checked)
-            db.ShowEnchantNames = checked
-            local CP = GetModule()
-            if CP then CP:RefreshSlotDisplays() end
-        end,
-        tooltip = "Shows the enchant name on enchantable gear slots.",
-    })
-    rowSD1:AddWidget(enchantNameCheck, 1 / 3)
-    manager:Register(enchantNameCheck, "all")
+    manager:RegisterGroup(cardSD:AddCheckboxGrid({
+        SlotPick("Show Item Level", "ShowSlotItemLevel", db.ShowSlotItemLevel,
+            "Shows the item level on each equipped gear slot."),
+        SlotPick("Show Enchant Names", "ShowEnchantNames", db.ShowEnchantNames,
+            "Shows the enchant name on enchantable gear slots."),
+        SlotPick("Show Gems", "ShowSlotGems", db.ShowSlotGems,
+            "Shows equipped gem icons on each gear slot."),
+        SlotPick("Show Enchant Rank", "ShowEnchantRank", db.ShowEnchantRank == true,
+            "Adds the crafted enchant's tier after its name, so a rank 1 enchant reads apart from a rank 3."),
+    }), "all")
 
-    local slotGemsCheck = GUIFrame:CreateCheckbox(rowSD1, "Show Gems", {
-        value = db.ShowSlotGems,
-        callback = function(checked)
-            db.ShowSlotGems = checked
-            local CP = GetModule()
-            if CP then CP:RefreshSlotDisplays() end
-        end,
-        tooltip = "Shows equipped gem icons on each gear slot.",
-    })
-    rowSD1:AddWidget(slotGemsCheck, 1 / 3)
-    manager:Register(slotGemsCheck, "all")
-    cardSD:AddRow(rowSD1, Theme.rowHeight)
+    local rowSDSep = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightSeparator)
+    local sepSD = GUIFrame:CreateSeparator(rowSDSep)
+    rowSDSep:AddWidget(sepSD, 1)
+    manager:Register(sepSD, "all")
+    cardSD:AddRow(rowSDSep, Theme.rowHeightSeparator)
 
     local rowSDStyle = GUIFrame:CreateRow(cardSD.content, Theme.rowHeight)
     local enchantStyleDrop = GUIFrame:CreateDropdown(rowSDStyle, "Enchant Name Style", {
@@ -311,18 +305,6 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     })
     rowSDStyle:AddWidget(enchantStyleDrop, 0.5)
     manager:Register(enchantStyleDrop, "all")
-
-    local rankCheck = GUIFrame:CreateCheckbox(rowSDStyle, "Show Enchant Rank", {
-        value = db.ShowEnchantRank == true,
-        callback = function(checked)
-            db.ShowEnchantRank = checked
-            local CP = GetModule()
-            if CP then CP:RefreshSlotDisplays() end
-        end,
-        tooltip = "Adds the crafted enchant's tier after its name, so a rank 1 enchant reads apart from a rank 3.",
-    })
-    rowSDStyle:AddWidget(rankCheck, 0.5)
-    manager:Register(rankCheck, "all")
     cardSD:AddRow(rowSDStyle, Theme.rowHeight)
 
     local rowSD2 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightLast)
@@ -478,21 +460,28 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
 
         local cardWB = GUIFrame:CreateCard(scrollChild, "Window Buttons", yOffset)
 
-        local rowWB1 = GUIFrame:CreateRow(cardWB.content, Theme.rowHeight)
-        local omniumCheck = GUIFrame:CreateCheckbox(rowWB1, "Omnium Foil", {
-            value = auDB.OmniumCharButton == true,
-            callback = function(checked) auDB.OmniumCharButton = checked; ApplyAutomation() end,
-            tooltip = "Hides the Omnium Foil minimap button and puts it in the bottom right of the character window instead. Only available at max level.",
+        cardWB:AddCheckboxGrid({
+            {
+                label = "Omnium Foil",
+                config = {
+                    value = auDB.OmniumCharButton == true,
+                    callback = function(checked) auDB.OmniumCharButton = checked; ApplyAutomation() end,
+                    tooltip = "Hides the Omnium Foil minimap button and puts it in the bottom right of the character window instead. Only available at max level.",
+                },
+            },
+            {
+                label = "Great Vault",
+                config = {
+                    value = auDB.VaultCharButton == true,
+                    callback = function(checked) auDB.VaultCharButton = checked; ApplyAutomation() end,
+                    tooltip = "Adds a Great Vault button beside the Omnium Foil button. Only available at max level.",
+                },
+            },
         })
-        rowWB1:AddWidget(omniumCheck, 0.5)
 
-        local vaultCheck = GUIFrame:CreateCheckbox(rowWB1, "Great Vault", {
-            value = auDB.VaultCharButton == true,
-            callback = function(checked) auDB.VaultCharButton = checked; ApplyAutomation() end,
-            tooltip = "Adds a Great Vault button beside the Omnium Foil button. Only available at max level.",
-        })
-        rowWB1:AddWidget(vaultCheck, 0.5)
-        cardWB:AddRow(rowWB1, Theme.rowHeight)
+        local rowWBSep = GUIFrame:CreateRow(cardWB.content, Theme.rowHeightSeparator)
+        rowWBSep:AddWidget(GUIFrame:CreateSeparator(rowWBSep), 1)
+        cardWB:AddRow(rowWBSep, Theme.rowHeightSeparator)
 
         local rowWB2 = GUIFrame:CreateRow(cardWB.content, Theme.rowHeightLast)
         local wbSizeSlider = GUIFrame:CreateSlider(rowWB2, "Button Size", {
