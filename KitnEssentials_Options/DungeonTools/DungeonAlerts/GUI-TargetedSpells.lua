@@ -209,25 +209,23 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     local cardC = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
     manager:Register(cardC, "all")
 
-    local function contentCheckbox(row, label, key, defaultOn)
-        local widget = GUIFrame:CreateCheckbox(row, label, {
-            value = defaultOn and (db[key] ~= false) or (db[key] == true),
-            callback = function(checked) db[key] = checked; ApplySettings() end,
-        })
-        manager:Register(widget, "all")
-        return widget
+    local function contentPick(label, key, defaultOn)
+        return {
+            label = label,
+            config = {
+                value = defaultOn and (db[key] ~= false) or (db[key] == true),
+                callback = function(checked) db[key] = checked; ApplySettings() end,
+            },
+        }
     end
 
-    local rowC1 = GUIFrame:CreateRow(cardC.content, Theme.rowHeight)
-    rowC1:AddWidget(contentCheckbox(rowC1, "Dungeons", "ShowInDungeons", true), 0.33)
-    rowC1:AddWidget(contentCheckbox(rowC1, "Delves", "ShowInDelves", true), 0.33)
-    rowC1:AddWidget(contentCheckbox(rowC1, "Raids", "ShowInRaids", false), 0.33)
-    cardC:AddRow(rowC1, Theme.rowHeight)
-
-    local rowC2 = GUIFrame:CreateRow(cardC.content, Theme.rowHeightLast)
-    rowC2:AddWidget(contentCheckbox(rowC2, "Open World", "ShowInOpenWorld", false), 0.5)
-    rowC2:AddWidget(contentCheckbox(rowC2, "Arenas / Battlegrounds", "ShowInPvP", false), 0.5)
-    cardC:AddRow(rowC2, Theme.rowHeightLast, 0)
+    manager:RegisterGroup(cardC:AddCheckboxGrid({
+        contentPick("Dungeons", "ShowInDungeons", true),
+        contentPick("Delves", "ShowInDelves", true),
+        contentPick("Raids", "ShowInRaids", false),
+        contentPick("Open World", "ShowInOpenWorld", false),
+        contentPick("Arenas / Battlegrounds", "ShowInPvP", false),
+    }, { isLast = true }), "all")
 
     yOffset = cardC:GetNextOffset()
 

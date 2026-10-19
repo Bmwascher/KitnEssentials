@@ -69,29 +69,30 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local cardContext = GUIFrame:CreateCard(scrollChild, "Active In", yOffset)
     manager:Register(cardContext, "all")
 
-    local cRow = GUIFrame:CreateRow(cardContext.content, Theme.rowHeightLast)
-    local dungeonsCheck = GUIFrame:CreateCheckbox(cRow, "Dungeons (5-man)", {
-        value = db.EnableInDungeons ~= false,
-        callback = function(checked) db.EnableInDungeons = checked end,
-        msgPopup = true,
-        msgText = "Dungeons",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    cRow:AddWidget(dungeonsCheck, 0.5)
-    manager:Register(dungeonsCheck, "all")
-
-    local raidsCheck = GUIFrame:CreateCheckbox(cRow, "Raids", {
-        value = db.EnableInRaids == true,
-        callback = function(checked) db.EnableInRaids = checked end,
-        msgPopup = true,
-        msgText = "Raids",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    cRow:AddWidget(raidsCheck, 0.5)
-    manager:Register(raidsCheck, "all")
-    cardContext:AddRow(cRow, Theme.rowHeightLast, 0)
+    manager:RegisterGroup(cardContext:AddCheckboxGrid({
+        {
+            label = "Dungeons (5-man)",
+            config = {
+                value = db.EnableInDungeons ~= false,
+                callback = function(checked) db.EnableInDungeons = checked end,
+                msgPopup = true,
+                msgText = "Dungeons",
+                msgOn = "On",
+                msgOff = "Off",
+            },
+        },
+        {
+            label = "Raids",
+            config = {
+                value = db.EnableInRaids == true,
+                callback = function(checked) db.EnableInRaids = checked end,
+                msgPopup = true,
+                msgText = "Raids",
+                msgOn = "On",
+                msgOff = "Off",
+            },
+        },
+    }, { isLast = true }), "all")
 
     yOffset = cardContext:GetNextOffset()
 
