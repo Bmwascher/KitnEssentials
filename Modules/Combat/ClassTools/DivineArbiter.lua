@@ -138,11 +138,9 @@ function DA:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- What the engine reads. While suspended it reads the module as off: work the
--- engine queued before the suspend (the vehicle-exit timer, a restriction
--- drain) runs after the events are gone and would otherwise re-show the
--- container from the saved switch. Every other read, and a write such as an
--- Edit Mode drag, goes through to the saved settings.
+-- Suspended, the engine reads the module as off, so work it queued before the
+-- suspend (a vehicle-exit timer, a restriction drain) cannot re-show the
+-- container. Other reads and writes go through to the saved settings.
 function DA:EngineSettings()
     if self.active then return self.db end
     if not self.suspendedView then
