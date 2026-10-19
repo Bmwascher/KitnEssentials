@@ -960,6 +960,38 @@ local function ShowListLine(frame)
     line:SetShown(scroll:IsShown())
 end
 
+-- The addon shows these bars again on every section switch, after the scroll
+-- bar last decided to hide.
+local function HideIdleBar(bar)
+    if S.data(bar).hideIdle and not bar:HasScrollableExtent() then bar:Hide() end
+end
+
+-- Modern lists hide their scroll bar while nothing scrolls; Legacy keeps the
+-- bar with its disabled arrows.
+local function SetIdleBarsHidden(frame, hide)
+    local recent, who = frame.RecentAlliesFrame, frame.WhoFrame
+    local quickJoin = frame.QuickJoinFrame and frame.QuickJoinFrame.ContentInset
+    for _, bar in ipairs({ frame.MinimalScrollBar or false, recent and recent.ScrollBar or false,
+        quickJoin and quickJoin.ScrollBar or false, who and who.ScrollBar or false }) do
+        if bar and type(bar.SetHideIfUnscrollable) == "function" and type(bar.HasScrollableExtent) == "function" then
+            local d = S.data(bar)
+            if hide then
+                if not d.idleHooked then
+                    d.idleHooked = true
+                    bar:HookScript("OnShow", HideIdleBar)
+                end
+                d.hideIdle = true
+                bar:SetHideIfUnscrollable(true)
+            elseif d.hideIdle then
+                d.hideIdle = nil
+                bar:SetHideIfUnscrollable(false)
+                bar:Show()
+            end
+        end
+    end
+end
+
+
 local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
 local BFL_CLOSE_SIZE = 20
 -- The flat themes' square portrait is 42 and its crop cuts the art's sides;
@@ -1042,6 +1074,7 @@ local function ModernPass(frame)
     PaintBattleTag()
     PaintPortrait()
     ShowListLine(frame)
+    SetIdleBarsHidden(frame, true)
     KeepKitnClose(nil, frame.CloseButton)
 end
 
@@ -1632,6 +1665,7 @@ local function Skin()
             SweepLegacy()
             local line = S.data(frame).listLine
             if line then line:Hide() end
+            SetIdleBarsHidden(frame, false)
         end
     end
 
