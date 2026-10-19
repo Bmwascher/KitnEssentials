@@ -1184,25 +1184,20 @@ end
 
 GUIFrame:NewWidgetPool("dm:splitlabel", ConstructSplitLabel, function() end)
 
--- "Meter Size", then "Whole meter" and the accent-colored dock size.
+-- "Meter Size:" and the accent-colored dock size.
 local function ConstructReadout(parent)
     local f = CreateFrame("Frame", nil, parent)
     local title = f:CreateFontString(nil, "OVERLAY")
     title:SetPoint("LEFT", f, "LEFT", 0, 0)
-    local label = f:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("LEFT", title, "RIGHT", 12, 0)
     local value = f:CreateFontString(nil, "OVERLAY")
-    value:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    value:SetPoint("LEFT", title, "RIGHT", 8, 0)
     f.title = title
 
     function f.Configure()
         local T = Theme
         KE:ApplyThemeFont(title, "normal")
         title:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-        title:SetText("Meter Size")
-        KE:ApplyThemeFont(label, "normal")
-        label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-        label:SetText("Whole meter")
+        title:SetText("Meter Size:")
         KE:ApplyThemeFont(value, "normal")
         value:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
         value:SetText("")
