@@ -21,7 +21,14 @@ local function Skin()
     if not frame then return S.Skip("InspectFrame missing") end
     S.Frame(frame)
     if _G.InspectPaperDollFrame and _G.InspectPaperDollFrame.ViewButton then
-        S.Button(_G.InspectPaperDollFrame.ViewButton)
+        local view = _G.InspectPaperDollFrame.ViewButton
+        S.Button(view)
+        -- Anchored here rather than left where Blizzard put it, so this skin's
+        -- layout holds even after the Character Panel moved the button.
+        view:ClearAllPoints()
+        view:SetPoint("TOP", _G.InspectPaperDollFrame, "TOP", 0, -39)
+        view:SetWidth(90)
+        view:SetText("Transmog")
     end
     if _G.InspectPaperDollItemsFrame and _G.InspectPaperDollItemsFrame.InspectTalents then
         S.Button(_G.InspectPaperDollItemsFrame.InspectTalents)
