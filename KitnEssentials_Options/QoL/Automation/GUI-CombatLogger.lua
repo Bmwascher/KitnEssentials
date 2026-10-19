@@ -79,37 +79,21 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     end
 
     -- Every content card is the same grid, so it is written once.
-    local function AddContentCard(title, defs, perRow)
+    local function AddContentCard(title, defs)
         local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
         manager:Register(card, "all")
 
-        local row
+        local picks = {}
         for i, def in ipairs(defs) do
-            -- The final row holds ((#defs - 1) % perRow) + 1 items, short of
-            -- perRow whenever the count does not divide evenly. A plain
-            -- `#defs - perRow` counts back a whole row, so on a short final
-            -- row it reaches into the row above when there is one.
-            local isLastRow = i > #defs - ((#defs - 1) % perRow + 1)
-            local rowHeight = isLastRow and Theme.rowHeightLast or Theme.rowHeight
-            if not row then
-                row = GUIFrame:CreateRow(card.content, rowHeight)
-            end
-            local checkbox = GUIFrame:CreateCheckbox(row, def.label, {
-                value = db[def.key] == true,
-                callback = function(val) db[def.key] = val; ApplySettings() end,
-            })
-            row:AddWidget(checkbox, 1 / perRow)
-            manager:Register(checkbox, "all")
-
-            if i % perRow == 0 or i == #defs then
-                if isLastRow then
-                    card:AddRow(row, rowHeight, 0)
-                else
-                    card:AddRow(row, rowHeight)
-                end
-                row = nil
-            end
+            picks[i] = {
+                label = def.label,
+                config = {
+                    value = db[def.key] == true,
+                    callback = function(val) db[def.key] = val; ApplySettings() end,
+                },
+            }
         end
+        manager:RegisterGroup(card:AddCheckboxGrid(picks, { isLast = true }), "all")
 
         yOffset = card:GetNextOffset()
         return card
@@ -219,9 +203,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Cards 3-5: what to log
     ----------------------------------------------------------------
-    AddContentCard("Dungeons", DUNGEONS, 5)
-    AddContentCard("Raids", RAIDS, 5)
-    AddContentCard("PvP", PVP, 3)
+    AddContentCard("Dungeons", DUNGEONS)
+    AddContentCard("Raids", RAIDS)
+    AddContentCard("PvP", PVP)
 
     ----------------------------------------------------------------
     -- Card 6: Scenarios
