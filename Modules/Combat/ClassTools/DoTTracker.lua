@@ -72,8 +72,8 @@ local NONE = {}
 local VIEWER_ORDER = { "Essential", "Utility", "BuffIcon" }
 -- Above the icon's cooldown swipe and countdown when centered on it.
 local ICON_LEVEL_OFFSET = 30
--- How often a count hidden on a transparent icon looks at it again: another
--- addon may reveal it on its own timer.
+-- How often a count hidden on an icon that cannot be seen looks at it again:
+-- another addon may reveal it on its own timer.
 local REVEAL_RECHECK = 0.25
 local WATCH_KEY = "DoTTracker"
 
@@ -621,7 +621,8 @@ end
 
 -- EllesmereUI's Cooldown Manager moves each Blizzard icon it shows into its own
 -- bars; one it has not taken yet stays in Blizzard's viewer, where nothing is
--- drawn. Read on every mask update, so switching it on or off applies at once.
+-- drawn. Read on every mask update, so switching it on or off applies at the
+-- next one.
 local function OtherManagerOn()
     local db = _G._ECME_AceDB
     local profile = type(db) == "table" and db.profile
@@ -630,10 +631,13 @@ local function OtherManagerOn()
 end
 
 -- Whether the icon is anchored outside its own viewer, as an icon moved into
--- another addon's bar is. nil when the anchor cannot be read.
+-- another addon's bar is. An icon with no anchor has not been moved. nil when
+-- the anchor cannot be read.
 local function AnchoredAway(icon, viewer)
+    if not viewer then return nil end
     local ok, _, rel = pcall(icon.GetPoint, icon, 1)
-    if not ok or issecretvalue(rel) or rel == nil then return nil end
+    if not ok or issecretvalue(rel) then return nil end
+    if rel == nil then return false end
     while rel do
         if rel == viewer then return false end
         local okParent, parent = pcall(rel.GetParent, rel)
@@ -653,8 +657,8 @@ local function HideCount(cell, icon, otherOn)
     if not otherOn then return false end
     -- Shown icons are drawn wherever they are; a hidden one counts as seen
     -- only once moved into the other addon's bar, where it keeps its slot.
-    local shown = icon:IsShown()
-    if issecretvalue(shown) then return nil end
+    local okShown, shown = pcall(icon.IsShown, icon)
+    if not okShown or issecretvalue(shown) then return nil end
     if shown then return false end
     local viewer = _G[KE.CDMIcons.VIEWERS[cell.attachViewer]]
     local away = AnchoredAway(icon, viewer)
