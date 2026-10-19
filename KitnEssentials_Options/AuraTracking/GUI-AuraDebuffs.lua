@@ -335,37 +335,19 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     }
 
     local filters = db.Filters or {}
-    local numFilters = #FILTERS
-    local fIdx = 1
-    while fIdx <= numFilters do
-        local entryA = FILTERS[fIdx]
-        local entryB = FILTERS[fIdx + 1]
-        local isLastRow = (fIdx + 2 > numFilters)
-        local rowH = isLastRow and Theme.rowHeightLast or Theme.rowHeight
-
-        local filterRow = GUIFrame:CreateRow(card7.content, rowH)
-
-        local checkA = GUIFrame:CreateCheckbox(filterRow, entryA.label, {
-            value    = filters[entryA.key] == true,
-            callback = function(checked) filters[entryA.key] = checked; ApplySettings() end,
-            tooltip  = entryA.tooltip,
-        })
-        filterRow:AddWidget(checkA, 0.5)
-        manager:Register(checkA, "all")
-
-        if entryB then
-            local checkB = GUIFrame:CreateCheckbox(filterRow, entryB.label, {
-                value    = filters[entryB.key] == true,
-                callback = function(checked) filters[entryB.key] = checked; ApplySettings() end,
-                tooltip  = entryB.tooltip,
-            })
-            filterRow:AddWidget(checkB, 0.5)
-            manager:Register(checkB, "all")
-        end
-
-        card7:AddRow(filterRow, rowH, isLastRow and 0 or nil)
-        fIdx = fIdx + 2
+    local filterPicks = {}
+    for i, entry in ipairs(FILTERS) do
+        filterPicks[i] = {
+            label = entry.label,
+            config = {
+                value    = filters[entry.key] == true,
+                callback = function(checked) filters[entry.key] = checked; ApplySettings() end,
+                tooltip  = entry.tooltip,
+            },
+        }
     end
+    -- Two columns: the tokens are long all-caps names that clip at three.
+    manager:RegisterGroup(card7:AddCheckboxGrid(filterPicks, { columns = 2, isLast = true }), "all")
 
     yOffset = card7:GetNextOffset()
 
