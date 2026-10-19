@@ -102,6 +102,7 @@ function KitnEssentials:OnInitialize()
     end
     if KE.db.global and KE.db.global.UseGlobalProfile then
         local profileName = KE.db.global.GlobalProfile or DEFAULT_PROFILE
+        if KE.ProfileManager.ProfileNameError(profileName) then profileName = DEFAULT_PROFILE end
         KE.db:SetProfile(profileName)
     end
 

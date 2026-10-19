@@ -104,7 +104,7 @@ globals = {
 read_globals = {
     -- Lua standard extensions in WoW
     "strsplit", "strjoin", "strtrim", "format", "tinsert", "tremove",
-    "wipe", "CopyTable", "tContains", "strsub", "strlen", "strupper",
+    "wipe", "CopyTable", "tContains", "strsub", "strlen", "strlenutf8", "strupper",
     "strlower", "strmatch", "nop", "time", "date",
 
     -- Core math (WoW re-exports)
