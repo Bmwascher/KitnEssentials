@@ -59,6 +59,7 @@ describe("GUI-NoMovementAlert tracked spells card", function()
             CreateDropdown = function() return {} end,
             CreateEditBox = function() return {} end,
             CreateCheckbox = function() return {} end,
+            CreateCompactCheckbox = function() return {} end,
             CreateAttachSizeRow = function() return {} end,
             CreateSpecHeaderRow = function(_, _, labelText)
                 specHeaders[#specHeaders + 1] = labelText
