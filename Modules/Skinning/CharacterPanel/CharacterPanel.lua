@@ -138,9 +138,9 @@ end
 
 -- Enchant labels. Short and Verbose look an enchant up by its exact name; a
 -- stat line with no name (leg spellthreads, armor kits) joins its stat words;
--- any other text shows as Full shows it. Full shows the name, or an entry's
--- full field when the name is too long for the slot. Exact names only: a
--- partial match lets a shorter name rewrite part of a longer one.
+-- any other text shows as Full shows it. Full shows the name, or the entry's
+-- full field when it has one. Exact names only: a partial match lets a
+-- shorter name rewrite part of a longer one.
 local ENCHANT_LABELS = {
     ["Mark of the Worldsoul"]          = { short = "Primary Stat",    verbose = "Primary Stat" },
     ["Mark of the Magister"]           = { short = "Int & Mana",      verbose = "Intellect & Mana" },
@@ -463,7 +463,7 @@ end
 -- The rank is read off the raw line before the atlas is stripped: a crafted
 -- enchant shows its tier only as that icon, and nothing else exposes it.
 -- Color codes go too, so a colored name matches its label entry and the
--- length cut counts only visible characters.
+-- length cut does not count them.
 local function ParseEnchantLine(text)
     local rank = tonumber(text:match("%-Tier(%d)"))
     text = text:gsub("%s*|A:.-|a", "")

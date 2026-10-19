@@ -1823,7 +1823,8 @@ end
 
 -- The height count rows need. Rows sit stride apart and each is stride - spacing
 -- tall: a positive spacing keeps its trailing gap in the height, and a negative
--- one adds back what the last row reaches past its stride, so nothing clips it.
+-- one adds back what the last row reaches past its stride, so the height holds
+-- the whole last row.
 function DM.RowSpan(count, stride, spacing)
     local span = count * stride
     if spacing and spacing < 0 then span = span - spacing end
