@@ -747,6 +747,18 @@ local function OnPulloutShow(f)
     pcall(SkinPulloutSearch, f)
 end
 
+local function OnPulloutOpen(p)
+    pcall(SkinPulloutSearch, p.frame)
+end
+
+-- A new list frame starts shown, so its first Open fires no OnShow.
+local function HookPulloutOpen(p)
+    if p and p.Open and p.frame and not S.data(p).keOpenHooked then
+        S.data(p).keOpenHooked = true
+        hooksecurefunc(p, "Open", OnPulloutOpen)
+    end
+end
+
 -- BigWigs 419 "stock yellow config" regression. BigWigs_Options
 -- (LoD) embeds its own AceGUI-3.0. It is often the FIRST -- or a
 -- NEWER -- AceGUI-3.0 in the session: LibStub:NewLibrary succeeds and the
@@ -791,6 +803,7 @@ local function WrapCreate(orig)
                 S.data(w.frame).keShowHooked = true
                 w.frame:HookScript("OnShow", OnPulloutShow)
             end
+            HookPulloutOpen(w)
         end
         return w
     end
@@ -862,6 +875,7 @@ local function HookAceGUI(AceGUI, minor, upgrading)
                 S.data(pf).keShowHooked = true
                 pf:HookScript("OnShow", OnPulloutShow)
             end
+            HookPulloutOpen(pf.obj)
         end
     end
 end
