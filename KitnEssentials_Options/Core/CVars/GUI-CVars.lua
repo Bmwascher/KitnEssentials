@@ -50,10 +50,9 @@ local function CVarPick(ctx, def)
         config = {
             value = AU and AU:GetLiveCVar(def) or false,
             callback = function(checked)
-                -- The write still goes through the profile as well as the
-                -- client, so the value keeps traveling with the profile and
-                -- "Apply CVars on Login" keeps working. Only the display source
-                -- changed.
+                -- The write goes through the profile as well as the client, so
+                -- the value travels with the profile and "Apply CVars on Login"
+                -- keeps working.
                 db[key] = checked
                 if AU then
                     AU._suppressCVarUpdate = true
