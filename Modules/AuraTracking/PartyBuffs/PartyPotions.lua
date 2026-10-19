@@ -84,11 +84,12 @@ local function ClassColor(class)
     return { c.r, c.g, c.b }
 end
 
--- The name may be secret: it only reaches SetText. A class the game hides
--- gives no color.
+-- The name, a nickname when the provider has one, may be secret: it only
+-- reaches SetText. A class the game hides gives no color.
 local function Who(token)
     local name
-    local ok, value = pcall(UnitName, token)
+    local ok, value = pcall(KE.GetNicknameOrName, KE, token)
+    if not ok then ok, value = pcall(UnitName, token) end
     if ok then name = value end
     local color
     local okClass, _, class = pcall(UnitClass, token)
@@ -335,6 +336,12 @@ function Pot.Resolve()
         end
     end
     Stack()
+end
+
+-- A changed nickname re-binds the rows, names read again and counts kept;
+-- Pot.Resolve does nothing while the bars are off, inactive or settling.
+function Pot.RefreshNames()
+    Pot.Resolve()
 end
 
 -- A token may name someone else until the module's roster settle ends: reads

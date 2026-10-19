@@ -4,8 +4,8 @@
 -- ║           the rule that decides whether its answer is a  ║
 -- ║           nickname, and the Name-Realm key builder. Read ║
 -- ║           by the Damage Meter, Death Notifications,      ║
--- ║           Healer Mana, the LFG Reminder and the Kick     ║
--- ║           Tracker (the key builder only).                ║
+-- ║           Healer Mana, the LFG Reminder, Party Potions   ║
+-- ║           and the Kick Tracker (the key builder only).   ║
 -- ╚══════════════════════════════════════════════════════════╝
 ---@class KE
 local KE = select(2, ...)
@@ -140,6 +140,9 @@ function KE:RefreshNicknameTags()
     -- never hit that window; a nickname callback can.
     local HM = KEAddon:GetModule("HealerMana", true)
     if HM and HM.FindHealers and HM.containerFrame then HM:FindHealers() end
+    -- The potion bars write a name only when a row binds.
+    local Pot = KE.PartyPotions
+    if Pot and Pot.RefreshNames then Pot.RefreshNames() end
 end
 
 ---------------------------------------------------------------------------------
