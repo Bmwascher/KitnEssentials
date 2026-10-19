@@ -29,6 +29,7 @@
     <Script file="Combat\ClassTools\GUI-StanceText.lua" />
     <Script file="Combat\ClassTools\GUI-HuntersMark.lua" />
     <Script file="Combat\ClassTools\GUI-HavocTracker.lua" />
+    <Script file="Combat\ClassTools\GUI-DivineArbiter.lua" />
     <Script file="Combat\ClassTools\GUI-ShamanProcCooldowns.lua" />
     <Script file="Combat\ClassTools\GUI-DoTTracker.lua" />
     <Script file="Combat\ClassTools\GUI-CustomCooldowns.lua" />

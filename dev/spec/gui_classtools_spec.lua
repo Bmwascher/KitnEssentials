@@ -18,7 +18,7 @@ describe("GUI-ClassTools: own-class tab", function()
     it("picks a tab of its own, on the strip, for each class with a tool", function()
         local onStrip = {}
         for _, tab in ipairs(GUIFrame.tabStrips["ClassTools"]) do onStrip[tab.id] = true end
-        for _, class in ipairs({ "EVOKER", "HUNTER", "MAGE", "PRIEST", "WARLOCK" }) do
+        for _, class in ipairs({ "EVOKER", "HUNTER", "MAGE", "PALADIN", "PRIEST", "WARLOCK" }) do
             local pick = GUIFrame.ClassToolsTabForClass(class)
             assert.is_true(onStrip[pick] == true, class .. " picks " .. tostring(pick) .. ", which is not on the strip")
             assert.are_not.equals("ClassToolsAllClasses", pick, class)
