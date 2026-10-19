@@ -387,14 +387,15 @@ end
 ---------------------------------------------------------------------------------
 -- Anchor
 ---------------------------------------------------------------------------------
--- Clamped and sized to the largest stack that can draw, up to the screen's
--- height: a clamp holds a frame's own rectangle, not its children's, and the
--- chain's size is secret.
+-- Clamped and sized to the shown rows, up to the screen's height: a clamp holds
+-- a frame's own rectangle, not its children's, and the chain's size is secret.
+-- Rows past the box are cut off and move into it as the rows above collapse.
 function CC:CreateAnchor()
     if self.anchor then return end
     local anchor = CreateFrame("Frame", "KE_CCTrackerAnchor", UIParent)
     anchor:SetSize(1, 1)
     anchor:SetClampedToScreen(true)
+    anchor:SetClipsChildren(true)
     anchor:EnableMouse(false)
     anchor:Hide()
     measureFS = anchor:CreateFontString(nil, "BACKGROUND")
