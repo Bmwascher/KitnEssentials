@@ -186,16 +186,6 @@ local function SkinInset(inset)
     end
 end
 
--- The Modern list clips its rows 2 below the inset, so the plate's bottom
--- border sits on that line.
-local function PlaceInsetPlate(inset)
-    local bd = inset and S.GetBackdrop(inset)
-    if not bd then return end
-    bd:ClearAllPoints()
-    bd:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -4)
-    bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, IsModern() and -2 or 4)
-end
-
 local function SkinHeaderRow(button)
     if not button then return end
     if button.BG then
@@ -944,6 +934,29 @@ local function KeepKitnClose(_, btn)
     x:SetAlpha(1)
 end
 
+-- The addon hides the Modern list's inset, and KE's plate with it, so a
+-- scrolled row is cut off with no edge; this line marks where rows are cut.
+local function ShowListLine(frame)
+    local scroll, inset = frame.ScrollFrame, frame.Inset
+    if not (scroll and inset) then return end
+    local d = S.data(frame)
+    local line = d.listLine
+    if not line then
+        line = CreateFrame("Frame", nil, inset)
+        line:SetIgnoreParentAlpha(true)
+        local tex = line:CreateTexture(nil, "OVERLAY")
+        tex:SetTexture(WHITE)
+        local c = S.palette.border
+        tex:SetVertexColor(c[1], c[2], c[3], c[4])
+        tex:SetAllPoints(line)
+        line:SetPoint("TOPLEFT", scroll, "BOTTOMLEFT", 0, 0)
+        line:SetPoint("TOPRIGHT", scroll, "BOTTOMRIGHT", 0, 0)
+        d.listLine = line
+    end
+    line:SetHeight(KE:GetPixelSize())
+    line:Show()
+end
+
 local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
 local BFL_CLOSE_SIZE = 20
 
@@ -1009,7 +1022,7 @@ local function ModernPass(frame)
     PaintSideTabs()
     PaintBattleTag()
     PaintPortrait()
-    PlaceInsetPlate(frame.Inset)
+    ShowListLine(frame)
     KeepKitnClose(nil, frame.CloseButton)
 end
 
@@ -1030,7 +1043,14 @@ local function ReStrip()
             CenterBattlenetRow(bnet)
         end
 
-        PlaceInsetPlate(frame.Inset)
+        local ins = frame.Inset
+
+        local ibd = ins and S.GetBackdrop and S.GetBackdrop(ins)
+        if ibd then
+            ibd:ClearAllPoints()
+            ibd:SetPoint("TOPLEFT", ins, "TOPLEFT", 4, -4)
+            ibd:SetPoint("BOTTOMRIGHT", ins, "BOTTOMRIGHT", -4, 4)
+        end
     end
     StripPanelShell(_G.BetterFriendlistSettingsFrame)
 end
@@ -1591,7 +1611,8 @@ local function Skin()
         elseif layout == "legacy" then
             EnsureLegacy()
             SweepLegacy()
-            PlaceInsetPlate(frame.Inset)
+            local line = S.data(frame).listLine
+            if line then line:Hide() end
         end
     end
 
