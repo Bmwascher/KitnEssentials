@@ -135,7 +135,7 @@ end
 -- Boss lifecycle evidence for one encounter. It outlives the store, so a map
 -- restarted mid-encounter keeps what was seen and any withdrawal.
 function Map.NewEvidence(encounterId)
-    return { encounterId = encounterId, seen = {}, withdrawn = false }
+    return { encounterId = encounterId, seen = {}, withdrawn = false, casterLost = false }
 end
 
 -- A lost boss may never cast the held wind, so only live published cards
@@ -166,6 +166,14 @@ function Map.BossLost(seen, unit, exists, dead)
     end
     if exists == false then return seen[unit] == true end
     return false
+end
+
+-- The wind caster's loss ends the map for the rest of the encounter: no
+-- wind can follow. It stays on the evidence, so a restart in the pull keeps
+-- the map hidden.
+function Map.CasterLost(evidence, unit, exists, dead)
+    if Map.BossLost(evidence.seen, unit, exists, dead) then evidence.casterLost = true end
+    return evidence.casterLost
 end
 
 local function currentRecord(map, inst, generation)
