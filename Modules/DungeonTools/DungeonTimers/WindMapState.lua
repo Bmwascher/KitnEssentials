@@ -168,11 +168,12 @@ function Map.BossLost(seen, unit, exists, dead)
     return false
 end
 
--- The wind caster's loss ends the map for the rest of the encounter: no
--- wind can follow. It stays on the evidence, so a restart in the pull keeps
--- the map hidden.
-function Map.CasterLost(evidence, unit, exists, dead)
-    if Map.BossLost(evidence.seen, unit, exists, dead) then evidence.casterLost = true end
+-- The wind caster read dead ends the map for the rest of the encounter: no
+-- wind can follow. A missing token only withdraws inference (BossLost), since
+-- a token can drop out while the boss lives. The loss stays on the evidence,
+-- so a restart in the pull keeps the map hidden.
+function Map.CasterLost(evidence, exists, dead)
+    if exists == true and dead == true then evidence.casterLost = true end
     return evidence.casterLost
 end
 

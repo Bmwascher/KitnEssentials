@@ -414,17 +414,18 @@ describe("boss token evidence", function()
         end
     end)
 
-    it("ends the map at the caster's loss and keeps it ended for the encounter", function()
+    it("ends the map only when the caster reads dead, and keeps it ended for the encounter", function()
         local M = L.loadWindMapState()
         local evidence = M.NewEvidence(2623)
         local steps = {
             { name = "alive", exists = true, dead = false, lost = false },
+            { name = "token missing", exists = false, dead = nil, lost = false },
             { name = "unreadable", exists = nil, dead = nil, lost = false },
             { name = "dead", exists = true, dead = true, lost = true },
             { name = "read alive again", exists = true, dead = false, lost = true },
         }
         for _, s in ipairs(steps) do
-            assert.equals(s.lost, M.CasterLost(evidence, "boss1", s.exists, s.dead), s.name)
+            assert.equals(s.lost, M.CasterLost(evidence, s.exists, s.dead), s.name)
         end
     end)
 end)

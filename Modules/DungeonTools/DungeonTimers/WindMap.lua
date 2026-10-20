@@ -580,8 +580,8 @@ local function Readable(value)
     return value
 end
 
--- Reads the fixed boss tokens. Erkhart's loss hides the map for the rest of
--- the encounter. Any other readable dead boss or readably lost token
+-- Reads the fixed boss tokens. Erkhart read dead hides the map for the rest
+-- of the encounter. Any other readable dead boss or readably lost token
 -- withdraws inference for the rest of the encounter, in the store and in the
 -- encounter's evidence: the held wind and its step are dropped, and only live
 -- published winds give a side. Unreadable answers change nothing.
@@ -591,7 +591,7 @@ function DT:_WindMapScanBosses()
     local casterExists = Readable(UnitExists(CAST_UNIT))
     local casterDead
     if casterExists == true then casterDead = Readable(UnitIsDead(CAST_UNIT)) end
-    if Map.CasterLost(evidence, CAST_UNIT, casterExists, casterDead) then
+    if Map.CasterLost(evidence, casterExists, casterDead) then
         DT._dprint("windmap caster-lost")
         self:_WindMapTeardown(true)
         return
@@ -603,6 +603,7 @@ function DT:_WindMapScanBosses()
         local dead
         if exists == true then dead = Readable(UnitIsDead(unit)) end
         if Map.BossLost(evidence.seen, unit, exists, dead) then
+            DT._dprint("windmap boss-lost unit=" .. unit .. " exists=" .. tostring(exists))
             Map.WithdrawInference(map, evidence)
             self:_WindMapWake()
             return
@@ -757,7 +758,7 @@ function DT:_WindMapEncounterStart(encounterId, fromEncounterStart)
     self._windMapSpitIcon = self:ResolveSpellIcon(cfg.spit)
     local frame = self:_WindMapFrame()
     self:_WindMapStartBossWatch(frame)
-    -- The first scan may find Erkhart already gone and end the map.
+    -- The first scan may find Erkhart already dead and end the map.
     if not self._windMap then return end
     self:_WindMapStartCastWatch(frame)
     self:_WindMapApplyLayout()
