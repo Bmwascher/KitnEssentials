@@ -118,7 +118,7 @@ function Rules.BoxEntries(class, specID, db, all, ranks)
     for _, row in ipairs(Table(KE.PartyCooldownsData.BOX_ROWS)) do
         if Rules.Owns(row, class, specID) then
             local entry, taken = Rules.BoxEntry(row, specID, db, all, ranks)
-            if entry and (all or cdRules.TalentAllows(entry, taken)) then out[#out + 1] = entry end
+            if entry and (all or cdRules.TalentAllows(entry, taken, specID)) then out[#out + 1] = entry end
         end
     end
     return out

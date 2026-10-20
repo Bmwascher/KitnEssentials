@@ -904,7 +904,7 @@ function PB:CooldownEntries(m)
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
             local taken = CDRules.CastTaken(specID, e.id, m.talents)
-            if CDRules.TalentAllows(e, taken) then
+            if CDRules.TalentAllows(e, taken, specID) then
                 e.charges = CDRules.CellCharges(e, specID, m.talents)
                 e.cd = CDRules.CellLength(e, specID, m.talents, e.charges)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, taken))
@@ -1613,7 +1613,7 @@ function PB:PreviewEntries(k)
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
             if #entries >= want then break end
             local has = CDRules.CastTaken(specID, e.id, talents)
-            if CDRules.TalentAllows(e, has) then
+            if CDRules.TalentAllows(e, has, specID) then
                 e.charges = CDRules.CellCharges(e, specID, talents)
                 e.cd = CDRules.CellLength(e, specID, talents, e.charges)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))

@@ -15,7 +15,8 @@ local L = require("dev.spec._ke_loader")
 -- 16 and two charge talents; spec 16 lists it paired at 100 s, spec 17
 -- unpaired, spec 18 with two charges. Cast 9 has only a charge talent; spec
 -- 19 lists it paired at 50 s. TRINKET_BUFFS maps trinket use spell 333 to its
--- buff 334.
+-- buff 334. Spec 20 lists only cast 13, which is hidden in spec 20 while talent
+-- 131 is taken.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -30,6 +31,8 @@ local DATA = {
                 mods = { { 81, add = -30 }, { 82, pct = -50 }, { spec = 16, add = -60 },
                          { 83, charges = 1 }, { 84, spec = 99, charges = 1 } } },
         [9] = { kind = "defensive", cd = 60, buffs = { 90 }, mods = { { 85, charges = 1 } } },
+        [13] = { kind = "offensive", cd = 60, buffs = { 130 },
+                 hide = { talents = { [131] = true }, specs = { [20] = true } } },
     },
     RACIALS = {
         { race = "Dwarf", raceID = 3, id = 4 },
@@ -43,6 +46,7 @@ local DATA = {
         [17] = { 8 },
         [18] = { { 8, charges = 2 } },
         [19] = { { 9, 50 } },
+        [20] = { 13 },
     },
     ROLE_SPEC = {
         DRUID = { TANK = 10, HEALER = 11 },
@@ -835,21 +839,29 @@ describe("PartyCooldownsRules.SpecWanted", function()
 end)
 
 describe("PartyCooldownsRules talent gate", function()
-    it("shows a row that needs a talent while it is taken, and unread only when likely", function()
+    it("shows a needs row while its talent is taken, hides a hide row in its specs while taken, unread by likely", function()
         local R = loadRules()
         local plain = entryOf(R, 10, 1)
         local gated = entryOf(R, 12, 5)
         local likely = { spell = { needs = { talents = {}, likely = true } } }
+        local hidden = entryOf(R, 20, 13)
+        local likelyHidden = { spell = { hide = { talents = {}, likely = true, specs = { [20] = true } } } }
         local cases = {
             { name = "no talent needed", entry = plain, taken = nil, want = true },
             { name = "taken", entry = gated, taken = true, want = true },
             { name = "not taken", entry = gated, taken = false, want = false },
             { name = "unread, not likely", entry = gated, taken = nil, want = false },
             { name = "unread, likely", entry = likely, taken = nil, want = true },
+            { name = "hide, taken", entry = hidden, taken = true, spec = 20, want = false },
+            { name = "hide, not taken", entry = hidden, taken = false, spec = 20, want = true },
+            { name = "hide, unread, not likely", entry = hidden, taken = nil, spec = 20, want = true },
+            { name = "hide, unread, likely", entry = likelyHidden, taken = nil, spec = 20, want = false },
+            { name = "hide, another spec", entry = hidden, taken = true, spec = 21, want = true },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.TalentAllows(case.entry, case.taken), case.name)
+            assert.are.equal(case.want, R.TalentAllows(case.entry, case.taken, case.spec), case.name)
         end
+        assert.are.equal(hidden.spell.hide, R.TalentsFor(20).rules[13], "a hide rule for its spec")
         assert.are.equal(gated.spell.needs, R.TalentsFor(12).rules[5], "a needs row")
         assert.is_not_nil(R.TalentsFor(10).rules[3], "a swap for its spec")
         assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")

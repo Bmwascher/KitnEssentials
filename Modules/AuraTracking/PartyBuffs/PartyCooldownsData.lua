@@ -18,6 +18,8 @@ KE.PartyCooldownsData = Data
 -- icon only: id is drawn when it is taken, likely until talents are read,
 -- and specs limits it to those specs. needs is a talent the row requires: it
 -- shows while the talent is taken, and before talents are read only if likely.
+-- hide is a talent that removes the row in specs: it hides while the talent
+-- is taken, and before talents are read only if likely.
 -- active is set on a summon seen only through a stand-in buff: its
 -- cell's aura button never shows, and the cell shows the summon's own icon
 -- with a timer for active seconds from the cast, then the cooldown. off
@@ -75,7 +77,8 @@ Data.SPELLS = {
     [122470]  = { kind = "defensive", cd = 90, buffs = { 125174 } },
 
     [31884]   = { kind = "offensive", cd = 120, buffs = { 31884, 231895, 454351, 216331, 389539 },
-                  swap = { id = 389539, talents = { [389539] = true }, likely = true, specs = { [66] = true } } },
+                  swap = { id = 389539, talents = { [389539] = true }, likely = true, specs = { [66] = true } },
+                  hide = { talents = { [458359] = true }, likely = false, specs = { [70] = true } } },
     [642]     = { kind = "defensive", cd = 300 },
     [498]     = { kind = "defensive", cd = 60, buffs = { 498, 403876 } },
     [31850]   = { kind = "defensive", cd = 90 },

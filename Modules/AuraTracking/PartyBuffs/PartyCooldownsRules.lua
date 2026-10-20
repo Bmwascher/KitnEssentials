@@ -943,8 +943,10 @@ end
 -- talent.
 local function AddCast(out, castID, spell, specID)
     local swap = spell and spell.swap
+    local hide = spell and spell.hide
     local rule = spell and spell.needs
     if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
+    if hide and hide.specs[specID] then rule = hide end
     local named = false
     if rule then
         out.rules[castID] = rule
@@ -996,7 +998,12 @@ function Rules.TalentRead(talents, talent, boxOn)
     return boxOn == true or not talents.boxOnly[talent]
 end
 
-function Rules.TalentAllows(entry, taken)
+function Rules.TalentAllows(entry, taken, specID)
+    local hide = entry.spell and entry.spell.hide
+    if hide and hide.specs[specID] then
+        if taken == nil then return hide.likely ~= true end
+        return taken == false
+    end
     local needs = entry.spell and entry.spell.needs
     if not needs then return true end
     if taken == nil then return needs.likely == true end
