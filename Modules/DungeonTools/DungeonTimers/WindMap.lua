@@ -611,8 +611,9 @@ function DT:_WindMapScanBosses()
 end
 
 -- Flag changes and roster changes on the boss tokens rescan them, so a held
--- wind is covered while no card is live and no tick runs. The tokens seen
--- live in the encounter's evidence, so a restart keeps them.
+-- wind and Erkhart's death are covered while no card is live and no tick
+-- runs. The watch lasts the whole map, past withdrawal. The tokens seen live
+-- in the encounter's evidence, so a restart keeps them.
 function DT:_WindMapStartBossWatch(frame)
     frame:RegisterUnitEvent("UNIT_FLAGS", "boss1", "boss2", "boss3", "boss4", "boss5")
     frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
@@ -653,7 +654,6 @@ function DT:_WindMapCastStart(unit, spellID, castBarID)
     if spell == nil or token == nil or type(bar) ~= "number" then
         if type(bar) ~= "number" then bar = nil end
         if Map.UnreadableCast(map, token, bar) then
-            self:_WindMapStopBossWatch()
             DT._dprint("windmap published-only reason=unreadable-cast")
         end
         self:_WindMapWake()
