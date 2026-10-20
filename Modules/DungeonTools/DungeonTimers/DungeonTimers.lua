@@ -6014,6 +6014,7 @@ function DT:OnProfileBoundary()
     self:_RetireProviderPrompt()
     self:_RequestProviderSetupCheck()
     self:ApplyWindMapSettings()
+    self:ApplyShieldWarningSettings()
 end
 
 function DT:OnDisable()

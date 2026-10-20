@@ -658,8 +658,8 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     -- Display-mode tag (Bar / Text). Phase rules read via GetPhaseDisplay;
     -- trash via DTrash:GetSpellDisplay; spells via GetSpellDisplay.
     -- RefreshListRowTag updates on Display tab toggles.
-    -- An aura sound row draws nothing in game and the wind map row is its own
-    -- panel, so neither has a Bar/Text tag.
+    -- An aura sound row draws nothing in game, and the wind map and shielded
+    -- target rows are their own displays, so none has a Bar/Text tag.
     if kit.tagLabel and item and (item.isAura or item.isWindMap or item.isShieldWarning) then
         kit.tagLabel:SetText("")
     elseif kit.tagLabel then
@@ -685,7 +685,7 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     end
 
     -- Sound indicator: "S" if any onShow/onHide sound configured. The wind
-    -- map plays no sound.
+    -- map and the shielded target text play no sound.
     if kit.soundLabel and item and (item.isWindMap or item.isShieldWarning) then
         kit.soundLabel:SetText("")
     elseif kit.soundLabel then

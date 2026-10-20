@@ -103,8 +103,8 @@ function DT:_ShieldWarningUpdate()
             return
         end
     end
-    -- A refused comparison returns nothing. A hidden answer is still a boolean,
-    -- and the alpha takes it unread; a pcall around that sink can lose it.
+    -- A refused comparison errors or returns nil. A secret answer goes straight
+    -- to SetAlphaFromBoolean, which accepts secrets and is not wrapped in pcall.
     local ok, same = pcall(UnitIsUnit, "target", swap.shielded)
     if not ok or (not issecretvalue(same) and type(same) ~= "boolean") then
         frame:Hide()
