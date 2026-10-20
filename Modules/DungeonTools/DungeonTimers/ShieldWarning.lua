@@ -16,6 +16,8 @@ if not DT then return end
 local Swap = KE._DungeonShieldSwapState
 
 local pcall = pcall
+local type = type
+local issecretvalue = issecretvalue
 local CreateFrame = CreateFrame
 local GetInstanceInfo = GetInstanceInfo
 local UIParent = UIParent
@@ -101,11 +103,14 @@ function DT:_ShieldWarningUpdate()
             return
         end
     end
+    -- A refused comparison returns nothing. A hidden answer is still a boolean,
+    -- and the alpha takes it unread; a pcall around that sink can lose it.
     local ok, same = pcall(UnitIsUnit, "target", swap.shielded)
-    if not ok or not pcall(frame.text.SetAlphaFromBoolean, frame.text, same, 1, 0) then
+    if not ok or (not issecretvalue(same) and type(same) ~= "boolean") then
         frame:Hide()
         return
     end
+    frame.text:SetAlphaFromBoolean(same, 1, 0)
     frame:Show()
 end
 
