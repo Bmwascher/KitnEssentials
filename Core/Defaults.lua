@@ -1729,6 +1729,7 @@ local Defaults = {
                 [265946]  = { enabled = true, default = true, label = "S2: Mchimba's Ritual Bandages" },
                 [1295275] = { enabled = true, default = true, label = "S2: Stormbound Emblem of Dazar" },
                 [1250580] = { enabled = true, default = true, label = "S2: Seed of the Devouring Wild" },
+                [1291894] = { enabled = true, default = true, label = "S2: Soulcoiler Ritual Vessel" },
             },
         },
 

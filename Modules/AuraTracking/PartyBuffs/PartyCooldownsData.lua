@@ -168,6 +168,11 @@ for castID, spell in pairs(Data.SPELLS) do
     spell.buffs = spell.buffs or { castID }
 end
 
+-- Trinkets whose buff aura carries another ID than the item's use spell.
+Data.TRINKET_BUFFS = {
+    [1291894] = { 1307578 }, -- Soulcoiler Ritual Vessel
+}
+
 -- Talent changes to a cast's cooldown, per rank: add seconds or pct percent,
 -- and spec limits one to a spec. A cell counts the length once every talent a
 -- mod names is read.

@@ -198,7 +198,7 @@ function Rules.TrinketEntries(slots, lengths, db)
             if cd then
                 out[#out + 1] = {
                     id = spellID, item = slot.item, key = key, kind = "trinket",
-                    buffs = { spellID }, cd = cd, trinket = true,
+                    buffs = KE.PartyCooldownsData.TRINKET_BUFFS[spellID] or { spellID }, cd = cd, trinket = true,
                 }
             end
         end

@@ -47,6 +47,7 @@ local DATA = {
         DRUID = { TANK = 10, HEALER = 11 },
         ROGUE = { DAMAGER = 10 },
     },
+    TRINKET_BUFFS = { [333] = { 334 } },
 }
 
 local function loadRules() return L.loadPartyCooldownsRules(DATA) end
@@ -218,6 +219,13 @@ describe("PartyCooldownsRules trinkets", function()
         for _, case in ipairs(dropped) do
             assert.are.same({}, R.TrinketEntries(case.slots, case.lengths, db), case.name)
         end
+    end)
+
+    it("watches a mapped trinket's buff, and any other trinket's use spell", function()
+        local R = loadRules()
+        local db = { ListTrinkets = { [111] = { enabled = true }, [333] = { enabled = true } } }
+        local got = R.TrinketEntries({ { item = 1, spell = 111 }, { item = 2, spell = 333 } }, { [1] = 120, [2] = 45 }, db)
+        assert.are.same({ { 111 }, { 334 } }, { got[1].buffs, got[2].buffs })
     end)
 
     it("reads the use cooldown from a tooltip line", function()
