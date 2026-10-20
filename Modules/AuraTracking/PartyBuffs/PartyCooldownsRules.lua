@@ -910,13 +910,13 @@ function Rules.TrinketShow(show, set, accepted)
 end
 
 -- A spec's talents: rules maps castID to the talent rule of each entry that
--- has one (its swap where the swap applies to the spec, else its needs); ids
--- and want list every talent those rules and the mods of the spec's casts
--- name, the externals box's casts and box rows included. rows is set when the
--- spec's own casts or its healer externals name a talent, box when its
--- healer externals or its box rows do; boxOnly holds the talents only box
--- rows name, which a read skips while the box is off. Nil when there is
--- none. The data never changes, so each spec's answer is built once and
+-- has one (its hide, else its swap, where it applies to the spec, else its
+-- needs); ids and want list every talent those rules and the mods of the
+-- spec's casts name, the externals box's casts and box rows included. rows is
+-- set when the spec's own casts or its healer externals name a talent, box
+-- when its healer externals or its box rows do; boxOnly holds the talents
+-- only box rows name, which a read skips while the box is off. Nil when there
+-- is none. The data never changes, so each spec's answer is built once and
 -- shared; callers only read it. The inspect ticker asks every second.
 local talentsBySpec = {}
 
