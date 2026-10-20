@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.15
+
+### Potion Bars
+
+- The timer digits are no longer cut off at the bottom, and the bars snap
+  back to the pixel grid after a move or restack
+- **NEW:** Dark Mode on the Potions tab, off by default. Bars fill with
+  the class color at full strength, names are white while cooling and
+  class-colored when ready, and the drained part uses your Background
+  Color. Class Color Bars, Class Color Names and Bar Color gray out while
+  it is on
+- Members show their nickname on their bar
+- Your own bar shows the icon of the potion you drank
+
+---
+
 ## v4.12.14
 
 ### Raid Cooldowns
