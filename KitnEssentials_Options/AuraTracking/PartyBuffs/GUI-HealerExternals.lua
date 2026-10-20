@@ -100,9 +100,10 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     cardMain:AddLabel("One icon per cooldown: the spells your party members cast on one target first, " ..
         "then their raid cooldowns. Full color when ready, gray with the time left once seen: a spell cast " ..
         "on one target when its buff appears on anyone in your party, a raid cooldown when its buff appears " ..
-        "on its caster. Your own show too, first in each group. Shown in a party where the Cooldowns tab's " ..
-        "Where It Shows allows, never in a raid or an arena. Another player's cast of the same spell, such as " ..
-        "a Retribution Paladin's Blessing of Sacrifice, starts it too.")
+        "on its caster. Your own show too, ahead of your party members' in each of those two groups, whether " ..
+        "or not Include Yourself is on. Shown in a party where the Cooldowns tab's Where It Shows allows, never " ..
+        "in a raid or an arena. Another player's cast of the same spell, such as a Retribution Paladin's " ..
+        "Blessing of Sacrifice, starts it too.")
     cardMain:AddNote("Move it with /kes edit.")
     local function Attach()
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
