@@ -127,6 +127,35 @@ function KE.GroupDungeonTimerBossRows(bosses)
     return groups
 end
 
+-- Settings-page order for one boss: the rows rowOrder names come first, in its
+-- order (a number names a spell row, a string a cue by name), then every other
+-- row in its incoming order.
+function KE.OrderDungeonTimerBossRows(items, rowOrder)
+    if type(rowOrder) ~= "table" or #rowOrder == 0 then return items end
+    local ordered, placed = {}, {}
+    for _, entry in ipairs(rowOrder) do
+        for index, item in ipairs(items) do
+            if not placed[index] then
+                local match
+                if type(entry) == "number" then
+                    match = item.id == entry
+                else
+                    match = item.isCue == true and item.cueName == entry
+                end
+                if match then
+                    placed[index] = true
+                    ordered[#ordered + 1] = item
+                    break
+                end
+            end
+        end
+    end
+    for index, item in ipairs(items) do
+        if not placed[index] then ordered[#ordered + 1] = item end
+    end
+    return ordered
+end
+
 local function CountEntries(t)
     local n = 0
     if type(t) == "table" then

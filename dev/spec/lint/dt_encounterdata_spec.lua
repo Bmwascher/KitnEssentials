@@ -6,8 +6,8 @@
 -- the schema documented at EncounterData.lua; the resolution half
 -- drives the REAL (file-local) ResolveDisplayPreset through DT:CreateBar
 -- and the exposed DT._ResolvePresetByText.
--- Spell/phase sound keys are outside this lint. Aura rules also check
--- registration names and files: an unresolved name makes the rule silent.
+-- Curated spell, cue, phase and aura sound names are checked against the
+-- registered list and the shipped files: an unresolved name plays nothing.
 local L = require("dev.spec._ke_loader")
 
 -- Schema enums, EncounterData.lua. castType is curation metadata
@@ -139,6 +139,36 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                         and binding.anchor == "timeline-finished") then
                         failures[#failures + 1] = "enc " .. tostring(encId) .. ": windMap." .. field ..
                             " must name an anchored explicit Timer row"
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    -- The settings page places each named row once and skips a name it
+    -- cannot match without a word.
+    it("a rowOrder names only spell rows and phase cues of its own encounter, once each", function()
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            local order = enc.rowOrder
+            if order ~= nil then
+                local ctx = "enc " .. tostring(encId) .. ": rowOrder"
+                if type(order) ~= "table" or #order == 0 then
+                    failures[#failures + 1] = ctx .. " must be a non-empty list"
+                else
+                    local seen = {}
+                    for i, entry in ipairs(order) do
+                        local known = (type(entry) == "number" and type(enc.spells) == "table" and enc.spells[entry] ~= nil)
+                            or (type(entry) == "string" and type(enc.phaseCues) == "table" and enc.phaseCues[entry] ~= nil)
+                        if not known then
+                            failures[#failures + 1] = ctx .. "[" .. i .. "] '" .. tostring(entry) ..
+                                "' is not a spell row or cue of this encounter"
+                        end
+                        if seen[entry] then
+                            failures[#failures + 1] = ctx .. "[" .. i .. "] '" .. tostring(entry) .. "' repeats"
+                        end
+                        seen[entry] = true
                     end
                 end
             end
@@ -800,5 +830,49 @@ describe("DungeonTimers EncounterData - aura sound rules", function()
         end
         assert.same({}, failures)
         assert.is_true(next(registered) ~= nil, "the loader hook collected no registered sound name")
+    end)
+
+    it("every curated spell, cue and phase sound names a registered sound whose file ships", function()
+        local failures = {}
+        local function check(ctx, field, name)
+            if name == nil then return end
+            if type(name) ~= "string" or not registered[name] then
+                failures[#failures + 1] = ctx .. ": " .. field .. " '" .. tostring(name) .. "' is not a registered sound name"
+                return
+            end
+            local file = io.open("Media/Sounds/" .. name .. ".ogg", "rb")
+            if file then
+                file:close()
+            else
+                failures[#failures + 1] = ctx .. ": " .. field .. " '" .. name .. "' has no file under Media/Sounds"
+            end
+        end
+        local function checkRow(ctx, row)
+            if type(row) ~= "table" then return end
+            check(ctx, "sound", row.sound)
+            check(ctx, "soundOnHide", row.soundOnHide)
+            if row.ordinalSounds ~= nil then
+                if type(row.ordinalSounds) ~= "table" then
+                    failures[#failures + 1] = ctx .. ": ordinalSounds must be a list"
+                else
+                    for i, name in ipairs(row.ordinalSounds) do
+                        check(ctx, "ordinalSounds[" .. i .. "]", name)
+                    end
+                end
+            end
+        end
+        for encId, enc in pairs(KE.EncounterData) do
+            local prefix = string.format("enc %s (%s)", tostring(encId), tostring(enc.name))
+            for spellId, spell in pairs(type(enc.spells) == "table" and enc.spells or {}) do
+                checkRow(prefix .. " spell " .. tostring(spellId), spell)
+            end
+            for cueName, cue in pairs(type(enc.phaseCues) == "table" and enc.phaseCues or {}) do
+                checkRow(prefix .. " cue " .. tostring(cueName), cue)
+            end
+            for i, rule in ipairs(type(enc.phases) == "table" and enc.phases or {}) do
+                checkRow(prefix .. " phase " .. i, rule)
+            end
+        end
+        assert.same({}, failures)
     end)
 end)

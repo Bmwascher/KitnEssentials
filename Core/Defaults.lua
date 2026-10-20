@@ -2254,7 +2254,7 @@ local Defaults = {
                 Strata = "MEDIUM",
                 AnchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
-                Position = DefaultPosition(-330, 120),
+                Position = DefaultPosition(-447, 370),
             },
         },
 

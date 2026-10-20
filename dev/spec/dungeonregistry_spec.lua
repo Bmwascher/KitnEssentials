@@ -93,6 +93,29 @@ describe("DungeonRegistry", function()
         assert.equal(2, groups[1].firstReminder)
     end)
 
+    it("orders a boss's rows by its rowOrder and keeps the rest in their incoming order", function()
+        local spellA, spellB = { id = 101 }, { id = 102 }
+        local cueX = { id = "cue:1:x", isCue = true, cueName = "x" }
+        local phase = { id = "phase:1:1", isPhase = true }
+        local map = { id = "map:1:wind", isWindMap = true }
+        local aura = { id = "aura:1:9:added", isAura = true }
+        local items = { spellA, spellB, cueX, phase, map, aura }
+        local cases = {
+            { name = "named rows first, in list order", order = { "x", 102 },
+                expected = { cueX, spellB, spellA, phase, map, aura } },
+            { name = "unnamed rows keep their incoming order after a named one", order = { 102 },
+                expected = { spellB, spellA, cueX, phase, map, aura } },
+            { name = "no list keeps the incoming order", order = nil, expected = items },
+        }
+        for _, c in ipairs(cases) do
+            local result = KE.OrderDungeonTimerBossRows(items, c.order)
+            assert.equal(#c.expected, #result, c.name)
+            for i = 1, #c.expected do
+                assert.equal(c.expected[i], result[i], c.name)
+            end
+        end
+    end)
+
     it("counts coverage for the selected season only", function()
         local encounters = {
             [10] = { dungeon = "Alpha", spells = { [1] = {}, [2] = {} }, phaseCues = { a = {} }, phases = { {} },

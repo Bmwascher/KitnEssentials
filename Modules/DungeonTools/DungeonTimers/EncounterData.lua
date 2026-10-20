@@ -354,6 +354,13 @@
 -- Garfrost/Tyrannus/Ick&Krick but actual order is
 -- Garfrost/Ick&Krick/Tyrannus).
 --
+-- Optional `rowOrder` field on an encounter orders its
+-- rows on the Dungeon Bosses settings page: numbers name
+-- rows of `spells`, strings name keys of `phaseCues`,
+-- each once. Unnamed rows follow in the default order
+-- (spells by ID, cues by name). The combat path never
+-- reads it.
+--
 -- timerPolicy = "explicit" (optional, encounter-level):
 -- switches this encounter to explicit-only Timer bindings
 -- — a row binds only when its timerSource contract
@@ -965,11 +972,11 @@ KE.EncounterData[3456] = {
     dungeon = "AltarOfFangs",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1307703, 1296050, 1296216, 1296220, 1307894, "pull_stomp" },
     spells = {
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1296220] = { name = "Triple Shot", castType = "begincast", castDuration = 2, role = "other", displayText = "DOTS + SPREAD", color = { 1.0, 0.6, 0.0 },
+        [1296220] = { name = "Triple Shot", castType = "begincast", castDuration = 2, role = "other", displayText = "DOTS + SPREAD", color = { 1.0, 0.6, 0.0 }, sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1296216] = { name = "Ssscavenging", castType = "cast", castDuration = 0, role = "mechanic", displayText = "SHIELD INC", sound = "Boss Buffed",
+        [1296216] = { name = "Ssscavenging", castType = "cast", castDuration = 0, role = "mechanic", displayText = "SHIELD INC", soundOnHide = "Boss Shielded",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1296050] = { name = "Regurgitate", castType = "begincast", castDuration = 3, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -977,7 +984,7 @@ KE.EncounterData[3456] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- No timeline event publishes this estimate; its provider stop follows the encounter warning.
         -- The pull publication can precede KE's encounter start.
-        [1307703] = { name = "Fresh Meat", castType = "cast", castDuration = 0, role = "tank", displayText = "FRESH MEAT", color = { 0.855, 0.357, 1.0 },
+        [1307703] = { name = "Fresh Meat", castType = "cast", castDuration = 0, role = "tank", displayText = "FRESH MEAT", color = { 0.855, 0.357, 1.0 }, sound = "Blade", soundOnHide = "Boss Buffed",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", pullReceipt = true, waitAfter = 5 } },
     },
     phaseCues = {
@@ -991,8 +998,9 @@ KE.EncounterData[3456] = {
         { parent = 1296216, baseAmount = 1311783.429, timeout = 60, displayText = "SHIELD" },
     },
     auraSounds = {
-        { spellID = 1296069, trigger = "added", unit = "player", name = "Regurgitate under you", sound = "Move" },
-        { spellID = 1297876, trigger = "added", unit = "player", name = "Triple Shot on you",    sound = "Gun1" },
+        { spellID = 1296069, trigger = "added", unit = "player", name = "Regurgitate under you",    sound = "Gun1" },
+        { spellID = 1297876, trigger = "added", unit = "player", name = "Triple Shot on you",       sound = "Defensive" },
+        { spellID = 1307915, trigger = "added", unit = "player", name = "Ravenous Stomp under you", sound = "Move" },
     },
 }
 
@@ -1001,15 +1009,16 @@ KE.EncounterData[3457] = {
     dungeon = "AltarOfFangs",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1298949, 1299940, "burrowing_charge", "venom_jet", 1299154, 1300686, 1310357, "toxic_atrophy_kicks", 1310547 },
     spells = {
         [1299154] = { name = "Synchronized Venom", castType = "begincast", castDuration = 2, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1298949] = { name = "Tail Scythe", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1298949] = { name = "Tail Scythe", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1310357] = { name = "Preparing Toxin", castType = "begincast", castDuration = 0, role = "kick", displayText = "KICKS INC", color = { 1.0, 0.15, 0.15 }, sound = "Interrupt",
+        [1310357] = { name = "Preparing Toxin", castType = "begincast", castDuration = 0, role = "kick", displayText = "KICKS INC", color = { 1.0, 0.15, 0.15 }, sound = "Kicks Inc",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Charge and Jet have separate cues.
-        [1299940] = { name = "Vindictive Onslaught", castType = "begincast", castDuration = 0, role = "other", displayText = "BAIT", color = { 0.3, 0.9, 1.0 },
+        [1299940] = { name = "Vindictive Onslaught", castType = "begincast", castDuration = 0, role = "other", displayText = "BAIT", color = { 0.3, 0.9, 1.0 }, sound = "Bait",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1299053] = { name = "Death Rattle", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "BREAK TETHER", color = { 0.855, 0.357, 1.0 }, sound = "Gun1",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1026,13 +1035,13 @@ KE.EncounterData[3457] = {
             display = "text", displayText = "KICK", color = { 1.0, 0.15, 0.15 }, sound = "Kick", showAtSeconds = 0 },
         burrowing_charge = { name = "Burrowing Charge", iconOverride = 1299130, role = "other",
             source = { kind = "Message", key = 1299130 }, duration = 3,
-            display = "text", displayText = "CHARGE", color = { 0.855, 0.357, 1.0 }, sound = "Dodge", showAtSeconds = 0 },
+            display = "text", displayText = "CHARGE", color = { 0.855, 0.357, 1.0 }, sound = "Move", showAtSeconds = 0 },
         venom_jet = { name = "Venom Jet", iconOverride = 1300044, role = "other",
             source = { kind = "Message", key = 1300044 }, duration = 4,
             display = "text", displayText = "FRONTAL", sound = "Frontal", showAtSeconds = 0 },
     },
     auraSounds = {
-        { spellID = 1310974, trigger = "added", unit = "player", name = "Toxic Atrophy on you", sound = "Gun1" },
+        { spellID = 1310974, trigger = "added", unit = "player", name = "Toxic Atrophy on you", sound = "GGEZ" },
         { spellID = 1300503, trigger = "added", unit = "player", name = "Spiteful Hunt on you", sound = "Fixate Incoming", disabled = true },
     },
 }
@@ -1042,16 +1051,16 @@ KE.EncounterData[3458] = {
     dungeon = "AltarOfFangs",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1301350, 1300876, 1301111, 1301413 },
     spells = {
         -- The short replacement may arrive before the long forecast's canceled stop.
         [1300876] = { name = "Ritual of the Fang", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "SOAK LINES", color = { 0.2, 1.0, 0.4 }, sound = "Soak",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", replacement = { from = 65, duration = 3 } } },
-        [1301111] = { name = "Axegrinder", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "FRONTALS", color = { 0.77, 0.17, 0.17 }, sound = "Frontal",
+        [1301111] = { name = "Axegrinder", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "FRONTALS", color = { 0.77, 0.17, 0.17 }, sound = "Frontals",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1301350] = { name = "Chop Down", castType = "begincast", castDuration = 1.5, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1301350] = { name = "Chop Down", castType = "begincast", castDuration = 1.5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1301413] = { name = "Boneslicer", castType = "begincast", castDuration = 5, role = "other", displayText = "CLEAR DEBUFF", color = { 0.95, 0.95, 0.95 },
+        [1301413] = { name = "Boneslicer", castType = "begincast", castDuration = 5, role = "other", displayText = "CLEAR DEBUFF", color = { 0.95, 0.95, 0.95 }, sound = "Clear",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     phaseCues = {
@@ -1063,7 +1072,10 @@ KE.EncounterData[3458] = {
             display = "text", displayText = "SOAK LINES", color = { 0.2, 1.0, 0.4 }, showAtSeconds = 0, disabled = true },
     },
     auraSounds = {
-        { spellID = 1300894, trigger = "removed", unit = "player", name = "Ritual Venom ended", sound = "Clear" },
+        { spellID = 1300894, trigger = "removed", unit = "player", name = "Ritual Venom Ended",        sound = "Done" },
+        { spellID = 1301231, trigger = "added",   unit = "player", name = "Bloodletting under you",    sound = "Move" },
+        { spellID = 1300885, trigger = "added",   unit = "player", name = "Ritual of the Fang on you", sound = "Gun1", disabled = true },
+        { spellID = 1301508, trigger = "added",   unit = "player", name = "Boneslicer on you",         sound = "Gun1" },
     },
 }
 
@@ -1076,13 +1088,18 @@ KE.EncounterData[3207] = {
     dungeon = "DenOfNalorakk",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1234233, 1235118, 1253268 },
     spells = {
-        [1234233] = { name = "Spoiled Supplies", castType = "cast", castDuration = 2.3, role = "other", displayText = "SOAK", sound = "Soaks",
+        [1234233] = { name = "Spoiled Supplies", castType = "cast", castDuration = 2.3, role = "other", displayText = "SOAKS", sound = "Soaks",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1253268] = { name = "Earthshatter Slam", castType = "begincast", castDuration = 4, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castConfirm = "boss-cast-start" } },
-        [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "AoE",
+        [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "Aoe And Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
+    },
+    auraSounds = {
+        { spellID = 1235405, trigger = "added", unit = "player", name = "Bonespiked under you", sound = "Move" },
+        { spellID = 1234846, trigger = "added", unit = "player", name = "Toxic Spores on you",  sound = "Gun1", disabled = true },
     },
 }
 
@@ -1091,6 +1108,7 @@ KE.EncounterData[3208] = {
     dungeon = "DenOfNalorakk",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1235623, 1235548, 1235783 },
     spells = {
         [1235548] = { name = "Glacial Torment",       castType = "begincast", castDuration = 1, role = "heal",     displayText = "DISPEL", sound = "Dispel",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
@@ -1099,6 +1117,14 @@ KE.EncounterData[3208] = {
         [1235783] = { name = "Shattering Frostspike", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "ADDS",   sound = "Adds",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
     },
+    auraSounds = {
+        { spellID = 1235549, trigger = "added", unit = "player", name = "Glacial Torment on you",     sound = "Dispel" },
+        { spellID = 1236289, trigger = "added", unit = "player", name = "Blizzard's Wrath under you", sound = "Move" },
+        { spellID = 1297749, trigger = "added", unit = "player", name = "Frozen Tempest on you",      sound = "Not Safe" },
+        { spellID = 1235841, trigger = "added", unit = "player", name = "Snowdrift under you",        sound = "Safe" },
+        { spellID = 1263597, trigger = "added", unit = "player", name = "Rime Detonation on you",     sound = "Gun1", disabled = true },
+        { spellID = 1235829, trigger = "added", unit = "player", name = "Winter's Shroud on you",     sound = "Gun1", disabled = true },
+    },
 }
 
 KE.EncounterData[3209] = {
@@ -1106,15 +1132,21 @@ KE.EncounterData[3209] = {
     dungeon = "DenOfNalorakk",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1242860, 1243569, 1297797, 1243011 },
     spells = {
-        [1242860] = { name = "Echoing Maul",           castType = "begincast", castDuration = 4, role = "other",    displayText = "DROPS", sound = "Drop",
+        [1242860] = { name = "Echoing Maul",           castType = "begincast", castDuration = 4, role = "other",    displayText = "DROPS", sound = "Drops",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
-        [1243011] = { name = "Fury of the War God",    castType = "cast",      castDuration = 0, role = "mechanic", displayText = "SOAK",  sound = "Soaks",
+        [1243011] = { name = "Fury of the War God",    castType = "cast",      castDuration = 0, role = "mechanic", displayText = "PROTECT", sound = "Protect",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
         [1243569] = { name = "Overwhelming Onslaught", castType = "begincast", castDuration = 7, role = "mechanic", displayText = "HIDE",  sound = "Hide",
                       timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1297797] = { name = "Forceful Slam",          castType = "begincast", castDuration = 5, role = "tank",     displayText = "TANK SOAK", sound = "Soak",
                       timerSource = { kind = "Sequel", parent = 1243569, after = 10 } },
+    },
+    auraSounds = {
+        { spellID = 1255577, trigger = "added", unit = "player", name = "Spectral Slash on you",      sound = "Defensive" },
+        { spellID = 1242869, trigger = "added", unit = "player", name = "Echoing Maul on you",        sound = "Move Out" },
+        { spellID = 1262253, trigger = "added", unit = "player", name = "Demoralizing Scream on you", sound = "GGEZ" },
     },
 }
 
@@ -1127,11 +1159,11 @@ KE.EncounterData[2139] = {
     dungeon = "KingsRest",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 265910, 265773, 265781, 265923 },
     spells = {
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [265773] = { name = "Spit Gold", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS",
+        [265773] = { name = "Spit Gold", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS", sound = "Drops",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [265910] = { name = "Tail Thrash", castType = "begincast", castDuration = 1.5, role = "tank", display = "bar", displayText = "TANK HIT",
+        [265910] = { name = "Tail Thrash", castType = "begincast", castDuration = 1.5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [265781] = { name = "Serpentine Gust", castType = "begincast", castDuration = 2, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1139,7 +1171,8 @@ KE.EncounterData[2139] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 265914, trigger = "added", unit = "player", name = "Molten Gold under you", sound = "Move" },
+        { spellID = 265914,  trigger = "added", unit = "player", name = "Molten Gold under you", sound = "Move" },
+        { spellID = 1306736, trigger = "added", unit = "player", name = "Spit Gold on you",      sound = "Move Out" },
     },
 }
 
@@ -1148,19 +1181,19 @@ KE.EncounterData[2142] = {
     dungeon = "KingsRest",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1311956, 267618, 267702, 1312146 },
     spells = {
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [267618] = { name = "Drain Fluids", castType = "begincast", castDuration = 2, role = "other", displayText = "FEET",
+        [267618] = { name = "Drain Fluids", castType = "begincast", castDuration = 2, role = "other", displayText = "FEET", sound = "Feet",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1311956] = { name = "Burn Corruption", castType = "begincast", castDuration = 4, role = "other", displayText = "DODGE", sound = "Dodge",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1312146] = { name = "Awakening Slam", castType = "begincast", castDuration = 3, role = "other", displayText = "ADDS", sound = "Adds",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [267702] = { name = "Entomb", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "RESCUE", color = { 0.855, 0.357, 1.0 }, sound = "Gun1",
+        [267702] = { name = "Entomb", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "RESCUE", color = { 0.855, 0.357, 1.0 }, sound = "Rescue",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 267618, trigger = "added", unit = "player", name = "Drain Fluids on you",      sound = "Gun1" },
+        { spellID = 267618, trigger = "added", unit = "player", name = "Drain Fluids on you",      sound = "Defensive" },
         { spellID = 267874, trigger = "added", unit = "player", name = "Burning Ground under you", sound = "Move" },
     },
 }
@@ -1170,23 +1203,26 @@ KE.EncounterData[2140] = {
     dungeon = "KingsRest",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 266237, 266231, 266206, 267494, 267273, 267060, 1305810 },
     spells = {
-        [266206] = { name = "Whirling Axes", castType = "begincast", castDuration = 2.8, role = "other", displayText = "DODGE",
+        [266206] = { name = "Whirling Axes", castType = "begincast", castDuration = 2.8, role = "other", displayText = "DODGE", sound = "Dodge",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [266231] = { name = "Severing Axe", castType = "begincast", castDuration = 1.5, role = "other", displayText = "BLEED", color = { 0.77, 0.17, 0.17 },
+        [266231] = { name = "Severing Axe", castType = "begincast", castDuration = 1.5, role = "other", displayText = "BLEED", color = { 0.77, 0.17, 0.17 }, sound = "Bleed",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [267494] = { name = "Barrel Through", castType = "begincast", castDuration = 6, role = "mechanic", displayText = "STACK + SOAK", color = { 0.2, 1.0, 0.4 }, sound = "Soak",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [266237] = { name = "Debilitating Backhand", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK KITE", color = { 0.77, 0.17, 0.17 },
+        [266237] = { name = "Debilitating Backhand", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK KITE", color = { 0.77, 0.17, 0.17 }, sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- No sound: a cooldown timer cannot say who is targeted.
         [1305810] = { name = "Arc Lightning", castType = "begincast", castDuration = 1, role = "other", displayText = "ARC LIGHTNING", color = { 1.0, 0.231, 0.188 }, disabled = true,
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [267273] = { name = "Poison Nova", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "KICK BOSS", color = { 1.0, 0.15, 0.15 }, sound = "Interrupt",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [267060] = { name = "Call of the Elements", castType = "begincast", castDuration = 2.5, role = "mechanic", displayText = "TOTEMS", sound = "Totem",
+        [267060] = { name = "Call of the Elements", castType = "begincast", castDuration = 2.5, role = "mechanic", displayText = "TOTEMS", sound = "Totems",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
+    },
+    auraSounds = {
+        { spellID = 266231, trigger = "added", unit = "player", name = "Severing Axe on you", sound = "Defensive" },
     },
 }
 
@@ -1195,29 +1231,31 @@ KE.EncounterData[2143] = {
     dungeon = "KingsRest",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 268586, 1303488, 269230, 269369, 1303115, 1303327, 1303267 },
     spells = {
         -- Timeline Finished can arrive late; retain the estimate unless a readable cast confirms its end.
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [269230] = { name = "Hunting Leap", castType = "begincast", castDuration = 2, role = "other", displayText = "ADD FRONTAL", color = { 0.77, 0.17, 0.17 },
+        [269230] = { name = "Hunting Leap", castType = "begincast", castDuration = 2, role = "other", displayText = "ADD FRONTAL", color = { 0.77, 0.17, 0.17 }, sound = "Add Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", castMatch = { spells = { 269232 }, endpoint = "cast-end" } } },
-        [269369] = { name = "Deathly Roar", castType = "begincast", castDuration = 0, role = "other", displayText = "KICK ADD", color = { 1.0, 0.15, 0.15 }, sound = "Interrupt",
+        [269369] = { name = "Deathly Roar", castType = "begincast", castDuration = 0, role = "other", displayText = "KICK ADD", color = { 1.0, 0.15, 0.15 }, sound = "Kick Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Unanchored: the timeline finish arrives late, so the cue ends on its estimate.
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1303115] = { name = "Aerial Smash", castType = "begincast", castDuration = 4, role = "other", displayText = "LEAP",
+        [1303115] = { name = "Aerial Smash", castType = "begincast", castDuration = 4, role = "other", displayText = "SPREAD", sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
-        [268586] = { name = "Blade Combo", castType = "begincast", castDuration = 1.5, role = "tank", display = "bar", displayText = "TANK HIT",
+        [268586] = { name = "Blade Combo", castType = "begincast", castDuration = 1.5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1303267] = { name = "Gilded Destruction", castType = "begincast", castDuration = 6, role = "mechanic", displayText = "AOE + FRONTAL", color = { 1.0, 1.0, 0.2 }, sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Unanchored: the timeline finish arrives late; the cue ends at the forecast deadline.
-        [1303327] = { name = "Quaking Leap", castType = "cast", castDuration = 0, role = "other", displayText = "SPREAD + LEAP", color = { 1.0, 0.6, 0.0 }, sound = "Leap",
+        [1303327] = { name = "Quaking Leap", castType = "cast", castDuration = 0, role = "other", displayText = "SPREAD", color = { 1.0, 0.6, 0.0 }, sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
-        [1303488] = { name = "Savage Maul", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1303488] = { name = "Savage Maul", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     phases = {
         { unit = "boss1", threshold = 80, lead = 5 },
+    },
+    auraSounds = {
+        { spellID = 1302945, trigger = "added", unit = "player", name = "Impaling Spear on you", sound = "Bleed" },
     },
 }
 
@@ -1230,6 +1268,7 @@ KE.EncounterData[3101] = {
     dungeon = "MurderRow",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 474240, 1253811, 1264095, "light_infusion" },
     spells = {
         [1253811] = { name = "Fel Spray", castType = "begincast", castDuration = 3.5, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1246,7 +1285,7 @@ KE.EncounterData[3101] = {
             hidesForecasts = { 474240 },
             prepareText = "VULNERABILITY SOON", endedText = "VULNERABILITY ENDED", endedDuration = 2,
             display = "bar", displayText = "VULNERABILITY 100%", color = { 0.4, 1.0, 0.3 },
-            sound = "Dmg Amp", showAtSeconds = 0 },
+            soundOnHide = "Dmg Amp Over", showAtSeconds = 0 },
     },
     phases = {
         { unit = "boss2", threshold = 20, lead = 5 },
@@ -1254,9 +1293,9 @@ KE.EncounterData[3101] = {
     auraSounds = {
         -- Off by default: the Light Infusion cue already announces this moment.
         { spellID = 1217464, trigger = "removed", unit = "boss",   name = "Vulnerability buff removed", sound = "Dmg Amp", disabled = true },
-        { spellID = 1217989, trigger = "removed", unit = "boss",   name = "Shield removed",             sound = "Gun1" },
-        { spellID = 1228198, trigger = "added",   unit = "player", name = "Corroding Spittle on you",   sound = "Dispel" },
-        { spellID = 1253813, trigger = "added",   unit = "player", name = "Fel Spray on you",           sound = "Gun1" },
+        { spellID = 1228198, trigger = "added",   unit = "player", name = "Corroding Spittle on you",   sound = "Defensive" },
+        { spellID = 1253813, trigger = "added",   unit = "player", name = "Fel Spray on you",           sound = "Move" },
+        { spellID = 1217989, trigger = "removed", unit = "boss",   name = "Shield removed",             sound = "Gun1", disabled = true },
     },
 }
 
@@ -1265,28 +1304,28 @@ KE.EncounterData[3102] = {
     dungeon = "MurderRow",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1222795, 474478, 474765, 1214357, 1218347 },
     spells = {
         [474478] = { name = "Killing Spree", castType = "cast", castDuration = 0, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
         [474765] = { name = "Same-Day Delivery", castType = "cast", castDuration = 2, role = "other", displayText = "FEET", sound = "Feet",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1214357] = { name = "Fire Bomb", castType = "cast", castDuration = 0, role = "other", displayText = "CLEARS",
+        [1214357] = { name = "Fire Bomb", castType = "cast", castDuration = 0, role = "other", displayText = "CLEAR", sound = "Clear",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
-        [1222795] = { name = "Envenom", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1222795] = { name = "Envenom", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1218347] = { name = "Murder in a Row", castType = "cast", castDuration = 0, role = "mechanic", displayText = "HIDE", sound = "Hide",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1214352, trigger = "added",   unit = "player", name = "Fire Bomb on you",             sound = "Move" },
-        { spellID = 474515,  trigger = "added",   unit = "player", name = "Heartstop Poison on you",      sound = "Dispel" },
-        { spellID = 474545,  trigger = "removed", unit = "player", name = "Murder in a Row ended",        sound = "Feet" },
+        { spellID = 1214352, trigger = "added",   unit = "player", name = "Fire Bomb on you",             sound = "Clear Bomb" },
+        { spellID = 474545,  trigger = "removed", unit = "player", name = "Murder in a Row Ended",        sound = "Feet" },
         { spellID = 474740,  trigger = "added",   unit = "player", name = "Murder in a Row bleed on you", sound = "Gun1" },
-        { spellID = 1218465, trigger = "added",   unit = "player", name = "Waiter assignment",            sound = "Whisper" },
-        { spellID = 1218466, trigger = "added",   unit = "player", name = "Cleaner assignment",           sound = "Whisper" },
-        { spellID = 1218467, trigger = "added",   unit = "player", name = "Entertainer assignment",       sound = "Whisper" },
-        { spellID = 1218468, trigger = "added",   unit = "player", name = "Bouncer assignment",           sound = "Whisper" },
+        { spellID = 474515,  trigger = "added",   unit = "player", name = "Heartstop Poison on you",      sound = "Dispel" },
+        { spellID = 1218465, trigger = "added",   unit = "player", name = "Waiter Assignment",            sound = "Waiter" },
+        { spellID = 1218466, trigger = "added",   unit = "player", name = "Cleaner Assignment",           sound = "Cleaner" },
+        { spellID = 1218467, trigger = "added",   unit = "player", name = "Entertainer Assignment",       sound = "Entertainer" },
+        { spellID = 1218468, trigger = "added",   unit = "player", name = "Bouncer Assignment",           sound = "Bouncer" },
     },
 }
 
@@ -1297,8 +1336,9 @@ KE.EncounterData[3103] = {
     dungeon = "MurderRow",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 473898, 1214637, 1295453, 474197, "rage_phase" },
     spells = {
-        [473898] = { name = "Legion Strike", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [473898] = { name = "Legion Strike", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", pausedStop = "retire" } },
         [1214637] = { name = "Axe Toss", castType = "begincast", castDuration = 3, role = "other", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", pausedStop = "retire" } },
@@ -1318,9 +1358,9 @@ KE.EncounterData[3103] = {
             sound = "Dmg Amp", showAtSeconds = 0 },
     },
     auraSounds = {
-        { spellID = 1214637, trigger = "added",   unit = "player", name = "Axe Toss on you",      sound = "Move" },
-        { spellID = 473898,  trigger = "removed", unit = "player", name = "Legion Strike ended",  sound = "Clear" },
-        { spellID = 474234,  trigger = "added",   unit = "player", name = "Burning Steps on you", sound = "Gun1" },
+        { spellID = 473898,  trigger = "removed", unit = "player", name = "Legion Strike Ended",  sound = "Clear" },
+        { spellID = 1214637, trigger = "added",   unit = "player", name = "Axe Toss on you",      sound = "Under Boss" },
+        { spellID = 474234,  trigger = "added",   unit = "player", name = "Burning Steps on you", sound = "Move" },
     },
 }
 
@@ -1329,10 +1369,11 @@ KE.EncounterData[3105] = {
     dungeon = "MurderRow",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 474408, 1218203, 1224478, "leap", "no_portal" },
     spells = {
         [474408] = { name = "Summon Vilefiend", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1218203] = { name = "Fingers of Gul'dan", castType = "begincast", castDuration = 5, role = "other", displayText = "DROPS", sound = "Drop",
+        [1218203] = { name = "Fingers of Gul'dan", castType = "begincast", castDuration = 5, role = "other", displayText = "ADDS", sound = "Adds",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Hidden by default: its forecast reaches zero after the leap. Its
         -- anchor still starts the lockout cue and ends the leap estimate.
@@ -1347,7 +1388,7 @@ KE.EncounterData[3105] = {
         no_portal = { name = "Malefic Wave lockout", iconOverride = 1224478, role = "mechanic",
             source = { kind = "Sequel", parent = 1224478, after = 0 }, duration = 10,
             endedText = "GATEWAY SAFE", endedDuration = 2, endedColor = { 0.2, 1.0, 0.4 },
-            display = "text", displayText = "DON'T GATE", color = { 1.0, 0.2, 0.2 }, showAtSeconds = 0 },
+            display = "text", displayText = "DON'T GATE", color = { 1.0, 0.2, 0.2 }, soundOnHide = "Take Gateway", showAtSeconds = 0 },
     },
     auraSounds = {
         { spellID = 1217384, trigger = "added", unit = "player", name = "Malefic Wave on you", sound = "Gun1" },
@@ -1363,13 +1404,14 @@ KE.EncounterData[2609] = {
     dungeon = "RubyLifePools",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1307297, 1307308, "awaken_whelps", 373686 },
     spells = {
-        [1307297] = { name = "Hailburst", castType = "begincast", castDuration = 3, role = "other", displayText = "DROPS", sound = "Drop",
+        [1307297] = { name = "Hailburst", castType = "begincast", castDuration = 3, role = "other", displayText = "DROPS", sound = "Drops",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1307308] = { name = "Chillstorm", castType = "begincast", castDuration = 4.5, role = "other", displayText = "SUCC", sound = "AoE",
+        [1307308] = { name = "Chillstorm", castType = "begincast", castDuration = 4.5, role = "other", displayText = "SUCC", sound = "Pull",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Mythic only: no Frost Overload timer is published on other difficulties.
-        [373686] = { name = "Frost Overload", castType = "cast", castDuration = 0, role = "mechanic", displayText = "SHIELD", sound = "Boss Buffed", shieldColor = { 0.37, 0.82, 1.0 },
+        [373686] = { name = "Frost Overload", castType = "cast", castDuration = 0, role = "mechanic", displayText = "SHIELD INC", soundOnHide = "Boss Shielded", shieldColor = { 0.37, 0.82, 1.0 },
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     phaseCues = {
@@ -1387,7 +1429,8 @@ KE.EncounterData[2609] = {
     },
     auraSounds = {
         { spellID = 372963, trigger = "added", unit = "player", name = "Storm's Eye on you", sound = "Move" },
-        { spellID = 384024, trigger = "added", unit = "player", name = "Hailbombs on you",   sound = "Gun1" },
+        { spellID = 384024, trigger = "added", unit = "player", name = "Hailbombs on you",   sound = "GGEZ" },
+        { spellID = 385518, trigger = "added", unit = "player", name = "Chillstorm on you",  sound = "Move Out" },
     },
 }
 
@@ -1396,17 +1439,18 @@ KE.EncounterData[2606] = {
     dungeon = "RubyLifePools",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 372858, 372864, 372110 },
     spells = {
         [372864] = { name = "Ritual of Blazebinding", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [372110] = { name = "Molten Boulder", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "BAIT",
+        [372110] = { name = "Molten Boulder", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "BAIT", sound = "Bait",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [372858] = { name = "Searing Blows", castType = "cast", castDuration = 0, role = "tank", display = "bar", displayText = "TANK HIT",
+        [372858] = { name = "Searing Blows", castType = "cast", castDuration = 0, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 372820, trigger = "added", unit = "player", name = "Scorched Earth on you", sound = "Move" },
+        { spellID = 372820, trigger = "added", unit = "player", name = "Scorched Earth on you",         sound = "Move" },
+        { spellID = 372865, trigger = "added", unit = "player", name = "Ritual of Blazebinding on you", sound = "Spawn Add" },
     },
 }
 
@@ -1416,17 +1460,17 @@ KE.EncounterData[2623] = {
     dungeon = "RubyLifePools",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 381512, 381862, 381517, 381525, 381516 },
     spells = {
         -- The cast can start well after the timeline finishes; its confirmed start re-times the cue.
         [381525] = { name = "Roaring Firebreath", castType = "begincast", castDuration = 4, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castMatch = { spells = { 381525 }, within = 5 }, soonOnHold = true } },
-        [381512] = { name = "Stormslam", castType = "begincast", castDuration = 2.5, role = "tank", display = "bar", displayText = "TANK HIT",
+        [381512] = { name = "Stormslam", castType = "begincast", castDuration = 2.5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [381517] = { name = "Winds of Change", castType = "begincast", castDuration = 1.5, role = "mechanic", displayText = "MOVE", sound = "Move",
+        [381517] = { name = "Winds of Change", castType = "begincast", castDuration = 1.5, role = "mechanic", displayText = "WINDS - CHECK MAP", sound = "Check Map",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
         -- The key names the debuff; the casts are the flying and grounded spits.
-        [381862] = { name = "Inferno Spit", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS",
+        [381862] = { name = "Inferno Spit", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS", sound = "Drops",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castMatch = { spells = { 381602, 381605 }, within = 5 }, soonOnHold = true } },
         [381516] = { name = "Interrupting Cloudburst", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "STOP CASTING", color = { 1.0, 0.15, 0.15 }, sound = "Stop Casting",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1440,8 +1484,9 @@ KE.EncounterData[2623] = {
     -- The 5 s Roaring Firebreath forecast marks the landing.
     stageCue = { spellID = 381525, duration = 5, stage = 2 },
     auraSounds = {
-        { spellID = 381526, trigger = "added", unit = "player", name = "Roaring Firebreath on you", sound = "Gun1" },
+        { spellID = 381526, trigger = "added", unit = "player", name = "Roaring Firebreath on you", sound = "Move" },
         { spellID = 384773, trigger = "added", unit = "player", name = "Flaming Embers on you",     sound = "Move" },
+        { spellID = 381862, trigger = "added", unit = "player", name = "Inferno Spit on you",       sound = "Defensive" },
     },
 }
 
@@ -1454,15 +1499,15 @@ KE.EncounterData[2124] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1311804, 1289059, 1288049, 1311805 },
     spells = {
         [1288049] = { name = "Thunder and Lightning", castType = "begincast", castDuration = 4.5, role = "other", displayText = "STACK + SOAK", color = { 0.2, 1.0, 0.4 }, sound = "Soak",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1311804] = { name = "Overload", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1311804] = { name = "Overload", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1311805] = { name = "Tempest Winds", castType = "begincast", castDuration = 3, role = "other", displayText = "MOVE OUT", color = { 1.0, 0.6, 0.0 },
+        [1311805] = { name = "Tempest Winds", castType = "begincast", castDuration = 3, role = "other", displayText = "DROPS", color = { 1.0, 0.6, 0.0 }, sound = "Drops",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1289059] = { name = "Gale Force", castType = "begincast", castDuration = 3.5, role = "other", displayText = "AOE + KNOCK", color = { 1.0, 1.0, 0.2 }, sound = "Knockback",
+        [1289059] = { name = "Gale Force", castType = "begincast", castDuration = 3.5, role = "other", displayText = "KNOCK", color = { 1.0, 1.0, 0.2 }, sound = "Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", holdOverlapping = true } },
     },
     phases = {
@@ -1472,7 +1517,11 @@ KE.EncounterData[2124] = {
         { unit = "boss2", threshold = 35, lead = 5 },
     },
     auraSounds = {
+        { spellID = 1288074, trigger = "added", unit = "player", name = "Thunder and Lightning on you", sound = "Move In" },
+        { spellID = 1288874, trigger = "added", unit = "player", name = "Tempest Winds on you",         sound = "Move Out" },
         { spellID = 1288885, trigger = "added", unit = "player", name = "Tempest Winds silence on you", sound = "Move" },
+        { spellID = 1289059, trigger = "added", unit = "player", name = "Gale Force on you",            sound = "Gun1", disabled = true },
+        { spellID = 1288457, trigger = "added", unit = "player", name = "Gust on you",                  sound = "Gun1", disabled = true },
     },
 }
 
@@ -1481,19 +1530,20 @@ KE.EncounterData[2125] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1290797, 1289109, 1290029, 1293048, 1289205, 264172 },
     spells = {
-        [264172] = { name = "Burrow", castType = "begincast", castDuration = 3, role = "other", displayText = "PHASE CHANGE", color = { 1.0, 1.0, 1.0 }, sound = "Phasing",
+        [264172] = { name = "Burrow", castType = "begincast", castDuration = 3, role = "other", displayText = "INTERMISSION", color = { 1.0, 1.0, 1.0 }, soundOnHide = "Intermission",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1290029] = { name = "A Knot of Snakes", castType = "begincast", castDuration = 3, role = "other", displayText = "STACK + CC", color = { 0.2, 1.0, 0.4 }, sound = "CC",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- An estimate: the channel length is unpublished, so the cue ends 3 s after its anchor.
-        [1289109] = { name = "Thunder Spit", castType = "begincast", castDuration = 3, role = "other", displayText = "FEET", sound = "Move",
+        [1289109] = { name = "Thunder Spit", castType = "begincast", castDuration = 3, role = "other", displayText = "FEET", sound = "Feet",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1289205] = { name = "Hatch", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "BIG ADD", color = { 1.0, 0.3, 0.8 }, sound = "Add",
+        [1289205] = { name = "Hatch", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "BIG ADD", color = { 1.0, 0.3, 0.8 }, sound = "Adds",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1290797] = { name = "Lightning Bite", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1290797] = { name = "Lightning Bite", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1293048] = { name = "Serpentstorm", castType = "begincast", castDuration = 4, role = "other", displayText = "AOE AND DANCE", color = { 1.0, 1.0, 0.2 }, sound = "Aoe And Dance",
+        [1293048] = { name = "Serpentstorm", castType = "begincast", castDuration = 4, role = "other", displayText = "AOE + DANCE", color = { 1.0, 1.0, 0.2 }, sound = "Aoe And Dance",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     phaseCues = {
@@ -1502,11 +1552,11 @@ KE.EncounterData[2125] = {
             display = "bar", displayText = "BURROWED", color = { 1.0, 1.0, 1.0 }, showAtSeconds = 0 },
     },
     auraSounds = {
-        { spellID = 1289109, trigger = "added", unit = "player", name = "Thunder Spit on you",          sound = "Gun1" },
-        { spellID = 1289588, trigger = "added", unit = "player", name = "Thunder Spit hit on you",      sound = "Move" },
-        { spellID = 1289589, trigger = "added", unit = "player", name = "Lingering Storm under you",    sound = "Move" },
-        { spellID = 1290030, trigger = "added", unit = "player", name = "A Knot of Snakes on you",      sound = "Move" },
+        { spellID = 1289109, trigger = "added", unit = "player", name = "Thunder Spit on you",          sound = "Move" },
+        { spellID = 1289588, trigger = "added", unit = "player", name = "Thunder Spit hit on you",      sound = "Gun1" },
+        { spellID = 1290030, trigger = "added", unit = "player", name = "A Knot of Snakes on you",      sound = "Under Boss" },
         { spellID = 1297034, trigger = "added", unit = "player", name = "Electrified Ground under you", sound = "Move" },
+        { spellID = 1289589, trigger = "added", unit = "player", name = "Lingering Storm under you",    sound = "Move" },
     },
 }
 
@@ -1515,15 +1565,17 @@ KE.EncounterData[2126] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1291618, 1309525 },
     spells = {
         [1309525] = { name = "Induction", castType = "begincast", castDuration = 3, role = "other", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- The extension estimates spire availability after the provider endpoint.
-        [1291618] = { name = "Lightning Spire", castType = "cast", castDuration = 3.5, role = "mechanic", displayText = "BLOCK LINE", color = { 0.855, 0.357, 1.0 }, sound = "Gun1",
+        [1291618] = { name = "Lightning Spire", castType = "cast", castDuration = 3.5, role = "mechanic", displayText = "BLOCK LINE", color = { 0.855, 0.357, 1.0 }, sound = "Block Line",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", soonOnHold = true } },
     },
     auraSounds = {
         { spellID = 1291815, trigger = "added", unit = "player", name = "Induction Field under you", sound = "Move" },
+        { spellID = 266923,  trigger = "added", unit = "player", name = "Galvanized on you",         sound = "Gun1", disabled = true },
     },
 }
 
@@ -1532,14 +1584,19 @@ KE.EncounterData[2127] = {
     dungeon = "TempleOfSethraliss",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 1301202, 1273408 },
     spells = {
-        [1301202] = { name = "Defiling Taint", castType = "cast", castDuration = 0, role = "other", displayText = "BOSS IMMUNE", color = { 1.0, 1.0, 1.0 },
+        [1301202] = { name = "Defiling Taint", castType = "cast", castDuration = 0, role = "other", displayText = "BOSS IMMUNE", color = { 1.0, 1.0, 1.0 }, sound = "Boss Immune",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", soonOnHold = true } },
-        [1273408] = { name = "Stage One", castType = "cast", castDuration = 0, role = "other", displayText = "STAGE ONE", color = { 1.0, 1.0, 1.0 },
+        [1273408] = { name = "Stage One", castType = "cast", castDuration = 0, role = "other", displayText = "STAGE ONE", color = { 1.0, 1.0, 1.0 }, sound = "Phase Ending",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1302826, trigger = "removed", unit = "player", name = "Corruption Burst ended", sound = "Clear" },
+        { spellID = 1302826, trigger = "removed", unit = "player", name = "Corruption Burst Ended", sound = "Clear", disabled = true },
+        { spellID = 1302618, trigger = "added",   unit = "player", name = "Vile Charge on you",     sound = "Gun1", disabled = true },
+        { spellID = 1300714, trigger = "added",   unit = "player", name = "Shadowlash on you",      sound = "Debuffed", disabled = true },
+        { spellID = 1311979, trigger = "added",   unit = "player", name = "Latent Hex on you",      sound = "Move Out" },
+        { spellID = 1300704, trigger = "added",   unit = "player", name = "Fixate on you",          sound = "Fixated", disabled = true },
     },
 }
 
@@ -1552,22 +1609,24 @@ KE.EncounterData[3199] = {
     dungeon = "TheBlindingVale",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1234753, 1234850, 1235640, 1235564 },
     spells = {
-        [1234753] = { name = "Bedrock Slam", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1234753] = { name = "Bedrock Slam", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1234850] = { name = "Lightsower Dash", castType = "begincast", castDuration = 2.5, role = "mechanic", displayText = "CHARGE", color = { 0.855, 0.357, 1.0 }, sound = "Dodge",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1235640] = { name = "Thornblade", castType = "begincast", castDuration = 3, role = "other", displayText = "MARKS + BLEED", color = { 0.77, 0.17, 0.17 },
+        [1235640] = { name = "Thornblade", castType = "begincast", castDuration = 3, role = "other", displayText = "MOVE OUT", color = { 0.77, 0.17, 0.17 }, sound = "Move Out",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", retainEarlyFinished = true } },
         -- The cue ends with the cast; the beam that follows is not shown.
-        [1235564] = { name = "Lightblossom Beam", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "BLOCK LINE", color = { 0.855, 0.357, 1.0 }, sound = "Gun1",
+        [1235564] = { name = "Lightblossom Beam", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "BLOCK LINE", color = { 0.855, 0.357, 1.0 }, sound = "Block Line",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1234802, trigger = "added", unit = "player", name = "Fertile Loam under you",         sound = "Move" },
+        { spellID = 1261276, trigger = "added", unit = "player", name = "Thornblade on you",              sound = "Move Out" },
+        { spellID = 1235865, trigger = "added", unit = "player", name = "Thornblade bleed on you",        sound = "Defensive" },
+        { spellID = 1235574, trigger = "added", unit = "player", name = "Lightblossom Beam on you",       sound = "Soaking" },
         { spellID = 1235828, trigger = "added", unit = "player", name = "Light-Scorched Earth under you", sound = "Move" },
-        { spellID = 1261276, trigger = "added", unit = "player", name = "Thornblade on you",              sound = "Gun1" },
+        { spellID = 1234802, trigger = "added", unit = "player", name = "Fertile Loam under you",         sound = "Move" },
     },
 }
 
@@ -1576,8 +1635,9 @@ KE.EncounterData[3200] = {
     dungeon = "TheBlindingVale",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1236746, 1236709, 1237090 },
     spells = {
-        [1236746] = { name = "Verdant Stomp", castType = "begincast", castDuration = 3, role = "other", displayText = "AOE", sound = "AoE",
+        [1236746] = { name = "Verdant Stomp", castType = "begincast", castDuration = 3, role = "other", displayText = "AOE", sound = "Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", suppressConcurrentRestart = { from = 29, duration = 6 } } },
         [1236709] = { name = "Thorncaller Roar", castType = "begincast", castDuration = 2, role = "other", displayText = "AOE + FEET", sound = "Aoe And Dance",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1585,8 +1645,10 @@ KE.EncounterData[3200] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1237267, trigger = "added", unit = "player", name = "Incise on you",   sound = "Gun1" },
-        { spellID = 1272290, trigger = "added", unit = "player", name = "Crunched on you", sound = "Gun1" },
+        { spellID = 1259365, trigger = "added", unit = "player", name = "Bloodthorn Roots on you",  sound = "Rooted" },
+        { spellID = 1237091, trigger = "added", unit = "player", name = "Bloodthirsty Gaze on you", sound = "Fixated" },
+        { spellID = 1237267, trigger = "added", unit = "player", name = "Incise on you",            sound = "Defensive" },
+        { spellID = 1272290, trigger = "added", unit = "player", name = "Crunched on you",          sound = "GGEZ" },
     },
 }
 
@@ -1595,19 +1657,19 @@ KE.EncounterData[3201] = {
     dungeon = "TheBlindingVale",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1239824, 1240098, 1240210, 1241058, 1239882, "bear_form", "haranir_form" },
     spells = {
         -- Off by default: its forecast ends at the pull.
-        [1239882] = { name = "Moonkin Form", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "PHASE 1", color = { 1.0, 1.0, 1.0 }, sound = "Phasing", disabled = true,
+        [1239882] = { name = "Moonkin Form", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "PHASE 1", color = { 1.0, 1.0, 1.0 }, disabled = true,
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Stage-three forecasts cancel near their deadlines instead of finishing.
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1239824] = { name = "Lightfire", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "SPREAD", color = { 1.0, 0.6, 0.0 },
+        [1239824] = { name = "Lightfire", castType = "begincast", castDuration = 2, role = "mechanic", displayText = "SPREAD", color = { 1.0, 0.6, 0.0 }, sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", canceledStop = { stage = 3, within = 1 } } },
         [1240098] = { name = "Lightfall", castType = "cast", castDuration = 0, role = "other", displayText = "FEET", color = { 1.0, 0.6, 0.0 }, sound = "Feet",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", canceledStop = { stage = 3, within = 1 } } },
         [1240210] = { name = "Pulverizing Strikes", castType = "begincast", castDuration = 2.5, role = "other", displayText = "MARKED FRONTALS", color = { 0.77, 0.17, 0.17 }, sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", canceledStop = { stage = 3, within = 1 } } },
-        [1241058] = { name = "Grievous Thrash", castType = "begincast", castDuration = 2, role = "other", displayText = "AOE + BLEED", sound = "AoE",
+        [1241058] = { name = "Grievous Thrash", castType = "begincast", castDuration = 2, role = "other", displayText = "BLEEDS", sound = "Bleeds",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", canceledStop = { stage = 3, within = 1 } } },
     },
     phaseCues = {
@@ -1622,6 +1684,10 @@ KE.EncounterData[3201] = {
         { unit = "boss1", threshold = 70, lead = 5 },
         { unit = "boss1", threshold = 40, lead = 5 },
     },
+    auraSounds = {
+        { spellID = 1239919, trigger = "added", unit = "player", name = "Lightfire Beams under you", sound = "Move" },
+        { spellID = 1239825, trigger = "added", unit = "player", name = "Lightfire on you",          sound = "Whisper" },
+    },
 }
 
 KE.EncounterData[3202] = {
@@ -1629,23 +1695,24 @@ KE.EncounterData[3202] = {
     dungeon = "TheBlindingVale",
     bossOrder = 4,
     timerPolicy = "explicit",
+    rowOrder = { 1247685, 1246372, 1246607, 1246858 },
     spells = {
         [1246372] = { name = "Awaken the Lightbloom", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "ADDS", sound = "Adds",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1247685] = { name = "Thornspike", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1247685] = { name = "Thornspike", castType = "begincast", castDuration = 3, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1246607] = { name = "Concentrated Lightbeam", castType = "begincast", castDuration = 5, role = "other", displayText = "AIM AT ADDS", color = { 1.0, 0.231, 0.188 },
+        [1246607] = { name = "Concentrated Lightbeam", castType = "begincast", castDuration = 5, role = "other", displayText = "AIM AT ADDS", color = { 1.0, 0.231, 0.188 }, sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- Mythic only: no other difficulty publishes this timer.
         [1246858] = { name = "Lightbloom's Essence", castType = "begincast", castDuration = 2, role = "other", displayText = "SOAK ORBS", color = { 0.2, 1.0, 0.4 }, sound = "Soaks",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1246753, trigger = "added",     unit = "player", name = "Lightsap under you",               sound = "Move" },
+        { spellID = 1247746, trigger = "added",     unit = "player", name = "Thornspike bleed on you",          sound = "Gun1" },
         { spellID = 1247052, trigger = "added",     unit = "player", name = "Lightbloom's Might: initial gain", sound = "Whisper" },
         { spellID = 1247052, trigger = "increased", unit = "player", name = "Lightbloom's Might: extra stack",  sound = "Whisper" },
-        { spellID = 1247746, trigger = "added",     unit = "player", name = "Thornspike bleed on you",          sound = "Gun1" },
+        { spellID = 1246753, trigger = "added",     unit = "player", name = "Lightsap under you",               sound = "Move" },
+        { spellID = 1246751, trigger = "added",     unit = "player", name = "Concentrated Lightbeam on you",    sound = "Gun1", disabled = true },
     },
 }
 
@@ -1658,19 +1725,20 @@ KE.EncounterData[3285] = {
     dungeon = "VoidscarArena",
     bossOrder = 1,
     timerPolicy = "explicit",
+    rowOrder = { 1297017, 1222098, 1296963, 1300259 },
     spells = {
         -- Unanchored: this event's timeline finish is not reliably reported.
-        [1222098] = { name = "Nether Dash", castType = "cast", castDuration = 0, role = "mechanic", displayText = "LINES", sound = "Move",
+        [1222098] = { name = "Nether Dash", castType = "cast", castDuration = 0, role = "mechanic", displayText = "LINES", sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label" } },
         [1296963] = { name = "Umbral Rupture", castType = "begincast", castDuration = 4, role = "other", displayText = "FEET", sound = "Feet",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1297017] = { name = "Void Blast", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1297017] = { name = "Void Blast", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1300259] = { name = "Dark Bloom", castType = "begincast", castDuration = 4, role = "other", displayText = "AOE + DODGE", sound = "Dodge",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1296967, trigger = "added", unit = "player", name = "Void Fissure on you", sound = "Move" },
+        { spellID = 1296967, trigger = "added", unit = "player", name = "Void Fissure under you", sound = "Move" },
     },
 }
 
@@ -1679,10 +1747,11 @@ KE.EncounterData[3286] = {
     dungeon = "VoidscarArena",
     bossOrder = 2,
     timerPolicy = "explicit",
+    rowOrder = { 1222642, 1226120, 1222721, 1262497, 1222371 },
     spells = {
         [1222371] = { name = "Provoke Creeper", castType = "cast", castDuration = 0, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Sequel", parent = 1262497, after = 7 } },
-        [1222642] = { name = "Hulking Claw", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1222642] = { name = "Hulking Claw", castType = "begincast", castDuration = 2, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1222721] = { name = "Noxious Breath", castType = "begincast", castDuration = 4, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
@@ -1692,9 +1761,11 @@ KE.EncounterData[3286] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
-        { spellID = 1222484, trigger = "added", unit = "player", name = "Poison Pool on you",         sound = "Move" },
-        { spellID = 1263971, trigger = "added", unit = "player", name = "Mind-Numbing Poison on you", sound = "Dispel" },
         { spellID = 1282892, trigger = "added", unit = "player", name = "Sickening Bite on you",      sound = "Gun1" },
+        { spellID = 1263971, trigger = "added", unit = "player", name = "Mind-Numbing Poison on you", sound = "Dispel" },
+        { spellID = 1222484, trigger = "added", unit = "player", name = "Poison Pool under you",      sound = "Move" },
+        { spellID = 1226031, trigger = "added", unit = "player", name = "Poison Splash on you",       sound = "Dispel", disabled = true },
+        { spellID = 1283506, trigger = "added", unit = "player", name = "Fixate on you",              sound = "Fixated" },
     },
 }
 
@@ -1703,17 +1774,17 @@ KE.EncounterData[3287] = {
     dungeon = "VoidscarArena",
     bossOrder = 3,
     timerPolicy = "explicit",
+    rowOrder = { 1311923, "tank_frontal", 1282770, 1227264, 1263982, 1222755 },
     spells = {
         [1222755] = { name = "Void Cascade", castType = "begincast", castDuration = 6, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1227264] = { name = "Cosmic Crash", castType = "begincast", castDuration = 4.8, role = "other", displayText = "AOE + SPREAD", sound = "Spread",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        -- No sound: a cooldown timer cannot say who is targeted.
-        [1263982] = { name = "Gravitic Orbs", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "BAIT ORBS",
+        [1263982] = { name = "Gravitic Orbs", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "BAIT ORBS", sound = "Bait",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1282770] = { name = "Unstable Singularity", castType = "begincast", castDuration = 6, role = "mechanic", displayText = "MOVE IN", color = { 1.0, 0.6, 0.0 }, sound = "Move",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [1311923] = { name = "Dark Waves", castType = "begincast", castDuration = 5, role = "tank", display = "bar", displayText = "TANK HIT",
+        [1311923] = { name = "Dark Waves", castType = "begincast", castDuration = 5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     phaseCues = {
@@ -1725,7 +1796,8 @@ KE.EncounterData[3287] = {
         },
     },
     auraSounds = {
-        { spellID = 1227247, trigger = "added", unit = "player", name = "Void Cascade on you", sound = "Gun1" },
-        { spellID = 1310026, trigger = "added", unit = "player", name = "Atomized on you",     sound = "Gun1" },
+        { spellID = 1263983, trigger = "added", unit = "player", name = "Condensed Mass on you", sound = "Clear" },
+        { spellID = 1227247, trigger = "added", unit = "player", name = "Void Cascade on you",   sound = "Gun1" },
+        { spellID = 1310026, trigger = "added", unit = "player", name = "Atomized on you",       sound = "GGEZ" },
     },
 }

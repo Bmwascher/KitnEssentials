@@ -510,6 +510,14 @@ function KE.GetDungeonTimerDungeonLabel(iconID, name) end
 ---@return { id: any, name: string, ordinal: number, spells: table[], firstReminder: integer? }[]
 function KE.GroupDungeonTimerBossRows(bosses) end
 
+--- Settings-page row order for one boss: rows named in rowOrder first, in its
+--- order (a number names a spell row by id, a string a cue by cueName), then the
+--- other rows in their incoming order. A nil or empty rowOrder returns items.
+---@param items table[]
+---@param rowOrder (number|string)[]?
+---@return table[]
+function KE.OrderDungeonTimerBossRows(items, rowOrder) end
+
 --- Season-scoped coverage counts for the General tab.
 ---@param registry KE.DungeonTimerEntry[]
 ---@param encounterData table<number, table>
