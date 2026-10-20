@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.16
+
+### Divine Arbiter
+
+- **NEW:** Divine Arbiter, on a new Paladin tab under Class Tools (it opens
+  on that tab for a Paladin). Off by default. For a Retribution Paladin
+  with the tier 4-piece, one icon shows while the Divine Arbiter buff is
+  up: the spender to press next (Divine Storm or Templar's Verdict), with
+  a 20 second countdown and a green glow
+- Position, icon size, spacing, glow and timer are adjustable, with an
+  Edit Mode mover. An optional sound plays once when a buff starts
+
+---
+
 ## v4.12.15
 
 ### Potion Bars
