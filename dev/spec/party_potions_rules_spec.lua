@@ -54,17 +54,22 @@ describe("PartyPotionsRules.KeepOnRoster", function()
 end)
 
 describe("PartyPotionsRules.Colors", function()
-    it("draws the class color darkened unless the bars take their own colors, a name in it only when known, and the background's opacity in both", function()
+    it("draws each mode's fill, drained part, names and Ready bar", function()
         local R = L.loadPartyPotionsRules()
         local class, bar, bg = { 0.2, 0.4, 0.6 }, { 0.3, 0.4, 0.5, 1 }, { 0.1, 0.1, 0.1, 0.8 }
         local white, gray = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
+        local dark = { dark = true, classBars = true, classNames = false, barColor = bar, bgColor = bg }
         local cases = {
             { name = "own colors", style = { barColor = bar, bgColor = bg }, color = class,
-              want = { bar, 1, bg, 1, white, 0.8 } },
+              want = { bar, 1, bg, 1, white, 0.8, bar, 1, white, true } },
             { name = "class name", style = { classBars = true, classNames = true, bgColor = bg }, color = class,
-              want = { class, R.DIM, class, R.BG, class, 0.8 } },
+              want = { class, R.DIM, class, R.BG, class, 0.8, class, R.DIM, class, true } },
             { name = "class hidden", style = { classBars = true, classNames = true, bgColor = bg },
-              want = { gray, R.DIM, gray, R.BG, white, 0.8 } },
+              want = { gray, R.DIM, gray, R.BG, white, 0.8, gray, R.DIM, white, true } },
+            { name = "dark", style = dark, color = class,
+              want = { class, 1, bg, 1, white, 0.8, bg, 1, class, false } },
+            { name = "dark, class hidden", style = dark,
+              want = { gray, 1, bg, 1, white, 0.8, bg, 1, white, false } },
         }
         for _, case in ipairs(cases) do
             assert.are.same(case.want, { R.Colors(case.style, case.color) }, case.name)
@@ -73,17 +78,21 @@ describe("PartyPotionsRules.Colors", function()
 end)
 
 describe("PartyPotionsRules.Window", function()
-    it("keeps the window on whole pixels, its offset rounded down, never taller than the line, with the gap above it", function()
+    it("places the window on whole pixels and opens it by at most the margin inside the area", function()
         local R = L.loadPartyPotionsRules()
         local cases = {
-            { name = "odd gap", area = 19, line = 14, want = { 14, 2, 3 } },
-            { name = "even gap", area = 18, line = 14, want = { 14, 2, 2 } },
-            { name = "line a hair under a pixel", area = 19, line = 13.9999998, want = { 14, 2, 3 } },
-            { name = "fractional line", area = 19, line = 13.6, want = { 13, 3, 3 } },
-            { name = "line taller than the area", area = 8, line = 13, want = { 13, -3, -2 } },
+            { name = "odd gap", area = 19, line = 14, margin = 5, want = { 14, 2, 3, 2, 3 } },
+            { name = "even gap", area = 18, line = 14, margin = 5, want = { 14, 2, 2, 2, 2 } },
+            { name = "line a hair under a pixel", area = 19, line = 13.9999998, margin = 5, want = { 14, 2, 3, 2, 3 } },
+            { name = "fractional line", area = 19, line = 13.6, margin = 5, want = { 13, 3, 3, 3, 3 } },
+            { name = "line taller than the area", area = 8, line = 13, margin = 5, want = { 13, -3, -2, 0, 0 } },
+            { name = "default bar", area = 21, line = 14, margin = 5, want = { 14, 3, 4, 3, 4 } },
+            { name = "margin under both gaps", area = 30, line = 14, margin = 3, want = { 14, 8, 8, 3, 3 } },
+            { name = "no room under the line", area = 15, line = 14, margin = 5, want = { 14, 0, 1, 0, 1 } },
+            { name = "fractional margin", area = 30, line = 14, margin = 3.7, want = { 14, 8, 8, 3, 3 } },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want, { R.Window(case.area, case.line) }, case.name)
+            assert.are.same(case.want, { R.Window(case.area, case.line, case.margin) }, case.name)
         end
     end)
 end)

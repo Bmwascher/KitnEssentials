@@ -1650,6 +1650,7 @@ local Defaults = {
             PotionTextSize    = 14,
             PotionClassBars   = false,
             PotionClassNames  = true,
+            PotionDarkMode    = false,
             PotionBarColor    = { 0.431, 0.682, 0.812, 1 }, -- #6EAECF
             -- #080808 at 80%, the Chat and Damage Meter backdrop color.
             PotionBgColor     = { 0.031, 0.031, 0.031, 0.80 },

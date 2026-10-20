@@ -268,13 +268,15 @@ function Rules.NewTracker(cd, hasShort, multi, charges)
     return t
 end
 
--- Back to ready, both charges full; the next read records without stamping.
+-- Back to ready, both charges full, with no late-fall window; the next read
+-- records without stamping.
 function Rules.Clear(t, n)
     for k = 1, 2 do
         local sl = t.slot[k]
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
     t.cur, t.primed, t.prev, t.prevShort, t.quietTo, t.restartTo = 1, false, nil, nil, nil, nil
+    t.fallD, t.fallFrom, t.fallTo = nil, nil, nil
     if t.charges then
         t.b, t.a0, t.a1, t.a2 = 0, 0, 0, 1
         t.f1, t.f2, t.p1, t.p2, t.fRead, t.legacy, t.lb = nil, nil, nil, nil, nil, nil, nil
@@ -834,10 +836,11 @@ end
 
 -- The gray window's y offset that lands its label's line bottom a quarter of a
 -- screen pixel above the grid, away from the edge where drawing can round to
--- either pixel; nil leaves the window where it is. y is the cell's center,
--- base the line bottom's depth below it, scale and height the cell's
--- effective scale and the screen's physical height. A center that cannot be
--- read keeps the last seat; before any seat, a quarter pixel is the guess.
+-- either pixel; nil leaves the window where it is. y is the edge the caller
+-- measures from (a cell's center, a potion bar's bottom), base the line
+-- bottom's depth below it, scale and height the frame's effective scale and
+-- the screen's physical height. An edge that cannot be read keeps the last
+-- seat; before any seat, a quarter pixel is the guess.
 function Rules.Seat(y, base, scale, height, seat, isSecret)
     if isSecret(scale) or type(scale) ~= "number" or scale <= 0
         or type(height) ~= "number" or height <= 0 or type(base) ~= "number" then

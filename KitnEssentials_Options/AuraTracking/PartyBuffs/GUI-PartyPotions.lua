@@ -51,8 +51,12 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     -- Without the sensor file no bar can exist; the list still feeds the
     -- Cooldowns tab's while-active potion icons.
     manager:SetCondition("barsOn", function() return Sensor ~= nil and db.PotionBars == true end)
+    -- Dark Mode sets the fill and both names itself.
+    manager:SetCondition("lightBars", function()
+        return Sensor ~= nil and db.PotionBars == true and db.PotionDarkMode ~= true
+    end)
     manager:SetCondition("ownColors", function()
-        return Sensor ~= nil and db.PotionBars == true and db.PotionClassBars ~= true
+        return Sensor ~= nil and db.PotionBars == true and db.PotionClassBars ~= true and db.PotionDarkMode ~= true
     end)
 
     local function AddCheck(row, label, key, state, tooltip, onChange)
@@ -113,7 +117,7 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     local rowB1 = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
     AddCheck(rowB1, "Include Yourself", "PotionIncludeSelf", "barsOn", "Shows a bar for your own potions too.")
     AddCheck(rowB1, "Show Ready Bars", "PotionShowReady", "barsOn",
-        "Keeps a full bar reading Ready for each party member whose potion is ready.")
+        "Keeps a bar reading Ready for each party member whose potion is ready.")
     cardBars:AddRow(rowB1, Theme.rowHeightLast, 0)
     yOffset = cardBars:GetNextOffset()
 
@@ -145,17 +149,26 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     -- Card: Colors
     ----------------------------------------------------------------
     local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    local rowC1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
-    AddCheck(rowC1, "Class Color Bars", "PotionClassBars", "barsOn",
-        "Draws each bar in its player's class color; the drained part takes the Background Color's opacity. Off: Bar Color and Background Color.",
+    local rowC0 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
+    AddCheck(rowC0, "Dark Mode", "PotionDarkMode", "barsOn",
+        "Draws each bar in its player's class color on the Background Color, with the name white while the " ..
+        "potion cools and in the class color once it is ready, and leaves a Ready bar empty. Class Color Bars, " ..
+        "Class Color Names and Bar Color do not apply while it is on.",
         RefreshStates)
-    AddCheck(rowC1, "Class Color Names", "PotionClassNames", "barsOn",
+    cardColors:AddRow(rowC0, Theme.rowHeight)
+    local rowC1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
+    AddCheck(rowC1, "Class Color Bars", "PotionClassBars", "lightBars",
+        "Draws each bar in its player's class color; the drained part takes the Background Color's opacity. " ..
+        "Off: Bar Color and Background Color.",
+        RefreshStates)
+    AddCheck(rowC1, "Class Color Names", "PotionClassNames", "lightBars",
         "Writes each name in its player's class color instead of white.")
     cardColors:AddRow(rowC1, Theme.rowHeight)
     local rowC2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
     AddColor(rowC2, "Bar Color", "PotionBarColor", "ownColors")
     AddColor(rowC2, "Background Color", "PotionBgColor", "barsOn",
-        "With Class Color Bars on, only its opacity is used.")
+        "With Dark Mode off and Class Color Bars on, only its opacity is used. With Dark Mode on, it colors " ..
+        "the drained part and fills the empty Ready bar.")
     cardColors:AddRow(rowC2, Theme.rowHeightLast, 0)
     yOffset = cardColors:GetNextOffset()
 

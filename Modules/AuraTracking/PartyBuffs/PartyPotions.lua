@@ -84,11 +84,12 @@ local function ClassColor(class)
     return { c.r, c.g, c.b }
 end
 
--- The name may be secret: it only reaches SetText. A class the game hides
--- gives no color.
+-- The name, a nickname when the provider has one, may be secret: it only
+-- reaches SetText. A class the game hides gives no color.
 local function Who(token)
     local name
-    local ok, value = pcall(UnitName, token)
+    local ok, value = pcall(KE.GetNicknameOrName, KE, token)
+    if not ok then ok, value = pcall(UnitName, token) end
     if ok then name = value end
     local color
     local okClass, _, class = pcall(UnitClass, token)
@@ -116,7 +117,8 @@ local function Corners()
     return "TOPLEFT", "BOTTOMLEFT"
 end
 
--- Placed rows one after another, anchored to each other.
+-- Placed rows one after another, anchored to each other. Each is seated where
+-- it lands, so a restack leaves no text off the pixel grid.
 local function Stack()
     local corner, far = Corners()
     local gap = Pot.style.up and Pot.style.gap or -Pot.style.gap
@@ -130,13 +132,16 @@ local function Stack()
             else
                 c:SetPoint(corner, Pot.live, corner, 0, 0)
             end
+            Bar.Seat(c)
             prev = c
         end
     end
 end
 
--- Your own casts are plain, so each listed potion starts your bar, a drink
--- over a running buff included.
+-- A plain cast of a listed potion starts your bar, a drink over a running buff
+-- included, and puts that potion's icon on it until the bar is cleared or
+-- unbound. A secret cast ID is skipped: the buff sensor still starts the bar,
+-- and the icon stays as it was.
 local function OnCast(_, _, _, _, spellID)
     if issecretvalue(spellID) then return end
     if not Pot.listed[spellID] then return end
@@ -147,6 +152,8 @@ local function OnCast(_, _, _, _, spellID)
     CDRules.StartCast(t, n)
     Track.Push(t, n)
     Track.Wake()
+    Pot.ownIcon = Texture(spellID) or Pot.icon
+    Bar.SetIcon(row.bar, Pot.ownIcon)
 end
 
 -- Made at the first activation. Each bar exists before any value reaches it,
@@ -187,6 +194,18 @@ local function Placement(db)
     return db.PotionPosition, placement, false
 end
 
+-- A move takes every bar off its seat: the live rows and, while the preview
+-- shows, its samples.
+local function SeatAll()
+    for _, row in ipairs(Pot.rows) do
+        if row.bar.placed then Bar.Seat(row.bar) end
+    end
+    if not Pot.previewing then return end
+    for _, sample in ipairs(Pot.samples) do
+        if sample.bar:IsShown() then Bar.Seat(sample.bar) end
+    end
+end
+
 -- A box anchored where the game restricts moves in combat is placed at the
 -- next drain instead.
 local function Place(db)
@@ -197,6 +216,7 @@ local function Place(db)
     Pot.placePending = nil
     local pos, config = Placement(db)
     KE:ApplyFramePosition(Pot.box, pos, config)
+    SeatAll()
 end
 
 -- The rows are stacked again by Pot.ApplySettings and re-dressed at the drain
@@ -209,6 +229,7 @@ local function Restyle(db)
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.PotionTextSize
     s.up = db.PotionGrowth == "UP"
     s.classBars, s.classNames = db.PotionClassBars == true, db.PotionClassNames == true
+    s.dark = db.PotionDarkMode == true
     s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
     box:SetSize(s.width, #ORDER * (s.height + s.gap) - s.gap)
@@ -264,10 +285,14 @@ end
 ---------------------------------------------------------------------------------
 -- Binding
 ---------------------------------------------------------------------------------
+-- Your bar's count ends with its bind, and its potion icon with it.
 local function Unbind(row)
     if not row.bound then return end
     Track.Unbind(row.st)
-    if row.token == "player" then Pot.castFrame:UnregisterAllEvents() end
+    if row.token == "player" then
+        Pot.castFrame:UnregisterAllEvents()
+        Pot.ownIcon = nil
+    end
     row.bound, row.guid = false, nil
 end
 
@@ -278,7 +303,7 @@ local function Bind(row)
     local name, color = Who(row.token)
     local e = {
         id = entry.id, kind = entry.kind, buffs = entry.buffs, cd = entry.cd,
-        texture = Pot.icon, name = name, color = color,
+        texture = row.token == "player" and Pot.ownIcon or Pot.icon, name = name, color = color,
     }
     Debug("bind %s", row.token)
     Track.Apply(row.st, row.token, { e }, Pot.style)
@@ -321,6 +346,12 @@ function Pot.Resolve()
     Stack()
 end
 
+-- A changed nickname re-binds the rows, names read again and counts kept;
+-- Pot.Resolve does nothing while the bars are off, inactive or settling.
+function Pot.RefreshNames()
+    Pot.Resolve()
+end
+
 -- A token may name someone else until the module's roster settle ends: reads
 -- wait, and the first resolve after it decides which counts stay.
 function Pot.OnRoster()
@@ -331,11 +362,14 @@ function Pot.OnRoster()
     end
 end
 
--- Every bound row's count back to ready, drawn at once. The trackers stay, so
--- a clear during a roster settle shows at once and a key start then still
--- finds them.
+-- Every bound row's count back to ready, drawn at once, and your bar's icon
+-- back to the shared one. The trackers stay, so a clear during a roster
+-- settle shows at once and a key start then still finds them.
 local function ClearCounts()
     local n = Track.Now()
+    Pot.ownIcon = nil
+    local me = Pot.byToken.player
+    if me then Bar.SetIcon(me.bar, Pot.icon) end
     for _, row in ipairs(Pot.rows) do
         local t = row.st.trackers[1]
         if t then

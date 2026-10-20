@@ -394,6 +394,22 @@ describe("PartyCooldownsRules.Feed", function()
         end
     end)
 
+    it("takes no fall after a clear in a window armed before it", function()
+        local R = loadRules()
+        for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
+            local w = wrap[2]
+            local t = R.NewTracker(300, false)
+            R.Clear(t, 0)
+            R.ArmFall(t, 0, 30)
+            -- A potion list change mid-key: the window's seconds are 32 to 61.
+            R.Clear(t, 10)
+            R.Feed(t, w(true), nil, 15, isSecret, pick)
+            R.Feed(t, w(false), nil, 40, isSecret, pick)
+            local sl = t.slot[t.cur]
+            assert.are.same({ 0, 1 }, { sl.v, sl.c }, wrap[1])
+        end
+    end)
+
     it("still stamps a rise inside the window at the read", function()
         local R = loadRules()
         for _, wrap in ipairs({ { "plain", function(v) return v end }, { "secret", secret } }) do
@@ -718,6 +734,25 @@ describe("PartyCooldownsRules.Seat", function()
         local R = loadRules()
         assert.is_nil(R.Seat(763, 12, HIDDEN, 768, nil, isSecret))
         assert.is_nil(R.Seat(763, nil, 1, 768, nil, isSecret))
+    end)
+
+    it("lands the line a quarter pixel above the grid, rolls up from 0.75, and keeps a seat within a tenth", function()
+        local R = loadRules()
+        local cases = {
+            { name = "lands at a quarter", y = 100.5, want = -0.25 },
+            { name = "lands at a quarter, two pixels a unit", y = 100.25, scale = 2, want = -0.125 },
+            { name = "rolls at 0.75", y = 100.75, want = 0.5 },
+            { name = "seated within tolerance", y = 100.5, seat = -0.2 },
+        }
+        for _, case in ipairs(cases) do
+            local got = R.Seat(case.y, 0, case.scale or 1, 768, case.seat, isSecret)
+            if case.want == nil then
+                assert.is_nil(got, case.name)
+            else
+                assert.is_number(got, case.name)
+                assert.is_true(math.abs(got - case.want) < 1e-9, case.name)
+            end
+        end
     end)
 end)
 
