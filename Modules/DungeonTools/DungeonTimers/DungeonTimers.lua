@@ -854,7 +854,7 @@ function DT:GetSpellAdmittedBinding(spellId)
 end
 
 -- Rule-6 minimum reveal window for an admitted row: effective extension plus
--- the row's stop tolerance. nil for any row without an admitted binding. The
+-- the row's forecast lead and stop tolerance. nil for any row without an admitted binding. The
 -- render path passes the instance's binding and the extension it already
 -- computed; preview and GUI resolve both here.
 function DT:GetSpellRevealFloor(spellId, binding, extension)
