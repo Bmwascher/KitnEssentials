@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.17
+
+### CC Tracker
+
+- Max Enemies is replaced by Enemy CCs Shown (1 to 15, default 5). The box
+  is only as tall as the rows shown, so it no longer pushes up the
+  screen. Up to 15 enemies are always tracked, and rows past the shown
+  count slide into view as CCs above them end
+- Everyone starts at 5 shown: a saved Max Enemies is deleted from every
+  profile and on import
+- Dragging the Enemy CCs Shown slider no longer costs frame rate
+
+---
+
 ## v4.12.16
 
 ### Divine Arbiter
