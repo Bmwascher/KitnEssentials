@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.2
+
+### Dungeon Timers
+
+- **NEW:** Season 2 dungeons: boss timers and cues for Altar of Fangs,
+  Den of Nalorakk, Kings' Rest, Murder Row, Ruby Life Pools, Temple of
+  Sethraliss, The Blinding Vale and Voidscar Arena. They follow BigWigs'
+  messages and bars, and each boss's sound-only reminders sit under it
+- The settings page has six tabs: Dungeon Bosses, Dungeon Trash, General,
+  Bars, Texts and Nameplates. A BigWigs Messages summary in the header
+  has a Check now button, and the Dungeon Trash tab says when a Season 2
+  dungeon has no trash alerts yet
+- **NEW:** Ruby Life Pools wind map. During Kyrakka and Erkhart, a panel
+  names the next wind's side and where the drop lands. In a key it follows
+  BigWigs' Winds bars, and it hides when Erkhart dies. On by default at
+  0.9 scale, with an Edit Mode mover. The Winds of Change row is off by
+  default
+- **NEW:** WRONG TARGET warning for Adderis and Aspix (Mythic and Mythic+,
+  needs BigWigs with LittleWigs). While your target is the boss carrying
+  Storm Blessed, red text shows above the screen's center with the
+  buff's icon on each side and a Wrong Target sound, at most once every 3
+  seconds. On by default, with a preview and a sound dropdown on its
+  Storm Blessed row
+- Adderis and Aspix: the 66% phase entries are gone, each 35% entry hides
+  at its boss's shield swap, and Gale Force's voice plays once per cast
+- Kokia Blazebinder's Molten Boulder BAIT now counts to the start of the
+  cast. Altar of Fangs counts Writhing Coil's three kicks with the new
+  Kick 1, Kick 2 and Kick 3 voices
+- Den of Nalorakk's Ravenous Bellow plays the AoE voice
+
+---
+
 ## v4.12.1
 
 ### Profiles
