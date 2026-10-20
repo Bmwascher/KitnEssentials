@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.18
+
+### Character Panel
+
+- With Character Panel on and Dark Theme off, the inspect window's
+  Transmog and Talents buttons sit side by side at the top, so the
+  Talents button no longer covers the average item level. Turning
+  Character Panel off puts Blizzard's layout back
+- With Dark Theme on, nothing moves, and its dressing room button reads
+  Transmog
+
+---
+
 ## v4.12.17
 
 ### CC Tracker
