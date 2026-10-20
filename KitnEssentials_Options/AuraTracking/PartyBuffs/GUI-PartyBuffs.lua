@@ -12,8 +12,8 @@ local DESCRIPTION = "Shows the cooldowns that matter to your group beside each p
     "their spec's offensive and personal defensive spells, plus their on-use trinkets. An icon is full color " ..
     "when ready, shows the buff's timer while it is up, then turns gray with the time left." ..
     "\n\nA member's spec comes from |cffffd100LibSpecialization|r or a quiet automatic inspect. Until it " ..
-    "is known, that member shows no cooldown icons. Externals and potions they receive still show while " ..
-    "active, after the cooldown icons." ..
+    "is known, that member shows no cooldown icons. Externals and potions your party members receive still " ..
+    "show while active, after the cooldown icons." ..
     "\n\nThe |cffffd100Potions|r tab shows each member's potion cooldown as a bar. The " ..
     "|cffffd100Raid Cooldowns|r tab shows your party's externals and raid cooldowns in a box you can move." ..
     "\n\nWorks on Blizzard's party frames and |cffffd100EllesmereUI|r frames. Not shown in raids."
