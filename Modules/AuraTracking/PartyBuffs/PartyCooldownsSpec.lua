@@ -138,6 +138,8 @@ function Spec.Resolve(m)
     local sources = {}
     if m.isPlayer then
         sources.player = KE:GetPlayerSpecId()
+        local ok, _, class = pcall(UnitClass, "player")
+        if ok then m.class = Plain(class) or m.class end
     else
         local unit = m.unit
         sources.lib, m.libKey = LibSpecFor(unit)
@@ -469,14 +471,16 @@ local C_Item = C_Item
 local C_TooltipInfo = C_TooltipInfo
 local GetInventoryItemID = GetInventoryItemID
 local TRINKET_SLOTS = { 13, 14 }
+local CHEST_AND_MAIN_HAND = { 5, 16 }
 
 local loadTries, lengthTries = {}, {}
 
 -- Out of combat. Returns whether the length is settled. A tooltip with no
 -- cooldown line may not have finished loading, so it is read again at the
--- next combat end, item load or read; past LOAD_TRIES such reads the item
--- stores false and gets no cell.
-local function ReadLength(itemID)
+-- next combat end, item load, read or timed retry; past LOAD_TRIES such reads
+-- the item stores false and gets no cell. A timed retry's read is not
+-- counted: the retries run per member, the count per item.
+local function ReadLength(itemID, retry)
     if Spec.lengths[itemID] ~= nil then return true end
     if InCombatLockdown() then return false end
     local ok, data = pcall(C_TooltipInfo.GetItemByID, itemID)
@@ -490,7 +494,7 @@ local function ReadLength(itemID)
             return true
         end
     end
-    if KE.PartyCooldownsRules.TakeLoadTry(lengthTries, itemID) then return false end
+    if retry or KE.PartyCooldownsRules.TakeLoadTry(lengthTries, itemID) then return false end
     Spec.lengths[itemID] = false
     return true
 end
@@ -498,8 +502,8 @@ end
 -- The slots' spells and lengths from their item IDs. Incomplete while an
 -- item's data is still loading or an on-use item's length is unread; an
 -- empty slot or a passive trinket is complete with no spell. A load is asked
--- for LOAD_TRIES times at most per item.
-local function Derive(items)
+-- for LOAD_TRIES times at most per item. retry: a timed retry (ReadLength).
+local function Derive(items, retry)
     local slots, complete = {}, true
     for i = 1, #TRINKET_SLOTS do
         local itemID = items[i]
@@ -507,13 +511,13 @@ local function Derive(items)
         if itemID then
             if Ask(C_Item.IsItemDataCachedByID, itemID) == true then
                 -- A refused or hidden answer is not "passive": the slot stays
-                -- incomplete and combat's end reads it again.
+                -- incomplete and a timed retry or combat's end reads it again.
                 local ok, _, id = pcall(C_Item.GetItemSpell, itemID)
                 if not ok or KE:IsSecretValue(id) then
                     complete = false
                 else
                     spellID = id
-                    if spellID and not ReadLength(itemID) then complete = false end
+                    if spellID and not ReadLength(itemID, retry) then complete = false end
                 end
             else
                 if KE.PartyCooldownsRules.TakeLoadTry(loadTries, itemID) then
@@ -529,9 +533,9 @@ end
 
 -- Nil when either slot's answer was refused or hidden; an empty slot answers
 -- a plain nil and reads as empty.
-local function ReadItems(unit)
+local function ReadItems(unit, slots)
     local items = {}
-    for i, slotID in ipairs(TRINKET_SLOTS) do
+    for i, slotID in ipairs(slots or TRINKET_SLOTS) do
         local ok, itemID = pcall(GetInventoryItemID, unit, slotID)
         if not ok or KE:IsSecretValue(itemID) then return nil end
         if type(itemID) == "number" then items[i] = itemID end
@@ -539,12 +543,31 @@ local function ReadItems(unit)
     return items
 end
 
+local Fill
+
+-- Past the waits, combat's end or the next read derives it again.
+local function Retry(m)
+    m.retryPending = nil
+    if Spec.byGUID[m.guid] ~= m or m.trinketsComplete ~= false or InCombatLockdown() then return end
+    Fill(m, nil, true)
+    Changed(m)
+end
+
+local function ScheduleRetry(m)
+    if m.retryPending or m.trinketsComplete ~= false or InCombatLockdown() then return end
+    local wait = KE.PartyCooldownsRules.NextDeriveWait(m.deriveTries)
+    if not wait then return end
+    m.deriveTries, m.retryPending = (m.deriveTries or 0) + 1, true
+    C_Timer.After(wait, function() Retry(m) end)
+end
+
 -- items nil re-derives the IDs already read. With none read the member has
 -- no trinkets yet and stays wanted.
-local function Fill(m, items)
+function Fill(m, items, retry)
     if items then m.trinketItems = items end
     if m.trinketItems then
-        m.trinkets, m.trinketsComplete = Derive(m.trinketItems)
+        m.trinkets, m.trinketsComplete = Derive(m.trinketItems, retry)
+        ScheduleRetry(m)
     else
         m.trinkets, m.trinketsComplete = nil, nil
     end
@@ -563,7 +586,7 @@ local function ReadOwn(m)
         m.trinketsStale = true
         return false
     end
-    m.trinketsStale = nil
+    m.trinketsStale, m.deriveTries = nil, nil
     Fill(m, items)
     return true
 end
@@ -576,12 +599,12 @@ Spec.readers[#Spec.readers + 1] = {
     On = function() return Spec.trackTrinkets == true end,
     Wanted = function(m) return m.trinketItems == nil or m.trinketsStale == true end,
     Read = function(m, unit)
-        local items = ReadItems(unit)
-        if not items then return end
+        local items, others = ReadItems(unit), ReadItems(unit, CHEST_AND_MAIN_HAND)
+        if not (items and others and KE.PartyCooldownsRules.GearArrived(items, others)) then return end
         local stands, same = KE.PartyCooldownsRules.TrinketReadStands(m.trinketItems, items)
         m.trinketsSame = same and (m.trinketsSame or 0) + 1 or 0
         m.trinketsStale = not stands or nil
-        m.trinketsReadAt = GetTime()
+        m.trinketsReadAt, m.deriveTries = GetTime(), nil
         Fill(m, items)
     end,
     Self = function(m)
@@ -589,7 +612,7 @@ Spec.readers[#Spec.readers + 1] = {
     end,
     Clear = function(m)
         m.trinketItems, m.trinkets, m.trinketsComplete = nil, nil, nil
-        m.trinketsStale, m.trinketsReadAt, m.trinketsSame = nil, nil, nil
+        m.trinketsStale, m.trinketsReadAt, m.trinketsSame, m.deriveTries = nil, nil, nil, nil
     end,
     OnEvent = function(event, arg1, arg2)
         if event == "PLAYER_EQUIPMENT_CHANGED" then

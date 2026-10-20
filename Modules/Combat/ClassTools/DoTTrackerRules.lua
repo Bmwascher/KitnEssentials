@@ -23,12 +23,13 @@ Rules.BUILD_AHEAD = 4
 -- listed only while one of them is known. `replacedBy`: dropped while that
 -- talent is known. `cap`: the game's target limit for the DoT. `defaultOff`:
 -- unticked until the player ticks it. The icon is `iconId` while `iconTalent`
--- is known.
+-- is known. `cast`: the ids of the spell that applies it, where they differ and
+-- the spell has a cooldown, so its ability icon can carry the count.
 local DEEP_WOUNDS_TALENTS = { 1261060, 1261062, 1270704 }
 
 KE.DOT_TRACKER_SEEDS = {
     DEATHKNIGHT = {
-        [250] = { { id = 55078, color = { 0.80, 0.20, 0.20 } } },
+        [250] = { { id = 55078, cast = { 50842 }, color = { 0.80, 0.20, 0.20 } } },
         [251] = { { id = 55095, color = { 0.40, 0.75, 1.00 } } },
         [252] = {
             { id = 191587, color = { 0.40, 0.85, 0.75 } },
@@ -49,7 +50,7 @@ KE.DOT_TRACKER_SEEDS = {
         },
         [104] = {
             { id = 164812, color = { 0.50, 0.65, 1.00 } },
-            { id = 192090, color = { 1.00, 0.85, 0.30 } },
+            { id = 192090, cast = { 77758 }, color = { 1.00, 0.85, 0.30 } },
         },
         -- Restoration has Sunfire only through its talent, the 93402 cast.
         [105] = {
@@ -74,7 +75,6 @@ KE.DOT_TRACKER_SEEDS = {
             { id = 703, color = { 1.00, 0.55, 0.15 } },
             { id = 1943, color = { 0.85, 0.15, 0.15 } },
         },
-        [261] = { { id = 1943, color = { 0.85, 0.15, 0.15 } } },
     },
     SHAMAN = {
         [262] = { { id = 188389, cap = 6, color = { 1.00, 0.45, 0.10 } } },
@@ -303,6 +303,11 @@ local NO_IDS = {}
 -- The extra ids a row counts: none for a row without them or an added DoT.
 function Rules.AlsoOf(row)
     return row and row.also or NO_IDS
+end
+
+-- nil for a row without cast ids.
+function Rules.CastOf(row)
+    return row and row.cast
 end
 
 -- A new set on every call: each sensor and timer filter gets its own.

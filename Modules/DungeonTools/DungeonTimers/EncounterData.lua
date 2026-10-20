@@ -332,6 +332,10 @@
 --                                      --   encounter's stage
 --                                      --   (stageCue) reaches
 --                                      --   this stage
+--               endsOnShield = true,  -- optional: hidden
+--                                      --   once shieldSwap
+--                                      --   has moved the
+--                                      --   shield to `unit`
 --           },
 --           ...
 --       },
@@ -454,6 +458,14 @@
 -- boss1-boss5 for presence and death: any readable boss death
 -- or lost boss token drops the held wind and its step for the
 -- rest of the encounter, leaving only live published winds.
+--
+-- shieldSwap = { message = <spellID>, start = <unit>,
+-- units = { <unit>, <unit> } } (encounter-level, optional): a
+-- pair of bosses where one carries a shield. `start` has it at
+-- the pull; each BigWigs_Message with key `message` moves it
+-- to the other unit (one move per 2 s). Ends endsOnShield
+-- phase rules. `icon` (optional) is the spell whose icon flanks
+-- the shielded target warning.
 --
 -- stageCue = { spellID = <spellID>, duration = <seconds>,
 -- stage = <n> } (encounter-level, optional): the encounter
@@ -1094,7 +1106,7 @@ KE.EncounterData[3207] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1253268] = { name = "Earthshatter Slam", castType = "begincast", castDuration = 4, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castConfirm = "boss-cast-start" } },
-        [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "Aoe And Knockback",
+        [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
@@ -1443,8 +1455,9 @@ KE.EncounterData[2606] = {
     spells = {
         [372864] = { name = "Ritual of Blazebinding", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
+        -- The timeline forecast ends about 0.5 s before the cast starts.
         [372110] = { name = "Molten Boulder", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "BAIT", sound = "Bait",
-            timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
+            timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", forecastLead = 0.5 } },
         [372858] = { name = "Searing Blows", castType = "cast", castDuration = 0, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
@@ -1467,7 +1480,7 @@ KE.EncounterData[2623] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castMatch = { spells = { 381525 }, within = 5 }, soonOnHold = true } },
         [381512] = { name = "Stormslam", castType = "begincast", castDuration = 2.5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [381517] = { name = "Winds of Change", castType = "begincast", castDuration = 1.5, role = "mechanic", displayText = "WINDS - CHECK MAP", sound = "Check Map",
+        [381517] = { name = "Winds of Change", castType = "begincast", castDuration = 1.5, role = "mechanic", displayText = "WINDS - CHECK MAP", sound = "Check Map", disabled = true,
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- The key names the debuff; the casts are the flying and grounded spits.
         [381862] = { name = "Inferno Spit", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS", sound = "Drops",
@@ -1510,12 +1523,13 @@ KE.EncounterData[2124] = {
         [1289059] = { name = "Gale Force", castType = "begincast", castDuration = 3.5, role = "other", displayText = "KNOCK", color = { 1.0, 1.0, 0.2 }, sound = "Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", holdOverlapping = true } },
     },
+    -- boss2 carries the shield from the pull; each boss takes it over when it
+    -- reaches 35%.
     phases = {
-        { unit = "boss1", threshold = 66, lead = 5 },
-        { unit = "boss1", threshold = 35, lead = 5 },
-        { unit = "boss2", threshold = 66, lead = 5 },
-        { unit = "boss2", threshold = 35, lead = 5 },
+        { unit = "boss1", threshold = 35, lead = 5, endsOnShield = true },
+        { unit = "boss2", threshold = 35, lead = 5, endsOnShield = true },
     },
+    shieldSwap = { message = 1310311, start = "boss2", units = { "boss1", "boss2" }, icon = 1289229 },
     auraSounds = {
         { spellID = 1288074, trigger = "added", unit = "player", name = "Thunder and Lightning on you", sound = "Move In" },
         { spellID = 1288874, trigger = "added", unit = "player", name = "Tempest Winds on you",         sound = "Move Out" },

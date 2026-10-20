@@ -370,20 +370,22 @@ function DM:LayoutDock()
     -- Shared per-layout geometry (computed ONCE)
     -----------------------------------------------------------------------------
     local headerH = KE:PixelSnap((db.FontSize or 12) + 6)
-    local stride  = KE:PixelSnap(db.BarHeight or 16) + KE:PixelSnap(db.BarSpacing or 2)
+    local spacing = KE:PixelSnap(db.BarSpacing or 2)
+    local stride  = KE:PixelSnap(db.BarHeight or 16) + spacing
     if stride <= 0 then stride = 1 end
     local visible = math_min((db.VisibleBars or 10) , self.BAR_POOL_SIZE or 40)
-    local Hnat    = headerH + visible * stride        -- natural full-window height
+    local Hnat    = headerH + DM.RowSpan(visible, stride, spacing) -- natural full-window height
     local Hdock   = Hnat                                -- dock content height
     local baseW   = db.Width or 240                     -- per-column natural width (ratio 1)
 
     local pad = self:_BackdropPad()
     local context = self:GetActiveContext()
 
-    -- Stash the header band + per-row stride so the splitter drag tick can
-    -- compute the per-pane minimum (header + 1 bar) without recomputing from db.
+    -- Stash the header band, per-row stride and spacing so the splitter drag tick
+    -- can compute the per-pane minimum (header + 1 bar) without recomputing from db.
     self._dockHeaderH = headerH
     self._dockStride  = stride
+    self._dockSpacing = spacing
 
     -- Splitter boundary descriptors, rebuilt every layout pass. A reused scratch
     -- list (wiped at the top of each LayoutDock) so the structural path allocates
@@ -952,10 +954,10 @@ local function SplitterStartDrag(s)
         s._pairRatio = ((type(ra) == "number" and ra) or 0)
             + ((type(rb) == "number" and rb) or 0)
 
-        -- Minimum pane = header band + one bar (stashed by LayoutDock).
+        -- Minimum pane = header band + one whole bar (stashed by LayoutDock).
         local headerH = self._dockHeaderH or 0
         local stride  = self._dockStride or 1
-        s._minPx = headerH + stride
+        s._minPx = headerH + DM.RowSpan(1, stride, self._dockSpacing)
         -- Degenerate guard: a pair smaller than 2*min can't honor the clamp.
         if s._pairPx < 2 * s._minPx then s._minPx = s._pairPx / 2 end
     else -- "col"
@@ -1540,8 +1542,8 @@ end
 
 -- Row gap rowIdx|rowIdx+1 in column colIdx: floor = header + one bar (matches the
 -- row SplitterStartDrag min). The column's content height is Hdock (the single
--- natural height = header + visible*stride); the pair occupies its normalized
--- share of that.
+-- natural height = header + the visible rows' DM.RowSpan); the pair occupies its
+-- normalized share of that.
 function DM:GetRowBoundaryRange(colIdx, rowIdx)
     local db = self.db
     local cols = db and db.Dock and db.Dock.Columns
@@ -1552,10 +1554,11 @@ function DM:GetRowBoundaryRange(colIdx, rowIdx)
     -- Header band + per-bar stride: prefer the values LayoutDock stashed (exact
     -- pixel-snapped match to the splitter); recompute from db if not laid out yet.
     local headerH = self._dockHeaderH or KE:PixelSnap((db.FontSize or 12) + 6)
-    local stride = self._dockStride or (KE:PixelSnap(db.BarHeight or 16) + KE:PixelSnap(db.BarSpacing or 2))
+    local spacing = self._dockSpacing or KE:PixelSnap(db.BarSpacing or 2)
+    local stride = self._dockStride or (KE:PixelSnap(db.BarHeight or 16) + spacing)
     if stride <= 0 then stride = 1 end
     local visible = math_min((db.VisibleBars or 10), self.BAR_POOL_SIZE or 40)
-    local Hdock = headerH + visible * stride
+    local Hdock = headerH + DM.RowSpan(visible, stride, spacing)
 
     -- The rows split the column's content height MINUS the inter-row gaps (matches
     -- LayoutDock's availH), so subtract them before apportioning the pair's share.
@@ -1574,7 +1577,7 @@ function DM:GetRowBoundaryRange(colIdx, rowIdx)
     local pairPx = availH * (pairRatio / sumR)
     if pairPx <= 0 then return 5, 95 end
 
-    local minPct = clamp(math_ceil((headerH + stride) / pairPx * 100), 5, 45)
+    local minPct = clamp(math_ceil((headerH + DM.RowSpan(1, stride, spacing)) / pairPx * 100), 5, 45)
     return minPct, 100 - minPct
 end
 

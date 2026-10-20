@@ -269,16 +269,18 @@ function HX.Resolve()
     local party, members, records, byToken = {}, {}, {}, {}
     local moved
     for _, token in ipairs(units) do
-        local m = token ~= "player" and (Spec.Member(token) or Kept(token))
+        local m = Spec.Member(token) or Kept(token)
         if m then
             local before = m.spec
             Spec.Resolve(m)
+            if m.isPlayer then Spec.ReadSelf(m) end
             if m.spec ~= before then
                 moved = moved or {}
                 moved[#moved + 1] = m
             end
             records[m], byToken[token] = true, m
-            if Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
+            -- members is the box's inspect list, and you are never inspected.
+            if not m.isPlayer and Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
             party[#party + 1] = {
                 token = token, guid = m.guid, spec = m.spec, class = m.class, talents = m.talents,
             }

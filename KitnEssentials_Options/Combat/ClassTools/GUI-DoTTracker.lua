@@ -417,7 +417,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     row4a:AddWidget(GUIFrame:CreateSlider(row4a, "Spacing", {
-        min = 0, max = 20, step = 1,
+        min = -1, max = 20, step = 1,
         value = db.Spacing or 4,
         callback = function(value)
             db.Spacing = value
@@ -524,7 +524,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     manager:Register(iconY, "attach")
     cardCDM:AddRow(rowCDM2, Theme.rowHeight)
     cardCDM:AddNote("DoTs in the Cooldown Manager's Essential, Utility or Tracked Buffs icons show their " ..
-        "count on that icon, with no glow or target timer. The others stay in the row.")
+        "count on that icon, with no glow or target timer. The others stay in the row. With EllesmereUI's " ..
+        "Cooldown Manager on, an attached count and its preview stay hidden until that addon shows the " ..
+        "icon: for a Tracked Buffs icon, usually the DoT's first application since /reload.")
     yOffset = cardCDM:GetNextOffset()
 
     ----------------------------------------------------------------

@@ -81,7 +81,7 @@ local function BuildPage(opts)
         })
         rowA:AddWidget(size, 0.5)
         local spacing = GUIFrame:CreateSlider(rowA, "Icon Spacing", {
-            min = 0, max = 20, step = 1, value = db.IconSpacing,
+            min = -1, max = 20, step = 1, value = db.IconSpacing,
             callback = function(v) db.IconSpacing = v; ApplySettings() end,
         })
         rowA:AddWidget(spacing, 0.5)

@@ -126,7 +126,7 @@ describe("HealerExternalsRules.BoxEntry", function()
 end)
 
 describe("HealerExternalsRules.Sources and Order", function()
-    it("lists target cells member by member before owner cells, an owner cell watching its owner alone", function()
+    it("lists target cells member by member, you included, before owner cells, an owner cell watching its owner alone", function()
         local R = loadRules()
         local members = {
             { token = "player", guid = "P", class = "WARRIOR", spec = 40 },
@@ -138,7 +138,7 @@ describe("HealerExternalsRules.Sources and Order", function()
         local sources = R.Sources(members, {})
         local who = {}
         for i, s in ipairs(sources) do who[i] = s.member.token end
-        assert.are.same({ "party1", "party2", "party3" }, who, "never you, never a member with nothing")
+        assert.are.same({ "player", "party1", "party2", "party3" }, who, "you first, never a member with nothing")
         local cells = {}
         for i, e in ipairs(R.Order(sources)) do
             cells[i] = { e.id, e.owner, e.units and e.units[1] or "all", e.quiet or 0 }
@@ -146,7 +146,7 @@ describe("HealerExternalsRules.Sources and Order", function()
         local q = R.RAID_QUIET
         assert.are.same({
             { 2, "B", "all", 0 }, { 8, "B", "all", 0 }, { 3, "C", "all", 0 },
-            { 5, "A", "party1", q }, { 6, "C", "party3", q },
+            { 5, "P", "player", q }, { 5, "A", "party1", q }, { 6, "C", "party3", q },
         }, cells, "target cells, then owner cells")
     end)
 end)

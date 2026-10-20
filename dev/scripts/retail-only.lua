@@ -32,6 +32,8 @@ return {
     "Modules/DungeonTools/DungeonTimers/DungeonTimers.lua",
     "Modules/DungeonTools/DungeonTimers/DungeonTimers.xml",
     "Modules/DungeonTools/DungeonTimers/EncounterData.lua",
+    "Modules/DungeonTools/DungeonTimers/ShieldSwapState.lua",
+    "Modules/DungeonTools/DungeonTimers/ShieldWarning.lua",
     "Modules/DungeonTools/DungeonTimers/TimerState.lua",
     "Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua",
     "Modules/DungeonTools/DungeonTimers/Trash/Trash.xml",

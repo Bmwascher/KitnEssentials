@@ -85,7 +85,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(iconSizeSlider, "all")
 
     local iconSpacingSlider = GUIFrame:CreateSlider(row2a, "Icon Spacing", {
-        min = 0, max = 16, step = 1,
+        min = -1, max = 16, step = 1,
         value = db.IconSpacing or 4,
         callback = function(val) db.IconSpacing = val; ApplySettings() end,
     })

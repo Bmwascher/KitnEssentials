@@ -128,7 +128,7 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
             callback = function(v) db.IconSize = v; ApplySettings() end,
         }), 0.5)
         sizeRow:AddWidget(GUIFrame:CreateSlider(sizeRow, "Icon Spacing", {
-            min = 0, max = 20, step = 1, value = db.IconSpacing or 2,
+            min = -1, max = 20, step = 1, value = db.IconSpacing or 2,
             callback = function(v) db.IconSpacing = v; ApplySettings() end,
         }), 0.5)
         card3:AddRow(sizeRow, Theme.rowHeight)

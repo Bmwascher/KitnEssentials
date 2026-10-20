@@ -138,8 +138,9 @@ end
 
 -- Enchant labels. Short and Verbose look an enchant up by its exact name; a
 -- stat line with no name (leg spellthreads, armor kits) joins its stat words;
--- any other text shows as Full shows it. Exact names only: a partial match lets
--- a shorter name rewrite part of a longer one.
+-- any other text shows as Full shows it. Full shows the name, or the entry's
+-- full field when it has one. Exact names only: a partial match lets a
+-- shorter name rewrite part of a longer one.
 local ENCHANT_LABELS = {
     ["Mark of the Worldsoul"]          = { short = "Primary Stat",    verbose = "Primary Stat" },
     ["Mark of the Magister"]           = { short = "Int & Mana",      verbose = "Intellect & Mana" },
@@ -178,6 +179,10 @@ local ENCHANT_LABELS = {
     ["Flames of the Sin'dorei"]        = { short = "Fire DoT",        verbose = "Fire Damage" },
     ["Strength of Halazzi"]            = { short = "Bleed",           verbose = "Bleed Damage" },
     ["Worldsoul Aegis"]                = { short = "Shield",          verbose = "Absorb Shield" },
+    ["Ancient Hash'ey Battle Art: Falco Strikes"]     = { short = "Nature",        verbose = "Nature Damage",      full = "Falco Strikes" },
+    ["Ancient Hash'ey Battle Art: Eye of the Lynx"]   = { short = "Haste & Leech", verbose = "Haste & Leech Proc", full = "Eye of the Lynx" },
+    ["Ancient Hash'ey Battle Art: Heat Wave"]         = { short = "Fire DoT",      verbose = "Fire Damage",        full = "Heat Wave" },
+    ["Ancient Hash'ey Battle Art: Ursine's Ironhide"] = { short = "Shield",        verbose = "Absorb Shield",      full = "Ursine's Ironhide" },
     ["Blood Knight's Armor Kit"]       = { short = "Agi/Str & Armor", verbose = "Primary & Armor" },
     ["Forest Hunter's Armor Kit"]      = { short = "Agi/Str & Stam",  verbose = "Primary & Stamina" },
     ["Thalassian Scout Armor Kit"]     = { short = "Minor Agi/Str",   verbose = "Minor Primary" },
@@ -261,13 +266,13 @@ local function ProcessEnchantText(text, style)
     if cached then return cached end
 
     local label = StripEnchantPreamble(text)
-    if style ~= "full" then
-        local entry = ENCHANT_LABELS[label]
-        if entry then
-            label = entry[style] or label
-        elseif label:find("%+%d") then
-            label = EffectLineLabel(label, style) or label
-        end
+    local entry = ENCHANT_LABELS[label]
+    if style == "full" then
+        if entry and entry.full then label = entry.full end
+    elseif entry then
+        label = entry[style] or label
+    elseif label:find("%+%d") then
+        label = EffectLineLabel(label, style) or label
     end
     _enchantLabelCache[cacheKey] = label
     return label
@@ -457,9 +462,12 @@ end
 
 -- The rank is read off the raw line before the atlas is stripped: a crafted
 -- enchant shows its tier only as that icon, and nothing else exposes it.
+-- Color codes go too, so a colored name matches its label entry and the
+-- length cut does not count them.
 local function ParseEnchantLine(text)
     local rank = tonumber(text:match("%-Tier(%d)"))
     text = text:gsub("%s*|A:.-|a", "")
+    text = text:gsub("|cn[^:]*:", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
     return strtrim(text), rank
 end
 CP._ParseEnchantLine = ParseEnchantLine

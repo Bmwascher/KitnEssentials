@@ -39,7 +39,7 @@ local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
 local issecretvalue = issecretvalue
-local ipairs, pcall, tostring, type = ipairs, pcall, tostring, type
+local ipairs, pairs, pcall, tostring, type = ipairs, pairs, pcall, tostring, type
 local math_ceil, math_max, math_min = math.ceil, math.max, math.min
 local table_concat = table.concat
 
@@ -70,8 +70,14 @@ local SAMPLE_TOTAL = 6
 local NONE = {}
 -- Searched in this order; the first viewer showing a DoT takes its count.
 local VIEWER_ORDER = { "Essential", "Utility", "BuffIcon" }
+-- Where the ability that applies a DoT shows, asked only when no viewer shows
+-- the DoT itself, so a count never leaves its debuff's icon for it.
+local CAST_VIEWER_ORDER = { "Essential", "Utility" }
 -- Above the icon's cooldown swipe and countdown when centered on it.
 local ICON_LEVEL_OFFSET = 30
+-- How often a count hidden on an icon that cannot be seen looks at it again:
+-- another addon may reveal it on its own timer.
+local REVEAL_RECHECK = 0.25
 local WATCH_KEY = "DoTTracker"
 
 DT.root = nil
@@ -92,6 +98,7 @@ DT.previewing = false
 DT.inCombat = false
 DT.shownHere = true
 DT.paintedTotal = -1
+DT.revealPending = false
 DT.editModeRegistered = false
 DT.someColor = DEFAULT_SOME
 DT.allColor = DEFAULT_ALL
@@ -240,6 +247,7 @@ end
 local function BuildAnswer(cell, k)
     local answer = { label = cell.tail:CreateFontString(nil, "OVERLAY") }
     answer.label:Hide()
+    if cell.masked then answer.label:SetAlpha(0) end
     cell.answers[k] = answer
     return answer
 end
@@ -258,7 +266,11 @@ local function PaintAnswers(cell, total)
         if k <= total then
             local shown, d = Rules.Capped(k, total, cell.cap)
             local color = Rules.CountColor(shown, d, cell.own, DT.someColor, DT.allColor, fullCoverage)
-            answer.label:SetTextColor(color[1], color[2], color[3], color[4])
+            -- The text color's alpha is the label's alpha, so a hidden count
+            -- is painted at 0 and keeps its own for MaskCell to restore.
+            local alpha = color[4] or 1
+            answer.label:SetTextColor(color[1], color[2], color[3], cell.masked and 0 or alpha)
+            answer.alpha = alpha
             answer.label:SetText(Rules.Label(shown, d, db.CountFormat))
             answer.label:Show()
         else
@@ -497,11 +509,24 @@ local function CdmIds(id, also)
     return ids
 end
 
+local function CastIds(cast)
+    if not cast then return nil end
+    local ids = {}
+    for i = 1, #cast do ids[cast[i]] = 1 end
+    return ids
+end
+
 local function FindIcon(cell)
     if not cell.cdmIds then return nil end
     for i = 1, #VIEWER_ORDER do
         local key = VIEWER_ORDER[i]
         local icon = KE.CDMIcons.Find(key, cell.cdmIds)
+        if icon then return icon, key end
+    end
+    if not cell.castIds then return nil end
+    for i = 1, #CAST_VIEWER_ORDER do
+        local key = CAST_VIEWER_ORDER[i]
+        local icon = KE.CDMIcons.Find(key, cell.castIds)
         if icon then return icon, key end
     end
     return nil
@@ -550,8 +575,19 @@ local function StyleAsPlaced(cell)
     return false
 end
 
+-- The labels alone, so no frame above the sensors changes. Every label, kept
+-- ones past a discarded sensor included.
+local function MaskCell(cell, masked)
+    if cell.masked == masked then return end
+    for _, answer in pairs(cell.answers) do answer.label:SetAlpha(masked and 0 or answer.alpha or 1) end
+    -- The preview's sample stands in for the count, so it hides with it.
+    if DT.previewing then cell.sample:SetShown(not masked) end
+    cell.masked = masked
+end
+
 -- Back to the row's origin; LayoutCells gives it its place in the row.
 local function PullBack(cell)
+    MaskCell(cell, false)
     cell.attachIcon, cell.attachViewer, cell.attachID, cell.attachSlot = nil, nil, nil, nil
     cell.frame:ClearAllPoints()
     cell.frame:SetPoint("TOPLEFT", DT.root, "TOPLEFT", 0, 0)
@@ -602,6 +638,87 @@ end
 
 local function ReplaceAttached()
     if DT.active then DT:PlaceAttached() end
+end
+
+-- EllesmereUI's Cooldown Manager moves each Blizzard icon it shows into its own
+-- bars; one it has not taken yet stays in Blizzard's viewer, where nothing is
+-- drawn. Read on every mask update, so switching it on or off applies at the
+-- next one.
+local function OtherManagerOn()
+    local db = _G._ECME_AceDB
+    local profile = type(db) == "table" and db.profile
+    local bars = type(profile) == "table" and profile.cdmBars
+    return type(bars) == "table" and bars.enabled == true
+end
+
+-- Whether the icon is anchored outside its own viewer, as an icon moved into
+-- another addon's bar is. An icon with no anchor has not been moved. nil when
+-- the anchor cannot be read.
+local function AnchoredAway(icon, viewer)
+    if not viewer then return nil end
+    local ok, _, rel = pcall(icon.GetPoint, icon, 1)
+    if not ok or issecretvalue(rel) then return nil end
+    if rel == nil then return false end
+    while rel do
+        if rel == viewer then return false end
+        local okParent, parent = pcall(rel.GetParent, rel)
+        if not okParent or issecretvalue(parent) then return nil end
+        rel = parent
+    end
+    return true
+end
+
+-- An attached count shows only while its icon can be seen: another addon may
+-- leave this icon fully transparent, or hidden in a viewer it does not draw.
+-- nil when a read is refused or secret, which keeps the last answer.
+local function HideCount(cell, icon, otherOn)
+    local ok, alpha = pcall(icon.GetEffectiveAlpha, icon)
+    if not ok or issecretvalue(alpha) or type(alpha) ~= "number" then return nil end
+    if alpha <= 0 then return true end
+    if not otherOn then return false end
+    -- Shown icons are drawn wherever they are; a hidden one counts as seen
+    -- only once moved into the other addon's bar, where it keeps its slot.
+    local okShown, shown = pcall(icon.IsShown, icon)
+    if not okShown or issecretvalue(shown) then return nil end
+    if shown then return false end
+    local viewer = _G[KE.CDMIcons.VIEWERS[cell.attachViewer]]
+    local away = AnchoredAway(icon, viewer)
+    if away == nil then return nil end
+    return not away
+end
+
+-- True while a count is hidden this way.
+local function UpdateMasks()
+    local waiting = false
+    local otherOn = OtherManagerOn()
+    for i = 1, #DT.list do
+        local cell = DT.cells[i]
+        local icon = cell.attachIcon
+        if icon then
+            local hide = HideCount(cell, icon, otherOn)
+            if hide ~= nil then MaskCell(cell, hide) end
+            if cell.masked then waiting = true end
+        else
+            MaskCell(cell, false)
+        end
+    end
+    return waiting
+end
+
+-- One pending look at a time, while a count is hidden and the tracker is on
+-- screen. Applying a DoT shows its icon without a viewer refresh, so the look
+-- cannot wait for one.
+local Recheck
+local function WatchReveal()
+    if UpdateMasks() and DT.root:IsShown() and not DT.revealPending then
+        DT.revealPending = true
+        C_Timer.After(REVEAL_RECHECK, Recheck)
+    end
+end
+
+function Recheck()
+    DT.revealPending = false
+    if DT.active then WatchReveal() end
 end
 
 -- A cell past the list, or every cell when the display stops: hidden and kept
@@ -1006,6 +1123,7 @@ function DT:PlaceAttached(force)
         end
     end
     LayoutCells(self.rowGeo)
+    WatchReveal()
     if changed then
         self:UpdateTimers()
         -- The sample timer and preview glow follow the attach state too.
@@ -1047,6 +1165,7 @@ function DT:Apply(list, allowed, class, specID, held)
             cell.cdmIds = CdmIds(id, also)
         end
         cell.row, cell.cap = row, row and row.cap
+        cell.castIds = CastIds(Rules.CastOf(row))
         if not (held and cell.iconId) then cell.iconId = Rules.IconOf(row, id, IsKnown) end
         local own = Rules.ColorOf(db.Spells and db.Spells[Rules.SpellKey(specID, id)], row, colorsOn)
         cell.own = own and { KE:ResolveColor(own, DEFAULT_SOME) } or nil
@@ -1120,6 +1239,7 @@ function DT:UpdateLive()
         cell.over:SetShown(self.previewing)
     end
     self.root:SetShown(live or (self.previewing and #self.list > 0))
+    if live then WatchReveal() end
     self:UpdateTimers()
     if self.slots then
         if live then self.slots:Start() else self.slots:Stop() end
@@ -1406,7 +1526,7 @@ function DT:PaintPreview()
         local color = Rules.CountColor(shown, d, cell.own, self.someColor, self.allColor, fullCoverage)
         cell.sample:SetTextColor(color[1], color[2], color[3], color[4])
         cell.sample:SetText(Rules.Label(shown, d, db.CountFormat))
-        cell.sample:Show()
+        cell.sample:SetShown(not cell.masked)
         cell.sampleTimer:SetText(SAMPLE_TIMERS[((i - 1) % #SAMPLE_TIMERS) + 1])
         cell.sampleTimer:SetShown(db.TimerEnabled ~= false and not cell.attachIcon)
         if db.GlowEnabled and shown == d and not cell.attachIcon then

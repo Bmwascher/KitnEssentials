@@ -118,7 +118,7 @@ function Rules.BoxEntries(class, specID, db, all, ranks)
     for _, row in ipairs(Table(KE.PartyCooldownsData.BOX_ROWS)) do
         if Rules.Owns(row, class, specID) then
             local entry, taken = Rules.BoxEntry(row, specID, db, all, ranks)
-            if entry and (all or cdRules.TalentAllows(entry, taken)) then out[#out + 1] = entry end
+            if entry and (all or cdRules.TalentAllows(entry, taken, specID)) then out[#out + 1] = entry end
         end
     end
     return out
@@ -126,18 +126,15 @@ end
 
 -- members: the party in token order, each { token, guid, spec, class,
 -- talents }. Returns each one with a switched-on entry, as { member,
--- entries }: its spec's externals, then the box rows it owns. You are never
--- one.
+-- entries }: its spec's externals, then the box rows it owns.
 function Rules.Sources(members, db)
     local out = {}
     for _, m in ipairs(members) do
-        if m.token ~= "player" then
-            local entries = Rules.Entries(m.spec, db, false, m.talents)
-            for _, e in ipairs(Rules.BoxEntries(m.class, m.spec, db, false, m.talents)) do
-                entries[#entries + 1] = e
-            end
-            if #entries > 0 then out[#out + 1] = { member = m, entries = entries } end
+        local entries = Rules.Entries(m.spec, db, false, m.talents)
+        for _, e in ipairs(Rules.BoxEntries(m.class, m.spec, db, false, m.talents)) do
+            entries[#entries + 1] = e
         end
+        if #entries > 0 then out[#out + 1] = { member = m, entries = entries } end
     end
     return out
 end

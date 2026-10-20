@@ -135,7 +135,7 @@ end
 -- Boss lifecycle evidence for one encounter. It outlives the store, so a map
 -- restarted mid-encounter keeps what was seen and any withdrawal.
 function Map.NewEvidence(encounterId)
-    return { encounterId = encounterId, seen = {}, withdrawn = false }
+    return { encounterId = encounterId, seen = {}, withdrawn = false, casterLost = false }
 end
 
 -- A lost boss may never cast the held wind, so only live published cards
@@ -168,6 +168,15 @@ function Map.BossLost(seen, unit, exists, dead)
     return false
 end
 
+-- The wind caster read dead ends the map for the rest of the encounter: no
+-- wind can follow. A missing token only withdraws inference (BossLost), since
+-- a token can drop out while the boss lives. The loss stays on the evidence,
+-- so a restart in the pull keeps the map hidden.
+function Map.CasterLost(evidence, exists, dead)
+    if exists == true and dead == true then evidence.casterLost = true end
+    return evidence.casterLost
+end
+
 local function currentRecord(map, inst, generation)
     local rec = map.records[inst]
     if rec and rec.generation == generation then return rec end
@@ -187,12 +196,16 @@ function Map.EndHistory(map)
 end
 
 -- An unreadable start may supersede Winds; discard its old association
--- unless the readable unit and bar prove this repeats the same cast.
+-- unless the readable unit and bar prove this repeats the same cast. Boss
+-- casts stay secret for the whole pull in a keystone, so no cast can step the
+-- sequence again: only live published sides remain. True when this switched.
 function Map.UnreadableCast(map, unit, bar)
     local open = map.cast
-    if open and unit ~= nil and bar ~= nil and open.unit == unit and open.bar == bar then return end
+    if open and unit ~= nil and bar ~= nil and open.unit == unit and open.bar == bar then return false end
     map.cast = nil
-    loseSequence(map)
+    if map.inferenceWithdrawn then return false end
+    Map.WithdrawInference(map)
+    return true
 end
 
 -- Keep the held deadline after its card ends. Callers also sample before

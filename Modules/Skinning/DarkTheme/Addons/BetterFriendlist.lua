@@ -553,6 +553,9 @@ local function PaintSideTabs()
         local selected = tab:IsEnabled() and tab.sectionID ~= nil and tab.sectionID == ui.selectedSection
         local bd = S.GetBackdrop(tab)
         if bd then
+            -- Opaque: the dark theme pulls the column 3 over the panel's edge.
+            local c = S.palette.control
+            bd:SetBackdropColor(c[1], c[2], c[3], 1)
             if selected then
                 S.PaintBrand(bd, "SetBackdropBorderColor", 1)
             else
@@ -657,7 +660,10 @@ local STATUS_EDGE_COLORS = {
     busy = { 0.9, 0.2, 0.2 },
 }
 local STATUS_EDGE_WIDTH = 2
-local CLASS_ICON_SIZE = 16
+-- The class icon takes the hidden status dot's place: the room before the name
+-- in a normal row, 4 under the control lane in a compact one.
+local CLASS_ICON_MAX = 28
+local CLASS_ICON_LANE_GAP = 4
 local EUI_CLASS_SHEET = "Interface\\AddOns\\EllesmereUI\\media\\icons\\class-full\\modern.tga"
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 
@@ -832,8 +838,7 @@ local function CardCues(card)
     edge:SetWidth(STATUS_EDGE_WIDTH)
     edge:Hide()
     local icon = bd:CreateTexture(nil, "OVERLAY")
-    icon:SetSize(CLASS_ICON_SIZE, CLASS_ICON_SIZE)
-    icon:SetPoint("LEFT", card.status, "RIGHT", 1, 0)
+    icon:SetPoint("LEFT", card.status, "LEFT", 0, 0)
     icon:Hide()
     d.cueFill, d.cueEdge, d.cueIcon = fill, edge, icon
     return d
@@ -849,6 +854,12 @@ local function PaintCardCues(card, d)
     else
         d.cueEdge:Hide()
     end
+    -- The stripe carries the status; the addon re-shows the dot every pass.
+    ZeroAlpha(card.status)
+    local lane = card.bflControlRowHeight
+    local size = type(lane) == "number" and math.max(1, math.min(CLASS_ICON_MAX, lane - CLASS_ICON_LANE_GAP))
+        or CLASS_ICON_MAX
+    d.cueIcon:SetSize(size, size)
     local classFile = state and FriendClassFile(friend)
     if classFile then
         PaintClassIcon(d.cueIcon, classFile)
@@ -889,6 +900,149 @@ local function RetintInvite(btn)
     if btn and S.data(btn).inviteLayout == "modern" then
         TintInviteGlyph(btn.ActionIcon, btn:IsEnabled())
     end
+end
+
+-- Both themes show the Blizzard theme's tag colors; the dark theme writes the
+-- tag white and drops the darker number.
+local BATTLETAG_R, BATTLETAG_G, BATTLETAG_B = 0.345, 0.667, 0.867
+local BATTLETAG_NUMBER_CODE = "|cff416380"
+
+local function PaintBattleTag()
+    if not IsModern() then return end
+    local frame = _G.BetterFriendsFrame
+    local hdr = frame and frame.FriendsTabHeader
+    local tag = hdr and hdr.BattlenetFrame and hdr.BattlenetFrame.Tag
+    if not (tag and tag.GetText) then return end
+    tag:SetTextColor(BATTLETAG_R, BATTLETAG_G, BATTLETAG_B, 1)
+    local streamer = GetBFLModule("StreamerMode")
+    if streamer and type(streamer.IsActive) == "function" and streamer:IsActive() then return end
+    local text = tag:GetText()
+    if KE:IsSecretValue(text) or type(text) ~= "string" then return end
+    local marker = text:find("#", 1, true)
+    if marker and not text:find("|", 1, true) then
+        tag:SetText(text:sub(1, marker - 1) .. BATTLETAG_NUMBER_CODE .. text:sub(marker) .. "|r")
+    end
+end
+
+-- The dark theme draws its own X on the close button, shows it again on hover,
+-- and fades KE's X with the rest of the button's art.
+local function KeepKitnClose(_, btn)
+    local x = btn and S.data(btn).closeX
+    if not x then return end
+    if btn.BFL_DarkIcon then btn.BFL_DarkIcon:SetTexture(nil) end
+    if btn.BFL_DarkHoverIcon then btn.BFL_DarkHoverIcon:SetTexture(nil) end
+    x:SetAlpha(1)
+end
+
+-- The addon hides the Modern list's inset, and KE's plate with it, so a
+-- scrolled row is cut off with no edge; this line marks where rows are cut.
+local function ShowListLine(frame)
+    local scroll, inset = frame.ScrollFrame, frame.Inset
+    if not (scroll and inset) then return end
+    local d = S.data(frame)
+    local line = d.listLine
+    if not line then
+        line = CreateFrame("Frame", nil, inset)
+        line:SetIgnoreParentAlpha(true)
+        local tex = line:CreateTexture(nil, "OVERLAY")
+        tex:SetTexture(WHITE)
+        local c = S.palette.border
+        tex:SetVertexColor(c[1], c[2], c[3], c[4])
+        tex:SetAllPoints(line)
+        line:SetPoint("TOPLEFT", scroll, "BOTTOMLEFT", 0, 0)
+        line:SetPoint("TOPRIGHT", scroll, "BOTTOMRIGHT", 0, 0)
+        -- The other sections hide the list and leave the inset shown.
+        scroll:HookScript("OnShow", function() line:SetShown(IsModern()) end)
+        scroll:HookScript("OnHide", function() line:Hide() end)
+        d.listLine = line
+    end
+    line:SetHeight(KE:GetPixelSize())
+    line:SetShown(scroll:IsShown())
+end
+
+-- The scroll bar shows itself whenever its list scrolls, and the addon shows
+-- these bars on every section switch, so a show is checked against both.
+local function HideIdleBar(bar)
+    local d = S.data(bar)
+    if not d.hideIdle then return end
+    if not bar:HasScrollableExtent() or (d.idleList and not d.idleList:IsShown()) then bar:Hide() end
+end
+
+-- Modern lists hide their scroll bar while nothing scrolls; Legacy keeps the
+-- bar with its disabled arrows. The friends bar is not inside its list, so it
+-- also hides with the list on the other sections.
+local function SetIdleBarsHidden(frame, hide)
+    local recent, who = frame.RecentAlliesFrame, frame.WhoFrame
+    local quickJoin = frame.QuickJoinFrame and frame.QuickJoinFrame.ContentInset
+    local pairsList = {
+        { frame.MinimalScrollBar, frame.ScrollFrame },
+        { recent and recent.ScrollBar, recent and recent.ScrollBox },
+        { quickJoin and quickJoin.ScrollBar, quickJoin and (quickJoin.ScrollBoxContainer or quickJoin.ScrollBox) },
+        { who and who.ScrollBar, who and who.ScrollBox },
+    }
+    for _, pair in ipairs(pairsList) do
+        local bar, list = pair[1], pair[2]
+        if bar and type(bar.SetHideIfUnscrollable) == "function" and type(bar.HasScrollableExtent) == "function" then
+            local d = S.data(bar)
+            if hide then
+                if not d.idleHooked then
+                    d.idleHooked = true
+                    bar:HookScript("OnShow", HideIdleBar)
+                end
+                d.hideIdle, d.idleList = true, list or nil
+                bar:SetHideIfUnscrollable(true)
+                HideIdleBar(bar)
+            elseif d.hideIdle then
+                d.hideIdle = nil
+                bar:SetHideIfUnscrollable(false)
+                bar:SetShown(not list or list:IsShown())
+            end
+        end
+    end
+end
+
+-- The addon puts the Modern header row 2 below the top of the list frame, so
+-- KE's plate starts at the headers there.
+local function PlaceWhoPlate(frame, modern)
+    local who = frame.WhoFrame
+    local inset = who and who.ListInset
+    local bd = inset and S.GetBackdrop(inset)
+    if not bd then return end
+    local top = modern and who.NameHeader
+    bd:ClearAllPoints()
+    if top then
+        bd:SetPoint("TOPLEFT", top, "TOPLEFT", 0, 0)
+    else
+        bd:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -4)
+    end
+    bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, 4)
+end
+
+local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
+local BFL_CLOSE_SIZE = 20
+-- The flat themes' square portrait is 42 and its crop cuts the art's sides;
+-- KE draws the whole logo larger and lower in its place.
+local LOGO_SQUARE_SIZE = 56
+local LOGO_SQUARE_DROP = 2
+
+local function PaintPortrait()
+    if not IsModern() then return end
+    local ui = GetFriendsUI()
+    local overlay = type(ui) == "table" and ui.root and ui.root.PortraitOverlay
+    local icon = overlay and overlay.Icon
+    if not (icon and icon.SetTexture) then return end
+    icon:SetTexture(KITN_LOGO)
+    local square = overlay.BFL_ModernSquarePortrait == true
+    local d = S.data(overlay)
+    if square and not d.kitnLogo then
+        local logo = overlay:CreateTexture(nil, "ARTWORK", nil, 7)
+        logo:SetTexture(KITN_LOGO)
+        logo:SetSize(LOGO_SQUARE_SIZE, LOGO_SQUARE_SIZE)
+        logo:SetPoint("TOP", overlay, "TOP", 0, -LOGO_SQUARE_DROP)
+        d.kitnLogo = logo
+    end
+    if d.kitnLogo then d.kitnLogo:SetShown(square) end
+    icon:SetAlpha(square and 0 or 1)
 end
 
 local function ModernPass(frame)
@@ -943,6 +1097,12 @@ local function ModernPass(frame)
         OwnControl(hdr.BattlenetFrame)
     end
     PaintSideTabs()
+    PaintBattleTag()
+    PaintPortrait()
+    ShowListLine(frame)
+    SetIdleBarsHidden(frame, true)
+    PlaceWhoPlate(frame, true)
+    KeepKitnClose(nil, frame.CloseButton)
 end
 
 local function ReStrip()
@@ -979,6 +1139,7 @@ local function Skin()
     if not frame or S.data(frame).bflSkinned then return end
     S.data(frame).bflSkinned = true
 
+    S.CloseButton(frame.CloseButton, BFL_CLOSE_SIZE)
     S.Frame(frame)
     StripPanelShell(frame)
 
@@ -1501,6 +1662,10 @@ local function Skin()
         HookIf(ui, "RefreshModernSideTabSelection", function()
             if IsModern() then PaintSideTabs() end
         end)
+        -- The theme pass recolors the tag after rebuilding its text.
+        HookIf(ui, "RefreshBattleTag", PaintBattleTag)
+        HookIf(ui, "ApplyTheme", PaintBattleTag)
+        HookIf(ui, "ApplyModernPortrait", PaintPortrait)
         HookIf(ui, "StyleGroupHeader", OnGroupHeader)
         HookIf(ui, "InitializeRequestHeader", OnRequestHeader)
         HookIf(ui, "InitializeRequestCard", OnRequestCard)
@@ -1510,6 +1675,7 @@ local function Skin()
         HookIf(engine, "RefreshRow", OnThemeRow)
         HookIf(engine, "RestoreFrame", OnThemeRestore)
         HookIf(engine, "CreateBackdrop", OnThemeBackdrop)
+        HookIf(engine, "SkinCloseButton", KeepKitnClose)
         for _, name in ipairs(THEME_CONTROL_STYLERS) do
             HookIf(engine, name, OnThemeControl)
         end
@@ -1524,6 +1690,10 @@ local function Skin()
         elseif layout == "legacy" then
             EnsureLegacy()
             SweepLegacy()
+            local line = S.data(frame).listLine
+            if line then line:Hide() end
+            SetIdleBarsHidden(frame, false)
+            PlaceWhoPlate(frame, false)
         end
     end
 

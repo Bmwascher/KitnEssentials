@@ -17,6 +17,7 @@ local DT = KitnEssentials:NewModule("DungeonTimers", "AceEvent-3.0", "AceTimer-3
 KE.EncounterData = KE.EncounterData or {}
 
 local State = KE._DungeonTimerState
+local Swap = KE._DungeonShieldSwapState
 local Trace = KE._DungeonTimerTrace
 
 local ipairs = ipairs
@@ -43,7 +44,7 @@ local type = type
 local issecretvalue = issecretvalue
 local canaccesstable = canaccesstable
 
-local DEBUG_DT2 = true
+local DEBUG_DT2 = false
 
 local BIGWIGS_EVENTS = {
     "BigWigs_StartBar",
@@ -412,6 +413,8 @@ local function dprint(msg)
         KE:Print("[DT2] " .. tostring(msg))
     end
 end
+-- Exported so sibling files (WindMap.lua) use the same DEBUG_DT2 flag.
+DT._dprint = dprint
 
 -- Preview bars loop endlessly so they're gated out to prevent sound spam.
 local function PlayBarSound(self, key)
@@ -852,14 +855,14 @@ function DT:GetSpellAdmittedBinding(spellId)
 end
 
 -- Rule-6 minimum reveal window for an admitted row: effective extension plus
--- the row's stop tolerance. nil for any row without an admitted binding. The
+-- the row's forecast lead and stop tolerance. nil for any row without an admitted binding. The
 -- render path passes the instance's binding and the extension it already
 -- computed; preview and GUI resolve both here.
 function DT:GetSpellRevealFloor(spellId, binding, extension)
     binding = binding or self:GetSpellAdmittedBinding(spellId)
     if not (binding and binding.policy == "estimated-impact") then return nil end
     if extension == nil then extension = self:GetSpellExtension(spellId) end
-    return extension + (binding.stopTolerance or 0)
+    return extension + (binding.forecastLead or 0) + (binding.stopTolerance or 0)
 end
 
 -- Rule-6 reveal floor, shared by the renderer and the spell preview so they
@@ -1565,7 +1568,7 @@ local function BarOnUpdateInstance(self, record)
         else
             local displayRemaining = State.AnchoredRemaining(inst, effectiveElapsed)
                 or State.PredictedRemaining(inst, effectiveElapsed)
-                or (remaining + inst.binding.extension)
+                or (remaining + inst.binding.extension + (inst.binding.forecastLead or 0))
             if displayRemaining < 0 then displayRemaining = 0 end
             GatedSetValue(self, displayRemaining)
             -- A held forecast has passed its deadline and has no corrected one yet.
@@ -2452,7 +2455,8 @@ local function RenderPresentation(self, key, record, baseDur, extension, display
                                         self:ReleaseInstancePresentations(inst, false)
                                         return
                                     end
-                                    local left = State.AnchoredRemaining(inst, elapsed) or remaining + inst.binding.extension
+                                    local left = State.AnchoredRemaining(inst, elapsed)
+                                        or remaining + inst.binding.extension + (inst.binding.forecastLead or 0)
                                     record.retireJob = retireJob
                                     retireJob.deadline = elapsed + left
                                     ScheduleJob(self, retireJob, fireNow)
@@ -2521,7 +2525,10 @@ end
 -- playHide follows the Stop-retire rule: only a shown presentation plays the hide sound.
 -- The hold job, cast watch, observation window and linked shield watch are
 -- resolved with the instance, on every retirement path.
-function DT:ReleaseInstancePresentations(inst, playHide)
+-- fromCancel: a provider stop the timeline marks Canceled. A held overlap
+-- successor it releases from behind a shown occurrence is the re-issue of an
+-- announced cast, so it takes over without its show sound.
+function DT:ReleaseInstancePresentations(inst, playHide, fromCancel)
     -- A canceled occurrence or an unconfirmed wait has nothing to announce.
     if inst.retainedEstimate == "canceled" or State.EndsSilently(inst) then playHide = false end
     self:_CancelHold(inst)
@@ -2537,6 +2544,7 @@ function DT:ReleaseInstancePresentations(inst, playHide)
     end
     if inst.mapObserved then self:_WindMapRetired(inst) end
     self._gateSuppressed[inst] = nil
+    local takeover = fromCancel == true and IsShownPresentation(inst)
     local presentations = self._presentations[inst]
     self._presentations[inst] = nil
     if presentations then ReleasePresentationFrames(self, presentations, playHide) end
@@ -2545,6 +2553,7 @@ function DT:ReleaseInstancePresentations(inst, playHide)
         local head = State.PresentationHead(self._state, inst, IsWaitingPresentation)
         local record = head and PresentationRecord(head)
         if record then
+            if takeover then record.suppressShowSound = true end
             ResumeJobHandle(self, record.revealJob, GetTime())
         end
     end
@@ -2765,7 +2774,8 @@ function DT:_ArmOwnedExpiry(inst, now)
     local job = {
         owner = inst.owner, scope = inst.scope, kind = "hold",
         instance = inst, instanceGeneration = inst.generation,
-        clockPolicy = "elapsed", deadline = inst.sourceClock.remainingAtReceipt + inst.binding.extension,
+        clockPolicy = "elapsed",
+        deadline = inst.sourceClock.remainingAtReceipt + inst.binding.extension + (inst.binding.forecastLead or 0),
         clock = inst.sourceClock,
     }
     job.action = function()
@@ -3459,7 +3469,8 @@ function DT:_RestoreGatedPresentation(inst, now)
     if not presentations then return end
     local record = { instance = inst, generation = inst.generation, role = "primary", shown = false,
         suppressShowSound = entry.silent }
-    local frame = RenderPresentation(self, {}, record, inst.sourceClock.remainingAtReceipt,
+    local frame = RenderPresentation(self, {}, record,
+        inst.sourceClock.remainingAtReceipt + (inst.binding.forecastLead or 0),
         inst.binding.extension or 0, self:GetSpellDisplay(spellId), inst.receiptIcon,
         self:GetSpellDisplayText(spellId), spellId, self:GetSpellCastDisplayText(spellId), false)
     if not frame then return end
@@ -4143,10 +4154,12 @@ function DT:_GetPhaseCurves(threshold, lead)
     return valueCurve, countdownCurve, transitionedCurve, frameCurve
 end
 
--- A rule with endsAtStage hides once the encounter's own stage reaches it.
-function DT._PhaseRuleEnded(rule, stage)
+-- A rule with endsAtStage hides once the encounter's own stage reaches it;
+-- one with endsOnShield once the shield has swapped to its unit.
+function DT._PhaseRuleEnded(rule, stage, swap)
     local endsAt = rule.endsAtStage
-    return type(endsAt) == "number" and type(stage) == "number" and stage >= endsAt
+    if type(endsAt) == "number" and type(stage) == "number" and stage >= endsAt then return true end
+    return Swap.RuleEnded(rule, swap)
 end
 
 function DT:RefreshPhaseBars()
@@ -4161,7 +4174,7 @@ function DT:RefreshPhaseBars()
         local unit = rule.unit or "boss1"
         local threshold = tonumber(rule.threshold) or 0
         local lead = self:GetPhaseEffectiveLead(key)
-        local disabled = self:IsPhaseDisabled(key) or DT._PhaseRuleEnded(rule, self._encounterStage)
+        local disabled = self:IsPhaseDisabled(key) or DT._PhaseRuleEnded(rule, self._encounterStage, self._shieldSwap)
 
         if disabled or not UnitExists(unit) or UnitIsDead(unit) or lead <= 0 then
             self:_HidePhaseBar(key)
@@ -4210,6 +4223,8 @@ function DT:StopPhaseTracking()
     -- Runs at every encounter start and end and on disable, so a stage never
     -- outlives its encounter.
     self._encounterStage = nil
+    self._shieldSwap = nil
+    self:_ShieldWarningStop()
     self:_HideAllPhaseBars()
 end
 
@@ -5269,6 +5284,9 @@ function DT:OnEncounterStart(_, encounterID)
     -- wind map starts and before any held receipt is replayed.
     local stagedEncounter = id and KE.EncounterData and KE.EncounterData[id]
     self._encounterStage = (stagedEncounter and stagedEncounter.stageCue) and 1 or nil
+    local swapCfg = stagedEncounter and stagedEncounter.shieldSwap
+    self._shieldSwap = swapCfg and Swap.New(swapCfg) or nil
+    self:_ShieldWarningStart()
     if id then State.ClearCueCounts(self._state, id) end
     -- Drops a shield left by an encounter that never ended, and releases the
     -- shield events for an encounter without a shield binding.
@@ -5996,6 +6014,7 @@ function DT:OnProfileBoundary()
     self:_RetireProviderPrompt()
     self:_RequestProviderSetupCheck()
     self:ApplyWindMapSettings()
+    self:ApplyShieldWarningSettings()
 end
 
 function DT:OnDisable()
@@ -6327,6 +6346,7 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         end
 
         local extension = effectiveBinding.extension or 0
+        local shownRemaining = remaining + (effectiveBinding.forecastLead or 0)
         local displayMode = self:GetSpellDisplay(spellIdNum)
         local displayText = self:GetSpellDisplayText(spellIdNum)
         local castDisplayText = self:GetSpellCastDisplayText(spellIdNum)
@@ -6336,13 +6356,13 @@ function DT:_HandleProviderEvent(event, receipt, ...)
 
         if primaryAllowed then
             local record = { instance = inst, generation = inst.generation, role = "primary", shown = false }
-            local frame = RenderPresentation(self, {}, record, remaining, extension, displayMode,
+            local frame = RenderPresentation(self, {}, record, shownRemaining, extension, displayMode,
                 icon, displayText, spellIdNum, castDisplayText, false)
             if frame then self._presentations[inst].primary = frame end
         end
         if secondaryAllowed and secondary then
             local secRecord = { instance = inst, generation = inst.generation, role = "secondary", shown = false }
-            local secFrame = RenderPresentation(self, {}, secRecord, remaining, extension,
+            local secFrame = RenderPresentation(self, {}, secRecord, shownRemaining, extension,
                 secondary.display or "text", icon, secondary.displayText, spellIdNum, nil, true)
             if secFrame then self._presentations[inst].secondary = secFrame end
         end
@@ -6475,7 +6495,7 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         elseif outcome == "retire" then
             State.EndForecastWait(inst)
             State.Retire(self._state, inst)
-            self:ReleaseInstancePresentations(inst, true)
+            self:ReleaseInstancePresentations(inst, true, timelineState == "canceled")
         elseif outcome == "enter-legacy-cast" then
             local fill = State.BeginLegacyCast(inst, now, inst.binding.extension)
             self:_ApplyCastPhaseVisual(inst, fill)
@@ -6555,6 +6575,11 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         if not meta then
             dprint("Message refused owner: " .. tostring(ownerReason))
             return
+        end
+        if self._shieldSwap and Swap.OnMessage(self._shieldSwap, key, GetTime()) then
+            dprint("shield swap to=" .. tostring(self._shieldSwap.shielded))
+            self:RefreshPhaseBars()
+            self:_ShieldWarningUpdate()
         end
         local binding, bindReason = State.ResolveBinding(self._bindings, meta, self._activeEncounterId,
             "Message", key, nil)

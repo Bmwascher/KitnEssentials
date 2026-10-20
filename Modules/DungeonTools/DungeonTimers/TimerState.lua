@@ -196,6 +196,17 @@ local function BuildExplicitTimerBinding(encounterId, spellId, row)
     if soonOnHold ~= nil and (soonOnHold ~= true or anchor ~= "timeline-finished" or holdOverlapping ~= nil) then
         return nil
     end
+    -- A forecast known to end early: the countdown runs this many seconds
+    -- behind it and still ends at the timeline Finished. The clock keeps the
+    -- provider's duration, which the timeline match compares.
+    local forecastLead = contract.forecastLead
+    if forecastLead ~= nil and (not isValidNumber(forecastLead) or forecastLead <= 0 or forecastLead > 1
+        or anchor ~= "timeline-finished" or castConfirm ~= nil or pausedStop ~= nil
+        or queueAfter ~= nil or canceledStop ~= nil or retainEarlyFinished ~= nil
+        or suppressConcurrentRestart ~= nil or holdOverlapping ~= nil or replacement ~= nil
+        or castMatch ~= nil or soonOnHold ~= nil) then
+        return nil
+    end
     if HasForbiddenExplicitField(row) then return nil end
 
     return {
@@ -227,6 +238,7 @@ local function BuildExplicitTimerBinding(encounterId, spellId, row)
         },
         waitAfter = waitAfter,
         soonOnHold = soonOnHold,
+        forecastLead = forecastLead,
     }
 end
 
@@ -1317,7 +1329,7 @@ function State.ClassifyStop(instance, now, forceDuration, timelineState, queueAl
                 local effectiveElapsed = evaluateClock(instance.sourceClock, now)
                 local extension = instance.binding.extension or 0
                 local remainingAtReceipt = instance.sourceClock.remainingAtReceipt
-                if effectiveElapsed >= remainingAtReceipt + extension then
+                if effectiveElapsed >= remainingAtReceipt + extension + (instance.binding.forecastLead or 0) then
                     -- A zero-extension parent's Finished may precede its expiry job.
                     -- Apply the same queue bound in either callback order.
                     if extension > 0 then return "retire" end
@@ -1484,7 +1496,7 @@ function State.ClassifyExpiry(instance, now)
         if instance.predictBound ~= nil then
             if effectiveElapsed >= instance.predictBound then return "retire" end
             if State.PredictedRemaining(instance, effectiveElapsed) > 0 then return "keep" end
-        elseif remaining + extension > 0 then
+        elseif remaining + extension + (instance.binding.forecastLead or 0) > 0 then
             return "keep"
         end
         -- Forecast zero. Only an anchor row may hold; the module resolves

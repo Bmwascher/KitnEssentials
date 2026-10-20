@@ -28,6 +28,8 @@ local MAP_GAP = 4
 -- A split row: the label line, then the slider below it.
 local SPLIT_ROW_H = 44
 
+local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
+
 -- Ordered option lists for the per-context default-display rows.
 -- Order mirrors the in-world view-selector grid (Selector.lua VIEW_GRID) so the GUI
 -- default-type picker offers the same eight types the right-click selector does.
@@ -617,16 +619,22 @@ local function ConstructSchematic(parent)
         removeBtn:SetSize(16, 16)
         removeBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -4)
         removeBtn:SetFrameLevel(box:GetFrameLevel() + 2)
-        removeBtn.text = removeBtn:CreateFontString(nil, "OVERLAY")
-        removeBtn.text:SetPoint("CENTER")
+        -- KE's close glyph is a plus; rotated 45 degrees it draws the X.
+        local icon = removeBtn:CreateTexture(nil, "OVERLAY")
+        icon:SetAllPoints()
+        icon:SetTexture(CLOSE_TEX)
+        icon:SetRotation(math.rad(45))
+        removeBtn.icon = icon
         removeBtn:Hide()
         removeBtn:SetScript("OnEnter", function(self)
+            icon:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText("Remove window " .. tostring(box.pos or "?"), 1, 1, 1, 1, true)
             GameTooltip:Show()
             if container._onHover then container._onHover("box", box, true) end
         end)
         removeBtn:SetScript("OnLeave", function()
+            icon:SetVertexColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
             GameTooltip:Hide()
             container.HideRemoveUnlessOver(box)
             if container._onHover then container._onHover("box", box, false) end
@@ -823,9 +831,7 @@ local function ConstructSchematic(parent)
                 KE:ApplyThemeFont(box.segText, 12)
                 box.segText:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
                 box.segText:SetText(segName or "")
-                KE:ApplyThemeFont(box.removeBtn.text, 13)
-                box.removeBtn.text:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
-                box.removeBtn.text:SetText("x")
+                box.removeBtn.icon:SetVertexColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
                 box.removeBtn:Hide()
                 box:Show()
                 boxAt[c][r] = box
@@ -1184,19 +1190,20 @@ end
 
 GUIFrame:NewWidgetPool("dm:splitlabel", ConstructSplitLabel, function() end)
 
--- "Whole meter" and the accent-colored dock size.
+-- "Meter Size:" and the accent-colored dock size.
 local function ConstructReadout(parent)
     local f = CreateFrame("Frame", nil, parent)
-    local label = f:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("LEFT", f, "LEFT", 0, 0)
+    local title = f:CreateFontString(nil, "OVERLAY")
+    title:SetPoint("LEFT", f, "LEFT", 0, 0)
     local value = f:CreateFontString(nil, "OVERLAY")
-    value:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    value:SetPoint("LEFT", title, "RIGHT", 8, 0)
+    f.title = title
 
     function f.Configure()
         local T = Theme
-        KE:ApplyThemeFont(label, "normal")
-        label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-        label:SetText("Whole meter")
+        KE:ApplyThemeFont(title, "normal")
+        title:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        title:SetText("Meter Size:")
         KE:ApplyThemeFont(value, "normal")
         value:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
         value:SetText("")
@@ -1325,7 +1332,6 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     local cardSize = GUIFrame:CreateCard(scrollChild, "Sizing", yOffset)
     manager:Register(cardSize, "all")
-    cardSize:AddLabel("Meter Size")
 
     local rowMeter = GUIFrame:CreateRow(cardSize.content, 24)
     local readout = GUIFrame:AcquirePooled("dm:readout", rowMeter)
@@ -1374,13 +1380,14 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     manager:Register(heightSlider, "all")
 
     local spacingSlider = GUIFrame:CreateSlider(rowBars, "Bar Spacing", {
-        min = 0, max = 10, step = 1,
+        min = -1, max = 10, step = 1,
         value = db.BarSpacing or 2,
         callback = function(val) db.BarSpacing = val; ApplySettings() end,
     })
     rowBars:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
     cardSize:AddRow(rowBars, barsLast and Theme.rowHeightLast or Theme.rowHeight, barsLast and 0 or nil)
+    if not barsLast then cardSize:AddSeparator() end
 
     local splits = {}
 
@@ -2337,7 +2344,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
 
     local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
     local spacingSlider = GUIFrame:CreateSlider(rowSpacing, "Spacing", {
-        min = 0, max = 10, step = 1,
+        min = -1, max = 10, step = 1,
         value = sh.Spacing or 2,
         callback = function(val) ResizeStrip("Spacing", val) end,
     })

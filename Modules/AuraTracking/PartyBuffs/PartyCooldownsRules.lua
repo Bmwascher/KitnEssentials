@@ -198,7 +198,7 @@ function Rules.TrinketEntries(slots, lengths, db)
             if cd then
                 out[#out + 1] = {
                     id = spellID, item = slot.item, key = key, kind = "trinket",
-                    buffs = { spellID }, cd = cd, trinket = true,
+                    buffs = KE.PartyCooldownsData.TRINKET_BUFFS[spellID] or { spellID }, cd = cd, trinket = true,
                 }
             end
         end
@@ -879,8 +879,8 @@ function Rules.ActiveSeconds(active, cd)
     return math_max(0, math_min(math_floor(active), cd - 1))
 end
 
--- Item data loads asked for per item in a session; a load that keeps failing
--- stops here.
+-- Item data loads, and tooltip reads with no cooldown line, per item in a
+-- session; a load that keeps failing stops here.
 Rules.LOAD_TRIES = 3
 
 -- True, and counted, while itemID has requests left.
@@ -889,6 +889,16 @@ function Rules.TakeLoadTry(tries, itemID)
     if n >= Rules.LOAD_TRIES then return false end
     tries[itemID] = n + 1
     return true
+end
+
+-- Seconds before each re-derive of a member whose trinkets are incomplete out
+-- of combat: a tooltip can lack its cooldown line until the use spell's text
+-- loads, and no event says when.
+Rules.DERIVE_WAITS = { 2, 5, 15 }
+
+-- The wait before the next re-derive after tries of them; nil once spent.
+function Rules.NextDeriveWait(tries)
+    return Rules.DERIVE_WAITS[(tries or 0) + 1]
 end
 
 -- The trinket icons a row may show after an exclusion call (set: the trinkets
@@ -910,13 +920,13 @@ function Rules.TrinketShow(show, set, accepted)
 end
 
 -- A spec's talents: rules maps castID to the talent rule of each entry that
--- has one (its swap where the swap applies to the spec, else its needs); ids
--- and want list every talent those rules and the mods of the spec's casts
--- name, the externals box's casts and box rows included. rows is set when the
--- spec's own casts or its healer externals name a talent, box when its
--- healer externals or its box rows do; boxOnly holds the talents only box
--- rows name, which a read skips while the box is off. Nil when there is
--- none. The data never changes, so each spec's answer is built once and
+-- has one (its hide, else its swap, where it applies to the spec, else its
+-- needs); ids and want list every talent those rules and the mods of the
+-- spec's casts name, the externals box's casts and box rows included. rows is
+-- set when the spec's own casts or its healer externals name a talent, box
+-- when its healer externals or its box rows do; boxOnly holds the talents
+-- only box rows name, which a read skips while the box is off. Nil when there
+-- is none. The data never changes, so each spec's answer is built once and
 -- shared; callers only read it. The inspect ticker asks every second.
 local talentsBySpec = {}
 
@@ -943,8 +953,10 @@ end
 -- talent.
 local function AddCast(out, castID, spell, specID)
     local swap = spell and spell.swap
+    local hide = spell and spell.hide
     local rule = spell and spell.needs
     if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
+    if hide and hide.specs[specID] then rule = hide end
     local named = false
     if rule then
         out.rules[castID] = rule
@@ -996,7 +1008,12 @@ function Rules.TalentRead(talents, talent, boxOn)
     return boxOn == true or not talents.boxOnly[talent]
 end
 
-function Rules.TalentAllows(entry, taken)
+function Rules.TalentAllows(entry, taken, specID)
+    local hide = entry.spell and entry.spell.hide
+    if hide and hide.specs[specID] then
+        if taken == nil then return hide.likely ~= true end
+        return taken == false
+    end
     local needs = entry.spell and entry.spell.needs
     if not needs then return true end
     if taken == nil then return needs.likely == true end
@@ -1101,6 +1118,13 @@ end
 function Rules.TrinketReadStands(prev, items)
     local same = prev ~= nil and prev[1] == items[1] and prev[2] == items[2]
     return same or (items[1] ~= nil and items[2] ~= nil), same
+end
+
+-- An inspect answer can come before the teammate's gear does, and then every
+-- slot reads empty. A read with no trinket counts only when the chest or main
+-- hand (others) holds an item.
+function Rules.GearArrived(items, others)
+    return items[1] ~= nil or items[2] ~= nil or others[1] ~= nil or others[2] ~= nil
 end
 
 -- The talent answer after three unreadable reads, and whether to read once

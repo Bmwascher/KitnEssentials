@@ -18,6 +18,8 @@ KE.PartyCooldownsData = Data
 -- icon only: id is drawn when it is taken, likely until talents are read,
 -- and specs limits it to those specs. needs is a talent the row requires: it
 -- shows while the talent is taken, and before talents are read only if likely.
+-- hide is a talent that removes the row in specs: it hides while the talent
+-- is taken, and before talents are read only if likely.
 -- active is set on a summon seen only through a stand-in buff: its
 -- cell's aura button never shows, and the cell shows the summon's own icon
 -- with a timer for active seconds from the cast, then the cooldown. off
@@ -75,7 +77,8 @@ Data.SPELLS = {
     [122470]  = { kind = "defensive", cd = 90, buffs = { 125174 } },
 
     [31884]   = { kind = "offensive", cd = 120, buffs = { 31884, 231895, 454351, 216331, 389539 },
-                  swap = { id = 389539, talents = { [389539] = true }, likely = true, specs = { [66] = true } } },
+                  swap = { id = 389539, talents = { [389539] = true }, likely = true, specs = { [66] = true } },
+                  hide = { talents = { [458359] = true }, likely = false, specs = { [70] = true } } },
     [642]     = { kind = "defensive", cd = 300 },
     [498]     = { kind = "defensive", cd = 60, buffs = { 498, 403876 } },
     [31850]   = { kind = "defensive", cd = 90 },
@@ -167,6 +170,11 @@ for castID, spell in pairs(Data.SPELLS) do
     spell.id = castID
     spell.buffs = spell.buffs or { castID }
 end
+
+-- Trinkets whose buff aura carries another ID than the item's use spell.
+Data.TRINKET_BUFFS = {
+    [1291894] = { 1307578 }, -- Soulcoiler Ritual Vessel
+}
 
 -- Talent changes to a cast's cooldown, per rank: add seconds or pct percent,
 -- and spec limits one to a spec. A cell counts the length once every talent a
@@ -312,8 +320,8 @@ Data.BOX_ROWS = {
       anySpec = true, watch = "target" },
     { id = 53480,  class = "HUNTER",      specs = { [253] = true, [254] = true, [255] = true },
       anySpec = true, watch = "target" },
-    { id = 29166,  class = "DRUID",       specs = { [102] = true, [105] = true },
-      roles = { DAMAGER = true, HEALER = true }, watch = "target" },
+    { id = 29166,  class = "DRUID",       specs = { [102] = true, [103] = true, [104] = true, [105] = true },
+      anySpec = true, watch = "target" },
     { id = 406732, class = "EVOKER",      specs = { [1473] = true }, roles = { DAMAGER = true }, watch = "target" },
     { id = 196718, class = "DEMONHUNTER", specs = { [577] = true, [581] = true, [1480] = true },
       anySpec = true, watch = "owner" },

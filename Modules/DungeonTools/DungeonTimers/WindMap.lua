@@ -332,23 +332,29 @@ end
 function DT:_WindMapFrame()
     local frame = self._windMapFrame
     if frame then return frame end
-    frame = CreateFrame("Frame", FRAME_NAME, UIParent, "BackdropTemplate")
+    -- Edit Mode moves the outer frame, which stays unscaled: its drag math
+    -- assumes the frame's units are UIParent's. The body carries the scale.
+    frame = CreateFrame("Frame", FRAME_NAME, UIParent)
     frame:SetSize(WIDTH, HEIGHT)
-    frame:SetBackdrop(BACKDROP)
-    frame:SetBackdropColor(0, 0, 0, 0.55)
-    frame:SetBackdropBorderColor(0, 0, 0, 1)
     frame:Hide()
+    local body = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    body:SetSize(WIDTH, HEIGHT)
+    body:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    body:SetBackdrop(BACKDROP)
+    body:SetBackdropColor(0, 0, 0, 0.55)
+    body:SetBackdropBorderColor(0, 0, 0, 1)
+    frame.body = body
 
-    frame.windText = NewText(frame, 12)
+    frame.windText = NewText(body, 12)
     frame.windText:SetHeight(LINE_HEIGHT)
-    frame.windText:SetPoint("TOP", frame, "TOP", 0, -PAD)
-    frame.dropText = NewText(frame, 12)
+    frame.windText:SetPoint("TOP", body, "TOP", 0, -PAD)
+    frame.dropText = NewText(body, 12)
     frame.dropText:SetHeight(LINE_HEIGHT)
     frame.dropText:SetPoint("TOP", frame.windText, "BOTTOM", 0, -LINE_GAP)
 
-    local block = CreateFrame("Frame", nil, frame)
+    local block = CreateFrame("Frame", nil, body)
     block:SetSize(MAP_SIZE, MAP_SIZE)
-    block:SetPoint("TOP", frame, "TOP", 0, -(PAD + LINE_HEIGHT * 2 + LINE_GAP + BLOCK_GAP))
+    block:SetPoint("TOP", body, "TOP", 0, -(PAD + LINE_HEIGHT * 2 + LINE_GAP + BLOCK_GAP))
     local art = block:CreateTexture(nil, "BACKGROUND")
     art:SetAllPoints()
     art:SetTexture(KE.PATH .. MAP_FILE)
@@ -390,7 +396,7 @@ function DT:_WindMapFrame()
     pulse:SetEndDelay(0.05)
 
     frame.cards = {}
-    for i = 1, 3 do frame.cards[i] = NewCard(frame, i) end
+    for i = 1, 3 do frame.cards[i] = NewCard(body, i) end
 
     frame:SetScript("OnEvent", function(_, event, ...) DT:_WindMapOnEvent(event, ...) end)
 
@@ -413,7 +419,9 @@ end
 function DT:_WindMapApplyLayout()
     local frame, db = self._windMapFrame, MapSettings()
     if not (frame and db) then return end
-    frame:SetScale(db.Scale or 1)
+    local scale = db.Scale or 1
+    frame.body:SetScale(scale)
+    frame:SetSize(WIDTH * scale, HEIGHT * scale)
     frame:SetAlpha(db.Opacity or 0.9)
     KE:ApplyFramePosition(frame, db.Position, {
         anchorFrameType = db.AnchorFrameType,
@@ -580,22 +588,31 @@ local function Readable(value)
     return value
 end
 
--- Reads the fixed boss tokens. A readable dead boss or a readably lost token
+-- Reads the fixed boss tokens. Erkhart read dead hides the map for the rest
+-- of the encounter. Any other readable dead boss or readably lost token
 -- withdraws inference for the rest of the encounter, in the store and in the
 -- encounter's evidence: the held wind and its step are dropped, and only live
--- published winds give a side. Unreadable answers change nothing. Withdrawal
--- is final, so the watch then stops.
+-- published winds give a side. Unreadable answers change nothing.
 function DT:_WindMapScanBosses()
     local map, evidence = self._windMap, self._windMapEvidence
-    if not (map and evidence) or map.inferenceWithdrawn then return end
+    if not (map and evidence) then return end
+    local casterExists = Readable(UnitExists(CAST_UNIT))
+    local casterDead
+    if casterExists == true then casterDead = Readable(UnitIsDead(CAST_UNIT)) end
+    if Map.CasterLost(evidence, casterExists, casterDead) then
+        DT._dprint("windmap caster-lost")
+        self:_WindMapTeardown(true)
+        return
+    end
+    if map.inferenceWithdrawn then return end
     for i = 1, #BOSS_UNITS do
         local unit = BOSS_UNITS[i]
         local exists = Readable(UnitExists(unit))
         local dead
         if exists == true then dead = Readable(UnitIsDead(unit)) end
         if Map.BossLost(evidence.seen, unit, exists, dead) then
+            DT._dprint("windmap boss-lost unit=" .. unit .. " exists=" .. tostring(exists))
             Map.WithdrawInference(map, evidence)
-            self:_WindMapStopBossWatch()
             self:_WindMapWake()
             return
         end
@@ -603,8 +620,9 @@ function DT:_WindMapScanBosses()
 end
 
 -- Flag changes and roster changes on the boss tokens rescan them, so a held
--- wind is covered while no card is live and no tick runs. The tokens seen
--- live in the encounter's evidence, so a restart keeps them.
+-- wind and Erkhart's death are covered while no card is live and no tick
+-- runs. The watch lasts the whole map, past withdrawal. The tokens seen live
+-- in the encounter's evidence, so a restart keeps them.
 function DT:_WindMapStartBossWatch(frame)
     frame:RegisterUnitEvent("UNIT_FLAGS", "boss1", "boss2", "boss3", "boss4", "boss5")
     frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
@@ -618,7 +636,7 @@ function DT:_WindMapStopBossWatch()
     frame:UnregisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 end
 
--- Watch only Erkhart so unreadable casts from the other boss cannot lose
+-- Watch only Erkhart so unreadable casts from the other boss cannot end
 -- the wind sequence. Confirmation outlives forecast cards and withdrawal.
 function DT:_WindMapStartCastWatch(frame)
     for i = 1, #CAST_EVENTS do
@@ -632,8 +650,9 @@ function DT:_WindMapStopCastWatch()
     for i = 1, #CAST_EVENTS do frame:UnregisterEvent(CAST_EVENTS[i]) end
 end
 
--- Unreadable identity may hide a Winds start. Readable starts use freshly
--- sampled deadlines even while the panel is hidden.
+-- Unreadable identity may hide a Winds start, and switches the map to live
+-- published sides. Readable starts use freshly sampled deadlines even while
+-- the panel is hidden.
 function DT:_WindMapCastStart(unit, spellID, castBarID)
     local map, cfg = self._windMap, self._windMapConfig
     if not (map and cfg) then return end
@@ -643,7 +662,9 @@ function DT:_WindMapCastStart(unit, spellID, castBarID)
     local token = Readable(unit)
     if spell == nil or token == nil or type(bar) ~= "number" then
         if type(bar) ~= "number" then bar = nil end
-        Map.UnreadableCast(map, token, bar)
+        if Map.UnreadableCast(map, token, bar) then
+            DT._dprint("windmap published-only reason=unreadable-cast")
+        end
         self:_WindMapWake()
         return
     end
@@ -689,6 +710,7 @@ function DT:_WindMapRefresh()
     end
     -- Each render rereads the boss tokens, in case no event reported a change.
     self:_WindMapScanBosses()
+    if self._windMap ~= map then return end
     local now = GetTime()
     local count = 0
     for inst, rec in pairs(map.records) do
@@ -731,6 +753,7 @@ function DT:_WindMapEncounterStart(encounterId, fromEncounterStart)
     if fromEncounterStart then self._windMapEvidence = Map.NewEvidence(encounterId) end
     local evidence = self._windMapEvidence
     if evidence and evidence.encounterId ~= encounterId then evidence = nil end
+    if evidence and evidence.casterLost then return end
     self._windMap = Map.New()
     -- Only a store started with the encounter saw every wind; any later start
     -- (the map turned on, or a profile change) begins withdrawn and unsure.
@@ -742,8 +765,9 @@ function DT:_WindMapEncounterStart(encounterId, fromEncounterStart)
     self._windMapEncounterId = encounterId
     self._windMapSpitIcon = self:ResolveSpellIcon(cfg.spit)
     local frame = self:_WindMapFrame()
-    -- The boss watch serves only a store that can still withdraw.
-    if not self._windMap.inferenceWithdrawn then self:_WindMapStartBossWatch(frame) end
+    self:_WindMapStartBossWatch(frame)
+    -- The first scan may find Erkhart already dead and end the map.
+    if not self._windMap then return end
     self:_WindMapStartCastWatch(frame)
     self:_WindMapApplyLayout()
     if not self._windMapPreview then

@@ -97,13 +97,13 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     if Sensor and Sensor.door and not Sensor.DoorOpen() then
         cardMain:AddNote("Raid Cooldowns timers are unavailable on this client.")
     end
-    cardMain:AddLabel("One icon per cooldown: the spells your party members cast on one target first, " ..
-        "then their raid cooldowns. Full color when ready, gray with the time left once seen: a spell cast " ..
-        "on one target when its buff appears on anyone in your party, a raid cooldown when its buff appears " ..
-        "on its caster. Your own are not shown. Shown in a party where the Cooldowns tab's Where It Shows " ..
-        "allows, never in a raid or an arena. Another player's cast of the same spell, such as a Retribution " ..
-        "Paladin's Blessing of Sacrifice, starts it too.")
-    cardMain:AddNote("Move it with /kes edit.")
+    cardMain:AddLabel("One icon per cooldown, with your party's single-target spells first and raid " ..
+        "cooldowns after. Yours come first in each group, whether or not |cffffd100Include Yourself|r is on." ..
+        "\n\nAn icon is full color when ready. It turns gray with the time left once its buff shows: a " ..
+        "single-target spell's on anyone in your party, a raid cooldown's on its caster. Another player's " ..
+        "cast of the same spell starts it too, such as a Retribution Paladin's |cffffd100Blessing of Sacrifice|r." ..
+        "\n\nShows in a party wherever the Cooldowns tab's |cffffd100Where It Shows|r allows. Never in a raid " ..
+        "or an arena.")
     local function Attach()
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
         db.HealerExtAnchorFrameType = "SELECTFRAME"
@@ -155,7 +155,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     cardDisplay:AddLabel("Font face and outline follow the Cooldowns tab's Font Settings.")
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddSlider(rowD1, "Icon Size", "HealerExtIconSize", ICON_MIN, ICON_MAX, "on")
-    AddSlider(rowD1, "Spacing", "HealerExtSpacing", 0, 20, "on")
+    AddSlider(rowD1, "Spacing", "HealerExtSpacing", -1, 20, "on")
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     local grow = GUIFrame:CreateDropdown(rowD2, "Grow", {

@@ -3,8 +3,10 @@
     <Script file="EncounterData.lua" />
     <Script file="TimerState.lua" />
     <Script file="WindMapState.lua" />
+    <Script file="ShieldSwapState.lua" />
     <Script file="DebugTrace.lua" />
     <Script file="DungeonTimers.lua" />
     <Script file="WindMap.lua" />
+    <Script file="ShieldWarning.lua" />
     <Include file="Trash\Trash.xml" />
 </Ui>

@@ -458,6 +458,12 @@ describe("Enchant name style", function()
         assert.equals(short, CP._ProcessEnchantText(RAW, "nonsense"))
     end)
 
+    -- The counterpart, an entry without a full name, is the exact-key row above.
+    it("shows an entry's full name in Full when it has one", function()
+        local CP = loadCP()
+        assert.equals("Heat Wave", CP._ProcessEnchantText("Ancient Hash'ey Battle Art: Heat Wave", "full"))
+    end)
+
     -- The cache defect. This case MUST be seen to fail against a cache keyed
     -- on the raw text alone: that is what proves it tests the key and not
     -- merely the resolver.
@@ -522,6 +528,8 @@ describe("Enchant rank", function()
             { line = "Rite of the Hash'ey |A:Professions-ChatIcon-Quality-12-Tier2:20:20|a",
               name = "Rite of the Hash'ey", rank = 2 },
             { line = "Radiant Critical Strike", name = "Radiant Critical Strike", rank = nil },
+            { line = "|cnIQ4:Ancient Hash'ey Battle Art: Heat Wave|r",
+              name = "Ancient Hash'ey Battle Art: Heat Wave", rank = nil },
         }
         for _, c in ipairs(cases) do
             local name, rank = CP._ParseEnchantLine(c.line)
