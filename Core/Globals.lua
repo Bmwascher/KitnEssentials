@@ -98,7 +98,7 @@ if KE.LSM then
         "Knockback", "Leap", "Move", "Move In", "Move Out", "Not Safe", "Phase Ending", "Phasing", "Pools",
         "Protect", "Pull", "Rescue", "Rooted", "Safe", "Soak", "Soaking", "Soaks", "Spawn Add", "Split",
         "Spread", "Stack", "Stop Casting", "Take Gateway", "Time Spiral", "Totem", "Totems", "Under Boss",
-        "Waiter", "Whisper",
+        "Waiter", "Whisper", "Wrong Target",
     }
     for _, name in ipairs(sounds) do
         KE.LSM:Register("sound", name, SOUND_DIR .. name .. ".ogg")

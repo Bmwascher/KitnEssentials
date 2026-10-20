@@ -35,8 +35,7 @@ local ICON_GAP = 6
 local COLOR = { 1, 0.15, 0.15 }
 local OFFSET_Y = 200
 local FALLBACK_ICON = 134400
--- The built-in sound; nil plays nothing until a sound is picked.
-DT.SHIELD_WARNING_DEFAULT_SOUND = nil
+DT.SHIELD_WARNING_DEFAULT_SOUND = "Wrong Target"
 
 local function WarningSettings()
     local profile = KE.db and KE.db.profile
