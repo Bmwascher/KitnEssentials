@@ -452,7 +452,7 @@ local function CollectEncountersForDungeon(dungeonKey)
             if type(enc.shieldSwap) == "table" then
                 table_insert(spellPairs, {
                     id              = string_format("warn:%d:shield", encId),
-                    data            = { name = "Shielded Target", spellID = enc.shieldSwap.message },
+                    data            = { name = "Storm Blessed", spellID = enc.shieldSwap.message },
                     isShieldWarning = true,
                 })
             end
@@ -3469,10 +3469,10 @@ local function BuildWindMapBody(parent, contentWidth, onCaptionResize)
 end
 
 local SHIELD_WARNING_TOOLTIP =
-    "Red SHIELDED TARGET text while your target is the boss that carries Storm Blessed."
+    "Red WRONG TARGET text while your target is the boss that carries Storm Blessed."
 
 local SHIELD_WARNING_DESCRIPTION =
-    "Shows a red SHIELDED TARGET text, with Storm Blessed's icon on each side, above the center of "
+    "Shows a red WRONG TARGET text, with Storm Blessed's icon on each side, above the center of "
     .. "the screen while your target is the boss that carries Storm Blessed and cannot be damaged. "
     .. "It follows BigWigs' \"Storm Blessed on ...\" messages, so it needs BigWigs with LittleWigs. "
     .. "Mythic and Mythic+ only. It hides once either boss dies. The sound plays each time the text "
@@ -3488,10 +3488,10 @@ local function BuildShieldWarningBody(parent, rowKey, contentWidth, onCaptionRes
     local header = body:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(header, "Expressway", 13, "OUTLINE")
     header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
-    header:SetText("Shielded Target")
+    header:SetText("Storm Blessed")
     header:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
 
-    local enableToggle = GUIFrame:CreateCheckbox(body, "Show SHIELDED TARGET", {
+    local enableToggle = GUIFrame:CreateCheckbox(body, "Show WRONG TARGET", {
         value = settings ~= nil and settings.Enabled == true,
         callback = function(checked)
             if not settings then return end

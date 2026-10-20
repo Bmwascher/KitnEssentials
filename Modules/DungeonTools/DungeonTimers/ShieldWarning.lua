@@ -28,7 +28,7 @@ local UnitExists = UnitExists
 local UnitIsDead = UnitIsDead
 local UnitIsUnit = UnitIsUnit
 
-local TEXT = "SHIELDED TARGET"
+local TEXT = "WRONG TARGET"
 local FONT_SIZE = 40
 local ICON_GAP = 6
 local COLOR = { 1, 0.15, 0.15 }
