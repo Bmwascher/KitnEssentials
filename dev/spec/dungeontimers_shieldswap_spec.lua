@@ -1,0 +1,40 @@
+-- Shield swap: which boss of a pair carries the shield, counted from the
+-- swap messages, and the phase rules that end at a swap. Message delivery and
+-- health curves are in-game checks.
+local L = require("dev.spec._ke_loader")
+
+local CFG = { message = 1310311, start = "boss2", units = { "boss1", "boss2" } }
+
+describe("shield swap", function()
+    it("moves the shield once per swap message, ignoring other keys and a repeat inside the throttle", function()
+        local Swap = L.loadShieldSwapState()
+        local swap = Swap.New(CFG)
+        local steps = {
+            { name = "pull", key = nil, at = 0, moved = false, shielded = "boss2" },
+            { name = "other message", key = 1289059, at = 10, moved = false, shielded = "boss2" },
+            { name = "first swap", key = 1310311, at = 66, moved = true, shielded = "boss1" },
+            { name = "repeat inside the throttle", key = 1310311, at = 67.5, moved = false, shielded = "boss1" },
+            { name = "second swap", key = 1310311, at = 129, moved = true, shielded = "boss2" },
+        }
+        for _, s in ipairs(steps) do
+            if s.key then assert.equals(s.moved, Swap.OnMessage(swap, s.key, s.at), s.name) end
+            assert.equals(s.shielded, swap.shielded, s.name)
+        end
+    end)
+end)
+
+describe("phase rule end at a swap", function()
+    it("ends an endsOnShield rule only once a swap has moved the shield to its unit", function()
+        local DT = L.loadDungeonTimers()
+        local Swap = L.loadShieldSwapState()
+        local swap = Swap.New(CFG)
+        local boss1 = { unit = "boss1", endsOnShield = true }
+        local boss2 = { unit = "boss2", endsOnShield = true }
+        assert.is_false(DT._PhaseRuleEnded(boss2, nil, swap), "the pull's starting shield")
+        Swap.OnMessage(swap, 1310311, 66)
+        assert.is_true(DT._PhaseRuleEnded(boss1, nil, swap), "swapped to boss1")
+        assert.is_false(DT._PhaseRuleEnded(boss2, nil, swap), "boss2 not swapped to yet")
+        assert.is_false(DT._PhaseRuleEnded({ unit = "boss1" }, nil, swap), "rule without endsOnShield")
+        assert.is_false(DT._PhaseRuleEnded(boss1, nil, nil), "encounter without a swap")
+    end)
+end)

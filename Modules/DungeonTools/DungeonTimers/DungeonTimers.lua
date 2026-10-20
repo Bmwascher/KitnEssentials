@@ -17,6 +17,7 @@ local DT = KitnEssentials:NewModule("DungeonTimers", "AceEvent-3.0", "AceTimer-3
 KE.EncounterData = KE.EncounterData or {}
 
 local State = KE._DungeonTimerState
+local Swap = KE._DungeonShieldSwapState
 local Trace = KE._DungeonTimerTrace
 
 local ipairs = ipairs
@@ -4148,10 +4149,12 @@ function DT:_GetPhaseCurves(threshold, lead)
     return valueCurve, countdownCurve, transitionedCurve, frameCurve
 end
 
--- A rule with endsAtStage hides once the encounter's own stage reaches it.
-function DT._PhaseRuleEnded(rule, stage)
+-- A rule with endsAtStage hides once the encounter's own stage reaches it;
+-- one with endsOnShield once the shield has swapped to its unit.
+function DT._PhaseRuleEnded(rule, stage, swap)
     local endsAt = rule.endsAtStage
-    return type(endsAt) == "number" and type(stage) == "number" and stage >= endsAt
+    if type(endsAt) == "number" and type(stage) == "number" and stage >= endsAt then return true end
+    return Swap.RuleEnded(rule, swap)
 end
 
 function DT:RefreshPhaseBars()
@@ -4166,7 +4169,7 @@ function DT:RefreshPhaseBars()
         local unit = rule.unit or "boss1"
         local threshold = tonumber(rule.threshold) or 0
         local lead = self:GetPhaseEffectiveLead(key)
-        local disabled = self:IsPhaseDisabled(key) or DT._PhaseRuleEnded(rule, self._encounterStage)
+        local disabled = self:IsPhaseDisabled(key) or DT._PhaseRuleEnded(rule, self._encounterStage, self._shieldSwap)
 
         if disabled or not UnitExists(unit) or UnitIsDead(unit) or lead <= 0 then
             self:_HidePhaseBar(key)
@@ -4215,6 +4218,7 @@ function DT:StopPhaseTracking()
     -- Runs at every encounter start and end and on disable, so a stage never
     -- outlives its encounter.
     self._encounterStage = nil
+    self._shieldSwap = nil
     self:_HideAllPhaseBars()
 end
 
@@ -5274,6 +5278,8 @@ function DT:OnEncounterStart(_, encounterID)
     -- wind map starts and before any held receipt is replayed.
     local stagedEncounter = id and KE.EncounterData and KE.EncounterData[id]
     self._encounterStage = (stagedEncounter and stagedEncounter.stageCue) and 1 or nil
+    local swapCfg = stagedEncounter and stagedEncounter.shieldSwap
+    self._shieldSwap = swapCfg and Swap.New(swapCfg) or nil
     if id then State.ClearCueCounts(self._state, id) end
     -- Drops a shield left by an encounter that never ended, and releases the
     -- shield events for an encounter without a shield binding.
@@ -6561,6 +6567,10 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         if not meta then
             dprint("Message refused owner: " .. tostring(ownerReason))
             return
+        end
+        if self._shieldSwap and Swap.OnMessage(self._shieldSwap, key, GetTime()) then
+            dprint("shield swap to=" .. tostring(self._shieldSwap.shielded))
+            self:RefreshPhaseBars()
         end
         local binding, bindReason = State.ResolveBinding(self._bindings, meta, self._activeEncounterId,
             "Message", key, nil)

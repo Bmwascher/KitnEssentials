@@ -125,6 +125,7 @@ function L.loadDungeonTimers(opts, overrides)
     end
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/TimerState.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMapState.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/ShieldSwapState.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/DebugTrace.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/DungeonTimers.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMap.lua", KE)
@@ -644,6 +645,15 @@ function L.loadWindMapState(overrides)
     local KE = {}
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMapState.lua", KE)
     return KE._DungeonWindMapState, KE
+end
+
+-- Modules/DungeonTools/DungeonTimers/ShieldSwapState.lua. Pure decision logic,
+-- like the wind map state. Returns KE._DungeonShieldSwapState, KE.
+function L.loadShieldSwapState(overrides)
+    installMock(overrides, {})
+    local KE = {}
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/ShieldSwapState.lua", KE)
+    return KE._DungeonShieldSwapState, KE
 end
 
 -- Modules/AuraTracking/AuraEngine/GlowRules.lua. Pure decision logic -- no WoW API,

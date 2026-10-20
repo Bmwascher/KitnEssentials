@@ -332,6 +332,10 @@
 --                                      --   encounter's stage
 --                                      --   (stageCue) reaches
 --                                      --   this stage
+--               endsOnShield = true,  -- optional: hidden
+--                                      --   once shieldSwap
+--                                      --   has moved the
+--                                      --   shield to `unit`
 --           },
 --           ...
 --       },
@@ -454,6 +458,13 @@
 -- boss1-boss5 for presence and death: any readable boss death
 -- or lost boss token drops the held wind and its step for the
 -- rest of the encounter, leaving only live published winds.
+--
+-- shieldSwap = { message = <spellID>, start = <unit>,
+-- units = { <unit>, <unit> } } (encounter-level, optional): a
+-- pair of bosses where one carries a shield. `start` has it at
+-- the pull; each BigWigs_Message with key `message` moves it
+-- to the other unit (one move per 2 s). Ends endsOnShield
+-- phase rules.
 --
 -- stageCue = { spellID = <spellID>, duration = <seconds>,
 -- stage = <n> } (encounter-level, optional): the encounter
@@ -1511,12 +1522,13 @@ KE.EncounterData[2124] = {
         [1289059] = { name = "Gale Force", castType = "begincast", castDuration = 3.5, role = "other", displayText = "KNOCK", color = { 1.0, 1.0, 0.2 }, sound = "Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", holdOverlapping = true } },
     },
+    -- Each boss swaps the shield to itself at its own 35%; the other boss
+    -- carries it from the pull.
     phases = {
-        { unit = "boss1", threshold = 66, lead = 5 },
-        { unit = "boss1", threshold = 35, lead = 5 },
-        { unit = "boss2", threshold = 66, lead = 5 },
-        { unit = "boss2", threshold = 35, lead = 5 },
+        { unit = "boss1", threshold = 35, lead = 5, endsOnShield = true },
+        { unit = "boss2", threshold = 35, lead = 5, endsOnShield = true },
     },
+    shieldSwap = { message = 1310311, start = "boss2", units = { "boss1", "boss2" } },
     auraSounds = {
         { spellID = 1288074, trigger = "added", unit = "player", name = "Thunder and Lightning on you", sound = "Move In" },
         { spellID = 1288874, trigger = "added", unit = "player", name = "Tempest Winds on you",         sound = "Move Out" },
