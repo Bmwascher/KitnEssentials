@@ -2328,8 +2328,8 @@ local Defaults = {
             },
 
             WindMap = {
-                Enabled = false,
-                Scale = 1,
+                Enabled = true,
+                Scale = 0.9,
                 Opacity = 0.9,
                 Strata = "MEDIUM",
                 AnchorFrameType = "UIPARENT",
