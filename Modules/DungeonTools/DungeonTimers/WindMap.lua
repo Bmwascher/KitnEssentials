@@ -646,7 +646,7 @@ function DT:_WindMapCastStart(unit, spellID, castBarID)
         if type(bar) ~= "number" then bar = nil end
         if Map.UnreadableCast(map, token, bar) then
             self:_WindMapStopBossWatch()
-            if DT._dprint then DT._dprint("windmap published-only reason=unreadable-cast") end
+            DT._dprint("windmap published-only reason=unreadable-cast")
         end
         self:_WindMapWake()
         return

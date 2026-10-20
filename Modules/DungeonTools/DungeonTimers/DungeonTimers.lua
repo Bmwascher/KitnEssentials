@@ -412,7 +412,7 @@ local function dprint(msg)
         KE:Print("[DT2] " .. tostring(msg))
     end
 end
--- Exported so sibling files (WindMap.lua) ride the same DEBUG_DT2 flag.
+-- Exported so sibling files (WindMap.lua) use the same DEBUG_DT2 flag.
 DT._dprint = dprint
 
 -- Preview bars loop endlessly so they're gated out to prevent sound spam.
