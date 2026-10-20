@@ -112,12 +112,13 @@ end
 
 -- Each category may fill the whole cap, so only the holder's clip holds the
 -- cap: buff lines are at most cap wide and the holder fits the layout exactly.
+-- ownLine starts the buffs on a line of their own whenever the row has a cell.
 -- Returns step, buffCol, buffLine, buffPerLine, width, height.
-function Rules.RowLayout(db, cellCount, perRow, size)
+function Rules.RowLayout(db, cellCount, perRow, size, ownLine)
     local spacing = db.IconSpacing
     local step = size + spacing
     local buffs = Rules.IconCount(db)
-    if cellCount + buffs <= perRow then
+    if cellCount + buffs <= perRow and not (ownLine and cellCount > 0) then
         return step, cellCount, 0, buffs, Span(cellCount + buffs, size, spacing), Span(1, size, spacing)
     end
     local buffLine = math_ceil(cellCount / perRow)
@@ -128,12 +129,47 @@ function Rules.RowLayout(db, cellCount, perRow, size)
     return step, 0, buffLine, perLine, width, Span(math_max(lines, 1), size, spacing)
 end
 
--- The spec can move the icons per row and the corner while the tracker is
+-- The row's geometry for any layout, live and preview alike, from plain counts
+-- only: the buff count is secret, so the buffs' cap stands in for it. A
+-- centered row puts its first cell line on the frame's center and starts the
+-- buffs from that line's left edge; a centered column puts its first column
+-- there, further columns to its right. x0 is the cells' offset from the
+-- holder's corner.
+function Rules.SlotGeometry(db, layout, cellCount, perRow, size)
+    local step, buffIndex, buffLine, buffPerLine, primary, cross =
+        Rules.RowLayout(db, cellCount, perRow, size, layout.centered and not layout.vertical)
+    local g = {
+        step = step, buffIndex = buffIndex, buffLine = buffLine, buffPerLine = buffPerLine,
+        x0 = 0, width = primary, height = cross,
+    }
+    if layout.vertical then
+        g.width, g.height, g.x0 = 2 * cross - size, primary, cross - size
+    elseif layout.centered then
+        local spacing = db.IconSpacing
+        local bs = Span(buffPerLine, size, spacing)
+        local cs = bs
+        if cellCount > 0 then cs = Span(math_min(cellCount, perRow), size, spacing) end
+        g.x0, g.width = math_max(0, bs - cs), math_max(cs, 2 * bs - cs)
+    end
+    return g
+end
+
+-- Where an icon sits from the holder's corner: index along its line, line
+-- across. A column's lines run up or down, and its columns open to the right.
+function Rules.IconOffset(g, layout, index, line)
+    local h = layout.left and -1 or 1
+    local v = layout.up and 1 or -1
+    local p, q = index * g.step, line * g.step
+    if layout.vertical then return g.x0 + h * q, v * p end
+    return g.x0 + h * p, v * q
+end
+
+-- The spec can move the icons per row and the layout while the tracker is
 -- off, with no event to say so, so each bind compares the last layout's inputs.
--- The corner fixes every direction inside the holder (LAYOUTS); the holder's
--- own anchor is set on every bind (PB:PlaceHolder).
-function Rules.NeedsLayout(slot, cellCount, perRow, corner)
-    return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutCorner ~= corner
+-- Two layouts can share a corner, so the layout record itself is compared; the
+-- holder's own anchor is set on every bind (PB:PlaceHolder).
+function Rules.NeedsLayout(slot, cellCount, perRow, layout)
+    return slot.cellCount ~= cellCount or slot.layoutPerRow ~= perRow or slot.layoutRecord ~= layout
 end
 
 -- dressedSize is nil before the first dressing.
@@ -258,7 +294,11 @@ end
 -- toward its frame: Left and Right run their lines outward, Above wraps up and
 -- Below wraps down. lift raises the holder by that many icons: a Center
 -- layout pins its top half an icon above the frame's middle, so its first
--- line centers on the frame and further lines hang below it.
+-- line centers on the frame and further lines hang below it. A centered
+-- layout pins the holder by its edge center on the frame's edge center; a
+-- vertical one runs a column away from the frame, further columns to its
+-- right. Their keys are new to the list, so a Grow saved for another side
+-- never turns into one of them.
 Rules.LAYOUTS = {
     LEFT = {
         { grow = "CENTER", point = "TOPRIGHT",    rel = "LEFT",        dx = -1, dy = 0, corner = "TOPRIGHT",
@@ -275,17 +315,25 @@ Rules.LAYOUTS = {
     ABOVE = {
         { grow = "RIGHT", point = "BOTTOMLEFT",  rel = "TOPLEFT",  dx = 1,  dy = 1, corner = "BOTTOMLEFT" },
         { grow = "LEFT",  point = "BOTTOMRIGHT", rel = "TOPRIGHT", dx = -1, dy = 1, corner = "BOTTOMRIGHT" },
+        { grow = "CENTER_ROW", point = "BOTTOM", rel = "TOP", dx = 0, dy = 1, corner = "BOTTOMLEFT",
+          centered = true },
+        { grow = "COLUMN_UP", point = "BOTTOM", rel = "TOP", dx = 0, dy = 1, corner = "BOTTOMLEFT",
+          centered = true, vertical = true },
     },
     BELOW = {
         { grow = "RIGHT", point = "TOPLEFT",  rel = "BOTTOMLEFT",  dx = 1,  dy = -1, corner = "TOPLEFT" },
         { grow = "LEFT",  point = "TOPRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = -1, corner = "TOPRIGHT" },
+        { grow = "CENTER_ROW", point = "TOP", rel = "BOTTOM", dx = 0, dy = -1, corner = "TOPLEFT",
+          centered = true },
+        { grow = "COLUMN_DOWN", point = "TOP", rel = "BOTTOM", dx = 0, dy = -1, corner = "TOPLEFT",
+          centered = true, vertical = true },
     },
     INSIDE = {
         { grow = "LEFT", point = "BOTTOMRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = 1, corner = "BOTTOMRIGHT" },
     },
 }
--- A layout grows away from its corner, so the corner alone sets its directions,
--- and two layouts with one corner lay out alike inside the holder.
+-- A layout grows away from its corner, so the corner sets its directions;
+-- centered and vertical set the rest (SlotGeometry).
 for _, layouts in pairs(Rules.LAYOUTS) do
     for _, layout in ipairs(layouts) do
         layout.left = layout.corner:sub(-5) == "RIGHT"

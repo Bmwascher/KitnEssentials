@@ -304,6 +304,7 @@ describe("PartyBuffsRules.Layout", function()
             { name = "Below, toward the frame", side = "BELOW", grow = "UP", list = "BELOW" },
             { name = "Inside, out of the frame", side = "INSIDE", grow = "RIGHT", list = "INSIDE" },
             { name = "Above, another side's choice", side = "ABOVE", grow = "UP", list = "ABOVE" },
+            { name = "Above, a stale Center", side = "ABOVE", grow = "CENTER", list = "ABOVE" },
             { name = "unknown side reads as Left", side = "NOWHERE", grow = "UP", list = "LEFT", want = "UP" },
         }
         for _, case in ipairs(cases) do
@@ -444,6 +445,51 @@ describe("PartyBuffsRules.RowLayout", function()
     end)
 end)
 
+describe("PartyBuffsRules.SlotGeometry and IconOffset", function()
+    it("centers a row's cells and a column on the frame, and keeps every other layout's numbers", function()
+        local R = L.loadPartyBuffsRules()
+        local aboveCenter = { corner = "BOTTOMLEFT", up = true, centered = true }
+        local belowCenter = { corner = "TOPLEFT", centered = true }
+        local aboveUp = { corner = "BOTTOMLEFT", up = true, centered = true, vertical = true }
+        local belowDown = { corner = "TOPLEFT", centered = true, vertical = true }
+        local aboveRight = { corner = "BOTTOMLEFT", up = true }
+        -- at: an icon's index, line and where it sits; pin: where the buffs start.
+        local cases = {
+            { name = "centered row, cells only", layout = aboveCenter, cells = 3, buffs = 0, perRow = 14,
+              want = { x0 = 0, width = 110, height = 36 }, at = { 2, 0, 74, 0 } },
+            { name = "centered row, cells and buffs", layout = aboveCenter, cells = 2, buffs = 4, perRow = 14,
+              want = { x0 = 74, width = 221, height = 73 }, pin = { 74, 37 } },
+            { name = "centered row, a typed fractional spacing", layout = aboveCenter, cells = 2, buffs = 4,
+              perRow = 14, spacing = 1.25,
+              want = { x0 = 74.5, width = 222.25, height = 73.25 }, pin = { 74.5, 37.25 } },
+            { name = "centered row, no cell", layout = belowCenter, cells = 0, buffs = 4, perRow = 14,
+              want = { x0 = 0, width = 147, height = 36 }, pin = { 0, 0 } },
+            { name = "centered column, one column", layout = aboveUp, cells = 4, buffs = 4, perRow = 14,
+              want = { x0 = 0, width = 36, height = 295 }, pin = { 0, 148 } },
+            { name = "centered column, two columns", layout = belowDown, cells = 4, buffs = 4, perRow = 6,
+              want = { x0 = 37, width = 110, height = 147 }, at = { 3, 0, 37, -111 }, pin = { 74, 0 } },
+            { name = "not centered, today's numbers", layout = aboveRight, cells = 4, buffs = 4, perRow = 6,
+              want = { x0 = 0, width = 147, height = 73, buffIndex = 0, buffLine = 1, buffPerLine = 4 },
+              pin = { 0, 37 } },
+        }
+        for _, case in ipairs(cases) do
+            local db = { IconSpacing = case.spacing or 1, MaxPerMember = case.buffs }
+            local g = R.SlotGeometry(db, case.layout, case.cells, case.perRow, 36)
+            for key, value in pairs(case.want) do
+                assert.are.equal(value, g[key], case.name .. ": " .. key)
+            end
+            if case.at then
+                assert.are.same({ case.at[3], case.at[4] },
+                    { R.IconOffset(g, case.layout, case.at[1], case.at[2]) }, case.name .. ": icon")
+            end
+            if case.pin then
+                assert.are.same(case.pin, { R.IconOffset(g, case.layout, g.buffIndex, g.buffLine) },
+                    case.name .. ": pin")
+            end
+        end
+    end)
+end)
+
 describe("PartyBuffsRules.NeedsPin and RecordPin", function()
     it("re-pins when the corner, x or y alone differs and not when all three match", function()
         local R = L.loadPartyBuffsRules()
@@ -471,17 +517,19 @@ describe("PartyBuffsRules.NeedsPin and RecordPin", function()
 end)
 
 describe("PartyBuffsRules.NeedsLayout", function()
-    it("lays the row out again when the cell count, the icons per row or the corner alone moved", function()
+    it("lays the row out again when the cell count, the icons per row or the layout alone moved", function()
         local R = L.loadPartyBuffsRules()
-        local slot = { cellCount = 4, layoutPerRow = 14, layoutCorner = "TOPLEFT" }
+        local right = R.Layout("ABOVE", "RIGHT")
+        local slot = { cellCount = 4, layoutPerRow = 14, layoutRecord = right }
         local cases = {
-            { name = "all match", cells = 4, perRow = 14, corner = "TOPLEFT", want = false },
-            { name = "cell count only", cells = 5, perRow = 14, corner = "TOPLEFT", want = true },
-            { name = "icons per row only", cells = 4, perRow = 3, corner = "TOPLEFT", want = true },
-            { name = "corner only", cells = 4, perRow = 14, corner = "TOPRIGHT", want = true },
+            { name = "all match", cells = 4, perRow = 14, layout = right, want = false },
+            { name = "cell count only", cells = 5, perRow = 14, layout = right, want = true },
+            { name = "icons per row only", cells = 4, perRow = 3, layout = right, want = true },
+            { name = "layout only, one corner", cells = 4, perRow = 14, layout = R.Layout("ABOVE", "COLUMN_UP"),
+              want = true },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.corner), case.name)
+            assert.are.equal(case.want, R.NeedsLayout(slot, case.cells, case.perRow, case.layout), case.name)
         end
     end)
 end)

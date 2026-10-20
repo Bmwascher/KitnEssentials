@@ -242,6 +242,13 @@ function Rules.TrackerKey(e)
         .. "/" .. Rules.Unit(e.cd)
 end
 
+-- A row cell's count is kept by its entry's key, else its position, and by
+-- what TrackerKey keeps it by, so a count follows its spell when another is
+-- switched off.
+function Rules.CellKey(e, i)
+    return tostring(e.key or i) .. "/" .. Rules.TrackerKey(e)
+end
+
 -- Two rolling slots, so a new use can stamp while an older one still counts.
 -- A slot's c is its stamp and v its visibility; either may hold a secret.
 -- A multi tracker reads a list of answers, one per watched unit. A charge

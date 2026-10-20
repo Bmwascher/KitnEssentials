@@ -1574,6 +1574,9 @@ local Defaults = {
 
         PartyBuffs = {
             Enabled           = false,
+            -- The Party Frame Icons switch: off, nothing is built beside party
+            -- frames; Potion bars and Healer Externals still work.
+            FrameIcons        = true,
             TrackExternal     = false,
             TrackBurst        = true,
             TrackPotion       = true,
