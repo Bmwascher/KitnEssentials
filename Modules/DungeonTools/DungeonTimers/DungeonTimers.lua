@@ -2525,10 +2525,10 @@ end
 -- playHide follows the Stop-retire rule: only a shown presentation plays the hide sound.
 -- The hold job, cast watch, observation window and linked shield watch are
 -- resolved with the instance, on every retirement path.
--- canceledStop: a provider stop the timeline marks Canceled. A held overlap
+-- fromCancel: a provider stop the timeline marks Canceled. A held overlap
 -- successor it releases from behind a shown occurrence is the re-issue of an
 -- announced cast, so it takes over without its show sound.
-function DT:ReleaseInstancePresentations(inst, playHide, canceledStop)
+function DT:ReleaseInstancePresentations(inst, playHide, fromCancel)
     -- A canceled occurrence or an unconfirmed wait has nothing to announce.
     if inst.retainedEstimate == "canceled" or State.EndsSilently(inst) then playHide = false end
     self:_CancelHold(inst)
@@ -2544,7 +2544,7 @@ function DT:ReleaseInstancePresentations(inst, playHide, canceledStop)
     end
     if inst.mapObserved then self:_WindMapRetired(inst) end
     self._gateSuppressed[inst] = nil
-    local takeover = canceledStop == true and IsShownPresentation(inst)
+    local takeover = fromCancel == true and IsShownPresentation(inst)
     local presentations = self._presentations[inst]
     self._presentations[inst] = nil
     if presentations then ReleasePresentationFrames(self, presentations, playHide) end

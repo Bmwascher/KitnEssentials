@@ -198,6 +198,28 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
         assert.same({}, failures)
     end)
 
+    -- The swap alternates the shield between two boss tokens on one message.
+    it("a shieldSwap names a message spell and two boss tokens, one of them its start", function()
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            local swap = enc.shieldSwap
+            if swap ~= nil then
+                local ctx = "enc " .. tostring(encId) .. ": shieldSwap"
+                local units = type(swap) == "table" and swap.units
+                local function isBoss(u) return type(u) == "string" and u:match("^boss%d$") ~= nil end
+                if not (type(units) == "table" and #units == 2 and isBoss(units[1]) and isBoss(units[2])
+                    and units[1] ~= units[2]) then
+                    failures[#failures + 1] = ctx .. ".units must be two different bossN tokens"
+                elseif not isPositiveNumber(swap.message) then
+                    failures[#failures + 1] = ctx .. ".message must be a spell ID"
+                elseif swap.start ~= units[1] and swap.start ~= units[2] then
+                    failures[#failures + 1] = ctx .. ".start must be one of its units"
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
     it("every spell entry has a valid trigger classification", function()
         local failures = forEachSpell(function(failures, ctx, _, _, spell)
             if spell.castType ~= nil then
@@ -409,6 +431,10 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                         if rule.endsAtStage ~= nil and not (isPositiveNumber(rule.endsAtStage)
                             and rule.endsAtStage % 1 == 0) then
                             failures[#failures + 1] = ctx .. ": endsAtStage must be a whole stage number from 1"
+                        end
+                        -- endsOnShield is decided by the encounter's shieldSwap.
+                        if rule.endsOnShield ~= nil and not (rule.endsOnShield == true and enc.shieldSwap ~= nil) then
+                            failures[#failures + 1] = ctx .. ": endsOnShield must be true on an encounter with a shieldSwap"
                         end
                     end
                 end

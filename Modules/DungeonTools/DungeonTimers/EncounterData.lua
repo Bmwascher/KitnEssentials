@@ -1522,8 +1522,8 @@ KE.EncounterData[2124] = {
         [1289059] = { name = "Gale Force", castType = "begincast", castDuration = 3.5, role = "other", displayText = "KNOCK", color = { 1.0, 1.0, 0.2 }, sound = "Knockback",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", holdOverlapping = true } },
     },
-    -- Each boss swaps the shield to itself at its own 35%; the other boss
-    -- carries it from the pull.
+    -- boss2 carries the shield from the pull; each boss takes it over when it
+    -- reaches 35%.
     phases = {
         { unit = "boss1", threshold = 35, lead = 5, endsOnShield = true },
         { unit = "boss2", threshold = 35, lead = 5, endsOnShield = true },
