@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.12
+
+### Party Cooldowns
+
+- A cooldown's length comes from the spell's cooldown with the player's
+  talents applied, for you and your teammates, and the Healer Externals
+  box reads each healer's talents. A count keeps running when a talent
+  read changes its length
+- **NEW:** Two-charge spells show a charge digit (0, 1 or 2) and turn gray
+  only at 0. The settings mark them "(2 charges)". Inside a key the digit
+  is shown when the game allows the read, else the cell keeps a single
+  timer
+- The typed Spell CD boxes and the Trinket Cooldowns card are removed, and
+  lengths you typed are deleted from every profile and on import
+- A Retribution Paladin with Radiant Glory no longer shows an Avenging
+  Wrath cell once their talents are read
+
+---
+
 ## v4.12.11
 
 ### Party Cooldowns
