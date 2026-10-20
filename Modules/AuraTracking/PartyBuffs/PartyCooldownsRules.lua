@@ -880,8 +880,8 @@ function Rules.ActiveSeconds(active, cd)
 end
 
 -- Item data loads, and tooltip reads with no cooldown line, per item in a
--- session; a load that keeps failing stops here. It outlasts DERIVE_WAITS.
-Rules.LOAD_TRIES = 6
+-- session; a load that keeps failing stops here.
+Rules.LOAD_TRIES = 3
 
 -- True, and counted, while itemID has requests left.
 function Rules.TakeLoadTry(tries, itemID)

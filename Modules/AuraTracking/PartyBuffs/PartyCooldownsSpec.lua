@@ -477,9 +477,10 @@ local loadTries, lengthTries = {}, {}
 
 -- Out of combat. Returns whether the length is settled. A tooltip with no
 -- cooldown line may not have finished loading, so it is read again at the
--- next combat end, item load or read; past LOAD_TRIES such reads the item
--- stores false and gets no cell.
-local function ReadLength(itemID)
+-- next combat end, item load, read or timed retry; past LOAD_TRIES such reads
+-- the item stores false and gets no cell. A timed retry's read is not
+-- counted: the retries run per member, the count per item.
+local function ReadLength(itemID, retry)
     if Spec.lengths[itemID] ~= nil then return true end
     if InCombatLockdown() then return false end
     local ok, data = pcall(C_TooltipInfo.GetItemByID, itemID)
@@ -493,7 +494,7 @@ local function ReadLength(itemID)
             return true
         end
     end
-    if KE.PartyCooldownsRules.TakeLoadTry(lengthTries, itemID) then return false end
+    if retry or KE.PartyCooldownsRules.TakeLoadTry(lengthTries, itemID) then return false end
     Spec.lengths[itemID] = false
     return true
 end
@@ -501,8 +502,8 @@ end
 -- The slots' spells and lengths from their item IDs. Incomplete while an
 -- item's data is still loading or an on-use item's length is unread; an
 -- empty slot or a passive trinket is complete with no spell. A load is asked
--- for LOAD_TRIES times at most per item.
-local function Derive(items)
+-- for LOAD_TRIES times at most per item. retry: a timed retry (ReadLength).
+local function Derive(items, retry)
     local slots, complete = {}, true
     for i = 1, #TRINKET_SLOTS do
         local itemID = items[i]
@@ -516,7 +517,7 @@ local function Derive(items)
                     complete = false
                 else
                     spellID = id
-                    if spellID and not ReadLength(itemID) then complete = false end
+                    if spellID and not ReadLength(itemID, retry) then complete = false end
                 end
             else
                 if KE.PartyCooldownsRules.TakeLoadTry(loadTries, itemID) then
@@ -548,7 +549,7 @@ local Fill
 local function Retry(m)
     m.retryPending = nil
     if Spec.byGUID[m.guid] ~= m or m.trinketsComplete ~= false or InCombatLockdown() then return end
-    Fill(m)
+    Fill(m, nil, true)
     Changed(m)
 end
 
@@ -562,10 +563,10 @@ end
 
 -- items nil re-derives the IDs already read. With none read the member has
 -- no trinkets yet and stays wanted.
-function Fill(m, items)
+function Fill(m, items, retry)
     if items then m.trinketItems = items end
     if m.trinketItems then
-        m.trinkets, m.trinketsComplete = Derive(m.trinketItems)
+        m.trinkets, m.trinketsComplete = Derive(m.trinketItems, retry)
         ScheduleRetry(m)
     else
         m.trinkets, m.trinketsComplete = nil, nil
