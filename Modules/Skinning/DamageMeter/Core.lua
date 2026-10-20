@@ -3081,10 +3081,11 @@ end
 ---------------------------------------------------------------------------------
 -- Content-context resolver
 --
--- Mirrors KickTracker:GetActiveContext (Modules/DungeonTools/KicksCasts/KickTracker.lua) but
--- keyed off the instance type rather than the player's spec. Each window stores
--- per-context configs under Windows[i].Contexts; the live context drives which
--- one is active, falling back to Default.
+-- Mirrors KickTracker:GetActiveContext
+-- (Modules/DungeonTools/KicksCasts/KickTracker.lua) but keyed off the instance
+-- type rather than the player's spec. Each window stores per-context configs
+-- under Windows[i].Contexts; the live context drives which one is active,
+-- falling back to Default.
 ---------------------------------------------------------------------------------
 
 local CTX_BY_INSTANCE = {

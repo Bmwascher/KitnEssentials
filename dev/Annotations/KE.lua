@@ -1487,6 +1487,13 @@ function KE:HasSecretValues(object) end
 ---@return boolean
 function KE:NoSecretValues(object) end
 
+--- True when `frame`'s parent is `parent`. A secret or unreadable parent
+--- counts as not the same.
+---@param frame any a region
+---@param parent any
+---@return boolean
+function KE:SameParent(frame, parent) end
+
 ---@param body any text to wrap, secret or not
 ---@param prefix string|nil
 ---@param suffix string|nil
@@ -1518,6 +1525,15 @@ function KE:GetSafeUnitGUID(unit) end
 ---@param fontString FontString
 ---@return string?
 function KE:GetSafeText(fontString) end
+
+--- Calls `fn(...)` under pcall. The first failure under each `label` in a
+--- session goes to the game's error handler; the call's results are returned.
+---@param label string
+---@param fn function
+---@param ... any
+---@return boolean ok
+---@return any ...
+function KE:SafeCall(label, fn, ...) end
 
 --- 0 = none, 1 = partial, 2 = full.
 ---@return number

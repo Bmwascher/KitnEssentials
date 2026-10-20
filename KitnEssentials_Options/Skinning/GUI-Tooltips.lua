@@ -340,7 +340,8 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     card5:AddRow(row5b, 44, 0)
     -- No health-text control: the bar carries a 0..1 fraction from
     -- UnitPercentHealthFromGUID, which is SecretReturns, so no current/max
-    -- readout is reachable. See StyleHealthBar in Modules/Skinning/Tooltips/Tooltips.lua.
+    -- readout is reachable. See StyleHealthBar in
+    -- Modules/Skinning/Tooltips/Tooltips.lua.
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------

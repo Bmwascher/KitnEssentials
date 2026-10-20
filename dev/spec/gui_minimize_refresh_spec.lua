@@ -11,15 +11,18 @@
 -- Only the refusal and the replay flag are asserted. Everything past the guard
 -- is real frame work and is verified in game.
 local helpers = require("dev.spec._helpers")
+local mock = require("dev.spec._wow_mock")
 
 describe("GUI-Core RefreshContent guard", function()
     local GUIFrame, rebuilt
 
-    -- The file only reads KE.Theme at load and defines onto KE.GUIFrame, so it
-    -- loads against a seed with no Blizzard fakes beyond a frame that answers
-    -- IsShown.
+    -- The file only reads KE.Theme at load and defines onto KE.GUIFrame. Its
+    -- rebuild loop dispatches through KE:SafeCall, so Core/Secret.lua loads onto
+    -- the same seed, behind the mock its file-scope event frame needs.
     before_each(function()
+        mock.install()
         local KE = { Theme = { headerHeight = 32, borderSize = 1 } }
+        helpers.loadModule("Core/Secret.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
 

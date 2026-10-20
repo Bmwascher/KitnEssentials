@@ -58,9 +58,9 @@ end
 --   or a function returning that list, evaluated at BUILD time. Use the
 --   function form when the tab set depends on state -- a page hosting modules
 --   that outlive its own master toggle offers only those while the master is
---   off (KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua). A shrinking list
---   needs no extra care: ResolveActiveTab above already falls back to the
---   first tab when the remembered id is gone.
+--   off (KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua).
+--   A shrinking list needs no extra care: ResolveActiveTab above already falls
+--   back to the first tab when the remembered id is gone.
 -- opts.headerBuilder(scrollChild, yOffset) -> (newYOffset, collapse)
 --   Renders above the tab strip; collapse = true returns immediately with no
 --   strip and no tab content (the lone-header-bar state for a disabled module).

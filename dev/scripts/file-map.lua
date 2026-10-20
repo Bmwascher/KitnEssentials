@@ -11,8 +11,9 @@
 --     function argument, or in a local table argument plus the local tables
 --     an ipairs loop copies into it;
 --   - for a RegisterContent builder that reads GUIFrame.registeredContent,
---     each registeredContent["<id>"] and each string of an ipairs({ ... })
---     list inside it.
+--     each registeredContent["<id>"], and each string of a plain string list
+--     looped by `for _, <var> in ipairs({ ... })` when the builder reads
+--     registeredContent[<var>].
 -- Page files register one of those ids. A settings file that registers
 -- through a variable, or registers nothing, is a page for each id it quotes.
 -- Module files name an id in guiPath or guiTab. Files no row reaches are
@@ -219,8 +220,10 @@ for path, text in pairs(sources) do
                 local span = callSpan(text, open)
                 if span:find("registeredContent%[") then
                     for id in span:gmatch('registeredContent%[%s*"([^"]+)"%s*%]') do kids[#kids + 1] = id end
-                    for list in span:gmatch("ipairs%(%s*(%b{})%s*%)") do
-                        for id in list:gmatch('"([^"]+)"') do kids[#kids + 1] = id end
+                    for var, list in span:gmatch("for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(%s*(%b{})%s*%)") do
+                        if not list:find("[={]", 2) and span:find("registeredContent%[%s*" .. var .. "%s*%]") then
+                            for id in list:gmatch('"([^"]+)"') do kids[#kids + 1] = id end
+                        end
                     end
                 end
             end

@@ -130,8 +130,8 @@ function KE:RefreshNicknameTags()
     local KEAddon = _G.KitnEssentials
     if not (KEAddon and KEAddon.GetModule) then return end
     -- The Damage Meter substitutes nicknames at render time behind memo tables
-    -- (Modules/Skinning/DamageMeter/Window.lua); tell it to drop them so a change
-    -- repaints the bars instead of serving stale (or missing) nicknames.
+    -- (Modules/Skinning/DamageMeter/Window.lua); tell it to drop them so a
+    -- change repaints the bars instead of serving stale (or missing) nicknames.
     local DM = KEAddon:GetModule("DamageMeter", true)
     if DM and DM.OnNicknamesChanged then DM:OnNicknamesChanged() end
     -- containerFrame guard: FindHealers checks only db.Enabled, which is true

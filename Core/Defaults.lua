@@ -492,10 +492,11 @@ local Defaults = {
             SplitIconLead = true, -- SPLIT only: false = flank mirror (icons bracket the gap); true = both lead with the icon
             GrowthDirection = "UP", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side, SPLIT = flank; heal grows off the shield
 
-            -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change
-            -- (a secret 0 can't instant-hide while abbreviating). false = full numbers
-            -- that persist while a shield is up and blank instantly at 0 (TruncateWhenZero);
-            -- only the icon fades. See Modules/Combat/StatusTexts/PlayerAbsorbs.lua Display header.
+            -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a
+            -- change (a secret 0 can't instant-hide while abbreviating).
+            -- false = full numbers that persist while a shield is up and blank
+            -- instantly at 0 (TruncateWhenZero); only the icon fades. See
+            -- Modules/Combat/StatusTexts/PlayerAbsorbs.lua Display header.
             AbbreviateNumber = true,
             HideWhenZero = true,
             FadeTime = 10, -- seconds the icon (and, when abbreviating, the number) lingers after a change
@@ -2314,8 +2315,8 @@ local Defaults = {
         -- Damage Meter Module
         --
         -- Module-owned defaults (MPT pattern): the canonical table is
-        -- DM_DEFAULTS in Modules/Skinning/DamageMeter/Core.lua, seeded + bound by
-        -- DM:UpdateDB. No section here on purpose -- don't re-add one.
+        -- DM_DEFAULTS in Modules/Skinning/DamageMeter/Core.lua, seeded + bound
+        -- by DM:UpdateDB. No section here on purpose -- don't re-add one.
         -----------------------------------------------------------------
 
         -----------------------------------------------------------------
@@ -2645,9 +2646,10 @@ local Defaults = {
                 QualityBorder = true, -- tint the window border to the best drop
                 MinWidth = 150,
                 -- Code-side fallback only, used when _G.LootFrame is missing
-                -- (Modules/Skinning/DarkTheme/LootFrame.lua's AnchorToBlizzardLoot).
-                -- The window normally follows Blizzard's own Edit Mode loot
-                -- frame position instead -- this has no control on the page.
+                -- (Modules/Skinning/DarkTheme/LootFrame.lua's
+                -- AnchorToBlizzardLoot). The window normally follows Blizzard's
+                -- own Edit Mode loot frame position instead -- this has no
+                -- control on the page.
                 Position = {
                     Point = "TOPRIGHT",
                     RelPoint = "TOPRIGHT",

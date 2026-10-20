@@ -567,3 +567,62 @@ describe("Secret.lua restriction listener", function()
         assert.equals(2, nextCalls)
     end)
 end)
+
+-- GetParent's answer can be secret, and comparing a secret is the hazard, so
+-- every parent compare goes through this guard.
+describe("Secret.lua parent compare guard", function()
+    it("answers same only for a readable parent equal to the expected one", function()
+        local SECRET, LOCKED, expected = {}, {}, {}
+        mock.install({
+            issecretvalue = function(v) return v == SECRET end,
+            canaccesstable = function(t) return t ~= LOCKED end,
+        })
+        local KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+        local function child(parent) return { GetParent = function() return parent end } end
+        local rows = {
+            { name = "same parent",              frame = child(expected), parent = expected, same = true },
+            { name = "different parent",         frame = child({}),       parent = expected, same = false },
+            { name = "secret parent",            frame = child(SECRET),   parent = SECRET,   same = false },
+            { name = "inaccessible table",       frame = child(LOCKED),   parent = LOCKED,   same = false },
+            { name = "nil parent, nil expected", frame = child(nil),      parent = nil,      same = true },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.same, KE:SameParent(row.frame, row.parent), row.name)
+        end
+    end)
+end)
+
+-- A guarded callback that fails must not vanish: the first failure of each
+-- label reaches the error handler, which here only records what it is handed.
+describe("Secret.lua protected dispatch", function()
+    local KE, reports
+
+    before_each(function()
+        reports = {}
+        mock.install({ issecretvalue = function(v) return v == "SECRET_ERR" end })
+        _G.geterrorhandler = function()
+            return function(message) reports[#reports + 1] = message end
+        end
+        KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+    end)
+
+    after_each(function()
+        _G.geterrorhandler = nil
+    end)
+
+    it("reports the first failure of each label once and passes results through", function()
+        local ok, first, second = KE:SafeCall("ok label", function(x) return x, "second" end, "first")
+        assert.same({ true, "first", "second" }, { ok, first, second })
+        assert.equals(0, #reports)
+
+        assert.is_false((KE:SafeCall("label A", function() error("boom", 0) end)))
+        KE:SafeCall("label A", function() error("again", 0) end)
+        KE:SafeCall("label B", function() error("other", 0) end)
+        assert.same({ "label A: boom", "label B: other" }, reports)
+    end)
+
+    it("reports a secret error by its label alone", function()
+        KE:SafeCall("label S", function() error("SECRET_ERR", 0) end)
+        assert.same({ "label S: failed with an unreadable error" }, reports)
+    end)
+end)

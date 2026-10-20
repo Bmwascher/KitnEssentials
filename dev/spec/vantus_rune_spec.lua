@@ -1,11 +1,15 @@
 local helpers = require("dev.spec._helpers")
+local mock = require("dev.spec._wow_mock")
 
 local function loadModule(after)
+    mock.install()
     local modules = helpers.installAddonShim()
     _G.C_Timer = { After = after or function() end }
     local KE = {
         db = { profile = { VantusRune = {} } },
     }
+    -- The guild bank reparent check goes through KE:SameParent.
+    helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Modules/QoL/Automation/VantusRune.lua", KE)
     return modules.VantusRune, KE
 end

@@ -63,8 +63,8 @@ local Ambiguate = Ambiguate
 local _G = _G
 local Theme = KE.Theme
 
--- Blizzard globals not on KE's read_globals allowlist -- read through _G.
--- per family convention rather than growing .luacheckrc for this port.
+-- Blizzard globals not on KE's read_globals allowlist are read through _G
+-- rather than added to .luacheckrc.
 local BetterDate = (_G.TimeUtil and _G.TimeUtil.BetterDate) or _G.BetterDate
 local SOUND_U_CHAT_SCROLL_BUTTON = (_G.SOUNDKIT and _G.SOUNDKIT.U_CHAT_SCROLL_BUTTON) or 1115
 
@@ -729,15 +729,6 @@ function CHAT:IsChatValid(chat)
     return true
 end
 
--- Fires on chat activity. Cheap (one table lookup per frame) and it
--- closes the gap for any window created by a path we do not hook: if a
--- frame is in CHAT_FRAMES without our AddMessage, style it now.
-function CHAT:OnChatMessage(frame)
-    if not self.panel or not frame then return end
-    if frame.OldAddMessage or self:ShouldIgnoreFrame(frame) then return end
-    self:StyleChat(frame)
-end
-
 function CHAT:SetupChat()
     if not self.panel then return end
 
@@ -774,9 +765,6 @@ function CHAT:SetupChat()
         end
         if type(_G.FCF_SetWindowName) == "function" then
             self:SecureHook("FCF_SetWindowName", "SetupChat")
-        end
-        if type(_G.ChatFrame_MessageEventHandler) == "function" then
-            self:SecureHook("ChatFrame_MessageEventHandler", "OnChatMessage")
         end
         self:SecureHook("FCF_SavePositionAndDimensions", "OnDockStateChanged")
         self:SecureHook("FCF_DockFrame", "OnDockStateChanged")
@@ -940,7 +928,7 @@ end
 function CHAT:OnFCFTab_UpdateColors(tab, selected)
     if not tab then return end
 
-    if tab:GetParent() == _G.ChatConfigFrameChatTabManager then
+    if KE:SameParent(tab, _G.ChatConfigFrameChatTabManager) then
         if selected then tab.Text:SetTextColor(1, 1, 1) end
 
         local name = _G.GetChatWindowInfo(tab:GetID())
@@ -2413,19 +2401,6 @@ function CHAT:StyleCombatLog()
     if not bar then return end
 
     local combatLog = _G.ChatFrame2
-
-    if bar.SetBackdrop and not bar.styled then
-        for _, region in pairs({ bar:GetRegions() }) do
-            if region:IsObjectType("Texture") then
-                region:SetTexture()
-            end
-        end
-
-        KE.Skins.OwnBackdrop(bar)
-        bar:SetBackdropColor(0, 0, 0, 0.6)
-        bar:SetBackdropBorderColor(0, 0, 0, 1)
-        bar.styled = true
-    end
 
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOMLEFT", combatLog, "TOPLEFT", -3, 2)

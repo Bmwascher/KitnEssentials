@@ -70,7 +70,8 @@ local format = string.format
 -- is a W113 (undefined variable) -- which is never acceptable at any stage.
 -- Alias them at file scope through _G, the same way both sibling modules do
 -- for C_LFGList (Modules/DungeonTools/KeystoneHelper/LFGQuickCreate.lua,
--- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua). Do NOT widen .luacheckrc instead.
+-- Modules/DungeonTools/KeystoneHelper/LFGReminder.lua). Do NOT widen
+-- .luacheckrc instead.
 -- C_SocialQueue may legitimately be nil here; every caller nil-checks it.
 local C_LFGList = _G.C_LFGList
 local C_SocialQueue = _G.C_SocialQueue

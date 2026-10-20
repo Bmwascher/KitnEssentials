@@ -245,7 +245,7 @@ local function ReapplyAnchorsToUs()
 
     for childKey, info in pairs(anchors) do
         if type(info) == "table" and info.target and published[info.target] then
-            pcall(eui.ReapplyUnlockAnchor, childKey)
+            KE:SafeCall("EllesmereUI unlock re-apply", eui.ReapplyUnlockAnchor, childKey)
         end
     end
 end
@@ -266,8 +266,8 @@ local function ReapplyMatchesToUs()
 
     for _, entry in ipairs(publishedConfigs) do
         local euiKey = KEY_PREFIX .. entry.config.key
-        if eui.PropagateWidthMatch then pcall(eui.PropagateWidthMatch, euiKey) end
-        if eui.PropagateHeightMatch then pcall(eui.PropagateHeightMatch, euiKey) end
+        if eui.PropagateWidthMatch then KE:SafeCall("EllesmereUI width match", eui.PropagateWidthMatch, euiKey) end
+        if eui.PropagateHeightMatch then KE:SafeCall("EllesmereUI height match", eui.PropagateHeightMatch, euiKey) end
     end
 end
 Bridge.ReapplyMatchesToUs = ReapplyMatchesToUs

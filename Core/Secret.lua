@@ -28,6 +28,7 @@ local CreateFrame = CreateFrame
 local issecretvalue = issecretvalue
 local issecrettable = issecrettable
 local canaccessvalue = canaccessvalue
+local canaccesstable = canaccesstable
 local UnitGUID = UnitGUID
 local UnitName = UnitName
 
@@ -71,6 +72,17 @@ end
 
 function KE:NoSecretValues(object)
     return not self:HasSecretValues(object)
+end
+
+-- GetParent's answer can be secret, and comparing a secret is the hazard: a
+-- secret or unreadable parent counts as not the same.
+function KE:SameParent(frame, parent)
+    local current = frame:GetParent()
+    if issecretvalue and issecretvalue(current) then return false end
+    if current ~= nil and canaccesstable and not canaccesstable(current) then
+        return false
+    end
+    return current == parent
 end
 
 -- Join text around a body that may be secret. C_StringUtil.WrapString is
@@ -229,6 +241,35 @@ function KE:GetSafeText(fontString)
     if not self:IsSafeValue(text) then return nil end
 
     return text
+end
+
+---------------------------------------------------------------------------------
+-- Protected Dispatch
+---------------------------------------------------------------------------------
+
+-- A failed call reports once per label, so a callback that fails on every
+-- page switch shows one error, not one per switch. The error value is tested
+-- before it is joined: it can be secret.
+local reportedLabels = {}
+
+local function Finish(label, ok, ...)
+    if not ok and not reportedLabels[label] then
+        reportedLabels[label] = true
+        local err = ...
+        local message
+        if not (issecretvalue and issecretvalue(err)) and type(err) == "string" then
+            message = label .. ": " .. err
+        else
+            message = label .. ": failed with an unreadable error"
+        end
+        local handler = geterrorhandler and geterrorhandler()
+        if handler then pcall(handler, message) end
+    end
+    return ok, ...
+end
+
+function KE:SafeCall(label, fn, ...)
+    return Finish(label, pcall(fn, ...))
 end
 
 ---------------------------------------------------------------------------------

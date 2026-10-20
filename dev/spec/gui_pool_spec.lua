@@ -32,6 +32,8 @@ describe("GUI-Core widget pools", function()
         _G.UIParent = CreateFrame()
         _G.KE_GUI_ORPHAN_COUNT = 0
         local KE = { Theme = { headerHeight = 32, borderSize = 1 }, Print = function() end }
+        -- ReleaseTracked's parent check goes through KE:SameParent.
+        helpers.loadModule("Core/Secret.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
     end)
@@ -194,6 +196,14 @@ describe("GUI-Core widget pools", function()
 
     it("gives a row one label for its whole use and still releases the row clean", function()
         local labels = 0
+        -- Loaded before the counting CreateFrame below, which cannot take the
+        -- event frame Core/Secret.lua makes at load.
+        local KE = {
+            Theme = { headerHeight = 32, borderSize = 1 },
+            Print = function() end,
+            ApplyThemeFont = function() end,
+        }
+        helpers.loadModule("Core/Secret.lua", KE)
         mock.install({ CreateFrame = function(_, _, parent)
             local f = fakeFrame(0, 0)
             f.parent = parent
@@ -208,11 +218,6 @@ describe("GUI-Core widget pools", function()
             return f
         end })
         _G.UIParent = fakeFrame(0, 0)
-        local KE = {
-            Theme = { headerHeight = 32, borderSize = 1 },
-            Print = function() end,
-            ApplyThemeFont = function() end,
-        }
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         local G = KE.GUIFrame
         local page = fakeFrame(0, 0)
@@ -236,6 +241,7 @@ describe("GUI-Core deferred widget callbacks", function()
         timers = {}
         mock.install({ C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end } })
         local KE = { Theme = { headerHeight = 32, borderSize = 1 }, Print = function() end }
+        helpers.loadModule("Core/Secret.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
         rebuilt = 0
