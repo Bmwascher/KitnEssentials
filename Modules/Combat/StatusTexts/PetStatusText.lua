@@ -109,42 +109,19 @@ local function GetPetNpcID()
 end
 
 local FELHUNTER_NPC_ID = 417
--- A Mythic dungeon reads 23 before the key and 8 once it is inserted.
-local MYTHIC_DIFFICULTY_ID = 23
-local MYTHIC_KEYSTONE_DIFFICULTY_ID = 8
 
--- "key" while a keystone runs; "world" outside any instance, player housing
--- included; "mythicIdle" in a Mythic dungeon with none running (before the
--- key, between insert and start, after completion); "other" in every other
--- instance. The ChallengeMode restriction spans exactly the running key.
-local function GetDemoPetContent()
-    local kinds = Enum.AddOnRestrictionType
-    local isActive = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
-    if kinds and kinds.ChallengeMode and isActive and isActive(kinds.ChallengeMode) then
-        return "key"
-    end
-    local _, instanceType, difficultyID = GetInstanceInfo()
-    if instanceType == "none" or instanceType == "neighborhood" or instanceType == "interior" then
-        return "world"
-    end
-    if instanceType == "party"
-        and (difficultyID == MYTHIC_DIFFICULTY_ID or difficultyID == MYTHIC_KEYSTONE_DIFFICULTY_ID) then
-        return "mythicIdle"
-    end
-    return "other"
+-- Outside any instance, player housing included.
+local function InOpenWorld()
+    local _, instanceType = GetInstanceInfo()
+    return instanceType == "none" or instanceType == "neighborhood" or instanceType == "interior"
 end
 
--- Whether a Demonology pet is the one the content calls for. nil when the pet
--- cannot be identified (secret or malformed GUID) or in the open world, which
--- never shows WRONG.
-function PS.DemoPetExpected(npcID, content)
-    if npcID == nil then return nil end
-    if content == "world" then return nil end
-    if content == "key" then return npcID == FELHUNTER_NPC_ID end
-    if content == "mythicIdle" then
-        return npcID == FELHUNTER_NPC_ID or FELGUARD_NPC_IDS[npcID] == true
-    end
-    return FELGUARD_NPC_IDS[npcID] == true
+-- Whether a Demonology pet is one it may run: the Felguard or the Felhunter.
+-- nil when the pet cannot be identified (secret or malformed GUID) or in the
+-- open world, which never shows WRONG.
+function PS.DemoPetExpected(npcID, inWorld)
+    if npcID == nil or inWorld then return nil end
+    return npcID == FELHUNTER_NPC_ID or FELGUARD_NPC_IDS[npcID] == true
 end
 
 -- Warlocks only. A quiet verdict given only because the sacrifice buff is
@@ -216,7 +193,7 @@ local function CheckPetStatus()
     -- explicitly: an unidentified pet falls through to the DEAD/PASSIVE/MISSING
     -- chain rather than raise a WRONG warning that cannot be verified.
     if specID == 266 and UnitExists("pet")
-        and PS.DemoPetExpected(GetPetNpcID(), GetDemoPetContent()) == false then
+        and PS.DemoPetExpected(GetPetNpcID(), InOpenWorld()) == false then
         return PET_STATUS.WRONG, PS.db.PetWrong, PS.db.WrongColor
     end
 
