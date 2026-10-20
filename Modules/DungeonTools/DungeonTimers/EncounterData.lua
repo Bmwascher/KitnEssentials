@@ -1106,7 +1106,7 @@ KE.EncounterData[3207] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         [1253268] = { name = "Earthshatter Slam", castType = "begincast", castDuration = 4, role = "other", displayText = "FRONTAL", sound = "Frontal",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castConfirm = "boss-cast-start" } },
-        [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "Aoe And Knockback",
+        [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
     auraSounds = {
@@ -1480,7 +1480,7 @@ KE.EncounterData[2623] = {
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", castMatch = { spells = { 381525 }, within = 5 }, soonOnHold = true } },
         [381512] = { name = "Stormslam", castType = "begincast", castDuration = 2.5, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
-        [381517] = { name = "Winds of Change", castType = "begincast", castDuration = 1.5, role = "mechanic", displayText = "WINDS - CHECK MAP", sound = "Check Map",
+        [381517] = { name = "Winds of Change", castType = "begincast", castDuration = 1.5, role = "mechanic", displayText = "WINDS - CHECK MAP", sound = "Check Map", disabled = true,
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
         -- The key names the debuff; the casts are the flying and grounded spits.
         [381862] = { name = "Inferno Spit", castType = "begincast", castDuration = 2, role = "other", displayText = "DROPS", sound = "Drops",
