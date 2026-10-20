@@ -305,7 +305,7 @@ function Rules.AlsoOf(row)
     return row and row.also or NO_IDS
 end
 
--- nil for a row whose DoT is applied by a spell of the same id.
+-- nil for a row without cast ids.
 function Rules.CastOf(row)
     return row and row.cast
 end
