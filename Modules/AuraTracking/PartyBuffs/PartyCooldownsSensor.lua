@@ -981,6 +981,15 @@ function Track.BuildNext(st)
     return Track.BuildOverlayNext(st)
 end
 
+-- Hides every button at once: the host is a KE frame, and hiding it is never
+-- refused.
+local function HideOverlay(st)
+    st.overlayOff = true
+    st.overlayHost:Hide()
+    pcall(st.overlay.SetEnabled, st.overlay, false)
+    st.overlayUnit = nil
+end
+
 function Track.Unbind(st)
     if not st.unit then return end
     st.unit, st.evtUnit, st.units = nil, nil, nil
@@ -992,12 +1001,7 @@ function Track.Unbind(st)
         end
     end
     for i = 1, st.count do Retire(st, i) end
-    if st.overlay then
-        st.overlayOff = true
-        st.overlayHost:Hide()
-        pcall(st.overlay.SetEnabled, st.overlay, false)
-        st.overlayUnit = nil
-    end
+    if st.overlay then HideOverlay(st) end
     st.count = 0
 end
 
@@ -1045,19 +1049,16 @@ local EMPTY = { includeSpellIDs = {} }
 -- cells work without an overlay.
 local MAX_OVERLAY_FAILS = 2
 
--- A view with no active state (overlay = false) takes no overlay at all, as if
--- its builds were spent.
+-- A view with no active state (overlay = false), or a slot whose active buffs
+-- show in the active list (overlayHeld), takes no overlay at all, as if its
+-- builds were spent.
 local function OverlaySpent(st)
-    return st.view.overlay == false or (st.overlayFails or 0) >= MAX_OVERLAY_FAILS
+    return st.view.overlay == false or st.overlayHeld == true or (st.overlayFails or 0) >= MAX_OVERLAY_FAILS
 end
 
--- Hides every button at once: the host is a KE frame, and hiding it is never
--- refused. Every cell of the slot stays unready until the drain.
+-- Every cell of the slot stays unready until the drain.
 local function Quarantine(st)
-    st.overlayOff = true
-    st.overlayHost:Hide()
-    pcall(st.overlay.SetEnabled, st.overlay, false)
-    st.overlayUnit = nil
+    HideOverlay(st)
     local n = Track.Now()
     for i = 1, st.count do
         if st.ready[i] then
@@ -1180,6 +1181,12 @@ function Track.BuildOverlayNext(st)
     return true
 end
 
+-- held: the slot's active buffs show in the row's active list, so it takes no
+-- overlay; the next ApplyOverlay hides one already built.
+function Track.HoldOverlay(st, held)
+    st.overlayHeld = held == true
+end
+
 -- Re-points the built slots: a ready cell's slot holds its buffs unless the
 -- entry has an active phase of its own; any other slot holds nothing. A cell
 -- whose slot is not built is not ready. Any refused call hides the whole
@@ -1189,6 +1196,12 @@ end
 function Track.ApplyOverlay(st, entries, unit, settings)
     st.overlaySettings = settings
     local container = st.overlay
+    -- Held off: the active list shows the buffs, so every cell stays ready and
+    -- turns gray when its use is read.
+    if st.overlayHeld then
+        if container and not st.overlayOff then HideOverlay(st) end
+        return true, false
+    end
     local spent = OverlaySpent(st)
     if not (container and st.overlaySetUp) then
         -- With the builds spent the cells work without an overlay.

@@ -1617,6 +1617,9 @@ local Defaults = {
             TimerFontSize     = 14,
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             ShowCooldownText  = true,
+            -- Active Cooldowns First: a cooldown's buff shows in a sorted list at
+            -- the start of the active buff icons instead of over its icon.
+            ActiveCooldownsFirst = false,
             -- Glow While Active: a cooldown icon glows while its buff is up,
             -- and the external, potion and trinket buff icons glow while shown.
             GlowEnabled       = true,

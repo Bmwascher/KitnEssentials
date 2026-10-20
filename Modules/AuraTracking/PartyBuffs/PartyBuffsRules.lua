@@ -33,6 +33,16 @@ for i, category in ipairs(Rules.CATEGORIES) do
     category.index = i
 end
 
+-- The active list: one group per cooldown kind, ahead of the categories
+-- (layoutIndex below 1). The filter matches the cooldown sensors': some
+-- cooldown buffs are nameplate-only.
+Rules.LIST_GROUPS = {
+    { key = "cdListOffensive", kind = "offensive", index = -2 },
+    { key = "cdListDefensive", kind = "defensive", index = -1 },
+    { key = "cdListTrinket",   kind = "trinket",   index = 0 },
+}
+Rules.LIST_FILTER = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
+
 local SHOW_IN = {
     key     = "ShowInKeys",
     dungeon = "ShowInDungeons",
@@ -82,13 +92,26 @@ function Rules.CellCount(entryCount, db)
     return math_min(entryCount, Rules.CooldownIconCount(db))
 end
 
+function Rules.ListOn(db)
+    return type(db) == "table" and db.ActiveCooldownsFirst == true
+end
+
+-- The active buff area's places: Max Active Buff Icons, plus one per cooldown
+-- cell while the active list is on, so the list never pushes the other buffs
+-- out. Never the live count, which is secret.
+function Rules.BuffAreaCount(db, cellCount)
+    return Rules.IconCount(db) + (Rules.ListOn(db) and cellCount or 0)
+end
+
 -- The Max Cooldown Icons and Max Active Buff Icons slider ceilings. A row
--- holds both, so no row is longer than their sum.
+-- holds both, so no row is longer than their sum unless the active list adds
+-- its places (BuffAreaCount).
 Rules.MAX_COOLDOWN_ICONS = 6
 Rules.MAX_BUFF_ICONS = 8
 Rules.MAX_PER_ROW = Rules.MAX_COOLDOWN_ICONS + Rules.MAX_BUFF_ICONS
 
--- Rounded as IconCount is; a value that is not a number never wraps.
+-- Rounded as IconCount is; a value that is not a number reads as the widest
+-- row the sliders allow.
 function Rules.PerRow(value)
     if type(value) ~= "number" then return Rules.MAX_PER_ROW end
     return math_max(1, math_floor(value + 0.5))
@@ -110,14 +133,15 @@ function Rules.LineSize(db, count, size)
     return Span(count, size, db.IconSpacing) + size / 2
 end
 
--- Each category may fill the whole cap, so only the holder's clip holds the
--- cap: buff lines are at most cap wide and the holder fits the layout exactly.
+-- Each group may fill its own cap, so only the holder's clip holds the buff
+-- area (BuffAreaCount): buff lines are at most that wide and the holder fits
+-- the layout exactly.
 -- ownLine starts the buffs on a line of their own whenever the row has a cell.
 -- Returns step, buffCol, buffLine, buffPerLine, width, height.
 function Rules.RowLayout(db, cellCount, perRow, size, ownLine)
     local spacing = db.IconSpacing
     local step = size + spacing
-    local buffs = Rules.IconCount(db)
+    local buffs = Rules.BuffAreaCount(db, cellCount)
     if cellCount + buffs <= perRow and not (ownLine and cellCount > 0) then
         return step, cellCount, 0, buffs, Span(cellCount + buffs, size, spacing), Span(1, size, spacing)
     end
@@ -191,9 +215,9 @@ function Rules.RecordPin(slot, ok, corner, x, y)
     end
 end
 
--- The only producer of a group's container settings, for creation and for
--- every reconfiguration.
-function Rules.BuildGroupConfig(category, db, cellBuffs)
+-- A category group's container settings, for creation and for every
+-- reconfiguration; a list group's come from ListGroupConfig.
+function Rules.BuildGroupConfig(category, db, cellBuffs, listBuffs)
     local auraRules = KE.AuraRules
     local candidates = {}
     if category.listKey then
@@ -204,9 +228,50 @@ function Rules.BuildGroupConfig(category, db, cellBuffs)
     end
     -- A trinket shown as a cooldown icon on this row is left out here.
     if category.excludesCells and cellBuffs then candidates.excludeSpellIDs = cellBuffs end
+    -- Every spell the active list can show leaves every category, so none
+    -- shows twice. The sets above are shared, so they are copied.
+    if listBuffs then
+        local merged = {}
+        for id in pairs(candidates.excludeSpellIDs or {}) do merged[id] = true end
+        for id in pairs(listBuffs) do merged[id] = true end
+        candidates.excludeSpellIDs = merged
+    end
     local maxFrames = 0
     if db[category.trackKey] == true then maxFrames = Rules.IconCount(db) end
     return category.filter, candidates, maxFrames, category.index
+end
+
+-- Every buff the row's active list can show, or nil while the list is off or
+-- holds nothing. A summon's buffs never show in the list.
+function Rules.ListBuffs(db, entries)
+    if not Rules.ListOn(db) then return nil end
+    local set
+    for _, e in ipairs(entries) do
+        if not e.active then
+            for _, id in ipairs(e.buffs) do
+                set = set or {}
+                set[id] = true
+            end
+        end
+    end
+    return set
+end
+
+-- One kind's active list group: the buffs of the row's cells of that kind, a
+-- summon's left out (its active phase shows on its cell), one place per such
+-- cell. Off, the group includes nothing, so it shows nothing whatever its cap.
+-- Plain data only; the container sorts by time left.
+function Rules.ListGroupConfig(group, db, entries)
+    local include, count = {}, 0
+    if Rules.ListOn(db) then
+        for _, e in ipairs(entries) do
+            if e.kind == group.kind and not e.active then
+                count = count + 1
+                for _, id in ipairs(e.buffs) do include[id] = true end
+            end
+        end
+    end
+    return Rules.LIST_FILTER, { includeSpellIDs = include }, count, group.index
 end
 
 -- displayedUnit is never read: on a compact frame it becomes the vehicle.
