@@ -36,29 +36,38 @@ local function RefreshStates(ctx)
     ctx.manager:UpdateAll(ctx.db.CVarsEnabled ~= false)
 end
 
-local function AddCVarCheckbox(ctx, card, def, existingRow, widthPct)
+-- The label and config both CVar widgets take: the General tab's switches and
+-- the Dev tab's checkbox list.
+local function CVarPick(ctx, def)
     local db, AU = ctx.db, ctx.AU
     local key = def.key
     local label = def.label
     if def.desc then
         label = label .. "  |cff888888- " .. def.desc .. "|r"
     end
+    return {
+        label = label,
+        config = {
+            value = AU and AU:GetLiveCVar(def) or false,
+            callback = function(checked)
+                -- The write goes through the profile as well as the client, so
+                -- the value travels with the profile and "Apply CVars on Login"
+                -- keeps working.
+                db[key] = checked
+                if AU then
+                    AU._suppressCVarUpdate = true
+                    AU:ApplyCVars()
+                    AU._suppressCVarUpdate = false
+                end
+            end,
+        },
+    }
+end
+
+local function AddCVarCheckbox(ctx, card, def, existingRow, widthPct)
+    local pick = CVarPick(ctx, def)
     local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local checkbox = GUIFrame:CreateCheckbox(row, label, {
-        value = AU and AU:GetLiveCVar(def) or false,
-        callback = function(checked)
-            -- The write still goes through the profile as well as the
-            -- client, so the value keeps traveling with the profile and
-            -- "Apply CVars on Login" keeps working. Only the display source
-            -- changed.
-            db[key] = checked
-            if AU then
-                AU._suppressCVarUpdate = true
-                AU:ApplyCVars()
-                AU._suppressCVarUpdate = false
-            end
-        end,
-    })
+    local checkbox = GUIFrame:CreateCheckbox(row, pick.label, pick.config)
     row:AddWidget(checkbox, widthPct or 1)
     ctx.manager:Register(checkbox, "all")
     if not existingRow then
@@ -271,21 +280,12 @@ GUIFrame:RegisterContent("CVarsDev", function(scrollChild, yOffset)
 
     card:AddLabel("|cffCC8800These force addon restrictions |cff33ff33on|r|cffCC8800 for testing. Leave them off for normal play — with one on, addons behave as though you were in a restricted state.|r")
 
-    -- One per row: at half width these labels truncate. The last row wants
-    -- rowHeightLast, which AddCVarCheckbox's own row never carries, so the
-    -- caller builds the row and closes the card itself.
-    local n = #devDefs
-    for i = 1, n do
-        local isLast = (i == n)
-        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(card.content, rowHeight)
-        AddCVarCheckbox(ctx, card, devDefs[i], row, 1)
-        if isLast then
-            card:AddRow(row, rowHeight, 0)
-        else
-            card:AddRow(row, rowHeight)
-        end
+    -- One per row: at half width these labels truncate.
+    local picks = {}
+    for i, def in ipairs(devDefs) do
+        picks[i] = CVarPick(ctx, def)
     end
+    ctx.manager:RegisterGroup(card:AddCheckboxGrid(picks, { columns = 1, isLast = true }), "all")
     yOffset = card:GetNextOffset()
 
     RefreshStates(ctx)

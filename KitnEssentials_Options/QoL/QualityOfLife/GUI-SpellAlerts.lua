@@ -132,13 +132,13 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
             -- Lay specs out in rows of COLUMNS
             local idx = 1
             while idx <= #specs do
-                local specRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+                local specRow = GUIFrame:CreateRow(card3.content, GUIFrame.CheckboxRowHeight)
                 for _ = 1, COLUMNS do
                     local spec = specs[idx]
                     if spec then
                         local sID = spec.id
                         local current = db.EnabledSpecs[sID] ~= false  -- default ON
-                        local specCheck = GUIFrame:CreateCheckbox(specRow, spec.label, {
+                        local specCheck = GUIFrame:CreateCompactCheckbox(specRow, spec.label, {
                             value = current,
                             callback = function(checked)
                                 -- Explicit false opts out; nil means default-on.
@@ -166,7 +166,7 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
                     end
                     idx = idx + 1
                 end
-                card3:AddRow(specRow, Theme.rowHeight)
+                card3:AddRow(specRow, GUIFrame.CheckboxRowHeight, idx <= #specs and GUIFrame.CheckboxRowGap or nil)
             end
         end
     end

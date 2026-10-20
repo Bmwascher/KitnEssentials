@@ -65,29 +65,36 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     manager:Register(card2, "all")
 
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local loadInRaid = GUIFrame:CreateCheckbox(row2a, "Load in Raid", {
-        value = db.LoadInRaid ~= false,
-        callback = function(checked) db.LoadInRaid = checked; UpdateStateDriver() end,
-        msgPopup = true,
-        msgText = "Load in Raid",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row2a:AddWidget(loadInRaid, 0.5)
-    manager:Register(loadInRaid, "all")
+    manager:RegisterGroup(card2:AddCheckboxGrid({
+        {
+            label = "Load in Raid",
+            config = {
+                value = db.LoadInRaid ~= false,
+                callback = function(checked) db.LoadInRaid = checked; UpdateStateDriver() end,
+                msgPopup = true,
+                msgText = "Load in Raid",
+                msgOn = "On",
+                msgOff = "Off",
+            },
+        },
+        {
+            label = "Load in Party",
+            config = {
+                value = db.LoadInParty == true,
+                callback = function(checked) db.LoadInParty = checked; UpdateStateDriver() end,
+                msgPopup = true,
+                msgText = "Load in Party",
+                msgOn = "On",
+                msgOff = "Off",
+            },
+        },
+    }), "all")
 
-    local loadInParty = GUIFrame:CreateCheckbox(row2a, "Load in Party", {
-        value = db.LoadInParty == true,
-        callback = function(checked) db.LoadInParty = checked; UpdateStateDriver() end,
-        msgPopup = true,
-        msgText = "Load in Party",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row2a:AddWidget(loadInParty, 0.5)
-    manager:Register(loadInParty, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
+    local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2 = GUIFrame:CreateSeparator(row2sep)
+    row2sep:AddWidget(sep2, 1)
+    manager:Register(sep2, "all")
+    card2:AddRow(row2sep, Theme.rowHeightSeparator)
 
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local sizeSlider = GUIFrame:CreateSlider(row2b, "Button Size", {

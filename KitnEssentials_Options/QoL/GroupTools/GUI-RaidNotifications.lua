@@ -64,22 +64,6 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         manager:UpdateAll(db.Enabled ~= false)
     end
 
-    -- == true, not ~= false: the module never subscribes an alert whose key is nil.
-    local function AddAlertRow(card, alerts)
-        local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-        for _, alert in ipairs(alerts) do
-            local key = alert.dbKey
-            local check = GUIFrame:CreateCheckbox(row, alert.label, {
-                value = db[key] == true,
-                callback = function(checked) db[key] = checked; ApplySettings() end,
-                tooltip = alert.tooltip,
-            })
-            row:AddWidget(check, 1/3)
-            manager:Register(check, "all")
-        end
-        card:AddRow(row, Theme.rowHeight)
-    end
-
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -108,13 +92,46 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
 
     yOffset = card1:GetNextOffset()
 
+    -- == true, not ~= false: the module never subscribes an alert whose key is nil.
+    local function AlertConfig(alert)
+        local key = alert.dbKey
+        return {
+            value = db[key] == true,
+            callback = function(checked) db[key] = checked; ApplySettings() end,
+            tooltip = alert.tooltip,
+        }
+    end
+
+    local function AddAlertRow(card, alerts)
+        local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+        for _, alert in ipairs(alerts) do
+            local check = GUIFrame:CreateCheckbox(row, alert.label, AlertConfig(alert))
+            row:AddWidget(check, 1/3)
+            manager:Register(check, "all")
+        end
+        card:AddRow(row, Theme.rowHeight)
+    end
+
+    local function AddAlertGrid(card, alerts)
+        local picks = {}
+        for i, alert in ipairs(alerts) do
+            picks[i] = { label = alert.label, config = AlertConfig(alert) }
+        end
+        manager:RegisterGroup(card:AddCheckboxGrid(picks), "all")
+        local sepRow = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
+        local sep = GUIFrame:CreateSeparator(sepRow)
+        sepRow:AddWidget(sep, 1)
+        manager:Register(sep, "all")
+        card:AddRow(sepRow, Theme.rowHeightSeparator)
+    end
+
     ----------------------------------------------------------------
     -- Card 2: General Alerts
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Alerts", yOffset)
     manager:Register(card2, "all")
 
-    AddAlertRow(card2, GENERAL_ALERTS)
+    AddAlertGrid(card2, GENERAL_ALERTS)
     AddAlertRow(card2, AUTO_READY)
     card2:AddNote("Each alert stays up while its condition holds. Auto Ready When Benched shows no alert; it answers the ready check.")
 
@@ -126,7 +143,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Boss Alerts", yOffset)
     manager:Register(card3, "all")
 
-    AddAlertRow(card3, BOSS_ALERTS)
+    AddAlertGrid(card3, BOSS_ALERTS)
 
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local durationSlider = GUIFrame:CreateSlider(row3, "Duration", {

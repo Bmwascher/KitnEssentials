@@ -79,15 +79,19 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
     -- Card 2: Tracked Talents
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Tracked Talents", yOffset)
-    local talentRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    for _, tracker in ipairs(Rules.TRACKERS) do
+    local talentPicks = {}
+    for i, tracker in ipairs(Rules.TRACKERS) do
         local dbKey = tracker.dbKey
-        talentRow:AddWidget(GUIFrame:CreateCheckbox(talentRow, TalentLabel(SPC, tracker), {
-            value = db[dbKey] == true,
-            callback = function(v) db[dbKey] = v; ApplySettings() end,
-        }), 0.5)
+        talentPicks[i] = {
+            label = TalentLabel(SPC, tracker),
+            config = {
+                value = db[dbKey] == true,
+                callback = function(v) db[dbKey] = v; ApplySettings() end,
+            },
+        }
     end
-    card2:AddRow(talentRow, Theme.rowHeightLast, 0)
+    -- Two columns: the gray tag after each name clips at three.
+    card2:AddCheckboxGrid(talentPicks, { columns = 2, isLast = true })
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------

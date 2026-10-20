@@ -323,8 +323,8 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
                         enabled = not (KE.MOVEMENT_DEFAULT_OFF and KE.MOVEMENT_DEFAULT_OFF[ids[1]])
                     end
 
-                    if not pending then pending = GUIFrame:CreateRow(card7.content, 36) end
-                    pending:AddWidget(GUIFrame:CreateCheckbox(pending, name, {
+                    if not pending then pending = GUIFrame:CreateRow(card7.content, GUIFrame.CheckboxRowHeight) end
+                    pending:AddWidget(GUIFrame:CreateCompactCheckbox(pending, name, {
                         value = enabled,
                         callback = function(v)
                             for _, id in ipairs(ids) do
@@ -340,7 +340,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
                     }), 1 / PER_ROW)
 
                     if idx % PER_ROW == 0 or idx == #order then
-                        card7:AddRow(pending, 36)
+                        card7:AddRow(pending, GUIFrame.CheckboxRowHeight, idx < #order and GUIFrame.CheckboxRowGap or nil)
                         pending = nil
                     end
                 end

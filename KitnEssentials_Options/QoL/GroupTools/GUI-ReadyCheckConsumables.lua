@@ -182,80 +182,34 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Visible Consumables", yOffset)
     manager:Register(card3, "all")
 
-    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local foodCheck = GUIFrame:CreateCheckbox(row3a, "Food", {
-        value = db.ShowFood ~= false,
-        callback = function(checked) db.ShowFood = checked; ApplySettings() end,
-    })
-    row3a:AddWidget(foodCheck, 1/3)
-    manager:Register(foodCheck, "all")
-
-    local flaskCheck = GUIFrame:CreateCheckbox(row3a, "Flask", {
-        value = db.ShowFlask ~= false,
-        callback = function(checked) db.ShowFlask = checked; ApplySettings() end,
-    })
-    row3a:AddWidget(flaskCheck, 1/3)
-    manager:Register(flaskCheck, "all")
-
-    local runeCheck = GUIFrame:CreateCheckbox(row3a, "Augment Rune", {
-        value = db.ShowAugmentRune ~= false,
-        callback = function(checked) db.ShowAugmentRune = checked; ApplySettings() end,
-    })
-    row3a:AddWidget(runeCheck, 1/3)
-    manager:Register(runeCheck, "all")
-    card3:AddRow(row3a, Theme.rowHeight)
-
-    -- One class row per class with a class slot or a class check; every
-    -- other class ends the card on the weapon row.
-    local lastConsumableRowIsClass = playerClass == "WARLOCK" or playerClass == "SHAMAN" or playerClass == "PALADIN"
-    local row3b = GUIFrame:CreateRow(card3.content, lastConsumableRowIsClass and Theme.rowHeight or Theme.rowHeightLast)
-    local oilCheck = GUIFrame:CreateCheckbox(row3b, "Weapon Enchant (MH)", {
-        value = db.ShowWeaponOil ~= false,
-        callback = function(checked) db.ShowWeaponOil = checked; ApplySettings() end,
-    })
-    row3b:AddWidget(oilCheck, 1/3)
-    manager:Register(oilCheck, "all")
-
-    local oilOHCheck = GUIFrame:CreateCheckbox(row3b, "Weapon Enchant (OH)", {
-        value = db.ShowOffHandOil ~= false,
-        callback = function(checked) db.ShowOffHandOil = checked; ApplySettings() end,
-    })
-    row3b:AddWidget(oilOHCheck, 1/3)
-    manager:Register(oilOHCheck, "all")
-
-    local hsCheck = GUIFrame:CreateCheckbox(row3b, "Healthstone", {
-        value = db.ShowHealthstone ~= false,
-        callback = function(checked) db.ShowHealthstone = checked; ApplySettings() end,
-        tooltip = "Needs a Warlock in your group.",
-    })
-    row3b:AddWidget(hsCheck, 1/3)
-    manager:Register(hsCheck, "all")
-    if lastConsumableRowIsClass then
-        card3:AddRow(row3b, Theme.rowHeight)
-
-        local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-        if playerClass ~= "PALADIN" then
-            local classCheck = GUIFrame:CreateCheckbox(row3c,
-                playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", {
-                value = db.ShowClassItem ~= false,
-                callback = function(checked) db.ShowClassItem = checked; ApplySettings() end,
-            })
-            row3c:AddWidget(classCheck, 0.5)
-            manager:Register(classCheck, "all")
-        end
-        if playerClass ~= "WARLOCK" then
-            local classChecksCheck = GUIFrame:CreateCheckbox(row3c,
-                playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", {
-                value = db.ClassChecks ~= false,
-                callback = function(checked) db.ClassChecks = checked; ApplySettings() end,
-            })
-            row3c:AddWidget(classChecksCheck, 0.5)
-            manager:Register(classChecksCheck, "all")
-        end
-        card3:AddRow(row3c, Theme.rowHeightLast, 0)
-    else
-        card3:AddRow(row3b, Theme.rowHeightLast, 0)
+    local function ConsumablePick(label, key, tooltip)
+        return {
+            label = label,
+            config = {
+                value = db[key] ~= false,
+                callback = function(checked) db[key] = checked; ApplySettings() end,
+                tooltip = tooltip,
+            },
+        }
     end
+
+    local consumables = {
+        ConsumablePick("Food", "ShowFood"),
+        ConsumablePick("Flask", "ShowFlask"),
+        ConsumablePick("Augment Rune", "ShowAugmentRune"),
+        ConsumablePick("Weapon Enchant (MH)", "ShowWeaponOil"),
+        ConsumablePick("Weapon Enchant (OH)", "ShowOffHandOil"),
+        ConsumablePick("Healthstone", "ShowHealthstone", "Needs a Warlock in your group."),
+    }
+    if playerClass == "WARLOCK" or playerClass == "SHAMAN" then
+        consumables[#consumables + 1] = ConsumablePick(
+            playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", "ShowClassItem")
+    end
+    if playerClass == "SHAMAN" or playerClass == "PALADIN" then
+        consumables[#consumables + 1] = ConsumablePick(
+            playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", "ClassChecks")
+    end
+    manager:RegisterGroup(card3:AddCheckboxGrid(consumables, { isLast = true }), "all")
 
     yOffset = card3:GetNextOffset()
 

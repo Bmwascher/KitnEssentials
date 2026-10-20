@@ -939,9 +939,8 @@ end
 -- three role toggle widgets + a Reset button. Future N13d/N13e slot below
 -- the toggle row (Enable toggle, showAtSeconds slider).
 --
--- Toggles use GUIFrame:CreateCheckbox (KE's slider-style toggle widget),
--- not bare UICheckButtonTemplate. Each occupies a fixed 110px column so
--- the three labels (Tank / Healer / DPS) line up cleanly without overlap.
+-- Each role pick occupies a fixed 110px column so the three labels
+-- (Tank / Healer / DPS) line up without overlap.
 local function BuildVisibilityTabBody(parent, spellId, spell)
     local DT = GetModule()
     local isCueRow = DT and DT.IsCueKey(spellId) or false
@@ -1083,15 +1082,12 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
     sectionLabel:SetText("Show this bar for:")
 
-    -- Three role toggles laid out horizontally. Each toggle widget is a
-    -- 36-tall row containing label-on-top + slider-toggle below; we anchor
-    -- each one at a fixed column stride so labels align consistently.
     local TOGGLE_COL_STRIDE = 110
     local prev = nil
     local firstToggle = nil
     for _, roleEntry in ipairs(PLAYER_ROLE_TOKENS) do
         local startedOn = DT and DT:IsSpellAllowedForRole(spellId, roleEntry.token) or false
-        local togRow = GUIFrame:CreateCheckbox(body, roleEntry.label, {
+        local togRow = GUIFrame:CreateCompactCheckbox(body, roleEntry.label, {
             value = startedOn,
             callback = function(checked)
                 if not (DT and DT.SetSpellRoleOverride) then return end
@@ -1106,9 +1102,8 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
             togRow:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
             firstToggle = togRow
         end
-        -- Toggle row's internal layout (label + slider) is 48px wide; row
-        -- frame itself has no width set. Force a reasonable width so the
-        -- column stride math is predictable across font widths.
+        -- The cell has no width of its own; a fixed one keeps the column
+        -- stride predictable and gives the label its room.
         togRow:SetWidth(TOGGLE_COL_STRIDE - 8)
         prev = togRow
         secondaryWidgets[#secondaryWidgets + 1] = togRow
@@ -2633,7 +2628,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     local prev, firstToggle
     for _, roleEntry in ipairs(PLAYER_ROLE_TOKENS) do
         local roleKey = ROLE_TOKEN_TO_KEY[roleEntry.token]
-        local togRow = GUIFrame:CreateCheckbox(body, roleEntry.label, {
+        local togRow = GUIFrame:CreateCompactCheckbox(body, roleEntry.label, {
             value = roles[roleKey] and true or false,
             callback = function(checked)
                 if not (DTrash and DTrash.SetSpellRoleOverride) then return end
