@@ -46,4 +46,18 @@ function Swap.WarningWanted(enabled, difficultyId, swap)
     return enabled == true and swap ~= nil and WARNING_DIFFICULTIES[difficultyId] == true
 end
 
+-- The warning's sound plays when its text appears, at most once per gap.
+-- shown is nil when the answer was hidden: nothing plays, and the next
+-- readable appearance counts as new.
+Swap.SOUND_GAP = 3
+
+function Swap.NoteShown(cue, shown, now)
+    local was = cue.shown
+    cue.shown = shown
+    if shown ~= true or was == true then return false end
+    if cue.playedAt ~= nil and now - cue.playedAt < Swap.SOUND_GAP then return false end
+    cue.playedAt = now
+    return true
+end
+
 KE._DungeonShieldSwapState = Swap

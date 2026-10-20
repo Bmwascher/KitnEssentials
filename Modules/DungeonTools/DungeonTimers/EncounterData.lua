@@ -464,7 +464,8 @@
 -- pair of bosses where one carries a shield. `start` has it at
 -- the pull; each BigWigs_Message with key `message` moves it
 -- to the other unit (one move per 2 s). Ends endsOnShield
--- phase rules.
+-- phase rules. `icon` (optional) is the spell whose icon flanks
+-- the shielded target warning.
 --
 -- stageCue = { spellID = <spellID>, duration = <seconds>,
 -- stage = <n> } (encounter-level, optional): the encounter
@@ -1528,7 +1529,7 @@ KE.EncounterData[2124] = {
         { unit = "boss1", threshold = 35, lead = 5, endsOnShield = true },
         { unit = "boss2", threshold = 35, lead = 5, endsOnShield = true },
     },
-    shieldSwap = { message = 1310311, start = "boss2", units = { "boss1", "boss2" } },
+    shieldSwap = { message = 1310311, start = "boss2", units = { "boss1", "boss2" }, icon = 1289229 },
     auraSounds = {
         { spellID = 1288074, trigger = "added", unit = "player", name = "Thunder and Lightning on you", sound = "Move In" },
         { spellID = 1288874, trigger = "added", unit = "player", name = "Tempest Winds on you",         sound = "Move Out" },

@@ -15,11 +15,15 @@ if not DT then return end
 
 local Swap = KE._DungeonShieldSwapState
 
+local pairs = pairs
 local pcall = pcall
 local type = type
 local issecretvalue = issecretvalue
 local CreateFrame = CreateFrame
+local C_Spell = C_Spell
 local GetInstanceInfo = GetInstanceInfo
+local GetTime = GetTime
+local PlaySoundFile = PlaySoundFile
 local UIParent = UIParent
 local UnitExists = UnitExists
 local UnitIsDead = UnitIsDead
@@ -27,8 +31,12 @@ local UnitIsUnit = UnitIsUnit
 
 local TEXT = "SHIELDED TARGET"
 local FONT_SIZE = 40
+local ICON_GAP = 6
 local COLOR = { 1, 0.15, 0.15 }
 local OFFSET_Y = 200
+local FALLBACK_ICON = 134400
+-- The built-in sound; nil plays nothing until a sound is picked.
+DT.SHIELD_WARNING_DEFAULT_SOUND = nil
 
 local function WarningSettings()
     local profile = KE.db and KE.db.profile
@@ -41,28 +49,83 @@ local function DifficultyId()
     return (select(3, GetInstanceInfo()))
 end
 
+-- The first encounter with a shieldSwap that names an icon.
+local function WarningIconId()
+    for _, enc in pairs(KE.EncounterData) do
+        local swap = enc.shieldSwap
+        if type(swap) == "table" and swap.icon then return swap.icon end
+    end
+    return nil
+end
+
 local function OnEvent()
     DT:_ShieldWarningUpdate()
 end
 
+local function NewIcon(body)
+    local px = (KE.GetPixelSize and KE:GetPixelSize()) or 1
+    local holder = CreateFrame("Frame", nil, body, "BackdropTemplate")
+    holder:SetSize(FONT_SIZE, FONT_SIZE)
+    holder:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+    holder:SetBackdropColor(0, 0, 0, 0.8)
+    if KE.AddIconBorders then KE:AddIconBorders(holder) end
+    local icon = holder:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", px, -px)
+    icon:SetPoint("BOTTOMRIGHT", -px, px)
+    if KE.ApplyIconZoom then KE:ApplyIconZoom(icon) end
+    local iconId = WarningIconId()
+    icon:SetTexture((iconId and C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(iconId))
+        or FALLBACK_ICON)
+    return holder
+end
+
+-- The body carries the visibility, so the text and both icons show together.
 function DT:_ShieldWarningFrame()
     local frame = self._shieldWarningFrame
     if frame then return frame end
     frame = CreateFrame("Frame", nil, UIParent)
     frame:SetFrameStrata("HIGH")
-    frame:SetSize(FONT_SIZE * 9, FONT_SIZE + 8)
+    frame:SetSize(FONT_SIZE * 12, FONT_SIZE + 8)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, OFFSET_Y)
     frame:EnableMouse(false)
     frame:Hide()
-    local text = frame:CreateFontString(nil, "OVERLAY")
+    local body = CreateFrame("Frame", nil, frame)
+    body:SetAllPoints()
+    local text = body:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(text, "Expressway", FONT_SIZE, "OUTLINE")
-    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    text:SetPoint("CENTER", body, "CENTER", 0, 0)
     text:SetTextColor(COLOR[1], COLOR[2], COLOR[3])
     text:SetText(TEXT)
-    frame.text = text
+    local left, right = NewIcon(body), NewIcon(body)
+    left:SetPoint("RIGHT", text, "LEFT", -ICON_GAP, 0)
+    right:SetPoint("LEFT", text, "RIGHT", ICON_GAP, 0)
+    frame.body = body
     frame:SetScript("OnEvent", OnEvent)
     self._shieldWarningFrame = frame
     return frame
+end
+
+-- nil follows the built-in sound; "None" is silent.
+function DT:GetShieldWarningSound()
+    local db = WarningSettings()
+    local pick = db and db.Sound
+    if pick == nil then return DT.SHIELD_WARNING_DEFAULT_SOUND end
+    if pick == "None" then return nil end
+    return pick
+end
+
+function DT:SetShieldWarningSound(key)
+    local db = WarningSettings()
+    if db then db.Sound = key end
+end
+
+local function PlayWarningSound()
+    local dtdb = DT.db
+    if dtdb and dtdb.MutePresetSounds then return end
+    local key = DT:GetShieldWarningSound()
+    local LSM = KE.LSM
+    local file = key and LSM and LSM:Fetch("sound", key)
+    if file then PlaySoundFile(file, (dtdb and dtdb.SoundChannel) or "Master") end
 end
 
 -- Runs after the encounter's swap state exists; the frame is made on the first
@@ -77,6 +140,7 @@ function DT:_ShieldWarningStart()
     frame:RegisterEvent("PLAYER_TARGET_CHANGED")
     frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
     frame:RegisterUnitEvent("UNIT_FLAGS", units[1], units[2])
+    self._shieldWarningCue = {}
     self._shieldWarningActive = true
     self:_ShieldWarningUpdate()
 end
@@ -86,7 +150,7 @@ function DT:_ShieldWarningStop()
     local frame = self._shieldWarningFrame
     if not frame then return end
     frame:UnregisterAllEvents()
-    frame:Hide()
+    if not self._shieldWarningPreview then frame:Hide() end
 end
 
 -- The text shows only while both bosses are up: once one dies the other loses
@@ -94,24 +158,32 @@ end
 function DT:_ShieldWarningUpdate()
     local frame = self._shieldWarningFrame
     local swap = self._shieldSwap
-    if not (frame and self._shieldWarningActive and swap) then return end
+    local cue = self._shieldWarningCue
+    if not (frame and self._shieldWarningActive and swap and cue) or self._shieldWarningPreview then return end
     local units = swap.cfg.units
     for i = 1, 2 do
         local unit = units[i]
         if not UnitExists(unit) or UnitIsDead(unit) then
             frame:Hide()
+            Swap.NoteShown(cue, false, GetTime())
             return
         end
     end
     -- A refused comparison errors or returns nil. A secret answer goes straight
     -- to SetAlphaFromBoolean, which accepts secrets and is not wrapped in pcall.
     local ok, same = pcall(UnitIsUnit, "target", swap.shielded)
-    if not ok or (not issecretvalue(same) and type(same) ~= "boolean") then
+    local secret = ok and issecretvalue(same)
+    if not ok or (not secret and type(same) ~= "boolean") then
         frame:Hide()
+        Swap.NoteShown(cue, false, GetTime())
         return
     end
-    frame.text:SetAlphaFromBoolean(same, 1, 0)
+    frame.body:SetAlphaFromBoolean(same, 1, 0)
     frame:Show()
+    -- Only a readable answer can say the text just appeared.
+    local shown = nil
+    if not secret then shown = same end
+    if Swap.NoteShown(cue, shown, GetTime()) then PlayWarningSound() end
 end
 
 function DT:ApplyShieldWarningSettings()
@@ -119,5 +191,26 @@ function DT:ApplyShieldWarningSettings()
         self:_ShieldWarningStart()
     else
         self:_ShieldWarningStop()
+    end
+end
+
+-- The settings row's preview: the real text and icons, steady, until the row
+-- loses the selection or the window closes.
+function DT:ShowShieldWarningPreview()
+    local frame = self:_ShieldWarningFrame()
+    self._shieldWarningPreview = true
+    frame.body:SetAlpha(1)
+    frame:Show()
+end
+
+function DT:HideShieldWarningPreview()
+    if not self._shieldWarningPreview then return end
+    self._shieldWarningPreview = false
+    local frame = self._shieldWarningFrame
+    if not frame then return end
+    if self._shieldWarningActive then
+        self:_ShieldWarningUpdate()
+    else
+        frame:Hide()
     end
 end

@@ -317,12 +317,26 @@ local function ShowWindMapPreview()
     if mod and mod.ShowWindMapPreview then mod:ShowWindMapPreview() end
 end
 
+local function HideShieldWarningPreview()
+    local mod = GetModule()
+    if mod and mod.HideShieldWarningPreview then mod:HideShieldWarningPreview() end
+end
+
+local function ShowShieldWarningPreview()
+    if not GUIFrame or not GUIFrame:IsShown() then return end
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
+    local mod = GetModule()
+    if mod and mod.ShowShieldWarningPreview then mod:ShowShieldWarningPreview() end
+end
+
 -- Everything the Dungeon Bosses and Dungeon Trash tabs can leave on screen:
--- boss spell preview, trash preview, phase preview, wind map preview.
+-- boss spell preview, trash preview, phase preview, wind map preview,
+-- shielded target preview.
 function KE.GUI.DungeonTimers.HideDungeonPreviews()
     HideSpellPreview()
     HideTrashPreview()
     HideWindMapPreview()
+    HideShieldWarningPreview()
     local mod = GetModule()
     if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
 end
@@ -685,8 +699,16 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     end
 
     -- Sound indicator: "S" if any onShow/onHide sound configured. The wind
-    -- map and the shielded target text play no sound.
-    if kit.soundLabel and item and (item.isWindMap or item.isShieldWarning) then
+    -- map plays no sound.
+    if kit.soundLabel and item and item.isShieldWarning then
+        local DT_mod = GetModule()
+        if DT_mod and DT_mod.GetShieldWarningSound and DT_mod:GetShieldWarningSound() then
+            kit.soundLabel:SetText("S")
+            kit.soundLabel:SetTextColor(1.0, 0.8, 0.3, 0.9)
+        else
+            kit.soundLabel:SetText("")
+        end
+    elseif kit.soundLabel and item and item.isWindMap then
         kit.soundLabel:SetText("")
     elseif kit.soundLabel then
         local hasSound
@@ -887,6 +909,8 @@ local function RefreshListRowSound(spellId)
         local DT = GetModule()
         if IsPhaseKey(spellId) then
             hasSound = (DT and DT.HasPhaseSound and DT:HasPhaseSound(spellId)) or false
+        elseif IsShieldWarningKey(spellId) then
+            hasSound = (DT and DT.GetShieldWarningSound and DT:GetShieldWarningSound() ~= nil) or false
         else
             hasSound = (DT and DT.HasSpellSound and DT:HasSpellSound(spellId)) or false
         end
@@ -3447,12 +3471,13 @@ local SHIELD_WARNING_TOOLTIP =
     "Red SHIELDED TARGET text while your target is the boss that carries Storm Blessed."
 
 local SHIELD_WARNING_DESCRIPTION =
-    "Shows a red SHIELDED TARGET text above the center of the screen while your target is the boss "
-    .. "that carries Storm Blessed and cannot be damaged. It follows BigWigs' \"Storm Blessed on ...\" "
-    .. "messages, so it needs BigWigs with LittleWigs. Mythic and Mythic+ only. It hides once either "
-    .. "boss dies. It plays no sound."
+    "Shows a red SHIELDED TARGET text, with Storm Blessed's icon on each side, above the center of "
+    .. "the screen while your target is the boss that carries Storm Blessed and cannot be damaged. "
+    .. "It follows BigWigs' \"Storm Blessed on ...\" messages, so it needs BigWigs with LittleWigs. "
+    .. "Mythic and Mythic+ only. It hides once either boss dies. The sound plays each time the text "
+    .. "appears, at most once every 3 seconds. While this row is selected the text shows as a preview."
 
-local function BuildShieldWarningBody(parent, contentWidth, onCaptionResize)
+local function BuildShieldWarningBody(parent, rowKey, contentWidth, onCaptionResize)
     local DT = GetModule()
     local db = GetSettingsDB()
     local settings = db and db.ShieldWarning
@@ -3476,17 +3501,43 @@ local function BuildShieldWarningBody(parent, contentWidth, onCaptionResize)
     enableToggle:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
     enableToggle:SetWidth(200)
 
+    local soundRow = GUIFrame:CreateRow(body, 36)
+    soundRow:SetPoint("TOPLEFT", enableToggle, "BOTTOMLEFT", 0, -16)
+    soundRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local soundDropdown = GUIFrame:CreateDropdown(soundRow, "Sound when the text appears", {
+        options = GUIFrame.BuildSoundOptions(),
+        value = (DT and DT:GetShieldWarningSound()) or "None",
+        callback = function(key)
+            if not (DT and DT.SetShieldWarningSound) then return end
+            DT:SetShieldWarningSound(key)
+            RefreshListRowSound(rowKey)
+        end,
+        searchable = true,
+    })
+    soundRow:AddWidget(soundDropdown, 0.7)
+    -- Plays even when preset sounds are muted: muting is for live encounters,
+    -- not the editor's preview.
+    local testButton = GUIFrame:CreateButton(soundRow, "Test", {
+        height = 28,
+        callback = function()
+            local key = DT and DT.GetShieldWarningSound and DT:GetShieldWarningSound()
+            local file = key and KE.LSM and KE.LSM:Fetch("sound", key)
+            if file then PlaySoundFile(file, (DT and DT.db and DT.db.SoundChannel) or "Master") end
+        end,
+    })
+    soundRow:AddWidget(testButton, 0.3, 0, 0, -12)
+
     local caption = body:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
-    caption:SetPoint("TOPLEFT", enableToggle, "BOTTOMLEFT", 0, -8)
+    caption:SetPoint("TOPLEFT", soundRow, "BOTTOMLEFT", 0, -8)
     caption:SetWidth(contentWidth)
     caption:SetJustifyH("LEFT")
     caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
     caption:SetText(SHIELD_WARNING_DESCRIPTION)
 
     local captionHeight = caption:GetStringHeight() or 0
-    local height = DETAIL_PADDING + (header:GetStringHeight() or 0) + 10 + enableToggle:GetHeight() + 8
-        + captionHeight
+    local height = DETAIL_PADDING + (header:GetStringHeight() or 0) + 10 + enableToggle:GetHeight() + 16
+        + soundRow:GetHeight() + 8 + captionHeight
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     body:SetScript("OnSizeChanged", FollowCaptionHeight(body, caption, captionHeight, onCaptionResize))
     return body, height
@@ -3737,6 +3788,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
         if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
     end
     if not IsWindMapKey(state.selectedSpellId) then HideWindMapPreview() end
+    if not IsShieldWarningKey(state.selectedSpellId) then HideShieldWarningPreview() end
     if not state.selectedSpellId then
         clearBossPreviews()
         HideTrashPreview()
@@ -3755,7 +3807,11 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
         clearBossPreviews()
         HideTrashPreview()
         ShowWindMapPreview()
-    elseif IsAuraKey(state.selectedSpellId) or IsShieldWarningKey(state.selectedSpellId) then
+    elseif IsShieldWarningKey(state.selectedSpellId) then
+        clearBossPreviews()
+        HideTrashPreview()
+        ShowShieldWarningPreview()
+    elseif IsAuraKey(state.selectedSpellId) then
         clearBossPreviews()
         HideTrashPreview()
     else
@@ -3897,7 +3953,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
             if selectedIsAura then
                 _, bodyHeight = BuildAuraSoundBody(tabBody, selectedSpell.id, contentWidth, onResize)
             elseif selectedIsShieldWarning then
-                _, bodyHeight = BuildShieldWarningBody(tabBody, contentWidth, onResize)
+                _, bodyHeight = BuildShieldWarningBody(tabBody, selectedSpell.id, contentWidth, onResize)
             else
                 _, bodyHeight = BuildWindMapBody(tabBody, contentWidth, onResize)
             end

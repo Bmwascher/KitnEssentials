@@ -214,6 +214,8 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                     failures[#failures + 1] = ctx .. ".message must be a spell ID"
                 elseif swap.start ~= units[1] and swap.start ~= units[2] then
                     failures[#failures + 1] = ctx .. ".start must be one of its units"
+                elseif swap.icon ~= nil and not isPositiveNumber(swap.icon) then
+                    failures[#failures + 1] = ctx .. ".icon must be a spell ID"
                 end
             end
         end

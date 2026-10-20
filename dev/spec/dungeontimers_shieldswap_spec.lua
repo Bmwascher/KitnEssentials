@@ -55,3 +55,23 @@ describe("shielded target warning", function()
         end
     end)
 end)
+
+describe("shielded target sound", function()
+    it("plays when the text appears, at most once per 3 s, and never on a hidden answer", function()
+        local Swap = L.loadShieldSwapState()
+        local cue = {}
+        local steps = {
+            { name = "appears", shown = true, at = 0, plays = true },
+            { name = "stays shown", shown = true, at = 1, plays = false },
+            { name = "target away", shown = false, at = 1.5, plays = false },
+            { name = "back inside the gap", shown = true, at = 2, plays = false },
+            { name = "target away again", shown = false, at = 3.5, plays = false },
+            { name = "back after the gap", shown = true, at = 4, plays = true },
+            { name = "hidden answer", shown = nil, at = 8, plays = false },
+            { name = "readable again", shown = true, at = 9, plays = true },
+        }
+        for _, s in ipairs(steps) do
+            assert.equals(s.plays, Swap.NoteShown(cue, s.shown, s.at), s.name)
+        end
+    end)
+end)
