@@ -322,11 +322,12 @@ local function HideShieldWarningPreview()
     if mod and mod.HideShieldWarningPreview then mod:HideShieldWarningPreview() end
 end
 
-local function ShowShieldWarningPreview()
+local function ShowShieldWarningPreview(key)
     if not GUIFrame or not GUIFrame:IsShown() then return end
     if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
     local mod = GetModule()
-    if mod and mod.ShowShieldWarningPreview then mod:ShowShieldWarningPreview() end
+    local encId = tonumber(key:match("^warn:(%d+):shield$"))
+    if mod and mod.ShowShieldWarningPreview then mod:ShowShieldWarningPreview(encId) end
 end
 
 -- Everything the Dungeon Bosses and Dungeon Trash tabs can leave on screen:
@@ -3810,7 +3811,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
     elseif IsShieldWarningKey(state.selectedSpellId) then
         clearBossPreviews()
         HideTrashPreview()
-        ShowShieldWarningPreview()
+        ShowShieldWarningPreview(state.selectedSpellId)
     elseif IsAuraKey(state.selectedSpellId) then
         clearBossPreviews()
         HideTrashPreview()

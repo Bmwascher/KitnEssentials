@@ -67,6 +67,7 @@ describe("shielded target sound", function()
             { name = "back inside the gap", shown = true, at = 2, plays = false },
             { name = "target away again", shown = false, at = 3.5, plays = false },
             { name = "back after the gap", shown = true, at = 4, plays = true },
+            { name = "still shown after the gap", shown = true, at = 7.5, plays = false },
             { name = "hidden answer", shown = nil, at = 8, plays = false },
             { name = "readable again", shown = true, at = 9, plays = true },
         }

@@ -15,7 +15,6 @@ if not DT then return end
 
 local Swap = KE._DungeonShieldSwapState
 
-local pairs = pairs
 local pcall = pcall
 local type = type
 local issecretvalue = issecretvalue
@@ -48,15 +47,6 @@ local function DifficultyId()
     return (select(3, GetInstanceInfo()))
 end
 
--- The first encounter with a shieldSwap that names an icon.
-local function WarningIconId()
-    for _, enc in pairs(KE.EncounterData) do
-        local swap = enc.shieldSwap
-        if type(swap) == "table" and swap.icon then return swap.icon end
-    end
-    return nil
-end
-
 local function OnEvent()
     DT:_ShieldWarningUpdate()
 end
@@ -72,10 +62,14 @@ local function NewIcon(body)
     icon:SetPoint("TOPLEFT", px, -px)
     icon:SetPoint("BOTTOMRIGHT", -px, px)
     if KE.ApplyIconZoom then KE:ApplyIconZoom(icon) end
-    local iconId = WarningIconId()
-    icon:SetTexture((iconId and C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(iconId))
-        or FALLBACK_ICON)
-    return holder
+    return holder, icon
+end
+
+local function SetWarningIcon(frame, iconId)
+    local texture = (iconId and C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(iconId))
+        or FALLBACK_ICON
+    frame.leftIcon:SetTexture(texture)
+    frame.rightIcon:SetTexture(texture)
 end
 
 -- The body carries the visibility, so the text and both icons show together.
@@ -95,10 +89,12 @@ function DT:_ShieldWarningFrame()
     text:SetPoint("CENTER", body, "CENTER", 0, 0)
     text:SetTextColor(COLOR[1], COLOR[2], COLOR[3])
     text:SetText(TEXT)
-    local left, right = NewIcon(body), NewIcon(body)
+    local left, leftIcon = NewIcon(body)
+    local right, rightIcon = NewIcon(body)
     left:SetPoint("RIGHT", text, "LEFT", -ICON_GAP, 0)
     right:SetPoint("LEFT", text, "RIGHT", ICON_GAP, 0)
     frame.body = body
+    frame.leftIcon, frame.rightIcon = leftIcon, rightIcon
     frame:SetScript("OnEvent", OnEvent)
     self._shieldWarningFrame = frame
     return frame
@@ -135,17 +131,21 @@ function DT:_ShieldWarningStart()
     local db = WarningSettings()
     if not Swap.WarningWanted(db and db.Enabled, DifficultyId(), swap) then return end
     local frame = self:_ShieldWarningFrame()
+    SetWarningIcon(frame, swap.cfg.icon)
     local units = swap.cfg.units
     frame:RegisterEvent("PLAYER_TARGET_CHANGED")
     frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
     frame:RegisterUnitEvent("UNIT_FLAGS", units[1], units[2])
-    self._shieldWarningCue = {}
     self._shieldWarningActive = true
     self:_ShieldWarningUpdate()
 end
 
+-- The cue lives on the encounter's swap, so a restart within the pull keeps
+-- the 3 s gap.
 function DT:_ShieldWarningStop()
     self._shieldWarningActive = false
+    local swap = self._shieldSwap
+    if swap then Swap.NoteShown(swap.cue, false, GetTime()) end
     local frame = self._shieldWarningFrame
     if not frame then return end
     frame:UnregisterAllEvents()
@@ -157,8 +157,8 @@ end
 function DT:_ShieldWarningUpdate()
     local frame = self._shieldWarningFrame
     local swap = self._shieldSwap
-    local cue = self._shieldWarningCue
-    if not (frame and self._shieldWarningActive and swap and cue) or self._shieldWarningPreview then return end
+    if not (frame and self._shieldWarningActive and swap) or self._shieldWarningPreview then return end
+    local cue = swap.cue
     local units = swap.cfg.units
     for i = 1, 2 do
         local unit = units[i]
@@ -195,8 +195,11 @@ end
 
 -- The settings row's preview: the real text and icons, steady, until the row
 -- loses the selection or the window closes.
-function DT:ShowShieldWarningPreview()
+function DT:ShowShieldWarningPreview(encId)
     local frame = self:_ShieldWarningFrame()
+    local enc = encId and KE.EncounterData and KE.EncounterData[encId]
+    local swapCfg = enc and enc.shieldSwap
+    SetWarningIcon(frame, type(swapCfg) == "table" and swapCfg.icon or nil)
     self._shieldWarningPreview = true
     frame.body:SetAlpha(1)
     frame:Show()
@@ -207,7 +210,8 @@ function DT:HideShieldWarningPreview()
     self._shieldWarningPreview = false
     local frame = self._shieldWarningFrame
     if not frame then return end
-    if self._shieldWarningActive then
+    if self._shieldWarningActive and self._shieldSwap then
+        SetWarningIcon(frame, self._shieldSwap.cfg.icon)
         self:_ShieldWarningUpdate()
     else
         frame:Hide()

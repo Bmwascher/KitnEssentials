@@ -17,7 +17,7 @@ Swap.THROTTLE = 2
 
 -- cfg is an encounter's shieldSwap entry: { message, start, units = { a, b } }.
 function Swap.New(cfg)
-    return { cfg = cfg, shielded = cfg.start, last = nil, swappedTo = {} }
+    return { cfg = cfg, shielded = cfg.start, last = nil, swappedTo = {}, cue = {} }
 end
 
 -- True when the message moves the shield to the other boss.
