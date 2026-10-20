@@ -138,6 +138,8 @@ function Spec.Resolve(m)
     local sources = {}
     if m.isPlayer then
         sources.player = KE:GetPlayerSpecId()
+        local ok, _, class = pcall(UnitClass, "player")
+        if ok then m.class = Plain(class) or m.class end
     else
         local unit = m.unit
         sources.lib, m.libKey = LibSpecFor(unit)
