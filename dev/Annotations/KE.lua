@@ -364,6 +364,9 @@ function KE:GetGlobalFont() end
 --- The list key every font dropdown offers as its first entry. Never stored.
 KE.FONT_FOLLOW_GLOBAL = "*global*"
 
+--- The name prefix of every Edit Mode box (Core/EditMode.lua).
+KE.EDIT_MODE_BOX_PREFIX = "KE_EditMode_"
+
 --- Adds the follow-the-global entry to an LSM font list and returns the list.
 --- Handles both the hash and the ordered-array list shapes. effectiveName
 --- overrides the label's font name where the pick inherits from a module face
@@ -533,12 +536,15 @@ function KE.CountDungeonTimerCoverage(registry, encounterData, trashData, season
 --- ResolveAnchorFrame) even though the fields themselves are optional.
 --- `SetParent` is an optional boolean; truthy reparents `frame` to the
 --- resolved anchor frame before positioning. Also snaps the frame to the
---- pixel grid at the end (KE:SnapFrameToPixels).
+--- pixel grid at the end (KE:SnapFrameToPixels). `followers` goes to
+--- ResolveAnchorFrame; it is an argument, never a Config field, because Config
+--- is often the saved table and a frame must not be saved.
 ---@param frame Frame
 ---@param posConfig { AnchorFrom: string?, AnchorTo: string?, XOffset: number?, YOffset: number? }
 ---@param Config { anchorFrameType: string?, ParentFrame: string?, Strata: string? }
 ---@param SetParent boolean?
-function KE:ApplyFramePosition(frame, posConfig, Config, SetParent) end
+---@param followers Frame[]?
+function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers) end
 
 ---@param frame Frame
 ---@param config table?
@@ -569,19 +575,28 @@ function KE:AddBorders(frame, color, borderParent) end
 ---@param parentFrame string?
 ---@param frame Frame? # the frame being placed; SELECTFRAME refuses it, its children and its dependents
 ---@param asParent boolean? # the result becomes a parent, so it must also be a frame
+---@param followers Frame[]? # frames moved onto `frame` after placement; SELECTFRAME refuses them and their dependents
 ---@return Frame?
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent) end
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent, followers) end
 
 --- True when `candidate` cannot anchor `frame` (or parent it, with `asParent`):
 --- not a region (a secret value, an unreadable table or a forbidden region
 --- counts as not a region), not a frame when a parent is needed, the frame itself, or a
 --- region whose parent or anchor chain reaches it. With no frame, only the
---- type tests apply.
+--- type tests apply. `followers` are frames the caller anchors or parents to
+--- `frame` after placing it; each is refused, and so is any region whose chain
+--- reaches one.
 ---@param frame Frame?
 ---@param candidate any
 ---@param asParent boolean?
+---@param followers Frame[]?
 ---@return boolean
-function KE:IsUnsafeAnchor(frame, candidate, asParent) end
+function KE:IsUnsafeAnchor(frame, candidate, asParent, followers) end
+
+--- True when `name` is an Edit Mode box's name, or a dotted name inside one.
+---@param name any
+---@return boolean
+function KE:IsEditModeBoxName(name) end
 
 ---@param frame Frame
 ---@return boolean

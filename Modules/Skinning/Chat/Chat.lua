@@ -527,6 +527,30 @@ end
 -- Edit mode
 ------------------------------------------------------------------------
 
+-- Every chat window and its tab, the dock and the chat alert stack can be
+-- moved onto the panel after it is placed, and which window sits in the panel
+-- can change later, so all of them are declared (KE:IsUnsafeAnchor).
+---@type Frame[]
+local panelFollowers = {}
+
+local function PanelFollowers()
+    wipe(panelFollowers)
+    local names = _G.CHAT_FRAMES
+    if names then
+        for _, frameName in ipairs(names) do
+            local chat = _G[frameName]
+            if chat then panelFollowers[#panelFollowers + 1] = chat end
+            local tab = _G[frameName .. "Tab"]
+            if tab then panelFollowers[#panelFollowers + 1] = tab end
+        end
+    end
+    local docker = _G.GeneralDockManager
+    if docker then panelFollowers[#panelFollowers + 1] = docker end
+    local alerts = _G.ChatAlertFrame
+    if alerts then panelFollowers[#panelFollowers + 1] = alerts end
+    return panelFollowers
+end
+
 function CHAT:RegisterEditMode()
     if not self.editModeConfig then
         self.editModeConfig = {
@@ -535,11 +559,12 @@ function CHAT:RegisterEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePosition(self.panel, self.db.Position, self.db)
+                KE:ApplyFramePosition(self.panel, self.db.Position, self.db, nil, PanelFollowers())
                 self.panel:SetFrameStrata("BACKGROUND")
             end,
             getParentFrame = function()
-                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame,
+                    self.panel, nil, PanelFollowers())
             end,
             guiPath = "Chat",
         }
@@ -587,7 +612,7 @@ function CHAT:CreateChatPanel()
     local db = self.db
     local panel = CreateFrame("Frame", "KE_ChatPanel", UIParent)
     panel:SetSize(self:GetPanelSize())
-    KE:ApplyFramePosition(panel, db.Position, db)
+    KE:ApplyFramePosition(panel, db.Position, db, nil, PanelFollowers())
     panel:SetFrameStrata("BACKGROUND")
     panel:SetFrameLevel(PANEL_FRAME_LEVEL)
     panel:SetClampedToScreen(true)
@@ -2627,7 +2652,7 @@ function CHAT:UpdatePanel()
     local db = self.db
 
     self.panel:SetSize(self:GetPanelSize())
-    KE:ApplyFramePosition(self.panel, db.Position, db)
+    KE:ApplyFramePosition(self.panel, db.Position, db, nil, PanelFollowers())
     self.panel:SetFrameStrata("BACKGROUND")
 
     if self.panel.backdrop then self:ApplyBackdrop(self.panel.backdrop) end

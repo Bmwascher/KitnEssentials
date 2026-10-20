@@ -484,6 +484,7 @@ local anchorPending = setmetatable({}, { __mode = "k" })
 local ANCHOR_WALK_LIMIT = 64
 local anchorQueue = {}
 local anchorSeen = {}
+local anchorFollowers = {}
 local warnedAnchorNames = {}
 
 -- Every widget carries its handle at index 0; a mixin or plain table can carry
@@ -514,17 +515,27 @@ local function IsFrame(region)
     return isFrame == true
 end
 
-function KE:IsUnsafeAnchor(frame, candidate, asParent)
+function KE:IsUnsafeAnchor(frame, candidate, asParent, followers)
     if not IsRegion(candidate) then return true end
     if asParent and not IsFrame(candidate) then return true end
     if frame == nil then return false end
     if candidate == frame then return true end
-    if candidate == UIParent then return false end
 
     -- Wiped on entry rather than exit: a walk an error interrupted would
     -- otherwise leave regions marked seen, and the next walk would skip them.
     wipe(anchorQueue)
     wipe(anchorSeen)
+    wipe(anchorFollowers)
+    -- A follower is not anchored to the frame yet when the frame is placed,
+    -- so the walk cannot reach it through its links.
+    if followers then
+        for i = 1, #followers do
+            local follower = followers[i]
+            if IsRegion(follower) then anchorFollowers[follower] = true end
+        end
+    end
+    if anchorFollowers[candidate] then return true end
+    if candidate == UIParent then return false end
     local top, seen = 1, 1
     anchorQueue[1] = candidate
     anchorSeen[candidate] = true
@@ -551,7 +562,7 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent)
                 end
                 link = relativeTo
             end
-            if link == frame then return true end
+            if link == frame or anchorFollowers[link] then return true end
             if link ~= nil and link ~= UIParent and not anchorSeen[link] and IsRegion(link) then
                 if seen == ANCHOR_WALK_LIMIT then return true end
                 seen = seen + 1
@@ -564,7 +575,47 @@ function KE:IsUnsafeAnchor(frame, candidate, asParent)
     return false
 end
 
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent)
+KE.EDIT_MODE_BOX_PREFIX = "KE_EditMode_"
+
+-- A plain find, so the chooser's per-frame call allocates no substring.
+function KE:IsEditModeBoxName(name)
+    return type(name) == "string" and string_find(name, KE.EDIT_MODE_BOX_PREFIX, 1, true) == 1
+end
+
+-- Select Frame names an unnamed child Parent.key, printing the key with
+-- tostring. Child keys are raw fields, so rawget finds them and never a
+-- widget method. The second return is true when the first name is not a
+-- global yet: its owner may build it later, so that stays as quiet as a
+-- missing plain name.
+local function ResolveFrameName(name)
+    local value = _G[name]
+    if issecretvalue(value) or value ~= nil then return value, false end
+    -- A hand-edited profile can hold any type here; only a string is split.
+    if type(name) ~= "string" then return nil, true end
+    local stop = string_find(name, ".", 1, true)
+    if not stop then return nil, true end
+    local current = _G[string.sub(name, 1, stop - 1)]
+    if issecretvalue(current) then return nil, false end
+    if current == nil then return nil, true end
+    while stop do
+        if type(current) ~= "table" or not canaccesstable(current) then return nil, false end
+        local start = stop + 1
+        stop = string_find(name, ".", start, true)
+        local key = string.sub(name, start, stop and stop - 1 or -1)
+        local child = rawget(current, key)
+        if issecretvalue(child) then return nil, false end
+        local number = tonumber(key)
+        if child == nil and number then
+            child = rawget(current, number)
+            if issecretvalue(child) then return nil, false end
+        end
+        if child == nil then return nil, false end
+        current = child
+    end
+    return current, false
+end
+
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent, followers)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
     elseif anchorFrameType == "PLAYERFRAME" then
@@ -574,18 +625,26 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent
         if lastPlayerFrame == nil then lastPlayerFrame = playerFrame end
         return playerFrame
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
-        local candidate = _G[parentFrameName]
-        -- A global can hold a cached secret API result, which must not be
-        -- compared; IsUnsafeAnchor refuses it.
-        if not issecretvalue(candidate) then
-            if candidate == nil then return UIParent end
+        -- Refused by name, so the answer does not depend on whether Edit Mode
+        -- has built its boxes yet.
+        local refused = self:IsEditModeBoxName(parentFrameName)
+        local candidate
+        if not refused then
+            local rootMissing
+            candidate, rootMissing = ResolveFrameName(parentFrameName)
+            -- A global can hold a cached secret API result, which must not be
+            -- compared; IsUnsafeAnchor refuses it.
+            if not issecretvalue(candidate) and candidate == nil then
+                if rootMissing then return UIParent end
+                refused = true
+            end
         end
-        if self:IsUnsafeAnchor(frame, candidate, asParent) then
+        if refused or self:IsUnsafeAnchor(frame, candidate, asParent, followers) then
             if not warnedAnchorNames[parentFrameName] then
                 warnedAnchorNames[parentFrameName] = true
                 self:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
-                    .. "is the display itself or depends on it, or its anchors could not all be checked. "
-                    .. "Placed on the screen instead.")
+                    .. "is an Edit Mode box, is the display itself, depends on it or is moved onto it, "
+                    .. "or its anchors could not all be checked. Placed on the screen instead.")
             end
             return UIParent
         end
@@ -2030,9 +2089,9 @@ function KE:ApplyActivePosition(frame, db, setParent)
     self:ApplyFramePosition(frame, posConfig, config, setParent)
 end
 
-function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
+function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
     if not frame or not posConfig then return end
-    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent)
+    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent, followers)
     if SetParent then
         frame:SetParent(parent)
     end

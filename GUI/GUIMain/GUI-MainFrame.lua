@@ -558,7 +558,7 @@ function GUIFrame:CreateMainFrame()
         end
         -- A save from a larger screen can put the corner off this one, and the
         -- room measured from there would not fit the screen.
-        x, y = GUIFrame.ClampCorner(x or 0, y or 0, screenW, screenH, GUIFrame.minWidth, GUIFrame.minHeight)
+        x, y = GUIFrame.ClampCorner(x, y, screenW, screenH, GUIFrame.minWidth, GUIFrame.minHeight)
         settleWindow(x, y, w, h)
     end
     restoreFromSaved()
@@ -695,7 +695,8 @@ function GUIFrame:CreateMainFrame()
         end
         GUIFrame.isResizing = true
         grabW, grabH = frame:GetWidth(), frame:GetHeight()
-        frame:StartSizing("BOTTOMRIGHT")
+        local alwaysStartFromMouse = true
+        frame:StartSizing("BOTTOMRIGHT", alwaysStartFromMouse)
     end)
     -- Only the button that started the resize ends it.
     resizeGrip:SetScript("OnMouseUp", function(_, button)

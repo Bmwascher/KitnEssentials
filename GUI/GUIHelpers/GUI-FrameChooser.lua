@@ -120,7 +120,8 @@ local function OnUpdateHandler(self, elapsed)
 
     if focus then
         focusName = RecurseGetName(focus)
-        if focusName == "WorldFrame" or not focusName then
+        -- An Edit Mode box covers the frame it stands for and is never an anchor.
+        if focusName == "WorldFrame" or not focusName or KE:IsEditModeBoxName(focusName) then
             focusName = nil
         end
 
