@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.3
+
+### Dungeon Timers
+
+- Season 2 bosses play their cue voices and show shorter texts, with new
+  colors for SOAKS, PROTECT, BLEEDS and WINDS - CHECK MAP. Each boss lists
+  its abilities in a set order on the Dungeon Bosses tab, reminders last
+- Six abilities also play a sound when their text hides: Fresh Meat,
+  Ssscavenging, Light Infusion, the Malefic Wave gateway, Frost Overload
+  and Burrow
+- 40 more personal aura reminders, 28 of them on by default. A reminder's
+  sound row has a Test button that grays out with the reminder
+- 37 new voice sounds are bundled and the other 40 are re-recorded. Sounds
+  other modules use by default change too: Aggro in Combat Texts,
+  Interrupt in Focus Castbar, Time Spiral and Whisper in Chat
+- The wind map starts at a new default position. Saved positions are kept
+
+---
+
 ## v4.12.2
 
 ### Dungeon Timers
