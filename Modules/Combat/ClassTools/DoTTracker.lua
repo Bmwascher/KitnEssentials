@@ -70,6 +70,9 @@ local SAMPLE_TOTAL = 6
 local NONE = {}
 -- Searched in this order; the first viewer showing a DoT takes its count.
 local VIEWER_ORDER = { "Essential", "Utility", "BuffIcon" }
+-- Where the ability that applies a DoT shows, asked only when no viewer shows
+-- the DoT itself, so a count never leaves its debuff's icon for it.
+local CAST_VIEWER_ORDER = { "Essential", "Utility" }
 -- Above the icon's cooldown swipe and countdown when centered on it.
 local ICON_LEVEL_OFFSET = 30
 -- How often a count hidden on an icon that cannot be seen looks at it again:
@@ -506,11 +509,24 @@ local function CdmIds(id, also)
     return ids
 end
 
+local function CastIds(cast)
+    if not cast then return nil end
+    local ids = {}
+    for i = 1, #cast do ids[cast[i]] = 1 end
+    return ids
+end
+
 local function FindIcon(cell)
     if not cell.cdmIds then return nil end
     for i = 1, #VIEWER_ORDER do
         local key = VIEWER_ORDER[i]
         local icon = KE.CDMIcons.Find(key, cell.cdmIds)
+        if icon then return icon, key end
+    end
+    if not cell.castIds then return nil end
+    for i = 1, #CAST_VIEWER_ORDER do
+        local key = CAST_VIEWER_ORDER[i]
+        local icon = KE.CDMIcons.Find(key, cell.castIds)
         if icon then return icon, key end
     end
     return nil
@@ -1147,6 +1163,7 @@ function DT:Apply(list, allowed, class, specID, held)
             cell.cdmIds = CdmIds(id, also)
         end
         cell.row, cell.cap = row, row and row.cap
+        cell.castIds = CastIds(Rules.CastOf(row))
         if not (held and cell.iconId) then cell.iconId = Rules.IconOf(row, id, IsKnown) end
         local own = Rules.ColorOf(db.Spells and db.Spells[Rules.SpellKey(specID, id)], row, colorsOn)
         cell.own = own and { KE:ResolveColor(own, DEFAULT_SOME) } or nil
