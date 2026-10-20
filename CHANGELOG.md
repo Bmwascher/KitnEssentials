@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.20
+
+### Settings Window
+
+- Icon Spacing sliders go down to -1 on Advanced Debuffs, External
+  Tracker, Movement Buffs, Player Buffs and Debuffs, Party Cooldowns,
+  Raid Cooldowns, Shaman Proc Cooldowns, DoT Tracker, Ready Check
+  Consumables and the Damage Meter's Spell History. At -1 neighboring
+  icons share one border line
+
+### Party Cooldowns
+
+- A negative icon spacing no longer moves the icon row toward the party
+  frame
+
+### Character Panel
+
+- The four Ancient Hash'ey Battle Art glove enchants show Short, Verbose
+  and Full labels, such as Shield and Fire DoT, in place of a cut-off
+  purple name. A colored enchant name now shows in the normal text color
+
+### Damage Meter
+
+- Bar Spacing goes down to -1. At -1 outlined bars share one edge line and
+  the last bar is never cut off
+
+### DoT Tracker
+
+- Rupture is no longer listed under Subtlety Rogue
+
+---
+
 ## v4.12.19
 
 ### Settings Window
