@@ -187,12 +187,16 @@ function Map.EndHistory(map)
 end
 
 -- An unreadable start may supersede Winds; discard its old association
--- unless the readable unit and bar prove this repeats the same cast.
+-- unless the readable unit and bar prove this repeats the same cast. Boss
+-- casts stay secret for the whole pull in a keystone, so no cast can step the
+-- sequence again: only live published sides remain. True when this switched.
 function Map.UnreadableCast(map, unit, bar)
     local open = map.cast
-    if open and unit ~= nil and bar ~= nil and open.unit == unit and open.bar == bar then return end
+    if open and unit ~= nil and bar ~= nil and open.unit == unit and open.bar == bar then return false end
     map.cast = nil
-    loseSequence(map)
+    if map.inferenceWithdrawn then return false end
+    Map.WithdrawInference(map)
+    return true
 end
 
 -- Keep the held deadline after its card ends. Callers also sample before

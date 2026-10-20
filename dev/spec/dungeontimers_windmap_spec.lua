@@ -207,7 +207,7 @@ describe("next wind", function()
             local unsure = M.New()
             local inst = admit(M, unsure, "wind", 1, 10)
             if endsFirst then M.NoteRetired(unsure, inst, 1) end
-            M.UnreadableCast(unsure, "boss1", 1)
+            M.EndHistory(unsure)
             if not endsFirst then M.NoteRetired(unsure, inst, 1) end
             admit(M, unsure, "wind", 2, 30)
             castWind(M, unsure, 2, 29)
@@ -215,7 +215,7 @@ describe("next wind", function()
         end
     end)
 
-    it("loses the sequence on an owner shutdown, an overflow, a cast that never ended, an unreadable start or an unknown side", function()
+    it("loses the sequence on an owner shutdown, an overflow, a cast that never ended or an unknown side", function()
         local M = L.loadWindMapState()
         local cases = {
             { name = "owner shutdown", act = function(map) M.EndHistory(map) end },
@@ -226,7 +226,6 @@ describe("next wind", function()
                 M.BindCast(map, "boss1", 2, 29, LEAD)
                 M.BindCast(map, "boss1", 3, 29, LEAD)
             end },
-            { name = "an unreadable start", act = function(map) M.UnreadableCast(map, "boss1", 9) end },
         }
         for _, c in ipairs(cases) do
             local map = M.New()
@@ -246,26 +245,43 @@ describe("next wind", function()
         assert.is_false(M.CastEnded(closed, "boss1", 4, true))
         assert.equals("syncing", stateOf(M, closed))
 
-        -- An unreadable start supersedes the open cast the same way; a repeat for
-        -- the open cast's own unit and bar is the same cast.
-        local superseded = M.New()
-        admit(M, superseded, "wind", 1, 10)
-        M.BindCast(superseded, "boss1", 4, 9, LEAD)
-        M.UnreadableCast(superseded, "boss1", 5)
-        assert.is_false(M.CastEnded(superseded, "boss1", 4, true))
-        assert.equals("syncing", stateOf(M, superseded))
-        local repeated = M.New()
-        admit(M, repeated, "wind", 1, 10)
-        M.BindCast(repeated, "boss1", 4, 9, LEAD)
-        M.UnreadableCast(repeated, "boss1", 4)
-        assert.is_true(M.CastEnded(repeated, "boss1", 4, true))
-        assert.equals(2, sideOf(M, repeated))
-
         local unknown = M.New()
         admit(M, unknown, "wind", nil, 10)
         assert.equals("syncing", stateOf(M, unknown))
         castWind(M, unknown, 1, 9)
         assert.equals("syncing", stateOf(M, unknown))
+    end)
+
+    it("follows only live published winds after an unreadable start, switching once", function()
+        local M = L.loadWindMapState()
+        local map = M.New()
+        admit(M, map, "wind", 1, 10)
+        castWind(M, map, 1, 9)
+        local secondInst = admit(M, map, "wind", 2, 30)
+        assert.equals(2, sideOf(M, map))
+        assert.is_true(M.UnreadableCast(map, "boss1", 9))
+        assert.equals(2, sideOf(M, map))
+        M.NoteRetired(map, secondInst, 1)
+        assert.equals("syncing", stateOf(M, map))
+        admit(M, map, "wind", 3, 50)
+        assert.is_false(M.UnreadableCast(map, "boss1", 10))
+        assert.equals(3, sideOf(M, map))
+    end)
+
+    it("supersedes the open cast on an unreadable start, unless it repeats the open cast's unit and bar", function()
+        local M = L.loadWindMapState()
+        local superseded = M.New()
+        admit(M, superseded, "wind", 1, 10)
+        M.BindCast(superseded, "boss1", 4, 9, LEAD)
+        assert.is_true(M.UnreadableCast(superseded, "boss1", 5))
+        assert.is_false(M.CastEnded(superseded, "boss1", 4, true))
+        assert.equals(1, sideOf(M, superseded))
+        local repeated = M.New()
+        admit(M, repeated, "wind", 1, 10)
+        M.BindCast(repeated, "boss1", 4, 9, LEAD)
+        assert.is_false(M.UnreadableCast(repeated, "boss1", 4))
+        assert.is_true(M.CastEnded(repeated, "boss1", 4, true))
+        assert.equals(2, sideOf(M, repeated))
     end)
 
     it("shows only live published winds once withdrawn, never a held or stepped side", function()

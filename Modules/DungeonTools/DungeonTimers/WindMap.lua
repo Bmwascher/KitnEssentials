@@ -618,7 +618,7 @@ function DT:_WindMapStopBossWatch()
     frame:UnregisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 end
 
--- Watch only Erkhart so unreadable casts from the other boss cannot lose
+-- Watch only Erkhart so unreadable casts from the other boss cannot end
 -- the wind sequence. Confirmation outlives forecast cards and withdrawal.
 function DT:_WindMapStartCastWatch(frame)
     for i = 1, #CAST_EVENTS do
@@ -632,8 +632,9 @@ function DT:_WindMapStopCastWatch()
     for i = 1, #CAST_EVENTS do frame:UnregisterEvent(CAST_EVENTS[i]) end
 end
 
--- Unreadable identity may hide a Winds start. Readable starts use freshly
--- sampled deadlines even while the panel is hidden.
+-- Unreadable identity may hide a Winds start, and switches the map to live
+-- published sides. Readable starts use freshly sampled deadlines even while
+-- the panel is hidden.
 function DT:_WindMapCastStart(unit, spellID, castBarID)
     local map, cfg = self._windMap, self._windMapConfig
     if not (map and cfg) then return end
@@ -643,7 +644,10 @@ function DT:_WindMapCastStart(unit, spellID, castBarID)
     local token = Readable(unit)
     if spell == nil or token == nil or type(bar) ~= "number" then
         if type(bar) ~= "number" then bar = nil end
-        Map.UnreadableCast(map, token, bar)
+        if Map.UnreadableCast(map, token, bar) then
+            self:_WindMapStopBossWatch()
+            if DT._dprint then DT._dprint("windmap published-only reason=unreadable-cast") end
+        end
         self:_WindMapWake()
         return
     end
