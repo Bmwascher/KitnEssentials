@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.8
+
+### Glow Settings
+
+- A Pixel glow keeps its dashes marching when you change only its color.
+  Changing the line count, size or speed still restarts them
+
+### Settings Window
+
+- Grow and anchor dropdowns on several pages list their choices in a new
+  order. Your saved picks are unchanged
+
+---
+
 ## v4.12.7
 
 ### Damage Meter
