@@ -511,7 +511,7 @@ local function Derive(items, retry)
         if itemID then
             if Ask(C_Item.IsItemDataCachedByID, itemID) == true then
                 -- A refused or hidden answer is not "passive": the slot stays
-                -- incomplete and combat's end reads it again.
+                -- incomplete and a timed retry or combat's end reads it again.
                 local ok, _, id = pcall(C_Item.GetItemSpell, itemID)
                 if not ok or KE:IsSecretValue(id) then
                     complete = false
