@@ -332,23 +332,29 @@ end
 function DT:_WindMapFrame()
     local frame = self._windMapFrame
     if frame then return frame end
-    frame = CreateFrame("Frame", FRAME_NAME, UIParent, "BackdropTemplate")
+    -- Edit Mode moves the outer frame, which stays unscaled: its drag math
+    -- assumes the frame's units are UIParent's. The body carries the scale.
+    frame = CreateFrame("Frame", FRAME_NAME, UIParent)
     frame:SetSize(WIDTH, HEIGHT)
-    frame:SetBackdrop(BACKDROP)
-    frame:SetBackdropColor(0, 0, 0, 0.55)
-    frame:SetBackdropBorderColor(0, 0, 0, 1)
     frame:Hide()
+    local body = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    body:SetSize(WIDTH, HEIGHT)
+    body:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    body:SetBackdrop(BACKDROP)
+    body:SetBackdropColor(0, 0, 0, 0.55)
+    body:SetBackdropBorderColor(0, 0, 0, 1)
+    frame.body = body
 
-    frame.windText = NewText(frame, 12)
+    frame.windText = NewText(body, 12)
     frame.windText:SetHeight(LINE_HEIGHT)
-    frame.windText:SetPoint("TOP", frame, "TOP", 0, -PAD)
-    frame.dropText = NewText(frame, 12)
+    frame.windText:SetPoint("TOP", body, "TOP", 0, -PAD)
+    frame.dropText = NewText(body, 12)
     frame.dropText:SetHeight(LINE_HEIGHT)
     frame.dropText:SetPoint("TOP", frame.windText, "BOTTOM", 0, -LINE_GAP)
 
-    local block = CreateFrame("Frame", nil, frame)
+    local block = CreateFrame("Frame", nil, body)
     block:SetSize(MAP_SIZE, MAP_SIZE)
-    block:SetPoint("TOP", frame, "TOP", 0, -(PAD + LINE_HEIGHT * 2 + LINE_GAP + BLOCK_GAP))
+    block:SetPoint("TOP", body, "TOP", 0, -(PAD + LINE_HEIGHT * 2 + LINE_GAP + BLOCK_GAP))
     local art = block:CreateTexture(nil, "BACKGROUND")
     art:SetAllPoints()
     art:SetTexture(KE.PATH .. MAP_FILE)
@@ -390,7 +396,7 @@ function DT:_WindMapFrame()
     pulse:SetEndDelay(0.05)
 
     frame.cards = {}
-    for i = 1, 3 do frame.cards[i] = NewCard(frame, i) end
+    for i = 1, 3 do frame.cards[i] = NewCard(body, i) end
 
     frame:SetScript("OnEvent", function(_, event, ...) DT:_WindMapOnEvent(event, ...) end)
 
@@ -413,7 +419,9 @@ end
 function DT:_WindMapApplyLayout()
     local frame, db = self._windMapFrame, MapSettings()
     if not (frame and db) then return end
-    frame:SetScale(db.Scale or 1)
+    local scale = db.Scale or 1
+    frame.body:SetScale(scale)
+    frame:SetSize(WIDTH * scale, HEIGHT * scale)
     frame:SetAlpha(db.Opacity or 0.9)
     KE:ApplyFramePosition(frame, db.Position, {
         anchorFrameType = db.AnchorFrameType,
