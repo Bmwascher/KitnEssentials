@@ -879,9 +879,9 @@ function Rules.ActiveSeconds(active, cd)
     return math_max(0, math_min(math_floor(active), cd - 1))
 end
 
--- Item data loads asked for per item in a session; a load that keeps failing
--- stops here.
-Rules.LOAD_TRIES = 3
+-- Item data loads, and tooltip reads with no cooldown line, per item in a
+-- session; a load that keeps failing stops here. It outlasts DERIVE_WAITS.
+Rules.LOAD_TRIES = 6
 
 -- True, and counted, while itemID has requests left.
 function Rules.TakeLoadTry(tries, itemID)
@@ -889,6 +889,16 @@ function Rules.TakeLoadTry(tries, itemID)
     if n >= Rules.LOAD_TRIES then return false end
     tries[itemID] = n + 1
     return true
+end
+
+-- Seconds before each re-derive of a member whose trinkets are incomplete out
+-- of combat: a tooltip can lack its cooldown line until the use spell's text
+-- loads, and no event says when.
+Rules.DERIVE_WAITS = { 2, 5, 15 }
+
+-- The wait before the next re-derive after tries of them; nil once spent.
+function Rules.NextDeriveWait(tries)
+    return Rules.DERIVE_WAITS[(tries or 0) + 1]
 end
 
 -- The trinket icons a row may show after an exclusion call (set: the trinkets

@@ -534,6 +534,18 @@ describe("PartyCooldownsRules.DoorVerdict", function()
     end)
 end)
 
+describe("PartyCooldownsRules.NextDeriveWait", function()
+    it("waits each of DERIVE_WAITS in turn, then no more", function()
+        local R = loadRules()
+        local got, want = {}, {}
+        for tries = 0, #R.DERIVE_WAITS do
+            got[#got + 1] = R.NextDeriveWait(tries > 0 and tries or nil) or false
+            want[#want + 1] = R.DERIVE_WAITS[tries + 1] or false
+        end
+        assert.are.same(want, got)
+    end)
+end)
+
 describe("PartyCooldownsRules.TakeLoadTry", function()
     it("allows LOAD_TRIES requests per item and no more", function()
         local R = loadRules()

@@ -542,12 +542,31 @@ local function ReadItems(unit, slots)
     return items
 end
 
+local Fill
+
+-- Past the waits, combat's end or the next read derives it again.
+local function Retry(m)
+    m.retryPending = nil
+    if Spec.byGUID[m.guid] ~= m or m.trinketsComplete ~= false or InCombatLockdown() then return end
+    Fill(m)
+    Changed(m)
+end
+
+local function ScheduleRetry(m)
+    if m.retryPending or m.trinketsComplete ~= false or InCombatLockdown() then return end
+    local wait = KE.PartyCooldownsRules.NextDeriveWait(m.deriveTries)
+    if not wait then return end
+    m.deriveTries, m.retryPending = (m.deriveTries or 0) + 1, true
+    C_Timer.After(wait, function() Retry(m) end)
+end
+
 -- items nil re-derives the IDs already read. With none read the member has
 -- no trinkets yet and stays wanted.
-local function Fill(m, items)
+function Fill(m, items)
     if items then m.trinketItems = items end
     if m.trinketItems then
         m.trinkets, m.trinketsComplete = Derive(m.trinketItems)
+        ScheduleRetry(m)
     else
         m.trinkets, m.trinketsComplete = nil, nil
     end
@@ -566,7 +585,7 @@ local function ReadOwn(m)
         m.trinketsStale = true
         return false
     end
-    m.trinketsStale = nil
+    m.trinketsStale, m.deriveTries = nil, nil
     Fill(m, items)
     return true
 end
@@ -584,7 +603,7 @@ Spec.readers[#Spec.readers + 1] = {
         local stands, same = KE.PartyCooldownsRules.TrinketReadStands(m.trinketItems, items)
         m.trinketsSame = same and (m.trinketsSame or 0) + 1 or 0
         m.trinketsStale = not stands or nil
-        m.trinketsReadAt = GetTime()
+        m.trinketsReadAt, m.deriveTries = GetTime(), nil
         Fill(m, items)
     end,
     Self = function(m)
@@ -592,7 +611,7 @@ Spec.readers[#Spec.readers + 1] = {
     end,
     Clear = function(m)
         m.trinketItems, m.trinkets, m.trinketsComplete = nil, nil, nil
-        m.trinketsStale, m.trinketsReadAt, m.trinketsSame = nil, nil, nil
+        m.trinketsStale, m.trinketsReadAt, m.trinketsSame, m.deriveTries = nil, nil, nil, nil
     end,
     OnEvent = function(event, arg1, arg2)
         if event == "PLAYER_EQUIPMENT_CHANGED" then
