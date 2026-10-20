@@ -35,7 +35,7 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Module | Description |
 |---|---|
-| Class Tools | Class tools on one page with a tab per class, opening on your own class: All Classes (Missing Forms stance, form, aura, and Evoker attunement alerts; Recuperate one-click self-heal with health-based visibility; Time Spiral movement proc tracker with glow and countdown; DoT Tracker, which counts how many enemies in combat carry each of your DoTs), Evoker (Disintegrate tick marks and Preservation Stasis tracker), Hunter (Hunter's Mark alert), Mage (Alter Time, which shows your health at the cast on Alter Time's icon), Priest (PI Macro, which builds a Power Infusion macro with trinkets, racials, and potions, and PI Assist, which glows the raid frame of your PI target while their burst cooldown runs), Shaman (Shaman Proc Cooldowns, a countdown after Nature's Guardian or Thunderous Paws fires), and Warlock (Havoc warning) |
+| Class Tools | Class tools on one page with a tab per class, opening on your own class: All Classes (Custom Cooldowns, which shows any spell you choose as a countdown line such as "Spell Reflection - 18"; DoT Tracker, which counts how many enemies in combat carry each of your DoTs and can put each count on its Cooldown Manager icon; Missing Forms stance, form, aura, and Evoker attunement alerts; Recuperate one-click self-heal with health-based visibility; Time Spiral movement proc tracker with glow and countdown), Evoker (Disintegrate tick marks and Preservation Stasis tracker), Hunter (Hunter's Mark alert), Mage (Alter Time, which shows your health at the cast on Alter Time's icon), Paladin (Divine Arbiter, which shows the Retribution spender to press next while the tier 4-piece buff is up), Priest (PI Macro, which builds a Power Infusion macro with trinkets, racials, and potions, and PI Assist, which glows the raid frame of your PI target while their burst cooldown runs), Shaman (Shaman Proc Cooldowns, a countdown after Nature's Guardian or Thunderous Paws fires), and Warlock (Havoc warning) |
 | Combat Res | Combat res charge tracker with timer |
 | Combat Texts | Combat enter/exit, no target warning, an AGGRO line with an optional sound while a mob is attacking you, interrupt announce with spell icon, and low durability warnings. Pet Status, Potion Ready, Missing Forms, No Movement Alert, Hunter's Mark, Havoc and Shaman Proc Cooldowns can attach to its stack |
 | Combat Timer | Configurable in-combat duration display |
@@ -53,7 +53,7 @@ The home page also carries the general settings: minimap button, login message, 
 | Player Debuffs | Replacement player debuff header with dispel-type coloring and full layout control |
 | Advanced Debuffs | Bar-based harmful-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, automatic player/pet-source exclusion, optional extra exclusion filters, a nameplate-only toggle, and a blocklist covering the spells the game lets addons identify by name (subsumes the older Boss Debuffs module) |
 | External Tracker | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, Blessing of Sacrifice, and similar) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a sound test |
-| Party Cooldowns | Each party member's important cooldowns beside their party frame, on Blizzard's party frames or EllesmereUI's: their spec's offensive and personal defensive spells and their racial, full color when ready, a timer while the buff is up with an optional glow, then gray with the time left. Trinket buffs, and externals and potions they receive, show while active, and the Potions tab shows each member's combat potion cooldown as a bar in one movable box. The Raid Cooldowns tab shows your own and each party member's externals and raid cooldowns, such as Pain Suppression, Darkness or Rallying Cry, as icons in a movable box that can sit above or below Healer Mana. Specs come from LibSpecialization or an automatic inspect. Per-spec spell lists with editable lengths and order, per-content visibility, optional category border colors, an Include Yourself option, and an optional separate placement for healer specs |
+| Party Cooldowns | Each party member's important cooldowns beside their party frame, on Blizzard's party frames or EllesmereUI's: their spec's offensive and personal defensive spells and their racial, full color when ready, a timer while the buff is up with an optional glow, then gray with the time left. Trinket buffs, and externals and potions they receive, show while active, and the Potions tab shows each member's combat potion cooldown as a bar in one movable box. The Raid Cooldowns tab shows your own and each party member's externals and raid cooldowns, such as Pain Suppression, Darkness or Rallying Cry, as icons in a movable box that can sit above or below Healer Mana. Specs and talents come from LibSpecialization or an automatic inspect, so cooldown lengths follow each player's talents and two-charge spells show a charge count. Per-spec spell lists with on/off and order, a Party Frame Icons switch, centered grow on the Above and Below sides, per-content visibility, optional category border colors, an Include Yourself option, and an optional separate placement for healer specs |
 | Totem Tracker | Bar tracker for active totems with destroy buttons, configurable layout, and edit-mode integration. Tracks **all four Augmentation Evoker dupes** with independent timers — the default UI shows only two |
 
 ## QoL
@@ -75,15 +75,16 @@ The home page also carries the general settings: minimap button, login message, 
 
 ## Dungeon Timers
 
-Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast durations, a phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides. A separate Dungeon Trash Tracker predicts trash-pack casts from nameplate observation, with on-nameplate countdown icons and per-ability sounds.
+Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast durations, voice cues, a phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides. A separate Dungeon Trash Tracker predicts trash-pack casts from nameplate observation, with on-nameplate countdown icons and per-ability sounds. Encounter extras include the Ruby Life Pools wind map (the next wind's side and where the drop lands) and a WRONG TARGET warning for the shielded boss on Adderis and Aspix.
 
-| Page | Description |
+| Tab | Description |
 |---|---|
-| General | Master enable, BigWigs integration, and role filtering |
-| Bar Settings | Bar color, texture, size, and growth |
-| Text Settings | Font, outline, and label formatting |
-| Nameplate Settings | Trash tracker icons, countdowns, and per-ability sounds |
-| Per-dungeon pages | Algeth'ar Academy, Magisters' Terrace, Maisara Caverns, Nexus-Point Xenas, Pit of Saron, Seat of the Triumvirate, Skyreach, and Windrunner Spire |
+| Dungeon Bosses | Per-dungeon boss abilities and personal aura reminders. Season 2: Altar of Fangs, Den of Nalorakk, Kings' Rest, Murder Row, Ruby Life Pools, Temple of Sethraliss, The Blinding Vale, and Voidscar Arena. Season 1: Algeth'ar Academy, Magisters' Terrace, Maisara Caverns, Nexus-Point Xenas, Pit of Saron, Seat of the Triumvirate, Skyreach, and Windrunner Spire |
+| Dungeon Trash | Per-dungeon trash-pack casts and sounds |
+| General | Master enable, BigWigs integration with a BigWigs Messages check, and role filtering |
+| Bars | Bar color, texture, size, and growth |
+| Texts | Font, outline, and label formatting |
+| Nameplates | Trash tracker icons, countdowns, and per-ability sounds |
 
 ## Skinning
 

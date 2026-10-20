@@ -1,205 +1,52 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.12.20
+## v4.13.0
 
-### Settings Window
+Season 2 Dungeon Timers, Custom Cooldowns, Divine Arbiter and Raid
+Cooldowns, plus a long list of Party Cooldowns, Damage Meter and skin
+work. Two saved settings reset with this update: lengths you typed into
+the Party Cooldowns Spell CD boxes or the Trinket Cooldowns card are
+deleted, because lengths now come from each player's talents, and the CC
+Tracker's Max Enemies is replaced by Enemy CCs Shown, which starts at 5.
 
-- Icon Spacing sliders go down to -1 on Advanced Debuffs, External
-  Tracker, Movement Buffs, Player Buffs and Debuffs, Party Cooldowns,
-  Raid Cooldowns, Shaman Proc Cooldowns, DoT Tracker, Ready Check
-  Consumables and the Damage Meter's Spell History. At -1 neighboring
-  icons share one border line
+### Dungeon Timers
 
-### Party Cooldowns
-
-- A negative icon spacing no longer moves the icon row toward the party
-  frame
-
-### Character Panel
-
-- The four Ancient Hash'ey Battle Art glove enchants show Short, Verbose
-  and Full labels, such as Shield and Fire DoT, in place of a cut-off
-  purple name. A colored enchant name now shows in the normal text color
-
-### Damage Meter
-
-- Bar Spacing goes down to -1. At -1 outlined bars share one edge line and
-  the last bar is never cut off
-
-### DoT Tracker
-
-- Rupture is no longer listed under Subtlety Rogue
-
----
-
-## v4.12.19
-
-### Settings Window
-
-- 22 cards on 18 pages that pick several things of one kind, such as
-  where a module runs, which consumables, which specs, roles, filters or
-  alerts, now show small checkboxes in a grid instead of a column of
-  switches. Most of these cards get shorter. Saved settings, tooltips and
-  graying are unchanged, and switches that turn a whole feature on or off
-  stay switches
-- The cards that printed a chat line when clicked still print it
-- PI Macro: the "Add /use 13 to the macro." note moved into the box's
-  tooltip
-
----
-
-## v4.12.18
-
-### Character Panel
-
-- With Character Panel on and Dark Theme off, the inspect window's
-  Transmog and Talents buttons sit side by side at the top, so the
-  Talents button no longer covers the average item level. Turning
-  Character Panel off puts Blizzard's layout back
-- With Dark Theme on, nothing moves, and its dressing room button reads
-  Transmog
-
----
-
-## v4.12.17
-
-### CC Tracker
-
-- Max Enemies is replaced by Enemy CCs Shown (1 to 15, default 5). The box
-  is only as tall as the rows shown, so it no longer pushes up the
-  screen. Up to 15 enemies are always tracked, and rows past the shown
-  count slide into view as CCs above them end
-- Everyone starts at 5 shown: a saved Max Enemies is deleted from every
-  profile and on import
-- Dragging the Enemy CCs Shown slider no longer costs frame rate
-
----
-
-## v4.12.16
-
-### Divine Arbiter
-
-- **NEW:** Divine Arbiter, on a new Paladin tab under Class Tools (it opens
-  on that tab for a Paladin). Off by default. For a Retribution Paladin
-  with the tier 4-piece, one icon shows while the Divine Arbiter buff is
-  up: the spender to press next (Divine Storm or Templar's Verdict), with
-  a 20 second countdown and a green glow
-- Position, icon size, spacing, glow and timer are adjustable, with an
-  Edit Mode mover. An optional sound plays once when a buff starts
-
----
-
-## v4.12.15
-
-### Potion Bars
-
-- The timer digits are no longer cut off at the bottom, and the bars snap
-  back to the pixel grid after a move or restack
-- **NEW:** Dark Mode on the Potions tab, off by default. Bars fill with
-  the class color at full strength, names are white while cooling and
-  class-colored when ready, and the drained part uses your Background
-  Color. Class Color Bars, Class Color Names and Bar Color gray out while
-  it is on
-- Members show their nickname on their bar
-- Your own bar shows the icon of the potion you drank
-
----
-
-## v4.12.14
-
-### Raid Cooldowns
-
-- The Party Cooldowns tab Healer Externals is now Raid Cooldowns. Your
-  saved settings and the box's position carry over
-- **NEW:** After each healer's external, the box shows Blessing of
-  Protection (or Spellwarding), Roar of Sacrifice, Innervate and Spatial
-  Paradox, then the raid cooldowns: Darkness, Anti-Magic Zone, Rallying
-  Cry, Zephyr, Aura Mastery, Tranquility, Rewind, Divine Hymn, Power Word:
-  Barrier, Spirit Link Totem and Dream Flight. All are on, party only, and
-  each can be switched off in the Spells card
-- Your own externals and raid cooldowns show in the box, first in each
-  group, whether or not Include Yourself is on. Innervate shows for every
-  Druid spec
-- Searching "raid cooldowns" in the settings sidebar finds Party
-  Cooldowns
-
-### External Tracker
-
-- **NEW:** Show Caster Name, off by default. On, the caster's name shows
-  under each icon in class color
-
-### Movement Buffs
-
-- **NEW:** Show Caster Name, off by default, as in External Tracker
-
----
-
-## v4.12.13
-
-### Party Cooldowns
-
-- **NEW:** Party Frame Icons, a switch heading the Cooldowns tab and on by
-  default. Off removes every icon beside the party frames. Potion bars and
-  the Healer Externals box keep working, and the rest of the tab grays
-- On the Above and Below sides, Grow gains Center (cooldown icons centered
-  on the frame's edge, buffs on their own line) and a centered column (Up
-  above, Down below)
-- A switched-off spell no longer resets the counts of the spells after it
-
----
-
-## v4.12.12
-
-### Party Cooldowns
-
-- A cooldown's length comes from the spell's cooldown with the player's
-  talents applied, for you and your teammates, and the Healer Externals
-  box reads each healer's talents. A count keeps running when a talent
-  read changes its length
-- **NEW:** Two-charge spells show a charge digit (0, 1 or 2) and turn gray
-  only at 0. The settings mark them "(2 charges)". Inside a key the digit
-  is shown when the game allows the read, else the cell keeps a single
-  timer
-- The typed Spell CD boxes and the Trinket Cooldowns card are removed, and
-  lengths you typed are deleted from every profile and on import
-- A Retribution Paladin with Radiant Glory no longer shows an Avenging
-  Wrath cell once their talents are read
-
----
-
-## v4.12.11
-
-### Party Cooldowns
-
-- Teammates' on-use trinkets show their gray cooldown icon on their row.
-  A teammate's trinkets also appear after a cold start without a manual
-  inspect, and a read made before their gear is known is refused
-- Soulcoiler Ritual Vessel is tracked: its cooldown cell starts when the
-  shield buff lands on the wearer, and that buff is left out of the
-  trinket icons while the cell shows
-- The settings preview hides with Alt+Z, shows no tooltip on hover, sits
-  above the live row and leaves out switched-off spells. Color and glow
-  drags update once per frame
-- Party rows stay in place while the game refuses a move, and are placed
-  again once the roster settles
-- Talent reads are steadier: your own talents wait for the talent data at
-  login, a teammate who never answers rests after 3 inspects (was 12),
-  and KE waits 3 seconds after another addon inspects someone
-- Position sliders span the screen by default on every page that has a
-  Position card (Dungeon Timers stays at -800 to 800)
-
-### Potion Bars
-
-- The potion bars and the Healer Externals box wait until combat ends to
-  take their place when the game refuses a move
-
-### PI Assist
-
-- The glow tries again when the game refuses the aura list call
-
----
-
-## v4.12.10
+- **NEW:** Season 2 dungeons: boss timers and cues for Altar of Fangs,
+  Den of Nalorakk, Kings' Rest, Murder Row, Ruby Life Pools, Temple of
+  Sethraliss, The Blinding Vale and Voidscar Arena. They follow BigWigs'
+  messages and bars, and each boss's sound-only reminders sit under it
+- The settings page has six tabs: Dungeon Bosses, Dungeon Trash, General,
+  Bars, Texts and Nameplates. A BigWigs Messages summary in the header
+  has a Check now button, and the Dungeon Trash tab says when a Season 2
+  dungeon has no trash alerts yet
+- Season 2 bosses play their cue voices and show shorter texts, with new
+  colors for SOAKS, PROTECT, BLEEDS and WINDS - CHECK MAP. Each boss lists
+  its abilities in a set order, reminders last. Six abilities also play a
+  sound when their text hides: Fresh Meat, Ssscavenging, Light Infusion,
+  the Malefic Wave gateway, Frost Overload and Burrow
+- 40 more personal aura reminders, 28 of them on by default. A reminder's
+  sound row has a Test button that grays out with the reminder
+- **NEW:** Ruby Life Pools wind map. During Kyrakka and Erkhart, a panel
+  names the next wind's side and where the drop lands. In a key it follows
+  BigWigs' Winds bars, and it hides when Erkhart dies. On by default at
+  0.9 scale, with an Edit Mode mover. The Winds of Change row is off by
+  default
+- **NEW:** WRONG TARGET warning for Adderis and Aspix (Mythic and Mythic+,
+  needs BigWigs with LittleWigs). While your target is the boss carrying
+  Storm Blessed, red text shows above the screen's center with the
+  buff's icon on each side and a Wrong Target sound, at most once every 3
+  seconds. On by default, with a preview and a sound dropdown on its
+  Storm Blessed row
+- Adderis and Aspix: the 66% phase entries are gone, each 35% entry hides
+  at its boss's shield swap, and Gale Force's voice plays once per cast
+- Kokia Blazebinder's Molten Boulder BAIT counts to the start of the cast.
+  Altar of Fangs counts Writhing Coil's three kicks with new Kick 1, Kick
+  2 and Kick 3 voices, and Den of Nalorakk's Ravenous Bellow plays the AoE
+  voice
+- 37 new voice sounds are bundled and the other 40 are re-recorded, and
+  the GGEZ sound is trimmed to 2.65 seconds. Sounds other modules use by
+  default change too: Aggro in Combat Texts, Interrupt in Focus Castbar,
+  Time Spiral and Whisper in Chat
 
 ### Custom Cooldowns
 
@@ -213,18 +60,8 @@
   Ready, Hide Out of Combat, growth direction, spacing, colors and a
   ready sound
 
-### No Movement Alert
-
-- Set to the Player Frame and attached to Combat Texts, it no longer
-  jumps off the Combat Texts stack at login
-
----
-
-## v4.12.9
-
 ### DoT Tracker
 
-- DoT Tracker is now the first tab under Class Tools > All Classes
 - **NEW:** Show In card: Dungeons, Delves, Raids, Open World and Arenas /
   Battlegrounds, all ticked. Where it is hidden, nothing is counted
 - **NEW:** Cooldown Manager card. Attach to Cooldown Manager (off by
@@ -238,25 +75,113 @@
   until EllesmereUI shows the icon, usually at the DoT's first
   application after a /reload. The preview hides its sample then, and a
   note on the card says so
-- Speed is hidden when the glow is Pulse Border
+- DoT Tracker is the second tab under Class Tools > All Classes, after
+  Custom Cooldowns. Speed is hidden when the glow is Pulse Border, and
+  Rupture is no longer listed under Subtlety Rogue
 
----
+### Divine Arbiter
 
-## v4.12.8
+- **NEW:** Divine Arbiter, on a new Paladin tab under Class Tools (it opens
+  on that tab for a Paladin). Off by default. For a Retribution Paladin
+  with the tier 4-piece, one icon shows while the Divine Arbiter buff is
+  up: the spender to press next (Divine Storm or Templar's Verdict), with
+  a 20 second countdown and a green glow
+- Position, icon size, spacing, glow and timer are adjustable, with an
+  Edit Mode mover. An optional sound plays once when a buff starts
 
-### Glow Settings
+### PI Assist
 
-- A Pixel glow keeps its dashes marching when you change only its color.
-  Changing the line count, size or speed still restarts them
+- The glow tries again when the game refuses the aura list call
 
-### Settings Window
+### No Movement Alert
 
-- Grow and anchor dropdowns on several pages list their choices in a new
-  order. Your saved picks are unchanged
+- Set to the Player Frame and attached to Combat Texts, it no longer
+  jumps off the Combat Texts stack at login
 
----
+### Party Cooldowns
 
-## v4.12.7
+- A cooldown's length comes from the spell's cooldown with the player's
+  talents applied, for you and your teammates. A count keeps running when
+  a talent read changes its length
+- **NEW:** Two-charge spells show a charge digit (0, 1 or 2) and turn gray
+  only at 0. The settings mark them "(2 charges)". Inside a key the digit
+  is shown when the game allows the read, else the cell keeps a single
+  timer
+- Changed: the typed Spell CD boxes and the Trinket Cooldowns card are
+  removed, and lengths you typed are deleted from every profile and on
+  import
+- **NEW:** Party Frame Icons, a switch heading the Cooldowns tab and on by
+  default. Off removes every icon beside the party frames, while Potion
+  Bars and Raid Cooldowns keep working
+- On the Above and Below sides, Grow gains Center (cooldown icons centered
+  on the frame's edge, buffs on their own line) and a centered column (Up
+  above, Down below)
+- Teammates' on-use trinkets show their gray cooldown icon on their row.
+  A teammate's trinkets appear after a cold start without a manual
+  inspect, and a read made before their gear is known is refused
+- Soulcoiler Ritual Vessel is tracked: its cooldown cell starts when the
+  shield buff lands on the wearer
+- A Retribution Paladin with Radiant Glory no longer shows an Avenging
+  Wrath cell once their talents are read
+- Talent reads are steadier: your own talents wait for the talent data at
+  login, a teammate who never answers rests after 3 inspects (was 12),
+  and KE waits 3 seconds after another addon inspects someone
+- The settings preview hides with Alt+Z, shows no tooltip on hover, sits
+  above the live row and leaves out switched-off spells. Color and glow
+  drags update once per frame
+- Party rows stay in place while the game refuses a move, and are placed
+  again once the roster settles. A switched-off spell no longer resets the
+  counts of the spells after it, and a negative icon spacing no longer
+  moves the icon row toward the party frame
+
+### Raid Cooldowns
+
+- The Party Cooldowns tab Healer Externals is now Raid Cooldowns. Your
+  saved settings and the box's position carry over, and each healer's
+  talents are read
+- **NEW:** After each healer's external, the box shows Blessing of
+  Protection (or Spellwarding), Roar of Sacrifice, Innervate and Spatial
+  Paradox, then the raid cooldowns: Darkness, Anti-Magic Zone, Rallying
+  Cry, Zephyr, Aura Mastery, Tranquility, Rewind, Divine Hymn, Power Word:
+  Barrier, Spirit Link Totem and Dream Flight. All are on, party only, and
+  each can be switched off in the Spells card
+- Your own externals and raid cooldowns show in the box, first in each
+  group, whether or not Include Yourself is on. Innervate shows for every
+  Druid spec
+- Searching "raid cooldowns" in the settings sidebar finds Party
+  Cooldowns
+
+### Potion Bars
+
+- **NEW:** Dark Mode on the Potions tab, off by default. Bars fill with
+  the class color at full strength, names are white while cooling and
+  class-colored when ready, and the drained part uses your Background
+  Color. Class Color Bars, Class Color Names and Bar Color gray out while
+  it is on
+- Members show their nickname on their bar, and your own bar shows the
+  icon of the potion you drank
+- The timer digits are no longer cut off at the bottom, and the bars snap
+  back to the pixel grid after a move or restack. The bars and the Raid
+  Cooldowns box wait until combat ends to take their place when the game
+  refuses a move
+
+### External Tracker
+
+- **NEW:** Show Caster Name, off by default. On, the caster's name shows
+  under each icon in class color
+
+### Movement Buffs
+
+- **NEW:** Show Caster Name, off by default, as in External Tracker
+
+### CC Tracker
+
+- Changed: Max Enemies is replaced by Enemy CCs Shown (1 to 15, default
+  5), and a saved Max Enemies is deleted from every profile and on import
+- The box is only as tall as the rows shown, so it no longer pushes up
+  the screen. Up to 15 enemies are always tracked, and rows past the shown
+  count slide into view as CCs above them end
+- Dragging the Enemy CCs Shown slider no longer costs frame rate
 
 ### Damage Meter
 
@@ -272,14 +197,21 @@
   /kes edit while the module is on
 - The Windows tab has three layout buttons, a layout map where you drag a
   gap to resize windows, an Even Sizes button, labeled size sliders and a
-  "Meter Size" readout in pixels. A map box's remove button uses the KE
-  close glyph
+  "Meter Size" readout in pixels
 - The segment menu and view picker marks, and a saved Accent border, draw
   in the theme color instead of white
+- Bar Spacing goes down to -1. At -1 outlined bars share one edge line and
+  the last bar is never cut off
 
----
+### Character Panel
 
-## v4.12.6
+- With Character Panel on and Dark Theme off, the inspect window's
+  Transmog and Talents buttons sit side by side at the top, so the
+  Talents button no longer covers the average item level. With Dark Theme
+  on, nothing moves, and its dressing room button reads Transmog
+- The four Ancient Hash'ey Battle Art glove enchants show Short, Verbose
+  and Full labels, such as Shield and Fire DoT, in place of a cut-off
+  purple name. A colored enchant name now shows in the normal text color
 
 ### Addon Skins
 
@@ -290,38 +222,42 @@
   Modern and Legacy
 - Modern friend rows are flat, with a status stripe, a larger class icon
   (EllesmereUI's icons when it is loaded), a same-zone accent, a selection
-  fill and an accent group count. A border line marks where the list
-  cuts its rows
-- The Kitn logo replaces the portrait, and the close X is larger. Scroll
-  bars hide while nothing scrolls, and the Who list starts at its header
-  row
+  fill and an accent group count. The Kitn logo replaces the portrait, the
+  close X is larger, and scroll bars hide while nothing scrolls
 - The invite button shows Blizzard's invite glyph in KE colors in both
-  layouts, in place of the Legacy "+" text and the cross-faction art. The
-  Battle.net tag box no longer slides left in Modern, and its tag text is
-  the same blue on both themes
-
-### Dungeon Timers
-
-- The GGEZ sound is trimmed to 2.65 seconds
-
----
-
-## v4.12.5
-
-### Addon Skins
-
+  layouts, and the Battle.net tag text is the same blue on both themes
 - BigWigs' sound pickers (Sounds, Pull, Victory, Wipe, Battle Res, Auras,
   Keystones and boss ability sounds) get the same flat dark box as
-  Countdown Type. The search box in their list is flat too, from the very
-  first time the list opens
+  Countdown Type, search box included
 
 ### Skinning
 
 - Reputation rows show the hover tint again
 
----
+### Settings Window
 
-## v4.12.4
+- 22 cards on 18 pages that pick several things of one kind, such as
+  where a module runs, which consumables, which specs, roles, filters or
+  alerts, now show small checkboxes in a grid instead of a column of
+  switches. Saved settings, tooltips and graying are unchanged
+- Icon Spacing sliders go down to -1 on Advanced Debuffs, External
+  Tracker, Movement Buffs, Player Buffs and Debuffs, Party Cooldowns,
+  Raid Cooldowns, Shaman Proc Cooldowns, DoT Tracker, Ready Check
+  Consumables and the Damage Meter's Spell History. At -1 neighboring
+  icons share one border line
+- Position sliders span the screen by default on every page that has a
+  Position card (Dungeon Timers stays at -800 to 800)
+- Grow and anchor dropdowns on several pages list their choices in a new
+  order. Your saved picks are unchanged
+- The resize grip starts sizing from where you press it, which stops the
+  window jumping at the start of a drag
+- PI Macro: the "Add /use 13 to the macro." note moved into the box's
+  tooltip
+
+### Glow Settings
+
+- A Pixel glow keeps its dashes marching when you change only its color.
+  Changing the line count, size or speed still restarts them
 
 ### Frame Anchoring
 
@@ -333,66 +269,6 @@
   alert frame as an anchor, not only the window seated in it
 - A name like "Parent.child" now anchors to that child. Edit Mode boxes
   cannot be picked, and the frame chooser skips them
-
-### Settings Window
-
-- The resize grip starts sizing from where you press it, which stops the
-  window jumping at the start of a drag
-
----
-
-## v4.12.3
-
-### Dungeon Timers
-
-- Season 2 bosses play their cue voices and show shorter texts, with new
-  colors for SOAKS, PROTECT, BLEEDS and WINDS - CHECK MAP. Each boss lists
-  its abilities in a set order on the Dungeon Bosses tab, reminders last
-- Six abilities also play a sound when their text hides: Fresh Meat,
-  Ssscavenging, Light Infusion, the Malefic Wave gateway, Frost Overload
-  and Burrow
-- 40 more personal aura reminders, 28 of them on by default. A reminder's
-  sound row has a Test button that grays out with the reminder
-- 37 new voice sounds are bundled and the other 40 are re-recorded. Sounds
-  other modules use by default change too: Aggro in Combat Texts,
-  Interrupt in Focus Castbar, Time Spiral and Whisper in Chat
-- The wind map starts at a new default position. Saved positions are kept
-
----
-
-## v4.12.2
-
-### Dungeon Timers
-
-- **NEW:** Season 2 dungeons: boss timers and cues for Altar of Fangs,
-  Den of Nalorakk, Kings' Rest, Murder Row, Ruby Life Pools, Temple of
-  Sethraliss, The Blinding Vale and Voidscar Arena. They follow BigWigs'
-  messages and bars, and each boss's sound-only reminders sit under it
-- The settings page has six tabs: Dungeon Bosses, Dungeon Trash, General,
-  Bars, Texts and Nameplates. A BigWigs Messages summary in the header
-  has a Check now button, and the Dungeon Trash tab says when a Season 2
-  dungeon has no trash alerts yet
-- **NEW:** Ruby Life Pools wind map. During Kyrakka and Erkhart, a panel
-  names the next wind's side and where the drop lands. In a key it follows
-  BigWigs' Winds bars, and it hides when Erkhart dies. On by default at
-  0.9 scale, with an Edit Mode mover. The Winds of Change row is off by
-  default
-- **NEW:** WRONG TARGET warning for Adderis and Aspix (Mythic and Mythic+,
-  needs BigWigs with LittleWigs). While your target is the boss carrying
-  Storm Blessed, red text shows above the screen's center with the
-  buff's icon on each side and a Wrong Target sound, at most once every 3
-  seconds. On by default, with a preview and a sound dropdown on its
-  Storm Blessed row
-- Adderis and Aspix: the 66% phase entries are gone, each 35% entry hides
-  at its boss's shield swap, and Gale Force's voice plays once per cast
-- Kokia Blazebinder's Molten Boulder BAIT now counts to the start of the
-  cast. Altar of Fangs counts Writhing Coil's three kicks with the new
-  Kick 1, Kick 2 and Kick 3 voices
-- Den of Nalorakk's Ravenous Bellow plays the AoE voice
-
----
-
-## v4.12.1
 
 ### Profiles
 
