@@ -459,8 +459,32 @@ function Rules.TimerWanted(exists, canAssist)
 end
 
 -- Threat moves on every hit on every engaged plate. It is worth a scan only for
--- a plate not yet counted while a slot is free: a mob that just joined. A plate
--- refused this pull waits for the tick; otherwise each hit on it would rescan.
-function Rules.WantsThreatScan(holdsSlot, refused, total, cap)
-    return not holdsSlot and not refused and total < cap
+-- a plate not yet counted, while a slot is free, that would count now: a mob
+-- that just joined. A refused plate, or one fighting someone else, waits for
+-- the tick; otherwise each hit on it would rescan. wouldCount(unit) runs a
+-- verdict, so it is asked last.
+function Rules.WantsThreatScan(holdsSlot, refused, total, cap, wouldCount, unit)
+    return not holdsSlot and not refused and total < cap and wouldCount(unit) == true
+end
+
+-- Delves are scenarios on this difficulty; any other scenario counts as the
+-- open world.
+Rules.DELVE_DIFFICULTY_ID = 208
+
+-- Whether the Show In boxes allow the tracker here. A box reads as ticked
+-- unless saved false, so a profile without the keys shows everywhere.
+function Rules.ShowHere(db, inInstance, instanceType, difficultyID)
+    local key = "ShowInOpenWorld"
+    if inInstance then
+        if instanceType == "party" then
+            key = "ShowInDungeons"
+        elseif instanceType == "raid" then
+            key = "ShowInRaids"
+        elseif instanceType == "arena" or instanceType == "pvp" then
+            key = "ShowInPvP"
+        elseif instanceType == "scenario" and difficultyID == Rules.DELVE_DIFFICULTY_ID then
+            key = "ShowInDelves"
+        end
+    end
+    return db[key] ~= false
 end

@@ -455,16 +455,51 @@ describe("dot tracker rules", function()
             end
         end)
 
-        it("scans on a threat change only for an uncounted plate not refused this pull, while a slot is free", function()
-            -- holds a slot, refused, total, cap, expected
+        it("scans on a threat change only for an uncounted plate not refused this pull that would count now, while a slot is free", function()
+            -- holds a slot, refused, total, cap, would count now, expected
             local cases = {
-                { false, false, 3, 20, true },
-                { true, false, 3, 20, false },
-                { false, true, 3, 20, false },
-                { false, false, 20, 20, false },
+                { false, false, 3, 20, true, true },
+                { true, false, 3, 20, true, false },
+                { false, true, 3, 20, true, false },
+                { false, false, 20, 20, true, false },
+                { false, false, 3, 20, false, false },
             }
             for i, case in ipairs(cases) do
-                assert.equals(case[5], Rules.WantsThreatScan(case[1], case[2], case[3], case[4]), "case " .. i)
+                local function wouldCount(unit)
+                    assert.equals("nameplate1", unit, "unit, case " .. i)
+                    return case[5]
+                end
+                assert.equals(case[6], Rules.WantsThreatScan(case[1], case[2], case[3], case[4], wouldCount, "nameplate1"),
+                    "case " .. i)
+            end
+        end)
+
+        it("shows only in the content types whose Show In box is ticked, and everywhere for a profile without them", function()
+            local function off(key) return { [key] = false } end
+            local function on(key) return { [key] = true } end
+            -- saved settings, in an instance, instance type, difficulty, expected
+            local cases = {
+                { {}, false, "none", 0, true },
+                { on("ShowInOpenWorld"), false, "none", 0, true },
+                { off("ShowInOpenWorld"), false, "none", 0, false },
+                { on("ShowInDungeons"), true, "party", 8, true },
+                { off("ShowInDungeons"), true, "party", 8, false },
+                { off("ShowInOpenWorld"), true, "party", 8, true },
+                { on("ShowInRaids"), true, "raid", 16, true },
+                { off("ShowInRaids"), true, "raid", 16, false },
+                { on("ShowInPvP"), true, "arena", 0, true },
+                { off("ShowInPvP"), true, "arena", 0, false },
+                { on("ShowInPvP"), true, "pvp", 0, true },
+                { off("ShowInPvP"), true, "pvp", 0, false },
+                { on("ShowInDelves"), true, "scenario", 208, true },
+                { off("ShowInDelves"), true, "scenario", 208, false },
+                { off("ShowInOpenWorld"), true, "scenario", 208, true },
+                { off("ShowInOpenWorld"), true, "scenario", 12, false },
+                { off("ShowInDelves"), true, "scenario", 12, true },
+                { {}, true, "raid", 16, true },
+            }
+            for i, case in ipairs(cases) do
+                assert.equals(case[5], Rules.ShowHere(case[1], case[2], case[3], case[4]), "case " .. i)
             end
         end)
     end)

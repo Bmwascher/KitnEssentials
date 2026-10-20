@@ -108,6 +108,12 @@ end
 ---------------------------------------------------------------------------------
 local watchers = {}
 local onRefreshes = {}
+-- Two error labels per watch key, one per callback: KE:SafeCall reports a
+-- label's first failure only, so a shared label would hide the other's.
+CDMIcons.labels = {}
+CDMIcons.refreshLabels = {}
+local labels = CDMIcons.labels
+local refreshLabels = CDMIcons.refreshLabels
 local runKeys = {}
 local queued = false
 local hookedViewers = {}
@@ -125,7 +131,7 @@ local function RunWatchers()
         local key = runKeys[i]
         runKeys[i] = nil
         local fn = watchers[key]
-        if fn then fn() end
+        if fn then KE:SafeCall(labels[key], fn) end
     end
 end
 
@@ -136,8 +142,9 @@ end
 -- before it shows there. The search waits for the next frame, once.
 local function OnViewerRefresh()
     if next(watchers) == nil then return end
-    for _, onRefresh in next, onRefreshes do
-        onRefresh()
+    -- An error here would reach Blizzard's caller and skip the other watchers.
+    for key, onRefresh in next, onRefreshes do
+        KE:SafeCall(refreshLabels[key], onRefresh)
     end
     if queued then return end
     queued = true
@@ -183,6 +190,8 @@ end
 -- runs inside every refresh: it may touch only the caller's own frames and
 -- must not Watch or Unwatch.
 function CDMIcons.Watch(key, fn, onRefresh)
+    labels[key] = labels[key] or ("Cooldown Manager watcher " .. key)
+    refreshLabels[key] = refreshLabels[key] or ("Cooldown Manager refresh " .. key)
     watchers[key] = fn
     onRefreshes[key] = onRefresh
     EnsureHooks()

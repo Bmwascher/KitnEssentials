@@ -65,8 +65,8 @@ local function Counts(self, unit, strict)
     return self.verdict(unit, strict) == nil
 end
 
-local function FirstFree(self)
-    local slot = 1
+local function FirstFree(self, from)
+    local slot = from or 1
     while slot <= self.cap and self.unitOf[slot] do slot = slot + 1 end
     if slot > self.cap then return nil end
     return slot
@@ -82,8 +82,8 @@ local function Release(self, slot)
     return true
 end
 
--- An onTake that answers false could not bind the plate: the slot goes back at
--- once, to the next plate in this scan, and the plate is tried on the next one.
+-- An onTake that answers false could not bind the plate: the slot is let go at
+-- once and skipped for the rest of this scan, and the plate is tried on the next.
 -- It stays marked until it binds or its plate goes, so a consumer can keep the
 -- plate's frequent events from rescanning on every one.
 local function Take(self, slot, unit)
@@ -225,13 +225,17 @@ function Slots:ScanNow()
         if unit and (slot > self.cap or not Counts(self, unit, strict)) then Release(self, slot) end
     end
     -- A unit keeps its slot while it counts, so a pull bigger than the cap drops
-    -- the latecomers instead of reshuffling.
+    -- the latecomers instead of reshuffling. Every slot below the one just handed
+    -- out is held, so the search resumes past it: a slot that refused a plate is
+    -- not offered to every later plate, which would stop the count below it.
+    local from = 1
     for i = 1, MAX_PLATES do
         local unit = plateTokens[i]
         if up[i] and not slotOf[unit] and Counts(self, unit, strict) then
-            local free = FirstFree(self)
+            local free = FirstFree(self, from)
             if not free then break end
             Take(self, free, unit)
+            from = free + 1
         end
     end
     ScanDone(self)
@@ -273,6 +277,9 @@ end
 function Slots:UnitOf(slot) return self.unitOf[slot] end
 function Slots:SlotOf(unit) return self.slotOf[unit] end
 function Slots:Refused(unit) return self.refused[unit] == true end
+
+-- The verdict under the last scan's strictness, without taking a slot.
+function Slots:WouldCount(unit) return Counts(self, unit, self.strict) end
 function Slots:Total() return self.total end
 function Slots:Cap() return self.cap end
 function Slots:IsStarted() return self.started end

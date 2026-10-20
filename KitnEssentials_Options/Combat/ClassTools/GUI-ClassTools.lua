@@ -38,10 +38,10 @@ local function RegisterClassPage(pageId, tabs)
 end
 
 RegisterClassPage("ClassToolsAllClasses", {
+    { id = "DoTTracker", label = "DoT Tracker" },
     { id = "StanceText", label = "Missing Forms" },
     { id = "Recuperate", label = "Recuperate" },
     { id = "TimeSpiral", label = "Time Spiral" },
-    { id = "DoTTracker", label = "DoT Tracker" },
 })
 
 RegisterClassPage("ClassToolsEvoker", {
