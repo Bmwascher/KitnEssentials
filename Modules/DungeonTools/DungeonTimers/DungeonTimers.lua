@@ -44,7 +44,7 @@ local type = type
 local issecretvalue = issecretvalue
 local canaccesstable = canaccesstable
 
-local DEBUG_DT2 = true
+local DEBUG_DT2 = false
 
 local BIGWIGS_EVENTS = {
     "BigWigs_StartBar",
