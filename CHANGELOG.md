@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.10
+
+### Custom Cooldowns
+
+- **NEW:** Custom Cooldowns, the first tab under Class Tools > All
+  Classes. Type a spell ID, choose All Specs or one spec, and the spell
+  shows as a line such as "Spell Reflection - 18" while it counts. Off by
+  default
+- A spell with two or more charges shows only when every charge is spent
+- Lines attach under Combat Texts by default, or sit at their own
+  position with their own font and an Edit Mode mover. Options: Show When
+  Ready, Hide Out of Combat, growth direction, spacing, colors and a
+  ready sound
+
+### No Movement Alert
+
+- Set to the Player Frame and attached to Combat Texts, it no longer
+  jumps off the Combat Texts stack at login
+
+---
+
 ## v4.12.9
 
 ### DoT Tracker
