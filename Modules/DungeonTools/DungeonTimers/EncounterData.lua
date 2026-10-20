@@ -1443,8 +1443,9 @@ KE.EncounterData[2606] = {
     spells = {
         [372864] = { name = "Ritual of Blazebinding", castType = "begincast", castDuration = 5, role = "mechanic", displayText = "ADD", sound = "Add",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
+        -- The timeline forecast ends about 0.5 s before the cast starts.
         [372110] = { name = "Molten Boulder", castType = "begincast", castDuration = 0, role = "mechanic", displayText = "BAIT", sound = "Bait",
-            timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
+            timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished", forecastLead = 0.5 } },
         [372858] = { name = "Searing Blows", castType = "cast", castDuration = 0, role = "tank", display = "bar", displayText = "TANK HIT", sound = "Blade",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },

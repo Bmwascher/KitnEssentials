@@ -1567,7 +1567,7 @@ local function BarOnUpdateInstance(self, record)
         else
             local displayRemaining = State.AnchoredRemaining(inst, effectiveElapsed)
                 or State.PredictedRemaining(inst, effectiveElapsed)
-                or (remaining + inst.binding.extension)
+                or (remaining + inst.binding.extension + (inst.binding.forecastLead or 0))
             if displayRemaining < 0 then displayRemaining = 0 end
             GatedSetValue(self, displayRemaining)
             -- A held forecast has passed its deadline and has no corrected one yet.
@@ -2454,7 +2454,8 @@ local function RenderPresentation(self, key, record, baseDur, extension, display
                                         self:ReleaseInstancePresentations(inst, false)
                                         return
                                     end
-                                    local left = State.AnchoredRemaining(inst, elapsed) or remaining + inst.binding.extension
+                                    local left = State.AnchoredRemaining(inst, elapsed)
+                                        or remaining + inst.binding.extension + (inst.binding.forecastLead or 0)
                                     record.retireJob = retireJob
                                     retireJob.deadline = elapsed + left
                                     ScheduleJob(self, retireJob, fireNow)
@@ -2767,7 +2768,8 @@ function DT:_ArmOwnedExpiry(inst, now)
     local job = {
         owner = inst.owner, scope = inst.scope, kind = "hold",
         instance = inst, instanceGeneration = inst.generation,
-        clockPolicy = "elapsed", deadline = inst.sourceClock.remainingAtReceipt + inst.binding.extension,
+        clockPolicy = "elapsed",
+        deadline = inst.sourceClock.remainingAtReceipt + inst.binding.extension + (inst.binding.forecastLead or 0),
         clock = inst.sourceClock,
     }
     job.action = function()
@@ -3461,7 +3463,8 @@ function DT:_RestoreGatedPresentation(inst, now)
     if not presentations then return end
     local record = { instance = inst, generation = inst.generation, role = "primary", shown = false,
         suppressShowSound = entry.silent }
-    local frame = RenderPresentation(self, {}, record, inst.sourceClock.remainingAtReceipt,
+    local frame = RenderPresentation(self, {}, record,
+        inst.sourceClock.remainingAtReceipt + (inst.binding.forecastLead or 0),
         inst.binding.extension or 0, self:GetSpellDisplay(spellId), inst.receiptIcon,
         self:GetSpellDisplayText(spellId), spellId, self:GetSpellCastDisplayText(spellId), false)
     if not frame then return end
@@ -6329,6 +6332,7 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         end
 
         local extension = effectiveBinding.extension or 0
+        local shownRemaining = remaining + (effectiveBinding.forecastLead or 0)
         local displayMode = self:GetSpellDisplay(spellIdNum)
         local displayText = self:GetSpellDisplayText(spellIdNum)
         local castDisplayText = self:GetSpellCastDisplayText(spellIdNum)
@@ -6338,13 +6342,13 @@ function DT:_HandleProviderEvent(event, receipt, ...)
 
         if primaryAllowed then
             local record = { instance = inst, generation = inst.generation, role = "primary", shown = false }
-            local frame = RenderPresentation(self, {}, record, remaining, extension, displayMode,
+            local frame = RenderPresentation(self, {}, record, shownRemaining, extension, displayMode,
                 icon, displayText, spellIdNum, castDisplayText, false)
             if frame then self._presentations[inst].primary = frame end
         end
         if secondaryAllowed and secondary then
             local secRecord = { instance = inst, generation = inst.generation, role = "secondary", shown = false }
-            local secFrame = RenderPresentation(self, {}, secRecord, remaining, extension,
+            local secFrame = RenderPresentation(self, {}, secRecord, shownRemaining, extension,
                 secondary.display or "text", icon, secondary.displayText, spellIdNum, nil, true)
             if secFrame then self._presentations[inst].secondary = secFrame end
         end
