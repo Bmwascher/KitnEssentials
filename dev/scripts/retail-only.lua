@@ -4,6 +4,7 @@
 -- belongs to Great Vault Alert. A tagged retail toc line can replace this list.
 return {
     "KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua",
+    "KitnEssentials_Options/Combat/ClassTools/GUI-DivineArbiter.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-HavocTracker.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-StasisTracker.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-TimeSpiral.lua",
@@ -22,6 +23,7 @@ return {
     "KitnEssentials_Options/Skinning/GUI-DragonRiding.lua",
     "KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua",
     "Modules/Combat/ClassTools/DisintegrateTicks.lua",
+    "Modules/Combat/ClassTools/DivineArbiter.lua",
     "Modules/Combat/ClassTools/HavocTracker.lua",
     "Modules/Combat/ClassTools/StasisTracker.lua",
     "Modules/Combat/ClassTools/TimeSpiral.lua",
