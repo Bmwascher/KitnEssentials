@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.13
+
+### Party Cooldowns
+
+- **NEW:** Party Frame Icons, a switch heading the Cooldowns tab and on by
+  default. Off removes every icon beside the party frames. Potion bars and
+  the Healer Externals box keep working, and the rest of the tab grays
+- On the Above and Below sides, Grow gains Center (cooldown icons centered
+  on the frame's edge, buffs on their own line) and a centered column (Up
+  above, Down below)
+- A switched-off spell no longer resets the counts of the spells after it
+
+---
+
 ## v4.12.12
 
 ### Party Cooldowns
