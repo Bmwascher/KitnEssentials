@@ -861,7 +861,7 @@ function DT:GetSpellRevealFloor(spellId, binding, extension)
     binding = binding or self:GetSpellAdmittedBinding(spellId)
     if not (binding and binding.policy == "estimated-impact") then return nil end
     if extension == nil then extension = self:GetSpellExtension(spellId) end
-    return extension + (binding.stopTolerance or 0)
+    return extension + (binding.forecastLead or 0) + (binding.stopTolerance or 0)
 end
 
 -- Rule-6 reveal floor, shared by the renderer and the spell preview so they

@@ -64,8 +64,10 @@ describe("DungeonTimers forecast lead", function()
         end
     end)
 
-    it("ends at the timeline Finished when it arrives inside the lead", function()
-        local inst = start(buildBinding())
+    it("anchors a Finished inside the lead on a row that owns its expiry, instead of retiring it", function()
+        local binding = buildBinding()
+        binding.ownsExpiry = true
+        local inst = start(binding)
         assert.equal("anchor", State.ClassifyStop(inst, 20.3, nil, "finished"))
         State.Anchor(inst, 20.3, 1)
         assert.equal(0, State.AnchoredRemaining(inst, (State.Sample(inst, 20.3))))

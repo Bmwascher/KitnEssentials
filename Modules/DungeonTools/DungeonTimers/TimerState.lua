@@ -204,7 +204,7 @@ local function BuildExplicitTimerBinding(encounterId, spellId, row)
         or anchor ~= "timeline-finished" or castConfirm ~= nil or pausedStop ~= nil
         or queueAfter ~= nil or canceledStop ~= nil or retainEarlyFinished ~= nil
         or suppressConcurrentRestart ~= nil or holdOverlapping ~= nil or replacement ~= nil
-        or castMatch ~= nil or waitAfter ~= nil or soonOnHold ~= nil) then
+        or castMatch ~= nil or soonOnHold ~= nil) then
         return nil
     end
     if HasForbiddenExplicitField(row) then return nil end
