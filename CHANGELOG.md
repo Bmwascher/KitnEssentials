@@ -19,13 +19,8 @@ Tracker's Max Enemies is replaced by Enemy CCs Shown, which starts at 5.
   Bars, Texts and Nameplates. A BigWigs Messages summary in the header
   has a Check now button, and the Dungeon Trash tab says when a Season 2
   dungeon has no trash alerts yet
-- Season 2 bosses play their cue voices and show shorter texts, with new
-  colors for SOAKS, PROTECT, BLEEDS and WINDS - CHECK MAP. Each boss lists
-  its abilities in a set order, reminders last. Six abilities also play a
-  sound when their text hides: Fresh Meat, Ssscavenging, Light Infusion,
-  the Malefic Wave gateway, Frost Overload and Burrow
-- 40 more personal aura reminders, 28 of them on by default. A reminder's
-  sound row has a Test button that grays out with the reminder
+- Season 2 bosses play their cue voices and show shorter texts, and 40
+  more personal aura reminders are added, 28 of them on by default
 - **NEW:** Ruby Life Pools wind map. During Kyrakka and Erkhart, a panel
   names the next wind's side and where the drop lands. In a key it follows
   BigWigs' Winds bars, and it hides when Erkhart dies. On by default at
@@ -37,12 +32,6 @@ Tracker's Max Enemies is replaced by Enemy CCs Shown, which starts at 5.
   buff's icon on each side and a Wrong Target sound, at most once every 3
   seconds. On by default, with a preview and a sound dropdown on its
   Storm Blessed row
-- Adderis and Aspix: the 66% phase entries are gone, each 35% entry hides
-  at its boss's shield swap, and Gale Force's voice plays once per cast
-- Kokia Blazebinder's Molten Boulder BAIT counts to the start of the cast.
-  Altar of Fangs counts Writhing Coil's three kicks with new Kick 1, Kick
-  2 and Kick 3 voices, and Den of Nalorakk's Ravenous Bellow plays the AoE
-  voice
 - 37 new voice sounds are bundled and the other 40 are re-recorded, and
   the GGEZ sound is trimmed to 2.65 seconds. Sounds other modules use by
   default change too: Aggro in Combat Texts, Interrupt in Focus Castbar,
@@ -126,9 +115,6 @@ Tracker's Max Enemies is replaced by Enemy CCs Shown, which starts at 5.
 - Talent reads are steadier: your own talents wait for the talent data at
   login, a teammate who never answers rests after 3 inspects (was 12),
   and KE waits 3 seconds after another addon inspects someone
-- The settings preview hides with Alt+Z, shows no tooltip on hover, sits
-  above the live row and leaves out switched-off spells. Color and glow
-  drags update once per frame
 - Party rows stay in place while the game refuses a move, and are placed
   again once the roster settles. A switched-off spell no longer resets the
   counts of the spells after it, and a negative icon spacing no longer
@@ -146,8 +132,7 @@ Tracker's Max Enemies is replaced by Enemy CCs Shown, which starts at 5.
   Barrier, Spirit Link Totem and Dream Flight. All are on, party only, and
   each can be switched off in the Spells card
 - Your own externals and raid cooldowns show in the box, first in each
-  group, whether or not Include Yourself is on. Innervate shows for every
-  Druid spec
+  group, whether or not Include Yourself is on
 - Searching "raid cooldowns" in the settings sidebar finds Party
   Cooldowns
 
@@ -158,7 +143,7 @@ Tracker's Max Enemies is replaced by Enemy CCs Shown, which starts at 5.
   class-colored when ready, and the drained part uses your Background
   Color. Class Color Bars, Class Color Names and Bar Color gray out while
   it is on
-- Members show their nickname on their bar, and your own bar shows the
+- Members show their NSRT nickname on their bar, and your own bar shows the
   icon of the potion you drank
 - The timer digits are no longer cut off at the bottom, and the bars snap
   back to the pixel grid after a move or restack. The bars and the Raid
