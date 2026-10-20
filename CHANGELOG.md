@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.19
+
+### Settings Window
+
+- 22 cards on 18 pages that pick several things of one kind, such as
+  where a module runs, which consumables, which specs, roles, filters or
+  alerts, now show small checkboxes in a grid instead of a column of
+  switches. Most of these cards get shorter. Saved settings, tooltips and
+  graying are unchanged, and switches that turn a whole feature on or off
+  stay switches
+- The cards that printed a chat line when clicked still print it
+- PI Macro: the "Add /use 13 to the macro." note moved into the box's
+  tooltip
+
+---
+
 ## v4.12.18
 
 ### Character Panel
