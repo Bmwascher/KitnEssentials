@@ -329,6 +329,132 @@ end
 InspectPanel._ScheduleCoalescedPass = ScheduleCoalescedPass
 
 ---------------------------------------------------------------------------------
+-- Inspect buttons
+---------------------------------------------------------------------------------
+-- With no skin restyling the window, Blizzard's Talents button covers the
+-- average item level, so both paperdoll buttons move into one row at the top.
+local BUTTON_W, BUTTON_H = 90, 22
+local VIEW_LABEL = "Transmog"
+local ANCHOR_EPSILON = 0.01
+-- Blizzard's layout, put back on disable. Its View button is BUTTON_H tall and
+-- sized to its label plus padding.
+local VIEW_TEXT_PAD = 30
+local TALENTS_W, TALENTS_H = 102, 20
+local VIEW_BLIZZARD = { point = "TOP", relPoint = "TOP", x = 0, y = -39 }
+local TALENTS_BLIZZARD = { point = "BOTTOMRIGHT", relPoint = "BOTTOMRIGHT", x = -10, y = 11 }
+local VIEW_OURS = { point = "TOPRIGHT", relPoint = "TOP", x = -2, y = -39 }
+local TALENTS_OURS = { point = "TOPLEFT", relPoint = "TOP", x = 2, y = -39 }
+
+local function SameAnchor(a, point, rel, relPoint, x, y)
+    return point == a.point and rel == a.rel and relPoint == a.relPoint
+        and math.abs(x - a.x) < ANCHOR_EPSILON and math.abs(y - a.y) < ANCHOR_EPSILON
+end
+
+-- Who last placed a button, read from its anchors. A skin that restyles the
+-- window moves the buttons when it runs, so "other" means one ran this
+-- session, whatever its saved setting says before a reload. A button with
+-- more than one anchor was placed by someone else.
+local function AnchorOwner(blizzard, ours, numPoints, point, rel, relPoint, x, y)
+    if issecretvalue(numPoints) or issecretvalue(point) or issecretvalue(rel)
+        or issecretvalue(relPoint) or issecretvalue(x) or issecretvalue(y) then
+        return "other"
+    end
+    if numPoints ~= 1 then return "other" end
+    if SameAnchor(blizzard, point, rel, relPoint, x, y) then return "blizzard" end
+    if SameAnchor(ours, point, rel, relPoint, x, y) then return "ours" end
+    return "other"
+end
+InspectPanel._AnchorOwner = AnchorOwner
+
+local function StockButtonCase(cpOn, viewOwner, talentsOwner)
+    return (cpOn and viewOwner ~= "other" and talentsOwner ~= "other") and true or false
+end
+InspectPanel._StockButtonCase = StockButtonCase
+
+-- A skin that moved either button since owns the window now.
+local function OwnsBoth(viewOwner, talentsOwner)
+    return viewOwner == "ours" and talentsOwner == "ours"
+end
+InspectPanel._OwnsBoth = OwnsBoth
+
+-- The label's width reads secret while its anchoring is secret, and the
+-- button's own anchors do not show that.
+local function RestoreViewWidth(textWidth)
+    if issecretvalue(textWidth) or type(textWidth) ~= "number" then return nil end
+    return VIEW_TEXT_PAD + textWidth
+end
+InspectPanel._RestoreViewWidth = RestoreViewWidth
+
+-- The frames exist only once the inspect UI has loaded, so the anchor tables
+-- take their relative frames here.
+local function InspectButtons()
+    local doll, items = _G.InspectPaperDollFrame, _G.InspectPaperDollItemsFrame
+    local view = doll and doll.ViewButton
+    local talents = items and items.InspectTalents
+    if not (view and talents) then return nil end
+    VIEW_BLIZZARD.rel, VIEW_OURS.rel = doll, doll
+    TALENTS_BLIZZARD.rel, TALENTS_OURS.rel = items, doll
+    return view, talents
+end
+
+local function OwnerOf(button, blizzard, ours)
+    local point, rel, relPoint, x, y = button:GetPoint(1)
+    return AnchorOwner(blizzard, ours, button:GetNumPoints(), point, rel, relPoint, x, y)
+end
+
+local buttonLayoutPending = false
+
+-- A frame late, so a skin that runs when the inspect UI loads, or at login,
+-- has placed the buttons before they are read.
+local function ApplyButtonLayout()
+    buttonLayoutPending = false
+    local view, talents = InspectButtons()
+    if not view then return end
+    local CP = InspectPanel.CP
+    local cpOn = InspectPanel:IsEnabled() and CP and CP.db and CP.db.Enabled
+    if not StockButtonCase(cpOn, OwnerOf(view, VIEW_BLIZZARD, VIEW_OURS),
+        OwnerOf(talents, TALENTS_BLIZZARD, TALENTS_OURS)) then
+        return
+    end
+    view:ClearAllPoints()
+    view:SetPoint(VIEW_OURS.point, VIEW_OURS.rel, VIEW_OURS.relPoint, VIEW_OURS.x, VIEW_OURS.y)
+    view:SetSize(BUTTON_W, BUTTON_H)
+    view:SetText(VIEW_LABEL)
+    talents:ClearAllPoints()
+    talents:SetPoint(TALENTS_OURS.point, TALENTS_OURS.rel, TALENTS_OURS.relPoint, TALENTS_OURS.x, TALENTS_OURS.y)
+    talents:SetSize(BUTTON_W, BUTTON_H)
+end
+
+function InspectPanel:ScheduleButtonLayout()
+    if buttonLayoutPending then return end
+    buttonLayoutPending = true
+    C_Timer.After(0, ApplyButtonLayout)
+end
+
+function InspectPanel:RestoreButtonLayout()
+    local view, talents = InspectButtons()
+    if not view then return end
+    if not OwnsBoth(OwnerOf(view, VIEW_BLIZZARD, VIEW_OURS),
+        OwnerOf(talents, TALENTS_BLIZZARD, TALENTS_OURS)) then
+        return
+    end
+    view:ClearAllPoints()
+    view:SetPoint(VIEW_BLIZZARD.point, VIEW_BLIZZARD.rel, VIEW_BLIZZARD.relPoint,
+        VIEW_BLIZZARD.x, VIEW_BLIZZARD.y)
+    view:SetText(_G.VIEW_IN_DRESSUP_FRAME)
+    view:SetHeight(BUTTON_H)
+    local fs = view:GetFontString()
+    local textWidth
+    if not issecretvalue(fs) and fs then textWidth = fs:GetStringWidth() end
+    local width = RestoreViewWidth(textWidth)
+    if width then view:SetWidth(width) end
+    talents:ClearAllPoints()
+    talents:SetPoint(TALENTS_BLIZZARD.point, TALENTS_BLIZZARD.rel, TALENTS_BLIZZARD.relPoint,
+        TALENTS_BLIZZARD.x, TALENTS_BLIZZARD.y)
+    talents:SetSize(TALENTS_W, TALENTS_H)
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function InspectPanel:OnInitialize()
@@ -348,6 +474,8 @@ end
 function InspectPanel:OnEnable()
     if not self.CP or not self.CP.db or not self.CP.db.Enabled then return end
     self:SetupInspectSupport()
+    -- A re-enable skips setup, so the layout is asked for here as well.
+    if C_AddOns.IsAddOnLoaded("Blizzard_InspectUI") then self:ScheduleButtonLayout() end
 
     -- Re-arm events that OnDisable stripped via UnregisterAllEvents. The OnEvent
     -- script + InspectFrame OnShow/OnHide hooks remain installed from the original
@@ -379,6 +507,7 @@ function InspectPanel:OnDisable()
     CancelSweep()
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
     self:HideAllInspectOverlays()
+    self:RestoreButtonLayout()
 end
 
 ---------------------------------------------------------------------------------
@@ -703,6 +832,7 @@ function InspectPanel:SetupInspectSupport()
         if _self._inspectHooked then return end
         if not InspectPaperDollItemSlotButton_Update then return end
         _self._inspectHooked = true
+        _self:ScheduleButtonLayout()
         hooksecurefunc("InspectPaperDollItemSlotButton_Update", function()
             QueueInspectUpdate()
         end)
