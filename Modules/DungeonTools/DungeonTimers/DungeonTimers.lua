@@ -2525,7 +2525,10 @@ end
 -- playHide follows the Stop-retire rule: only a shown presentation plays the hide sound.
 -- The hold job, cast watch, observation window and linked shield watch are
 -- resolved with the instance, on every retirement path.
-function DT:ReleaseInstancePresentations(inst, playHide)
+-- canceledStop: a provider stop the timeline marks Canceled. A held overlap
+-- successor it releases from behind a shown occurrence is the re-issue of an
+-- announced cast, so it takes over without its show sound.
+function DT:ReleaseInstancePresentations(inst, playHide, canceledStop)
     -- A canceled occurrence or an unconfirmed wait has nothing to announce.
     if inst.retainedEstimate == "canceled" or State.EndsSilently(inst) then playHide = false end
     self:_CancelHold(inst)
@@ -2541,6 +2544,7 @@ function DT:ReleaseInstancePresentations(inst, playHide)
     end
     if inst.mapObserved then self:_WindMapRetired(inst) end
     self._gateSuppressed[inst] = nil
+    local takeover = canceledStop == true and IsShownPresentation(inst)
     local presentations = self._presentations[inst]
     self._presentations[inst] = nil
     if presentations then ReleasePresentationFrames(self, presentations, playHide) end
@@ -2549,6 +2553,7 @@ function DT:ReleaseInstancePresentations(inst, playHide)
         local head = State.PresentationHead(self._state, inst, IsWaitingPresentation)
         local record = head and PresentationRecord(head)
         if record then
+            if takeover then record.suppressShowSound = true end
             ResumeJobHandle(self, record.revealJob, GetTime())
         end
     end
@@ -6487,7 +6492,7 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         elseif outcome == "retire" then
             State.EndForecastWait(inst)
             State.Retire(self._state, inst)
-            self:ReleaseInstancePresentations(inst, true)
+            self:ReleaseInstancePresentations(inst, true, timelineState == "canceled")
         elseif outcome == "enter-legacy-cast" then
             local fill = State.BeginLegacyCast(inst, now, inst.binding.extension)
             self:_ApplyCastPhaseVisual(inst, fill)

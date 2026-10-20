@@ -3614,6 +3614,52 @@ describe("DungeonTimers compatibility", function()
         assert.equal(before, #soundCalls)
     end)
 
+    it("shows an overlap successor without its sound when a Canceled stop of the shown occurrence releases it, and with it after a Finished one", function()
+        local cases = {
+            { name = "canceled", state = 3, sounds = 0 },
+            { name = "finished", state = 2, sounds = 1 },
+        }
+        for _, case in ipairs(cases) do
+            local m = loadTimelineModule({ encounterData = function(data, contract)
+                data[2].spells[701].timerSource = contract({ holdOverlapping = true })
+            end })
+            _G.C_EncounterTimeline = { GetEventState = function() return case.state end }
+            local _, shownFrame = m.publish(701, "Overlap (1)", 10, 81, 6)
+            assert.is_true(shownFrame._dtPresentation.shown, case.name)
+            m.clock.now = 5
+            local _, frame = m.publish(701, "Overlap (2)", 1, 82, 6)
+            assert.is_true(frame._dtPresentation.overlapHeld, case.name)
+            local before = #soundCalls
+            m.DT:EventCallback("BigWigs_StopBar", m.owner, "Overlap (1)")
+            if case.state == 2 then
+                -- A Finished stop anchors; the shown bar ends with its cast.
+                m.clock.now = 8.1
+                m.tick(shownFrame)
+            end
+            assert.is_true(frame._dtPresentation.shown, case.name)
+            assert.equal(before + case.sounds, #soundCalls, case.name)
+        end
+    end)
+
+    it("keeps a chain of Canceled re-issues silent: a silent takeover counts as shown", function()
+        local m = loadTimelineModule({ encounterData = function(data, contract)
+            data[2].spells[701].timerSource = contract({ holdOverlapping = true })
+        end })
+        _G.C_EncounterTimeline = { GetEventState = function() return 3 end }
+        m.publish(701, "Overlap (1)", 10, 81, 6)
+        m.clock.now = 5
+        local _, second = m.publish(701, "Overlap (2)", 1, 82, 6)
+        -- A later tick, so each receipt keeps its own timeline event.
+        m.clock.now = 5.1
+        local _, third = m.publish(701, "Overlap (3)", 1, 83, 6)
+        local before = #soundCalls
+        m.DT:EventCallback("BigWigs_StopBar", m.owner, "Overlap (1)")
+        assert.is_true(second._dtPresentation.shown)
+        m.DT:EventCallback("BigWigs_StopBar", m.owner, "Overlap (2)")
+        assert.is_true(third._dtPresentation.shown)
+        assert.equal(before, #soundCalls)
+    end)
+
     it("two Finished stops anchor the current occurrence but preserve a fresh future forecast and its ordinary sounds", function()
         local m = loadTimelineModule({ encounterData = function(data, contract)
             data[2].spells[712] = { name = "Future Row", castDuration = 3,
