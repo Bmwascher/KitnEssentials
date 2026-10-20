@@ -139,7 +139,7 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
 
     local rowL2 = GUIFrame:CreateRow(cardL.content, Theme.rowHeight)
     local growDrop = GUIFrame:CreateDropdown(rowL2, "Grow Direction", {
-        options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
+        options = GUIFrame.GrowVerticalOptions,
         value = db.Grow or "DOWN",
         callback = function(key) db.Grow = key; Rebuild() end,
     })

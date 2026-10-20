@@ -58,7 +58,7 @@ local function loadCP(lines, overrides)
 
     for k, v in pairs(overrides or {}) do _G[k] = v end
 
-    helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", {
+    local KE = helpers.loadModule("Core/Colors.lua", {
         -- Read at FILE SCOPE: EMPTY_SOCKET_ICON is built by iterating it, so a
         -- missing key is not a nil method later, it is
         -- "bad argument #1 to 'ipairs' (table expected, got nil)" while the
@@ -70,6 +70,7 @@ local function loadCP(lines, overrides)
         IsSafeValue = function(_, v) return v ~= nil end,
         EUIDrawsSlotElement = function(_, _, element) return owned[element] == true end,
     })
+    helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", KE)
     return modules["CharacterPanel"]
 end
 

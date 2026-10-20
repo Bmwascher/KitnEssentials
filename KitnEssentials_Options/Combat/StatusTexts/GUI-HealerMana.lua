@@ -312,10 +312,7 @@ GUIFrame:RegisterContent("HealerManaRaid", function(scrollChild, yOffset)
     manager:Register(spacingSlider, "raidConfig")
 
     local growDropdown = GUIFrame:CreateDropdown(rowRaid2, "Grow Direction", {
-        options = {
-            { key = "DOWN", text = "Down" },
-            { key = "UP",   text = "Up" },
-        },
+        options = GUIFrame.GrowVerticalOptions,
         value = lookValue("GrowDirection", "DOWN"),
         callback = function(key) db[lookKey("GrowDirection")] = key; Refresh() end,
     })

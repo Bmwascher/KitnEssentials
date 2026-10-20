@@ -197,12 +197,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     manager:Register(showTimerCheck, "all")
 
     local growDropdown = GUIFrame:CreateDropdown(row5b, "Growth Direction", {
-        options = {
-            { key = "RIGHT", text = "Right" },
-            { key = "LEFT",  text = "Left" },
-            { key = "UP",    text = "Up" },
-            { key = "DOWN",  text = "Down" },
-        },
+        options = GUIFrame.GrowDirectionOptions,
         value = db.GrowDirection,
         callback = function(key) db.GrowDirection = key; ApplySettings() end,
     })

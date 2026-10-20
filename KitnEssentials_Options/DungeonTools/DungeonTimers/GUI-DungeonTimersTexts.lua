@@ -13,10 +13,7 @@ local pairs = pairs
 KE.GUI = KE.GUI or {}
 KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
-local SETTINGS_GROWTH_OPTIONS = {
-    { key = "DOWN", text = "Down" },
-    { key = "UP",   text = "Up" },
-}
+local SETTINGS_GROWTH_OPTIONS = GUIFrame.GrowVerticalOptions
 
 local SETTINGS_TEXT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 

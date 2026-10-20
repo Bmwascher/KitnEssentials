@@ -15,10 +15,7 @@ local math_ceil = math.ceil
 local math_max = math.max
 local next = next
 
-local GROW_OPTIONS = {
-    { key = "DOWN", text = "Down" },
-    { key = "UP",   text = "Up" },
-}
+local GROW_OPTIONS = GUIFrame.GrowVerticalOptions
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
 

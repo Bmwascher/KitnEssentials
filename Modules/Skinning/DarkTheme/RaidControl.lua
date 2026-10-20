@@ -454,7 +454,7 @@ end
 
 local function RoleIcons_AddNames(tbl, name, unitClass)
     local color = (KE:IsSafeValue(unitClass) and RAID_CLASS_COLORS[unitClass]) or PRIEST_COLOR
-    tinsert(tbl, format("|cff%02x%02x%02x%s", color.r * 255, color.g * 255, color.b * 255, gsub(name, "%-.+", "*")))
+    tinsert(tbl, KE:ColorCode(color.r, color.g, color.b) .. gsub(name, "%-.+", "*"))
 end
 
 local function RoleIcons_AddPartyUnit(unit, iconRole)

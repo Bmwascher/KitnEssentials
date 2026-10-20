@@ -82,7 +82,7 @@ local PREVIEW_BUFFS = {
 -- most samples a row draws: the Max Cooldown Icons ceiling.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
 local PREVIEW_LEFT = 74
-local PREVIEW_CELLS = 6
+local PREVIEW_CELLS = KE.PartyBuffsRules.MAX_COOLDOWN_ICONS
 -- Each stand-in row's race for its racial sample; no Evoker racial is tracked.
 local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
 -- No item is read for a stand-in row, so its sample trinkets take this length.

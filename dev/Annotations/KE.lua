@@ -1128,6 +1128,19 @@ function KE:ColorTextByClass(text, classToken) end
 ---@return string
 function KE:RGBAToHex(r, g, b) end
 
+---@param r number?
+---@param g number?
+---@param b number?
+---@return string
+function KE:ColorCode(r, g, b) end
+
+---@param text string
+---@param r number?
+---@param g number?
+---@param b number?
+---@return string
+function KE:WrapColor(text, r, g, b) end
+
 ---@return string
 function KE:GetThemeColorHex() end
 

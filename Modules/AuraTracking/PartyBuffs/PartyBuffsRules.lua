@@ -82,8 +82,11 @@ function Rules.CellCount(entryCount, db)
     return math_min(entryCount, Rules.CooldownIconCount(db))
 end
 
--- Max Cooldown Icons (6) plus Max Active Buff Icons (8): no row is longer.
-Rules.MAX_PER_ROW = 14
+-- The Max Cooldown Icons and Max Active Buff Icons slider ceilings. A row
+-- holds both, so no row is longer than their sum.
+Rules.MAX_COOLDOWN_ICONS = 6
+Rules.MAX_BUFF_ICONS = 8
+Rules.MAX_PER_ROW = Rules.MAX_COOLDOWN_ICONS + Rules.MAX_BUFF_ICONS
 
 -- Rounded as IconCount is; a value that is not a number never wraps.
 function Rules.PerRow(value)

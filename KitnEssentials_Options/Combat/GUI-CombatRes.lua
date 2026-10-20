@@ -163,10 +163,7 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     manager:Register(spacingSlider, "all")
 
     local growthDropdown = GUIFrame:CreateDropdown(rowLayout, "Growth Direction", {
-        options = {
-            { key = "LEFT",  text = "Left" },
-            { key = "RIGHT", text = "Right" },
-        },
+        options = GUIFrame.GrowHorizontalOptions,
         value = db.GrowthDirection or "RIGHT",
         callback = function(key) db.GrowthDirection = key; ApplySettings() end,
     })

@@ -183,6 +183,27 @@ function GlowRules.NormalizePixelThickness(value)
     return math_floor(t)
 end
 
+-- Everything the dash layout and its animation read. Color is absent on
+-- purpose: a color edit recolors the strips without restarting their march.
+function GlowRules.PixelState(count, thickness, width, height, period)
+    return {
+        count     = GlowRules.NormalizePixelCount(count),
+        thickness = GlowRules.NormalizePixelThickness(thickness),
+        width     = width,
+        height    = height,
+        period    = period,
+    }
+end
+
+function GlowRules.PixelNeedsRestart(applied, wanted)
+    if not applied then return true end
+    return applied.count     ~= wanted.count
+        or applied.thickness ~= wanted.thickness
+        or applied.width     ~= wanted.width
+        or applied.height    ~= wanted.height
+        or applied.period    ~= wanted.period
+end
+
 -- The marching border, as scalars.
 --
 -- `cycle` is the pixel span of one dash plus its gap. Each strip is drawn one

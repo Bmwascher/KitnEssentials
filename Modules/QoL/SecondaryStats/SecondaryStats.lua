@@ -25,7 +25,6 @@ local GetLifesteal = GetLifesteal
 local GetAvoidance = GetAvoidance
 local GetSpeed = GetSpeed
 local issecretvalue = issecretvalue
-local string_format = string.format
 local math_floor = math.floor
 local unpack = unpack
 
@@ -123,8 +122,7 @@ end
 -- Color
 ---------------------------------------------------------------------------------
 local function ToHex(r, g, b)
-    return string_format("%02x%02x%02x",
-        math_floor((r or 1) * 255), math_floor((g or 1) * 255), math_floor((b or 1) * 255))
+    return KE:RGBAToHex(r, g, b)
 end
 
 -- Cache only a RESOLVED class color. Caching the white fallback leaves the

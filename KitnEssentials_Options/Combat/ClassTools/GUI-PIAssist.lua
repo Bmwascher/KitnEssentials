@@ -179,43 +179,15 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Glow (engine card; Pulse Border only)
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow",
         db = db,
-        dbKeys = {
-            enabled   = "GlowEnabled",
-            type      = "GlowType",
-            color     = "GlowColor",
-            lines     = "GlowLines",
-            frequency = "GlowFrequency",
-            thickness = "GlowThickness",
-            pulse     = "GlowPulse",
-        },
         types = {
             { key = "border", text = "Pulse Border" },
         },
-        resolveType = KE.AuraGlowRules.ResolveType,
         typeTooltip = "A border around the target's raid frame while their burst buff is up. Color and thickness edits made inside a dungeon or raid take effect when you leave.",
-        typeRows = function(rows)
-            return {
-                border      = rows.border,
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-            }
-        end,
         showSpeed = function() return false end,
-        speedAdapter = {
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 1)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 1,
-        },
+        speedMax = 1,
         onChangeCallback = ApplySettings,
     })
     -- The card alone: its SetEnabled already manages the controls under it

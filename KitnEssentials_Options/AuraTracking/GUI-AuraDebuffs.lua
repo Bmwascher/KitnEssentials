@@ -184,10 +184,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local growHorizDropdown = GUIFrame:CreateDropdown(row4c, "Grow Horizontal", {
-        options = {
-            { key = "LEFT",  text = "Left" },
-            { key = "RIGHT", text = "Right" },
-        },
+        options = GUIFrame.GrowHorizontalOptions,
         value = db.GrowHorizontal or "RIGHT",
         callback = function(key) db.GrowHorizontal = key; ApplySettings() end,
     })
@@ -195,10 +192,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     manager:Register(growHorizDropdown, "all")
 
     local growVertDropdown = GUIFrame:CreateDropdown(row4c, "Grow Vertical", {
-        options = {
-            { key = "UP",   text = "Up" },
-            { key = "DOWN", text = "Down" },
-        },
+        options = GUIFrame.GrowVerticalOptions,
         value = db.GrowVertical or "DOWN",
         callback = function(key) db.GrowVertical = key; ApplySettings() end,
     })
@@ -771,17 +765,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     local card10 = GUIFrame:CreateCard(scrollChild, "Element Positions", yOffset)
     manager:Register(card10, "all")
 
-    local TEXT_ANCHOR_OPTIONS = {
-        { key = "TOPLEFT",     text = "Top Left" },
-        { key = "TOP",         text = "Top" },
-        { key = "TOPRIGHT",    text = "Top Right" },
-        { key = "LEFT",        text = "Left" },
-        { key = "CENTER",      text = "Center" },
-        { key = "RIGHT",       text = "Right" },
-        { key = "BOTTOMLEFT",  text = "Bottom Left" },
-        { key = "BOTTOM",      text = "Bottom" },
-        { key = "BOTTOMRIGHT", text = "Bottom Right" },
-    }
+    local TEXT_ANCHOR_OPTIONS = GUIFrame.AnchorPointOptions
 
     db.TimerPosition  = db.TimerPosition or {}
     db.StackPosition  = db.StackPosition

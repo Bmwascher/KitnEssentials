@@ -42,6 +42,7 @@ local function loadCP()
     KE.db = { profile = { CharacterPanel = {
         Enabled = true, SocketHelperEnabled = true, TrackIndicatorsEnabled = true,
     } } }
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", KE)
 
     local CP = _G.KitnEssentials:GetModule("CharacterPanel")

@@ -32,18 +32,7 @@ local ipairs = ipairs
 -- of the row above.
 local EXTRA_ROW_GAP = 2
 
--- In screen order; the dropdown keeps an ordered list's order.
-local ANCHOR_POINT_OPTIONS = {
-    { key = "TOPLEFT",     text = "Top Left" },
-    { key = "TOP",         text = "Top" },
-    { key = "TOPRIGHT",    text = "Top Right" },
-    { key = "LEFT",        text = "Left" },
-    { key = "CENTER",      text = "Center" },
-    { key = "RIGHT",       text = "Right" },
-    { key = "BOTTOMLEFT",  text = "Bottom Left" },
-    { key = "BOTTOM",      text = "Bottom" },
-    { key = "BOTTOMRIGHT", text = "Bottom Right" },
-}
+local ANCHOR_POINT_OPTIONS = GUIFrame.AnchorPointOptions
 
 local ANCHOR_FRAME_TYPES = {
     { key = "SCREEN",      text = "Screen Center" },

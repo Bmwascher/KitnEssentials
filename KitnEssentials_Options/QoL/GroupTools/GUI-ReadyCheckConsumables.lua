@@ -282,17 +282,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(posModeDropdown, "all")
     card4:AddRow(row4a, Theme.rowHeight)
 
-    local anchorPoints = {
-        { key = "TOP",         text = "Top" },
-        { key = "TOPLEFT",     text = "Top Left" },
-        { key = "TOPRIGHT",    text = "Top Right" },
-        { key = "BOTTOM",      text = "Bottom" },
-        { key = "BOTTOMLEFT",  text = "Bottom Left" },
-        { key = "BOTTOMRIGHT", text = "Bottom Right" },
-        { key = "LEFT",        text = "Left" },
-        { key = "RIGHT",       text = "Right" },
-        { key = "CENTER",      text = "Center" },
-    }
+    local anchorPoints = GUIFrame.AnchorPointOptions
 
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local selfPointDropdown = GUIFrame:CreateDropdown(row4b, "Self Point", {

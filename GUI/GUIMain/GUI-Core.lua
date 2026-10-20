@@ -1608,12 +1608,36 @@ end
 -- Dropdown Options
 ---------------------------------------------------------------------------------
 
--- One table shared by every page: the dropdown only reads its options.
+-- Shared by every page: the dropdown only reads its options, and keeps an
+-- ordered list's order.
 GUIFrame.GrowDirectionOptions = {
     { key = "DOWN",  text = "Down" },
     { key = "UP",    text = "Up" },
     { key = "LEFT",  text = "Left" },
     { key = "RIGHT", text = "Right" },
+}
+
+GUIFrame.GrowVerticalOptions = {
+    { key = "DOWN", text = "Down" },
+    { key = "UP",   text = "Up" },
+}
+
+GUIFrame.GrowHorizontalOptions = {
+    { key = "LEFT",  text = "Left" },
+    { key = "RIGHT", text = "Right" },
+}
+
+-- In screen order.
+GUIFrame.AnchorPointOptions = {
+    { key = "TOPLEFT",     text = "Top Left" },
+    { key = "TOP",         text = "Top" },
+    { key = "TOPRIGHT",    text = "Top Right" },
+    { key = "LEFT",        text = "Left" },
+    { key = "CENTER",      text = "Center" },
+    { key = "RIGHT",       text = "Right" },
+    { key = "BOTTOMLEFT",  text = "Bottom Left" },
+    { key = "BOTTOM",      text = "Bottom" },
+    { key = "BOTTOMRIGHT", text = "Bottom Right" },
 }
 
 -- "None" first, then the library's sounds in its sorted order. A library

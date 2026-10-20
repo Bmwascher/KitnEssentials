@@ -71,6 +71,14 @@ function M.installSpecInfo(override)
     }
 end
 
+-- The client's math.clamp, as probed in game: the lower bound is applied
+-- first, then the upper, so with a reversed range the upper bound wins.
+-- luacheck: push ignore 122 142
+math.clamp = math.clamp or function(value, minimum, maximum)
+    return math.min(math.max(value, minimum), maximum)
+end
+-- luacheck: pop
+
 function M.install(overrides)
     overrides = overrides or {}
     local frames = {}

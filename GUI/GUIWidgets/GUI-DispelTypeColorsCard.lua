@@ -81,11 +81,9 @@ function GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, config)
 
         local resetBtn = GUIFrame:CreateButton(row, "Reset", {
             height   = 24,
-            tooltip  = "Reset " .. dtype .. " to default (" ..
-                       string.format("#%02X%02X%02X",
-                           DISPEL_DEFAULTS[dtype][1] * 255 + 0.5,
-                           DISPEL_DEFAULTS[dtype][2] * 255 + 0.5,
-                           DISPEL_DEFAULTS[dtype][3] * 255 + 0.5) .. ").",
+            tooltip  = "Reset " .. dtype .. " to default (#" ..
+                       KE:RGBAToHex(DISPEL_DEFAULTS[dtype][1], DISPEL_DEFAULTS[dtype][2],
+                           DISPEL_DEFAULTS[dtype][3]) .. ").",
             callback = function()
                 local d = DISPEL_DEFAULTS[dtype]
                 dispelColors[dtype] = nil  -- drop user override

@@ -529,6 +529,7 @@ function L.loadChatMessageHandler(overrides)
     -- by the handler. Without this line every new case dies on
     -- "attempt to call method 'NotSecretValue' (a nil value)".
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
@@ -609,6 +610,7 @@ function L.loadTooltips(opts, overrides)
         db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/Tooltips/Tooltips.lua", KE)
     return modules["SkinTooltips"], KE
 end
@@ -2117,6 +2119,7 @@ function L.loadRaidControl(overrides)
     local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
     KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/DarkTheme/RaidControl.lua", KE)
     local RC = modules["RaidControl"]
 
@@ -2843,6 +2846,7 @@ function L.loadChatLinks(overrides)
     _G.strsub = string.sub
     local KE = { db = { profile = { Skinning = { ChatLinks = {} } } } }
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/Chat/ChatLinks.lua", KE)
     return modules["ChatLinks"], KE
 end
@@ -2965,6 +2969,8 @@ function L.loadHealerMana(overrides)
     _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
     _G.UnitClass = overrides.UnitClass or function() return "Priest", "PRIEST" end
     _G.UnitIsConnected = overrides.UnitIsConnected or function() return true end
+    -- Read at file scope by PartyCooldownsSpec.lua; the client's value.
+    _G.Constants = { TraitConsts = { INSPECT_TRAIT_CONFIG_ID = -1 } }
 
     local profile = {
         Dungeons = {
@@ -3008,10 +3014,11 @@ function L.loadHealerMana(overrides)
         GetNicknameOrName = function() return "Healer" end,
         GetClassColor = function() return { 1, 1, 1 } end,
     }
-    -- The snapshot's spec lookup takes its secret test and its key rule from
-    -- these two files.
+    -- The snapshot's spec lookup takes its secret test, its key rule and the
+    -- unit key built on them from these three files.
     helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua", KE)
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartyCooldownsSpec.lua", KE)
     helpers.loadModule("Modules/Combat/StatusTexts/HealerMana.lua", KE)
     local HM = modules["HealerMana"]
     HM:UpdateDB()

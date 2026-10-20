@@ -110,6 +110,9 @@ read_globals = {
     -- Core math (WoW re-exports)
     "ceil", "floor", "min", "max", "abs", "sort",
 
+    -- Lua built-in the 12.1.5 client adds to math.
+    math = { fields = { "clamp" } },
+
     -- Frame and UI
     "CreateFrame", "CreateFont", "CreateColor", "UIParent", "Settings",
     "CreateAbbreviateConfig",

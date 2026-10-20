@@ -145,10 +145,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
 
     local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local growHorizDropdown = GUIFrame:CreateDropdown(row3c, "Grow Horizontal", {
-        options = {
-            { key = "LEFT",  text = "Left" },
-            { key = "RIGHT", text = "Right" },
-        },
+        options = GUIFrame.GrowHorizontalOptions,
         value = db.GrowHorizontal or "LEFT",
         callback = function(key) db.GrowHorizontal = key; ApplySettings() end,
     })
@@ -156,10 +153,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     manager:Register(growHorizDropdown, "all")
 
     local growVertDropdown = GUIFrame:CreateDropdown(row3c, "Grow Vertical", {
-        options = {
-            { key = "UP",   text = "Up" },
-            { key = "DOWN", text = "Down" },
-        },
+        options = GUIFrame.GrowVerticalOptions,
         value = db.GrowVertical or "UP",
         callback = function(key) db.GrowVertical = key; ApplySettings() end,
     })
@@ -225,50 +219,10 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Glow Settings
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow",
         db = db,
-        dbKeys = {
-            enabled   = "GlowEnabled",
-            type      = "GlowType",
-            color     = "GlowColor",
-            lines     = "GlowLines",
-            frequency = "GlowFrequency",
-            length    = "GlowLength",
-            thickness = "GlowThickness",
-            border    = "GlowBorder",
-            scale     = "GlowScale",
-            startAnim = "GlowStartAnim",
-            duration  = "GlowDuration",
-        },
-        types = {
-            { key = "pixel",    text = "Pixel" },
-            { key = "ants",     text = "Ants" },
-            { key = "procloop", text = "Proc Loop" },
-            { key = "alert",    text = "Alert" },
-        },
-        resolveType = KE.AuraGlowRules.ResolveType,
         typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
-        typeRows = function(rows)
-            return {
-                pixel       = rows.pixel,
-                unsupported = rows.pixelExtras,
-                autocast    = rows.autocast,
-                proc        = rows.proc,
-                border      = rows.border,
-            }
-        end,
-        showSpeed = function() return true end,
-        speedAdapter = {
-            read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormalizeFrequency(
-                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
-            end,
-            write   = KE.AuraGlowRules.WriteSpeed,
-            setType = KE.AuraGlowRules.SetType,
-            min     = 0.05,
-            max     = 2,
-        },
         onChangeCallback = ApplySettings,
         onHeightChange = function() C_Timer.After(0, RefreshPage) end,
     })

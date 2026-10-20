@@ -12,7 +12,7 @@ describe("CHAT:ApplyGuildMemberStatus", function()
     it("marks the filter active only once it registers, so a failed apply is retried once", function()
         mock.install({})
         local modules = helpers.installAddonShim()
-        helpers.loadModule("Modules/Skinning/Chat/Chat.lua", {})
+        helpers.loadModule("Modules/Skinning/Chat/Chat.lua", helpers.loadModule("Core/Colors.lua", {}))
         local CHAT = modules["Chat"]
         CHAT.db = { GuildMemberStatus = true }
         CHAT.SecureHook = function() end
