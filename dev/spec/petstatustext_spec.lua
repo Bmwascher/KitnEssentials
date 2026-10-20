@@ -3,7 +3,7 @@ local L = require("dev.spec._ke_loader")
 local GRIMOIRE = 196099
 
 -- Spec IDs that are NOT the two CheckPetStatus branches on: 254 is MM Hunter
--- (pet-replacing talents) and 266 is Demo Warlock (the Felguard check). Using
+-- (pet-replacing talents) and 266 is Demo Warlock (the expected-pet check). Using
 -- any other id keeps a case on the plain Dead/Passive/Missing path.
 local AFFLICTION = 265
 local BEAST_MASTERY = 253
