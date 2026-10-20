@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.7
+
+### Damage Meter
+
+- While the settings window or /kes edit is open, each meter window shows
+  a numbered chip at the left of its header, in the theme color. The same
+  numbers label the layout map, the size sliders and the Default Display
+  rows. /kes dm report with no number posts the window numbered 1
+- Pointing at a settings row, map box or size slider outlines that meter
+  window and fades the others. Pointing at a meter window lights its row
+  and box
+- The page has four tabs: Windows, Appearance, Behavior and Spell History.
+  Lock Dock and the Tip card are gone, and the dock always shows in
+  /kes edit while the module is on
+- The Windows tab has three layout buttons, a layout map where you drag a
+  gap to resize windows, an Even Sizes button, labeled size sliders and a
+  "Meter Size" readout in pixels. A map box's remove button uses the KE
+  close glyph
+- The segment menu and view picker marks, and a saved Accent border, draw
+  in the theme color instead of white
+
+---
+
 ## v4.12.6
 
 ### Addon Skins
