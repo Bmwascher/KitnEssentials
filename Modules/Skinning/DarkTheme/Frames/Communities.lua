@@ -55,11 +55,11 @@ local function SectionBox(parent, flag, tlx, tly, brx, bry)
 end
 
 local function StyleReward(child)
-    if not child or S.data(child).aeRow then return end
+    if not child or S.data(child).keRow then return end
     if child.Icon then S.Icon(child.Icon, true) end
     S.StripTextures(child)
     S.Backdrop(child)
-    S.data(child).aeRow = true
+    S.data(child).keRow = true
 end
 
 local function StyleListEntry(child)
@@ -69,7 +69,7 @@ local function StyleListEntry(child)
     if child.CircleMask and child.CircleMask.Hide then child.CircleMask:Hide() end
     if child.IconRing and child.IconRing.Hide then child.IconRing:Hide() end
     if child.IconBorder and child.IconBorder.Hide then child.IconBorder:Hide() end
-    if not S.data(child).aeRow then
+    if not S.data(child).keRow then
 
         if child.Name then
             S.SetFont(child.Name, nil, "OUTLINE")
@@ -83,7 +83,7 @@ local function StyleListEntry(child)
             bd:SetPoint("TOPLEFT", child, "TOPLEFT", 4, -13)
             bd:SetPoint("BOTTOMRIGHT", child, "BOTTOMRIGHT", -8, 8)
         end
-        S.data(child).aeRow = true
+        S.data(child).keRow = true
     end
     FlattenSelection(child, S.GetBackdrop(child))
 end
@@ -91,10 +91,10 @@ end
 local function StyleMemberRow(child)
     if not child then return end
     FlattenSelection(child)
-    if S.data(child).aeMemberRow then return end
+    if S.data(child).keMemberRow then return end
 
     S.FontStringsDeep(child, 12, "OUTLINE", 2)
-    S.data(child).aeMemberRow = true
+    S.data(child).keMemberRow = true
 end
 
 local function SetEditBoxFontsDeep(frame, size, depth)
@@ -194,9 +194,9 @@ local function Skin()
     S.Frame(frame)
 
     HideDecorations(frame)
-    if not S.data(frame).aeDecoHook then
+    if not S.data(frame).keDecoHook then
         frame:HookScript("OnShow", HideDecorations)
-        S.data(frame).aeDecoHook = true
+        S.data(frame).keDecoHook = true
     end
 
     if frame.CloseButton then S.CloseButton(frame.CloseButton) end
@@ -206,7 +206,7 @@ local function Skin()
     if mmf then
         S.MaxMinFrame(mmf)
 
-        if not S.data(mmf).aeDecoHook then
+        if not S.data(mmf).keDecoHook then
             for _, bn in ipairs({ "MaximizeButton", "MinimizeButton" }) do
                 local b = mmf[bn]
                 if b then
@@ -223,7 +223,7 @@ local function Skin()
                 LayoutChat(frame)
             end)
 
-            S.data(mmf).aeDecoHook = true
+            S.data(mmf).keDecoHook = true
         end
     end
 
@@ -315,9 +315,9 @@ local function Skin()
             if df.ScrollBar then S.ScrollBar(df.ScrollBar) end
         end
 
-        SectionBox(info, "aeBox1", 14, -22, 0, 200)
-        SectionBox(info, "aeBox2", 14, -158, 0, 118)
-        SectionBox(info, "aeBox3", 14, -236, -7, 1)
+        SectionBox(info, "keBox1", 14, -22, 0, 200)
+        SectionBox(info, "keBox2", 14, -158, 0, 118)
+        SectionBox(info, "keBox3", 14, -236, -7, 1)
     end
     local news = _G.CommunitiesFrameGuildDetailsFrameNews
     if news then
@@ -335,7 +335,7 @@ local function Skin()
             end)
         end
 
-        SectionBox(news, "aeBox4", 7, -22, -13, 1)
+        SectionBox(news, "keBox4", 7, -22, -13, 1)
     end
     if _G.CommunitiesGuildNewsFiltersFrame then
         S.StripTextures(_G.CommunitiesGuildNewsFiltersFrame)
@@ -346,8 +346,8 @@ local function Skin()
     -- Guild Message of the Day editor -- same shape as the Guild Log
     -- below; this frame was simply never skinned.
     local motd = _G.CommunitiesGuildTextEditFrame
-    if motd and not S.data(motd).aeMotd then
-        S.data(motd).aeMotd = true
+    if motd and not S.data(motd).keMotd then
+        S.data(motd).keMotd = true
         S.StripTextures(motd)
         S.Backdrop(motd)
         if motd.Container and motd.Container.NineSlice then
@@ -372,7 +372,7 @@ local function Skin()
     end
 
     local log = _G.CommunitiesGuildLogFrame
-    if log and not S.data(log).aeLog then
+    if log and not S.data(log).keLog then
         S.StripTextures(log)
         S.Backdrop(log)
         if log.Container and log.Container.NineSlice then
@@ -389,7 +389,7 @@ local function Skin()
         if bottomClose and bottomClose.IsObjectType and bottomClose:IsObjectType("Button") then
             S.Button(bottomClose)
         end
-        S.data(log).aeLog = true
+        S.data(log).keLog = true
     end
 
     local list = frame.CommunitiesList or _G.CommunitiesFrameCommunitiesList
@@ -430,30 +430,30 @@ local function Skin()
                 if col[k] and col[k].Hide then col[k]:Hide() end
             end
         end
-        if not S.data(frame.MemberList).aeColHook and frame.MemberList.RefreshListDisplay then
+        if not S.data(frame.MemberList).keColHook and frame.MemberList.RefreshListDisplay then
             hooksecurefunc(frame.MemberList, "RefreshListDisplay", function(ml)
                 local cd = ml.ColumnDisplay
                 if not cd then return end
                 for _, child in ipairs({ cd:GetChildren() }) do
-                    if not S.data(child).aeCol then
+                    if not S.data(child).keCol then
                         S.StripTextures(child)
                         S.Backdrop(child)
-                        S.data(child).aeCol = true
+                        S.data(child).keCol = true
                     end
                 end
             end)
-            S.data(frame.MemberList).aeColHook = true
+            S.data(frame.MemberList).keColHook = true
         end
 
         local wm = frame.MemberList.WatermarkFrame
         if wm and wm.SetAlpha then wm:SetAlpha(0) end
-        if not S.data(frame.MemberList).aeWmHook then
+        if not S.data(frame.MemberList).keWmHook then
             frame.MemberList:HookScript("OnShow", function(self)
                 if self.WatermarkFrame and self.WatermarkFrame.SetAlpha then
                     self.WatermarkFrame:SetAlpha(0)
                 end
             end)
-            S.data(frame.MemberList).aeWmHook = true
+            S.data(frame.MemberList).keWmHook = true
         end
         if frame.MemberList.ScrollBox then
             S.HookScrollBox(frame.MemberList.ScrollBox, StyleMemberRow)

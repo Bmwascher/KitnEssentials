@@ -47,7 +47,7 @@ end
 -- Each tab hangs off the one BEFORE it. 12.1 added a third, and anchoring
 -- them all to tab 1 stacks them in one place.
 local function AnchorDashboardTab2(tab, _, _, _, x, y)
-    local prev = S.data(tab).aePrevTab
+    local prev = S.data(tab).kePrevTab
     if prev and (x ~= 0 or y ~= -1) then
         tab:ClearAllPoints()
         tab:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -1)
@@ -91,8 +91,8 @@ end
 local function HookCatalogTiles(optionsContainer)
     if not optionsContainer then return end
     local sb = optionsContainer.ScrollBox
-    if sb and sb.Update and sb.ForEachFrame and not S.data(sb).aeTileHook then
-        S.data(sb).aeTileHook = true
+    if sb and sb.Update and sb.ForEachFrame and not S.data(sb).keTileHook then
+        S.data(sb).keTileHook = true
         hooksecurefunc(sb, "Update", Catalog_Update)
         Catalog_Update(sb)
     end
@@ -166,8 +166,8 @@ local function SkinHouseFinder()
 
         for _, sf in next, { list.ScrollFrame, list.BNetScrollFrame } do
             local layoutList = sf and sf.NeighborhoodList
-            if layoutList and layoutList.Layout and not S.data(layoutList).aeRowHook then
-                S.data(layoutList).aeRowHook = true
+            if layoutList and layoutList.Layout and not S.data(layoutList).keRowHook then
+                S.data(layoutList).keRowHook = true
                 hooksecurefunc(layoutList, "Layout", TreatNeighborhoodList)
                 TreatNeighborhoodList(layoutList)
             end
@@ -193,12 +193,7 @@ local function SkinDashboard()
         end
     end
 
-    -- parentArray="TabButtons" is the whole set; the hardcoded pair silently
-    -- skipped the Collection tab 12.1 added.
-    local sideTabs = dash.TabButtons
-    if not sideTabs or #sideTabs == 0 then
-        sideTabs = { dash.HouseInfoTabButton, dash.CatalogTabButton }
-    end
+    local sideTabs = dash.TabButtons or {}
     for i, tab in ipairs(sideTabs) do
         if tab then
             S.Backdrop(tab)
@@ -209,13 +204,11 @@ local function SkinDashboard()
                 tab:SetPoint("TOPLEFT", dash, "TOPRIGHT", 1, 0)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab)
             else
-                S.data(tab).aePrevTab = sideTabs[i - 1]
+                S.data(tab).kePrevTab = sideTabs[i - 1]
                 tab:ClearAllPoints()
                 tab:SetPoint("TOPLEFT", sideTabs[i - 1], "BOTTOMLEFT", 0, -1)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab2)
             end
-            -- Pre-12.1 name; S.KillSideTabArt covers the 12.1 one.
-            if tab.Highlight then S.KillTexture(tab.Highlight) end
             S.HoverWash(tab)
             local icon = tab.Icon
             if icon then
@@ -238,26 +231,11 @@ local function SkinDashboard()
             -- Background is Blizzard's gold frame, drawn over our backdrop.
             if tab.Background then tab.Background:SetAlpha(0) end
 
-            -- SelectedTexture is Blizzard's own key on 12.1, carrying the gold
-            -- selected atlas. Recolor theirs; only build ours when absent.
+            -- Blizzard's SelectedTexture carries the gold selected atlas; recolor it.
             if tab.SelectedTexture then
                 tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
                 S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
-                local tbd = S.GetBackdrop(tab)
-                if tbd then
-                    S.InsetToEdge(tab.SelectedTexture, tbd)
-                else
-                    S.InsetToEdge(tab.SelectedTexture, tab)
-                    S.TrackEdgeClients(tab)
-                end
-            else
-                local selT = tab:CreateTexture(nil, "BACKGROUND", nil, 1)
-                S.PaintBrand(selT, "SetColorTexture", S.palette.selectedA)
-                local tbd = S.GetBackdrop(tab)
-                S.InsetToEdge(selT, tbd or tab)
-                if not tbd then S.TrackEdgeClients(tab) end
-                selT:Hide()
-                tab.SelectedTexture = selT
+                S.InsetToEdge(tab.SelectedTexture, S.GetBackdrop(tab))
             end
         end
     end

@@ -83,14 +83,14 @@ local function SkinKeystoneTabs(frame)
 
             local txt = tab.Text
             if txt then
-                if not S.data(frame).aeTabFont then
+                if not S.data(frame).keTabFont then
                     local f = _G.CreateFont("KE_BigWigsKeystoneTabFont")
                     local face, size, flags = txt:GetFont()
                     if face then f:SetFont(face, size or 12, flags or "") end
                     f:SetTextColor(1, 1, 1)
-                    S.data(frame).aeTabFont = f
+                    S.data(frame).keTabFont = f
                 end
-                local fo = S.data(frame).aeTabFont
+                local fo = S.data(frame).keTabFont
                 tab:SetNormalFontObject(fo)
                 tab:SetHighlightFontObject(fo)
                 tab:SetDisabledFontObject(fo)
@@ -103,8 +103,8 @@ local function SkinKeystoneTabs(frame)
             end
 
             S.TabSetSelected(tab)
-            if not S.data(tab).aeBWTabHooks then
-                S.data(tab).aeBWTabHooks = true
+            if not S.data(tab).keBWTabHooks then
+                S.data(tab).keBWTabHooks = true
                 hooksecurefunc(tab, "Disable", function(t) S.TabSetSelected(t, true) end)
                 hooksecurefunc(tab, "Enable", function(t) S.TabSetSelected(t, false) end)
             end
@@ -123,8 +123,8 @@ local function SkinKeystoneTabs(frame)
 end
 
 local function BrandCastFilter(tex)
-    if not tex or S.data(tex).aeBrandCast then return end
-    S.data(tex).aeBrandCast = true
+    if not tex or S.data(tex).keBrandCast then return end
+    S.data(tex).keBrandCast = true
     local orig = tex.SetColorTexture
     tex.SetColorTexture = function(t, r, g, b, a)
         if r == 0 and g == 0 and b == 1 then
@@ -142,8 +142,8 @@ local function SkinKeystoneTeleports(frame)
             local sc = child:GetScrollChild()
             if sc then
                 for _, btn in next, { sc:GetChildren() } do
-                    if btn.cdbar and btn.spellID and not S.data(btn).aeTile then
-                        S.data(btn).aeTile = true
+                    if btn.cdbar and btn.spellID and not S.data(btn).keTile then
+                        S.data(btn).keTile = true
                         BrandCastFilter(btn.cdbar)
                         local icon, cdbar = btn.icon, btn.cdbar
                         for _, r in next, { btn:GetRegions() } do

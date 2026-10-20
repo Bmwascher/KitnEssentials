@@ -24,10 +24,10 @@ end
 local DAMPEN = 0.55
 local function DampenBarColor(bar, r, g, b, a)
     local d = S.data(bar)
-    if d.aeDampening then return end
-    d.aeDampening = true
+    if d.keDampening then return end
+    d.keDampening = true
     bar:SetStatusBarColor(r * DAMPEN, g * DAMPEN, b * DAMPEN, a or 1)
-    d.aeDampening = false
+    d.keDampening = false
 end
 
 local function UpdateToggleAtlas(button)
@@ -47,9 +47,9 @@ local function FixCollapseChevron(child)
     hooksecurefunc(child.Right, "SetAtlas", UpdateCollapse)
 
     child.Right:Show()
-    if not S.data(child.Right).aeKeepShown then
+    if not S.data(child.Right).keKeepShown then
         hooksecurefunc(child.Right, "Hide", function(t) t:Show() end)
-        S.data(child.Right).aeKeepShown = true
+        S.data(child.Right).keKeepShown = true
     end
     if child.HighlightRight then
         UpdateCollapse(child.HighlightRight)
@@ -58,9 +58,10 @@ local function FixCollapseChevron(child)
 end
 
 local function StyleEntry(child)
-    if not child or S.data(child).aeRepRow then return end
-    S.RowHover(child)
+    if not child or S.data(child).keRepRow then return end
+    -- StripTextures clears every texture region, so the hover is added after it.
     S.StripTextures(child)
+    S.RowHover(child)
     FixCollapseChevron(child)
 
     if child.Right then
@@ -73,9 +74,9 @@ local function StyleEntry(child)
     end
     local tcb = child.ToggleCollapseButton
     if tcb then
-        if tcb.RefreshIcon and not S.data(tcb).aeToggleHooked then
+        if tcb.RefreshIcon and not S.data(tcb).keToggleHooked then
             hooksecurefunc(tcb, "RefreshIcon", UpdateToggleAtlas)
-            S.data(tcb).aeToggleHooked = true
+            S.data(tcb).keToggleHooked = true
         end
         UpdateToggleAtlas(tcb)
     end
@@ -86,9 +87,9 @@ local function StyleEntry(child)
         if bar.SetStatusBarTexture then bar:SetStatusBarTexture(WHITE) end
         S.StatusBar(bar)
 
-        if not S.data(bar).aeDampHooked then
+        if not S.data(bar).keDampHooked then
             hooksecurefunc(bar, "SetStatusBarColor", DampenBarColor)
-            S.data(bar).aeDampHooked = true
+            S.data(bar).keDampHooked = true
             local r, g, b, a = bar:GetStatusBarColor()
             if r then DampenBarColor(bar, r, g, b, a) end
         end
@@ -96,7 +97,7 @@ local function StyleEntry(child)
         S.FontStrings(content, REP_ROW_FONT, "")
         S.FontStrings(bar, REP_ROW_FONT, "")
     end
-    S.data(child).aeRepRow = true
+    S.data(child).keRepRow = true
 end
 
 local function Skin()

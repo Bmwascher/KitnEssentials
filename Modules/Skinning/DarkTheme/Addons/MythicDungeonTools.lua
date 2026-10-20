@@ -85,8 +85,8 @@ local function ReskinProgressBar(progressBar)
     if not bar then return end
 
     S.StripTextures(bar)
-    if not S.data(bar).aeShrunk then
-        S.data(bar).aeShrunk = true
+    if not S.data(bar).keShrunk then
+        S.data(bar).keShrunk = true
         local w, h = S.SafeSize(bar)
         if w and w > 4 then bar:SetSize(w - 2, h - 2) end
     end
@@ -139,8 +139,8 @@ local SIDE_BUTTONS = {
 
 local function BumpButtonFont()
     local mf = _G.MDTButtonFont
-    if mf and mf.GetFont and not S.data(mf).aeBumped then
-        S.data(mf).aeBumped = true
+    if mf and mf.GetFont and not S.data(mf).keBumped then
+        S.data(mf).keBumped = true
         local face, _, flags = mf:GetFont()
         if face then mf:SetFont(face, 12, flags or "") end
     end

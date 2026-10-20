@@ -104,8 +104,8 @@ function S.AcceptMember(role, class, isLeader)
 end
 
 local function HideIconExtras(d)
-    if d.aeClassBar then d.aeClassBar:Hide() end
-    if d.aeLeader then d.aeLeader:Hide() end
+    if d.keClassBar then d.keClassBar:Hide() end
+    if d.keLeader then d.keLeader:Hide() end
 end
 
 -- Every path that declines to paint must run this before returning. The rows
@@ -131,9 +131,9 @@ end
 local function ReskinMemberIcon(slot, set, role, class, isLeader, alpha)
     local withBg, plain, circle = slot.RoleIconWithBackground, slot.RoleIcon, slot.ClassCircle
     local d = S.data(slot)
-    if not d.aeSnap then
+    if not d.keSnap then
         if withBg then S.PixelSnap(withBg) end
-        d.aeSnap = true
+        d.keSnap = true
     end
 
     local anchor = withBg
@@ -171,18 +171,18 @@ local function ReskinMemberIcon(slot, set, role, class, isLeader, alpha)
     -- frames above the activity's player count, and a texture parented to
     -- enumerate outlives that hide as a bar floating over nothing.
     if isLeader then
-        if not d.aeLeader then
+        if not d.keLeader then
             local t = slot:CreateTexture(nil, "OVERLAY")
             t:SetAtlas("groupfinder-icon-leader", true)
             t:SetSize(10, 8)
-            d.aeLeader = t
+            d.keLeader = t
         end
-        d.aeLeader:ClearAllPoints()
-        d.aeLeader:SetPoint("BOTTOM", anchor, "TOP", 0, 1)
-        d.aeLeader:SetAlpha(alpha)
-        d.aeLeader:Show()
-    elseif d.aeLeader then
-        d.aeLeader:Hide()
+        d.keLeader:ClearAllPoints()
+        d.keLeader:SetPoint("BOTTOM", anchor, "TOP", 0, 1)
+        d.keLeader:SetAlpha(alpha)
+        d.keLeader:Show()
+    elseif d.keLeader then
+        d.keLeader:Hide()
     end
 
     -- Every KE art set carries the bar; blizzard draws no class indicator at
@@ -190,20 +190,20 @@ local function ReskinMemberIcon(slot, set, role, class, isLeader, alpha)
     local color = KE.ROLE_ICON_ART[set] and _G.RAID_CLASS_COLORS
         and _G.RAID_CLASS_COLORS[class]
     if color then
-        if not d.aeClassBar then
+        if not d.keClassBar then
             local t = slot:CreateTexture(nil, "ARTWORK")
             t:SetTexture(KE.PATH .. [[Statusbars\KitnEssentials]])
             t:SetSize(16, 4)
             S.PixelSnap(t)
-            d.aeClassBar = t
+            d.keClassBar = t
         end
-        d.aeClassBar:ClearAllPoints()
-        d.aeClassBar:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
-        d.aeClassBar:SetVertexColor(color.r, color.g, color.b)
-        d.aeClassBar:SetAlpha(alpha)
-        d.aeClassBar:Show()
-    elseif d.aeClassBar then
-        d.aeClassBar:Hide()
+        d.keClassBar:ClearAllPoints()
+        d.keClassBar:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
+        d.keClassBar:SetVertexColor(color.r, color.g, color.b)
+        d.keClassBar:SetAlpha(alpha)
+        d.keClassBar:Show()
+    elseif d.keClassBar then
+        d.keClassBar:Hide()
     end
 end
 
@@ -220,7 +220,7 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
     -- role display into a class display would otherwise keep the old role
     -- arguments, and a later fallback would replay them over class art.
     local ed = S.data(enumerate)
-    ed.aeArgs = nil
+    ed.keArgs = nil
 
     -- Every display type is painted, including the class enumerates Blizzard
     -- fills by class. The member list is re-derived from the search result
@@ -249,7 +249,7 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
     -- Stash the hook's own arguments so the settings refresh can replay a
     -- real paint. Without them the refresh cannot tell a role display from a
     -- class display and correctly refuses to paint at all.
-    ed.aeArgs = { numPlayers, nil, disabled, iconOrder }
+    ed.keArgs = { numPlayers, nil, disabled, iconOrder }
 
     local parent = enumerate:GetParent()
     local button = parent and parent:GetParent()
@@ -344,7 +344,7 @@ local COUNT_WIDTH = 19
 local DAMAGER_INSET = -6
 local function LayoutRoleCount(roleCount)
     local d = S.data(roleCount)
-    if d.aeCountLayout then return end
+    if d.keCountLayout then return end
 
     -- Only DamagerIcon moves: the template's anchor chain hangs off that exact
     -- key, so the other five regions follow without being touched.
@@ -362,7 +362,7 @@ local function LayoutRoleCount(roleCount)
         counts[i]:SetJustifyH("RIGHT")
     end
 
-    d.aeCountLayout = true
+    d.keCountLayout = true
 end
 
 local function UpdateRoleCount(roleCount)
@@ -373,9 +373,9 @@ local function UpdateRoleCount(roleCount)
         local icon = roleCount[slot[1]] or roleCount[slot[2]]
         if icon and icon.SetTexture then
             local d = S.data(icon)
-            if not d.aeSnap then
+            if not d.keSnap then
                 S.PixelSnap(icon)
-                d.aeSnap = true
+                d.keSnap = true
             end
             local path = S.RoleArtPath(set, slot[3])
             if path then
@@ -504,7 +504,7 @@ function S.RefreshLFGRoleIcons()
                     -- Replay the arguments Blizzard's hook gave this frame.
                     -- Calling with none refuses, because nothing then
                     -- distinguishes a role display from a class one.
-                    local a = S.data(dd.Enumerate).aeArgs
+                    local a = S.data(dd.Enumerate).keArgs
                     if a then UpdateEnumerate(dd.Enumerate, a[1], a[2], a[3], a[4]) end
                 end
                 if dd.RoleCount then UpdateRoleCount(dd.RoleCount) end

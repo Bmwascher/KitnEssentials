@@ -128,7 +128,7 @@ local function ReskinPopupFrame(frame)
     S.StripTextures(frame)
     S.Backdrop(frame)
 
-    if not S.data(frame).aeClose then
+    if not S.data(frame).keClose then
         local close = CreateFrame("Button", nil, frame)
         close:SetSize(16, 16)
         close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
@@ -141,7 +141,7 @@ local function ReskinPopupFrame(frame)
         close:SetScript("OnEnter", function() tex:SetVertexColor(BRAND[1], BRAND[2], BRAND[3]) end)
         close:SetScript("OnLeave", function() tex:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3]) end)
         close:SetScript("OnClick", function() frame:Hide() end)
-        S.data(frame).aeClose = close
+        S.data(frame).keClose = close
     end
 end
 
@@ -282,8 +282,8 @@ local function SkinMainFrame()
                 S.StripTextures(border); border:Hide()
             end
             if listFrame.NineSlice and listFrame.NineSlice.SetAlpha then listFrame.NineSlice:SetAlpha(0) end
-            if not S.data(listFrame).aeNudged then
-                S.data(listFrame).aeNudged = true
+            if not S.data(listFrame).keNudged then
+                S.data(listFrame).keNudged = true
                 local pts = {}
                 for i = 1, listFrame:GetNumPoints() do
                     pts[i] = { listFrame:GetPoint(i) }
@@ -362,8 +362,8 @@ local function SkinMainFrame()
         tpf:ClearAllPoints()
         tpf:SetPoint("TOPRIGHT", frame, "TOPLEFT", -4, 0)
         tpf:SetClampedToScreen(true)
-        if not S.data(tpf).aeDraggable then
-            S.data(tpf).aeDraggable = true
+        if not S.data(tpf).keDraggable then
+            S.data(tpf).keDraggable = true
             tpf:SetMovable(true)
             local handle = tpf.Header or tpf
             handle:EnableMouse(true)

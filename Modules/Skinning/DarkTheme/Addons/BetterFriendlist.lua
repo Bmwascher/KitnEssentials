@@ -139,7 +139,7 @@ local function SkinInset(inset)
         bd:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -4)
         bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, 4)
     end
-    S.data(inset).aeBD = bd
+    S.data(inset).keBD = bd
 end
 
 local function SkinHeaderRow(button)
@@ -696,8 +696,8 @@ local function Skin()
                 end
             end
 
-            if not S.data(frame).aeBnetDragHook and frame.HookScript then
-                S.data(frame).aeBnetDragHook = true
+            if not S.data(frame).keBnetDragHook and frame.HookScript then
+                S.data(frame).keBnetDragHook = true
                 frame:HookScript("OnDragStop", function()
                     if bnet.SettingsButton then S.FixSubPixelEdge(bnet.SettingsButton) end
                     if bnet.ContactsMenuButton then S.FixSubPixelEdge(bnet.ContactsMenuButton) end

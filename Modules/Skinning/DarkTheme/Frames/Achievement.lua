@@ -66,8 +66,8 @@ local function OnObjectivesShown(frame)
     -- Own flag: S.StatusBar guards on `skinned` itself, so setting that here
     -- made the call a no-op and the bars kept Blizzard's art.
     for _, bar in next, objectives.progressBars do
-        if not S.data(bar).aeCriteriaBar then
-            S.data(bar).aeCriteriaBar = true
+        if not S.data(bar).keCriteriaBar then
+            S.data(bar).keCriteriaBar = true
             GreenGradient(bar)
         end
     end

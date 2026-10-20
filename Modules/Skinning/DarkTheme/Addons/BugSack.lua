@@ -113,18 +113,6 @@ local function Skin()
     if _G.BugSack.OpenSack then hooksecurefunc(_G.BugSack, "OpenSack", OpenSack) end
     -- Right-clicking the minimap icon opens the window without OpenSack.
     if _G.BugSack.OpenConfig then hooksecurefunc(_G.BugSack, "OpenConfig", OpenSack) end
-
-    local sp = _G.SettingsPanel
-    local box = sp and sp.Container and sp.Container.SettingsList and sp.Container.SettingsList.ScrollBox
-    if box and box.Update then
-        hooksecurefunc(box, "Update", function(scrollBox)
-            scrollBox:ForEachFrame(function(frame)
-                if frame.soundDropdown and frame.soundDropdown.intrinsic == "DropdownButton" then
-                    S.DropDown(frame.soundDropdown)
-                end
-            end)
-        end)
-    end
 end
 
 S:Register("BugSack", Skin, "BugSack")

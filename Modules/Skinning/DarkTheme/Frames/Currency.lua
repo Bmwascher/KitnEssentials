@@ -30,12 +30,12 @@ local function StyleButtonClean(button)
     S.StripTextures(button)
     S.ClearButtonArt(button)
     if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
-    local aeBD = S.Backdrop(button)
-    if aeBD then
+    local keBD = S.Backdrop(button)
+    if keBD then
         local c = S.palette.control
-        aeBD:SetBackdropColor(c[1], c[2], c[3], c[4])
+        keBD:SetBackdropColor(c[1], c[2], c[3], c[4])
     end
-    S.Hover(button, aeBD)
+    S.Hover(button, keBD)
     S.data(button).skinned = true
 end
 

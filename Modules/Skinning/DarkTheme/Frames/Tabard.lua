@@ -59,28 +59,28 @@ local function AnchorRotate()
     if not (btn and model) then return end
     btn:ClearAllPoints()
     btn:SetPoint("BOTTOMLEFT", model, "BOTTOMLEFT", 4, 4)
-    if not S.data(btn).aeAnchorArmor then
+    if not S.data(btn).keAnchorArmor then
         hooksecurefunc(btn, "SetPoint", function(b, _, _, _, _, _, forced)
             if forced ~= true then
                 b:ClearAllPoints()
                 b.SetPoint(b, "BOTTOMLEFT", model, "BOTTOMLEFT", 4, 4, true)
             end
         end)
-        S.data(btn).aeAnchorArmor = true
+        S.data(btn).keAnchorArmor = true
     end
 
     local rbtn = _G.TabardCharacterModelRotateRightButton
     if rbtn then
         rbtn:ClearAllPoints()
         rbtn:SetPoint("TOPLEFT", btn, "TOPRIGHT", 4, 0)
-        if not S.data(rbtn).aeAnchorArmor then
+        if not S.data(rbtn).keAnchorArmor then
             hooksecurefunc(rbtn, "SetPoint", function(b, _, _, _, _, _, forced)
                 if forced ~= true then
                     b:ClearAllPoints()
                     b.SetPoint(b, "TOPLEFT", btn, "TOPRIGHT", 4, 0, true)
                 end
             end)
-            S.data(rbtn).aeAnchorArmor = true
+            S.data(rbtn).keAnchorArmor = true
         end
     end
 end
