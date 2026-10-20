@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.9
+
+### DoT Tracker
+
+- DoT Tracker is now the first tab under Class Tools > All Classes
+- **NEW:** Show In card: Dungeons, Delves, Raids, Open World and Arenas /
+  Battlegrounds, all ticked. Where it is hidden, nothing is counted
+- **NEW:** Cooldown Manager card. Attach to Cooldown Manager (off by
+  default) puts each DoT's count on its Cooldown Manager icon (Essential,
+  Utility or Tracked Buffs), with Position on Icon (Above, Below or
+  Center) and X and Y offsets. An attached count has no glow or target
+  timer, and the other DoTs close up in the row
+- Where no icon shows the DoT itself, Guardian's Thrash and Blood's Blood
+  Plague counts sit on the Thrash or Blood Boil icon
+- With EllesmereUI's Cooldown Manager, an attached count stays hidden
+  until EllesmereUI shows the icon, usually at the DoT's first
+  application after a /reload. The preview hides its sample then, and a
+  note on the card says so
+- Speed is hidden when the glow is Pulse Border
+
+---
+
 ## v4.12.8
 
 ### Glow Settings
