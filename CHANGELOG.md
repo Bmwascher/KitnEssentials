@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.11
+
+### Party Cooldowns
+
+- Teammates' on-use trinkets show their gray cooldown icon on their row.
+  A teammate's trinkets also appear after a cold start without a manual
+  inspect, and a read made before their gear is known is refused
+- Soulcoiler Ritual Vessel is tracked: its cooldown cell starts when the
+  shield buff lands on the wearer, and that buff is left out of the
+  trinket icons while the cell shows
+- The settings preview hides with Alt+Z, shows no tooltip on hover, sits
+  above the live row and leaves out switched-off spells. Color and glow
+  drags update once per frame
+- Party rows stay in place while the game refuses a move, and are placed
+  again once the roster settles
+- Talent reads are steadier: your own talents wait for the talent data at
+  login, a teammate who never answers rests after 3 inspects (was 12),
+  and KE waits 3 seconds after another addon inspects someone
+- Position sliders span the screen by default on every page that has a
+  Position card (Dungeon Timers stays at -800 to 800)
+
+### Potion Bars
+
+- The potion bars and the Healer Externals box wait until combat ends to
+  take their place when the game refuses a move
+
+### PI Assist
+
+- The glow tries again when the game refuses the aura list call
+
+---
+
 ## v4.12.10
 
 ### Custom Cooldowns
