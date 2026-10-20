@@ -1037,7 +1037,9 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
     for _ = 1, 2 do
         local set = {}
         for i, e in ipairs(entries) do
-            if e.trinket and track.ready[i] then set[e.id] = true end
+            if e.trinket and track.ready[i] then
+                for _, id in ipairs(e.buffs) do set[id] = true end
+            end
         end
         -- Ready again before the settle: it stayed excluded, so it may show.
         for id in pairs(slot.cellRelease) do
@@ -1066,7 +1068,7 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
         end
         local off, show = track.overlayOff, slot.cellShow
         for i, e in ipairs(entries) do
-            if e.trinket and not (show and show[e.id]) then Track.Withhold(track, i) end
+            if e.trinket and not (show and show[e.buffs[1]]) then Track.Withhold(track, i) end
         end
         if track.overlayOff == off then return end
     end
@@ -1770,7 +1772,9 @@ function PB:DrawPreviewRow(k, frame)
     -- of the active list, out of its other groups.
     local skip = KE.PartyBuffsRules.ListBuffs(db, entries) or {}
     for _, e in ipairs(entries) do
-        if e.trinket then skip[e.id] = true end
+        if e.trinket then
+            for _, id in ipairs(e.buffs) do skip[id] = true end
+        end
     end
     local tracked, pools, available = {}, {}, {}
     for i = 1, #DESCRIPTORS do

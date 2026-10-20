@@ -14,7 +14,8 @@ local L = require("dev.spec._ke_loader")
 -- which starts switched off. Cast 8 has talent mods, a spec-only one for spec
 -- 16 and two charge talents; spec 16 lists it paired at 100 s, spec 17
 -- unpaired, spec 18 with two charges. Cast 9 has only a charge talent; spec
--- 19 lists it paired at 50 s.
+-- 19 lists it paired at 50 s. TRINKET_BUFFS maps trinket use spell 333 to its
+-- buff 334.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
