@@ -40,9 +40,6 @@ local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side 
     "edge, Left at its right edge, Center centers the cooldown icons on the frame with the active buffs on " ..
     "the next line, Up or Down stacks the icons in a column centered on the frame, further columns to its " ..
     "right. Inside has one layout."
-local LIST_TOOLTIP = "Cooldowns whose buff is up show first among the active buff icons: offensive, then " ..
-    "defensive, then trinkets, each soonest to end first. Their cooldown icons stay in place and turn gray " ..
-    "when used. The game does the sorting, so it works in keys."
 
 -- state: the picker's one state group, when not colorsOn. The healer
 -- externals box reads the Externals color, so it alone stays on colorsOn and
@@ -263,9 +260,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     manager:Register(AddSlider(rowD2, "Max Active Buff Icons", "MaxPerMember", 1,
         KE.PartyBuffsRules.MAX_BUFF_ICONS), "iconsOn")
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
-    local rowDList = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    manager:Register(AddCheck(rowDList, "Active Cooldowns First", "ActiveCooldownsFirst", LIST_TOOLTIP), "cellsOn")
-    cardDisplay:AddRow(rowDList, Theme.rowHeight)
 
     local rowDSep = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
     rowDSep:AddWidget(GUIFrame:CreateSeparator(rowDSep), 1)
@@ -274,7 +268,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddCheck(rowD3, "Timer Text", "ShowTimer", nil, nil, 1 / 3), "iconsOn")
     manager:Register(AddCheck(rowD3, "Cooldown Text", "ShowCooldownText",
-        "The time left on a gray icon, in the Font Settings font and Timer Size.",
+        "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size.",
         nil, 1 / 3), "cellsOn")
     manager:Register(AddCheck(rowD3, "Time-Left Swipe", "Swipe", nil, nil, 1 / 3), "iconsOn")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
@@ -426,8 +420,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     AddPlacement(AddSlider(rowX3, "Icons Per Row", PlacementKey("IconsPerRow"), 1,
         KE.PartyBuffsRules.MAX_PER_ROW, PlacementValue("IconsPerRow"),
         "Icons on one line before the row wraps; in an Up or Down column, icons per column. At "
-            .. KE.PartyBuffsRules.MAX_PER_ROW .. " it never wraps, except for the room Active Cooldowns "
-            .. "First adds."))
+            .. KE.PartyBuffsRules.MAX_PER_ROW .. " it never wraps."))
     if healerView then
         AddPlacement(AddSlider(rowX3, "Icon Size", PlacementKey("IconSize"), ICON_SIZE_MIN, ICON_SIZE_MAX,
             PlacementValue("IconSize"), "Icon size in a healer spec. Other specs use Icon Size on the Display card."))

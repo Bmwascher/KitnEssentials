@@ -82,10 +82,6 @@ local PREVIEW_BUFFS = {
 -- most samples a row draws: the Max Cooldown Icons ceiling.
 local PREVIEW_SPECS = { 71, 102, 1473, 266 }
 local PREVIEW_LEFT = 74
--- Seconds since the active sample's use, about how long its timer has run
--- (AuraRules.PreviewTiming(1)): cell 2 counts from then while the active list
--- shows its buff.
-local PREVIEW_USED = 5
 local PREVIEW_CELLS = KE.PartyBuffsRules.MAX_COOLDOWN_ICONS
 -- Each stand-in row's race for its racial sample; no Evoker racial is tracked.
 local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
@@ -110,33 +106,12 @@ for i, category in ipairs(KE.PartyBuffsRules.CATEGORIES) do
     DESCRIPTORS[i] = {
         key = category.key,
         category = category,
-        trackKey = category.trackKey,
-        sort = "AuraInstanceIDOnly",
         capabilities = {
             hasBorder = true, hasGlow = true, hasDispelBadge = false, hasDispelRing = true,
             ringColorKey = "Ring" .. category.colorKey:sub(6),
         },
     }
 end
-
--- The active list's groups, one per cooldown kind, dressed as the cells'
--- overlay buttons are: their ring keys are the cells' (FillStyle).
-local LIST_DESCRIPTORS = {}
-for i, group in ipairs(KE.PartyBuffsRules.LIST_GROUPS) do
-    LIST_DESCRIPTORS[i] = {
-        key = group.key,
-        list = group,
-        trackKey = "ActiveCooldownsFirst",
-        sort = "ExpirationOnly",
-        capabilities = Track.OVERLAY_DESCRIPTORS[group.kind].capabilities,
-    }
-end
-
--- Every group of a row's container: the active list's, then the categories.
--- trackKey gates the build; sort names the group's AuraContainerSortMethod.
-local GROUPS = {}
-for _, d in ipairs(LIST_DESCRIPTORS) do GROUPS[#GROUPS + 1] = d end
-for _, d in ipairs(DESCRIPTORS) do GROUPS[#GROUPS + 1] = d end
 
 PB.active = false
 PB.previewing = false
@@ -408,9 +383,9 @@ function PB:SlotComplete(k)
     -- A retired button is lost capacity; the build replaces the container
     -- once auras are not secret.
     if slot.dressFailed and not KE:AreAuraIdentitiesHidden() then return false end
-    for i = 1, #GROUPS do
-        local d = GROUPS[i]
-        if self.db[d.trackKey] == true and not slot.groups[d.key] then return false end
+    for i = 1, #DESCRIPTORS do
+        local d = DESCRIPTORS[i]
+        if self.db[d.category.trackKey] == true and not slot.groups[d.key] then return false end
     end
     return true
 end
@@ -604,35 +579,15 @@ local function RetireButton(button)
     return ok
 end
 
--- Never written.
-local EMPTY_ENTRIES = {}
-
--- Every group's container settings, for creation and every reconfiguration.
--- A list group follows the row's last bound cells, none before the first
--- bind; every category leaves out the list's spells (listBuffs).
-local function GroupConfig(db, slot, d)
-    if d.list then
-        return KE.PartyBuffsRules.ListGroupConfig(d.list, db, slot.listEntries or EMPTY_ENTRIES)
-    end
-    return KE.PartyBuffsRules.BuildGroupConfig(d.category, db, slot.cellBuffs, slot.listBuffs)
-end
-
-local function SetSig(set)
-    if not set then return "" end
-    local ids = {}
-    for id in pairs(set) do ids[#ids + 1] = id end
-    table_sort(ids)
-    return table_concat(ids, ",")
-end
-
 function PB:AddGroup(k, slot, d)
-    local filter, candidates, maxFrames, index = GroupConfig(self.db, slot, d)
+    local filter, candidates, maxFrames, index =
+        KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, slot.cellBuffs)
     local container = slot.container
     local started = DEBUG_PB and debugprofilestop()
     local ok = pcall(container.AddAuraGroup, container, d.key, filter, {
         candidateFilters = candidates,
         maxFrameCount    = maxFrames,
-        sortMethod       = AuraContainerSortMethod[d.sort],
+        sortMethod       = AuraContainerSortMethod.AuraInstanceIDOnly,
         sortDirection    = AuraContainerSortDirection.Normal,
         -- Reads the live settings: buttons made in a later batch are dressed
         -- from the profile current at that time. Blizzard applies the
@@ -770,9 +725,9 @@ function PB:BuildSlot(k)
         KE.PartyBuffsRules.RecordPin(slot, pinned, corner, 0, 0)
     end
     local built, refused = false, false
-    for i = 1, #GROUPS do
-        local d = GROUPS[i]
-        if self.db[d.trackKey] == true and not slot.groups[d.key] then
+    for i = 1, #DESCRIPTORS do
+        local d = DESCRIPTORS[i]
+        if self.db[d.category.trackKey] == true and not slot.groups[d.key] then
             self:AddGroup(k, slot, d)
             if slot.groups[d.key] and not self:SlotComplete(k) then return false end
             built, refused = true, not slot.groups[d.key]
@@ -949,75 +904,17 @@ function PB:BindCooldowns(k, binding)
         slot.cdMember, slot.cdSpec = m, spec
     end
     local entries = self:CooldownEntries(m)
-    Track.HoldOverlay(slot.track, KE.PartyBuffsRules.ListOn(self.db))
     local clean, restyle = Track.Apply(slot.track, binding.token, entries, self.cellStyle, self.styleSettings)
     slot.cellSize = self.cellStyle.size
     if not clean then self.buildPending = true end
     if restyle then self:Restyle() end
     if Track.Missing(slot.track) then self:Enqueue(k) end
     self:LayoutCells(slot, #entries)
-    slot.listEntries = entries
     self:ExcludeCellTrinkets(k, slot, entries)
-    self:ApplyActiveList(slot, entries)
     self:SyncMembers()
     -- Spec.Resolve announces no change, and the raid cooldowns box may read
     -- this record too. Its resolve then finds the spec unmoved.
     if m and m.spec ~= before then HX.OnMemberChanged(m) end
-end
-
--- A trinket release waits for the overlay to process its emptied slots; a
--- held-off overlay shows nothing, so nothing waits for it.
-local function OverlayWaits(track)
-    local host = track.overlayHost
-    return host ~= nil and not track.overlayHeld and not host:IsVisible()
-end
-
--- The active list's include sets and caps follow the row's cells on every
--- bind, and every category leaves the list's spells out. A refused call waits
--- for the drain, as the trinket exclusion does; until then a buff can show
--- twice or not at all. A group built later takes the same settings at its
--- creation (GroupConfig).
-function PB:ApplyActiveList(slot, entries)
-    local container = slot.container
-    if not container then return end
-    local db = self.db
-    local listBuffs = KE.PartyBuffsRules.ListBuffs(db, entries)
-    -- Off, with the list's buffs dropped and every filter taken: nothing to
-    -- issue. slot.listBuffs is tested too: a reconfiguration clears the
-    -- signatures while the list may still be on.
-    if not (listBuffs or slot.listBuffs or slot.listSigs) then return end
-    slot.listBuffs = listBuffs
-    slot.listSigs = slot.listSigs or {}
-    slot.listExcludeSigs = slot.listExcludeSigs or {}
-    local settled = true
-    for i = 1, #LIST_DESCRIPTORS do
-        local d = LIST_DESCRIPTORS[i]
-        if slot.groups[d.key] then
-            local _, candidates, maxFrames = GroupConfig(db, slot, d)
-            local sig = SetSig(candidates.includeSpellIDs) .. ":" .. maxFrames
-            if slot.listSigs[d.key] ~= sig then
-                local ok = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates)
-                ok = pcall(container.SetAuraGroupMaxFrameCount, container, d.key, maxFrames) and ok
-                slot.listSigs[d.key] = ok and sig or nil
-                if not ok then settled = false end
-            end
-        end
-    end
-    local sig = SetSig(listBuffs)
-    for i = 1, #DESCRIPTORS do
-        local d = DESCRIPTORS[i]
-        if slot.groups[d.key] and slot.listExcludeSigs[d.key] ~= sig then
-            local _, candidates = GroupConfig(db, slot, d)
-            local ok = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates)
-            slot.listExcludeSigs[d.key] = ok and sig or nil
-            if not ok then settled = false end
-        end
-    end
-    if not settled then
-        self.buildPending = true
-    elseif not listBuffs then
-        slot.listSigs, slot.listExcludeSigs = nil, nil
-    end
 end
 
 -- A trinket with a cooldown icon leaves this row's while-active Trinkets
@@ -1035,7 +932,7 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
     -- Withholding a cell can hide the whole overlay and with it every cell,
     -- so a second pass settles the exclusion; after it no cell is ready.
     for _ = 1, 2 do
-        local set = {}
+        local set, ids = {}, {}
         for i, e in ipairs(entries) do
             if e.trinket and track.ready[i] then
                 for _, id in ipairs(e.buffs) do set[id] = true end
@@ -1049,9 +946,11 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
             if not set[id] then slot.cellRelease[id] = true end
         end
         for id in pairs(slot.cellRelease) do set[id] = true end
-        local sig = SetSig(set)
+        for id in pairs(set) do ids[#ids + 1] = id end
+        table_sort(ids)
+        local sig = table_concat(ids, ",")
         if slot.cellSig ~= sig then
-            local cellBuffs = sig ~= "" and set or nil
+            local cellBuffs = #ids > 0 and set or nil
             slot.cellBuffs = cellBuffs
             local accepted = self:SetTrinketExclusion(slot, cellBuffs)
             slot.cellShow, slot.cellPending = CDRules.TrinketShow(slot.cellShow, set, accepted)
@@ -1063,7 +962,8 @@ function PB:ExcludeCellTrinkets(k, slot, entries)
         end
         -- A release waits for a shown overlay host: the bind that shows it
         -- comes back here, so nothing polls meanwhile.
-        if slot.cellPending or (next(slot.cellRelease) and not OverlayWaits(track)) then
+        local host = track.overlayHost
+        if slot.cellPending or (next(slot.cellRelease) and not (host and not host:IsVisible())) then
             self:SettleCellTrinkets(k, slot)
         end
         local off, show = track.overlayOff, slot.cellShow
@@ -1096,7 +996,8 @@ function PB:SettleCellTrinkets(k, slot)
         if slot.cellPending then slot.cellShow, slot.cellPending = slot.cellPending, nil end
         -- A hidden overlay host has not processed its emptied slots either; the
         -- bind that shows it starts the settle again.
-        if next(slot.cellRelease) and not (slot.track and OverlayWaits(slot.track)) then
+        local host = slot.track and slot.track.overlayHost
+        if next(slot.cellRelease) and not (host and not host:IsVisible()) then
             for id in pairs(slot.cellRelease) do
                 slot.cellRelease[id] = nil
                 slot.cellShow[id] = nil
@@ -1121,8 +1022,7 @@ function PB:SetTrinketExclusion(slot, cellBuffs)
         if d.category.excludesCells then
             if slot.unknownGroups[d.key] then return false end
             if not slot.groups[d.key] then return true end
-            local _, candidates = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, cellBuffs,
-                slot.listBuffs)
+            local _, candidates = KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, cellBuffs)
             return pcall(slot.container.SetAuraGroupCandidateFilters, slot.container, d.key, candidates)
         end
     end
@@ -1410,8 +1310,8 @@ function PB:Restyle()
     for k = 1, MAX_SLOTS do
         local slot = self.slots[k]
         if slot and slot.container then
-            for i = 1, #GROUPS do
-                local d = GROUPS[i]
+            for i = 1, #DESCRIPTORS do
+                local d = DESCRIPTORS[i]
                 if slot.groups[d.key] and not RestyleGroup(slot.container, d, self.styleSettings) then
                     clean = false
                 end
@@ -1424,23 +1324,21 @@ function PB:Restyle()
     self.restylePending = not clean
 end
 
--- Returns false when any setter was refused. It issues every group's whole
--- config, so the list's signatures no longer say what a group holds; the next
--- bind that has a list issues them again.
+-- Returns false when any setter was refused.
 function PB:ReconfigureSlot(slot)
     local container = slot.container
     local clean = true
-    for i = 1, #GROUPS do
-        local d = GROUPS[i]
+    for i = 1, #DESCRIPTORS do
+        local d = DESCRIPTORS[i]
         if slot.groups[d.key] then
-            local filter, candidates, maxFrames, index = GroupConfig(self.db, slot, d)
+            local filter, candidates, maxFrames, index =
+                KE.PartyBuffsRules.BuildGroupConfig(d.category, self.db, slot.cellBuffs)
             clean = pcall(container.SetAuraGroupFilterString, container, d.key, filter) and clean
             clean = pcall(container.SetAuraGroupCandidateFilters, container, d.key, candidates) and clean
             clean = pcall(container.SetAuraGroupMaxFrameCount, container, d.key, maxFrames) and clean
             clean = pcall(container.SetAuraGroupLayout, container, d.key, self:GroupLayout(index)) and clean
         end
     end
-    slot.listSigs, slot.listExcludeSigs = nil, nil
     return self:ApplySlotLayout(slot) and clean
 end
 
@@ -1644,36 +1542,16 @@ function PB:PreviewEntries(k)
     return entries
 end
 
--- The active sample: cell 2's buff, unless cell 2 is a summon, whose active
--- phase never shows as a buff.
-local function ActiveSample(entries)
-    local e = entries[2]
-    if e and e.active then return nil end
-    return e
-end
-
--- The seconds a preview cell cools from, nil for a ready one: cell 3 with
--- PREVIEW_LEFT to go (one under the spell's length when that is shorter), and
--- cell 2 while the active list shows its buff, used PREVIEW_USED ago.
-local function PreviewLoop(i, e, listed)
-    if i == 3 then return math_min(PREVIEW_LEFT, e.cd - 1) end
-    if i == 2 and listed then return math_max(1, e.cd - PREVIEW_USED) end
-    return nil
-end
-
--- Every cell ready but the cooling ones (PreviewLoop), each started again with
--- the same time left whenever it has run out. A redraw keeps a cell's tracker
--- while its spell, length, charges and loop are the same, so a countdown
--- carries on. Plain values only.
+-- Every cell ready but cell 3, cooling with PREVIEW_LEFT seconds to go (one
+-- under the spell's length when that is shorter), started again with the same
+-- time left whenever it has run out. A redraw keeps a cell's tracker while its
+-- spell and length are the same, so a countdown carries on. Plain values only.
 function PB:DrawPreviewCells(row, entries, layout, g, perRow)
     local n = Track.Now()
-    local sample = ActiveSample(entries)
-    local listed = KE.PartyBuffsRules.ListOn(self.db) and sample ~= nil
     for i = 1, PREVIEW_CELLS do
         local c, e, old = row.cells[i], entries[i], row.trackers[i]
-        local loop = e and PreviewLoop(i, e, listed)
         if old and not (e and old.previewID == e.id and old.cd == e.cd
-            and (old.charges or 1) == (e.charges or 1) and old.loop == loop) then
+            and (old.charges or 1) == (e.charges or 1)) then
             Track.Forget(old)
             row.trackers[i] = nil
             old = nil
@@ -1693,8 +1571,8 @@ function PB:DrawPreviewCells(row, entries, layout, g, perRow)
             else
                 local t = CDRules.NewTracker(e.cd, false, false, e.charges)
                 t.cell, t.previewID = c, e.id
-                t.loop = loop
-                if loop then
+                if i == 3 then
+                    t.loop = math_min(PREVIEW_LEFT, e.cd - 1)
                     CDRules.StartLoop(t, n)
                 else
                     CDRules.Clear(t, n)
@@ -1708,12 +1586,14 @@ function PB:DrawPreviewCells(row, entries, layout, g, perRow)
             c:Hide()
         end
     end
-    self:DrawPreviewActive(row, sample, layout, g)
+    -- A summon with its own active phase never gets an aura button live.
+    local sample = entries[2]
+    if sample and sample.active then sample = nil end
+    self:DrawPreviewActive(row, sample)
 end
 
--- The active sample: a preview aura frame with a running timer, over cell 2,
--- or first in the buff area while the active list is on.
-function PB:DrawPreviewActive(row, e, layout, g)
+-- The active sample: a preview aura frame over cell 2 with a running timer.
+function PB:DrawPreviewActive(row, e)
     local icon = row.active
     if not e then
         if icon then
@@ -1734,16 +1614,10 @@ function PB:DrawPreviewActive(row, e, layout, g)
         icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
         row.active = icon
     end
+    local cell = row.cells[2]
+    icon:SetFrameLevel(cell:GetFrameLevel() + 10)
     icon:ClearAllPoints()
-    if KE.PartyBuffsRules.ListOn(self.db) then
-        local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex, g.buffLine)
-        icon:SetFrameLevel(row.holder:GetFrameLevel() + 1)
-        icon:SetPoint(layout.corner, row.holder, layout.corner, x, y)
-    else
-        local cell = row.cells[2]
-        icon:SetFrameLevel(cell:GetFrameLevel() + 10)
-        icon:SetPoint("CENTER", cell, "CENTER", 0, 0)
-    end
+    icon:SetPoint("CENTER", cell, "CENTER", 0, 0)
     icon.keIcon:SetTexture(e.texture)
     self:RunPreviewTimer(icon, 1, GetTime())
     icon:Show()
@@ -1768,9 +1642,8 @@ function PB:DrawPreviewRow(k, frame)
         return
     end
     self:DrawPreviewCells(row, entries, layout, g, perRow)
-    -- The live row leaves a trinket drawn as a cooldown icon, and every spell
-    -- of the active list, out of its other groups.
-    local skip = KE.PartyBuffsRules.ListBuffs(db, entries) or {}
+    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs.
+    local skip = {}
     for _, e in ipairs(entries) do
         if e.trinket then
             for _, id in ipairs(e.buffs) do skip[id] = true end
@@ -1787,8 +1660,6 @@ function PB:DrawPreviewRow(k, frame)
         end
     end
     local counts = KE.PartyBuffsRules.SplitBuffSamples(KE.PartyBuffsRules.IconCount(db), available)
-    -- The active list's sample takes the buff area's first place.
-    local lead = (KE.PartyBuffsRules.ListOn(db) and ActiveSample(entries)) and 1 or 0
     local now, shown = GetTime(), 0
     for i, d in ipairs(tracked) do
         for j = 1, counts[i] do
@@ -1805,7 +1676,7 @@ function PB:DrawPreviewRow(k, frame)
                 row.icons[shown] = icon
             end
             -- Where the live container would put the same icon.
-            local col, line = KE.PartyBuffsRules.GridPosition(lead + shown - 1, g.buffPerLine)
+            local col, line = KE.PartyBuffsRules.GridPosition(shown - 1, g.buffPerLine)
             local x, y = KE.PartyBuffsRules.IconOffset(g, layout, g.buffIndex + col, g.buffLine + line)
             icon:ClearAllPoints()
             icon:SetPoint(layout.corner, holder, layout.corner, x, y)

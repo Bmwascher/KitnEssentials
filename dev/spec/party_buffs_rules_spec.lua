@@ -476,11 +476,9 @@ describe("PartyBuffsRules.SlotGeometry and IconOffset", function()
             { name = "not centered, today's numbers", layout = aboveRight, cells = 4, buffs = 4, perRow = 6,
               want = { x0 = 0, width = 147, height = 73, buffIndex = 0, buffLine = 1, buffPerLine = 4 },
               pin = { 0, 37 } },
-            { name = "centered row, list on", layout = aboveCenter, cells = 2, buffs = 4, perRow = 14, list = true,
-              want = { x0 = 148, width = 369, height = 73 }, pin = { 148, 37 } },
         }
         for _, case in ipairs(cases) do
-            local db = { IconSpacing = case.spacing or 1, MaxPerMember = case.buffs, ActiveCooldownsFirst = case.list }
+            local db = { IconSpacing = case.spacing or 1, MaxPerMember = case.buffs }
             local g = R.SlotGeometry(db, case.layout, case.cells, case.perRow, 36)
             for key, value in pairs(case.want) do
                 assert.are.equal(value, g[key], case.name .. ": " .. key)
@@ -493,22 +491,6 @@ describe("PartyBuffsRules.SlotGeometry and IconOffset", function()
                 assert.are.same(case.pin, { R.IconOffset(g, case.layout, g.buffIndex, g.buffLine) },
                     case.name .. ": pin")
             end
-        end
-    end)
-end)
-
-describe("PartyBuffsRules.BuffAreaCount", function()
-    it("adds one place per cooldown cell to Max Active Buff Icons while the active list is on", function()
-        local R = L.loadPartyBuffsRules()
-        local cases = {
-            { name = "off", db = { MaxPerMember = 4 }, cells = 4, want = 4 },
-            { name = "on, with cells", db = { MaxPerMember = 4, ActiveCooldownsFirst = true }, cells = 4, want = 8 },
-            { name = "on, no cell", db = { MaxPerMember = 4, ActiveCooldownsFirst = true }, cells = 0, want = 4 },
-            { name = "on, a fractional cap", db = { MaxPerMember = 4.6, ActiveCooldownsFirst = true }, cells = 2,
-              want = 7 },
-        }
-        for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.BuffAreaCount(case.db, case.cells), case.name)
         end
     end)
 end)
@@ -586,70 +568,6 @@ describe("PartyBuffsRules.BuildGroupConfig cell trinkets", function()
             local _, candidates = R.BuildGroupConfig(byKey[case.key], makeDb({}), case.cells)
             assert.are.equal(case.want, candidates.excludeSpellIDs, case.name)
         end
-    end)
-end)
-
-describe("PartyBuffsRules.ListGroupConfig and the category exclusion", function()
-    local entries = {
-        { kind = "offensive", buffs = { 10, 11 } },
-        { kind = "offensive", buffs = { 20 }, active = 12 },
-        { kind = "defensive", buffs = { 30 } },
-        { kind = "trinket", buffs = { 40 }, trinket = true },
-    }
-
-    it("gives each kind's list group its cells' buffs without summons, one place per such cell", function()
-        local R = L.loadPartyBuffsRules()
-        local on, off = makeDb({ ActiveCooldownsFirst = true }), makeDb({})
-        local byKind = {}
-        for _, group in ipairs(R.LIST_GROUPS) do byKind[group.kind] = group end
-        local cases = {
-            { name = "offensive, a summon left out", kind = "offensive", db = on, entries = entries,
-              include = { [10] = true, [11] = true }, max = 1 },
-            { name = "defensive", kind = "defensive", db = on, entries = entries,
-              include = { [30] = true }, max = 1 },
-            { name = "trinket", kind = "trinket", db = on, entries = entries,
-              include = { [40] = true }, max = 1 },
-            { name = "only a summon", kind = "offensive", db = on, entries = { entries[2] },
-              include = {}, max = 0 },
-            { name = "switch off: nothing included", kind = "offensive", db = off, entries = entries,
-              include = {}, max = 0 },
-        }
-        for _, case in ipairs(cases) do
-            local _, candidates, max = R.ListGroupConfig(byKind[case.kind], case.db, case.entries)
-            assert.are.same(case.include, candidates.includeSpellIDs, case.name)
-            assert.are.equal(case.max, max, case.name)
-        end
-    end)
-
-    it("leaves the list's buffs out of every category and never writes the shared sets", function()
-        local R, KE = L.loadPartyBuffsRules()
-        local on, off = makeDb({ ActiveCooldownsFirst = true }), makeDb({})
-        local blocklist = KE.AuraRules.BuildExcludeSpellIDs(nil)
-        local cells = { [50] = true }
-        local listed = R.ListBuffs(on, entries)
-        local external
-        for _, category in ipairs(R.CATEGORIES) do
-            if category.excludeBlocklist then external = category end
-            local _, merged = R.BuildGroupConfig(category, on, cells, listed)
-            for _, id in ipairs({ 10, 11, 30, 40 }) do
-                assert.is_true(merged.excludeSpellIDs[id], category.key .. " leaves out " .. id)
-            end
-            assert.is_nil(merged.excludeSpellIDs[20], category.key .. ": a summon's buff stays")
-            if category.excludeBlocklist then
-                for id in pairs(blocklist) do
-                    assert.is_true(merged.excludeSpellIDs[id], "blocklist " .. id)
-                end
-            end
-            if category.excludesCells then
-                assert.is_true(merged.excludeSpellIDs[50], "a trinket cell stays left out")
-            end
-        end
-        for _, id in ipairs({ 10, 11, 30, 40 }) do
-            assert.is_nil(blocklist[id], "shared blocklist untouched " .. id)
-            assert.is_nil(cells[id], "cell set untouched " .. id)
-        end
-        local _, plain = R.BuildGroupConfig(external, off, nil, R.ListBuffs(off, entries))
-        assert.are.equal(blocklist, plain.excludeSpellIDs, "switch off: the blocklist itself")
     end)
 end)
 
