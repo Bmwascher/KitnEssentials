@@ -270,9 +270,11 @@ local function MakeBar(parent, db)
     -- for secret reads and shows a "secret while in combat" message in combat.
     row:SetScript("OnEnter", function()
         if DM.ShowHoverTip then DM:ShowHoverTip(bar.win, bar, true) end  -- isInitial: anchor the tip once on hover
+        if bar.win then DM:NoteWindowHover(bar.win, true) end
     end)
     row:SetScript("OnLeave", function()
         if DM.HideHoverTip then DM:HideHoverTip() end
+        if bar.win then DM:NoteWindowHover(bar.win, false) end
     end)
 
     row:Hide()
@@ -403,34 +405,22 @@ function DM:CreateWindow(winIdx)
     W.clock:SetTextColor(0.85, 0.85, 0.85)
     W.clock:Hide()
 
-    -- Window-index badge: a solid accent-colored chip (top-right) with a bright
-    -- white number, shown ONLY during GUI preview / edit so the "Window N" rows in
-    -- the config map unambiguously to the numbered window on screen; hidden during
-    -- normal play so it never obscures bar data. The badge shows the window's
-    -- on-screen DISPLAY POSITION (left->right, top->bottom), NOT its storage index
-    -- -- LayoutDock authoritatively sets W.indexBadge.text from self._winDisplayPos
-    -- on every structural pass. The text set here is only a placeholder before the
-    -- first layout (the chip is hidden until then). A frame+backdrop (not a bare
-    -- FontString) so the number reads clearly against any bar color behind it; the
-    -- chip sits a few frame levels above the body so it isn't covered by bars.
+    -- Window number chip, shown only while the settings or /kes edit preview the
+    -- meter, so it never covers bar data in play. It shows the display position,
+    -- which LayoutDock writes from self._winDisplayPos on every structural pass.
+    -- PaintIndexBadge sizes, places and colors it; it sits above the bars.
     W.indexBadge = CreateFrame("Frame", nil, W.frame, "BackdropTemplate")
-    W.indexBadge:SetSize(22, 22)
-    W.indexBadge:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2, -2)
     W.indexBadge:SetFrameLevel(W.frame:GetFrameLevel() + 6)
     W.indexBadge:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    do
-        local ar, ag, ab = KE:GetAccentColor()
-        W.indexBadge:SetBackdropColor(ar or 1, ag or 0, ab or 0.55, 0.92)
-    end
     W.indexBadge:SetBackdropBorderColor(0, 0, 0, 1)
     W.indexBadge.text = W.indexBadge:CreateFontString(nil, "OVERLAY")
     W.indexBadge.text:SetPoint("CENTER", W.indexBadge, "CENTER", 0, 0)
-    KE:ApplyFontToText(W.indexBadge.text, self.db and self.db.FontFace, 15, "OUTLINE")
-    W.indexBadge.text:SetTextColor(1, 1, 1, 1)
+    -- SetText raises on a FontString with no font; PaintIndexBadge sets the size.
+    KE:ApplyFontToText(W.indexBadge.text, self.db and self.db.FontFace, 13, "OUTLINE")
     W.indexBadge.text:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
     if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
 
@@ -461,11 +451,13 @@ function DM:CreateWindow(winIdx)
             GameTooltip:SetText(tooltip)
             GameTooltip:Show()
             DM:RevealHeaderIcons(W)
+            DM:NoteWindowHover(W, true)
         end)
         b:SetScript("OnLeave", function(btn)
             btn.icon:SetVertexColor(0.8, 0.8, 0.8)
             GameTooltip:Hide()
             DM:HeaderIconLeave(W)
+            DM:NoteWindowHover(W, false)
         end)
         b:SetScript("OnClick", onClick)
         return b
@@ -495,11 +487,13 @@ function DM:CreateWindow(winIdx)
             btn.icon:SetVertexColor(1, 1, 1)
             DM:RevealHeaderIcons(W)
             if DM.OpenSegmentMenu then DM:OpenSegmentMenu(W) end
+            DM:NoteWindowHover(W, true)
         end)
         seg:SetScript("OnLeave", function(btn)
             btn.icon:SetVertexColor(0.8, 0.8, 0.8)
             DM:HeaderIconLeave(W)
             if DM.ScheduleSegmentClose then DM:ScheduleSegmentClose(W) end
+            DM:NoteWindowHover(W, false)
         end)
     end
 
@@ -548,6 +542,9 @@ function DM:CreateWindow(winIdx)
             DM:OnWindowRightClick(W)
         end
     end)
+    -- The empty body counts as the window for the settings hover link.
+    W.body:SetScript("OnEnter", function() DM:NoteWindowHover(W, true) end)
+    W.body:SetScript("OnLeave", function() DM:NoteWindowHover(W, false) end)
 
     -- Mouse-wheel scroll. A short pane (e.g. a 35%-height stacked window) shows fewer
     -- rows than the meter holds, so the wheel scrolls the bar list to reach the
@@ -600,6 +597,7 @@ function DM:CreateWindow(winIdx)
     -- them in DM:LayoutDock (called by CreateAllWindows after every window is
     -- built), so the frame is briefly 0-wide here until that structural pass runs.
     self:LayoutWindow(W)
+    self:PaintIndexBadge(W)
 
     self.windows_rt = self.windows_rt or {}
     self.windows_rt[winIdx] = W
@@ -666,9 +664,8 @@ function DM:LayoutWindow(W)
         if W.headerIcon and W.headerBar then
             local iconSize = headerFontSize + 4
             W.headerIcon:SetSize(iconSize, iconSize)
-            W.headerIcon:ClearAllPoints()
-            W.headerIcon:SetPoint("LEFT", W.headerBar, "LEFT", 4, 0)
         end
+        self:AnchorHeaderStart(W)
         -- The detail panel covers the same area as the body; keep its top edge in
         -- sync with the header band. Its anchor was baked at EnsureDetail time, so a
         -- later font-size change would otherwise leave a gap/overlap on the next open.
@@ -754,6 +751,46 @@ function DM:ApplyHeaderColor(W)
         W.header:SetTextColor(KE:GetAccentColor("theme"))
     else
         W.header:SetTextColor(1, 1, 1)
+    end
+end
+
+local HEADER_INSET = 4
+
+-- The chip's side tracks the header band: the band height minus 2, kept to
+-- 12..18 px, so a small header font never pushes the chip out of the band.
+local function BadgeSide(W)
+    local side = (W._headerH or 20) - 2
+    if side > 18 then side = 18 elseif side < 12 then side = 12 end
+    return side
+end
+
+-- Sizes, places and colors the window number chip from DM:GetChipStyle.
+function DM:PaintIndexBadge(W)
+    local badge = W and W.indexBadge
+    if not (badge and W.headerBar) then return end
+    local side = BadgeSide(W)
+    local r, g, b, ink, outline = self:GetChipStyle()
+    badge:SetSize(side, side)
+    badge:ClearAllPoints()
+    badge:SetPoint("LEFT", W.headerBar, "LEFT", 1, 0)
+    badge:SetBackdropColor(r, g, b, 1)
+    KE:ApplyFontToText(badge.text, self.db and self.db.FontFace, side - 5, outline)
+    badge.text:SetTextColor(ink, ink, ink, 1)
+end
+
+-- The header's left inset, past the chip while chips show. It holds the type
+-- icon, or the title when the icon is hidden.
+function DM:AnchorHeaderStart(W)
+    if not (W and W.headerBar) then return end
+    local inset = HEADER_INSET
+    if self._badgesShown then inset = HEADER_INSET + BadgeSide(W) + HEADER_INSET end
+    if W.headerIcon then
+        W.headerIcon:ClearAllPoints()
+        W.headerIcon:SetPoint("LEFT", W.headerBar, "LEFT", inset, 0)
+    end
+    if W.header and not (W.headerIcon and W.headerIcon:IsShown()) then
+        W.header:ClearAllPoints()
+        W.header:SetPoint("LEFT", W.headerBar, "LEFT", inset, 0)
     end
 end
 
@@ -968,8 +1005,14 @@ function DM:ApplyHeaderIcons(W)
             -- and keeps them up while an overlay is open. The icons' own OnEnter/OnLeave
             -- call the same pair, so entering/leaving directly on an icon is covered too.
             W.headerBar:EnableMouse(true)
-            W.headerBar:SetScript("OnEnter", function() DM:RevealHeaderIcons(W) end)
-            W.headerBar:SetScript("OnLeave", function() DM:HeaderIconLeave(W) end)
+            W.headerBar:SetScript("OnEnter", function()
+                DM:RevealHeaderIcons(W)
+                DM:NoteWindowHover(W, true)
+            end)
+            W.headerBar:SetScript("OnLeave", function()
+                DM:HeaderIconLeave(W)
+                DM:NoteWindowHover(W, false)
+            end)
             W._headerIconHover = true
         end
         -- Re-derive the reveal from the LIVE overlay/hover state: the alpha-0 loop
@@ -1435,7 +1478,7 @@ function DM:RenderWindow(W)
                 W.header:SetPoint("LEFT", W.headerIcon, "RIGHT", 3, 0)
             else
                 W.headerIcon:Hide()
-                W.header:SetPoint("LEFT", W.headerBar, "LEFT", 4, 0)
+                self:AnchorHeaderStart(W)
             end
         end
         -- Recolor the title on every header rebuild. ReapplyBarVisuals nils

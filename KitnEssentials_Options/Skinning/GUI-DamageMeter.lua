@@ -10,11 +10,23 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local pairs = pairs
+local ipairs = ipairs
+local tostring = tostring
 local CreateFrame = CreateFrame
 local math_max = math.max
 local math_floor = math.floor
 
-local activeTab = "General"
+local PAGE_ID = "DamageMeter"
+local TAB_WINDOWS = "DamageMeter_Windows"
+local TAB_APPEARANCE = "DamageMeter_Appearance"
+local TAB_BEHAVIOR = "DamageMeter_Behavior"
+local TAB_SPELLHISTORY = "DamageMeter_SpellHistory"
+
+-- The layout map's height and the gap between its boxes.
+local MAP_HEIGHT = 140
+local MAP_GAP = 4
+-- A split row: the label line, then the slider below it.
+local SPLIT_ROW_H = 44
 
 -- Ordered option lists for the per-context default-display rows.
 -- Order mirrors the in-world view-selector grid (Selector.lua VIEW_GRID) so the GUI
@@ -45,11 +57,33 @@ local CONTEXT_OPTIONS = {
     { key = "Scenario",     text = "Scenario" },
 }
 
-local ARRANGEMENT_OPTIONS = {
-    { key = "Horizontal", text = "Horizontal" },
-    { key = "Vertical",   text = "Vertical" },
-    { key = "Custom",     text = "Custom" },
+-- The map boxes and split labels name a window by these texts.
+local TYPE_TEXT, SEGMENT_TEXT = {}, {}
+for _, option in ipairs(METER_TYPE_OPTIONS) do TYPE_TEXT[option.key] = option.text end
+for _, option in ipairs(SEGMENT_OPTIONS) do SEGMENT_TEXT[option.key] = option.text end
+
+local ARRANGEMENT_BUTTONS = {
+    { key = "Horizontal", text = "Side by Side",
+      tooltip = "Puts each window in its own column, left to right." },
+    { key = "Vertical", text = "Stacked",
+      tooltip = "Stacks every window in one column, top to bottom." },
+    { key = "Custom", text = "Custom",
+      tooltip = "Lit when you have arranged the windows yourself. Drag the boxes on the map to make your own layout." },
 }
+
+local SPLIT_TOOLTIP = "Moves only the split between these two; the other windows stay put. " ..
+    "Same as dragging this gap on the meter."
+
+local function Gold(text)
+    return "|cffffd100" .. text .. "|r"
+end
+
+local DESCRIPTION = "A damage meter built on the game's own combat data, standing in for the " ..
+    "built-in meter while it is on. Switch what it shows and which fight it shows on the meter " ..
+    "itself; these settings set the defaults and the look." ..
+    "\n\nMove it in " .. Gold("/kes edit") .. " and resize windows by dragging the gaps between " ..
+    "them. " .. Gold("/kes dm") .. " shows or hides it, " .. Gold("/kes dm reset") ..
+    " clears every segment, " .. Gold("/kes dm report") .. " posts window 1 to chat (out of combat)."
 
 -- Resolves the live module handle (may be nil very early in load).
 local function GetDM()
@@ -68,9 +102,8 @@ local function ApplyBackdropOnly()
     if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
 end
 
--- Schedules a full page rebuild on the next frame (used by the Windows tab's
--- Configure-For context switches and arrangement changes that change which
--- widgets appear). Defined here; first consumed when the Windows tab lands.
+-- Schedules a full page rebuild on the next frame, for a change that adds or
+-- removes widgets, so the widget whose callback asked is not torn down mid-call.
 local function RebuildPage()
     if GUIFrame.RefreshContent then
         C_Timer.After(0, function() GUIFrame:RefreshContent() end)
@@ -89,110 +122,77 @@ local function MediaList(kind, fallback)
     return out
 end
 
----------------------------------------------------------------------------------
--- General tab
----------------------------------------------------------------------------------
-local function BuildGeneralTab(scrollChild, yOffset, db, manager)
-    local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("DamageMeter", true)
-        if not mod then return end
-        mod.db.Enabled = enabled
-        if enabled then
-            KitnEssentials:EnableModule("DamageMeter")
-        else
-            KitnEssentials:DisableModule("DamageMeter")
-        end
+local function ApplyModuleState(enabled)
+    if not KitnEssentials then return end
+    local mod = KitnEssentials:GetModule("DamageMeter", true)
+    if not mod then return end
+    if mod.db then mod.db.Enabled = enabled end
+    if enabled then
+        KitnEssentials:EnableModule("DamageMeter")
+    else
+        KitnEssentials:DisableModule("DamageMeter")
     end
+end
 
-    ----------------------------------------------------------------
-    -- Card 1: Enable
-    ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Damage Meter", yOffset)
-    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+local function Unavailable(scrollChild, yOffset)
+    local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+    errorCard:AddLabel("Database not available")
+    return errorCard:GetNextOffset()
+end
+
+---------------------------------------------------------------------------------
+-- Number chips: one look for every chip on the page, from DM:GetChipStyle
+---------------------------------------------------------------------------------
+local function SetChipOutline(text, outline)
+    local face, size = text:GetFont()
+    if face then text:SetFont(face, size, outline == "NONE" and "" or outline) end
+end
+
+local function NewChip(parent, side)
+    local chip = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    chip:SetSize(side, side)
+    chip:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    chip.text = chip:CreateFontString(nil, "OVERLAY")
+    chip.text:SetPoint("CENTER")
+    return chip
+end
+
+-- The font goes on before the text: SetText raises on a FontString with none.
+local function PaintChip(chip, n, fontSize)
+    local DM = GetDM()
+    if not (DM and DM.GetChipStyle) then return end
+    local r, g, b, ink, outline = DM:GetChipStyle()
+    chip:SetBackdropColor(r, g, b, 1)
+    chip:SetBackdropBorderColor(0, 0, 0, 1)
+    KE:ApplyThemeFont(chip.text, fontSize)
+    SetChipOutline(chip.text, outline)
+    chip.text:SetTextColor(ink, ink, ink, 1)
+    chip.text:SetText(tostring(n))
+end
+
+---------------------------------------------------------------------------------
+-- Header: the module switch and the description, above the tab strip
+---------------------------------------------------------------------------------
+local function BuildHeader(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.DamageMeter
+    if not db then return Unavailable(scrollChild, yOffset), true end
+
+    local card = GUIFrame:CreateCard(scrollChild, "Damage Meter", yOffset)
+    card:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("A damage meter built on the game's own combat data, standing in for the " ..
-        "built-in meter while it is on. Switch what it shows and which fight it shows on the meter " ..
-        "itself; the settings here set the defaults and the look.")
+    -- Lone header bar: a disabled module shows its switch and nothing else. Any
+    -- label would give the card a body, and collapse only hides the tabs.
+    local disabled = db.Enabled == false
+    if not disabled then card:AddLabel(DESCRIPTION) end
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
-    ----------------------------------------------------------------
-    -- Card: Dock (Lock Dock -- moved off the enable row into its own row here)
-    ----------------------------------------------------------------
-    local DM = GetDM()
-    local cardDock = GUIFrame:CreateCard(scrollChild, "Dock", yOffset)
-    manager:Register(cardDock, "all")
-
-    local rowDock = GUIFrame:CreateRow(cardDock.content, Theme.rowHeightLast)
-    local lockCheck = GUIFrame:CreateCheckbox(rowDock, "Lock Dock", {
-        value = db.Locked == true,
-        callback = function(checked)
-            db.Locked = checked
-            if DM and DM.ApplyLockState then DM:ApplyLockState() end
-        end,
-    })
-    rowDock:AddWidget(lockCheck, 1)
-    manager:Register(lockCheck, "all")
-    cardDock:AddRow(rowDock, Theme.rowHeightLast, 0)
-
-    yOffset = cardDock:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 2: Position Settings (the dock is the positioned frame)
-    -- Position follows the Dock card, which the header-toggle conversion
-    -- inserted between it and the enable switch.
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
-        db = db,
-        positionKey = "Position",
-        dbKeys = {
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Tip
-    ----------------------------------------------------------------
-    -- Three bullets, the first wraps -> ~4 body lines. The CreateText body is
-    -- anchored title->bottom, so it gets (rowH - title - spacer); 92 gives ~4.5 body
-    -- lines of headroom (was 76 for two bullets before the report line was added).
-    local dragNoteCard = GUIFrame:CreateCard(scrollChild, "Tip", yOffset)
-    manager:Register(dragNoteCard, "all")
-    local dnRow = GUIFrame:CreateRow(dragNoteCard.content, 92)
-    local dnText = GUIFrame:CreateText(dnRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Drag the dock in " .. KE:ColorTextByTheme("/kes edit") ..
-        " (disabled while locked). Resize panes by dragging the gaps between windows.\n" ..
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kes dm") ..
-        " toggles the dock; " .. KE:ColorTextByTheme("/kes dm reset") .. " clears all segments.\n" ..
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kes dm report") ..
-        " posts the primary window to chat (out of combat).",
-        92, "hide")
-    dnRow:AddWidget(dnText, 1)
-    manager:Register(dnText, "all")
-    dragNoteCard:AddRow(dnRow, 92, 0)
-    yOffset = dragNoteCard:GetNextOffset()
-
-    return yOffset
+    return card:GetNextOffset(), disabled
 end
 
 ---------------------------------------------------------------------------------
@@ -230,23 +230,23 @@ local function GetSchematicGhost()
     return g
 end
 
--- Painted at each drag start from the live accent, so a theme change since
--- the ghost was made shows. Dark ink on a light accent.
-local function PaintSchematicGhost(g)
-    local a = Theme.accent
-    local ink = KE.IsLightColor(a[1], a[2], a[3]) and 0 or 1
-    g:SetBackdropColor(a[1], a[2], a[3], 0.9)
-    g:SetBackdropBorderColor(ink, ink, ink, 1)
-    g.text:SetTextColor(ink, ink, ink, 1)
+-- Painted at each drag start, so a theme change since the ghost was made shows.
+local function PaintSchematicGhost(ghost)
+    local DM = GetDM()
+    if not (DM and DM.GetChipStyle) then return end
+    local r, g, b, ink, outline = DM:GetChipStyle()
+    ghost:SetBackdropColor(r, g, b, 0.9)
+    ghost:SetBackdropBorderColor(0, 0, 0, 1)
+    SetChipOutline(ghost.text, outline)
+    ghost.text:SetTextColor(ink, ink, ink, 1)
 end
 
 -- The layout map: one box per window, placed to mirror the in-world dock
--- (columns left to right, stacked rows top to bottom), each showing its
--- on-screen number and its full panel label. It is the only arranging
--- surface: drag a box onto another box's center to stack or reorder (a
--- horizontal line shows the row gap it lands in), or to a column's side or
--- off the map edge to peel it into a new column (a vertical line shows the
--- boundary). A ghost follows the cursor throughout.
+-- (columns left to right, stacked rows top to bottom), each showing its number
+-- chip, type and segment. It is the only arranging surface: drag a box onto
+-- another box's center to stack or reorder (a horizontal line shows the row gap
+-- it lands in), or to a column's side or off the map edge to peel it into a new
+-- column (a vertical line shows the boundary). A ghost follows the cursor.
 local function ConstructSchematic(parent)
     local container = CreateFrame("Frame", nil, parent)
     -- Kept across uses: OnSizeChanged does not fire for a map that comes
@@ -402,16 +402,190 @@ local function ConstructSchematic(parent)
         end
     end
 
+    -- Gap handles: an 8 px hit frame over each 4 px gap between two boxes.
+    -- Dragging one moves that split as its slider and the in-world splitter
+    -- do, clamped to the same range.
+    local handles = {}
+    local gapDrag = {}
+    -- Carries the gap drag's OnUpdate. A handle's scripts are set once, in
+    -- NewHandle, and never changed: the map is pooled, so a script swapped on
+    -- a handle later would outlive the page that swapped it.
+    local gapDriver = CreateFrame("Frame", nil, container)
+
+    local function PaintHandle(h)
+        h.line:SetShown(h._hover or h._lit or gapDrag.handle == h)
+    end
+
+    local function StopGapDrag()
+        local h = gapDrag.handle
+        if not h then return end
+        gapDrag.handle = nil
+        gapDriver:SetScript("OnUpdate", nil)
+        PaintHandle(h)
+    end
+
+    -- The pointer's place across the pair, less half the gap, is the left or
+    -- top side's share. The pair's outer edges do not move during the drag: a
+    -- split move keeps the pair's ratio sum.
+    local function GapDragUpdate()
+        local h = gapDrag.handle
+        local dm = GetDM()
+        if not (h and dm) then return end
+        if not IsMouseButtonDown("LeftButton") then StopGapDrag() return end
+        local cs = container:GetEffectiveScale()
+        if cs <= 0 then cs = 1 end
+        local mx, my = GetCursorPosition()
+        local pct
+        if h.kind == "col" then
+            pct = (mx / cs - gapDrag.start - MAP_GAP / 2) / gapDrag.span * 100
+        else
+            pct = (gapDrag.start - my / cs - MAP_GAP / 2) / gapDrag.span * 100
+        end
+        if pct < gapDrag.lo then pct = gapDrag.lo elseif pct > gapDrag.hi then pct = gapDrag.hi end
+        if h.kind == "col" then
+            dm:SetColumnBoundaryShare(h.c, pct)
+        else
+            dm:SetRowBoundaryShare(h.c, h.r, pct)
+        end
+        container.Relayout()
+    end
+
+    local function StartGapDrag(h)
+        local dm = GetDM()
+        local boxAt = container._boxAt
+        local col = boxAt and boxAt[h.c]
+        if not (dm and col) then return end
+        local a, b, start, far, lo, hi
+        if h.kind == "col" then
+            local nextCol = boxAt[h.c + 1]
+            a, b = col[1], nextCol and nextCol[1]
+            if not (a and b) then return end
+            start, far = a:GetLeft(), b:GetRight()
+            if not (start and far) then return end
+            gapDrag.span = far - start - MAP_GAP
+            lo, hi = dm:GetColumnBoundaryRange(h.c)
+        else
+            a, b = col[h.r], col[h.r + 1]
+            if not (a and b) then return end
+            start, far = a:GetTop(), b:GetBottom()
+            if not (start and far) then return end
+            gapDrag.span = start - far - MAP_GAP
+            lo, hi = dm:GetRowBoundaryRange(h.c, h.r)
+        end
+        if gapDrag.span <= 0 then return end
+        gapDrag.start, gapDrag.lo, gapDrag.hi = start, lo, hi
+        gapDrag.handle = h
+        PaintHandle(h)
+        gapDriver:SetScript("OnUpdate", GapDragUpdate)
+    end
+
+    local function NewHandle()
+        local h = CreateFrame("Frame", nil, container)
+        h:EnableMouse(true)
+        h.line = h:CreateTexture(nil, "OVERLAY")
+        h.line:Hide()
+        h:SetScript("OnEnter", function(self)
+            self._hover = true
+            PaintHandle(self)
+            if container._onHover then container._onHover("gap", self, true) end
+        end)
+        h:SetScript("OnLeave", function(self)
+            self._hover = false
+            PaintHandle(self)
+            if container._onHover then container._onHover("gap", self, false) end
+        end)
+        h:SetScript("OnMouseDown", function(self, button)
+            if button == "LeftButton" then StartGapDrag(self) end
+        end)
+        h:SetScript("OnMouseUp", function(_, button)
+            if button == "LeftButton" then StopGapDrag() end
+        end)
+        h:SetScript("OnHide", StopGapDrag)
+        handles[#handles + 1] = h
+        GUIFrame:PoolGrow(container, container, 1, 0)
+        GUIFrame:PoolOwn(container, h)
+        return h
+    end
+
+    -- One handle per gap, anchored to the box before it, so a relayout carries
+    -- the handles along. A column handle spans the map's height; a row handle
+    -- spans its column.
+    function container.ConfigureHandles()
+        local cols, boxAt = container._cols, container._boxAt
+        local accent = Theme.accent
+        local level = container:GetFrameLevel() + 4
+        local n = 0
+        for c = 1, #cols do
+            local col, nextCol = boxAt[c], boxAt[c + 1]
+            if col and col[1] and nextCol and nextCol[1] then
+                n = n + 1
+                local h = handles[n] or NewHandle()
+                h.kind, h.c, h.r = "col", c, nil
+                h:ClearAllPoints()
+                h:SetPoint("TOPLEFT", col[1], "TOPRIGHT", MAP_GAP / 2 - 4, 0)
+                h:SetSize(8, container._height)
+                h.line:ClearAllPoints()
+                h.line:SetSize(2, container._height)
+                h.line:SetPoint("CENTER", h, "CENTER", 0, 0)
+                h.line:SetColorTexture(accent[1], accent[2], accent[3], 1)
+                h:SetFrameLevel(level)
+                h._hover = false
+                h:Show()
+                PaintHandle(h)
+            end
+            if col then
+                for r = 1, #col - 1 do
+                    n = n + 1
+                    local h = handles[n] or NewHandle()
+                    h.kind, h.c, h.r = "row", c, r
+                    h:ClearAllPoints()
+                    h:SetPoint("TOPLEFT", col[r], "BOTTOMLEFT", 0, 4 - MAP_GAP / 2)
+                    h:SetPoint("TOPRIGHT", col[r], "BOTTOMRIGHT", 0, 4 - MAP_GAP / 2)
+                    h:SetHeight(8)
+                    h.line:ClearAllPoints()
+                    h.line:SetHeight(2)
+                    h.line:SetPoint("LEFT", h, "LEFT", 0, 0)
+                    h.line:SetPoint("RIGHT", h, "RIGHT", 0, 0)
+                    h.line:SetColorTexture(accent[1], accent[2], accent[3], 1)
+                    h:SetFrameLevel(level)
+                    h._hover = false
+                    h:Show()
+                    PaintHandle(h)
+                end
+            end
+        end
+        for i = n + 1, #handles do handles[i]:Hide() end
+    end
+
     -- Ends a drag with nothing moved. Also the pool's reset, so a page
-    -- rebuilt under a drag leaves no ghost, line or dimmed box.
+    -- rebuilt under a drag leaves no ghost, line, dimmed box or gap drag.
     function container.CancelDrag()
         container:SetScript("OnUpdate", nil)
         container._dragWin = nil
+        StopGapDrag()
         ClearDrop()
         dropLine:Hide()
         for i = 1, #boxes do boxes[i]:SetAlpha(1) end
         ResetBorders()
         if schematicGhost then schematicGhost:Hide() end
+    end
+
+    -- Geometric, so moving from the box onto its own remove button keeps it,
+    -- whichever event arrives first. A gap handle covers the box's last 2 px
+    -- and sits above it, so the pointer can be inside the box and on a handle
+    -- at once; that counts as off the box.
+    function container.HideRemoveUnlessOver(box)
+        local over = box:IsMouseOver()
+        if over then
+            for i = 1, #handles do
+                local h = handles[i]
+                if h:IsShown() and h:IsMouseOver() then
+                    over = false
+                    break
+                end
+            end
+        end
+        if not over then box.removeBtn:Hide() end
     end
 
     local function NewBox()
@@ -422,33 +596,78 @@ local function ConstructSchematic(parent)
             edgeSize = 1,
         })
 
-        local num = box:CreateFontString(nil, "OVERLAY")
-        num:SetPoint("CENTER", box, "CENTER", 0, 5)
-        box.num = num
+        box.chip = NewChip(box, 20)
 
-        -- Tucked under the number, not pinned to the box bottom, so it
-        -- still shows in a short box; wrapped so a long name stays readable.
-        local tlabel = box:CreateFontString(nil, "OVERLAY")
-        tlabel:SetPoint("TOP", num, "BOTTOM", 0, -1)
-        tlabel:SetPoint("LEFT", box, "LEFT", 2, 0)
-        tlabel:SetPoint("RIGHT", box, "RIGHT", -2, 0)
-        tlabel:SetJustifyH("CENTER")
-        tlabel:SetWordWrap(true)
-        box.tlabel = tlabel
+        local typeText = box:CreateFontString(nil, "OVERLAY")
+        typeText:SetPoint("LEFT", box.chip, "RIGHT", 6, 0)
+        -- Level with the chip's center, clear of the remove button.
+        typeText:SetPoint("RIGHT", box, "TOPRIGHT", -24, -16)
+        typeText:SetJustifyH("LEFT")
+        typeText:SetWordWrap(false)
+        box.typeText = typeText
+
+        local segText = box:CreateFontString(nil, "OVERLAY")
+        segText:SetPoint("TOPLEFT", box, "TOPLEFT", 32, -28)
+        segText:SetPoint("TOPRIGHT", box, "TOPRIGHT", -6, -28)
+        segText:SetJustifyH("LEFT")
+        segText:SetWordWrap(false)
+        box.segText = segText
+
+        local removeBtn = CreateFrame("Button", nil, box)
+        removeBtn:SetSize(16, 16)
+        removeBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", -4, -4)
+        removeBtn:SetFrameLevel(box:GetFrameLevel() + 2)
+        removeBtn.text = removeBtn:CreateFontString(nil, "OVERLAY")
+        removeBtn.text:SetPoint("CENTER")
+        removeBtn:Hide()
+        removeBtn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText("Remove window " .. tostring(box.pos or "?"), 1, 1, 1, 1, true)
+            GameTooltip:Show()
+            if container._onHover then container._onHover("box", box, true) end
+        end)
+        removeBtn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+            container.HideRemoveUnlessOver(box)
+            if container._onHover then container._onHover("box", box, false) end
+        end)
+        removeBtn:SetScript("OnClick", function()
+            local dm = GetDM()
+            if dm and dm.RemoveWindow and box.winIdx then dm:RemoveWindow(box.winIdx) end
+            RebuildPage()
+        end)
+        box.removeBtn = removeBtn
+
+        -- The 2 px mark for a window the pointer is on, here or on the meter.
+        local lit = CreateFrame("Frame", nil, box, "BackdropTemplate")
+        lit:SetAllPoints(box)
+        lit:SetFrameLevel(box:GetFrameLevel() + 1)
+        lit:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
+        lit:Hide()
+        box.lit = lit
 
         box:EnableMouse(true)
+        box:SetScript("OnEnter", function(self)
+            if self._removable and not (container._dragWin or gapDrag.handle) then self.removeBtn:Show() end
+            if container._onHover then container._onHover("box", self, true) end
+        end)
+        box:SetScript("OnLeave", function(self)
+            container.HideRemoveUnlessOver(self)
+            if container._onHover then container._onHover("box", self, false) end
+        end)
         box:RegisterForDrag("LeftButton")
         box:SetScript("OnDragStart", function(self)
-            local posOf, fullLabel = container._posOf, container._fullLabel
-            if not posOf then return end
+            local posOf, infoOf = container._posOf, container._infoOf
+            if not (posOf and infoOf) then return end
             container._dragWin = self.winIdx
             ClearDrop()
+            self.removeBtn:Hide()
             self:SetAlpha(0.4)
             local ghost = GetSchematicGhost()
             PaintSchematicGhost(ghost)
             local label = tostring(posOf[self.winIdx] or "?")
-            local nm = fullLabel and fullLabel(self.winIdx)
-            if nm and nm ~= "" then label = label .. "  " .. nm end
+            local _, _, full = infoOf(self.winIdx)
+            if full and full ~= "" then label = label .. "  " .. full end
             ghost.text:SetText(label)
             ghost:SetWidth(math_max(60, ghost.text:GetStringWidth() + 18))
             ghost:Show()
@@ -481,14 +700,28 @@ local function ConstructSchematic(parent)
         return box
     end
 
+    -- A short box keeps only what fits: under 44 px no segment line, under
+    -- 26 px no type either, with the chip centered.
+    local function PlaceBoxContent(box, h)
+        local chip = box.chip
+        chip:ClearAllPoints()
+        if h < 26 then
+            chip:SetPoint("LEFT", box, "LEFT", 6, 0)
+            box.typeText:Hide()
+        else
+            chip:SetPoint("TOPLEFT", box, "TOPLEFT", 6, -6)
+            box.typeText:Show()
+        end
+        box.segText:SetShown(h >= 44)
+    end
+
     local function Layout(width)
         local cols, boxAt, height = container._cols, container._boxAt, container._height
         if not (cols and boxAt and height) or not width or width <= 0 then return end
-        local GAP = 4
         local sumW = 0
         for c = 1, #cols do sumW = sumW + ((cols[c].WidthRatio) or 1) end
         if sumW <= 0 then sumW = math_max(1, #cols) end
-        local availW = width - GAP * math_max(0, #cols - 1)
+        local availW = width - MAP_GAP * math_max(0, #cols - 1)
         if availW <= 0 then availW = width end
         local runX = 0
         for c = 1, #cols do
@@ -498,7 +731,7 @@ local function ConstructSchematic(parent)
             local sumR = 0
             for r = 1, #wins do sumR = sumR + ((ratios[r]) or 1) end
             if sumR <= 0 then sumR = math_max(1, #wins) end
-            local availH = height - GAP * math_max(0, #wins - 1)
+            local availH = height - MAP_GAP * math_max(0, #wins - 1)
             if availH <= 0 then availH = height end
             local runY = 0
             for r = 1, #wins do
@@ -508,13 +741,11 @@ local function ConstructSchematic(parent)
                     box:ClearAllPoints()
                     box:SetPoint("TOPLEFT", container, "TOPLEFT", runX, -runY)
                     box:SetSize(math_max(1, colW), math_max(1, rowH))
-                    -- The label shows whenever the box fits the number plus
-                    -- one label line.
-                    if rowH < 26 then box.tlabel:Hide() else box.tlabel:Show() end
+                    PlaceBoxContent(box, rowH)
                 end
-                runY = runY + rowH + GAP
+                runY = runY + rowH + MAP_GAP
             end
-            runX = runX + colW + GAP
+            runX = runX + colW + MAP_GAP
         end
     end
 
@@ -527,13 +758,45 @@ local function ConstructSchematic(parent)
     -- relayout picks up a ratio the slider has just written.
     container.Relayout = function() Layout(container:GetWidth()) end
 
-    function container.Configure(_, height, cols, posOf, fullLabel)
+    -- fn(kind, frame, entering): kind "box" for a box (frame.winIdx), "gap" for a
+    -- gap handle (frame.kind, frame.c, frame.r). Setting it clears every mark.
+    function container.SetHover(fn)
+        container._onHover = fn
+        container.LightBoxes(nil)
+        container.LightGap(nil)
+    end
+
+    -- set[idx] = true lights those windows' boxes; nil lights none.
+    function container.LightBoxes(set)
+        local accent = Theme.accent
+        for i = 1, #boxes do
+            local box = boxes[i]
+            if set and i <= (container._count or 0) and set[box.winIdx] then
+                box.lit:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
+                box.lit:Show()
+            else
+                box.lit:Hide()
+            end
+        end
+    end
+
+    -- gap is a split target ({ gapKind, c, r }) or nil.
+    function container.LightGap(gap)
+        for i = 1, #handles do
+            local h = handles[i]
+            h._lit = gap ~= nil and h.kind == gap.gapKind and h.c == gap.c and h.r == gap.r
+            PaintHandle(h)
+        end
+    end
+
+    -- infoOf(idx) returns the window's type text, segment text and full label.
+    function container.Configure(_, cols, posOf, infoOf, removable)
         local T = Theme
-        container:SetHeight(height)
-        container._height = height
+        container:SetHeight(MAP_HEIGHT)
+        container._height = MAP_HEIGHT
         container._cols = cols
         container._posOf = posOf
-        container._fullLabel = fullLabel
+        container._infoOf = infoOf
         dropLine:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
         dropLine:Hide()
 
@@ -546,16 +809,24 @@ local function ConstructSchematic(parent)
                 local idx = wins[r]
                 count = count + 1
                 local box = boxes[count] or NewBox()
+                local typeName, segName = infoOf(idx)
                 box.winIdx = idx
+                box.pos = posOf[idx]
+                box._removable = removable
                 box:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
                 box:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
                 box:SetAlpha(1)
-                KE:ApplyThemeFont(box.num, "large")
-                box.num:SetText(tostring(posOf[idx] or "?"))
-                box.num:SetTextColor(1, 1, 1, 1)
-                KE:ApplyThemeFont(box.tlabel, "small")
-                box.tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-                box.tlabel:SetText((fullLabel and fullLabel(idx)) or "")
+                PaintChip(box.chip, posOf[idx] or "?", 14)
+                KE:ApplyThemeFont(box.typeText, 13)
+                box.typeText:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
+                box.typeText:SetText(typeName or "")
+                KE:ApplyThemeFont(box.segText, 12)
+                box.segText:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+                box.segText:SetText(segName or "")
+                KE:ApplyThemeFont(box.removeBtn.text, 13)
+                box.removeBtn.text:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
+                box.removeBtn.text:SetText("x")
+                box.removeBtn:Hide()
                 box:Show()
                 boxAt[c][r] = box
             end
@@ -564,7 +835,20 @@ local function ConstructSchematic(parent)
 
         container._boxAt = boxAt
         container._count = count
+        container.ConfigureHandles()
         Layout(container._keWidth)
+    end
+
+    -- Re-reads each box's type and segment, after a Type or Segment pick.
+    function container.RefreshInfo()
+        local infoOf = container._infoOf
+        if not infoOf then return end
+        for i = 1, container._count or 0 do
+            local box = boxes[i]
+            local typeName, segName = infoOf(box.winIdx)
+            box.typeText:SetText(typeName or "")
+            box.segText:SetText(segName or "")
+        end
     end
 
     container._keOwned = { container }
@@ -575,31 +859,15 @@ GUIFrame:NewWidgetPool("dm:schematic", ConstructSchematic, function(container)
     container.CancelDrag()
 end)
 
--- Small accent number chip matching the map boxes and the in-world index
--- badges, so a row maps to its numbered window. The outer frame takes the
--- column width; the chip inside is fixed, at the control band 14px down,
--- where the toggle and dropdowns sit.
+-- The Default Display row chip. The outer frame takes the column width; the
+-- chip sits 14 px down, level with the row's controls.
 local function ConstructNumberBadge(parent)
     local f = CreateFrame("Frame", nil, parent)
-    local chip = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    chip:SetSize(24, 24)
+    local chip = NewChip(f, 24)
     chip:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -14)
-    chip:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    local t = chip:CreateFontString(nil, "OVERLAY")
-    t:SetPoint("CENTER")
 
     function f.Configure(_, n)
-        local a = Theme.accent
-        chip:SetBackdropColor(a[1], a[2], a[3], 0.9)
-        chip:SetBackdropBorderColor(0, 0, 0, 1)
-        KE:ApplyThemeFont(t, "normal")
-        local ink = KE.IsLightColor(a[1], a[2], a[3]) and 0 or 1
-        t:SetTextColor(ink, ink, ink, 1)
-        t:SetText(tostring(n))
+        PaintChip(chip, n, 15)
     end
 
     f._keOwned = { f, chip }
@@ -655,287 +923,636 @@ end
 
 GUIFrame:NewWidgetPool("dm:hdr", ConstructWindowHeader, function() end)
 
--- Rewrites a sizing slider's label into a LIVE, directional dual-share readout:
--- "Col 1  60% <|> 40%  Col 2" -- leftName/rightName flank the split, the `<|>`
--- glyph reads as the draggable divider (slides either way), and both panes' shares
--- show at once so "which way grows which" is unambiguous as the thumb moves. The
--- slider value is the left/top pane's 0-1 share of the pair, so the right share is
--- its complement (they always sum to 100). Fed by the slider's onValueChanged slot
--- (UNthrottled, unlike the db callback) so the label tracks the thumb every frame -- including the
--- silent neighbor cross-updates a shared-pane drag triggers. ASCII only: WoW's
--- embedded fonts lack the geometric arrow glyphs (feedback_wow_fontstring_limits).
-local function WireSplitLabel(sliderRow, leftName, rightName)
-    if not (sliderRow and sliderRow.label and sliderRow.SetOnValueChanged) then return end
-    local lbl = sliderRow.label
-    local function refresh(val)
-        val = val or sliderRow:GetValue() or 0.5
-        local L = math_floor(val * 100 + 0.5)
-        if L < 0 then L = 0 elseif L > 100 then L = 100 end
-        lbl:SetText(leftName .. "  " .. L .. "% <|> " .. (100 - L) .. "%  " .. rightName)
-    end
-    sliderRow:SetOnValueChanged(refresh)
-    refresh()
+---------------------------------------------------------------------------------
+-- Hover link
+---------------------------------------------------------------------------------
+-- Pointing at a window's row or map box, or at a split's slider or map gap,
+-- lights it here and outlines its windows on the meter. Pointing at a meter
+-- window lights its row and box. Filled by each Windows tab build and emptied
+-- by every rebuild and by leaving the page.
+local HOVER_ROW_ALPHA = 0.06
+
+local Hover = { targets = {}, gaps = {}, set = {} }
+
+-- r is nil for a column split; AddSplit passes nil for every column gap.
+---@param kind string
+---@param c integer
+---@param r integer|nil
+---@return string
+function Hover.GapKey(kind, c, r)
+    if kind == "col" or not r then return "c" .. c end
+    return "r" .. c .. ":" .. r
 end
 
+-- The target's windows as a set, in one reused table.
+function Hover.SetOf(target)
+    local set = Hover.set
+    wipe(set)
+    if target then
+        for i = 1, #target.wins do set[target.wins[i]] = true end
+    end
+    return set
+end
+
+function Hover.Paint(target)
+    for _, t in pairs(Hover.targets) do t.catcher:SetLit(t == target) end
+    for _, t in pairs(Hover.gaps) do t.catcher:SetLit(t == target) end
+    local map = Hover.schematic
+    if not map then return end
+    if target and target.kind == "win" then
+        map.LightBoxes(Hover.SetOf(target))
+    else
+        map.LightBoxes(nil)
+    end
+    map.LightGap(target and target.kind == "gap" and target or nil)
+end
+
+function Hover.Highlight(target)
+    local DM = GetDM()
+    if DM and DM.HighlightWindows then
+        DM:HighlightWindows(target and Hover.SetOf(target) or nil)
+    end
+end
+
+-- Repeats each frame while the pointer is still on the focused frame. A frame
+-- with no hover report of its own (a pooled widget's part this page does not
+-- wire, a dropdown's open list) sends no leave when the pointer goes straight
+-- off the element, so only this geometric test can end the focus. An enter
+-- stops the repeat.
+function Hover.Check()
+    Hover.looping = false
+    if not Hover.wanted then return end
+    local frame = Hover.frame
+    if Hover.focus and frame and frame:IsVisible() and frame:IsMouseOver() then
+        Hover.looping = true
+        C_Timer.After(0, Hover.Check)
+        return
+    end
+    Hover.wanted = false
+    if not Hover.focus then return end
+    Hover.focus, Hover.frame = nil, nil
+    Hover.Paint(Hover.meterTarget)
+    Hover.Highlight(nil)
+end
+
+-- An enter takes the focus at once. A leave is settled by the geometric test
+-- above, so a move between a row's own widgets, or from a box onto its remove
+-- button, keeps the focus.
+function Hover.Note(target, frame, entering)
+    if not Hover.active then return end
+    if entering then
+        Hover.wanted = false
+        Hover.frame = frame
+        if Hover.focus ~= target then
+            Hover.focus = target
+            Hover.Paint(target)
+            Hover.Highlight(target)
+        end
+    else
+        Hover.wanted = true
+        if not Hover.looping then
+            Hover.looping = true
+            C_Timer.After(0, Hover.Check)
+        end
+    end
+end
+
+-- The meter side: idx is the window under the pointer on the meter, or nil.
+function Hover.OnWindowHover(idx)
+    Hover.meterTarget = idx and Hover.targets[idx] or nil
+    if not Hover.focus then Hover.Paint(Hover.meterTarget) end
+end
+
+function Hover.Begin(schematic)
+    Hover.schematic = schematic
+    Hover.active = true
+end
+
+function Hover.Clear()
+    Hover.active, Hover.wanted = false, false
+    Hover.focus, Hover.frame, Hover.meterTarget, Hover.schematic = nil, nil, nil, nil
+    wipe(Hover.targets)
+    wipe(Hover.gaps)
+end
+
+-- A row-sized frame under the row's widgets that reports the pointer on the
+-- row's chip, its widgets or the gaps between them.
+local function ConstructRowHover(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    -- Motion only: clicks and the wheel reach the widgets and the scroll frame.
+    f:SetMouseMotionEnabled(true)
+    f:SetMouseClickEnabled(false)
+    local tex = f:CreateTexture(nil, "BACKGROUND")
+    tex:SetAllPoints(f)
+    tex:SetColorTexture(1, 1, 1, HOVER_ROW_ALPHA)
+    tex:Hide()
+
+    function f.SetLit(_, on)
+        tex:SetShown(on and true or false)
+    end
+
+    -- At the row's own level, so each widget above it keeps its own mouse.
+    function f.Bind(_, row, target)
+        f._target = target
+        f:ClearAllPoints()
+        f:SetAllPoints(row)
+        f:SetFrameLevel(row:GetFrameLevel())
+        tex:Hide()
+    end
+
+    f:SetScript("OnEnter", function(self)
+        if self._target then Hover.Note(self._target, self, true) end
+    end)
+    f:SetScript("OnLeave", function(self)
+        if self._target then Hover.Note(self._target, self, false) end
+    end)
+
+    f._keOwned = { f }
+    return f
+end
+
+GUIFrame:NewWidgetPool("dm:rowhover", ConstructRowHover, function(f)
+    f._target = nil
+    f:SetLit(false)
+end)
+
+local function BindTarget(row, target)
+    target.catcher = GUIFrame:AcquirePooled("dm:rowhover", row)
+    target.catcher:Bind(row, target)
+    return target
+end
+
+function Hover.AddWindow(idx, row)
+    local target = BindTarget(row, { kind = "win", wins = { idx } })
+    Hover.targets[idx] = target
+    return target
+end
+
+function Hover.AddGap(kind, c, r, leftList, rightList, row)
+    local wins = {}
+    for i = 1, #leftList do wins[#wins + 1] = leftList[i] end
+    for i = 1, #rightList do wins[#wins + 1] = rightList[i] end
+    local target = BindTarget(row, { kind = "gap", gapKind = kind, c = c, r = r, wins = wins })
+    Hover.gaps[Hover.GapKey(kind, c, r)] = target
+    return target
+end
+
+-- An empty slot in a row of buttons. Pooled: a frame the page made itself and
+-- put on a pooled row would retire that row.
+GUIFrame:NewWidgetPool("dm:spacer", function(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    f._keOwned = { f }
+    return f
+end, function() end)
+
+local SPLIT_CHIPS = 5
+
+-- The line over a split slider: each side's chips, its name when it is one
+-- window, and its "%, px" size, the left side read from the left edge and the
+-- right side from the right.
+local function ConstructSplitLabel(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetHeight(14)
+    local sides = {}
+    for s = 1, 2 do
+        local side = { chips = {} }
+        for i = 1, SPLIT_CHIPS do side.chips[i] = NewChip(f, 18) end
+        side.name = f:CreateFontString(nil, "OVERLAY")
+        side.size = f:CreateFontString(nil, "OVERLAY")
+        sides[s] = side
+    end
+
+    local function PaintSide(side, spec, fromRight)
+        local point, rel, gap = "LEFT", "RIGHT", 2
+        if fromRight then point, rel, gap = "RIGHT", "LEFT", -2 end
+        local prev
+        for i = 1, SPLIT_CHIPS do
+            local chip = side.chips[i]
+            local n = spec.nums[i]
+            chip:ClearAllPoints()
+            if n then
+                if prev then
+                    chip:SetPoint(point, prev, rel, gap, 0)
+                else
+                    chip:SetPoint(point, f, point, 0, 0)
+                end
+                PaintChip(chip, n, 13)
+                chip:Show()
+                prev = chip
+            else
+                chip:Hide()
+            end
+        end
+        local T = Theme
+        local name, size = side.name, side.size
+        KE:ApplyThemeFont(name, "small")
+        name:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
+        name:SetText(spec.name or "")
+        name:ClearAllPoints()
+        name:SetPoint(point, prev or f, prev and rel or point, gap * 3, 0)
+        KE:ApplyThemeFont(size, "small")
+        size:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        size:SetText("")
+        size:ClearAllPoints()
+        if spec.name then
+            size:SetPoint(point, name, rel, gap * 3, 0)
+        else
+            size:SetPoint(point, prev or f, prev and rel or point, gap * 3, 0)
+        end
+    end
+
+    -- left and right are { nums = { display numbers }, name = text or nil }.
+    function f.Configure(_, left, right)
+        PaintSide(sides[1], left, false)
+        PaintSide(sides[2], right, true)
+    end
+
+    function f.SetSizes(_, leftText, rightText)
+        sides[1].size:SetText(leftText)
+        sides[2].size:SetText(rightText)
+    end
+
+    -- A side named at Configure keeps its name slot; only the text changes.
+    function f.SetNames(_, leftName, rightName)
+        sides[1].name:SetText(leftName or "")
+        sides[2].name:SetText(rightName or "")
+    end
+
+    f._keOwned = { f }
+    return f
+end
+
+GUIFrame:NewWidgetPool("dm:splitlabel", ConstructSplitLabel, function() end)
+
+-- "Whole meter" and the accent-colored dock size.
+local function ConstructReadout(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    local label = f:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("LEFT", f, "LEFT", 0, 0)
+    local value = f:CreateFontString(nil, "OVERLAY")
+    value:SetPoint("LEFT", label, "RIGHT", 8, 0)
+
+    function f.Configure()
+        local T = Theme
+        KE:ApplyThemeFont(label, "normal")
+        label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        label:SetText("Whole meter")
+        KE:ApplyThemeFont(value, "normal")
+        value:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        value:SetText("")
+    end
+
+    function f.ShowMeterSize(_, w, h)
+        if w and h then
+            value:SetText(math_floor(w + 0.5) .. " x " .. math_floor(h + 0.5) .. " px")
+        else
+            value:SetText("")
+        end
+    end
+
+    f._keOwned = { f }
+    return f
+end
+
+GUIFrame:NewWidgetPool("dm:readout", ConstructReadout, function() end)
+
 ---------------------------------------------------------------------------------
--- Windows tab (structure + per-context defaults)
+-- Windows tab (structure, sizes, position and per-context defaults)
 ---------------------------------------------------------------------------------
+-- True from a Windows tab build until the link is cleared.
+local windowsLinked = false
+
 local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     local DM = GetDM()
+    if not (DM and DM.GetColumnWidthPx) then return yOffset end
 
-    -- Referenced window indices in DOCK ORDER (column-then-row = on-screen reading
-    -- order). The array position IS the display number: order[n] is the storage
-    -- index of the n-th window left->right / top->bottom, and the in-world badge
-    -- shows the same n (LayoutDock stamps it from the same DockWindowIndices order).
-    -- So "Window n" in the GUI always maps to the numbered window on screen.
-    local order = {}
-    if DM and DM.DockWindowIndices then
-        local found = DM:DockWindowIndices({})
-        for i = 1, #found do order[i] = found[i] end
-    end
-    -- Reverse map (storage index -> display number) for the schematic boxes.
+    -- Storage indices in on-screen order: order[n] is the window the meter
+    -- numbers n, the order LayoutDock numbers the chips in.
+    local order = DM.DockWindowIndices and DM:DockWindowIndices({}) or {}
     local posOf = {}
     for n = 1, #order do posOf[order[n]] = n end
 
     local cols = db.Dock and db.Dock.Columns
-    -- Arrangement is DERIVED from the column shape (Horizontal/Vertical/Custom);
-    -- dragging boxes in the map + the per-window New Column button reach any Custom
-    -- layout directly, so the old sticky "Custom" GUI override is no longer needed.
-    local arrangement = (DM and DM.GetArrangement and DM:GetArrangement()) or "Custom"
+    local arrangement = (DM.GetArrangement and DM:GetArrangement()) or "Custom"
     local maxWin = db.MaxWindows or 5
 
-    -- The selected "Configure For" context (also used for the schematic's labels so
-    -- the map reflects what the Default Display card is editing).
-    if DM and DM.guiConfigContext == nil then DM.guiConfigContext = "Default" end
-    local ctx = (DM and DM.guiConfigContext) or "Default"
+    -- The map and the split labels show the context Configure For is editing.
+    if DM.guiConfigContext == nil then DM.guiConfigContext = "Default" end
+    local ctx = DM.guiConfigContext or "Default"
     db.Windows = db.Windows or {}
-    -- The FULL panel label for a window in the selected context -- identical to the
-    -- in-world header (via DM:FormatWindowLabel), so the map / ghost match it.
-    local function FullLabelFor(idx)
+
+    local function InfoFor(idx)
         local w = db.Windows[idx]
-        if not (w and w.Contexts) then return "" end
-        local cfg = w.Contexts[ctx] or w.Contexts.Default or {}
-        if DM and DM.FormatWindowLabel then
-            return DM:FormatWindowLabel(cfg.MeterType, cfg.SessionType)
-        end
-        return ""
+        local cfg = w and w.Contexts and (w.Contexts[ctx] or w.Contexts.Default)
+        if not cfg then return "", "", "" end
+        local meterType = cfg.MeterType or Enum.DamageMeterType.DamageDone
+        local sessionType = cfg.SessionType or Enum.DamageMeterSessionType.Current
+        local full = DM.FormatWindowLabel and DM:FormatWindowLabel(meterType, sessionType) or ""
+        return TYPE_TEXT[meterType] or "", SEGMENT_TEXT[sessionType] or "", full
     end
 
-    -- The layout map, declared at tab scope so the Sizing sliders (a later card) can
-    -- call schematic.Relayout() to live-update the boxes as the ratios change.
     local schematic
 
     ----------------------------------------------------------------
-    -- Card 1: Layout (quick preset + visual map + move controls)
+    -- Layout: three arrangement buttons and Add Window over the map
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
-    manager:Register(card1, "all")
+    local cardLayout = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
+    manager:Register(cardLayout, "all")
 
-    -- Quick preset dropdown + Add/Remove.
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local arrDropdown = GUIFrame:CreateDropdown(row1, "Layout", {
-        options = ARRANGEMENT_OPTIONS,
-        value = arrangement,
-        callback = function(key)
-            -- Horizontal/Vertical rewrite the columns; Custom is a no-op (the
-            -- structure already is whatever the moves made it).
-            if DM and DM.SetArrangement then DM:SetArrangement(key) end
-            RebuildPage()
-        end,
-    })
-    row1:AddWidget(arrDropdown, 0.5)
-    manager:Register(arrDropdown, "all")
+    local rowArr = GUIFrame:CreateRow(cardLayout.content, Theme.rowHeight)
+    local arrLabel = rowArr:GetLabel("small")
+    arrLabel:SetPoint("TOPLEFT", rowArr, "TOPLEFT", 0, 1)
+    arrLabel:SetJustifyH("LEFT")
+    arrLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    arrLabel:SetText("Layout")
 
-    -- Add/Remove are gated by the floor/cap (NOT registered -- manager:UpdateAll
-    -- would re-enable them on module-enable and defeat the cap gating). The card's
-    -- mouse blocker + alpha cascade still disable them when the module is off.
-    local addBtn = GUIFrame:CreateButton(row1, "Add Window", {
+    for _, spec in ipairs(ARRANGEMENT_BUTTONS) do
+        local key = spec.key
+        local btn = GUIFrame:CreateButton(rowArr, spec.text, {
+            height = 24,
+            tooltip = spec.tooltip,
+            callback = function()
+                -- Custom only shows the state; the map makes a custom layout.
+                if key == "Custom" then return end
+                if DM.SetArrangement then DM:SetArrangement(key) end
+                RebuildPage()
+            end,
+        })
+        btn:SetSelected(arrangement == key)
+        rowArr:AddWidget(btn, 0.145, nil, 0, -14)
+        manager:Register(btn, "all")
+    end
+
+    local spacer = GUIFrame:AcquirePooled("dm:spacer", rowArr)
+    rowArr:AddWidget(spacer, 0.36)
+
+    -- Not registered: manager:UpdateAll would enable it again past the cap.
+    local addBtn = GUIFrame:CreateButton(rowArr, "Add Window", {
+        height = 24,
+        tooltip = "Adds a window as a new column on the right, up to " .. maxWin .. " windows.",
         callback = function()
-            if DM and DM.AddWindow then DM:AddWindow() end
+            if DM.AddWindow then DM:AddWindow() end
             RebuildPage()
         end,
     })
-    row1:AddWidget(addBtn, 0.25)
-
-    local removeBtn = GUIFrame:CreateButton(row1, "Remove Window", {
-        callback = function()
-            -- Remove the LAST on-screen window (highest display position).
-            if DM and DM.RemoveWindow and #order > 1 then
-                DM:RemoveWindow(order[#order])
-            end
-            RebuildPage()
-        end,
-    })
-    row1:AddWidget(removeBtn, 0.25)
+    rowArr:AddWidget(addBtn, 0.205, nil, 0, -14)
     addBtn:SetEnabled(#order < maxWin)
-    removeBtn:SetEnabled(#order > 1)
-    card1:AddRow(row1, Theme.rowHeight)
+    cardLayout:AddRow(rowArr, Theme.rowHeight)
 
-    -- Visual layout map (numbered boxes mirroring the in-world dock).
     if cols and #order > 0 then
-        schematic = GUIFrame:AcquirePooled("dm:schematic", card1.content)
-        schematic:Configure(96, cols, posOf, FullLabelFor)
-        card1:AddRow(schematic, 96)
+        schematic = GUIFrame:AcquirePooled("dm:schematic", cardLayout.content)
+        schematic:Configure(cols, posOf, InfoFor, #order > 1)
+        cardLayout:AddRow(schematic, MAP_HEIGHT)
+    end
+    cardLayout:AddNote("Drag a window onto another to stack it, or to an edge for a new column.")
+
+    yOffset = cardLayout:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Sizing: the whole meter, then one split slider per gap -- the pair
+    -- the in-world splitter for that gap moves
+    ----------------------------------------------------------------
+    local nCols = (cols and #cols) or 0
+    local colGaps, rowGaps = {}, {}
+    for c = 1, nCols - 1 do colGaps[#colGaps + 1] = c end
+    for c = 1, nCols do
+        local wins = cols[c].Windows
+        if wins then
+            for r = 1, #wins - 1 do rowGaps[#rowGaps + 1] = { c = c, r = r } end
+        end
+    end
+    local nGaps = #colGaps + #rowGaps
+
+    local cardSize = GUIFrame:CreateCard(scrollChild, "Sizing", yOffset)
+    manager:Register(cardSize, "all")
+    cardSize:AddLabel("Meter Size")
+
+    local rowMeter = GUIFrame:CreateRow(cardSize.content, 24)
+    local readout = GUIFrame:AcquirePooled("dm:readout", rowMeter)
+    readout:Configure()
+    rowMeter:AddWidget(readout, 0.795)
+    -- Not registered, like Add Window: it stays off with no gap to even out.
+    local evenBtn = GUIFrame:CreateButton(rowMeter, "Even Sizes", {
+        height = 24,
+        tooltip = "Makes every column the Window Width and splits every column's height evenly.",
+        callback = function()
+            if DM.EvenSizes then DM:EvenSizes() end
+        end,
+    })
+    rowMeter:AddWidget(evenBtn, 0.205)
+    evenBtn:SetEnabled(nGaps > 0)
+    cardSize:AddRow(rowMeter, 24)
+
+    local rowWidth = GUIFrame:CreateRow(cardSize.content, Theme.rowHeight)
+    local widthSlider = GUIFrame:CreateSlider(rowWidth, "Window Width", {
+        min = 120, max = 600, step = 1,
+        value = db.Width or 240,
+        tooltip = "The width of one column when the columns are even, in pixels.",
+        callback = function(val) db.Width = val; ApplySettings() end,
+    })
+    rowWidth:AddWidget(widthSlider, 0.5)
+    manager:Register(widthSlider, "all")
+
+    local visSlider = GUIFrame:CreateSlider(rowWidth, "Visible Bars", {
+        min = 1, max = 40, step = 1,
+        value = db.VisibleBars or 10,
+        tooltip = "How many bars fit the meter's height. Stacked windows share that height.",
+        callback = function(val) db.VisibleBars = val; ApplySettings() end,
+    })
+    rowWidth:AddWidget(visSlider, 0.5)
+    manager:Register(visSlider, "all")
+    cardSize:AddRow(rowWidth, Theme.rowHeight)
+
+    local barsLast = nGaps == 0
+    local rowBars = GUIFrame:CreateRow(cardSize.content, barsLast and Theme.rowHeightLast or Theme.rowHeight)
+    local heightSlider = GUIFrame:CreateSlider(rowBars, "Bar Height", {
+        min = 8, max = 40, step = 1,
+        value = db.BarHeight or 16,
+        callback = function(val) db.BarHeight = val; ApplySettings() end,
+    })
+    rowBars:AddWidget(heightSlider, 0.5)
+    manager:Register(heightSlider, "all")
+
+    local spacingSlider = GUIFrame:CreateSlider(rowBars, "Bar Spacing", {
+        min = 0, max = 10, step = 1,
+        value = db.BarSpacing or 2,
+        callback = function(val) db.BarSpacing = val; ApplySettings() end,
+    })
+    rowBars:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    cardSize:AddRow(rowBars, barsLast and Theme.rowHeightLast or Theme.rowHeight, barsLast and 0 or nil)
+
+    local splits = {}
+
+    -- The left or top side's share of the pair, in percent.
+    local function ShareOf(split)
+        if split.kind == "col" then return DM:GetColumnBoundaryShare(split.c) end
+        return DM:GetRowBoundaryShare(split.c, split.r)
     end
 
-    -- The map is the ONLY place you arrange windows: drag onto a window's center to
-    -- stack/reorder, or drag toward a column's edge (or off the map) to peel a window
-    -- into its own new column. The live line preview shows the result before release
-    -- (horizontal = stack, vertical = new column), so no separate buttons are needed.
-    local arrNoteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local arrNote = GUIFrame:CreateText(arrNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Drag onto a window's center to stack it; drag to a side or off the edge for a new column.\n" ..
-        KE:ColorTextByTheme("-") .. " Numbers match the meter on screen (up to " .. maxWin ..
-        "). Resize by dragging the gaps in the world.",
-        50, "hide")
-    arrNoteRow:AddWidget(arrNote, 1)
-    manager:Register(arrNote, "all")
-    card1:AddRow(arrNoteRow, Theme.rowHeightNote, 0)
+    local function SizeText(pct, px)
+        if px then return pct .. "%, " .. math_floor(px + 0.5) .. " px" end
+        return pct .. "%"
+    end
 
-    yOffset = card1:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 2: Sizing (one split slider per gap -- the exact pair the in-world
-    -- drag-splitter for that gap adjusts). Shown only when a gap exists.
-    ----------------------------------------------------------------
-    do
-        local nCols = (cols and #cols) or 0
-        local hasColBoundary = nCols >= 2
-        local hasRowBoundary = false
-        if cols then
-            for c = 1, #cols do
-                if cols[c].Windows and #cols[c].Windows >= 2 then hasRowBoundary = true; break end
-            end
+    -- Each side's px from the last layout; nil for a side not placed.
+    local function ReadSplitPx(split)
+        if split.kind == "col" then
+            return DM:GetColumnWidthPx(split.c), DM:GetColumnWidthPx(split.c + 1)
         end
+        return DM:GetWindowHeightPx(split.leftIdx), DM:GetWindowHeightPx(split.rightIdx)
+    end
 
-        if hasColBoundary or hasRowBoundary then
-            local sizeCard = GUIFrame:CreateCard(scrollChild, "Sizing", yOffset)
-            manager:Register(sizeCard, "all")
+    -- value is the slider's 0-1 left share; the right share is its complement.
+    local function PaintSplit(split, value)
+        local left = math_floor((value or 0.5) * 100 + 0.5)
+        if left < 0 then left = 0 elseif left > 100 then left = 100 end
+        split.label:SetSizes(SizeText(left, split.leftPx), SizeText(100 - left, split.rightPx))
+    end
 
-            -- Slider references for live cross-update (neighbors share a pane).
-            local colSliders = {}
-            local rowSliders = {}
+    -- The split's range in percent. It follows the pair's pixels, so a change
+    -- to Window Width, Visible Bars or a bar size moves it.
+    local function RangeOf(split)
+        if split.kind == "col" then return DM:GetColumnBoundaryRange(split.c) end
+        return DM:GetRowBoundaryRange(split.c, split.r)
+    end
 
-            -- Column-gap sliders: between column c and c+1, value = left share. Stored
-            -- as a 0-1 fraction with isPercent so the readout shows "%". Range clamped
-            -- per gap to the in-world drag-splitter floor (DM:GetColumnBoundaryRange)
-            -- so a column can't be sliddered below usable size.
-            for c = 1, nCols - 1 do
-                local cMin, cMax = 5, 95
-                if DM and DM.GetColumnBoundaryRange then cMin, cMax = DM:GetColumnBoundaryRange(c) end
-                local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
-                local slider = GUIFrame:CreateSlider(rowS, "", {
-                    min = cMin / 100, max = cMax / 100, step = 0.01, isPercent = true,
-                    value = ((DM and DM.GetColumnBoundaryShare and DM:GetColumnBoundaryShare(c)) or 50) / 100,
-                    callback = function(val)
-                        if DM and DM.SetColumnBoundaryShare then DM:SetColumnBoundaryShare(c, val * 100) end
-                        if schematic and schematic.Relayout then schematic.Relayout() end
-                        -- Refresh the two neighbors that share a touched column.
-                        if colSliders[c - 1] and DM then
-                            colSliders[c - 1]:SetValue(DM:GetColumnBoundaryShare(c - 1) / 100, true)
-                        end
-                        if colSliders[c + 1] and DM then
-                            colSliders[c + 1]:SetValue(DM:GetColumnBoundaryShare(c + 1) / 100, true)
-                        end
-                    end,
-                })
-                WireSplitLabel(slider, "Col " .. c, "Col " .. (c + 1))
-                rowS:AddWidget(slider, 1)
-                manager:Register(slider, "all")
-                sizeCard:AddRow(rowS, Theme.rowHeight)
-                colSliders[c] = slider
-            end
+    -- A single window is named; a column of several is shown by its chips alone.
+    local function NameOf(list)
+        if #list == 1 then return (InfoFor(list[1])) end
+        return nil
+    end
 
-            -- Row-gap sliders: within each stacked column, between row r and r+1.
-            if cols then
-                for c = 1, #cols do
-                    local wins = cols[c].Windows
-                    if wins and #wins >= 2 then
-                        rowSliders[c] = rowSliders[c] or {}
-                        for r = 1, #wins - 1 do
-                            local topNum = posOf[wins[r]] or wins[r]
-                            local botNum = posOf[wins[r + 1]] or wins[r + 1]
-                            local rMin, rMax = 5, 95
-                            if DM and DM.GetRowBoundaryRange then rMin, rMax = DM:GetRowBoundaryRange(c, r) end
-                            local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
-                            local slider = GUIFrame:CreateSlider(rowS, "", {
-                                min = rMin / 100, max = rMax / 100, step = 0.01, isPercent = true,
-                                value = ((DM and DM.GetRowBoundaryShare and DM:GetRowBoundaryShare(c, r)) or 50) / 100,
-                                callback = function(val)
-                                    if DM and DM.SetRowBoundaryShare then DM:SetRowBoundaryShare(c, r, val * 100) end
-                                    if schematic and schematic.Relayout then schematic.Relayout() end
-                                    local rs = rowSliders[c]
-                                    if rs and DM then
-                                        if rs[r - 1] then rs[r - 1]:SetValue(DM:GetRowBoundaryShare(c, r - 1) / 100, true) end
-                                        if rs[r + 1] then rs[r + 1]:SetValue(DM:GetRowBoundaryShare(c, r + 1) / 100, true) end
-                                    end
-                                end,
-                            })
-                            WireSplitLabel(slider, "Win " .. topNum, "Win " .. botNum)
-                            rowS:AddWidget(slider, 1)
-                            manager:Register(slider, "all")
-                            sizeCard:AddRow(rowS, Theme.rowHeight)
-                            rowSliders[c][r] = slider
-                        end
-                    end
+    local function SideOf(list)
+        local nums = {}
+        for i = 1, #list do nums[i] = posOf[list[i]] or list[i] end
+        return { nums = nums, name = NameOf(list) }
+    end
+
+    local function AddSplit(kind, c, r, leftList, rightList, isLast)
+        local split = {
+            kind = kind, c = c, r = r,
+            leftList = leftList, rightList = rightList,
+            leftIdx = leftList[1], rightIdx = rightList[1],
+        }
+        local lo, hi = RangeOf(split)
+        local row = GUIFrame:CreateRow(cardSize.content, SPLIT_ROW_H)
+        local label = GUIFrame:AcquirePooled("dm:splitlabel", row)
+        label:Configure(SideOf(leftList), SideOf(rightList))
+        label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        label:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+        split.label = label
+        local target = Hover.AddGap(kind, c, r, leftList, rightList, row)
+        split.leftPx, split.rightPx = ReadSplitPx(split)
+        -- The neighbors that share a pane follow on the next layout, through
+        -- OnDockLayout below.
+        local slider = GUIFrame:CreateSlider(row, "", {
+            min = lo / 100, max = hi / 100, step = 0.01, isPercent = true,
+            value = ShareOf(split) / 100,
+            tooltip = SPLIT_TOOLTIP,
+            onValueChanged = function(val) PaintSplit(split, val) end,
+            onHover = function(entering) Hover.Note(target, target.catcher, entering) end,
+            callback = function(val)
+                if kind == "col" then
+                    DM:SetColumnBoundaryShare(c, val * 100)
+                else
+                    DM:SetRowBoundaryShare(c, r, val * 100)
                 end
-            end
+                if schematic then schematic.Relayout() end
+            end,
+        })
+        split.slider = slider
+        row:AddWidget(slider, 1, nil, 0, -6)
+        manager:Register(slider, "all")
+        cardSize:AddRow(row, SPLIT_ROW_H, isLast and 0 or nil)
+        splits[#splits + 1] = split
+        PaintSplit(split, slider:GetValue())
+    end
 
-            local szNoteRow = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeightNote)
-            local szNote = GUIFrame:CreateText(szNoteRow,
-                KE:ColorTextByTheme("Note"),
-                KE:ColorTextByTheme("-") .. " Each slider splits just its two neighbors; the rest stay put.\n" ..
-                KE:ColorTextByTheme("-") .. " Same effect as dragging that gap between windows in the world.",
-                50, "hide")
-            szNoteRow:AddWidget(szNote, 1)
-            manager:Register(szNote, "all")
-            sizeCard:AddRow(szNoteRow, Theme.rowHeightNote, 0)
+    if #colGaps > 0 then
+        cardSize:AddLabel("Widths")
+        for i = 1, #colGaps do
+            local c = colGaps[i]
+            AddSplit("col", c, nil, cols[c].Windows or {}, cols[c + 1].Windows or {},
+                i == #colGaps and #rowGaps == 0)
+        end
+    end
+    if #rowGaps > 0 then
+        cardSize:AddLabel("Heights")
+        for i = 1, #rowGaps do
+            local gap = rowGaps[i]
+            local wins = cols[gap.c].Windows
+            AddSplit("row", gap.c, gap.r, { wins[gap.r] }, { wins[gap.r + 1] }, i == #rowGaps)
+        end
+    end
 
-            yOffset = sizeCard:GetNextOffset()
+    yOffset = cardSize:GetNextOffset()
+
+    -- A Type or Segment pick renames the map boxes and the split sides at once.
+    -- Placement and pixels follow through OnDockLayout below.
+    local function RefreshNames()
+        if schematic then schematic.RefreshInfo() end
+        for i = 1, #splits do
+            local split = splits[i]
+            split.label:SetNames(NameOf(split.leftList), NameOf(split.rightList))
         end
     end
 
     ----------------------------------------------------------------
-    -- Card 3: Default Display (Configure For: <context>)
+    -- Position Settings (the dock is the positioned frame)
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Default Display", yOffset)
-    manager:Register(card2, "all")
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = db,
+        positionKey = "Position",
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    local rowCtx = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    ----------------------------------------------------------------
+    -- Default Display (Configure For: <context>)
+    ----------------------------------------------------------------
+    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Default Display", yOffset)
+    manager:Register(cardDisplay, "all")
+
+    local rowCtx = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     local ctxDropdown = GUIFrame:CreateDropdown(rowCtx, "Configure For", {
         options = CONTEXT_OPTIONS,
         value = ctx,
+        tooltip = "Each kind of content can have its own windows, types and segments. They apply when " ..
+            "you enter that content; content you have not set up uses Default.",
         callback = function(key)
-            if DM then DM.guiConfigContext = key end
+            DM.guiConfigContext = key
             RebuildPage()
         end,
     })
     rowCtx:AddWidget(ctxDropdown, 1)
     manager:Register(ctxDropdown, "all")
-    card2:AddRow(rowCtx, Theme.rowHeight)
-
-    local ctxNoteRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightNote)
-    local ctxNote = GUIFrame:CreateText(ctxNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Defaults auto-apply when you enter that content. Unset contexts inherit Default.\n" ..
-        KE:ColorTextByTheme("-") .. " Live type/segment changes on the meter stick until the content changes.",
-        50, "hide")
-    ctxNoteRow:AddWidget(ctxNote, 1)
-    manager:Register(ctxNote, "all")
-    card2:AddRow(ctxNoteRow, Theme.rowHeightNote, 0)
+    cardDisplay:AddRow(rowCtx, Theme.rowHeight)
+    cardDisplay:AddNote("Changing type or segment on the meter itself lasts until you enter different content.")
 
     -- Column layout shared by the header + every window row (so they align):
     --   badge 0.08 | enable 0.16 | Type 0.38 | Segment 0.38.
     local COL_BADGE, COL_ENABLE, COL_TYPE, COL_SEG = 0.08, 0.16, 0.38, 0.38
 
     -- Card alpha grays the header with the module; it is not registered.
-    local hdrRow = GUIFrame:AcquirePooled("dm:hdr", card2.content)
+    local hdrRow = GUIFrame:AcquirePooled("dm:hdr", cardDisplay.content)
     hdrRow:Configure({ COL_BADGE, COL_BADGE + COL_ENABLE, COL_BADGE + COL_ENABLE + COL_TYPE })
-    card2:AddRow(hdrRow, 14)
+    cardDisplay:AddRow(hdrRow, 14)
 
-    -- One row per window (numbered left->right / top->bottom by on-screen position):
-    -- [number chip] [enable] [Type] [Segment]. Labels live in the header above.
+    -- One row per window, in on-screen order: [chip] [enable] [Type] [Segment].
     for n = 1, #order do
         local idx = order[n]
         local window = db.Windows[idx]
@@ -951,12 +1568,15 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                         or Enum.DamageMeterSessionType.Current,
                 }
                 window.Contexts[ctx][field] = value
-                if DM and DM.RefreshDock then DM:RefreshDock() end
-                if DM and DM.Tick then DM:Tick() end
+                if DM.RefreshDock then DM:RefreshDock() end
+                if DM.Tick then DM:Tick() end
+                if field ~= "Enabled" then RefreshNames() end
             end
 
             local isLast = (n == #order)
-            local rowW = GUIFrame:CreateRow(card2.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
+            local rowW = GUIFrame:CreateRow(cardDisplay.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
+            local target = Hover.AddWindow(idx, rowW)
+            local function RowHover(entering) Hover.Note(target, target.catcher, entering) end
 
             local badge = GUIFrame:AcquirePooled("dm:badge", rowW)
             badge:Configure(n)
@@ -964,7 +1584,9 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
             local enChk = GUIFrame:CreateCheckbox(rowW, "", {
                 value = cfg.Enabled ~= false,
+                tooltip = "Shows this window in the content picked above.",
                 callback = function(checked) writeField("Enabled", checked) end,
+                onHover = RowHover,
             })
             rowW:AddWidget(enChk, COL_ENABLE)
             manager:Register(enChk, "all")
@@ -973,6 +1595,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 options = METER_TYPE_OPTIONS,
                 value = cfg.MeterType or Enum.DamageMeterType.DamageDone,
                 callback = function(key) writeField("MeterType", key) end,
+                onHover = RowHover,
             })
             rowW:AddWidget(typeDd, COL_TYPE)
             manager:Register(typeDd, "all")
@@ -980,16 +1603,63 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             local segDd = GUIFrame:CreateDropdown(rowW, "", {
                 options = SEGMENT_OPTIONS,
                 value = cfg.SessionType or Enum.DamageMeterSessionType.Current,
+                tooltip = "Current is the fight in progress, or the last one. Overall adds up every fight " ..
+                    "since the last reset.",
                 callback = function(key) writeField("SessionType", key) end,
+                onHover = RowHover,
             })
             rowW:AddWidget(segDd, COL_SEG)
             manager:Register(segDd, "all")
 
-            card2:AddRow(rowW, isLast and Theme.rowHeightLast or Theme.rowHeight, isLast and 0 or nil)
+            cardDisplay:AddRow(rowW, isLast and Theme.rowHeightLast or Theme.rowHeight, isLast and 0 or nil)
         end
     end
 
-    yOffset = card2:GetNextOffset()
+    yOffset = cardDisplay:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- The settings link: the readout, the split labels, ranges and values
+    -- and the map follow every dock layout, an in-world splitter drag included
+    ----------------------------------------------------------------
+    local function OnDockLayout()
+        readout:ShowMeterSize(DM:GetDockContentSize())
+        for i = 1, #splits do
+            local split = splits[i]
+            split.leftPx, split.rightPx = ReadSplitPx(split)
+            -- A silent range or value under a thumb being dragged would make it
+            -- jitter; that drag writes the share itself.
+            local track = split.slider.slider
+            local share
+            if track and track:IsDraggingThumb() then
+                share = split.slider:GetValue()
+            else
+                local lo, hi = RangeOf(split)
+                split.slider:SetMinMaxValues(lo / 100, hi / 100, true)
+                share = ShareOf(split) / 100
+                split.slider:SetValue(share, true)
+            end
+            PaintSplit(split, share)
+        end
+        if schematic then schematic.Relayout() end
+    end
+    if schematic then
+        schematic.SetHover(function(kind, frame, entering)
+            local target
+            if kind == "box" then
+                target = Hover.targets[frame.winIdx]
+            else
+                target = Hover.gaps[Hover.GapKey(frame.kind, frame.c, frame.r)]
+            end
+            if target then Hover.Note(target, frame, entering) end
+        end)
+    end
+    Hover.Begin(schematic)
+    if DM.SetSettingsLink then
+        DM:SetSettingsLink({ OnDockLayout = OnDockLayout, OnWindowHover = Hover.OnWindowHover })
+    end
+    windowsLinked = true
+    OnDockLayout()
+
     return yOffset
 end
 
@@ -1008,70 +1678,26 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:SetCondition("barcustomcolor", function() return db.BarColorMode == "Custom" end)
 
     ----------------------------------------------------------------
-    -- Bars -- texture + geometry.
+    -- Bars: texture, thin-line style and fill
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Bars", yOffset)
-    manager:Register(card1, "all")
+    local cardBars = GUIFrame:CreateCard(scrollChild, "Bars", yOffset)
+    manager:Register(cardBars, "all")
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local texDropdown = GUIFrame:CreateDropdown(row1a, "Bar Texture", {
+    local rowTex = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
+    local texDropdown = GUIFrame:CreateDropdown(rowTex, "Bar Texture", {
         options = statusbarList,
         value = db.StatusBarTexture or "KitnUI",
         callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
         searchable = true,
     })
-    row1a:AddWidget(texDropdown, 1)
+    rowTex:AddWidget(texDropdown, 1)
     manager:Register(texDropdown, "all")
-    card1:AddRow(row1a, Theme.rowHeight)
+    cardBars:AddRow(rowTex, Theme.rowHeight)
 
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local widthSlider = GUIFrame:CreateSlider(row1b, "Window Width", {
-        min = 120, max = 600, step = 1,
-        value = db.Width or 240,
-        callback = function(val) db.Width = val; ApplySettings() end,
-    })
-    row1b:AddWidget(widthSlider, 0.5)
-    manager:Register(widthSlider, "all")
-
-    local visSlider = GUIFrame:CreateSlider(row1b, "Visible Bars", {
-        min = 1, max = 40, step = 1,
-        value = db.VisibleBars or 10,
-        callback = function(val) db.VisibleBars = val; ApplySettings() end,
-    })
-    row1b:AddWidget(visSlider, 0.5)
-    manager:Register(visSlider, "all")
-    card1:AddRow(row1b, Theme.rowHeight)
-
-    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local heightSlider = GUIFrame:CreateSlider(row1c, "Bar Height", {
-        min = 8, max = 40, step = 1,
-        value = db.BarHeight or 16,
-        callback = function(val) db.BarHeight = val; ApplySettings() end,
-    })
-    row1c:AddWidget(heightSlider, 0.5)
-    manager:Register(heightSlider, "all")
-
-    local spacingSlider = GUIFrame:CreateSlider(row1c, "Bar Spacing", {
-        min = 0, max = 10, step = 1,
-        value = db.BarSpacing or 2,
-        callback = function(val) db.BarSpacing = val; ApplySettings() end,
-    })
-    row1c:AddWidget(spacingSlider, 0.5)
-    manager:Register(spacingSlider, "all")
-    card1:AddRow(row1c, Theme.rowHeight)
-
-    -- Separator: splits the size sliders above from the thin-line style block below.
-    local row1sep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    manager:Register(sep1, "all")
-    card1:AddRow(row1sep, Theme.rowHeightSeparator)
-
-    -- Thin-line style: the colored fill becomes a thin strip pinned to the bottom edge
-    -- (a clean minimalist look). Line Thickness shares the toggle's row and grays out when
-    -- the toggle is off.
-    local row1d = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local thinChk = GUIFrame:CreateCheckbox(row1d, "Thin Line Bars", {
+    -- Thin-line style: the colored fill becomes a thin strip pinned to the bottom edge.
+    -- Line Thickness grays out when the toggle is off.
+    local rowThin = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
+    local thinChk = GUIFrame:CreateCheckbox(rowThin, "Thin Line Bars", {
         value = db.BarThinLine == true,
         callback = function(checked)
             db.BarThinLine = checked
@@ -1079,111 +1705,20 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row1d:AddWidget(thinChk, 0.5)
+    rowThin:AddWidget(thinChk, 0.5)
     manager:Register(thinChk, "all")
 
-    local thinHSlider = GUIFrame:CreateSlider(row1d, "Line Thickness", {
+    local thinHSlider = GUIFrame:CreateSlider(rowThin, "Line Thickness", {
         min = 1, max = 12, step = 1,
         value = db.BarThinLineHeight or 2,
         callback = function(val) db.BarThinLineHeight = val; ApplySettings() end,
     })
-    row1d:AddWidget(thinHSlider, 0.5)
+    rowThin:AddWidget(thinHSlider, 0.5)
     manager:Register(thinHSlider, "thinline")
-    card1:AddRow(row1d, Theme.rowHeightLast, 0)
+    cardBars:AddRow(rowThin, Theme.rowHeight)
 
-    yOffset = card1:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Bar Content -- only what is DRAWN on each bar row.
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Bar Content", yOffset)
-    manager:Register(card2, "all")
-
-    -- Row 1: spec icon + class-colored names (the two "how a row reads at a glance" toggles).
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local iconChk = GUIFrame:CreateCheckbox(row2a, "Show Spec Icon", {
-        value = db.ShowIcon ~= false,
-        callback = function(checked) db.ShowIcon = checked; ApplySettings() end,
-    })
-    row2a:AddWidget(iconChk, 0.5)
-    manager:Register(iconChk, "all")
-
-    local classNameChk = GUIFrame:CreateCheckbox(row2a, "Class Color Names", {
-        value = db.ClassColorName == true,
-        callback = function(checked) db.ClassColorName = checked; ApplySettings() end,
-    })
-    row2a:AddWidget(classNameChk, 0.5)
-    manager:Register(classNameChk, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
-
-    -- Row 2: the two name toggles (player name + realm suffix).
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local nameChk = GUIFrame:CreateCheckbox(row2b, "Show Player Names", {
-        value = db.ShowName ~= false,
-        callback = function(checked) db.ShowName = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(nameChk, 0.5)
-    manager:Register(nameChk, "all")
-
-    local realmChk = GUIFrame:CreateCheckbox(row2b, "Show Realm Names", {
-        value = db.ShowRealm == true,
-        callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(realmChk, 0.5)
-    manager:Register(realmChk, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    -- Separator: splits the name/icon element toggles above from the number/value row below.
-    local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
-    local sep2 = GUIFrame:CreateSeparator(row2sep)
-    row2sep:AddWidget(sep2, 1)
-    manager:Register(sep2, "all")
-    card2:AddRow(row2sep, Theme.rowHeightSeparator)
-
-    -- Row 3: number format (full width -- it's the headline content control).
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local fmtDd = GUIFrame:CreateDropdown(row2c, "Numbers", {
-        options = {
-            { key = "Both",   text = "Amount + DPS" },
-            { key = "Amount", text = "Amount Only" },
-            { key = "PerSec", text = "DPS Only" },
-        },
-        value = db.NumberFormat or "Both",
-        callback = function(key) db.NumberFormat = key; ApplySettings() end,
-    })
-    row2c:AddWidget(fmtDd, 1)
-    manager:Register(fmtDd, "all")
-    card2:AddRow(row2c, Theme.rowHeight)
-
-    -- Row 4: self pin + rank numbering.
-    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local selfChk = GUIFrame:CreateCheckbox(row2d, "Always Show Self", {
-        value = db.AlwaysShowSelf ~= false,
-        tooltip = "Pins your row to the last visible slot when you fall off-screen. Role-aware: damage views pin DPS and tanks, healing views pin healers; other views never pin.",
-        callback = function(checked) db.AlwaysShowSelf = checked; ApplySettings() end,
-    })
-    row2d:AddWidget(selfChk, 0.5)
-    manager:Register(selfChk, "all")
-
-    local rankChk = GUIFrame:CreateCheckbox(row2d, "Show Rank Number", {
-        value = db.ShowRank == true,
-        callback = function(checked) db.ShowRank = checked; ApplySettings() end,
-    })
-    row2d:AddWidget(rankChk, 0.5)
-    manager:Register(rankChk, "all")
-    card2:AddRow(row2d, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Bar Colors -- fill color mode + opacity + bar text color.
-    -- The Custom color picker grays out unless the fill mode is Custom.
-    ----------------------------------------------------------------
-    local cardColors = GUIFrame:CreateCard(scrollChild, "Bar Colors", yOffset)
-    manager:Register(cardColors, "all")
-
-    local rowCol1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
-    local fillModeDd = GUIFrame:CreateDropdown(rowCol1, "Fill Color", {
+    local rowFill = GUIFrame:CreateRow(cardBars.content, Theme.rowHeight)
+    local fillModeDd = GUIFrame:CreateDropdown(rowFill, "Fill Color", {
         options = {
             { key = "Class",  text = "Class Color" },
             { key = "Custom", text = "Custom" },
@@ -1196,13 +1731,13 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)   -- re-evaluate the Custom-color gray
         end,
     })
-    rowCol1:AddWidget(fillModeDd, 0.5)
+    rowFill:AddWidget(fillModeDd, 0.5)
     manager:Register(fillModeDd, "all")
 
     -- Custom fill color. The picker exposes opacity (hasOpacity); its alpha doubles as the
     -- fill opacity (kept in db.BarColorAlpha, in sync with the Fill Opacity slider below so
     -- both edit the same value). RGB is stored in db.BarColor.
-    local fillColorPicker = GUIFrame:CreateColorPicker(rowCol1, "Custom Color", {
+    local fillColorPicker = GUIFrame:CreateColorPicker(rowFill, "Custom Color", {
         color = {
             (db.BarColor and db.BarColor[1]) or 0.30,
             (db.BarColor and db.BarColor[2]) or 0.55,
@@ -1215,49 +1750,148 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             ApplySettings()
         end,
     })
-    rowCol1:AddWidget(fillColorPicker, 0.5)
+    rowFill:AddWidget(fillColorPicker, 0.5)
     manager:Register(fillColorPicker, "barcustomcolor")
-    cardColors:AddRow(rowCol1, Theme.rowHeight)
+    cardBars:AddRow(rowFill, Theme.rowHeight)
 
-    local rowCol2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
-    -- Fill opacity applies to ALL modes (Class / Custom / Accent), so it stays enabled even
-    -- when the Custom picker is grayed.
-    local opacitySlider = GUIFrame:CreateSlider(rowCol2, "Fill Opacity", {
+    -- Fill opacity applies to every fill mode, so it stays enabled even when the
+    -- Custom picker is grayed.
+    local rowOpacity = GUIFrame:CreateRow(cardBars.content, Theme.rowHeightLast)
+    local opacitySlider = GUIFrame:CreateSlider(rowOpacity, "Fill Opacity", {
         min = 0, max = 1, step = 0.05, isPercent = true,
         value = db.BarColorAlpha or 1,
         callback = function(val) db.BarColorAlpha = val; ApplySettings() end,
     })
-    rowCol2:AddWidget(opacitySlider, 0.5)
+    rowOpacity:AddWidget(opacitySlider, 0.5)
     manager:Register(opacitySlider, "all")
+    cardBars:AddRow(rowOpacity, Theme.rowHeightLast, 0)
+
+    yOffset = cardBars:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Bar Text: what each bar row reads, and its tooltip
+    ----------------------------------------------------------------
+    manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
+
+    local cardText = GUIFrame:CreateCard(scrollChild, "Bar Text", yOffset)
+    manager:Register(cardText, "all")
+
+    local rowNames = GUIFrame:CreateRow(cardText.content, Theme.rowHeight)
+    local nameChk = GUIFrame:CreateCheckbox(rowNames, "Show Player Names", {
+        value = db.ShowName ~= false,
+        callback = function(checked) db.ShowName = checked; ApplySettings() end,
+    })
+    rowNames:AddWidget(nameChk, 0.5)
+    manager:Register(nameChk, "all")
+
+    local realmChk = GUIFrame:CreateCheckbox(rowNames, "Show Realm Names", {
+        value = db.ShowRealm == true,
+        callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
+    })
+    rowNames:AddWidget(realmChk, 0.5)
+    manager:Register(realmChk, "all")
+    cardText:AddRow(rowNames, Theme.rowHeight)
+
+    local rowClass = GUIFrame:CreateRow(cardText.content, Theme.rowHeight)
+    local classNameChk = GUIFrame:CreateCheckbox(rowClass, "Class Color Names", {
+        value = db.ClassColorName == true,
+        callback = function(checked) db.ClassColorName = checked; ApplySettings() end,
+    })
+    rowClass:AddWidget(classNameChk, 0.5)
+    manager:Register(classNameChk, "all")
+
+    local iconChk = GUIFrame:CreateCheckbox(rowClass, "Show Spec Icon", {
+        value = db.ShowIcon ~= false,
+        callback = function(checked) db.ShowIcon = checked; ApplySettings() end,
+    })
+    rowClass:AddWidget(iconChk, 0.5)
+    manager:Register(iconChk, "all")
+    cardText:AddRow(rowClass, Theme.rowHeight)
+
+    local rowRank = GUIFrame:CreateRow(cardText.content, Theme.rowHeight)
+    local rankChk = GUIFrame:CreateCheckbox(rowRank, "Show Rank Number", {
+        value = db.ShowRank == true,
+        callback = function(checked) db.ShowRank = checked; ApplySettings() end,
+    })
+    rowRank:AddWidget(rankChk, 0.5)
+    manager:Register(rankChk, "all")
+
+    local selfChk = GUIFrame:CreateCheckbox(rowRank, "Always Show Self", {
+        value = db.AlwaysShowSelf ~= false,
+        tooltip = "Pins your row to the last visible slot when you fall off-screen. Role-aware: damage views pin DPS and tanks, healing views pin healers; other views never pin.",
+        callback = function(checked) db.AlwaysShowSelf = checked; ApplySettings() end,
+    })
+    rowRank:AddWidget(selfChk, 0.5)
+    manager:Register(selfChk, "all")
+    cardText:AddRow(rowRank, Theme.rowHeight)
+
+    local rowNumbers = GUIFrame:CreateRow(cardText.content, Theme.rowHeight)
+    local fmtDd = GUIFrame:CreateDropdown(rowNumbers, "Numbers", {
+        options = {
+            { key = "Both",   text = "Amount + DPS" },
+            { key = "Amount", text = "Amount Only" },
+            { key = "PerSec", text = "DPS Only" },
+        },
+        value = db.NumberFormat or "Both",
+        callback = function(key) db.NumberFormat = key; ApplySettings() end,
+    })
+    rowNumbers:AddWidget(fmtDd, 0.5)
+    manager:Register(fmtDd, "all")
 
     -- Bar text color (value column always; name column when NOT class-colored). Alpha is
     -- ignored -- bar text is always opaque -- so only RGB is stored.
-    local textColorPicker = GUIFrame:CreateColorPicker(rowCol2, "Text Color", {
+    local textColorPicker = GUIFrame:CreateColorPicker(rowNumbers, "Text Color", {
         color = db.BarTextColor or { 1, 1, 1, 1 },
         callback = function(r, g, b) db.BarTextColor = { r, g, b }; ApplySettings() end,
     })
-    rowCol2:AddWidget(textColorPicker, 0.5)
+    rowNumbers:AddWidget(textColorPicker, 0.5)
     manager:Register(textColorPicker, "all")
-    cardColors:AddRow(rowCol2, Theme.rowHeightLast, 0)
+    cardText:AddRow(rowNumbers, Theme.rowHeight)
 
-    yOffset = cardColors:GetNextOffset()
+    local rowTip = GUIFrame:CreateRow(cardText.content, Theme.rowHeightLast)
+    local hoverTipChk = GUIFrame:CreateCheckbox(rowTip, "Tooltip on Mouseover", {
+        value = db.HoverTooltip ~= false,
+        tooltip = "Pointing at a bar shows that player's top spells, or the death recap in the Deaths view.",
+        callback = function(checked)
+            db.HoverTooltip = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowTip:AddWidget(hoverTipChk, 0.5)
+    manager:Register(hoverTipChk, "all")
+
+    local hoverAnchorDd = GUIFrame:CreateDropdown(rowTip, "Tooltip Position", {
+        options = {
+            { key = "smart",  text = "Smart (auto side)" },
+            { key = "bar",    text = "Above Bar" },
+            { key = "left",   text = "Left of Meter" },
+            { key = "right",  text = "Right of Meter" },
+            { key = "center", text = "Screen Center" },
+        },
+        value = db.HoverTooltipAnchor or "smart",
+        tooltip = "Where that tooltip opens. Smart picks the side away from the nearer screen edge.",
+        callback = function(key) db.HoverTooltipAnchor = key; ApplySettings() end,
+    })
+    rowTip:AddWidget(hoverAnchorDd, 0.5)
+    manager:Register(hoverAnchorDd, "hovertip")
+    cardText:AddRow(rowTip, Theme.rowHeightLast, 0)
+
+    yOffset = cardText:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Header Icons -- two independent elements on each window header band: the
-    -- meter-type glyph beside the title ("Show Type Icon") and the settings /
-    -- reset / segment action buttons ("Show Action Buttons"). "Only on Mouseover"
-    -- governs the action buttons and grays when they're off.
+    -- Header: the action buttons, the type icon, the clock and the title.
+    -- "Only on Mouseover" governs the action buttons and grays when they're off.
     ----------------------------------------------------------------
     manager:SetCondition("headericons", function() return db.ShowHeaderIcons ~= false end)
 
-    local cardHeaderIcons = GUIFrame:CreateCard(scrollChild, "Header Icons", yOffset)
-    manager:Register(cardHeaderIcons, "all")
+    local cardHeader = GUIFrame:CreateCard(scrollChild, "Header", yOffset)
+    manager:Register(cardHeader, "all")
 
-    -- Action Buttons lead the row so "Only on Mouseover" (which governs them) sits in the
-    -- left column directly beneath it; Type Icon is the independent right-column toggle.
-    local rowHdr = GUIFrame:CreateRow(cardHeaderIcons.content, Theme.rowHeight)
+    local rowHdr = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeight)
     local headerIconsChk = GUIFrame:CreateCheckbox(rowHdr, "Show Action Buttons", {
         value = db.ShowHeaderIcons ~= false,
+        tooltip = "The settings, reset, segment and report icons at the right end of each header.",
         callback = function(checked)
             db.ShowHeaderIcons = checked
             ApplySettings()
@@ -1269,21 +1903,22 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     local typeIconChk = GUIFrame:CreateCheckbox(rowHdr, "Show Type Icon", {
         value = db.ShowTypeIcon ~= false,
+        tooltip = "The meter-type icon beside each window's title.",
         callback = function(checked) db.ShowTypeIcon = checked; ApplySettings() end,
     })
     rowHdr:AddWidget(typeIconChk, 0.5)
     manager:Register(typeIconChk, "all")
-    cardHeaderIcons:AddRow(rowHdr, Theme.rowHeight)
+    cardHeader:AddRow(rowHdr, Theme.rowHeight)
 
-    local rowHdr2 = GUIFrame:CreateRow(cardHeaderIcons.content, Theme.rowHeight)
+    local rowHdr2 = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeight)
     local headerMouseoverChk = GUIFrame:CreateCheckbox(rowHdr2, "Only on Mouseover", {
         value = db.HeaderIconsMouseover == true,
+        tooltip = "Shows the header icons only while the mouse is on that header.",
         callback = function(checked) db.HeaderIconsMouseover = checked; ApplySettings() end,
     })
     rowHdr2:AddWidget(headerMouseoverChk, 0.5)
     manager:Register(headerMouseoverChk, "headericons")
 
-    -- Combat clock: header chrome like the icons, so it shares this card.
     local clockChk = GUIFrame:CreateCheckbox(rowHdr2, "Combat Clock", {
         value = db.ShowCombatClock == true,
         tooltip = "Shows the fight length [M:SS] on window 1's header while in combat; freezes and dims at the final time when the fight ends. Sits in the action-button slot and steps aside while those icons are revealed.",
@@ -1291,130 +1926,76 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     rowHdr2:AddWidget(clockChk, 0.5)
     manager:Register(clockChk, "all")
-    cardHeaderIcons:AddRow(rowHdr2, Theme.rowHeight)
+    cardHeader:AddRow(rowHdr2, Theme.rowHeight)
 
-    -- What each toggle controls.
-    local rowHdrNote = GUIFrame:CreateRow(cardHeaderIcons.content, 68)
-    local hdrNote = GUIFrame:CreateText(rowHdrNote,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Action Buttons: the settings / reset / segment icons (top-right).\n" ..
-        KE:ColorTextByTheme("-") .. " Type Icon: the meter-type glyph beside the window title.\n" ..
-        KE:ColorTextByTheme("-") .. " Combat Clock: fight length on window 1, frozen + dimmed when the fight ends.",
-        68, "hide")
-    rowHdrNote:AddWidget(hdrNote, 1)
-    manager:Register(hdrNote, "all")
-    cardHeaderIcons:AddRow(rowHdrNote, 68, 0)
-
-    yOffset = cardHeaderIcons:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Hover Tooltip -- hovering a bar floats a top-N breakdown / death
-    -- recap. The position dropdown grays when the tip is off.
-    ----------------------------------------------------------------
-    manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
-
-    local cardHoverTip = GUIFrame:CreateCard(scrollChild, "Tooltip on Mouseover", yOffset)
-    manager:Register(cardHoverTip, "all")
-
-    local rowTip1 = GUIFrame:CreateRow(cardHoverTip.content, Theme.rowHeight)
-    local hoverTipChk = GUIFrame:CreateCheckbox(rowTip1, "Show Tooltip on Mouseover", {
-        value = db.HoverTooltip ~= false,
-        callback = function(checked)
-            db.HoverTooltip = checked
-            ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
+    -- Header text and bar text size are independent sliders. HeaderFontSize falls back
+    -- to FontSize when unset, so an existing config's header keeps its current size until
+    -- this slider is moved; the bar rows always read FontSize.
+    local rowHdr3 = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeightLast)
+    local headerThemeChk = GUIFrame:CreateCheckbox(rowHdr3, "Theme Color Header", {
+        value = db.HeaderThemeColor == true,
+        callback = function(checked) db.HeaderThemeColor = checked; ApplySettings() end,
     })
-    rowTip1:AddWidget(hoverTipChk, 1)
-    manager:Register(hoverTipChk, "all")
-    cardHoverTip:AddRow(rowTip1, Theme.rowHeight)
+    rowHdr3:AddWidget(headerThemeChk, 0.5)
+    manager:Register(headerThemeChk, "all")
 
-    local rowTip2 = GUIFrame:CreateRow(cardHoverTip.content, Theme.rowHeightLast)
-    local hoverAnchorDd = GUIFrame:CreateDropdown(rowTip2, "Tooltip Position", {
-        options = {
-            { key = "smart",  text = "Smart (auto side)" },
-            { key = "bar",    text = "Above Bar" },
-            { key = "left",   text = "Left of Meter" },
-            { key = "right",  text = "Right of Meter" },
-            { key = "center", text = "Screen Center" },
-        },
-        value = db.HoverTooltipAnchor or "smart",
-        callback = function(key) db.HoverTooltipAnchor = key; ApplySettings() end,
+    local headerSizeSlider = GUIFrame:CreateSlider(rowHdr3, "Header Text Size", {
+        min = 8, max = 24, step = 1,
+        value = db.HeaderFontSize or db.FontSize or 12,
+        callback = function(val) db.HeaderFontSize = val; ApplySettings() end,
     })
-    rowTip2:AddWidget(hoverAnchorDd, 1)
-    manager:Register(hoverAnchorDd, "hovertip")
-    cardHoverTip:AddRow(rowTip2, Theme.rowHeightLast, 0)
+    rowHdr3:AddWidget(headerSizeSlider, 0.5)
+    manager:Register(headerSizeSlider, "all")
+    cardHeader:AddRow(rowHdr3, Theme.rowHeightLast, 0)
 
-    yOffset = cardHoverTip:GetNextOffset()
+    yOffset = cardHeader:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Font
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    manager:Register(card3, "all")
+    local cardFont = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    manager:Register(cardFont, "all")
 
-    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
+    local rowFont = GUIFrame:CreateRow(cardFont.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(rowFont, "Font", {
         options = KE:AddFollowGlobalFont(fontList),
         value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
         callback = function(key) db.FontFace = KE:StoredFontFace(key); ApplySettings() end,
         searchable = true,
         isFontPreview = true,
     })
-    row3a:AddWidget(fontDropdown, 0.5)
+    rowFont:AddWidget(fontDropdown, 0.5)
     manager:Register(fontDropdown, "all")
 
-    local outlineDropdown = GUIFrame:CreateDropdown(row3a, "Font Outline", {
+    local outlineDropdown = GUIFrame:CreateDropdown(rowFont, "Font Outline", {
         options = KE:GetFontOutlineOptions(),
         value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
         callback = function(key) db.FontOutline = key; ApplySettings() end,
     })
-    row3a:AddWidget(outlineDropdown, 0.5)
+    rowFont:AddWidget(outlineDropdown, 0.5)
     manager:Register(outlineDropdown, "all")
-    card3:AddRow(row3a, Theme.rowHeight)
+    cardFont:AddRow(rowFont, Theme.rowHeight)
 
-    -- Header text and bar text size are independent sliders. HeaderFontSize falls back
-    -- to FontSize when unset, so an existing config's header keeps its current size until
-    -- this slider is moved; the bar rows always read FontSize.
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local headerSizeSlider = GUIFrame:CreateSlider(row3b, "Header Text Size", {
-        min = 8, max = 24, step = 1,
-        value = db.HeaderFontSize or db.FontSize or 12,
-        callback = function(val) db.HeaderFontSize = val; ApplySettings() end,
-    })
-    row3b:AddWidget(headerSizeSlider, 0.5)
-    manager:Register(headerSizeSlider, "all")
-
-    local barSizeSlider = GUIFrame:CreateSlider(row3b, "Bar Text Size", {
+    local rowBarSize = GUIFrame:CreateRow(cardFont.content, Theme.rowHeightLast)
+    local barSizeSlider = GUIFrame:CreateSlider(rowBarSize, "Bar Text Size", {
         min = 8, max = 24, step = 1,
         value = db.FontSize or 12,
         callback = function(val) db.FontSize = val; ApplySettings() end,
     })
-    row3b:AddWidget(barSizeSlider, 0.5)
+    rowBarSize:AddWidget(barSizeSlider, 0.5)
     manager:Register(barSizeSlider, "all")
-    card3:AddRow(row3b, Theme.rowHeight)
+    cardFont:AddRow(rowBarSize, Theme.rowHeightLast, 0)
 
-    -- Header title color: tint the header line with the KitnUI theme accent
-    -- instead of white. Header-only (bar text keeps its own Text Color picker).
-    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local headerThemeChk = GUIFrame:CreateCheckbox(row3c, "Theme Color Header", {
-        value = db.HeaderThemeColor == true,
-        callback = function(checked) db.HeaderThemeColor = checked; ApplySettings() end,
-    })
-    row3c:AddWidget(headerThemeChk, 0.5)
-    manager:Register(headerThemeChk, "all")
-    card3:AddRow(row3c, Theme.rowHeightLast, 0)
-
-    yOffset = card3:GetNextOffset()
+    yOffset = cardFont:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Backdrop
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
-    manager:Register(card4, "all")
+    local cardBackdrop = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
+    manager:Register(cardBackdrop, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local bgEnableChk = GUIFrame:CreateCheckbox(row4a, "Enable Backdrop", {
+    local rowBd1 = GUIFrame:CreateRow(cardBackdrop.content, Theme.rowHeight)
+    local bgEnableChk = GUIFrame:CreateCheckbox(rowBd1, "Enable Backdrop", {
         value = db.BackdropEnabled ~= false,
         callback = function(checked)
             db.BackdropEnabled = checked
@@ -1422,60 +2003,62 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row4a:AddWidget(bgEnableChk, 0.5)
+    rowBd1:AddWidget(bgEnableChk, 0.5)
     manager:Register(bgEnableChk, "all")
 
-    local styleDropdown = GUIFrame:CreateDropdown(row4a, "Border Style", {
+    -- A saved "accent" shows as Theme, which is what it draws; the saved value
+    -- changes only when another style is picked.
+    local borderStyle = db.BackdropBorderStyle or "neutral"
+    if borderStyle == "accent" then borderStyle = "theme" end
+    local styleDropdown = GUIFrame:CreateDropdown(rowBd1, "Border Style", {
         options = {
             { key = "neutral", text = "Neutral" },
-            { key = "accent",  text = "Accent" },
             { key = "theme",   text = "Theme" },
         },
-        value = db.BackdropBorderStyle or "neutral",
+        value = borderStyle,
+        tooltip = "Neutral uses the Border color below. Theme uses your theme color.",
         callback = function(key) db.BackdropBorderStyle = key; ApplyBackdropOnly() end,
     })
-    row4a:AddWidget(styleDropdown, 0.5)
+    rowBd1:AddWidget(styleDropdown, 0.5)
     manager:Register(styleDropdown, "backdrop")
-    card4:AddRow(row4a, Theme.rowHeight)
+    cardBackdrop:AddRow(rowBd1, Theme.rowHeight)
 
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local bgColorPicker = GUIFrame:CreateColorPicker(row4b, "Background", {
+    local rowBd2 = GUIFrame:CreateRow(cardBackdrop.content, Theme.rowHeight)
+    local bgColorPicker = GUIFrame:CreateColorPicker(rowBd2, "Background", {
         color = db.BackdropColor or { 0.031, 0.031, 0.031, 0.8 },
         callback = function(r, g, b, a) db.BackdropColor = { r, g, b, a }; ApplyBackdropOnly() end,
     })
-    row4b:AddWidget(bgColorPicker, 0.5)
+    rowBd2:AddWidget(bgColorPicker, 0.5)
     manager:Register(bgColorPicker, "backdrop")
 
-    local borderColorPicker = GUIFrame:CreateColorPicker(row4b, "Border", {
+    local borderColorPicker = GUIFrame:CreateColorPicker(rowBd2, "Border", {
         color = db.BackdropBorderColor or { 0, 0, 0, 1 },
         callback = function(r, g, b, a) db.BackdropBorderColor = { r, g, b, a }; ApplyBackdropOnly() end,
     })
-    row4b:AddWidget(borderColorPicker, 0.5)
+    rowBd2:AddWidget(borderColorPicker, 0.5)
     manager:Register(borderColorPicker, "backdrop")
-    card4:AddRow(row4b, Theme.rowHeight)
+    cardBackdrop:AddRow(rowBd2, Theme.rowHeight)
 
-    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local padSlider = GUIFrame:CreateSlider(row4c, "Padding", {
+    -- Behind Bars Only wraps only the bar rows: it drops the backdrop off the
+    -- header band so the title floats above it.
+    local rowBd3 = GUIFrame:CreateRow(cardBackdrop.content, Theme.rowHeightLast)
+    local padSlider = GUIFrame:CreateSlider(rowBd3, "Padding", {
         min = 0, max = 20, step = 1,
         value = db.BackdropPadding or 1,
         callback = function(val) db.BackdropPadding = val; ApplySettings() end,
     })
-    row4c:AddWidget(padSlider, 1)
+    rowBd3:AddWidget(padSlider, 0.5)
     manager:Register(padSlider, "backdrop")
-    card4:AddRow(row4c, Theme.rowHeight)
 
-    -- Wrap only the bar rows: drops the backdrop off the header band so the title
-    -- floats above it. Backdrop group so it grays out when the backdrop is off.
-    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local behindBarsChk = GUIFrame:CreateCheckbox(row4d, "Behind Bars Only", {
+    local behindBarsChk = GUIFrame:CreateCheckbox(rowBd3, "Behind Bars Only", {
         value = db.BackdropBehindBarsOnly == true,
         callback = function(checked) db.BackdropBehindBarsOnly = checked; ApplyBackdropOnly() end,
     })
-    row4d:AddWidget(behindBarsChk, 0.5)
+    rowBd3:AddWidget(behindBarsChk, 0.5)
     manager:Register(behindBarsChk, "backdrop")
-    card4:AddRow(row4d, Theme.rowHeightLast, 0)
+    cardBackdrop:AddRow(rowBd3, Theme.rowHeightLast, 0)
 
-    yOffset = card4:GetNextOffset()
+    yOffset = cardBackdrop:GetNextOffset()
     return yOffset
 end
 
@@ -1486,51 +2069,44 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     local DM = GetDM()
 
     ----------------------------------------------------------------
-    -- Card 1: Performance
+    -- Visibility (conditional show / hide)
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Performance", yOffset)
-    manager:Register(card1, "all")
+    local cardVis = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
+    manager:Register(cardVis, "all")
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local refreshSlider = GUIFrame:CreateSlider(row1a, "Combat Refresh", {
-        min = 0.1, max = 1.0, step = 0.05,
-        value = db.RefreshRate or 0.5,
-        callback = function(val)
-            db.RefreshRate = val
-            -- Apply live: restart the ticker only if it's currently running.
-            if DM and DM._ticker and DM.StartTicker then DM:StartTicker() end
+    local rowVis = GUIFrame:CreateRow(cardVis.content, Theme.rowHeight)
+    local oocChk = GUIFrame:CreateCheckbox(rowVis, "Hide Out of Combat", {
+        value = db.HideOutOfCombat == true,
+        tooltip = "Shows the meter only while you or your group are in combat. With Only in Instances " ..
+            "also on, both must be true.",
+        callback = function(checked)
+            db.HideOutOfCombat = checked
+            -- Re-evaluate now; while this panel is open the preview override keeps the
+            -- meter visible, so the hide takes visible effect when the GUI closes.
+            if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
         end,
     })
-    row1a:AddWidget(refreshSlider, 0.5)
-    manager:Register(refreshSlider, "all")
+    rowVis:AddWidget(oocChk, 0.5)
+    manager:Register(oocChk, "all")
 
-    local budgetSlider = GUIFrame:CreateSlider(row1a, "UI Budget (ms)", {
-        min = 0.5, max = 5.0, step = 0.1,
-        value = db.UIBudgetMs or 1.2,
-        callback = function(val) db.UIBudgetMs = val end,
+    local instChk = GUIFrame:CreateCheckbox(rowVis, "Only in Instances", {
+        value = db.OnlyInInstances == true,
+        tooltip = "Shows the meter only inside a dungeon, raid, arena, battleground or scenario. With " ..
+            "Hide Out of Combat also on, both must be true.",
+        callback = function(checked)
+            db.OnlyInInstances = checked
+            if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
+        end,
     })
-    row1a:AddWidget(budgetSlider, 0.5)
-    manager:Register(budgetSlider, "all")
-    card1:AddRow(row1a, Theme.rowHeight)
+    rowVis:AddWidget(instChk, 0.5)
+    manager:Register(instChk, "all")
+    cardVis:AddRow(rowVis, Theme.rowHeight)
+    cardVis:AddNote("Always shown while these settings or " .. KE:ColorTextByTheme("/kes edit") .. " are open.")
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 65)
-    local note = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Combat Refresh") ..
-        " — how often bars repaint in combat (lower = smoother, more CPU).\n" ..
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("UI Budget") ..
-        " — max ms/frame spent painting; windows over budget defer to the next frame.\n" ..
-        KE:ColorTextByTheme("-") .. " Segments are automatic: " .. KE:ColorTextByTheme("Current") ..
-        " is the live fight, " .. KE:ColorTextByTheme("Overall") .. " is cumulative (set per window in Windows).",
-        65, "hide")
-    noteRow:AddWidget(note, 1)
-    manager:Register(note, "all")
-    card1:AddRow(noteRow, 65, 0)
-
-    yOffset = card1:GetNextOffset()
+    yOffset = cardVis:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Segments (session data lifecycle)
+    -- Segments (session data lifecycle)
     ----------------------------------------------------------------
     local cardSeg = GUIFrame:CreateCard(scrollChild, "Segments", yOffset)
     manager:Register(cardSeg, "all")
@@ -1538,6 +2114,8 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     local rowSeg = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
     local keyResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Key Start", {
         value = db.ResetOnKeyStart ~= false,
+        tooltip = "Clears every segment when a keystone starts, so Overall covers just that run. Off, " ..
+            "history and Overall run across keys until /kes dm reset or the header reset button.",
         callback = function(checked) db.ResetOnKeyStart = checked end,
     })
     rowSeg:AddWidget(keyResetChk, 0.5)
@@ -1545,6 +2123,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
 
     local logoutResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Logout", {
         value = db.ResetOnLogout == true,
+        tooltip = "Clears the meter the next time you log in. A /reload keeps it.",
         callback = function(checked) db.ResetOnLogout = checked end,
     })
     rowSeg:AddWidget(logoutResetChk, 0.5)
@@ -1555,6 +2134,9 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     local rowInst = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
     local instResetChk = GUIFrame:CreateCheckbox(rowInst, "Reset on Instance Entry", {
         value = db.ResetOnInstanceEntry == true,
+        tooltip = "Clears the meter when you enter a different dungeon, raid, scenario or Delve, or a " ..
+            "different difficulty. Running back after a death, a login or a /reload is not an entry. " ..
+            "Key history is kept.",
         callback = function(checked)
             db.ResetOnInstanceEntry = checked
             if not checked and DM and DM.CloseInstancePrompt then DM:CloseInstancePrompt() end
@@ -1571,6 +2153,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
             { key = "ask",  text = "Ask" },
         },
         value = db.InstanceResetMode == "auto" and "auto" or "ask",
+        tooltip = "Ask shows a prompt before clearing; Auto clears at once.",
         callback = function(key) db.InstanceResetMode = key end,
     })
     rowInst:AddWidget(instModeDd, 0.5)
@@ -1595,78 +2178,49 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     local retainSlider = GUIFrame:CreateSlider(rowRetain, "Key History (keys kept)", {
         min = 1, max = 5, step = 1,
         value = retainDisplay,
+        tooltip = "With Reset on Key Start on, this many past keys stay in the segment menu. Each keeps " ..
+            "full detail for its Run Summary or newest pull, and totals for its other pulls.",
         callback = function(v) db.HistoryRetain = v end,
     })
     rowRetain:AddWidget(retainSlider, 1)
     manager:Register(retainSlider, "all")
     cardSeg:AddRow(rowRetain, Theme.rowHeight)
-
-    -- 96px, not the usual 65: four bullets take 5 body lines (the third wraps),
-    -- and 65 fits only a title plus 3 at the small font's ~16px line pitch.
-    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 96)
-    local segNote = GUIFrame:CreateText(segNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " On: all segments clear when a keystone starts, so " ..
-        KE:ColorTextByTheme("Overall") .. " covers just that run.\n" ..
-        KE:ColorTextByTheme("-") .. " Off: history and " .. KE:ColorTextByTheme("Overall") ..
-        " both span keys until you clear them with " ..
-        KE:ColorTextByTheme("/kes dm reset") .. " or the header reset button.\n" ..
-        KE:ColorTextByTheme("-") .. " With reset on, the last " ..
-        KE:ColorTextByTheme("Key History") .. " keys stay browsable in the segment menu until a reload, the header reset, or the module is disabled.\n" ..
-        KE:ColorTextByTheme("-") .. " Each stored key keeps full detail for its Run Summary (or newest pull) and totals for its other pulls.",
-        96, "hide")
-    segNoteRow:AddWidget(segNote, 1)
-    manager:Register(segNote, "all")
-    cardSeg:AddRow(segNoteRow, 96, 0)
-
-    cardSeg:AddSeparator()
-    cardSeg:AddNote(KE:ColorTextByTheme("Reset on Instance Entry") .. " clears the meter when you enter a different dungeon, raid, scenario or Delve, or a different difficulty; " ..
-        KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login or a /reload is never an entry. Key history is kept.")
-    cardSeg:AddNote(KE:ColorTextByTheme("Reset on Logout") .. " clears the meter the next time you log in; /reload keeps it.")
+    cardSeg:AddNote("Kept keys stay in the segment menu until a reload or a reset.")
 
     yOffset = cardSeg:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Visibility (conditional show / hide)
+    -- Performance
     ----------------------------------------------------------------
-    local cardVis = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
-    manager:Register(cardVis, "all")
+    local cardPerf = GUIFrame:CreateCard(scrollChild, "Performance", yOffset)
+    manager:Register(cardPerf, "all")
 
-    local rowVis = GUIFrame:CreateRow(cardVis.content, Theme.rowHeight)
-    local oocChk = GUIFrame:CreateCheckbox(rowVis, "Hide Out of Combat", {
-        value = db.HideOutOfCombat == true,
-        callback = function(checked)
-            db.HideOutOfCombat = checked
-            -- Re-evaluate now; while this panel is open the preview override keeps the
-            -- meter visible, so the hide takes visible effect when the GUI closes.
-            if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
+    local rowPerf = GUIFrame:CreateRow(cardPerf.content, Theme.rowHeightLast)
+    local refreshSlider = GUIFrame:CreateSlider(rowPerf, "Combat Refresh", {
+        min = 0.1, max = 1.0, step = 0.05,
+        value = db.RefreshRate or 0.5,
+        tooltip = "How often the bars repaint in combat, in seconds. Lower is smoother and uses more CPU.",
+        callback = function(val)
+            db.RefreshRate = val
+            -- Apply live: restart the ticker only if it's currently running.
+            if DM and DM._ticker and DM.StartTicker then DM:StartTicker() end
         end,
     })
-    rowVis:AddWidget(oocChk, 0.5)
-    manager:Register(oocChk, "all")
+    rowPerf:AddWidget(refreshSlider, 0.5)
+    manager:Register(refreshSlider, "all")
 
-    local instChk = GUIFrame:CreateCheckbox(rowVis, "Only in Instances", {
-        value = db.OnlyInInstances == true,
-        callback = function(checked)
-            db.OnlyInInstances = checked
-            if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
-        end,
+    local budgetSlider = GUIFrame:CreateSlider(rowPerf, "UI Budget (ms)", {
+        min = 0.5, max = 5.0, step = 0.1,
+        value = db.UIBudgetMs or 1.2,
+        tooltip = "The most time per frame, in milliseconds, spent painting bars. Windows over the " ..
+            "budget wait for the next frame.",
+        callback = function(val) db.UIBudgetMs = val end,
     })
-    rowVis:AddWidget(instChk, 0.5)
-    manager:Register(instChk, "all")
-    cardVis:AddRow(rowVis, Theme.rowHeight)
+    rowPerf:AddWidget(budgetSlider, 0.5)
+    manager:Register(budgetSlider, "all")
+    cardPerf:AddRow(rowPerf, Theme.rowHeightLast, 0)
 
-    local visNoteRow = GUIFrame:CreateRow(cardVis.content, Theme.rowHeightNote)
-    local visNote = GUIFrame:CreateText(visNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Both combine: the meter shows only when every enabled condition is met.\n" ..
-        KE:ColorTextByTheme("-") .. " Always visible while this panel is open or in " .. KE:ColorTextByTheme("/kes edit") .. ".",
-        50, "hide")
-    visNoteRow:AddWidget(visNote, 1)
-    manager:Register(visNote, "all")
-    cardVis:AddRow(visNoteRow, Theme.rowHeightNote, 0)
-
-    yOffset = cardVis:GetNextOffset()
+    yOffset = cardPerf:GetNextOffset()
     return yOffset
 end
 
@@ -1939,44 +2493,52 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
 end
 
 ---------------------------------------------------------------------------------
--- Page registration
+-- Settings link teardown
 ---------------------------------------------------------------------------------
-GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
-    local db = KE.db and KE.db.profile.DamageMeter
-    if not db then
-        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
-        errorCard:AddLabel("Database not available")
-        return errorCard:GetNextOffset()
+-- The Windows tab links itself to the meter on every build. Every rebuild (a tab
+-- switch included), a page switch and closing the window end that link, which
+-- puts every meter window back to full opacity.
+local function ClearSettingsLink()
+    local wasLinked = windowsLinked
+    windowsLinked = false
+    local DM = GetDM()
+    if DM and DM.SetSettingsLink then DM:SetSettingsLink(nil) end
+    Hover.Clear()
+    -- GUIFrame:Show puts back the hidden page without building it, which would
+    -- leave the tab unlinked. A refresh asked for while hidden is held and run
+    -- by the next Show, so the tab builds and links again.
+    if wasLinked and not GUIFrame:IsShown() then GUIFrame:RefreshContent() end
+end
+
+GUIFrame:RegisterContentRebuildCallback("dm:settingslink", ClearSettingsLink)
+GUIFrame:RegisterContentCleanup("dm:settingslink", ClearSettingsLink)
+
+---------------------------------------------------------------------------------
+-- Page registration: the switch and description above four tabs
+---------------------------------------------------------------------------------
+-- Each tab reads its own db and makes its own manager. The host builds a tab
+-- only while the module is on, so no manager spans two builders.
+local function TabPage(builder)
+    return function(scrollChild, yOffset)
+        local db = KE.db and KE.db.profile.DamageMeter
+        if not db then return yOffset end
+        local manager = GUIFrame:CreateWidgetStateManager()
+        yOffset = builder(scrollChild, yOffset, db, manager)
+        manager:UpdateAll(db.Enabled ~= false)
+        return yOffset
     end
+end
 
-    local _, newOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
-        tabs = {
-            { id = "General", label = "General" },
-            { id = "Windows", label = "Windows" },
-            { id = "Appearance", label = "Appearance" },
-            { id = "Behavior", label = "Behavior" },
-            { id = "SpellHistory", label = "Spell History" },
-        },
-        activeId = activeTab,
-        onSwitch = function(newId) activeTab = newId end,
-        fill = true,
-    })
-    yOffset = newOffset
+GUIFrame:RegisterContent(TAB_WINDOWS, TabPage(BuildWindowsTab))
+GUIFrame:RegisterContent(TAB_APPEARANCE, TabPage(BuildAppearanceTab))
+GUIFrame:RegisterContent(TAB_BEHAVIOR, TabPage(BuildBehaviorTab))
+GUIFrame:RegisterContent(TAB_SPELLHISTORY, TabPage(BuildSpellHistoryTab))
 
-    local manager = GUIFrame:CreateWidgetStateManager()
-
-    if activeTab == "General" then
-        yOffset = BuildGeneralTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "Windows" then
-        yOffset = BuildWindowsTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "Appearance" then
-        yOffset = BuildAppearanceTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "Behavior" then
-        yOffset = BuildBehaviorTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "SpellHistory" then
-        yOffset = BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
-    end
-
-    manager:UpdateAll(db.Enabled ~= false)
-    return yOffset
-end)
+GUIFrame:RegisterTabbedContent(PAGE_ID, {
+    { id = TAB_WINDOWS,      label = "Windows" },
+    { id = TAB_APPEARANCE,   label = "Appearance" },
+    { id = TAB_BEHAVIOR,     label = "Behavior" },
+    { id = TAB_SPELLHISTORY, label = "Spell History" },
+}, {
+    headerBuilder = BuildHeader,
+})

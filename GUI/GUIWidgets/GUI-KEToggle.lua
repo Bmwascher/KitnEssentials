@@ -273,6 +273,7 @@ local function ConstructCheckbox(parent)
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
             GameTooltip:Show()
         end
+        if row._onHover then row._onHover(true) end
     end)
 
     button:SetScript("OnLeave", function()
@@ -284,6 +285,7 @@ local function ConstructCheckbox(parent)
             knobR, knobG, knobB, knobA = Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.4
         end
         GameTooltip:Hide()
+        if row._onHover then row._onHover(false) end
     end)
 
     toggle.SetValue = function(_, value, instant)
@@ -354,6 +356,7 @@ local function ConfigureCheckbox(row, labelText, config)
     KE:ApplyThemeFont(label, "small")
     label:SetText(labelText or "")
     row._tooltip = config.tooltip
+    row._onHover = config.onHover
     row._msgPopup = config.msgPopup
     row._msgText = config.msgText
     row._msgOn = config.msgOn
@@ -370,7 +373,8 @@ local checkboxPool = GUIFrame:NewWidgetPool("checkbox", ConstructCheckbox, funct
 end)
 
 -- Checkbox Widget — config-table API: { value, callback, msgPopup, msgText, msgOn, msgOff, tooltip,
--- immediateCallback }
+-- immediateCallback, onHover }
+-- onHover(entering) runs as the pointer enters and leaves the toggle.
 function GUIFrame:CreateCheckbox(parent, labelText, config)
     config = config or {}
     local row

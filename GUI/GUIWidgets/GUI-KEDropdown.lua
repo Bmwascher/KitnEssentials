@@ -731,11 +731,13 @@ local function ConstructDropdown(parent, searchable)
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
             GameTooltip:Show()
         end
+        if row._onHover then row._onHover(true) end
     end)
 
     dropdownButton:SetScript("OnLeave", function()
         SetBorderHover(false)
         GameTooltip:Hide()
+        if row._onHover then row._onHover(false) end
     end)
 
     -- Hide handlers
@@ -913,6 +915,7 @@ local function ConfigureDropdown(row, labelText, config)
     label:SetText(labelText or "")
     KE:ApplyThemeFont(row.dropdown.selectedText, "normal")
     row._tooltip = config.tooltip
+    row._onHover = config.onHover
     row._applyOptions(config.options, true)
     row._showSelected(config.value or config.selected)
     row:SetEnabled(true)
@@ -934,7 +937,8 @@ local searchDropdownPool = GUIFrame:NewWidgetPool("dropdown:search", function(ho
 end, ResetDropdown)
 
 -- Dropdown Widget — config-table API: { options, value, callback, tooltip,
--- searchable }
+-- searchable, onHover }
+-- onHover(entering) runs as the pointer enters and leaves the button.
 -- TODO: `labelWidth` and `isFontPreview` are accepted in the API but not
 -- yet wired into the widget body. Config keys pass silently.
 function GUIFrame:CreateDropdown(parent, labelText, config)

@@ -239,11 +239,13 @@ local function ConstructSlider(parent)
     -- Hover effects
     leftStepper:SetScript("OnEnter", function(self)
         AnimateLeftStepperColor(true)
+        if row._onHover then row._onHover(true) end
     end)
 
     -- Leave effects
     leftStepper:SetScript("OnLeave", function(self)
         AnimateLeftStepperColor(false)
+        if row._onHover then row._onHover(false) end
     end)
 
     -- Right stepper (increment) - arrow points right (rotated 90 counter-clockwise)
@@ -313,11 +315,13 @@ local function ConstructSlider(parent)
     -- Hover effects
     rightStepper:SetScript("OnEnter", function(self)
         AnimateRightStepperColor(true)
+        if row._onHover then row._onHover(true) end
     end)
 
     -- Leave effects
     rightStepper:SetScript("OnLeave", function(self)
         AnimateRightStepperColor(false)
+        if row._onHover then row._onHover(false) end
     end)
 
     -- Store references
@@ -516,12 +520,14 @@ local function ConstructSlider(parent)
         if not valueEdit:HasFocus() then
             AnimateEditBoxBorder(true)
         end
+        if row._onHover then row._onHover(true) end
     end)
 
     valueEdit:SetScript("OnLeave", function(self)
         if not valueEdit:HasFocus() then
             AnimateEditBoxBorder(false)
         end
+        if row._onHover then row._onHover(false) end
     end)
 
     local curDrag = false
@@ -560,6 +566,7 @@ local function ConstructSlider(parent)
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
             GameTooltip:Show()
         end
+        if row._onHover then row._onHover(true) end
     end)
 
     slider:SetScript("OnLeave", function(self)
@@ -567,6 +574,7 @@ local function ConstructSlider(parent)
             AnimateThumbColor(false, false)
         end
         GameTooltip:Hide()
+        if row._onHover then row._onHover(false) end
     end)
 
     -- A hide can swallow the mouse-up or cut a fade short.
@@ -715,6 +723,7 @@ local function ConfigureSlider(row, labelText, config)
     KE:ApplyThemeFont(row.valueEdit, "normal")
 
     row._tooltip = config.tooltip
+    row._onHover = config.onHover
     row._isPercent = config.isPercent
     row._step = step
     row:_resetInteraction()
@@ -734,7 +743,9 @@ local sliderPool = GUIFrame:NewWidgetPool("slider", ConstructSlider, function(ro
 end)
 
 -- Slider widget — config-table API: { min, max, step, value, callback,
--- onValueChanged, tooltip, isPercent }
+-- onValueChanged, tooltip, isPercent, onHover }
+-- onHover(entering) runs as the pointer enters and leaves the track, either
+-- stepper or the value box.
 -- TODO: `labelWidth` is accepted in the API but not yet wired into the widget
 -- body. Callers (e.g. `labelWidth = 60`) won't see
 -- the effect — config key passes silently. Implement when needed.

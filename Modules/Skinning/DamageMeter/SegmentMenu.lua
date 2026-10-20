@@ -179,7 +179,7 @@ function DM:PopulateSegmentMenu(W)
     local s = W.segMenu
     if not s then return end
     local db = self.db
-    local ar, ag, ab = KE:GetAccentColor()
+    local ar, ag, ab = KE:GetAccentColor("theme")
     -- Panel width tracks the anchor window ("same size as one panel"), floored at
     -- the legacy fixed width so a skinny window can't crush the labels.
     local segW = SEG_W
@@ -447,7 +447,7 @@ function DM:OpenSegmentFlyout(W, bundle, anchorRow)
     if f._bundle == bundle and f:IsShown() then return end
     f._bundle = bundle
     local db = self.db
-    local ar, ag, ab = KE:GetAccentColor()
+    local ar, ag, ab = KE:GetAccentColor("theme")
     local rowH = max(16, ((db and db.FontSize) or 12) + 8)
     local rowW = SEG_W - 2 - SEG_PAD * 2
 

@@ -54,7 +54,7 @@ local GRID_GAP = 3
 function DM:PaintSelectorActive(W, activeType)
     if not (W.selector and W.selector.cards) then return end
     W.selector._activeType = activeType
-    local ar, ag, ab = KE:GetAccentColor()
+    local ar, ag, ab = KE:GetAccentColor("theme")
     for _, card in ipairs(W.selector.cards) do
         if card.meterType == activeType then
             card:SetBackdropBorderColor(ar or 0.6, ag or 0.6, ab or 0.6, 1)

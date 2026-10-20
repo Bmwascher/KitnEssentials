@@ -604,6 +604,13 @@ function DM:LayoutDock()
     -- Position the drag splitters over the boundaries emitted above (also hides
     -- any pooled splitter the new layout no longer needs).
     self:_LayoutSplitters()
+
+    -- This pass can place or drop a lit window (a Show box ticked under the
+    -- pointer, a content change), so the highlight is redone from _dockPlaced.
+    -- Then the settings page reads its sizes and ranges from this pass.
+    if self._litSet then self:HighlightWindows(self._litSet) end
+    local link = self._settingsLink
+    if link and link.OnDockLayout then link.OnDockLayout() end
 end
 
 ---------------------------------------------------------------------------------
@@ -616,18 +623,16 @@ end
 
 -- Resolves the backdrop border color (r,g,b,a) from db.BackdropBorderStyle into
 -- the reused self._dockBorderColor table, so KE:ApplyBackdrop reads a {r,g,b,a}
--- array. "neutral" -> db.BackdropBorderColor ; "accent" -> KE:GetAccentColor() ;
--- "theme" -> KE:GetAccentColor("theme") ; anything else falls back to neutral.
+-- array. "neutral" -> db.BackdropBorderColor ; "theme" -> the theme color ;
+-- anything else falls back to neutral. "accent" is no longer offered: a profile
+-- that saved it reads as theme, and the saved value is left as it is.
 function DM:_ResolveDockBorderColor()
     local db = self.db
     self._dockBorderColor = self._dockBorderColor or {}
     local out = self._dockBorderColor
 
     local style = db and db.BackdropBorderStyle
-    if style == "accent" then
-        local r, g, b, a = KE:GetAccentColor()
-        out[1], out[2], out[3], out[4] = r, g, b, a or 1
-    elseif style == "theme" then
+    if style == "theme" or style == "accent" then
         local r, g, b, a = KE:GetAccentColor("theme")
         out[1], out[2], out[3], out[4] = r, g, b, a or 1
     else
@@ -1571,4 +1576,47 @@ function DM:GetRowBoundaryRange(colIdx, rowIdx)
 
     local minPct = clamp(math_ceil((headerH + stride) / pairPx * 100), 5, 45)
     return minPct, 100 - minPct
+end
+
+---------------------------------------------------------------------------------
+-- Sizes for the settings page
+---------------------------------------------------------------------------------
+
+-- Every column back to Window Width and every stacked window to an equal share:
+-- the ratios SetArrangement and AddWindow seed.
+function DM:EvenSizes()
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    if not cols then return end
+    for c = 1, #cols do
+        local col = cols[c]
+        if col then
+            col.WidthRatio = 1
+            local ratios = col.RowRatios
+            if ratios then
+                for r = 1, #ratios do ratios[r] = 1 end
+            end
+        end
+    end
+    self:RefreshDock()
+end
+
+-- The dock content size from the last layout (windows and gaps, no backdrop
+-- padding), or nil before the first layout.
+function DM:GetDockContentSize()
+    return self._dockContentW, self._dockContentH
+end
+
+-- A column's width from the last layout, or nil when it placed no window.
+function DM:GetColumnWidthPx(colIdx)
+    local ci = self._dockColInfo and self._dockColInfo[colIdx]
+    if not (ci and ci.placed) then return nil end
+    return ci.w
+end
+
+-- A window's height from the last layout, or nil when it is not placed.
+function DM:GetWindowHeightPx(idx)
+    if not (self._dockPlaced and self._dockPlaced[idx]) then return nil end
+    local W = self.windows_rt and self.windows_rt[idx]
+    local rc = W and W._dockRect
+    return rc and rc.h
 end

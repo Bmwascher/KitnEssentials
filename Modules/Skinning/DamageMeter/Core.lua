@@ -191,7 +191,6 @@ local RETIRED_FONT_FACE = "Expressway"
 
 local DM_DEFAULTS = {
     Enabled = false,
-    Locked = true,              -- when true, disables EditMode drag of the dock
     RefreshRate = 0.5,
     UIBudgetMs = 1.2,
     MaxWindows = 5,
@@ -260,7 +259,7 @@ local DM_DEFAULTS = {
 
     -- Shared backdrop (flat); arrangement is owned by Dock below
     BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border
-    BackdropBorderStyle = "neutral",            -- neutral | accent | theme
+    BackdropBorderStyle = "neutral",            -- neutral | theme
     BackdropBorderColor = { 0, 0, 0, 1 },        -- solid black
     BackdropColor = { 0.031, 0.031, 0.031, 0.8 }, -- #080808 @ 80% opacity
     BackdropPadding = 1,
@@ -402,6 +401,7 @@ function DM:ApplySettings()
         if W.frame then
             self:ApplyWindowGeometry(W)
             self:ReapplyBarVisuals(W)
+            self:PaintIndexBadge(W)
         end
     end
 
@@ -452,8 +452,7 @@ end
 ---------------------------------------------------------------------------------
 -- EditMode registration
 --
--- The dock is the positioned frame. Registered only when not Locked; the GUI Lock
--- toggle calls RegWithEditMode / UnregisterEditMode to add/remove the mover.
+-- The dock is the positioned frame, registered whenever the module is on.
 -- getPosition / setPosition read+write the SAME db.Position table (no drift).
 ---------------------------------------------------------------------------------
 
@@ -480,15 +479,14 @@ function DM:RegWithEditMode()
                 return KE:ResolveAnchorFrame(self.db and self.db.anchorFrameType, self.db and self.db.ParentFrame)
             end,
             guiPath = "DamageMeter",
+            guiTab = "DamageMeter_Windows",
         }
     end
 
-    -- Published regardless of the lock, and never withdrawn: EUI elements
-    -- anchored to the dock must keep following it after the meter is locked.
-    -- isHidden therefore does NOT report the lock. It reports the two states
-    -- that should cost the element its mover: no dock, or the module disabled.
-    -- OnDisable hides the dock without destroying it, so existence alone is not
-    -- enough.
+    -- Never withdrawn: EUI elements anchored to the dock must keep following
+    -- it. isHidden reports the two states that should cost the element its
+    -- mover: no dock, or the module disabled. OnDisable hides the dock without
+    -- destroying it, so existence alone is not enough.
     if KE.EUIUnlock then
         KE.EUIUnlock:Register(self.editModeConfig, {
             label = "Damage Meter",
@@ -499,7 +497,6 @@ function DM:RegWithEditMode()
         })
     end
 
-    if self.db and self.db.Locked then return end
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement(self.editModeConfig)
         self.editModeRegistered = true
@@ -514,23 +511,6 @@ function DM:UnregisterEditMode()
     -- The EllesmereUI element deliberately stays registered; see RegWithEditMode.
 end
 
--- GUI Lock toggle entry point: register or unregister the dock mover and refresh
--- any live overlay so the change is visible immediately in /kes edit.
-function DM:ApplyLockState()
-    -- Dismiss any open view-selector before (un)registering the mover so the picker
-    -- doesn't sit over the bars while the dock is repositioned in EditMode.
-    if self.CloseAllSelectors then self:CloseAllSelectors() end
-    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
-    if self.db and self.db.Locked then
-        self:UnregisterEditMode()
-    else
-        self:RegWithEditMode()
-    end
-    if KE.EditMode and KE.EditMode.isActive and KE.EditMode.RefreshOverlays then
-        KE.EditMode:RefreshOverlays()
-    end
-end
-
 ---------------------------------------------------------------------------------
 -- Preview Manager hooks
 --
@@ -540,16 +520,31 @@ end
 -- dock). ShowPreview/HidePreview are idempotent per the PreviewManager cache.
 ---------------------------------------------------------------------------------
 
--- Toggles the large per-window index badges (a GUI preview / edit aid so the
--- "Window N" config rows map to the numbered window on screen). Sets _badgesShown
--- so a window built later (AddWindow during preview) shows its badge immediately.
--- A badge is a child of its window frame, so a hidden (disabled-context) window's
--- badge stays hidden regardless.
+-- Near-black (#111111): the chip number on a light theme color.
+local CHIP_DARK_INK = 0.067
+
+-- The look of every window number chip, on the meter and in the settings: the
+-- theme color with the ink that reads on it. White ink takes a black outline;
+-- on dark ink an outline fills the glyphs in, so it gets none.
+function DM:GetChipStyle()
+    local r, g, b = KE:GetAccentColor("theme")
+    if KE.IsLightColor(r, g, b) then
+        return r, g, b, CHIP_DARK_INK, "NONE"
+    end
+    return r, g, b, 1, "OUTLINE"
+end
+
+-- Shows or hides the window number chips (a settings and /kes edit aid, so a
+-- numbered row maps to the numbered window). _badgesShown lets a window built
+-- later (AddWindow during preview) match, and moves each title clear of its
+-- chip. A chip is a child of its window frame, so a hidden window's stays hidden.
 function DM:SetWindowBadges(show)
     self._badgesShown = show
     if not self.windows_rt then return end
     for _, W in pairs(self.windows_rt) do
         if W.indexBadge then
+            self:PaintIndexBadge(W)
+            self:AnchorHeaderStart(W)
             if show then W.indexBadge:Show() else W.indexBadge:Hide() end
         end
     end
@@ -573,12 +568,116 @@ function DM:HidePreview()
     -- The dock is persistent (must NOT hide the user's real dock); only the
     -- preview-only window badges are turned off here.
     self:SetWindowBadges(false)
+    self:HighlightWindows(nil)
     -- GUI closed: drop the preview override and re-evaluate the hide conditions so the
     -- meter re-hides if HideOutOfCombat / OnlyInInstances now say it should. UpdateBackdrop
     -- (Dock.lua) is resolved at runtime; guard for load order.
     self._guiPreview = false
     if self.UpdateBackdrop then self:UpdateBackdrop() end
     if self.ApplySpellHistory then self:ApplySpellHistory() end
+end
+
+-- The settings page's link: link.OnDockLayout() after each dock layout, and
+-- link.OnWindowHover(idx or nil) as the pointer moves onto or off a window.
+-- nil ends the link and puts every window back to full opacity.
+function DM:SetSettingsLink(link)
+    self._settingsLink = link
+    self._hoverW = nil
+    self._hoverWanted = false
+    if not link then self:HighlightWindows(nil) end
+end
+
+local DIMMED_ALPHA = 0.35
+
+-- Made on a window's first highlight: a 2 px theme-color edge over its frame.
+local function GetLitOutline(W)
+    local lit = W.litOutline
+    if not lit then
+        lit = CreateFrame("Frame", nil, W.frame, "BackdropTemplate")
+        lit:SetAllPoints(W.frame)
+        lit:SetFrameLevel(W.frame:GetFrameLevel() + 8)
+        lit:SetBackdrop({
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 2 * KE:GetPixelSize(),
+        })
+        W.litOutline = lit
+    end
+    return lit
+end
+
+-- set holds storage indices (set[idx] = true). Each placed window in it gets
+-- the outline and every other window fades. nil, or a set with no placed
+-- window, puts every window back. The set is kept so LayoutDock can redo the
+-- highlight when a window is placed or dropped while the set is lit.
+function DM:HighlightWindows(set)
+    self._litSet = set
+    local wins, placed = self.windows_rt, self._dockPlaced
+    if not wins then return end
+    local any = false
+    if set and placed then
+        for idx in pairs(set) do
+            if placed[idx] then
+                any = true
+                break
+            end
+        end
+    end
+    local r, g, b = KE:GetAccentColor("theme")
+    for idx, W in pairs(wins) do
+        if W.frame then
+            if any and set[idx] then
+                local lit = GetLitOutline(W)
+                lit:SetBackdropBorderColor(r, g, b, 1)
+                lit:Show()
+                W.frame:SetAlpha(1)
+            else
+                if W.litOutline then W.litOutline:Hide() end
+                W.frame:SetAlpha(any and DIMMED_ALPHA or 1)
+            end
+        end
+    end
+end
+
+-- Repeats each frame while the pointer is still on the window: a child frame
+-- with no hover report of its own sends no leave when the pointer goes
+-- straight off the window, so only the geometric test can end the hover.
+-- An enter stops the repeat. Hoisted, so no closure per event.
+local function HoverCheck()
+    DM._hoverLooping = false
+    if not DM._hoverWanted then return end
+    local W = DM._hoverW
+    local f = W and W.frame
+    if f and f:IsVisible() and f:IsMouseOver() then
+        DM._hoverLooping = true
+        C_Timer.After(0, HoverCheck)
+        return
+    end
+    DM._hoverWanted = false
+    if not W then return end
+    DM._hoverW = nil
+    local link = DM._settingsLink
+    if link and link.OnWindowHover then link.OnWindowHover(nil) end
+end
+
+-- Called from the window's own hover scripts. A leave is settled by the
+-- geometric test above, so a move between two of its child frames is not a
+-- leave, whichever of the two events arrives first.
+function DM:NoteWindowHover(W, entering)
+    local link = self._settingsLink
+    if not link then return end
+    if entering then
+        self._hoverWanted = false
+        if self._hoverW ~= W then
+            self._hoverW = W
+            if link.OnWindowHover then link.OnWindowHover(W.idx) end
+        end
+    else
+        self._hoverWanted = true
+        if not self._hoverLooping then
+            self._hoverLooping = true
+            C_Timer.After(0, HoverCheck)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -870,7 +969,7 @@ function DM:OnEnable()
     self:_ScheduleContextCheck()
 
     -- Suppress Blizzard's built-in meter when configured, and register the dock
-    -- with EditMode (unless Locked). Both are idempotent / guarded.
+    -- with EditMode. Both are idempotent / guarded.
     self:ApplyReplaceBlizzard()
     self:RegWithEditMode()
 
@@ -2746,8 +2845,16 @@ DM.RATE_METER_TYPES = RATE_METER_TYPES
 
 function DM:ReportView(rest, winIdx)
     -- winIdx selects which window to report: the header Report button passes the clicked
-    -- window's index; the slash command omits it -> the primary window (1).
-    winIdx = winIdx or 1
+    -- window's index; the slash command omits it -> the window numbered 1 on screen,
+    -- which need not be storage index 1 once windows are moved or removed. Dock.lua
+    -- loads after this file, so the lookup is guarded.
+    if not winIdx then
+        winIdx = 1
+        if self.DockWindowIndices then
+            self._reportScratch = self._reportScratch or {}
+            winIdx = self:DockWindowIndices(self._reportScratch)[1] or 1
+        end
+    end
     -- Guard the captured chat API: a missing namespace is a clean no-op, not a nil call.
     if not SendChat then return end
     -- SendChatMessage is refused under a chat lock; say why instead of sending.
