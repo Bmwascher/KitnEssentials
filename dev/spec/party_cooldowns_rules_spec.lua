@@ -620,6 +620,21 @@ describe("PartyCooldownsRules.TrinketReadStands", function()
     end)
 end)
 
+describe("PartyCooldownsRules.GearArrived", function()
+    it("refuses a read with no trinket unless the chest or main hand holds an item", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a trinket", items = { nil, 2 }, others = {}, arrived = true },
+            { name = "no trinket, a chest", items = {}, others = { 5 }, arrived = true },
+            { name = "no trinket, a main hand", items = {}, others = { nil, 16 }, arrived = true },
+            { name = "nothing", items = {}, others = {}, arrived = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.arrived, R.GearArrived(case.items, case.others), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.ResetsAtKeyStart", function()
     it("resets a class spell counted at KEY_RESET_MIN seconds or more, never a trinket", function()
         local R = loadRules()

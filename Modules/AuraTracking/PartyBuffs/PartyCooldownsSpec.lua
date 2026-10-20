@@ -471,6 +471,7 @@ local C_Item = C_Item
 local C_TooltipInfo = C_TooltipInfo
 local GetInventoryItemID = GetInventoryItemID
 local TRINKET_SLOTS = { 13, 14 }
+local CHEST_AND_MAIN_HAND = { 5, 16 }
 
 local loadTries, lengthTries = {}, {}
 
@@ -531,9 +532,9 @@ end
 
 -- Nil when either slot's answer was refused or hidden; an empty slot answers
 -- a plain nil and reads as empty.
-local function ReadItems(unit)
+local function ReadItems(unit, slots)
     local items = {}
-    for i, slotID in ipairs(TRINKET_SLOTS) do
+    for i, slotID in ipairs(slots or TRINKET_SLOTS) do
         local ok, itemID = pcall(GetInventoryItemID, unit, slotID)
         if not ok or KE:IsSecretValue(itemID) then return nil end
         if type(itemID) == "number" then items[i] = itemID end
@@ -578,8 +579,8 @@ Spec.readers[#Spec.readers + 1] = {
     On = function() return Spec.trackTrinkets == true end,
     Wanted = function(m) return m.trinketItems == nil or m.trinketsStale == true end,
     Read = function(m, unit)
-        local items = ReadItems(unit)
-        if not items then return end
+        local items, others = ReadItems(unit), ReadItems(unit, CHEST_AND_MAIN_HAND)
+        if not (items and others and KE.PartyCooldownsRules.GearArrived(items, others)) then return end
         local stands, same = KE.PartyCooldownsRules.TrinketReadStands(m.trinketItems, items)
         m.trinketsSame = same and (m.trinketsSame or 0) + 1 or 0
         m.trinketsStale = not stands or nil

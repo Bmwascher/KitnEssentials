@@ -1103,6 +1103,13 @@ function Rules.TrinketReadStands(prev, items)
     return same or (items[1] ~= nil and items[2] ~= nil), same
 end
 
+-- An inspect answer can come before the teammate's gear does, and then every
+-- slot reads empty. A read with no trinket counts only when the chest or main
+-- hand (others) holds an item.
+function Rules.GearArrived(items, others)
+    return items[1] ~= nil or items[2] ~= nil or others[1] ~= nil or others[2] ~= nil
+end
+
 -- The talent answer after three unreadable reads, and whether to read once
 -- more: a member with no answer stores an empty one and is read again; a held
 -- answer, the empty one included, is kept.
