@@ -1,5 +1,34 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.14
+
+### Raid Cooldowns
+
+- The Party Cooldowns tab Healer Externals is now Raid Cooldowns. Your
+  saved settings and the box's position carry over
+- **NEW:** After each healer's external, the box shows Blessing of
+  Protection (or Spellwarding), Roar of Sacrifice, Innervate and Spatial
+  Paradox, then the raid cooldowns: Darkness, Anti-Magic Zone, Rallying
+  Cry, Zephyr, Aura Mastery, Tranquility, Rewind, Divine Hymn, Power Word:
+  Barrier, Spirit Link Totem and Dream Flight. All are on, party only, and
+  each can be switched off in the Spells card
+- Your own externals and raid cooldowns show in the box, first in each
+  group, whether or not Include Yourself is on. Innervate shows for every
+  Druid spec
+- Searching "raid cooldowns" in the settings sidebar finds Party
+  Cooldowns
+
+### External Tracker
+
+- **NEW:** Show Caster Name, off by default. On, the caster's name shows
+  under each icon in class color
+
+### Movement Buffs
+
+- **NEW:** Show Caster Name, off by default, as in External Tracker
+
+---
+
 ## v4.12.13
 
 ### Party Cooldowns
