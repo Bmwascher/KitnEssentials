@@ -580,6 +580,8 @@ end
 local function MaskCell(cell, masked)
     if cell.masked == masked then return end
     for _, answer in pairs(cell.answers) do answer.label:SetAlpha(masked and 0 or answer.alpha or 1) end
+    -- The preview's sample stands in for the count, so it hides with it.
+    if DT.previewing then cell.sample:SetShown(not masked) end
     cell.masked = masked
 end
 
@@ -1524,7 +1526,7 @@ function DT:PaintPreview()
         local color = Rules.CountColor(shown, d, cell.own, self.someColor, self.allColor, fullCoverage)
         cell.sample:SetTextColor(color[1], color[2], color[3], color[4])
         cell.sample:SetText(Rules.Label(shown, d, db.CountFormat))
-        cell.sample:Show()
+        cell.sample:SetShown(not cell.masked)
         cell.sampleTimer:SetText(SAMPLE_TIMERS[((i - 1) % #SAMPLE_TIMERS) + 1])
         cell.sampleTimer:SetShown(db.TimerEnabled ~= false and not cell.attachIcon)
         if db.GlowEnabled and shown == d and not cell.attachIcon then

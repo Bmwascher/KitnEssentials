@@ -524,7 +524,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     manager:Register(iconY, "attach")
     cardCDM:AddRow(rowCDM2, Theme.rowHeight)
     cardCDM:AddNote("DoTs in the Cooldown Manager's Essential, Utility or Tracked Buffs icons show their " ..
-        "count on that icon, with no glow or target timer. The others stay in the row.")
+        "count on that icon, with no glow or target timer. The others stay in the row. An attached count " ..
+        "and its preview show only once the Cooldown Manager shows that icon: with EllesmereUI's bars, " ..
+        "after the DoT's first cast since /reload.")
     yOffset = cardCDM:GetNextOffset()
 
     ----------------------------------------------------------------
