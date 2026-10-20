@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.5
+
+### Addon Skins
+
+- BigWigs' sound pickers (Sounds, Pull, Victory, Wipe, Battle Res, Auras,
+  Keystones and boss ability sounds) get the same flat dark box as
+  Countdown Type. The search box in their list is flat too, from the very
+  first time the list opens
+
+### Skinning
+
+- Reputation rows show the hover tint again
+
+---
+
 ## v4.12.4
 
 ### Frame Anchoring
