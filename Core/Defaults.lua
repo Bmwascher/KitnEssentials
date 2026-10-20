@@ -2336,6 +2336,10 @@ local Defaults = {
                 ParentFrame = "UIParent",
                 Position = DefaultPosition(-447, 370),
             },
+
+            ShieldWarning = {
+                Enabled = true,
+            },
         },
 
         -----------------------------------------------------------------

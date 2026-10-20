@@ -434,6 +434,13 @@ local function CollectEncountersForDungeon(dungeonKey)
                     isWindMap = true,
                 })
             end
+            if type(enc.shieldSwap) == "table" then
+                table_insert(spellPairs, {
+                    id              = string_format("warn:%d:shield", encId),
+                    data            = { name = "Shielded Target", spellID = enc.shieldSwap.message },
+                    isShieldWarning = true,
+                })
+            end
             table_insert(encList, {
                 id        = encId,
                 name      = enc.shortName or enc.name or string_format("Encounter %d", encId),
@@ -585,9 +592,13 @@ local function IsWindMapKey(key)
     return type(key) == "string" and key:find("^map:%d+:wind$") ~= nil
 end
 
+local function IsShieldWarningKey(key)
+    return type(key) == "string" and key:find("^warn:%d+:shield$") ~= nil
+end
+
 local function ApplyOverrideStripe(kit, spellId)
     if not (kit and kit.overrideStripe) then return end
-    if IsWindMapKey(spellId) then
+    if IsWindMapKey(spellId) or IsShieldWarningKey(spellId) then
         kit.overrideStripe:Hide()
         return
     end
@@ -649,7 +660,7 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     -- RefreshListRowTag updates on Display tab toggles.
     -- An aura sound row draws nothing in game and the wind map row is its own
     -- panel, so neither has a Bar/Text tag.
-    if kit.tagLabel and item and (item.isAura or item.isWindMap) then
+    if kit.tagLabel and item and (item.isAura or item.isWindMap or item.isShieldWarning) then
         kit.tagLabel:SetText("")
     elseif kit.tagLabel then
         local effectiveDisplay
@@ -675,7 +686,7 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
 
     -- Sound indicator: "S" if any onShow/onHide sound configured. The wind
     -- map plays no sound.
-    if kit.soundLabel and item and item.isWindMap then
+    if kit.soundLabel and item and (item.isWindMap or item.isShieldWarning) then
         kit.soundLabel:SetText("")
     elseif kit.soundLabel then
         local hasSound
@@ -707,7 +718,7 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
             local tex = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.spellID))
                         or 134400
             kit.icon:SetTexture(tex)
-        elseif item and (item.isAura or item.isWindMap) then
+        elseif item and (item.isAura or item.isWindMap or item.isShieldWarning) then
             kit.icon:SetTexture(
                 (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spell.spellID)) or 134400)
         elseif item and item.isCue then
@@ -3432,6 +3443,55 @@ local function BuildWindMapBody(parent, contentWidth, onCaptionResize)
     return body, height
 end
 
+local SHIELD_WARNING_TOOLTIP =
+    "Red SHIELDED TARGET text while your target is the boss that carries Storm Blessed."
+
+local SHIELD_WARNING_DESCRIPTION =
+    "Shows a red SHIELDED TARGET text above the center of the screen while your target is the boss "
+    .. "that carries Storm Blessed and cannot be damaged. It follows BigWigs' \"Storm Blessed on ...\" "
+    .. "messages, so it needs BigWigs with LittleWigs. Mythic and Mythic+ only. It hides once either "
+    .. "boss dies. It plays no sound."
+
+local function BuildShieldWarningBody(parent, contentWidth, onCaptionResize)
+    local DT = GetModule()
+    local db = GetSettingsDB()
+    local settings = db and db.ShieldWarning
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    local header = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(header, "Expressway", 13, "OUTLINE")
+    header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    header:SetText("Shielded Target")
+    header:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+
+    local enableToggle = GUIFrame:CreateCheckbox(body, "Show SHIELDED TARGET", {
+        value = settings ~= nil and settings.Enabled == true,
+        callback = function(checked)
+            if not settings then return end
+            settings.Enabled = checked
+            if DT and DT.ApplyShieldWarningSettings then DT:ApplyShieldWarningSettings() end
+        end,
+    })
+    enableToggle:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
+    enableToggle:SetWidth(200)
+
+    local caption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
+    caption:SetPoint("TOPLEFT", enableToggle, "BOTTOMLEFT", 0, -8)
+    caption:SetWidth(contentWidth)
+    caption:SetJustifyH("LEFT")
+    caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    caption:SetText(SHIELD_WARNING_DESCRIPTION)
+
+    local captionHeight = caption:GetStringHeight() or 0
+    local height = DETAIL_PADDING + (header:GetStringHeight() or 0) + 10 + enableToggle:GetHeight() + 8
+        + captionHeight
+    caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    body:SetScript("OnSizeChanged", FollowCaptionHeight(body, caption, captionHeight, onCaptionResize))
+    return body, height
+end
+
 ---------------------------------------------------------------------------------
 -- Title row of the detail pane: icon and name in one frame, so the whole area
 -- is a single tooltip hover target. The hover reads the fields ConfigureTitle
@@ -3480,6 +3540,9 @@ local function TitleOnEnter(title)
     elseif title._hoverIsWindMap then
         GameTooltip:AddLine(ResolveSpellDisplayName(id, title._hoverData))
         GameTooltip:AddLine(WIND_MAP_TOOLTIP, 0.85, 0.85, 0.85, true)
+    elseif title._hoverIsShieldWarning then
+        GameTooltip:AddLine(ResolveSpellDisplayName(id, title._hoverData))
+        GameTooltip:AddLine(SHIELD_WARNING_TOOLTIP, 0.85, 0.85, 0.85, true)
     elseif title._hoverIsAura then
         local data = title._hoverData
         GameTooltip:AddLine(ResolveSpellDisplayName(id, data))
@@ -3556,7 +3619,7 @@ local function ConfigureTitle(title, item, data)
             or 134400
         )
         nameText:SetText((data and data.name) or "Trash")
-    elseif item.isAura or item.isWindMap then
+    elseif item.isAura or item.isWindMap or item.isShieldWarning then
         icon:SetTexture(
             (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(data.spellID))
             or 134400
@@ -3589,6 +3652,7 @@ local function ConfigureTitle(title, item, data)
     title._hoverIsCue = item.isCue == true
     title._hoverIsAura = item.isAura or false
     title._hoverIsWindMap = item.isWindMap or false
+    title._hoverIsShieldWarning = item.isShieldWarning or false
     title._hoverData = data or {}
     title:EnableMouse(true)
 end
@@ -3691,7 +3755,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
         clearBossPreviews()
         HideTrashPreview()
         ShowWindMapPreview()
-    elseif IsAuraKey(state.selectedSpellId) then
+    elseif IsAuraKey(state.selectedSpellId) or IsShieldWarningKey(state.selectedSpellId) then
         clearBossPreviews()
         HideTrashPreview()
     else
@@ -3780,6 +3844,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
     selectedIsTrash = selectedSpell and selectedSpell.isTrash or false
     local selectedIsAura = selectedSpell and selectedSpell.isAura or false
     local selectedIsWindMap = selectedSpell and selectedSpell.isWindMap or false
+    local selectedIsShieldWarning = selectedSpell and selectedSpell.isShieldWarning or false
 
     local titleRow = GUIFrame:AcquirePooled("dtd:title", rightCol)
     titleRow:SetHeight(TITLE_ICON_SIZE)
@@ -3791,7 +3856,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
     -- A reminder row has no tabs, so it gets no tab bar and its separator
     -- follows the title at the title-to-tabs spacing.
     local separatorAnchor, separatorGap = titleRow, -10
-    if not selectedIsAura and not selectedIsWindMap then
+    if not selectedIsAura and not selectedIsWindMap and not selectedIsShieldWarning then
         local tabBar = GUIFrame:AcquirePooled("dtd:host", rightCol)
         tabBar:SetPoint("TOPLEFT", titleRow, "BOTTOMLEFT", 0, -10)
         tabBar:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
@@ -3822,7 +3887,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
 
     local auraBodyHeight, refitAuraPane
     if selectedSpell then
-        if selectedIsAura or selectedIsWindMap then
+        if selectedIsAura or selectedIsWindMap or selectedIsShieldWarning then
             local contentWidth = scrollChild:GetWidth() - Theme.paddingSmall * 2 - LEFT_COL_WIDTH - COL_GAP
                 - DETAIL_PADDING * 4
             local function onResize(delta)
@@ -3831,6 +3896,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
             local _, bodyHeight
             if selectedIsAura then
                 _, bodyHeight = BuildAuraSoundBody(tabBody, selectedSpell.id, contentWidth, onResize)
+            elseif selectedIsShieldWarning then
+                _, bodyHeight = BuildShieldWarningBody(tabBody, contentWidth, onResize)
             else
                 _, bodyHeight = BuildWindMapBody(tabBody, contentWidth, onResize)
             end

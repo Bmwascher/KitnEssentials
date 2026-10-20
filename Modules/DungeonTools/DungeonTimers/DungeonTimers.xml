@@ -7,5 +7,6 @@
     <Script file="DebugTrace.lua" />
     <Script file="DungeonTimers.lua" />
     <Script file="WindMap.lua" />
+    <Script file="ShieldWarning.lua" />
     <Include file="Trash\Trash.xml" />
 </Ui>

@@ -38,3 +38,20 @@ describe("phase rule end at a swap", function()
         assert.is_false(DT._PhaseRuleEnded(boss1, nil, nil), "encounter without a swap")
     end)
 end)
+
+describe("shielded target warning", function()
+    it("arms only when it is on, the encounter has a swap and the difficulty is Mythic or Mythic+", function()
+        local Swap = L.loadShieldSwapState()
+        local swap = Swap.New(CFG)
+        local cases = {
+            { name = "Mythic+", enabled = true, difficulty = 8, swap = swap, wanted = true },
+            { name = "Mythic", enabled = true, difficulty = 23, swap = swap, wanted = true },
+            { name = "Heroic", enabled = true, difficulty = 2, swap = swap, wanted = false },
+            { name = "turned off", enabled = false, difficulty = 8, swap = swap, wanted = false },
+            { name = "no swap encounter", enabled = true, difficulty = 8, swap = nil, wanted = false },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.wanted, Swap.WarningWanted(c.enabled, c.difficulty, c.swap), c.name)
+        end
+    end)
+end)

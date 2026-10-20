@@ -38,4 +38,12 @@ function Swap.RuleEnded(rule, swap)
     return rule.endsOnShield == true and swap ~= nil and swap.swappedTo[rule.unit or "boss1"] == true
 end
 
+-- Mythic and Mythic+ only: where the shield may not exist, a count that
+-- never moves would mark the starting unit for the whole fight.
+local WARNING_DIFFICULTIES = { [8] = true, [23] = true }
+
+function Swap.WarningWanted(enabled, difficultyId, swap)
+    return enabled == true and swap ~= nil and WARNING_DIFFICULTIES[difficultyId] == true
+end
+
 KE._DungeonShieldSwapState = Swap

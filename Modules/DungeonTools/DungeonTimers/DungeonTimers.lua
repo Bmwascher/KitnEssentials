@@ -4224,6 +4224,7 @@ function DT:StopPhaseTracking()
     -- outlives its encounter.
     self._encounterStage = nil
     self._shieldSwap = nil
+    self:_ShieldWarningStop()
     self:_HideAllPhaseBars()
 end
 
@@ -5285,6 +5286,7 @@ function DT:OnEncounterStart(_, encounterID)
     self._encounterStage = (stagedEncounter and stagedEncounter.stageCue) and 1 or nil
     local swapCfg = stagedEncounter and stagedEncounter.shieldSwap
     self._shieldSwap = swapCfg and Swap.New(swapCfg) or nil
+    self:_ShieldWarningStart()
     if id then State.ClearCueCounts(self._state, id) end
     -- Drops a shield left by an encounter that never ended, and releases the
     -- shield events for an encounter without a shield binding.
@@ -6576,6 +6578,7 @@ function DT:_HandleProviderEvent(event, receipt, ...)
         if self._shieldSwap and Swap.OnMessage(self._shieldSwap, key, GetTime()) then
             dprint("shield swap to=" .. tostring(self._shieldSwap.shielded))
             self:RefreshPhaseBars()
+            self:_ShieldWarningUpdate()
         end
         local binding, bindReason = State.ResolveBinding(self._bindings, meta, self._activeEncounterId,
             "Message", key, nil)

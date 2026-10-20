@@ -129,6 +129,7 @@ function L.loadDungeonTimers(opts, overrides)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/DebugTrace.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/DungeonTimers.lua", KE)
     helpers.loadModule("Modules/DungeonTools/DungeonTimers/WindMap.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/DungeonTimers/ShieldWarning.lua", KE)
     return modules["DungeonTimers"], KE
 end
 
