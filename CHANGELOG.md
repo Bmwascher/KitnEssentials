@@ -1,5 +1,32 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.6
+
+### Addon Skins
+
+- Better Friendlist: the Modern window gets KE's flat dark look. This
+  covers the side tabs, the Battle.net and filter bars, group headers,
+  the Requests page and the Who and Raid buttons. KE dresses only the
+  layout Better Friendlist is using and follows a live switch between
+  Modern and Legacy
+- Modern friend rows are flat, with a status stripe, a larger class icon
+  (EllesmereUI's icons when it is loaded), a same-zone accent, a selection
+  fill and an accent group count. A border line marks where the list
+  cuts its rows
+- The Kitn logo replaces the portrait, and the close X is larger. Scroll
+  bars hide while nothing scrolls, and the Who list starts at its header
+  row
+- The invite button shows Blizzard's invite glyph in KE colors in both
+  layouts, in place of the Legacy "+" text and the cross-faction art. The
+  Battle.net tag box no longer slides left in Modern, and its tag text is
+  the same blue on both themes
+
+### Dungeon Timers
+
+- The GGEZ sound is trimmed to 2.65 seconds
+
+---
+
 ## v4.12.5
 
 ### Addon Skins
