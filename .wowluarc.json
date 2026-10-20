@@ -18,7 +18,7 @@
   "globals": {
     "read": [
       "KitnEssentials", "KE",
-      "BigWigs", "BigWigsLoader",
+      "BigWigs", "BigWigsLoader", "BigWigsAPI",
       "ElvUI", "ElvUI_SpellBookTooltip",
       "LibStub",
       "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",

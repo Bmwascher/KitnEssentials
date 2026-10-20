@@ -6,9 +6,8 @@
 -- the schema documented at EncounterData.lua; the resolution half
 -- drives the REAL (file-local) ResolveDisplayPreset through DT:CreateBar
 -- and the exposed DT._ResolvePresetByText.
--- Sound keys (spell/phase sound + soundOnHide) are deliberately NOT
--- validated — approved decision (would need the LSM sound list from
--- Core/Globals.lua).
+-- Spell/phase sound keys are outside this lint. Aura rules also check
+-- registration names and files: an unresolved name makes the rule silent.
 local L = require("dev.spec._ke_loader")
 
 -- Schema enums, EncounterData.lua. castType is curation metadata
@@ -21,7 +20,7 @@ local DISPLAYS = { bar = true, text = true }
 
 -- Labels that deliberately render with DEFAULT_BAR_COLOR (no preset, no
 -- alias, no curated color). Anything else unresolvable is treated as a typo.
-local DEFAULT_COLOR_LABELS = { ["BOSS BUFFED"] = true, ["KICK"] = true }
+local DEFAULT_COLOR_LABELS = { ["BOSS BUFFED"] = true, ["BOSS LEAP"] = true, ["KICK"] = true }
 
 describe("DungeonTimers EncounterData — curated-data lint", function()
     local DT, KE
@@ -125,6 +124,50 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
         assert.same({}, failures)
     end)
 
+    -- The wind map reads both rows through their explicit anchored bindings,
+    -- whose owned hold and estimate end bound each card's lifetime.
+    it("a windMap names anchored explicit Timer rows of its own encounter", function()
+        local bindings = KE._DungeonTimerState.BuildBindings(KE.EncounterData)
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            if enc.windMap ~= nil then
+                local timers = bindings.timers[encId] or {}
+                for _, field in ipairs({ "wind", "spit" }) do
+                    local id = type(enc.windMap) == "table" and enc.windMap[field] or nil
+                    local binding = id and timers[id]
+                    if not (binding and binding.policy == "estimated-impact"
+                        and binding.anchor == "timeline-finished") then
+                        failures[#failures + 1] = "enc " .. tostring(encId) .. ": windMap." .. field ..
+                            " must name an anchored explicit Timer row"
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    -- The stage latch matches a Timer receipt by its curated row and by its
+    -- duration rounded to one decimal; a stage cue starts after stage 1.
+    it("a stageCue names an explicit Timer row of its own encounter, a one-decimal duration and a later stage", function()
+        local bindings = KE._DungeonTimerState.BuildBindings(KE.EncounterData)
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            local cue = enc.stageCue
+            if cue ~= nil then
+                local ctx = "enc " .. tostring(encId) .. ": stageCue"
+                local timers = bindings.timers[encId] or {}
+                if type(cue) ~= "table" or not timers[cue.spellID] then
+                    failures[#failures + 1] = ctx .. " must name an explicit Timer row"
+                elseif not (isPositiveNumber(cue.duration) and (cue.duration * 10) % 1 == 0) then
+                    failures[#failures + 1] = ctx .. ".duration must be positive with at most one decimal"
+                elseif not (isPositiveNumber(cue.stage) and cue.stage % 1 == 0 and cue.stage >= 2) then
+                    failures[#failures + 1] = ctx .. ".stage must be a whole stage number from 2"
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
     it("every spell entry has a valid trigger classification", function()
         local failures = forEachSpell(function(failures, ctx, _, _, spell)
             if spell.castType ~= nil then
@@ -184,9 +227,12 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
     end)
 
     it("duration fields are positive numbers (channels carry channelDuration)", function()
-        local failures = forEachSpell(function(failures, ctx, _, _, spell)
+        local failures = forEachSpell(function(failures, ctx, enc, _, spell)
             for _, field in ipairs({ "castDuration", "channelDuration", "forceDuration", "duration" }) do
-                if spell[field] ~= nil and not isPositiveNumber(spell[field]) then
+                -- An explicit encounter's castDuration may be zero; the explicit
+                -- contract case enforces its own >= 0 domain.
+                local explicitCast = field == "castDuration" and enc.timerPolicy == "explicit"
+                if spell[field] ~= nil and not explicitCast and not isPositiveNumber(spell[field]) then
                     failures[#failures + 1] = ctx .. ": " .. field .. " must be a positive number"
                 end
             end
@@ -215,7 +261,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                 if type(pcb) ~= "table" then
                     failures[#failures + 1] = ctx .. ": postCastBar must be a table"
                 else
-                    -- RenderBar drops baseDur <= 0 (DungeonTimers.lua):
+                    -- RenderPresentation drops baseDur <= 0 (DungeonTimers.lua):
                     -- a postCastBar without a positive duration never renders.
                     if not isPositiveNumber(pcb.duration) then
                         failures[#failures + 1] = ctx .. ": postCastBar.duration must be a positive number"
@@ -251,6 +297,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
     it("color arrays are three numbers in 0..1", function()
         local failures = forEachSpell(function(failures, ctx, _, _, spell)
             lintColor(failures, ctx, "color", spell.color)
+            lintColor(failures, ctx, "shieldColor", spell.shieldColor)
             if type(spell.secondary) == "table" then
                 lintColor(failures, ctx, "secondary.color", spell.secondary.color)
             end
@@ -296,8 +343,9 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                 lintLabel(failures, ctx, "postCastBar.displayText",
                     spell.postCastBar.displayText, hasColor)
             end
-            -- shieldBar.displayText is exempt from color resolution — the
-            -- shield bar's fill color is hardcoded (DungeonTimers.lua).
+            -- A shield's displayText (row shieldBar or encounter shields) is
+            -- exempt from color resolution: the shield fill color is hardcoded
+            -- (DungeonTimers.lua).
         end)
         assert.same({}, failures)
     end)
@@ -325,6 +373,12 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                         -- lead is a dead rule.
                         if not isPositiveNumber(rule.lead) then
                             failures[#failures + 1] = ctx .. ": lead must be a positive number"
+                        end
+                        -- endsAtStage is compared with the encounter
+                        -- stage, which is a whole number from 1.
+                        if rule.endsAtStage ~= nil and not (isPositiveNumber(rule.endsAtStage)
+                            and rule.endsAtStage % 1 == 0) then
+                            failures[#failures + 1] = ctx .. ": endsAtStage must be a whole stage number from 1"
                         end
                     end
                 end
@@ -360,6 +414,263 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
             if DT.DISPLAY_PRESETS[target] == nil then
                 failures[#failures + 1] = "alias '" .. tostring(aliasKey) .. "': target '" ..
                     tostring(target) .. "' is not a preset"
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    -- Mirrors TimerState.lua's BuildExplicitTimerBinding/HasForbiddenExplicitField so a row
+    -- that satisfies this lint is guaranteed a real binding, not silently dropped at runtime.
+    local EXPLICIT_FORBIDDEN_FIELDS = {
+        "channelDuration", "forceDuration", "postCastBar", "phantomFollowupOf",
+        "spawnOnMessage", "shieldBar", "secondary", "castDisplayText",
+    }
+
+    local function isFiniteNumber(v)
+        return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+    end
+
+    -- Mirrors TimerState.lua's BuildSequelBindings: a Sequel row that passes
+    -- here must own the sequel binding installed under its parent.
+    local function lintSequel(failures, ctx, encId, enc, spellId, spell, bindings)
+        local contract = spell.timerSource
+        local parentId = contract.parent
+        if not isFiniteNumber(parentId) or parentId == spellId or enc.spells[parentId] == nil then
+            failures[#failures + 1] = ctx .. ": timerSource.parent must name another row of this encounter"
+        end
+        if not (isFiniteNumber(contract.after) and contract.after >= 0) then
+            failures[#failures + 1] = ctx .. ": timerSource.after must be a finite number >= 0"
+        end
+        if not (isFiniteNumber(spell.castDuration) and spell.castDuration >= 0) then
+            failures[#failures + 1] = ctx .. ": sequel row requires a finite castDuration >= 0"
+        elseif isFiniteNumber(contract.after) and contract.after + spell.castDuration <= 0 then
+            failures[#failures + 1] = ctx .. ": sequel after + castDuration must be > 0"
+        end
+        for _, field in ipairs(EXPLICIT_FORBIDDEN_FIELDS) do
+            if spell[field] ~= nil then
+                failures[#failures + 1] = ctx .. ": sequel row must not carry " .. field
+            end
+        end
+        if spell.extendByChannel == true then
+            failures[#failures + 1] = ctx .. ": sequel row must not set extendByChannel"
+        end
+        local byParent = bindings.sequels[encId]
+        local installed = isFiniteNumber(parentId) and byParent and byParent[parentId]
+        if not (installed and installed.key == spellId) then
+            failures[#failures + 1] = ctx ..
+                ": sequel row passes this lint but the runtime builder installed no sequel binding"
+        end
+    end
+
+    it("explicit timer contracts are well-formed and agree with the runtime builder", function()
+        local bindings = KE._DungeonTimerState.BuildBindings(KE.EncounterData)
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            local ctxEnc = "enc " .. tostring(encId)
+            if enc.timerPolicy ~= nil and enc.timerPolicy ~= "explicit" then
+                failures[#failures + 1] = ctxEnc .. ": timerPolicy must be nil or 'explicit'"
+            end
+            for spellId, spell in pairs(type(enc.spells) == "table" and enc.spells or {}) do
+                local ctx = string.format("enc %s (%s) spell %s",
+                    tostring(encId), tostring(enc.name), tostring(spellId))
+                if enc.timerPolicy ~= "explicit" then
+                    if spell.timerSource ~= nil then
+                        failures[#failures + 1] = ctx ..
+                            ": timerSource requires the encounter's timerPolicy to be 'explicit'"
+                    end
+                elseif type(spell.timerSource) == "table" and spell.timerSource.kind == "Sequel" then
+                    lintSequel(failures, ctx, encId, enc, spellId, spell, bindings)
+                else
+                    local contract = spell.timerSource
+                    if type(contract) ~= "table" then
+                        failures[#failures + 1] = ctx .. ": explicit encounter row must carry a timerSource table"
+                    else
+                        if contract.kind ~= "Timer" then
+                            failures[#failures + 1] = ctx .. ": timerSource.kind must be 'Timer'"
+                        end
+                        if contract.isCooldown ~= true then
+                            failures[#failures + 1] = ctx .. ": timerSource.isCooldown must be true"
+                        end
+                        if contract.policy ~= "estimated-impact" then
+                            failures[#failures + 1] = ctx .. ": timerSource.policy must be 'estimated-impact'"
+                        end
+                        if contract.spanMode ~= "remaining-only" then
+                            failures[#failures + 1] = ctx .. ": timerSource.spanMode must be 'remaining-only'"
+                        end
+                        if contract.collisionPolicy ~= "refuse-unresolved-label" then
+                            failures[#failures + 1] = ctx .. ": timerSource.collisionPolicy must be 'refuse-unresolved-label'"
+                        end
+                        if not (isFiniteNumber(contract.stopTolerance) and contract.stopTolerance > 0) then
+                            failures[#failures + 1] = ctx .. ": timerSource.stopTolerance must be a finite number > 0"
+                        end
+                        if contract.anchor ~= nil and contract.anchor ~= "timeline-finished" then
+                            failures[#failures + 1] = ctx .. ": timerSource.anchor must be nil or 'timeline-finished'"
+                        end
+                        if contract.castConfirm ~= nil and contract.castConfirm ~= "boss-cast-start" then
+                            failures[#failures + 1] = ctx .. ": timerSource.castConfirm must be nil or 'boss-cast-start'"
+                        end
+                        local canceledStop = contract.canceledStop
+                        if canceledStop ~= nil then
+                            if type(canceledStop) ~= "table" or not isFiniteNumber(canceledStop.stage)
+                                or canceledStop.stage <= 0 or not isFiniteNumber(canceledStop.within)
+                                or canceledStop.within <= 0 or canceledStop.within > 1 then
+                                failures[#failures + 1] = ctx .. ": timerSource.canceledStop needs stage > 0 and 0 < within <= 1"
+                            end
+                            if contract.anchor ~= "timeline-finished" or contract.castConfirm ~= nil
+                                or contract.pausedStop ~= nil or contract.queueAfter ~= nil then
+                                failures[#failures + 1] = ctx ..
+                                    ": timerSource.canceledStop needs the anchor and no castConfirm, pausedStop or queueAfter"
+                            end
+                        end
+                        local retainEarlyFinished = contract.retainEarlyFinished
+                        if retainEarlyFinished ~= nil and (retainEarlyFinished ~= true
+                            or contract.anchor ~= "timeline-finished" or contract.castConfirm ~= nil
+                            or contract.pausedStop ~= nil or contract.queueAfter ~= nil or canceledStop ~= nil) then
+                            failures[#failures + 1] = ctx ..
+                                ": retainEarlyFinished needs true, the anchor and no other stop/queue policy"
+                        end
+                        local restart = contract.suppressConcurrentRestart
+                        if restart ~= nil and (type(restart) ~= "table"
+                            or not isFiniteNumber(restart.from) or not isFiniteNumber(restart.duration)
+                            or restart.duration <= 0 or restart.from <= restart.duration
+                            or contract.anchor ~= "timeline-finished" or contract.castConfirm ~= nil
+                            or contract.pausedStop ~= nil or contract.queueAfter ~= nil
+                            or canceledStop ~= nil or retainEarlyFinished ~= nil) then
+                            failures[#failures + 1] = ctx ..
+                                ": suppressConcurrentRestart needs from > duration > 0, an anchor and no other stop/queue policy"
+                        end
+                        if canceledStop ~= nil or retainEarlyFinished ~= nil or restart ~= nil then
+                            -- These dependents need every published occurrence to reach an anchor.
+                            local installed = bindings.timers[encId] and bindings.timers[encId][spellId]
+                            local shieldParent = bindings.shields[encId] and bindings.shields[encId][spellId]
+                            local cueEnder = bindings.cueEnders[encId] and bindings.cueEnders[encId][spellId]
+                            if (installed and installed.ownsExpiry) or shieldParent or cueEnder then
+                                failures[#failures + 1] = ctx ..
+                                    ": a retained or suppressed row may not own its expiry, parent a shield or end a cue"
+                            end
+                        end
+                    end
+                    if not (isFiniteNumber(spell.castDuration) and spell.castDuration >= 0) then
+                        failures[#failures + 1] = ctx .. ": explicit row requires a finite castDuration >= 0"
+                    end
+                    for _, field in ipairs(EXPLICIT_FORBIDDEN_FIELDS) do
+                        if spell[field] ~= nil then
+                            failures[#failures + 1] = ctx .. ": explicit row must not carry " .. field
+                        end
+                    end
+                    if spell.extendByChannel == true then
+                        failures[#failures + 1] = ctx .. ": explicit row must not set extendByChannel"
+                    end
+                    local timersForEncounter = bindings.timers[encId]
+                    if not (timersForEncounter and timersForEncounter[spellId]) then
+                        failures[#failures + 1] = ctx ..
+                            ": row passes this lint but the runtime builder installed no binding"
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    it("phase cues are well-formed and agree with the runtime builder", function()
+        local State = KE._DungeonTimerState
+        local bindings = State.BuildBindings(KE.EncounterData)
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            if enc.phaseCues ~= nil then
+                if enc.timerPolicy ~= "explicit" then
+                    failures[#failures + 1] = "enc " .. tostring(encId) ..
+                        ": phaseCues requires the encounter's timerPolicy to be 'explicit'"
+                end
+                for cueName, cue in pairs(type(enc.phaseCues) == "table" and enc.phaseCues or {}) do
+                    local ctx = string.format("enc %s (%s) cue %s",
+                        tostring(encId), tostring(enc.name), tostring(cueName))
+                    if type(cue.name) ~= "string" or cue.name == "" then
+                        failures[#failures + 1] = ctx .. ": name must be a non-empty string"
+                    end
+                    if type(cue.iconOverride) ~= "number" and type(cue.iconOverride) ~= "string" then
+                        failures[#failures + 1] = ctx .. ": iconOverride must be a spell ID, texture ID or path"
+                    end
+                    if cue.role ~= nil and not ROLES[cue.role] then
+                        failures[#failures + 1] = ctx .. ": unknown role '" .. tostring(cue.role) .. "'"
+                    end
+                    if cue.display ~= nil and not DISPLAYS[cue.display] then
+                        failures[#failures + 1] = ctx .. ": unknown display '" .. tostring(cue.display) .. "'"
+                    end
+                    lintColor(failures, ctx, "color", cue.color)
+                    lintColor(failures, ctx, "endedColor", cue.endedColor)
+                    local hasColor = cue.color ~= nil
+                    lintLabel(failures, ctx, "displayText", cue.displayText, hasColor)
+                    lintLabel(failures, ctx, "prepareText", cue.prepareText, hasColor)
+                    lintLabel(failures, ctx, "endedText", cue.endedText, hasColor or cue.endedColor ~= nil)
+
+                    local source = type(cue.source) == "table" and cue.source or {}
+                    local installed
+                    if source.kind == "Message" and source.key ~= nil then
+                        installed = bindings.messages[encId] and bindings.messages[encId][source.key]
+                    elseif source.kind == "Timer" and source.key ~= nil then
+                        installed = bindings.phaseTimers[encId] and bindings.phaseTimers[encId][source.key]
+                    elseif source.kind == "Sequel" and source.parent ~= nil then
+                        installed = bindings.sequels[encId] and bindings.sequels[encId][source.parent]
+                    end
+                    if not (installed and installed.cueKey == State.CueKey(encId, cueName)) then
+                        failures[#failures + 1] = ctx .. ": the runtime builder installed no binding for this cue"
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    it("curated queue relations and forecast gates install their runtime bindings", function()
+        local State = KE._DungeonTimerState
+        local bindings = State.BuildBindings(KE.EncounterData)
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            for spellId, spell in pairs(type(enc.spells) == "table" and enc.spells or {}) do
+                local contract = type(spell.timerSource) == "table" and spell.timerSource or {}
+                local queueAfter = contract.queueAfter
+                if queueAfter ~= nil then
+                    local parentId = type(queueAfter) == "table" and queueAfter.parent or nil
+                    local byParent = bindings.queues[encId]
+                    local installed = parentId ~= nil and byParent and byParent[parentId]
+                    if not (installed and installed.target == spellId) then
+                        failures[#failures + 1] = string.format(
+                            "enc %s spell %s: queueAfter installed no queue binding", tostring(encId), tostring(spellId))
+                    end
+                end
+            end
+            for cueName, cue in pairs(type(enc.phaseCues) == "table" and enc.phaseCues or {}) do
+                if cue.hidesForecasts ~= nil then
+                    local gates = bindings.forecastGates[encId]
+                    if not (gates and gates[State.CueKey(encId, cueName)]) then
+                        failures[#failures + 1] = string.format(
+                            "enc %s cue %s: hidesForecasts installed no forecast gate", tostring(encId), tostring(cueName))
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    it("boss shield entries sit in explicit encounters and install their runtime shield binding", function()
+        local bindings = KE._DungeonTimerState.BuildBindings(KE.EncounterData)
+        local failures = {}
+        for encId, enc in pairs(KE.EncounterData) do
+            if enc.shields ~= nil then
+                if enc.timerPolicy ~= "explicit" then
+                    failures[#failures + 1] = "enc " .. tostring(encId) ..
+                        ": shields requires the encounter's timerPolicy to be 'explicit'"
+                end
+                for i, entry in ipairs(type(enc.shields) == "table" and enc.shields or {}) do
+                    local ctx = string.format("enc %s (%s) shield %d", tostring(encId), tostring(enc.name), i)
+                    local parentId = type(entry) == "table" and entry.parent or nil
+                    local byParent = bindings.shields[encId]
+                    local installed = parentId ~= nil and byParent and byParent[parentId]
+                    if not (installed and installed.explicit) then
+                        failures[#failures + 1] = ctx .. ": the runtime builder installed no shield binding"
+                    end
+                end
             end
         end
         assert.same({}, failures)
@@ -447,5 +758,47 @@ describe("DungeonTimers display-preset resolution", function()
         local bar2 = DT:CreateBar("k6", 5, 2, "bar", "CC ADDS", nil, "Knock")
         assert.equals("Knock", bar2.castBaseText)
         assert.equals(DT.DISPLAY_PRESETS.PULL.color, bar2.castColor)
+    end)
+end)
+
+-- A leftover media file alone does not prove its sound name is registered.
+describe("DungeonTimers EncounterData - aura sound rules", function()
+    local DT, KE
+    local registered = {}
+
+    setup(function()
+        L.loadGlobals(nil, { onMediaRegister = function(kind, name)
+            if kind == "sound" then registered[name] = true end
+        end })
+        DT, KE = L.loadDungeonTimers({ withEncounterData = true })
+    end)
+
+    it("every aura sound rule is well-formed, unique per dungeon and names a registered sound whose file ships", function()
+        local failures, seen = {}, {}
+        for encId, enc in pairs(KE.EncounterData) do
+            for i, rule in ipairs(type(enc.auraSounds) == "table" and enc.auraSounds or {}) do
+                local ctx = string.format("enc %s (%s) aura rule %d", tostring(encId), tostring(enc.name), i)
+                if not DT.IsWellFormedAuraRule(rule) then
+                    failures[#failures + 1] = ctx .. ": malformed (fields, spellID, trigger, unit, name, sound or disabled)"
+                else
+                    local dupKey = tostring(enc.dungeon) .. ":" .. rule.spellID .. ":" .. rule.trigger
+                    if seen[dupKey] then
+                        failures[#failures + 1] = ctx .. ": duplicate spell and trigger within the dungeon"
+                    end
+                    seen[dupKey] = true
+                    if not registered[rule.sound] then
+                        failures[#failures + 1] = ctx .. ": sound '" .. rule.sound .. "' is not a registered sound name"
+                    end
+                    local file = io.open("Media/Sounds/" .. rule.sound .. ".ogg", "rb")
+                    if file then
+                        file:close()
+                    else
+                        failures[#failures + 1] = ctx .. ": sound '" .. rule.sound .. "' has no file under Media/Sounds"
+                    end
+                end
+            end
+        end
+        assert.same({}, failures)
+        assert.is_true(next(registered) ~= nil, "the loader hook collected no registered sound name")
     end)
 end)

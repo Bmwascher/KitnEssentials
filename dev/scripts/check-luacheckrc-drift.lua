@@ -175,7 +175,7 @@ end
 -- ---- classification -----------------------------------------------------------
 local thirdParty = {
     LibStub = true, ElvUI = true, ElvUI_SpellBookTooltip = true,
-    BigWigs = true, BigWigsLoader = true, WeakAuras = true,
+    BigWigs = true, BigWigsLoader = true, BigWigsAPI = true, WeakAuras = true,
     Ayije_CastBar = true, BCDM_CastBar = true, UUF_Player_CastBar = true,
 }
 local function isKEOwn(sym)

@@ -14,6 +14,7 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
+local pairs = pairs
 local ipairs = ipairs
 
 -- instanceID = instance map ID (GetInstanceInfo 8th return); each value
@@ -29,6 +30,14 @@ KE.DungeonTimerDungeons = {
     { key = "SeatOfTriumvirate", name = "Seat of the Triumvirate", iconID = 1711340, instanceID = 1753, season = 1 },
     { key = "Skyreach",          name = "Skyreach",                iconID = 1002596, instanceID = 1209, season = 1 },
     { key = "WindrunnerSpire",   name = "Windrunner Spire",        iconID = 7266215, instanceID = 2805, season = 1 },
+    { key = "AltarOfFangs",      name = "Altar of Fangs",          iconID = 7956175, instanceID = 2993, season = 2 },
+    { key = "DenOfNalorakk",     name = "Den of Nalorakk",         iconID = 7266214, instanceID = 2825, season = 2 },
+    { key = "KingsRest",         name = "Kings' Rest",             iconID = 2011123, instanceID = 1762, season = 2 },
+    { key = "MurderRow",         name = "Murder Row",              iconID = 7266213, instanceID = 2813, season = 2 },
+    { key = "RubyLifePools",     name = "Ruby Life Pools",         iconID = 4578416, instanceID = 2521, season = 2 },
+    { key = "TempleOfSethraliss", name = "Temple of Sethraliss",   iconID = 2011143, instanceID = 1877, season = 2 },
+    { key = "TheBlindingVale",   name = "The Blinding Vale",      iconID = 7354408, instanceID = 2859, season = 2 },
+    { key = "VoidscarArena",     name = "Voidscar Arena",          iconID = 7439626, instanceID = 2923, season = 2 },
 }
 
 -- Distinct seasons, ascending.
@@ -75,4 +84,94 @@ function KE.ResolveDungeonTimerSelection(registry, instanceID, saved)
         if d.season == newest then return newest, d.key end
     end
     return nil, nil
+end
+
+-- string.format("%d", nil) raises on Lua 5.1, so an entry without an iconID
+-- takes the question-mark texture the other icon fallbacks use.
+function KE.GetDungeonTimerDungeonLabel(iconID, name)
+    if iconID then
+        return ("|T%d:16:16:0:0:64:64:5:59:5:59|t %s"):format(iconID, name)
+    end
+    return ("|TInterface\\Icons\\INV_Misc_QuestionMark:16:16:0:0:64:64:5:59:5:59|t %s"):format(name)
+end
+
+-- One group per boss with rows: its timer rows, then its reminder rows from
+-- firstReminder on. The ordinal comes from the full input, so a boss left out
+-- does not renumber the bosses after it.
+function KE.GroupDungeonTimerBossRows(bosses)
+    local groups = {}
+    for position, boss in ipairs(bosses) do
+        local rows, reminderRows = {}, {}
+        for _, item in ipairs(boss.items) do
+            if item.isAura == true then
+                reminderRows[#reminderRows + 1] = item
+            else
+                rows[#rows + 1] = item
+            end
+        end
+        local firstReminder
+        if #reminderRows > 0 then
+            firstReminder = #rows + 1
+            for _, item in ipairs(reminderRows) do rows[#rows + 1] = item end
+        end
+        if #rows > 0 then
+            groups[#groups + 1] = {
+                id = boss.id,
+                name = boss.name,
+                ordinal = boss.bossOrder or position,
+                spells = rows,
+                firstReminder = firstReminder,
+            }
+        end
+    end
+    return groups
+end
+
+local function CountEntries(t)
+    local n = 0
+    if type(t) == "table" then
+        for _ in pairs(t) do n = n + 1 end
+    end
+    return n
+end
+
+-- Season coverage for the General tab. Timers are the non-reminder rows the
+-- Dungeon Bosses tab lists; trash skips hidden fingerprint-only spells, which
+-- the Dungeon Trash tab also leaves out.
+function KE.CountDungeonTimerCoverage(registry, encounterData, trashData, season, isReminder)
+    local inSeason, covered = {}, {}
+    for _, d in ipairs(registry) do
+        if d.season == season then inSeason[d.key] = true end
+    end
+    local c = { dungeons = 0, bosses = 0, timers = 0, reminders = 0, trashEnemies = 0, trashAbilities = 0 }
+    for _, enc in pairs(encounterData) do
+        if inSeason[enc.dungeon] then
+            c.bosses = c.bosses + 1
+            if not covered[enc.dungeon] then
+                covered[enc.dungeon] = true
+                c.dungeons = c.dungeons + 1
+            end
+            c.timers = c.timers + CountEntries(enc.spells) + CountEntries(enc.phaseCues) + CountEntries(enc.phases)
+            if type(enc.auraSounds) == "table" then
+                for _, rule in ipairs(enc.auraSounds) do
+                    if isReminder(rule) then c.reminders = c.reminders + 1 end
+                end
+            end
+        end
+    end
+    for _, dungeon in pairs(trashData) do
+        if inSeason[dungeon.dungeonKey] then
+            for _, mob in pairs(dungeon.mobs or {}) do
+                local tracked = 0
+                for _, spell in pairs(mob.spells or {}) do
+                    if spell.hidden ~= true then tracked = tracked + 1 end
+                end
+                if tracked > 0 then
+                    c.trashEnemies = c.trashEnemies + 1
+                    c.trashAbilities = c.trashAbilities + tracked
+                end
+            end
+        end
+    end
+    return c
 end

@@ -16,11 +16,15 @@ local DT = KitnEssentials:NewModule("DungeonTimers", "AceEvent-3.0", "AceTimer-3
 
 KE.EncounterData = KE.EncounterData or {}
 
+local State = KE._DungeonTimerState
+local Trace = KE._DungeonTimerTrace
+
 local ipairs = ipairs
 local pairs = pairs
 local tostring = tostring
 local tonumber = tonumber
 local string_format = string.format
+local math_min = math.min
 local table_insert = table.insert
 local table_remove = table.remove
 local table_sort = table.sort
@@ -36,16 +40,62 @@ local Enum = Enum
 local AbbreviateNumbers = AbbreviateNumbers
 local pcall = pcall
 local type = type
+local issecretvalue = issecretvalue
+local canaccesstable = canaccesstable
 
-local DEBUG_DT2 = false
+local DEBUG_DT2 = true
 
 local BIGWIGS_EVENTS = {
+    "BigWigs_StartBar",
     "BigWigs_Timer",
+    "BigWigs_CastTimer",
+    "BigWigs_PauseBar",
+    "BigWigs_ResumeBar",
     "BigWigs_StopBar",
     "BigWigs_StopBars",
     "BigWigs_OnBossDisable",
     "BigWigs_Message",
 }
+
+-- Timeline values an anchored row acts on; any nil leaves the anchor path
+-- inert and every stop on the heuristic rules.
+local TIMELINE_SOURCE_ENCOUNTER = Enum and Enum.EncounterTimelineEventSource
+    and Enum.EncounterTimelineEventSource.Encounter
+local TIMELINE_STATE_FINISHED = Enum and Enum.EncounterTimelineEventState
+    and Enum.EncounterTimelineEventState.Finished
+local TIMELINE_STATE_CANCELED = Enum and Enum.EncounterTimelineEventState
+    and Enum.EncounterTimelineEventState.Canceled
+local TIMELINE_STATE_ACTIVE = Enum and Enum.EncounterTimelineEventState
+    and Enum.EncounterTimelineEventState.Active
+local TIMELINE_STATE_PAUSED = Enum and Enum.EncounterTimelineEventState
+    and Enum.EncounterTimelineEventState.Paused
+
+-- Wall-clock windows after a qualified Finished anchor: the Slam cast-start
+-- confirm, and the DEBUG_DT2-only cast-start observation. Neither pauses.
+local CONFIRM_WINDOW = 1.5
+local OBSERVE_WINDOW = 3.0
+
+local SOON_TEXT = "Soon"
+local BOSS_UNITS = { "boss1", "boss2", "boss3", "boss4", "boss5" }
+
+-- One AceEvent slot exists per event per module object, so each unit-cast
+-- event has exactly one module handler and every feature dispatches from it.
+local UNIT_CAST_HANDLERS = {
+    UNIT_SPELLCAST_START = "OnUnitCastStart",
+    UNIT_SPELLCAST_INTERRUPTED = "OnUnitCastInterrupted",
+    UNIT_SPELLCAST_FAILED = "OnUnitCastFailed",
+    UNIT_SPELLCAST_FAILED_QUIET = "OnUnitCastFailed",
+    UNIT_SPELLCAST_CHANNEL_START = "OnUnitChannelStart",
+    UNIT_SPELLCAST_CHANNEL_STOP = "OnUnitChannelStop",
+    UNIT_SPELLCAST_DELAYED = "OnUnitCastDelayed",
+    UNIT_SPELLCAST_STOP = "OnUnitCastStop",
+}
+
+local function AcceptBossUnit(unit)
+    if issecretvalue and issecretvalue(unit) then return false end
+    if type(unit) ~= "string" or not unit:match("^boss%d$") then return false end
+    return true
+end
 
 -- Optional load — module degrades to "no role filter" if absent.
 local LibSpec = LibStub("LibSpecialization", true)
@@ -62,25 +112,18 @@ local FALLBACK_BAR_WIDTH = 250
 local FALLBACK_BAR_HEIGHT = 22
 local FALLBACK_TEXT_HEIGHT = 22
 
-local STOP_TOLERANCE = 0.5  -- seconds: StopBar within this window of cast-phase boundary = natural countdown expiry
 local STALE_GRACE = 1.5     -- seconds: bar at 0 self-destructs after this if StopBar never arrives (boss phased out etc.)
 
--- Non-printable suffix on the secondary bar's key in self.bars so it never collides with a real BigWigs text.
-local SECONDARY_KEY_SUFFIX = "\1S"
--- Suffix for post-cast bars (synthetic follow-up after a cast finishes naturally).
-local POSTCAST_KEY_SUFFIX = "\1V"
 -- Synthetic key prefix for shield bars (boss absorb-tracker bars, e.g. Vordaza
--- Necrotic Convergence). Independent of any BigWigs text key — we own the
--- lifecycle via UNIT_SPELLCAST_CHANNEL_START/STOP, not BigWigs_Timer.
+-- Necrotic Convergence), independent of any BigWigs text key. A shield shows on
+-- a boss channel start inside its parent's watch window.
 local SHIELD_KEY_PREFIX = "__shield:"
 local SHIELD_REFRESH_THROTTLE = 0.1  -- absorb-changed coalescing window
 local function ShieldBarKey(spellId) return SHIELD_KEY_PREFIX .. tostring(spellId) end
 
 -- M+ damage scaling for boss absorb shields.
 -- shield max = baseAmount × LEVEL_MULTIPLIERS[keystoneLevel].
--- Levels above 35 clamp to [35]; level 0 (no keystone) uses 1.0. Same table
--- powered the standalone VordazaShield module before it was folded into
--- DungeonTimers' shieldBar schema field.
+-- Levels above 35 clamp to [35]; level 0 (no keystone) uses 1.0.
 local LEVEL_MULTIPLIERS = {
     [1]  =  1.00,
     [2]  =  1.07000005245,
@@ -133,58 +176,69 @@ local function GetShieldLevelMultiplier()
     return LEVEL_MULTIPLIERS[level] or 1
 end
 
-local function ResolveBossUnit()
-    for i = 1, 5 do
-        local unit = "boss" .. tostring(i)
-        if UnitExists(unit) then return unit end
-    end
-    return nil
-end
+-- Same style as FormatShieldTotal.
+local SHIELD_REMAINING_OPTIONS = {
+    breakpointData = {
+        {
+            breakpoint = 1e6, abbreviation = "M", significandDivisor = 1e4,
+            fractionDivisor = 100, abbreviationIsGlobal = false,
+        },
+        {
+            breakpoint = 1e3, abbreviation = "K", significandDivisor = 1e3,
+            fractionDivisor = 1, abbreviationIsGlobal = false,
+        },
+        {
+            breakpoint = 0, abbreviation = "", significandDivisor = 1,
+            fractionDivisor = 1, abbreviationIsGlobal = false,
+        },
+    },
+}
 
--- Secret-safe percent + max-raw formatter. AbbreviateNumbers with breakpointData
--- divides the secret absorb token by 1% of the max (significandDivisor =
--- maxNum / 100), returning the bucket as a numeric percentage with our
--- abbreviation suffix appended. We bake the max raw amount (a plain number,
--- safely abbreviated) into the suffix so the displayed text reads like
--- "82% / 1.16M" — live percent, static total reference. Direct arithmetic or
--- comparison on the secret return value would crash; this path only feeds the
--- resulting string straight into FontString:SetText (allowed-when-tainted).
-local function FormatShieldDisplay(currentValue, maxNum)
-    if currentValue == nil or not maxNum or maxNum <= 0 then return "" end
-    if type(AbbreviateNumbers) ~= "function" then return "" end
-
-    -- Manual abbreviation of the plain max so "1.16M" reads cleaner than
-    -- AbbreviateLargeNumbers' default high-threshold "1160K" output. maxNum
-    -- is plain (baseAmount × multiplier), so no secret-value concerns here.
-    local maxText
-    if maxNum >= 1e6 then
-        maxText = string.format("%.2fM", maxNum / 1e6)
-    elseif maxNum >= 1e3 then
-        maxText = string.format("%.0fK", maxNum / 1e3)
-    else
-        maxText = tostring(maxNum)
-    end
-    local suffix = "% / " .. maxText
-
-    local ok, text = pcall(AbbreviateNumbers, currentValue, {
+-- Percent of the estimated total: AbbreviateNumbers divides the absorb value by
+-- 1% of the total, so no Lua arithmetic touches the secret value.
+local function NewShieldPercentOptions(total)
+    return {
         breakpointData = {
             {
-                breakpoint           = 0,
-                abbreviation         = suffix,
-                significandDivisor   = maxNum / 100,
-                fractionDivisor      = 1,
-                abbreviationIsGlobal = false,
+                breakpoint = 0, abbreviation = "%", significandDivisor = total / 100,
+                fractionDivisor = 1, abbreviationIsGlobal = false,
             },
         },
-    })
-    if ok and type(text) == "string" then return text end
-    return ""
+    }
+end
+
+-- The total is plain (baseAmount times the keystone multiplier).
+local function FormatShieldTotal(total)
+    if total >= 1e6 then return string.format("%.2fM", total / 1e6) end
+    if total >= 1e3 then return string.format("%.0fK", total / 1e3) end
+    return tostring(total)
+end
+
+-- The absorb value reaches only AbbreviateNumbers and SetFormattedText, which
+-- both accept secret arguments.
+local function WriteShieldText(fontString, absorbAmount, totalText, percentOptions)
+    if type(AbbreviateNumbers) ~= "function" then
+        fontString:SetText("")
+        return
+    end
+    local okPercent, percentText = pcall(AbbreviateNumbers, absorbAmount, percentOptions)
+    if not okPercent then
+        fontString:SetText("")
+        return
+    end
+    local okRemaining, remainingText = pcall(AbbreviateNumbers, absorbAmount, SHIELD_REMAINING_OPTIONS)
+    if okRemaining then
+        fontString:SetFormattedText("%s / %s (%s)", remainingText, totalText, percentText)
+    else
+        fontString:SetFormattedText("%s / %s", percentText, totalText)
+    end
 end
 
 -- 30 = "always show decimals" for typical 0-30s bars. User-configured threshold of 1 would render "5 4 3 2 1 0.9 0.8".
 local DECIMAL_THRESHOLD_DEFAULT = 30
 
 local DEFAULT_BAR_COLOR = { 0.3, 0.5, 0.9 }
+local SHIELD_FILL_COLOR = { 0.137, 0.325, 0.278 }
 local DISPLAY_PRESETS = {
     ADD     = { label = "ADD",      color = { 1.0,  0.3,  0.8  } },
     AMP     = { label = "AMP",      color = { 0.9,  0.5,  1.0  } },
@@ -213,8 +267,12 @@ local DISPLAY_PRESET_ALIASES = {
     ["ADD GRIP"]  = "ADD",
     ADDS         = "ADD",
     ["AIM BEAMS"] = "CLEAR",
+    ["AOE + BLEED"] = "AOE",
+    ["AOE + DODGE"] = "DODGE",
     ["AOE + FEET"] = "FEET",
+    ["AOE + SPREAD"] = "SPREAD",
     BAIT         = "PULL",
+    ["BAIT ORBS"] = "PULL",
     BEAM         = "AMP",
     ["BIG HIT"]  = "TANK",
     ["CC ADDS"]  = "ADD",
@@ -229,13 +287,18 @@ local DISPLAY_PRESET_ALIASES = {
     KNOCK        = "PULL",
     LEAP         = "PULL",
     LEAPS        = "PULL",
+    LINES        = "MOVE",
     MARKS        = "FRONTAL",
     MINIGAME     = "DANCE",
     ["ORB SPAWN"] = "ADD",
     SHIELD       = "VULN",
+    ["SHIELD INC"] = "VULN",
     SPLIT        = "AMP",
     SUCC          = "AOE",
+    ["TANK FRONTAL"] = "FRONTAL",
+    ["TANK SOAK"] = "SOAK",
     TOTEMS        = "ADD",
+    ["VULN + AOE"] = "AOE",
     VULNERABILITY = "VULN",
 }
 
@@ -338,6 +401,10 @@ local PHASE_TICK_SECONDS = 0.5
 
 local function dprint(msg)
     if DEBUG_DT2 then
+        if DT._debugTrace and DT._debugTrace.active then
+            DT._debugTrace:Decision(msg)
+            return
+        end
         KE:Print("[DT2] " .. tostring(msg))
     end
 end
@@ -346,10 +413,12 @@ end
 local function PlayBarSound(self, key)
     if self.isPreview then return end
     if not self.spellId then return end
+    local record = self._dtPresentation
+    if record and record.silent then return end
     if DT.db and DT.db.MutePresetSounds then return end
     local soundKey
     if key == "show" then
-        soundKey = DT:GetEffectiveSpellSoundOnShow(self.spellId)
+        soundKey = DT:GetEffectiveSpellSoundOnShow(self.spellId, record and record.ordinal)
     elseif key == "hide" then
         soundKey = DT:GetEffectiveSpellSoundOnHide(self.spellId)
     end
@@ -371,10 +440,23 @@ end
 
 function DT:BuildSpellLookup()
     local lookup = {}
-    for _, enc in pairs(KE.EncounterData or {}) do
+    for encId, enc in pairs(KE.EncounterData or {}) do
         if enc.spells then
             for spellId, spellData in pairs(enc.spells) do
                 lookup[spellId] = spellData
+            end
+        end
+        if type(enc.phaseCues) == "table" then
+            for name, cue in pairs(enc.phaseCues) do
+                lookup[State.CueKey(encId, name)] = cue
+            end
+        end
+        if type(enc.auraSounds) == "table" then
+            for i = 1, #enc.auraSounds do
+                local rule = enc.auraSounds[i]
+                if DT.IsWellFormedAuraRule(rule) then
+                    lookup[DT.MakeAuraKey(encId, rule.spellID, rule.trigger)] = rule
+                end
             end
         end
     end
@@ -386,6 +468,10 @@ function DT:GetSpellInfo(spellId)
     if not spellId then return nil end
     local lookup = self.spellLookup or self:BuildSpellLookup()
     return lookup[spellId]
+end
+
+function DT.IsCueKey(key)
+    return type(key) == "string" and key:find("^cue:") ~= nil
 end
 
 function DT:GetEncounterPhases(encounterID)
@@ -423,10 +509,13 @@ function DT:GetPhaseRuleByKey(key)
     return self:GetPhaseRule(enc, idx), enc, idx
 end
 
--- Extension past BigWigs's countdown so the bar hits 0 at impact, not at cast-start.
--- castDuration always extends; channelDuration only when extendByChannel = true (effect lands
--- at end-of-channel rather than the typical start). User offset added on top, floored at 0.
+-- Presentation offset past the provider countdown. castDuration always extends and may
+-- be zero for a row whose cue ends at the provider deadline; channelDuration only when
+-- extendByChannel = true (effect lands at end-of-channel rather than the typical start).
+-- User offset added on top, floored at 0.
 function DT:GetSpellExtension(spellId)
+    -- A cue's window is provider- or data-timed; a stored offset never moves it.
+    if DT.IsCueKey(spellId) then return 0 end
     local data = self:GetSpellInfo(spellId)
     local curated = (data and data.castDuration) or 0
     if data and data.extendByChannel and data.channelDuration then
@@ -568,6 +657,7 @@ function DT:SetSpellSoundOnShow(spellId, soundKey)
     else
         self.db.SpellSoundsOnShow[spellId] = soundKey
     end
+    if DT.IsAuraKey(spellId) then self:SyncAuraSounds() end
 end
 
 function DT:GetSpellSoundOnHide(spellId)
@@ -588,12 +678,16 @@ end
 -- Resolves the three-state storage into the LSM key audio playback should
 -- consult. Returns nil for "play nothing" (either explicit "None" override
 -- or no override + no curated default).
-function DT:GetEffectiveSpellSoundOnShow(spellId)
+function DT:GetEffectiveSpellSoundOnShow(spellId, ordinal)
     if not spellId then return nil end
     local override = self:GetSpellSoundOnShow(spellId)
     if override == "None" then return nil end
     if override then return override end
     local spellData = self:GetSpellInfo(spellId)
+    local sounds = spellData and spellData.ordinalSounds
+    if type(ordinal) == "number" and type(sounds) == "table" and sounds[ordinal] then
+        return sounds[ordinal]
+    end
     return spellData and spellData.sound or nil
 end
 
@@ -638,38 +732,24 @@ function DT:GetSpellPostCastBar(spellId)
     return data and data.postCastBar or nil
 end
 
--- Optional shield-tracker bar config (e.g. Vordaza Necrotic Convergence). When
--- present, DT spawns an absorb-percent bar on UNIT_SPELLCAST_CHANNEL_START for
--- the parent spellID. See _ShowShieldBar for lifecycle.
+-- Validated shield binding for a parent in the active encounter, from a legacy
+-- row's shieldBar or an explicit encounter's shields entry. See _ShowShieldBar
+-- for the lifecycle.
 function DT:GetSpellShieldBar(spellId)
-    local data = self:GetSpellInfo(spellId)
-    return data and data.shieldBar or nil
+    local encounterId = self._activeEncounterId
+    local byEncounter = encounterId and self._bindings and self._bindings.shields[encounterId]
+    return byEncounter and byEncounter[spellId] or nil
 end
 
 -- Phantom-followup entries: GUI-visible spell entries that don't fire from
 -- their own BigWigs_Timer (their LittleWigs aura trigger is unreliable in
--- 12.0). Instead they spawn when the *parent* spell's BigWigs_StopBar fires
--- naturally (countdown completed → cast finished → buff applied). Allows
+-- 12.0). Instead they spawn as an independent side effect of the *parent*
+-- spell's accepted Timer, from the parent-to-phantom binding lookup. Allows
 -- the VULN bar to have its own color/displayText/disabled/font row in the
 -- GUI while staying chained to the parent's lifecycle.
 function DT:GetSpellPhantomFollowupOf(spellId)
     local data = self:GetSpellInfo(spellId)
     return data and tonumber(data.phantomFollowupOf) or nil
-end
-
--- Returns array of plain-integer spell IDs whose `phantomFollowupOf` points
--- at parentSpellId. Called from _StopBarKey's natural-end branch.
-function DT:_CollectPhantomFollowups(parentSpellId)
-    if not parentSpellId then return nil end
-    local lookup = self.spellLookup or self:BuildSpellLookup()
-    local out
-    for spellId, data in pairs(lookup) do
-        if tonumber(data.phantomFollowupOf) == parentSpellId then
-            out = out or {}
-            out[#out + 1] = spellId
-        end
-    end
-    return out
 end
 
 -- Override BigWigs's reported duration with a known-correct value (e.g. for
@@ -749,6 +829,48 @@ function DT:GetSpellCuratorShowAt(spellId)
     return data and data.showAtSeconds or nil
 end
 
+-- Validated explicit binding for a curated row; nil for a legacy row or a
+-- row the builder refused, so the curated timerSource field alone never
+-- admits anything. The preview and captions can run before the module
+-- enables, so the table is built on first use and replaced at OnEnable.
+function DT:GetSpellAdmittedBinding(spellId)
+    if not self._bindings then
+        self._bindings = State.BuildBindings(KE.EncounterData)
+    end
+    for _, byKey in pairs(self._bindings.timers) do
+        local binding = byKey[spellId]
+        if binding then
+            if binding.policy == "estimated-impact" then return binding end
+            return nil
+        end
+    end
+    return nil
+end
+
+-- Rule-6 minimum reveal window for an admitted row: effective extension plus
+-- the row's stop tolerance. nil for any row without an admitted binding. The
+-- render path passes the instance's binding and the extension it already
+-- computed; preview and GUI resolve both here.
+function DT:GetSpellRevealFloor(spellId, binding, extension)
+    binding = binding or self:GetSpellAdmittedBinding(spellId)
+    if not (binding and binding.policy == "estimated-impact") then return nil end
+    if extension == nil then extension = self:GetSpellExtension(spellId) end
+    return extension + (binding.stopTolerance or 0)
+end
+
+-- Rule-6 reveal floor, shared by the renderer and the spell preview so they
+-- cannot drift apart. A configured zero (always visible) is never floored.
+function DT:GetSpellEffectiveShowAtSeconds(spellId, displayMode, binding, extension)
+    local groupCfg = (displayMode == "bar") and (self.db and self.db.BarGroup)
+                                            or (self.db and self.db.TextGroup)
+    local configured = self:GetSpellShowAtSeconds(spellId) or (groupCfg and groupCfg.ShowAtSeconds) or 0
+    if configured <= 0 then return configured end
+
+    local floor = self:GetSpellRevealFloor(spellId, binding, extension)
+    if floor and floor > configured then return floor end
+    return configured
+end
+
 function DT:GetSpellShowAtOverride(spellId)
     if not (self.db and self.db.SpellShowAtOverrides and spellId) then return nil end
     return self.db.SpellShowAtOverrides[spellId]
@@ -802,7 +924,8 @@ function DT:IsSpellAllowedForRole(spellId, playerRoleToken)
     return allow[role] == true
 end
 
--- Filter OFF by default — db.RoleFilterEnabled=false makes everything pass.
+-- The role filter ships enabled; db.RoleFilterEnabled=false or a per-spell
+-- role override still lets a row through.
 function DT:ShouldShowSpellRole(spellId)
     if not (self.db and self.db.RoleFilterEnabled) then return true end
     return self:IsSpellAllowedForRole(spellId, self.playerRole)
@@ -845,10 +968,15 @@ end
 
 function DT:ResetDungeonRoleOverrides(dungeonKey)
     if not (self.db and self.db.SpellRoleOverrides and dungeonKey) then return end
-    for _, enc in pairs(KE.EncounterData or {}) do
-        if enc.dungeon == dungeonKey and enc.spells then
-            for spellId in pairs(enc.spells) do
+    for encId, enc in pairs(KE.EncounterData or {}) do
+        if enc.dungeon == dungeonKey then
+            for spellId in pairs(enc.spells or {}) do
                 self.db.SpellRoleOverrides[spellId] = nil
+            end
+            if type(enc.phaseCues) == "table" then
+                for name in pairs(enc.phaseCues) do
+                    self.db.SpellRoleOverrides[State.CueKey(encId, name)] = nil
+                end
             end
         end
     end
@@ -879,6 +1007,8 @@ function DT:SetSpellDisabled(spellId, disabled)
     else
         self.db.SpellDisabled[spellId] = disabled
     end
+    if DT.IsAuraKey(spellId) then self:SyncAuraSounds() end
+    self:_OnProviderCueChanged(spellId)
 end
 
 function DT:ShouldShowSpell(spellId)
@@ -955,6 +1085,8 @@ function DT:ResetSpellOverrides(spellId)
     if self.db.SpellSoundsOnHide then
         self.db.SpellSoundsOnHide[spellId] = nil
     end
+    if DT.IsAuraKey(spellId) then self:SyncAuraSounds() end
+    self:_OnProviderCueChanged(spellId)
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -1327,15 +1459,8 @@ local function GatedSetText(textObj, holderBar, slot, str)
     end
 end
 
--- Below threshold = "%.1f" decimals; at/above = ceil whole seconds ("5" means "5+ left").
-local function UpdateTimeString(self, displayedTime)
-    local threshold = self.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
-    local timerStr
-    if displayedTime < threshold then
-        timerStr = string_format("%.1f", displayedTime)
-    else
-        timerStr = string_format("%d", math.ceil(displayedTime))
-    end
+local function SetCountdownText(self, timerStr)
+    if self.staticLabel then return end
     if self.timerText then
         GatedSetText(self.timerText, self, "_lastTimerStr", timerStr)
     elseif self.label and self.baseText then
@@ -1344,15 +1469,17 @@ local function UpdateTimeString(self, displayedTime)
     end
 end
 
--- Spawns the parent's `postCastBar` follow-up (Nysarra-style: fires at
--- cast-phase-end). Phantom followups are NOT spawned here — they fire at
--- parent's Timer arrival (in EventCallback's BigWigs_Timer branch) because
--- LittleWigs's `self:Bar()` for L'ura's Backlash is a duration bar (active
--- window), not a CDBar (predictive countdown). Spawning the VULN phantom at
--- StopBar would mean rendering it AFTER the vulnerability window has ended.
-local function SpawnFollowups(self)
-    if self.isPreview then return end
-    if self.postCastBar then DT:_SpawnPostCastBar(self) end
+-- Below threshold = "%.1f" decimals; at/above = ceil whole seconds ("5" means "5+ left").
+local function UpdateTimeString(self, displayedTime)
+    if self.staticLabel then return end
+    local threshold = self.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
+    local timerStr
+    if displayedTime < threshold then
+        timerStr = string_format("%.1f", displayedTime)
+    else
+        timerStr = string_format("%d", math.ceil(displayedTime))
+    end
+    SetCountdownText(self, timerStr)
 end
 
 -- Free-lists of retired CreateBar kits, keyed by displayMode ("bar" and
@@ -1370,10 +1497,6 @@ local barFramePool = { bar = {}, text = {} }
 local function ReleaseBar(bar)
     if not bar then return end
     if bar._dtPooled then return end
-    if bar.revealTimer then
-        DT:CancelTimer(bar.revealTimer)
-        bar.revealTimer = nil
-    end
     bar:SetScript("OnUpdate", nil)
     bar:Hide()
     if not bar._dtPoolKey then return end
@@ -1386,6 +1509,7 @@ local function ReleaseBar(bar)
     bar.loop = false
     bar.isPreview = false
     bar.isShieldBar = false
+    bar.staticLabel = false
     bar.shieldSpellId = nil
     bar.shieldUnit = nil
     bar.shieldMax = nil
@@ -1394,16 +1518,127 @@ local function ReleaseBar(bar)
     bar.postCastBar = nil
     bar.castBaseText = nil
     bar.castColor = nil
+    bar.fixedColor = nil
     bar.castStartTime = nil
     bar.castFromValue = nil
     bar.castDuration = nil
     bar._lastValue = nil
     bar._lastTimerStr = nil
+    -- A reused kit that still carried these would drive BarOnUpdate's
+    -- state branch off a retired record; the preview paths call CreateBar
+    -- directly and leave OnUpdate live.
+    bar._dtPresentation = nil
+    bar._dtKey = nil
     bar._dtPooled = true
     table_insert(barFramePool[bar._dtPoolKey], bar)
 end
 
+-- self.phase/castStartTime belong to the preview path; cast visuals read the cast clock here.
+local function BarOnUpdateInstance(self, record)
+    local now = GetTime()
+    local inst = record.instance
+    local effectiveElapsed, _, remaining, phaseRemaining = State.Sample(inst, now)
+    if effectiveElapsed == nil then
+        DT:ReleaseInstancePresentations(inst, false)
+        return
+    end
+    local outcome = State.ClassifyExpiry(inst, now)
+    if outcome == "hold-eligible" then
+        -- Resolved once per instance; the owned hold job, not this update,
+        -- enforces the bound.
+        outcome = DT:_BeginHold(inst, now) and "keep" or "retire"
+    end
+    if outcome == "keep" then
+        if inst.castClock then
+            local castElapsed = inst.binding.extension - phaseRemaining
+            local visual = (self.castFromValue or 0) * (1 - castElapsed / inst.binding.extension)
+            GatedSetValue(self, visual)
+            UpdateTimeString(self, phaseRemaining)
+        elseif State.ShowsSoon(inst) then
+            -- A waiting occurrence has no deadline to draw.
+            GatedSetValue(self, 0)
+            SetCountdownText(self, SOON_TEXT)
+        else
+            local displayRemaining = State.AnchoredRemaining(inst, effectiveElapsed)
+                or State.PredictedRemaining(inst, effectiveElapsed)
+                or (remaining + inst.binding.extension)
+            if displayRemaining < 0 then displayRemaining = 0 end
+            GatedSetValue(self, displayRemaining)
+            -- A held forecast has passed its deadline and has no corrected one yet.
+            if inst.holdDeadline ~= nil then
+                if self.timerText then GatedSetText(self.timerText, self, "_lastTimerStr", "") end
+            else
+                UpdateTimeString(self, displayRemaining)
+            end
+        end
+    elseif outcome == "retire" then
+        -- Create the ending text before release so the pool cannot reuse this frame.
+        if inst.binding.cueKey then
+            DT:_SpawnCueEnded(inst.owner, inst.binding.cueKey, now + remaining)
+        end
+        State.Retire(DT._state, inst)
+        DT:ReleaseInstancePresentations(inst, true)
+    elseif outcome == "legacy-followup-and-retire" then
+        if State.TakeFollowup(DT._state, inst) then
+            DT:_SpawnPostCastBar(inst, self)
+        end
+        State.Retire(DT._state, inst)
+        DT:ReleaseInstancePresentations(inst, true)
+    end
+end
+
+-- Clears this frame's own slot registration before release so a later
+-- lookup under the same slot never finds an already-pooled or reused frame.
+local function ClearSlotPresentation(frame, record)
+    local byOwner = DT._slotPresentations[record.owner]
+    local byKind = byOwner and byOwner[record.synthetic]
+    if byKind and byKind[record.slotKey] == frame then
+        byKind[record.slotKey] = nil
+    end
+end
+
+-- Synthetic (phantom/postcast/message) presentations sample their own
+-- independent clock and self-release on expiry or on a stale slot
+-- generation — they never share the source instance's retirement.
+local function BarOnUpdateSynthetic(self, record)
+    local now = GetTime()
+    if not State.IsSlotCurrent(DT._state, record.owner, record.synthetic, record.slotKey, record.generation) then
+        ClearSlotPresentation(self, record)
+        DT.bars[self._dtKey] = nil
+        ReleaseBar(self)
+        DT:LayoutBars()
+        return
+    end
+    local effectiveElapsed, _, remaining = State.SampleClock(record.clock, now)
+    if effectiveElapsed == nil or remaining <= 0 then
+        if effectiveElapsed ~= nil then
+            PlayBarSound(self, "hide")
+            if record.endsCue then
+                DT:_SpawnCueEnded(record.owner, record.endsCue, now + remaining)
+            end
+        end
+        ClearSlotPresentation(self, record)
+        DT.bars[self._dtKey] = nil
+        ReleaseBar(self)
+        DT:LayoutBars()
+        return
+    end
+    GatedSetValue(self, remaining)
+    UpdateTimeString(self, remaining)
+end
+
 local function BarOnUpdate(self)
+    if self._dtPooled then return end
+    local record = self._dtPresentation
+    if record and record.instance then
+        BarOnUpdateInstance(self, record)
+        return
+    elseif record and record.synthetic then
+        BarOnUpdateSynthetic(self, record)
+        return
+    end
+
+    -- Only previews reach here; boss and synthetic presentations returned above.
     if self.phase == "cast" then
         local castElapsed = GetTime() - self.castStartTime
         if castElapsed >= self.castDuration then
@@ -1427,10 +1662,6 @@ local function BarOnUpdate(self)
                 return
             end
             -- Cast phase ended at impact — fire hide sound BEFORE Hide() so the cue lands.
-            -- Spawn follow-up bars here (postCastBar + phantomFollowupOf entries) on
-            -- natural completion; cast interrupts go through StopBar's KillBar branch
-            -- and skip this block.
-            SpawnFollowups(self)
             PlayBarSound(self, "hide")
             ReleaseBar(self)
             DT.bars[self.text] = nil
@@ -1450,12 +1681,6 @@ local function BarOnUpdate(self)
                 self._lastTimerStr = nil
             elseif (self.extension or 0) <= 0 then
                 -- No cast extension expected → self-destruct at zero crossing.
-                -- Spawn follow-up bars BEFORE destroying — BigWigs's StopBar
-                -- typically trails the countdown's zero-crossing by a few frames
-                -- (~80ms observed), so by the time _StopBarKey runs the bar is
-                -- already gone from self.bars. This branch is the primary spawn
-                -- path for extension=0 entries like L'ura's Backlash (1266001).
-                SpawnFollowups(self)
                 PlayBarSound(self, "hide")
                 ReleaseBar(self)
                 DT.bars[self.text] = nil
@@ -1500,17 +1725,20 @@ local function ApplyVisualsToBar(frame)
     elseif frame.phaseKey then
         userColor = DT:GetPhaseColorOverride(frame.phaseKey)
     end
-    -- Secondary bars read secondary.color; primary bars read spell.color.
     local curatorColor
     if frame.spellId then
-        if frame.isSecondary then
+        if frame.isShieldBar then
+            local spell = DT:GetSpellInfo(frame.spellId)
+            curatorColor = spell and spell.shieldColor or SHIELD_FILL_COLOR
+        elseif frame.isSecondary then
             local secondary = DT:GetSpellSecondary(frame.spellId)
             curatorColor = secondary and secondary.color or nil
         else
             curatorColor = DT:GetSpellCuratorColor(frame.spellId)
         end
     end
-    frame.barColor = userColor or curatorColor or presetColor or DEFAULT_BAR_COLOR
+    -- An ending leg's own color outranks the user's color for its cue.
+    frame.barColor = frame.fixedColor or userColor or curatorColor or presetColor or DEFAULT_BAR_COLOR
 
     local w, h
     if isBar then
@@ -1682,7 +1910,7 @@ local function ApplyVisualsToBar(frame)
     end
 end
 
-function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId, castDisplayText, isSecondary)
+function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId, castDisplayText, isSecondary, isSyntheticPostCast)
     displayMode = displayMode or "text"
     local isBar = (displayMode == "bar")
     local group = isBar and self:EnsureBarGroup() or self:EnsureTextGroup()
@@ -1742,7 +1970,7 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
             frame.bar:SetPoint("BOTTOMRIGHT", -px, px)
         end
         -- Per-spawn: reset to the placeholder so a reused kit doesn't keep
-        -- its previous spell's icon (RenderBar overwrites with iconID).
+        -- its previous spell's icon (the render entry point overwrites with iconID).
         frame.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
     else
         if not frame.bar then
@@ -1805,20 +2033,15 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     end
 
     -- Stash post-cast follow-up bar config (e.g. 17s VULN/BEAM after a cast).
-    -- Only the primary bar carries it — secondary bars are siblings, not parents.
-    -- Suffix check prevents recursion: synthetic post-cast bars (text ends with
-    -- POSTCAST_KEY_SUFFIX) inherit parent's spellId, so GetSpellPostCastBar would
-    -- return the same config again. Guard so a postCastBar can't chain into itself
-    -- if a future curator gives it its own castDuration. Shield bars (key prefix
-    -- SHIELD_KEY_PREFIX) also share the parent spellId and must skip postCastBar.
-    local isSyntheticPostCast = text and text:sub(-#POSTCAST_KEY_SUFFIX) == POSTCAST_KEY_SUFFIX
-    local isSyntheticShield   = text and text:sub(1, #SHIELD_KEY_PREFIX) == SHIELD_KEY_PREFIX
+    -- Only the primary carries it; synthetic and shield bars share the parent
+    -- spellId and must not chain a postCastBar into themselves.
+    local isSyntheticShield = text and text:sub(1, #SHIELD_KEY_PREFIX) == SHIELD_KEY_PREFIX
     if not isSecondary and not isSyntheticPostCast and not isSyntheticShield then
         frame.postCastBar = DT:GetSpellPostCastBar(spellId)
     end
 
     ApplyVisualsToBar(frame)
-    -- frame.text keeps BigWigs's raw string for StopBar key matching; baseText is the rendered label.
+    -- frame.text keeps the raw label passed in; baseText is the rendered label.
     frame.baseText = resolvedLabel or StripBigWigsCounter(text)
     -- Initial label: bar mode shows just the name; text mode shows "name »"
     -- (with the separator baked into the static label) so the timer can
@@ -1847,8 +2070,11 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
 end
 
 function DT:LayoutBars()
-    local barGroup = self:EnsureBarGroup()
-    local textGroup = self:EnsureTextGroup()
+    -- Read, never create: every bar's create path ensures its own group, so an
+    -- absent group has nothing to place, and teardown of a module that never
+    -- showed a bar allocates no frame.
+    local barGroup = self.barGroup
+    local textGroup = self.textGroup
     self:UpdateDB()
 
     local barCfg = self.db and self.db.BarGroup or nil
@@ -1875,6 +2101,9 @@ function DT:LayoutBars()
         end
     end
     table_sort(ordered, function(a, b)
+        -- Transparent phase rows must not displace ordinary countdowns.
+        local aPhase, bPhase = a.isPhaseBar == true, b.isPhaseBar == true
+        if aPhase ~= bPhase then return not aPhase end
         return (a.sortIndex or 0) < (b.sortIndex or 0)
     end)
 
@@ -1892,11 +2121,7 @@ function DT:LayoutBars()
         end
     end
 
-    -- Merged stacking with the Dungeon Trash tracker: trash alerts share
-    -- this module's group positions and CONTINUE each stack past the boss
-    -- rows instead of drawing over them.
-    -- Publish the per-mode extents and re-flow the trash block whenever the
-    -- boss stack resizes (read-only in the other direction — no recursion).
+    -- Include transparent phase slots so merged trash cannot overlap them.
     self._stackExtents = self._stackExtents or {}
     if self._stackExtents.bar ~= barY or self._stackExtents.text ~= textY then
         self._stackExtents.bar = barY
@@ -1909,7 +2134,7 @@ function DT:LayoutBars()
     end
 end
 
--- Visible extent of one stack (bar/text), refreshed by every LayoutBars —
+-- Extent of all reserved boss rows (bar/text), refreshed by every LayoutBars —
 -- the trash tracker's merged stack starts from it.
 function DT:GetStackExtent(mode)
     local e = self._stackExtents
@@ -1931,95 +2156,874 @@ end
 
 -- Real bars start at 1000 so they always lay out after the 1/2/3 previews.
 DT._barSortCounter = 1000
+DT._timerStateRevision = 73
+-- Hidden occurrences the wind map observes, each with the job that ends it.
+DT._observedRetireJobs = {}
 
-function DT:RevealBar(key)
-    local bar = self.bars[key]
-    if not bar then return end
-    bar.revealTimer = nil
-
-    -- Tighten the bar's visual range so it appears full and drains over the showWindow,
-    -- not as a sliver representing showWindow / total.
-    if bar.bar and bar.showWindow and bar.showWindow > 0 then
-        bar.bar:SetMinMaxValues(0, bar.showWindow)
-        bar.bar:SetValue(bar.showWindow)
-        bar._lastValue = nil
+-- Adapter-owned span normalization. Remaining-only contracts discard
+-- any supplied maximum without inspecting it. Full-span contracts check
+-- the maximum's secrecy after that return, then accept a nil maximum
+-- (span = time) or an ordinary finite maximum >= time; anything else refuses.
+function DT._NormalizeSpan(spanMode, time, maxTime)
+    if type(time) ~= "number" or time ~= time or time == math.huge or time == -math.huge or time <= 0 then
+        return nil, "invalid-time"
     end
-
-    bar:Show()
-    PlayBarSound(bar, "show")
-    self:LayoutBars()
+    if spanMode ~= "full-span" then
+        return time, time
+    end
+    if issecretvalue and issecretvalue(maxTime) then return nil, "invalid-span" end
+    if maxTime == nil then return time, time end
+    if type(maxTime) ~= "number" or maxTime ~= maxTime
+        or maxTime == math.huge or maxTime == -math.huge or maxTime < time then
+        return nil, "invalid-span"
+    end
+    return time, maxTime
 end
 
----@param text string
-function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId, castDisplayText, isSecondary)
-    if not text or not baseDur or baseDur <= 0 then return end
-    local existing = self.bars[text]
+-- A stale generation, retired scope/epoch or already-shown source record refuses.
+function DT._IsPresentationCurrent(record)
+    if not record then return false end
+    if record.instance then
+        if record.shown then return false end
+        return State.IsCurrent(DT._state, record.instance, record.generation,
+            record.instance.moduleEpoch, record.instance.encounterEpoch)
+    end
+    if record.synthetic then
+        return State.IsSlotCurrent(DT._state, record.owner, record.synthetic, record.slotKey, record.generation)
+    end
+    return false
+end
+
+-- User time offset on top of the curated extension, cached per spell so
+-- repeated Timers do not rebuild the copy.
+function DT:_EffectiveBinding(binding, extension)
+    if extension == binding.extension then return binding end
+    self._effectiveBindings = self._effectiveBindings or {}
+    local cached = self._effectiveBindings[binding]
+    if not cached or cached.extension ~= extension then
+        cached = {}
+        for k, v in pairs(binding) do cached[k] = v end
+        cached.extension = extension
+        self._effectiveBindings[binding] = cached
+    end
+    return cached
+end
+
+-- Refuses inaccessible, secret or anonymous owners; no inference from name,
+-- icon or duration. The cache is cleared at explicit boundaries.
+function DT:_ResolveOwnerMeta(owner)
+    if issecretvalue and issecretvalue(owner) then return nil, "secret-owner" end
+    if type(owner) ~= "table" then return nil, "invalid-owner" end
+    if canaccesstable and not canaccesstable(owner) then return nil, "inaccessible-owner" end
+    local cached = self._ownerMeta[owner]
+    if cached then return cached.encounterIds end
+    local member = owner.GetEncounterID
+    if issecretvalue and issecretvalue(member) then return nil, "secret-getencounterid" end
+    if type(member) ~= "function" then return nil, "no-getencounterid" end
+    local ids = { member(owner) }
+    for i = 1, #ids do
+        local id = ids[i]
+        if (issecretvalue and issecretvalue(id)) or type(id) ~= "number" then
+            return nil, "invalid-encounter-id"
+        end
+    end
+    self._ownerMeta[owner] = { encounterIds = ids }
+    return ids
+end
+
+-- CancelJob, RunJob and ScheduleJob touch self._jobs and self._ownedJobs per
+-- job; RetireOrdinaryWork clears both tables outright.
+local function CancelJob(self, job)
+    if not job then return end
+    if job.handle then self:CancelTimer(job.handle) end
+    self._jobs[job] = nil
+    local owned = self._ownedJobs[job.owner]
+    if owned then owned[job] = nil end
+end
+
+-- A stale job (retired instance/generation, replaced slot) is dropped silently.
+local function RunJob(job)
+    local self = DT
+    self._jobs[job] = nil
+    local owned = self._ownedJobs[job.owner]
+    if owned then owned[job] = nil end
+    job.handle = nil
+    local current
+    if job.instance then
+        current = State.IsCurrent(self._state, job.instance, job.instanceGeneration,
+            job.instance.moduleEpoch, job.instance.encounterEpoch)
+    elseif job.kind == "message" then
+        local slots = self._slotJobs[job.owner]
+        current = slots and slots["message"] and slots["message"][job.slotKey] == job
+    else
+        current = State.IsSlotCurrent(self._state, job.owner, job.kind, job.slotKey, job.generation)
+    end
+    if current then job.action(job) end
+end
+
+local function TrackJob(self, job)
+    self._jobs[job] = true
+    self._ownedJobs[job.owner] = self._ownedJobs[job.owner] or {}
+    self._ownedJobs[job.owner][job] = true
+end
+
+-- A due delay runs the guarded action once synchronously; never a zero-delay continuation.
+local function ScheduleJob(self, job, now)
+    local delay, reason = State.JobRemaining(job.clockPolicy, job.deadline, job.clock, now)
+    if not delay then
+        dprint("job refused: " .. tostring(reason))
+        return nil
+    end
+    TrackJob(self, job)
+    if delay <= 0 then
+        RunJob(job)
+        return nil
+    end
+    job.handle = self:ScheduleTimer(RunJob, delay, job)
+    return job
+end
+
+local function PauseJobHandle(self, job)
+    if not job or not job.handle then return end
+    self:CancelTimer(job.handle)
+end
+
+local function ResumeJobHandle(self, job, now)
+    if not job then return end
+    if not self._jobs[job] then return end
+    if job.handle then
+        self:CancelTimer(job.handle)
+        job.handle = nil
+    end
+    local delay = State.JobRemaining(job.clockPolicy, job.deadline, job.clock, now)
+    if not delay then
+        self._jobs[job] = nil
+        local owned = self._ownedJobs[job.owner]
+        if owned then owned[job] = nil end
+        return
+    end
+    if delay <= 0 then
+        RunJob(job)
+    else
+        job.handle = self:ScheduleTimer(RunJob, delay, job)
+    end
+end
+
+-- Hidden overlap rows need the same bounded expiry as a shown countdown.
+local function KeepPresentationInstance(self, inst, now)
+    local outcome = State.ClassifyExpiry(inst, now)
+    if outcome == "hold-eligible" then outcome = self:_BeginHold(inst, now) and "keep" or "retire" end
+    if outcome == "keep" then return true end
+    State.Retire(self._state, inst)
+    self:ReleaseInstancePresentations(inst, false)
+    return false
+end
+
+local function PresentationRecord(inst)
+    local presentations = DT._presentations[inst]
+    local frame = presentations and presentations.primary
+    return frame and frame._dtPresentation
+end
+
+local function IsShownPresentation(inst)
+    local record = PresentationRecord(inst)
+    return record and record.shown == true
+end
+
+local function IsWaitingPresentation(inst)
+    local record = PresentationRecord(inst)
+    return record and record.overlapHeld == true and inst.state ~= "paused"
+end
+
+-- `key` is the private storage identity in self.bars; CreateBar's text is the
+-- source label or a synthetic identifier, never the key.
+local function RenderPresentation(self, key, record, baseDur, extension, displayMode, iconID,
+                                   displayText, spellId, castDisplayText, isSecondary)
+    if not baseDur or baseDur <= 0 then return nil end
+    local now = GetTime()
+    local ctext
+    if record.instance then
+        ctext = record.instance.label
+    else
+        ctext = tostring(record.synthetic) .. ":" .. tostring(record.slotKey)
+    end
+    local isSyntheticPostCast = record.synthetic ~= nil
+
+    local frame = self:CreateBar(ctext, baseDur, extension, displayMode, displayText, spellId,
+        castDisplayText, isSecondary, isSyntheticPostCast)
+    self._barSortCounter = self._barSortCounter + 1
+    frame.sortIndex = self._barSortCounter
+    frame._dtKey = key
+    frame._dtPresentation = record
+    self.bars[key] = frame
+
+    if iconID and frame.icon then
+        frame.icon:SetTexture(iconID)
+    end
+
+    self:UpdateDB()
+    local total = baseDur + (extension or 0)
+
+    if record.instance then
+        local showWindow = self:GetSpellEffectiveShowAtSeconds(spellId, displayMode,
+            record.instance.binding, extension or 0)
+        local revealAt = showWindow > 0 and total - showWindow or 0
+        local restart = record.instance.binding.suppressConcurrentRestart
+        if restart and record.instance.sourceClock.remainingAtReceipt == restart.duration then
+            -- Immediate reveals wait beyond the whole concurrent-anchor window.
+            revealAt = math.max(revealAt, record.instance.binding.stopTolerance + 0.01)
+        end
+        if revealAt > 0 or record.instance.binding.holdOverlapping then
+            frame:Hide()
+            frame.showWindow = showWindow
+            local inst = record.instance
+            if inst.binding.holdOverlapping then
+                -- Register before a synchronous expiry needs to find and release the frame.
+                self._presentations[inst][record.role] = frame
+            end
+            local revealJob = {
+                owner = inst.owner, scope = inst.scope, kind = "reveal",
+                instance = inst, instanceGeneration = inst.generation,
+                clockPolicy = "elapsed", deadline = revealAt, clock = inst.sourceClock,
+            }
+            revealJob.action = function()
+                if not DT._IsPresentationCurrent(record) then return end
+                if inst.binding.holdOverlapping then
+                    if not KeepPresentationInstance(self, inst, GetTime()) then return end
+                    local shown = State.PresentationHead(self._state, inst, IsShownPresentation)
+                    if shown and shown ~= inst then
+                        if not record.overlapHeld then dprint("presentation held text=" .. tostring(inst.label)) end
+                        record.overlapHeld = true
+                        -- Retirement or Resume wakes this job; no polling timer.
+                        TrackJob(self, revealJob)
+                        return
+                    end
+                    if record.overlapHeld then dprint("presentation released text=" .. tostring(inst.label)) end
+                    record.overlapHeld = nil
+                end
+                record.revealJob = nil
+                -- An overdue reveal must not show or sound an expired window.
+                if inst.binding.cueKey and self:_ExpireTimerCue(inst, GetTime()) then return end
+                frame:Show()
+                if frame.bar and showWindow > 0 and showWindow < total then
+                    frame.bar:SetMinMaxValues(0, showWindow)
+                    frame.bar:SetValue(showWindow)
+                    frame._lastValue = nil
+                end
+                -- Rule 7: a kept stop suppresses only this still-pending
+                -- show sound, never the reveal itself.
+                if not record.suppressShowSound then
+                    PlayBarSound(frame, "show")
+                end
+                record.shown = true
+                if inst.binding.holdOverlapping then BarOnUpdateInstance(frame, record) end
+                self:LayoutBars()
+            end
+            record.revealJob = revealJob
+            ScheduleJob(self, revealJob, now)
+            if inst.state == "retired" then return nil end
+
+            -- An owned instance's forecast end is decided by its expiry job; this
+            -- job could run before a late reveal and retire it regardless.
+            if not inst.binding.ownsExpiry then
+                local retireJob = {
+                    owner = inst.owner, scope = inst.scope, kind = "retire",
+                    instance = inst, instanceGeneration = inst.generation,
+                    clockPolicy = "elapsed", deadline = total, clock = inst.sourceClock,
+                }
+                retireJob.action = function()
+                    record.retireJob = nil
+                    if not record.shown then
+                        if inst.binding.holdOverlapping then
+                            local fireNow = GetTime()
+                            if KeepPresentationInstance(self, inst, fireNow) then
+                                if inst.holdDeadline ~= nil then
+                                    -- Finished must be able to replace the hold with an anchored expiry.
+                                    record.retireJob = retireJob
+                                    TrackJob(self, retireJob)
+                                else
+                                    local elapsed, _, remaining = State.Sample(inst, fireNow)
+                                    if elapsed == nil or remaining == nil then
+                                        State.Retire(self._state, inst)
+                                        self:ReleaseInstancePresentations(inst, false)
+                                        return
+                                    end
+                                    local left = State.AnchoredRemaining(inst, elapsed) or remaining + inst.binding.extension
+                                    record.retireJob = retireJob
+                                    retireJob.deadline = elapsed + left
+                                    ScheduleJob(self, retireJob, fireNow)
+                                end
+                            end
+                            return
+                        end
+                        -- A Timer cue whose reveal never ran still reached
+                        -- its end; the ended text is timed from that end.
+                        if inst.binding.cueKey then
+                            local fireNow = GetTime()
+                            local _, _, left = State.Sample(inst, fireNow)
+                            if left then
+                                self:_SpawnCueEnded(inst.owner, inst.binding.cueKey, fireNow + left)
+                            end
+                        end
+                        State.Retire(self._state, inst)
+                        self:ReleaseInstancePresentations(inst, false)
+                    end
+                end
+                record.retireJob = retireJob
+                ScheduleJob(self, retireJob, now)
+                if inst.state == "retired" then return nil end
+            end
+        else
+            if not record.suppressShowSound then
+                PlayBarSound(frame, "show")
+            end
+            record.shown = true
+        end
+    else
+        -- Synthetic presentations always show immediately.
+        PlayBarSound(frame, "show")
+    end
+
+    self:LayoutBars()
+    return frame
+end
+
+-- Frames and their reveal/retire jobs only; the table is emptied in place. The
+-- instance's hold, owned expiry and cast work stay, so a forecast with no frame
+-- keeps its own lifetime and a canceled reveal can never show a pooled frame.
+local function ReleasePresentationFrames(self, presentations, playHide)
+    local released = false
+    for _, role in ipairs({ "primary", "secondary" }) do
+        local frame = presentations[role]
+        if frame then
+            presentations[role] = nil
+            local record = frame._dtPresentation
+            if record then
+                CancelJob(self, record.revealJob)
+                CancelJob(self, record.retireJob)
+                record.revealJob, record.retireJob = nil, nil
+            end
+            if playHide and frame:IsShown() then
+                PlayBarSound(frame, "hide")
+            end
+            self.bars[frame._dtKey] = nil
+            ReleaseBar(frame)
+            released = true
+        end
+    end
+    if released then self:LayoutBars() end
+end
+
+-- playHide follows the Stop-retire rule: only a shown presentation plays the hide sound.
+-- The hold job, cast watch, observation window and linked shield watch are
+-- resolved with the instance, on every retirement path.
+function DT:ReleaseInstancePresentations(inst, playHide)
+    -- A canceled occurrence or an unconfirmed wait has nothing to announce.
+    if inst.retainedEstimate == "canceled" or State.EndsSilently(inst) then playHide = false end
+    self:_CancelHold(inst)
+    self:_CloseCastWatch(inst, "retired")
+    self:_CloseCastMatch(inst)
+    self:_CloseCastFollow(inst)
+    self:_CloseObservationWindow(inst, "retired")
+    self:_ReleaseShieldWatchOf(inst)
+    local observedRetire = self._observedRetireJobs[inst]
+    if observedRetire then
+        self._observedRetireJobs[inst] = nil
+        CancelJob(self, observedRetire)
+    end
+    if inst.mapObserved then self:_WindMapRetired(inst) end
+    self._gateSuppressed[inst] = nil
+    local presentations = self._presentations[inst]
+    self._presentations[inst] = nil
+    if presentations then ReleasePresentationFrames(self, presentations, playHide) end
+    if inst.binding.holdOverlapping
+        and not State.PresentationHead(self._state, inst, IsShownPresentation) then
+        local head = State.PresentationHead(self._state, inst, IsWaitingPresentation)
+        local record = head and PresentationRecord(head)
+        if record then
+            ResumeJobHandle(self, record.revealJob, GetTime())
+        end
+    end
+end
+
+-- The reveal/retire jobs keep their original deadline; StopBar never moves them.
+function DT:_ApplyCastPhaseVisual(inst, fill)
+    local presentations = self._presentations[inst]
+    if not presentations then return end
+    for _, role in ipairs({ "primary", "secondary" }) do
+        local frame = presentations[role]
+        if frame then
+            frame.castFromValue = fill
+            if frame.castDisplayTextRaw then
+                local cc = frame.castColor or DEFAULT_BAR_COLOR
+                frame.baseText = frame.castBaseText or frame.baseText
+                if frame.displayMode == "bar" then
+                    if frame.bar then frame.bar:SetStatusBarColor(cc[1], cc[2], cc[3]) end
+                    if frame.label then frame.label:SetText(frame.baseText) end
+                else
+                    if frame.label then frame.label:SetText(frame.baseText .. " \194\187") end
+                    if frame.label then frame.label:SetTextColor(cc[1], cc[2], cc[3]) end
+                    if frame.timerText then frame.timerText:SetTextColor(cc[1], cc[2], cc[3]) end
+                end
+            end
+        end
+    end
+end
+
+-- Rule 7's only effect on a kept stop: flag every presentation record so a
+-- still-pending reveal shows silently. A gated instance has no record, so its
+-- gate entry keeps the flag for the restore.
+function DT:_SuppressPendingShowSound(inst)
+    local gated = self._gateSuppressed[inst]
+    if gated then gated.silent = true end
+    local presentations = self._presentations[inst]
+    if not presentations then return end
+    for _, role in ipairs({ "primary", "secondary" }) do
+        local frame = presentations[role]
+        local record = frame and frame._dtPresentation
+        if record then record.suppressShowSound = true end
+    end
+end
+
+function DT:_OnSourcePauseChanged(inst, paused, now)
+    local holdJob = self._holdJobs[inst]
+    if holdJob then
+        if paused then
+            PauseJobHandle(self, holdJob)
+        else
+            ResumeJobHandle(self, holdJob, now)
+        end
+    end
+    local observedRetire = self._observedRetireJobs[inst]
+    if observedRetire then
+        if paused then
+            PauseJobHandle(self, observedRetire)
+        else
+            ResumeJobHandle(self, observedRetire, now)
+        end
+    end
+    local presentations = self._presentations[inst]
+    if not presentations then return end
+    for _, role in ipairs({ "primary", "secondary" }) do
+        local frame = presentations[role]
+        local record = frame and frame._dtPresentation
+        if record then
+            if paused then
+                PauseJobHandle(self, record.revealJob)
+                PauseJobHandle(self, record.retireJob)
+            else
+                ResumeJobHandle(self, record.revealJob, now)
+                ResumeJobHandle(self, record.retireJob, now)
+            end
+        end
+    end
+end
+
+-- Moves the pending reveal/retire deadlines to an anchored or predicted total.
+-- A prediction passes retireAt so the retire never passes its bound. A shown
+-- presentation needs nothing: its OnUpdate reads the current remaining. A
+-- hidden occurrence the wind map observes moves its own retire job instead.
+function DT:_OnInstanceAnchored(inst, total, now, retireAt)
+    if inst.mapObserved then
+        if inst.trackOnly and inst.state ~= "retired" then
+            self:_ArmObservedRetire(inst, retireAt or total, now)
+        end
+        self:_WindMapRetimed(inst, now)
+    end
+    local presentations = self._presentations[inst]
+    if not presentations then return end
+    for _, role in ipairs({ "primary", "secondary" }) do
+        local frame = presentations[role]
+        local record = frame and frame._dtPresentation
+        if record then
+            if record.revealJob then
+                local showWindow = frame.showWindow or 0
+                record.revealJob.deadline = showWindow > 0 and total - showWindow or 0
+                ResumeJobHandle(self, record.revealJob, now)
+            end
+            if record.retireJob then
+                record.retireJob.deadline = retireAt or total
+                ResumeJobHandle(self, record.retireJob, now)
+            end
+        end
+    end
+end
+
+-- Hold eligibility at forecast zero: the correlated event must still be
+-- Active or Paused, or Finished for an owned parent with no extension, and
+-- carry a usable queue allowance. Same refusal shape
+-- as _ReadTimelineState; any nil retires the instance as before.
+function DT:_ResolveHold(inst)
+    if TIMELINE_STATE_ACTIVE == nil or TIMELINE_STATE_PAUSED == nil then return nil, nil, "no-enum" end
+    if not (C_EncounterTimeline and C_EncounterTimeline.GetEventState) then return nil, nil, "no-api" end
+    local eventId, maxQueue = State.ResolveTimelineEvent(self._state, inst)
+    if not eventId then return nil, nil, maxQueue end
+    if maxQueue == nil then return nil, eventId, "no-maxqueue" end
+    local state = C_EncounterTimeline.GetEventState(eventId)
+    if issecretvalue and issecretvalue(state) then return nil, eventId, "secret-state" end
+    if state == nil then return nil, eventId, "gone" end
+    -- Finished may precede the parent's stop callback; preserve its bounded anchor opportunity.
+    local awaitsStop = inst.binding.ownsExpiry and not inst.binding.admitsLateFinished
+        and (inst.binding.extension or 0) <= 0
+        and TIMELINE_STATE_FINISHED ~= nil and state == TIMELINE_STATE_FINISHED
+    if not awaitsStop and state ~= TIMELINE_STATE_ACTIVE and state ~= TIMELINE_STATE_PAUSED then
+        return nil, eventId, "terminal"
+    end
+    return maxQueue, eventId
+end
+
+-- One owned job ends a hold or a wait at its bound. A job created on a paused
+-- clock is registered without a timer so ResumeJobHandle arms it on Resume:
+-- ScheduleJob would arm wall time from the frozen sample and
+-- _OnSourcePauseChanged pauses only existing jobs.
+local function ArmHoldJob(self, inst, deadline, now, onExpire)
+    local job = {
+        owner = inst.owner, scope = inst.scope, kind = "hold",
+        instance = inst, instanceGeneration = inst.generation,
+        clockPolicy = "elapsed", deadline = deadline, clock = inst.sourceClock,
+    }
+    job.action = function()
+        self._holdJobs[inst] = nil
+        onExpire()
+    end
+    self._holdJobs[inst] = job
+    if inst.sourceClock.pausedAt ~= nil then
+        TrackJob(self, job)
+    else
+        ScheduleJob(self, job, now)
+    end
+end
+
+-- True once the instance is held; the owned hold job retires it at the
+-- bound. A waitAfter row takes its own bounded wait instead.
+function DT:_BeginHold(inst, now)
+    if inst.binding.waitAfter then return self:_BeginForecastWait(inst, now) end
+    local maxQueue, eventId, reason = self:_ResolveHold(inst)
+    if not maxQueue then
+        dprint(string_format("hold refused text=%s event=%s reason=%s",
+            tostring(inst.label), tostring(eventId), tostring(reason)))
+        return false
+    end
+    local deadline, holdReason = State.BeginHold(inst, maxQueue)
+    if not deadline then
+        dprint("hold refused: " .. tostring(holdReason))
+        return false
+    end
+    ArmHoldJob(self, inst, deadline, now, function()
+        dprint(string_format("hold expired text=%s elapsed=%.3f",
+            tostring(inst.label), GetTime() - inst.sourceClock.receivedAt))
+        State.Retire(self._state, inst)
+        self:ReleaseInstancePresentations(inst, true)
+    end)
+    if DEBUG_DT2 then
+        local blocked
+        if C_EncounterTimeline.IsEventBlocked then blocked = C_EncounterTimeline.IsEventBlocked(eventId) end
+        if issecretvalue and issecretvalue(blocked) then blocked = "secret" end
+        dprint(string_format("hold text=%s event=%s maxQueue=%s deadline=%.3f blocked=%s at=%.3f",
+            tostring(inst.label), tostring(eventId), tostring(maxQueue), deadline, tostring(blocked), now))
+    end
+    return inst.state ~= "retired"
+end
+
+-- A forecast confirmed only by its provider stop waits past zero for that
+-- stop; the bound ends it silently.
+function DT:_BeginForecastWait(inst, now)
+    local deadline, reason = State.BeginForecastWait(inst)
+    if not deadline then
+        dprint("wait refused: " .. tostring(reason))
+        return false
+    end
+    ArmHoldJob(self, inst, deadline, now, function()
+        dprint("wait expired text=" .. tostring(inst.label))
+        State.Retire(self._state, inst)
+        self:ReleaseInstancePresentations(inst, true)
+    end)
+    dprint(string_format("wait text=%s deadline=%.3f at=%.3f", tostring(inst.label), deadline, now))
+    return inst.state ~= "retired"
+end
+
+function DT:_CancelHold(inst)
+    local job = self._holdJobs[inst]
+    if not job then return end
+    self._holdJobs[inst] = nil
+    CancelJob(self, job)
+end
+
+-- One sequel slot per owner, counted parent label and child.
+local function SequelSlotKey(label, childId)
+    return tostring(label) .. ":" .. tostring(childId)
+end
+
+-- Forecast-zero decision of an ownsExpiry instance: one job on its own clock,
+-- identical whether its cue is shown, hidden or never rendered. It takes the
+-- existing hold, or retires the instance.
+function DT:_ArmOwnedExpiry(inst, now)
+    local job = {
+        owner = inst.owner, scope = inst.scope, kind = "hold",
+        instance = inst, instanceGeneration = inst.generation,
+        clockPolicy = "elapsed", deadline = inst.sourceClock.remainingAtReceipt + inst.binding.extension,
+        clock = inst.sourceClock,
+    }
+    job.action = function()
+        self._holdJobs[inst] = nil
+        local held = self:_BeginHold(inst, GetTime())
+        dprint(string_format("expiry text=%s held=%s", tostring(inst.label), tostring(held)))
+        if not held then
+            State.Retire(self._state, inst)
+            self:ReleaseInstancePresentations(inst, true)
+        end
+    end
+    self._holdJobs[inst] = job
+    ScheduleJob(self, job, now)
+end
+
+-- A filtered parent keeps dependent timing work under its owned expiry. A
+-- filtered row the wind map observes also keeps its cast matching, unrendered.
+-- A map-only occurrence the map refuses has no reason to exist and retires.
+function DT:_StartTrackOnly(owner, label, binding, spellId, remaining, span, now, timelineIdentity, mapData,
+                            mapOnly)
+    local effectiveBinding = self:_EffectiveBinding(binding, self:GetSpellExtension(spellId))
+    local inst, predecessor = State.Start(self._state, owner, label, effectiveBinding, remaining, span, now, false, true)
+    if not inst then
+        dprint("trackonly refused start: " .. tostring(predecessor))
+        return
+    end
+    inst.timelineIdentity = timelineIdentity
+    if predecessor then
+        self:ReleaseInstancePresentations(predecessor, false)
+    end
+    self:_LinkShieldWatch(owner, label, spellId, inst)
+    self:_ArmOwnedExpiry(inst, now)
+    if mapData then
+        inst.mapOnly = mapOnly
+        self:_WindMapAttach(inst, mapData)
+        if inst.mapObserved then
+            if effectiveBinding.castMatch then self:_WatchCastMatch(inst) end
+        elseif mapOnly then
+            State.Retire(self._state, inst)
+            self:ReleaseInstancePresentations(inst, false)
+            return
+        end
+    end
+    dprint(string_format("trackonly started text=%s deadline=%.3f", tostring(label),
+        remaining + effectiveBinding.extension))
+end
+
+-- A hidden observed occurrence has no frame to end it, so one job retires it
+-- at its anchored or estimated end. Every re-time re-arms it.
+function DT:_ArmObservedRetire(inst, deadline, now)
+    local previous = self._observedRetireJobs[inst]
+    if previous then CancelJob(self, previous) end
+    local job = {
+        owner = inst.owner, scope = inst.scope, kind = "retire",
+        instance = inst, instanceGeneration = inst.generation,
+        clockPolicy = "elapsed", deadline = deadline, clock = inst.sourceClock,
+    }
+    job.action = function()
+        self._observedRetireJobs[inst] = nil
+        local fireNow = GetTime()
+        if not KeepPresentationInstance(self, inst, fireNow) then return end
+        local elapsed = State.Sample(inst, fireNow)
+        local left = elapsed and State.AnchoredRemaining(inst, elapsed)
+        if left and left > 0 then self:_ArmObservedRetire(inst, elapsed + left, fireNow) end
+    end
+    self._observedRetireJobs[inst] = job
+    if inst.sourceClock.pausedAt ~= nil then
+        TrackJob(self, job)
+    else
+        ScheduleJob(self, job, now)
+    end
+end
+
+-- A curated parent's qualified Finished approximates its cast start; the one
+-- target forecast still due before that cast and its gap end is moved later.
+-- Display settings of either row take no part, and any refusal changes nothing.
+function DT:_ApplyQueuedForecast(parent, now)
+    local queues = self._bindings.queues[parent.binding.encounterId]
+    local queue = queues and queues[parent.binding.curationId]
+    if not queue then return end
+    local target, selectReason = State.SelectQueuedTarget(self._state, parent.owner, queue.target, now, queue.delay)
+    if not target then
+        dprint("queue refused reason=" .. tostring(selectReason))
+        return
+    end
+    local maxQueue, eventId, holdReason = self:_ResolveHold(target)
+    if not maxQueue then
+        dprint(string_format("queue refused text=%s event=%s reason=%s",
+            tostring(target.label), tostring(eventId), tostring(holdReason)))
+        return
+    end
+    local total, bound = State.Predict(target, now, queue.delay, maxQueue)
+    if not total then
+        dprint(string_format("queue refused text=%s reason=%s", tostring(target.label), tostring(bound)))
+        return
+    end
+    self:_CancelHold(target)
+    self:_OnInstanceAnchored(target, total, now, math_min(total, bound))
+    dprint(string_format("queue text=%s parent=%s total=%.3f bound=%.3f at=%.3f",
+        tostring(target.label), tostring(parent.label), total, bound, now))
+end
+
+-- One child cue per anchored parent occurrence. Timing and display mode are
+-- read at the anchor, so the drawn mode matches the window it was planned
+-- with; enabled, disabled and role state when the reveal job fires.
+function DT:_ScheduleSequel(inst, now)
+    local sequels = self._bindings.sequels[inst.binding.encounterId]
+    local sequel = sequels and sequels[inst.binding.curationId]
+    if not sequel then return end
+
+    local child = sequel.key
+    local display = self:GetSpellDisplay(child)
+    local window = self:GetSpellEffectiveShowAtSeconds(child, display)
+    if sequel.cueKey then
+        -- Zero reveal covers the phase window, excluding the preceding gap.
+        local cueRevealAt, cueEndAt = State.PlanSequel(now + sequel.after, 0, sequel.duration, window)
+        if not cueRevealAt then
+            dprint("sequel refused reason=" .. tostring(cueEndAt))
+            return
+        end
+        self:_EndCue(inst.owner, sequel.cueKey)
+        -- A cue never shows beside the window of the row whose anchor ends it.
+        local ender = sequel.endsOnAnchor and sequels[sequel.endsOnAnchor]
+        if ender and ender.cueKey and self:_IsCueWindowLive(inst.owner, ender.cueKey, now) then
+            dprint("cue refused reason=ender-window cue=" .. sequel.cueKey)
+            return
+        end
+        self:_ScheduleCueWindow(inst.owner, sequel.cueKey, display, cueRevealAt, cueEndAt, now)
+        return
+    end
+    local revealAt, endAt = State.PlanSequel(now, sequel.after, self:GetSpellExtension(child), window)
+    if not revealAt then
+        dprint("sequel refused reason=" .. tostring(endAt))
+        return
+    end
+
+    local owner = inst.owner
+    local slotKey = SequelSlotKey(inst.label, child)
+    local generation, slotReason = State.NextSlot(self._state, owner, "sequel", slotKey)
+    if not generation then
+        dprint("sequel refused reason=" .. tostring(slotReason))
+        return
+    end
+
+    local job = {
+        owner = owner, kind = "sequel", slotKey = slotKey, generation = generation,
+        clockPolicy = "wall", deadline = revealAt,
+    }
+    job.action = function()
+        if not (self.db and self.db.Enabled) then return end
+        if self:IsSpellDisabled(child) then
+            dprint("sequel suppressed reason=disabled label=" .. slotKey)
+            return
+        end
+        if not self:ShouldShowSpellRole(child) then
+            dprint("sequel suppressed reason=role label=" .. slotKey)
+            return
+        end
+        local fireNow = GetTime()
+        local duration = endAt - fireNow
+        local frame = self:_SpawnSynthetic(owner, "sequel", slotKey, duration, display,
+            self:ResolveSpellIcon(child), self:GetSpellDisplayText(child), child, fireNow)
+        if frame then
+            dprint(string_format("sequel fired label=%s duration=%.3f", slotKey, duration))
+        else
+            dprint("sequel suppressed reason=late label=" .. slotKey)
+        end
+    end
+    dprint(string_format("sequel scheduled parent=%s label=%s child=%s reveal=%.3f end=%.3f",
+        tostring(inst.binding.curationId), tostring(inst.label), tostring(child), revealAt, endAt))
+    ScheduleJob(self, job, now)
+end
+
+local function CloseCueInterrupts(self, owner, cueKey, keep)
+    for watch in pairs(self._cueInterrupts) do
+        if watch ~= keep and (owner == nil or watch.owner == owner)
+            and (cueKey == nil or watch.cueKey == cueKey) then
+            self._cueInterrupts[watch] = nil
+            CancelJob(self, watch.job)
+        end
+    end
+    if next(self._cueInterrupts) == nil then
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_INTERRUPTED", "cue")
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_FAILED", "cue")
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_FAILED_QUIET", "cue")
+    end
+end
+
+-- Owned jobs and synthetic presentations only; the caller retires source instances.
+local function ReleaseOwnerWork(self, owner)
+    CloseCueInterrupts(self, owner)
+    local jobs = self._ownedJobs[owner]
+    if jobs then
+        for job in pairs(jobs) do CancelJob(self, job) end
+    end
+    local slots = self._slotPresentations[owner]
+    local released = false
+    if slots then
+        for _, byKey in pairs(slots) do
+            for _, frame in pairs(byKey) do
+                if frame._dtKey then self.bars[frame._dtKey] = nil end
+                ReleaseBar(frame)
+                released = true
+            end
+        end
+        self._slotPresentations[owner] = nil
+    end
+    self._slotJobs[owner] = nil
+    self._cueInstances[owner] = nil
+    self._cueLabels[owner] = nil
+    self._forecastGates[owner] = nil
+    for inst in pairs(self._gateSuppressed) do
+        if inst.owner == owner then self._gateSuppressed[inst] = nil end
+    end
+    if released then self:LayoutBars() end
+end
+
+-- The replacement frame is created before the predecessor is released so the
+-- pool cannot hand the just-released kit back as the new presentation.
+function DT:_SpawnSynthetic(owner, kind, slotKey, duration, displayMode, iconTex, displayText, spellId, now, opts)
+    if not duration or duration <= 0 then return nil end
+    local generation, reason = State.NextSlot(self._state, owner, kind, slotKey)
+    if not generation then
+        dprint("synthetic refused: " .. tostring(reason))
+        return nil
+    end
+
+    local byOwner = self._slotPresentations[owner]
+    local existing = byOwner and byOwner[kind] and byOwner[kind][slotKey]
+
+    local record = {
+        synthetic = kind, owner = owner, slotKey = slotKey, generation = generation,
+        clock = State.NewClock(duration, duration, now),
+    }
+    if opts then
+        record.silent = opts.silent
+        record.endsCue = opts.endsCue
+        record.ordinal = opts.ordinal
+    end
+    local frame = RenderPresentation(self, {}, record, duration, 0, displayMode, iconTex,
+        displayText, spellId, nil, false)
+    if not frame then return nil end
+
     if existing then
-        -- Pool the replaced bar — CreateBar typically pops it right back
-        -- out, making the hot repeating-BigWigs-bar path allocation-free.
+        if existing._dtKey then self.bars[existing._dtKey] = nil end
         ReleaseBar(existing)
     end
-    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId, castDisplayText, isSecondary)
-    self._barSortCounter = self._barSortCounter + 1
-    bar.sortIndex = self._barSortCounter
-    self.bars[text] = bar
 
-    if iconID and bar.icon then
-        bar.icon:SetTexture(iconID)
+    self._slotPresentations[owner] = self._slotPresentations[owner] or {}
+    self._slotPresentations[owner][kind] = self._slotPresentations[owner][kind] or {}
+    self._slotPresentations[owner][kind][slotKey] = frame
+
+    -- The predecessor's release happens after RenderPresentation's own
+    -- layout pass, so that pass still counted it — re-run once the final
+    -- registration set (predecessor gone, replacement in) is in place.
+    if existing then
+        self:LayoutBars()
     end
 
-    -- Hide bars whose total lifetime exceeds ShowAtSeconds; reveal at total-showWindow
-    -- so they're visible for exactly showWindow seconds (including cast extension).
-    self:UpdateDB()
-    local groupCfg = (displayMode == "bar") and (self.db and self.db.BarGroup)
-                                            or (self.db and self.db.TextGroup)
-    -- Synthetic follow-ups (postCastBar, phantom) always show immediately —
-    -- their reveal window is rarely what the user wants for a follow-up, and
-    -- a postCastBar inherits the parent's spellId so GetSpellShowAtSeconds
-    -- would pull the wrong value.
-    local isPostCastFollow = text and text:sub(-#POSTCAST_KEY_SUFFIX) == POSTCAST_KEY_SUFFIX
-    local isPhantomFollow  = text and text:sub(1, 8) == "phantom:"
-    local spellShowAt
-    if isPostCastFollow or isPhantomFollow then
-        spellShowAt = 0
-    else
-        spellShowAt = self:GetSpellShowAtSeconds(spellId)
-    end
-    local showWindow = spellShowAt or (groupCfg and groupCfg.ShowAtSeconds) or 0
-    local total = baseDur + (extension or 0)
-    if showWindow > 0 and total > showWindow then
-        bar:Hide()
-        bar.showWindow = showWindow
-        local delay = total - showWindow
-        bar.revealTimer = self:ScheduleTimer("RevealBar", delay, text)
-    else
-        -- Immediately visible — RevealBar handles the deferred case.
-        PlayBarSound(bar, "show")
-    end
-
-    self:LayoutBars()
+    return frame
 end
 
-local function KillBar(self, text)
-    local bar = self.bars[text]
-    if not bar then return end
-    -- Skip hide-sound if the bar never reached visibility (still in showAt delay).
-    if bar:IsShown() then
-        PlayBarSound(bar, "hide")
-    end
-    ReleaseBar(bar)
-    self.bars[text] = nil
-    self:LayoutBars()
-end
-
--- Spawns a `spawnOnMessage` bar in response to a BigWigs_Message firing for
--- the configured spellId. Used when SPELL_AURA_APPLIED for hostile-target
--- auras doesn't fire in 12.0 but LittleWigs still issues a Message() from a
--- non-aura trigger (widget update, boss emote, CLEU success). Example:
--- Crawth's goal-tracker widget 4183 hitting barValue=3 fires
--- Message(376448, "red") which we use as the VULN spawn signal.
--- `leadDelay` starts the visible bar leadDelay seconds after the message
--- arrives, matching the moment the buff actually lands on the boss.
 local function ResolveIconOverride(value, fallback)
     if not value then return fallback end
     if type(value) == "number" and C_Spell and C_Spell.GetSpellTexture then
@@ -2028,174 +3032,750 @@ local function ResolveIconOverride(value, fallback)
     return value
 end
 
-function DT:_SpawnMessageBar(spellId, key)
-    if not spellId then return end
+-- Optional iconOverride on the postCastBar config takes precedence over the
+-- parent's inherited icon; useful when the follow-up represents a different
+-- visual cue (e.g. KNOCK icon → VULNERABILITY icon). Different counted
+-- parent labels partition independent children via the slot key.
+function DT:_SpawnPostCastBar(inst, parentFrame)
+    local pcfg = self:GetSpellPostCastBar(inst.binding.curationId)
+    if not pcfg then return end
+    local parentIcon = parentFrame and parentFrame.icon and parentFrame.icon.GetTexture
+        and parentFrame.icon:GetTexture() or nil
+    local iconTex = ResolveIconOverride(pcfg.iconOverride, parentIcon)
+    local slotKey = tostring(inst.label) .. ":" .. tostring(inst.binding.curationId)
+    self:_SpawnSynthetic(inst.owner, "postcast", slotKey, tonumber(pcfg.duration) or 0,
+        pcfg.display or "bar", iconTex, pcfg.displayText, inst.binding.curationId, GetTime())
+end
+
+-- Filtered by the phantom's own disabled/role state, never the parent's.
+function DT:_SpawnPhantomFollowup(owner, phantomSpellId, parentIconTex, now)
+    local data = self:GetSpellInfo(phantomSpellId)
+    if not data then return end
+    if self:IsSpellDisabled(phantomSpellId) then return end
+    if not self:ShouldShowSpellRole(phantomSpellId) then return end
+    local duration = tonumber(data.duration) or 0
+    if duration <= 0 then return end
+    local iconTex = ResolveIconOverride(data.iconOverride, parentIconTex)
+    self:_SpawnPhantom(owner, phantomSpellId, duration, data.display or "bar", iconTex, data.displayText, now)
+end
+
+function DT:_SpawnPhantom(owner, phantomSpellId, duration, displayMode, iconTex, displayText, now)
+    self:_SpawnSynthetic(owner, "phantom", phantomSpellId, duration, displayMode, iconTex,
+        displayText, phantomSpellId, now)
+end
+
+-- Same-slot replacement cancels the pending job; admission is re-checked
+-- when it fires. The pending job's identity is its own table stored under
+-- self._slotJobs, not a slot generation — _SpawnSynthetic allocates the
+-- generation for the rendered cue at fire time, so a second Message here
+-- must not bump it and retire the still-visible previous cue early.
+function DT:_SpawnMessageBar(owner, binding, key, now)
+    local spellId = binding.curationId
     local data = self:GetSpellInfo(spellId)
     if not (data and data.spawnOnMessage) then return end
     if self:IsSpellDisabled(spellId) then return end
     if not self:ShouldShowSpellRole(spellId) then return end
 
-    local duration = tonumber(data.duration) or 0
-    if duration <= 0 then return end
-    local text = "msg:" .. tostring(spellId) .. ":" .. tostring(key or "")
-    local iconTex = ResolveIconOverride(data.iconOverride, self:ResolveSpellIcon(spellId))
+    local slotKey = tostring(spellId) .. ":" .. tostring(key)
 
-    local function spawn()
-        self:RenderBar(text, duration, 0, data.display or "bar",
-                       iconTex, data.displayText, spellId, nil, false)
-    end
+    self._slotJobs[owner] = self._slotJobs[owner] or {}
+    self._slotJobs[owner]["message"] = self._slotJobs[owner]["message"] or {}
+    local previous = self._slotJobs[owner]["message"][slotKey]
+    if previous then CancelJob(self, previous) end
 
     local lead = tonumber(data.leadDelay) or 0
-    if lead > 0 then
-        dprint(string_format("MessageBar spawn spell=%d delayed=%.1f", spellId, lead))
-        -- On the module timer so OnDisable cancels a pending spawn.
-        self:ScheduleTimer(spawn, lead)
-    else
-        dprint(string_format("MessageBar spawn spell=%d", spellId))
-        spawn()
+    local job = {
+        owner = owner, kind = "message", slotKey = slotKey,
+        clockPolicy = "wall", deadline = now + lead,
+    }
+    job.action = function()
+        if not (self.db and self.db.Enabled) then return end
+        self._slotJobs[owner]["message"][slotKey] = nil
+        if self:IsSpellDisabled(spellId) then return end
+        if not self:ShouldShowSpellRole(spellId) then return end
+        local duration = tonumber(data.duration) or 0
+        local iconTex = ResolveIconOverride(data.iconOverride, self:ResolveSpellIcon(spellId))
+        self:_SpawnSynthetic(owner, "message", slotKey, duration, data.display or "bar",
+            iconTex, data.displayText, spellId, GetTime())
     end
+    self._slotJobs[owner]["message"][slotKey] = job
+    ScheduleJob(self, job, now)
 end
 
--- Spawns a parent bar's `postCastBar` follow-up. Shared by two trigger paths:
---   (a) BarOnUpdate cast-phase-end (parent has castDuration; runs after the
---       cast phase finishes naturally)
---   (b) _StopBarKey natural-countdown-end with extension=0 (parent has no
---       cast phase; LittleWigs's StopBar marks the cast finish moment — used
---       for predictive bars like L'ura's Backlash where the buff lands on
---       cast-end and SPELL_AURA_APPLIED is unreliable in 12.0)
--- Optional iconOverride on the postCastBar config takes precedence over the
--- parent's inherited icon; useful when the follow-up represents a different
--- visual cue (e.g. KNOCK icon → VULNERABILITY icon).
-function DT:_SpawnPostCastBar(parent)
-    if not parent or not parent.postCastBar then return end
-    local pcfg = parent.postCastBar
-    local parentIcon = parent.icon and parent.icon.GetTexture and parent.icon:GetTexture() or nil
-    local iconTex = ResolveIconOverride(pcfg.iconOverride, parentIcon)
-    self:RenderBar(
-        (parent.text or "") .. POSTCAST_KEY_SUFFIX,
-        tonumber(pcfg.duration) or 0, 0,
-        pcfg.display or "bar", iconTex, pcfg.displayText,
-        parent.spellId, nil, false)
-end
+local CUE_LEG_SUFFIXES = { "#prepare", "", "#ended" }
 
--- Spawns a phantom-followup bar using the phantom entry's own spellId so
--- per-spell GUI overrides (color, displayText, disabled, font) on the phantom
--- entry apply correctly. Key format `phantom:<spellId>` is unique across the
--- session — a re-fire of the same phantom replaces the previous bar.
--- parentIconTex is the icon from BigWigs_Timer's payload, used as a fallback
--- when the phantom doesn't set iconOverride. Called at PARENT TIMER TIME
--- (start of the parent's bar) — for L'ura, that's the start of the
--- vulnerability window, which is when BigWigs's `self:Bar()` duration timer
--- fires (it's a duration bar, not a CDBar predictive countdown).
-function DT:_SpawnPhantomFollowup(phantomSpellId, parentIconTex)
-    if not phantomSpellId then return end
-    local data = self:GetSpellInfo(phantomSpellId)
-    if not data then return end
-    if self:IsSpellDisabled(phantomSpellId) then return end
-    if not self:ShouldShowSpellRole(phantomSpellId) then return end
-
-    local duration = tonumber(data.duration) or 0
-    if duration <= 0 then return end
-
-    local iconTex = ResolveIconOverride(data.iconOverride, parentIconTex)
-    local text = "phantom:" .. tostring(phantomSpellId)
-    dprint(string_format("PhantomFollowup spawn spell=%d duration=%.1f", phantomSpellId, duration))
-    self:RenderBar(text, duration, 0, data.display or "bar",
-                   iconTex, data.displayText, phantomSpellId, nil, false)
-end
-
-function DT:StopBar(text)
-    if not text then return end
-    -- Stop both keys: secondary bars share lifetime with primary, so one BigWigs StopBar covers both.
-    self:_StopBarKey(text)
-    self:_StopBarKey(text .. SECONDARY_KEY_SUFFIX)
-end
-
-function DT:_StopBarKey(text)
-    if not text then return end
-    local bar = self.bars[text]
-    if not bar then return end
-
-    -- forceDuration bars self-drain to 0; ignore BigWigs's premature StopBar
-    -- (e.g. LittleWigs Backlash StopBar at 12.5s when our forced duration is 20s).
-    -- Mass-cleanup paths (BigWigs_StopBars, BigWigs_OnBossDisable) still tear them down via StopAllBars.
-    if bar.spellId and self:GetSpellForceDuration(bar.spellId) then
-        dprint("StopBar (forceDuration; ignored): " .. tostring(text))
-        return
-    end
-
-    -- Cast-phase StopBar = mid-cast interrupt. Kill.
-    if bar.phase == "cast" then
-        dprint("StopBar (cast interrupt): " .. tostring(text))
-        KillBar(self, text)
-        return
-    end
-
-    -- elapsed >= base-tolerance → countdown finished naturally → cast-phase transition.
-    -- elapsed < base-tolerance   → mid-countdown interrupt → kill.
-    local elapsed = GetTime() - bar.startTime
-    local extension = bar.extension or 0
-    local naturalEnd = (elapsed >= bar.duration - STOP_TOLERANCE)
-
-    if naturalEnd and extension > 0 then
-        local currentValue = bar.totalDuration - elapsed
-        if currentValue <= 0 then
-            dprint(string_format("StopBar %s → killed (stale, elapsed=%.2f total=%.2f)",
-                text, elapsed, bar.totalDuration))
-            KillBar(self, text)
-            return
-        end
-        bar.phase = "cast"
-        bar.castStartTime = GetTime()
-        bar.castFromValue = currentValue
-        bar.castDuration = extension
-        -- Opt-in cast-phase label/color swap (castDisplayText). Bar mode swaps fill;
-        -- text mode swaps label color (label IS the visible cue).
-        if bar.castDisplayTextRaw then
-            local cc = bar.castColor or DEFAULT_BAR_COLOR
-            bar.baseText = bar.castBaseText or bar.baseText
-            if bar.displayMode == "bar" then
-                if bar.bar then bar.bar:SetStatusBarColor(cc[1], cc[2], cc[3]) end
-                if bar.label then bar.label:SetText(bar.baseText) end
-            else
-                -- Text mode now has a static label + floating timerText split.
-                -- Re-render the label directly with the new baseText (and the
-                -- baked-in " »" separator); timerText is unaffected (it carries
-                -- only the time number). Color update applies to both halves so
-                -- the cast-phase tint reads as one cue.
-                if bar.label then bar.label:SetText(bar.baseText .. " \194\187") end
-                if bar.label then bar.label:SetTextColor(cc[1], cc[2], cc[3]) end
-                if bar.timerText then bar.timerText:SetTextColor(cc[1], cc[2], cc[3]) end
+-- Retire each leg silently; the caller controls any result text.
+function DT:_EndCue(owner, cueKey, keepInterrupt)
+    CloseCueInterrupts(self, owner, cueKey, keepInterrupt)
+    local jobs = self._ownedJobs[owner]
+    if jobs then
+        for job in pairs(jobs) do
+            if job.cueKey == cueKey and not (keepInterrupt and job == keepInterrupt.job) then
+                CancelJob(self, job)
             end
         end
-        dprint(string_format("StopBar %s → cast phase (fromValue=%.2f late=%.2fs)",
-            text, currentValue, elapsed - bar.duration))
-    else
-        -- Natural completion with no cast phase → spawn postCastBar follow-up
-        -- before killing the parent (so it can inherit the icon if its own
-        -- iconOverride isn't set). Phantom followups are NOT spawned here —
-        -- they're tied to parent's Timer arrival (see EventCallback), since
-        -- LittleWigs predictive bars are duration bars (active window), not
-        -- countdowns to a future cast.
-        if naturalEnd and extension <= 0 and bar.postCastBar and not bar.isPreview then
-            dprint(string_format("StopBar %s → killed (natural, spawning postCastBar)", text))
-            self:_SpawnPostCastBar(bar)
-        else
-            dprint(string_format("StopBar %s → killed (elapsed=%.2f base=%.2f ext=%.2f)",
-                text, elapsed, bar.duration, extension))
+    end
+    local byKey = self._slotPresentations[owner] and self._slotPresentations[owner]["cue"]
+    local released = false
+    if byKey then
+        for i = 1, #CUE_LEG_SUFFIXES do
+            local slotKey = cueKey .. CUE_LEG_SUFFIXES[i]
+            local frame = byKey[slotKey]
+            if frame then
+                byKey[slotKey] = nil
+                if frame._dtKey then self.bars[frame._dtKey] = nil end
+                ReleaseBar(frame)
+                released = true
+            end
         end
-        KillBar(self, text)
+    end
+    local byCue = self._cueInstances[owner]
+    local inst = byCue and byCue[cueKey]
+    if inst then
+        byCue[cueKey] = nil
+        State.Retire(self._state, inst)
+        self:ReleaseInstancePresentations(inst, false)
+    end
+    local labels = self._cueLabels[owner]
+    if labels then labels[cueKey] = nil end
+    if released then self:LayoutBars() end
+end
+
+-- A displaced label must not cancel the cue's newer occurrence.
+function DT:_EndCueOccurrence(owner, cueKey, label)
+    local labels = self._cueLabels[owner]
+    if labels and labels[cueKey] == label then self:_EndCue(owner, cueKey) end
+end
+
+function DT:_EndCuesOnAnchor(inst)
+    local enders = self._bindings.cueEnders[inst.binding.encounterId]
+    local cueKeys = enders and enders[inst.binding.curationId]
+    if not cueKeys then return end
+    for i = 1, #cueKeys do
+        self:_EndCue(inst.owner, cueKeys[i])
     end
 end
 
-function DT:StopAllBars()
-    for text, bar in pairs(self.bars) do
-        -- Preview bars are GUI-lifecycle owned, not encounter-lifecycle.
-        if not bar.isPreview then
-            ReleaseBar(bar)
-            self.bars[text] = nil
+-- Decided by the window's own end, not by leftover frames or jobs: a drawn
+-- window counts while it has time left; a pending one only while admitted.
+function DT:_IsCueWindowLive(owner, cueKey, now)
+    local byKey = self._slotPresentations[owner] and self._slotPresentations[owner]["cue"]
+    local frame = byKey and byKey[cueKey]
+    local record = frame and frame._dtPresentation
+    if record and record.clock then
+        local _, _, remaining = State.SampleClock(record.clock, now)
+        if remaining and remaining > 0 then return true end
+    end
+    if not self:ShouldShowSpell(cueKey) then return false end
+    local jobs = self._ownedJobs[owner]
+    if jobs then
+        for job in pairs(jobs) do
+            if job.cueKey == cueKey and job.endAt and now < job.endAt then return true end
         end
     end
+    return false
+end
+
+-- Retire before a late reveal or pause can move the expired window's ending interval.
+function DT:_ExpireTimerCue(inst, now)
+    local _, _, left = State.Sample(inst, now)
+    if not left or left > 0 then return false end
+    self:_SpawnCueEnded(inst.owner, inst.binding.cueKey, now + left)
+    State.Retire(self._state, inst)
+    self:ReleaseInstancePresentations(inst, true)
+    return true
+end
+
+function DT:_ScheduleCueWindow(owner, cueKey, display, revealAt, endAt, now, ordinal)
+    local planKey = cueKey .. "#plan"
+    local generation, slotReason = State.NextSlot(self._state, owner, "cue", planKey)
+    if not generation then
+        dprint("cue refused reason=" .. tostring(slotReason))
+        return
+    end
+    local job = {
+        owner = owner, kind = "cue", slotKey = planKey, generation = generation, cueKey = cueKey,
+        clockPolicy = "wall", deadline = revealAt, endAt = endAt,
+    }
+    job.action = function()
+        if not (self.db and self.db.Enabled) then return end
+        if not self:ShouldShowSpell(cueKey) then
+            dprint("cue suppressed reason=filtered cue=" .. cueKey)
+            return
+        end
+        local data = self:GetSpellInfo(cueKey)
+        if not data then return end
+        local fireNow = GetTime()
+        if fireNow >= endAt then
+            self:_SpawnCueEnded(owner, cueKey, endAt)
+            return
+        end
+        -- Covers a cue planned while this window's cue was disabled.
+        local endedByWindow = self._bindings.cuesEndedByWindow[cueKey]
+        if endedByWindow then
+            for i = 1, #endedByWindow do self:_EndCue(owner, endedByWindow[i]) end
+        end
+        local endsCue
+        if data.endedText then endsCue = cueKey end
+        local label = self:GetSpellDisplayText(cueKey) or data.name
+        if ordinal then label = label .. " " .. ordinal end
+        self:_SpawnSynthetic(owner, "cue", cueKey, endAt - fireNow, display,
+            self:ResolveSpellIcon(cueKey), label, cueKey, fireNow, { endsCue = endsCue, ordinal = ordinal })
+    end
+    dprint(string_format("cue scheduled cue=%s reveal=%.3f end=%.3f", cueKey, revealAt, endAt))
+    ScheduleJob(self, job, now)
+    return generation
+end
+
+local function ReadCueCastBarID(result, ordinal)
+    if not result or ordinal ~= result.ordinal or not UnitCastingInfo then return nil end
+    local ok, castBarID = pcall(function() return select(10, UnitCastingInfo(result.unit)) end)
+    if not ok or (issecretvalue and issecretvalue(castBarID)) then return nil end
+    if type(castBarID) ~= "number" then return nil end
+    return castBarID
+end
+
+function DT:_ArmCueInterrupt(owner, cueKey, generation, result, castBarID, now, endAt)
+    if not generation or not castBarID or not self:ShouldShowSpell(cueKey) then return end
+    local watch = {
+        owner = owner, cueKey = cueKey, scope = self._state.scopes[owner],
+        slotKey = cueKey .. "#plan", generation = generation, result = result,
+        unit = result.unit, castBarID = castBarID, startedAt = now, endAt = endAt,
+    }
+    local job = {
+        owner = owner, scope = watch.scope, kind = "cue", cueKey = cueKey,
+        slotKey = watch.slotKey, generation = generation, clockPolicy = "wall", deadline = endAt,
+    }
+    job.action = function()
+        if not self._cueInterrupts[watch] then return end
+        CloseCueInterrupts(self, owner, cueKey)
+    end
+    watch.job = job
+    self._cueInterrupts[watch] = true
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_INTERRUPTED", "cue")
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_FAILED", "cue")
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_FAILED_QUIET", "cue")
+    ScheduleJob(self, job, now)
+    dprint("cue interrupt armed cue=" .. cueKey .. " castBarID=" .. tostring(castBarID))
+end
+
+function DT:OnUnitCastInterrupted(_, unit, _castGUID, _spellID, _interruptedBy, castBarID)
+    self:_OnFollowedCastEnded(unit, castBarID, "interrupted")
+    self:_OnCueCastEnded(unit, castBarID, "interrupted")
+end
+
+function DT:OnUnitCastFailed(_, unit, _castGUID, _spellID, castBarID)
+    self:_OnFollowedCastEnded(unit, castBarID, "failed")
+    self:_OnCueCastEnded(unit, castBarID, "failed")
+end
+
+local function SetStaticCueResult(frame, color)
+    if not frame then return end
+    frame.staticLabel = true
+    if color then
+        frame.fixedColor = color
+        ApplyVisualsToBar(frame)
+    end
+    if frame.label then frame.label:SetText(frame.baseText) end
+    if frame.timerText then frame.timerText:SetText("") end
+end
+
+function DT:_OnCueCastEnded(unit, castBarID, reason)
+    if not (self.db and self.db.Enabled) or not AcceptBossUnit(unit) then return end
+    if issecretvalue and issecretvalue(castBarID) then return end
+    local now = GetTime()
+    for watch in pairs(self._cueInterrupts) do
+        if State.MatchCueInterrupt(self._state, watch, unit, castBarID, now) then
+            -- Keep the consumed ID until its original deadline to refuse duplicate Messages.
+            watch.completed = true
+            self:_EndCue(watch.owner, watch.cueKey, watch)
+            if self:ShouldShowSpell(watch.cueKey) then
+                local result = watch.result
+                local frame = self:_SpawnSynthetic(watch.owner, "cue", watch.cueKey .. "#ended",
+                    result.duration, "text", self:ResolveSpellIcon(watch.cueKey), result.displayText,
+                    watch.cueKey, now, { silent = true })
+                SetStaticCueResult(frame, result.color)
+            end
+            dprint("cue interrupt done cue=" .. watch.cueKey .. " castBarID=" .. tostring(castBarID) .. " reason=" .. reason)
+        end
+    end
+end
+
+-- Assigned below, after the readable-value helpers it uses.
+local ReadCountInputs
+
+-- Compare the provider's localized count text instead of parsing the Message.
+function DT:_MatchCueMessage(owner, binding, data, message)
+    if not (data.ordinals or data.messageCount) then return true end
+    local templateKey = data.ordinals and "count_amount" or "count"
+    local template, renameOrReason = ReadCountInputs(owner, binding.key, templateKey)
+    if not template then return nil, renameOrReason end
+    local matched, reason
+    if data.ordinals then
+        matched, reason = State.MatchMessageOrdinal(message, template, renameOrReason, data.ordinals)
+    else
+        matched, reason = State.MatchMessageCount(message, template, renameOrReason, data.messageCount)
+    end
+    if not matched then return nil, reason end
+    if data.ordinals then return true, matched end
+    return true
+end
+
+-- Check the cap before replacing the current occurrence. A count or ordinal
+-- is matched first, so a refused Message changes nothing and uses no cap.
+function DT:_OnCueMessage(owner, binding, now, message)
+    local cueKey = binding.cueKey
+    local data = self:GetSpellInfo(cueKey)
+    if not data then return end
+    local matched, ordinalOrReason = self:_MatchCueMessage(owner, binding, data, message)
+    if not matched then
+        dprint("cue refused reason=" .. tostring(ordinalOrReason) .. " cue=" .. cueKey)
+        return
+    end
+    local ordinal = ordinalOrReason
+    local castBarID = ReadCueCastBarID(data.interruptResult, ordinal)
+    if data.interruptResult and ordinal == data.interruptResult.ordinal then
+        for watch in pairs(self._cueInterrupts) do
+            if watch.owner == owner and watch.cueKey == cueKey
+                and State.IsCueInterruptCurrent(self._state, watch, now)
+                and (watch.castBarID == castBarID or (watch.completed and castBarID == nil)) then return end
+        end
+    end
+    -- Phase knowledge precedes the cap and every display filter of the cue.
+    self:_OpenForecastGate(owner, binding, data, now)
+    local admitted, capReason = State.AdmitCue(self._state, binding.encounterId, cueKey, data.maxPerPull)
+    if not admitted then
+        dprint("cue refused reason=" .. tostring(capReason) .. " cue=" .. cueKey)
+        return
+    end
+    self:_EndCue(owner, cueKey)
+
+    local lead = data.leadDelay or 0
+    local display = self:GetSpellDisplay(cueKey)
+    local window = self:GetSpellEffectiveShowAtSeconds(cueKey, display)
+    local revealAt, endAt = State.PlanSequel(now + lead, 0, data.duration, window)
+    if not revealAt then
+        dprint("cue refused reason=" .. tostring(endAt))
+        return
+    end
+    if data.prepareText and self:ShouldShowSpell(cueKey) then
+        self:_SpawnSynthetic(owner, "cue", cueKey .. "#prepare", lead, "text",
+            self:ResolveSpellIcon(cueKey), data.prepareText, cueKey, now, { silent = true })
+    end
+    local generation = self:_ScheduleCueWindow(owner, cueKey, display, revealAt, endAt, now, ordinal)
+    self:_ArmCueInterrupt(owner, cueKey, generation, data.interruptResult, castBarID, now, endAt)
+end
+
+-- A covered forecast loses only its frames until the gate closes or its
+-- Finished anchors it. An instance already suppressed keeps its first entry.
+-- silent carries a played or suppressed show sound across every restored
+-- record, so no later gate can sound it again.
+function DT:_OpenForecastGate(owner, binding, data, now)
+    local gates = self._bindings.forecastGates[binding.encounterId]
+    local cueKey = binding.cueKey
+    local spells = gates and gates[cueKey]
+    if not spells then return end
+    local slotKey = cueKey .. "#gate"
+    local generation, slotReason = State.NextSlot(self._state, owner, "cue", slotKey)
+    if not generation then
+        dprint("gate refused reason=" .. tostring(slotReason))
+        return
+    end
+    local endsAt = now + (data.leadDelay or 0) + data.duration
+    self._forecastGates[owner] = self._forecastGates[owner] or {}
+    self._forecastGates[owner][cueKey] = { endsAt = endsAt, spells = spells }
+    -- No cueKey field: the cue's own replacement must not cancel the gate.
+    local job = {
+        owner = owner, kind = "cue", slotKey = slotKey, generation = generation,
+        clockPolicy = "wall", deadline = endsAt,
+    }
+    job.action = function() self:_CloseForecastGate(owner, cueKey) end
+    ScheduleJob(self, job, now)
+    for inst, presentations in pairs(self._presentations) do
+        if inst.owner == owner and spells[inst.binding.curationId] and inst.anchorElapsed == nil
+            and not self._gateSuppressed[inst] then
+            local primary = presentations.primary
+            local record = primary and primary._dtPresentation
+            self._gateSuppressed[inst] = {
+                silent = record ~= nil and (record.shown == true or record.suppressShowSound == true),
+            }
+            ReleasePresentationFrames(self, presentations, false)
+        end
+    end
+    dprint(string_format("gate opened cue=%s ends=%.3f", cueKey, endsAt))
+end
+
+function DT:_CloseForecastGate(owner, cueKey)
+    local gates = self._forecastGates[owner]
+    if gates then gates[cueKey] = nil end
+    local now = GetTime()
+    -- A restore clears entries, and a retiring one clears its entry again
+    -- through ReleaseInstancePresentations, so restores run after the walk.
+    local due = {}
+    for inst in pairs(self._gateSuppressed) do
+        if inst.owner == owner and not State.GateCovers(gates, inst.binding.curationId, now) then
+            due[#due + 1] = inst
+        end
+    end
+    for i = 1, #due do
+        self:_RestoreGatedPresentation(due[i], now)
+    end
+    dprint("gate closed cue=" .. tostring(cueKey))
+end
+
+-- Set sound history before RenderPresentation, which may show synchronously.
+-- A paused source leaves new jobs registered but unarmed until Resume.
+function DT:_RestoreGatedPresentation(inst, now)
+    local entry = self._gateSuppressed[inst]
+    if not entry then return end
+    self._gateSuppressed[inst] = nil
+    if not State.IsCurrent(self._state, inst, inst.generation, inst.moduleEpoch, inst.encounterEpoch) then
+        return
+    end
+    -- ClassifyExpiry answers "keep" for an unheld owned instance past forecast
+    -- zero, leaving hold-or-retire to its expiry job. When that job is due, it
+    -- runs first, so a retiring forecast is never drawn or sounded.
+    local expiryJob = self._holdJobs[inst]
+    if expiryJob and inst.binding.ownsExpiry and inst.anchorElapsed == nil and inst.holdDeadline == nil then
+        local left = State.JobRemaining(expiryJob.clockPolicy, expiryJob.deadline, expiryJob.clock, now)
+        if left and left <= 0 then
+            CancelJob(self, expiryJob)
+            RunJob(expiryJob)
+            if inst.state == "retired" then return end
+        end
+    end
+    local spellId = inst.binding.curationId
+    if not (self.db and self.db.Enabled) or not self:ShouldShowSpell(spellId)
+        or State.ClassifyExpiry(inst, now) ~= "keep" then
+        State.Retire(self._state, inst)
+        self:ReleaseInstancePresentations(inst, false)
+        return
+    end
+    local presentations = self._presentations[inst]
+    if not presentations then return end
+    local record = { instance = inst, generation = inst.generation, role = "primary", shown = false,
+        suppressShowSound = entry.silent }
+    local frame = RenderPresentation(self, {}, record, inst.sourceClock.remainingAtReceipt,
+        inst.binding.extension or 0, self:GetSpellDisplay(spellId), inst.receiptIcon,
+        self:GetSpellDisplayText(spellId), spellId, self:GetSpellCastDisplayText(spellId), false)
+    if not frame then return end
+    presentations.primary = frame
+    if inst.sourceClock.pausedAt ~= nil then
+        PauseJobHandle(self, record.revealJob)
+        PauseJobHandle(self, record.retireJob)
+    end
+end
+
+-- Keep the ending interval tied to natural expiry, even when dispatch runs late.
+function DT:_SpawnCueEnded(owner, cueKey, endedAt)
+    local data = self:GetSpellInfo(cueKey)
+    if not (data and data.endedText) then return end
+    if not (self.db and self.db.Enabled) then return end
+    if not self:ShouldShowSpell(cueKey) then return end
+    local now = GetTime()
+    local left = endedAt + data.endedDuration - now
+    if left <= 0 then return end
+    local frame = self:_SpawnSynthetic(owner, "cue", cueKey .. "#ended", left, "text",
+        self:ResolveSpellIcon(cueKey), data.endedText, cueKey, now, { silent = true })
+    SetStaticCueResult(frame, data.endedColor)
+end
+
+local CUE_PROVIDER_OPTIONS = {
+    ["cue:2609:awaken_whelps"] = {
+        moduleName = "Melidrussa Chillworn", encounterId = 2609, optionKey = 373046,
+        label = "Awaken Whelps",
+        manualPath = "Ruby Life Pools > Melidrussa Chillworn > Awaken Whelps > Advanced options > Messages",
+        instanceID = 2521, dungeonName = "Ruby Life Pools", contentAddon = "LittleWigs_Dragonflight",
+        mythicOnly = true,
+    },
+    ["cue:3101:light_infusion"] = {
+        moduleName = "Kystia Manaheart", encounterId = 3101, optionKey = 1230304,
+        label = "Light Infusion",
+        manualPath = "Murder Row > Kystia Manaheart > Light Infusion > Advanced options > Messages",
+        instanceID = 2813, dungeonName = "Murder Row", contentAddon = "LittleWigs",
+    },
+    ["cue:3201:bear_form"] = {
+        moduleName = "Lightwarden Ruia", encounterId = 3201, optionKey = 1239885,
+        label = "Bear Form",
+        manualPath = "The Blinding Vale > Lightwarden Ruia > Shapeshift: Bear > Advanced options > Messages",
+        instanceID = 2859, dungeonName = "The Blinding Vale", contentAddon = "LittleWigs",
+    },
+    ["cue:3201:haranir_form"] = {
+        moduleName = "Lightwarden Ruia", encounterId = 3201, optionKey = 1239883,
+        label = "Haranir Form",
+        manualPath = "The Blinding Vale > Lightwarden Ruia > Shapeshift: Haranir > Advanced options > Messages",
+        instanceID = 2859, dungeonName = "The Blinding Vale", contentAddon = "LittleWigs",
+    },
+    ["cue:3456:pull_stomp"] = {
+        moduleName = "Rav'i", encounterId = 3456, optionKey = 1307894,
+        label = "Ravenous Stomp",
+        manualPath = "Altar of Fangs > Rav'i > Ravenous Stomp > Advanced options > Messages",
+        instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
+    },
+    ["cue:3457:toxic_atrophy_kicks"] = {
+        moduleName = "The Writhing Coil", encounterId = 3457, optionKey = 1310358,
+        label = "Toxic Atrophy (Stage 2)",
+        manualPath = "Altar of Fangs > The Writhing Coil > Stage 2 > Toxic Atrophy > Advanced options > Messages",
+        instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
+    },
+    ["cue:3457:burrowing_charge"] = {
+        moduleName = "The Writhing Coil", encounterId = 3457, optionKey = 1299130,
+        label = "Burrowing Charge",
+        manualPath = "Altar of Fangs > The Writhing Coil > Burrowing Charge > Advanced options > Messages",
+        instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
+    },
+    ["cue:3457:venom_jet"] = {
+        moduleName = "The Writhing Coil", encounterId = 3457, optionKey = 1300044,
+        label = "Venom Jet",
+        manualPath = "Altar of Fangs > The Writhing Coil > Venom Jet > Advanced options > Messages",
+        instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
+    },
+    ["cue:3458:axegrinder_channel"] = {
+        moduleName = "Zul'jan", encounterId = 3458, optionKey = 1301111,
+        label = "Axegrinder (Channel)",
+        manualPath = "Altar of Fangs > Zul'jan > Axegrinder > Advanced options > Messages",
+        instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
+    },
+    ["cue:3458:ritual_channel"] = {
+        moduleName = "Zul'jan", encounterId = 3458, optionKey = 1300876,
+        label = "Ritual of the Fang (Channel)",
+        manualPath = "Altar of Fangs > Zul'jan > Ritual of the Fang > Advanced options > Messages",
+        instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
+    },
+}
+
+local CUE_PROVIDER_ORDER = {
+    "cue:3101:light_infusion", "cue:2609:awaken_whelps", "cue:3201:bear_form", "cue:3201:haranir_form",
+    "cue:3456:pull_stomp", "cue:3457:toxic_atrophy_kicks", "cue:3457:burrowing_charge", "cue:3457:venom_jet",
+    "cue:3458:axegrinder_channel", "cue:3458:ritual_channel",
+}
+
+local CUE_PROVIDER_PROMPT = "%s needs BigWigs Messages to show this alert. Enable Messages for %s"
+    .. " in your current BigWigs profile? BigWigs may also show its own message."
+
+local CUE_PROVIDER_REFUSALS = {
+    combat = "you are in combat",
+    ["module-disabled"] = "Dungeon Timers is disabled",
+    ["cue-disabled"] = "this alert is disabled",
+    ["profile-changed"] = "the BigWigs profile changed",
+    ["not-applicable"] = "this alert requires Mythic or Mythic+ difficulty in this dungeon",
+    unknown = "BigWigs could not be checked",
+}
+
+local function IsReadableTable(value)
+    if issecretvalue and issecretvalue(value) then return false end
+    if type(value) ~= "table" then return false end
+    if canaccesstable and not canaccesstable(value) then return false end
+    return true
+end
+
+local function IsPlainValue(value, typeName)
+    if issecretvalue and issecretvalue(value) then return false end
+    return type(value) == typeName
+end
+
+-- An unregistered locale reads as nil and a key without a rename raises; each refuses.
+ReadCountInputs = function(owner, key, templateKey)
+    local api = BigWigsAPI
+    if not IsReadableTable(api) then return nil, "no-provider-api" end
+    local getLocale = api.GetLocale
+    if not IsPlainValue(getLocale, "function") then return nil, "no-provider-api" end
+    local okLocale, locale = pcall(getLocale, api, "BigWigs: Common")
+    if not okLocale or not IsReadableTable(locale) then return nil, "no-locale" end
+    ---@cast locale table
+    local template = rawget(locale, templateKey)
+    if not IsPlainValue(template, "string") then return nil, "no-template" end
+    local getRename = owner.GetRename
+    if not IsPlainValue(getRename, "function") then return nil, "no-rename" end
+    local okRename, rename = pcall(getRename, owner, key)
+    if not okRename or not IsPlainValue(rename, "string") or rename == "" then return nil, "no-rename" end
+    return template, rename
+end
+
+-- Indexing the profile lets a newly switched profile resolve its defaults.
+function DT:_ReadCueProviderOption(cueKey)
+    local entry = CUE_PROVIDER_OPTIONS[cueKey]
+    if not entry then return nil end
+    if not IsReadableTable(BigWigsLoader) then return "unknown", nil, entry, "no-provider" end
+    local core = BigWigs
+    if not IsReadableTable(core) then return "unknown", nil, entry, "not-loaded" end
+    local constants, getModule = core.C, core.GetBossModule
+    if not IsReadableTable(constants) or not IsPlainValue(getModule, "function") then
+        return "unknown", nil, entry
+    end
+    local messageBit, emphasizeBit = constants.MESSAGE, constants.EMPHASIZE
+    if not (IsPlainValue(messageBit, "number") and IsPlainValue(emphasizeBit, "number")) then
+        return "unknown", nil, entry
+    end
+
+    local okModule, module = pcall(getModule, core, entry.moduleName, true)
+    if not okModule then return "unknown", nil, entry, "unreadable" end
+    if not IsReadableTable(module) then return "unknown", nil, entry, "not-loaded" end
+    local getEncounterID = module.GetEncounterID
+    if not IsPlainValue(getEncounterID, "function") then return "unknown", nil, entry end
+    local ids = { pcall(getEncounterID, module) }
+    local owns = false
+    if ids[1] == true then
+        for i = 2, #ids do
+            if IsPlainValue(ids[i], "number") and ids[i] == entry.encounterId then owns = true end
+        end
+    end
+    if not owns then return "unknown", nil, entry end
+
+    -- toggleDefaults says the option exists; it is never the current setting.
+    local defaults, db = module.toggleDefaults, module.db
+    if not IsReadableTable(defaults) or not IsPlainValue(defaults[entry.optionKey], "number") then
+        return "unknown", nil, entry
+    end
+    if not IsReadableTable(db) then return "unknown", nil, entry end
+    local okProfile, profile = pcall(function() return db.profile end)
+    if not okProfile or not IsReadableTable(profile) then return "unknown", nil, entry end
+    ---@cast profile table
+    local toggles = rawget(profile, "toggles")
+    if not IsReadableTable(toggles) then return "unknown", nil, entry end
+    local flags = rawget(toggles, entry.optionKey)
+    if not IsPlainValue(flags, "number") then return "unknown", nil, entry end
+
+    local status = State.ProviderMessageStatus(flags, messageBit, emphasizeBit)
+    if status == "unknown" then return "unknown", nil, entry end
+    return status, {
+        profile = profile, toggles = toggles, flags = flags,
+        messageBit = messageBit, emphasizeBit = emphasizeBit,
+    }, entry
+end
+
+-- Resolve the current notice because the settings page may have been replaced.
+local function NotifyCueProviderNotice(self, cueKey)
+    local notice = self._cueProviderNotice
+    if notice then notice(cueKey) end
+    local headerNotice = self._providerSetupHeaderNotice
+    if headerNotice then headerNotice(cueKey) end
+end
+
+-- No combat refusal: raised in combat it waits in the prompt queue.
+function DT:_OpenCueProviderPrompt(cueKey, origin)
+    if self:_ProviderSetupGate(cueKey, false) then
+        self:_RetireProviderPrompt(cueKey)
+        NotifyCueProviderNotice(self, cueKey)
+        return
+    end
+    if origin == "auto" and self._cueProviderAccept then return end
+    local status, context, entry = self:_ReadCueProviderOption(cueKey)
+    if status ~= "missing" or not context then
+        NotifyCueProviderNotice(self, cueKey)
+        return
+    end
+    self:_RetireProviderPrompt()
+    -- Asking again ends an earlier Later, so a refused accept can bring the prompt back.
+    if origin ~= "auto" then self._providerSetupAnswered[cueKey] = nil end
+    local openedProfile = context.profile
+    local accept
+    local function release()
+        if self._cueProviderAccept ~= accept then return false end
+        self._cueProviderAccept = nil
+        self._cueProviderOrigin = nil
+        self._cueProviderKey = nil
+        return true
+    end
+    -- A refused acceptance must not count as Later.
+    accept = function()
+        if not release() then return end
+        self:_AcceptCueProviderPrompt(cueKey, openedProfile)
+        self:_RequestProviderSetupCheck()
+    end
+    local function decline()
+        if release() then
+            self:_NoteProviderPromptAnswered(cueKey)
+            self:_RequestProviderSetupCheck()
+        end
+    end
+    self._cueProviderAccept = accept
+    self._cueProviderOrigin = origin or "explicit"
+    self._cueProviderKey = cueKey
+    KE:CreatePrompt(entry.label, string_format(CUE_PROVIDER_PROMPT, entry.label, entry.label),
+        false, nil, true, self:ResolveSpellIcon(cueKey) or 134400, 20, 20, nil, accept, decline,
+        "Enable Messages", "Later", false, nil,
+        { waitIfBusy = true, parkKey = "DungeonTimers.providerSetup" })
+end
+
+function DT:_AcceptCueProviderPrompt(cueKey, openedProfile)
+    local refusal = self:_ProviderSetupGate(cueKey, InCombatLockdown() and true or false)
+    if refusal then
+        local gated = CUE_PROVIDER_OPTIONS[cueKey]
+        if gated then
+            KE:Print(string_format("BigWigs Messages for %s was not changed: %s.", gated.label,
+                CUE_PROVIDER_REFUSALS[refusal] or CUE_PROVIDER_REFUSALS.unknown))
+        end
+        NotifyCueProviderNotice(self, cueKey)
+        return
+    end
+    local status, context, entry = self:_ReadCueProviderOption(cueKey)
+    if not status then return end
+    local current = {
+        inCombat = InCombatLockdown() and true or false,
+        cueEnabled = not self:IsSpellDisabled(cueKey),
+    }
+    if context then
+        current.profile, current.flags = context.profile, context.flags
+        current.messageBit, current.emphasizeBit = context.messageBit, context.emphasizeBit
+    end
+    local decision, detail = State.PlanProviderMessageEnable({ profile = openedProfile }, current)
+    if decision == "write" and context then
+        context.toggles[entry.optionKey] = detail
+        if self:_ReadCueProviderOption(cueKey) == "satisfied" then
+            KE:Print(string_format("BigWigs Messages enabled for %s.", entry.label))
+        else
+            KE:Print(string_format("BigWigs Messages for %s could not be confirmed.", entry.label))
+        end
+    elseif decision == "satisfied" then
+        KE:Print(string_format("BigWigs Messages or Emphasize is already on for %s.", entry.label))
+    else
+        KE:Print(string_format("BigWigs Messages for %s was not changed: %s.", entry.label,
+            CUE_PROVIDER_REFUSALS[detail] or CUE_PROVIDER_REFUSALS.unknown))
+    end
+    NotifyCueProviderNotice(self, cueKey)
+end
+
+-- Zone exit and real profile boundaries. Leaves previews and phase bars to their
+-- own cleanup; ApplySettings never calls this.
+local function RetireOrdinaryWork(self)
+    CloseCueInterrupts(self)
+    self:_HideAllShieldBars()
+    local retired = State.RetireAll(self._state)
+    for i = 1, #retired do
+        self:ReleaseInstancePresentations(retired[i], false)
+    end
+    self:_CloseAllCastWork("retired")
+    for job in pairs(self._jobs) do
+        if job.handle then self:CancelTimer(job.handle) end
+    end
+    self._jobs = {}
+    self._ownedJobs = {}
+    for _, byKind in pairs(self._slotPresentations) do
+        for _, byKey in pairs(byKind) do
+            for _, frame in pairs(byKey) do
+                if frame._dtKey then self.bars[frame._dtKey] = nil end
+                ReleaseBar(frame)
+            end
+        end
+    end
+    self._slotPresentations = {}
+    self._slotJobs = {}
+    self._cueInstances = {}
+    self._cueLabels = {}
+    self._forecastGates = {}
+    self._gateSuppressed = {}
+    self._ownerMeta = {}
+    self._pullHold = {}
+    self._presentations = {}
+    self._effectiveBindings = {}
+    self._holdJobs = {}
+    self._castWatches = {}
+    self._observeWindows = {}
+    self._castMatches = {}
+    self._castFollows = {}
+    self._observedRetireJobs = {}
+    self:_WindMapTeardown()
     self:LayoutBars()
 end
 
@@ -2338,8 +3918,8 @@ end
 --   secretFrameAlpha   — outer frame alpha (union of countdown + transitioned bands)
 -- The bar is created lazily and kept in self.bars for the encounter's duration —
 -- visibility is driven by SetAlpha because we can't read the secret value in addon
--- code to make a Show/Hide choice. Layout slot is permanently reserved during the
--- encounter; SetAlpha=0 hides the frame visually but keeps its layout position.
+-- code to make a Show/Hide choice. Layout reserves its slot after ordinary
+-- countdowns, including while the phase frame is transparent.
 function DT:_ShowPhaseBar(key, secretValue, secretCountdown, secretTransitioned, secretFrameAlpha, lead)
     local bar = self.bars[key]
     local needLayout = false
@@ -2352,7 +3932,7 @@ function DT:_ShowPhaseBar(key, secretValue, secretCountdown, secretTransitioned,
     end
     if not bar then
         local _, _, ruleIdx = self:GetPhaseRuleByKey(key)
-        local sortIdx = 50 + (ruleIdx or 1)  -- 51,52,... below real bars (1000+) so phase bars sort to the top
+        local sortIdx = 50 + (ruleIdx or 1)
         bar = CreatePhaseBar(self, key, sortIdx)
         self.bars[key] = bar
         needLayout = true
@@ -2409,8 +3989,7 @@ function DT:_HidePhaseBar(key)
 end
 
 function DT:_HideAllPhaseBars()
-    -- Preview bars are GUI-lifecycle (mirrors StopAllBars' isPreview skip) so
-    -- ENCOUNTER_END doesn't clear a preview the user is currently editing.
+    -- Preview bars belong to the editor, so encounter cleanup leaves them visible.
     local changed = false
     for key, bar in pairs(self.bars) do
         if bar.isPhaseBar and not bar.isPreview then
@@ -2436,9 +4015,8 @@ DT._phaseCurves = DT._phaseCurves or {}
 -- That means we CANNOT extract a clean integer tier in addon code — `==` and
 -- ordered comparisons against secret numbers throw whenever execution is
 -- tainted (and our addon IS tainted by the time the ticker fires, from
--- earlier secret-value flows). The shield-bar comment about "secret == 0"
--- was misleading: it only works in fresh untainted event handlers like
--- UNIT_ABSORB_AMOUNT_CHANGED's direct invocation.
+-- earlier secret-value flows); such a comparison works only in a fresh,
+-- untainted event handler.
 --
 -- Workaround: drive the bar visuals DIRECTLY from the secret HP curve output
 -- via APIs flagged `AllowedWhenTainted`:
@@ -2561,6 +4139,12 @@ function DT:_GetPhaseCurves(threshold, lead)
     return valueCurve, countdownCurve, transitionedCurve, frameCurve
 end
 
+-- A rule with endsAtStage hides once the encounter's own stage reaches it.
+function DT._PhaseRuleEnded(rule, stage)
+    local endsAt = rule.endsAtStage
+    return type(endsAt) == "number" and type(stage) == "number" and stage >= endsAt
+end
+
 function DT:RefreshPhaseBars()
     local encounterID = self.activeEncounterID
     if not encounterID then return end
@@ -2573,7 +4157,7 @@ function DT:RefreshPhaseBars()
         local unit = rule.unit or "boss1"
         local threshold = tonumber(rule.threshold) or 0
         local lead = self:GetPhaseEffectiveLead(key)
-        local disabled = self:IsPhaseDisabled(key)
+        local disabled = self:IsPhaseDisabled(key) or DT._PhaseRuleEnded(rule, self._encounterStage)
 
         if disabled or not UnitExists(unit) or UnitIsDead(unit) or lead <= 0 then
             self:_HidePhaseBar(key)
@@ -2619,119 +4203,120 @@ function DT:StopPhaseTracking()
         dprint("StopPhaseTracking encounterID=" .. tostring(self.activeEncounterID))
     end
     self.activeEncounterID = nil
+    -- Runs at every encounter start and end and on disable, so a stage never
+    -- outlives its encounter.
+    self._encounterStage = nil
     self:_HideAllPhaseBars()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Shield bars (boss absorb tracker)                       ║
--- ║  Spawns an absorb-percent bar on UNIT_SPELLCAST_CHANNEL_ ║
--- ║  START for spells with a `shieldBar` schema field. Used  ║
+-- ║  Spawns a remaining / total (percent) bar on a boss's    ║
+-- ║  channel start inside a shield parent's window. Used     ║
 -- ║  for boss intermission shields (e.g. Vordaza's Necrotic  ║
 -- ║  Convergence) where the team's progress through the      ║
 -- ║  shield is the relevant cue. Reads the secret-value      ║
 -- ║  UnitGetTotalAbsorbs token and passes it directly to     ║
 -- ║  SetValue + AbbreviateNumbers (allowed-when-tainted).    ║
 -- ║  Per-shield-bar state lives on the frame itself          ║
--- ║  (shieldUnit/shieldSpellId/shieldMax). Refresh timers    ║
+-- ║  (its shield* fields). Refresh timers                    ║
 -- ║  keyed by spellID in DT._shieldRefreshTimers.            ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 DT._shieldRefreshTimers = DT._shieldRefreshTimers or {}
 DT._absorbEventRegistered = false
--- Plain-number spell IDs in the active encounter that have shieldBar config.
--- Built at ENCOUNTER_START, cleared at ENCOUNTER_END. Storing the literals
--- here means we never have to recover them from a (potentially secret) cast
--- event — CHANNEL_START's spellId on hostiles is a secret value in 12.0.
+-- Plain-number parent spell IDs with a shield binding in the active encounter,
+-- built at ENCOUNTER_START.
 DT._activeShieldSpellIds = DT._activeShieldSpellIds or {}
--- Arming state for the channel-start spawn path. _ArmShieldChannelWatch sets
--- _shieldArming[spellId] = true ~1s before the curated cast time, then a
--- 5s expiry timer auto-disarms it. The CHANNEL_START handler walks this
--- table on every fire (no secret-spellId match needed — we trust the timing).
+-- Per parent: true while its watch's channel window is open. CHANNEL_START's
+-- spell ID is secret on a hostile unit, so timing, not the spell, identifies
+-- the parent.
 DT._shieldArming = DT._shieldArming or {}
-DT._shieldArmingTimers = DT._shieldArmingTimers or {}  -- pending arm + auto-disarm handles
--- Fallback hide timers: scheduled at bar-spawn to clean up if neither
--- INTERRUPTIBLE (shield broken) nor ENCOUNTER_END (run reset) fires before
--- the channel's natural end (e.g. team gets full-wiped without breaking it).
+-- Pre-channel watches keyed by parent spell ID (one shield per parent) and by
+-- owner + exact label for Pause/Resume and StopBar correlation.
+DT._shieldWatches = DT._shieldWatches or {}
+DT._shieldWatchByLabel = DT._shieldWatchByLabel or {}
+-- Cleanup cap per shown shield, from its binding's timeout.
 DT._shieldFallbackTimers = DT._shieldFallbackTimers or {}
+-- One frame kit per parent, reused for the session.
+DT._shieldKits = DT._shieldKits or {}
 
--- Lifecycle:
---   BigWigs_Timer for shieldBar parent → _ArmShieldChannelWatch arms a flag
---                                        ~1s before the curated cast time
---   UNIT_SPELLCAST_CHANNEL_START on bossN, while armed → _ShowShieldBar
---   UNIT_SPELLCAST_INTERRUPTIBLE on bossN → _HideAllShieldBars (shield broken)
---   UNIT_ABSORB_AMOUNT_CHANGED on bossN → _ScheduleShieldRefresh (value only,
---                                         never compares the secret token)
---   ENCOUNTER_END / BigWigs_StopBars / OnBossDisable → _HideAllShieldBars
---
--- We never compare the secret absorb value to 0 (or anything else) — 12.0.5
--- escalates `secret == literal` to "attempt to compare ... while execution
--- tainted" in some paths. The CHANNEL_START arming + INTERRUPTIBLE kill
--- combo gives us the same lifecycle signal without ever inspecting the
--- secret value.
---
--- Limitation: assumes one shieldBar entry per encounter — if multiple bosses
--- in one encounter ever each have an absorb shield we'd need to disambiguate
--- arming by unit. Not a current concern (Vordaza is the only shieldBar boss).
+-- How long an explicit parent's Finished opens its channel window.
+local SHIELD_FINISH_WINDOW = 2
 
-function DT:_ShowShieldBar(spellId, unit)
-    if not (spellId and unit) then return end
+-- castBarID is documented as never secret; anything else counts as absent.
+local function PlainCastBarId(value)
+    if issecretvalue and issecretvalue(value) then return nil end
+    if type(value) ~= "number" then return nil end
+    return value
+end
+
+function DT:_ShowShieldBar(spellId, unit, castBarId, owner)
+    if not (spellId and unit and owner) then return end
     local cfg = self:GetSpellShieldBar(spellId)
     if not cfg then return end
     if self:IsSpellDisabled(spellId) then return end
     if not self:ShouldShowSpellRole(spellId) then return end
+    local generation, reason = State.NextSlot(self._state, owner, "shield", spellId)
+    if not generation then
+        dprint("shield refused: " .. tostring(reason))
+        return
+    end
 
     local key = ShieldBarKey(spellId)
-    local bar = self.bars[key]
-
-    -- Visual primitives reuse CreateBar so font/texture/color/icon all flow
-    -- through the same DT settings as a regular bar. baseDuration=1 is a
-    -- throwaway — we cancel OnUpdate immediately and overwrite the StatusBar
-    -- range in _RefreshShieldBar.
+    local bar = self._shieldKits[spellId]
+    -- CreateBar gives the shield the regular bar's font, texture and icon;
+    -- baseDuration=1 is a throwaway, the range is overwritten below.
     if not bar then
-        local label = cfg.displayText or "SHIELD"
-        bar = self:CreateBar(key, 1, 0, "bar", label, spellId)
+        bar = self:CreateBar(key, 1, 0, "bar", cfg.displayText or "SHIELD", spellId)
         bar:SetScript("OnUpdate", nil)
-        -- 12.0: _RefreshShieldBar feeds this StatusBar the secret
-        -- UnitGetTotalAbsorbs token via SetValue, which permanently
-        -- secret-poisons its getters. Drop it from the shared bar pool so a
-        -- later plain countdown bar can never recycle the poisoned kit and
-        -- taint on GetMinMaxValues. ReleaseBar then gives it hide-only
-        -- teardown, exactly like phase bars. The GatedSetValue guard above
-        -- is the backstop. Strands one kit per shield hide/show cycle
-        -- (Vordaza-rare), and each re-show pops a fresh kit from the shared
-        -- pool — accepted cost of the secret-taint quarantine.
+        -- SetValue with the secret absorb value secret-poisons this StatusBar's
+        -- getters, so a plain countdown must never recycle the kit: ReleaseBar
+        -- gives it hide-only teardown and this parent reuses it.
         bar._dtPoolKey = nil
         bar.isShieldBar = true
         bar.shieldSpellId = spellId
-        self._barSortCounter = self._barSortCounter + 1
-        bar.sortIndex = self._barSortCounter
-        self.bars[key] = bar
         if bar.icon then
             bar.icon:SetTexture(self:ResolveSpellIcon(spellId) or 134400)
         end
-        -- Dark forest green to match the Necrotic Convergence icon's swirl.
-        -- Hardcoded for now — overrides whatever default CreateBar applied.
-        if bar.bar then
-            bar.bar:SetStatusBarColor(0.137, 0.325, 0.278)  -- #235347
-        end
+        self._shieldKits[spellId] = bar
+    end
+    if self.bars[key] ~= bar then
+        ApplyVisualsToBar(bar)
+        self._barSortCounter = self._barSortCounter + 1
+        bar.sortIndex = self._barSortCounter
+        self.bars[key] = bar
     end
 
     bar.shieldUnit = unit
-    -- Recompute max on every spawn so M+ level changes between channels (rare,
-    -- but possible if the keystone level changes via custom mode) take effect.
-    bar.shieldMax = (tonumber(cfg.baseAmount) or 0) * GetShieldLevelMultiplier()
-    if bar.shieldMax <= 0 then bar.shieldMax = 1 end
+    bar.shieldCastBarId = castBarId
+    bar.shieldOwner = owner
+    bar.shieldGeneration = generation
+    -- Recomputed per activation so a keystone level change takes effect.
+    bar.shieldMax = cfg.baseAmount * GetShieldLevelMultiplier()
     bar.bar:SetMinMaxValues(0, bar.shieldMax)
     bar.bar:SetValue(bar.shieldMax)
-    bar._lastValue = nil  -- invalidate gating cache so first SetValue takes
+    bar._lastValue = nil
+    bar.shieldTotalText = FormatShieldTotal(bar.shieldMax)
+    bar.shieldPercentOptions = NewShieldPercentOptions(bar.shieldMax)
     if bar.timerText then
-        bar.timerText:SetText(FormatShieldDisplay(bar.shieldMax, bar.shieldMax))
+        WriteShieldText(bar.timerText, bar.shieldMax, bar.shieldTotalText, bar.shieldPercentOptions)
     end
     bar:Show()
-    -- No PlayBarSound here — shield bar is a secondary display of the same
-    -- spell event the text/bar primary already announced. Playing the curated
-    -- sound again would double-fire (e.g. "Intermission" heard twice).
+    -- No sound: the parent's countdown already announced this mechanic.
     self:LayoutBars()
+
+    local pending = self._shieldRefreshTimers[spellId]
+    if pending then
+        self:CancelTimer(pending)
+        self._shieldRefreshTimers[spellId] = nil
+    end
+    local fallback = self._shieldFallbackTimers[spellId]
+    if fallback then self:CancelTimer(fallback) end
+    self._shieldFallbackTimers[spellId] = self:ScheduleTimer(function()
+        self._shieldFallbackTimers[spellId] = nil
+        if self:_IsShieldCurrent(spellId, owner, generation) then self:_HideShieldBar(spellId) end
+    end, cfg.timeout)
     self:_RefreshShieldBar(spellId)
 end
 
@@ -2759,35 +4344,43 @@ end
 
 function DT:_RefreshShieldBar(spellId)
     if not spellId then return end
-    self._shieldRefreshTimers[spellId] = nil
-    local key = ShieldBarKey(spellId)
-    local bar = self.bars[key]
+    local bar = self.bars[ShieldBarKey(spellId)]
     if not (bar and bar:IsShown()) then return end
 
+    -- Only the unit that channeled the shield; while it is missing the bar
+    -- waits for an end signal instead of moving to another boss.
     local unit = bar.shieldUnit
-    if not unit or not UnitExists(unit) then
-        unit = ResolveBossUnit()
-        if not unit then return end
-        bar.shieldUnit = unit
-    end
+    if not (unit and UnitExists(unit)) then return end
 
     local absorbAmount = UnitGetTotalAbsorbs(unit)
     if absorbAmount == nil then return end
 
-    -- Secret-safe SetValue — passing the secret token directly is allowed
-    -- by Blizzard. GatedSetValue would also work but its cached delta check
-    -- is unsafe with secret values (equality on secrets = taint), so call
-    -- SetValue directly here.
+    -- Direct SetValue: GatedSetValue's cached delta check compares values,
+    -- which a secret value refuses.
     bar.bar:SetValue(absorbAmount)
     if bar.timerText then
-        bar.timerText:SetText(FormatShieldDisplay(absorbAmount, bar.shieldMax))
+        WriteShieldText(bar.timerText, absorbAmount, bar.shieldTotalText, bar.shieldPercentOptions)
     end
 end
 
 function DT:_ScheduleShieldRefresh(spellId)
     if not spellId then return end
     if self._shieldRefreshTimers[spellId] then return end
-    self._shieldRefreshTimers[spellId] = self:ScheduleTimer("_RefreshShieldBar", SHIELD_REFRESH_THROTTLE, spellId)
+    local bar = self.bars[ShieldBarKey(spellId)]
+    if not bar then return end
+    local owner, generation = bar.shieldOwner, bar.shieldGeneration
+    self._shieldRefreshTimers[spellId] = self:ScheduleTimer(function()
+        self._shieldRefreshTimers[spellId] = nil
+        if self:_IsShieldCurrent(spellId, owner, generation) then self:_RefreshShieldBar(spellId) end
+    end, SHIELD_REFRESH_THROTTLE)
+end
+
+-- The shown bar is still this activation and its owner's scope is live, so a
+-- hide, a re-activation, owner retirement or an epoch bump drops queued work.
+function DT:_IsShieldCurrent(spellId, owner, generation)
+    local bar = self.bars[ShieldBarKey(spellId)]
+    if not (bar and bar.shieldOwner == owner and bar.shieldGeneration == generation) then return false end
+    return State.IsSlotCurrent(self._state, owner, "shield", spellId, generation)
 end
 
 function DT:_HideAllShieldBars()
@@ -2801,12 +4394,15 @@ function DT:_HideAllShieldBars()
         if timer then self:CancelTimer(timer) end
         self._shieldFallbackTimers[spellId] = nil
     end
-    for spellId, pending in pairs(self._shieldArmingTimers) do
-        if pending.arm then self:CancelTimer(pending.arm) end
-        if pending.disarm then self:CancelTimer(pending.disarm) end
-        self._shieldArmingTimers[spellId] = nil
+    for spellId in pairs(self._shieldArming) do
         self._shieldArming[spellId] = false
     end
+    for _, watch in pairs(self._shieldWatches) do
+        CancelJob(self, watch.armJob)
+        CancelJob(self, watch.disarmJob)
+    end
+    self._shieldWatches = {}
+    self._shieldWatchByLabel = {}
     local changed = false
     for k, bar in pairs(self.bars) do
         if bar.isShieldBar then
@@ -2818,147 +4414,895 @@ function DT:_HideAllShieldBars()
     if changed then self:LayoutBars() end
 end
 
--- Refreshes any active shield bar on the firing boss unit. Pure value-only
--- path: feeds the secret absorb token straight into SetValue + AbbreviateNumbers
--- (both AllowedWhenTainted) inside _RefreshShieldBar. Never compares the
--- secret value to anything — spawn lives on CHANNEL_START, kill lives on
--- INTERRUPTIBLE / ENCOUNTER_END.
-function DT:OnUnitAbsorbAmountChanged(_, unit)
-    if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
-    if #self._activeShieldSpellIds == 0 then return end
+-- Hides only the shield bars/watches owned by `owner` — StopBars/OnBossDisable
+-- from one boss module must not clear another owner's live channel-observed
+-- shield bar.
+function DT:_HideOwnerShieldBars(owner)
+    for _, bar in pairs(self.bars) do
+        if bar.isShieldBar and bar.shieldOwner == owner then
+            self:_HideShieldBar(bar.shieldSpellId)
+        end
+    end
+    local watchesByLabel = self._shieldWatchByLabel[owner]
+    if watchesByLabel then
+        for _, watch in pairs(watchesByLabel) do
+            self:_CloseShieldWatch(watch)
+        end
+        self._shieldWatchByLabel[owner] = nil
+    end
+end
 
+-- The arming flag is cleared only while this watch still owns its parent, so
+-- closing a replaced watch cannot disarm its successor.
+function DT:_CloseShieldWatch(watch)
+    CancelJob(self, watch.armJob)
+    CancelJob(self, watch.disarmJob)
+    if self._shieldWatches[watch.spellId] == watch then
+        self._shieldWatches[watch.spellId] = nil
+        self._shieldArming[watch.spellId] = false
+    end
+    local byLabel = self._shieldWatchByLabel[watch.owner]
+    if byLabel and byLabel[watch.label] == watch then byLabel[watch.label] = nil end
+end
+
+-- Called before anything that can retire the new instance, so its release
+-- finds the link.
+function DT:_LinkShieldWatch(owner, label, spellId, inst)
+    local watch = self._shieldWatches[spellId]
+    if watch and watch.owner == owner and watch.label == label then
+        watch.instance = inst
+    end
+end
+
+-- Only the watch linked to this very instance, so releasing a replaced
+-- predecessor leaves its successor's watch alone.
+function DT:_ReleaseShieldWatchOf(inst)
+    local byLabel = self._shieldWatchByLabel[inst.owner]
+    local watch = byLabel and byLabel[inst.label]
+    if not (watch and watch.instance == inst) then return end
+    local finished = watch.opened == true or inst.anchorElapsed ~= nil
+    if State.ShieldWatchOnRetire(watch.explicit, finished) == "close" then
+        self:_CloseShieldWatch(watch)
+    end
+end
+
+function DT:OnUnitAbsorbAmountChanged(_, unit)
+    if not AcceptBossUnit(unit) then return end
     for i = 1, #self._activeShieldSpellIds do
         local spellId = self._activeShieldSpellIds[i]
         local bar = self.bars[ShieldBarKey(spellId)]
-        if bar and bar:IsShown() then
-            if bar.shieldUnit ~= unit then bar.shieldUnit = unit end
+        if bar and bar:IsShown() and State.ShieldUnitMatches(bar.shieldUnit, nil, unit, nil) then
             self:_ScheduleShieldRefresh(spellId)
         end
     end
 end
 
--- Schedule the arming flag for `spellId` to flip true ~1s before the curated
--- cast lands, then auto-disarm 5s after that to bound the false-positive
--- window. leadTime is the BigWigs_Timer reported duration (countdown to
--- next cast).
-function DT:_ArmShieldChannelWatch(spellId, leadTime)
-    if not spellId then return end
-    -- Cancel any pending arm scheduler for this spellId.
-    local pending = self._shieldArmingTimers[spellId]
-    if pending then
-        if pending.arm then self:CancelTimer(pending.arm) end
-        if pending.disarm then self:CancelTimer(pending.disarm) end
+-- An explicit watch keeps its record past disarm, so its parent's late
+-- Finished can re-open the window.
+function DT:_ArmShieldChannelWatch(owner, label, spellId, remaining, span, now, explicit)
+    local generation, reason = State.NextSlot(self._state, owner, "shieldWatch", spellId)
+    if not generation then
+        dprint("shield watch refused: " .. tostring(reason))
+        return
     end
-    self._shieldArmingTimers[spellId] = {}
-    self._shieldArming[spellId] = false
 
-    local armDelay = math.max(0, (tonumber(leadTime) or 1) - 1)
-    self._shieldArmingTimers[spellId].arm = self:ScheduleTimer(function()
-        if not self.db or not self.db.Enabled then return end
+    local previous = self._shieldWatches[spellId]
+    if previous then self:_CloseShieldWatch(previous) end
+
+    local clock = State.NewClock(remaining, span, now)
+    if not clock then return end
+    local armAt = math.max(remaining - 1, 0)
+    local watch = {
+        owner = owner, spellId = spellId, label = label, generation = generation,
+        clock = clock, armAt = armAt, disarmAt = armAt + 5, explicit = explicit == true,
+    }
+
+    local armJob = {
+        owner = owner, kind = "shieldWatch", slotKey = spellId, generation = generation,
+        clockPolicy = "elapsed", deadline = armAt, clock = clock,
+    }
+    armJob.action = function()
+        watch.armJob = nil
         self._shieldArming[spellId] = true
-        self._shieldArmingTimers[spellId] = self._shieldArmingTimers[spellId] or {}
-        self._shieldArmingTimers[spellId].disarm = self:ScheduleTimer(function()
-            self._shieldArming[spellId] = false
-            if self._shieldArmingTimers[spellId] then
-                self._shieldArmingTimers[spellId].disarm = nil
+        local disarmJob = {
+            owner = owner, kind = "shieldWatch", slotKey = spellId, generation = generation,
+            clockPolicy = "elapsed", deadline = watch.disarmAt, clock = clock,
+        }
+        disarmJob.action = function()
+            watch.disarmJob = nil
+            if watch.explicit then
+                self._shieldArming[spellId] = false
+            else
+                self:_CloseShieldWatch(watch)
             end
-        end, 5)
-    end, armDelay)
+        end
+        watch.disarmJob = ScheduleJob(self, disarmJob, GetTime())
+    end
+    watch.armJob = ScheduleJob(self, armJob, now)
+
+    self._shieldWatches[spellId] = watch
+    self._shieldWatchByLabel[owner] = self._shieldWatchByLabel[owner] or {}
+    self._shieldWatchByLabel[owner][label] = watch
 end
 
--- Channel-start spawn: walks the active shieldBar spell list and spawns the
--- first one currently armed. We cannot read CHANNEL_START's spellId on a
--- hostile boss (it's a secret value), so the arming flag set 1s before the
--- curated cast time is the disambiguation signal.
-function DT:OnUnitChannelStart(_, unit)
-    if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
-    if #self._activeShieldSpellIds == 0 then return end
+-- outcome is nil when the stop found no published occurrence.
+function DT:_ResolveShieldWatchOnStop(owner, label, outcome, now)
+    local byLabel = self._shieldWatchByLabel[owner]
+    local watch = byLabel and byLabel[label]
+    if not watch then return end
+    local action = State.ResolveShieldWatch(watch.explicit, outcome, watch.opened == true)
+    if action == "close" then
+        self:_CloseShieldWatch(watch)
+    elseif action == "open" then
+        CancelJob(self, watch.armJob)
+        CancelJob(self, watch.disarmJob)
+        watch.armJob = nil
+        watch.armingHeld = nil
+        watch.opened = true
+        self._shieldArming[watch.spellId] = true
+        local disarmJob = {
+            owner = owner, kind = "shieldWatch", slotKey = watch.spellId, generation = watch.generation,
+            clockPolicy = "wall", deadline = now + SHIELD_FINISH_WINDOW,
+        }
+        disarmJob.action = function()
+            watch.disarmJob = nil
+            self:_CloseShieldWatch(watch)
+        end
+        watch.disarmJob = ScheduleJob(self, disarmJob, now)
+    end
+end
 
+-- Single CHANNEL_START handler: the shield spawn first, then the DEBUG_DT2
+-- observation. The guard runs once for both.
+function DT:OnUnitChannelStart(_, unit, _, _, castBarId)
+    if not AcceptBossUnit(unit) then return end
+    self:_ShieldChannelStart(unit, PlainCastBarId(castBarId))
+    self:_ObserveCastStart("channel", unit, GetTime())
+end
+
+-- The window is consumed before the show, so a repeated start cannot spawn a
+-- second bar.
+function DT:_ShieldChannelStart(unit, castBarId)
     for i = 1, #self._activeShieldSpellIds do
         local spellId = self._activeShieldSpellIds[i]
         if self._shieldArming[spellId] then
-            -- Disarm immediately so a re-fire (rare, but BigWigs can re-Timer)
-            -- doesn't trigger a second spawn.
+            local watch = self._shieldWatches[spellId]
             self._shieldArming[spellId] = false
-            local pending = self._shieldArmingTimers[spellId]
-            if pending then
-                if pending.arm then self:CancelTimer(pending.arm); pending.arm = nil end
-                if pending.disarm then self:CancelTimer(pending.disarm); pending.disarm = nil end
+            if watch then
+                self:_CloseShieldWatch(watch)
+                self:_ShowShieldBar(spellId, unit, castBarId, watch.owner)
             end
-
-            self:_ShowShieldBar(spellId, unit)
-
-            -- Fallback hide if neither INTERRUPTIBLE nor ENCOUNTER_END fires
-            -- before natural channel end. Uses the curated channelDuration so
-            -- the safety net matches the encounter timing.
-            local spellData = self:GetSpellInfo(spellId)
-            local channelDur = (spellData and (spellData.channelDuration or spellData.castDuration)) or 60
-            if self._shieldFallbackTimers[spellId] then
-                self:CancelTimer(self._shieldFallbackTimers[spellId])
-            end
-            self._shieldFallbackTimers[spellId] = self:ScheduleTimer(function()
-                self._shieldFallbackTimers[spellId] = nil
-                self:_HideShieldBar(spellId)
-            end, channelDur + 2)
             return
         end
     end
 end
 
--- Vordaza's channel becomes interruptible only after the shield is consumed.
--- For any other shieldBar boss we'd want this same signal — non-interruptible
--- while shield is up, interruptible after. Hide all active shields on the
--- firing unit.
-function DT:OnUnitSpellcastInterruptible(_, unit)
-    if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
-    if #self._activeShieldSpellIds == 0 then return end
-    self:_HideAllShieldBars()
+function DT:OnUnitChannelStop(_, unit, _, _, _, castBarId)
+    if not AcceptBossUnit(unit) then return end
+    self:_HideShieldsOnUnit(unit, PlainCastBarId(castBarId))
 end
 
--- Collects the plain-integer spell IDs in the encounter that have shieldBar
--- config. Keys of EncounterData[id].spells are integers from source.
+-- A boss's channel turns interruptible once its shield is consumed.
+function DT:OnUnitSpellcastInterruptible(_, unit)
+    if not AcceptBossUnit(unit) then return end
+    self:_HideShieldsOnUnit(unit, nil)
+end
+
+function DT:_HideShieldsOnUnit(unit, castBarId)
+    for i = 1, #self._activeShieldSpellIds do
+        local spellId = self._activeShieldSpellIds[i]
+        local bar = self.bars[ShieldBarKey(spellId)]
+        if bar and bar:IsShown()
+            and State.ShieldUnitMatches(bar.shieldUnit, bar.shieldCastBarId, unit, castBarId) then
+            self:_HideShieldBar(spellId)
+        end
+    end
+end
+
+-- Parent spell IDs with a shield binding in the encounter, legacy or explicit.
 function DT:_CollectShieldSpellIds(encounterID)
     local out = {}
-    local enc = encounterID and KE.EncounterData and KE.EncounterData[encounterID]
-    if not (enc and enc.spells) then return out end
-    for spellId, spell in pairs(enc.spells) do
-        if spell.shieldBar then out[#out + 1] = spellId end
-    end
+    local byParent = encounterID and self._bindings and self._bindings.shields[encounterID]
+    if not byParent then return out end
+    for parentId in pairs(byParent) do out[#out + 1] = parentId end
     return out
 end
 
 function DT:_RegisterAbsorbEvent()
     if self._absorbEventRegistered then return end
     self:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED", "OnUnitAbsorbAmountChanged")
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnUnitChannelStart")
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_CHANNEL_START", "shield")
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_CHANNEL_STOP", "shield")
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "OnUnitSpellcastInterruptible")
     self._absorbEventRegistered = true
-    dprint("ShieldBar events registered (absorb + channel + interruptible)")
+    dprint("ShieldBar events registered (absorb + channel start/stop + interruptible)")
 end
 
 function DT:_UnregisterAbsorbEvent()
     if not self._absorbEventRegistered then return end
     self:UnregisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
-    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_CHANNEL_START", "shield")
+    self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_CHANNEL_STOP", "shield")
     self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
     self._absorbEventRegistered = false
     dprint("ShieldBar events unregistered")
 end
 
-function DT:OnEncounterStart(_, encounterID)
-    local id = tonumber(encounterID)
-    self:StartPhaseTracking(id)
-    self._activeShieldSpellIds = self:_CollectShieldSpellIds(id)
-    if id and #self._activeShieldSpellIds > 0 then
-        self:_RegisterAbsorbEvent()
+-- Feature set per unit-cast event; the slot is registered while any feature
+-- holds it, so one feature's close never drops another's handler.
+function DT:_AcquireUnitCastEvent(event, feature)
+    local holders = self._unitCastHolders[event]
+    if holders[feature] then return end
+    if next(holders) == nil then
+        self:RegisterEvent(event, UNIT_CAST_HANDLERS[event])
+    end
+    holders[feature] = true
+end
+
+function DT:_ReleaseUnitCastEvent(event, feature)
+    local holders = self._unitCastHolders[event]
+    if not holders[feature] then return end
+    holders[feature] = nil
+    if next(holders) == nil then
+        self:UnregisterEvent(event)
     end
 end
 
+function DT:_ReleaseAllUnitCastEvents()
+    for event, holders in pairs(self._unitCastHolders) do
+        if next(holders) ~= nil then
+            self._unitCastHolders[event] = {}
+            self:UnregisterEvent(event)
+        end
+    end
+end
+
+-- Observe after confirmation so diagnostics include the confirmed state.
+function DT:OnUnitCastStart(_, unit, _castGUID, spellID, castBarID)
+    if not AcceptBossUnit(unit) then return end
+    local now = GetTime()
+    local confirmedInst = self:_ConfirmCastStart(unit, now)
+    self:_MatchCastStart(unit, spellID, castBarID, now)
+    self:_ObserveCastStart("cast", unit, now, confirmedInst)
+end
+
+-- castConfirm rows only: a 1.5 s wall window after the Finished anchor in
+-- which the first boss cast start re-bases the origin, once. The watch ends
+-- on the confirm or at the window end; the window-end job is an owned wall
+-- job the instance's retirement drops.
+function DT:_ArmCastConfirm(inst, now)
+    if inst.binding.castConfirm ~= "boss-cast-start" then return end
+    if self._castWatches[inst] then return end
+    local watch = { inst = inst, generation = inst.generation, windowEnd = now + CONFIRM_WINDOW }
+    local job = {
+        owner = inst.owner, scope = inst.scope, kind = "castWatch",
+        instance = inst, instanceGeneration = inst.generation,
+        clockPolicy = "wall", deadline = watch.windowEnd,
+    }
+    job.action = function() self:_CloseCastWatch(inst, "window") end
+    watch.job = job
+    self._castWatches[inst] = watch
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_START", "watch")
+    ScheduleJob(self, job, now)
+end
+
+function DT:_CloseCastWatch(inst, reason)
+    local watch = self._castWatches[inst]
+    if not watch then return end
+    self._castWatches[inst] = nil
+    CancelJob(self, watch.job)
+    if reason == "window" then
+        dprint("confirm ignored reason=window text=" .. tostring(inst.label))
+    end
+    if next(self._castWatches) == nil then
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_START", "watch")
+    end
+end
+
+-- Stale and overdue entries close before anything is counted: the window
+-- job is a wall timer that runs on a later frame, so a start delivered in
+-- between must neither confirm nor make two watches ambiguous. Two armed
+-- in-window watches refuse both; only Slam opts in, so that is unreachable
+-- with the 3207 rows and is what keeps the matcher bounded.
+function DT:_ConfirmCastStart(unit, now)
+    for inst, watch in pairs(self._castWatches) do
+        if not State.IsCurrent(self._state, inst, watch.generation, inst.moduleEpoch, inst.encounterEpoch) then
+            self:_CloseCastWatch(inst, "retired")
+        elseif now > watch.windowEnd then
+            self:_CloseCastWatch(inst, "window")
+        end
+    end
+    local armed, armedCount = nil, 0
+    for _, watch in pairs(self._castWatches) do
+        armedCount = armedCount + 1
+        armed = watch
+    end
+    if armedCount == 0 then return end
+    if armedCount > 1 then
+        dprint("confirm ignored reason=ambiguous unit=" .. unit)
+        return
+    end
+    local inst = armed.inst
+    local total, reason = State.Confirm(inst, now)
+    if not total then
+        dprint(string_format("confirm ignored reason=%s text=%s", tostring(reason), tostring(inst.label)))
+        return
+    end
+    dprint(string_format("confirm text=%s unit=%s confirmElapsed=%.3f total=%.3f",
+        tostring(inst.label), unit, inst.anchorElapsed, total))
+    self:_OnInstanceAnchored(inst, total, now)
+    self:_CloseCastWatch(inst, "confirmed")
+    return inst
+end
+
+-- DEBUG_DT2 only, logging only: 3.0 wall seconds of boss cast and channel
+-- starts after any Finished anchor. Kept open through a confirm so
+-- competing and late starts are recorded; closure logs what was seen and why
+-- it closed. Arrivals outside every window are not observed.
+function DT:_OpenObservationWindow(inst, now)
+    if self._observeWindows[inst] then return end
+    local window = { inst = inst, openedAt = now, count = 0 }
+    local job = {
+        owner = inst.owner, scope = inst.scope, kind = "observe",
+        instance = inst, instanceGeneration = inst.generation,
+        clockPolicy = "wall", deadline = now + OBSERVE_WINDOW,
+    }
+    job.action = function() self:_CloseObservationWindow(inst, "timer") end
+    window.job = job
+    self._observeWindows[inst] = window
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_START", "observe")
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_CHANNEL_START", "observe")
+    ScheduleJob(self, job, now)
+end
+
+function DT:_CloseObservationWindow(inst, reason)
+    local window = self._observeWindows[inst]
+    if not window then return end
+    self._observeWindows[inst] = nil
+    CancelJob(self, window.job)
+    if window.count == 0 then
+        local observed = GetTime() - window.openedAt
+        if observed > OBSERVE_WINDOW then observed = OBSERVE_WINDOW end
+        dprint(string_format("castStart none label=%s observed=%.3f closed=%s",
+            tostring(inst.label), observed, tostring(reason)))
+    end
+    if next(self._observeWindows) == nil then
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_START", "observe")
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_CHANNEL_START", "observe")
+    end
+end
+
+-- An arrival after the deadline closes the window instead of counting: the
+-- window job is a wall timer that may run a frame later.
+-- confirmedInst is the instance this same arrival just confirmed, so the
+-- arrival is not also reported as a second start.
+function DT:_ObserveCastStart(kind, unit, now, confirmedInst)
+    for inst, window in pairs(self._observeWindows) do
+        if now > window.openedAt + OBSERVE_WINDOW then
+            self:_CloseObservationWindow(inst, "timer")
+        else
+            window.count = window.count + 1
+            local watchState = "none"
+            if self._castWatches[inst] then
+                watchState = "armed"
+            elseif inst.confirmed then
+                watchState = "confirmed"
+            end
+            dprint(string_format("castStart kind=%s unit=%s at=%.3f sinceAnchor=%.3f label=%s watch=%s",
+                kind, unit, now, now - window.openedAt, tostring(inst.label), watchState))
+            if kind == "cast" and watchState == "confirmed" and inst ~= confirmedInst then
+                dprint(string_format("confirm ignored reason=second text=%s unit=%s", tostring(inst.label), unit))
+            end
+        end
+    end
+end
+
+local function ReadCastSnapshot(unit)
+    if not UnitCastingInfo then return nil end
+    local ok, name, _, _, startMs, endMs, _, _, _, spellId, castBarId = pcall(UnitCastingInfo, unit)
+    if not ok then return nil end
+    if issecretvalue and (issecretvalue(name) or issecretvalue(spellId)
+        or issecretvalue(startMs) or issecretvalue(endMs)) then
+        return nil
+    end
+    if name == nil then return nil end
+    return spellId, PlainCastBarId(castBarId), startMs, endMs
+end
+
+function DT:_WatchCastMatch(inst)
+    self._castMatches[inst] = inst.generation
+    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_START", "castMatch")
+end
+
+function DT:_CloseCastMatch(inst)
+    local matches = self._castMatches
+    if not (matches and matches[inst]) then return end
+    matches[inst] = nil
+    if next(matches) == nil then
+        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_START", "castMatch")
+    end
+end
+
+function DT:_CastMatchCandidates()
+    local list = {}
+    for inst, generation in pairs(self._castMatches) do
+        if State.IsCurrent(self._state, inst, generation, inst.moduleEpoch, inst.encounterEpoch) then
+            list[#list + 1] = inst
+        else
+            self:_CloseCastMatch(inst)
+        end
+    end
+    return list
+end
+
+-- A nil startSpell takes the unit's running cast as its own START. Returns
+-- the cast start and end, or nil, nil and the refusal reason.
+function DT:_CastEvidence(unit, spells, startSpell, startBar, now)
+    local spellId, castBarId, startMs, endMs = ReadCastSnapshot(unit)
+    if startSpell == nil then startSpell, startBar = spellId, castBarId end
+    local castStart, castEnd = State.CastTimesFromEvidence(spells, startSpell, startBar,
+        spellId, castBarId, startMs, endMs, now)
+    if not castStart then return nil, nil, castEnd, startSpell, startBar end
+    return castStart, castEnd, nil, startSpell, startBar
+end
+
+local FOLLOW_EVENTS = {
+    "UNIT_SPELLCAST_DELAYED", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_INTERRUPTED",
+    "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_FAILED_QUIET",
+}
+
+function DT:_FollowCast(inst, unit, castBarId, spellId)
+    self._castFollows[inst] = { unit = unit, bar = castBarId, spell = spellId, generation = inst.generation }
+    for i = 1, #FOLLOW_EVENTS do self:_AcquireUnitCastEvent(FOLLOW_EVENTS[i], "castFollow") end
+end
+
+function DT:_CloseCastFollow(inst)
+    local follows = self._castFollows
+    if not (follows and follows[inst]) then return end
+    follows[inst] = nil
+    if next(follows) == nil then
+        for i = 1, #FOLLOW_EVENTS do self:_ReleaseUnitCastEvent(FOLLOW_EVENTS[i], "castFollow") end
+    end
+end
+
+-- An early end of a followed cast, bound by its token and public cast bar
+-- only, ends its countdown without a completion claim. A completing stop
+-- reconciles the countdown with the cast's real end: only the user offset
+-- still ahead remains, on wall time, so a paused clock resumes.
+function DT:_OnFollowedCastEnded(unit, castBarID, kind)
+    local follows = self._castFollows
+    if not follows or next(follows) == nil or not AcceptBossUnit(unit) then return end
+    local bar = PlainCastBarId(castBarID)
+    if bar == nil then return end
+    local now = GetTime()
+    for inst, follow in pairs(follows) do
+        if not State.IsCurrent(self._state, inst, follow.generation, inst.moduleEpoch, inst.encounterEpoch) then
+            self:_CloseCastFollow(inst)
+        elseif follow.unit == unit and follow.bar == bar then
+            self:_CloseCastFollow(inst)
+            local outcome, reason = State.EndFollowedCast(inst, kind, now)
+            dprint(string_format("cast follow %s text=%s outcome=%s", kind, tostring(inst.label),
+                tostring(outcome or reason)))
+            if outcome == "ended-early" then
+                State.Retire(self._state, inst)
+                self:ReleaseInstancePresentations(inst, true)
+            elseif outcome == "completed" then
+                local total, left, resumed = State.CompleteFollowedCast(inst, now)
+                if resumed then self:_OnSourcePauseChanged(inst, false, now) end
+                if total and left <= 0 then
+                    State.Retire(self._state, inst)
+                    self:ReleaseInstancePresentations(inst, true)
+                elseif total then
+                    self:_OnInstanceAnchored(inst, total, now)
+                end
+            end
+        end
+    end
+end
+
+function DT:OnUnitCastStop(_, unit, _castGUID, _spellID, castBarID)
+    self:_OnFollowedCastEnded(unit, castBarID, "stopped")
+end
+
+-- One eligible occurrence takes one unused cast; any hold or wait ends. A
+-- curated row runs its effective extension from the cast's start; a cast-end
+-- row runs to the cast's end and follows it. No sound plays.
+function DT:_ApplyCastMatch(unit, spellId, castBarId, castStart, castEnd, now)
+    local inst, reason = State.SelectCastOccurrence(self:_CastMatchCandidates(), spellId, now, castStart)
+    if not inst then
+        dprint("cast match refused reason=" .. tostring(reason) .. " spell=" .. tostring(spellId))
+        return nil, reason
+    end
+    if not State.TakeCastBar(self._state, inst.encounterId, castBarId) then
+        dprint("cast match refused reason=used bar=" .. tostring(castBarId))
+        return nil, "used"
+    end
+    local total, matchReason = State.MatchCast(inst, now, castStart, castEnd)
+    if not total then
+        dprint("cast match refused reason=" .. tostring(matchReason))
+        return nil, matchReason
+    end
+    self:_CancelHold(inst)
+    self:_OnInstanceAnchored(inst, total, now)
+    self:_CloseCastMatch(inst)
+    if inst.castExtension ~= nil then self:_FollowCast(inst, unit, castBarId, spellId) end
+    dprint(string_format("cast match text=%s unit=%s spell=%s bar=%s start=%.3f end=%.3f total=%.3f",
+        tostring(inst.label), unit, tostring(spellId), tostring(castBarId), castStart, castEnd, total))
+    return inst
+end
+
+function DT:_MatchCastStart(unit, spellID, castBarID, now)
+    local matches = self._castMatches
+    if not matches or next(matches) == nil then return end
+    if issecretvalue and issecretvalue(spellID) then return end
+    local spells
+    for inst in pairs(matches) do
+        if inst.binding.castMatch.spells[spellID] then
+            spells = inst.binding.castMatch.spells
+            break
+        end
+    end
+    if not spells then return end
+    local startBar = PlainCastBarId(castBarID)
+    local castStart, castEnd, reason = self:_CastEvidence(unit, spells, spellID, startBar, now)
+    if not castStart then
+        dprint("cast match refused reason=" .. tostring(reason) .. " unit=" .. unit)
+        return
+    end
+    self:_ApplyCastMatch(unit, spellID, startBar, castStart, castEnd, now)
+end
+
+-- A refused refresh keeps the last readable end and the same cast's cancellation ownership.
+function DT:OnUnitCastDelayed(_, unit, _castGUID, _spellID, castBarID)
+    if not AcceptBossUnit(unit) then return end
+    local bar = PlainCastBarId(castBarID)
+    if bar == nil then return end
+    local now = GetTime()
+    for inst, follow in pairs(self._castFollows) do
+        if not State.IsCurrent(self._state, inst, follow.generation, inst.moduleEpoch, inst.encounterEpoch) then
+            self:_CloseCastFollow(inst)
+        elseif follow.unit == unit and follow.bar == bar then
+            local _, castEnd, reason = self:_CastEvidence(unit, { [follow.spell] = true }, follow.spell, bar, now)
+            local total
+            if castEnd then total, reason = State.FollowCastEnd(inst, now, castEnd) end
+            if total then
+                self:_OnInstanceAnchored(inst, total, now)
+                dprint(string_format("cast follow text=%s bar=%s end=%.3f total=%.3f",
+                    tostring(inst.label), tostring(bar), castEnd, total))
+            else
+                dprint("cast follow kept last end reason=" .. tostring(reason) .. " text=" .. tostring(inst.label))
+            end
+        end
+    end
+end
+
+function DT:_ReadCastReadability(spells)
+    local answers = {}
+    local predicate = C_Secrets and C_Secrets.ShouldUnitSpellCastBeSecret
+    if type(predicate) ~= "function" then return answers end
+    for i = 1, #BOSS_UNITS do
+        local unit = BOSS_UNITS[i]
+        local exists = UnitExists(unit)
+        if not (issecretvalue and issecretvalue(exists)) and exists == true then
+            for spellId in pairs(spells) do
+                local ok, secret = pcall(predicate, unit, spellId)
+                local answer = "unknown"
+                if ok and not (issecretvalue and issecretvalue(secret)) then
+                    if secret == false then
+                        answer = "readable"
+                    elseif secret == true then
+                        answer = "secret"
+                    end
+                end
+                answers[#answers + 1] = { spellId = spellId, answer = answer }
+            end
+        end
+    end
+    return answers
+end
+
+-- Only an admissible, unused running cast can suppress the wait; ambiguity keeps the estimate.
+function DT:_BeginCastWait(inst, now)
+    local castMatch = inst.binding.castMatch
+    if not (castMatch and castMatch.within) or not self._castMatches[inst] then return end
+    local running, castUnit, castStart, castEnd, spellId, castBarId = 0, nil, nil, nil, nil, nil
+    for i = 1, #BOSS_UNITS do
+        local unit = BOSS_UNITS[i]
+        local unitStart, unitEnd, _, unitSpell, unitBar = self:_CastEvidence(unit, castMatch.spells, nil, nil, now)
+        if unitStart and State.AdmitsCastStart(inst, now, unitStart)
+            and not State.IsCastBarUsed(self._state, inst.encounterId, unitBar) then
+            running = running + 1
+            castUnit, castStart, castEnd, spellId, castBarId = unit, unitStart, unitEnd, unitSpell, unitBar
+        end
+    end
+    if running > 1 then
+        dprint("cast wait refused reason=ambiguous-running text=" .. tostring(inst.label))
+        return
+    end
+    local untaken = false
+    if running == 1 then
+        local matched, matchReason = self:_ApplyCastMatch(castUnit, spellId, castBarId, castStart, castEnd, now)
+        if matched == inst then return end
+        if matchReason == "ambiguous" then
+            dprint("cast wait refused reason=ambiguous-occurrence text=" .. tostring(inst.label))
+            return
+        end
+        untaken = matched == nil
+    end
+    local selected, reason = State.SelectWait(castMatch.spells, self:_ReadCastReadability(castMatch.spells))
+    if not selected then
+        dprint("cast wait refused reason=" .. tostring(reason) .. " text=" .. tostring(inst.label))
+        return
+    end
+    local bound, waitReason = State.BeginCastWait(inst, now, untaken)
+    if not bound then
+        dprint("cast wait refused reason=" .. tostring(waitReason) .. " text=" .. tostring(inst.label))
+        return
+    end
+    ArmHoldJob(self, inst, bound, now, function() self:_EndCastWait(inst, GetTime()) end)
+    if inst.state == "retired" then return end
+    -- The retire job never ends a longer estimate before the wait's job does.
+    local total = inst.anchorElapsed + inst.binding.extension
+    self:_OnInstanceAnchored(inst, total, now, math.max(total, bound))
+    dprint(string_format("cast wait text=%s bound=%.3f", tostring(inst.label), bound))
+end
+
+-- An unmatched wait returns to a running estimate; past it, the occurrence
+-- ends silently without claiming completion.
+function DT:_EndCastWait(inst, now)
+    self:_CancelHold(inst)
+    local outcome = State.EndCastWait(inst, now)
+    if not outcome then return end
+    dprint(string_format("cast wait ended text=%s outcome=%s", tostring(inst.label), outcome))
+    if outcome == "expired" then
+        State.Retire(self._state, inst)
+        self:ReleaseInstancePresentations(inst, true)
+    else
+        self:_OnInstanceAnchored(inst, inst.anchorElapsed + inst.binding.extension, now)
+    end
+end
+
+function DT:_CloseAllCastWork(reason)
+    for inst in pairs(self._castWatches) do self:_CloseCastWatch(inst, reason) end
+    for inst in pairs(self._observeWindows) do self:_CloseObservationWindow(inst, reason) end
+    for inst in pairs(self._castMatches) do self:_CloseCastMatch(inst) end
+    for inst in pairs(self._castFollows) do self:_CloseCastFollow(inst) end
+end
+
+-- The fourth return bounds Finished admission for a zero-extension parent.
+function DT:_ReadTimelineState(inst)
+    if TIMELINE_STATE_FINISHED == nil or TIMELINE_STATE_CANCELED == nil then return nil, nil, "no-enum" end
+    if not (C_EncounterTimeline and C_EncounterTimeline.GetEventState) then return nil, nil, "no-api" end
+    local eventId, reasonOrQueue = State.ResolveTimelineEvent(self._state, inst)
+    if not eventId then return nil, nil, reasonOrQueue end
+    local state = C_EncounterTimeline.GetEventState(eventId)
+    if issecretvalue and issecretvalue(state) then return nil, eventId, "secret-state" end
+    if state == TIMELINE_STATE_FINISHED then return "finished", eventId, nil, reasonOrQueue end
+    if state == TIMELINE_STATE_CANCELED then return "canceled", eventId end
+    if TIMELINE_STATE_PAUSED ~= nil and state == TIMELINE_STATE_PAUSED then return "paused", eventId end
+    if TIMELINE_STATE_ACTIVE ~= nil and state == TIMELINE_STATE_ACTIVE then return "active", eventId end
+    return nil, eventId, "state=" .. tostring(state)
+end
+
+-- GetStage is plain module state, but the owner is a foreign table: refuse
+-- anything secret or malformed rather than compare it.
+function DT._ReadProviderStage(owner)
+    if issecretvalue and issecretvalue(owner) then return nil, "secret-owner" end
+    if type(owner) ~= "table" then return nil, "invalid-owner" end
+    if canaccesstable and not canaccesstable(owner) then return nil, "inaccessible-owner" end
+    local member = owner.GetStage
+    if issecretvalue and issecretvalue(member) then return nil, "secret-getstage" end
+    if type(member) ~= "function" then return nil, "no-getstage" end
+    local ok, stage = pcall(member, owner)
+    if not ok then return nil, "getstage-error" end
+    if issecretvalue and issecretvalue(stage) then return nil, "secret-stage" end
+    if type(stage) ~= "number" or stage ~= stage or stage == math.huge or stage == -math.huge then
+        return nil, "invalid-stage"
+    end
+    return stage
+end
+
+-- The stage a Timer receipt starts, or nil: the encounter's stageCue row, with
+-- a published duration that rounds to the cue's at one decimal, as the
+-- provider rounds it. Only the row and the duration decide; no text is read.
+function DT._StageCueStage(cue, curationId, time)
+    if type(cue) ~= "table" or curationId ~= cue.spellID then return nil end
+    if type(time) ~= "number" or math.floor(time * 10 + 0.5) ~= cue.duration * 10 then return nil end
+    return cue.stage
+end
+
+-- The encounter's own stage. It starts at 1 for an encounter with a stageCue
+-- and only moves forward, so a repeated or replayed cue changes nothing. The
+-- provider's stage is not read: it can be left over from an earlier pull.
+function DT:_NoteEncounterStage(stage)
+    local current = self._encounterStage
+    if type(current) ~= "number" or stage <= current then return end
+    self._encounterStage = stage
+    if self._windMap then self:_WindMapStage(stage) end
+end
+
+-- Encounter-source events only; the fields read are NeverSecret and the
+-- secret ones (spell identity, icons, severity) are never touched.
+function DT:OnEncounterTimelineEventAdded(_, eventInfo)
+    local encounterId = self._activeEncounterId
+    if not encounterId or type(eventInfo) ~= "table" then return end
+    if TIMELINE_SOURCE_ENCOUNTER == nil then return end
+    local source, id, duration = eventInfo.source, eventInfo.id, eventInfo.duration
+    if issecretvalue and (issecretvalue(source) or issecretvalue(id) or issecretvalue(duration)) then
+        return
+    end
+    if source ~= TIMELINE_SOURCE_ENCOUNTER then return end
+    local maxQueue = eventInfo.maxQueueDuration
+    if issecretvalue and issecretvalue(maxQueue) then maxQueue = nil end
+    local ok, reason = State.RecordTimelineEvent(self._state, encounterId, id, duration, GetTime(), maxQueue)
+    if not ok then
+        dprint("timeline record refused: " .. tostring(reason))
+        return
+    end
+    dprint(string_format("timeline event id=%s duration=%s maxQueue=%s at=%.3f",
+        tostring(id), tostring(duration), tostring(maxQueue), GetTime()))
+end
+
+function DT:_RegisterTimelineEvent()
+    if self._timelineEventRegistered then return end
+    self:RegisterEvent("ENCOUNTER_TIMELINE_EVENT_ADDED", "OnEncounterTimelineEventAdded")
+    self._timelineEventRegistered = true
+end
+
+function DT:_UnregisterTimelineEvent()
+    if not self._timelineEventRegistered then return end
+    self:UnregisterEvent("ENCOUNTER_TIMELINE_EVENT_ADDED")
+    self._timelineEventRegistered = false
+end
+
+-- The provider can publish marked pull receipts before KE's encounter start.
+-- Hold validated payloads until that start; stops and expiry void them.
+local PULL_HOLD_WINDOW, PULL_HOLD_PER_SOURCE = 0.5, 4
+
+local function DropHeldPullReceipts(self, owner, label)
+    local held = self._pullHold
+    if #held == 0 then return end
+    local kept = {}
+    for i = 1, #held do
+        local entry = held[i]
+        if entry.owner ~= owner or (label ~= nil and entry.label ~= label) then
+            kept[#kept + 1] = entry
+        end
+    end
+    self._pullHold = kept
+end
+
+function DT:_HoldPullReceipt(event, ...)
+    local owner = ...
+    if issecretvalue and issecretvalue(owner) then return end
+    if event == "BigWigs_StopBar" or event == "BigWigs_PauseBar" or event == "BigWigs_ResumeBar" then
+        local label = select(2, ...)
+        if issecretvalue and issecretvalue(label) then return end
+        if label ~= nil then DropHeldPullReceipts(self, owner, label) end
+        return
+    end
+    if event == "BigWigs_StopBars" or event == "BigWigs_OnBossDisable" then
+        DropHeldPullReceipts(self, owner, nil)
+        return
+    end
+    local binding, label, cap = self:_ValidatePullReceipt(event, ...)
+    if not binding then return end
+    local held, fromSource = self._pullHold, 0
+    for i = 1, #held do
+        local entry = held[i]
+        -- A Timer label already held would be refused as outstanding after the start.
+        if label ~= nil and entry.owner == owner and entry.label == label then return end
+        if entry.source == binding.curationId then fromSource = fromSource + 1 end
+    end
+    if cap and fromSource >= cap then return end
+    if fromSource >= PULL_HOLD_PER_SOURCE then
+        dprint("pull receipt dropped: source full")
+        return
+    end
+    held[#held + 1] = { event = event, owner = owner, label = label, source = binding.curationId,
+        encounterId = binding.encounterId, at = GetTime(), traceReceipt = self:_CaptureTraceReceipt(),
+        n = select("#", ...), ... }
+    dprint(string_format("pull receipt held event=%s encounter=%d", event, binding.encounterId))
+end
+
+local function IsTimerPayloadReadable(key, time, text, icon, isCooldown, isBarEnabled)
+    return not (issecretvalue and (issecretvalue(key) or issecretvalue(time) or issecretvalue(text)
+        or issecretvalue(icon) or issecretvalue(isCooldown) or issecretvalue(isBarEnabled)))
+end
+
+local function IsMessagePayloadReadable(key, message)
+    return not (issecretvalue and (issecretvalue(key) or issecretvalue(message)))
+end
+
+-- Malformed receipts must not reserve a label or consume capacity.
+function DT:_ValidatePullReceipt(event, ...)
+    if event == "BigWigs_Timer" then
+        local owner, key, time, maxTime, text, _, icon, isCooldown, isBarEnabled = ...
+        if not IsTimerPayloadReadable(key, time, text, icon, isCooldown, isBarEnabled) then return nil end
+        if type(text) ~= "string" or text == "" then return nil end
+        local meta = self:_ResolveOwnerMeta(owner)
+        if not meta then return nil end
+        local binding = State.ResolvePullBinding(self._bindings, meta, "Timer", key, isCooldown)
+        if not binding or not DT._NormalizeSpan(binding.spanMode, time, maxTime) then return nil end
+        return binding, text
+    elseif event == "BigWigs_Message" then
+        local owner, key, message = ...
+        if not IsMessagePayloadReadable(key, message) then return nil end
+        local meta = self:_ResolveOwnerMeta(owner)
+        if not meta then return nil end
+        local binding = State.ResolvePullBinding(self._bindings, meta, "Message", key, nil)
+        local data = binding and binding.cueKey and self:GetSpellInfo(binding.cueKey)
+        if not data or not self:_MatchCueMessage(owner, binding, data, message) then return nil end
+        return binding, nil, data.maxPerPull
+    end
+    return nil
+end
+
+-- Taken before the replay, so each held receipt runs once.
+function DT:_ReplayPullReceipts(id)
+    local held = self._pullHold
+    self._pullHold = {}
+    if #held == 0 then return end
+    local now, replayed = GetTime(), 0
+    for i = 1, #held do
+        local entry = held[i]
+        local age = now - entry.at
+        if entry.encounterId == id and age >= 0 and age <= PULL_HOLD_WINDOW then
+            replayed = replayed + 1
+            self:_ReplayProviderEvent(entry.traceReceipt, nil, entry.event, nil, unpack(entry, 1, entry.n))
+        end
+    end
+    dprint(string_format("pull replay encounter=%s replayed=%d of %d", tostring(id), replayed, #held))
+end
+
+function DT:OnEncounterStart(_, encounterID)
+    CloseCueInterrupts(self)
+    self._activeEncounterId = tonumber(encounterID)
+    local id = self._activeEncounterId
+    self:StartPhaseTracking(id)
+    -- An encounter with a stage cue starts in stage 1. StartPhaseTracking has
+    -- just cleared the previous encounter's stage, and this runs before the
+    -- wind map starts and before any held receipt is replayed.
+    local stagedEncounter = id and KE.EncounterData and KE.EncounterData[id]
+    self._encounterStage = (stagedEncounter and stagedEncounter.stageCue) and 1 or nil
+    if id then State.ClearCueCounts(self._state, id) end
+    -- Drops a shield left by an encounter that never ended, and releases the
+    -- shield events for an encounter without a shield binding.
+    self:_HideAllShieldBars()
+    self._activeShieldSpellIds = self:_CollectShieldSpellIds(id)
+    if id and #self._activeShieldSpellIds > 0 then
+        self:_RegisterAbsorbEvent()
+    else
+        self:_UnregisterAbsorbEvent()
+    end
+    self:_WindMapEncounterStart(id, true)
+    self:_ReplayPullReceipts(id)
+end
+
+-- Retires this encounter's work now instead of waiting for the publisher's delayed disable.
 function DT:OnEncounterEnd()
+    local id = self._activeEncounterId
+    if id then
+        self:_CloseAllCastWork("encounter-end")
+        local retired = State.RetireEncounter(self._state, id)
+        for i = 1, #retired do
+            self:ReleaseInstancePresentations(retired[i], false)
+        end
+        for owner, scope in pairs(self._state.scopes) do
+            if scope.encounterId == id then
+                ReleaseOwnerWork(self, owner)
+            end
+        end
+    end
+    self._ownerMeta = {}
+    self._pullHold = {}
+    self._activeEncounterId = nil
     self:StopPhaseTracking()
     self:_UnregisterAbsorbEvent()
     self:_HideAllShieldBars()
     self._activeShieldSpellIds = {}
+    self:_ReleaseAllUnitCastEvents()
+    self:_WindMapTeardown()
 end
 
 -- Settings preview bars/texts: looping fake bars for live feedback while editing GUI panels.
@@ -3091,14 +5435,15 @@ function DT:ShowSpellPreview(spellId)
     local displayMode = self:GetSpellDisplay(spellId) or "text"
     local displayText = self:GetSpellDisplayText(spellId)
 
-    local label = data.name or string_format("Spell %d", spellId)
+    local fallback = tostring(spellId)
+    if type(spellId) == "number" then
+        fallback = string_format("Spell %d", spellId)
+    end
+    local label = data.name or fallback
 
-    -- Preview chain MUST mirror RenderBar's (override → curator → group default → 0)
-    -- so what the user sees here matches what they'll see in-fight.
-    local groupKey = (displayMode == "bar") and "BarGroup" or "TextGroup"
-    local groupCfg = self.db and self.db[groupKey]
-    local groupDefault = (groupCfg and groupCfg.ShowAtSeconds) or 0
-    local effectiveShowAt = self:GetSpellShowAtSeconds(spellId) or groupDefault
+    -- Preview chain MUST mirror the render entry point's (override → curator
+    -- → group default → 0) so what the user sees here matches in-fight.
+    local effectiveShowAt = self:GetSpellEffectiveShowAtSeconds(spellId, displayMode)
     -- forceDuration / spawnOnMessage / phantomFollowupOf spells all use a
     -- curated duration field for the preview so what the user sees here
     -- matches what they'll see in-fight, not the generic 8s preview-base
@@ -3107,6 +5452,12 @@ function DT:ShowSpellPreview(spellId)
     local curatedDur
     if (data.spawnOnMessage or data.phantomFollowupOf) and data.duration then
         curatedDur = tonumber(data.duration)
+    elseif DT.IsCueKey(spellId) then
+        -- Provider-timed cues use a sample length outside the encounter.
+        curatedDur = data.duration or SPELL_PREVIEW_BASE_DURATION
+        if data.duration and effectiveShowAt > 0 and effectiveShowAt < curatedDur then
+            curatedDur = effectiveShowAt
+        end
     end
     local baseDuration
     if forceDur then
@@ -3114,7 +5465,14 @@ function DT:ShowSpellPreview(spellId)
     elseif curatedDur then
         baseDuration = curatedDur
     elseif effectiveShowAt > 0 then
-        baseDuration = math.max(1, effectiveShowAt - extension)
+        local binding = self:GetSpellAdmittedBinding(spellId)
+        if binding then
+            -- The rule-6 floor keeps this positive; the max(1, ...) clamp
+            -- would preview a longer bar than the row runs.
+            baseDuration = effectiveShowAt - extension
+        else
+            baseDuration = math.max(1, effectiveShowAt - extension)
+        end
     else
         baseDuration = SPELL_PREVIEW_BASE_DURATION
     end
@@ -3184,7 +5542,7 @@ function DT:ShowPhasePreview(key)
     -- but we re-key it under PHASE_PREVIEW_KEY in self.bars so a real
     -- in-fight phase bar can coexist (e.g. testing on a target dummy with
     -- active encounter). Reuse the cached kit for this display mode when
-    -- one exists; sortIndex 1 → top of layout.
+    -- one exists; sortIndex 1 places the preview before other phase rows.
     local mode = self:GetPhaseDisplay(key)
     local bar = phasePreviewKits[mode]
     if bar then
@@ -3234,6 +5592,294 @@ function DT:RefreshPhasePreview()
     self:ShowPhasePreview(key)
 end
 
+local AURA_BOSS_TOKENS = { "boss1", "boss2", "boss3", "boss4", "boss5" }
+
+function DT.MakeAuraKey(encounterId, spellID, trigger)
+    return "aura:" .. tostring(encounterId) .. ":" .. tostring(spellID) .. ":" .. tostring(trigger)
+end
+
+function DT.IsAuraKey(key)
+    return type(key) == "string" and key:find("^aura:") ~= nil
+end
+
+local AURA_RULE_FIELDS = { spellID = true, trigger = true, unit = true, name = true, sound = true, disabled = true }
+local AURA_RULE_TRIGGERS = { added = true, removed = true, increased = true }
+local AURA_RULE_UNITS = { player = true, boss = true }
+
+function DT.IsWellFormedAuraRule(rule)
+    if type(rule) ~= "table" then return false end
+    for field in pairs(rule) do
+        if not AURA_RULE_FIELDS[field] then return false end
+    end
+    if type(rule.spellID) ~= "number" then return false end
+    if not AURA_RULE_TRIGGERS[rule.trigger] or not AURA_RULE_UNITS[rule.unit] then return false end
+    if type(rule.name) ~= "string" or rule.name == "" then return false end
+    if type(rule.sound) ~= "string" or rule.sound == "" then return false end
+    return rule.disabled == nil or type(rule.disabled) == "boolean"
+end
+
+-- Target and nameplate aliases could register the same enemy sound again.
+function DT._BuildAuraSoundWanted(encounterData, registry, ctx)
+    local wanted = {}
+    if not ctx.enabled or ctx.muted or not ctx.instanceID then return wanted end
+    local dungeonKey
+    for i = 1, #registry do
+        if registry[i].instanceID == ctx.instanceID then dungeonKey = registry[i].key end
+    end
+    if not dungeonKey then return wanted end
+
+    for encounterId, enc in pairs(encounterData) do
+        if enc.dungeon == dungeonKey and type(enc.auraSounds) == "table" then
+            for i = 1, #enc.auraSounds do
+                local rule = enc.auraSounds[i]
+                local trigger
+                if DT.IsWellFormedAuraRule(rule) then trigger = ctx.triggers[rule.trigger] end
+                if trigger ~= nil then
+                    local key = DT.MakeAuraKey(encounterId, rule.spellID, rule.trigger)
+                    local name = not ctx.isDisabled(key) and ctx.soundFor(key) or nil
+                    local path = name and ctx.resolveMedia(name) or nil
+                    if path and rule.unit == "player" then
+                        wanted[#wanted + 1] = { trigger = trigger, unitToken = "player",
+                            spellID = rule.spellID, path = path, channel = ctx.channel }
+                    elseif path then
+                        for t = 1, #AURA_BOSS_TOKENS do
+                            wanted[#wanted + 1] = { trigger = trigger, unitToken = AURA_BOSS_TOKENS[t],
+                                spellID = rule.spellID, path = path, channel = ctx.channel }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return wanted
+end
+
+local function CurrentInstanceMapID()
+    if not GetInstanceInfo then return nil end
+    return (select(8, GetInstanceInfo()))
+end
+
+function DT:_UpdateAuraSoundEvents(wantEvents)
+    wantEvents = wantEvents and true or false
+    if wantEvents == (self._auraSoundEvents == true) then return end
+    self._auraSoundEvents = wantEvents
+    if wantEvents then
+        self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnAuraSoundRestrictionChanged")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnAuraSoundRelease")
+    else
+        self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
+end
+
+function DT:OnAuraSoundRelease()
+    if self._auraSounds and self._auraSounds:IsPending() then self:SyncAuraSounds() end
+end
+
+-- The restriction state is read one frame after the event, once it has settled.
+function DT:OnAuraSoundRestrictionChanged()
+    if not (self._auraSounds and self._auraSounds:IsPending()) then return end
+    C_Timer.After(0, function() self:OnAuraSoundRelease() end)
+end
+
+-- The client owns aura matching and playback; Lua retains only registration IDs.
+function DT:SyncAuraSounds()
+    self:UpdateDB()
+    local enabled = self._auraSoundsActive == true and self.db ~= nil and self.db.Enabled == true
+    local instanceID
+    if enabled then instanceID = CurrentInstanceMapID() end
+    local triggerEnum = Enum and Enum.UnitAuraSoundTrigger
+    local wanted = {}
+    if triggerEnum and KE.LSM then
+        wanted = DT._BuildAuraSoundWanted(KE.EncounterData or {}, KE.DungeonTimerDungeons or {}, {
+            enabled = enabled,
+            instanceID = instanceID,
+            muted = self.db ~= nil and self.db.MutePresetSounds == true,
+            channel = (self.db and self.db.SoundChannel) or "Master",
+            triggers = { added = triggerEnum.Added, removed = triggerEnum.Removed,
+                increased = triggerEnum.ApplicationsIncreased },
+            isDisabled = function(key) return self:IsSpellDisabled(key) end,
+            soundFor = function(key) return self:GetEffectiveSpellSoundOnShow(key) end,
+            resolveMedia = function(name) return KE.LSM:Fetch("sound", name, true) end,
+        })
+    end
+
+    local registry = self._auraSounds
+    if not registry then
+        if #wanted == 0 then
+            self:_UpdateAuraSoundEvents(false)
+            return
+        end
+        local Sound = KE.AuraSound
+        if not (Sound and C_UnitAuras and C_UnitAuras.AddAuraSound and C_UnitAuras.RemoveAuraSound) then return end
+        registry = Sound.New({
+            api = { Add = C_UnitAuras.AddAuraSound, Remove = C_UnitAuras.RemoveAuraSound },
+            isHidden = function()
+                if not KE.AreAuraIdentitiesHidden then return true end
+                return KE:AreAuraIdentitiesHidden()
+            end,
+            onDiagnostic = dprint,
+        })
+        self._auraSounds = registry
+    end
+    registry:SyncRules(wanted)
+    if #wanted == 0 and not registry:IsPending() then self._auraSounds = nil end
+    self:_UpdateAuraSoundEvents(enabled and registry:IsPending())
+end
+
+function DT:_ProviderSetupGate(cueKey, inCombat)
+    local entry = CUE_PROVIDER_OPTIONS[cueKey]
+    local applicable = true
+    if entry and entry.mythicOnly then
+        applicable = false
+        if GetInstanceInfo then
+            local _, _, difficulty, _, _, _, _, instanceID = GetInstanceInfo()
+            if IsPlainValue(instanceID, "number") then
+                applicable = instanceID ~= entry.instanceID or (IsPlainValue(difficulty, "number")
+                    and (difficulty == 8 or difficulty == 23))
+            end
+        end
+    end
+    return State.ProviderSetupGate({
+        hasDescriptor = entry ~= nil,
+        applicable = applicable,
+        moduleEnabled = self._providerSetupActive == true and (self.db and self.db.Enabled) and true or false,
+        cueEnabled = not self:IsSpellDisabled(cueKey),
+        inCombat = inCombat,
+    })
+end
+
+function DT:_ProviderSetupCueKeys()
+    return CUE_PROVIDER_ORDER
+end
+
+function DT:_GetProviderSetupNotice(cueKey)
+    local entry = CUE_PROVIDER_OPTIONS[cueKey]
+    if not entry then return nil end
+    local refusal = self:_ProviderSetupGate(cueKey, false)
+    if refusal then return refusal == "not-applicable" and refusal or "disabled", entry end
+    local status, _, _, reason = self:_ReadCueProviderOption(cueKey)
+    return status, entry, reason
+end
+
+function DT:_RetireProviderPrompt(cueKey)
+    if cueKey and self._cueProviderKey ~= cueKey then return end
+    local accept = self._cueProviderAccept
+    self._cueProviderAccept = nil
+    self._cueProviderOrigin = nil
+    self._cueProviderKey = nil
+    if accept then KE:ClosePromptIfOwner(accept) end
+end
+
+-- A town dismissal must not suppress the next dungeon visit.
+function DT:_NoteProviderPromptAnswered(cueKey)
+    local entry, answered = CUE_PROVIDER_OPTIONS[cueKey], self._providerSetupAnswered
+    if entry and answered and CurrentInstanceMapID() == entry.instanceID then answered[cueKey] = true end
+end
+
+function DT:_RunProviderSetupCheck(explicit, cueKey)
+    local entry, answered = CUE_PROVIDER_OPTIONS[cueKey], self._providerSetupAnswered
+    local inInstance = entry ~= nil and CurrentInstanceMapID() == entry.instanceID
+    -- Before the gate: leaving ends the visit even while the alert is disabled.
+    if answered and not inInstance then answered[cueKey] = nil end
+    if self:_ProviderSetupGate(cueKey, false) then
+        self:_RetireProviderPrompt(cueKey)
+        NotifyCueProviderNotice(self, cueKey)
+        return nil
+    end
+    local status, _, _, reason = self:_ReadCueProviderOption(cueKey)
+    local plan = State.PlanProviderSetup({
+        explicit = explicit,
+        inInstance = inInstance,
+        status = status,
+        answered = answered[cueKey] == true,
+        pending = self._cueProviderAccept
+            and (self._cueProviderKey == cueKey and self._cueProviderOrigin or "other") or nil,
+    })
+    if plan == "open" then
+        self:_OpenCueProviderPrompt(cueKey, explicit and "explicit" or "auto")
+    elseif plan == "close" then
+        self:_RetireProviderPrompt(cueKey)
+    end
+    NotifyCueProviderNotice(self, cueKey)
+    return reason
+end
+
+-- The flag outlives disable so re-enabling before the callback cannot queue another.
+function DT:_RequestProviderSetupCheck()
+    if not self._providerSetupActive or self._providerSetupQueued then return end
+    self._providerSetupQueued = true
+    C_Timer.After(0, function()
+        self._providerSetupQueued = false
+        if not self._providerSetupActive then return end
+        local pendingKey = self._cueProviderKey
+        if pendingKey then self:_RunProviderSetupCheck(false, pendingKey) end
+        for _, cueKey in ipairs(CUE_PROVIDER_ORDER) do
+            if cueKey ~= pendingKey then self:_RunProviderSetupCheck(false, cueKey) end
+        end
+    end)
+end
+
+function DT:_OnProviderCueChanged(spellId)
+    if not CUE_PROVIDER_OPTIONS[spellId] then return end
+    if self:IsSpellDisabled(spellId) then self:_RetireProviderPrompt(spellId) end
+    self:_RequestProviderSetupCheck()
+end
+
+-- Native loading respects disabled addons; the provider's zone loader enables them.
+local function LoadProviderAddOn(name)
+    local addOns = C_AddOns
+    if not (addOns and addOns.IsAddOnLoaded and addOns.LoadAddOn) then return false end
+    local okState, _, isLoaded = pcall(addOns.IsAddOnLoaded, name)
+    if okState and isLoaded == true then return true end
+    local okCall, loaded, why = pcall(addOns.LoadAddOn, name)
+    if okCall and loaded == true then return true end
+    if okCall and IsPlainValue(why, "string") then return false, why end
+    return false
+end
+
+local function LoadProviderContent(entry)
+    if not IsReadableTable(BigWigs) then
+        local loaded, why = LoadProviderAddOn("BigWigs_Core")
+        if not loaded or not IsReadableTable(BigWigs) then return why, "BigWigs_Core" end
+    end
+    local loaded, why = LoadProviderAddOn(entry.contentAddon)
+    if not loaded then return why, entry.contentAddon end
+end
+
+---@param reportedFailures table<string, boolean>?
+function DT:_CheckProviderSetupNow(cueKey, reportedFailures)
+    if self:_ProviderSetupGate(cueKey, InCombatLockdown() and true or false) then
+        NotifyCueProviderNotice(self, cueKey)
+        return
+    end
+    local entry = CUE_PROVIDER_OPTIONS[cueKey]
+    local _, _, _, before = self:_ReadCueProviderOption(cueKey)
+    local loadReason, failedAddon
+    if before == "not-loaded" then loadReason, failedAddon = LoadProviderContent(entry) end
+    self._providerSetupAnswered[cueKey] = nil
+    if self:_RunProviderSetupCheck(true, cueKey) ~= "not-loaded" then return end
+    failedAddon = failedAddon or entry.contentAddon
+    if reportedFailures then
+        if reportedFailures[failedAddon] then return end
+        reportedFailures[failedAddon] = true
+    end
+    if loadReason then
+        KE:Print(string_format("BigWigs addon %s is not loaded (%s).", failedAddon, loadReason))
+    else
+        KE:Print(string_format("BigWigs addon %s is not loaded. Check that BigWigs and LittleWigs"
+            .. " are enabled.", failedAddon))
+    end
+end
+
+function DT:OnProviderSetupSignal(event)
+    if event == "BigWigs_ProfileUpdate" then
+        self:_RetireProviderPrompt()
+        self._providerSetupAnswered = {}
+    end
+    self:_RequestProviderSetupCheck()
+end
+
 function DT:OnInitialize()
     -- db must be populated BEFORE KitnEssentials:OnEnable's auto-enable loop checks module.db.Enabled.
     self:UpdateDB()
@@ -3243,6 +5889,38 @@ end
 function DT:OnEnable()
     dprint("OnEnable")
     self:UpdateDB()
+
+    self._state = State.New()
+    self._bindings = State.BuildBindings(KE.EncounterData)
+    self._ownerMeta = {}
+    self._presentations = {}
+    self._effectiveBindings = {}
+    self._jobs = {}
+    self._ownedJobs = {}
+    self._slotJobs = {}
+    self._cueInstances = {}
+    self._cueLabels = {}
+    self._forecastGates = {}
+    self._gateSuppressed = {}
+    self._slotPresentations = {}
+    self._cueInterrupts = {}
+    self._shieldWatches = {}
+    self._shieldWatchByLabel = {}
+    self._holdJobs = {}
+    self._castWatches = {}
+    self._observeWindows = {}
+    self._castMatches = {}
+    self._castFollows = {}
+    self._observedRetireJobs = {}
+    self._unitCastHolders = {
+        UNIT_SPELLCAST_START = {}, UNIT_SPELLCAST_CHANNEL_START = {}, UNIT_SPELLCAST_CHANNEL_STOP = {},
+        UNIT_SPELLCAST_INTERRUPTED = {}, UNIT_SPELLCAST_DELAYED = {}, UNIT_SPELLCAST_STOP = {},
+        UNIT_SPELLCAST_FAILED = {}, UNIT_SPELLCAST_FAILED_QUIET = {},
+    }
+    self._activeEncounterId = nil
+    self._pullHold = {}
+
+    -- Tables first: a refused enable is still followed by OnDisable, which walks them.
     if not (self.db and self.db.Enabled) then return end
     self:UpdateGroupPositions()
 
@@ -3260,6 +5938,8 @@ function DT:OnEnable()
             BigWigsLoader.RegisterMessage(self, event, "EventCallback")
         end
         dprint("registered " .. #BIGWIGS_EVENTS .. " BigWigs events")
+        BigWigsLoader.RegisterMessage(self, "BigWigs_BossModuleRegistered", "OnProviderSetupSignal")
+        BigWigsLoader.RegisterMessage(self, "BigWigs_ProfileUpdate", "OnProviderSetupSignal")
     else
         dprint("BigWigsLoader missing — event registration skipped")
     end
@@ -3271,9 +5951,47 @@ function DT:OnEnable()
         dprint("LibSpec missing — role filter degraded to always-DAMAGER")
     end
 
-    -- Phase tracker (HP%-driven).
+    -- Phase tracker (HP%-driven) plus the encounter identity Timer/CastTimer/
+    -- Message admission compares against.
     self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
     self:RegisterEvent("ENCOUNTER_END",   "OnEncounterEnd")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
+    self:_RegisterTimelineEvent()
+
+    if KE.db and KE.db.RegisterCallback then
+        KE.db.RegisterCallback(self, "OnProfileChanged", "OnProfileBoundary")
+        KE.db.RegisterCallback(self, "OnProfileCopied", "OnProfileBoundary")
+        KE.db.RegisterCallback(self, "OnProfileReset", "OnProfileBoundary")
+    end
+
+    self._auraSoundsActive = true
+    self:SyncAuraSounds()
+
+    -- Also covers a boss module registered before the subscription above.
+    self._providerSetupAnswered = {}
+    self._providerSetupActive = true
+    self:_RequestProviderSetupCheck()
+    self:ApplyWindMapSettings()
+end
+
+-- A loading screen ends every live boss publication and an admitted owner
+-- re-publishes after re-engage, so no instance-ID comparison is needed.
+function DT:OnPlayerEnteringWorld()
+    RetireOrdinaryWork(self)
+    self:StopDiagnosticTrace("world-change")
+    -- One frame later the instance map ID has settled.
+    C_Timer.After(0, function() self:SyncAuraSounds() end)
+    self:_RequestProviderSetupCheck()
+end
+
+-- Independent of ProfileManager's refresh suppression; ApplySettings must not restart clocks.
+function DT:OnProfileBoundary()
+    RetireOrdinaryWork(self)
+    self:StopDiagnosticTrace("profile-change")
+    self:SyncAuraSounds()
+    self:_RetireProviderPrompt()
+    self:_RequestProviderSetupCheck()
+    self:ApplyWindMapSettings()
 end
 
 function DT:OnDisable()
@@ -3282,86 +6000,274 @@ function DT:OnDisable()
         for _, event in ipairs(BIGWIGS_EVENTS) do
             BigWigsLoader.UnregisterMessage(self, event)
         end
+        BigWigsLoader.UnregisterMessage(self, "BigWigs_BossModuleRegistered")
+        BigWigsLoader.UnregisterMessage(self, "BigWigs_ProfileUpdate")
     end
     if LibSpec then
         LibSpec.UnregisterGroup(self)
     end
     self:UnregisterEvent("ENCOUNTER_START")
     self:UnregisterEvent("ENCOUNTER_END")
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    self:_UnregisterTimelineEvent()
+    if KE.db and KE.db.UnregisterCallback then
+        KE.db.UnregisterCallback(self, "OnProfileChanged")
+        KE.db.UnregisterCallback(self, "OnProfileCopied")
+        KE.db.UnregisterCallback(self, "OnProfileReset")
+    end
+    RetireOrdinaryWork(self)
+    self:_RetireProviderPrompt()
+    self._providerSetupActive = false
+    self._providerSetupAnswered = nil
+    self._cueProviderNotice = nil
+    self._providerSetupHeaderNotice = nil
+    self._auraSoundsActive = false
+    if self._auraSounds then
+        self._auraSounds:RetireAll()
+        self._auraSounds = nil
+    end
+    self:_UpdateAuraSoundEvents(false)
     self:_UnregisterAbsorbEvent()
+    self:_ReleaseAllUnitCastEvents()
     self:_HideAllShieldBars()
     self:StopPhaseTracking()
-    self:StopAllBars()
+    self:HideSettingsBarPreviews()
+    self:HideSettingsTextPreviews()
+    self:HideSpellPreview()
+    self:HidePhasePreview()
+    self:StopDiagnosticTrace("module-disabled")
+end
+
+function DT:StartDiagnosticTrace(reset)
+    if not DEBUG_DT2 then KE:Print("NEED: enable the Dungeon Timers diagnostic build"); return end
+    local trace, reason = Trace.Start(self, reset)
+    if not trace then KE:Print("NEED: " .. reason); return end
+    KE:Print(string_format("DT trace %s: revision %d, %d rows saved, %d omitted.",
+        reason, self._timerStateRevision, #trace.store.rows, trace.store.omitted))
+end
+
+function DT:StopDiagnosticTrace(reason)
+    local trace = self._debugTrace
+    if not (trace and trace.active) then return end
+    trace:Stop(reason or "user")
+    KE:Print(string_format("DT trace stopped: %d rows saved, %d omitted. /reload to save to disk.",
+        #trace.store.rows, trace.store.omitted))
+end
+
+function DT:_SuppressConcurrentRestarts(inst)
+    if not inst.binding.suppressConcurrentRestart then return false end
+    if not State.IsScopeCurrent(self._state, inst.owner, inst.scope) then return false end
+    local instances = self._state.instancesByOwner[inst.owner]
+    for _, other in pairs(instances) do
+        local candidate, anchored = inst, other
+        if inst.anchorAt then candidate, anchored = other, inst end
+        if State.IsConcurrentRestart(candidate, anchored) then
+            State.Retire(self._state, candidate)
+            self:ReleaseInstancePresentations(candidate, false)
+            dprint(string_format("restart suppressed text=%s event=%s anchorEvent=%s",
+                tostring(candidate.label), tostring(candidate.timelineIdentity), tostring(anchored.anchorEventId)))
+            if candidate == inst then return true end
+        end
+    end
+    return false
 end
 
 function DT:EventCallback(event, ...)
+    local trace = self._debugTrace
+    if not (DEBUG_DT2 and trace and trace.active) then
+        self:_HandleProviderEvent(event, nil, ...)
+        return
+    end
+    local previousReceipt = trace.receipt
+    trace.receipt = trace:Provider(event, ...)
+    self:_HandleProviderEvent(event, nil, ...)
+    trace.receipt = previousReceipt
+end
+
+-- Held receipts keep the trace row of the provider call that delivered them.
+function DT:_CaptureTraceReceipt()
+    local trace = self._debugTrace
+    if not (DEBUG_DT2 and trace and trace.active) then return nil end
+    return trace:Capture()
+end
+
+-- A replayed receipt's decisions, its announcement included, belong to that
+-- row, not to the caller's.
+function DT:_ReplayProviderEvent(captured, announcement, event, receipt, ...)
+    local trace = self._debugTrace
+    if not (DEBUG_DT2 and trace and trace.active) then
+        if announcement then dprint(announcement) end
+        self:_HandleProviderEvent(event, receipt, ...)
+        return
+    end
+    local previousReceipt = trace.receipt
+    trace.receipt = Trace.Restore(captured, trace)
+    if announcement then dprint(announcement) end
+    self:_HandleProviderEvent(event, receipt, ...)
+    trace.receipt = previousReceipt
+end
+
+function DT:_ReplayTimerReplacement(receipt)
+    if TIMELINE_STATE_ACTIVE == nil or not (C_EncounterTimeline and C_EncounterTimeline.GetEventState) then return end
+    local id = State.ResolveTimelineEvent(self._state, receipt)
+    if not id then return end
+    local state = C_EncounterTimeline.GetEventState(id)
+    if issecretvalue and issecretvalue(state) then return end
+    if state ~= TIMELINE_STATE_ACTIVE then return end
+    self:_ReplayProviderEvent(receipt.payload.traceReceipt, "Timer replacement replayed event=" .. tostring(id),
+        "BigWigs_Timer", receipt, unpack(receipt.payload, 1, 9))
+end
+
+function DT:_HandleProviderEvent(event, receipt, ...)
+    if not self._activeEncounterId then self:_HoldPullReceipt(event, ...) end
     if event == "BigWigs_Timer" then
-        local addon, spellId, duration, _, text, count, icon = ...
-        local baseDur = tonumber(duration) or 0
-        local spellIdNum = tonumber(spellId)
-
-        -- Curated-only gate: BigWigs's own bars handle uncurated content; we don't double up.
-        local spellData = self:GetSpellInfo(spellIdNum)
-        if not spellData then
+        local owner, key, time, maxTime, text, counter, icon, isCooldown, isBarEnabled = ...
+        -- Consumed before any refusal, so no earlier StartBar can reach a later receipt.
+        local meta, ownerReason = self:_ResolveOwnerMeta(owner)
+        local evidenceNow = GetTime()
+        local evidence, startKey, startText, startTime, startCooldown, startEventId
+        if not receipt then
+            evidence, startKey, startText, startTime, startCooldown, startEventId =
+                State.TakeStartBar(self._state, meta and owner or nil, evidenceNow)
+        end
+        if not IsTimerPayloadReadable(key, time, text, icon, isCooldown, isBarEnabled) then
+            if evidence == "pending" then State.PoisonStartBars(self._state, owner, evidenceNow) end
             return
         end
 
-        -- Shield-bar arming: if this Timer is for a shieldBar parent (e.g. Vordaza's
-        -- Necrotic Convergence), schedule the channel-start watch to arm ~1s before
-        -- the cast lands. CHANNEL_START on bossN while armed → _ShowShieldBar.
-        -- Done BEFORE the spawnOnMessage / phantomFollowupOf early-returns so the
-        -- arming is independent of whichever Timer-rendering path this spell uses.
-        if spellData.shieldBar then
-            self:_ArmShieldChannelWatch(spellIdNum, baseDur)
+        if not meta then
+            dprint("Timer refused owner: " .. tostring(ownerReason))
+            return
         end
+        local identity
+        if receipt then
+            identity = receipt.timelineIdentity
+        else
+            identity = State.MatchStartBar(evidence, startKey, startText, startTime, startCooldown,
+                startEventId, key, text, time, isCooldown, isBarEnabled)
+        end
+        if identity == "refused" then State.PoisonStartBars(self._state, owner, evidenceNow) end
 
-        -- spawnOnMessage entries opt out of the BigWigs_Timer path entirely —
-        -- they're driven by BigWigs_Message below. LittleWigs may still fire a
-        -- Timer for the same spellId from a fallback handler we don't want to
-        -- react to (e.g. Crawth's FirestormApplied which doesn't fire in 12.0
-        -- but exists in source).
-        if spellData.spawnOnMessage then
+        local binding, bindReason = State.ResolveBinding(self._bindings, meta, self._activeEncounterId,
+            "Timer", key, isCooldown)
+        if not binding then
+            dprint("Timer refused binding: " .. tostring(bindReason))
             return
         end
 
-        -- phantomFollowupOf entries opt out of the Timer path for their own
-        -- spellId — they spawn as a side-effect of their PARENT's Timer (see
-        -- below). LittleWigs may also fire a Timer for the phantom's own
-        -- spellId from a fallback handler (e.g. SPELL_AURA_APPLIED) which we
-        -- want to ignore to avoid double-rendering.
-        if spellData.phantomFollowupOf then
+        local spellIdNum = binding.curationId
+        local now = receipt and receipt.sourceClock.receivedAt or GetTime()
+
+        -- The owner and the binding are this encounter's; the cue counts before
+        -- any later refusal or filter of its own row.
+        local cueEncounter = KE.EncounterData and KE.EncounterData[binding.encounterId]
+        local cueStage = cueEncounter and DT._StageCueStage(cueEncounter.stageCue, spellIdNum, time)
+        if cueStage then self:_NoteEncounterStage(cueStage) end
+
+        -- NextSlot needs an admitted scope; AdmitOwner reuses a live one so repeated
+        -- Timers keep the owner's slot generations valid.
+        local admitScope, admitReason = State.AdmitOwner(self._state, owner, self._activeEncounterId)
+        if not admitScope then
+            dprint("Timer refused admission: " .. tostring(admitReason))
             return
         end
 
-        -- Phantom-followup spawn: separate GUI-configurable spell entries that
-        -- share the parent's Timer lifecycle. Fires BEFORE the parent's own
-        -- disabled/role gates so the user can disable the parent (KNOCK) while
-        -- keeping the phantom (VULN) visible, or vice versa.
-        do
-            local phantoms = self:_CollectPhantomFollowups(spellIdNum)
-            if phantoms then
-                for i = 1, #phantoms do
-                    self:_SpawnPhantomFollowup(phantoms[i], icon)
+        -- The explicit contract refuses malformed input before conversion;
+        -- the legacy route keeps its coercion.
+        local receivedTime = time
+        if binding.policy ~= "estimated-impact" then receivedTime = tonumber(time) or 0 end
+        local remaining, span = DT._NormalizeSpan(binding.spanMode, receivedTime, maxTime)
+        if not remaining then
+            dprint("Timer refused span: " .. tostring(span))
+            return
+        end
+
+        local previous = State.Find(self._state, owner, text)
+        if previous and previous.state ~= "retired" and previous.binding.holdOverlapping then
+            dprint("Timer refused live overlap replacement")
+            return
+        end
+
+        -- Record ownership before filtering so later label-only callbacks cannot reach an older cue.
+        State.NotePublication(self._state, owner, text, binding)
+
+        -- Refuse a pilot label still awaiting a stop before any shield,
+        -- phantom, filter, admission, job or sound work for this receipt.
+        if binding.collisionPolicy then
+            local observed, obsReason = State.ObservePilotLabel(self._state, owner, self._activeEncounterId, text)
+            if not observed then
+                if not receipt and obsReason == "outstanding" then
+                    local held = State.HoldTimerReplacement(self._state, owner, text, binding, remaining, now, identity,
+                        { owner, key, time, maxTime, text, counter, icon, isCooldown, isBarEnabled,
+                            traceReceipt = self:_CaptureTraceReceipt() })
+                    if held then
+                        dprint("Timer replacement held event=" .. tostring(identity))
+                        return
+                    end
                 end
+                dprint("Timer refused awaiting-stop: " .. tostring(obsReason))
+                return
             end
         end
 
-        -- forceDuration override: replace BigWigs's reported duration with a curated one
-        -- (e.g. Backlash's actual buff is 20s but LittleWigs hardcodes 12.5s). Bar will
-        -- self-drain; _StopBarKey ignores BigWigs StopBar for these spells.
-        local forceDur = self:GetSpellForceDuration(spellIdNum)
-        if forceDur then baseDur = forceDur end
+        -- A filtered Timer receipt still replaces the cue's prior occurrence.
+        if binding.cueKey then
+            self:_EndCue(owner, binding.cueKey)
+            self._cueLabels[owner] = self._cueLabels[owner] or {}
+            self._cueLabels[owner][binding.cueKey] = text
+        end
 
-        -- iconOverride: swap BigWigs's icon for a curated texture (e.g. a more
-        -- recognizable icon than the default spell texture).
-        local iconOverride = self:GetSpellIconOverride(spellIdNum)
-        if iconOverride then icon = iconOverride end
+        -- Armed from the normalized receipt, before the parent's own gates.
+        local shield = self:GetSpellShieldBar(spellIdNum)
+        if shield then
+            self:_ArmShieldChannelWatch(owner, text, spellIdNum, remaining, span, now, shield.explicit)
+        end
+
+        -- Spawned before the parent's disabled/role gates: the phantom filters itself.
+        local phantoms = self._bindings.phantoms[binding.encounterId]
+            and self._bindings.phantoms[binding.encounterId][spellIdNum]
+        if phantoms then
+            for i = 1, #phantoms do
+                self:_SpawnPhantomFollowup(owner, phantoms[i], icon, now)
+            end
+        end
+
+        -- A cast-matched row reads its exact event at every provider stop.
+        local timelineIdentity
+        if binding.anchor == "timeline-finished" or binding.castMatch then
+            timelineIdentity = identity
+            dprint("Timer identity: " .. tostring(identity))
+        end
+        -- Read from the raw receipt, before the filters and the icon override below.
+        local mapData = self._windMap and self:_WindMapRead(binding, icon, counter)
+
+        local sequels = self._bindings.sequels[binding.encounterId]
+        local sequel = sequels and sequels[spellIdNum]
+        local queues = self._bindings.queues[binding.encounterId]
+        local queue = queues and queues[spellIdNum]
+        -- A same-label republish replaces the parent occurrence; the fresh slot
+        -- generation drops a child job or cue left from the old anchor.
+        -- A cue child is owned by the owner and the cue: no parent receipt ends it.
+        if sequel and not sequel.cueKey then
+            State.NextSlot(self._state, owner, "sequel", SequelSlotKey(text, sequel.key))
+        end
 
         if self:IsSpellDisabled(spellIdNum) then
-            dprint(string_format("Timer FILTERED text=%s reason=disabled player=%s",
-                tostring(text), tostring(self.playerRole)))
+            dprint(string_format("Timer FILTERED text=%s reason=disabled", tostring(text)))
+            if sequel or queue or mapData then
+                self:_StartTrackOnly(owner, text, binding, spellIdNum, remaining, span, now, timelineIdentity,
+                    mapData, not (sequel or queue))
+            end
             return
         end
+
+        -- Curated duration replaces the published one; ClassifyStop enforces the single-Stop exception.
+        local forceDur = self:GetSpellForceDuration(spellIdNum)
+        if forceDur then remaining, span = forceDur, forceDur end
+
+        -- iconOverride: swap BigWigs's icon for a curated texture.
+        local iconOverride = self:GetSpellIconOverride(spellIdNum)
+        if iconOverride then icon = iconOverride end
 
         -- Secondary uses curated role only (no user-override GUI yet).
         local primaryAllowed = self:ShouldShowSpellRole(spellIdNum)
@@ -3379,64 +6285,288 @@ function DT:EventCallback(event, ...)
         end
 
         if not primaryAllowed and not secondaryAllowed then
-            dprint(string_format("Timer FILTERED text=%s reason=role role=%s secRole=%s player=%s",
-                tostring(text),
-                tostring(self:GetSpellRole(spellIdNum)),
-                tostring(secondary and secondary.role),
-                tostring(self.playerRole)))
+            dprint(string_format("Timer FILTERED text=%s reason=role", tostring(text)))
+            if sequel or queue or mapData then
+                self:_StartTrackOnly(owner, text, binding, spellIdNum, remaining, span, now, timelineIdentity,
+                    mapData, not (sequel or queue))
+            end
             return
         end
 
-        local ext = self:GetSpellExtension(spellIdNum)
-        local total = baseDur + ext
+        local effective = self:GetSpellExtension(spellIdNum)
+        local effectiveBinding = self:_EffectiveBinding(binding, effective)
+
+        local inst, predecessor = State.Start(self._state, owner, text, effectiveBinding, remaining, span, now, primaryAllowed)
+        if not inst then
+            dprint("Timer refused start: " .. tostring(predecessor))
+            return
+        end
+        if predecessor then
+            self:ReleaseInstancePresentations(predecessor, false)
+        end
+        self:_LinkShieldWatch(owner, text, spellIdNum, inst)
+        inst.timelineIdentity = timelineIdentity
+        if binding.canceledStop then State.RecordPublishedStage(inst, (DT._ReadProviderStage(owner))) end
+        if self:_SuppressConcurrentRestarts(inst) then return end
+        self._presentations[inst] = {}
+        if binding.cueKey then
+            self._cueInstances[owner] = self._cueInstances[owner] or {}
+            self._cueInstances[owner][binding.cueKey] = inst
+        end
+        if effectiveBinding.ownsExpiry then self:_ArmOwnedExpiry(inst, now) end
+        if mapData then self:_WindMapAttach(inst, mapData) end
+        inst.receiptIcon = icon
+        if State.GateCovers(self._forecastGates[owner], spellIdNum, now) then
+            self._gateSuppressed[inst] = { silent = false }
+            dprint("Timer gated text=" .. tostring(text))
+            return
+        end
+
+        local extension = effectiveBinding.extension or 0
         local displayMode = self:GetSpellDisplay(spellIdNum)
         local displayText = self:GetSpellDisplayText(spellIdNum)
         local castDisplayText = self:GetSpellCastDisplayText(spellIdNum)
-        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s label=%s castLabel=%s mod=%s count=%s icon=%s primary=%s secondary=%s",
-            tostring(text),
-            tostring(spellId),
-            baseDur,
-            ext,
-            total,
-            displayMode,
-            tostring(displayText),
-            tostring(castDisplayText),
-            tostring(addon and addon.moduleName or addon),
-            tostring(count),
-            tostring(icon),
-            tostring(primaryAllowed),
-            tostring(secondaryAllowed)))
+        dprint(string_format("Timer text=%s spellId=%s remaining=%.2f span=%.2f ext=%.2f primary=%s secondary=%s",
+            tostring(text), tostring(spellIdNum), remaining, span, extension,
+            tostring(primaryAllowed), tostring(secondaryAllowed)))
 
         if primaryAllowed then
-            self:RenderBar(text, baseDur, ext, displayMode, icon, displayText, spellIdNum, castDisplayText, false)
+            local record = { instance = inst, generation = inst.generation, role = "primary", shown = false }
+            local frame = RenderPresentation(self, {}, record, remaining, extension, displayMode,
+                icon, displayText, spellIdNum, castDisplayText, false)
+            if frame then self._presentations[inst].primary = frame end
         end
         if secondaryAllowed and secondary then
-            local secText = secondary.displayText
-            local secMode = secondary.display or "text"
-            self:RenderBar(text .. SECONDARY_KEY_SUFFIX, baseDur, ext, secMode, icon, secText, spellIdNum, nil, true)
+            local secRecord = { instance = inst, generation = inst.generation, role = "secondary", shown = false }
+            local secFrame = RenderPresentation(self, {}, secRecord, remaining, extension,
+                secondary.display or "text", icon, secondary.displayText, spellIdNum, nil, true)
+            if secFrame then self._presentations[inst].secondary = secFrame end
         end
-    elseif event == "BigWigs_Message" then
-        -- Payload: (addon, key, color, text, icon, sound)
-        -- key is a plain spell ID (LittleWigs/BigWigs serialize them as ints)
-        -- for spell-keyed messages; can also be a string for custom options.
-        local _, key = ...
-        local spellIdNum = tonumber(key)
-        if spellIdNum then
-            self:_SpawnMessageBar(spellIdNum, key)
+        local presentations = self._presentations[inst]
+        if inst.binding.castMatch and inst.state ~= "retired"
+            and (inst.mapObserved or (presentations and (presentations.primary or presentations.secondary))) then
+            self:_WatchCastMatch(inst)
+        end
+    elseif event == "BigWigs_StartBar" then
+        -- Argument 10 (counting the message name) is a custom timeline bar's event
+        -- ID; argument 9 is another field and is nil in that shape.
+        if not self._activeEncounterId then return end
+        local owner, key, text, time, _, isCooldown, _, otherEventId, timelineEventId = ...
+        local now = GetTime()
+        if not self:_ResolveOwnerMeta(owner) then
+            State.PoisonStartBars(self._state, nil, now)
+            return
+        end
+        local accepted = not (issecretvalue and (issecretvalue(key) or issecretvalue(text)
+            or issecretvalue(time) or issecretvalue(isCooldown) or issecretvalue(otherEventId)
+            or issecretvalue(timelineEventId)))
+        accepted = accepted and otherEventId == nil and type(isCooldown) == "boolean"
+        local outcome = State.NoteStartBar(self._state, owner, self._activeEncounterId, now, accepted,
+            key, text, time, isCooldown, timelineEventId)
+        dprint("StartBar evidence: " .. tostring(outcome))
+    elseif event == "BigWigs_CastTimer" then
+        -- No CastTimer binding is installed, so this always refuses; never routed through Timer's positions.
+        local owner, key, time, _, text = ...
+        -- A cast bar's StartBar never carries identity; taken first so it cannot reach a later receipt.
+        local meta, ownerReason = self:_ResolveOwnerMeta(owner)
+        State.TakeStartBar(self._state, meta and owner or nil, GetTime())
+        if issecretvalue and (issecretvalue(key) or issecretvalue(time)
+            or issecretvalue(text)) then
+            return
+        end
+        if not meta then
+            dprint("CastTimer refused owner: " .. tostring(ownerReason))
+            return
+        end
+        local binding, bindReason = State.ResolveBinding(self._bindings, meta, self._activeEncounterId,
+            "CastTimer", key, nil)
+        if not binding then
+            dprint("CastTimer refused binding: " .. tostring(bindReason))
+            return
+        end
+    elseif event == "BigWigs_PauseBar" then
+        local owner, text = ...
+        if issecretvalue and issecretvalue(text) then return end
+        local meta = self:_ResolveOwnerMeta(owner)
+        if not meta then return end
+        local now = GetTime()
+        -- Pausing an exhausted clock would incorrectly extend its ending interval on resume.
+        local pauseTarget = State.FindPublished(self._state, owner, text)
+        if pauseTarget and pauseTarget.binding.cueKey then self:_ExpireTimerCue(pauseTarget, now) end
+        local inst, changed = State.Pause(self._state, owner, text, now)
+        if inst and changed then
+            self:_OnSourcePauseChanged(inst, true, now)
+        end
+        local watch = self._shieldWatchByLabel[owner] and self._shieldWatchByLabel[owner][text]
+        if watch then
+            local watchChanged = State.PauseClock(watch.clock, now)
+            if watchChanged == true then
+                watch.armingHeld = self._shieldArming[watch.spellId]
+                self._shieldArming[watch.spellId] = false
+                PauseJobHandle(self, watch.armJob)
+                PauseJobHandle(self, watch.disarmJob)
+            end
+        end
+    elseif event == "BigWigs_ResumeBar" then
+        local owner, text = ...
+        if issecretvalue and issecretvalue(text) then return end
+        local meta = self:_ResolveOwnerMeta(owner)
+        if not meta then return end
+        local now = GetTime()
+        local inst, changed = State.Resume(self._state, owner, text, now)
+        if inst and changed then
+            self:_OnSourcePauseChanged(inst, false, now)
+        end
+        local watch = self._shieldWatchByLabel[owner] and self._shieldWatchByLabel[owner][text]
+        if watch then
+            local watchChanged = State.ResumeClock(watch.clock, now)
+            if watchChanged == true then
+                self._shieldArming[watch.spellId] = watch.armingHeld
+                watch.armingHeld = nil
+                ResumeJobHandle(self, watch.armJob, now)
+                ResumeJobHandle(self, watch.disarmJob, now)
+            end
         end
     elseif event == "BigWigs_StopBar" then
-        local _, text = ...
-        dprint("StopBar text=" .. tostring(text))
-        self:StopBar(text)
-    elseif event == "BigWigs_StopBars" then
-        local addon = ...
-        dprint("StopBars mod=" .. tostring(addon and addon.moduleName or addon))
-        self:StopAllBars()
-        self:_HideAllShieldBars()
-    elseif event == "BigWigs_OnBossDisable" then
-        local addon = ...
-        dprint("OnBossDisable mod=" .. tostring(addon and addon.moduleName or addon))
-        self:StopAllBars()
-        self:_HideAllShieldBars()
+        local owner, text = ...
+        if issecretvalue and issecretvalue(text) then return end
+        local meta = self:_ResolveOwnerMeta(owner)
+        if not meta then return end
+        local now = GetTime()
+        -- Clear the awaiting-stop entry before the no-instance return: a
+        -- valid stop frees its label even when filtering or expiry already
+        -- removed the instance.
+        State.ResolveAwaitingStop(self._state, owner, text)
+        -- An expired cue still owns the stop; do not fall back to an older same-label row.
+        local inst, publishedCue = State.FindPublished(self._state, owner, text)
+        if not inst then
+            self:_ResolveShieldWatchOnStop(owner, text, nil, now)
+            if publishedCue then self:_EndCueOccurrence(owner, publishedCue, text) end
+            dprint(string_format("StopBar text=%s no instance at=%.3f", tostring(text), now))
+            return
+        end
+        local wasPaused = inst.state == "paused"
+        local forceDur = self:GetSpellForceDuration(inst.binding.curationId)
+        local timelineState, eventId, stateReason, queueAllowance
+        if inst.binding.anchor or inst.binding.castMatch then
+            timelineState, eventId, stateReason, queueAllowance = self:_ReadTimelineState(inst)
+        end
+        local providerStage
+        if inst.binding.canceledStop and timelineState == "canceled" then
+            providerStage = DT._ReadProviderStage(owner)
+        end
+        local outcome = State.ClassifyStop(inst, now, forceDur, timelineState, queueAllowance, providerStage)
+        local replacement = State.TakeTimerReplacement(self._state, inst, now, outcome, timelineState, eventId)
+        if inst.mapObserved then self:_WindMapStop(inst, outcome, timelineState) end
+        if inst.binding.castMatch then
+            State.NoteCastMatchStop(inst, timelineState)
+            if inst.castMatchClosed and inst.waitBound ~= nil then self:_EndCastWait(inst, now) end
+        end
+        dprint(string_format("StopBar text=%s outcome=%s event=%s state=%s wasPaused=%s at=%.3f elapsed=%.3f",
+            tostring(text), tostring(outcome), tostring(eventId), tostring(timelineState or stateReason),
+            tostring(wasPaused), now, now - inst.sourceClock.receivedAt))
+        self:_ResolveShieldWatchOnStop(owner, text, outcome, now)
+        if outcome == "ignore" then
+            dprint("StopBar ignored (forceDuration self-drains or already anchored): " .. tostring(text))
+        elseif outcome == "retire" then
+            State.EndForecastWait(inst)
+            State.Retire(self._state, inst)
+            self:ReleaseInstancePresentations(inst, true)
+        elseif outcome == "enter-legacy-cast" then
+            local fill = State.BeginLegacyCast(inst, now, inst.binding.extension)
+            self:_ApplyCastPhaseVisual(inst, fill)
+        elseif outcome == "legacy-followup-and-retire" then
+            if State.TakeFollowup(self._state, inst) then
+                local presentations = self._presentations[inst]
+                self:_SpawnPostCastBar(inst, presentations and presentations.primary)
+            end
+            State.Retire(self._state, inst)
+            self:ReleaseInstancePresentations(inst, true)
+        elseif outcome == "anchor" or outcome == "resume-and-anchor" then
+            -- (a) the hold ends before any job can resume against the anchor;
+            -- (b) a paused instance resumes in full (clock and state) at the
+            -- stop instant, since the publisher never resumes a Finished bar;
+            -- (c) anchor; (d) move job deadlines before resuming overdue work.
+            self:_CancelHold(inst)
+            if outcome == "resume-and-anchor" then
+                State.Resume(self._state, owner, text, now)
+            end
+            local total, anchorReason = State.Anchor(inst, now, eventId)
+            if total then
+                self:_SuppressConcurrentRestarts(inst)
+                dprint(string_format("anchor text=%s event=%s anchorElapsed=%.3f total=%.3f",
+                    tostring(text), tostring(eventId), inst.anchorElapsed, total))
+                if self._gateSuppressed[inst] then self:_RestoreGatedPresentation(inst, now) end
+                self:_OnInstanceAnchored(inst, total, now)
+                if outcome == "resume-and-anchor" then
+                    self:_OnSourcePauseChanged(inst, false, now)
+                end
+                self:_ArmCastConfirm(inst, now)
+                self:_BeginCastWait(inst, now)
+                self:_EndCuesOnAnchor(inst)
+                self:_ScheduleSequel(inst, now)
+                self:_ApplyQueuedForecast(inst, now)
+                -- A refused restore just retired the instance; a window opened now could
+                -- never time out, because RunJob drops a retired instance's job.
+                if DEBUG_DT2 and not inst.trackOnly and inst.state ~= "retired" then
+                    self:_OpenObservationWindow(inst, now)
+                end
+            else
+                dprint("anchor refused: " .. tostring(anchorReason))
+            end
+            -- The owned expiry was just canceled, so a tracking-only parent has
+            -- nothing left to time once its Finished is resolved. An observed one
+            -- keeps the retire job its anchor armed.
+            if inst.trackOnly and not self._observedRetireJobs[inst] then
+                State.Retire(self._state, inst)
+                self:ReleaseInstancePresentations(inst, false)
+            end
+        elseif outcome == "keep-estimate" then
+            self:_SuppressPendingShowSound(inst)
+            State.EndForecastWait(inst)
+        elseif outcome == "retain-canceled" then
+            -- A canceled occurrence starts nothing an anchor would; its jobs keep their deadlines.
+            State.RetainEstimate(inst, "canceled")
+            self:_SuppressPendingShowSound(inst)
+        elseif outcome == "retain-finished" then
+            State.RetainEstimate(inst, "finished")
+        end
+        if replacement then self:_ReplayTimerReplacement(replacement) end
+    elseif event == "BigWigs_StopBars" or event == "BigWigs_OnBossDisable" then
+        local owner = ...
+        local meta = self:_ResolveOwnerMeta(owner)
+        if not meta then return end
+        dprint("StopBars/OnBossDisable owner=" .. tostring(owner))
+        local retired = State.RetireOwner(self._state, owner)
+        for i = 1, #retired do
+            self:ReleaseInstancePresentations(retired[i], false)
+        end
+        ReleaseOwnerWork(self, owner)
+        self:_HideOwnerShieldBars(owner)
+        if self._windMap then self:_WindMapOwnerStopped(owner) end
+    elseif event == "BigWigs_Message" then
+        local owner, key, message = ...
+        if not IsMessagePayloadReadable(key, message) then return end
+        local meta, ownerReason = self:_ResolveOwnerMeta(owner)
+        if not meta then
+            dprint("Message refused owner: " .. tostring(ownerReason))
+            return
+        end
+        local binding, bindReason = State.ResolveBinding(self._bindings, meta, self._activeEncounterId,
+            "Message", key, nil)
+        if not binding then
+            dprint("Message refused binding: " .. tostring(bindReason))
+            return
+        end
+        local scope, scopeReason = State.AdmitOwner(self._state, owner, self._activeEncounterId)
+        if not scope then
+            dprint("Message refused admission: " .. tostring(scopeReason))
+            return
+        end
+        if binding.cueKey then
+            self:_OnCueMessage(owner, binding, GetTime(), message)
+        else
+            self:_SpawnMessageBar(owner, binding, key, GetTime())
+        end
     end
 end

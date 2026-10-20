@@ -2246,6 +2246,16 @@ local Defaults = {
                 anchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
             },
+
+            WindMap = {
+                Enabled = false,
+                Scale = 1,
+                Opacity = 0.9,
+                Strata = "MEDIUM",
+                AnchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Position = DefaultPosition(-330, 120),
+            },
         },
 
         -----------------------------------------------------------------

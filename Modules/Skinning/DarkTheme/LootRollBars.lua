@@ -27,7 +27,7 @@ local GetLootRollTimeLeft = GetLootRollTimeLeft
 local IsModifiedClick = IsModifiedClick
 local IsShiftKeyDown = IsShiftKeyDown
 local RollOnLoot = RollOnLoot
-local GetItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
+local GetItemInfo = C_Item.GetItemInfo
 local C_Timer = C_Timer
 
 local NEED, GREED, PASS = NEED, GREED, PASS

@@ -223,6 +223,7 @@ read_globals = {
 
     -- Timer
     "C_Timer",
+    "C_EncounterTimeline",
 
     -- Sound
     "PlaySoundFile", "StopSound", "PlaySound",
@@ -254,10 +255,8 @@ read_globals = {
 
     -- Item / Container
     "C_Item", "C_Container", "Item", "ItemLocation",
-    "GetItemInfo", "GetItemInfoInstant", "GetItemSpell", "GetItemCount",
     "GetInventoryItemID", "GetInventoryItemDurability", "GetInventoryItemTexture", "GetInventoryItemLink",
-    "GetDetailedItemLevelInfo",
-    "GetInventoryItemQuality", "GetItemQualityColor", "ITEM_QUALITY_COLORS",
+    "GetInventoryItemQuality", "ITEM_QUALITY_COLORS",
     "GetItemGem", -- deprecated compat shim (C_Item.GetItemGem), Blizzard_DeprecatedItemScript
     "RegisterAttributeDriver", "UnregisterAttributeDriver",
     "ClearCursor", "ResetCursor", "SetCursor",
@@ -276,7 +275,7 @@ read_globals = {
     "CancelUnitBuff",
 
     -- Gem Socketing
-    "C_ItemSocketInfo", "SocketInventoryItem", "AcceptSockets", "CloseSocketInfo",
+    "C_ItemSocketInfo", "SocketInventoryItem",
 
     -- PaperDoll layout
     "PaperDollFrame_SetLevel", "PaperDollFrame_UpdateStats",
@@ -308,7 +307,7 @@ read_globals = {
 
     -- Currency / Money
     "C_CurrencyInfo",
-    "GetMoney", "GetCoinTextureString",
+    "GetMoney",
 
     -- Tooltip
     "GameTooltip", "GameTooltip_Hide", "GameTooltip_ShowCompareItem",
@@ -451,7 +450,7 @@ read_globals = {
     "LibStub",
 
     -- BigWigs (optional dependency)
-    "BigWigs", "BigWigsLoader",
+    "BigWigs", "BigWigsLoader", "BigWigsAPI",
 
     -- ElvUI (optional dependency)
     "ElvUI",
