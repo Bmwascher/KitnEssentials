@@ -38,6 +38,7 @@ local function RegisterClassPage(pageId, tabs)
 end
 
 RegisterClassPage("ClassToolsAllClasses", {
+    { id = "CustomCooldowns", label = "Custom Cooldowns" },
     { id = "DoTTracker", label = "DoT Tracker" },
     { id = "StanceText", label = "Missing Forms" },
     { id = "Recuperate", label = "Recuperate" },

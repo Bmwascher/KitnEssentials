@@ -3463,6 +3463,13 @@ function L.loadShamanProcRules(overrides)
     return helpers.loadModule("Modules/Combat/ClassTools/ShamanProcRules.lua", {})
 end
 
+-- Modules/Combat/ClassTools/CustomCooldownsRules.lua. Pure logic: nothing to
+-- stub. Returns KE.
+function L.loadCustomCooldownsRules(overrides)
+    installMock(overrides, {})
+    return helpers.loadModule("Modules/Combat/ClassTools/CustomCooldownsRules.lua", {})
+end
+
 -- Core/CDMIcons.lua. The info function is looked up at call time, so a spec
 -- passes its own C_CooldownViewer per load; viewers are plain tables the spec
 -- puts on _G. Returns KE.

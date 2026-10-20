@@ -1089,6 +1089,7 @@ local PREVIEW_MODULES = {
     "DoTTracker",
     "AlterTime",
     "ShamanProcCooldowns",
+    "CustomCooldowns",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -1103,7 +1104,7 @@ local SECTION_PREVIEW_MODULES = {
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
         "DisintegrateTicks", "StasisTracker",
         "Recuperate", "TimeSpiral", "PIAssist", "DoTTracker", "AlterTime",
-        "ShamanProcCooldowns",
+        "ShamanProcCooldowns", "CustomCooldowns",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",

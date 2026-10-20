@@ -448,6 +448,11 @@ function NMA:CreateFrame_()
     frame:SetSize(220, 40)
     frame:Hide()
     self.frame = frame
+    -- Attached, the login anchor pass must not put the frame back on its own
+    -- Player Frame position.
+    KE:RegisterAnchorRepair(frame, function()
+        return not self:IsAttached() and self.db.anchorFrameType == "PLAYERFRAME"
+    end, function() self:ApplyPosition() end)
 end
 
 function NMA:GetSlot(index)
