@@ -76,6 +76,8 @@ CC.previewing = false
 CC.applyQueued = false
 CC.editModeRegistered = false
 CC.buildTarget = 0
+CC.runTarget = 0
+CC.buildQueued = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -239,12 +241,12 @@ function CC:GeometrySource()
     return self.applied
 end
 
--- The cap, the name, the position and strata are always current: a cap change
--- builds or releases rows at once, and the name window and the anchor are ours.
+-- The shown count, the name, the position and strata are always current: the
+-- shown count changes no row, and the name window and the anchor are ours.
 function CC:Box(src)
     local db = self.db
     boxInput.MaxHeight = ScreenHeight()
-    boxInput.MaxEnemies = db.MaxEnemies
+    boxInput.ShownRows = Rules.NormalizeShown(db.ShownRows)
     boxInput.NameEnabled = db.NameEnabled
     boxInput.NameWidth = db.NameWidth
     boxInput.NameFontSize = db.NameFontSize
@@ -361,7 +363,7 @@ end
 -- The cap follows the rows that exist, so no plate is handed a slot before its
 -- container does.
 function CC:UpdateCap()
-    self.slots:SetCap(math_min(self.db.MaxEnemies or 5, #self.rows))
+    self.slots:SetCap(math_min(Rules.TRACKED_ENEMIES, #self.rows))
 end
 
 function CC:EnsureSlots()
@@ -371,6 +373,8 @@ function CC:EnsureSlots()
         cap = 0,
         onTake = function(slot, unit) return CC:Take(slot, unit) end,
         onRelease = function(slot, unit) CC:Release(slot, unit) end,
+        -- A stop reports a scan too, so a tracker turning off builds nothing.
+        onScanDone = function() if CC.active then CC:RaiseBuildTarget() end end,
         unitEvents = UNIT_EVENTS,
         onUnitEvent = function(slots, event, unit) CC:OnPlateUnitEvent(slots, event, unit) end,
     })
@@ -383,14 +387,15 @@ end
 ---------------------------------------------------------------------------------
 -- Anchor
 ---------------------------------------------------------------------------------
--- Clamped and sized to the largest stack that can draw, up to the screen's
--- height: a clamp holds a frame's own rectangle, not its children's, and the
--- chain's size is secret.
+-- Clamped and sized to the shown rows, up to the screen's height: a clamp holds
+-- a frame's own rectangle, not its children's, and the chain's size is secret.
+-- Rows past the box are cut off and move into it as the rows above collapse.
 function CC:CreateAnchor()
     if self.anchor then return end
     local anchor = CreateFrame("Frame", "KE_CCTrackerAnchor", UIParent)
     anchor:SetSize(1, 1)
     anchor:SetClampedToScreen(true)
+    anchor:SetClipsChildren(true)
     anchor:EnableMouse(false)
     anchor:Hide()
     measureFS = anchor:CreateFontString(nil, "BACKGROUND")
@@ -487,17 +492,40 @@ function CC:Apply()
         KE:Print("[CC] auras restricted: row changes wait for the drain")
     end
     self:UpdateCap()
-    self:RunBuild(db.MaxEnemies or 5)
+    self:RaiseBuildTarget()
     self:UpdateLive()
 end
 
--- The runner only raises its target, so a lower cap restarts the walk: it
--- passes the rows already built in one frame and stops at the new cap. Rows
--- above it stay, released and unused, until /reload.
-function CC:RunBuild(target)
-    if target < self.buildTarget then self.runner:Cancel() end
-    self.buildTarget = target
-    self.runner:Run(target)
+local function StartBuild()
+    CC.buildQueued = false
+    if not CC.active then return end
+    CC.runTarget = CC.buildTarget
+    CC.runner:Run(CC.buildTarget)
+end
+
+-- A frame cannot be destroyed, so built rows are kept for reuse and the target
+-- only rises; each scan keeps it a few rows past the highest held enemy.
+-- An idle runner builds as soon as it is run, possibly in the frame its last
+-- walk just built in, so it is started on the next frame; a walking one only
+-- takes the higher target. Either way no frame builds two rows.
+function CC:RaiseBuildTarget()
+    local highest = 0
+    for slot = self.slots:Cap(), 1, -1 do
+        if self.slots:UnitOf(slot) then
+            highest = slot
+            break
+        end
+    end
+    local want = Rules.BuildTarget(highest)
+    if want <= self.buildTarget then return end
+    self.buildTarget = want
+    if self.runner:Built() < self.runTarget then
+        self.runTarget = want
+        self.runner:Run(want)
+    elseif not self.buildQueued then
+        self.buildQueued = true
+        C_Timer.After(0, StartBuild)
+    end
 end
 
 function CC:UpdateLive()
@@ -554,6 +582,7 @@ function CC:Deactivate()
     self.active = false
     if self.runner then self.runner:Cancel() end
     self.buildTarget = 0
+    self.runTarget = 0
     -- A refused build blocks every later row; the next activation retries.
     self.failed = nil
     if self.slots then self.slots:Stop() end
@@ -611,6 +640,15 @@ function CC:ApplySettings()
     if not self:IsEnabled() or self.applyQueued then return end
     self.applyQueued = true
     C_Timer.After(0, ApplyQueued)
+end
+
+-- The shown count changes only the box and the preview, never a row.
+function CC:ApplyShown()
+    if not self:IsEnabled() then return end
+    self:UpdateDB()
+    if not self.active then return end
+    self:ApplyAnchorPosition()
+    if self.previewing then self:PaintSamples() end
 end
 
 function CC:OnEnable()
@@ -677,7 +715,7 @@ function CC:PaintSamples()
     local box = self:Box(db)
     local corner = box.corner
     local edge = up and "BOTTOMRIGHT" or "TOPRIGHT"
-    local shown = math_min(#SAMPLES, db.MaxEnemies or 5)
+    local shown = math_min(#SAMPLES, Rules.NormalizeShown(db.ShownRows))
     local nameOn = db.NameEnabled ~= false
     local threshold = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold)
     for k, data in ipairs(SAMPLES) do

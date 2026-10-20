@@ -224,12 +224,12 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     card3:AddRow(row3a, Theme.rowHeight)
 
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Max Enemies", {
-        min = 1, max = 40, step = 1,
-        value = db.MaxEnemies or 5,
+    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemy CCs Shown", {
+        min = 1, max = Rules.TRACKED_ENEMIES, step = 1,
+        value = Rules.NormalizeShown(db.ShownRows),
         callback = function(value)
-            db.MaxEnemies = value
-            ApplySettings()
+            db.ShownRows = value
+            if CC then CC:ApplyShown() end
         end,
     }), 0.5)
     row3b:AddWidget(GUIFrame:CreateDropdown(row3b, "Grow Direction", {
@@ -241,7 +241,8 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card3:AddRow(row3b, Theme.rowHeight)
-    card3:AddNote("The stack stays on screen, Max Enemies rows tall: lower it near a screen edge.")
+    card3:AddNote("Up to " .. Rules.TRACKED_ENEMIES .. " enemies are tracked. This many show at once; " ..
+        "the rest come into view as shown CCs end. The stack stays on screen: lower it near a screen edge.")
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
