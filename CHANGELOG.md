@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.1
+
+### Pet Status Text
+
+- Demonology accepts the Felguard or the Felhunter in every instance, raids
+  and keys included, and shows WRONG PET only for another demon
+
+---
+
 ## v4.13.0
 
 Season 2 Dungeon Timers, Custom Cooldowns, Divine Arbiter and Raid
