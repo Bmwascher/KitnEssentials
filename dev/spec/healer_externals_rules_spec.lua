@@ -34,7 +34,6 @@ describe("HealerExternalsRules.Entries", function()
             return out
         end
         local off = { CooldownOff = { ["healer:10:1"] = true } }
-        local function typed(value) return { CooldownSeconds = { ["healer:11:2"] = value } } end
         local cases = {
             { name = "table order, listed lengths", spec = 10, db = {},
               want = { { 1, "healer:10:1", 180, false }, { 4, "healer:10:4", R.CD_MAX, false } } },
@@ -42,17 +41,12 @@ describe("HealerExternalsRules.Entries", function()
               want = { { 4, "healer:10:4", R.CD_MAX, false } } },
             { name = "switched off, editor list", spec = 10, db = off, all = true,
               want = { { 1, "healer:10:1", 180, true }, { 4, "healer:10:4", R.CD_MAX, false } } },
-            { name = "typed, floored", spec = 11, db = typed(61.7), want = { { 2, "healer:11:2", 61, false } } },
-            { name = "typed below the floor", spec = 11, db = typed(CD.CD_MIN - 2),
-              want = { { 2, "healer:11:2", CD.CD_MIN, false } } },
-            { name = "typed far above the cap", spec = 11, db = typed(CD.CD_MAX * 10),
-              want = { { 2, "healer:11:2", R.CD_MAX, false } } },
             { name = "no row", spec = 99, db = {}, want = {} },
         }
         for _, case in ipairs(cases) do
             assert.are.same(case.want, shape(R.Entries(case.spec, case.db, case.all)), case.name)
         end
-        assert.is_true(CD.Unit(R.Entries(11, typed(CD.CD_MAX * 10))[1].cd) <= 2, "door bound")
+        assert.is_true(CD.Unit(R.Entries(10, {})[2].cd) <= 2, "door bound")
     end)
 end)
 

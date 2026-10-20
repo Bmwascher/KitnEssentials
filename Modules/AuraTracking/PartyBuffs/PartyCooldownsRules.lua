@@ -34,26 +34,30 @@ end
 
 function Rules.CooldownKey(specID, castID) return specID .. ":" .. castID end
 
--- TalentsFor's key for a cast's length rule, apart from its show rule.
-function Rules.LengthKey(castID) return "len:" .. castID end
+-- A spec list item: a cast, or { cast, seconds, charges = n }.
+function Rules.UnpackItem(item)
+    if type(item) == "table" then return item[1], item[2], item.charges end
+    return item, nil, nil
+end
 
 function Rules.TrinketKey(spellID) return "trinket:" .. spellID end
 
--- A typed length, floored and clamped, or nil when it is not a number.
+-- A length, floored and clamped, or nil when it is not a number.
 function Rules.ClampSeconds(value)
     value = tonumber(value)
     if not value or value ~= value then return nil end
     return math_floor(math_max(Rules.CD_MIN, math_min(Rules.CD_MAX, value)))
 end
 
--- One cooldown entry: the typed length over the listed one, both clamped.
-local function Entry(castID, spell, key, listed, typed, isOff)
+-- One cooldown entry at its listed length, clamped, with the charges its spec
+-- always gives.
+local function Entry(castID, spell, key, listed, isOff, charges)
     return {
         id = castID, key = key, spell = spell, kind = spell.kind,
         buffs = spell.buffs, short = spell.short, active = spell.active,
         listed = listed,
-        cd = Rules.ClampSeconds(typed) or Rules.ClampSeconds(listed),
-        typed = Rules.ClampSeconds(typed) ~= nil,
+        cd = Rules.ClampSeconds(listed),
+        charges = charges,
         off = isOff,
     }
 end
@@ -73,7 +77,7 @@ function Rules.SpellList(specID, db, all)
     local source = data.SPECS[specID]
     if not source then return out end
     db = Table(db)
-    local off, seconds = Table(db.CooldownOff), Table(db.CooldownSeconds)
+    local off = Table(db.CooldownOff)
     local order = Table(db.CooldownOrder)[specID]
     local rank
     if type(order) == "table" then
@@ -83,13 +87,12 @@ function Rules.SpellList(specID, db, all)
         end
     end
     for i, item in ipairs(source) do
-        local castID, talented = item, nil
-        if type(item) == "table" then castID, talented = item[1], item[2] end
+        local castID, talented, charges = Rules.UnpackItem(item)
         local spell = data.SPELLS[castID]
         local key = Rules.CooldownKey(specID, castID)
         local isOff = Rules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
-            local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
+            local entry = Entry(castID, spell, key, talented or spell.cd, isOff, charges)
             entry.at = rank and (rank[castID] or #order + i) or i
             out[#out + 1] = entry
         end
@@ -180,19 +183,18 @@ end
 
 -- slots holds slot 13's and slot 14's { item, spell }; lengths, the read use
 -- cooldown per item. A trinket gets a cell when its use spell is a switched-on
--- row of the Trinkets list and a length is known, the typed one first.
+-- row of the Trinkets list and its length is known.
 function Rules.TrinketEntries(slots, lengths, db)
     local out = {}
     db = Table(db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
-    local seconds = Table(db.CooldownSeconds)
     for i = 1, 2 do
         local slot = slots[i]
         local spellID = slot and slot.spell
         if spellID and listed[spellID] then
             local key = Rules.TrinketKey(spellID)
             -- Every length is clamped to CD_MAX: the door bound assumes u <= 4.
-            local cd = Rules.ClampSeconds(seconds[key]) or Rules.ClampSeconds(lengths[slot.item])
+            local cd = Rules.ClampSeconds(lengths[slot.item])
             if cd then
                 out[#out + 1] = {
                     id = spellID, item = slot.item, key = key, kind = "trinket",
@@ -210,6 +212,8 @@ end
 local math_abs = math.abs
 local math_ceil = math.ceil
 local pcall = pcall
+local table_concat = table.concat
+local tostring = tostring
 
 -- A stamp is one of the 255 values k / 255 the latch carries exactly; 254
 -- steps of u seconds make one roll period.
@@ -218,35 +222,56 @@ Rules.CODES = 254
 Rules.LINGER = 4
 Rules.DOOR_SAMPLES = { 0, 1, 48, 85, 127, 200, 254, 255 }
 Rules.DOOR_PASSES = 16
--- A secret read passes the stamp through the client 2 times, 4 with a short
--- sensor: up to 20320 times over a 900-second cooldown's roll period. At
--- 0.5 / (1020 * 1270), just over 3.8598e-7, the drift could reach half a strip
--- line; keep the slack at 3.85e-7 or less. A group tracker passes it up to 2
--- times per watched unit: at 5 units and lengths of 508 seconds or less its
--- own ceiling is higher, 6.17e-7.
+-- A secret read passes the stamp through the client up to 2 times, 4 with a
+-- short sensor, at up to 5 reads a second; a charge cell's read adds 2 and
+-- its tick 5 a second. Over one roll period the drift stays under half a
+-- strip line while DOOR_SLACK <= 8 / (64770 * passes a second * u^2):
+-- 3.86e-7 for a 900-second cell with a short sensor, 3.92e-7 for a charge
+-- cell with one at CHARGE_CD_MAX. A group tracker passes it up to 2 times per
+-- watched unit, 2 more with charges: at 5 units and 508 seconds or less,
+-- 6.18e-7, and 4.75e-7 with charges.
 Rules.DOOR_SLACK = 3e-7
 
 function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
 
+-- What a cell's count is kept by: its buffs, proc length, charges and code
+-- unit. A new length in the same unit keeps the stamps valid, so the count
+-- carries on.
+function Rules.TrackerKey(e)
+    return table_concat(e.buffs, ",") .. "/" .. tostring(e.short) .. "/" .. tostring(e.charges)
+        .. "/" .. Rules.Unit(e.cd)
+end
+
 -- Two rolling slots, so a new use can stamp while an older one still counts.
 -- A slot's c is its stamp and v its visibility; either may hold a secret.
--- A multi tracker reads a list of answers, one per watched unit.
-function Rules.NewTracker(cd, hasShort, multi)
+-- A multi tracker reads a list of answers, one per watched unit. A charge
+-- tracker (charges 2) recharges one slot after the other: b is set while a
+-- second use waits behind the running recharge, and a0, a1, a2 are the
+-- alphas of the 0, 1 and 2 count digits.
+function Rules.NewTracker(cd, hasShort, multi, charges)
     local u = Rules.Unit(cd)
-    return {
+    local t = {
         cd = cd, u = u, P = Rules.CODES * u, cur = 1, primed = false, hasShort = hasShort == true,
         multi = multi == true,
         slot = { { c = 1, v = 0, epoch = 0 }, { c = 1, v = 0, epoch = 0 } },
     }
+    if type(charges) == "number" and charges >= 2 then
+        t.charges, t.b, t.a0, t.a1, t.a2 = 2, 0, 0, 0, 1
+    end
+    return t
 end
 
--- Back to ready; the next read records without stamping.
+-- Back to ready, both charges full; the next read records without stamping.
 function Rules.Clear(t, n)
     for k = 1, 2 do
         local sl = t.slot[k]
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
     t.cur, t.primed, t.prev, t.prevShort, t.quietTo = 1, false, nil, nil, nil
+    if t.charges then
+        t.b, t.a0, t.a1, t.a2 = 0, 0, 0, 1
+        t.f1, t.f2, t.p1, t.p2, t.fRead, t.legacy, t.lb = nil, nil, nil, nil, nil, nil, nil
+    end
 end
 
 function Rules.Roll(t, n)
@@ -257,9 +282,12 @@ function Rules.Roll(t, n)
     return true
 end
 
+-- Code 0 is a fresh slot's value, which a charge tracker reads as finished,
+-- so its stamps start at code 1.
 function Rules.Stamp(t, n)
     local code = math_floor((n - t.slot[t.cur].epoch) / t.u)
-    if code < 0 then code = 0 elseif code > Rules.CODES then code = Rules.CODES end
+    local low = t.charges and 1 or 0
+    if code < low then code = low elseif code > Rules.CODES then code = Rules.CODES end
     return (255 - code) / 255
 end
 
@@ -296,11 +324,20 @@ function Rules.StartCast(t, n)
     t.quietTo = n + Rules.CAST_QUIET
 end
 
--- A preview sample: cooling at n with t.loop seconds left.
+local function NeverSecret() return false end
+
+-- A preview sample: cooling at n with t.loop seconds left; a charge sample
+-- shows no charge left.
 function Rules.StartLoop(t, n)
     local start = n - (t.cd - t.loop)
-    Rules.Clear(t, start)
+    -- A charge stamp starts at code 1, so a charge sample's slot starts one
+    -- code unit before the use.
+    Rules.Clear(t, t.charges and start - t.u or start)
     Rules.StartPlain(t, start)
+    if t.charges then
+        t.b = 1
+        Rules.ChargeCount(t, n, NeverSecret)
+    end
 end
 
 -- For each new key, the index of the same key in old, or false. Each old
@@ -347,19 +384,38 @@ end
 -- One read. Plain answers decide the edge in Lua. A secret answer is only
 -- passed to pick, which writes the stamp and the visibility without Lua
 -- learning it. Inside an armed window a fall stamps fallD seconds back; in a
--- cast's quiet a rise only records. Returns true when a slot changed.
-function Rules.Feed(t, lit, short, n, isSecret, pick)
-    local changed = false
+-- cast's quiet a rise only records. A charge tracker's read goes to
+-- ChargeUse, past reading its finished state back and checked the read-back's
+-- self-check (nil while undecided); the edge below never sees it. An error
+-- there loses the count, times the read as one cooldown, per unit for a
+-- group, and redraws; if that errs too, the read is held: the previous read
+-- stays, so the next read finds the same use. Returns true when a slot
+-- changed.
+function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
+    local changed, held = false, false
     local hasShort, multi = t.hasShort, t.multi
     if t.primed then
         changed = Rules.Roll(t, n)
         local litKnown, up = State(lit, short, hasShort, isSecret, multi)
         local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret, multi)
-        local rise = not (t.quietTo ~= nil and n <= t.quietTo)
+        local quiet = t.quietTo ~= nil and n <= t.quietTo
+        local taken, moved = false, false
+        if t.charges and not quiet and t.fallD == nil then
+            local ok
+            ok, taken, moved = pcall(Rules.ChargeUse, t, lit, short, n, isSecret, pick, past, checked)
+            if not ok then
+                Rules.ChargeLose(t)
+                local timed = pcall(Rules.ChargeLegacyUse, t, lit, short, n, isSecret, pick)
+                taken, moved, held = true, true, not timed
+            end
+        end
+        local rise = not taken and not quiet
             and not ((litKnown and not up) or (prevKnown and was))
-        local fall = t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
+        local fall = not taken and t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
             and not ((litKnown and up) or (prevKnown and not was))
-        if rise or fall then
+        if taken then
+            changed = changed or moved == true
+        elseif rise or fall then
             if litKnown and prevKnown then
                 if rise then
                     Rules.StartPlain(t, n)
@@ -390,7 +446,7 @@ function Rules.Feed(t, lit, short, n, isSecret, pick)
             changed = true
         end
     end
-    t.prev, t.prevShort, t.primed = lit, short, true
+    if not held then t.prev, t.prevShort, t.primed = lit, short, true end
     return changed
 end
 
@@ -412,6 +468,315 @@ function Rules.Tick(t, n, isSecret)
         end
     end
     return running, changed
+end
+
+---------------------------------------------------------------------------------
+-- Charges: two, recharged one after the other
+---------------------------------------------------------------------------------
+-- Plain while b, both slots' stamps and visibilities, the digit alphas and the
+-- lost count's cover can be read; the plain pass compares the alphas.
+function Rules.ChargePlain(t, isSecret)
+    if isSecret(t.b) or isSecret(t.a0) or isSecret(t.a1) or isSecret(t.a2) or isSecret(t.lb) then
+        return false
+    end
+    for k = 1, 2 do
+        local sl = t.slot[k]
+        if isSecret(sl.c) or isSecret(sl.v) then return false end
+    end
+    return true
+end
+
+-- The stamp at or above which slot sl has run its cooldown at n, half a code
+-- step off the codes.
+function Rules.ChargeThreshold(t, sl, n)
+    local th = (254.5 - math_floor((n - sl.epoch - t.cd) / t.u)) / 255
+    if th > 254.5 / 255 then th = 254.5 / 255 end
+    return th
+end
+
+-- Whether slot k has run its cooldown, or is empty, at n: first whether that
+-- could be read, always plain, then the answer. On a secret stamp both come
+-- from past, a read-back whose answer may be secret and only ever reaches pick.
+function Rules.ChargeFin(t, k, n, isSecret, past)
+    local sl = t.slot[k]
+    if not isSecret(sl.c) then
+        if sl.c == 1 or Rules.Left(t, sl, n) <= 0 then return true, true end
+        if not isSecret(sl.v) and sl.v == 0 then return true, true end
+        return true, false
+    end
+    if not past then return false, nil end
+    return past(t, k, Rules.ChargeThreshold(t, sl, n))
+end
+
+-- Whether a second use waits, read the same way.
+function Rules.ChargeHas(t, isSecret, past)
+    if not isSecret(t.b) then return true, t.b > 0.5 end
+    if not past then return false, nil end
+    return past(t, "b", 0.5)
+end
+
+-- The digit alphas. Plain state only.
+function Rules.ChargeCount(t, n, isSecret, past)
+    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
+    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    local have = 1
+    if f1 and f2 then have = 2 elseif t.b > 0.5 then have = 0 end
+    t.a0, t.a1, t.a2 = have == 0 and 1 or 0, have == 1 and 1 or 0, have == 2 and 1 or 0
+end
+
+-- The count is lost: the cell shows a single timer and no digit. Its cover
+-- keeps what the count showed (b, no charge left), so a cell at no charge
+-- stays gray until its running recharge returns one, and a cell with a charge
+-- shows none; each later use shows one cooldown from that use
+-- (ChargeLegacyUse).
+function Rules.ChargeLose(t)
+    if t.legacy then return end
+    t.legacy, t.lb = true, t.b
+end
+
+-- Back from the single timer on plain state: that timer counts as the one
+-- running recharge.
+function Rules.ChargeResume(t, n, isSecret)
+    t.legacy, t.lb, t.b = nil, nil, 0
+    Rules.ChargeCount(t, n, isSecret)
+end
+
+-- A recharge that ended with a second use waiting starts the next one at the
+-- second it ended. Plain state only; returns whether it did.
+function Rules.ChargeAdvance(t, n)
+    if t.b <= 0.5 then return false end
+    local fin
+    for k = 1, 2 do
+        local sl = t.slot[k]
+        if sl.v ~= 0 and sl.c ~= 1 then
+            local left = Rules.Left(t, sl, n)
+            if left > 0 then return false end
+            if not fin or n + left > fin then fin = n + left end
+        end
+    end
+    if fin then
+        local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+        sl.c, sl.v, other.v = Rules.Stamp(t, fin), 1, 0
+    end
+    t.b = 0
+    return true
+end
+
+-- A plain use. A waiting recharge whose turn has come starts first, so a use
+-- on that second takes the charge it leaves; then with both charges ready the
+-- use starts a recharge, else it waits behind the running one. Plain state
+-- only.
+function Rules.ChargeUsePlain(t, n, isSecret, past)
+    Rules.Roll(t, n)
+    Rules.ChargeAdvance(t, n)
+    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
+    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    if f1 and f2 then
+        local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+        sl.c, sl.v, other.v, t.b = Rules.Stamp(t, n), 1, 0, 0
+    else
+        t.b = 1
+    end
+    Rules.ChargeCount(t, n, isSecret, past)
+end
+
+-- Uses in one read from plain answers: 0, 1, or 2 when two or more units of a
+-- group rise at once. A group counts each unit's own rise, so a second use on
+-- another unit while the first buff is up is seen. Nil while an answer is
+-- secret.
+local function PlainRises(t, lit, short, isSecret)
+    if t.multi then
+        local prev, r = t.prev, 0
+        for j = 1, lit.n do
+            if isSecret(lit[j]) or isSecret(prev[j]) then return nil end
+            if lit[j] == true and prev[j] ~= true then r = r + 1 end
+        end
+        return math_min(r, 2)
+    end
+    local litKnown, up = State(lit, short, t.hasShort, isSecret, false)
+    local prevKnown, was = State(t.prev, t.prevShort, t.hasShort, isSecret, false)
+    if not (litKnown and prevKnown) then return nil end
+    if up and not was then return 1 end
+    return 0
+end
+
+-- Whether a read cannot hold a use, from plain answers only: a single sensor
+-- not lit now, or lit in the read before; a group when every unit is. A
+-- secret answer never makes its side idle, so a read that might hold a use
+-- still goes on.
+function Rules.ChargeIdle(t, lit, short, isSecret)
+    if t.multi then
+        local prev = t.prev
+        for j = 1, lit.n do
+            local now, before = lit[j], prev[j]
+            local off = not isSecret(now) and now ~= true
+            local on = not isSecret(before) and before == true
+            if not (off or on) then return false end
+        end
+        return true
+    end
+    local litKnown, up = State(lit, short, t.hasShort, isSecret, false)
+    local prevKnown, was = State(t.prev, t.prevShort, t.hasShort, isSecret, false)
+    return (litKnown and not up) or (prevKnown and was)
+end
+
+-- old with no use in the read, new with one: a lit read after one that was
+-- not.
+local function OnRise(t, lit, short, old, new, pick)
+    local hasShort = t.hasShort
+    return Pick(lit, short, hasShort, Pick(t.prev, t.prevShort, hasShort, old, new, pick, false), old, pick, false)
+end
+
+-- x0 with no unit rising in the read, x1 with one, x2 with two or more; a unit
+-- rises when lit now and not in the read before. Two evaluations per unit on
+-- any path.
+local function ByRises(t, lit, x0, x1, x2, pick)
+    local prev, h0, h1 = t.prev, x0, x1
+    for j = lit.n, 1, -1 do
+        h0, h1 = pick(lit[j], pick(prev[j], h0, h1), h0), pick(lit[j], pick(prev[j], h1, x2), h1)
+    end
+    return h0
+end
+
+-- The value for r uses, or picked by the reads when r is not known.
+local function Choose(t, lit, short, r, x0, x1, x2, pick)
+    if r == 1 then return x1 elseif r == 2 then return x2 end
+    if t.multi then return ByRises(t, lit, x0, x1, x2, pick) end
+    return OnRise(t, lit, short, x0, x1, pick)
+end
+
+-- A use while the count is lost: one cooldown from the read that saw it, a
+-- group's counted per unit, with the cover shown. Returns whether a value
+-- changed; a group read with another unit count only records, as in
+-- ChargeUse.
+function Rules.ChargeLegacyUse(t, lit, short, n, isSecret, pick)
+    if t.multi and t.prev.n ~= lit.n then return false end
+    local r = PlainRises(t, lit, short, isSecret)
+    if r == 0 then return false end
+    local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+    local stamp = Rules.Stamp(t, n)
+    local c = Choose(t, lit, short, r, sl.c, stamp, stamp, pick)
+    local v = Choose(t, lit, short, r, sl.v, 1, 1, pick)
+    local o = Choose(t, lit, short, r, other.v, 0, 0, pick)
+    local lb = Choose(t, lit, short, r, t.lb, 1, 1, pick)
+    sl.c, sl.v, other.v, t.lb = c, v, o, lb
+    return true
+end
+
+-- A read of a charge tracker: whether this path took it, and whether a value
+-- changed. A read that cannot hold a use (ChargeIdle) only records. On hidden
+-- state each new value is picked by the reads and the finished answers, and
+-- none is written until every pick has run, so an error leaves the state
+-- whole. With the count lost, or a finished answer unreadable, the use is
+-- timed as one cooldown (ChargeLegacyUse). A group read with another unit
+-- count only records; Track.ApplyGroup's hold unprimes the tracker whenever
+-- the unit list changes. checked is the read-back's self-check: until it
+-- decides, a read that needs a hidden value only records, so no count is lost
+-- without a cast.
+function Rules.ChargeUse(t, lit, short, n, isSecret, pick, past, checked)
+    if t.multi and t.prev.n ~= lit.n then return true, false end
+    if Rules.ChargeIdle(t, lit, short, isSecret) then return true, false end
+    local plain = Rules.ChargePlain(t, isSecret)
+    local resumed = plain and t.legacy == true
+    if resumed then Rules.ChargeResume(t, n, isSecret) end
+    if t.legacy then
+        return true, Rules.ChargeLegacyUse(t, lit, short, n, isSecret, pick)
+    end
+    local r = PlainRises(t, lit, short, isSecret)
+    if r == 0 then return true, resumed end
+    if checked == nil and not (plain and r) then return true, resumed end
+    if plain and r then
+        for _ = 1, r do Rules.ChargeUsePlain(t, n, isSecret, past) end
+        return true, true
+    end
+    local known1, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
+    local known2, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    local knownB, has = Rules.ChargeHas(t, isSecret, past)
+    if not (known1 and known2 and knownB) then
+        Rules.ChargeLose(t)
+        Rules.ChargeLegacyUse(t, lit, short, n, isSecret, pick)
+        return true, true
+    end
+    local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+    -- From full a use starts a recharge, or, when a use waits and the running
+    -- recharge has just ended, takes the charge it leaves; from one charge it
+    -- takes the last. Two uses from full also take the last.
+    local c = pick(f1, pick(f2, Rules.Stamp(t, n), sl.c), sl.c)
+    local v = pick(f1, pick(f2, 1, sl.v), sl.v)
+    local o = pick(f1, pick(f2, 0, other.v), other.v)
+    local b = pick(f1, pick(f2, pick(has, 1, 0), 1), 1)
+    local a1 = pick(f1, pick(f2, pick(has, 0, 1), 0), 0)
+    c = Choose(t, lit, short, r, sl.c, c, c, pick)
+    v = Choose(t, lit, short, r, sl.v, v, v, pick)
+    o = Choose(t, lit, short, r, other.v, o, o, pick)
+    local a0 = Choose(t, lit, short, r, t.a0, b, 1, pick)
+    a1 = Choose(t, lit, short, r, t.a1, a1, 0, pick)
+    local a2 = Choose(t, lit, short, r, t.a2, 0, 0, pick)
+    b = Choose(t, lit, short, r, t.b, b, 1, pick)
+    sl.c, sl.v, other.v = c, v, o
+    t.a0, t.a1, t.a2, t.b = a0, a1, a2, b
+    return true, true
+end
+
+-- a on the second both slots are first finished, x otherwise.
+local function Fall(t, a, x, pick)
+    local q = pick(t.f1, pick(t.f2, a, x), x)
+    return pick(t.p1, pick(t.p2, x, q), q)
+end
+
+-- The plain pass: a waiting recharge whose turn has come starts, and the digit
+-- is recounted. Returns whether a value changed.
+function Rules.ChargeTickPlain(t, n, isSecret, past)
+    local moved = Rules.ChargeAdvance(t, n)
+    local a0, a1, a2 = t.a0, t.a1, t.a2
+    Rules.ChargeCount(t, n, isSecret, past)
+    if a0 ~= t.a0 or a1 ~= t.a1 or a2 ~= t.a2 then moved = true end
+    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
+    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    t.f1, t.f2, t.fRead = f1, f2, true
+    return moved
+end
+
+-- The once-a-second pass, run before Rules.Tick; it rolls first, so a stamp
+-- after a held second is not capped. checked is the read-back's self-check:
+-- nil while undecided, then true or false. An answer that cannot be read once
+-- the check has decided loses the count (ChargeLose) until the state reads
+-- plain again; while it is undecided the pass waits. No value is written
+-- until every pick has run. Returns whether a value changed.
+function Rules.ChargeTick(t, n, isSecret, pick, past, checked)
+    local rolled = Rules.Roll(t, n)
+    if Rules.ChargePlain(t, isSecret) then
+        local resumed = t.legacy == true
+        if resumed then Rules.ChargeResume(t, n, isSecret) end
+        local moved = Rules.ChargeTickPlain(t, n, isSecret, past)
+        return moved or rolled or resumed
+    end
+    if t.legacy then return rolled end
+    local known1, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
+    local known2, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    local knownB, has = Rules.ChargeHas(t, isSecret, past)
+    if not (known1 and known2 and knownB) then
+        if checked ~= nil then
+            Rules.ChargeLose(t)
+            return true
+        end
+        return rolled
+    end
+    local read = t.fRead
+    t.p1, t.p2 = t.f1, t.f2
+    t.f1, t.f2, t.fRead = f1, f2, true
+    if not read then return rolled end
+    local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
+    local c = Fall(t, pick(has, Rules.Stamp(t, n), sl.c), sl.c, pick)
+    local v = Fall(t, pick(has, 1, sl.v), sl.v, pick)
+    local o = Fall(t, pick(has, 0, other.v), other.v, pick)
+    local a0 = Fall(t, 0, t.a0, pick)
+    local a1 = Fall(t, pick(has, 1, 0), t.a1, pick)
+    local a2 = Fall(t, pick(has, 0, 1), t.a2, pick)
+    local b = Fall(t, 0, t.b, pick)
+    sl.c, sl.v, other.v = c, v, o
+    t.a0, t.a1, t.a2, t.b = a0, a1, a2, b
+    return true
 end
 
 -- Round-trips each sample through eval, alternating its two branches. Exact,
@@ -531,35 +896,46 @@ function Rules.TrinketShow(show, set, accepted)
     return kept, pending
 end
 
--- castID -> the talent rule of each of the spec's entries that has one: its
--- swap where the swap applies to the spec, else its needs. A paired cast whose
--- spell has lengthNeeds also gets that rule under Rules.LengthKey(castID).
--- Nil when none does. The data never changes, so each spec's answer is built
--- once and shared; callers only read it. The inspect ticker asks every second.
+-- A spec's talents: rules maps castID to the talent rule of each entry that
+-- has one (its swap where the swap applies to the spec, else its needs); ids
+-- and want list every talent those rules and the mods of the spec's casts
+-- name, the externals box's casts included. Nil when there is none. The data
+-- never changes, so each spec's answer is built once and shared; callers only
+-- read it. The inspect ticker asks every second.
 local talentsBySpec = {}
+
+local function AddTalent(out, talent)
+    if talent and not out.want[talent] then
+        out.want[talent] = true
+        out.ids[#out.ids + 1] = talent
+    end
+end
+
+local function AddModTalents(out, spell)
+    for _, mod in ipairs(spell and spell.mods or {}) do AddTalent(out, mod[1]) end
+end
 
 function Rules.TalentsFor(specID)
     if specID == nil then return nil end
     local cached = talentsBySpec[specID]
     if cached == nil then
         local data = KE.PartyCooldownsData
-        cached = false
+        local out = { rules = {}, ids = {}, want = {} }
         for _, item in ipairs(data.SPECS[specID] or {}) do
-            local paired = type(item) == "table"
-            local castID = paired and item[1] or item
+            local castID = Rules.UnpackItem(item)
             local spell = data.SPELLS[castID]
             local swap = spell and spell.swap
             local rule = spell and spell.needs
             if swap and (not swap.specs or swap.specs[specID]) then rule = swap end
             if rule then
-                cached = cached or {}
-                cached[castID] = rule
+                out.rules[castID] = rule
+                for talent in pairs(rule.talents) do AddTalent(out, talent) end
             end
-            if paired and spell and spell.lengthNeeds then
-                cached = cached or {}
-                cached[Rules.LengthKey(castID)] = spell.lengthNeeds
-            end
+            AddModTalents(out, spell)
         end
+        local healer = data.HEALER_SPECS and data.HEALER_SPECS[specID]
+        for _, castID in ipairs(healer and healer.casts or {}) do AddModTalents(out, data.SPELLS[castID]) end
+        cached = #out.ids > 0 and out or false
         talentsBySpec[specID] = cached
     end
     return cached or nil
@@ -572,34 +948,80 @@ function Rules.TalentAllows(entry, taken)
     return taken == true
 end
 
--- The length a cell counts: the spell's own when its length talent is read as
--- not taken, or unread and not likely, and no seconds are typed; else the
--- entry's.
-function Rules.TalentLength(entry, taken)
-    local needs = entry.spell and entry.spell.lengthNeeds
-    if not needs or entry.typed then return entry.cd end
-    if taken == nil then taken = needs.likely ~= false end
-    if taken then return entry.cd end
-    return Rules.ClampSeconds(entry.spell.cd)
+-- A spell's cooldown with talents applied: flat seconds add and percents
+-- multiply, each per rank, and a mod limited to another spec counts nothing.
+-- Nil while any talent a length mod names is unread, and when no mod changes
+-- a length: a mod that adds a charge is skipped.
+function Rules.ModLength(base, mods, ranks, specID)
+    local cd, mul, any = base, 1, false
+    for _, mod in ipairs(mods) do
+        if not mod.charges then
+            any = true
+            local rank = 1
+            if mod[1] then
+                rank = ranks and ranks[mod[1]]
+                if type(rank) ~= "number" then return nil end
+            end
+            if mod.spec and mod.spec ~= specID then rank = 0 end
+            if rank > 0 then
+                cd, mul = cd + (mod.add or 0) * rank, mul * (1 + (mod.pct or 0) * rank / 100)
+            end
+        end
+    end
+    if not any then return nil end
+    return math_floor(math_max(Rules.CD_MIN, math_min(Rules.CD_MAX, cd * mul)) + 0.5)
 end
 
--- Your own answer for one talent rule: true, false, or nil when the client
--- answered nothing, so an unreadable spellbook keeps the likely state.
--- override is the cast's override spell, nil when unread; known maps each
--- talent to its spellbook answer, nil when unread.
-function Rules.OwnTaken(rule, override, known)
-    local answered = false
-    if rule.id ~= nil and override ~= nil then
-        if override == rule.id then return true end
-        answered = true
+-- A charge cell counts at most this long: its tick and read passes need
+-- Unit(cd) <= 3 under DOOR_SLACK.
+Rules.CHARGE_CD_MAX = 3 * Rules.CODES
+
+-- The length a cell counts: the spell's cooldown with the member's talents
+-- once every one its length mods name is read, the listed length until then.
+function Rules.CellLength(entry, specID, ranks, charges)
+    local spell = entry.spell
+    local cd = spell and spell.mods and Rules.ModLength(spell.cd, spell.mods, ranks, specID) or entry.cd
+    if type(charges) == "number" and charges >= 2 then cd = math_min(cd, Rules.CHARGE_CD_MAX) end
+    return cd
+end
+
+-- The most charges a cell counts: one per timer slot.
+Rules.MAX_CHARGES = 2
+
+-- The charges a cell counts: the entry's own, plus one per charge talent read
+-- as taken for the spec; an unread one adds nothing.
+function Rules.CellCharges(entry, specID, ranks)
+    local charges = entry.charges or 1
+    for _, mod in ipairs(entry.spell and entry.spell.mods or {}) do
+        local rank = mod.charges and mod[1] and ranks and ranks[mod[1]]
+        if type(rank) == "number" and rank > 0 and not (mod.spec and mod.spec ~= specID) then
+            charges = charges + mod.charges
+        end
     end
+    return math_min(charges, Rules.MAX_CHARGES)
+end
+
+-- A talent rule's answer from ranks: true when any of its talents is taken,
+-- false when some are read and none is, nil when none is read.
+function Rules.Taken(rule, ranks)
+    if not (rule and ranks) then return nil end
+    local read = false
     for talent in pairs(rule.talents) do
-        local isKnown = known[talent]
-        if isKnown == true then return true end
-        if isKnown ~= nil then answered = true end
+        local rank = ranks[talent]
+        if type(rank) == "number" then
+            if rank > 0 then return true end
+            read = true
+        end
     end
-    if answered then return false end
+    if read then return false end
     return nil
+end
+
+-- Whether a cast's talent rule is taken, from a member's ranks; nil when the
+-- cast has no rule or nothing of it is read.
+function Rules.CastTaken(specID, castID, ranks)
+    local talents = Rules.TalentsFor(specID)
+    return Rules.Taken(talents and talents.rules[castID], ranks)
 end
 
 -- A gear event within GEAR_QUIET seconds of a teammate's last trinket read
@@ -641,12 +1063,51 @@ function Rules.BuildEventCounts(inKey, isPlayer)
 end
 
 -- The game resets class cooldowns of KEY_RESET_MIN seconds or more when a key
--- starts, and no trinket. The length is the one the cell counts, talents and
--- typed seconds included.
+-- starts, and no trinket. The length is the one the cell counts, talents
+-- included.
 Rules.KEY_RESET_MIN = 90
 
 function Rules.ResetsAtKeyStart(entry)
     return entry.trinket ~= true and type(entry.cd) == "number" and entry.cd >= Rules.KEY_RESET_MIN
+end
+
+-- A key start's reset of one cell: one the game resets goes back to ready,
+-- both charges full; any other keeps its count. Returns whether it reset.
+function Rules.KeyStartClear(t, entry, n)
+    if not Rules.ResetsAtKeyStart(entry) then return false end
+    Rules.Clear(t, n)
+    return true
+end
+
+-- Every restriction kind can hide a sensor's answer but Chat, which limits
+-- addon messages only. A kind that hid no read resets nothing: only cells on
+-- hidden state are reset.
+Rules.HIDING_KINDS = { "Combat", "Encounter", "ChallengeMode", "PvPMatch", "Map" }
+
+-- Whether no restriction that can hide a read is active. kinds is the
+-- client's restriction-kind enum and isActive answers for one kind; an error
+-- or any answer but a plain false counts as active, so a doubtful answer
+-- never resets a count. A kind the enum does not list cannot be active.
+function Rules.ReadsUnhidden(kinds, isActive)
+    if type(kinds) ~= "table" or type(isActive) ~= "function" then return false end
+    for _, name in ipairs(Rules.HIDING_KINDS) do
+        local kind = kinds[name]
+        if kind ~= nil then
+            local ok, on = pcall(isActive, kind)
+            if not ok or on ~= false then return false end
+        end
+    end
+    return true
+end
+
+-- With no restriction left, a charge tracker counted from hidden reads keeps
+-- hidden state, which no plain read can recount, so it goes back to ready,
+-- both charges full. A one-charge tracker's timer runs out on its own.
+-- Returns whether it reset.
+function Rules.HiddenChargeClear(t, n, isSecret)
+    if not t.charges or Rules.ChargePlain(t, isSecret) then return false end
+    Rules.Clear(t, n)
+    return true
 end
 
 -- A missing talent string on either side cannot tell, so it counts as moved.
@@ -674,7 +1135,7 @@ function Rules.RacialEntry(castID, db, all)
     local key = Rules.RacialKey(castID)
     local isOff = Rules.IsOff(Table(db.CooldownOff), key, spell)
     if isOff and not all then return nil end
-    return Entry(castID, spell, key, spell.cd, Table(db.CooldownSeconds)[key], isOff)
+    return Entry(castID, spell, key, spell.cd, isOff)
 end
 
 function Rules.MemberRacial(race, db)

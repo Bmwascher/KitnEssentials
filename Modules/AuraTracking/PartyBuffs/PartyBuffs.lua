@@ -833,9 +833,10 @@ function PB:CooldownEntries(m)
     local specID = m.spec
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
-            local taken = m.talents and m.talents[e.id]
+            local taken = CDRules.CastTaken(specID, e.id, m.talents)
             if CDRules.TalentAllows(e, taken) then
-                e.cd = CDRules.TalentLength(e, m.talents and m.talents[CDRules.LengthKey(e.id)])
+                e.charges = CDRules.CellCharges(e, specID, m.talents)
+                e.cd = CDRules.CellLength(e, specID, m.talents, e.charges)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, taken))
                 entries[#entries + 1] = e
             end
@@ -857,9 +858,10 @@ function PB:CooldownEntries(m)
 end
 
 -- Re-run on every bind and on each change to the member's spec, trinkets or
--- talents. For the same member and spec, a cell whose spell and length did not
--- change keeps its timer. When the GUID is secret the slot keeps the record it
--- had for the same token; a roster change or a closed gate clears it first.
+-- talents. For the same member and spec, a cell whose spell, charges and code
+-- unit did not change keeps its count. When the GUID is secret the slot keeps
+-- the record it had for the same token; a roster change or a closed gate
+-- clears it first.
 function PB:BindCooldowns(k, binding)
     local slot = self.slots[k]
     slot.track = slot.track or Track.NewSlot(slot.holder)
@@ -1155,9 +1157,17 @@ function PB:OnRelease()
     if self.restylePending then self:Restyle() end
 end
 
+-- IsAddOnRestrictionActive answers false while this event dispatches, so the
+-- test waits for the next frame.
 function PB:OnRestrictionChanged()
     C_Timer.After(0, function()
-        if self:IsEnabled() then self:OnRelease() end
+        if not self:IsEnabled() then return end
+        local RA = C_RestrictedActions
+        local kinds = Enum and Enum.AddOnRestrictionType
+        if RA and CDRules.ReadsUnhidden(kinds, RA.IsAddOnRestrictionActive) then
+            Track.ChargeRestrictionsEnded()
+        end
+        self:OnRelease()
     end)
 end
 
@@ -1472,9 +1482,10 @@ function PB:PreviewEntries(k)
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
             if #entries >= want then break end
-            local has = talents and talents[e.id]
+            local has = CDRules.CastTaken(specID, e.id, talents)
             if CDRules.TalentAllows(e, has) then
-                e.cd = CDRules.TalentLength(e, talents and talents[CDRules.LengthKey(e.id)])
+                e.charges = CDRules.CellCharges(e, specID, talents)
+                e.cd = CDRules.CellLength(e, specID, talents, e.charges)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))
                 entries[#entries + 1] = e
             end
@@ -1512,7 +1523,8 @@ function PB:DrawPreviewCells(row, entries, side, step, perRow)
     local dir, rise = side.left and -1 or 1, side.up and 1 or -1
     for i = 1, PREVIEW_CELLS do
         local c, e, old = row.cells[i], entries[i], row.trackers[i]
-        if old and not (e and old.previewID == e.id and old.cd == e.cd) then
+        if old and not (e and old.previewID == e.id and old.cd == e.cd
+            and (old.charges or 1) == (e.charges or 1)) then
             Track.Forget(old)
             row.trackers[i] = nil
             old = nil
@@ -1530,7 +1542,7 @@ function PB:DrawPreviewCells(row, entries, side, step, perRow)
             if old then
                 Track.Push(old, n)
             else
-                local t = CDRules.NewTracker(e.cd, false)
+                local t = CDRules.NewTracker(e.cd, false, false, e.charges)
                 t.cell, t.previewID = c, e.id
                 if i == 3 then
                     t.loop = math_min(PREVIEW_LEFT, e.cd - 1)

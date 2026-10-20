@@ -15,8 +15,9 @@ local Rules = {}
 KE.HealerExternalsRules = Rules
 
 -- A group tracker's read passes its stamp through up to two client
--- evaluations per watched unit, so the door bound needs Unit(cd) <= 2, which
--- holds up to 508 seconds. Never raise this above 508.
+-- evaluations per watched unit, a charge cell's two more plus five a second
+-- from its tick, so the door bound needs Unit(cd) <= 2, which holds up to 508
+-- seconds. Never raise this above 508.
 Rules.CD_MAX = 300
 
 local function Table(value)
@@ -33,40 +34,44 @@ end
 
 function Rules.Key(specID, castID) return "healer:" .. KE.PartyCooldownsRules.CooldownKey(specID, castID) end
 
--- The spec's externals in table order, typed seconds over listed ones. A
--- switched-off entry is dropped unless all is set, which the editor uses to
--- list every one.
-function Rules.Entries(specID, db, all)
+-- The spec's externals in table order, at the healer's talented lengths once
+-- ranks are read, capped at CD_MAX. A switched-off entry is dropped unless all
+-- is set, which the editor uses to list every one.
+function Rules.Entries(specID, db, all, ranks)
     local data = KE.PartyCooldownsData
+    local cdRules = KE.PartyCooldownsRules
     local out = {}
     local row = Table(data.HEALER_SPECS)[specID]
     if not row then return out end
     db = Table(db)
-    local off, seconds = Table(db.CooldownOff), Table(db.CooldownSeconds)
+    local off = Table(db.CooldownOff)
     for _, castID in ipairs(row.casts) do
         local spell = data.SPELLS[castID]
         local key = Rules.Key(specID, castID)
-        local isOff = KE.PartyCooldownsRules.IsOff(off, key, spell)
+        local isOff = cdRules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
-            out[#out + 1] = {
+            local entry = {
                 id = castID, key = key, spell = spell, kind = spell.kind, buffs = spell.buffs,
                 listed = spell.cd,
-                cd = Rules.ClampSeconds(seconds[key]) or Rules.ClampSeconds(spell.cd),
+                cd = Rules.ClampSeconds(spell.cd),
                 off = isOff,
             }
+            entry.charges = cdRules.CellCharges(entry, specID, ranks)
+            entry.cd = Rules.ClampSeconds(cdRules.CellLength(entry, specID, ranks, entry.charges))
+            out[#out + 1] = entry
         end
     end
     return out
 end
 
--- members: the party in token order, each { token, guid, spec }. Returns each
--- one whose spec has a switched-on external, as { member, entries }. You are
--- never one, and an unknown spec gives none.
+-- members: the party in token order, each { token, guid, spec, talents }.
+-- Returns each one whose spec has a switched-on external, as { member,
+-- entries }. You are never one, and an unknown spec gives none.
 function Rules.Healers(members, db)
     local out = {}
     for _, m in ipairs(members) do
         if m.token ~= "player" and m.spec ~= nil then
-            local entries = Rules.Entries(m.spec, db)
+            local entries = Rules.Entries(m.spec, db, false, m.talents)
             if #entries > 0 then out[#out + 1] = { member = m, entries = entries } end
         end
     end

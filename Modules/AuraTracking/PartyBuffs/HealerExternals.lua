@@ -41,7 +41,7 @@ HX.DEFAULT_POSITION = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -4
 -- The cooldown icon with no active state laid over it.
 HX.VIEW = {
     New = Cell.New, Dress = Cell.Dress, Write = Cell.Write, Range = Cell.Range, Clear = Cell.Clear,
-    Seat = Cell.Seat, overlay = false,
+    Seat = Cell.Seat, WriteCharges = Cell.WriteCharges, overlay = false,
 }
 
 -- Reads wait out a roster change, longer than the module's 0.5 s settle.
@@ -263,7 +263,7 @@ function HX.Resolve()
             end
             records[m], byToken[token] = true, m
             if Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
-            party[#party + 1] = { token = token, guid = m.guid, spec = m.spec }
+            party[#party + 1] = { token = token, guid = m.guid, spec = m.spec, talents = m.talents }
         end
     end
     HX.members, HX.records, HX.byToken = members, records, byToken

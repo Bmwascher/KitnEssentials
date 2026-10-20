@@ -1623,12 +1623,10 @@ local Defaults = {
             GlowFrequency     = 0.5,
             GlowThickness     = 2,
             GlowPulse         = true,
-            -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
-            -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
-            -- external "healer:<specID>:<castID>". CooldownOrder holds a cast
-            -- list per spec.
+            -- Keyed "<specID>:<castID>"; a racial "race:<castID>" and a
+            -- healer's external "healer:<specID>:<castID>". CooldownOrder
+            -- holds a cast list per spec.
             CooldownOff       = {},
-            CooldownSeconds   = {},
             CooldownOrder     = {},
             -- Potion bars (Potions tab). They read ListPotions, which the
             -- while-active potion icons read too. The position card writes
@@ -3056,6 +3054,8 @@ local KEY_RENAMES = {
     { id = "Skinning.Details.Delete",     block = "Skinning", old = "Details",     new = "Details",     convert = DeleteKey },
     { id = "Dungeons.InstanceReset.Delete", block = "Dungeons", old = "InstanceReset", new = "InstanceReset", convert = DeleteKey },
     { id = "Dungeons.DungeonTimers.Delete", block = "Dungeons", old = "DungeonTimers", new = "DungeonTimers", convert = DeleteKey },
+    -- Typed cooldown lengths: lengths follow talents, and no box sets one.
+    { id = "PartyBuffs.CooldownSeconds.Delete", block = "PartyBuffs", old = "CooldownSeconds", new = "CooldownSeconds", convert = DeleteKey },
     -- Blocks of modules folded into a replacement. These run before the
     -- replacement's own copy, so a block it never copied is lost with them.
     { id = "BossDebuffs.Delete", path = { "BossDebuffs" }, convert = DeleteKey },

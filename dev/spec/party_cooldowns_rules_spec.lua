@@ -10,10 +10,11 @@ local L = require("dev.spec._ke_loader")
 -- with a swap scoped to spec 10; spec 11 lists only the scoped one. ROLE_SPEC
 -- holds a tank and a healer guess, and a damage cell no guess may use. Cast 4
 -- is the racial of the race Dwarf, in no spec list. Spec 12 lists only cast 5,
--- which needs talent 55 and is not likely taken. Cast 6 needs talent 65 and
--- is likely taken; its paired length needs talent 66. Spec 13 lists it paired
--- at 30 s, spec 14 unpaired. Spec 15 lists only cast 7, which starts
--- switched off.
+-- which needs talent 55 and is not likely taken. Spec 15 lists only cast 7,
+-- which starts switched off. Cast 8 has talent mods, a spec-only one for spec
+-- 16 and two charge talents; spec 16 lists it paired at 100 s, spec 17
+-- unpaired, spec 18 with two charges. Cast 9 has only a charge talent; spec
+-- 19 lists it paired at 50 s.
 local DATA = {
     SPELLS = {
         [1] = { kind = "offensive", cd = 120, buffs = { 1 } },
@@ -23,10 +24,11 @@ local DATA = {
                 swap = { id = 30, talents = { [30] = true }, likely = true, specs = { [10] = true } } },
         [4] = { kind = "defensive", cd = 120, buffs = { 40 } },
         [5] = { kind = "offensive", cd = 60, buffs = { 50 }, needs = { talents = { [55] = true } } },
-        [6] = { kind = "offensive", cd = 120, buffs = { 60 },
-                needs = { talents = { [65] = true }, likely = true },
-                lengthNeeds = { talents = { [66] = true } } },
         [7] = { kind = "offensive", cd = 90, buffs = { 70 }, off = true },
+        [8] = { kind = "offensive", cd = 180, buffs = { 80 },
+                mods = { { 81, add = -30 }, { 82, pct = -50 }, { spec = 16, add = -60 },
+                         { 83, charges = 1 }, { 84, spec = 99, charges = 1 } } },
+        [9] = { kind = "defensive", cd = 60, buffs = { 90 }, mods = { { 85, charges = 1 } } },
     },
     RACIALS = {
         { race = "Dwarf", raceID = 3, id = 4 },
@@ -35,9 +37,11 @@ local DATA = {
         [10] = { { 1, 45 }, 2, 3 },
         [11] = { 3 },
         [12] = { 5 },
-        [13] = { { 6, 30 } },
-        [14] = { 6 },
         [15] = { 7 },
+        [16] = { { 8, 100 } },
+        [17] = { 8 },
+        [18] = { { 8, charges = 2 } },
+        [19] = { { 9, 50 } },
     },
     ROLE_SPEC = {
         DRUID = { TANK = 10, HEALER = 11 },
@@ -88,22 +92,6 @@ describe("PartyCooldownsRules.IsOff", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.IsOff(case.off, "k", case.spell), case.name)
-        end
-    end)
-end)
-
-describe("PartyCooldownsRules lengths", function()
-    it("prefers typed seconds, then the spec's talented length, then the base, clamping the typed one", function()
-        local R = loadRules()
-        assert.are.same({ 45, 60 }, { entryOf(R, 10, 1).cd, entryOf(R, 10, 2).cd })
-        local cases = {
-            { typed = 75, want = 75 }, { typed = R.CD_MIN - 2, want = R.CD_MIN },
-            { typed = R.CD_MAX + 1100, want = R.CD_MAX }, { typed = 61.7, want = 61 },
-            { typed = "abc", want = 45 },
-        }
-        for _, case in ipairs(cases) do
-            local db = { CooldownSeconds = { ["10:1"] = case.typed } }
-            assert.are.equal(case.want, entryOf(R, 10, 1, db).cd, tostring(case.typed))
         end
     end)
 end)
@@ -210,13 +198,12 @@ describe("PartyCooldownsRules.NextInspect", function()
 end)
 
 describe("PartyCooldownsRules trinkets", function()
-    it("gives a cell to a listed, switched-on trinket with a known length, typed length first, clamped", function()
+    it("gives a cell to a listed, switched-on trinket with a known length, clamped", function()
         local R = loadRules()
         local db = {
             ListTrinkets = { [111] = { enabled = true }, [222] = { enabled = false }, [333] = { enabled = true } },
-            CooldownSeconds = { ["trinket:333"] = 45 },
         }
-        local got = R.TrinketEntries({ { item = 1, spell = 111 }, { item = 2, spell = 333 } }, { [1] = 120 }, db)
+        local got = R.TrinketEntries({ { item = 1, spell = 111 }, { item = 2, spell = 333 } }, { [1] = 120, [2] = 45 }, db)
         assert.are.same({ { 111, 120, 1 }, { 333, 45, 2 } },
             { { got[1].id, got[1].cd, got[1].item }, { got[2].id, got[2].cd, got[2].item } })
         local long = R.TrinketEntries({ { item = 1, spell = 111 } }, { [1] = R.CD_MAX + 300 }, db)
@@ -346,6 +333,36 @@ describe("PartyCooldownsRules.Feed", function()
         R.ArmFall(windowed, 0, 6)
         local armed = deepest(windowed, { secret(true), secret(false) })
         assert.is_true(armed > 0 and armed <= 2, "windowed sensor: " .. armed)
+        -- A charge tracker's stamp is secret, and its finished state is read
+        -- back as a secret answer.
+        local function past() return true, secret(true) end
+        local function deepestCharge(t, reads)
+            local most = 0
+            for _, prev in ipairs(reads) do
+                for _, lit in ipairs(reads) do
+                    R.Clear(t, 0)
+                    t.primed, t.prev, t.prevShort = true, prev, false
+                    t.slot[t.cur].c = { secret = true, value = true, depth = 0 }
+                    R.Feed(t, lit, false, 12, isSecret, counting, past, true)
+                    local c = t.slot[t.cur].c
+                    most = math.max(most, type(c) == "table" and c.depth or 0)
+                end
+            end
+            return most
+        end
+        local single = deepestCharge(R.NewTracker(120, false, false, 2), { secret(true), secret(false) })
+        assert.is_true(single > 0 and single <= 4, "a charge read: " .. single)
+        local shorted = deepestCharge(R.NewTracker(120, true, false, 2), { secret(true), secret(false) })
+        assert.is_true(shorted > 0 and shorted <= 6, "a charge read with a short sensor: " .. shorted)
+        local group = deepestCharge(R.NewTracker(120, false, true, 2), lists)
+        assert.is_true(group > 0 and group <= 2 * m + 2, "a charge read, five units: " .. group)
+        local ticked = R.NewTracker(120, false, false, 2)
+        R.Clear(ticked, 0)
+        ticked.slot[ticked.cur].c = { secret = true, value = true, depth = 0 }
+        ticked.f1, ticked.f2, ticked.fRead = secret(true), secret(false), true
+        R.ChargeTick(ticked, 12, isSecret, counting, past, true)
+        local tick = ticked.slot[ticked.cur].c.depth
+        assert.is_true(tick > 0 and tick <= 5, "a charge tick: " .. tick)
     end)
 
     -- A 300-second tracker counts in 2-second codes from its clear at 0.
@@ -696,8 +713,6 @@ describe("PartyCooldownsRules racials", function()
         local on = { ShowRacials = true }
         local e = R.MemberRacial("Dwarf", on)
         assert.are.same({ 4, "race:4", 120, { 40 } }, { e.id, e.key, e.cd, e.buffs })
-        local typed = { ShowRacials = true, CooldownSeconds = { ["race:4"] = 90 } }
-        assert.are.equal(90, R.MemberRacial("Dwarf", typed).cd, "typed seconds")
         local cases = {
             { name = "Racials off", race = "Dwarf", db = { ShowRacials = false } },
             { name = "race with no racial", race = "Human", db = on },
@@ -746,56 +761,311 @@ describe("PartyCooldownsRules talent gate", function()
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.TalentAllows(case.entry, case.taken), case.name)
         end
-        assert.are.equal(gated.spell.needs, R.TalentsFor(12)[5], "a needs row")
-        assert.is_not_nil(R.TalentsFor(10)[3], "a swap for its spec")
+        assert.are.equal(gated.spell.needs, R.TalentsFor(12).rules[5], "a needs row")
+        assert.is_not_nil(R.TalentsFor(10).rules[3], "a swap for its spec")
         assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")
+        assert.is_true(R.TalentsFor(16).want[81], "a mod's talent")
     end)
 end)
 
-describe("PartyCooldownsRules talent lengths", function()
-    it("counts the spell's own length when the talent is read as not taken, or unread and not likely, and nothing is typed", function()
+describe("PartyCooldownsRules.CellLength", function()
+    it("counts the talented length once every length talent is read, the listed one until then", function()
         local R = loadRules()
-        local paired = entryOf(R, 13, 6)
-        local typed = entryOf(R, 13, 6, { CooldownSeconds = { ["13:6"] = 40 } })
-        local plain = entryOf(R, 10, 1)
-        local unlikely = { cd = 30, spell = { cd = 120, lengthNeeds = { talents = {}, likely = false } } }
+        local paired, unpaired = entryOf(R, 16, 8), entryOf(R, 17, 8)
+        local long = { cd = 900, spell = { cd = 900 } }
         local cases = {
-            { name = "not taken", entry = paired, taken = false, want = 120 },
-            { name = "taken", entry = paired, taken = true, want = 30 },
-            { name = "unread", entry = paired, taken = nil, want = 30 },
-            { name = "unread, not likely", entry = unlikely, taken = nil, want = 120 },
-            { name = "typed, not taken", entry = typed, taken = false, want = 40 },
-            { name = "no length talent", entry = plain, taken = false, want = 45 },
+            { name = "every length talent read", entry = paired, spec = 16, ranks = { [81] = 1, [82] = 1 }, want = 45 },
+            { name = "one of two read", entry = paired, spec = 16, ranks = { [81] = 1 }, want = 100 },
+            { name = "none read", entry = paired, spec = 16, want = 100 },
+            { name = "unpaired, none read", entry = unpaired, spec = 17, want = 180 },
+            { name = "only a charge mod, read", entry = entryOf(R, 19, 9), spec = 19, ranks = { [85] = 1 }, want = 50 },
+            { name = "a charge cell over the cap", entry = long, spec = 16, charges = 2, want = R.CHARGE_CD_MAX },
+            { name = "a one-charge cell, no cap", entry = long, spec = 16, charges = 1, want = 900 },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.TalentLength(case.entry, case.taken), case.name)
+            assert.are.equal(case.want, R.CellLength(case.entry, case.spec, case.ranks, case.charges), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.CellCharges", function()
+    it("adds a charge for a charge talent read as taken in its spec, none unread, and caps the count", function()
+        local R = loadRules()
+        local plain, based = entryOf(R, 16, 8), entryOf(R, 18, 8)
+        local cases = {
+            { name = "base count from the list", entry = based, ranks = {}, want = 2 },
+            { name = "talent taken", entry = plain, ranks = { [83] = 1 }, want = 2 },
+            { name = "talent read, not taken", entry = plain, ranks = { [83] = 0 }, want = 1 },
+            { name = "talent unread", entry = plain, ranks = {}, want = 1 },
+            { name = "talent for another spec", entry = plain, ranks = { [84] = 1 }, want = 1 },
+            { name = "a base of two and a talent", entry = based, ranks = { [83] = 1 }, want = R.MAX_CHARGES },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.CellCharges(case.entry, 16, case.ranks), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.Taken", function()
+    it("takes a rule when any of its talents is taken, and answers nil only when none is read", function()
+        local R = loadRules()
+        local rule = { talents = { [91] = true, [92] = true } }
+        local cases = {
+            { name = "one taken", ranks = { [91] = 0, [92] = 2 }, want = true },
+            { name = "all read, none taken", ranks = { [91] = 0, [92] = 0 }, want = false },
+            { name = "some read, none taken", ranks = { [91] = 0 }, want = false },
+            { name = "none read", ranks = {}, want = nil },
+            { name = "no answer", ranks = nil, want = nil },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.Taken(rule, case.ranks), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.TrackerKey", function()
+    it("keeps a count across a new length in the same code unit, never across a new unit, charges or buffs", function()
+        local R = loadRules()
+        local base = { buffs = { 1 }, cd = 120 }
+        local cases = {
+            { name = "shorter, same unit", e = { buffs = { 1 }, cd = 90 }, same = true },
+            { name = "a new unit", from = { buffs = { 1 }, cd = 240 }, e = { buffs = { 1 }, cd = 300 }, same = false },
+            { name = "a new charge count", e = { buffs = { 1 }, cd = 120, charges = 2 }, same = false },
+            { name = "other buffs", e = { buffs = { 2 }, cd = 120 }, same = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.same, R.TrackerKey(case.from or base) == R.TrackerKey(case.e), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules charges", function()
+    local function secret(value) return { secret = true, value = value } end
+    local function isSecret(v) return type(v) == "table" and v.secret == true end
+    local function choose(b, a, c)
+        if isSecret(b) then b = b.value end
+        if b then return a end
+        return c
+    end
+    local function count(t)
+        if t.a0 == 1 then return 0 elseif t.a1 == 1 then return 1 elseif t.a2 == 1 then return 2 end
+    end
+
+    it("recharges two charges one after the other on plain reads", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, false, 2)
+        R.Clear(t, 0)
+        local function read(lit, n) R.Feed(t, lit, nil, n, isSecret, choose, nil) end
+        local steps = {}
+        read(false, 9)
+        read(true, 10)
+        steps[#steps + 1] = { "first use", count(t), t.b }
+        read(false, 15)
+        read(true, 20)
+        steps[#steps + 1] = { "second use", count(t), t.b }
+        R.ChargeTick(t, 70, isSecret, choose, nil, nil)
+        steps[#steps + 1] = { "the first recharge ends", count(t), t.b, R.Left(t, t.slot[t.cur], 70) }
+        R.ChargeTick(t, 130, isSecret, choose, nil, nil)
+        steps[#steps + 1] = { "the second ends", count(t), t.b }
+        assert.are.same({
+            { "first use", 1, 0 }, { "second use", 0, 1 }, { "the first recharge ends", 1, 0, 60 },
+            { "the second ends", 2, 0 },
+        }, steps)
+    end)
+
+    it("fills both charges at a key start only on a cell the game resets, KEY_RESET_MIN or more", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a 60-second cell keeps its count", cd = 60, want = { false, 0, 1 } },
+            { name = "a 180-second cell is filled", cd = 180, want = { true, 2, 0 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(case.cd, false, false, 2)
+            R.Clear(t, 0)
+            for _, step in ipairs({ { false, 9 }, { true, 10 }, { false, 15 }, { true, 20 } }) do
+                R.Feed(t, step[1], nil, step[2], isSecret, choose, nil)
+            end
+            local cleared = R.KeyStartClear(t, { cd = case.cd }, 25)
+            assert.are.same(case.want, { cleared, count(t), t.b }, case.name)
         end
     end)
 
-    it("adds a length rule under its own key only for a paired cast", function()
+    it("finds reads unhidden only when no restriction kind that can hide them is active", function()
         local R = loadRules()
-        local spell = DATA.SPELLS[6]
-        assert.are.equal(spell.lengthNeeds, R.TalentsFor(13)[R.LengthKey(6)], "paired")
-        assert.are.equal(spell.needs, R.TalentsFor(13)[6], "the show rule stays under the cast")
-        assert.is_nil(R.TalentsFor(14)[R.LengthKey(6)], "unpaired")
-    end)
-end)
-
-describe("PartyCooldownsRules.OwnTaken", function()
-    it("answers taken or not taken only from a plain spellbook answer, else nil", function()
-        local R = loadRules()
-        local needs = DATA.SPELLS[5].needs
-        local swap = DATA.SPELLS[2].swap
+        local kinds = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3, Map = 4, Chat = 5 }
         local cases = {
-            { name = "needs, known", rule = needs, known = { [55] = true }, want = true },
-            { name = "needs, not known", rule = needs, known = { [55] = false }, want = false },
-            { name = "needs, unread", rule = needs, known = {}, want = nil },
-            { name = "swap, overridden", rule = swap, override = 20, known = {}, want = true },
-            { name = "swap, other override", rule = swap, override = 2, known = {}, want = false },
-            { name = "swap, nothing read", rule = swap, known = {}, want = nil },
+            { name = "none active", on = {}, want = true },
+            { name = "only Chat active, which hides no read", on = { [5] = true }, want = true },
+            { name = "Combat active", on = { [0] = true }, want = false },
+            { name = "an answer that errs counts as active", on = { [3] = "error" }, want = false },
+            { name = "no enum", on = {}, noEnum = true, want = false },
         }
         for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.OwnTaken(case.rule, case.override, case.known), case.name)
+            local function isActive(kind)
+                if case.on[kind] == "error" then error("refused") end
+                return case.on[kind] == true
+            end
+            local given = kinds
+            if case.noEnum then given = nil end
+            assert.are.equal(case.want, R.ReadsUnhidden(given, isActive), case.name)
+        end
+    end)
+
+    it("fills a cell when the restrictions end only when it is a charge cell on hidden state", function()
+        local R = loadRules()
+        -- want: reset, the current stamp still secret, the count (nil on a
+        -- one-charge cell).
+        local cases = {
+            { name = "a charge cell on plain state keeps its count", charges = 2, hide = false, want = { false, false, 0 } },
+            { name = "a charge cell on hidden state is filled", charges = 2, hide = true, want = { true, false, 2 } },
+            { name = "a one-charge cell keeps its timer", charges = 1, hide = true, want = { false, true } },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(60, false, false, case.charges)
+            R.Clear(t, 0)
+            for _, step in ipairs({ { false, 9 }, { true, 10 }, { false, 15 }, { true, 20 } }) do
+                R.Feed(t, step[1], nil, step[2], isSecret, choose, nil)
+            end
+            if case.hide then t.slot[t.cur].c = secret(t.slot[t.cur].c) end
+            local cleared = R.HiddenChargeClear(t, 25, isSecret)
+            assert.are.same(case.want, { cleared, isSecret(t.slot[t.cur].c), count(t) }, case.name)
+        end
+    end)
+
+    it("counts a group's second use on another unit while the first unit's buff is still up", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, true, 2)
+        R.Clear(t, 0)
+        local function read(n, a, b) R.Feed(t, { a, b, n = 2 }, nil, n, isSecret, choose, nil) end
+        read(9, false, false)
+        read(10, true, false)
+        read(12, true, true)
+        assert.are.same({ 0, 1 }, { count(t), t.b })
+    end)
+
+    it("starts the waiting recharge first when a use lands on the second the running one ends", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, false, 2)
+        R.Clear(t, 0)
+        local function read(lit, n) R.Feed(t, lit, nil, n, isSecret, choose, nil) end
+        for _, step in ipairs({ { false, 9 }, { true, 10 }, { false, 15 }, { true, 20 }, { false, 25 }, { true, 70 } }) do
+            read(step[1], step[2])
+        end
+        assert.are.same({ 0, 1, 60 }, { count(t), t.b, R.Left(t, t.slot[t.cur], 70) })
+    end)
+
+    it("times a lost count's use from the read that saw it, a group's per unit", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, true, 2)
+        R.Clear(t, 0)
+        local function read(n, a, b) return R.Feed(t, { a, b, n = 2 }, nil, n, isSecret, choose, nil) end
+        read(9, false, false)
+        read(10, true, false)
+        t.b = secret(0)
+        R.ChargeLose(t)
+        local changed = read(12, true, true)
+        local sl = t.slot[t.cur]
+        assert.are.same({ true, true, 1, 1, 60 }, { changed, t.legacy, sl.v, t.lb, R.Left(t, sl, 12) })
+    end)
+
+    it("keeps a use whose charge read errs: one cooldown from that read, and a redraw", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, true, 2)
+        R.Clear(t, 0)
+        local function boom() error("refused") end
+        R.Feed(t, { false, false, n = 2 }, nil, 9, isSecret, choose, nil)
+        R.Feed(t, { true, false, n = 2 }, nil, 10, isSecret, choose, nil)
+        t.slot[t.cur].c = secret(t.slot[t.cur].c)
+        local changed = R.Feed(t, { true, true, n = 2 }, nil, 12, isSecret, choose, boom, true)
+        local sl = t.slot[t.cur]
+        assert.are.same({ true, true, 1, 1, 60 }, { changed, t.legacy, sl.v, t.lb, R.Left(t, sl, 12) })
+    end)
+
+    it("holds a read whose fallback errs as well, so the next read finds the same use", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, true, 2)
+        R.Clear(t, 0)
+        local function boom() error("refused") end
+        local before = { false, false, n = 2 }
+        R.Feed(t, before, nil, 9, isSecret, choose, nil)
+        local changed = R.Feed(t, { secret(true), secret(false), n = 2 }, nil, 10, isSecret, boom, nil, true)
+        local held, lost = t.prev == before, t.legacy
+        R.Feed(t, { true, false, n = 2 }, nil, 11, isSecret, choose, nil)
+        local sl = t.slot[t.cur]
+        assert.are.same({ true, true, true, 1, 1, 60 }, { changed, held, lost, count(t), sl.v, R.Left(t, sl, 11) })
+    end)
+
+    it("only records a hidden read until the self-check decides", function()
+        local R = loadRules()
+        local cases = {
+            { name = "undecided", checked = nil, want = { false, 2 } },
+            { name = "passed", checked = true, want = { true, 1 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(60, false, false, 2)
+            R.Clear(t, 0)
+            R.Feed(t, false, nil, 9, isSecret, choose, nil, case.checked)
+            local changed = R.Feed(t, secret(true), nil, 10, isSecret, choose, nil, case.checked)
+            assert.are.same(case.want, { changed, count(t) }, case.name)
+        end
+    end)
+
+    it("recounts a lost count on plain state at the next tick; an idle read leaves it lost", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, false, 2)
+        R.Clear(t, 0)
+        R.Feed(t, false, nil, 9, isSecret, choose, nil)
+        R.ChargeLose(t)
+        local read = R.Feed(t, false, nil, 12, isSecret, choose, nil)
+        local lost = t.legacy == true
+        local ticked = R.ChargeTick(t, 13, isSecret, choose, nil, nil)
+        assert.are.same({ false, true, true, 2 }, { read, lost, ticked, count(t) })
+        assert.is_nil(t.legacy)
+    end)
+
+    it("finds a read idle only when no unit can have risen, from plain answers", function()
+        local R = loadRules()
+        local cases = {
+            { name = "single, not lit now", prev = secret(true), lit = false, want = true },
+            { name = "single, lit before", prev = true, lit = secret(true), want = true },
+            { name = "single, a rise", prev = false, lit = true, want = false },
+            { name = "single, hidden now after an unlit read", prev = false, lit = secret(true), want = false },
+            { name = "group, a second unit rising while the first is lit", multi = true,
+                prev = { true, false, n = 2 }, lit = { true, true, n = 2 }, want = false },
+            { name = "group, every unit off now or lit before", multi = true,
+                prev = { true, false, n = 2 }, lit = { secret(true), false, n = 2 }, want = true },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(60, false, case.multi == true, 2)
+            t.prev, t.prevShort = case.prev, nil
+            assert.are.equal(case.want, R.ChargeIdle(t, case.lit, nil, isSecret), case.name)
+        end
+    end)
+
+    it("only records an idle read on hidden state after the verdict, losing no count", function()
+        local R = loadRules()
+        local t = R.NewTracker(60, false, false, 2)
+        R.Clear(t, 0)
+        local function unreadable() return false, nil end
+        R.Feed(t, secret(true), nil, 9, isSecret, choose, unreadable, true)
+        t.slot[t.cur].c = secret(t.slot[t.cur].c)
+        local changed = R.Feed(t, false, nil, 12, isSecret, choose, unreadable, true)
+        assert.are.same({ false, false }, { changed, t.legacy == true })
+    end)
+
+    it("reads a charge tracker as plain only when every value its plain pass reads is plain", function()
+        local R = loadRules()
+        local cases = {
+            { name = "all plain", want = true },
+            { name = "a secret digit alpha", field = "a1", want = false },
+            { name = "a secret lost-count cover", field = "lb", want = false },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(60, false, false, 2)
+            R.Clear(t, 0)
+            t.lb = 1
+            if case.field then t[case.field] = secret(t[case.field]) end
+            assert.are.equal(case.want, R.ChargePlain(t, isSecret), case.name)
         end
     end)
 end)

@@ -18,9 +18,7 @@ KE.PartyCooldownsData = Data
 -- icon only: id is drawn when it is taken, likely until talents are read,
 -- and specs limits it to those specs. needs is a talent the row requires: it
 -- shows while the talent is taken, and before talents are read only if likely.
--- lengthNeeds is a talent a spec's paired seconds need: a member read without
--- it counts the cast's own cd, and so does one not yet read when likely is
--- false. active is set on a summon seen only through a stand-in buff: its
+-- active is set on a summon seen only through a stand-in buff: its
 -- cell's aura button never shows, and the cell shows the summon's own icon
 -- with a timer for active seconds from the cast, then the cooldown. off
 -- starts the row switched off in every spec's spell list.
@@ -41,14 +39,13 @@ Data.SPELLS = {
     -- Vengeance's Metamorphosis; its cooldown and buff are from game data.
     [187827]  = { kind = "defensive", cd = 120 },
 
-    -- Incarnation's two charges: each use reads as the whole cooldown. It
-    -- shares a choice node with Convoke the Spirits, the less common pick.
+    -- With Whirling Stars it has two charges. Incarnation shares a choice node
+    -- with Convoke the Spirits, the less common pick.
     [194223]  = { kind = "offensive", cd = 180, buffs = { 194223, 102560, 390414 },
                   swap = { id = 102560, talents = { [102560] = true }, likely = true } },
     -- Feral's 60 s needs Ashamane's Guidance, which most Ferals skip.
     [391528]  = { kind = "offensive", cd = 120,
-                  needs = { talents = { [391528] = true }, likely = false },
-                  lengthNeeds = { talents = { [391548] = true }, likely = false } },
+                  needs = { talents = { [391528] = true }, likely = false } },
     [106951]  = { kind = "offensive", cd = 180, buffs = { 106951, 102543 } },
     [22812]   = { kind = "defensive", cd = 60 },
     [61336]   = { kind = "defensive", cd = 180 },
@@ -72,8 +69,7 @@ Data.SPELLS = {
     [132578]  = { kind = "offensive", cd = 120 },
     -- Seen through Celestial Conduit, which every Xuen caster has.
     -- Windwalker's 90 s needs Xuen's Bond.
-    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 }, active = 20,
-                  lengthNeeds = { talents = { [392986] = true } } },
+    [123904]  = { kind = "offensive", cd = 120, buffs = { 1248992 }, active = 20 },
     [115203]  = { kind = "defensive", cd = 360, buffs = { 115203, 120954 } },
     [122783]  = { kind = "defensive", cd = 90 },
     [122470]  = { kind = "defensive", cd = 90, buffs = { 125174 } },
@@ -90,7 +86,7 @@ Data.SPELLS = {
     [10060]   = { kind = "offensive", cd = 120,
                   needs = { talents = { [373466] = true }, likely = true } },
     -- The 70 s needs Angel's Mercy.
-    [19236]   = { kind = "defensive", cd = 90, lengthNeeds = { talents = { [238100] = true } } },
+    [19236]   = { kind = "defensive", cd = 90 },
     [47585]   = { kind = "defensive", cd = 120 },
 
     [360194]  = { kind = "offensive", cd = 120, buffs = { 1249810 } },
@@ -100,8 +96,7 @@ Data.SPELLS = {
     [5277]    = { kind = "defensive", cd = 120 },
 
     -- Elemental's 120 s needs First Ascendant.
-    [114050]  = { kind = "offensive", cd = 180, buffs = { 114050, 1219480 }, short = 10,
-                  lengthNeeds = { talents = { [462440] = true } } },
+    [114050]  = { kind = "offensive", cd = 180, buffs = { 114050, 1219480 }, short = 10 },
     [114051]  = { kind = "offensive", cd = 180, short = 10 },
     [108271]  = { kind = "defensive", cd = 120 },
     -- Seen only through Primordial Bond, so a read without it hides the row.
@@ -114,13 +109,11 @@ Data.SPELLS = {
     -- Seen only through Crashing Chaos, so a read without it hides the row.
     -- Destruction's 90 s needs Inferno.
     [1122]    = { kind = "offensive", cd = 120, buffs = { 417282 }, active = 30,
-                  needs = { talents = { [417234] = true }, likely = true },
-                  lengthNeeds = { talents = { [1280483] = true } } },
+                  needs = { talents = { [417234] = true }, likely = true } },
 
     [1719]    = { kind = "offensive", cd = 90 },
     [118038]  = { kind = "defensive", cd = 120 },
     [184364]  = { kind = "defensive", cd = 120 },
-    -- Two charges; each use reads as the whole cooldown.
     [23920]   = { kind = "defensive", cd = 25 },
 
     -- Healer externals, in no spec list: HEALER_SPECS picks them by spec.
@@ -141,7 +134,70 @@ for castID, spell in pairs(Data.SPELLS) do
     spell.buffs = spell.buffs or { castID }
 end
 
--- Per spec, in display order. A pair is { cast, the spec's talented seconds }.
+-- Talent changes to a cast's cooldown, per rank: add seconds or pct percent,
+-- and spec limits one to a spec. A cell counts the length once every talent a
+-- mod names is read.
+local MODS = {
+    [49028]   = { { 377637, add = -30 } },
+    [48707]   = { { 205727, add = -20 }, { 457574, add = 20 } },
+    [194223]  = { { 390378, add = -60 }, { 468743, add = -60 } },
+    [106951]  = { { 391174, add = -60 }, { 391548, add = -30 } },
+    [391528]  = { { 391548, spec = 103, add = -60 } },
+    [22812]   = { { spec = 104, add = -15 }, { 203965, pct = -12 } },
+    [61336]   = { { 203965, pct = -12 } },
+    [102342]  = { { 382552, add = -20 } },
+    [403631]  = { { 412713, pct = -10 } },
+    [363916]  = { { 412713, pct = -10 } },
+    [357170]  = { { 376204, add = -10 } },
+    [19574]   = { { 231548, add = -60 } },
+    [288613]  = { { 260404, add = -30 } },
+    [1250646] = { { 1251790, add = -15 } },
+    [186265]  = { { 266921, add = -15 }, { 1258485, add = -30 } },
+    [190319]  = { { 1254194, add = -60 } },
+    [45438]   = { { 382424, add = -30 }, { 1265517, add = -30 }, { 1244110, add = -30 } },
+    [342245]  = { { 342249, add = -5 }, { 1255166, add = -10 } },
+    [132578]  = { { 450989, add = -25 } },
+    [123904]  = { { 392986, add = -30 } },
+    [115203]  = { { spec = 269, add = -240 }, { spec = 270, add = -240 }, { 388813, add = -30 } },
+    [116849]  = { { 202424, add = -45 } },
+    [31884]   = { { spec = 70, add = -60 }, { 1241511, add = -30 }, { 204074, pct = -50 } },
+    [642]     = { { 114154, pct = -30 }, { 378425, pct = -15 } },
+    [498]     = { { spec = 70, add = 30 }, { 114154, pct = -30 } },
+    [31850]   = { { 114154, pct = -30 } },
+    [6940]    = { { 384820, add = -60 }, { 384820, spec = 65, add = 45 } },
+    [19236]   = { { 238100, add = -20 } },
+    [47585]   = { { 288733, add = -30 } },
+    [114050]  = { { 462440, add = -60 } },
+    [114051]  = { { 384444, add = -60 } },
+    [108271]  = { { 381647, add = -30 } },
+    [1122]    = { { 1280483, add = -30 } },
+    [104773]  = { { 386659, add = -45 } },
+    [108416]  = { { 386686, add = -15 } },
+    [118038]  = { { 391271, pct = -10 } },
+    [184364]  = { { 391271, pct = -10 } },
+    [23920]   = { { spec = 73, add = -5 }, { 391271, pct = -10 } },
+}
+for castID, mods in pairs(MODS) do Data.SPELLS[castID].mods = mods end
+
+-- Talents that give a cast its second charge. A cell counts it once the
+-- talent is read as taken; unread, it counts nothing.
+local CHARGES = {
+    [33206]  = { 373035 },   -- Pain Suppression: Protector of the Frail
+    [357170] = { 376204 },   -- Time Dilation: Just in Time
+    [194223] = { 468743 },   -- Celestial Alignment: Whirling Stars
+    [45438]  = { 1244110 },  -- Ice Block: Glacial Bulwark
+    [363916] = { 375406 },   -- Obsidian Scales: Obsidian Bulwark
+    [198589] = { 1266307 },  -- Blur: Demonic Resilience
+    [264735] = { 459450 },   -- Survival of the Fittest: Padded Armor
+}
+for castID, talents in pairs(CHARGES) do
+    local spell = Data.SPELLS[castID]
+    spell.mods = spell.mods or {}
+    for _, talent in ipairs(talents) do spell.mods[#spell.mods + 1] = { talent, charges = 1 } end
+end
+
+-- Per spec, in display order. A pair is { cast, the spec's listed seconds },
+-- with charges = n where the spec always has n charges.
 Data.SPECS = {
     [250]  = { { 49028, 90 }, 48792 },
     [251]  = { 51271, 1249658, 279302, 48792, { 48707, 40 } },
@@ -150,8 +206,8 @@ Data.SPECS = {
     [581]  = { 187827 },
     [1480] = { 198589 },
     [102]  = { { 194223, 120 }, 391528, 22812 },
-    [103]  = { { 106951, 90 }, { 391528, 60 }, 22812, 61336 },
-    [104]  = { { 22812, 34 }, { 61336, 137 } },
+    [103]  = { { 106951, 90 }, 391528, 22812, 61336 },
+    [104]  = { { 22812, 34 }, { 61336, 137, charges = 2 } },
     [105]  = { 22812 },
     [1467] = { 375087, 363916 },
     [1468] = { 363916 },

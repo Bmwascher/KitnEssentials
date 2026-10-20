@@ -16,6 +16,7 @@ local KE = select(2, ...)
 local C_CurveUtil = C_CurveUtil
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
+local GetCursorPosition = GetCursorPosition
 local GetTime = GetTime
 local UIParent = UIParent
 local ipairs = ipairs
@@ -25,7 +26,9 @@ local math_max = math.max
 local pairs = pairs
 local pcall = pcall
 local table_concat = table.concat
+local table_remove = table.remove
 local tostring = tostring
+local type = type
 local wipe = wipe
 
 local Rules = KE.PartyCooldownsRules
@@ -50,7 +53,8 @@ local HIDDEN_RETRY = 1
 -- cost one GetTime and one compare; the fourth walks the live trackers, with
 -- 2 SetMinMaxValues per running slot (64 a second at 16 cells), 3 on a summon
 -- cell whose glow is on, plus a seat check per running gray cell (3 reads, an
--- anchor write only when the seat moved).
+-- anchor write only when the seat moved). A charge cell adds its pass: on
+-- secret state three read-backs of four calls, 33 evaluations and one push.
 local TICK = 0.25
 
 -- Whole seconds from an origin far enough back that no epoch goes negative.
@@ -71,37 +75,246 @@ function Track.Now() return math_floor(GetTime() - T0 + 0.5) end
 
 function Track.DoorOpen() return Rules.DoorOpen(Track.door) end
 
--- PB:DrawPreviewCells makes trackers with no view; Cell draws those.
+---------------------------------------------------------------------------------
+-- Charge read-back: a hidden bar holds a value, and a hit test on its fill
+-- edge answers whether the value is at least a threshold without Lua reading
+-- it. The answer may be secret; it only reaches EvaluateColorValueFromBoolean.
+---------------------------------------------------------------------------------
+local CMP_LO, CMP_HI, CMP_HEIGHT = -0.02, 1.02, 520
+local CHECK_TRIES = 6
+local cmpLayer
+local cmpPool = {}
+-- A bar whose probe was refused, kept for the next pair.
+local spareBar
+
+-- Made only for two-charge cells: the self-check's pair when the first is
+-- bound, three per cell when it is revealed. The layer is shown so the hit
+-- test has a laid-out frame to measure.
+local function NewCompare()
+    local cmp = table_remove(cmpPool)
+    if cmp then return cmp end
+    if not cmpLayer then
+        cmpLayer = CreateFrame("Frame", nil, UIParent)
+        cmpLayer:SetSize(1, 1)
+        cmpLayer:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
+    local bar = spareBar
+    if not bar then
+        bar = CreateFrame("StatusBar", nil, cmpLayer)
+        bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        bar:SetStatusBarColor(0, 0, 0, 0)
+        bar:SetOrientation("VERTICAL")
+        bar:SetSize(1, CMP_HEIGHT)
+        bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+        bar:SetMinMaxValues(CMP_LO, CMP_HI)
+        bar:SetValue(1)
+        spareBar = bar
+    end
+    local probe = CreateFrame("Frame", nil, cmpLayer)
+    probe:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+    probe:SetPoint("TOPRIGHT", bar:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
+    spareBar = nil
+    return { bar = bar, probe = probe }
+end
+
+-- Whether cmp's value is at least v: the probe spans the bar's bottom to its
+-- fill edge, and a point v up the bar lies over it exactly then. First whether
+-- the measures could be read, always plain, then the answer, which may be
+-- secret and is never compared here.
+local function Past(cmp, v)
+    local bottom = cmp.bar:GetBottom()
+    local _, y = GetCursorPosition()
+    local scale = cmp.probe:GetEffectiveScale()
+    if type(bottom) ~= "number" or issecretvalue(bottom) or type(y) ~= "number" or issecretvalue(y)
+        or type(scale) ~= "number" or issecretvalue(scale) or scale <= 0 then
+        return false, nil
+    end
+    local at = bottom + CMP_HEIGHT * (v - CMP_LO) / (CMP_HI - CMP_LO)
+    return true, cmp.probe:IsMouseOver(y / scale - at, -1e5, -1e5, 1e5)
+end
+
+-- The rules' read-back: which is slot 1, slot 2 or "b". It answers only once
+-- the self-check has passed, and never while a bar holds an older value than
+-- the tracker (a refused write), so a stale bar is never read as a count.
+local function ReadBack(t, which, v)
+    local cmp = Track.chargeCheck == true and not t.cmpStale and t.cmp and t.cmp[which]
+    if not cmp then return false, nil end
+    return Past(cmp, v)
+end
+
+-- Every write is tried; any refused one marks the bars stale until a later
+-- write of all three is accepted.
+local function WriteCompare(t)
+    local cmp = t.cmp
+    if not cmp then return end
+    local ok1 = pcall(cmp[1].bar.SetValue, cmp[1].bar, t.slot[1].c)
+    local ok2 = pcall(cmp[2].bar.SetValue, cmp[2].bar, t.slot[2].c)
+    local okB = pcall(cmp.b.bar.SetValue, cmp.b.bar, t.b)
+    t.cmpStale = not (ok1 and ok2 and okB)
+end
+
+-- The self-check starts when the first two-charge cell is bound, so a player
+-- who never has one gets no frame, and in the usual order (form the group,
+-- then start the key) its verdict is in before any read is secret. The ticker
+-- runs its steps. A refused frame decides the check as failed: an undecided
+-- check would keep every hidden read recording only, with no timer at all.
+function Track.StartCheck()
+    if Track.checkProbe or Track.chargeCheck ~= nil then return end
+    local ok, probe = pcall(NewCompare)
+    if not ok then
+        Track.chargeCheck, Track.chargeWhy = false, tostring(probe)
+        return
+    end
+    Track.checkProbe = probe
+    Track.Wake()
+end
+
+-- The check's probe pair is made first and the tracker's bars are stored only
+-- once all three exist, so a refused frame leaves nothing half made and the
+-- next reveal tries again.
+function Track.EnsureCompare(t)
+    if not t.charges then return end
+    Track.StartCheck()
+    if t.cmp then return end
+    local made = {}
+    for i = 1, 3 do
+        local ok, cmp = pcall(NewCompare)
+        if not ok then
+            for _, back in ipairs(made) do cmpPool[#cmpPool + 1] = back end
+            return
+        end
+        made[i] = cmp
+    end
+    t.cmp = { made[1], made[2], b = made[3] }
+    WriteCompare(t)
+end
+
+function Track.FreeCompare(t)
+    local cmp = t.cmp
+    if not cmp then return end
+    t.cmp = nil
+    cmpPool[#cmpPool + 1] = cmp[1]
+    cmpPool[#cmpPool + 1] = cmp[2]
+    cmpPool[#cmpPool + 1] = cmp.b
+end
+
+-- PB:DrawPreviewCells makes trackers with no view; Cell draws those. A charge
+-- tracker also writes its read-back bars and its count.
 local function Push(t, n)
     local c = t.cell
     if not c then return end
     local view = t.view or Cell
     for k = 1, 2 do pcall(view.Write, c, k, t.slot[k], t.u, n) end
+    if t.charges then
+        WriteCompare(t)
+        if view.WriteCharges then pcall(view.WriteCharges, c, t) end
+    end
     if view.Seat then pcall(view.Seat, c) end
 end
 Track.Push = Push
 
--- Work happens once a second; the ticker stops when nothing shows a time.
+-- A failed self-check: no hidden answer can be read from now on, so every
+-- charge cell on secret state loses its count at once rather than at its next
+-- read, and shows its single timer until the restrictions' end resets it to
+-- full.
+local function CheckFailed(n, why)
+    Track.chargeCheck, Track.chargeWhy = false, why
+    for t in pairs(Track.live) do
+        if t.charges and not t.legacy and not Rules.ChargePlain(t, issecretvalue) then
+            Rules.ChargeLose(t)
+            Push(t, n)
+        end
+    end
+end
+
+local checkTry, checkPass, checkWant = 0, 0, nil
+
+-- One step a second until it decides: the probe bar set to 0.3, then 0.7,
+-- must read at least its value minus 0.05 and not its value plus 0.05, twice
+-- in a row within CHECK_TRIES tries. A secret answer cannot be checked here
+-- and is taken as passed; it is tested for secrecy before any comparison.
+local function CheckStep(n)
+    local probe = Track.checkProbe
+    if checkWant then
+        local okA, knownA, a = pcall(Past, probe, checkWant - 0.05)
+        local okB, knownB, b = pcall(Past, probe, checkWant + 0.05)
+        if not (okA and okB) then
+            CheckFailed(n, tostring(okA and knownB or knownA))
+            return
+        end
+        if issecretvalue(a) or issecretvalue(b) then
+            Track.chargeCheck, Track.chargeWhy = true, "hidden"
+            return
+        end
+        if knownA and knownB and a == true and b == false then
+            checkPass = checkPass + 1
+            if checkPass >= 2 then
+                Track.chargeCheck = true
+                return
+            end
+        else
+            checkPass = 0
+            if checkTry >= CHECK_TRIES then
+                CheckFailed(n, "a bar at " .. checkWant .. " read " .. tostring(a) .. " / " .. tostring(b))
+                return
+            end
+        end
+    end
+    checkTry = checkTry + 1
+    checkWant = checkTry % 2 == 1 and 0.3 or 0.7
+    probe.bar:SetValue(checkWant)
+end
+
+-- Work happens once a second; the ticker stops when nothing shows a time and
+-- the read-back's self-check, one step a second, has decided. A charge
+-- tracker's pass runs first, so a recharge that ended with a second use
+-- waiting starts the next one before the linger clears it. On secret state
+-- that pass needs the read-back, which the hidden interface hides, so such a
+-- tracker is held whole, linger included, until the interface shows again. A
+-- preview sample takes no charge pass, so it loops at no charge.
 local function Tick()
     local n = Track.Now()
     if n == lastN then return end
     lastN = n
-    local any = false
+    local shown = UIParent:IsShown()
+    local checking = Track.chargeCheck == nil and Track.checkProbe ~= nil
+    if shown and checking then
+        local ok, err = pcall(CheckStep, n)
+        if not ok then CheckFailed(n, tostring(err)) end
+    end
+    local any = checking
     for t in pairs(Track.live) do
-        local running, changed = Rules.Tick(t, n, issecretvalue)
-        if t.loop and not running then
-            Rules.StartLoop(t, n)
-            running, changed = true, true
-        end
-        if changed then Push(t, n) end
-        if running then
-            any = true
-            local view = t.view or Cell
-            for k = 1, 2 do
-                local sl = t.slot[k]
-                if issecretvalue(sl.v) or sl.v ~= 0 then pcall(view.Range, t.cell, k, sl, t.u, n) end
+        local held = false
+        if t.charges and not t.loop then
+            if shown or Rules.ChargePlain(t, issecretvalue) then
+                local ok, moved = pcall(Rules.ChargeTick, t, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck)
+                if not ok then
+                    Rules.ChargeLose(t)
+                    moved = true
+                end
+                if moved then Push(t, n) end
+            else
+                held = true
             end
-            if view.Seat and t.cell and not changed then pcall(view.Seat, t.cell) end
+        end
+        if held then
+            any = true
+        else
+            local running, changed = Rules.Tick(t, n, issecretvalue)
+            if t.loop and not running then
+                Rules.StartLoop(t, n)
+                running, changed = true, true
+            end
+            if changed then Push(t, n) end
+            if running then
+                any = true
+                local view = t.view or Cell
+                for k = 1, 2 do
+                    local sl = t.slot[k]
+                    if issecretvalue(sl.v) or sl.v ~= 0 then pcall(view.Range, t.cell, k, sl, t.u, n) end
+                end
+                if view.Seat and t.cell and not changed then pcall(view.Seat, t.cell) end
+            end
         end
     end
     if not any and ticker then
@@ -123,8 +336,10 @@ end
 
 function Track.Forget(t)
     Track.live[t] = nil
+    Track.FreeCompare(t)
     -- The last tracker gone: Tick would only cancel at the next whole second.
-    if ticker and next(Track.live) == nil then
+    -- An undecided self-check keeps it, as Tick does.
+    if ticker and next(Track.live) == nil and not (Track.chargeCheck == nil and Track.checkProbe) then
         ticker:Cancel()
         ticker = nil
     end
@@ -295,7 +510,7 @@ local function ReadCell(st, i, n)
         t.primed = false
         return
     end
-    if Rules.Feed(t, lit, short, n, issecretvalue, EvalBool) then
+    if Rules.Feed(t, lit, short, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck) then
         Push(t, n)
         Track.Wake()
     end
@@ -324,11 +539,13 @@ local function ReadGroupCell(st, i, n)
             end
         end
     end
-    if Rules.Feed(t, list, nil, n, issecretvalue, EvalBool) then
+    if Rules.Feed(t, list, nil, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck) then
         Push(t, n)
         Track.Wake()
     end
-    t.next = 3 - t.next
+    -- A held read keeps the list before it as the previous read, so the
+    -- lists swap only once Feed has taken this one.
+    if t.prev == list then t.next = 3 - t.next end
 end
 
 -- While the interface is hidden its containers show nothing, so a read then
@@ -424,17 +641,28 @@ function Track.KeyStart()
     for st in pairs(Track.slots) do
         for i = 1, st.count do
             local t, e = st.trackers[i], st.entries[i]
-            if t and e and Rules.ResetsAtKeyStart(e) then
-                Rules.Clear(t, n)
+            if t and e and Rules.KeyStartClear(t, e, n) then
                 Push(t, n)
             end
         end
     end
 end
 
-local function Sig(e)
-    return table_concat(e.buffs, ",") .. "/" .. tostring(e.short) .. "/" .. e.cd
+-- Party rows and the externals box alike; a reset digit can read one charge
+-- high for up to one cooldown.
+function Track.ChargeRestrictionsEnded()
+    local n = Track.Now()
+    for st in pairs(Track.slots) do
+        for i = 1, st.count do
+            local t = st.trackers[i]
+            if t and Rules.HiddenChargeClear(t, n, issecretvalue) then Push(t, n) end
+        end
+    end
 end
+
+-- Sensors take it as their filter signature too, so a new length does not
+-- re-aim them.
+local Sig = Rules.TrackerKey
 
 -- A cell's sensors: its own and its proc sensor, or one per unit in a group
 -- slot.
@@ -461,6 +689,7 @@ end
 local function Reveal(st, i, n)
     local c, t = st.cells[i], st.trackers[i]
     if st.ready[i] then
+        pcall(Track.EnsureCompare, t)
         Push(t, n)
         Track.Watch(t)
         c:Show()
@@ -503,7 +732,8 @@ end
 
 -- Points the slot's cells at entries for unit. Containers are only aimed
 -- here; BuildNext makes the missing ones, one per call. A cell keeps its
--- running timer while its buffs and length are unchanged.
+-- count while its buffs, charges and code unit are unchanged; a new length in
+-- the same unit re-dresses it.
 function Track.Apply(st, unit, entries, style, settings)
     local clean, moved = true, false
     local n = Track.Now()
@@ -532,11 +762,14 @@ function Track.Apply(st, unit, entries, style, settings)
         local t = st.trackers[i]
         if not t or t.sig ~= sig then
             if t then Track.Forget(t) end
-            t = Rules.NewTracker(e.cd, e.short ~= nil)
+            t = Rules.NewTracker(e.cd, e.short ~= nil, false, e.charges)
+            if t.charges then Track.StartCheck() end
             t.sig, t.cell, t.view = sig, c, st.view
             Rules.Clear(t, n)
             st.trackers[i] = t
             moved = true
+        elseif t.cd ~= e.cd then
+            t.cd = e.cd
         end
         local ready, refused, aimed = Ready(st.sensors[i], sig, e.buffs, nil, unit)
         if e.short then
@@ -623,9 +856,11 @@ function Track.ApplyGroup(st, units, entries, style)
         local t = at and old[at]
         if t then
             used[at] = true
+            t.cd = e.cd
             if t.cell ~= c then t.cell, moved = c, true end
         else
-            t = Rules.NewTracker(e.cd, false, true)
+            t = Rules.NewTracker(e.cd, false, true, e.charges)
+            if t.charges then Track.StartCheck() end
             t.sig, t.cell, t.view = sig, c, st.view
             t.lists, t.next = { { n = 0 }, { n = 0 } }, 1
             Rules.Clear(t, n)
