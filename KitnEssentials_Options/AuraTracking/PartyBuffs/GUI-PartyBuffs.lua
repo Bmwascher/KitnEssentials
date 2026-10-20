@@ -15,13 +15,13 @@ local DESCRIPTION = "Shows the cooldowns that matter for your group beside each 
     "it is known, that member shows no cooldown icons. Externals and potions your party members receive still " ..
     "show while active, after the cooldown icons. " ..
     "The Potions tab shows each party member's potion cooldown as a bar. " ..
-    "The Healer Externals tab shows each party healer's external cooldown in a box you can move." ..
+    "The Raid Cooldowns tab shows your party's externals and raid cooldowns in a box you can move." ..
     "\n\nWorks on Blizzard's party frames and on |cffffd100EllesmereUI|r frames. Not shown in raids."
 
 GUIFrame:RegisterTabbedContent("PartyBuffs", {
     { id = "PartyBuffsCooldowns",       label = "Cooldowns" },
     { id = "PartyBuffsPotions",         label = "Potions" },
-    { id = "PartyBuffsHealerExternals", label = "Healer Externals" },
+    { id = "PartyBuffsHealerExternals", label = "Raid Cooldowns" },
 }, {
     headerBuilder = function(scrollChild, yOffset)
         local db = KE.db and KE.db.profile.PartyBuffs

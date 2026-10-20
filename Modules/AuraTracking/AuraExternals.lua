@@ -56,7 +56,10 @@ local DECLARATION = {
             -- added spell would never appear.
             buildFilter  = function() return "HELPFUL" end,
             buildCandidates = BuildExternalCandidates,
-            capabilities = { hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true },
+            capabilities = {
+                hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true,
+                hasCasterName = true,
+            },
         },
         {
             key          = "big",

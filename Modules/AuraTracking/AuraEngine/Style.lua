@@ -286,6 +286,18 @@ function Style.CreateRegions(frame, group, settings)
         frame.keCaption:SetJustifyH("CENTER")
     end
 
+    -- Made for every button of the group whatever the setting: a region
+    -- parented after initializeFrame returns has no legal window. Seeded with
+    -- a font because SetCasterName redraws at once, and SetText on a fontless
+    -- string errors.
+    if caps.hasCasterName then
+        frame.keCaster = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
+        frame.keCaster:SetJustifyH("CENTER")
+        frame.keCaster:SetWordWrap(false)
+        KE:ApplyFontToText(frame.keCaster, settings.FontFace, settings.FontSize, settings.FontOutline)
+        frame.keCaster:Hide()
+    end
+
     -- Seeded here for the same reason as the dispel host's fontstring:
     -- RegisterRegions's Set* calls can trigger an immediate UpdateAuraDisplay,
     -- and SetText on a fontless string errors.
@@ -416,6 +428,18 @@ function Style.RegisterRegions(button, _display, group, settings)
         button:SetApplicationCount(button.keCount)
     end
 
+    -- Once registered, the game writes the name and shows or hides it; off,
+    -- the registration is cleared and the string emptied so no name lingers.
+    if button.keCaster then
+        if settings.ShowCasterName == true then
+            button:SetCasterName(button.keCaster, { useClassColors = true, showRealmName = false })
+        else
+            button:ClearCasterName()
+            button.keCaster:SetText("")
+            button.keCaster:Hide()
+        end
+    end
+
     -- List-shaped: clear before add, or a reconfiguration stacks a second
     -- dispel texture on top of the first.
     if button.keDispel then
@@ -532,6 +556,16 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         caption:ClearAllPoints()
         caption:SetPoint("TOP", frame, "BOTTOM", 0, -2)
         caption:SetShown(settings.ShowText ~= false)
+    end
+
+    -- Font, anchor and width only: a live button's caster text and shown
+    -- state are the game's once registered, and the preview writes its own.
+    if caps.hasCasterName and frame.keCaster then
+        local caster = frame.keCaster
+        KE:ApplyFontToText(caster, settings.FontFace, settings.FontSize, settings.FontOutline)
+        caster:ClearAllPoints()
+        caster:SetPoint("TOP", frame, "BOTTOM", 0, -1)
+        caster:SetWidth(settings.IconSize or 0)
     end
 
     if caps.hasBorder and frame.keBorder then

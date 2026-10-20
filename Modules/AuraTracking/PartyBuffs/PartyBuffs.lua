@@ -213,7 +213,7 @@ function PB:EvaluateGate()
     local rules = KE.PartyBuffsRules
     local content = rules.ClassifyContent(self:ReadFacts())
     local inGroup, inRaid = PlainTrue(IsInGroup), PlainTrue(IsInRaid)
-    -- The healer externals box reads this to stay out of raid groups.
+    -- The raid cooldowns box reads this to stay out of raid groups.
     self.inRaid = inRaid
     local on = rules.ShouldActivate(self.db, content, inGroup, inRaid)
     Debug("gate %s group=%s raid=%s -> %s", content, inGroup, inRaid, on and "activate" or "deactivate")
@@ -425,7 +425,7 @@ end
 -- finished, so its teammate shows before the next slot starts. pumping stays
 -- set while BuildSlot runs, so an Enqueue from inside it schedules nothing and
 -- only this function schedules the next pump.
--- HX.QUEUE_KEY is the healer externals box's key, any other string a
+-- HX.QUEUE_KEY is the raid cooldowns box's key, any other string a
 -- potion row's unit token, a number a party slot's.
 local function BuildHead()
     local k = PB.queue[1]
@@ -960,7 +960,7 @@ function PB:BindCooldowns(k, binding)
     self:ExcludeCellTrinkets(k, slot, entries)
     self:ApplyActiveList(slot, entries)
     self:SyncMembers()
-    -- Spec.Resolve announces no change, and the healer externals box may read
+    -- Spec.Resolve announces no change, and the raid cooldowns box may read
     -- this record too. Its resolve then finds the spec unmoved.
     if m and m.spec ~= before then HX.OnMemberChanged(m) end
 end
@@ -1166,7 +1166,7 @@ function PB:SyncMembers()
         local slot = self.slots[k]
         if self.bindings[k] and slot and slot.member then list[#list + 1] = slot.member end
     end
-    -- The healer externals box needs its healers' specs whether or not a
+    -- The raid cooldowns box needs its members' specs whether or not a
     -- party frame row shows them.
     for _, m in ipairs(HX.members) do
         local listed = false
@@ -1263,7 +1263,7 @@ function PB:OnWorldEntry()
         if not (self:IsEnabled() and self.active) then return end
         Debug("world settle")
         self:QueueResolve()
-        -- The potion and healer externals boxes bind outside the party frame
+        -- The potion and raid cooldowns boxes bind outside the party frame
         -- resolve; their rows re-dress here once the login UI scale settles.
         self:OnRelease()
     end)
@@ -1460,7 +1460,7 @@ function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
     self:BuildStyleSettings()
-    -- Off, only the healer externals box still needs specs read.
+    -- Off, only the raid cooldowns box still needs specs read.
     local icons = IconsOn()
     Spec.SetTracked(icons and self.db.TrackBurst == true, icons and self.db.TrackTrinket == true,
         icons and self.db.ShowRacials == true, self.db.HealerExternals == true)

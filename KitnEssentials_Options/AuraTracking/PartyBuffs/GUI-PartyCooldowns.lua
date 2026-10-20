@@ -119,7 +119,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     end
 
     -- Party Frame Icons off grays every setting of the rows beside party
-    -- frames; Potion bars and the healer externals box keep theirs live.
+    -- frames; Potion bars and the raid cooldowns box keep theirs live.
     manager:SetCondition("iconsOn", function() return db.FrameIcons == true end)
     manager:SetCondition("colorsOn", function() return db.CategoryColors == true end)
     manager:SetCondition("rowColorsOn", function()
@@ -224,7 +224,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         ApplySettings()
     end)
     cardTracked:AddLabel("Cooldown and active buff icons beside each party frame. "
-        .. "Potion bars and Healer Externals work with this off.")
+        .. "Potion bars and Raid Cooldowns work with this off.")
     AddPicks(cardTracked, {
         { "Class Cooldowns", "TrackBurst",
             "Each party member's offensive and personal defensive cooldowns, by spec.", RefreshStates },
@@ -347,7 +347,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         onChangeCallback = ApplySettings,
     })
     -- The card itself is not registered: its SetEnabled drives all four
-    -- widgets. Potion bars and the healer externals box read the font and
+    -- widgets. Potion bars and the raid cooldowns box read the font and
     -- outline.
     if fontWidgets then
         manager:Register(fontWidgets[1], "all")

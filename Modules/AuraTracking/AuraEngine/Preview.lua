@@ -221,6 +221,15 @@ local function ApplyPreviewSwipe(frame, swipe)
     end
 end
 
+-- A live button's caster name is the game's to write; a preview frame
+-- registers nothing, so a sample stands in while the setting is on.
+local function ApplyPreviewCaster(frame, shown)
+    local caster = frame.keCaster
+    if not caster then return end
+    caster:SetText(shown and "Caster" or "")
+    caster:SetShown(shown)
+end
+
 local function PopulateEntryContent(frame, entry, now, decimalThreshold, swipe)
     if frame.keIcon then
         frame.keIcon:SetTexture(entry.icon)
@@ -311,6 +320,7 @@ local function BuildFrames(state, handle, display, settings)
             RepaintDispelRing(frame, group, settings, entry.dispelType)
             PopulateDispelBadge(frame, entry.dispelType)
             ApplyPreviewSwipe(frame, state.swipe)
+            ApplyPreviewCaster(frame, settings.ShowCasterName == true)
 
             PositionEntryFrame(frame, i, display, settings)
             PopulateEntryContent(frame, entry, now, state.decimalThreshold, state.swipe)

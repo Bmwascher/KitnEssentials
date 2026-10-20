@@ -1480,6 +1480,7 @@ local Defaults = {
 
         AuraExternals = {
             Enabled           = false,
+            ShowCasterName    = false,
             ShowBigDefensives = false,
             HideSelfCast      = false,
             Strata            = "MEDIUM",
@@ -1575,7 +1576,7 @@ local Defaults = {
         PartyBuffs = {
             Enabled           = false,
             -- The Party Frame Icons switch: off, nothing is built beside party
-            -- frames; Potion bars and Healer Externals still work.
+            -- frames; Potion bars and Raid Cooldowns still work.
             FrameIcons        = true,
             TrackExternal     = false,
             TrackBurst        = true,
@@ -1629,9 +1630,10 @@ local Defaults = {
             GlowFrequency     = 0.5,
             GlowThickness     = 2,
             GlowPulse         = true,
-            -- Keyed "<specID>:<castID>"; a racial "race:<castID>" and a
-            -- healer's external "healer:<specID>:<castID>". CooldownOrder
-            -- holds a cast list per spec.
+            -- Keyed "<specID>:<castID>"; a racial "race:<castID>", a
+            -- healer's external "healer:<specID>:<castID>" and a Raid
+            -- Cooldowns box row "box:<castID>". CooldownOrder holds a cast
+            -- list per spec.
             CooldownOff       = {},
             CooldownOrder     = {},
             -- Potion bars (Potions tab). They read ListPotions, which the
@@ -1654,8 +1656,8 @@ local Defaults = {
             PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 },
             PotionAnchorFrameType = "UIPARENT",
             PotionStrata      = "MEDIUM",
-            -- Healer externals box (Healer Externals tab), attached to the top
-            -- of Healer Mana. While Healer Mana's frame does not exist (off
+            -- Raid Cooldowns box (Raid Cooldowns tab), attached to the top of
+            -- Healer Mana. While Healer Mana's frame does not exist (off
             -- since login) the box takes HX.DEFAULT_POSITION on the screen.
             HealerExternals   = true,
             HealerExtIconSize = 38,
@@ -1700,6 +1702,7 @@ local Defaults = {
 
         AuraMovement = {
             Enabled = false,
+            ShowCasterName = false,
             Strata = "MEDIUM",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",

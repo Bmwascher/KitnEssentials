@@ -118,11 +118,45 @@ Data.SPELLS = {
 
     -- Healer externals, in no spec list: HEALER_SPECS picks them by spec.
     [33206]   = { kind = "external", cd = 180 }, -- Pain Suppression
-    [47788]   = { kind = "external", cd = 180 }, -- Guardian Spirit
+    [47788]   = { kind = "external", cd = 180, buffs = { 47788, 255312 } }, -- Guardian Spirit
     [102342]  = { kind = "external", cd = 90 },  -- Ironbark
     [116849]  = { kind = "external", cd = 120 }, -- Life Cocoon
     [6940]    = { kind = "external", cd = 120 }, -- Blessing of Sacrifice
     [357170]  = { kind = "external", cd = 60 },  -- Time Dilation
+
+    -- Box rows, in no spec list: BOX_ROWS picks them by class and spec.
+    -- Blessing of Protection's cell shows Blessing of Spellwarding, which
+    -- shares its cooldown, once that talent is read as taken.
+    [1022]    = { kind = "external", cd = 300, buffs = { 1022, 204018 },
+                  swap = { id = 204018, talents = { [204018] = true }, likely = false } },
+    [53480]   = { kind = "external", cd = 120,
+                  needs = { talents = { [53480] = true }, likely = false } },
+    [29166]   = { kind = "external", cd = 180,
+                  needs = { talents = { [29166] = true }, likely = true } },
+    [406732]  = { kind = "external", cd = 180, buffs = { 406732, 406789 } },
+    [196718]  = { kind = "external", cd = 300, buffs = { 209426 },
+                  needs = { talents = { [196718] = true }, likely = true } },
+    [51052]   = { kind = "external", cd = 240, buffs = { 145629 },
+                  needs = { talents = { [51052] = true }, likely = true } },
+    [97462]   = { kind = "external", cd = 180, buffs = { 97463 },
+                  needs = { talents = { [97462] = true }, likely = true } },
+    [374227]  = { kind = "external", cd = 120,
+                  needs = { talents = { [374227] = true }, likely = true } },
+    [31821]   = { kind = "external", cd = 180, buffs = { 31821, 317929 },
+                  needs = { talents = { [31821] = true }, likely = true } },
+    [740]     = { kind = "external", cd = 180, buffs = { 740, 157982, 1264623 },
+                  needs = { talents = { [740] = true }, likely = true } },
+    -- The game reports no base cooldown for it.
+    [363534]  = { kind = "external", cd = 240,
+                  needs = { talents = { [363534] = true }, likely = true } },
+    [64843]   = { kind = "external", cd = 180, buffs = { 64843, 64844 },
+                  needs = { talents = { [64843] = true }, likely = true } },
+    [62618]   = { kind = "external", cd = 180, buffs = { 81782 },
+                  needs = { talents = { [62618] = true }, likely = true } },
+    -- The game reports no base cooldown for it.
+    [98008]   = { kind = "external", cd = 180, buffs = { 325174 },
+                  needs = { talents = { [98008] = true }, likely = true } },
+    [359816]  = { kind = "external", cd = 120, buffs = { 359816, 362361 } },
 
     -- Racials, in no spec list: RACIALS picks one by race.
     [20594]   = { kind = "defensive", cd = 120, buffs = { 65116 } },
@@ -176,6 +210,10 @@ local MODS = {
     [118038]  = { { 391271, pct = -10 } },
     [184364]  = { { 391271, pct = -10 } },
     [23920]   = { { spec = 73, add = -5 }, { 391271, pct = -10 } },
+    [1022]    = { { 384909, add = -60 }, { 378425, pct = -15 } },
+    [196718]  = { { 389783, add = -120 } },
+    [51052]   = { { 374383, add = -60 } },
+    [363534]  = { { 381922, add = -60 } },
 }
 for castID, mods in pairs(MODS) do Data.SPELLS[castID].mods = mods end
 
@@ -262,6 +300,36 @@ Data.HEALER_SPECS = {
     [270]  = { class = "MONK",    casts = { 116849 } },
     [65]   = { class = "PALADIN", casts = { 6940 } },
     [1468] = { class = "EVOKER",  casts = { 357170 } },
+}
+
+-- The raid cooldowns box's rows beyond the healer externals, in each
+-- member's display order. specs lists the owning specs and roles the roles
+-- they fill; an anySpec row shows from the class before the spec is known.
+-- A target row's buff lands on whoever it was cast on, so every party unit
+-- is watched; an owner row's appears on its caster, who alone is watched.
+Data.BOX_ROWS = {
+    { id = 1022,   class = "PALADIN",     specs = { [65] = true, [66] = true, [70] = true },
+      anySpec = true, watch = "target" },
+    { id = 53480,  class = "HUNTER",      specs = { [253] = true, [254] = true, [255] = true },
+      anySpec = true, watch = "target" },
+    { id = 29166,  class = "DRUID",       specs = { [102] = true, [105] = true },
+      roles = { DAMAGER = true, HEALER = true }, watch = "target" },
+    { id = 406732, class = "EVOKER",      specs = { [1473] = true }, roles = { DAMAGER = true }, watch = "target" },
+    { id = 196718, class = "DEMONHUNTER", specs = { [577] = true, [581] = true, [1480] = true },
+      anySpec = true, watch = "owner" },
+    { id = 51052,  class = "DEATHKNIGHT", specs = { [250] = true, [251] = true, [252] = true },
+      anySpec = true, watch = "owner" },
+    { id = 97462,  class = "WARRIOR",     specs = { [71] = true, [72] = true, [73] = true },
+      anySpec = true, watch = "owner" },
+    { id = 374227, class = "EVOKER",      specs = { [1467] = true, [1468] = true, [1473] = true },
+      anySpec = true, watch = "owner" },
+    { id = 31821,  class = "PALADIN",     specs = { [65] = true },   roles = { HEALER = true }, watch = "owner" },
+    { id = 740,    class = "DRUID",       specs = { [105] = true },  roles = { HEALER = true }, watch = "owner" },
+    { id = 363534, class = "EVOKER",      specs = { [1468] = true }, roles = { HEALER = true }, watch = "owner" },
+    { id = 64843,  class = "PRIEST",      specs = { [257] = true },  roles = { HEALER = true }, watch = "owner" },
+    { id = 62618,  class = "PRIEST",      specs = { [256] = true },  roles = { HEALER = true }, watch = "owner" },
+    { id = 98008,  class = "SHAMAN",      specs = { [264] = true },  roles = { HEALER = true }, watch = "owner" },
+    { id = 359816, class = "EVOKER",      specs = { [1468] = true }, roles = { HEALER = true }, watch = "owner" },
 }
 
 -- Race token to racial, in editor order; raceID names the race on the

@@ -426,6 +426,36 @@ describe("PartyCooldownsRules.Feed", function()
             end
         end
     end)
+
+    it("takes no plain rise for a tracker's quiet seconds after a plain start, and leaves hidden reads alone", function()
+        local R = loadRules()
+        local q = 15
+        local plain = function(v) return v end
+        -- s wraps the start's two reads, r the rise's two.
+        local cases = {
+            { name = "a plain rise inside the quiet keeps the start", s = plain, r = plain, quiet = q,
+              rise = 10 + q, want = { 1, (255 - 5) / 255 } },
+            { name = "a plain rise after the quiet stamps", s = plain, r = plain, quiet = q, rise = 11 + q,
+              want = { 1, (255 - math.floor((11 + q) / 2)) / 255 } },
+            { name = "no quiet: the next rise stamps", s = plain, r = plain, rise = 10 + q,
+              want = { 1, (255 - math.floor((10 + q) / 2)) / 255 } },
+            { name = "a hidden start opens no quiet", s = secret, r = plain, quiet = q, rise = 10 + q,
+              want = { 1, (255 - math.floor((10 + q) / 2)) / 255 } },
+            { name = "a hidden rise inside the quiet still stamps", s = plain, r = secret, quiet = q,
+              rise = 10 + q, want = { 1, (255 - math.floor((10 + q) / 2)) / 255 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(300, false)
+            t.quiet = case.quiet
+            R.Clear(t, 0)
+            R.Feed(t, case.s(false), nil, 9, isSecret, pick)
+            R.Feed(t, case.s(true), nil, 10, isSecret, pick)
+            R.Feed(t, case.r(false), nil, case.rise - 1, isSecret, pick)
+            R.Feed(t, case.r(true), nil, case.rise, isSecret, pick)
+            local sl = t.slot[t.cur]
+            assert.are.same(case.want, { sl.v, sl.c }, case.name)
+        end
+    end)
 end)
 
 describe("PartyCooldownsRules.Tick", function()
@@ -765,6 +795,74 @@ describe("PartyCooldownsRules talent gate", function()
         assert.is_not_nil(R.TalentsFor(10).rules[3], "a swap for its spec")
         assert.is_nil(R.TalentsFor(11), "a swap scoped to another spec")
         assert.is_true(R.TalentsFor(16).want[81], "a mod's talent")
+    end)
+end)
+
+describe("PartyCooldownsRules.TalentsFor box rows", function()
+    it("flags the talents a spec's box rows name apart from its own casts', with each row's rule", function()
+        -- Spec 20 lists no cast; its box rows give cast 6, which needs talent
+        -- 60, and cast 13, whose swap to talent 130 applies to every spec.
+        -- Specs 12 and 14 list cast 5, which needs talent 55; spec 12 also
+        -- owns box row 7, which needs talent 55 or 77.
+        local data = {
+            SPELLS = {
+                [5] = { kind = "offensive", cd = 60, buffs = { 50 }, needs = { talents = { [55] = true } } },
+                [6] = { kind = "external", cd = 180, buffs = { 6 },
+                        needs = { talents = { [60] = true }, likely = true } },
+                [7] = { kind = "external", cd = 120, buffs = { 7 },
+                        needs = { talents = { [55] = true, [77] = true }, likely = true } },
+                [13] = { kind = "external", cd = 300, buffs = { 13, 130 },
+                         swap = { id = 130, talents = { [130] = true }, likely = false } },
+            },
+            SPECS = { [12] = { 5 }, [14] = { 5 } },
+            BOX_ROWS = {
+                { id = 6, class = "DRUID", specs = { [20] = true }, watch = "owner" },
+                { id = 13, class = "DRUID", specs = { [20] = true }, watch = "target" },
+                { id = 7, class = "MONK", specs = { [12] = true }, watch = "owner" },
+            },
+        }
+        local R = L.loadPartyCooldownsRules(data)
+        local box, mixed, own = R.TalentsFor(20), R.TalentsFor(12), R.TalentsFor(14)
+        assert.are.same({ false, true }, { box.rows, box.box }, "box rows only")
+        assert.are.equal(data.SPELLS[6].needs, box.rules[6], "a box row's needs rule")
+        assert.are.equal(data.SPELLS[13].swap, box.rules[13], "a box row's swap")
+        assert.are.same({ [60] = true, [130] = true }, box.boxOnly, "every talent box-only")
+        assert.are.same({ true, true }, { mixed.rows, mixed.box }, "own casts and a box row")
+        assert.are.same({ [77] = true }, mixed.boxOnly, "a talent its own cast names is not box-only")
+        assert.are.same({ true, false }, { own.rows, own.box }, "its own casts only")
+        assert.are.same({}, own.boxOnly, "no box-only talent")
+    end)
+end)
+
+describe("PartyCooldownsRules talent read guards", function()
+    it("wants a member's talents only for a switched-on part that names one", function()
+        local R = loadRules()
+        local rowsOnly = { rows = true, box = false, boxOnly = {} }
+        local boxOnly = { rows = false, box = true, boxOnly = { [60] = true } }
+        local cases = {
+            { name = "no talents", class = true, box = true, want = false },
+            { name = "own casts, Class Cooldowns on", talents = rowsOnly, class = true, box = false, want = true },
+            { name = "own casts, only the box on", talents = rowsOnly, class = false, box = true, want = false },
+            { name = "box rows, the box on", talents = boxOnly, class = false, box = true, want = true },
+            { name = "box rows, only Class Cooldowns on", talents = boxOnly, class = true, box = false,
+              want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentsWanted(case.talents, case.class, case.box), case.name)
+        end
+    end)
+
+    it("skips a talent only box rows name while the box is off", function()
+        local R = loadRules()
+        local talents = { boxOnly = { [77] = true } }
+        local cases = {
+            { name = "box-only, box off", talent = 77, box = false, want = false },
+            { name = "box-only, box on", talent = 77, box = true, want = true },
+            { name = "its own cast's, box off", talent = 55, box = false, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.TalentRead(talents, case.talent, case.box), case.name)
+        end
     end)
 end)
 

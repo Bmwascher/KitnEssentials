@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-HealerExternals.lua                                 ║
--- ║  GUI: Party Cooldowns, Healer Externals tab              ║
--- ║  Purpose: the healer externals box and its settings.     ║
+-- ║  GUI: Party Cooldowns, Raid Cooldowns tab                ║
+-- ║  Purpose: the raid cooldowns box and its settings.       ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -13,9 +13,9 @@ local C_Timer = C_Timer
 
 local GROW_OPTIONS = GUIFrame.GrowDirectionOptions
 
--- Healer Mana's display, keyed by the side the box attaches to. Both draw
--- their borders inside their frames, so an offset of 1 leaves one empty
--- pixel between the two border lines.
+-- The box's place against Healer Mana's display, keyed by the side it
+-- attaches to. Both frames draw their borders inside, so an offset of 1
+-- leaves one empty pixel between the two border lines.
 local HEALER_MANA = "KitnEssentialsHealerMana"
 local ATTACHED = {
     TOP    = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT",    XOffset = 0, YOffset = 1 },
@@ -87,20 +87,22 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     end
 
     ----------------------------------------------------------------
-    -- Card: Healer Externals
+    -- Card: Raid Cooldowns
     ----------------------------------------------------------------
-    local cardMain = GUIFrame:CreateCard(scrollChild, "Healer Externals", yOffset)
+    local cardMain = GUIFrame:CreateCard(scrollChild, "Raid Cooldowns", yOffset)
     cardMain:AddHeaderToggle(db.HealerExternals == true, function(checked)
         db.HealerExternals = checked
         ApplySettings()
     end)
     if Sensor and Sensor.door and not Sensor.DoorOpen() then
-        cardMain:AddNote("Healer external timers are unavailable on this client.")
+        cardMain:AddNote("Raid Cooldowns timers are unavailable on this client.")
     end
-    cardMain:AddLabel("One icon per party healer: full color when their external is ready, gray with the " ..
-        "time left once its buff appears on anyone in your party. Your own external is not shown. Shown in a " ..
-        "party where the Cooldowns tab's Where It Shows allows, never in a raid or an arena. Another " ..
-        "player's cast of the same spell, such as a Retribution Paladin's Blessing of Sacrifice, starts it too.")
+    cardMain:AddLabel("One icon per cooldown: the spells your party members cast on one target first, " ..
+        "then their raid cooldowns. Full color when ready, gray with the time left once seen: a spell cast " ..
+        "on one target when its buff appears on anyone in your party, a raid cooldown when its buff appears " ..
+        "on its caster. Your own are not shown. Shown in a party where the Cooldowns tab's Where It Shows " ..
+        "allows, never in a raid or an arena. Another player's cast of the same spell, such as a Retribution " ..
+        "Paladin's Blessing of Sacrifice, starts it too.")
     cardMain:AddNote("Move it with /kes edit.")
     local function Attach()
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
@@ -190,7 +192,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card: Externals
+    -- Card: Spells
     ----------------------------------------------------------------
     local listCard, listOffset = KE.PartyCooldownsPage.ExternalsCard(scrollChild, yOffset, {
         db = db, apply = ApplySettings,
