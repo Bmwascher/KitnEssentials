@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.12.4
+
+### Frame Anchoring
+
+- Picking a Select Frame anchor that would loop no longer causes a Lua
+  error. This covers the Top-Center widgets, the chat panel, alerts and
+  event toasts anchored to the Blizzard frame they carry. The display goes
+  to the screen and a chat line says why, once
+- The chat panel refuses every chat window, its tab, the dock and the chat
+  alert frame as an anchor, not only the window seated in it
+- A name like "Parent.child" now anchors to that child. Edit Mode boxes
+  cannot be picked, and the frame chooser skips them
+
+### Settings Window
+
+- The resize grip starts sizing from where you press it, which stops the
+  window jumping at the start of a drag
+
+---
+
 ## v4.12.3
 
 ### Dungeon Timers
