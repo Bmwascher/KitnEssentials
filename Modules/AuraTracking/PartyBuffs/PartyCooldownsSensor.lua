@@ -657,10 +657,19 @@ function Track.ApplyGroup(st, units, entries, style)
     return clean
 end
 
+-- Failed sensor builds per slot. A refused add is a defect that repeats, so
+-- past this the slot's cells without a sensor stay hidden for the session.
+local MAX_SENSOR_FAILS = 2
+
+local function SensorsSpent(st)
+    return (st.sensorFails or 0) >= MAX_SENSOR_FAILS
+end
+
 -- True while a cell of the slot waits for a container.
 function Track.Missing(st)
     if not st.unit then return false end
     if st.units then
+        if SensorsSpent(st) then return false end
         for i = 1, st.count do
             for j = 1, #st.units do
                 if not st.group[i][j] then return true end
@@ -668,24 +677,35 @@ function Track.Missing(st)
         end
         return false
     end
-    for i = 1, st.count do
-        local e = st.entries[i]
-        if not st.sensors[i] or (e.short and not st.shorts[i]) then return true end
+    if not SensorsSpent(st) then
+        for i = 1, st.count do
+            local e = st.entries[i]
+            if not st.sensors[i] or (e.short and not st.shorts[i]) then return true end
+        end
     end
     return Track.OverlayMissing(st)
+end
+
+local function SensorFailed(st)
+    st.sensorFails = (st.sensorFails or 0) + 1
+    return false
 end
 
 -- Builds one missing container: each is a full aura scan, so the caller
 -- spends at most one per frame. Returns false when the build was refused.
 function Track.BuildNext(st)
     if not st.unit then return true end
+    if SensorsSpent(st) then
+        if st.units then return true end
+        return Track.BuildOverlayNext(st)
+    end
     if st.units then
         for i = 1, st.count do
             local e, sensors = st.entries[i], st.group[i]
             for j = 1, #st.units do
                 if not sensors[j] then
                     local sensor = NewSensor(e.buffs, nil, st.sensorHost)
-                    if not sensor then return false end
+                    if not sensor then return SensorFailed(st) end
                     sensor.keSig = Sig(e)
                     sensors[j] = sensor
                     return true
@@ -698,14 +718,14 @@ function Track.BuildNext(st)
         local e = st.entries[i]
         if not st.sensors[i] then
             local sensor = NewSensor(e.buffs, nil, st.sensorHost)
-            if not sensor then return false end
+            if not sensor then return SensorFailed(st) end
             sensor.keSig = Sig(e)
             st.sensors[i] = sensor
             return true
         end
         if e.short and not st.shorts[i] then
             local short = NewSensor(e.buffs, e.short, st.sensorHost)
-            if not short then return false end
+            if not short then return SensorFailed(st) end
             short.keSig = Sig(e)
             st.shorts[i] = short
             return true

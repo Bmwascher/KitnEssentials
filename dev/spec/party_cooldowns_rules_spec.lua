@@ -77,6 +77,21 @@ describe("PartyCooldownsRules.SpellList", function()
     end)
 end)
 
+describe("PartyCooldownsRules.IsOff", function()
+    it("takes a saved switch over the data default, and the data default while unset", function()
+        local R = loadRules()
+        local cases = {
+            { name = "saved off", off = { k = true }, spell = {}, want = true },
+            { name = "saved on over a default off", off = { k = false }, spell = { off = true }, want = false },
+            { name = "unset, default off", off = {}, spell = { off = true }, want = true },
+            { name = "unset, no default", off = {}, spell = {}, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.IsOff(case.off, "k", case.spell), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules lengths", function()
     it("prefers typed seconds, then the spec's talented length, then the base, clamping the typed one", function()
         local R = loadRules()
@@ -161,16 +176,36 @@ describe("PartyCooldownsRules.NextInspect", function()
         assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
     end)
 
-    it("rests a member for TRY_WAIT seconds after MAX_TRIES tries", function()
+    it("asks nobody within FOREIGN_GAP seconds of another addon's inspect request", function()
         local R = loadRules()
-        local m = member("a")
-        for _ = 1, R.MAX_TRIES - 1 do R.CountTry(m, 100) end
-        assert.is_nil(m.waitUntil)
-        R.CountTry(m, 100)
-        local back = 100 + R.TRY_WAIT
-        assert.are.same({ 0, back }, { m.tries, m.waitUntil })
-        assert.is_nil(R.NextInspect({ now = back - 1 }, { m }))
-        assert.are.equal(m, R.NextInspect({ now = back }, { m }))
+        local members = { member("a") }
+        local cases = {
+            { name = "inside the gap", foreignAt = 10.5 - R.FOREIGN_GAP },
+            { name = "at the gap", foreignAt = 10 - R.FOREIGN_GAP, want = "a" },
+            { name = "no foreign request", want = "a" },
+        }
+        for _, case in ipairs(cases) do
+            local got = R.NextInspect({ now = 10, foreignAt = case.foreignAt }, members)
+            assert.are.equal(case.want, got and got.name, case.name)
+        end
+    end)
+
+    it("rests a member for TRY_WAIT seconds after MAX_TRIES tries, or STALE_TRIES when only stale", function()
+        local R = loadRules()
+        local cases = {
+            { name = "unread", stale = false, cap = R.MAX_TRIES },
+            { name = "stale", stale = true, cap = R.STALE_TRIES },
+        }
+        for _, case in ipairs(cases) do
+            local m = member("a")
+            for _ = 1, case.cap - 1 do R.CountTry(m, 100, case.stale) end
+            assert.is_nil(m.waitUntil, case.name)
+            R.CountTry(m, 100, case.stale)
+            local back = 100 + R.TRY_WAIT
+            assert.are.same({ 0, back }, { m.tries, m.waitUntil }, case.name)
+            assert.is_nil(R.NextInspect({ now = back - 1 }, { m }), case.name)
+            assert.are.equal(m, R.NextInspect({ now = back }, { m }), case.name)
+        end
     end)
 end)
 
@@ -204,6 +239,8 @@ describe("PartyCooldownsRules trinkets", function()
             { text = "Use: Gain 2000 Haste for 20 sec. (2 Min Cooldown)", want = 120 },
             { text = "Use: Shield yourself. (1 Min 30 Sec Cooldown)", want = 90 },
             { text = "Use: Burst (scales with level). (90 Sec Cooldown)", want = 90 },
+            { text = "Use: Gain 2000 Haste for 20 sec. (2 |4Min:Min; Cooldown)", want = 120 },
+            { text = "Use: Shield yourself. (1 |4Min:Min; 30 |4Sec:Sec; Cooldown)", want = 90 },
             { text = "Equip: Your attacks sometimes do more." },
             { text = nil },
         }

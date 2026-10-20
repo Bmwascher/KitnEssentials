@@ -35,6 +35,10 @@ local Track = KE.PartyCooldownsSensor
 local Pot = { rows = {}, byToken = {}, samples = {}, style = {} }
 KE.PartyPotions = Pot
 
+-- The box's starting place while a Select Frame anchor cannot be used: the
+-- profile's own default.
+Pot.DEFAULT_POSITION = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 }
+
 -- Flip to true, /reload, repro, read the log.
 local DEBUG_PP = false
 
@@ -168,12 +172,31 @@ local function MakeRows()
     end
 end
 
-local placement = {}
+local placement, screen = {}, { anchorFrameType = "UIPARENT" }
 
+-- A Select Frame anchor the shared resolution refuses (unnamed, missing or
+-- unsafe) takes the starting place on the screen. The third return says the
+-- starting place is in use.
 local function Placement(db)
-    placement.anchorFrameType, placement.ParentFrame = db.PotionAnchorFrameType, db.PotionParentFrame
-    placement.Strata = db.PotionStrata
-    return placement
+    local kind, name = db.PotionAnchorFrameType, db.PotionParentFrame
+    screen.Strata, placement.Strata = db.PotionStrata, db.PotionStrata
+    if kind == "SELECTFRAME" and KE:ResolveSelectFrame(name, Pot.box) == nil then
+        return Pot.DEFAULT_POSITION, screen, true
+    end
+    placement.anchorFrameType, placement.ParentFrame = kind, name
+    return db.PotionPosition, placement, false
+end
+
+-- A box anchored where the game restricts moves in combat is placed at the
+-- next drain instead.
+local function Place(db)
+    if not KE:CanReanchorNow(Pot.box) then
+        Pot.placePending = true
+        return
+    end
+    Pot.placePending = nil
+    local pos, config = Placement(db)
+    KE:ApplyFramePosition(Pot.box, pos, config)
 end
 
 -- The rows are stacked again by Pot.ApplySettings and re-dressed at the drain
@@ -189,7 +212,7 @@ local function Restyle(db)
     s.barColor, s.bgColor = db.PotionBarColor, db.PotionBgColor
     local box = Pot.box
     box:SetSize(s.width, #ORDER * (s.height + s.gap) - s.gap)
-    KE:ApplyFramePosition(box, db.PotionPosition, Placement(db))
+    Place(db)
 end
 
 -- Registering again would cancel a drag in progress.
@@ -199,15 +222,25 @@ local function Register()
     for k, v in pairs(EDIT_MODE_ELEMENT) do cfg[k] = v end
     cfg.frame = Pot.box
     cfg.module = Pot.pb
-    cfg.getPosition = function() return Pot.pb.db.PotionPosition end
+    cfg.getPosition = function() return (Placement(Pot.pb.db)) end
+    -- While the starting place stands in for an anchor Placement cannot use,
+    -- the mover works on the screen: a moved position detaches the box, and
+    -- the starting place handed back unchanged keeps the attachment.
     cfg.setPosition = function(pos)
-        local p = Pot.pb.db.PotionPosition
+        local db = Pot.pb.db
+        local _, _, fallback = Placement(db)
+        if KE.HealerExternalsRules.MoverDetaches(fallback, pos, Pot.DEFAULT_POSITION) then
+            db.PotionAnchorFrameType, db.PotionParentFrame = "UIPARENT", nil
+        elseif fallback then
+            return Place(db)
+        end
+        local p = db.PotionPosition
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
         p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
-        KE:ApplyFramePosition(Pot.box, p, Placement(Pot.pb.db))
+        Place(db)
     end
     cfg.getParentFrame = function()
-        local config = Placement(Pot.pb.db)
+        local _, config = Placement(Pot.pb.db)
         return KE:ResolveAnchorFrame(config.anchorFrameType, config.ParentFrame, Pot.box)
     end
     KE.EditMode:RegisterElement(cfg)
@@ -332,6 +365,7 @@ function Pot.OnKeyStart()
 end
 
 function Pot.OnRelease()
+    if Pot.placePending and Pot.box then Place(Pot.pb.db) end
     Pot.Resolve()
 end
 

@@ -380,14 +380,17 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit.anchorPointDropdown:SetValue(anchorPoint, true)
     kit.anchorPointOnlyDropdown:SetValue(anchorPoint, true)
 
-    -- Slider range may be overridden per consumer (DungeonTimersBars/Texts
-    -- use ±800 instead of the default ±1000). Apply per render before
-    -- SetValue so the value isn't clamped by a stale range. Pass silent=true
-    -- so the clamp Blizzard performs when shrinking the range doesn't fire
-    -- OnValueChanged → write the clamp value to db before SetValue below
-    -- restores the saved value (latent before the FontSettingsCard pool
-    -- bug surfaced the same pattern).
-    local sliderRange = config.sliderRange or { -1000, 1000 }
+    -- The default spans the screen, so a frame dragged anywhere in Edit Mode
+    -- keeps its offset; a consumer may pass its own (DungeonTimersBars/Texts
+    -- use -800 to 800). Apply per render before SetValue so the value isn't
+    -- clamped by a stale range. Pass silent=true so the clamp Blizzard
+    -- performs when shrinking the range doesn't fire OnValueChanged and write
+    -- the clamp value to db before SetValue below restores the saved value.
+    local sliderRange = config.sliderRange
+    if not sliderRange then
+        local reach = math.ceil(math.max(UIParent:GetWidth(), UIParent:GetHeight()))
+        sliderRange = { -reach, reach }
+    end
     kit.xSlider:SetMinMaxValues(sliderRange[1], sliderRange[2], true)
     kit.ySlider:SetMinMaxValues(sliderRange[1], sliderRange[2], true)
     kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)

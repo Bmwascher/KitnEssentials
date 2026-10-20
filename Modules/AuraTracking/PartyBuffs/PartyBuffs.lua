@@ -87,6 +87,8 @@ local PREVIEW_CELLS = KE.PartyBuffsRules.MAX_COOLDOWN_ICONS
 local PREVIEW_RACES = { "Dwarf", "NightElf", false, "DarkIronDwarf" }
 -- No item is read for a stand-in row, so its sample trinkets take this length.
 local PREVIEW_TRINKET_CD = 120
+-- Levels a preview row sits above a live one, above its container's buttons.
+local PREVIEW_LEVEL_LIFT = 10
 
 local GATE_EVENTS = {
     "ZONE_CHANGED_NEW_AREA",
@@ -367,7 +369,8 @@ function PB:DropSlot(k)
     if slot.container then pcall(slot.container.SetEnabled, slot.container, false) end
     if slot.track then Track.Unbind(slot.track) end
     slot.holder:Hide()
-    slot.holder:ClearAllPoints()
+    -- A skipped clear leaves only a hidden frame's old point.
+    if KE:CanReanchorNow(slot.holder) then slot.holder:ClearAllPoints() end
 end
 
 function PB:SlotComplete(k)
@@ -451,10 +454,15 @@ end
 -- resolves unless PB:KeepRosterRows kept it.
 function PB:ResolveAll()
     if self._rosterTimer then
+        -- A kept row is placed again: the icon size may have changed.
         for k = 1, MAX_SLOTS do
+            local slot, binding = self.slots[k], self.bindings[k]
             if not self.rosterKept[k] then
                 self.bindings[k] = nil
                 self:DropSlot(k)
+            elseif slot and binding
+                and not self:PlaceHolder(slot.holder, binding.frame, false, self.styleSettings.IconSize) then
+                self.buildPending = true
             end
         end
         return
@@ -743,11 +751,17 @@ end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
 -- and could not be hidden in combat. It takes the party frame's strata, or
--- MEDIUM when that cannot be read. Returns the strata and level applied, or
--- nil when the anchor was refused.
+-- MEDIUM when that cannot be read; a preview row sits PREVIEW_LEVEL_LIFT
+-- levels higher, so a hover stops at the preview and not at the live button
+-- under it. size is the icon size the Center lift is measured in. Returns the
+-- strata and level applied, or nil when the anchor was refused or the holder
+-- may not move now.
 function PB:PlaceHolder(holder, frame, forPreview, size)
+    if not KE:CanReanchorNow(holder) then return nil end
     local side, x, y = self:Placement(forPreview)
     local dx, dy = KE.PartyBuffsRules.HolderOffset(side, self.db.IconSpacing, x, y, size)
+    -- The Center lift is half an icon: a half pixel at an odd size.
+    dy = KE:PixelSnap(dy)
     holder:ClearAllPoints()
     if not pcall(holder.SetPoint, holder, side.point, frame, side.rel, dx, dy) then
         return nil
@@ -759,7 +773,7 @@ function PB:PlaceHolder(holder, frame, forPreview, size)
     end
     local okLevel, frameLevel = pcall(frame.GetFrameLevel, frame)
     if okLevel and not issecretvalue(frameLevel) and type(frameLevel) == "number" then
-        level = frameLevel + 10
+        level = frameLevel + 10 + (forPreview and PREVIEW_LEVEL_LIFT or 0)
     end
     holder:SetFrameStrata(strata)
     if level then holder:SetFrameLevel(level) end
@@ -1320,6 +1334,19 @@ function PB:ApplySettings()
     if self.previewing then self:ShowPreview() end
 end
 
+-- A color drag calls back on every mouse move; its applies run once per
+-- frame at most.
+local function RunQueuedApply()
+    PB.applyPending = false
+    PB:ApplySettings()
+end
+
+function PB:QueueApplySettings()
+    if self.applyPending then return end
+    self.applyPending = true
+    C_Timer.After(0, RunQueuedApply)
+end
+
 function PB:SeedHealerPlacement()
     self:UpdateDB()
     KE.PartyBuffsRules.SeedHealerPlacement(self.db)
@@ -1431,10 +1458,9 @@ local function SampleTrinkets(row, db)
     return out
 end
 
--- In the live row's order, cut to Max Cooldown Icons: the spec's spells
--- (ticked or not, so a spec listing few shows few rather than another class's
--- spells), then the racial, then the trinkets. A known member's spec, race
--- and trinkets when grouped; a stand-in row's samples otherwise.
+-- In the live row's order, cut to Max Cooldown Icons: the spec's switched-on
+-- spells, then the racial, then the trinkets. A known member's spec, race and
+-- trinkets when grouped; a stand-in row's samples otherwise.
 function PB:PreviewEntries(k)
     local db, entries = self.db, {}
     local binding = self.bindings[k]
@@ -1444,7 +1470,7 @@ function PB:PreviewEntries(k)
     local talents = m and m.talents
     local want = math_min(KE.PartyBuffsRules.CooldownIconCount(db), PREVIEW_CELLS)
     if db.TrackBurst == true then
-        for _, e in ipairs(CDRules.SpellList(specID, db, true)) do
+        for _, e in ipairs(CDRules.SpellList(specID, db)) do
             if #entries >= want then break end
             local has = talents and talents[e.id]
             if CDRules.TalentAllows(e, has) then
@@ -1494,6 +1520,7 @@ function PB:DrawPreviewCells(row, entries, side, step, perRow)
         if e then
             if not c then
                 c = Cell.New(row.holder)
+                c:EnableMouse(true)
                 row.cells[i] = c
             end
             Cell.Dress(c, self.previewCellStyle, e)
@@ -1543,6 +1570,7 @@ function PB:DrawPreviewActive(row, e)
         KE.AuraGlow.Apply(icon, settings, d.capabilities)
     else
         icon = CreateFrame("Frame", nil, row.holder)
+        icon:EnableMouse(true)
         KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
         icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
         row.active = icon
@@ -1603,6 +1631,7 @@ function PB:DrawPreviewRow(k, frame)
                 KE.AuraGlow.Apply(icon, settings, d.capabilities)
             else
                 icon = CreateFrame("Frame", nil, holder)
+                icon:EnableMouse(true)
                 KE.AuraStyle.InitializePreviewFrame(icon, nil, d, settings)
                 icon.keCooldown:SetScript("OnCooldownDone", RearmPreview)
                 row.icons[shown] = icon
@@ -1632,11 +1661,41 @@ function PB:ApplyLiveAlpha()
     for _, slot in pairs(self.slots) do slot.holder:SetAlpha(alpha) end
 end
 
+-- A plain frame that stays shown under UIParent, so its scripts run when the
+-- whole interface hides and shows. Made on the first preview; with the
+-- preview closed both return at once.
+local function OnInterfaceHidden()
+    if not (PB:IsEnabled() and PB.previewing) then return end
+    PB:HidePreviewFrames()
+    Pot.HidePreview()
+    HX.HidePreview()
+end
+
+local function OnInterfaceShown()
+    if PB:IsEnabled() and PB.previewing then PB:ShowPreview() end
+end
+
+function PB:EnsureUIWatcher()
+    if self.uiWatcher then return end
+    local watcher = CreateFrame("Frame", nil, UIParent)
+    watcher:SetSize(1, 1)
+    watcher:EnableMouse(false)
+    watcher:SetScript("OnHide", OnInterfaceHidden)
+    watcher:SetScript("OnShow", OnInterfaceShown)
+    self.uiWatcher = watcher
+end
+
 -- Held back while a roster change settles, like the live icons; the settle
--- timer redraws it.
+-- timer redraws it. With the whole interface hidden nothing is drawn, so no
+-- glow loops under it; the watcher redraws when it shows.
 function PB:ShowPreview()
+    self:EnsureUIWatcher()
     self.previewing = true
     self:ApplyLiveAlpha()
+    if not UIParent:IsShown() then
+        self:HidePreviewFrames()
+        return
+    end
     -- The potion samples sit in their own box, not beside party frames, so a
     -- roster settle does not hold them back.
     Pot.ShowPreview()

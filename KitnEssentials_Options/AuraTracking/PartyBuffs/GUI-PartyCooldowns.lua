@@ -93,6 +93,11 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         if PB and PB.ApplySettings then PB:ApplySettings() end
     end
 
+    -- A color or glow drag calls back on every mouse move.
+    local function QueueApply()
+        if PB and PB.QueueApplySettings then PB:QueueApplySettings() end
+    end
+
     local function RefreshStates()
         manager:UpdateAll(db.Enabled == true)
     end
@@ -181,7 +186,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             color = db[spec.key],
             callback = function(r, g, b, a)
                 db[spec.key] = { r, g, b, a }
-                ApplySettings()
+                QueueApply()
             end,
         })
         row:AddWidget(picker, 1 / 3)
@@ -278,7 +283,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         },
         -- The pulse runs at a fixed rhythm.
         showSpeed = function(glowType) return glowType ~= "border" end,
-        onChangeCallback = ApplySettings,
+        onChangeCallback = QueueApply,
         onHeightChange = RebuildPage,
     })
     -- The buff icons glow too, so the card applies without the cooldown cells.

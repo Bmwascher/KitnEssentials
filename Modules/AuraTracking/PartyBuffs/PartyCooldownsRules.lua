@@ -21,7 +21,11 @@ KE.PartyCooldownsRules = Rules
 Rules.CD_MIN, Rules.CD_MAX = 5, 900
 Rules.INSPECT_GAP = 2
 Rules.MAX_TRIES = 12
+Rules.STALE_TRIES = 3
 Rules.TRY_WAIT = 30
+-- Seconds after another addon's inspect request in which nobody is asked and
+-- no answer is cleared: that request may still be reading the data.
+Rules.FOREIGN_GAP = 3
 
 local function Table(value)
     if type(value) == "table" then return value end
@@ -54,6 +58,12 @@ local function Entry(castID, spell, key, listed, typed, isOff)
     }
 end
 
+-- A saved switch wins; an entry never switched takes its data row's default.
+function Rules.IsOff(off, key, spell)
+    if off[key] ~= nil then return off[key] == true end
+    return spell ~= nil and spell.off == true
+end
+
 -- The spec's entries: casts in the saved order first, the rest after them in
 -- table order. A switched-off entry is dropped unless all is set, which the
 -- editor uses to list every one.
@@ -77,7 +87,7 @@ function Rules.SpellList(specID, db, all)
         if type(item) == "table" then castID, talented = item[1], item[2] end
         local spell = data.SPELLS[castID]
         local key = Rules.CooldownKey(specID, castID)
-        local isOff = off[key] == true or (off[key] == nil and spell ~= nil and spell.off == true)
+        local isOff = Rules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
             local entry = Entry(castID, spell, key, talented or spell.cd, seconds[key], isOff)
             entry.at = rank and (rank[castID] or #order + i) or i
@@ -123,12 +133,21 @@ function Rules.InspectInUse(inspectShown, talentsInspecting)
     return inspectShown == true or talentsInspecting == true
 end
 
+-- Whether another addon's inspect request, made at foreignAt, may still be in
+-- use.
+function Rules.ForeignBusy(now, foreignAt)
+    if type(foreignAt) ~= "number" then return false end
+    return now - foreignAt < Rules.FOREIGN_GAP
+end
+
 -- At most one member per call, and none while an inspect view is in use, in
--- combat, or within INSPECT_GAP seconds of the last request. An offline
--- member never answers, and asking it would hold back everyone behind it.
+-- combat, within INSPECT_GAP seconds of the last request or within
+-- FOREIGN_GAP seconds of another addon's. An offline member never answers,
+-- and asking it would hold back everyone behind it.
 function Rules.NextInspect(state, members)
     if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
     if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
+    if Rules.ForeignBusy(state.now, state.foreignAt) then return nil end
     for _, m in ipairs(members) do
         if not m.done and m.canInspect and not m.offline and not (m.waitUntil and state.now < m.waitUntil) then
             return m
@@ -137,18 +156,21 @@ function Rules.NextInspect(state, members)
     return nil
 end
 
--- A request with no answer is a try; MAX_TRIES of them rest the member.
-function Rules.CountTry(m, now)
+-- A request with no answer is a try; MAX_TRIES of them rest the member, or
+-- STALE_TRIES when every answer it is wanted for is in hand and only stale.
+function Rules.CountTry(m, now, stale)
     m.tries = (m.tries or 0) + 1
-    if m.tries >= Rules.MAX_TRIES then
+    if m.tries >= (stale and Rules.STALE_TRIES or Rules.MAX_TRIES) then
         m.tries, m.waitUntil = 0, now + Rules.TRY_WAIT
     end
 end
 
 -- An item tooltip names its use cooldown as "(2 Min Cooldown)",
--- "(1 Min 30 Sec Cooldown)" or "(90 Sec Cooldown)".
+-- "(1 Min 30 Sec Cooldown)" or "(90 Sec Cooldown)". The raw text can carry the
+-- client's |4singular:plural; escape, which reads as its first form.
 function Rules.ParseCooldownText(text)
     if type(text) ~= "string" then return nil end
+    text = text:gsub("|4([^:;]*):[^;]*;", "%1")
     local inner = text:match("%(([^()]-) Cooldown%)")
     if not inner then return nil end
     local total = (tonumber(inner:match("(%d+) Min")) or 0) * 60 + (tonumber(inner:match("(%d+) Sec")) or 0)
@@ -650,7 +672,7 @@ function Rules.RacialEntry(castID, db, all)
     if not spell then return nil end
     db = Table(db)
     local key = Rules.RacialKey(castID)
-    local isOff = Table(db.CooldownOff)[key] == true
+    local isOff = Rules.IsOff(Table(db.CooldownOff), key, spell)
     if isOff and not all then return nil end
     return Entry(castID, spell, key, spell.cd, Table(db.CooldownSeconds)[key], isOff)
 end

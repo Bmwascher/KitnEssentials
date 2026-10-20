@@ -1622,6 +1622,7 @@ local Defaults = {
             GlowLines         = 8,
             GlowFrequency     = 0.5,
             GlowThickness     = 2,
+            GlowPulse         = true,
             -- Keyed "<specID>:<castID>"; a typed trinket length is keyed
             -- "trinket:<spellID>", a racial "race:<castID>" and a healer's
             -- external "healer:<specID>:<castID>". CooldownOrder holds a cast

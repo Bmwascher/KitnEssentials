@@ -25,7 +25,7 @@ local UnitClass = UnitClass
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
 local UnitIsConnected = UnitIsConnected
-local UnitName = UnitName
+local UnitNameUnmodified = UnitNameUnmodified
 local UnitRace = UnitRace
 local ipairs = ipairs
 local pairs = pairs
@@ -56,7 +56,7 @@ Spec.libSpecs = {}
 Spec.libTalents = {}
 Spec.members = {}
 
-local events
+local events, foreignHooked
 
 local function Plain(value)
     if KE:IsSecretValue(value) then return nil end
@@ -93,7 +93,7 @@ end
 -- cannot be read: a realm read as empty would match a same-named player of
 -- your realm.
 local function LibKey(unit)
-    local ok, name, realm = pcall(UnitName, unit)
+    local ok, name, realm = pcall(UnitNameUnmodified, unit)
     if not ok or KE:IsSecretValue(name) or KE:IsSecretValue(realm) then return nil end
     return KE.PartyCooldownsRules.LibKey(name, realm)
 end
@@ -111,6 +111,10 @@ local function ForgetReads(m)
     for _, reader in ipairs(Spec.readers) do
         if reader.Forget then reader.Forget(m) end
     end
+end
+
+local function ClearTalents(m)
+    m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
 end
 
 -- The race token, or nil until a source answers; a GUID's race never changes,
@@ -176,6 +180,18 @@ local function Done(m)
     return true
 end
 
+-- Every answer the member is still wanted for is in hand and only marked
+-- stale, so an inspect that never answers costs fewer tries.
+local function OnlyStale(m)
+    if m.source == nil or m.source == "guess" then return false end
+    if Spec.trackTrinkets == true and m.trinketItems == nil then return false end
+    if Spec.trackClass == true and m.talents == nil
+        and KE.PartyCooldownsRules.TalentsFor(m.spec) ~= nil then
+        return false
+    end
+    return true
+end
+
 function Spec.ReadSelf(m)
     for _, reader in ipairs(Spec.readers) do
         if reader.Self and IsOn(reader) then reader.Self(m) end
@@ -200,7 +216,7 @@ function Spec.Tick()
     local rules = KE.PartyCooldownsRules
     if Spec.pending then
         if now - Spec.lastRequest < INSPECT_TIMEOUT then return end
-        rules.CountTry(Spec.pending, now)
+        rules.CountTry(Spec.pending, now, OnlyStale(Spec.pending))
         Spec.pending = nil
     end
     local waiting = false
@@ -224,13 +240,14 @@ function Spec.Tick()
         inCombat = InCombatLockdown(),
         now = now,
         lastRequest = Spec.lastRequest,
+        foreignAt = Spec.foreignAt,
     }, Spec.members)
     if not m then return end
     Spec.lastRequest = now
     if pcall(NotifyInspect, m.unit) then
         Spec.pending = m
     else
-        rules.CountTry(m, now)
+        rules.CountTry(m, now, OnlyStale(m))
     end
 end
 
@@ -297,9 +314,12 @@ local function OnInspectReady(guid)
             if IsOn(reader) and reader.Wanted(m) then reader.Read(m, unit) end
         end
     end
-    if not KE.PartyCooldownsRules.InspectInUse(InspectViews()) then pcall(ClearInspectPlayer) end
+    local rules = KE.PartyCooldownsRules
+    if not (rules.InspectInUse(InspectViews()) or rules.ForeignBusy(GetTime(), Spec.foreignAt)) then
+        pcall(ClearInspectPlayer)
+    end
     m.done = Done(m)
-    if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime()) end
+    if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime(), OnlyStale(m)) end
     Changed(m)
 end
 
@@ -316,9 +336,7 @@ local function OnLibSpec(specID, _, _, playerName, talents)
     Spec.libSpecs[playerName], Spec.libTalents[playerName] = specID, talents
     if same and moved and rules.BuildEventCounts(InKey(), false) then
         for _, m in pairs(Spec.byGUID) do
-            if not m.isPlayer and m.libKey == playerName then
-                m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
-            end
+            if not m.isPlayer and m.libKey == playerName then ClearTalents(m) end
         end
     end
     for _, m in ipairs(Spec.members) do
@@ -361,11 +379,25 @@ function Spec.Enable(onChange)
     if LibSpec then LibSpec.RegisterGroup(Spec, OnLibSpec) end
 end
 
+-- Another addon's inspect request. KE's own never reach the hook: they call
+-- the local captured at load, and the hook wraps only the global.
+local function OnForeignInspect()
+    if Spec.active then Spec.foreignAt = GetTime() end
+end
+
 -- The content gate: every event and the inspect ticker live only between
--- these two.
+-- these two. The inspect hook is installed on the first activation and is
+-- inert while inactive; a hook cannot be removed.
 function Spec.Activate()
     if Spec.active or not Spec.enabled then return end
     Spec.active = true
+    if not foreignHooked then
+        local notify = _G.NotifyInspect
+        if type(notify) == "function" then
+            hooksecurefunc("NotifyInspect", OnForeignInspect)
+            foreignHooked = true
+        end
+    end
     if not events then
         events = CreateFrame("Frame")
         events:SetScript("OnEvent", OnEvent)
@@ -586,13 +618,17 @@ Spec.readers[#Spec.readers + 1] = {
                 local m = Spec.player
                 if m and (m.trinketItems == nil or m.trinketsStale) and ReadOwn(m) then Changed(m) end
             end
+            -- Changed can add a record, and a key added during a pairs walk
+            -- is undefined.
+            local changed = {}
             for _, m in pairs(Spec.byGUID) do
                 if m.trinketItems and not m.trinketsComplete
                     and (not itemID or HasItem(m, itemID)) then
                     Fill(m)
-                    Changed(m)
+                    changed[#changed + 1] = m
                 end
             end
+            for _, m in ipairs(changed) do Changed(m) end
         end
     end,
 }
@@ -706,16 +742,17 @@ end
 -- three tries. A walk that missed against a member's old spec must not stop
 -- the walk for everyone, so the walk's misses go too.
 local function ForgetTalents(m)
-    m.talents, m.talentMisses, m.talentsStale, m.talentsRetryAt = nil, nil, nil, nil
+    ClearTalents(m)
     wipe(misses)
 end
 
 -- Companion, skyriding and profession configs fire TRAIT_CONFIG_UPDATED too;
--- only a class talent config changes your talents. An unreadable answer
--- counts as one.
+-- only a class talent config changes your talents, and the inspect config
+-- holds another player's. An unreadable answer counts as one.
 local function IsClassConfig(configID)
     configID = Plain(configID)
     if type(configID) ~= "number" then return true end
+    if configID == INSPECT_CONFIG then return false end
     local ok, info = pcall(C_Traits.GetConfigInfo, configID)
     if not ok or type(info) ~= "table" then return true end
     return info.type == Enum.TraitConfigType.Combat
@@ -729,7 +766,7 @@ end
 -- every teammate's answer stale for the inspect to read again; a stale answer
 -- stays in use until a read replaces it.
 Spec.readers[#Spec.readers + 1] = {
-    events = { "TRAIT_CONFIG_UPDATED", "READY_CHECK" },
+    events = { "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "READY_CHECK" },
     On = function() return Spec.trackClass == true end,
     Clear = ForgetTalents,
     Wanted = function(m)
@@ -764,8 +801,12 @@ Spec.readers[#Spec.readers + 1] = {
             end
         end
     end,
+    -- Before the talent configs load every spellbook answer reads not taken,
+    -- so the read waits for TRAIT_CONFIG_LIST_UPDATED.
     Self = function(m)
-        if m.talents == nil and m.spec then m.talents = SelfTaken(m.spec) end
+        if m.talents == nil and m.spec and Ask(C_ClassTalents.GetActiveConfigID) ~= nil then
+            m.talents = SelfTaken(m.spec)
+        end
     end,
     Forget = ForgetTalents,
     OnEvent = function(event, configID)
@@ -773,6 +814,8 @@ Spec.readers[#Spec.readers + 1] = {
         if event == "TRAIT_CONFIG_UPDATED" and m and IsClassConfig(configID) then
             m.talents = nil
             Changed(m)
+        elseif event == "TRAIT_CONFIG_LIST_UPDATED" then
+            if m and m.talents == nil then Changed(m) end
         elseif event == "READY_CHECK" and KE.PartyCooldownsRules.BuildEventCounts(InKey(), false) then
             for _, member in pairs(Spec.byGUID) do
                 if not member.isPlayer and member.talents then member.talentsStale = true end

@@ -290,4 +290,30 @@ describe("unsafe anchor guard", function()
         assert.equal(1, #printed)
         _G.KE_EditMode_SpecBox = nil
     end)
+
+    -- The loader's UIParent is a no-op table with no widget handle, which
+    -- IsRegion refuses, so the case swaps in a region fake for its rows.
+    it("ResolveSelectFrame returns nil for each refusal, and UIParent for a name that holds it", function()
+        local frame = region(nil)
+        local savedParent = _G.UIParent
+        finally(function()
+            _G.UIParent = savedParent
+            _G.KE_SpecSelectAlias, _G.KE_SpecSelectSelf, _G.KE_EditMode_SpecSelect = nil, nil, nil
+        end)
+        _G.UIParent = region(nil)
+        _G.KE_SpecSelectAlias = _G.UIParent
+        _G.KE_SpecSelectSelf = frame
+        _G.KE_EditMode_SpecSelect = region(nil)
+        local rows = {
+            { name = "a name holding UIParent", path = "KE_SpecSelectAlias", want = _G.UIParent, missing = false },
+            { name = "the display itself", path = "KE_SpecSelectSelf", missing = false },
+            { name = "an Edit Mode box", path = "KE_EditMode_SpecSelect", missing = false },
+            { name = "a missing first frame", path = "KE_SpecSelectNoRoot", missing = true },
+        }
+        for _, row in ipairs(rows) do
+            local got, missing = KE:ResolveSelectFrame(row.path, frame)
+            assert.equal(row.want, got, row.name)
+            assert.equal(row.missing, missing, row.name)
+        end
+    end)
 end)

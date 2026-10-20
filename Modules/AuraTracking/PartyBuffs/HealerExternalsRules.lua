@@ -46,7 +46,7 @@ function Rules.Entries(specID, db, all)
     for _, castID in ipairs(row.casts) do
         local spell = data.SPELLS[castID]
         local key = Rules.Key(specID, castID)
-        local isOff = off[key] == true
+        local isOff = KE.PartyCooldownsRules.IsOff(off, key, spell)
         if spell and (all or not isOff) then
             out[#out + 1] = {
                 id = castID, key = key, spell = spell, kind = spell.kind, buffs = spell.buffs,
@@ -88,7 +88,7 @@ function Rules.On(db, active, inRaid)
     return Table(db).HealerExternals == true and active == true and inRaid ~= true
 end
 
--- Whether an Edit Mode position detaches the box: only a move away from the
+-- Whether an Edit Mode position detaches a box: only a move away from the
 -- starting place while that place stands in for an anchor that is unnamed,
 -- missing or refused. Edit Mode hands back the current position after a canceled drag,
 -- and on a revert the position the mover started from, which is the starting

@@ -274,6 +274,19 @@ describe("PartyBuffsRules.ActivePlacement", function()
     end)
 end)
 
+describe("PartyBuffsRules.PlacementValue", function()
+    it("gives nil for a key with no placement pair", function()
+        local R = L.loadPartyBuffsRules()
+        local cases = {
+            { name = "healer branch", healer = true },
+            { name = "default branch", healer = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.is_nil(R.PlacementValue({ Side = "LEFT" }, nil, case.healer), case.name)
+        end
+    end)
+end)
+
 describe("PartyBuffsRules.Layout", function()
     it("gives the layout the side offers for its Grow, the side's first for any other, and Left's list "
         .. "for an unknown side", function()

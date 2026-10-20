@@ -240,6 +240,8 @@ end
 -- font, size or length changed.
 function Cell.Dress(c, style, e)
     local size = style.size
+    -- A login scale change can land after the shared pixel size was cached.
+    KE:UpdatePixelCache()
     local px = KE:GetPixelSize()
     local color = style.colors[e.kind] or BLACK
     c:SetSize(size, size)
