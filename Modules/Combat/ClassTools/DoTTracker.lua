@@ -263,7 +263,11 @@ local function PaintAnswers(cell, total)
         if k <= total then
             local shown, d = Rules.Capped(k, total, cell.cap)
             local color = Rules.CountColor(shown, d, cell.own, DT.someColor, DT.allColor, fullCoverage)
-            answer.label:SetTextColor(color[1], color[2], color[3], color[4])
+            -- The text color's alpha is the label's alpha, so a hidden count
+            -- is painted at 0 and keeps its own for MaskCell to restore.
+            local alpha = color[4] or 1
+            answer.label:SetTextColor(color[1], color[2], color[3], cell.masked and 0 or alpha)
+            answer.alpha = alpha
             answer.label:SetText(Rules.Label(shown, d, db.CountFormat))
             answer.label:Show()
         else
@@ -559,8 +563,7 @@ end
 -- ones past a discarded sensor included.
 local function MaskCell(cell, masked)
     if cell.masked == masked then return end
-    local alpha = masked and 0 or 1
-    for _, answer in pairs(cell.answers) do answer.label:SetAlpha(alpha) end
+    for _, answer in pairs(cell.answers) do answer.label:SetAlpha(masked and 0 or answer.alpha or 1) end
     cell.masked = masked
 end
 
