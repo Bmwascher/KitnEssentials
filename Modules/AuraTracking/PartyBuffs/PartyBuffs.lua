@@ -862,6 +862,7 @@ function PB:CooldownEntries(m)
             if CDRules.TalentAllows(e, taken, specID) then
                 e.charges = CDRules.CellCharges(e, specID, m.talents)
                 e.cd = CDRules.CellLength(e, specID, m.talents, e.charges)
+                e.lockOn = CDRules.LockOn(e, m.talents, m.isPlayer == true)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, taken))
                 entries[#entries + 1] = e
             end

@@ -23,7 +23,10 @@ KE.PartyCooldownsData = Data
 -- active is set on a summon seen only through a stand-in buff: its
 -- cell's aura button never shows, and the cell shows the summon's own icon
 -- with a timer for active seconds from the cast, then the cooldown. off
--- starts the row switched off in every spec's spell list.
+-- starts the row switched off in every spec's spell list. free lists buffs
+-- that end the cast's recharges when they rise and make its uses free while
+-- up. lockout is a talent rule, read as needs is, whose auto-cast leaves a
+-- lockout debuff and spends no charge.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },
@@ -51,6 +54,10 @@ Data.SPELLS = {
     [106951]  = { kind = "offensive", cd = 180, buffs = { 106951, 102543 } },
     [22812]   = { kind = "defensive", cd = 60 },
     [61336]   = { kind = "defensive", cd = 180 },
+    -- The game's 20.5 s recharge counts as 21, so no charge shows early.
+    [22842]   = { kind = "defensive", cd = 21, free = { 102558, 50334 },
+                  needs = { talents = { [22842] = true }, likely = true },
+                  lockout = { talents = { [377847] = true }, likely = true } },
 
     [375087]  = { kind = "offensive", cd = 120 },
     [403631]  = { kind = "offensive", cd = 120 },
@@ -235,6 +242,7 @@ local CHARGES = {
     [363916] = { 375406 },   -- Obsidian Scales: Obsidian Bulwark
     [198589] = { 1266307 },  -- Blur: Demonic Resilience
     [264735] = { 459450 },   -- Survival of the Fittest: Padded Armor
+    [22842]  = { 377811 },   -- Frenzied Regeneration: Innate Resolve
 }
 for castID, talents in pairs(CHARGES) do
     local spell = Data.SPELLS[castID]
@@ -253,7 +261,7 @@ Data.SPECS = {
     [1480] = { 198589 },
     [102]  = { { 194223, 120 }, 391528, 22812 },
     [103]  = { { 106951, 90 }, 391528, 22812, 61336 },
-    [104]  = { { 22812, 34 }, { 61336, 137, charges = 2 } },
+    [104]  = { { 22812, 34 }, { 61336, 137, charges = 2 }, 22842 },
     [105]  = { 22812 },
     [1467] = { 375087, 363916 },
     [1468] = { 363916 },
