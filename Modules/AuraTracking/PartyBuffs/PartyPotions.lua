@@ -139,9 +139,8 @@ local function Stack()
 end
 
 -- A plain cast of a listed potion starts your bar, a drink over a running buff
--- included, and puts that potion's icon on it until the bar is cleared or
--- unbound. A secret cast ID is skipped: the buff sensor still starts the bar,
--- and the icon stays as it was.
+-- included, and shows that potion's icon. A secret cast ID is skipped: the
+-- buff sensor still starts the bar and reads the icon.
 local function OnCast(_, _, _, _, spellID)
     if issecretvalue(spellID) then return end
     if not Pot.listed[spellID] then return end
@@ -150,10 +149,9 @@ local function OnCast(_, _, _, _, spellID)
     if not t then return end
     local n = Track.Now()
     CDRules.StartCast(t, n)
+    CDRules.SetKind(t, Pot.entry.kinds.of[spellID])
     Track.Push(t, n)
     Track.Wake()
-    Pot.ownIcon = Texture(spellID) or Pot.icon
-    Bar.SetIcon(row.bar, Pot.ownIcon)
 end
 
 -- Made at the first activation. Each bar exists before any value reaches it,
@@ -285,14 +283,11 @@ end
 ---------------------------------------------------------------------------------
 -- Binding
 ---------------------------------------------------------------------------------
--- Your bar's count ends with its bind, and its potion icon with it.
+-- A bar's count ends with its bind, and its potion icon with it.
 local function Unbind(row)
     if not row.bound then return end
     Track.Unbind(row.st)
-    if row.token == "player" then
-        Pot.castFrame:UnregisterAllEvents()
-        Pot.ownIcon = nil
-    end
+    if row.token == "player" then Pot.castFrame:UnregisterAllEvents() end
     row.bound, row.guid = false, nil
 end
 
@@ -302,8 +297,8 @@ local function Bind(row)
     local entry = Pot.entry
     local name, color = Who(row.token)
     local e = {
-        id = entry.id, kind = entry.kind, buffs = entry.buffs, cd = entry.cd,
-        texture = row.token == "player" and Pot.ownIcon or Pot.icon, name = name, color = color,
+        id = entry.id, kind = entry.kind, buffs = entry.buffs, cd = entry.cd, kinds = entry.kinds,
+        texture = Pot.icon, name = name, color = color,
     }
     Debug("bind %s", row.token)
     Track.Apply(row.st, row.token, { e }, Pot.style)
@@ -362,18 +357,16 @@ function Pot.OnRoster()
     end
 end
 
--- Every bound row's count back to ready, drawn at once, and your bar's icon
--- back to the shared one. The trackers stay, so a clear during a roster
--- settle shows at once and a key start then still finds them.
+-- Every bound row's count back to ready and its icon back to the base, drawn
+-- at once. The trackers stay, so a clear during a roster settle shows at once
+-- and a key start then still finds them.
 local function ClearCounts()
     local n = Track.Now()
-    Pot.ownIcon = nil
-    local me = Pot.byToken.player
-    if me then Bar.SetIcon(me.bar, Pot.icon) end
     for _, row in ipairs(Pot.rows) do
         local t = row.st.trackers[1]
         if t then
             CDRules.Clear(t, n)
+            CDRules.SetKind(t, nil)
             Track.Push(t, n)
         end
     end
@@ -434,6 +427,12 @@ local function ForgetSamples()
     end
 end
 
+-- Sample i shows the listed potions' icons in turn.
+local function ShowSampleKind(t, kinds, i)
+    CDRules.FitKinds(t, kinds)
+    CDRules.SetKind(t, kinds and (i - 1) % kinds.n + 1)
+end
+
 -- Plain sample bars stacked in the box, counting down and starting again.
 -- The preview is redrawn on every roster, resolve and settings change, so a
 -- sample keeps its count unless it changed between counting and cleared.
@@ -442,6 +441,7 @@ local function DrawSamples()
     local s = Pot.style
     local cd = Rules.SECONDS
     local texture = Pot.icon
+    local kinds = Pot.entry and Pot.entry.kinds
     local showReady = Pot.pb.db.PotionShowReady == true
     local corner = Corners()
     local step = (s.height + s.gap) * (s.up and 1 or -1)
@@ -453,7 +453,8 @@ local function DrawSamples()
             Pot.samples[i] = sample
         end
         local bar = sample.bar
-        Bar.Dress(bar, s, { texture = texture, cd = cd, name = info.name, color = ClassColor(info.class) })
+        Bar.Dress(bar, s, { texture = texture, kinds = kinds, cd = cd, name = info.name,
+            color = ClassColor(info.class) })
         bar:ClearAllPoints()
         bar:SetPoint(corner, Pot.sampleLayer, corner, 0, (i - 1) * step)
         local cleared = showReady and i == #SAMPLES
@@ -470,12 +471,15 @@ local function DrawSamples()
                 t.loop = math_max(1, math_floor(cd * info.left))
                 CDRules.StartLoop(t, n)
             end
+            ShowSampleKind(t, kinds, i)
             Track.Push(t, n)
             Track.Watch(t)
             sample.t, sample.cleared = t, cleared
         else
+            ShowSampleKind(sample.t, kinds, i)
             -- Dress undid the bar's seats; only a push seats again.
             Bar.Seat(bar)
+            Bar.WriteKinds(bar, sample.t)
         end
         bar:Show()
     end
@@ -536,6 +540,7 @@ function Pot.ApplySettings()
     MakeBox()
     Pot.listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)
     Pot.entry = Rules.Entry(Pot.listed)
+    if Pot.entry then Pot.entry.kinds = Rules.Kinds(Pot.entry.buffs, Texture) end
     Pot.icon = Texture(Rules.ICON_SPELL) or Rules.FALLBACK_ICON
     if Pot.active then
         MakeRows()

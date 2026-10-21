@@ -391,8 +391,3 @@ function Bar.WriteKinds(c, t)
     for k = 1, 2 do WriteStack(c.face[k].art, t.ic) end
     c.icv = t.icv
 end
-
-function Bar.SetIcon(c, texture)
-    c.ready.icon:SetTexture(texture)
-    for k = 1, 2 do c.face[k].art.icon:SetTexture(texture) end
-end
