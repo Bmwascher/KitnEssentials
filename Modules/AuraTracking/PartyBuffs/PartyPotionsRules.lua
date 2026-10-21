@@ -11,6 +11,7 @@ local math_floor = math.floor
 local math_max = math.max
 local math_min = math.min
 local pairs = pairs
+local table_concat = table.concat
 local table_insert = table.insert
 local table_sort = table.sort
 local type = type
@@ -20,10 +21,13 @@ KE.PartyPotionsRules = Rules
 
 Rules.TOKENS = { "party1", "party2", "party3", "party4" }
 Rules.FALLBACK_ICON = "Interface\\Icons\\Trade_Alchemy"
--- Party bars show Light's Potential: their sensor sees that a listed potion
--- was drunk, never which one. Your own bar takes the drunk potion's icon from
--- your cast.
+-- The base icon every bar shows before a drink is seen, and after a clear.
 Rules.ICON_SPELL = 1236616
+-- Kinds are the listed potions grouped by icon. A kind's number minus one is
+-- written in binary into its sensor's groups, group b 2^(b-1) steps wide, so
+-- the lit width says which kind is up.
+Rules.MAX_KINDS = 8
+Rules.KIND_STEP = 20000
 -- Combat potions share one 5-minute cooldown and a 30-second buff.
 Rules.SECONDS = 300
 Rules.BUFF_SECONDS = 30
@@ -45,6 +49,51 @@ function Rules.Entry(listed)
     if #buffs == 0 then return nil end
     table_sort(buffs)
     return { id = "potion", kind = "potion", buffs = buffs, cd = Rules.SECONDS }
+end
+
+-- The entry's buffs grouped by icon, numbered in buffs order. texture gives a
+-- plain texture or nil, which counts as the fallback icon; past MAX_KINDS
+-- icons the rest share the last kind, drawn with the fallback icon. groups[b]
+-- lists the potions whose kind number minus one has bit b-1 set, as many
+-- groups as it takes to count n kinds. nil when buffs is nil.
+function Rules.Kinds(buffs, texture)
+    if not buffs then return nil end
+    local tex, ids, of, at = {}, {}, {}, {}
+    for _, id in ipairs(buffs) do
+        if not of[id] then
+            local t = texture(id) or Rules.FALLBACK_ICON
+            local k = at[t]
+            if not k then
+                if #tex < Rules.MAX_KINDS then
+                    k = #tex + 1
+                    tex[k], ids[k], at[t] = t, {}, k
+                else
+                    k = Rules.MAX_KINDS
+                    tex[k] = Rules.FALLBACK_ICON
+                end
+            end
+            of[id] = k
+            ids[k][#ids[k] + 1] = id
+        end
+    end
+    local n = #tex
+    local bits, span = 0, 1
+    while span < n do bits, span = bits + 1, span * 2 end
+    local groups = {}
+    for b = 1, bits do
+        local bit = 2 ^ (b - 1)
+        local list = {}
+        for k = 1, n do
+            if math_floor((k - 1) / bit) % 2 == 1 then
+                for _, id in ipairs(ids[k]) do list[#list + 1] = id end
+            end
+        end
+        groups[b] = { ids = list, width = bit * Rules.KIND_STEP }
+    end
+    local parts = {}
+    for k = 1, n do parts[k] = table_concat(ids[k], ",") end
+    return { n = n, tex = tex, of = of, step = Rules.KIND_STEP, groups = groups,
+        sig = table_concat(parts, ";") }
 end
 
 -- The units to watch, in box order. Solo there are none, so nothing shows out
