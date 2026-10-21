@@ -229,7 +229,8 @@ Rules.DOOR_PASSES = 16
 -- 3.86e-7 for a 900-second cell with a short sensor, 3.92e-7 for a charge
 -- cell with one at CHARGE_CD_MAX. A group tracker passes it up to 2 times per
 -- watched unit, 2 more with charges: at 5 units and 508 seconds or less,
--- 6.18e-7, and 4.75e-7 with charges.
+-- 6.18e-7, and 4.75e-7 with charges. A cell with free and lockout sensors
+-- adds 2 passes a read for the fill and 3 for the veto: at u = 1, 2.47e-6.
 Rules.DOOR_SLACK = 3e-7
 
 function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
@@ -276,6 +277,7 @@ function Rules.Clear(t, n)
         sl.c, sl.v, sl.epoch = 1, 0, n
     end
     t.cur, t.primed, t.prev, t.prevShort, t.quietTo, t.restartTo = 1, false, nil, nil, nil, nil
+    t.pf, t.pl = nil, nil
     t.fallD, t.fallFrom, t.fallTo = nil, nil, nil
     if t.charges then
         t.b, t.a0, t.a1, t.a2 = 0, 0, 0, 1
@@ -362,6 +364,58 @@ function Rules.MatchKeys(old, new)
     return match
 end
 
+-- Free uses. Feed keeps the read's free and lockout answers in t.vf and t.vl
+-- and the previous read's in t.pf and t.pl; a tracker without those sensors
+-- has all four nil, and nothing here changes it.
+
+-- Whether a read's use is vetoed: first whether that could be read, then the
+-- answer. A use read while the free buff is up costs nothing, and so does one
+-- read with a lockout rise.
+function Rules.FreeVetoed(t, isSecret)
+    local f, l, pl = t.vf, t.vl, t.pl
+    if isSecret(f) or isSecret(l) or isSecret(pl) then return false, false end
+    return true, f == true or (l == true and pl == false)
+end
+
+-- x, the value a use writes, or old where the read is vetoed, picked so a
+-- secret answer is never compared.
+function Rules.FreeVeto(t, x, old, pick)
+    local f, l, pl = t.vf, t.vl, t.pl
+    if f ~= nil then x = pick(f, old, x) end
+    if l ~= nil and pl ~= nil then x = pick(l, pick(pl, x, old), x) end
+    return x
+end
+
+local function Fill(f, pf, x, full, pick) return pick(f, pick(pf, x, full), x) end
+
+-- A rise of the free buff ends every recharge: both charges are back. On
+-- secret answers each value is picked, and none is written until every pick
+-- has run. Returns whether a value changed.
+function Rules.FreeFill(t, isSecret, pick)
+    local f, pf = t.vf, t.pf
+    if f == nil or pf == nil then return false end
+    local s1, s2 = t.slot[1], t.slot[2]
+    if not isSecret(f) and not isSecret(pf) then
+        if not (f == true and pf ~= true) then return false end
+        s1.c, s1.v, s2.c, s2.v = 1, 0, 1, 0
+        if t.charges then t.b, t.a0, t.a1, t.a2, t.legacy, t.lb = 0, 0, 0, 1, nil, nil end
+        return true
+    end
+    local c1, v1 = Fill(f, pf, s1.c, 1, pick), Fill(f, pf, s1.v, 0, pick)
+    local c2, v2 = Fill(f, pf, s2.c, 1, pick), Fill(f, pf, s2.v, 0, pick)
+    if t.charges then
+        local b, a0 = Fill(f, pf, t.b, 0, pick), Fill(f, pf, t.a0, 0, pick)
+        local a1, a2 = Fill(f, pf, t.a1, 0, pick), Fill(f, pf, t.a2, 1, pick)
+        -- A lost count stays lost: t.legacy is plain, and the cell hides the
+        -- digits on it, so only its timer and cover can be picked to ready.
+        local lb = t.lb
+        if t.legacy then lb = Fill(f, pf, lb, 0, pick) end
+        t.b, t.a0, t.a1, t.a2, t.lb = b, a0, a1, a2, lb
+    end
+    s1.c, s1.v, s2.c, s2.v = c1, v1, c2, v2
+    return true
+end
+
 -- Known and up, from plain answers only. A lit short sensor means a proc
 -- copy, which is not a use. A list is up when any of its answers is.
 local function State(lit, short, hasShort, isSecret, multi)
@@ -399,13 +453,17 @@ end
 -- self-check (nil while undecided); the edge below never sees it. An error
 -- there loses the count, times the read as one cooldown, per unit for a
 -- group, and redraws; if that errs too, the read is held: the previous read
--- stays, so the next read finds the same use. Returns true when a slot
--- changed.
-function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
+-- stays, so the next read finds the same use. free and lock are a free
+-- cell's free and lockout answers: a free rise fills the cell first
+-- (FreeFill), and a use read while free is lit or with a lockout rise
+-- changes nothing (FreeVeto). Returns true when a slot changed.
+function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked, free, lock)
     local changed, held = false, false
     local hasShort, multi = t.hasShort, t.multi
+    t.vf, t.vl = free, lock
     if t.primed then
         changed = Rules.Roll(t, n)
+        if Rules.FreeFill(t, isSecret, pick) then changed = true end
         local litKnown, up = State(lit, short, hasShort, isSecret, multi)
         local prevKnown, was = State(t.prev, t.prevShort, hasShort, isSecret, multi)
         local quiet = t.quietTo ~= nil and n <= t.quietTo
@@ -420,14 +478,15 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
             end
         end
         local restarting = litKnown and prevKnown and t.restartTo ~= nil and n <= t.restartTo
-        local rise = not taken and not quiet and not restarting
+        local freeKnown, vetoed = Rules.FreeVetoed(t, isSecret)
+        local rise = not taken and not quiet and not restarting and not (freeKnown and vetoed)
             and not ((litKnown and not up) or (prevKnown and was))
         local fall = not taken and t.fallD ~= nil and n >= t.fallFrom and n <= t.fallTo
             and not ((litKnown and up) or (prevKnown and not was))
         if taken then
             changed = changed or moved == true
         elseif rise or fall then
-            if litKnown and prevKnown then
+            if litKnown and prevKnown and freeKnown then
                 if rise then
                     Rules.StartPlain(t, n)
                     if t.quiet then t.restartTo = n + t.quiet end
@@ -441,9 +500,10 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
                 local prev, prevShort = t.prev, t.prevShort
                 local riseC, riseV, riseO = sl.c, sl.v, other.v
                 if rise then
-                    riseC = Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi)
-                    riseV = Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi)
-                    riseO = Pick(prev, prevShort, hasShort, other.v, 0, pick, multi)
+                    local V = Rules.FreeVeto
+                    riseC = V(t, Pick(prev, prevShort, hasShort, sl.c, Rules.Stamp(t, n), pick, multi), sl.c, pick)
+                    riseV = V(t, Pick(prev, prevShort, hasShort, sl.v, 1, pick, multi), sl.v, pick)
+                    riseO = V(t, Pick(prev, prevShort, hasShort, other.v, 0, pick, multi), other.v, pick)
                 end
                 local fallC, fallV, fallO = sl.c, sl.v, other.v
                 if fall then
@@ -458,7 +518,7 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
             changed = true
         end
     end
-    if not held then t.prev, t.prevShort, t.primed = lit, short, true end
+    if not held then t.prev, t.prevShort, t.primed, t.pf, t.pl = lit, short, true, free, lock end
     return changed
 end
 
@@ -665,12 +725,15 @@ function Rules.ChargeLegacyUse(t, lit, short, n, isSecret, pick)
     if t.multi and t.prev.n ~= lit.n then return false end
     local r = PlainRises(t, lit, short, isSecret)
     if r == 0 then return false end
+    local freeKnown, vetoed = Rules.FreeVetoed(t, isSecret)
+    if freeKnown and vetoed then return false end
     local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
     local stamp = Rules.Stamp(t, n)
-    local c = Choose(t, lit, short, r, sl.c, stamp, stamp, pick)
-    local v = Choose(t, lit, short, r, sl.v, 1, 1, pick)
-    local o = Choose(t, lit, short, r, other.v, 0, 0, pick)
-    local lb = Choose(t, lit, short, r, t.lb, 1, 1, pick)
+    local V = Rules.FreeVeto
+    local c = V(t, Choose(t, lit, short, r, sl.c, stamp, stamp, pick), sl.c, pick)
+    local v = V(t, Choose(t, lit, short, r, sl.v, 1, 1, pick), sl.v, pick)
+    local o = V(t, Choose(t, lit, short, r, other.v, 0, 0, pick), other.v, pick)
+    local lb = V(t, Choose(t, lit, short, r, t.lb, 1, 1, pick), t.lb, pick)
     sl.c, sl.v, other.v, t.lb = c, v, o, lb
     return true
 end
@@ -696,8 +759,11 @@ function Rules.ChargeUse(t, lit, short, n, isSecret, pick, past, checked)
     end
     local r = PlainRises(t, lit, short, isSecret)
     if r == 0 then return true, resumed end
-    if checked == nil and not (plain and r) then return true, resumed end
-    if plain and r then
+    local freeKnown, vetoed = Rules.FreeVetoed(t, isSecret)
+    if freeKnown and vetoed then return true, resumed end
+    local plainUse = plain and r and freeKnown
+    if checked == nil and not plainUse then return true, resumed end
+    if plainUse then
         for _ = 1, r do Rules.ChargeUsePlain(t, n, isSecret, past) end
         return true, true
     end
@@ -725,6 +791,9 @@ function Rules.ChargeUse(t, lit, short, n, isSecret, pick, past, checked)
     a1 = Choose(t, lit, short, r, t.a1, a1, 0, pick)
     local a2 = Choose(t, lit, short, r, t.a2, 0, 0, pick)
     b = Choose(t, lit, short, r, t.b, b, 1, pick)
+    local V = Rules.FreeVeto
+    c, v, o = V(t, c, sl.c, pick), V(t, v, sl.v, pick), V(t, o, other.v, pick)
+    a0, a1, a2, b = V(t, a0, t.a0, pick), V(t, a1, t.a1, pick), V(t, a2, t.a2, pick), V(t, b, t.b, pick)
     sl.c, sl.v, other.v = c, v, o
     t.a0, t.a1, t.a2, t.b = a0, a1, a2, b
     return true, true
