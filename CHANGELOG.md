@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.2
+
+### Raid Notifications
+
+- The LOOT BOSS alert shows the new cat icon, half again as large as
+  before
+
+### Minimap
+
+- New cat icon on the minimap button and in the addon list: the
+  constellation head with a soft pink glow
+
+---
+
 ## v4.13.1
 
 ### Pet Status Text
