@@ -149,7 +149,9 @@ local function OnCast(_, _, _, _, spellID)
     if not t then return end
     local n = Track.Now()
     CDRules.StartCast(t, n)
-    CDRules.SetKind(t, Pot.entry.kinds.of[spellID])
+    -- The kinds the tracker is sized for; Pot.entry's can be newer until the
+    -- row binds again.
+    CDRules.SetKind(t, row.st.entries[1].kinds.of[spellID])
     Track.Push(t, n)
     Track.Wake()
 end
@@ -372,18 +374,47 @@ local function ClearCounts()
     end
 end
 
--- A committed potion list change clears every bar, even one whose buffs did
--- not change.
-function Pot.ClearAll()
-    ClearCounts()
+-- Groups the entry's potions by icon through Rules.HoldKinds; active is the
+-- grouping in use. Returns whether the grouping changed.
+local function TakeKinds(active, regroup)
+    local entry = Pot.entry
+    if not entry then return false end
+    entry.kinds = Rules.HoldKinds(active, Rules.Kinds(entry.buffs, Texture), regroup)
+    return active ~= nil and entry.kinds.sig ~= active.sig
 end
 
--- A key's start clears every bar; the module's hold covers the reads. A
--- teammate's potion drunk again over a buff from before the start shows only
--- as that buff's late fall, so their bars watch for one.
+-- A bound row may show a drunk potion; with none bound any grouping is taken.
+local function AnyBound()
+    for _, row in ipairs(Pot.rows) do
+        if row.bound then return true end
+    end
+    return false
+end
+
+-- Right after a clear every row shows the base icon, so a held grouping is
+-- taken. Not during a roster settle: its rows bind only at its drain, which
+-- would reset a drink made before it.
+local function Regroup()
+    if Settling() then return false end
+    return TakeKinds(Pot.entry and Pot.entry.kinds, true)
+end
+
+-- A committed potion list change clears every bar, even one whose buffs did
+-- not change, and lets the potions regroup; the settings pass that follows
+-- binds the rows again.
+function Pot.ClearAll()
+    ClearCounts()
+    Regroup()
+end
+
+-- A key's start clears every bar, and binds them again when the potions
+-- regroup; the module's hold covers the reads. A teammate's potion drunk
+-- again over a buff from before the start shows only as that buff's late
+-- fall, so their bars watch for one.
 function Pot.OnKeyStart()
     if not (Pot.on and Pot.active) then return end
     ClearCounts()
+    if Regroup() then Pot.Resolve() end
     local n = Track.Now()
     for _, row in ipairs(Pot.rows) do
         local t = row.st.trackers[1]
@@ -538,8 +569,9 @@ function Pot.ApplySettings()
     Pot.on = true
     MakeBox()
     Pot.listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListPotions)
+    local active = Pot.entry and Pot.entry.kinds
     Pot.entry = Rules.Entry(Pot.listed)
-    if Pot.entry then Pot.entry.kinds = Rules.Kinds(Pot.entry.buffs, Texture) end
+    TakeKinds(active, not AnyBound())
     Pot.icon = Texture(Rules.ICON_SPELL) or Rules.FALLBACK_ICON
     if Pot.active then
         MakeRows()

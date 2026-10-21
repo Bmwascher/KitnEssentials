@@ -55,7 +55,8 @@ end
 -- plain texture or nil, which counts as the fallback icon; past MAX_KINDS
 -- icons the rest share the last kind, drawn with the fallback icon. groups[b]
 -- lists the potions whose kind number minus one has bit b-1 set, as many
--- groups as it takes to count n kinds. nil when buffs is nil.
+-- groups as it takes to count n kinds. list names the potions and sig how
+-- they are grouped. nil when buffs is nil.
 function Rules.Kinds(buffs, texture)
     if not buffs then return nil end
     local tex, ids, of, at = {}, {}, {}, {}
@@ -93,7 +94,18 @@ function Rules.Kinds(buffs, texture)
     local parts = {}
     for k = 1, n do parts[k] = table_concat(ids[k], ",") end
     return { n = n, tex = tex, of = of, step = Rules.KIND_STEP, groups = groups,
-        sig = table_concat(parts, ";") }
+        list = table_concat(buffs, ","), sig = table_concat(parts, ";") }
+end
+
+-- The kinds a settings pass leaves in use. A new grouping of the same
+-- potions would put every bound row back on the base icon, so it waits for
+-- regroup, a moment no row can show a drunk potion. The same grouping keeps
+-- every icon, and other potions start new counts, so both are taken at once.
+function Rules.HoldKinds(active, fresh, regroup)
+    if regroup or not active or active.list ~= fresh.list or active.sig == fresh.sig then
+        return fresh
+    end
+    return active
 end
 
 -- The units to watch, in box order. Solo there are none, so nothing shows out
