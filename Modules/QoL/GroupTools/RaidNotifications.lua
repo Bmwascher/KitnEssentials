@@ -100,8 +100,7 @@ local SATED_DEBUFFS = {
 local ALERT_DEFS = {
     { key = "Gateway",    text = "GATE USABLE", icon = 607513,  enableKey = "GatewayEnabled" },
     { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
-    -- crop: the head's 105 px square in the 128 px texture; the rest is margin.
-    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true, crop = { 12 / 128, 117 / 128, 8 / 128, 113 / 128 } },
+    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
     { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = VOIDCORE_FALLBACK_ICON, enableKey = "VoidcoreEnabled" },
 }
