@@ -390,6 +390,87 @@ local function Pick(lit, short, hasShort, a, b, pick, multi)
     return pick(lit, pick(short, b, a), b)
 end
 
+-- A potion row's icon alphas (t.ic, one per kind: 0, 1 or a secret) and the
+-- picks of the latest read that took them (t.kseen). t.icv moves with every
+-- write, from one counter, so a bar that changes tracker never matches an old
+-- serial.
+local icSerial = 0
+
+local function Touch(t)
+    icSerial = icSerial + 1
+    t.icv = icSerial
+end
+
+local function CopyKinds(dst, src)
+    for k = 1, #dst do dst[k] = src[k] end
+end
+
+-- Sizes the alphas for kinds, all at the base icon, when the kinds changed;
+-- no kinds removes them.
+function Rules.FitKinds(t, kinds)
+    if not kinds then
+        t.ic, t.kseen, t.kindSig = nil, nil, nil
+        return
+    end
+    if t.kindSig == kinds.sig then return end
+    local ic, seen = {}, {}
+    for k = 1, kinds.n do ic[k], seen[k] = 0, 0 end
+    t.ic, t.kseen, t.kindSig = ic, seen, kinds.sig
+    Touch(t)
+end
+
+-- Kind k at full alpha and the rest at none; nil shows the base icon.
+function Rules.SetKind(t, k)
+    local ic = t.ic
+    if not ic then return end
+    for j = 1, #ic do ic[j] = j == k and 1 or 0 end
+    Touch(t)
+end
+
+-- Whether a read needs the kind picks: it may be a rise, or a late-fall
+-- window is open and the buff may still be up, so a fall can name it.
+function Rules.KindsWanted(t, lit, short, n, isSecret)
+    local litKnown, up = State(lit, short, t.hasShort, isSecret, t.multi)
+    if litKnown and not up then return false end
+    if t.fallD ~= nil and n <= t.fallTo then return true end
+    if not t.primed then return false end
+    local prevKnown, was = State(t.prev, t.prevShort, t.hasShort, isSecret, t.multi)
+    return not (prevKnown and was)
+end
+
+local function Either(b, x, y, isSecret, pick)
+    if isSecret(b) then return pick(b, x, y) end
+    if b then return x end
+    return y
+end
+
+-- One pick per kind from the hit tests: ge[1] is the sensor's lit answer and
+-- ge[k] whether its width reaches kind k, so kind k is up when ge[k] holds
+-- and ge[k+1] does not. A secret answer only reaches pick.
+function Rules.KindPicks(ge, n, isSecret, pick, out)
+    for k = 1, n do
+        local above = 1
+        if k < n then above = Either(ge[k + 1], 0, 1, isSecret, pick) end
+        out[k] = Either(ge[k], above, 0, isSecret, pick)
+    end
+    return out
+end
+
+-- A hidden read's icon latch, beside the stamp's: a rise takes the read's
+-- picks (rising), a fall the picks kept from the read before.
+local function LatchKinds(t, lit, short, rising, fall, pick)
+    local ic, seen = t.ic, t.kseen
+    local hasShort, multi, prev, prevShort = t.hasShort, t.multi, t.prev, t.prevShort
+    for k = 1, #ic do
+        local old = ic[k]
+        local riseK, fallK = old, old
+        if rising then riseK = Pick(prev, prevShort, hasShort, old, rising[k], pick, multi) end
+        if fall then fallK = Pick(prev, prevShort, hasShort, seen[k], old, pick, multi) end
+        ic[k] = Pick(lit, short, hasShort, riseK, fallK, pick, multi)
+    end
+    Touch(t)
+end
+
 -- One read. Plain answers decide the edge in Lua. A secret answer is only
 -- passed to pick, which writes the stamp and the visibility without Lua
 -- learning it. Inside an armed window a fall stamps fallD seconds back; in a
@@ -400,8 +481,9 @@ end
 -- there loses the count, times the read as one cooldown, per unit for a
 -- group, and redraws; if that errs too, the read is held: the previous read
 -- stays, so the next read finds the same use. Returns true when a slot
--- changed.
-function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
+-- changed. kinds is a potion row's kind picks: a rise latches them into t.ic,
+-- a late fall the picks kept from the read before.
+function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked, kinds)
     local changed, held = false, false
     local hasShort, multi = t.hasShort, t.multi
     if t.primed then
@@ -431,8 +513,16 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
                 if rise then
                     Rules.StartPlain(t, n)
                     if t.quiet then t.restartTo = n + t.quiet end
+                    if t.ic and kinds then
+                        CopyKinds(t.ic, kinds)
+                        Touch(t)
+                    end
                 else
                     Rules.StartPlain(t, n, n - t.fallD)
+                    if t.ic then
+                        CopyKinds(t.ic, t.kseen)
+                        Touch(t)
+                    end
                 end
             else
                 -- The sides are picked by the plain flags; a side that cannot
@@ -454,11 +544,16 @@ function Rules.Feed(t, lit, short, n, isSecret, pick, past, checked)
                 sl.c = Pick(lit, short, hasShort, riseC, fallC, pick, multi)
                 sl.v = Pick(lit, short, hasShort, riseV, fallV, pick, multi)
                 other.v = Pick(lit, short, hasShort, riseO, fallO, pick, multi)
+                local rising = rise and kinds or nil
+                if t.ic and (rising or fall) then LatchKinds(t, lit, short, rising, fall, pick) end
             end
             changed = true
         end
     end
-    if not held then t.prev, t.prevShort, t.primed = lit, short, true end
+    if not held then
+        t.prev, t.prevShort, t.primed = lit, short, true
+        if kinds and t.kseen then CopyKinds(t.kseen, kinds) end
+    end
     return changed
 end
 
