@@ -55,6 +55,7 @@ local function Entry(castID, spell, key, listed, isOff, charges)
     return {
         id = castID, key = key, spell = spell, kind = spell.kind,
         buffs = spell.buffs, short = spell.short, active = spell.active,
+        free = spell.free, lockout = spell.lockout,
         listed = listed,
         cd = Rules.ClampSeconds(listed),
         charges = charges,
@@ -1018,8 +1019,8 @@ local function AddModTalents(out, spell)
     return named
 end
 
--- A cast's talent rule and its mods' talents. Returns whether it names a
--- talent.
+-- A cast's talent rule, its lockout's talents and its mods' talents. Returns
+-- whether it names a talent.
 local function AddCast(out, castID, spell, specID)
     local swap = spell and spell.swap
     local hide = spell and spell.hide
@@ -1030,6 +1031,13 @@ local function AddCast(out, castID, spell, specID)
     if rule then
         out.rules[castID] = rule
         for talent in pairs(rule.talents) do
+            AddTalent(out, talent)
+            named = true
+        end
+    end
+    local lockout = spell and spell.lockout
+    if lockout then
+        for talent in pairs(lockout.talents) do
             AddTalent(out, talent)
             named = true
         end
@@ -1163,6 +1171,17 @@ end
 function Rules.CastTaken(specID, castID, ranks)
     local talents = Rules.TalentsFor(specID)
     return Rules.Taken(talents and talents.rules[castID], ranks)
+end
+
+-- Whether a cell watches its lockout: on your own row only, because the
+-- lockout sensor's source filter passes only auras you or your pet applied;
+-- there, the lockout talent read as taken, or unread and likely.
+function Rules.LockOn(entry, ranks, own)
+    local lockout = entry.lockout
+    if own ~= true or not lockout then return false end
+    local taken = Rules.Taken(lockout, ranks)
+    if taken == nil then return lockout.likely == true end
+    return taken
 end
 
 -- A gear event within GEAR_QUIET seconds of a teammate's last trinket read

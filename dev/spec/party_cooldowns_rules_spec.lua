@@ -1416,3 +1416,22 @@ describe("PartyCooldownsRules free uses", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules.LockOn", function()
+    it("watches the lockout on your own row while its talent is taken, or unread and likely", function()
+        local R = loadRules()
+        local lockout = { talents = { [70] = true }, likely = true }
+        local cases = {
+            { name = "taken", entry = { lockout = lockout }, ranks = { [70] = 1 }, own = true, want = true },
+            { name = "read as not taken", entry = { lockout = lockout }, ranks = { [70] = 0 }, own = true,
+              want = false },
+            { name = "unread, likely", entry = { lockout = lockout }, ranks = {}, own = true, want = true },
+            { name = "no lockout rule", entry = {}, ranks = { [70] = 1 }, own = true, want = false },
+            { name = "a party row, taken", entry = { lockout = lockout }, ranks = { [70] = 1 }, own = false,
+              want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.LockOn(case.entry, case.ranks, case.own), case.name)
+        end
+    end)
+end)
