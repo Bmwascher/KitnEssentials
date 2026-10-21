@@ -229,6 +229,7 @@ local function SetButtonEnabled(button, enabled, isLeader)
     end
 end
 
+---@param eventFunc fun(self: Frame, event?: FrameEvent, ...: any)?
 local function CreateUtilButton(name, parent, template, width, height, point, relativeto, point2, xOfs, yOfs, label, events, eventFunc, mouseFunc)
     local S = KE.Skins
     local btn = CreateFrame("Button", name, parent, template)
@@ -275,6 +276,7 @@ local function CreateUtilButton(name, parent, template, width, height, point, re
     return btn
 end
 
+---@param eventFunc fun(self: Frame, event?: FrameEvent, ...: any)?
 local function CreateDropdown(name, parent, width, point, relativeto, point2, xOfs, yOfs, label, events, eventFunc, setupFunc)
     local S = KE.Skins
     local dropdown = CreateFrame("DropdownButton", name, parent, "WowStyle1DropdownTemplate")
@@ -309,6 +311,7 @@ local function CreateDropdown(name, parent, width, point, relativeto, point2, xO
     return dropdown
 end
 
+---@param eventFunc fun(self: Frame, event?: FrameEvent, ...: any)?
 local function CreateCheckBox(name, parent, size, point, relativeto, point2, xOfs, yOfs, label, events, eventFunc, clickFunc)
     local S = KE.Skins
     local box = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")

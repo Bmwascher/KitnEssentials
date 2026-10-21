@@ -2375,6 +2375,7 @@ local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = 
 -- transient list over the world.
 local POPUP_BG = { 0.05, 0.05, 0.05, 0.97 }
 
+---@param link string?
 local function GetQualityAtlasFromLink(link)
     if not link then return nil end
     return link:match(qualityAtlasPattern)
