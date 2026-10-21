@@ -807,7 +807,7 @@ end
 
 -- Aims an existing sensor. Returns whether the cell can use it, whether a
 -- call was refused (as opposed to the sensor not being built yet), and
--- whether the sensor was bound, re-pointed or re-enabled.
+-- whether the sensor was bound, re-pointed, re-aimed or re-enabled.
 local function Ready(sensor, sig, buffs, short, unit, kinds)
     if not sensor then return false, false, false end
     local ok, changed = Aim(sensor, sig, buffs, short, unit, kinds)
@@ -887,9 +887,9 @@ function Track.Apply(st, unit, entries, style, settings)
     for i = 1, st.count do
         if Reveal(st, i, n) then fresh = true end
     end
-    -- A sensor bound, re-pointed or re-enabled settles before it is read. A
-    -- cell that has just become ready is primed by these reads, however long
-    -- ago the slot's bind reads ran.
+    -- A sensor bound, re-pointed, re-aimed or re-enabled settles before it is
+    -- read. A cell that has just become ready is primed by these reads,
+    -- however long ago the slot's bind reads ran.
     if moved then Track.Hold(st, BIND_HOLD) elseif fresh then Track.Arm(st) end
     return clean and overlayClean, restyle
 end

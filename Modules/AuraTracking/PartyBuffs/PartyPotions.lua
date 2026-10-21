@@ -292,7 +292,7 @@ local function Unbind(row)
 end
 
 -- A refused call is tried again at the drain (Pot.OnRelease); the build queue
--- makes the row's sensor, one per frame.
+-- makes the row's sensor and then its kind groups, one per frame.
 local function Bind(row)
     local entry = Pot.entry
     local name, color = Who(row.token)
