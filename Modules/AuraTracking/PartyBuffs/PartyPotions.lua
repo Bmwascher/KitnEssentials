@@ -393,9 +393,10 @@ end
 
 -- Right after a clear every row shows the base icon, so a held grouping is
 -- taken. Not during a roster settle: its rows bind only at its drain, which
--- would reset a drink made before it.
+-- would reset a drink made before it. While bars are off nothing is taken:
+-- turning them on regroups.
 local function Regroup()
-    if Settling() then return false end
+    if not Pot.on or Settling() then return false end
     return TakeKinds(Pot.entry and Pot.entry.kinds, true)
 end
 
