@@ -18,6 +18,7 @@ local KE = select(2, ...)
 local CreateFrame = CreateFrame
 local GetPhysicalScreenSize = GetPhysicalScreenSize
 local issecretvalue = issecretvalue
+local math_max = math.max
 local math_min = math.min
 local table_concat = table.concat
 local tostring = tostring
@@ -81,6 +82,7 @@ local function NewArt(parent)
     local art = CreateFrame("Frame", nil, parent)
     art.icon = art:CreateTexture(nil, "ARTWORK")
     KE:ApplyIconZoom(art.icon)
+    art.kinds = {}
     -- A frame, not a backing: the drained part shows what is behind the bar.
     art.edges = {}
     for i = 1, 4 do
@@ -168,6 +170,30 @@ local function PlaceReadyText(c, y)
     c.readyText:SetPoint("TOPRIGHT", c.ready.area, "TOPRIGHT", -TEXT_PAD, y)
 end
 
+-- One icon per kind over the base icon, made once and placed with it, hidden
+-- past the kinds in use; Bar.WriteKinds sets their alphas.
+local function PaintKinds(art, kinds, px, inner)
+    local n = kinds and kinds.n or 0
+    for k = 1, math_max(n, #art.kinds) do
+        local tex = art.kinds[k]
+        if k <= n then
+            if not tex then
+                tex = art:CreateTexture(nil, "ARTWORK", nil, 1)
+                KE:ApplyIconZoom(tex)
+                tex:SetAlpha(0)
+                art.kinds[k] = tex
+            end
+            tex:ClearAllPoints()
+            tex:SetPoint("TOPLEFT", art, "TOPLEFT", px, -px)
+            tex:SetSize(inner, inner)
+            tex:SetTexture(kinds.tex[k])
+            tex:Show()
+        elseif tex then
+            tex:Hide()
+        end
+    end
+end
+
 -- Frame, icon, fill and name. The icon sits inside the frame at the left end,
 -- right against the area the fill drains across. reserve keeps the name clear
 -- of the text on the right. The name hangs top pixels below the area's top,
@@ -180,6 +206,7 @@ local function Paint(art, style, e, fill, scale, nameColor, px, reserve, top, ba
     art.icon:SetPoint("TOPLEFT", art, "TOPLEFT", px, -px)
     art.icon:SetSize(inner, inner)
     art.icon:SetTexture(e.texture)
+    PaintKinds(art, e.kinds, px, inner)
     art.area:ClearAllPoints()
     art.area:SetPoint("TOPLEFT", art, "TOPLEFT", inner + px, -px)
     art.area:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", -px, px)
@@ -207,7 +234,7 @@ function Bar.Dress(c, style, e)
         Rules.Colors(style, e.color)
     local font, size, outline = style.fontName, style.textSize, style.outline
     c:SetSize(style.width, style.height)
-    c.cd, c.placed = e.cd, true
+    c.cd, c.placed, c.icv = e.cd, true, nil
     local bottom, height = CDRules.StripBar(e.cd, CDRules.Unit(e.cd))
     local timerWidth = Cell.TextWidth(font, size, outline, "00:00") + TIMER_PAD
     local step, line = Cell.LineMetrics(font, size, outline)
@@ -347,7 +374,20 @@ function Bar.SetReady(c, on)
     c.ready:SetShown(on == true)
 end
 
-function Bar.SetIcon(c, texture)
-    c.ready.icon:SetTexture(texture)
-    for k = 1, 2 do c.face[k].art.icon:SetTexture(texture) end
+-- One stack's kind icons at the tracker's alphas, which may be secret and
+-- reach only SetAlpha.
+local function WriteStack(art, ic)
+    for k = 1, #ic do
+        local tex = art.kinds[k]
+        if tex then tex:SetAlpha(ic[k]) end
+    end
+end
+
+-- Both faces and the Ready bar show the row's last drunk potion. Written
+-- only when the tracker's serial moved since this bar's last write.
+function Bar.WriteKinds(c, t)
+    if c.icv == t.icv or not t.ic then return end
+    WriteStack(c.ready, t.ic)
+    for k = 1, 2 do WriteStack(c.face[k].art, t.ic) end
+    c.icv = t.icv
 end

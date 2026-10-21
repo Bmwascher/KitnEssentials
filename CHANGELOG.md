@@ -1,5 +1,29 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.3
+
+### Party Potions
+
+- Each row shows the potion that was actually drunk, not always Light's
+  Potential, and its Ready bar keeps that icon until the rows are cleared
+- The settings preview shows a different listed potion on each sample row
+
+---
+
+## v4.13.2
+
+### Raid Notifications
+
+- The LOOT BOSS alert shows the new cat icon, half again as large as
+  before
+
+### Minimap
+
+- New cat icon on the minimap button and in the addon list: the
+  constellation head with a soft pink glow
+
+---
+
 ## v4.13.1
 
 ### Pet Status Text

@@ -6,9 +6,11 @@
 --
 -- A sensor is a Blizzard aura container holding one 50000-wide element
 -- while the buff is up, so IsMouseOver answers "present" without Lua reading
--- the aura. Where auras are secret the answer is secret too; it only reaches
--- EvaluateColorValueFromBoolean, whose result goes straight to the cell's
--- bars and alphas. Every container call is a pcall.
+-- the aura. A potion row's sensor also holds up to three groups whose widths
+-- add (kind - 1) steps to the lit width, so a hit test at each kind's width says
+-- which icon to show. Where auras are secret the answer is secret too; it
+-- only reaches EvaluateColorValueFromBoolean, whose result goes straight to
+-- the cell's bars and alphas. Every container call is a pcall.
 
 ---@class KE
 local KE = select(2, ...)
@@ -45,6 +47,9 @@ local SENSOR_GROUP = "cd"
 local SENSOR_FILTER = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
 -- A lit sensor spans the screen from just off its left edge.
 local SENSOR_WIDTH = 50000
+local SENSOR_X = -11
+-- An aura group or slot filter that admits nothing.
+local EMPTY = { includeSpellIDs = {} }
 -- A free cell's lockout sensor matches its lockout debuff by shape: the
 -- client refuses spell-ID filters on a friendly unit's debuffs. Built only
 -- where Rules.LockOn allows it.
@@ -214,6 +219,7 @@ local function Push(t, n)
     if not c then return end
     local view = t.view or Cell
     for k = 1, 2 do pcall(view.Write, c, k, t.slot[k], t.u, n) end
+    if t.ic and view.WriteKinds then pcall(view.WriteKinds, c, t) end
     if t.charges then
         WriteCompare(t)
         if view.WriteCharges then pcall(view.WriteCharges, c, t) end
@@ -388,7 +394,7 @@ local function NewSensor(buffs, short, host, filter, filters)
     if not ok or not sensor then return nil end
     local grouped = pcall(function()
         sensor:SetSize(1, 1)
-        sensor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -11, 0)
+        sensor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", SENSOR_X, 0)
         sensor:EnableMouse(false)
         sensor:AddAuraGroup(SENSOR_GROUP, filter or SENSOR_FILTER, {
             maxFrameCount = 1,
@@ -410,17 +416,63 @@ local function NewSensor(buffs, short, host, filter, filters)
     return sensor
 end
 
+local function KindKey(b) return "kind" .. b end
+
+-- Group b's filter: its potions, or nothing once the kinds need fewer groups.
+local function KindFilter(kinds, b)
+    local g = kinds.groups[b]
+    if not g then return EMPTY end
+    return { includeSpellIDs = BuffSet(g.ids) }
+end
+
+-- Whether a potion sensor still lacks a group its kinds need. A sensor whose
+-- add was refused never adds another: the refused key may be registered.
+local function KindsMissing(sensor, kinds)
+    return kinds ~= nil and not sensor.keKindsBroken and (sensor.keGroups or 0) < #kinds.groups
+end
+
+-- Adds the sensor's next group, empty: the container registers a group
+-- before its add finishes, so a refused add can leave one behind that no
+-- later aim reaches, and an empty one never lights the sensor. The next aim
+-- points the new group at its potions. Each add is one more container pass,
+-- so the caller adds at most one per frame.
+local function AddKindGroup(sensor, kinds)
+    local b = (sensor.keGroups or 0) + 1
+    local added = pcall(sensor.AddAuraGroup, sensor, KindKey(b), SENSOR_FILTER, {
+        maxFrameCount = 1,
+        candidateFilters = EMPTY,
+        initializeFrame = InitSensorButton,
+        layout = { elementWidth = kinds.groups[b].width, elementHeight = 1, elementSpacing = 0, lineSpacing = 0 },
+    })
+    if not added then
+        sensor.keKindsBroken = true
+        return false
+    end
+    sensor.keGroups, sensor.keKinds = b, nil
+    return true
+end
+
 -- A refused call leaves the sensor's state unknown, so every recorded field
--- is cleared and the next apply issues all three calls again; until then it is
--- parked and never read. Returns whether every call was accepted, and whether
--- any was issued (the sensor was bound, re-pointed or re-enabled).
-local function Aim(sensor, sig, buffs, short, unit, filters)
+-- is cleared and the next apply issues every call again; until then it is
+-- parked and never read. kinds re-aims a potion sensor's built groups;
+-- filters, when given, replace the spell-ID match. Returns whether every call
+-- was accepted, and whether any was issued (the sensor was bound, re-pointed,
+-- re-aimed or re-enabled).
+local function Aim(sensor, sig, buffs, short, unit, kinds, filters)
+    local kindSig = kinds and kinds.sig
     local changed = sensor.keSig ~= sig or sensor.keUnit ~= unit or not sensor.keOn
+        or (kinds ~= nil and sensor.keKinds ~= kindSig)
     local ok = pcall(function()
         if sensor.keSig ~= sig then
             sensor:SetAuraGroupCandidateFilters(SENSOR_GROUP,
                 filters or { includeSpellIDs = BuffSet(buffs), maxDuration = short })
             sensor.keSig = sig
+        end
+        if kinds and sensor.keKinds ~= kindSig then
+            for b = 1, sensor.keGroups or 0 do
+                sensor:SetAuraGroupCandidateFilters(KindKey(b), KindFilter(kinds, b))
+            end
+            sensor.keKinds = kindSig
         end
         if sensor.keUnit ~= unit then
             sensor:SetUnit(unit)
@@ -434,7 +486,7 @@ local function Aim(sensor, sig, buffs, short, unit, filters)
     if ok then
         debt[sensor] = nil
     else
-        sensor.keOn, sensor.keSig, sensor.keUnit = nil, nil, nil
+        sensor.keOn, sensor.keSig, sensor.keUnit, sensor.keKinds = nil, nil, nil, nil
         Track.Park(sensor)
     end
     return ok, changed
@@ -507,6 +559,28 @@ local function Answer(sensor)
     return Lit(sensor)
 end
 
+local ONE = { 1 }
+local ge, picks = {}, {}
+
+-- A potion cell's kind picks, or nil while its groups are not all built and
+-- aimed, or when a hit test is refused. Kind k is up when the lit width
+-- reaches k-1 steps past SENSOR_WIDTH; each test sits half a step short of
+-- that, so a cursor anywhere on the screen reads it the same way.
+local function KindPicks(sensor, lit, kinds)
+    if kinds.n == 1 then return ONE end
+    if sensor.keKindsBroken or sensor.keKinds ~= kinds.sig or (sensor.keGroups or 0) < #kinds.groups then
+        return nil
+    end
+    ge[1] = lit
+    for k = 2, kinds.n do
+        local ok, over = pcall(sensor.IsMouseOver, sensor, 1e5, -1e5, -1e5,
+            -SENSOR_X - SENSOR_WIDTH - (k - 1.5) * kinds.step)
+        if not ok then return nil end
+        ge[k] = over
+    end
+    return Rules.KindPicks(ge, kinds.n, issecretvalue, EvalBool, picks)
+end
+
 local function ReadCell(st, i, n)
     local t, sensor = st.trackers[i], st.sensors[i]
     if not (st.ready[i] and t and sensor and sensor.keOn == true) then return end
@@ -535,7 +609,12 @@ local function ReadCell(st, i, n)
         t.primed = false
         return
     end
-    if Rules.Feed(t, lit, short, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck, free, lock) then
+    local kinds = st.entries[i].kinds
+    local kindPicks
+    if kinds and t.ic and Rules.KindsWanted(t, lit, short, n, issecretvalue) then
+        kindPicks = KindPicks(sensor, lit, kinds)
+    end
+    if Rules.Feed(t, lit, short, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck, kindPicks, free, lock) then
         Push(t, n)
         Track.Wake()
     end
@@ -758,15 +837,15 @@ end
 
 -- Aims an existing sensor. Returns whether the cell can use it, whether a
 -- call was refused (as opposed to the sensor not being built yet), and
--- whether the sensor was bound, re-pointed or re-enabled.
-local function Ready(sensor, sig, buffs, short, unit, filters)
+-- whether the sensor was bound, re-pointed, re-aimed or re-enabled.
+local function Ready(sensor, sig, buffs, short, unit, kinds, filters)
     if not sensor then return false, false, false end
-    local ok, changed = Aim(sensor, sig, buffs, short, unit, filters)
+    local ok, changed = Aim(sensor, sig, buffs, short, unit, kinds, filters)
     return ok, not ok, changed
 end
 
 local function AimMore(ready, refused, aimed, sensor, sig, buffs, short, unit, filters)
-    local ok, no, did = Ready(sensor, sig, buffs, short, unit, filters)
+    local ok, no, did = Ready(sensor, sig, buffs, short, unit, nil, filters)
     return ready and ok, refused or no, aimed or did
 end
 
@@ -819,7 +898,8 @@ function Track.Apply(st, unit, entries, style, settings)
             moved = true
         end
         st.trackers[i] = t
-        local ready, refused, aimed = Ready(st.sensors[i], sig, e.buffs, nil, unit)
+        if e.kinds or t.ic then Rules.FitKinds(t, e.kinds) end
+        local ready, refused, aimed = Ready(st.sensors[i], sig, e.buffs, nil, unit, e.kinds)
         if e.short then
             ready, refused, aimed = AimMore(ready, refused, aimed, st.shorts[i], sig, e.buffs, e.short, unit)
         else
@@ -851,9 +931,9 @@ function Track.Apply(st, unit, entries, style, settings)
     for i = 1, st.count do
         if Reveal(st, i, n) then fresh = true end
     end
-    -- A sensor bound, re-pointed or re-enabled settles before it is read. A
-    -- cell that has just become ready is primed by these reads, however long
-    -- ago the slot's bind reads ran.
+    -- A sensor bound, re-pointed, re-aimed or re-enabled settles before it is
+    -- read. A cell that has just become ready is primed by these reads,
+    -- however long ago the slot's bind reads ran.
     if moved then Track.Hold(st, BIND_HOLD) elseif fresh then Track.Arm(st) end
     return clean and overlayClean, restyle
 end
@@ -984,6 +1064,7 @@ function Track.Missing(st)
                 or (e.lockOn and not st.locks[i]) then
                 return true
             end
+            if KindsMissing(st.sensors[i], e.kinds) then return true end
         end
     end
     return Track.OverlayMissing(st)
@@ -1047,6 +1128,10 @@ function Track.BuildNext(st)
             st.locks[i] = lock
             return true
         end
+        if KindsMissing(st.sensors[i], e.kinds) then
+            if AddKindGroup(st.sensors[i], e.kinds) then return true end
+            return SensorFailed(st)
+        end
     end
     return Track.BuildOverlayNext(st)
 end
@@ -1107,8 +1192,6 @@ Track.OVERLAY_DESCRIPTORS = OVERLAY_DESCRIPTORS
 local function SlotKey(st, i)
     return "cd" .. i .. "." .. (st.overlayGen[i] or 0)
 end
-
-local EMPTY = { includeSpellIDs = {} }
 
 -- Failed overlay builds per row: the container, its setup or a slot add. An
 -- add can leave a button the container keeps for good; past this the row's

@@ -1,7 +1,8 @@
 -- Tier 1: Party Potions' pure rules
 -- (Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua): the bars' entry, the
 -- watched units, the roster keep, the bar colors, the timer window, the gap
--- between bars and the cover range on the party cooldowns stamp.
+-- between bars, the cover range on the party cooldowns stamp, the kinds'
+-- binary groups and when a new grouping is taken.
 local L = require("dev.spec._ke_loader")
 
 describe("PartyPotionsRules.Entry", function()
@@ -127,6 +128,54 @@ describe("PartyPotionsRules.CoverRange", function()
                 assert.is_true(math.abs(fill(sl.c, lo, hi) - math.min(1, e / cd)) < 1e-9,
                     cd .. " s, cover at second " .. e)
             end
+        end
+    end)
+end)
+
+describe("PartyPotionsRules.Kinds", function()
+    it("writes each kind's number minus one in binary into the groups, so a potion's groups add up to its steps", function()
+        local R = L.loadPartyPotionsRules()
+        -- One distinct texture per potion; nine fold into eight kinds.
+        local cases = {
+            { n = 1, kinds = 1, groups = 0 }, { n = 2, kinds = 2, groups = 1 },
+            { n = 4, kinds = 4, groups = 2 }, { n = 5, kinds = 5, groups = 3 },
+            { n = 8, kinds = 8, groups = 3 }, { n = 9, kinds = 8, groups = 3 },
+        }
+        for _, case in ipairs(cases) do
+            local buffs = {}
+            for i = 1, case.n do buffs[i] = 100 + i end
+            local k = R.Kinds(buffs, function(id) return "tex" .. id end)
+            local name = case.n .. " icons"
+            assert.are.same({ case.kinds, case.groups }, { k.n, #k.groups }, name)
+            local width = {}
+            for _, g in ipairs(k.groups) do
+                for _, id in ipairs(g.ids) do width[id] = (width[id] or 0) + g.width end
+            end
+            for _, id in ipairs(buffs) do
+                assert.are.equal((k.of[id] - 1) * R.KIND_STEP, width[id] or 0, name .. ", potion " .. id)
+            end
+        end
+    end)
+end)
+
+describe("PartyPotionsRules.HoldKinds", function()
+    it("keeps a new grouping of the same potions until a regroup, and takes every other", function()
+        local R = L.loadPartyPotionsRules()
+        local function tex(id) return "tex" .. id end
+        -- Two potions on one unreadable icon, then on icons of their own.
+        local together = R.Kinds({ 101, 102 }, function() return nil end)
+        local apart = R.Kinds({ 101, 102 }, tex)
+        local renamed = R.Kinds({ 101, 102 }, function(id) return "new" .. id end)
+        local other = R.Kinds({ 101, 103 }, tex)
+        local cases = {
+            { name = "a new grouping of the same potions", active = together, fresh = apart, want = together },
+            { name = "the same, with regroup", active = together, fresh = apart, regroup = true, want = apart },
+            { name = "the same grouping, new textures", active = apart, fresh = renamed, want = renamed },
+            { name = "other potions", active = together, fresh = other, want = other },
+            { name = "none in use", fresh = apart, want = apart },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.HoldKinds(case.active, case.fresh, case.regroup), case.name)
         end
     end)
 end)
