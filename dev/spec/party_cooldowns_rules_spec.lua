@@ -487,6 +487,128 @@ describe("PartyCooldownsRules.Feed", function()
     end)
 end)
 
+describe("PartyCooldownsRules icon latch", function()
+    -- The Feed cases' boxed secrets: only pick opens one.
+    local function secret(value) return { secret = true, value = value } end
+    local function isSecret(v) return type(v) == "table" and v.secret == true end
+    local function pick(b, a, c)
+        if isSecret(b) then b = b.value end
+        if b then return a end
+        return c
+    end
+    local WRAPS = { { "plain", function(v) return v end }, { "secret", secret } }
+    local KINDS = { n = 3, sig = "a;b;c" }
+    -- The picks of a read that sees kind 2.
+    local TWO = { 0, 1, 0 }
+
+    local function tracker(R)
+        local t = R.NewTracker(300, false)
+        R.Clear(t, 0)
+        R.FitKinds(t, KINDS)
+        return t
+    end
+
+    it("latches the read's picks on a rise", function()
+        local R = loadRules()
+        for _, wrap in ipairs(WRAPS) do
+            local t = tracker(R)
+            R.Feed(t, wrap[2](false), nil, 10, isSecret, pick, nil, nil, TWO)
+            R.Feed(t, wrap[2](true), nil, 11, isSecret, pick, nil, nil, TWO)
+            assert.are.same({ 1, TWO }, { t.slot[t.cur].v, t.ic }, wrap[1])
+        end
+    end)
+
+    it("leaves the alphas on reads that are not a rise", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a first read", reads = { true } },
+            { name = "steady lit", reads = { true, true } },
+            { name = "steady unlit", reads = { false, false } },
+        }
+        for _, wrap in ipairs(WRAPS) do
+            for _, case in ipairs(cases) do
+                local t = tracker(R)
+                for i, lit in ipairs(case.reads) do
+                    R.Feed(t, wrap[2](lit), nil, 10 + i, isSecret, pick, nil, nil, TWO)
+                end
+                assert.are.same({ 0, 0, 0 }, t.ic, wrap[1] .. ": " .. case.name)
+            end
+        end
+    end)
+
+    it("leaves the alphas on a rise inside a cast's quiet seconds", function()
+        local R = loadRules()
+        for _, wrap in ipairs(WRAPS) do
+            local t = tracker(R)
+            R.StartCast(t, 10)
+            R.SetKind(t, 3)
+            R.Feed(t, wrap[2](false), nil, 11, isSecret, pick, nil, nil, TWO)
+            R.Feed(t, wrap[2](true), nil, 12, isSecret, pick, nil, nil, TWO)
+            assert.are.same({ 0, 0, 1 }, t.ic, wrap[1])
+        end
+    end)
+
+    it("starts the bar and leaves the alphas when a rise has no picks", function()
+        local R = loadRules()
+        for _, wrap in ipairs(WRAPS) do
+            local t = tracker(R)
+            R.Feed(t, wrap[2](false), nil, 10, isSecret, pick)
+            R.Feed(t, wrap[2](true), nil, 11, isSecret, pick)
+            assert.are.same({ 1, { 0, 0, 0 } }, { t.slot[t.cur].v, t.ic }, wrap[1])
+        end
+    end)
+
+    it("names the fallen buff's kind on a late fall, from the read before it", function()
+        local R = loadRules()
+        for _, wrap in ipairs(WRAPS) do
+            local w = wrap[2]
+            local t = tracker(R)
+            -- The window's seconds are 32 to 61.
+            R.ArmFall(t, 0, 30)
+            R.Feed(t, w(true), nil, 5, isSecret, pick, nil, nil, TWO)
+            R.Feed(t, w(true), nil, 31, isSecret, pick, nil, nil, TWO)
+            R.Feed(t, w(false), nil, 40, isSecret, pick, nil, nil, { 0, 0, 0 })
+            assert.are.same({ 1, TWO }, { t.slot[t.cur].v, t.ic }, wrap[1])
+        end
+    end)
+
+    it("asks for picks on a read that may be a rise or may still see the buff in a fall window", function()
+        local R = loadRules()
+        local cases = {
+            { name = "unprimed outside a window", lit = true, want = false },
+            { name = "plainly off now", prev = false, lit = false, want = false },
+            { name = "plainly on before", prev = true, lit = true, want = false },
+            { name = "a plain rise", prev = false, lit = true, want = true },
+            { name = "hidden reads", prev = secret(true), lit = secret(true), want = true },
+            { name = "unprimed in a window", window = true, lit = true, want = true },
+            { name = "plainly on before in a window", window = true, prev = true, lit = true, want = true },
+            { name = "plainly off now in a window", window = true, prev = true, lit = false, want = false },
+            { name = "after the window", window = true, prev = true, lit = true, at = 62, want = false },
+        }
+        for _, case in ipairs(cases) do
+            local t = R.NewTracker(300, false)
+            R.Clear(t, 0)
+            if case.window then R.ArmFall(t, 0, 30) end
+            if case.prev ~= nil then t.primed, t.prev = true, case.prev end
+            assert.are.equal(case.want, R.KindsWanted(t, case.lit, nil, case.at or 40, isSecret), case.name)
+        end
+    end)
+
+    it("keeps the alphas for the same kinds, resets them to the base for new ones, and drops them for none", function()
+        local R = loadRules()
+        local t = tracker(R)
+        R.SetKind(t, 2)
+        t.kseen[1] = 1
+        R.FitKinds(t, KINDS)
+        assert.are.same({ { 0, 1, 0 }, { 1, 0, 0 } }, { t.ic, t.kseen }, "same kinds")
+        R.FitKinds(t, { n = 2, sig = "a;bc" })
+        assert.are.same({ { 0, 0 }, { 0, 0 } }, { t.ic, t.kseen }, "new kinds")
+        R.FitKinds(t, nil)
+        assert.is_nil(t.ic, "none")
+        assert.is_nil(t.kseen, "none")
+    end)
+end)
+
 describe("PartyCooldownsRules.Tick", function()
     it("clears a plain slot LINGER seconds past zero and never clears a secret one", function()
         local R = loadRules()
