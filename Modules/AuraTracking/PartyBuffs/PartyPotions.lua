@@ -427,7 +427,6 @@ local function ForgetSamples()
     end
 end
 
--- Sample i shows the listed potions' icons in turn.
 local function ShowSampleKind(t, kinds, i)
     CDRules.FitKinds(t, kinds)
     CDRules.SetKind(t, kinds and (i - 1) % kinds.n + 1)
