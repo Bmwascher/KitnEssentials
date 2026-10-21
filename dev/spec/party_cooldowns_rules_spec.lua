@@ -1415,6 +1415,19 @@ describe("PartyCooldownsRules free uses", function()
             assert.are.same(case.want, case.look(t), case.name)
         end
     end)
+
+    it("leaves a full, idle cell plain when the free answer is secret", function()
+        local R = loadRules()
+        local function hide(b, a, c) return secret(choose(b, a, c)) end
+        local cases = { { name = "a charge cell", make = chargeCell }, { name = "a one-charge cell", make = plainCell } }
+        for _, case in ipairs(cases) do
+            local t = case.make(R)
+            R.Feed(t, false, nil, 9, isSecret, hide, nil, true, secret(false), nil)
+            local changed = R.Feed(t, false, nil, 10, isSecret, hide, nil, true, secret(true), nil)
+            assert.are.same({ false, false, false, false },
+                { changed, isSecret(t.slot[1].v), isSecret(t.slot[2].v), isSecret(t.a2) }, case.name)
+        end
+    end)
 end)
 
 describe("PartyCooldownsRules.LockOn", function()

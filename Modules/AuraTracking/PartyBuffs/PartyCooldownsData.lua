@@ -25,8 +25,9 @@ KE.PartyCooldownsData = Data
 -- with a timer for active seconds from the cast, then the cooldown. off
 -- starts the row switched off in every spec's spell list. free lists buffs
 -- that end the cast's recharges when they rise and make its uses free while
--- up. lockout is a talent rule, read as needs is, whose auto-cast leaves a
--- lockout debuff and spends no charge.
+-- up; a free row's cd stays at 508 s or less (Rules.DOOR_SLACK). lockout is a
+-- talent rule, read as needs is, whose auto-cast leaves a lockout debuff and
+-- spends no charge.
 Data.SPELLS = {
     [49028]   = { kind = "offensive", cd = 120, buffs = { 81256 } },
     [48792]   = { kind = "defensive", cd = 120 },

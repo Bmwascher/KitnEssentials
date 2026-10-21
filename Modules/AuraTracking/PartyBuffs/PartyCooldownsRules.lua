@@ -231,7 +231,8 @@ Rules.DOOR_PASSES = 16
 -- cell with one at CHARGE_CD_MAX. A group tracker passes it up to 2 times per
 -- watched unit, 2 more with charges: at 5 units and 508 seconds or less,
 -- 6.18e-7, and 4.75e-7 with charges. A cell with free and lockout sensors
--- adds 2 passes a read for the fill and 3 for the veto: at u = 1, 2.47e-6.
+-- adds 2 passes a read for the fill and 3 for the veto: 6.18e-7 with charges
+-- at u = 2, but 2.74e-7 at u = 3, so a free row's cd stays at 508 s or less.
 Rules.DOOR_SLACK = 3e-7
 
 function Rules.Unit(cd) return math_max(1, math_ceil(cd / Rules.CODES)) end
@@ -389,9 +390,22 @@ end
 
 local function Fill(f, pf, x, full, pick) return pick(f, pick(pf, x, full), x) end
 
+-- Plain, no slot shown and, for charges, both back with no use waiting: a
+-- fill would change nothing shown or counted, and picking it would only make
+-- the state secret. A hidden slot's stamp counts for nothing (ChargeFin, Tick).
+local function FullIdle(t, isSecret)
+    local s1, s2 = t.slot[1], t.slot[2]
+    if isSecret(s1.v) or isSecret(s2.v) or s1.v ~= 0 or s2.v ~= 0 then return false end
+    if not t.charges then return true end
+    if isSecret(t.b) or isSecret(t.a0) or isSecret(t.a1) or isSecret(t.a2) or isSecret(t.lb) then
+        return false
+    end
+    return t.b == 0 and t.a0 == 0 and t.a1 == 0 and t.a2 == 1 and (not t.legacy or t.lb == 0)
+end
+
 -- A rise of the free buff ends every recharge: both charges are back. On
--- secret answers each value is picked, and none is written until every pick
--- has run. Returns whether a value changed.
+-- secret answers each value is picked, unless the cell is full and idle, and
+-- none is written until every pick has run. Returns whether a value changed.
 function Rules.FreeFill(t, isSecret, pick)
     local f, pf = t.vf, t.pf
     if f == nil or pf == nil then return false end
@@ -402,6 +416,7 @@ function Rules.FreeFill(t, isSecret, pick)
         if t.charges then t.b, t.a0, t.a1, t.a2, t.legacy, t.lb = 0, 0, 0, 1, nil, nil end
         return true
     end
+    if FullIdle(t, isSecret) then return false end
     local c1, v1 = Fill(f, pf, s1.c, 1, pick), Fill(f, pf, s1.v, 0, pick)
     local c2, v2 = Fill(f, pf, s2.c, 1, pick), Fill(f, pf, s2.v, 0, pick)
     if t.charges then
@@ -1122,7 +1137,8 @@ function Rules.ModLength(base, mods, ranks, specID)
 end
 
 -- A charge cell counts at most this long: its tick and read passes need
--- Unit(cd) <= 3 under DOOR_SLACK.
+-- Unit(cd) <= 3 under DOOR_SLACK, and Unit(cd) <= 2 with free and lockout
+-- sensors.
 Rules.CHARGE_CD_MAX = 3 * Rules.CODES
 
 -- The length a cell counts: the spell's cooldown with the member's talents
