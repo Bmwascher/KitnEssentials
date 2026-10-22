@@ -147,7 +147,19 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     })
     row3a:AddWidget(chatCheck, 0.33)
 
-    local expandCheck = GUIFrame:CreateCheckbox(row3a, "Expand All Sidebar Sections", {
+    local noticeCheck = GUIFrame:CreateCheckbox(row3a, "Show Update Notice in Chat", {
+        value = not (versionDb and versionDb.ShowNotice == false),
+        tooltip = "Prints a chat line at login when a newer KitnEssentials version has been seen in your guild or group. Version messages are still exchanged while this is off.",
+        callback = function(checked)
+            if not versionDb then return end
+            versionDb.ShowNotice = checked
+        end,
+    })
+    row3a:AddWidget(noticeCheck, 0.33)
+    card2:AddRow(row3a, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local expandCheck = GUIFrame:CreateCheckbox(row3b, "Expand All Sidebar Sections", {
         value = db and db.ExpandSidebarOnOpen == true,
         tooltip = "Every sidebar section opens expanded. Off opens only Core; sections you expand by hand stay open until the next reload.",
         callback = function(checked)
@@ -157,10 +169,8 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
             GUIFrame:RefreshSidebar()
         end,
     })
-    row3a:AddWidget(expandCheck, 0.33)
-    card2:AddRow(row3a, Theme.rowHeight)
+    row3b:AddWidget(expandCheck, 0.33)
 
-    local row3b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local slugCheck = GUIFrame:CreateCheckbox(row3b, "Use Slug Font Rendering", {
         value = not (db and db.UseSlugFonts == false),
         tooltip = "Renders text with the GPU glyph renderer for crisper edges.",
@@ -170,7 +180,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
             KE:CreateReloadPrompt("Changing Slug rendering requires a UI reload to reach every module.")
         end,
     })
-    row3b:AddWidget(slugCheck, 0.5)
+    row3b:AddWidget(slugCheck, 0.33)
 
     local fontDropdown = GUIFrame:CreateDropdown(row3b, "Global Font", {
         options = BuildFontList(),
@@ -183,20 +193,8 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
             KE:CreateReloadPrompt("Changing the global font requires a UI reload to reach every module.")
         end,
     })
-    row3b:AddWidget(fontDropdown, 0.5)
+    row3b:AddWidget(fontDropdown, 0.33)
     card2:AddRow(row3b, Theme.rowHeight)
-
-    local row3c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local noticeCheck = GUIFrame:CreateCheckbox(row3c, "Show Update Notice in Chat", {
-        value = not (versionDb and versionDb.ShowNotice == false),
-        tooltip = "Prints a chat line at login when a newer KitnEssentials version has been seen in your guild or group. Version messages are still exchanged while this is off.",
-        callback = function(checked)
-            if not versionDb then return end
-            versionDb.ShowNotice = checked
-        end,
-    })
-    row3c:AddWidget(noticeCheck, 0.33)
-    card2:AddRow(row3c, Theme.rowHeight)
 
     local sepRow2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
     local sep2 = GUIFrame:CreateSeparator(sepRow2)
