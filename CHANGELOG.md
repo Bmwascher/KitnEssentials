@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.9
+
+### Mythic+ Timer
+
+- The live pull estimate keeps its trailing zero, so 3.40% no longer shows
+  as 3.4%
+
+---
+
 ## v4.13.8
 
 ### Party Cooldowns
