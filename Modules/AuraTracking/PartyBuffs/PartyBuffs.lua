@@ -47,7 +47,6 @@ local wipe = wipe
 local table_concat = table.concat
 local table_remove = table.remove
 local table_sort = table.sort
-local math_max = math.max
 local math_min = math.min
 
 local CDRules = KE.PartyCooldownsRules
@@ -1521,21 +1520,19 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- Two of the other rows' trinket buffs, so a row's trinket cell never repeats
--- its own trinket buff sample. Only spells the Trinkets list switches on.
+-- The first trinket buff the Trinkets list switches on, from the row's own.
 local function SampleTrinkets(row, db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
-    local out = {}
-    for j = 1, 2 do
+    for j = 0, #PREVIEW_BUFFS - 1 do
         local spellID = PREVIEW_BUFFS[(row + j - 1) % #PREVIEW_BUFFS + 1].trinket
         if listed[spellID] then
-            out[#out + 1] = {
+            return { {
                 id = spellID, key = CDRules.TrinketKey(spellID), kind = "trinket", buffs = { spellID },
                 cd = PREVIEW_TRINKET_CD, trinket = true, texture = C_Spell.GetSpellTexture(spellID),
-            }
+            } }
         end
     end
-    return out
+    return {}
 end
 
 -- In the live row's order, cut to Max Cooldown Icons: the spec's switched-on
@@ -1684,10 +1681,12 @@ function PB:DrawPreviewRow(k, frame)
         return
     end
     self:DrawPreviewCells(row, entries, layout, g, perRow)
-    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs.
-    local skip = {}
+    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs,
+    -- and a row with a trinket cell shows no trinket buff sample beside it.
+    local skip, trinketCell = {}, false
     for _, e in ipairs(entries) do
         if e.trinket then
+            trinketCell = true
             for _, id in ipairs(e.buffs) do skip[id] = true end
         end
     end
@@ -1697,8 +1696,9 @@ function PB:DrawPreviewRow(k, frame)
         if db[d.category.trackKey] == true then
             local ids = KE.PartyBuffsRules.PreviewSamples(PREVIEW_BUFFS, k, d.category.key,
                 db[d.category.listKey], skip)
+            -- One sample per kind: repeats of a kind read as clutter, not as a cap.
             tracked[#tracked + 1], pools[#pools + 1] = d, ids
-            available[#available + 1] = math_max(#ids, 1)
+            available[#available + 1] = (trinketCell and d.category.key == "trinket") and 0 or 1
         end
     end
     local counts = KE.PartyBuffsRules.SplitBuffSamples(KE.PartyBuffsRules.IconCount(db), available)

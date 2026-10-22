@@ -256,9 +256,13 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddSlider(rowD2, "Max Cooldown Icons", "MaxCooldownIcons", 1,
-        KE.PartyBuffsRules.MAX_COOLDOWN_ICONS), "cellsOn")
+        KE.PartyBuffsRules.MAX_COOLDOWN_ICONS, nil,
+        "Cooldown icons per member: spells first, then the racial, then trinkets."), "cellsOn")
     manager:Register(AddSlider(rowD2, "Max Active Buff Icons", "MaxPerMember", 1,
-        KE.PartyBuffsRules.MAX_BUFF_ICONS), "iconsOn")
+        KE.PartyBuffsRules.MAX_BUFF_ICONS, nil,
+        "Active buffs per member (trinket buffs, potions, externals), after the cooldown icons. "
+            .. "The row keeps room for all of them. Icons Per Row counts both kinds; once a row "
+            .. "wraps, the buffs start a line of their own."), "iconsOn")
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
 
     local rowDSep = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
