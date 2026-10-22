@@ -101,7 +101,7 @@ local ALERT_DEFS = {
     { key = "Gateway",    text = "GATE USABLE", icon = 607513,  enableKey = "GatewayEnabled" },
     { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
     -- iconScale: the bare cat reads small beside framed spell icons at the font size.
-    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true, iconScale = 1.5 },
+    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES_Head", enableKey = "LootBossEnabled", frameless = true, iconScale = 1.5 },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
     { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = VOIDCORE_FALLBACK_ICON, enableKey = "VoidcoreEnabled" },
 }
