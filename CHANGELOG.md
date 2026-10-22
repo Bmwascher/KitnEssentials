@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.4
+
+### Party Cooldowns
+
+- **NEW:** Guardian Druids show a Frenzied Regeneration cell with its
+  charges. Berserk and Incarnation refill it, and uses while either is up
+  spend nothing
+- On your own row, a Well-Honed Instincts auto-cast spends no charge
+
+---
+
 ## v4.13.3
 
 ### Party Potions
