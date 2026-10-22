@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.8
+
+### Party Cooldowns
+
+- The Soulcoiler Ritual Vessel's cooldown now drops 30 seconds each time an
+  ally dies, as it does in game
+
+---
+
 ## v4.13.7
 
 ### Party Cooldowns
