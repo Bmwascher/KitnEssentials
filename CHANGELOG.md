@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.5
+
+### Party Cooldowns
+
+- **NEW:** Unstable Felheart Crystal shows for anyone wearing it, starting
+  when its shield lands on the wearer
+
+---
+
 ## v4.13.4
 
 ### Party Cooldowns
