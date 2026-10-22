@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.10
+
+### Party Cooldowns
+
+- The settings preview shows one trinket, one potion and one external per
+  row instead of repeats
+- Max Cooldown Icons and Max Active Buff Icons have tooltips explaining how
+  they share a row with Icons Per Row
+
+---
+
 ## v4.13.9
 
 ### Mythic+ Timer
