@@ -751,6 +751,21 @@ describe("PartyCooldownsRules.AfterTalentMisses", function()
     end)
 end)
 
+describe("PartyCooldownsRules.FillAbsent", function()
+    it("reads a wanted talent the trees lack as rank 0, keeping found ranks and unread box talents", function()
+        local R = loadRules()
+        local talents = { want = { [1] = true, [2] = true, [3] = true }, boxOnly = { [3] = true } }
+        local found = { [1] = { {} } }
+        local cases = {
+            { name = "box off", boxOn = false, want = { [1] = 2, [2] = 0 } },
+            { name = "box on", boxOn = true, want = { [1] = 2, [2] = 0, [3] = 0 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.FillAbsent({ [1] = 2 }, talents, found, case.boxOn), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.TrinketReadStands", function()
     it("lets a read with an empty slot stand only once a second read agrees", function()
         local R = loadRules()

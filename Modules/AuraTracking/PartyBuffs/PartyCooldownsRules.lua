@@ -1196,6 +1196,17 @@ function Rules.TalentRead(talents, talent, boxOn)
     return boxOn == true or not talents.boxOnly[talent]
 end
 
+-- A finished walk's ranks: a kept talent the member's trees lack reads 0, so
+-- another spec's talent never holds back a length's other mods.
+function Rules.FillAbsent(out, talents, found, boxOn)
+    for talent in pairs(talents.want) do
+        if out[talent] == nil and not found[talent] and Rules.TalentRead(talents, talent, boxOn) then
+            out[talent] = 0
+        end
+    end
+    return out
+end
+
 function Rules.TalentAllows(entry, taken, specID)
     local hide = entry.spell and entry.spell.hide
     if hide and hide.specs[specID] then

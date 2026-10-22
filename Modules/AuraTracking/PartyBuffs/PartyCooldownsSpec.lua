@@ -763,7 +763,7 @@ local function ReadRanks(specID, config)
             out[talent] = rank
         end
     end
-    return out
+    return rules.FillAbsent(out, talents, found, boxOn)
 end
 
 -- A member's unreadable reads belong to the answer: a new spec gets its own
