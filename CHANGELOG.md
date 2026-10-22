@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.11
+
+### Raid Notifications
+
+- The LOOT BOSS alert shows a new filled cat head, purple fading to pink
+  with bright eyes, that stays clear on light backgrounds
+
+### Addon Skins
+
+- BetterFriendlist: the friends list portrait shows the same new cat head
+
+---
+
 ## v4.13.10
 
 ### Party Cooldowns
