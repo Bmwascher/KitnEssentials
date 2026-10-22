@@ -197,9 +197,11 @@ function Rules.TrinketEntries(slots, lengths, db)
             -- Every length is clamped to CD_MAX: the door bound assumes u <= 4.
             local cd = Rules.ClampSeconds(lengths[slot.item])
             if cd then
+                local cuts = KE.PartyCooldownsData.DEATH_CUTS
                 out[#out + 1] = {
                     id = spellID, item = slot.item, key = key, kind = "trinket",
                     buffs = KE.PartyCooldownsData.TRINKET_BUFFS[spellID] or { spellID }, cd = cd, trinket = true,
+                    cut = cuts and cuts[spellID],
                 }
             end
         end
