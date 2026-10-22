@@ -131,15 +131,11 @@ describe("MPT pull: scheduler and lifecycle", function()
         cycle()
         assert.are.equal(1, #shown)
         assert.are.same({ 49, "r49", 16.9 }, shown[1])
-        -- two origins, then a count bar and a percent bar per counted unit,
-        -- each fed its count directly
-        assert.are.equal(6, #bars)
+        -- origin bar plus one bar per counted unit, each fed its count directly
+        assert.are.equal(3, #bars)
         assert.are.equal(0, bars[1].values[1])
-        assert.are.equal(0, bars[2].values[1])
-        assert.are.equal(20, bars[3].values[1])
-        assert.are.equal(20, bars[4].values[1])
-        assert.are.equal(29, bars[5].values[1])
-        assert.are.equal(29, bars[6].values[1])
+        assert.are.equal(20, bars[2].values[1])
+        assert.are.equal(29, bars[3].values[1])
         -- the next request inside the interval waits out the remainder
         now = 0.03
         MPT:RequestPullEstimate()
@@ -150,15 +146,15 @@ describe("MPT pull: scheduler and lifecycle", function()
     it("work during an owned batch never rebuilds the pool and yields one follow-up", function()
         MPT:SyncPullEstimate()
         fireTimers()                                   -- build; the batch owns the pool
-        local built, fed = #bars, #bars[3].values
+        local built, fed = #bars, #bars[2].values
         MPT:RequestPullEstimate()
         listener:Fire("UNIT_THREAT_LIST_UPDATE", "nameplate1")
         MPT:SyncPullEstimate()
         assert.are.equal(0, liveTimers())
         assert.are.equal(built, #bars)
         -- the borrowed bars are untouched until the batch settles
-        assert.is_true(bars[3].shown)
-        assert.are.equal(fed, #bars[3].values)
+        assert.is_true(bars[2].shown)
+        assert.are.equal(fed, #bars[2].values)
         drain()                                        -- both settle frames
         assert.are.equal(1, #shown)
         assert.are.equal(1, liveTimers())              -- exactly one follow-up
@@ -232,12 +228,12 @@ describe("MPT pull: scheduler and lifecycle", function()
         criteria = {}
         cycle()
         assert.are.equal(2, #shown)
-        -- the duplicated token is read once and fed once: the origins plus ONE
-        -- count and percent pair, no bar beyond the first build's six
+        -- the duplicated token is read once and fed once: origin plus ONE bar,
+        -- no bar beyond the first build's three
         assert.are.equal(1, criteria.nameplate1)
-        assert.are.equal(6, #bars)
-        assert.are.equal(20, bars[3].values[#bars[3].values - 1])
-        assert.is_false(bars[5].shown)
+        assert.are.equal(3, #bars)
+        assert.are.equal(20, bars[2].values[#bars[2].values - 1])
+        assert.is_false(bars[3].shown)
     end)
 
     it("no admitted units clears; teardown cancels, unregisters and repeats harmlessly", function()

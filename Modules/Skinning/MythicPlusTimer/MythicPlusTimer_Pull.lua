@@ -112,19 +112,17 @@ end
 -- means.
 local bars, barsInUse = {}, 0
 
--- The percent chain: bars PCT_WIDTH wide fill count * PCT_WIDTH / total, so
--- the chain ends at the percent times 100. Fills land on whole units, which
--- keeps two decimals at this width. A frame scaled by 100 on that edge reads
--- the percent itself as its left, still secret, for a %.2f format.
-local PCT_WIDTH = 10000
+-- A frame scaled by total / 100 on the chain's end reads the summed count as
+-- a percent in its own units, still secret, for a %.2f format. Whole counts
+-- fill whole units, so the end is exact; a fill of a fractional width snaps.
 local pctReader
 
-local function PercentReader()
+local function PercentReader(total)
     if not pctReader then
         pctReader = CreateFrame("Frame")
-        pctReader:SetScale(PCT_WIDTH / 100)
         pctReader:SetSize(1, 1)
     end
+    pctReader:SetScale(total / 100)
     return pctReader
 end
 
@@ -205,7 +203,7 @@ local function Deliver(b)
     end
     -- The endpoint may be secret: classify first, never compare or store it.
     local endpoint = b.endpoint:GetRight()
-    local percent = PercentReader():GetLeft()
+    local percent = pctReader and pctReader:GetLeft()
     ReleasePool()
     if (not issecretvalue(endpoint) and type(endpoint) ~= "number")
         or (not issecretvalue(percent) and type(percent) ~= "number") then
@@ -238,13 +236,6 @@ local function Build()
     origin:SetValue(0)
     origin:Show()
     local prevTex = origin:GetStatusBarTexture()
-    local pctOrigin = AcquireBar()
-    pctOrigin:SetSize(PCT_WIDTH, 10)
-    pctOrigin:SetPoint("LEFT")
-    pctOrigin:SetMinMaxValues(0, total)
-    pctOrigin:SetValue(0)
-    pctOrigin:Show()
-    local pctTex = pctOrigin:GetStatusBarTexture()
     local gens, accepted = {}, 0
     for i = 1, #batchTokens do
         local unit = batchTokens[i]
@@ -259,22 +250,15 @@ local function Build()
             bar:SetValue(count)
             bar:Show()
             prevTex = bar:GetStatusBarTexture()
-            local pct = AcquireBar()
-            pct:SetSize(PCT_WIDTH, 10)
-            pct:SetPoint("LEFT", pctTex, "RIGHT", 0, 0)
-            pct:SetMinMaxValues(0, total)
-            pct:SetValue(count)
-            pct:Show()
-            pctTex = pct:GetStatusBarTexture()
             accepted = accepted + 1
         end
     end
-    PercentReader():SetPoint("LEFT", pctTex, "RIGHT", 0, 0)
     if accepted == 0 then
         ReleasePool()
         if MPT.ClearPullDisplay then MPT:ClearPullDisplay() end
         return
     end
+    PercentReader(total):SetPoint("LEFT", prevTex, "RIGHT", 0, 0)
     if DEBUG_PULL then KE:Print(("[MPT pull] build: %d admitted, %d counted, total %d"):format(#batchTokens, accepted, total)) end
     local b = { epoch = epoch, total = total, credited = credited, n = #batchTokens, gens = gens, endpoint = prevTex }
     batch = b

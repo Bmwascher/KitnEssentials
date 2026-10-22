@@ -39,7 +39,6 @@ describe("MPT pull: selection predicates", function()
         _G.C_NamePlate = { GetNamePlates = function() return {} end }
         _G.C_ScenarioInfo = { GetUnitCriteriaProgressValues = function() return nil end }
         _G.C_StringUtil = { RoundToNearestString = function(v) return tostring(v) end }
-        _G.CreateAbbreviateConfig = function() return {} end
         helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Pull.lua",
             { Print = function() end })
         MPT = modules["MythicPlusTimer"]
