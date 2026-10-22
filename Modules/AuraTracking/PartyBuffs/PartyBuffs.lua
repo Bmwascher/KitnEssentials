@@ -1520,11 +1520,10 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- The first of the other rows' trinket buffs the Trinkets list switches on,
--- from the next row, so a row's trinket cell never repeats its own buff sample.
+-- The row's own trinket buff, or the next row's the Trinkets list switches on.
 local function SampleTrinkets(row, db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
-    for j = 1, #PREVIEW_BUFFS - 1 do
+    for j = 0, #PREVIEW_BUFFS - 1 do
         local spellID = PREVIEW_BUFFS[(row + j - 1) % #PREVIEW_BUFFS + 1].trinket
         if listed[spellID] then
             return { {
@@ -1682,10 +1681,12 @@ function PB:DrawPreviewRow(k, frame)
         return
     end
     self:DrawPreviewCells(row, entries, layout, g, perRow)
-    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs.
-    local skip = {}
+    -- The live row leaves a trinket drawn as a cooldown icon out of its buffs,
+    -- and a row with a trinket cell shows no trinket buff sample beside it.
+    local skip, trinketCell = {}, false
     for _, e in ipairs(entries) do
         if e.trinket then
+            trinketCell = true
             for _, id in ipairs(e.buffs) do skip[id] = true end
         end
     end
@@ -1697,7 +1698,7 @@ function PB:DrawPreviewRow(k, frame)
                 db[d.category.listKey], skip)
             -- One sample per kind: repeats of a kind read as clutter, not as a cap.
             tracked[#tracked + 1], pools[#pools + 1] = d, ids
-            available[#available + 1] = 1
+            available[#available + 1] = (trinketCell and d.category.key == "trinket") and 0 or 1
         end
     end
     local counts = KE.PartyBuffsRules.SplitBuffSamples(KE.PartyBuffsRules.IconCount(db), available)
