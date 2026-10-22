@@ -50,6 +50,7 @@
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsSpec.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsCell.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsSensor.lua" />
+    <Script file="AuraTracking\PartyBuffs\PartyCooldownsDeaths.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyPotionsRules.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyPotionsBar.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyPotions.lua" />
