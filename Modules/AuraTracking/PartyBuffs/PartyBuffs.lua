@@ -1520,7 +1520,7 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- The row's own trinket buff, or the next row's the Trinkets list switches on.
+-- The first trinket buff the Trinkets list switches on, from the row's own.
 local function SampleTrinkets(row, db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
     for j = 0, #PREVIEW_BUFFS - 1 do
