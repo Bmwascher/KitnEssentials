@@ -859,6 +859,11 @@ function KE:BuildNicknameKey(rawName, fallbackRealm) end
 ---@return number # -1 | 0 | 1
 function KE:CompareVersions(a, b) end
 
+--- The newest version another copy reported that is newer than the installed
+--- one, or nil (Modules/Core/VersionCheck.lua).
+---@return string?
+function KE:GetNewerVersion() end
+
 -- ─── Skinning (Modules/Skinning/DarkTheme/EUIWindows.lua) ──────────
 --- Pure. Which of our skin keys EllesmereUI already covers.
 ---@param env { loaded: boolean, version: string?, getStyle: (fun(euiKey: string): string?)? }

@@ -92,6 +92,11 @@ local Defaults = {
             Custom = {},
             TintSkins = true,
         },
+
+        -- Account-wide: the notice describes the install, not a profile.
+        VersionCheck = {
+            ShowNotice = true,
+        },
     },
     profile = {
         -- Global
