@@ -194,12 +194,46 @@ try {
         & $cm 'uppercase subject'           "Fix the show target toggle`n"                            'block'
         & $cm 'default merge subject'       "Merge branch 'codex/x'`n"                                'block'
         & $cm 'clean'                       "fix the show target toggle`n"                            'pass'
-        & $cm 'release commit'              "v$tocVer`: fix a thing`n"                                'pass'
+        # The matching release pass case also needs a staged LAST_RELEASE, so it
+        # runs with the LAST_RELEASE cases in the feature worktree below.
         & $cm 'release version not in .toc' "v$otherVer`: fix a thing`n"                              'block'
         & $cm 'human sign-off'              "fix`n`nSigned-off-by: Brandon Wascher <x>`n"             'pass'
         & $cm 'comment lines before subject' "# editor comment`nfix a thing`n"                        'pass'
         & $cm 'blank lines before subject'  "`n`nfix a thing`n"                                       'pass'
         & $cm 'compat name alone'           "skin the elvui bags`n"                                   'pass'
+
+        # --- commit-msg LAST_RELEASE cases, staged in the feature worktree ----
+        # A stand-in VersionCheck.lua committed on the throwaway branch holds an
+        # untagged HEAD value, so the cases do not depend on what main holds and
+        # show that HEAD's value grants nothing.
+        $vcRel = 'Modules/Core/VersionCheck.lua'
+        $vcAbs = Join-Path $feature ($vcRel -replace '/', '\')
+        $tocAbs = Join-Path $feature 'KitnEssentials.toc'
+        $tocText = [System.IO.File]::ReadAllText($tocAbs)
+        $lastTag = "$(git -C $feature describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>$null)" -replace '^v', ''
+        Check 'commit-msg: latest release tag read for the LAST_RELEASE cases' ($lastTag -match '^\d+\.\d+\.\d+$') "got '$lastTag'"
+        New-Item -ItemType Directory -Path (Split-Path $vcAbs) -Force | Out-Null
+        [System.IO.File]::WriteAllText($vcAbs, "local LAST_RELEASE = `"0.0.1`"`n")
+        git -C $feature add -- $vcRel 2>&1 | Out-Null
+        git -C $feature commit -q --no-verify -m 'hooktest stand-in' 2>&1 | Out-Null
+        $lr = { param($name, $msg, $value, $tocVer, $expect)
+            [System.IO.File]::WriteAllText($vcAbs, "local LAST_RELEASE = `"$value`"`n")
+            git -C $feature add -- $vcRel 2>&1 | Out-Null
+            if ($tocVer) {
+                [System.IO.File]::WriteAllText($tocAbs, ($tocText -replace '(?m)^## X-Manual-Version: [^\r\n]*', "## X-Manual-Version: $tocVer"))
+                git -C $feature add -- KitnEssentials.toc 2>&1 | Out-Null
+            }
+            [System.IO.File]::WriteAllText($msgFile, $msg)
+            Push-Location $feature
+            try { & $bash $hook $msgFile 2>&1 | Out-Null; $code_ = $LASTEXITCODE } finally { Pop-Location }
+            Check "commit-msg $expect`: $name" ($code_ -eq $(if ($expect -eq 'block') { 1 } else { 0 }))
+            git -C $feature reset -q -- $vcRel KitnEssentials.toc 2>&1 | Out-Null
+            git -C $feature checkout -q -- $vcRel KitnEssentials.toc 2>&1 | Out-Null
+        }
+        & $lr 'LAST_RELEASE that is not the latest tag, carried from HEAD' "fix a thing`n" '0.0.1' $null 'block'
+        & $lr 'LAST_RELEASE set to the latest tag'        "fix a thing`n"          $lastTag $null   'pass'
+        & $lr 'release commit with matching LAST_RELEASE' "v9.8.7: fix a thing`n"  '9.8.7'  '9.8.7' 'pass'
+        & $lr 'release commit with stale LAST_RELEASE'    "v9.8.7: fix a thing`n"  '0.0.1'  '9.8.7' 'block'
         Remove-Item $msgFile -Force -ErrorAction SilentlyContinue
 
         # --- pre-commit (bash), staged in the feature worktree -----------------
