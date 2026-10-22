@@ -47,7 +47,6 @@ local wipe = wipe
 local table_concat = table.concat
 local table_remove = table.remove
 local table_sort = table.sort
-local math_max = math.max
 local math_min = math.min
 
 local CDRules = KE.PartyCooldownsRules
@@ -1521,21 +1520,16 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- Two of the other rows' trinket buffs, so a row's trinket cell never repeats
--- its own trinket buff sample. Only spells the Trinkets list switches on.
+-- The next row's trinket buff, so a row's trinket cell never repeats its own
+-- trinket buff sample. Only a spell the Trinkets list switches on.
 local function SampleTrinkets(row, db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
-    local out = {}
-    for j = 1, 2 do
-        local spellID = PREVIEW_BUFFS[(row + j - 1) % #PREVIEW_BUFFS + 1].trinket
-        if listed[spellID] then
-            out[#out + 1] = {
-                id = spellID, key = CDRules.TrinketKey(spellID), kind = "trinket", buffs = { spellID },
-                cd = PREVIEW_TRINKET_CD, trinket = true, texture = C_Spell.GetSpellTexture(spellID),
-            }
-        end
-    end
-    return out
+    local spellID = PREVIEW_BUFFS[row % #PREVIEW_BUFFS + 1].trinket
+    if not listed[spellID] then return {} end
+    return { {
+        id = spellID, key = CDRules.TrinketKey(spellID), kind = "trinket", buffs = { spellID },
+        cd = PREVIEW_TRINKET_CD, trinket = true, texture = C_Spell.GetSpellTexture(spellID),
+    } }
 end
 
 -- In the live row's order, cut to Max Cooldown Icons: the spec's switched-on
@@ -1697,8 +1691,9 @@ function PB:DrawPreviewRow(k, frame)
         if db[d.category.trackKey] == true then
             local ids = KE.PartyBuffsRules.PreviewSamples(PREVIEW_BUFFS, k, d.category.key,
                 db[d.category.listKey], skip)
+            -- One sample per kind: repeats of a kind read as clutter, not as a cap.
             tracked[#tracked + 1], pools[#pools + 1] = d, ids
-            available[#available + 1] = math_max(#ids, 1)
+            available[#available + 1] = 1
         end
     end
     local counts = KE.PartyBuffsRules.SplitBuffSamples(KE.PartyBuffsRules.IconCount(db), available)
