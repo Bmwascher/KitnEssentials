@@ -151,7 +151,6 @@ local function ReleasePool()
     if pctReader then pctReader:ClearAllPoints() end
 end
 
-
 ---------------------------------------------------------------------------------
 -- Scheduler
 ---------------------------------------------------------------------------------
@@ -270,9 +269,7 @@ local function Build()
             accepted = accepted + 1
         end
     end
-    local reader = PercentReader()
-    reader:ClearAllPoints()
-    reader:SetPoint("LEFT", pctTex, "RIGHT", 0, 0)
+    PercentReader():SetPoint("LEFT", pctTex, "RIGHT", 0, 0)
     if accepted == 0 then
         ReleasePool()
         if MPT.ClearPullDisplay then MPT:ClearPullDisplay() end
