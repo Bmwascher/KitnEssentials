@@ -1,6 +1,9 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.13.13
+## v4.14.0
+
+An update notice for new versions, a new K icon, and more Party Cooldowns
+work.
 
 ### General
 
@@ -10,98 +13,28 @@
 - **NEW:** "Show Update Notice in Chat" on the Home page turns the chat line
   off
 
----
-
-## v4.13.12
-
 ### Minimap
 
 - New K icon on the minimap button, in the addon list and in the M+ forces
   tooltip, purple fading to pink
-
----
-
-## v4.13.11
-
-### Raid Notifications
-
-- The LOOT BOSS alert shows a new filled cat head, purple fading to pink
-  with bright eyes, that stays clear on light backgrounds
-
-### Addon Skins
-
-- BetterFriendlist: the friends list portrait shows the same new cat head
-
----
-
-## v4.13.10
-
-### Party Cooldowns
-
-- The settings preview shows one trinket, one potion and one external per
-  row instead of repeats
-- Max Cooldown Icons and Max Active Buff Icons have tooltips explaining how
-  they share a row with Icons Per Row
-
----
-
-## v4.13.9
-
-### Mythic+ Timer
-
-- The live pull estimate keeps its trailing zero, so 3.40% no longer shows
-  as 3.4%
-
----
-
-## v4.13.8
-
-### Party Cooldowns
-
-- The Soulcoiler Ritual Vessel's cooldown now drops 30 seconds each time an
-  ally dies, as it does in game
-
----
-
-## v4.13.7
-
-### Party Cooldowns
-
-- Talents from another spec no longer hide a cooldown's other talent changes:
-  Holy and Retribution Paladins now count Improved Blessing of Protection,
-  Unbreakable Spirit and their Avenging Wrath talents
-
----
-
-## v4.13.6
-
-### DoT Tracker
-
-- Feral no longer lists Thrash
-
----
-
-## v4.13.5
-
-### Party Cooldowns
-
-- **NEW:** Unstable Felheart Crystal shows for anyone wearing it, starting
-  when its shield lands on the wearer
-
----
-
-## v4.13.4
 
 ### Party Cooldowns
 
 - **NEW:** Guardian Druids show a Frenzied Regeneration cell with its
   charges. Berserk and Incarnation refill it, and uses while either is up
   spend nothing
+- **NEW:** Unstable Felheart Crystal shows for anyone wearing it, starting
+  when its shield lands on the wearer
 - On your own row, a Well-Honed Instincts auto-cast spends no charge
-
----
-
-## v4.13.3
+- The Soulcoiler Ritual Vessel's cooldown now drops 30 seconds each time an
+  ally dies, as it does in game
+- Talents from another spec no longer hide a cooldown's other talent changes:
+  Holy and Retribution Paladins now count Improved Blessing of Protection,
+  Unbreakable Spirit and their Avenging Wrath talents
+- The settings preview shows one trinket, one potion and one external per
+  row instead of repeats
+- Max Cooldown Icons and Max Active Buff Icons have tooltips explaining how
+  they share a row with Icons Per Row
 
 ### Party Potions
 
@@ -109,19 +42,24 @@
   Potential, and its Ready bar keeps that icon until the rows are cleared
 - The settings preview shows a different listed potion on each sample row
 
----
+### DoT Tracker
 
-## v4.13.2
+- Feral no longer lists Thrash
+
+### Mythic+ Timer
+
+- The live pull estimate keeps its trailing zero, so 3.40% no longer shows
+  as 3.4%
 
 ### Raid Notifications
 
-- The LOOT BOSS alert shows the new cat icon, half again as large as
-  before
+- The LOOT BOSS alert shows a new filled cat head, purple fading to pink
+  with bright eyes, half again as large as before and clear on light
+  backgrounds
 
-### Minimap
+### Addon Skins
 
-- New cat icon on the minimap button and in the addon list: the
-  constellation head with a soft pink glow
+- BetterFriendlist: the friends list portrait shows the same cat head
 
 ---
 

@@ -16,6 +16,7 @@ KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and 
 - **Global font** — set one font for every module, with per-module overrides still available
 - **Sidebar search** — filter every page by name or keyword as you type
 - **Minimap button** — quick access to settings, edit mode, and reload
+- **Update notice** — a chat line at login when someone in your guild or group runs a newer version
 
 The sections below mirror the settings panel, so anything listed here is where you will find it in game.
 
@@ -29,7 +30,7 @@ The sections below mirror the settings panel, so anything listed here is where y
 | CVars | One-click console variable panel that reads its values live from your client; a UI Scaling tab that scales Blizzard windows such as the character, professions and auction house panels, with an optional scale per category, and holds the windowed and maximized world map scale; and a Dev tab of addon-restriction variables for testing |
 | System Optimization | One-click performance pass covering frame rate, memory, latency, and related console variables |
 
-The home page also carries the general settings: minimap button, login message, Global Font, and Slug font rendering. Slug is Blizzard's GPU glyph renderer — it gives sharper text but is unavailable in some locales, so it can be turned off for everything at once.
+The home page also carries the general settings: minimap button, login message, update notice, Global Font, and Slug font rendering. Slug is Blizzard's GPU glyph renderer — it gives sharper text but is unavailable in some locales, so it can be turned off for everything at once.
 
 ## Combat
 
