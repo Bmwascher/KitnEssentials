@@ -52,7 +52,12 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     -- Version and author
     local version = KE.Version or "@project-version@"
-    local infoLabel = card1:AddLabel("Version: |cffffffff" .. version .. "|r  -  Author: |cffffffffBitebtw|r")
+    local versionLine = "|cffffffff" .. version .. "|r"
+    local newer = KE.GetNewerVersion and KE:GetNewerVersion()
+    if newer then
+        versionLine = versionLine .. ", |cff7fff7f" .. newer .. " available|r"
+    end
+    local infoLabel = card1:AddLabel("Version: " .. versionLine .. "  -  Author: |cffffffffBitebtw|r")
     infoLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
     card1:AddSpacing(2)
 
@@ -72,6 +77,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     ---------------------------------------------------------------------------------
     local db = KE.db and KE.db.profile
     local themeDb = KE.db and KE.db.global and KE.db.global.Theme
+    local versionDb = KE.db and KE.db.global and KE.db.global.VersionCheck
     local themeMode = (themeDb and themeDb.Mode) or "preset"
     local card2 = GUIFrame:CreateCard(scrollChild, "General", yOffset)
 
@@ -179,6 +185,18 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     })
     row3b:AddWidget(fontDropdown, 0.5)
     card2:AddRow(row3b, Theme.rowHeight)
+
+    local row3c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local noticeCheck = GUIFrame:CreateCheckbox(row3c, "Show Update Notice in Chat", {
+        value = not (versionDb and versionDb.ShowNotice == false),
+        tooltip = "Prints a chat line at login when a newer KitnEssentials version has been seen in your guild or group. Version messages are still exchanged while this is off.",
+        callback = function(checked)
+            if not versionDb then return end
+            versionDb.ShowNotice = checked
+        end,
+    })
+    row3c:AddWidget(noticeCheck, 0.33)
+    card2:AddRow(row3c, Theme.rowHeight)
 
     local sepRow2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
     local sep2 = GUIFrame:CreateSeparator(sepRow2)

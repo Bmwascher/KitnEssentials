@@ -14,6 +14,7 @@
     <Script file="CDMIcons.lua" />
     <Script file="Defaults.lua"/>
     <Script file="Globals.lua" />
+    <Script file="VersionCompare.lua" />
     <Script file="Conflicts.lua" />
     <Script file="EditMode.lua" />
     <Script file="EUIUnlockBridge.lua" />

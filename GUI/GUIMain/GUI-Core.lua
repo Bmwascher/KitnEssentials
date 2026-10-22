@@ -521,6 +521,16 @@ end
 -- Theme
 ---------------------------------------------------------------------------------
 
+function GUIFrame:RefreshVersionText()
+    if not self.versionText then return end
+    local text = "|cff888888v" .. (KE.Version or "?") .. "|r"
+    local newer = KE.GetNewerVersion and KE:GetNewerVersion()
+    if newer then
+        text = text .. "|cff888888, |r|cff7fff7f" .. newer .. " available|r"
+    end
+    self.versionText:SetText(text)
+end
+
 -- Apply theme colors to all GUI elements
 function GUIFrame:ApplyThemeColors()
     if not self.mainFrame then return end
@@ -561,9 +571,7 @@ function GUIFrame:ApplyThemeColors()
     if self.titleText then
         self.titleText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
     end
-    if self.versionText then
-        self.versionText:SetText("|cff888888v" .. (KE.Version or "?") .. "|r")
-    end
+    self:RefreshVersionText()
     if self.PaintEditModeButton then
         self.PaintEditModeButton()
     end

@@ -625,7 +625,22 @@ end
 function L.loadEUIWindows(overrides)
     installMock(overrides, {})
     local KE = { Skins = {} }
+    -- The `since` gate compares through KE:CompareVersions.
+    helpers.loadModule("Core/VersionCompare.lua", KE)
     return helpers.loadModule("Modules/Skinning/DarkTheme/EUIWindows.lua", KE), KE
+end
+
+-- Modules/Core/VersionCheck.lua. Specs reach only the pure decisions, which
+-- are fields on the module table; Core/VersionCompare.lua loads first because
+-- they compare through KE:CompareVersions. Timers stay inert and no event is
+-- fired. Returns VC, KE.
+function L.loadVersionCheck(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    local KE = { Print = function() end }
+    helpers.loadModule("Core/VersionCompare.lua", KE)
+    helpers.loadModule("Modules/Core/VersionCheck.lua", KE)
+    return modules["VersionCheck"], KE
 end
 
 -- Modules/AuraTracking/AuraEngine/Rules.lua. Pure decision logic -- no WoW API, no
@@ -826,6 +841,7 @@ end
 -- was invisible to busted. Returns the composed KE.
 function L.loadSkinAPI_EUIWindows(overrides)
     local KE = L.loadSkinAPI(overrides)
+    helpers.loadModule("Core/VersionCompare.lua", KE)
     helpers.loadModule("Modules/Skinning/DarkTheme/EUIWindows.lua", KE)
     return KE
 end

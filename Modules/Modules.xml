@@ -83,6 +83,7 @@
     <Script file="QoL\Automation\Automation.lua" />
     <Script file="Skinning\DragonRiding.lua" />
     <Script file="Core\Optimize.lua" />
+    <Script file="Core\VersionCheck.lua" />
     <Script file="QoL\QualityOfLife\SlashCommands.lua" />
     <Script file="QoL\Automation\CombatLogger.lua" />
     <Script file="QoL\Automation\AuctionHouseFilter.lua" />

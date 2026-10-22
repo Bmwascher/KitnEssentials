@@ -48,6 +48,14 @@ if printf '%s' "$subject" | grep -qE '^[A-Z]'; then
     exit 1
 fi
 
+# LAST_RELEASE in Modules/Core/VersionCheck.lua is the version a checkout copy
+# announces to other players, so it may only hold a released version: a
+# release commit sets it to its own version, and every other commit must hold
+# the latest release tag reachable from HEAD, so an untagged value cannot
+# outlive its release commit. An empty value announces nothing.
+lr_file='Modules/Core/VersionCheck.lua'
+staged_lr="$(git show ":$lr_file" 2>/dev/null | grep -m1 -E '^local LAST_RELEASE = "[^"]*"' | sed -E 's/^local LAST_RELEASE = "([^"]*)".*/\1/')"
+
 # Release commits ("vX.Y.Z: ..."): the staged .toc must carry the same
 # version (blocking: a mismatch ships the wrong fallback version), and the
 # bump tier is checked against the top CHANGELOG entry (family AGENTS.md,
@@ -58,6 +66,10 @@ if [ -n "$rel" ]; then
     toc_ver="$(git show :KitnEssentials.toc 2>/dev/null | grep -m1 '^## X-Manual-Version:' | awk '{print $3}')"
     if [ "$toc_ver" != "$rel" ]; then
         echo "[commit-msg] BLOCKED: release subject is v$rel but the staged KitnEssentials.toc X-Manual-Version is '${toc_ver:-missing}'. Stage the bumped .toc, or override with: git commit --no-verify" >&2
+        exit 1
+    fi
+    if [ "$staged_lr" != "$rel" ]; then
+        echo "[commit-msg] BLOCKED: release subject is v$rel but the staged $lr_file LAST_RELEASE is '${staged_lr:-missing}'. Set it to \"$rel\" and stage it, or override with: git commit --no-verify" >&2
         exit 1
     fi
     prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | tr -d v)"
@@ -75,6 +87,12 @@ if [ -n "$rel" ]; then
         else
             [ "$tier" != patch ] && echo "[commit-msg] note (non-blocking): v$prev -> v$rel is a $tier bump but the entry has no **NEW:** bullet - fixes and polish alone stay a patch (family AGENTS.md, release-version tiers)." >&2
         fi
+    fi
+elif [ -n "$staged_lr" ]; then
+    last_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | tr -d v)"
+    if [ "$staged_lr" != "$last_tag" ]; then
+        echo "[commit-msg] BLOCKED: $lr_file LAST_RELEASE is '$staged_lr' but the latest release tag is '${last_tag:-none}'. Set it to the latest tag (tag a release commit first), or override a deliberate exception with: git commit --no-verify" >&2
+        exit 1
     fi
 fi
 
