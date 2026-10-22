@@ -1406,3 +1406,167 @@ describe("PartyCooldownsRules.MatchKeys", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules free uses", function()
+    local function secret(value) return { secret = true, value = value } end
+    local function isSecret(v) return type(v) == "table" and v.secret == true end
+    local function choose(b, a, c)
+        if isSecret(b) then b = b.value end
+        if b then return a end
+        return c
+    end
+    local function count(t)
+        if t.a0 == 1 then return 0 elseif t.a1 == 1 then return 1 elseif t.a2 == 1 then return 2 end
+    end
+    -- A step is { lit, free, lock, n }, or "unprime".
+    local function run(R, t, steps, checked)
+        for _, step in ipairs(steps) do
+            if step == "unprime" then
+                t.primed = false
+            else
+                R.Feed(t, step[1], nil, step[4], isSecret, choose, nil, checked, nil, step[2], step[3])
+            end
+        end
+    end
+    local function join(a, b)
+        local out = {}
+        for _, s in ipairs(a) do out[#out + 1] = s end
+        for _, s in ipairs(b) do out[#out + 1] = s end
+        return out
+    end
+    local function chargeCell(R)
+        local t = R.NewTracker(20, false, false, 2)
+        R.Clear(t, 0)
+        return t
+    end
+    local function plainCell(R)
+        local t = R.NewTracker(20, false, false, nil)
+        R.Clear(t, 0)
+        return t
+    end
+    -- Two uses from full: no charge left and a second use waiting.
+    local USES = {
+        { false, false, nil, 9 }, { true, false, nil, 10 }, { false, false, nil, 12 }, { true, false, nil, 13 },
+    }
+
+    it("fills a charge cell when the free buff rises in a primed read, on plain answers", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a rise fills both charges", more = { { false, true, nil, 14 } }, want = { 2, 0 } },
+            { name = "an unprimed read only records", more = { "unprime", { false, true, nil, 14 } },
+              want = { 0, 1 } },
+            { name = "an answer lit in both reads keeps the count",
+              more = { "unprime", { false, true, nil, 14 }, { false, true, nil, 15 } }, want = { 0, 1 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = chargeCell(R)
+            run(R, t, join(USES, case.more))
+            assert.are.same(case.want, { count(t), t.b }, case.name)
+        end
+    end)
+
+    it("fills a charge cell through picks when the free answer is secret", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a secret rise fills both charges", more = { { false, secret(true), nil, 14 } },
+              want = { 2, 0 } },
+            { name = "a secret answer lit in both reads keeps the count",
+              more = { "unprime", { false, secret(true), nil, 14 }, { false, secret(true), nil, 15 } },
+              want = { 0, 1 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = chargeCell(R)
+            run(R, t, join(USES, case.more))
+            assert.are.same(case.want, { count(t), t.b }, case.name)
+        end
+    end)
+
+    it("keeps a lost count lost through a secret fill, with its timer and cover cleared", function()
+        local R = loadRules()
+        local t = chargeCell(R)
+        run(R, t, USES)
+        R.ChargeLose(t)
+        run(R, t, { { false, secret(true), nil, 14 } })
+        assert.are.same({ true, 0, 0, 0 }, { t.legacy, t.lb, t.slot[1].v, t.slot[2].v })
+    end)
+
+    it("spends no charge for a use read while the free buff is up or the lockout rises", function()
+        local R = loadRules()
+        local cases = {
+            { name = "free buff up", steps = { { false, true, nil, 9 }, { true, true, nil, 10 } }, want = 2 },
+            { name = "lockout rising", steps = { { false, false, false, 9 }, { true, false, true, 10 } }, want = 2 },
+            { name = "lockout up in both reads spends a charge",
+              steps = { { false, false, true, 9 }, { true, false, true, 10 } }, want = 1 },
+        }
+        for _, case in ipairs(cases) do
+            local t = chargeCell(R)
+            run(R, t, case.steps)
+            assert.are.equal(case.want, count(t), case.name)
+        end
+    end)
+
+    it("starts no timer on a one-charge cell for a use read while the free buff is up", function()
+        local R = loadRules()
+        local t = plainCell(R)
+        run(R, t, { { false, true, nil, 9 }, { true, true, nil, 10 } })
+        assert.are.same({ 0, 0 }, { t.slot[1].v, t.slot[2].v })
+    end)
+
+    it("keeps every value on the hidden branches when the free answer is secret and lit", function()
+        local R = loadRules()
+        local hidden = { { secret(false), secret(true), nil, 9 }, { secret(true), secret(true), nil, 10 } }
+        local cases = {
+            { name = "the charge pick path", make = chargeCell, steps = hidden,
+              look = function(t) return { count(t) } end, want = { 2 } },
+            { name = "the one-charge Pick block", make = plainCell, steps = hidden,
+              look = function(t) return { t.slot[1].v, t.slot[2].v } end, want = { 0, 0 } },
+            { name = "the lost count's single timer",
+              make = function()
+                  local t = chargeCell(R)
+                  R.ChargeLose(t)
+                  t.lb = secret(0)
+                  return t
+              end,
+              steps = { { false, secret(true), nil, 9 }, { true, secret(true), nil, 10 } },
+              look = function(t) return { t.slot[1].v, t.slot[2].v, isSecret(t.lb) and t.lb.value } end,
+              want = { 0, 0, 0 } },
+        }
+        for _, case in ipairs(cases) do
+            local t = case.make(R)
+            run(R, t, case.steps, true)
+            assert.are.same(case.want, case.look(t), case.name)
+        end
+    end)
+
+    it("leaves a full, idle cell plain when the free answer is secret", function()
+        local R = loadRules()
+        local function hide(b, a, c) return secret(choose(b, a, c)) end
+        local cases = { { name = "a charge cell", make = chargeCell }, { name = "a one-charge cell", make = plainCell } }
+        for _, case in ipairs(cases) do
+            local t = case.make(R)
+            R.Feed(t, false, nil, 9, isSecret, hide, nil, true, nil, secret(false), nil)
+            local changed = R.Feed(t, false, nil, 10, isSecret, hide, nil, true, nil, secret(true), nil)
+            assert.are.same({ false, false, false, false },
+                { changed, isSecret(t.slot[1].v), isSecret(t.slot[2].v), isSecret(t.a2) }, case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.LockOn", function()
+    it("watches the lockout on your own row while its talent is taken, or unread and likely", function()
+        local R = loadRules()
+        local lockout = { talents = { [70] = true }, likely = true }
+        local cases = {
+            { name = "taken", entry = { lockout = lockout }, ranks = { [70] = 1 }, own = true, want = true },
+            { name = "read as not taken", entry = { lockout = lockout }, ranks = { [70] = 0 }, own = true,
+              want = false },
+            { name = "unread, likely", entry = { lockout = lockout }, ranks = {}, own = true, want = true },
+            { name = "no lockout rule", entry = {}, ranks = { [70] = 1 }, own = true, want = false },
+            { name = "a party row, taken", entry = { lockout = lockout }, ranks = { [70] = 1 }, own = false,
+              want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.LockOn(case.entry, case.ranks, case.own), case.name)
+        end
+    end)
+end)

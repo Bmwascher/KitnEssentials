@@ -50,6 +50,15 @@ local SENSOR_WIDTH = 50000
 local SENSOR_X = -11
 -- An aura group or slot filter that admits nothing.
 local EMPTY = { includeSpellIDs = {} }
+-- A free cell's lockout sensor matches its lockout debuff by shape: the
+-- client refuses spell-ID filters on a friendly unit's debuffs. Built only
+-- where Rules.LockOn allows it.
+local LOCK_SIG = "lock"
+local LOCK_FILTER = "HARMFUL"
+local LOCK_FILTERS = {
+    isFromPlayerOrPlayerPet = true, isBossAura = false, maxDuration = 91,
+    excludeDispelTypes = { Magic = true, Curse = true, Disease = true, Poison = true, Bleed = true },
+}
 local READ_DELAY = 0.2
 local READS = 2
 local BIND_HOLD = 0.5
@@ -372,8 +381,9 @@ local function BuffSet(buffs)
 end
 
 -- short makes the sensor see only a proc copy of the buff. host parents it:
--- the shared host unless the slot has its own, which its owner hides.
-local function NewSensor(buffs, short, host)
+-- the shared host unless the slot has its own, which its owner hides. filter
+-- and filters, when given, replace the buff filter and the spell-ID match.
+local function NewSensor(buffs, short, host, filter, filters)
     if not host and not sensHost then
         sensHost = CreateFrame("Frame", nil, UIParent)
         sensHost:SetSize(1, 1)
@@ -386,9 +396,9 @@ local function NewSensor(buffs, short, host)
         sensor:SetSize(1, 1)
         sensor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", SENSOR_X, 0)
         sensor:EnableMouse(false)
-        sensor:AddAuraGroup(SENSOR_GROUP, SENSOR_FILTER, {
+        sensor:AddAuraGroup(SENSOR_GROUP, filter or SENSOR_FILTER, {
             maxFrameCount = 1,
-            candidateFilters = { includeSpellIDs = BuffSet(buffs), maxDuration = short },
+            candidateFilters = filters or { includeSpellIDs = BuffSet(buffs), maxDuration = short },
             initializeFrame = InitSensorButton,
             layout = { elementWidth = SENSOR_WIDTH, elementHeight = 1, elementSpacing = 0, lineSpacing = 0 },
         })
@@ -444,16 +454,18 @@ end
 
 -- A refused call leaves the sensor's state unknown, so every recorded field
 -- is cleared and the next apply issues every call again; until then it is
--- parked and never read. kinds re-aims a potion sensor's built groups.
--- Returns whether every call was accepted, and whether any was issued (the
--- sensor was bound, re-pointed, re-aimed or re-enabled).
-local function Aim(sensor, sig, buffs, short, unit, kinds)
+-- parked and never read. kinds re-aims a potion sensor's built groups;
+-- filters, when given, replace the spell-ID match. Returns whether every call
+-- was accepted, and whether any was issued (the sensor was bound, re-pointed,
+-- re-aimed or re-enabled).
+local function Aim(sensor, sig, buffs, short, unit, kinds, filters)
     local kindSig = kinds and kinds.sig
     local changed = sensor.keSig ~= sig or sensor.keUnit ~= unit or not sensor.keOn
         or (kinds ~= nil and sensor.keKinds ~= kindSig)
     local ok = pcall(function()
         if sensor.keSig ~= sig then
-            sensor:SetAuraGroupCandidateFilters(SENSOR_GROUP, { includeSpellIDs = BuffSet(buffs), maxDuration = short })
+            sensor:SetAuraGroupCandidateFilters(SENSOR_GROUP,
+                filters or { includeSpellIDs = BuffSet(buffs), maxDuration = short })
             sensor.keSig = sig
         end
         if kinds and sensor.keKinds ~= kindSig then
@@ -542,6 +554,11 @@ local function Lit(sensor)
     return pcall(sensor.IsMouseOver, sensor, 1e5, -1e5, 0, 0)
 end
 
+local function Answer(sensor)
+    if not (sensor and sensor.keOn == true) then return false end
+    return Lit(sensor)
+end
+
 local ONE = { 1 }
 local ge, picks = {}, {}
 
@@ -569,17 +586,26 @@ local function ReadCell(st, i, n)
     if not (st.ready[i] and t and sensor and sensor.keOn == true) then return end
     local ok, lit = Lit(sensor)
     if not ok then return end
-    local short
+    local short, free, lock
     if t.hasShort then
-        local shortSensor = st.shorts[i]
-        if not (shortSensor and shortSensor.keOn == true) then return end
         local okShort
-        okShort, short = Lit(shortSensor)
+        okShort, short = Answer(st.shorts[i])
         if not okShort then return end
+    end
+    if t.free then
+        local okFree
+        okFree, free = Answer(st.frees[i])
+        if not okFree then return end
+    end
+    if t.lock then
+        local okLock
+        okLock, lock = Answer(st.locks[i])
+        if not okLock then return end
     end
     -- Closed door: no use is seen here, and a count already running from
     -- plain reads goes on.
-    if not Track.DoorOpen() and (issecretvalue(lit) or issecretvalue(short)) then
+    if not Track.DoorOpen() and (issecretvalue(lit) or issecretvalue(short)
+        or issecretvalue(free) or issecretvalue(lock)) then
         t.primed = false
         return
     end
@@ -588,7 +614,7 @@ local function ReadCell(st, i, n)
     if kinds and t.ic and Rules.KindsWanted(t, lit, short, n, issecretvalue) then
         kindPicks = KindPicks(sensor, lit, kinds)
     end
-    if Rules.Feed(t, lit, short, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck, kindPicks) then
+    if Rules.Feed(t, lit, short, n, issecretvalue, EvalBool, ReadBack, Track.chargeCheck, kindPicks, free, lock) then
         Push(t, n)
         Track.Wake()
     end
@@ -673,7 +699,7 @@ end
 function Track.NewSlot(holder, view, sensorHost)
     local st = {
         holder = holder, view = view or Cell, sensorHost = sensorHost,
-        entries = {}, cells = {}, trackers = {}, sensors = {}, shorts = {},
+        entries = {}, cells = {}, trackers = {}, sensors = {}, shorts = {}, frees = {}, locks = {},
         ready = {}, shown = {}, count = 0, reads = 0, holdUntil = 0,
     }
     st.evt = CreateFrame("Frame")
@@ -748,11 +774,15 @@ end
 -- re-aim them.
 local Sig = Rules.TrackerKey
 
--- A cell's sensors: its own and its proc sensor, or one per unit in a group
--- slot.
+local function FreeSig(e) return "free:" .. table_concat(e.free, ",") end
+
+-- A cell's sensors: its own, its proc copy's, its free and its lockout
+-- sensor, or one per unit in a group slot.
 local function ParkCell(st, i)
     Park(st.sensors[i])
     Park(st.shorts[i])
+    Park(st.frees[i])
+    Park(st.locks[i])
     local group = st.group and st.group[i]
     if group then
         for _, sensor in pairs(group) do Park(sensor) end
@@ -808,10 +838,15 @@ end
 -- Aims an existing sensor. Returns whether the cell can use it, whether a
 -- call was refused (as opposed to the sensor not being built yet), and
 -- whether the sensor was bound, re-pointed, re-aimed or re-enabled.
-local function Ready(sensor, sig, buffs, short, unit, kinds)
+local function Ready(sensor, sig, buffs, short, unit, kinds, filters)
     if not sensor then return false, false, false end
-    local ok, changed = Aim(sensor, sig, buffs, short, unit, kinds)
+    local ok, changed = Aim(sensor, sig, buffs, short, unit, kinds, filters)
     return ok, not ok, changed
+end
+
+local function AimMore(ready, refused, aimed, sensor, sig, buffs, short, unit, filters)
+    local ok, no, did = Ready(sensor, sig, buffs, short, unit, nil, filters)
+    return ready and ok, refused or no, aimed or did
 end
 
 -- Points the slot's cells at entries for unit. Containers are only aimed
@@ -866,11 +901,20 @@ function Track.Apply(st, unit, entries, style, settings)
         if e.kinds or t.ic then Rules.FitKinds(t, e.kinds) end
         local ready, refused, aimed = Ready(st.sensors[i], sig, e.buffs, nil, unit, e.kinds)
         if e.short then
-            local shortReady, shortRefused, shortAimed = Ready(st.shorts[i], sig, e.buffs, e.short, unit)
-            ready, refused = ready and shortReady, refused or shortRefused
-            aimed = aimed or shortAimed
+            ready, refused, aimed = AimMore(ready, refused, aimed, st.shorts[i], sig, e.buffs, e.short, unit)
         else
             Park(st.shorts[i])
+        end
+        t.free, t.lock = e.free ~= nil, e.lockOn == true
+        if t.free then
+            ready, refused, aimed = AimMore(ready, refused, aimed, st.frees[i], FreeSig(e), e.free, nil, unit)
+        else
+            Park(st.frees[i])
+        end
+        if t.lock then
+            ready, refused, aimed = AimMore(ready, refused, aimed, st.locks[i], LOCK_SIG, nil, nil, unit, LOCK_FILTERS)
+        else
+            Park(st.locks[i])
         end
         if refused then clean = false end
         if aimed and ready then moved = true end
@@ -1016,7 +1060,10 @@ function Track.Missing(st)
     if not SensorsSpent(st) then
         for i = 1, st.count do
             local e = st.entries[i]
-            if not st.sensors[i] or (e.short and not st.shorts[i]) then return true end
+            if not st.sensors[i] or (e.short and not st.shorts[i]) or (e.free and not st.frees[i])
+                or (e.lockOn and not st.locks[i]) then
+                return true
+            end
             if KindsMissing(st.sensors[i], e.kinds) then return true end
         end
     end
@@ -1065,6 +1112,20 @@ function Track.BuildNext(st)
             if not short then return SensorFailed(st) end
             short.keSig = Sig(e)
             st.shorts[i] = short
+            return true
+        end
+        if e.free and not st.frees[i] then
+            local free = NewSensor(e.free, nil, st.sensorHost)
+            if not free then return SensorFailed(st) end
+            free.keSig = FreeSig(e)
+            st.frees[i] = free
+            return true
+        end
+        if e.lockOn and not st.locks[i] then
+            local lock = NewSensor(nil, nil, st.sensorHost, LOCK_FILTER, LOCK_FILTERS)
+            if not lock then return SensorFailed(st) end
+            lock.keSig = LOCK_SIG
+            st.locks[i] = lock
             return true
         end
         if KindsMissing(st.sensors[i], e.kinds) then
