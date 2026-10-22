@@ -1207,6 +1207,15 @@ function Rules.FillAbsent(out, talents, found, boxOn)
     return out
 end
 
+-- Whether a spec's first walk runs now: "walk", "miss" (its tries are spent,
+-- or the loadout is another spec's, whose index could lack this spec's nodes)
+-- or "skip" (in combat; waits without a miss).
+function Rules.FirstWalk(spent, specID, loadoutSpec, inCombat)
+    if spent or loadoutSpec ~= specID then return "miss" end
+    if inCombat then return "skip" end
+    return "walk"
+end
+
 function Rules.TalentAllows(entry, taken, specID)
     local hide = entry.spell and entry.spell.hide
     if hide and hide.specs[specID] then

@@ -766,6 +766,22 @@ describe("PartyCooldownsRules.FillAbsent", function()
     end)
 end)
 
+describe("PartyCooldownsRules.FirstWalk", function()
+    it("walks only an unspent spec's own loadout out of combat", function()
+        local R = loadRules()
+        local cases = {
+            { name = "own loadout", spent = false, loadout = 65, combat = false, want = "walk" },
+            { name = "tries spent", spent = true, loadout = 65, combat = false, want = "miss" },
+            { name = "another spec's loadout", spent = false, loadout = 70, combat = false, want = "miss" },
+            { name = "no loadout spec", spent = false, loadout = nil, combat = false, want = "miss" },
+            { name = "in combat", spent = false, loadout = 65, combat = true, want = "skip" },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.FirstWalk(case.spent, 65, case.loadout, case.combat), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.TrinketReadStands", function()
     it("lets a read with an empty slot stand only once a second read agrees", function()
         local R = loadRules()
