@@ -21,6 +21,7 @@ describe("MPT pull: scheduler and lifecycle", function()
     local counts             -- [token] = forces count handed to the calculator
     local criteria           -- [token] = criteria reads this build made
     local endpoint           -- what the endpoint bar's GetRight returns
+    local percent            -- what the percent reader's GetLeft returns
     local shown, cleared     -- SetPullDisplay records / ClearPullDisplay count
     local bars               -- StatusBars the calculator created
 
@@ -50,7 +51,7 @@ describe("MPT pull: scheduler and lifecycle", function()
     before_each(function()
         now, afters, timers = 0, {}, {}
         plates, units, counts, bars, criteria = {}, {}, {}, {}, {}
-        endpoint = 49
+        endpoint, percent = 49, 16.9
         shown, cleared = {}, 0
         local frames = mock.install({
             GetTime = function() return now end,
@@ -78,6 +79,9 @@ describe("MPT pull: scheduler and lifecycle", function()
                 function f:Show() self.shown = true end
                 function f:Hide() self.shown = false end
                 bars[#bars + 1] = f
+            elseif kind == "Frame" then
+                function f:SetScale() end
+                function f:GetLeft() return percent end
             end
             return f
         end
@@ -97,8 +101,6 @@ describe("MPT pull: scheduler and lifecycle", function()
             return counts[u]
         end }
         _G.C_StringUtil = { RoundToNearestString = function(v) return "r" .. tostring(v) end }
-        _G.AbbreviateNumbers = function(v) return "p" .. tostring(v) end
-        _G.CreateAbbreviateConfig = function() return {} end
 
         helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Pull.lua",
             { Print = function() end })
@@ -109,8 +111,8 @@ describe("MPT pull: scheduler and lifecycle", function()
         MPT.run = { active = true, completed = false,
                     forces = { total = 290, current = 204, completed = false } }
         MPT.isPreview = nil
-        MPT.SetPullDisplay = function(_, count, countText, percentText)
-            shown[#shown + 1] = { count, countText, percentText }
+        MPT.SetPullDisplay = function(_, count, countText, pct)
+            shown[#shown + 1] = { count, countText, pct }
         end
         MPT.ClearPullDisplay = function() cleared = cleared + 1 end
 
@@ -128,12 +130,16 @@ describe("MPT pull: scheduler and lifecycle", function()
         assert.are.equal(0, timers[1].delay)
         cycle()
         assert.are.equal(1, #shown)
-        assert.are.same({ 49, "r49", "p49" }, shown[1])
-        -- origin bar plus one bar per counted unit, each fed its count directly
-        assert.are.equal(3, #bars)
+        assert.are.same({ 49, "r49", 16.9 }, shown[1])
+        -- two origins, then a count bar and a percent bar per counted unit,
+        -- each fed its count directly
+        assert.are.equal(6, #bars)
         assert.are.equal(0, bars[1].values[1])
-        assert.are.equal(20, bars[2].values[1])
-        assert.are.equal(29, bars[3].values[1])
+        assert.are.equal(0, bars[2].values[1])
+        assert.are.equal(20, bars[3].values[1])
+        assert.are.equal(20, bars[4].values[1])
+        assert.are.equal(29, bars[5].values[1])
+        assert.are.equal(29, bars[6].values[1])
         -- the next request inside the interval waits out the remainder
         now = 0.03
         MPT:RequestPullEstimate()
@@ -144,15 +150,15 @@ describe("MPT pull: scheduler and lifecycle", function()
     it("work during an owned batch never rebuilds the pool and yields one follow-up", function()
         MPT:SyncPullEstimate()
         fireTimers()                                   -- build; the batch owns the pool
-        local built, fed = #bars, #bars[2].values
+        local built, fed = #bars, #bars[3].values
         MPT:RequestPullEstimate()
         listener:Fire("UNIT_THREAT_LIST_UPDATE", "nameplate1")
         MPT:SyncPullEstimate()
         assert.are.equal(0, liveTimers())
         assert.are.equal(built, #bars)
         -- the borrowed bars are untouched until the batch settles
-        assert.is_true(bars[2].shown)
-        assert.are.equal(fed, #bars[2].values)
+        assert.is_true(bars[3].shown)
+        assert.are.equal(fed, #bars[3].values)
         drain()                                        -- both settle frames
         assert.are.equal(1, #shown)
         assert.are.equal(1, liveTimers())              -- exactly one follow-up
@@ -226,12 +232,12 @@ describe("MPT pull: scheduler and lifecycle", function()
         criteria = {}
         cycle()
         assert.are.equal(2, #shown)
-        -- the duplicated token is read once and fed once: origin plus ONE bar,
-        -- no bar beyond the first build's three
+        -- the duplicated token is read once and fed once: the origins plus ONE
+        -- count and percent pair, no bar beyond the first build's six
         assert.are.equal(1, criteria.nameplate1)
-        assert.are.equal(3, #bars)
-        assert.are.equal(20, bars[2].values[#bars[2].values - 1])
-        assert.is_false(bars[3].shown)
+        assert.are.equal(6, #bars)
+        assert.are.equal(20, bars[3].values[#bars[3].values - 1])
+        assert.is_false(bars[5].shown)
     end)
 
     it("no admitted units clears; teardown cancels, unregisters and repeats harmlessly", function()

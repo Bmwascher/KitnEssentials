@@ -25,8 +25,6 @@ local UnitCanAttack = UnitCanAttack
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitThreatSituation = UnitThreatSituation
 local UnitPlayerControlled = UnitPlayerControlled
-local AbbreviateNumbers = AbbreviateNumbers
-local CreateAbbreviateConfig = CreateAbbreviateConfig
 local issecretvalue = issecretvalue or function() return false end
 local wipe = wipe
 local strfind = string.find
@@ -114,6 +112,22 @@ end
 -- means.
 local bars, barsInUse = {}, 0
 
+-- The percent chain: bars PCT_WIDTH wide fill count * PCT_WIDTH / total, so
+-- the chain ends at the percent times 100. Fills land on whole units, which
+-- keeps two decimals at this width. A frame scaled by 100 on that edge reads
+-- the percent itself as its left, still secret, for a %.2f format.
+local PCT_WIDTH = 10000
+local pctReader
+
+local function PercentReader()
+    if not pctReader then
+        pctReader = CreateFrame("Frame")
+        pctReader:SetScale(PCT_WIDTH / 100)
+        pctReader:SetSize(1, 1)
+    end
+    return pctReader
+end
+
 local function AcquireBar()
     barsInUse = barsInUse + 1
     local bar = bars[barsInUse]
@@ -134,26 +148,9 @@ local function ReleasePool()
         bar:SetValue(0)
     end
     barsInUse = 0
+    if pctReader then pctReader:ClearAllPoints() end
 end
 
-local abbrevTotal, abbrevConfig
-local function PercentConfig(total)
-    if abbrevTotal ~= total then
-        abbrevTotal = total
-        abbrevConfig = {
-            config = CreateAbbreviateConfig({
-                {
-                    breakpoint = 0.00001,
-                    abbreviation = "",
-                    significandDivisor = total / 10000,
-                    fractionDivisor = 100,
-                    abbreviationIsGlobal = false,
-                },
-            }),
-        }
-    end
-    return abbrevConfig
-end
 
 ---------------------------------------------------------------------------------
 -- Scheduler
@@ -209,13 +206,13 @@ local function Deliver(b)
     end
     -- The endpoint may be secret: classify first, never compare or store it.
     local endpoint = b.endpoint:GetRight()
+    local percent = PercentReader():GetLeft()
     ReleasePool()
-    if not issecretvalue(endpoint) and type(endpoint) ~= "number" then
+    if (not issecretvalue(endpoint) and type(endpoint) ~= "number")
+        or (not issecretvalue(percent) and type(percent) ~= "number") then
         if MPT.ClearPullDisplay then MPT:ClearPullDisplay() end
     elseif MPT.SetPullDisplay then
-        MPT:SetPullDisplay(endpoint,
-            C_StringUtil.RoundToNearestString(endpoint),
-            AbbreviateNumbers(endpoint, PercentConfig(b.total)))
+        MPT:SetPullDisplay(endpoint, C_StringUtil.RoundToNearestString(endpoint), percent)
     end
     if dirty then MPT:RequestPullEstimate() end
 end
@@ -242,6 +239,13 @@ local function Build()
     origin:SetValue(0)
     origin:Show()
     local prevTex = origin:GetStatusBarTexture()
+    local pctOrigin = AcquireBar()
+    pctOrigin:SetSize(PCT_WIDTH, 10)
+    pctOrigin:SetPoint("LEFT")
+    pctOrigin:SetMinMaxValues(0, total)
+    pctOrigin:SetValue(0)
+    pctOrigin:Show()
+    local pctTex = pctOrigin:GetStatusBarTexture()
     local gens, accepted = {}, 0
     for i = 1, #batchTokens do
         local unit = batchTokens[i]
@@ -256,9 +260,19 @@ local function Build()
             bar:SetValue(count)
             bar:Show()
             prevTex = bar:GetStatusBarTexture()
+            local pct = AcquireBar()
+            pct:SetSize(PCT_WIDTH, 10)
+            pct:SetPoint("LEFT", pctTex, "RIGHT", 0, 0)
+            pct:SetMinMaxValues(0, total)
+            pct:SetValue(count)
+            pct:Show()
+            pctTex = pct:GetStatusBarTexture()
             accepted = accepted + 1
         end
     end
+    local reader = PercentReader()
+    reader:ClearAllPoints()
+    reader:SetPoint("LEFT", pctTex, "RIGHT", 0, 0)
     if accepted == 0 then
         ReleasePool()
         if MPT.ClearPullDisplay then MPT:ClearPullDisplay() end
