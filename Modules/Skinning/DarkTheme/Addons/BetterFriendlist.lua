@@ -1018,7 +1018,7 @@ local function PlaceWhoPlate(frame, modern)
     bd:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, 4)
 end
 
-local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES"
+local KITN_LOGO = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES_Head"
 local BFL_CLOSE_SIZE = 20
 -- The flat themes' square portrait is 42 and its crop cuts the art's sides;
 -- KE draws the whole logo larger and lower in its place.
