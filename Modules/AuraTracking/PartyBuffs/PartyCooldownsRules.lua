@@ -1409,6 +1409,54 @@ function Rules.HiddenChargeClear(t, n, isSecret)
     return true
 end
 
+-- A member's read from the unit answers: true dead, false alive, nil when it
+-- cannot be told. An offline member cannot be told, since a disconnected
+-- unit's answers are not its state. A feigning member is alive. Each answer
+-- is tested for secrecy before it is compared.
+function Rules.DeathRead(okConn, conn, okDead, dead, okFeign, feign, isSecret)
+    if not okConn or isSecret(conn) or conn ~= true then return nil end
+    if not okDead or isSecret(dead) then return nil end
+    if dead ~= true then return false end
+    if not okFeign or isSecret(feign) then return nil end
+    if feign == true then return false end
+    return true
+end
+
+-- Stores a member's read and returns whether it is a death: alive before,
+-- dead now. An unknown read keeps the stored state, and a first read only
+-- records, so a member already dead when first read is never counted.
+function Rules.NoteDeath(states, key, read)
+    if read == nil then return false end
+    local was = states[key]
+    states[key] = read
+    return read == true and was == false
+end
+
+-- Whether a row is the dying member's: the same token, or two read GUIDs that
+-- match. A row neither test can tell takes the cut.
+function Rules.SameMember(rowToken, rowGUID, token, guid)
+    if rowToken == token then return true end
+    return type(rowGUID) == "string" and type(guid) == "string" and rowGUID == guid
+end
+
+-- Seconds after a cut in which a rise only records, so an aura change the
+-- death brings is not taken for a use.
+Rules.DEATH_QUIET = 3
+
+-- An ally's death takes seconds off a cell. Every drawing reads n - epoch, so
+-- moving both epochs back draws the tracker as it would look that much later,
+-- plain or hidden, without reading a stamp or a visibility; the roll keeps the
+-- current slot inside its period. A charge tracker is refused. Returns whether
+-- it cut.
+function Rules.DeathCut(t, seconds, n)
+    if t.charges or type(seconds) ~= "number" or seconds <= 0 then return false end
+    t.slot[1].epoch = t.slot[1].epoch - seconds
+    t.slot[2].epoch = t.slot[2].epoch - seconds
+    Rules.Roll(t, n)
+    t.quietTo = math_max(t.quietTo or n, n + Rules.DEATH_QUIET)
+    return true
+end
+
 -- A missing talent string on either side cannot tell, so it counts as moved.
 function Rules.TalentsMoved(prev, talents)
     return type(prev) ~= "string" or type(talents) ~= "string" or prev ~= talents

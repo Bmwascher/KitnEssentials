@@ -1601,3 +1601,150 @@ describe("PartyCooldownsRules.LockOn", function()
         end
     end)
 end)
+
+describe("PartyCooldownsRules ally deaths", function()
+    -- A secret answer is a boxed value: arithmetic or an order compare on one
+    -- errors, as on a real secret, and only the injected evaluator opens it.
+    local function secret(value) return { secret = true, value = value } end
+    local function isSecret(v) return type(v) == "table" and v.secret == true end
+    local function pick(b, a, c)
+        if isSecret(b) then b = b.value end
+        if b then return a end
+        return c
+    end
+
+    it("reads dead, alive, a feign as alive, and unknown when offline or an answer is refused or secret", function()
+        local R = loadRules()
+        -- An answer's ok flag defaults to true and the connection to true.
+        local cases = {
+            { name = "alive", dead = false, feign = false, want = false },
+            { name = "dead", dead = true, feign = false, want = true },
+            { name = "feigning", dead = true, feign = true, want = false },
+            { name = "offline", conn = false, dead = true, feign = false },
+            { name = "connection refused", okConn = false, dead = true, feign = false },
+            { name = "connection secret", conn = secret(true), dead = true, feign = false },
+            { name = "death refused", okDead = false, feign = false },
+            { name = "death secret", dead = secret(true), feign = false },
+            { name = "feign refused", dead = true, okFeign = false },
+            { name = "feign secret", dead = true, feign = secret(false) },
+        }
+        local function ok(flag) return flag ~= false end
+        for _, case in ipairs(cases) do
+            local conn = case.conn == nil and true or case.conn
+            assert.are.equal(case.want, R.DeathRead(ok(case.okConn), conn, ok(case.okDead), case.dead,
+                ok(case.okFeign), case.feign, isSecret), case.name)
+        end
+    end)
+
+    it("counts a death only when a member read alive reads dead", function()
+        local R = loadRules()
+        local cases = {
+            { name = "a first read dead only records", reads = { true }, want = { false } },
+            { name = "alive then dead", reads = { false, true }, want = { false, true } },
+            { name = "dead stays dead", reads = { false, true, true }, want = { false, true, false } },
+            { name = "alive again, then dead again", reads = { false, true, false, true },
+              want = { false, true, false, true } },
+        }
+        for _, case in ipairs(cases) do
+            local states, got = {}, {}
+            for i, read in ipairs(case.reads) do got[i] = R.NoteDeath(states, "party1", read) end
+            assert.are.same(case.want, got, case.name)
+        end
+    end)
+
+    it("keeps the stored state through an unknown read", function()
+        local R = loadRules()
+        local states = {}
+        R.NoteDeath(states, "party1", false)
+        assert.is_false(R.NoteDeath(states, "party1", nil))
+        assert.are.equal(false, states.party1)
+        assert.is_true(R.NoteDeath(states, "party1", true))
+    end)
+
+    it("takes a row for the dying member by its token, or by two read GUIDs that match", function()
+        local R = loadRules()
+        local cases = {
+            { name = "same token", row = "party1", token = "party1", want = true },
+            { name = "same GUID", row = "raid2", rowGUID = "Player-1", token = "party1", guid = "Player-1",
+              want = true },
+            { name = "row GUID missing", row = "raid2", token = "party1", guid = "Player-1", want = false },
+            { name = "dying GUID missing", row = "raid2", rowGUID = "Player-1", token = "party1", want = false },
+            { name = "another member", row = "party2", rowGUID = "Player-2", token = "party1", guid = "Player-1",
+              want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.SameMember(case.row, case.rowGUID, case.token, case.guid), case.name)
+        end
+    end)
+
+    it("takes the seconds off a running slot, and off an older slot still running after a roll", function()
+        local R = loadRules()
+        local t = R.NewTracker(120, false)
+        R.Clear(t, 0)
+        R.StartPlain(t, 10)
+        assert.are.equal(110, R.Left(t, t.slot[1], 20))
+        assert.is_true(R.DeathCut(t, 30, 20))
+        assert.are.equal(80, R.Left(t, t.slot[1], 20))
+        local P = R.CODES * R.Unit(120)
+        local rolled = R.NewTracker(120, false)
+        R.Clear(rolled, 0)
+        R.StartPlain(rolled, P - 4)
+        R.Roll(rolled, P)
+        assert.are.equal(2, rolled.cur)
+        assert.are.equal(110, R.Left(rolled, rolled.slot[1], P + 6))
+        R.DeathCut(rolled, 30, P + 6)
+        assert.are.equal(80, R.Left(rolled, rolled.slot[1], P + 6))
+    end)
+
+    it("cuts a hidden slot by its epochs alone, leaving its stamp and visibility as they are", function()
+        local R = loadRules()
+        local t = R.NewTracker(120, false)
+        R.Clear(t, 0)
+        local c1, v1, c2, v2 = secret(0.5), secret(1), secret(1), secret(0)
+        t.slot[1].c, t.slot[1].v, t.slot[2].c, t.slot[2].v = c1, v1, c2, v2
+        assert.is_true(R.DeathCut(t, 30, 20))
+        assert.are.same({ -30, -30 }, { t.slot[1].epoch, t.slot[2].epoch })
+        assert.is_true(rawequal(c1, t.slot[1].c) and rawequal(v1, t.slot[1].v)
+            and rawequal(c2, t.slot[2].c) and rawequal(v2, t.slot[2].v))
+    end)
+
+    it("rolls at once when a cut carries the current slot past its period, keeping that slot's timer", function()
+        local R = loadRules()
+        local P = R.CODES * R.Unit(120)
+        local t = R.NewTracker(120, false)
+        R.Clear(t, 0)
+        R.StartPlain(t, P - 14)
+        R.DeathCut(t, 30, P - 14)
+        assert.are.same({ 2, P - 14, 1 }, { t.cur, t.slot[2].epoch, t.slot[1].v })
+        assert.are.equal(90, R.Left(t, t.slot[1], P - 14))
+    end)
+
+    it("only records a rise for DEATH_QUIET seconds after a cut, then stamps a full cooldown", function()
+        local R = loadRules()
+        local t = R.NewTracker(120, false)
+        R.Clear(t, 0)
+        R.Feed(t, false, nil, 10, isSecret, pick)
+        R.DeathCut(t, 30, 10)
+        local quietEnd = 10 + R.DEATH_QUIET
+        R.Feed(t, true, nil, quietEnd, isSecret, pick)
+        assert.are.equal(0, t.slot[t.cur].v)
+        R.Feed(t, false, nil, quietEnd + 1, isSecret, pick)
+        R.Feed(t, true, nil, quietEnd + 2, isSecret, pick)
+        local sl = t.slot[t.cur]
+        assert.are.same({ 1, 120 }, { sl.v, R.Left(t, sl, quietEnd + 2) })
+    end)
+
+    it("refuses a charge tracker and a missing cut, leaving them as they were", function()
+        local R = loadRules()
+        local charged = R.NewTracker(60, false, false, 2)
+        R.Clear(charged, 0)
+        local plain = R.NewTracker(120, false)
+        R.Clear(plain, 0)
+        assert.is_false(R.DeathCut(charged, 30, 10))
+        assert.is_false(R.DeathCut(plain, nil, 10))
+        for _, t in ipairs({ charged, plain }) do
+            assert.are.same({ 0, 0 }, { t.slot[1].epoch, t.slot[2].epoch })
+            assert.is_nil(t.quietTo)
+        end
+    end)
+end)
