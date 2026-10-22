@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.12
+
+### Minimap
+
+- New K icon on the minimap button, in the addon list and in the M+ forces
+  tooltip, purple fading to pink
+
+---
+
 ## v4.13.11
 
 ### Raid Notifications
