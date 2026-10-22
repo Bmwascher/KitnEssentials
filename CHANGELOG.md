@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.6
+
+### DoT Tracker
+
+- Feral no longer lists Thrash
+
+---
+
 ## v4.13.5
 
 ### Party Cooldowns
