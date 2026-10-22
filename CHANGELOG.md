@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.13
+
+### General
+
+- **NEW:** Update notice. When someone in your guild or group runs a newer
+  KitnEssentials, a chat line at login tells you a new version is out, and
+  the settings window shows it next to your version
+- **NEW:** "Show Update Notice in Chat" on the Home page turns the chat line
+  off
+
+---
+
 ## v4.13.12
 
 ### Minimap
