@@ -625,6 +625,8 @@ end
 function L.loadEUIWindows(overrides)
     installMock(overrides, {})
     local KE = { Skins = {} }
+    -- The `since` gate compares through KE:CompareVersions.
+    helpers.loadModule("Core/VersionCompare.lua", KE)
     return helpers.loadModule("Modules/Skinning/DarkTheme/EUIWindows.lua", KE), KE
 end
 
@@ -826,6 +828,7 @@ end
 -- was invisible to busted. Returns the composed KE.
 function L.loadSkinAPI_EUIWindows(overrides)
     local KE = L.loadSkinAPI(overrides)
+    helpers.loadModule("Core/VersionCompare.lua", KE)
     helpers.loadModule("Modules/Skinning/DarkTheme/EUIWindows.lua", KE)
     return KE
 end

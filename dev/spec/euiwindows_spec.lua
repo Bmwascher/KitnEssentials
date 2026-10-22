@@ -28,31 +28,6 @@ describe("EUIWindows", function()
         }
     end
 
-    describe("CompareVersion", function()
-        it("orders by numeric segment, not by string", function()
-            local _, KE = loader.loadEUIWindows()
-            -- "8.6.10" > "8.6.4" numerically but < as a string. Getting this
-            -- wrong would silently un-suppress three windows on a future
-            -- EllesmereUI.
-            assert.equal(1, KE.Skins.CompareVersion("8.6.10", "8.6.4"))
-            assert.equal(-1, KE.Skins.CompareVersion("8.5.9", "8.6.4"))
-            assert.equal(0, KE.Skins.CompareVersion("8.6.4", "8.6.4"))
-        end)
-
-        it("treats a missing or unparseable version as lower", function()
-            local _, KE = loader.loadEUIWindows()
-            assert.equal(-1, KE.Skins.CompareVersion(nil, "8.6.4"))
-            assert.equal(-1, KE.Skins.CompareVersion("", "8.6.4"))
-            assert.equal(-1, KE.Skins.CompareVersion("v-unknown", "8.6.4"))
-        end)
-
-        it("tolerates differing segment counts", function()
-            local _, KE = loader.loadEUIWindows()
-            assert.equal(-1, KE.Skins.CompareVersion("8.6", "8.6.1"))
-            assert.equal(0, KE.Skins.CompareVersion("8.6.0", "8.6"))
-        end)
-    end)
-
     describe("BuildSkinSuppressionSet", function()
         it("suppresses a skin EllesmereUI owns", function()
             local _, KE = loader.loadEUIWindows()

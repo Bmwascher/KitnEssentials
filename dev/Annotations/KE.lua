@@ -851,6 +851,14 @@ function KE:FlushPendingReloadPrompt() end
 ---@return string?
 function KE:BuildNicknameKey(rawName, fallbackRealm) end
 
+-- ─── Versions (Core/VersionCompare.lua) ────────────────────
+--- Numeric-segment version compare; a missing segment counts as 0 and an
+--- unparseable value sorts lowest.
+---@param a string?
+---@param b string?
+---@return number # -1 | 0 | 1
+function KE:CompareVersions(a, b) end
+
 -- ─── Skinning (Modules/Skinning/DarkTheme/EUIWindows.lua) ──────────
 --- Pure. Which of our skin keys EllesmereUI already covers.
 ---@param env { loaded: boolean, version: string?, getStyle: (fun(euiKey: string): string?)? }
