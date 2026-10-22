@@ -1520,16 +1520,20 @@ function PB:RunPreviewTimer(icon, index, now)
     if not keep then cooldown:SetCooldown(now - offset, duration) end
 end
 
--- The next row's trinket buff, so a row's trinket cell never repeats its own
--- trinket buff sample. Only a spell the Trinkets list switches on.
+-- The first of the other rows' trinket buffs the Trinkets list switches on,
+-- from the next row, so a row's trinket cell never repeats its own buff sample.
 local function SampleTrinkets(row, db)
     local listed = KE.AuraRules.BuildIncludeSpellIDs(db.ListTrinkets)
-    local spellID = PREVIEW_BUFFS[row % #PREVIEW_BUFFS + 1].trinket
-    if not listed[spellID] then return {} end
-    return { {
-        id = spellID, key = CDRules.TrinketKey(spellID), kind = "trinket", buffs = { spellID },
-        cd = PREVIEW_TRINKET_CD, trinket = true, texture = C_Spell.GetSpellTexture(spellID),
-    } }
+    for j = 1, #PREVIEW_BUFFS - 1 do
+        local spellID = PREVIEW_BUFFS[(row + j - 1) % #PREVIEW_BUFFS + 1].trinket
+        if listed[spellID] then
+            return { {
+                id = spellID, key = CDRules.TrinketKey(spellID), kind = "trinket", buffs = { spellID },
+                cd = PREVIEW_TRINKET_CD, trinket = true, texture = C_Spell.GetSpellTexture(spellID),
+            } }
+        end
+    end
+    return {}
 end
 
 -- In the live row's order, cut to Max Cooldown Icons: the spec's switched-on
