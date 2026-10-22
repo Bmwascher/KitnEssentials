@@ -692,7 +692,13 @@ local function Index(specID, tree, config, want)
             local entry = C_Traits.GetEntryInfo(config, entryID)
             local definitionID = type(entry) == "table" and entry.definitionID
             local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
-            local talent = type(definition) == "table" and definition.spellID
+            -- A talent missing from the index reads 0, so an entry that cannot
+            -- be read fails the walk instead of leaving a gap.
+            if type(entry) ~= "table" or (definitionID and type(definition) ~= "table") then
+                misses[specID] = (misses[specID] or 0) + 1
+                return nil
+            end
+            local talent = definition and definition.spellID
             if talent and want[talent] then
                 local spots = found[talent] or {}
                 found[talent] = spots
@@ -726,8 +732,8 @@ end
 -- inspect data, a loadout not of this spec's class, no wanted talent found,
 -- or a node unreadable; the reader counts that as a miss. A second result
 -- true means the answer is skipped without a miss: a first walk would run in
--- combat.
-local function ReadRanks(specID, config)
+-- combat. The first walk's gate is Rules.FirstWalk.
+local function ReadRanks(specID, config, loadoutSpec)
     local out = {}
     local rules = KE.PartyCooldownsRules
     local talents = rules.TalentsFor(specID)
@@ -743,8 +749,9 @@ local function ReadRanks(specID, config)
     if not HasTree(trees, tree) then return nil end
     local found = index[specID]
     if not found then
-        if (misses[specID] or 0) >= MAX_MISSES then return nil end
-        if InCombatLockdown() then return nil, true end
+        local walk = rules.FirstWalk((misses[specID] or 0) >= MAX_MISSES, specID, loadoutSpec, InCombatLockdown())
+        if walk == "miss" then return nil end
+        if walk == "skip" then return nil, true end
         found = Index(specID, tree, config, talents.want)
         if not found then return nil end
     end
@@ -763,7 +770,7 @@ local function ReadRanks(specID, config)
             out[talent] = rank
         end
     end
-    return out
+    return rules.FillAbsent(out, talents, found, boxOn)
 end
 
 -- A member's unreadable reads belong to the answer: a new spec gets its own
@@ -809,7 +816,7 @@ Spec.readers[#Spec.readers + 1] = {
             m.talentsRetryAt = nil
             wipe(misses)
         end
-        local ok, ranks, skip = pcall(ReadRanks, m.spec, INSPECT_CONFIG)
+        local ok, ranks, skip = pcall(ReadRanks, m.spec, INSPECT_CONFIG, m.inspected)
         if ok and ranks then
             m.talents, m.talentMisses, m.talentsStale = ranks, nil, nil
             return
@@ -836,7 +843,7 @@ Spec.readers[#Spec.readers + 1] = {
         if m.talents ~= nil or not m.spec then return end
         local config = Ask(C_ClassTalents.GetActiveConfigID)
         if config == nil then return end
-        local ok, ranks, skip = pcall(ReadRanks, m.spec, config)
+        local ok, ranks, skip = pcall(ReadRanks, m.spec, config, m.spec)
         if ok and ranks then
             m.talents = ranks
         elseif ok and skip then

@@ -751,6 +751,37 @@ describe("PartyCooldownsRules.AfterTalentMisses", function()
     end)
 end)
 
+describe("PartyCooldownsRules.FillAbsent", function()
+    it("reads a wanted talent the trees lack as rank 0, keeping found ranks and unread box talents", function()
+        local R = loadRules()
+        local talents = { want = { [1] = true, [2] = true, [3] = true }, boxOnly = { [3] = true } }
+        local found = { [1] = { {} } }
+        local cases = {
+            { name = "box off", boxOn = false, want = { [1] = 2, [2] = 0 } },
+            { name = "box on", boxOn = true, want = { [1] = 2, [2] = 0, [3] = 0 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.FillAbsent({ [1] = 2 }, talents, found, case.boxOn), case.name)
+        end
+    end)
+end)
+
+describe("PartyCooldownsRules.FirstWalk", function()
+    it("walks only an unspent spec's own loadout out of combat", function()
+        local R = loadRules()
+        local cases = {
+            { name = "own loadout", spent = false, loadout = 65, combat = false, want = "walk" },
+            { name = "tries spent", spent = true, loadout = 65, combat = false, want = "miss" },
+            { name = "another spec's loadout", spent = false, loadout = 70, combat = false, want = "miss" },
+            { name = "no loadout spec", spent = false, loadout = nil, combat = false, want = "miss" },
+            { name = "in combat", spent = false, loadout = 65, combat = true, want = "skip" },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.FirstWalk(case.spent, 65, case.loadout, case.combat), case.name)
+        end
+    end)
+end)
+
 describe("PartyCooldownsRules.TrinketReadStands", function()
     it("lets a read with an empty slot stand only once a second read agrees", function()
         local R = loadRules()
