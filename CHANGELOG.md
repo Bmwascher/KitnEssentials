@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.13.7
+
+### Party Cooldowns
+
+- Talents from another spec no longer hide a cooldown's other talent changes:
+  Holy and Retribution Paladins now count Improved Blessing of Protection,
+  Unbreakable Spirit and their Avenging Wrath talents
+
+---
+
 ## v4.13.6
 
 ### DoT Tracker
