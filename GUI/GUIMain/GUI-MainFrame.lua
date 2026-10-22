@@ -636,8 +636,8 @@ function GUIFrame:CreateMainFrame()
     local versionText = bottomBar:CreateFontString(nil, "OVERLAY")
     versionText:SetPoint("LEFT", bottomBar, "LEFT", T.paddingSmall, 0)
     KE:ApplyThemeFont(versionText, "small")
-    versionText:SetText("|cff888888v" .. (KE.Version or "?") .. "|r")
     GUIFrame.versionText = versionText
+    GUIFrame:RefreshVersionText()
 
     -- Resize grip (right side, custom texture)
     local resizeGrip = CreateFrame("Button", nil, bottomBar)
