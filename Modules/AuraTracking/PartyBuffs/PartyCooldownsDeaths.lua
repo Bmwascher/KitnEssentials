@@ -13,6 +13,7 @@ local KE = select(2, ...)
 
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
+local geterrorhandler = geterrorhandler
 local UnitExists = UnitExists
 local UnitIsConnected = UnitIsConnected
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
@@ -63,7 +64,11 @@ function Deaths.Scan(seed)
                     -- A refused GUID read leaves the row match to the token.
                     local okGUID, guid = pcall(KE.GetSafeUnitGUID, KE, token)
                     local ok, cut = pcall(onDeath, token, okGUID and guid or nil)
-                    if ok and type(cut) == "number" then Deaths.cuts = Deaths.cuts + cut end
+                    if not ok then
+                        geterrorhandler()(cut)
+                    elseif type(cut) == "number" then
+                        Deaths.cuts = Deaths.cuts + cut
+                    end
                 end
             end
         end

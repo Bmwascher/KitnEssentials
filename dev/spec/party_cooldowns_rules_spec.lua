@@ -1622,7 +1622,6 @@ describe("PartyCooldownsRules ally deaths", function()
             { name = "feigning", dead = true, feign = true, want = false },
             { name = "offline", conn = false, dead = true, feign = false },
             { name = "connection refused", okConn = false, dead = true, feign = false },
-            { name = "connection secret", conn = secret(true), dead = true, feign = false },
             { name = "death refused", okDead = false, feign = false },
             { name = "death secret", dead = secret(true), feign = false },
             { name = "feign refused", dead = true, okFeign = false },

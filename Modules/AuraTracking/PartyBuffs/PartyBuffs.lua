@@ -1174,7 +1174,6 @@ end
 function PB:OnRoster()
     self:ClearQueue()
     self:KeepRosterRows()
-    -- A token may name someone else now, so its next read only records.
     Deaths.Scan(true)
     -- A token can name someone else now, so the inspect list empties until the
     -- rows rebind (a kept row can add its member back sooner); whoever left

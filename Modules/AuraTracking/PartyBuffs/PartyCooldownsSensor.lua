@@ -20,6 +20,7 @@ local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local GetCursorPosition = GetCursorPosition
 local GetTime = GetTime
+local geterrorhandler = geterrorhandler
 local UIParent = UIParent
 local ipairs = ipairs
 local issecretvalue = issecretvalue
@@ -295,7 +296,10 @@ local function Tick()
     if n == lastN then return end
     lastN = n
     -- First, so a cut it makes is drawn this second.
-    if Track.onSecond then pcall(Track.onSecond, n) end
+    if Track.onSecond then
+        local ok, err = pcall(Track.onSecond, n)
+        if not ok then geterrorhandler()(err) end
+    end
     local shown = UIParent:IsShown()
     local checking = Track.chargeCheck == nil and Track.checkProbe ~= nil
     if shown and checking then
