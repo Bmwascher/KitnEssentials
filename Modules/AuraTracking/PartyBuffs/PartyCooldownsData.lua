@@ -182,6 +182,7 @@ end
 -- Trinkets whose buff aura carries another ID than the item's use spell.
 Data.TRINKET_BUFFS = {
     [1291894] = { 1307578 }, -- Soulcoiler Ritual Vessel
+    [1254339] = { 1255200 }, -- Unstable Felheart Crystal
 }
 
 -- Talent changes to a cast's cooldown, per rank: add seconds or pct percent,
