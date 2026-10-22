@@ -20,6 +20,7 @@ local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local GetCursorPosition = GetCursorPosition
 local GetTime = GetTime
+local geterrorhandler = geterrorhandler
 local UIParent = UIParent
 local ipairs = ipairs
 local issecretvalue = issecretvalue
@@ -76,6 +77,9 @@ local T0 = GetTime() - 1024
 
 Track.live = {}
 Track.slots = {}
+-- Run under pcall once a second by the ticker, before the trackers; nil
+-- unless the death watch is on (PartyCooldownsDeaths.lua).
+Track.onSecond = nil
 
 local sensHost, ticker, lastN
 local sensorsShown = false
@@ -291,6 +295,11 @@ local function Tick()
     local n = Track.Now()
     if n == lastN then return end
     lastN = n
+    -- First, so a cut it makes is drawn this second.
+    if Track.onSecond then
+        local ok, err = pcall(Track.onSecond, n)
+        if not ok then geterrorhandler()(err) end
+    end
     local shown = UIParent:IsShown()
     local checking = Track.chargeCheck == nil and Track.checkProbe ~= nil
     if shown and checking then
@@ -768,6 +777,31 @@ function Track.ChargeRestrictionsEnded()
             if t and Rules.HiddenChargeClear(t, n, issecretvalue) then Push(t, n) end
         end
     end
+end
+
+-- Whether a party row holds a cell an ally's death cuts.
+function Track.HasCut(st)
+    if st.units then return false end
+    for i = 1, st.count do
+        if st.entries[i].cut and st.trackers[i] then return true end
+    end
+    return false
+end
+
+-- An ally's death on one row. A cell that is not ready moves too, and Reveal
+-- draws it when it shows. Returns how many cells were cut.
+function Track.DeathCut(st, n)
+    if st.units then return 0 end
+    local cut = 0
+    for i = 1, st.count do
+        local t, e = st.trackers[i], st.entries[i]
+        if t and e.cut and Rules.DeathCut(t, e.cut, n) then
+            cut = cut + 1
+            if st.ready[i] then Push(t, n) end
+        end
+    end
+    if cut > 0 then Track.Wake() end
+    return cut
 end
 
 -- Sensors take it as their filter signature too, so a new length does not

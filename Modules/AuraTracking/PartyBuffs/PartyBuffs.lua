@@ -57,6 +57,7 @@ local Track = KE.PartyCooldownsSensor
 local Pot = KE.PartyPotions
 local PotRules = KE.PartyPotionsRules
 local HX = KE.HealerExternals
+local Deaths = KE.PartyCooldownsDeaths
 
 -- Times each group build and logs every candidate frame, binding and watched
 -- show or hide.
@@ -232,6 +233,7 @@ function PB:Deactivate()
         if self.slots[k] then self.slots[k].member = nil end
     end
     Spec.Deactivate()
+    Deaths.Off()
     Track.HideSensors()
     Pot.Deactivate()
     HX.Deactivate()
@@ -375,6 +377,7 @@ function PB:DropSlot(k)
     slot.holder:Hide()
     -- A skipped clear leaves only a hidden frame's old point.
     if KE:CanReanchorNow(slot.holder) then slot.holder:ClearAllPoints() end
+    self:SyncDeathWatch()
 end
 
 function PB:SlotComplete(k)
@@ -916,6 +919,7 @@ function PB:BindCooldowns(k, binding)
     -- Spec.Resolve announces no change, and the raid cooldowns box may read
     -- this record too. Its resolve then finds the spec unmoved.
     if m and m.spec ~= before then HX.OnMemberChanged(m) end
+    self:SyncDeathWatch()
 end
 
 -- A trinket with a cooldown icon leaves this row's while-active Trinkets
@@ -1100,6 +1104,42 @@ function PB:OnMemberChanged(m)
 end
 
 ---------------------------------------------------------------------------------
+-- Ally deaths
+---------------------------------------------------------------------------------
+-- Every live row but the dying member's; preview rows, the potion bar and the
+-- raid cooldowns box take no cut. Returns how many cells were cut.
+function PB:OnAllyDied(token, guid)
+    local n, cut = Track.Now(), 0
+    for k = 1, MAX_SLOTS do
+        local slot, binding = self.slots[k], self.bindings[k]
+        if binding and slot and slot.track then
+            local m = slot.member
+            if not CDRules.SameMember(binding.token, m and m.guid, token, guid) then
+                cut = cut + Track.DeathCut(slot.track, n)
+            end
+        end
+    end
+    Debug("ally %s died: %d cells cut", token, cut)
+    return cut
+end
+
+local function OnAllyDied(token, guid) return PB:OnAllyDied(token, guid) end
+
+-- The watch runs only while a live row holds a cell a death cuts.
+function PB:SyncDeathWatch()
+    if self.active then
+        for k = 1, MAX_SLOTS do
+            local slot = self.slots[k]
+            if self.bindings[k] and slot and slot.track and Track.HasCut(slot.track) then
+                Deaths.On(OnAllyDied)
+                return
+            end
+        end
+    end
+    Deaths.Off()
+end
+
+---------------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------------
 -- A row stays up, with its counts, while its frame still shows its token and
@@ -1134,6 +1174,7 @@ end
 function PB:OnRoster()
     self:ClearQueue()
     self:KeepRosterRows()
+    Deaths.Scan(true)
     -- A token can name someone else now, so the inspect list empties until the
     -- rows rebind (a kept row can add its member back sooner); whoever left
     -- is read again if they come back.

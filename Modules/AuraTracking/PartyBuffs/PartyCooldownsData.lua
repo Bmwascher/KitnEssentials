@@ -185,6 +185,12 @@ Data.TRINKET_BUFFS = {
     [1254339] = { 1255200 }, -- Unstable Felheart Crystal
 }
 
+-- Seconds one ally's death takes off a trinket's cooldown, by use spell. Each
+-- stays under the cell's roll period, CODES times its code unit.
+Data.DEATH_CUTS = {
+    [1291894] = 30, -- Soulcoiler Ritual Vessel
+}
+
 -- Talent changes to a cast's cooldown, per rank: add seconds or pct percent,
 -- and spec limits one to a spec. A cell counts the length once every talent a
 -- mod names is read.
