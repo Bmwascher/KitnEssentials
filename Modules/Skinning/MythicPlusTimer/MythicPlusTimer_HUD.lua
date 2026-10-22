@@ -1150,7 +1150,7 @@ function MPT:RenderForces()
     -- through the same sinks. Live runs are fed by MythicPlusTimer_Pull.lua.
     if self.isPreview then
         if db.ShowPullOverlay then
-            self:SetPullDisplay(36, "36", "15.00")
+            self:SetPullDisplay(36, "36", 15)
         else
             self:ClearPullDisplay()
         end
@@ -1158,12 +1158,12 @@ function MPT:RenderForces()
 end
 
 ---------------------------------------------------------------------------------
--- Pull-estimate sinks. `count`, `countText` and `percentText` may be secret:
+-- Pull-estimate sinks. `count`, `countText` and `percent` may be secret:
 -- they go straight into SetValue / SetFormattedText and are never read back,
 -- compared, measured or cached (SetTextGated / SetValueGated would compare).
 ---------------------------------------------------------------------------------
 
-function MPT:SetPullDisplay(count, countText, percentText)
+function MPT:SetPullDisplay(count, countText, percent)
     local f    = self.frames and self.frames.root
     local bars = self.frames and self.frames.bars
     local db   = self.db
@@ -1188,11 +1188,11 @@ function MPT:SetPullDisplay(count, countText, percentText)
     local fs = f.forcesPullText
     local mode = MPT.PullTextFormat(db.ForcesFormat)
     if mode == "COUNT_PERCENT" then
-        fs:SetFormattedText("(+%s - %s%%)", countText, percentText)
+        fs:SetFormattedText("(+%s - %.2f%%)", countText, percent)
     elseif mode == "COUNT" then
         fs:SetFormattedText("(+%s)", countText)
     else
-        fs:SetFormattedText("(+%s%%)", percentText)
+        fs:SetFormattedText("(+%.2f%%)", percent)
     end
     local tc = db.ForcesTextColor or { 1, 1, 1 }
     self.SetColorGated(fs, tc[1], tc[2], tc[3])

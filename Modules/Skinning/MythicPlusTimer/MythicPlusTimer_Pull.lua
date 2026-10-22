@@ -25,8 +25,6 @@ local UnitCanAttack = UnitCanAttack
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitThreatSituation = UnitThreatSituation
 local UnitPlayerControlled = UnitPlayerControlled
-local AbbreviateNumbers = AbbreviateNumbers
-local CreateAbbreviateConfig = CreateAbbreviateConfig
 local issecretvalue = issecretvalue or function() return false end
 local wipe = wipe
 local strfind = string.find
@@ -114,6 +112,20 @@ end
 -- means.
 local bars, barsInUse = {}, 0
 
+-- A frame scaled by total / 100 on the chain's end reads the summed count as
+-- a percent in its own units, still secret, for a %.2f format. Whole counts
+-- fill whole units, so the end is exact; a fill of a fractional width snaps.
+local pctReader
+
+local function PercentReader(total)
+    if not pctReader then
+        pctReader = CreateFrame("Frame")
+        pctReader:SetSize(1, 1)
+    end
+    pctReader:SetScale(total / 100)
+    return pctReader
+end
+
 local function AcquireBar()
     barsInUse = barsInUse + 1
     local bar = bars[barsInUse]
@@ -134,25 +146,7 @@ local function ReleasePool()
         bar:SetValue(0)
     end
     barsInUse = 0
-end
-
-local abbrevTotal, abbrevConfig
-local function PercentConfig(total)
-    if abbrevTotal ~= total then
-        abbrevTotal = total
-        abbrevConfig = {
-            config = CreateAbbreviateConfig({
-                {
-                    breakpoint = 0.00001,
-                    abbreviation = "",
-                    significandDivisor = total / 10000,
-                    fractionDivisor = 100,
-                    abbreviationIsGlobal = false,
-                },
-            }),
-        }
-    end
-    return abbrevConfig
+    if pctReader then pctReader:ClearAllPoints() end
 end
 
 ---------------------------------------------------------------------------------
@@ -209,13 +203,13 @@ local function Deliver(b)
     end
     -- The endpoint may be secret: classify first, never compare or store it.
     local endpoint = b.endpoint:GetRight()
+    local percent = pctReader and pctReader:GetLeft()
     ReleasePool()
-    if not issecretvalue(endpoint) and type(endpoint) ~= "number" then
+    if (not issecretvalue(endpoint) and type(endpoint) ~= "number")
+        or (not issecretvalue(percent) and type(percent) ~= "number") then
         if MPT.ClearPullDisplay then MPT:ClearPullDisplay() end
     elseif MPT.SetPullDisplay then
-        MPT:SetPullDisplay(endpoint,
-            C_StringUtil.RoundToNearestString(endpoint),
-            AbbreviateNumbers(endpoint, PercentConfig(b.total)))
+        MPT:SetPullDisplay(endpoint, C_StringUtil.RoundToNearestString(endpoint), percent)
     end
     if dirty then MPT:RequestPullEstimate() end
 end
@@ -264,6 +258,7 @@ local function Build()
         if MPT.ClearPullDisplay then MPT:ClearPullDisplay() end
         return
     end
+    PercentReader(total):SetPoint("LEFT", prevTex, "RIGHT", 0, 0)
     if DEBUG_PULL then KE:Print(("[MPT pull] build: %d admitted, %d counted, total %d"):format(#batchTokens, accepted, total)) end
     local b = { epoch = epoch, total = total, credited = credited, n = #batchTokens, gens = gens, endpoint = prevTex }
     batch = b

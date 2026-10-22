@@ -21,6 +21,7 @@ describe("MPT pull: scheduler and lifecycle", function()
     local counts             -- [token] = forces count handed to the calculator
     local criteria           -- [token] = criteria reads this build made
     local endpoint           -- what the endpoint bar's GetRight returns
+    local percent            -- what the percent reader's GetLeft returns
     local shown, cleared     -- SetPullDisplay records / ClearPullDisplay count
     local bars               -- StatusBars the calculator created
 
@@ -50,7 +51,7 @@ describe("MPT pull: scheduler and lifecycle", function()
     before_each(function()
         now, afters, timers = 0, {}, {}
         plates, units, counts, bars, criteria = {}, {}, {}, {}, {}
-        endpoint = 49
+        endpoint, percent = 49, 16.9
         shown, cleared = {}, 0
         local frames = mock.install({
             GetTime = function() return now end,
@@ -78,6 +79,9 @@ describe("MPT pull: scheduler and lifecycle", function()
                 function f:Show() self.shown = true end
                 function f:Hide() self.shown = false end
                 bars[#bars + 1] = f
+            elseif kind == "Frame" then
+                function f:SetScale() end
+                function f:GetLeft() return percent end
             end
             return f
         end
@@ -97,8 +101,6 @@ describe("MPT pull: scheduler and lifecycle", function()
             return counts[u]
         end }
         _G.C_StringUtil = { RoundToNearestString = function(v) return "r" .. tostring(v) end }
-        _G.AbbreviateNumbers = function(v) return "p" .. tostring(v) end
-        _G.CreateAbbreviateConfig = function() return {} end
 
         helpers.loadModule("Modules/Skinning/MythicPlusTimer/MythicPlusTimer_Pull.lua",
             { Print = function() end })
@@ -109,8 +111,8 @@ describe("MPT pull: scheduler and lifecycle", function()
         MPT.run = { active = true, completed = false,
                     forces = { total = 290, current = 204, completed = false } }
         MPT.isPreview = nil
-        MPT.SetPullDisplay = function(_, count, countText, percentText)
-            shown[#shown + 1] = { count, countText, percentText }
+        MPT.SetPullDisplay = function(_, count, countText, pct)
+            shown[#shown + 1] = { count, countText, pct }
         end
         MPT.ClearPullDisplay = function() cleared = cleared + 1 end
 
@@ -128,7 +130,7 @@ describe("MPT pull: scheduler and lifecycle", function()
         assert.are.equal(0, timers[1].delay)
         cycle()
         assert.are.equal(1, #shown)
-        assert.are.same({ 49, "r49", "p49" }, shown[1])
+        assert.are.same({ 49, "r49", 16.9 }, shown[1])
         -- origin bar plus one bar per counted unit, each fed its count directly
         assert.are.equal(3, #bars)
         assert.are.equal(0, bars[1].values[1])
