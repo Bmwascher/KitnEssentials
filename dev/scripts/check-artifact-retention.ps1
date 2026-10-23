@@ -45,7 +45,9 @@
 #     `closed: YYYY-MM-DD` line closes it. A member belongs to its program,
 #     whatever its own ledger says: silent while the program is open, [I]
 #     with it once closed. A member with a pending round, a keep entry or a
-#     second program listing it holds the whole program as [U].
+#     second program listing it holds the whole program as [U]. A bullet that
+#     is not one bare folder name (a path, programs, panels, ..) is no member:
+#     it is an [I] note, and it blocks a closed program from -Archive and -Pick.
 #   - programs/active-masters.tsv, next-program-opening.md,
 #     next-program-deferrals.md and .migrated are fixed and silent.
 #   - everything else is [U]: no ledger, no finish line, a last finish line
@@ -65,9 +67,9 @@
 # a docs-root entry is written docs:<path>, and is read from the PRIMARY
 # checkout's keep file, since every checkout shares one docs root. A
 # checkout-path entry naming the docs root is a FAIL: it would match nothing.
-# An entry exempts that path (and, for [B], any entry containing it) from [A],
-# [B], [E], [H], [I] and [U] while the local branch is unmerged or through the
-# end of the named day.
+# An entry exempts that path from [A], [B], [C], [E], [H], [I] and [U], and any
+# entry containing it from [B], [C], [H], [I] and [U], while the local branch
+# is unmerged or through the end of the named day.
 # Work with no branch yet takes the dated form; frozen-but-unbuilt plans use
 # the branch they will land on.
 #
@@ -82,8 +84,9 @@
 # the docs root> (the year of its ledger's first date), a program to
 # programs/<name>/ with its members under programs/<name>/features/. -Pick
 # moves the named [U] entries the same way, a held program with its members,
-# and refuses a folder two programs list or a program holding one or a kept
-# member. A path already taken gets a timestamp suffix, and each move writes a
+# and refuses a folder two programs list or a program holding one, a kept
+# member or a bullet that is not a folder name. A path already taken gets a
+# timestamp suffix, and each move writes a
 # line to MANIFEST-<date>.txt there before it runs; a failed or reversed move
 # adds a `not moved` line. Folders move with Directory.Move, which fails whole
 # when a file inside is open; such an entry stays and is a FAIL. A program
@@ -283,14 +286,16 @@ foreach ($e in $entries) {
     }
 }
 
-# [C] review mirrors whose commit is in main
+# [C] review mirrors whose commit is in main, unless kept or holding a kept path
 $mirrors = Full '.superpowers/review-sources'
 if ($gitOk -and (Test-Path -LiteralPath $mirrors)) {
     foreach ($mdir in Get-ChildItem -LiteralPath $mirrors -Directory) {
         $m = [regex]::Match($mdir.Name, '-([0-9a-f]{7,40})$')
         if ($m.Success) {
+            $mirrorRel = Rel $mdir.FullName
+            if ((IsKept $mirrorRel) -or (SheltersKept $mirrorRel)) { continue }
             & git -C $root merge-base --is-ancestor $m.Groups[1].Value main 2>$null
-            if ($LASTEXITCODE -eq 0) { $stale += Rel $mdir.FullName }
+            if ($LASTEXITCODE -eq 0) { $stale += $mirrorRel }
             elseif ($LASTEXITCODE -ne 1 -and $LASTEXITCODE -ne 128) { $gitOk = $false }
         }
     }
@@ -356,22 +361,31 @@ function HasPendingRound([string]$dir) {
     if (-not (Test-Path -LiteralPath $rounds -PathType Container)) { return $false }
     return [bool]@(@(Get-ChildItem -LiteralPath $rounds -Directory -Force) | Where-Object { $_.Name -notmatch '\.dead\d+$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'pending.json')) }).Count
 }
-# A program's members and closed date; $null when the folder holds no program.md.
-# The Feature folders section ends where Get-Section in program-master.ps1 ends one.
+# A member bullet names one folder directly under the docs root; anything
+# else would move a path that is not a feature folder.
+function IsFolderName([string]$name) {
+    return [bool]($name -notmatch '[\\/:*?"<>|]' -and $name.Trim('.') -and $name -notin @('programs', 'panels'))
+}
+# A program's members, its bullets that are no folder name, and its closed
+# date; $null when the folder holds no program.md. The Feature folders section
+# ends where Get-Section in program-master.ps1 ends one.
 function ProgramInfo([string]$dir) {
     $doc = Join-Path $dir 'program.md'
     if (-not (Test-Path -LiteralPath $doc -PathType Leaf)) { return $null }
-    $members = @(); $closedOn = $null; $inside = $false
+    $members = @(); $invalid = @(); $closedOn = $null; $inside = $false
     foreach ($l in Get-Content -LiteralPath $doc) {
         if (-not $closedOn -and $l -match '^closed:\s*(\d{4}-\d{2}-\d{2})\s*$') { $closedOn = $Matches[1] }
         if ($inside -and ($l -match '^## ' -or $l -match '^---\s*$')) { $inside = $false }
         if ($l -match '^##\s+Feature folders\s*$') { $inside = $true; continue }
-        if ($inside -and $l -match '^\s*[-*]\s+`([^`]+)`') { $members += $Matches[1].Trim().TrimEnd('/') }
+        if ($inside -and $l -match '^\s*[-*]\s+`([^`]+)`') {
+            $name = $Matches[1].Trim().TrimEnd('/')
+            if (IsFolderName $name) { $members += $name } else { $invalid += $name }
+        }
     }
     # A name listed twice in one program is one member (hashtable keys ignore case).
     $seen = @{}
     $members = @($members | Where-Object { if ($seen.ContainsKey($_)) { $false } else { $seen[$_] = 1; $true } })
-    return [pscustomobject]@{ closed = $closedOn; members = $members }
+    return [pscustomobject]@{ closed = $closedOn; members = $members; invalid = $invalid }
 }
 # $refuse, when set, is why -Pick must not move the entry.
 function AddUnknown($item, [string]$reason, $program, [string]$refuse) {
@@ -497,8 +511,9 @@ if ($docsRoot -and -not $migrationWait) {
                 if (-not ((IsKept $rel) -or (SheltersKept $rel))) { AddUnknown $e 'program without program.md' $null }
                 continue
             }
-            $p = [pscustomobject]@{ item = $e; rel = $rel; closed = $info.closed; members = $info.members; blocks = @(); pending = @() }
+            $p = [pscustomobject]@{ item = $e; rel = $rel; closed = $info.closed; members = $info.members; invalid = $info.invalid; blocks = @(); pending = @() }
             $programs += $p
+            if (-not ((IsKept $rel) -or (SheltersKept $rel))) { foreach ($b in $info.invalid) { $notes += "[I] not a feature folder name in ${rel}: $b" } }
             foreach ($m in $p.members) {
                 $k = $m.ToLower()
                 if (-not $owners.ContainsKey($k)) { $owners[$k] = @() }
@@ -543,6 +558,7 @@ if ($docsRoot -and -not $migrationWait) {
     # -Pick; a pending round only holds it, and -Pick may still move it.
     foreach ($p in $programs) {
         if ((IsKept $p.rel) -or (SheltersKept $p.rel) -or -not $p.closed) { continue }
+        foreach ($b in $p.invalid) { $p.blocks += "not a feature folder name: $b" }
         foreach ($m in $p.members) {
             $mdir = Join-Path $docsRoot $m
             $mrel = "docs:$m"

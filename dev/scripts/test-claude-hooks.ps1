@@ -375,8 +375,10 @@ try {
         Check "parsec-docs-root: $($c.name)" ($code -eq $c.code -and ($null -eq $c.want -or $out -eq $c.want)) "exit $code, $out"
     }
     $fromWt = (& pwsh -NoProfile -File $rr -Root $wt | Out-String).Trim()
+    $codeWt = $LASTEXITCODE
     $fromRoot = (& pwsh -NoProfile -File $rr -Root $root | Out-String).Trim()
-    Check 'parsec-docs-root: a worktree reads the primary''s config' ($fromWt -ne '' -and $fromWt -eq $fromRoot) "$fromWt vs $fromRoot"
+    $codeRoot = $LASTEXITCODE
+    Check 'parsec-docs-root: a worktree reads the primary''s config' ($codeWt -eq 0 -and $codeRoot -eq 0 -and $fromWt -ne '' -and $fromWt -eq $fromRoot) "exit $codeWt/$codeRoot, $fromWt vs $fromRoot"
     # The master registry lives under the docs root; a missing root refuses
     # -Register and -Unregister and keeps -LogEvent and -Recover quiet.
     $mproj = Join-Path $outside 'mproj'
@@ -406,9 +408,10 @@ try {
         }
         New-Item -ItemType Directory -Path $mdocs | Out-Null
         & pwsh -NoProfile -File $mpm -Register $mdoc *> $null
+        $regCode = $LASTEXITCODE
         $reg = Join-Path $mdocs 'programs\active-masters.tsv'
         $line = if (Test-Path $reg) { (Get-Content $reg -Raw) } else { '' }
-        Check 'program-master: a control document outside the checkout is registered by its absolute path' ($line -match [regex]::Escape(($mdoc -replace '\\', '/'))) $line
+        Check 'program-master: a control document outside the checkout is registered by its absolute path' ($regCode -eq 0 -and $line -match [regex]::Escape(($mdoc -replace '\\', '/'))) "exit $regCode, $line"
     } finally {
         $env:KE_PROGRAM_MASTERS = $msaved.reg; $env:CLAUDE_CODE_SESSION_ID = $msaved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $msaved.hid
     }
@@ -459,6 +462,7 @@ try {
         'programs\2026-01-05-noprog\scoping.md' = "# s`n"
         'programs\2026-01-06-keptheld\program.md' = "# Kept held`nclosed: 2026-01-06`n`n## Feature folders`n`n- ``01-17-kept-member```n"
         'programs\2026-01-07-locked\program.md' = "# Locked`nclosed: 2026-01-07`n`n## Feature folders`n`n- ``01-16-locked-member```n"
+        'programs\2026-01-08-badlist\program.md' = "# Bad list`nclosed: 2026-01-08`n`n## Feature folders`n`n- ``programs/2026-01-05-noprog```n"
         'programs\2026-01-01-loose.md' = "# loose`n"
         'programs\active-masters.tsv' = ''
         'programs\.migrated' = "migrated`n"
@@ -472,9 +476,13 @@ try {
     Get-ChildItem -LiteralPath $rdocs -Recurse -File | Where-Object { $_.FullName -notlike '*\01-10-fresh\*' -and $_.FullName -notlike '*\01-13-young\*' } | ForEach-Object { $_.LastWriteTime = $aged }
     $rret = Join-Path $rproj 'dev\scripts\check-artifact-retention.ps1'
     $dry = (& pwsh -NoProfile -File $rret -Root $rproj -Soft 2>&1 | Out-String)
+    $dryOk = $LASTEXITCODE -eq 0 -and $dry -notmatch 'FAIL \[script\]'
     # A file held open makes the locked program's member move fail during -Archive.
     $lock = [System.IO.File]::Open((Join-Path $rdocs '01-16-locked-member\notes.md'), 'Open', 'Read', 'None')
-    try { $arch = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Archive 2>&1 | Out-String) } finally { $lock.Dispose() }
+    try {
+        $arch = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Archive 2>&1 | Out-String)
+        $archOk = $LASTEXITCODE -eq 0 -and $arch -notmatch 'FAIL \[script\]'
+    } finally { $lock.Dispose() }
     function RetMoved([string]$from, [string]$to) { (Test-Path (Join-Path $rarch $to)) -and -not (Test-Path (Join-Path $rdocs $from)) }
     function RetStays([string]$from) { Test-Path (Join-Path $rdocs $from) }
     $rows = @(
@@ -495,6 +503,7 @@ try {
         @{ n = 'programs\2026-01-03-held'; listed = 'docs:programs/2026-01-03-held \(program held: docs:01-11-held-member round pending\)'; place = (RetStays 'programs\2026-01-03-held') },
         @{ n = 'programs\2026-01-07-locked'; listed = '\[I\] closed program docs:programs/2026-01-07-locked,'; place = ($arch -match 'FAIL \[archive\] could not move docs:01-16-locked-member') -and (RetStays 'programs\2026-01-07-locked\program.md') -and -not (RetStays 'programs\2026-01-07-locked\features') -and (RetStays '01-16-locked-member') -and -not (Test-Path (Join-Path $rarch 'programs\2026-01-07-locked')) },
         @{ n = 'programs\2026-01-05-noprog'; listed = 'docs:programs/2026-01-05-noprog \(program without program.md\)'; place = (RetStays 'programs\2026-01-05-noprog') },
+        @{ n = 'programs\2026-01-08-badlist'; listed = '\[I\] not a feature folder name in docs:programs/2026-01-08-badlist: programs/2026-01-05-noprog'; place = ($dry -match 'docs:programs/2026-01-08-badlist \(program held: not a feature folder name: programs/2026-01-05-noprog\)') -and (RetStays 'programs\2026-01-08-badlist\program.md') -and (RetStays 'programs\2026-01-05-noprog') },
         @{ n = 'panels\01-01-panel'; listed = 'docs:panels/01-01-panel \(panel\)'; place = (RetStays 'panels\01-01-panel') },
         @{ n = 'programs\2026-01-01-loose.md'; listed = 'docs:programs/2026-01-01-loose.md \(loose file\)'; place = (RetStays 'programs\2026-01-01-loose.md') },
         @{ n = '01-09-kept'; listed = $null; place = (RetStays '01-09-kept') },
@@ -503,23 +512,25 @@ try {
     foreach ($r in $rows) {
         $name = $r.n -replace '\\', '/'
         $listedOk = if ($r.listed) { $dry -match $r.listed } else { $dry -notmatch [regex]::Escape("docs:$name") }
-        Check "retention docs root: $($r.n)" ($listedOk -and $r.place) "$dry`n$arch"
+        Check "retention docs root: $($r.n)" ($dryOk -and $archOk -and $listedOk -and $r.place) "$dry`n$arch"
     }
-    Check 'retention [A] sees media under the docs root' ($dry -match '\[A\] 1 media files') $dry
-    Check 'retention [F] refuses a checkout path into the docs root' ($dry -match 'FAIL \[F\] keep entry names a docs-root path by its checkout path') $dry
+    Check 'retention [A] sees media under the docs root' ($dryOk -and $dry -match '\[A\] 1 media files') $dry
+    Check 'retention [F] refuses a checkout path into the docs root' ($dryOk -and $dry -match 'FAIL \[F\] keep entry names a docs-root path by its checkout path') $dry
 
     # -Pick moves a named unknown entry, a held program with its members, and
     # refuses anything else.
-    $picked = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Pick 'docs:01-06-noledger,docs:programs/2026-01-03-held,docs:01-07-open-member,docs:programs/2026-01-06-keptheld,docs:01-14-shared' 2>&1 | Out-String)
+    $picked = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Pick 'docs:01-06-noledger,docs:programs/2026-01-03-held,docs:01-07-open-member,docs:programs/2026-01-06-keptheld,docs:01-14-shared,docs:programs/2026-01-08-badlist' 2>&1 | Out-String)
+    $pickOk = $LASTEXITCODE -eq 0 -and $picked -notmatch 'FAIL \[script\]'
     $pickYear = (Get-Date).AddDays(-40).Year
     $pickRows = @(
         @{ name = 'an unknown entry moves'; ok = (RetMoved '01-06-noledger' "parsec\$pickYear\01-06-noledger") },
         @{ name = 'a held program moves with its member'; ok = (RetMoved '01-11-held-member' 'programs\2026-01-03-held\features\01-11-held-member') },
         @{ name = 'a member of an open program is refused'; ok = ($picked -match 'FAIL \[U\] not an unknown entry: docs:01-07-open-member') -and (RetStays '01-07-open-member') },
         @{ name = 'a program held by a kept member is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:programs/2026-01-06-keptheld: docs:01-17-kept-member kept') -and (RetStays 'programs\2026-01-06-keptheld') -and (RetStays '01-17-kept-member') },
-        @{ name = 'a folder two programs list is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:01-14-shared: listed by two programs') -and (RetStays '01-14-shared') }
+        @{ name = 'a folder two programs list is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:01-14-shared: listed by two programs') -and (RetStays '01-14-shared') },
+        @{ name = 'a program blocked by a bullet that is not a folder name is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:programs/2026-01-08-badlist: not a feature folder name: programs/2026-01-05-noprog') -and (RetStays 'programs\2026-01-08-badlist') -and (RetStays 'programs\2026-01-05-noprog') }
     )
-    foreach ($r in $pickRows) { Check "retention -Pick: $($r.name)" $r.ok $picked }
+    foreach ($r in $pickRows) { Check "retention -Pick: $($r.name)" ($pickOk -and $r.ok) $picked }
 
     # A configured docs root that is missing is a FAIL; a missing fallback is silent.
     $r7 = Join-Path $outside 'r7'
@@ -527,10 +538,12 @@ try {
     foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $r7 'dev\scripts\') }
     [System.IO.File]::WriteAllText((Join-Path $r7 '.claude\parsec.toml'), "docs_root = `"$((Join-Path $outside 'nodocs') -replace '\\', '/')`"`n")
     $o7 = (& pwsh -NoProfile -File (Join-Path $r7 'dev\scripts\check-artifact-retention.ps1') -Root $r7 -Soft 2>&1 | Out-String)
-    Check 'retention: a configured docs root that is missing is a FAIL' ($o7 -match 'FAIL \[H\] docs root missing') $o7
+    $o7ok = $LASTEXITCODE -eq 0 -and $o7 -notmatch 'FAIL \[script\]'
+    Check 'retention: a configured docs root that is missing is a FAIL' ($o7ok -and $o7 -match 'FAIL \[H\] docs root missing') $o7
     Remove-Item (Join-Path $r7 '.claude\parsec.toml') -Force
     $o7 = (& pwsh -NoProfile -File (Join-Path $r7 'dev\scripts\check-artifact-retention.ps1') -Root $r7 -Soft 2>&1 | Out-String)
-    Check 'retention: a missing fallback docs root is silent' ($o7 -notmatch '\[H\]') $o7
+    $o7ok = $LASTEXITCODE -eq 0 -and $o7 -notmatch 'FAIL \[script\]'
+    Check 'retention: a missing fallback docs root is silent' ($o7ok -and $o7 -notmatch '\[H\]') $o7
 
     # Without the programs/.migrated marker the docs-root rules and -Pick wait,
     # and -Archive moves nothing from the docs root.
@@ -546,7 +559,33 @@ try {
         (Get-Item $path).LastWriteTime = (Get-Date).AddDays(-40)
     }
     $o8 = (& pwsh -NoProfile -File (Join-Path $r8 'dev\scripts\check-artifact-retention.ps1') -Root $r8 -Soft -Archive -Pick 'docs:01-01-done' 2>&1 | Out-String)
-    Check 'retention: no migration marker holds the docs-root rules and -Pick' (($o8 -match 'wait for the program migration') -and ($o8 -match '-Pick skipped') -and ($o8 -notmatch 'FAIL \[U\]') -and (Test-Path (Join-Path $r8docs '01-01-done'))) $o8
+    $o8ok = $LASTEXITCODE -eq 0 -and $o8 -notmatch 'FAIL \[script\]'
+    Check 'retention: no migration marker holds the docs-root rules and -Pick' ($o8ok -and ($o8 -match 'wait for the program migration') -and ($o8 -match '-Pick skipped') -and ($o8 -notmatch 'FAIL \[U\]') -and (Test-Path (Join-Path $r8docs '01-01-done'))) $o8
+
+    # [C] honors the keep list: a merged review mirror that is kept, or holds
+    # a kept path, is not queued for -Archive. The repository is throwaway, so
+    # its one commit on main makes every mirror named for it merged.
+    $gproj = Join-Path $outside 'gproj'
+    New-Item -ItemType Directory -Path $gproj | Out-Null
+    git -C $gproj init -q -b main 2>&1 | Out-Null
+    git -C $gproj -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty --no-verify -m init 2>&1 | Out-Null
+    $gsha = "$(git -C $gproj rev-parse --short=7 main)".Trim()
+    $gmir = Join-Path $gproj '.superpowers\review-sources'
+    foreach ($d in @("plain-$gsha", "kept-$gsha", "shelter-$gsha\inner")) { New-Item -ItemType Directory -Path (Join-Path $gmir $d) -Force | Out-Null }
+    New-Item -ItemType Directory -Path (Join-Path $gproj 'dev\docs') -Force | Out-Null
+    $until = (Get-Date).AddDays(1).ToString('yyyy-MM-dd')
+    [System.IO.File]::WriteAllText((Join-Path $gproj 'dev\docs\retention-keep.txt'), ".superpowers/review-sources/kept-$gsha|until:$until|fixture`n.superpowers/review-sources/shelter-$gsha/inner|until:$until|fixture`n")
+    $oc = (& pwsh -NoProfile -File (Join-Path $root 'dev\scripts\check-artifact-retention.ps1') -Root $gproj -Soft 2>&1 | Out-String)
+    $ocOk = $LASTEXITCODE -eq 0 -and $oc -notmatch 'FAIL \[script\]' -and $gsha -match '^[0-9a-f]{7}$'
+    $cRows = @(
+        @{ name = 'a merged mirror is queued'; dir = "plain-$gsha"; queued = $true },
+        @{ name = 'a kept mirror is not queued'; dir = "kept-$gsha"; queued = $false },
+        @{ name = 'a mirror holding a kept path is not queued'; dir = "shelter-$gsha"; queued = $false }
+    )
+    foreach ($c in $cRows) {
+        $hit = $oc -match ('(?m)^\s+\.superpowers/review-sources/' + [regex]::Escape($c.dir) + '\s*$')
+        Check "retention [C]: $($c.name)" ($ocOk -and $hit -eq $c.queued) $oc
+    }
 } finally {
     # Each step runs regardless of the others; native git exits are checked
     # because they do not throw, and any leftover fails the run.
