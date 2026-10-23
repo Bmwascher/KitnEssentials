@@ -55,8 +55,11 @@ local function NormalizeRealm(realm)
     return stripped ~= "" and stripped or nil
 end
 
-function KE.ChatRoleIconKeys(name, realm, playerRealm)
+-- With surnames on, realm is the member's surname: the one key is the joined
+-- name chat shows, and the player's surname never stands in for it.
+function KE.ChatRoleIconKeys(name, realm, playerRealm, surnames)
     if type(name) ~= "string" or name == "" then return nil end
+    if surnames then return KE:JoinCharacterName(name, realm) end
     local qualifier = NormalizeRealm(realm) or NormalizeRealm(playerRealm)
     if not qualifier then return name end
     return name, name .. "-" .. qualifier

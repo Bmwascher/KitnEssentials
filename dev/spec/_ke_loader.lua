@@ -1187,10 +1187,12 @@ function L.loadChatRoleIconStrings()
 end
 
 -- The cache-key rule from the same file. Pure, so it needs no art table and
--- no mock environment at all.
+-- no mock environment; Core/Identity.lua supplies the surname join, and the
+-- values here are plain, so the secret test is a stub.
 function L.loadChatRoleIconKeys()
     local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = "", ROLE_ICON_ART = {} }
+    local KE = { PATH = "", ROLE_ICON_ART = {}, IsSecretValue = function() return false end }
+    helpersLocal.loadModule("Core/Identity.lua", KE)
     helpersLocal.loadModule("Modules/Skinning/Chat/ChatRoleIcons.lua", KE)
     return KE.ChatRoleIconKeys
 end

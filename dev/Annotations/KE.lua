@@ -959,13 +959,16 @@ function KE.BuildChatRoleIconStrings(set) end
 
 --- Cache keys for one group member's chat role icon: the bare name, and the
 --- name qualified with a normalized realm. playerRealm substitutes for a
---- missing member realm. Callers must pass already-guarded plain values.
+--- missing member realm. With surnames on, realm is the member's surname and
+--- the one key is the joined full name. Callers must pass already-guarded
+--- plain values.
 ---@param name string?
 ---@param realm string?
 ---@param playerRealm string?
+---@param surnames boolean?
 ---@return string|nil bareKey
 ---@return string|nil qualifiedKey
-function KE.ChatRoleIconKeys(name, realm, playerRealm) end
+function KE.ChatRoleIconKeys(name, realm, playerRealm, surnames) end
 
 ---@param text string|nil
 ---@return boolean

@@ -2785,13 +2785,14 @@ function RebuildLFGRoles()
     -- used when it is a plain string.
     local myName, myRealm = UnitFullName("player")
     local playerRealm = (not KE:IsSecretValue(myRealm)) and myRealm or nil
+    local surnames = KE:UsesSurnames()
 
     local function store(name, realm, role)
         local okName, okRealm = KE.AcceptChatMember(role, name, realm)
         if not okName then return end
         local icon = strings[role]
         if not icon then return end
-        local bare, qualified = KE.ChatRoleIconKeys(okName, okRealm, playerRealm)
+        local bare, qualified = KE.ChatRoleIconKeys(okName, okRealm, playerRealm, surnames)
         if bare then CMH.lfgRoles[bare] = icon end
         if qualified then CMH.lfgRoles[qualified] = icon end
     end
