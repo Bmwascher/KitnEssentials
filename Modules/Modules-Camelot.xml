@@ -11,9 +11,13 @@
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
+    <Script file="Skinning\DarkTheme\GlobalFonts.lua" />
+    <Script file="Skinning\DarkTheme\BlizzardFonts.lua" />
     <Script file="Skinning\DarkTheme\UIWidgets.lua" />
+    <Script file="Skinning\DarkTheme\ContextMenus.lua" />
     <Script file="Skinning\Tooltips\Tooltips.lua" />
     <Script file="Skinning\Tooltips\TooltipStatusBar.lua" />
+    <Script file="Skinning\DarkTheme\BlizzardMessages.lua" />
     <Script file="Skinning\DarkTheme\LootRoll.lua" />
     <Script file="Skinning\DarkTheme\LootRollBars.lua" />
     <Script file="Skinning\DarkTheme\LootFrame.lua" />

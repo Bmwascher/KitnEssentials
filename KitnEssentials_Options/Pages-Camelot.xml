@@ -5,6 +5,7 @@
          order. Home and Profile Manager load with the main addon. -->
     <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
     <Script file="Skinning\GUI-Tooltips.lua" />
+    <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />
     <Script file="Skinning\DarkTheme\GUI-UIWidgets.lua" />
     <Script file="Skinning\DarkTheme\GUI-AlertFrames.lua" />
     <Script file="Skinning\DarkTheme\GUI-LootRoll.lua" />

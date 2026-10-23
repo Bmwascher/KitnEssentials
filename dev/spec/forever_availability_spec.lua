@@ -144,13 +144,13 @@ describe("Forever availability: tab resolution", function()
 end)
 
 describe("Forever availability: frame skins", function()
-    -- Mail stands for an admitted window, Friends for a withheld one and
-    -- ContextMenus for a row backed by its own module.
+    -- Mail stands for an admitted window, ContextMenus for an admitted row
+    -- backed by its own module, and Friends for a withheld one.
     it("admits only the listed skin keys after a baseline load and every key after a retail load", function()
         for _, row in ipairs({
             { load = "baseline", baseline = true, key = "Mail",         want = true },
             { load = "baseline", baseline = true, key = "Friends",      want = false },
-            { load = "baseline", baseline = true, key = "ContextMenus", want = false },
+            { load = "baseline", baseline = true, key = "ContextMenus", want = true },
             { load = "baseline", baseline = true, key = nil,            want = false },
             { load = "retail",   baseline = nil,  key = "Friends",      want = true },
             { load = "retail",   baseline = nil,  key = "ContextMenus", want = true },

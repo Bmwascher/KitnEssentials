@@ -21,8 +21,8 @@ local FOREVER_ALLOWED = {
     ProfilesSharing = true,
     ProfilesReset = true,
     -- Dark Theme: the engine, Color Picker, the skins command, and the page
-    -- with the tabs that configure what loads. Group Finder, Raid Control,
-    -- Addon Skins, Blizzard Text and On-Screen Messages stay withheld.
+    -- with the tabs that configure what loads. Group Finder, Raid Control and
+    -- Addon Skins stay withheld.
     BlizzardFrames = true,
     ColorPicker = true,
     SkinAPI = true,
@@ -44,6 +44,13 @@ local FOREVER_ALLOWED = {
     SkinBlizzardFramesLootRoll = true,
     SkinBlizzardFramesLootWindow = true,
     SkinBlizzardFramesWidgets = true,
+    -- Fonts and menus: Blizzard Text, On-Screen Messages, the global font
+    -- sweep and Context Menus, at their retail defaults.
+    BlizzardFonts = true,
+    ContextMenus = true,
+    SkinBlizzardMessages = true,
+    SkinBlizzardFramesFontsBlizzard = true,
+    SkinMessages = true,
     -- Tooltips: the module and its page. Its realm-name, guild-realm and
     -- Mythic+ options stay withheld.
     SkinTooltips = true,
@@ -75,7 +82,8 @@ function KE:FilterAvailableEntries(entries)
 end
 
 -- Skin registration keys a baseline load runs: the admitted window skins,
--- plus Dialogs. Kept apart from the feature ids above so a skin key can
+-- plus Dialogs, the global font sweep, the shared dropdown list and the
+-- Context Menus row. Kept apart from the feature ids above so a skin key can
 -- never collide with a module or page id.
 local FOREVER_FRAME_SKINS = {
     AddonManager = true,
@@ -89,6 +97,7 @@ local FOREVER_FRAME_SKINS = {
     Channels = true,
     ChatConfig = true,
     Communities = true,
+    ContextMenus = true,
     CooldownManager = true,
     DeathRecap = true,
     Dialogs = true,
@@ -97,6 +106,7 @@ local FOREVER_FRAME_SKINS = {
     ExtraButtons = true,
     FlightMap = true,
     GenericTrait = true,
+    GlobalFonts = true,
     GMChat = true,
     Gossip = true,
     Guild = true,
@@ -119,6 +129,7 @@ local FOREVER_FRAME_SKINS = {
     Quest = true,
     Raid = true,
     SettingsPanel = true,
+    SharedDropDownList = true,
     Socket = true,
     SubscriptionInterstitial = true,
     Tabard = true,
