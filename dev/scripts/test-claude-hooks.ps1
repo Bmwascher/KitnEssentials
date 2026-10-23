@@ -427,6 +427,7 @@ try {
     $keepLines = @(
         'docs:01-09-kept|until:2099-01-01|fixture',
         'docs:01-17-kept-member|until:2099-01-01|fixture',
+        'docs:01-12-nofinish.|until:2099-01-01|fixture',
         'dev/docs/parsec/01-01-x|until:2099-01-01|fixture'
     )
     [System.IO.File]::WriteAllText((Join-Path $rproj 'dev\docs\retention-keep.txt'), ($keepLines -join "`n") + "`n")
@@ -463,6 +464,7 @@ try {
         'programs\2026-01-06-keptheld\program.md' = "# Kept held`nclosed: 2026-01-06`n`n## Feature folders`n`n- ``01-17-kept-member```n"
         'programs\2026-01-07-locked\program.md' = "# Locked`nclosed: 2026-01-07`n`n## Feature folders`n`n- ``01-16-locked-member```n"
         'programs\2026-01-08-badlist\program.md' = "# Bad list`nclosed: 2026-01-08`n`n## Feature folders`n`n- ``programs/2026-01-05-noprog```n"
+        'programs\2026-01-09-alias\program.md' = "# Alias`nclosed: 2026-01-09`n`n## Feature folders`n`n- ``01-09-kept.```n- ``01-06-noledger/```n"
         'programs\2026-01-01-loose.md' = "# loose`n"
         'programs\active-masters.tsv' = ''
         'programs\.migrated' = "migrated`n"
@@ -504,6 +506,7 @@ try {
         @{ n = 'programs\2026-01-07-locked'; listed = '\[I\] closed program docs:programs/2026-01-07-locked,'; place = ($arch -match 'FAIL \[archive\] could not move docs:01-16-locked-member') -and (RetStays 'programs\2026-01-07-locked\program.md') -and -not (RetStays 'programs\2026-01-07-locked\features') -and (RetStays '01-16-locked-member') -and -not (Test-Path (Join-Path $rarch 'programs\2026-01-07-locked')) },
         @{ n = 'programs\2026-01-05-noprog'; listed = 'docs:programs/2026-01-05-noprog \(program without program.md\)'; place = (RetStays 'programs\2026-01-05-noprog') },
         @{ n = 'programs\2026-01-08-badlist'; listed = '\[I\] not a feature folder name in docs:programs/2026-01-08-badlist: programs/2026-01-05-noprog'; place = ($dry -match 'docs:programs/2026-01-08-badlist \(program held: not a feature folder name: programs/2026-01-05-noprog\)') -and (RetStays 'programs\2026-01-08-badlist\program.md') -and (RetStays 'programs\2026-01-05-noprog') },
+        @{ n = 'programs\2026-01-09-alias'; listed = '\[I\] not a feature folder name in docs:programs/2026-01-09-alias: 01-09-kept\.'; place = ($dry -match '\[I\] not a feature folder name in docs:programs/2026-01-09-alias: 01-06-noledger/') -and ($dry -match 'docs:programs/2026-01-09-alias \(program held: not a feature folder name: 01-09-kept\.\)') -and (RetStays 'programs\2026-01-09-alias\program.md') -and (RetStays '01-09-kept') -and (RetStays '01-06-noledger') },
         @{ n = 'panels\01-01-panel'; listed = 'docs:panels/01-01-panel \(panel\)'; place = (RetStays 'panels\01-01-panel') },
         @{ n = 'programs\2026-01-01-loose.md'; listed = 'docs:programs/2026-01-01-loose.md \(loose file\)'; place = (RetStays 'programs\2026-01-01-loose.md') },
         @{ n = '01-09-kept'; listed = $null; place = (RetStays '01-09-kept') },
@@ -516,6 +519,7 @@ try {
     }
     Check 'retention [A] sees media under the docs root' ($dryOk -and $dry -match '\[A\] 1 media files') $dry
     Check 'retention [F] refuses a checkout path into the docs root' ($dryOk -and $dry -match 'FAIL \[F\] keep entry names a docs-root path by its checkout path') $dry
+    Check 'retention [F] refuses a keep entry that is not a canonical path' ($dryOk -and $dry -match 'FAIL \[F\] keep entry is not a canonical path.*docs:01-12-nofinish\.' -and $dry -match 'docs:01-12-nofinish \(no finish line\)') $dry
 
     # -Pick moves a named unknown entry, a held program with its members, and
     # refuses anything else.

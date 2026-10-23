@@ -46,8 +46,10 @@
 #     whatever its own ledger says: silent while the program is open, [I]
 #     with it once closed. A member with a pending round, a keep entry or a
 #     second program listing it holds the whole program as [U]. A bullet that
-#     is not one bare folder name (a path, programs, panels, ..) is no member:
-#     it is an [I] note, and it blocks a closed program from -Archive and -Pick.
+#     is not one canonical folder name as written (a path, programs, panels, a
+#     trailing dot or space, ~, a device name) is no member: it is an [I]
+#     note, and it blocks a closed program from -Archive and -Pick. A member is
+#     the docs-root folder whose name it equals.
 #   - programs/active-masters.tsv, next-program-opening.md,
 #     next-program-deferrals.md and .migrated are fixed and silent.
 #   - everything else is [U]: no ledger, no finish line, a last finish line
@@ -69,7 +71,9 @@
 # checkout-path entry naming the docs root is a FAIL: it would match nothing.
 # An entry exempts that path from [A], [B], [C], [E], [H], [I] and [U], and any
 # entry containing it from [B], [C], [H], [I] and [U], while the local branch
-# is unmerged or through the end of the named day.
+# is unmerged or through the end of the named day. A path with a segment
+# Windows would read as another name (a trailing dot or space, ~, . or ..) is
+# a FAIL and exempts nothing.
 # Work with no branch yet takes the dated form; frozen-but-unbuilt plans use
 # the branch they will land on.
 #
@@ -157,6 +161,12 @@ function Full($rel) {
     }
     return Join-Path $root ($rel -replace '/', '\')
 }
+# One name Windows keeps as written: no trailing dot or space (Windows drops
+# them), no ~ (an 8.3 alias), no device name. The keep and membership checks
+# compare names as strings, so an alias would reach a folder they never match.
+function IsCanonicalName([string]$name) {
+    return [bool]($name -and $name -notmatch '[\\/:*?"<>|~\x00-\x1f]' -and $name -notmatch '^\s|[.\s]$' -and $name -notmatch '^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$')
+}
 
 # git state; any failure disables the branch-based rules
 $gitOk = $true
@@ -205,6 +215,9 @@ foreach ($src in $keepSources) {
         $kpath = ($parts[0].Trim() -replace '\\', '/').TrimEnd('/'); $kbranch = $parts[1].Trim()
         $isDocs = $kpath.StartsWith('docs:')
         if (($isDocs -and -not $src.docs) -or (-not $isDocs -and -not $src.checkout)) { continue }
+        if (@(($kpath -replace '^docs:', '') -split '/' | Where-Object { -not (IsCanonicalName $_) }).Count) {
+            $fails += "[F] keep entry is not a canonical path (Windows would read a segment as another name): $kpath"; continue
+        }
         # A docs: entry cannot be judged while the docs root is unreadable or missing.
         $kfull = Full $kpath
         if (-not $isDocs -and ($kpath -match '^dev/docs/parsec(/|$)' -or ($docsRoot -and (Under $kfull $docsRoot)))) {
@@ -361,10 +374,10 @@ function HasPendingRound([string]$dir) {
     if (-not (Test-Path -LiteralPath $rounds -PathType Container)) { return $false }
     return [bool]@(@(Get-ChildItem -LiteralPath $rounds -Directory -Force) | Where-Object { $_.Name -notmatch '\.dead\d+$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'pending.json')) }).Count
 }
-# A member bullet names one folder directly under the docs root; anything
-# else would move a path that is not a feature folder.
+# A member bullet names one folder directly under the docs root, as written;
+# anything else would move a path that is not a feature folder.
 function IsFolderName([string]$name) {
-    return [bool]($name -notmatch '[\\/:*?"<>|]' -and $name.Trim('.') -and $name -notin @('programs', 'panels'))
+    return (IsCanonicalName $name) -and $name -notin @('programs', 'panels')
 }
 # A program's members, its bullets that are no folder name, and its closed
 # date; $null when the folder holds no program.md. The Feature folders section
@@ -378,7 +391,7 @@ function ProgramInfo([string]$dir) {
         if ($inside -and ($l -match '^## ' -or $l -match '^---\s*$')) { $inside = $false }
         if ($l -match '^##\s+Feature folders\s*$') { $inside = $true; continue }
         if ($inside -and $l -match '^\s*[-*]\s+`([^`]+)`') {
-            $name = $Matches[1].Trim().TrimEnd('/')
+            $name = $Matches[1]
             if (IsFolderName $name) { $members += $name } else { $invalid += $name }
         }
     }
@@ -455,7 +468,7 @@ function ArchiveProgram($p) {
         $plan = @([pscustomobject]@{ src = $p.item.FullName; name = $p.rel; rel = $final })
         foreach ($m in $p.members) {
             $mdir = Join-Path $docsRoot $m
-            if (Test-Path -LiteralPath $mdir -PathType Container) { $plan += [pscustomobject]@{ src = $mdir; name = "docs:$m"; rel = "$final/features/$m" } }
+            if ($childDirs.ContainsKey($m) -and (Test-Path -LiteralPath $mdir -PathType Container)) { $plan += [pscustomobject]@{ src = $mdir; name = "docs:$m"; rel = "$final/features/$m" } }
         }
         # Each line written is tracked, so a failure part way through the
         # logging still marks every logged entry as not moved.
@@ -499,6 +512,10 @@ if ($docsRoot -and -not $migrationWait) {
     # Programs first: membership decides before a member's own ledger.
     $fixed = @('active-masters.tsv', 'next-program-opening.md', 'next-program-deferrals.md', '.migrated')
     $programs = @(); $owners = @{}
+    # Docs-root folders by name (keys ignore case). A member resolves only to
+    # one of these, so keep, ownership and moves all use the name on disk.
+    $childDirs = @{}
+    foreach ($c in @(Get-ChildItem -LiteralPath $docsRoot -Directory -Force)) { $childDirs[$c.Name] = $c.Name }
     if (Test-Path -LiteralPath $programsDir -PathType Container) {
         foreach ($e in Get-ChildItem -LiteralPath $programsDir -Force) {
             $rel = Rel $e.FullName
@@ -511,7 +528,8 @@ if ($docsRoot -and -not $migrationWait) {
                 if (-not ((IsKept $rel) -or (SheltersKept $rel))) { AddUnknown $e 'program without program.md' $null }
                 continue
             }
-            $p = [pscustomobject]@{ item = $e; rel = $rel; closed = $info.closed; members = $info.members; invalid = $info.invalid; blocks = @(); pending = @() }
+            $onDisk = @($info.members | ForEach-Object { if ($childDirs.ContainsKey($_)) { $childDirs[$_] } else { $_ } })
+            $p = [pscustomobject]@{ item = $e; rel = $rel; closed = $info.closed; members = $onDisk; invalid = $info.invalid; blocks = @(); pending = @() }
             $programs += $p
             if (-not ((IsKept $rel) -or (SheltersKept $rel))) { foreach ($b in $info.invalid) { $notes += "[I] not a feature folder name in ${rel}: $b" } }
             foreach ($m in $p.members) {
@@ -562,7 +580,7 @@ if ($docsRoot -and -not $migrationWait) {
         foreach ($m in $p.members) {
             $mdir = Join-Path $docsRoot $m
             $mrel = "docs:$m"
-            if (-not (Test-Path -LiteralPath $mdir -PathType Container)) { $notes += "[I] listed folder missing: $mrel"; continue }
+            if (-not $childDirs.ContainsKey($m)) { $notes += "[I] listed folder missing: $mrel"; continue }
             if (@($owners[$m.ToLower()]).Count -gt 1) { $p.blocks += "$mrel listed by two programs" }
             elseif ((IsKept $mrel) -or (SheltersKept $mrel)) { $p.blocks += "$mrel kept" }
             elseif (HasPendingRound $mdir) { $p.pending += "$mrel round pending" }
