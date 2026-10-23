@@ -323,10 +323,10 @@ try {
     # master registry names, and only for the compact source.
     $pr = 'program-recovery.ps1'
     $pproj = Join-Path $outside 'pproj'
-    foreach ($d in @('.claude\skills\phased-program', 'dev\scripts', 'dev\docs\parsec\programs')) { New-Item -ItemType Directory -Path (Join-Path $pproj $d) -Force | Out-Null }
-    Copy-Item (Join-Path $root 'dev\scripts\program-master.ps1') (Join-Path $pproj 'dev\scripts\')
+    foreach ($d in @('.claude\skills\phased-program', 'dev\scripts', 'dev\docs\parsec\programs\2026-01-01-demo')) { New-Item -ItemType Directory -Path (Join-Path $pproj $d) -Force | Out-Null }
+    foreach ($s in @('program-master.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $pproj 'dev\scripts\') }
     [System.IO.File]::WriteAllText((Join-Path $pproj '.claude\skills\phased-program\recovery-card.md'), "CARD LINE`n")
-    $pdoc = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-program.md'
+    $pdoc = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-demo\program.md'
     [System.IO.File]::WriteAllText($pdoc, "# p`n`n## Open questions`n`nOQ ROW`n`n---`n`n## Status`n`nSTATUS ROW`n`n---`n`n## At the end`n`nTAIL ROW`n")
     $saved = @{ dir = $env:CLAUDE_PROJECT_DIR; reg = $env:KE_PROGRAM_MASTERS; sid = $env:CLAUDE_CODE_SESSION_ID; hid = $env:CLAUDE_CODE_HOST_SESSION_ID }
     $env:CLAUDE_PROJECT_DIR = $pproj
@@ -347,7 +347,7 @@ try {
         $env:CLAUDE_CODE_HOST_SESSION_ID = "hooktest-host-$tag"
         $r = Invoke-Hook (Join-Path $templates $pr) @{ session_id = 'resumed-new-id'; source = 'compact' }
         Check "$pr matches a master by its host id" ($r.out -match 'CARD LINE') $r.out.Trim()
-        $events = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-program-events.log'
+        $events = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-demo\program-events.log'
         Check "$pr logs one compact event per recovery" ((Test-Path $events) -and @(Get-Content $events | Where-Object { $_ -match "`tcompact$" }).Count -eq 2)
     } finally {
         $env:CLAUDE_PROJECT_DIR = $saved.dir; $env:KE_PROGRAM_MASTERS = $saved.reg
@@ -377,6 +377,41 @@ try {
     $fromWt = (& pwsh -NoProfile -File $rr -Root $wt | Out-String).Trim()
     $fromRoot = (& pwsh -NoProfile -File $rr -Root $root | Out-String).Trim()
     Check 'parsec-docs-root: a worktree reads the primary''s config' ($fromWt -ne '' -and $fromWt -eq $fromRoot) "$fromWt vs $fromRoot"
+    # The master registry lives under the docs root; a missing root refuses
+    # -Register and -Unregister and keeps -LogEvent and -Recover quiet.
+    $mproj = Join-Path $outside 'mproj'
+    foreach ($d in @('.claude', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $mproj $d) -Force | Out-Null }
+    foreach ($s in @('program-master.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $mproj 'dev\scripts\') }
+    $mdocs = Join-Path $outside 'mdocs'
+    $mdoc = Join-Path $outside 'mprog\program.md'
+    New-Item -ItemType Directory -Path (Split-Path $mdoc -Parent) -Force | Out-Null
+    [System.IO.File]::WriteAllText($mdoc, "# m`n")
+    [System.IO.File]::WriteAllText((Join-Path $mproj '.claude\parsec.toml'), "docs_root = `"$($mdocs -replace '\\', '/')`"`n")
+    $mpm = Join-Path $mproj 'dev\scripts\program-master.ps1'
+    $msaved = @{ reg = $env:KE_PROGRAM_MASTERS; sid = $env:CLAUDE_CODE_SESSION_ID; hid = $env:CLAUDE_CODE_HOST_SESSION_ID }
+    $env:KE_PROGRAM_MASTERS = ''
+    $env:CLAUDE_CODE_SESSION_ID = "hooktest-mreg-$tag"
+    $env:CLAUDE_CODE_HOST_SESSION_ID = ''
+    try {
+        $missingCases = @(
+            @{ name = '-Register refuses a missing docs root'; args = @('-Register', $mdoc); code = 1; out = '' },
+            @{ name = '-Unregister refuses a missing docs root'; args = @('-Unregister'); code = 1; out = 'does not exist' },
+            @{ name = '-LogEvent notes a missing docs root and exits 0'; args = @('-LogEvent', 'x'); code = 0; out = 'does not exist' },
+            @{ name = '-Recover is silent with a missing docs root'; args = @('-Recover'); code = 0; out = '^$' }
+        )
+        foreach ($c in $missingCases) {
+            $o = (& pwsh -NoProfile -File $mpm @($c.args) 2>&1 | Out-String).Trim()
+            $code = $LASTEXITCODE
+            Check "program-master: $($c.name)" ($code -eq $c.code -and $o -match $c.out -and -not (Test-Path $mdocs)) "exit $code, $o"
+        }
+        New-Item -ItemType Directory -Path $mdocs | Out-Null
+        & pwsh -NoProfile -File $mpm -Register $mdoc *> $null
+        $reg = Join-Path $mdocs 'programs\active-masters.tsv'
+        $line = if (Test-Path $reg) { (Get-Content $reg -Raw) } else { '' }
+        Check 'program-master: a control document outside the checkout is registered by its absolute path' ($line -match [regex]::Escape(($mdoc -replace '\\', '/'))) $line
+    } finally {
+        $env:KE_PROGRAM_MASTERS = $msaved.reg; $env:CLAUDE_CODE_SESSION_ID = $msaved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $msaved.hid
+    }
 } finally {
     # Each step runs regardless of the others; native git exits are checked
     # because they do not throw, and any leftover fails the run.
