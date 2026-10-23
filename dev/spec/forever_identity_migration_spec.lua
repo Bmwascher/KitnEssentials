@@ -18,6 +18,7 @@ describe("Core/Identity.lua", function()
     after_each(function()
         _G.UnitNameUnmodified = nil
         _G.RegionalUniqueNamesEnabled = nil
+        _G.Constants = nil
     end)
 
     it("never attributes another identity's record to a character sharing its first name", function()
@@ -54,6 +55,29 @@ describe("Core/Identity.lua", function()
             KE.db = row.db
             _G.UnitNameUnmodified = function() return row.unitName end
             assert.is_nil(KE:GetPlayerIdentityParts(), row.name)
+        end
+    end)
+
+    -- The client's own full name for a first name and surname. A non-space
+    -- separator in the constant row proves the constant is read.
+    it("joins a first name and surname the way the client spells a full name", function()
+        local KE = load()
+        for _, row in ipairs({
+            { why = "separator constant",    sep = "_", name = "Bob",       surname = "Smith", want = "Bob_Smith" },
+            { why = "no constant: a space",  sep = nil, name = "Bob",       surname = "Smith", want = "Bob Smith" },
+            { why = "no surname",            sep = nil, name = "Bob",       surname = nil,     want = "Bob" },
+            { why = "empty surname",         sep = nil, name = "Bob",       surname = "",      want = "Bob" },
+            { why = "secret surname",        sep = nil, name = "Bob",       surname = SECRET,  want = "Bob" },
+            { why = "already joined",        sep = nil, name = "Bob Smith", surname = "Smith", want = "Bob Smith" },
+            { why = "secret name",           sep = nil, name = SECRET,      surname = "Smith", want = nil },
+            { why = "empty name",            sep = nil, name = "",          surname = "Smith", want = nil },
+        }) do
+            if row.sep then
+                _G.Constants = { CharacterNameSeparatorConsts = { CHARACTERNAME_SURNAME_SEPARATOR = row.sep } }
+            else
+                _G.Constants = nil
+            end
+            assert.equals(row.want, KE:JoinCharacterName(row.name, row.surname), row.why)
         end
     end)
 end)

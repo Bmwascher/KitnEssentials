@@ -485,6 +485,21 @@ function KE:GetPlayerIdentityParts() end
 ---@return "owned"|"other"|"unresolved"
 function KE:ClassifyLegacyCharacterRecord(key, entry, identity) end
 
+--- Whether this client names characters "First Surname" (regional names on).
+---@return boolean
+function KE:UsesSurnames() end
+
+--- The separator the client puts between a first name and a surname.
+---@return string
+function KE:GetSurnameSeparator() end
+
+--- The full name the client shows for a first name and surname: nil for a
+--- secret, missing or empty name; the name alone without a usable surname.
+---@param name any
+---@param surname any
+---@return string?
+function KE:JoinCharacterName(name, surname) end
+
 -- Core/ProfileManager.lua export string codec
 ---@param tbl table
 ---@return string|nil encoded
