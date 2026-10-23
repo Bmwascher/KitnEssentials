@@ -439,6 +439,57 @@ describe("SkinAPI client availability gate", function()
     end)
 end)
 
+describe("SkinAPI gamepad stand-down", function()
+    -- Plain globals: neither is managed by the shared mock, so a case that
+    -- leaves one standing would change what every later spec runs against.
+    after_each(function()
+        _G.C_InputInterfaceStyle = nil
+        _G.IsLoggedIn = nil
+    end)
+
+    -- A fresh load per row, so the session latch starts empty. The returned
+    -- setter changes the live style after the first read.
+    local function load(style, loggedIn)
+        local KE = L.loadSkinAPI()
+        _G.Enum.InputDeviceInterfaceType = { Mkb = 0, Gamepad = 1 }
+        local current = style
+        if style ~= nil then
+            _G.C_InputInterfaceStyle = { GetCurrentStyle = function() return current end }
+        else
+            _G.C_InputInterfaceStyle = nil
+        end
+        _G.IsLoggedIn = function() return loggedIn end
+        return KE, function(v) current = v end
+    end
+
+    it("follows the Gamepad style, and keeps the first answer read after login", function()
+        for _, row in ipairs({
+            { name = "no style API",                  style = nil, loggedIn = true,  after = nil, want = { false, false } },
+            { name = "mouse and keyboard, held",      style = 0,   loggedIn = true,  after = 1,   want = { false, false } },
+            { name = "gamepad, held",                 style = 1,   loggedIn = true,  after = 0,   want = { true, true } },
+            { name = "before login, follows the style", style = 0, loggedIn = false, after = 1,   want = { false, true } },
+        }) do
+            local KE, setStyle = load(row.style, row.loggedIn)
+            local first = KE.Skins.PadStandDown()
+            if row.after ~= nil then setStyle(row.after) end
+            local second = KE.Skins.PadStandDown()
+            assert.same(row.want, { first, second }, row.name)
+        end
+    end)
+
+    it("turns the skin engine off while the stand-down holds", function()
+        for _, row in ipairs({
+            { name = "gamepad",            style = 1, want = false },
+            { name = "mouse and keyboard", style = 0, want = true },
+        }) do
+            local KE = load(row.style, true)
+            KE.ShouldNotLoadModule = function() return false end
+            KE.db.profile.Skinning.BlizzardFrames = { Enabled = true }
+            assert.equals(row.want, KE.Skins:IsActive(), row.name)
+        end
+    end)
+end)
+
 -- Task 0B: per-registration bookkeeping (skinRegistrations), the truthful
 -- skinStatus aggregate, and the two diagnostics that read them. Every case
 -- here runs on the composed loader and dispatches through the production

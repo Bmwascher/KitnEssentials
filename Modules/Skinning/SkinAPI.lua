@@ -3390,7 +3390,26 @@ function S.TabsSettle(prefix, maxN)
     end
 end
 
+-- Under the Gamepad interface style the controller drives Blizzard's windows,
+-- and a skin cannot be taken off once applied, so the first answer read after
+-- login holds until the next reload.
+local padLatched
+
+function S.PadStandDown()
+    if padLatched ~= nil then return padLatched end
+    local style = _G.C_InputInterfaceStyle
+    local kinds = _G.Enum and _G.Enum.InputDeviceInterfaceType
+    local on = false
+    if style and style.GetCurrentStyle and kinds and kinds.Gamepad ~= nil then
+        ---@diagnostic disable-next-line: wrong-flavor-api
+        on = style.GetCurrentStyle() == kinds.Gamepad
+    end
+    if _G.IsLoggedIn and _G.IsLoggedIn() then padLatched = on end
+    return on
+end
+
 function S:IsActive()
+    if S.PadStandDown() then return false end
     if KE:ShouldNotLoadModule() then return false end
     local db = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
