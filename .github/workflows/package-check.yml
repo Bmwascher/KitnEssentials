@@ -80,6 +80,6 @@ jobs:
             done < <(grep '^Libs/' "$RUNNER_TEMP/loaded-$client.txt" || true)
           done
           if [ "$missing" -gt 0 ]; then
-            echo "::error::$missing loaded library file(s) missing from the archive"
+            echo "::error::loaded library files are missing from the archive; see the missing lines above"
             exit 1
           fi
