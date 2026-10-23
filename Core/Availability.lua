@@ -95,6 +95,7 @@ local FOREVER_FRAME_SKINS = {
     BlackMarket = true,
     Calendar = true,
     Channels = true,
+    Character = true,
     ChatConfig = true,
     Communities = true,
     ContextMenus = true,
