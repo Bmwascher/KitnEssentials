@@ -42,7 +42,12 @@ function Get-TextHash([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
 }
-$liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $root '.claude\hooks') }
+# The project-scope hooks and the .agents mirror are gitignored, so they exist
+# only in the primary checkout, the first worktree git lists.
+$primary = $root
+$wtList = @(git -C $root worktree list --porcelain 2>$null | Where-Object { $_ -like 'worktree *' })
+if ($LASTEXITCODE -eq 0 -and $wtList.Count) { $primary = [System.IO.Path]::GetFullPath($wtList[0].Substring(9)) }
+$liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $primary '.claude\hooks') }
 foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1', 'program-recovery.ps1')) {
     $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1', 'program-recovery.ps1')) { 'project' } else { 'user' }
     $other = if ($scope -eq 'user') { 'project' } else { 'user' }
@@ -54,7 +59,7 @@ foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', '
 
 # The live .agents mirror must match its sources (both trees are gitignored,
 # so a fresh checkout fails here until the sync script has run once).
-& pwsh -NoProfile -File (Join-Path $root 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
+& pwsh -NoProfile -File (Join-Path $primary 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
 Check 'agents mirror in sync' ($LASTEXITCODE -eq 0) 'run pwsh dev/scripts/sync-agents-mirror.ps1'
 
 $tag = [System.IO.Path]::GetRandomFileName().Replace('.', '')
@@ -64,8 +69,10 @@ $feature = "$wt-feature"
 $featureBranch = "hooktest/$tag"
 $outside = "$wt-outside"
 try {
-    git -C $root worktree add -q $wt main 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "could not add a worktree on main (is main checked out elsewhere?)" }
+    # --force: the primary usually has main checked out. The branch rules need
+    # a checkout on main, not a detached one, and this checkout never commits.
+    git -C $root worktree add --force -q $wt main 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "could not add a worktree on main" }
     New-Item -ItemType Junction -Path $link -Target $wt | Out-Null
     New-Item -ItemType Directory -Path $outside | Out-Null
     git -C $root worktree add -q -b $featureBranch $feature main 2>&1 | Out-Null
