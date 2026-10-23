@@ -51,8 +51,8 @@ jobs:
       # delta, untracked (no copy in the checkout) or missing (not in the
       # archive). Inline scripts also print as "<inline> <manifest>".
       # A missing file fails the step; on this runner that includes a path
-      # whose letter case differs, which Windows would still load, and is a
-      # delta to fix all the same.
+      # whose letter case differs, which Windows would still load, and needs
+      # fixing all the same.
       - name: List the loaded library files
         run: |
           sudo apt-get update -q
