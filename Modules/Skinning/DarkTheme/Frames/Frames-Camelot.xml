@@ -5,12 +5,28 @@
          needs its entry in Core/Availability.lua's frame skin list, or it
          never dispatches. -->
     <Script file="AddonManager.lua" />
+    <Script file="Alerts.lua" />
+    <Script file="AuctionHouse.lua" />
+    <Script file="Barber.lua" />
     <Script file="Battlenet.lua" />
+    <Script file="Binding.lua" />
+    <Script file="BlackMarket.lua" />
+    <Script file="Calendar.lua" />
+    <Script file="Channels.lua" />
+    <Script file="ChatConfig.lua" />
+    <Script file="Communities.lua" />
+    <Script file="CooldownManager.lua" />
     <Script file="DeathRecap.lua" />
+    <Script file="DressingRoom.lua" />
+    <Script file="EditMode.lua" />
+    <Script file="ExtraButtons.lua" />
     <Script file="FlightMap.lua" />
     <Script file="GenericTrait.lua" />
+    <Script file="GMChat.lua" />
     <Script file="Gossip.lua" />
     <Script file="Guild.lua" />
+    <Script file="GuildBank.lua" />
+    <Script file="GuildControl.lua" />
     <Script file="GuildRegistrar.lua" />
     <Script file="Help.lua" />
     <Script file="Loot.lua" />
@@ -20,15 +36,21 @@
     <Script file="Merchant.lua" />
     <Script file="MirrorTimers.lua" />
     <Script file="Misc.lua" />
+    <Script file="NonRaid.lua" />
     <Script file="Petition.lua" />
+    <Script file="PlayerSpells.lua" />
     <Script file="PvPMatch.lua" />
     <Script file="Quest.lua" />
     <Script file="Raid.lua" />
+    <Script file="SettingsPanel.lua" />
     <Script file="Socket.lua" />
     <Script file="SubscriptionInterstitial.lua" />
+    <Script file="Tabard.lua" />
     <Script file="Taxi.lua" />
     <Script file="TimeManager.lua" />
     <Script file="Trade.lua" />
     <Script file="Trainer.lua" />
+    <Script file="Transmog.lua" />
     <Script file="TutorialFrame.lua" />
+    <Script file="WorldMap.lua" />
 </Ui>
