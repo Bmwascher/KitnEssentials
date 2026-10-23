@@ -1909,8 +1909,15 @@ function CHAT:StyleChat(chat)
     chat.keStyled = true
 end
 
-local HiddenFrame = CreateFrame("Frame")
-HiddenFrame:Hide()
+-- Made on first use, so a chat setup that disables nothing makes no frame.
+local hiddenFrame
+local function HiddenFrame()
+    if not hiddenFrame then
+        hiddenFrame = CreateFrame("Frame")
+        hiddenFrame:Hide()
+    end
+    return hiddenFrame
+end
 
 -- `list`, when passed, collects every object touched (this one plus all
 -- recursed-into children) in a flat sequence so RestoreDisabledFrame can
@@ -1928,7 +1935,7 @@ function CHAT:DisableFrame(object, list)
         -- irreversible call also happens inside ClearFrameTextures(frame, true).
         object:UnregisterAllEvents()
         object.keOldParent = object.keOldParent or object:GetParent()
-        object:SetParent(HiddenFrame)
+        object:SetParent(HiddenFrame())
     else
         object.keOldShow = object.keOldShow or object.Show
         object.Show = object.Hide

@@ -1306,7 +1306,8 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
 
         -- Handle different message types
         if (chatType == 'SYSTEM' or chatType == 'SKILL' or chatType == 'CURRENCY' or chatType == 'MONEY' or
-                chatType == 'OPENING' or chatType == 'TRADESKILLS' or chatType == 'PET_INFO' or chatType == 'TARGETICONS' or chatType == 'BN_WHISPER_PLAYER_OFFLINE') then
+                chatType == 'OPENING' or chatType == 'TRADESKILLS' or chatType == 'PET_INFO' or chatType == 'TARGETICONS' or chatType == 'BN_WHISPER_PLAYER_OFFLINE' or
+                chatType == 'COLLECTED_APPEARANCE') then
             frame:AddMessage(arg1, info.r, info.g, info.b, info.id)
         elseif chatType == 'LOOT' then
             frame:AddMessage(arg1, info.r, info.g, info.b, info.id)

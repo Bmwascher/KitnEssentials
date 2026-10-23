@@ -17,16 +17,16 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HomePage",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "Profiles",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "ProfilesReset",    want = true },
-            { load = "baseline",            seed = BASELINE,             id = "Chat",             want = false },
+            { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "NotAFeature",      want = false },
             { load = "baseline",            seed = BASELINE,             id = nil,                want = false },
             { load = "baseline, no iface",  seed = BASELINE_UNREADABLE,  id = "HomePage",         want = true },
             { load = "baseline, no iface",  seed = BASELINE_UNREADABLE,  id = "LibDualSpec",      want = false },
             { load = "baseline, no iface",  seed = BASELINE_UNREADABLE,  id = "NicknameProvider", want = false },
-            { load = "retail",              seed = RETAIL,               id = "Chat",             want = true },
+            { load = "retail",              seed = RETAIL,               id = "MythicPlusTimer",  want = true },
             { load = "retail",              seed = RETAIL,               id = "NotAFeature",      want = true },
-            { load = "retail, Forever iface", seed = RETAIL_FOREVER_IFACE, id = "Chat",           want = true },
+            { load = "retail, Forever iface", seed = RETAIL_FOREVER_IFACE, id = "MythicPlusTimer", want = true },
         }) do
             local seed = { BASELINE_LOAD = row.seed.BASELINE_LOAD, IS_FOREVER = row.seed.IS_FOREVER }
             local KE = helpers.loadModule("Core/Availability.lua", seed)
@@ -41,8 +41,8 @@ describe("Forever availability: admission", function()
         }) do
             local KE = L.loadConflicts(nil, { forever = row.forever })
             local queue = KE:BuildConflictQueue({
-                profile = { Skinning = { Chat = { Enabled = true } } },
-                isLoaded = function(name) return name == "Prat-3.0" end,
+                profile = { MythicPlusTimer = { Enabled = true } },
+                isLoaded = function(name) return name == "EllesmereUIMythicTimer" end,
                 shouldNotLoad = false,
             })
             assert.equals(row.prompts, #queue, row.name)
@@ -104,8 +104,8 @@ describe("Forever availability: dual-spec profiles", function()
 end)
 
 describe("Forever availability: tab resolution", function()
-    -- Chat stands for any withheld page and sits first, so a missing
-    -- filter renders it in every row.
+    -- Mythic+ Timer stands for any withheld page and sits first, so a
+    -- missing filter renders it in every row.
     it("lands a withheld remembered, nested or default tab on the first admitted tab", function()
         local rendered
         local GUIFrame = {
@@ -115,22 +115,22 @@ describe("Forever availability: tab resolution", function()
         }
         local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = true, IS_FOREVER = true, GUIFrame = GUIFrame })
         helpers.loadModule("GUI/GUIMain/GUI-TabbedContent.lua", KE)
-        for _, id in ipairs({ "Chat", "ProfilesSharing", "ProfilesMain" }) do
+        for _, id in ipairs({ "MythicPlusTimer", "ProfilesSharing", "ProfilesMain" }) do
             GUIFrame.registeredContent[id] = function(_, yOffset)
                 rendered = id
                 return yOffset
             end
         end
-        GUIFrame:RegisterNestedTabs("Chat", { "ChatForms" })
+        GUIFrame:RegisterNestedTabs("MythicPlusTimer", { "MythicPlusTimerForms" })
         local TABS = {
-            { id = "Chat",            label = "Withheld" },
+            { id = "MythicPlusTimer", label = "Withheld" },
             { id = "ProfilesSharing", label = "Sharing" },
             { id = "ProfilesMain",    label = "Profile" },
         }
         for _, row in ipairs({
-            { name = "remembered", remembered = "Chat" },
-            { name = "nested",     remembered = "ChatForms" },
-            { name = "default",    default = "Chat" },
+            { name = "remembered", remembered = "MythicPlusTimer" },
+            { name = "nested",     remembered = "MythicPlusTimerForms" },
+            { name = "default",    default = "MythicPlusTimer" },
         }) do
             rendered = nil
             GUIFrame.tabbedPageState["Profiles"] = row.remembered

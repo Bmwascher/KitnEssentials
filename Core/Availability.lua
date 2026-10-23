@@ -54,6 +54,10 @@ local FOREVER_ALLOWED = {
     -- Tooltips: the module and its page. Its realm-name, guild-realm and
     -- Mythic+ options stay withheld.
     SkinTooltips = true,
+    -- Chat: the module, its history and links modules, and its page.
+    Chat = true,
+    ChatHistory = true,
+    ChatLinks = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
