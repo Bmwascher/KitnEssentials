@@ -1,5 +1,41 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.1
+
+KitnEssentials now loads on WoW Forever, with the modules that work there.
+On retail the only change is a darker default tooltip backdrop.
+
+### WoW Forever
+
+- **NEW:** KitnEssentials loads on WoW Forever. Modules that do not work
+  there yet are left out entirely: they do not load, and their settings
+  pages and options do not appear. Forever support has not yet been tested
+  on the live Forever client
+- On Forever: Home and Profiles (no dual-spec profiles); Dark Theme with
+  skins for more than 50 Blizzard windows, including Character, Inspect,
+  Reputation, Currency, Professions, Collections, Stable, Transmog and Black
+  Market; its Elements (loot roll, loot window, UI widgets, alerts, Vehicle
+  Exit Button); Blizzard Text, On-Screen Messages, Global Fonts and Context
+  Menus; Color Picker; Tooltips; Chat with Chat History and Chat Links;
+  Damage Meter
+- Forever has no realms, so Tooltips and the Damage Meter leave out their
+  realm-name options, and the Damage Meter leaves out its Mythic+ and Reset
+  on Key Start options
+- Chat reads a Forever first name and surname as one name for role icons,
+  class-colored mentions and the keyword sound
+- With the Gamepad interface style on, window, font and menu skins stay off
+  until a /reload in the mouse and keyboard style
+- Where the game refuses an addon reload, KitnEssentials offers a button you
+  click to reload
+- Not on Forever yet: the Friends window skin, Character Panel, group
+  finder, Mythic+ Timer, and the Combat, Aura Tracking, QoL and Dungeon
+  Tools sections
+
+### Tooltips
+
+- The default backdrop is darker (8% gray at 86% opacity); a backdrop color
+  you set yourself is kept
+
 ## v4.14.0
 
 An update notice for new versions, a new K icon, and more Party Cooldowns

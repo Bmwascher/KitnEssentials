@@ -99,6 +99,10 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
 | Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, aura, and pet ability IDs including Always-mode Blizzard aura coverage and optional icon IDs, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
 
+## WoW Forever
+
+KitnEssentials also runs on WoW Forever, with the parts that work there: Home and Profiles, Dark Theme with its window skins, Elements, fonts and context menus, Color Picker, Tooltips, Chat, and the Damage Meter. Everything else stays hidden on Forever: it does not load, and its settings do not appear. Options that need realms, Mythic+ or keystones are left out there.
+
 ## Slash Commands
 
 `/kes` (also `/kitnessentials` and `/dunnigan`) is the base command for all of the below.
