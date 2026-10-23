@@ -2055,7 +2055,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- Honor ShowRealm: only strip when off; when on, keep the full secret "Name-Realm".
         -- Cache nulled (can't dirty-check a maybe-secret string), so it re-resolves each tick.
         local shown = nm
-        if not db.ShowRealm then
+        if not (db.ShowRealm and DM.realmNamesAdmitted) then
             shown = Ambiguate(nm, "short") or nm
         end
         row.name:SetText(shown)
@@ -2073,7 +2073,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         end
         bar._rawName = nm
         if nm then
-            if db.ShowRealm then
+            if db.ShowRealm and DM.realmNamesAdmitted then
                 -- Stabilize the realm suffix. The source name resolves to "Name-Realm"
                 -- while the unit is fully known but intermittently drops to bare "Name"
                 -- (e.g. across a phase transition), so rendering it verbatim flickers.

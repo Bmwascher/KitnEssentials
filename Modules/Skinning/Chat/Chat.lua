@@ -1909,8 +1909,15 @@ function CHAT:StyleChat(chat)
     chat.keStyled = true
 end
 
-local HiddenFrame = CreateFrame("Frame")
-HiddenFrame:Hide()
+-- Made on first use, so a chat setup that disables nothing makes no frame.
+local hiddenFrame
+local function HiddenFrame()
+    if not hiddenFrame then
+        hiddenFrame = CreateFrame("Frame")
+        hiddenFrame:Hide()
+    end
+    return hiddenFrame
+end
 
 -- `list`, when passed, collects every object touched (this one plus all
 -- recursed-into children) in a flat sequence so RestoreDisabledFrame can
@@ -1928,7 +1935,7 @@ function CHAT:DisableFrame(object, list)
         -- irreversible call also happens inside ClearFrameTextures(frame, true).
         object:UnregisterAllEvents()
         object.keOldParent = object.keOldParent or object:GetParent()
-        object:SetParent(HiddenFrame)
+        object:SetParent(HiddenFrame())
     else
         object.keOldShow = object.keOldShow or object.Show
         object.Show = object.Hide
@@ -2785,13 +2792,14 @@ function RebuildLFGRoles()
     -- used when it is a plain string.
     local myName, myRealm = UnitFullName("player")
     local playerRealm = (not KE:IsSecretValue(myRealm)) and myRealm or nil
+    local surnames = KE:UsesSurnames()
 
     local function store(name, realm, role)
         local okName, okRealm = KE.AcceptChatMember(role, name, realm)
         if not okName then return end
         local icon = strings[role]
         if not icon then return end
-        local bare, qualified = KE.ChatRoleIconKeys(okName, okRealm, playerRealm)
+        local bare, qualified = KE.ChatRoleIconKeys(okName, okRealm, playerRealm, surnames)
         if bare then CMH.lfgRoles[bare] = icon end
         if qualified then CMH.lfgRoles[qualified] = icon end
     end

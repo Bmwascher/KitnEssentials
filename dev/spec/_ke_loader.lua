@@ -15,8 +15,8 @@
 --   local DM = L.loadDMCore({ issecretvalue = myFn })
 --
 -- Loaders taking opts (loadDungeonTimers, loadPixelPerfect) accept mock
--- overrides as a second arg; the rest take overrides first (loadGlobals takes
--- overrides first AND an optional opts second). Override keys
+-- overrides as a second arg; the rest take overrides first (loadGlobals and
+-- loadConflicts take overrides first AND an optional opts second). Override keys
 -- _wow_mock manages (issecretvalue, C_Timer, AbbreviateNumbers, ...) win
 -- over the loader defaults; stubs _wow_mock does NOT manage live on _G and
 -- can simply be reassigned after the loader returns.
@@ -189,6 +189,11 @@ function L.loadGlobals(overrides, opts)
             return issecretvalue and issecretvalue(value)
         end,
     }
+    -- Core/Availability.lua loads before Globals in-game. opts.forever seeds
+    -- a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end
 
@@ -419,7 +424,9 @@ function L.loadProfileManager(overrides)
     _G.KitnEssentials.IterateModules = _G.KitnEssentials.IterateModules or function() return pairs({}) end
     _G.KitnEssentials.EnableModule = _G.KitnEssentials.EnableModule or function() end
     _G.KitnEssentials.DisableModule = _G.KitnEssentials.DisableModule or function() end
+    -- No BASELINE_LOAD: a retail load, so Core/Availability.lua admits everything.
     local KE = { db = db }
+    helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Core/ProfileManager.lua", KE)
     return KE.ProfileManager, KE, db
 end
@@ -429,7 +436,7 @@ end
 -- KE, prompts (every CreatePrompt/CreateReloadPrompt call, in order),
 -- disabled (addon names passed to C_AddOns.DisableAddOn), and printed (chat
 -- lines, kept separate so prompt-count assertions stay exact).
-function L.loadConflicts(overrides)
+function L.loadConflicts(overrides, opts)
     installMock(overrides, {})
     local disabled = {}
     -- Models production: DisableAddOn flips the enable state while the addon
@@ -483,6 +490,11 @@ function L.loadConflicts(overrides)
         -- break every "#prompts" assertion, since each choice prints.
         Print = function(_, msg) printed[#printed + 1] = msg end,
     }
+    -- Core/Availability.lua loads before Conflicts in-game. opts.forever seeds
+    -- a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts ~= nil and opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Core/Conflicts.lua", KE), prompts, disabled, printed
 end
 
@@ -531,20 +543,22 @@ function L.loadChatMessageHandler(overrides)
     -- by the handler. Without this line every new case dies on
     -- "attempt to call method 'NotSecretValue' (a nil value)".
     helpers.loadModule("Core/Secret.lua", KE)
+    -- The surname helpers the mention scan and the self test read.
+    helpers.loadModule("Core/Identity.lua", KE)
     helpers.loadModule("Core/Colors.lua", KE)
     return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
--- Modules/Skinning/SkinAPI.lua. Creates frames at file scope (the hidden
--- parking frame and the edge refresher), so CreateFrame must exist before
--- the load. GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
+-- Modules/Skinning/SkinAPI.lua. Creates its parking frame and edge refresher
+-- at the first skin work, so CreateFrame must exist before any case skins.
+-- GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
 -- which would drag in the whole profile stack for two color lookups.
 local SKINAPI_THEME = {
     accent      = { 1.0, 0.0, 0.549, 1 },
     accentHover = { 1.0, 0.0, 0.549, 0.25 },
 }
 
-function L.loadSkinAPI(overrides)
+function L.loadSkinAPI(overrides, opts)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
     _G.GetPhysicalScreenSize = function() return 2560, 1440 end
@@ -564,6 +578,11 @@ function L.loadSkinAPI(overrides)
         db = { profile = { Skinning = { BlizzardFrames = {} } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    -- Core/Availability.lua loads before the module lists in-game. opts.forever
+    -- seeds a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts ~= nil and opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
 end
 
@@ -612,6 +631,11 @@ function L.loadTooltips(opts, overrides)
         db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    -- Core/Availability.lua loads before the module lists in-game. opts.forever
+    -- seeds a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/Tooltips/Tooltips.lua", KE)
     return modules["SkinTooltips"], KE
@@ -1194,10 +1218,12 @@ function L.loadChatRoleIconStrings()
 end
 
 -- The cache-key rule from the same file. Pure, so it needs no art table and
--- no mock environment at all.
+-- no mock environment; Core/Identity.lua supplies the surname join, and the
+-- values here are plain, so the secret test is a stub.
 function L.loadChatRoleIconKeys()
     local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = "", ROLE_ICON_ART = {} }
+    local KE = { PATH = "", ROLE_ICON_ART = {}, IsSecretValue = function() return false end }
+    helpersLocal.loadModule("Core/Identity.lua", KE)
     helpersLocal.loadModule("Modules/Skinning/Chat/ChatRoleIcons.lua", KE)
     return KE.ChatRoleIconKeys
 end

@@ -432,3 +432,44 @@ describe("Tooltips OnTooltipSetUnitAura embedded refusal", function()
         assert.same({ "|cffe65353Spell ID:|r 383169" }, tt.lines)
     end)
 end)
+
+describe("Tooltips ComposeNameLine", function()
+    after_each(function() _G.FOREIGN_SERVER_LABEL = nil end)
+
+    -- realmNames false stands for a client whose second UnitName return is a
+    -- surname; true for one where it is a realm.
+    it("joins a surname with no realm marker where realm names are withheld, and keeps the realm rules where admitted", function()
+        _G.FOREIGN_SERVER_LABEL = " (*)"
+        local TT = L.loadTooltips()
+        for _, row in ipairs({
+            { name = "withheld, title name",    pvp = "Sergeant Chillgor Bingus", second = "Bingus", always = true,  virtual = false, realmNames = false, want = "Sergeant Chillgor Bingus" },
+            { name = "withheld, empty pvp",     pvp = "",                         second = "Bingus", always = true,  virtual = false, realmNames = false, want = "Chillgor Bingus" },
+            { name = "withheld, no surname",    pvp = nil,                        second = "",       always = false, virtual = false, realmNames = false, want = "Chillgor" },
+            { name = "admitted, always realm",  pvp = nil,                        second = "Ravencrest", always = true,  virtual = false, realmNames = true, want = "Chillgor-Ravencrest" },
+            { name = "admitted, foreign realm", pvp = nil,                        second = "Ravencrest", always = false, virtual = false, realmNames = true, want = "Chillgor (*)" },
+            { name = "admitted, virtual realm", pvp = nil,                        second = "Ravencrest", always = false, virtual = true,  realmNames = true, want = "Chillgor" },
+            { name = "admitted, same realm",    pvp = "Sergeant Chillgor",        second = nil,      always = true,  virtual = false, realmNames = true,  want = "Sergeant Chillgor" },
+        }) do
+            assert.equals(row.want,
+                TT._ComposeNameLine("Chillgor", row.second, row.pvp, row.virtual, row.always, row.realmNames),
+                row.name)
+        end
+    end)
+end)
+
+describe("Tooltips EffectiveLineOptions", function()
+    -- A shared or imported profile can carry all three on.
+    it("reads every withheld unit-line option as off after a baseline load and as saved after a retail load", function()
+        for _, row in ipairs({
+            { name = "baseline, saved on", forever = true,  saved = true,  want = false },
+            { name = "retail, saved on",   forever = false, saved = true,  want = true },
+            { name = "retail, saved off",  forever = false, saved = false, want = false },
+        }) do
+            local TT = L.loadTooltips({ forever = row.forever })
+            local realm, guildRealm, mythicPlus = TT._EffectiveLineOptions({
+                AlwaysShowRealm = row.saved, HideGuildRealm = row.saved, MythicPlusLine = row.saved,
+            })
+            assert.same({ row.want, row.want, row.want }, { realm, guildRealm, mythicPlus }, row.name)
+        end
+    end)
+end)

@@ -6,7 +6,7 @@ local hooksecurefunc = hooksecurefunc
 local SLOTS = {
     "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist",
     "Hands", "Waist", "Legs", "Feet", "Finger0", "Finger1", "Trinket0",
-    "Trinket1", "MainHand", "SecondaryHand",
+    "Trinket1", "MainHand", "SecondaryHand", "Ranged", "Ammo",
 }
 
 local STAT_CATEGORIES = { "ItemLevelCategory", "AttributesCategory", "EnhancementsCategory" }
@@ -59,6 +59,21 @@ local function ColorizeStatPane(frame)
 end
 S._ColorizeStatPane = ColorizeStatPane
 
+-- One stat row: its fonts once, then the gradients. Blizzard stripes the
+-- plate down the list, on for one row and off for the next; the gradients
+-- follow that rather than blooming every row.
+local function StyleStatLine(row)
+    local d = S.data(row)
+    if not d.statFonted then
+        d.statFonted = true
+        S.FontStrings(row, ROW_SIZE, "OUTLINE")
+    end
+    local shown = row.Background and row.Background:IsShown()
+    ColorizeStatPane(row)
+    if d.statGradL then d.statGradL:SetShown(shown) end
+    if d.statGradR then d.statGradR:SetShown(shown) end
+end
+
 local function UpdateStatsPane()
     local pane = _G.CharacterStatsPane
     if not pane then return end
@@ -78,22 +93,43 @@ local function UpdateStatsPane()
 
     if pane.statsFramePool and pane.statsFramePool.EnumerateActive then
         for row in pane.statsFramePool:EnumerateActive() do
-
-            if not S.data(row).statFonted then
-                S.data(row).statFonted = true
-
-                S.FontStrings(row, ROW_SIZE, "OUTLINE")
-            end
-
-            -- Blizzard stripes the plate down the list, on for one row and off
-            -- for the next. Follow that rather than blooming every row.
-            local shown = row.Background and row.Background:IsShown()
-            ColorizeStatPane(row)
-            local d = S.data(row)
-            if d.statGradL then d.statGradL:SetShown(shown) end
-            if d.statGradR then d.statGradR:SetShown(shown) end
+            StyleStatLine(row)
         end
     end
+end
+
+-- A client that lists the stats in a ScrollBox: header rows carry a Title,
+-- stat rows a Label and a Value. The pooled pane above stays, hidden there.
+local function StyleStatsScrollRow(row)
+    if not row.Title then return StyleStatLine(row) end
+    local d = S.data(row)
+    if d.keStatHeader then return end
+    d.keStatHeader = true
+    S.StripTextures(row)
+    local bd = S.Backdrop(row)
+    if bd then
+        bd:ClearAllPoints()
+        bd:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -HEADER_INSET)
+        bd:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, HEADER_INSET)
+    end
+    S.FontStrings(row, HEADER_SIZE, "OUTLINE")
+end
+
+-- The player's list and the pet's, which the pet sidebar tab shows; both use
+-- the same template.
+local STATS_HOSTS = { "CharacterStatsPaneScrollBox", "CharacterStatsPanePetScrollBox" }
+
+local function SkinStatsScrollBox()
+    for _, name in ipairs(STATS_HOSTS) do
+        local host = _G[name]
+        if host then
+            S.StripTextures(host)
+            if host.ScrollBar then S.ScrollBar(host.ScrollBar) end
+            if host.ScrollBox then S.HookScrollBox(host.ScrollBox, StyleStatsScrollRow) end
+        end
+    end
+    -- The pet tab's experience bar is a colored progress bar.
+    S.ColoredBar(_G.PetPaperDollFrameExpBar)
 end
 
 local statsHooked = false
@@ -135,14 +171,32 @@ local function SkinStatsPane()
     end
 
     UpdateStatsPane()
+    SkinStatsScrollBox()
     if not statsHooked and _G.PaperDollFrame_UpdateStats then
         hooksecurefunc("PaperDollFrame_UpdateStats", UpdateStatsPane)
         statsHooked = true
     end
 end
 
+-- A sidebar tab without TabBg draws its frame from an unnamed region under
+-- this atlas and marks the open pane with an atlas checked texture.
+local STAT_TAB_ATLAS = "UI-Character-Info-StatTab"
+
+local function DressStatTabArt(tab)
+    for _, region in ipairs({ tab:GetRegions() }) do
+        if region:IsObjectType("Texture") and region:GetAtlas() == STAT_TAB_ATLAS then
+            S.KillTexture(region)
+        end
+    end
+    local checked = tab.GetCheckedTexture and tab:GetCheckedTexture()
+    if checked then
+        S.PaintBrand(checked, "SetColorTexture", S.palette.selectedA)
+        S.InsetToEdge(checked, S.GetBackdrop(tab))
+    end
+end
+
 local function SkinSidebarTabs()
-    for i = 1, 3 do
+    for i = 1, 4 do
         local tab = _G["PaperDollSidebarTab" .. i]
         if tab and not S.data(tab).keTabSkinned then
             -- (art flashed on open): SetAlpha(0) is
@@ -150,6 +204,7 @@ local function SkinSidebarTabs()
             -- to be Killed rather than faded.
             if tab.TabBg then S.Kill(tab.TabBg) end
             S.Backdrop(tab)
+            if not tab.TabBg then DressStatTabArt(tab) end
             if tab.Icon and tab.Icon.SetAllPoints then tab.Icon:SetAllPoints() end
             if tab.Highlight and tab.Highlight.SetColorTexture then
 
@@ -431,7 +486,6 @@ local function UpdateCharacterInset(a, b)
     -- The hook passes (self, name); the skin's own call passes (name).
     local name = (type(b) == "string" and b) or (type(a) == "string" and a) or nil
     local inset = _G.CharacterFrameInset
-    if not inset then return end
 
     -- (art returns on Currency -> Reputation ->
     -- Character): Blizzard re-dresses the inset on every tab switch,
@@ -444,6 +498,8 @@ local function UpdateCharacterInset(a, b)
     -- re-strip the parent here as well. With NineSlice now in the
     -- region list, this clears the pieces themselves.
     S.StripTextures(_G.CharacterFrame)
+    -- Without an inset the frame's own art still returns on every tab switch.
+    if not inset then return end
     S.StripTextures(inset)
     if _G.CharacterFrameInsetRight then S.StripTextures(_G.CharacterFrameInsetRight) end
 
@@ -537,6 +593,7 @@ local function Skin()
         local button = _G["Character" .. slot .. "Slot"]
         if button then
             S.ItemButton(button)
+            if button.BorderFrame then S.StripTextures(button.BorderFrame) end
             if qualityBorders and button.IconBorder then
                 S.IconBorder(button.IconBorder, S.GetBackdrop(button))
             end
@@ -554,6 +611,9 @@ local function Skin()
 
     SkinStatsPane()
     SkinSidebarTabs()
+    if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
+    if frame.LeftPaneHost then S.StripTextures(frame.LeftPaneHost) end
+    if frame.RightPaneHost then S.StripTextures(frame.RightPaneHost) end
 
     SkinTitlesPane()
     SkinEquipmentManagerPane()

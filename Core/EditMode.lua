@@ -310,15 +310,16 @@ function EditMode:ElementMatchesCategory(element)
     return KE:GetSectionForItem(element.guiPath) == self.activeCategory
 end
 
--- Two reasons a registered element is not live, so Edit Mode draws no box for it.
--- Its module was switched off: registration outlives the module, so without
--- this the box outlives it too. Or the module is running but something else
--- owns the position in the current mode.
+-- Three reasons a registered element is not live, so Edit Mode draws no box for it.
+-- This client withholds its page. Its module was switched off: registration
+-- outlives the module, so without this the box outlives it too. Or the module
+-- is running but something else owns the position in the current mode.
 --
 -- Visibility is deliberately NOT used here. Some movers are invisible proxies
 -- by design, previews are switched on after overlays are built, and the
 -- visibility APIs are secret-capable.
 function EditMode:ElementIsLive(element)
+    if not KE:IsFeatureAvailable(element.guiPath) then return false end
     local module = element.module
     if module and module.IsEnabled and not module:IsEnabled() then
         return false

@@ -97,9 +97,7 @@ function KitnEssentials:OnInitialize()
     KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true) --[[@as AceDB]]
     KE:MigrateChatHistoryToCharStore()
     KE:ClearStaleChatHistory()
-    if KE.LDS then
-        KE.LDS:EnhanceDatabase(KE.db, "KitnEssentials")
-    end
+    KE:EnhanceDualSpec(KE.db)
     if KE.db.global and KE.db.global.UseGlobalProfile then
         local profileName = KE.db.global.GlobalProfile or DEFAULT_PROFILE
         if KE.ProfileManager.ProfileNameError(profileName) then profileName = DEFAULT_PROFILE end
@@ -168,7 +166,7 @@ function KE:SetupMinimapIcon()
             elseif button == "RightButton" then
                 if KE.EditMode then KE.EditMode:Toggle() end
             elseif button == "MiddleButton" then
-                ReloadUI()
+                KE:ReloadUI()
             end
         end,
         OnTooltipShow = function(tt)
@@ -202,8 +200,8 @@ local function OnEncounterStart()
 end
 
 local function OnPlayerEnteringWorld()
-    for _, module in KitnEssentials:IterateModules() do
-        if module:IsEnabled() and module.ApplySettings then
+    for name, module in KitnEssentials:IterateModules() do
+        if module:IsEnabled() and module.ApplySettings and KE:IsFeatureAvailable(name) then
             module:ApplySettings()
         end
     end
@@ -220,7 +218,8 @@ function KitnEssentials:OnEnable()
     -- Enable modules based on saved settings
     local skipSkinning = KE:ShouldNotLoadModule()
     for name, module in self:IterateModules() do
-        if module.db and module.db.Enabled then
+        -- A withheld module stays off whatever its saved flag says.
+        if module.db and module.db.Enabled and KE:IsFeatureAvailable(name) then
             -- Skip skinning modules when ElvUI handles skinning
             if not (skipSkinning and (name:find("^Skin") or module.keDeferToReload)) then
                 self:EnableModule(name)

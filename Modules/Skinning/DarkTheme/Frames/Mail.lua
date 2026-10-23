@@ -161,13 +161,23 @@ local function Skin()
     S.TabsSettle("MailFrameTab", 2)
 end
 
+-- A client without the global refresh function updates through the frame's
+-- own Update method, which Blizzard always calls on the frame itself.
+local function HookUpdate(globalName, frame, fn)
+    if _G[globalName] then
+        hooksecurefunc(globalName, fn)
+    elseif frame and frame.Update then
+        hooksecurefunc(frame, "Update", fn)
+    end
+end
+
 -- An inbox update can reach the rows while the window is hidden, so these
 -- hooks exist from login.
 local function Arm()
     if not _G.MailFrame then return S.Skip("MailFrame missing") end
-    if _G.SendMailFrame_Update then hooksecurefunc("SendMailFrame_Update", SkinSendAttachments) end
-    if _G.OpenMail_Update then hooksecurefunc("OpenMail_Update", SkinOpenAttachments) end
-    if _G.InboxFrame_Update then hooksecurefunc("InboxFrame_Update", SkinInboxRows) end
+    HookUpdate("SendMailFrame_Update", _G.SendMailFrame, SkinSendAttachments)
+    HookUpdate("OpenMail_Update", _G.OpenMailFrame, SkinOpenAttachments)
+    HookUpdate("InboxFrame_Update", _G.InboxFrame, SkinInboxRows)
 
     -- Body fonts for the letter and the auction invoice.
     for _, name in next, { "InvoiceTextFontNormal", "MailTextFontNormal" } do

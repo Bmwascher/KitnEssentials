@@ -186,6 +186,8 @@ local function loadProfiler(options)
         IsSecretValue = function()
             return false
         end,
+        -- KE:ReloadUI after a retail load (Core/Widgets.lua).
+        ReloadUI = function() _G.ReloadUI() end,
         -- SEVEN placeholders between text and onAccept, matching the real
         -- signature (Core/Widgets.lua).
         CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,

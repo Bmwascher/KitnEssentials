@@ -270,6 +270,7 @@ describe("ChatMessageHandler body highlight", function()
     after_each(function()
         _G.KitnEssentials = nil
         _G.GetNormalizedRealmName = nil
+        _G.RegionalUniqueNamesEnabled = nil
         -- installSound's LibStub is not reinstalled by the loader either, so it
         -- would otherwise outlive this file and hand a working Fetch to any
         -- later spec that forgot to stub one.
@@ -383,6 +384,43 @@ describe("ChatMessageHandler body highlight", function()
             setChat({ HighlightKeywords = "", ClassColorMentions = true, ExcludedMentions = "Ana-Realm", HighlightSound = "None" })
             assert.are.equal("ping Ana-Realm", CMH.Highlight("ping Ana-Realm"))
         end)
+
+        -- Surname mode: a full name is two words, and the class-name cache
+        -- holds it whole.
+        it("treats a first name and surname as one name in surname mode", function()
+            for _, row in ipairs({
+                { why = "a cached full name is one hit, not its first word", surnames = true,
+                  names = { ["ana smith"] = "MAGE", ana = "ROGUE" }, text = "ping Ana Smith now",
+                  has = { "Ana Smith|r" }, hasNot = { "Ana|r" } },
+                { why = "an excluded full name stops the fallback", surnames = true, excluded = "Ana Smith",
+                  names = { ["ana smith"] = "MAGE", ana = "ROGUE" }, text = "ping Ana Smith now", same = true },
+                { why = "a following word is still looked up alone", surnames = true,
+                  names = { ana = "MAGE", bob = "ROGUE" }, text = "Ana Bob",
+                  has = { "Ana|r", "Bob|r" } },
+                { why = "outside surname mode a two-word key is never tried", surnames = false,
+                  names = { ["ana smith"] = "MAGE" }, text = "ping Ana Smith now", same = true },
+            }) do
+                if row.surnames then
+                    _G.RegionalUniqueNamesEnabled = function() return true end
+                else
+                    _G.RegionalUniqueNamesEnabled = nil
+                end
+                _G.KitnEssentials = {
+                    GetModule = function() return { ClassNames = row.names } end,
+                }
+                CMH.ResetHighlight()
+                setChat({ HighlightKeywords = "", ClassColorMentions = true,
+                          ExcludedMentions = row.excluded or "", HighlightSound = "None" })
+                local out = CMH.Highlight(row.text)
+                if row.same then assert.are.equal(row.text, out, row.why) end
+                for _, piece in ipairs(row.has or {}) do
+                    assert.is_truthy(out:find(piece, 1, true), row.why .. ": " .. piece)
+                end
+                for _, piece in ipairs(row.hasNot or {}) do
+                    assert.is_falsy(out:find(piece, 1, true), row.why .. ": " .. piece)
+                end
+            end
+        end)
     end)
 
     describe("sound", function()
@@ -473,6 +511,25 @@ describe("ChatMessageHandler body highlight", function()
             setChat({ HighlightKeywords = "kitn", HighlightColor = { 1, 0, 0 }, HighlightSound = "Bell" })
             CMH.Highlight("kitn", "Ana")
             assert.is_true(played)
+        end)
+
+        -- Surname mode: UnitFullName's second return is your surname, and a
+        -- sender is "First Surname" with no realm.
+        it("in surname mode, stays silent on your own full name and plays for a namesake", function()
+            installSound()
+            _G.RegionalUniqueNamesEnabled = function() return true end
+            _G.UnitFullName = function() return "Kitn", "Bingus" end
+            for _, row in ipairs({
+                { author = "Kitn Bingus", want = false, why = "your own full name" },
+                { author = "Kitn Smith",  want = true,  why = "your first name, another surname" },
+                { author = "Kitn",        want = true,  why = "your first name, no surname" },
+            }) do
+                CMH.ResetHighlight()
+                setChat({ HighlightKeywords = "kitn", HighlightColor = { 1, 0, 0 }, HighlightSound = "Bell" })
+                played = false
+                CMH.Highlight("kitn", row.author)
+                assert.are.equal(row.want, played, row.why)
+            end
         end)
 
         it("throttles to one play every five seconds", function()

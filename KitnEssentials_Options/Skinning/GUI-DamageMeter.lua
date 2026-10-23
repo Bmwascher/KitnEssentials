@@ -59,6 +59,23 @@ local CONTEXT_OPTIONS = {
     { key = "Scenario",     text = "Scenario" },
 }
 
+-- A client can withhold these options; the module ignores their saved values
+-- there, so their controls are left out rather than grayed.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local REALM_NAMES = Admitted("DamageMeterRealmNames")
+local MYTHIC_PLUS = Admitted("DamageMeterMythicPlus")
+local KEYSTONES = Admitted("DamageMeterKeystone")
+
+local CONTEXT_CHOICES = CONTEXT_OPTIONS
+if not MYTHIC_PLUS then
+    CONTEXT_CHOICES = {}
+    for _, option in ipairs(CONTEXT_OPTIONS) do
+        if option.key ~= "Mythic+" then CONTEXT_CHOICES[#CONTEXT_CHOICES + 1] = option end
+    end
+end
+
 -- The map boxes and split labels name a window by these texts.
 local TYPE_TEXT, SEGMENT_TEXT = {}, {}
 for _, option in ipairs(METER_TYPE_OPTIONS) do TYPE_TEXT[option.key] = option.text end
@@ -1536,7 +1553,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     local rowCtx = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     local ctxDropdown = GUIFrame:CreateDropdown(rowCtx, "Configure For", {
-        options = CONTEXT_OPTIONS,
+        options = CONTEXT_CHOICES,
         value = ctx,
         tooltip = "Each kind of content can have its own windows, types and segments. They apply when " ..
             "you enter that content; content you have not set up uses Default.",
@@ -1788,15 +1805,17 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
         value = db.ShowName ~= false,
         callback = function(checked) db.ShowName = checked; ApplySettings() end,
     })
-    rowNames:AddWidget(nameChk, 0.5)
+    rowNames:AddWidget(nameChk, REALM_NAMES and 0.5 or 1)
     manager:Register(nameChk, "all")
 
-    local realmChk = GUIFrame:CreateCheckbox(rowNames, "Show Realm Names", {
-        value = db.ShowRealm == true,
-        callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
-    })
-    rowNames:AddWidget(realmChk, 0.5)
-    manager:Register(realmChk, "all")
+    if REALM_NAMES then
+        local realmChk = GUIFrame:CreateCheckbox(rowNames, "Show Realm Names", {
+            value = db.ShowRealm == true,
+            callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
+        })
+        rowNames:AddWidget(realmChk, 0.5)
+        manager:Register(realmChk, "all")
+    end
     cardText:AddRow(rowNames, Theme.rowHeight)
 
     local rowClass = GUIFrame:CreateRow(cardText.content, Theme.rowHeight)
@@ -2119,21 +2138,23 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(cardSeg, "all")
 
     local rowSeg = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
-    local keyResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Key Start", {
-        value = db.ResetOnKeyStart ~= false,
-        tooltip = "Clears every segment when a keystone starts, so Overall covers just that run. Off, " ..
-            "history and Overall run across keys until /kes dm reset or the header reset button.",
-        callback = function(checked) db.ResetOnKeyStart = checked end,
-    })
-    rowSeg:AddWidget(keyResetChk, 0.5)
-    manager:Register(keyResetChk, "all")
+    if KEYSTONES then
+        local keyResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Key Start", {
+            value = db.ResetOnKeyStart ~= false,
+            tooltip = "Clears every segment when a keystone starts, so Overall covers just that run. Off, " ..
+                "history and Overall run across keys until /kes dm reset or the header reset button.",
+            callback = function(checked) db.ResetOnKeyStart = checked end,
+        })
+        rowSeg:AddWidget(keyResetChk, 0.5)
+        manager:Register(keyResetChk, "all")
+    end
 
     local logoutResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Logout", {
         value = db.ResetOnLogout == true,
         tooltip = "Clears the meter the next time you log in. A /reload keeps it.",
         callback = function(checked) db.ResetOnLogout = checked end,
     })
-    rowSeg:AddWidget(logoutResetChk, 0.5)
+    rowSeg:AddWidget(logoutResetChk, KEYSTONES and 0.5 or 1)
     manager:Register(logoutResetChk, "all")
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
@@ -2143,7 +2164,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         value = db.ResetOnInstanceEntry == true,
         tooltip = "Clears the meter when you enter a different dungeon, raid, scenario or Delve, or a " ..
             "different difficulty. Running back after a death, a login or a /reload is not an entry. " ..
-            "Key history is kept.",
+            (KEYSTONES and "Key history is kept." or "History is kept."),
         callback = function(checked)
             db.ResetOnInstanceEntry = checked
             if not checked and DM and DM.CloseInstancePrompt then DM:CloseInstancePrompt() end
@@ -2182,17 +2203,23 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     elseif retainDisplay > 5 then
         retainDisplay = 5
     end
-    local retainSlider = GUIFrame:CreateSlider(rowRetain, "Key History (keys kept)", {
+    -- Without keystones, the instance-entry and login resets fill the history.
+    local retainLabel = KEYSTONES and "Key History (keys kept)" or "History (resets kept)"
+    local retainTip = KEYSTONES
+        and ("With Reset on Key Start on, this many past keys stay in the segment menu. Each keeps " ..
+            "full detail for its Run Summary or newest pull, and totals for its other pulls.")
+        or "Each reset keeps its segments as an Earlier runs entry in the segment menu, up to this many."
+    local retainSlider = GUIFrame:CreateSlider(rowRetain, retainLabel, {
         min = 1, max = 5, step = 1,
         value = retainDisplay,
-        tooltip = "With Reset on Key Start on, this many past keys stay in the segment menu. Each keeps " ..
-            "full detail for its Run Summary or newest pull, and totals for its other pulls.",
+        tooltip = retainTip,
         callback = function(v) db.HistoryRetain = v end,
     })
     rowRetain:AddWidget(retainSlider, 1)
     manager:Register(retainSlider, "all")
     cardSeg:AddRow(rowRetain, Theme.rowHeight)
-    cardSeg:AddNote("Kept keys stay in the segment menu until a reload or a reset.")
+    cardSeg:AddNote(KEYSTONES and "Kept keys stay in the segment menu until a reload or a reset."
+        or "Earlier runs stay in the segment menu until a reload or a reset.")
 
     yOffset = cardSeg:GetNextOffset()
 

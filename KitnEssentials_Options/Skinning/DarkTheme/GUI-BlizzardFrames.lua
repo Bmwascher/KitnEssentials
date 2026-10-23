@@ -226,6 +226,19 @@ local DROPDOWN_H = 40
 local function SortByText(list)
     table.sort(list, function(a, b) return a.text < b.text end)
 end
+-- Rows for skins this client withholds leave the list before anything reads
+-- it, so neither a row nor the bulk toggle can write a withheld choice, and a
+-- module-backed row never enables a module that is not loaded. A headless
+-- load of this page has no policy and keeps every row, as on retail.
+local function AdmittedFrameSkins(list)
+    if not KE.IsFrameSkinAvailable then return list end
+    local kept = {}
+    for _, entry in ipairs(list) do
+        if KE:IsFrameSkinAvailable(entry.key) then kept[#kept + 1] = entry end
+    end
+    return kept
+end
+FRAME_SKINS = AdmittedFrameSkins(FRAME_SKINS)
 SortByText(FRAME_SKINS)
 SortByText(ADDON_SKINS)
 
@@ -720,14 +733,16 @@ GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", elementIds)
 
 -- No conflict branch here. Every tab on this row configures a module that
 -- stands down under ElvUI, so the whole Elements tab drops out of the strip
--- rather than this row filtering itself.
+-- rather than this row filtering itself. The client policy does filter it:
+-- these ids are feature ids, which GUIFrame:CreateSubTabs never checks.
 local function VisibleElementTabs()
-    return elementTabs
+    return KE.FilterAvailableEntries and KE:FilterAvailableEntries(elementTabs) or elementTabs
 end
 GUIFrame._VisibleElementTabs = VisibleElementTabs
 
 GUIFrame:RegisterContent("SkinBlizzardFramesElements", function(scrollChild, yOffset)
     local tabs = VisibleElementTabs()
+    if #tabs == 0 then return yOffset end
 
     -- Consumed once: re-reading it on every rebuild would drag the user back
     -- here every time the page redraws after they clicked a different sub-tab.
@@ -813,12 +828,21 @@ end, {
         -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
             card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
-        else
+        elseif KE.Skins and KE.Skins.PadStandDown and KE.Skins.PadStandDown() then
+            card:AddNote("|cffffd100The Gamepad interface style is on.|r KitnEssentials leaves Blizzard's windows, fonts and menus unskinned in that style so the controller's own navigation is not disturbed. Your settings are kept and take effect after a /reload in the mouse and keyboard style.")
+        elseif GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesElements"] then
             card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
                 "windows and drops out of the tab row while this is off. Fonts and Elements have " ..
                 "their own switches and keep working with this off. The Skinned Windows size and " ..
                 "outline only show in skinned windows; its font face is also the one Blizzard Text " ..
                 "uses. Changes apply after a /reload.")
+        else
+            -- Elements is unregistered only where the client withholds it, and
+            -- Blizzard Text with it, so the label names neither.
+            card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
+                "windows and drops out of the tab row while this is off. Fonts keeps working with " ..
+                "this off. The Skinned Windows size and outline only show in skinned windows. " ..
+                "Changes apply after a /reload.")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own

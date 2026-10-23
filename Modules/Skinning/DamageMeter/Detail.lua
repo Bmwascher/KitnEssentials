@@ -97,7 +97,7 @@ end
 -- them), so the plain :match strip is safe -- a character name never contains a hyphen.
 local function StripRealmName(db, name)
     if not name then return name end
-    if db and db.ShowRealm then return name end
+    if db and db.ShowRealm and DM.realmNamesAdmitted then return name end
     return name:match("^[^-]+") or name
 end
 
@@ -1277,7 +1277,8 @@ local TIP_TGT_GAP = 4           -- vertical gap above the Targets divider
 local TIP_TGT_LABEL_H = 12      -- height the "Targets" label occupies before the target rows
 local _tip                      -- module-level singleton (shared by all windows)
 local _tipActiveBar             -- the bar currently hovered (nil = none); drives the poll
-local _tipPoll                  -- detach-when-idle OnUpdate frame
+local _tipPoll                  -- detach-when-idle OnUpdate frame, made on first hover
+local TipPollOnUpdate
 local _tipPollAccum = 0
 -- Which recap the tip is currently SHOWING. The stash is on the tip, not on the
 -- hovered bar: the tip is a shared singleton, so a bar-keyed stash would let a
@@ -2190,7 +2191,13 @@ function DM:ShowHoverTip(W, bar, isInitial)
         end
         _tip:Show()
         _tipActiveBar = bar
-        if _tipPoll then _tipPollAccum = 0; _tipPoll:Show() end
+        if not _tipPoll then
+            _tipPoll = CreateFrame("Frame")
+            _tipPoll:Hide()
+            _tipPoll:SetScript("OnUpdate", TipPollOnUpdate)
+        end
+        _tipPollAccum = 0
+        _tipPoll:Show()
     else
         self:HideHoverTip()
     end
@@ -2276,9 +2283,7 @@ end
 -- Detach-when-idle live poll (KE OnUpdate detach-when-idle pattern). Only runs while
 -- a bar is actively hovered; re-populates ~4 Hz so settling numbers stay live (OOC)
 -- or the combat message stays put. Hides itself the instant the active bar is gone.
-_tipPoll = CreateFrame("Frame")
-_tipPoll:Hide()
-_tipPoll:SetScript("OnUpdate", function(self, elapsed)
+TipPollOnUpdate = function(self, elapsed)
     _tipPollAccum = _tipPollAccum + elapsed
     if _tipPollAccum < 0.25 then return end   -- ~4 Hz check is plenty for a hover peek
     _tipPollAccum = 0
@@ -2294,7 +2299,7 @@ _tipPoll:SetScript("OnUpdate", function(self, elapsed)
     if not DM._hoverTipDirty then return end
     DM._hoverTipDirty = false
     DM:ShowHoverTip(bar.win, bar, false)      -- re-populate live / flip to/from the combat message; skip re-anchor
-end)
+end
 
 ---------------------------------------------------------------------------------
 -- Busted seam (dev/spec/dm_breakdown_spec.lua, dm_meter_names_spec.lua). The pure helpers

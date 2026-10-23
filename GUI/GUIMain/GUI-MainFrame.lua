@@ -148,6 +148,16 @@ for _, section in ipairs(GUIFrame.sidebarConfig) do
     end
 end
 
+-- Rows for withheld features leave the table itself, so the sidebar, its
+-- search and Edit Mode's categories all agree. A section left empty goes too.
+for i = #GUIFrame.sidebarConfig, 1, -1 do
+    local section = GUIFrame.sidebarConfig[i]
+    section.items = KE:FilterAvailableEntries(section.items)
+    if #section.items == 0 then
+        table.remove(GUIFrame.sidebarConfig, i)
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Content Area
 ---------------------------------------------------------------------------------
