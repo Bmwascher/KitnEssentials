@@ -30,4 +30,5 @@
     <Script file="Skinning\DarkTheme\LootRollBars.lua" />
     <Script file="Skinning\DarkTheme\LootFrame.lua" />
     <Include file="Skinning\DarkTheme\Frames\Frames-Camelot.xml" />
+    <Include file="Skinning\DamageMeter\DamageMeter.xml" />
 </Ui>

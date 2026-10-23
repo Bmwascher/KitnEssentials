@@ -15,6 +15,10 @@ local DM = KitnEssentials:NewModule("DamageMeter", "AceEvent-3.0")
 
 KE.DamageMeter = DM
 
+-- Where realm names are withheld their control is hidden, so a saved Show
+-- Realm Names must not show realms there.
+DM.realmNamesAdmitted = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("DamageMeterRealmNames") == true
+
 local DEBUG_DM = false
 
 -- Module state. editModeRegistered tracks whether the dock mover is currently
@@ -2819,7 +2823,7 @@ function DM:ReportView(rest, winIdx)
         -- nm is plain here, so string ops are taint-safe. Honor ShowRealm: strip the
         -- realm suffix (player names never contain a hyphen, so the split is exact).
         local shown = nm
-        if not (self.db and self.db.ShowRealm) then
+        if not (self.db and self.db.ShowRealm and DM.realmNamesAdmitted) then
             shown = nm:match("^([^-]+)") or nm
         end
 

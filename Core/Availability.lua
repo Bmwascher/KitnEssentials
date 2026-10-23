@@ -58,6 +58,9 @@ local FOREVER_ALLOWED = {
     Chat = true,
     ChatHistory = true,
     ChatLinks = true,
+    -- Damage Meter: the module and its page. Its realm-name, Mythic+ and
+    -- keystone options stay withheld.
+    DamageMeter = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
