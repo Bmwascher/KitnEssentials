@@ -412,6 +412,141 @@ try {
     } finally {
         $env:KE_PROGRAM_MASTERS = $msaved.reg; $env:CLAUDE_CODE_SESSION_ID = $msaved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $msaved.hid
     }
+    # The retention rules for the parsec docs root, against a throwaway project
+    # whose docs root sits outside it. The project is no git repository, so the
+    # same runs show the docs-root rules running when git fails.
+    $rproj = Join-Path $outside 'rproj'
+    $rdocs = Join-Path $outside 'rdocs'
+    $rarch = Join-Path $outside '_archive\KitnEssentials-process'
+    foreach ($d in @('.claude', 'dev\scripts', 'dev\docs')) { New-Item -ItemType Directory -Path (Join-Path $rproj $d) -Force | Out-Null }
+    foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $rproj 'dev\scripts\') }
+    [System.IO.File]::WriteAllText((Join-Path $rproj '.claude\parsec.toml'), "docs_root = `"$($rdocs -replace '\\', '/')`"`n")
+    $keepLines = @(
+        'docs:01-09-kept|until:2099-01-01|fixture',
+        'docs:01-17-kept-member|until:2099-01-01|fixture',
+        'dev/docs/parsec/01-01-x|until:2099-01-01|fixture'
+    )
+    [System.IO.File]::WriteAllText((Join-Path $rproj 'dev\docs\retention-keep.txt'), ($keepLines -join "`n") + "`n")
+    $head = "# F (2026)`ntopic: f   branch: f   base: 1`n"
+    $merged = "$head- 2026-01-01 10:00 -0500 finish: merged abc1234`n"
+    $fixture = [ordered]@{
+        '01-01-merged-template\ledger.md' = "$head- 2026-01-01 10:00 -0500 finish: stop and report`n- 2026-01-02 10:00 -0500 finish: merged abc1234`n"
+        '01-02-merged-bullet\ledger.md' = "# F (2026)`n- head: topic f, base 1, checkout x`n- 2026-01-02 merged: abc1234 on main, pushed`n"
+        '01-03-reported\ledger.md' = "$head- 2026-01-03 10:00 -0500 finish: stop and report, unmerged`n"
+        '01-04-reopened\ledger.md' = "$head- 2026-01-04 10:00 -0500 finish: merged abc1234`n- 2026-01-05 10:00 -0500 finish: stop and report`n"
+        '01-05-pending\ledger.md' = $merged
+        '01-05-pending\rounds\diff-r1-sol\pending.json' = '{}'
+        '01-06-noledger\notes.md' = "# n`n"
+        '01-06-noledger\shot.png' = 'x'
+        '01-07-open-member\ledger.md' = $merged
+        '01-08-closed-member\ledger.md' = "$head- 2026-01-08 10:00 -0500 finish: stop and report`n"
+        '01-09-kept\ledger.md' = $merged
+        '01-10-fresh\ledger.md' = $merged
+        '01-11-held-member\ledger.md' = $merged
+        '01-11-held-member\rounds\diff-r1-sol\pending.json' = '{}'
+        '01-12-nofinish\ledger.md' = "$head- 2026-01-12 10:00 -0500 go: Brandon`n"
+        '01-13-young\ledger.md' = "$head- 2026-01-13 10:00 -0500 finish: stop and report`n"
+        '01-14-shared\ledger.md' = $merged
+        '01-16-locked-member\notes.md' = "# n`n"
+        '01-17-kept-member\ledger.md' = $merged
+        '01-18-dead-round\ledger.md' = $merged
+        '01-18-dead-round\rounds\prereview-r1-opus.dead1\pending.json' = '{}'
+        'panels\01-01-panel\brief.md' = "# p`n"
+        'programs\2026-01-01-open\program.md' = "# Open`n`n## Feature folders`n`n- ``01-07-open-member```n- ``01-14-shared```n"
+        'programs\2026-01-02-shut\program.md' = "# Shut`nclosed: 2026-01-03`n`n## Feature folders`n`n- ``01-08-closed-member`` phase 1`n- ``01-15-gone```n`n---`n"
+        'programs\2026-01-03-held\program.md' = "# Held`nclosed: 2026-01-04`n`n## Feature folders`n`n- ``01-11-held-member```n"
+        'programs\2026-01-04-twin\program.md' = "# Twin`n`n## Feature folders`n`n- ``01-14-shared```n"
+        'programs\2026-01-05-noprog\scoping.md' = "# s`n"
+        'programs\2026-01-06-keptheld\program.md' = "# Kept held`nclosed: 2026-01-06`n`n## Feature folders`n`n- ``01-17-kept-member```n"
+        'programs\2026-01-07-locked\program.md' = "# Locked`nclosed: 2026-01-07`n`n## Feature folders`n`n- ``01-16-locked-member```n"
+        'programs\2026-01-01-loose.md' = "# loose`n"
+        'programs\active-masters.tsv' = ''
+        'programs\.migrated' = "migrated`n"
+    }
+    foreach ($f in $fixture.Keys) {
+        $path = Join-Path $rdocs $f
+        New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
+        [System.IO.File]::WriteAllText($path, $fixture[$f])
+    }
+    $aged = (Get-Date).AddDays(-40)
+    Get-ChildItem -LiteralPath $rdocs -Recurse -File | Where-Object { $_.FullName -notlike '*\01-10-fresh\*' -and $_.FullName -notlike '*\01-13-young\*' } | ForEach-Object { $_.LastWriteTime = $aged }
+    $rret = Join-Path $rproj 'dev\scripts\check-artifact-retention.ps1'
+    $dry = (& pwsh -NoProfile -File $rret -Root $rproj -Soft 2>&1 | Out-String)
+    # A file held open makes the locked program's member move fail during -Archive.
+    $lock = [System.IO.File]::Open((Join-Path $rdocs '01-16-locked-member\notes.md'), 'Open', 'Read', 'None')
+    try { $arch = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Archive 2>&1 | Out-String) } finally { $lock.Dispose() }
+    function RetMoved([string]$from, [string]$to) { (Test-Path (Join-Path $rarch $to)) -and -not (Test-Path (Join-Path $rdocs $from)) }
+    function RetStays([string]$from) { Test-Path (Join-Path $rdocs $from) }
+    $rows = @(
+        @{ n = '01-01-merged-template'; listed = '(?m)^\s+docs:01-01-merged-template\s*$'; place = (RetMoved '01-01-merged-template' 'parsec\2026\01-01-merged-template') },
+        @{ n = '01-02-merged-bullet'; listed = '(?m)^\s+docs:01-02-merged-bullet\s*$'; place = (RetMoved '01-02-merged-bullet' 'parsec\2026\01-02-merged-bullet') },
+        @{ n = '01-03-reported'; listed = 'docs:01-03-reported \(last finish: stop and report, unmerged\)'; place = (RetStays '01-03-reported') },
+        @{ n = '01-04-reopened'; listed = 'docs:01-04-reopened \(last finish: stop and report\)'; place = (RetStays '01-04-reopened') },
+        @{ n = '01-05-pending'; listed = 'docs:01-05-pending \(round pending\)'; place = (RetStays '01-05-pending') },
+        @{ n = '01-18-dead-round'; listed = '(?m)^\s+docs:01-18-dead-round\s*$'; place = (RetMoved '01-18-dead-round' 'parsec\2026\01-18-dead-round') },
+        @{ n = '01-06-noledger'; listed = 'docs:01-06-noledger \(no ledger\)'; place = (RetStays '01-06-noledger') },
+        @{ n = '01-12-nofinish'; listed = 'docs:01-12-nofinish \(no finish line\)'; place = (RetStays '01-12-nofinish') },
+        @{ n = '01-13-young'; listed = $null; place = (RetStays '01-13-young') },
+        @{ n = '01-07-open-member'; listed = $null; place = (RetStays '01-07-open-member') },
+        @{ n = '01-14-shared'; listed = 'docs:01-14-shared \(listed by two programs\)'; place = (RetStays '01-14-shared') },
+        @{ n = '01-08-closed-member'; listed = $null; place = (RetMoved '01-08-closed-member' 'programs\2026-01-02-shut\features\01-08-closed-member') },
+        @{ n = 'programs\2026-01-02-shut'; listed = '\[I\] closed program docs:programs/2026-01-02-shut,'; place = (RetMoved 'programs\2026-01-02-shut' 'programs\2026-01-02-shut\program.md') },
+        @{ n = '01-15-gone'; listed = '\[I\] listed folder missing: docs:01-15-gone'; place = (RetMoved 'programs\2026-01-02-shut' 'programs\2026-01-02-shut\program.md') },
+        @{ n = 'programs\2026-01-03-held'; listed = 'docs:programs/2026-01-03-held \(program held: docs:01-11-held-member round pending\)'; place = (RetStays 'programs\2026-01-03-held') },
+        @{ n = 'programs\2026-01-07-locked'; listed = '\[I\] closed program docs:programs/2026-01-07-locked,'; place = ($arch -match 'FAIL \[archive\] could not move docs:01-16-locked-member') -and (RetStays 'programs\2026-01-07-locked\program.md') -and -not (RetStays 'programs\2026-01-07-locked\features') -and (RetStays '01-16-locked-member') -and -not (Test-Path (Join-Path $rarch 'programs\2026-01-07-locked')) },
+        @{ n = 'programs\2026-01-05-noprog'; listed = 'docs:programs/2026-01-05-noprog \(program without program.md\)'; place = (RetStays 'programs\2026-01-05-noprog') },
+        @{ n = 'panels\01-01-panel'; listed = 'docs:panels/01-01-panel \(panel\)'; place = (RetStays 'panels\01-01-panel') },
+        @{ n = 'programs\2026-01-01-loose.md'; listed = 'docs:programs/2026-01-01-loose.md \(loose file\)'; place = (RetStays 'programs\2026-01-01-loose.md') },
+        @{ n = '01-09-kept'; listed = $null; place = (RetStays '01-09-kept') },
+        @{ n = '01-10-fresh'; listed = $null; place = (RetStays '01-10-fresh') }
+    )
+    foreach ($r in $rows) {
+        $name = $r.n -replace '\\', '/'
+        $listedOk = if ($r.listed) { $dry -match $r.listed } else { $dry -notmatch [regex]::Escape("docs:$name") }
+        Check "retention docs root: $($r.n)" ($listedOk -and $r.place) "$dry`n$arch"
+    }
+    Check 'retention [A] sees media under the docs root' ($dry -match '\[A\] 1 media files') $dry
+    Check 'retention [F] refuses a checkout path into the docs root' ($dry -match 'FAIL \[F\] keep entry names a docs-root path by its checkout path') $dry
+
+    # -Pick moves a named unknown entry, a held program with its members, and
+    # refuses anything else.
+    $picked = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Pick 'docs:01-06-noledger,docs:programs/2026-01-03-held,docs:01-07-open-member,docs:programs/2026-01-06-keptheld,docs:01-14-shared' 2>&1 | Out-String)
+    $pickYear = (Get-Date).AddDays(-40).Year
+    $pickRows = @(
+        @{ name = 'an unknown entry moves'; ok = (RetMoved '01-06-noledger' "parsec\$pickYear\01-06-noledger") },
+        @{ name = 'a held program moves with its member'; ok = (RetMoved '01-11-held-member' 'programs\2026-01-03-held\features\01-11-held-member') },
+        @{ name = 'a member of an open program is refused'; ok = ($picked -match 'FAIL \[U\] not an unknown entry: docs:01-07-open-member') -and (RetStays '01-07-open-member') },
+        @{ name = 'a program held by a kept member is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:programs/2026-01-06-keptheld: docs:01-17-kept-member kept') -and (RetStays 'programs\2026-01-06-keptheld') -and (RetStays '01-17-kept-member') },
+        @{ name = 'a folder two programs list is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:01-14-shared: listed by two programs') -and (RetStays '01-14-shared') }
+    )
+    foreach ($r in $pickRows) { Check "retention -Pick: $($r.name)" $r.ok $picked }
+
+    # A configured docs root that is missing is a FAIL; a missing fallback is silent.
+    $r7 = Join-Path $outside 'r7'
+    foreach ($d in @('.claude', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $r7 $d) -Force | Out-Null }
+    foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $r7 'dev\scripts\') }
+    [System.IO.File]::WriteAllText((Join-Path $r7 '.claude\parsec.toml'), "docs_root = `"$((Join-Path $outside 'nodocs') -replace '\\', '/')`"`n")
+    $o7 = (& pwsh -NoProfile -File (Join-Path $r7 'dev\scripts\check-artifact-retention.ps1') -Root $r7 -Soft 2>&1 | Out-String)
+    Check 'retention: a configured docs root that is missing is a FAIL' ($o7 -match 'FAIL \[H\] docs root missing') $o7
+    Remove-Item (Join-Path $r7 '.claude\parsec.toml') -Force
+    $o7 = (& pwsh -NoProfile -File (Join-Path $r7 'dev\scripts\check-artifact-retention.ps1') -Root $r7 -Soft 2>&1 | Out-String)
+    Check 'retention: a missing fallback docs root is silent' ($o7 -notmatch '\[H\]') $o7
+
+    # Without the programs/.migrated marker the docs-root rules and -Pick wait,
+    # and -Archive moves nothing from the docs root.
+    $r8 = Join-Path $outside 'r8'
+    $r8docs = Join-Path $outside 'r8docs'
+    foreach ($d in @('.claude', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $r8 $d) -Force | Out-Null }
+    foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $r8 'dev\scripts\') }
+    [System.IO.File]::WriteAllText((Join-Path $r8 '.claude\parsec.toml'), "docs_root = `"$($r8docs -replace '\\', '/')`"`n")
+    foreach ($f in @('programs\active-masters.tsv', '01-01-done\ledger.md')) {
+        $path = Join-Path $r8docs $f
+        New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
+        [System.IO.File]::WriteAllText($path, "# F (2026)`n- 2026-01-01 10:00 -0500 finish: merged abc1234`n")
+        (Get-Item $path).LastWriteTime = (Get-Date).AddDays(-40)
+    }
+    $o8 = (& pwsh -NoProfile -File (Join-Path $r8 'dev\scripts\check-artifact-retention.ps1') -Root $r8 -Soft -Archive -Pick 'docs:01-01-done' 2>&1 | Out-String)
+    Check 'retention: no migration marker holds the docs-root rules and -Pick' (($o8 -match 'wait for the program migration') -and ($o8 -match '-Pick skipped') -and ($o8 -notmatch 'FAIL \[U\]') -and (Test-Path (Join-Path $r8docs '01-01-done'))) $o8
 } finally {
     # Each step runs regardless of the others; native git exits are checked
     # because they do not throw, and any leftover fails the run.
