@@ -22,8 +22,25 @@ local function SkinModelControls(controlFrame)
     S.data(controlFrame).skinned = true
 end
 
+-- Blizzard shows and hides each slot's lock and generic-pet icons, so the
+-- slot keeps its regions and only its frame art fades.
+local SLOT_ART = { "unlockedBackground", "currentBackground", "lockedBackground" }
+
+local function StyleStableSlot(slot)
+    if not slot or S.data(slot).keStableSlot then return end
+    S.data(slot).keStableSlot = true
+    for _, key in ipairs(SLOT_ART) do
+        if slot[key] then slot[key]:SetAlpha(0) end
+    end
+    S.Backdrop(slot)
+    local name = slot:GetName()
+    local icon = name and _G[name .. "IconTexture"]
+    if icon then S.Icon(icon) end
+    S.Hover(slot)
+end
+
 local function Skin()
-    local frame = _G.StableFrame
+    local frame = _G.StableFrame or _G.PetStableFrame
     if not frame then return S.Skip("StableFrame missing") end
     if S.data(frame).ported then return end
 
@@ -54,7 +71,7 @@ local function Skin()
         end
     end
 
-    local modelScene = frame.PetModelScene
+    local modelScene = frame.PetModelScene or frame.modelScene
     if modelScene then
         local shadow = modelScene.PetModelSceneShadow
         if shadow then
@@ -79,6 +96,19 @@ local function Skin()
             if petInfo.Specialization then S.DropDown(petInfo.Specialization) end
         end
         if modelScene.ControlFrame then SkinModelControls(modelScene.ControlFrame) end
+    end
+
+    -- The window with a purchase button, an experience bar and named slots.
+    if frame.modelScene then
+        if frame.purchaseButton then S.Button(frame.purchaseButton) end
+        S.ColoredBar(frame.expBar)
+        if frame.modelScene.Background then frame.modelScene.Background:Hide() end
+        StyleStableSlot(_G.PetStableCurrentPet)
+        local n = 1
+        while _G["PetStableStabledPet" .. n] do
+            StyleStableSlot(_G["PetStableStabledPet" .. n])
+            n = n + 1
+        end
     end
     S.data(frame).ported = true
 end

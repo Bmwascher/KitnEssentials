@@ -15,6 +15,7 @@
     <Script file="Channels.lua" />
     <Script file="Character.lua" />
     <Script file="ChatConfig.lua" />
+    <Script file="Collectables.lua" />
     <Script file="Communities.lua" />
     <Script file="CooldownManager.lua" />
     <Script file="Currency.lua" />
@@ -49,6 +50,7 @@
     <Script file="Reputation.lua" />
     <Script file="SettingsPanel.lua" />
     <Script file="Socket.lua" />
+    <Script file="Stable.lua" />
     <Script file="SubscriptionInterstitial.lua" />
     <Script file="Tabard.lua" />
     <Script file="Taxi.lua" />
