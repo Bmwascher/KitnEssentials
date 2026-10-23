@@ -90,8 +90,8 @@
 # moves whole or not at all: when one member cannot move, the moves already
 # made for it are reversed, so its program.md keeps the membership for the
 # next run. Nothing is ever deleted, except the empty features/ folder an
-# undone program move made inside the program folder. Git unavailable means [B]/[C]/[D] cannot be judged: FAIL,
-# none of them archived.
+# undone program move made inside the program folder. Git unavailable means
+# [B]/[C]/[D] cannot be judged: FAIL, none of them archived.
 # Exit 1 on any FAIL or script error; -Soft forces exit 0.
 
 param(

@@ -6,8 +6,8 @@
 # <folder> is a path, or a bare feature folder name under the parsec docs root.
 # Saves the whole block (one surrounding ```text fence removed) as
 # reports/report.md in the feature folder, then checks the block's
-# `### For Brandon` section,
-# the only part the master relays (phased-program skill, step 5), against
+# `### For Brandon` section, the only part the master relays (phased-program
+# skill, step 5), against
 # the rest of the block:
 #   - a line naming an UNVERIFIED claim, a riding Minor, or a gate that is
 #     waived, degraded, NOT-RUN or RAN-FIX-OPEN must appear in `Not settled`,
