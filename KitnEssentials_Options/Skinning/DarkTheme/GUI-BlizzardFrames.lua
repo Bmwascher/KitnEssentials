@@ -733,14 +733,16 @@ GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", elementIds)
 
 -- No conflict branch here. Every tab on this row configures a module that
 -- stands down under ElvUI, so the whole Elements tab drops out of the strip
--- rather than this row filtering itself.
+-- rather than this row filtering itself. The client policy does filter it:
+-- these ids are feature ids, which GUIFrame:CreateSubTabs never checks.
 local function VisibleElementTabs()
-    return elementTabs
+    return KE.FilterAvailableEntries and KE:FilterAvailableEntries(elementTabs) or elementTabs
 end
 GUIFrame._VisibleElementTabs = VisibleElementTabs
 
 GUIFrame:RegisterContent("SkinBlizzardFramesElements", function(scrollChild, yOffset)
     local tabs = VisibleElementTabs()
+    if #tabs == 0 then return yOffset end
 
     -- Consumed once: re-reading it on every rebuild would drag the user back
     -- here every time the page redraws after they clicked a different sub-tab.

@@ -5,11 +5,17 @@
          retail list's relative order, because load order is behavior
          (Modules.xml). -->
     <Include file="Core\Diagnostics\Diagnostics.xml" />
+    <Script file="Skinning\DarkTheme\AlertFrames.lua" />
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
+    <Script file="Skinning\DarkTheme\VehicleExit.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />
+    <Script file="Skinning\DarkTheme\UIWidgets.lua" />
     <Script file="Skinning\Tooltips\Tooltips.lua" />
     <Script file="Skinning\Tooltips\TooltipStatusBar.lua" />
+    <Script file="Skinning\DarkTheme\LootRoll.lua" />
+    <Script file="Skinning\DarkTheme\LootRollBars.lua" />
+    <Script file="Skinning\DarkTheme\LootFrame.lua" />
     <Include file="Skinning\DarkTheme\Frames\Frames-Camelot.xml" />
 </Ui>

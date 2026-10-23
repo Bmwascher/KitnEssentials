@@ -21,8 +21,8 @@ local FOREVER_ALLOWED = {
     ProfilesSharing = true,
     ProfilesReset = true,
     -- Dark Theme: the engine, Color Picker, the skins command, and the page
-    -- with the tabs that configure what loads. Elements, Group Finder, Addon
-    -- Skins, Blizzard Text and On-Screen Messages stay withheld.
+    -- with the tabs that configure what loads. Group Finder, Raid Control,
+    -- Addon Skins, Blizzard Text and On-Screen Messages stay withheld.
     BlizzardFrames = true,
     ColorPicker = true,
     SkinAPI = true,
@@ -33,6 +33,17 @@ local FOREVER_ALLOWED = {
     SkinBlizzardFramesFontsWindows = true,
     SkinBlizzardFramesSkins = true,
     SkinBlizzardFramesFrames = true,
+    -- Elements: the five modules with their own switches, and their pages.
+    AlertFrames = true,
+    LootFrame = true,
+    LootRoll = true,
+    UIWidgets = true,
+    VehicleExit = true,
+    SkinBlizzardFramesElements = true,
+    SkinBlizzardFramesAlertFrames = true,
+    SkinBlizzardFramesLootRoll = true,
+    SkinBlizzardFramesLootWindow = true,
+    SkinBlizzardFramesWidgets = true,
     -- Tooltips: the module and its page. Its realm-name, guild-realm and
     -- Mythic+ options stay withheld.
     SkinTooltips = true,
