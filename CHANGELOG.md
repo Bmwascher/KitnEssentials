@@ -2,39 +2,32 @@
 
 ## v4.14.1
 
-KitnEssentials now loads on WoW Forever, with the modules that work there.
-On retail the only change is a darker default tooltip backdrop.
+KitnEssentials now runs on WoW Forever.
 
 ### WoW Forever
 
-- **NEW:** KitnEssentials loads on WoW Forever. Modules that do not work
-  there yet are left out entirely: they do not load, and their settings
-  pages and options do not appear. Forever support has not yet been tested
-  on the live Forever client
-- On Forever: Home and Profiles (no dual-spec profiles); Dark Theme with
-  skins for more than 50 Blizzard windows, including Character, Inspect,
-  Reputation, Currency, Professions, Collections, Stable, Transmog and Black
-  Market; its Elements (loot roll, loot window, UI widgets, alerts, Vehicle
-  Exit Button); Blizzard Text, On-Screen Messages, Global Fonts and Context
-  Menus; Color Picker; Tooltips; Chat with Chat History and Chat Links;
-  Damage Meter
-- Forever has no realms, so Tooltips and the Damage Meter leave out their
-  realm-name options, and the Damage Meter leaves out its Mythic+ and Reset
-  on Key Start options
-- Chat reads a Forever first name and surname as one name for role icons,
-  class-colored mentions and the keyword sound
-- With the Gamepad interface style on, window, font and menu skins stay off
-  until a /reload in the mouse and keyboard style
-- Where the game refuses an addon reload, KitnEssentials offers a button you
-  click to reload
-- Not on Forever yet: the Friends window skin, Character Panel, group
-  finder, Mythic+ Timer, and the Combat, Aura Tracking, QoL and Dungeon
-  Tools sections
+- **NEW:** KitnEssentials loads on WoW Forever. Only the modules below run
+  there; everything else stays hidden, settings pages included
+- Available: Home and Profiles, Dark Theme, Color Picker, Tooltips, Chat
+  (with Chat History and Chat Links) and the Damage Meter
+- Dark Theme skins more than 50 Blizzard windows, including Character,
+  Professions, Collections and Stable in their Forever layouts, plus its
+  Elements, fonts and context menus
+- Chat treats a first name and surname as one name for role icons,
+  mentions and the keyword sound
+- Options that need realms, Mythic+ or keystones are hidden, as are
+  dual-spec profiles
+- With the Gamepad interface style on, the skins stay off until you
+  /reload in mouse and keyboard style
+- When the game won't let an addon reload the UI, a reload button appears
+  to click instead
+- Not on Forever yet: the Combat, Aura Tracking, QoL and Dungeon Tools
+  sections, the Character Panel and the Friends window skin
+- Not yet tested on the live Forever client
 
 ### Tooltips
 
-- The default backdrop is darker (8% gray at 86% opacity); a backdrop color
-  you set yourself is kept
+- Darker default backdrop. A color you picked yourself is kept
 
 ## v4.14.0
 
