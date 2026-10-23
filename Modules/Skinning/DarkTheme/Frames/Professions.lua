@@ -402,8 +402,14 @@ local function SkinGearSlot(button)
 end
 
 -- The chat-link button is a bare art button: Blizzard's texture includes
--- padding we crop out, then it takes the standard control template.
+-- padding we crop out, then it takes the standard control template. A link
+-- button with no normal texture draws a Background and an Icon instead.
 local function SkinLinkButton(button)
+    if not button:GetNormalTexture() then
+        S.Template(button, "Default")
+        if button.Background then button.Background:Hide() end
+        return
+    end
     button:GetNormalTexture():SetTexCoord(0.25, 0.7, 0.37, 0.75)
     button:GetPushedTexture():SetTexCoord(0.25, 0.7, 0.45, 0.8)
     button:GetHighlightTexture():SetAlpha(0)
@@ -513,6 +519,56 @@ local function SkinSpecPage(page)
     SpecTabs(page)
 end
 
+local WHITE = "Interface\\Buttons\\WHITE8x8"
+
+local BOOK_SLOTS = {
+    "PrimaryProfession1", "PrimaryProfession2",
+    "SecondaryProfession1", "SecondaryProfession2", "SecondaryProfession3",
+}
+
+-- The book page's spell buttons, read through their keys: these have no
+-- global names to build NameFrame lookups from.
+local function DressBookSpell(button)
+    if not button or S.data(button).keBookSpell then return end
+    S.data(button).keBookSpell = true
+
+    button:SetCheckedTexture(WHITE)
+    S.PaintBrand(button:GetCheckedTexture(), "SetColorTexture", S.palette.selectedA)
+    button:SetPushedTexture(WHITE)
+    button:GetPushedTexture():SetColorTexture(1, 1, 1, 0.5)
+
+    local icon = button.IconTexture
+    if not icon then return end
+    icon:ClearAllPoints()
+    icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    S.Icon(icon, true)
+    local ibd = S.GetBackdrop(icon)
+    if ibd and button.highlightTexture then
+        button.highlightTexture:ClearAllPoints()
+        button.highlightTexture:SetPoint("TOPLEFT", ibd, "TOPLEFT", 1, -1)
+        button.highlightTexture:SetPoint("BOTTOMRIGHT", ibd, "BOTTOMRIGHT", -1, 1)
+    end
+end
+
+-- Blizzard re-atlases each slot's Background per profession, so it is faded
+-- rather than cleared.
+local function SkinBookPage(page)
+    local content = page.ProfessionsContentFrame
+    if not content then return end
+    for _, key in ipairs(BOOK_SLOTS) do
+        local slot = content[key]
+        if slot and not S.data(slot).keBookSlot then
+            S.data(slot).keBookSlot = true
+            if slot.Background then slot.Background:SetAlpha(0) end
+            S.Backdrop(slot)
+            SkinRankBar(slot.StatusBar)
+            S.FontStrings(slot, nil, "OUTLINE")
+            for i = 1, 4 do DressBookSpell(slot["SpellButton" .. i]) end
+        end
+    end
+end
+
 local function Skin()
     local PF = _G.ProfessionsFrame
     if not PF then return S.Skip("ProfessionsFrame missing") end
@@ -520,6 +576,12 @@ local function Skin()
     S.Frame(PF)
     if PF.MaximizeMinimize then S.MaxMinFrame(PF.MaximizeMinimize) end
     if PF.TabSystem then SkinTabRow(PF.TabSystem) end
+    -- The overview tab sits outside the profession tabs' array.
+    if PF.rightProfessionTabs then
+        S.SideTabsInPlace({ PF.ProfessionsOverviewTab })
+        S.SideTabsInPlace(PF.rightProfessionTabs)
+    end
+    if PF.BookPage then SkinBookPage(PF.BookPage) end
 
     local CraftingPage = PF.CraftingPage
     SkinCraftingPage(CraftingPage)

@@ -42,6 +42,7 @@
     <Script file="NonRaid.lua" />
     <Script file="Petition.lua" />
     <Script file="PlayerSpells.lua" />
+    <Script file="Professions.lua" />
     <Script file="PvPMatch.lua" />
     <Script file="Quest.lua" />
     <Script file="Raid.lua" />
