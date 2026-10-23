@@ -1,6 +1,8 @@
 # Exercises the tracked Claude Code hook templates (dev/claude-hooks/) and the
 # commit-msg git hook against every documented deny and allow case, using a
 # throwaway worktree on main so the branch rules can be tested from any branch.
+# It also exercises the parsec docs-root scripts (resolver, master registry,
+# retention rules) against throwaway projects.
 #
 #   pwsh dev/scripts/test-claude-hooks.ps1
 #
@@ -351,6 +353,30 @@ try {
         $env:CLAUDE_PROJECT_DIR = $saved.dir; $env:KE_PROGRAM_MASTERS = $saved.reg
         $env:CLAUDE_CODE_SESSION_ID = $saved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $saved.hid
     }
+    # The docs-root resolver: the primary's config, absolute or relative, else
+    # the fallback; an unreadable value is an error, never the fallback.
+    $rr = Join-Path $root 'dev\scripts\parsec-docs-root.ps1'
+    $rproj0 = Join-Path $outside 'resolve'
+    New-Item -ItemType Directory -Path (Join-Path $rproj0 '.claude') -Force | Out-Null
+    $tomlPath = Join-Path $rproj0 '.claude\parsec.toml'
+    $abs = Join-Path $outside 'elsewhere'
+    $resolveCases = @(
+        @{ name = 'relative value'; toml = "docs_root = `"docs/here`"`n"; want = (Join-Path $rproj0 'docs\here'); code = 0 },
+        @{ name = 'absolute value'; toml = "docs_root = `"$($abs -replace '\\', '/')`"`n"; want = $abs; code = 0 },
+        @{ name = 'no docs_root line'; toml = "worktrees = `"x`"`n"; want = (Join-Path $rproj0 'dev\docs\parsec'); code = 0 },
+        @{ name = 'no config'; toml = $null; want = (Join-Path $rproj0 'dev\docs\parsec'); code = 0 },
+        @{ name = 'unreadable value'; toml = "docs_root = 'single'`n"; want = $null; code = 1 }
+    )
+    foreach ($c in $resolveCases) {
+        Remove-Item $tomlPath -Force -ErrorAction SilentlyContinue
+        if ($null -ne $c.toml) { [System.IO.File]::WriteAllText($tomlPath, $c.toml) }
+        $out = (& pwsh -NoProfile -File $rr -Root $rproj0 2>$null | Out-String).Trim()
+        $code = $LASTEXITCODE
+        Check "parsec-docs-root: $($c.name)" ($code -eq $c.code -and ($null -eq $c.want -or $out -eq $c.want)) "exit $code, $out"
+    }
+    $fromWt = (& pwsh -NoProfile -File $rr -Root $wt | Out-String).Trim()
+    $fromRoot = (& pwsh -NoProfile -File $rr -Root $root | Out-String).Trim()
+    Check 'parsec-docs-root: a worktree reads the primary''s config' ($fromWt -ne '' -and $fromWt -eq $fromRoot) "$fromWt vs $fromRoot"
 } finally {
     # Each step runs regardless of the others; native git exits are checked
     # because they do not throw, and any leftover fails the run.
