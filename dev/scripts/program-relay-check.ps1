@@ -3,9 +3,11 @@
 #   pwsh dev/scripts/program-relay-check.ps1 -FeatureFolder <folder> [-Path <block file>]
 #   <block> | pwsh dev/scripts/program-relay-check.ps1 -FeatureFolder <folder>
 #
-# Saves the whole block (one surrounding ```text fence removed) as report.md
-# in the feature folder, then checks the block's `### For Brandon` section,
-# the only part the master relays (phased-program skill, step 5), against
+# <folder> is a path, or a bare feature folder name under the parsec docs root.
+# Saves the whole block (one surrounding ```text fence removed) as
+# reports/report.md in the feature folder, then checks the block's
+# `### For Brandon` section, the only part the master relays (phased-program
+# skill, step 5), against
 # the rest of the block:
 #   - a line naming an UNVERIFIED claim, a riding Minor, or a gate that is
 #     waived, degraded, NOT-RUN or RAN-FIX-OPEN must appear in `Not settled`,
@@ -19,7 +21,7 @@
 # PASS prints the relay, nothing else on stdout, exit 0: the section's words
 # unchanged, rendered as markdown (the status line as a `###` heading, each
 # labeled line as a bullet with its label in bold, sub-bullets nested), then
-# `📄 Full report:` and the report.md path. -Raw prints the lines exactly.
+# `📄 Full report:` and the report's absolute path. -Raw prints the lines exactly.
 # FAIL prints what is missing on stderr and not the section, exit 1: the
 # section goes back to the phase, it is never rewritten by the master.
 # Matching is by keyword and text, so a FAIL can be a false alarm; read the
@@ -38,6 +40,12 @@ $ErrorActionPreference = 'Stop'
 try { [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 
+if (-not (Test-Path -LiteralPath $FeatureFolder -PathType Container) -and $FeatureFolder -notmatch '[\\/]') {
+    try {
+        $underDocs = Join-Path ([string](& (Join-Path $PSScriptRoot 'parsec-docs-root.ps1'))) $FeatureFolder
+        if (Test-Path -LiteralPath $underDocs -PathType Container) { $FeatureFolder = $underDocs }
+    } catch { }
+}
 if (-not (Test-Path -LiteralPath $FeatureFolder -PathType Container)) {
     [Console]::Error.WriteLine("RELAY CHECK ERROR: no feature folder at $FeatureFolder")
     exit 2
@@ -53,7 +61,9 @@ if ($first -lt $last -and $lines[$first] -match '^\s*```' -and $lines[$last] -ma
 if ($first -gt $last) { [Console]::Error.WriteLine('RELAY CHECK ERROR: the report block is empty'); exit 2 }
 $lines = @($lines[$first..$last])
 
-$report = Join-Path $FeatureFolder 'report.md'
+$reportDir = Join-Path $FeatureFolder 'reports'
+New-Item -ItemType Directory -Force $reportDir | Out-Null
+$report = Join-Path $reportDir 'report.md'
 Set-Content -LiteralPath $report -Value $lines -Encoding utf8
 
 function Get-Norm([string]$s) {
@@ -191,8 +201,7 @@ if ($problems.Count) {
 if ($Raw) {
     $sectionLines | Write-Output
 } else {
-    $reportPath = (Resolve-Path -LiteralPath $report).Path
-    $shown = if ($reportPath -match '[\\/](dev[\\/]docs[\\/].*)$') { $Matches[1] -replace '\\', '/' } else { $reportPath }
+    $shown = (Resolve-Path -LiteralPath $report).Path -replace '\\', '/'
     # A blank line between bullets would split the list; one before the path ends it.
     $rendered | Write-Output
     Write-Output ''
