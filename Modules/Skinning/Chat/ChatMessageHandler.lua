@@ -756,7 +756,8 @@ end
 -- cache holds up to two entries for each cached GUID.
 ---@param text string
 ---@param lowered string
-local function ScanMentions(text, lowered, classNames, excluded, protectCount, hitCount)
+---@param sep string? the surname separator, passed only while surnames are on
+local function ScanMentions(text, lowered, classNames, excluded, protectCount, hitCount, sep)
     local length = #text
     local i = 1
 
@@ -777,28 +778,46 @@ local function ScanMentions(text, lowered, classNames, excluded, protectCount, h
                 longEnd = j - 1
             end
 
-            local tries = (longEnd ~= e) and 2 or 1
+            -- With surnames on, a full name is two words joined by the
+            -- separator. Tried first, so "Ana Smith" wins over "Ana".
+            local fullEnd = e
+            if sep and text:sub(e + 1, e + #sep) == sep
+                and not CMH.IsBoundary(text, e + #sep + 1) then
+                local j = e + #sep + 1
+                while j <= length and not CMH.IsBoundary(text, j) do j = j + 1 end
+                fullEnd = j - 1
+            end
+
+            local first = (fullEnd ~= e) and fullEnd or longEnd
+            local tries = (first ~= e) and 2 or 1
+            -- A full name that hits or is excluded takes its second word with
+            -- it; otherwise that word is still looked up on its own.
+            local resume = longEnd
             for attempt = 1, tries do
-                local stop = (attempt == 1) and longEnd or e
+                local stop = (attempt == 1) and first or e
                 local candidate = lowered:sub(s, stop)
 
                 -- Exclusion is read BEFORE the class lookup. Checking it only
                 -- for a cached name would let "Ana-Realm" fall through to
                 -- "Ana" whenever the realm-qualified form was never cached,
                 -- coloring exactly the name the user excluded.
-                if excluded[candidate] then break end
+                if excluded[candidate] then
+                    if fullEnd ~= e and stop == fullEnd then resume = fullEnd end
+                    break
+                end
 
                 local class = classNames[candidate]
                 if class then
                     local colorString = ClassColorString(class)
                     if colorString and not Blocked(s, stop, protectCount) then
                         hitCount = RecordHit(hitCount, s, stop, colorString)
+                        if fullEnd ~= e and stop == fullEnd then resume = fullEnd end
                         break
                     end
                 end
             end
 
-            if longEnd ~= e then i = longEnd + 1 end
+            if resume ~= e then i = resume + 1 end
         end
     end
 
@@ -840,6 +859,14 @@ local function IsSelf(author)
     local me, displayRealm
     if _G.UnitFullName then me, displayRealm = _G.UnitFullName("player") end
     if not me then return false end
+
+    -- With surnames on, the second return is your surname and a sender is
+    -- "First Surname" with no realm, so the whole name decides.
+    if KE:UsesSurnames() then
+        local full = KE:JoinCharacterName(me, displayRealm)
+        local sender = author:match("^([^-]+)")
+        return full ~= nil and sender ~= nil and strlower(sender) == strlower(full)
+    end
 
     local name, realm = author:match("^([^-]+)-?(.*)$")
     if not name or strlower(name) ~= strlower(me) then return false end
@@ -889,8 +916,9 @@ function CMH.Highlight(text, author, bossBody)
     end
 
     if wantMentions then
+        local sep = KE:UsesSurnames() and KE:GetSurnameSeparator() or nil
         hitCount = ScanMentions(text, lowered, classNames,
-            Exclusions(db.ExcludedMentions), protectCount, hitCount)
+            Exclusions(db.ExcludedMentions), protectCount, hitCount, sep)
     end
 
     if hitCount == 0 then return text end

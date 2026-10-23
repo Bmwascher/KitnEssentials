@@ -541,6 +541,8 @@ function L.loadChatMessageHandler(overrides)
     -- by the handler. Without this line every new case dies on
     -- "attempt to call method 'NotSecretValue' (a nil value)".
     helpers.loadModule("Core/Secret.lua", KE)
+    -- The surname helpers the mention scan and the self test read.
+    helpers.loadModule("Core/Identity.lua", KE)
     return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
