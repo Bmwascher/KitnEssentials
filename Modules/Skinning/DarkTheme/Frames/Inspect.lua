@@ -40,6 +40,7 @@ local function Skin()
     end
 
     S.Tabs("InspectFrameTab", 5)
+    if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
 
     local model = _G.InspectModelFrame
     if model then
@@ -73,6 +74,7 @@ local function Skin()
                 slot.icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 1, -1)
                 slot.icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
                 S.StripTextures(slot)
+                if slot.BorderFrame then S.StripTextures(slot.BorderFrame) end
                 S.Hover(slot, slot.icon)
                 if slot.IconBorder then
                     S.IconBorder(slot.IconBorder, S.GetBackdrop(slot.icon))

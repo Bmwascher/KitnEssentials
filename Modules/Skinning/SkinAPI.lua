@@ -1302,6 +1302,44 @@ function S.StatusBar(bar, inset)
     S.data(bar).skinned = true
 end
 
+-- A ColoredProgressBarTemplate bar is a Frame, not a StatusBar: a Fill
+-- texture the mixin sizes, clipped by a Mask, over a track texture. The fill
+-- keeps its own atlas, which Blizzard tints through SetVertexColor; the track
+-- and the mask go, and the backdrop hugs the fill's row.
+local COLORED_BAR_FILL_H = 15
+
+function S.ColoredBar(bar, dampen)
+    local fill = bar and bar.Fill
+    if not fill or S.data(bar).keColoredBar then return end
+    S.data(bar).keColoredBar = true
+
+    S.StripKeepingIcon(bar, fill)
+    if bar.Mask and fill.RemoveMaskTexture then fill:RemoveMaskTexture(bar.Mask) end
+
+    local bd = S.Backdrop(bar)
+    local area = bar.FillArea
+    if bd and area then
+        local _, h = S.SafeSize(fill)
+        local half = ((h and h > 0) and h or COLORED_BAR_FILL_H) / 2 + 1
+        bd:ClearAllPoints()
+        bd:SetPoint("TOPLEFT", area, "LEFT", -1, half)
+        bd:SetPoint("BOTTOMRIGHT", area, "RIGHT", 1, -half)
+    end
+    if bar.Text then S.SetFont(bar.Text) end
+
+    if type(dampen) ~= "number" then return end
+    local function Dampen(tex, r, g, b, a)
+        local d = S.data(tex)
+        if d.keDampening or type(r) ~= "number" then return end
+        d.keDampening = true
+        tex:SetVertexColor(r * dampen, g * dampen, b * dampen, a or 1)
+        d.keDampening = false
+    end
+    hooksecurefunc(fill, "SetVertexColor", Dampen)
+    local r, g, b, a = fill:GetVertexColor()
+    if r then Dampen(fill, r, g, b, a) end
+end
+
 function S.ProgressFill(bar)
     if not bar or not bar.SetStatusBarTexture then return end
     bar:SetStatusBarTexture(HOVER_TEX)
@@ -2401,8 +2439,10 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     S.Backdrop(tab)
     tab:SetSize(30, 40)
 
-    tab:ClearAllPoints()
+    -- With no anchor the tab keeps Blizzard's points, which the window's own
+    -- layout code re-applies.
     if prevTab then
+        tab:ClearAllPoints()
         tab:SetPoint("TOP", prevTab, "BOTTOM", 0, -1)
         hooksecurefunc(tab, "SetPoint", function(t, _, _, _, x, y)
             if (x ~= 0 or y ~= -1) and not S.data(t).anchoring then
@@ -2413,6 +2453,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
             end
         end)
     elseif anchorParent then
+        tab:ClearAllPoints()
         tab:SetPoint("TOPLEFT", anchorParent, "TOPRIGHT", 1, 0)
         hooksecurefunc(tab, "SetPoint", function(t, _, _, _, x, y)
             if (x ~= 1 or y ~= 0) and not S.data(t).anchoring then
@@ -2453,6 +2494,8 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
             resize()
             recenter()
         end)
+        -- Some clients' side-tab template rounds the icon with a mask.
+        if tab.Mask and icon.RemoveMaskTexture then icon:RemoveMaskTexture(tab.Mask) end
     end
 
     if tab.Background then tab.Background:SetAlpha(0) end
@@ -2464,6 +2507,14 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     S.KillSideTabArt(tab)
     S.HoverWash(tab)
     S.data(tab).keSideTab = true
+end
+
+-- A column of side tabs that keeps the places Blizzard's layout gives them.
+local IN_PLACE_ICON = 22
+
+function S.SideTabsInPlace(tabs)
+    if not tabs then return end
+    for _, tab in ipairs(tabs) do S.SideTab(tab, nil, nil, IN_PLACE_ICON) end
 end
 
 function S.NavCrumb(btn)
