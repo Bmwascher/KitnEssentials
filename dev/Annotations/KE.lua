@@ -1377,6 +1377,13 @@ function KE:IsPlayerHealerSpec() end
 ---@return boolean
 function KE:IsPlayerTankSpec() end
 
+--- The Forever role rule: the spec library's talent role as it is; with no
+--- answer, "DAMAGER" for a character with a spec and nil without one.
+---@param libraryRole string?
+---@param hasSpec boolean
+---@return string?
+function KE:ResolveForeverRole(libraryRole, hasSpec) end
+
 ---@param enabledSpecs table<number, boolean>?
 ---@param specId number?
 ---@return boolean

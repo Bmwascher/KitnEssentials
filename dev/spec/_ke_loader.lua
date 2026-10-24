@@ -152,9 +152,10 @@ function L.loadGlobals(overrides, opts)
         Fetch = function(_, _, name) return name and ("path/" .. name) or nil end,
         IsValid = function(_, _, name) return name == "Expressway" or name == "GoodFont" end,
     }
+    -- opts.libs maps a library name to the stand-in LibStub returns for it.
     _G.LibStub = function(name)
         if name == "LibSharedMedia-3.0" then return lsm end
-        return nil
+        return opts.libs and opts.libs[name] or nil
     end
     -- opts.loadedAddOns is a name->true set of addons IsAddOnLoaded reports;
     -- absent means nothing is loaded, the historical behavior. It is an opt
