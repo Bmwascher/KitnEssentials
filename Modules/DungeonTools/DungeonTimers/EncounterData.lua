@@ -1082,10 +1082,10 @@ KE.EncounterData[3458] = {
     phaseCues = {
         axegrinder_channel = { name = "Axegrinder (Channel)", iconOverride = 1301111, role = "mechanic",
             source = { kind = "Message", key = 1301111 }, leadDelay = 3, duration = 6,
-            display = "text", displayText = "FRONTALS", color = { 0.77, 0.17, 0.17 }, showAtSeconds = 0, disabled = true },
+            display = "text", displayText = "FRONTALS", color = { 0.77, 0.17, 0.17 }, sound = "Move", showAtSeconds = 0, disabled = true },
         ritual_channel = { name = "Ritual of the Fang (Channel)", iconOverride = 1300876, role = "mechanic",
             source = { kind = "Message", key = 1300876 }, leadDelay = 5, duration = 8,
-            display = "text", displayText = "SOAK LINES", color = { 0.2, 1.0, 0.4 }, showAtSeconds = 0, disabled = true },
+            display = "text", displayText = "SOAK LINES", color = { 0.2, 1.0, 0.4 }, sound = "Soaking", showAtSeconds = 0, disabled = true },
     },
     auraSounds = {
         { spellID = 1300894, trigger = "removed", unit = "player", name = "Ritual Venom Ended",        sound = "Done" },
@@ -1163,6 +1163,7 @@ KE.EncounterData[3209] = {
         { spellID = 1255577, trigger = "added", unit = "player", name = "Spectral Slash on you",      sound = "Defensive" },
         { spellID = 1242869, trigger = "added", unit = "player", name = "Echoing Maul on you",        sound = "Move Out" },
         { spellID = 1262253, trigger = "added", unit = "player", name = "Demoralizing Scream on you", sound = "GGEZ" },
+        { spellID = 1261781, trigger = "added", unit = "player", name = "Defensive Stance on you",    sound = "Safe" },
     },
 }
 
