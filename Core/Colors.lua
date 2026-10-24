@@ -15,7 +15,6 @@ local type = type
 local tonumber = tonumber
 local CreateColor = CreateColor
 local select = select
-local unpack = unpack
 local modf = math.modf
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
@@ -197,9 +196,4 @@ function KE:ColorGradient(Min, Max, ...)
     local Segment, RelPercent = modf(Percent * (Num - 1))
     local R1, G1, B1, R2, G2, B2 = select((Segment * 3) + 1, ...)
     return R1 + (R2 - R1) * RelPercent, G1 + (G2 - G1) * RelPercent, B1 + (B2 - B1) * RelPercent
-end
-
-function KE:ColorText(text, color)
-    local r, g, b, a = unpack(color)
-    return string.format("|c%02X%02X%02X%02X%s|r", (a or 1) * 255, r * 255, g * 255, b * 255, text)
 end

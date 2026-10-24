@@ -1272,11 +1272,6 @@ function KE:CreateColor(r, g, b, a) end
 ---@return number b
 function KE:ColorGradient(Min, Max, ...) end
 
----@param text string
----@param color number[]
----@return string
-function KE:ColorText(text, color) end
-
 -- Core/Conflicts.lua
 --- Builds the ordered list of conflict prompts to raise.
 ---@param env table # { profile: table, isLoaded: fun(addonName: string, resolver: table?): boolean, shouldNotLoad: boolean? }
