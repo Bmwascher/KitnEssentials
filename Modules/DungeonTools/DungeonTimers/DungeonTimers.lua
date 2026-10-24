@@ -416,20 +416,11 @@ end
 -- Exported so sibling files (WindMap.lua) use the same DEBUG_DT2 flag.
 DT._dprint = dprint
 
--- Preview bars loop endlessly so they're gated out to prevent sound spam.
-local function PlayBarSound(self, key)
-    if self.isPreview then return end
-    if not self.spellId then return end
-    local record = self._dtPresentation
-    if record and record.silent then return end
-    if DT.db and DT.db.MutePresetSounds then return end
-    local soundKey
-    if key == "show" then
-        soundKey = DT:GetEffectiveSpellSoundOnShow(self.spellId, record and record.ordinal)
-    elseif key == "hide" then
-        soundKey = DT:GetEffectiveSpellSoundOnHide(self.spellId)
-    end
+-- The one tail every preset sound shares: master mute, the media lookup and
+-- the player's channel.
+local function PlayPresetSound(soundKey)
     if not soundKey then return end
+    if DT.db and DT.db.MutePresetSounds then return end
     local LSM = KE.LSM
     if not LSM then return end
     local file = LSM:Fetch("sound", soundKey)
@@ -437,6 +428,21 @@ local function PlayBarSound(self, key)
         local channel = (DT.db and DT.db.SoundChannel) or "Master"
         PlaySoundFile(file, channel)
     end
+end
+
+-- Preview bars loop endlessly so they're gated out to prevent sound spam.
+local function PlayBarSound(self, key)
+    if self.isPreview then return end
+    if not self.spellId then return end
+    local record = self._dtPresentation
+    if record and record.silent then return end
+    local soundKey
+    if key == "show" then
+        soundKey = DT:GetEffectiveSpellSoundOnShow(self.spellId, record and record.ordinal)
+    elseif key == "hide" then
+        soundKey = DT:GetEffectiveSpellSoundOnHide(self.spellId)
+    end
+    PlayPresetSound(soundKey)
 end
 
 -- BigWigs appends " (N)" for repeating-cast uniqueness; keep it in self.bars keys but strip it from the rendered label.
@@ -705,6 +711,15 @@ function DT:GetEffectiveSpellSoundOnHide(spellId)
     if override then return override end
     local spellData = self:GetSpellInfo(spellId)
     return spellData and spellData.soundOnHide or nil
+end
+
+-- A "None" show override silences the result too; any other override
+-- replaces only the kick voices, so the result keeps its own clip.
+function DT:GetEffectiveCueResultSound(cueKey)
+    if self:GetSpellSoundOnShow(cueKey) == "None" then return nil end
+    local data = self:GetSpellInfo(cueKey)
+    local result = data and data.interruptResult
+    return result and result.sound or nil
 end
 
 -- "S" label visibility on the spell list. Checks the effective sound so a
@@ -3312,6 +3327,9 @@ function DT:_OnCueCastEnded(unit, castBarID, reason)
                     result.duration, "text", self:ResolveSpellIcon(watch.cueKey), result.displayText,
                     watch.cueKey, now, { silent = true })
                 SetStaticCueResult(frame, result.color)
+                -- The frame stays silent, so its show and hide sounds never play;
+                -- the result's clip plays once here.
+                if frame then PlayPresetSound(self:GetEffectiveCueResultSound(watch.cueKey)) end
             end
             dprint("cue interrupt " .. outcome .. " cue=" .. watch.cueKey .. " castBarID=" .. tostring(castBarID) .. " reason=" .. reason)
         end
@@ -3819,21 +3837,13 @@ local PHASE_TRANSITIONED_BAND = 1
 
 local function PlayPhaseSound(key, hookKey)
     if not (key and hookKey) then return end
-    if DT.db and DT.db.MutePresetSounds then return end
     local soundKey
     if hookKey == "show" then
         soundKey = DT:GetEffectivePhaseSoundOnShow(key)
     elseif hookKey == "hide" then
         soundKey = DT:GetEffectivePhaseSoundOnHide(key)
     end
-    if not soundKey then return end
-    local LSM = KE.LSM
-    if not LSM then return end
-    local file = LSM:Fetch("sound", soundKey)
-    if file then
-        local channel = (DT.db and DT.db.SoundChannel) or "Master"
-        PlaySoundFile(file, channel)
-    end
+    PlayPresetSound(soundKey)
 end
 
 -- Per-key configuration, shared by fresh kits (CreatePhaseBar tail) and the

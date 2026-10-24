@@ -879,6 +879,9 @@ describe("DungeonTimers EncounterData - aura sound rules", function()
             if type(row) ~= "table" then return end
             check(ctx, "sound", row.sound)
             check(ctx, "soundOnHide", row.soundOnHide)
+            if type(row.interruptResult) == "table" then
+                check(ctx, "interruptResult.sound", row.interruptResult.sound)
+            end
             if row.ordinalSounds ~= nil then
                 if type(row.ordinalSounds) ~= "table" then
                     failures[#failures + 1] = ctx .. ": ordinalSounds must be a list"

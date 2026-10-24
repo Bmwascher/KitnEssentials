@@ -324,6 +324,7 @@ local function ValidateCue(name, cue)
         if result.unit ~= "boss1" or not isNonEmptyString(result.displayText) then return nil end
         if not isValidNumber(result.duration) or result.duration <= 0 then return nil end
         if not isValidColor(result.color) then return nil end
+        if result.sound ~= nil and (not isNonEmptyString(result.sound) or result.sound == "None") then return nil end
     end
     if cue.endsOnAnchor ~= nil and (kind ~= "Sequel" or not isValidNumber(cue.endsOnAnchor)) then
         return nil

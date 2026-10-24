@@ -1043,7 +1043,7 @@ KE.EncounterData[3457] = {
         toxic_atrophy_kicks = { name = "Toxic Atrophy interrupts", iconOverride = 1310358, role = "kick",
             source = { kind = "Message", key = 1310358 }, duration = 4, ordinals = 3,
             ordinalSounds = { "Kick 1", "Kick 2", "Kick 3" },
-            interruptResult = { ordinal = 3, unit = "boss1", displayText = "DONE", duration = 2.0, color = { 0.2, 1.0, 0.2 } },
+            interruptResult = { ordinal = 3, unit = "boss1", displayText = "DONE", duration = 2.0, color = { 0.2, 1.0, 0.2 }, sound = "Done" },
             display = "text", displayText = "KICK", color = { 1.0, 0.15, 0.15 }, sound = "Kick", showAtSeconds = 0 },
         burrowing_charge = { name = "Burrowing Charge", iconOverride = 1299130, role = "other",
             source = { kind = "Message", key = 1299130 }, duration = 3,

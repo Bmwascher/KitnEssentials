@@ -1247,6 +1247,7 @@ describe("DungeonTimers TimerState", function()
             { name = "empty result", field = "displayText", value = "" },
             { name = "zero duration", field = "duration", value = 0 },
             { name = "invalid color", field = "color", value = { 0, 2, 0 } },
+            { name = "invalid sound", field = "sound", value = "None" },
             { name = "non Message", timer = true },
         }
         for _, case in ipairs(changes) do

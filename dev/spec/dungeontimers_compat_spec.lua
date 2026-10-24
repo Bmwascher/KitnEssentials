@@ -2042,7 +2042,7 @@ describe("DungeonTimers compatibility", function()
 
     local function loadInterruptModule()
         local m = loadCountModule({ ordinal = 3, unit = "boss1", displayText = "DONE",
-            duration = 1.5, color = { 0, 1, 0 } })
+            duration = 1.5, color = { 0, 1, 0 }, sound = "Done" })
         m.castBarID = "10"
         _G.UnitCastingInfo = function()
             return nil, nil, nil, nil, nil, nil, nil, nil, { __secret = true }, m.castBarID
@@ -2055,7 +2055,7 @@ describe("DungeonTimers compatibility", function()
         m.DT:OnUnitCastInterrupted(nil, unit, { __secret = true }, { __secret = true }, { __secret = true }, id)
     end
 
-    it("a matched third-kick interrupt replaces the cue with a silent result once, including duplicate Messages", function()
+    it("a matched third-kick interrupt replaces the cue with its result and its clip once, including duplicate Messages", function()
         local m = loadInterruptModule()
         sendKick(m, "Toxic Atrophy (3/3)")
         local sounds = #soundCalls
@@ -2082,7 +2082,7 @@ describe("DungeonTimers compatibility", function()
             assert.equal(result, m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"])
         end
         assert.same({}, kickTexts(m))
-        assert.equal(sounds, #soundCalls)
+        assert.equal(sounds + 1, #soundCalls)
         m.clock.now = 2.6
         m.tick(result)
         assert.same({}, cueTexts(m, KICK_CUE .. "#ended"))
@@ -2091,18 +2091,33 @@ describe("DungeonTimers compatibility", function()
         assert.same({ "KICK 3" }, kickTexts(m))
     end)
 
-    it("a matched Kick 1 or Kick 2 interrupt removes that kick at once and silently, with no DONE", function()
-        for _, ordinal in ipairs({ 1, 2 }) do
-            local label = "kick " .. ordinal
+    it("a matched interrupt removes Kick 1 or Kick 2 with no DONE and no sound, and turns Kick 3 into DONE with its clip once", function()
+        for _, case in ipairs({ { ordinal = 1 }, { ordinal = 2 }, { ordinal = 3, done = true } }) do
+            local label = "kick " .. case.ordinal
             local m = loadInterruptModule()
-            sendKick(m, ("Toxic Atrophy (%d/3)"):format(ordinal))
-            assert.same({ "KICK " .. ordinal }, kickTexts(m), label)
+            m.KE.LSM = { Fetch = function(_, _kind, key) return "path/" .. key .. ".ogg" end }
+            sendKick(m, ("Toxic Atrophy (%d/3)"):format(case.ordinal))
+            assert.same({ "KICK " .. case.ordinal }, kickTexts(m), label)
             local sounds = #soundCalls
             m.clock.now = 1
             interruptKick(m, "boss1", "10")
             assert.same({}, kickTexts(m), label)
-            assert.same({}, cueTexts(m, KICK_CUE .. "#ended"), label)
-            assert.equal(sounds, #soundCalls, label)
+            assert.same(case.done and { "DONE" } or {}, cueTexts(m, KICK_CUE .. "#ended"), label)
+            assert.equal(sounds + (case.done and 1 or 0), #soundCalls, label)
+            if case.done then assert.equal("path/Done.ogg", soundCalls[#soundCalls], label) end
+        end
+    end)
+
+    it("the result clip is silenced by a None show override and kept under any other override", function()
+        local m = loadInterruptModule()
+        local cases = {
+            { name = "no override", expect = "Done" },
+            { name = "None override", override = "None" },
+            { name = "another sound override", override = "Alert", expect = "Done" },
+        }
+        for _, case in ipairs(cases) do
+            m.DT:SetSpellSoundOnShow(KICK_CUE, case.override)
+            assert.equal(case.expect, m.DT:GetEffectiveCueResultSound(KICK_CUE), case.name)
         end
     end)
 
