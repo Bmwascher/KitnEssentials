@@ -416,8 +416,6 @@ end
 -- Exported so sibling files (WindMap.lua) use the same DEBUG_DT2 flag.
 DT._dprint = dprint
 
--- The one tail every preset sound shares: master mute, the media lookup and
--- the player's channel.
 local function PlayPresetSound(soundKey)
     if not soundKey then return end
     if DT.db and DT.db.MutePresetSounds then return end
@@ -3320,7 +3318,6 @@ function DT:_OnCueCastEnded(unit, castBarID, reason)
             watch.completed = true
             self:_EndCue(watch.owner, watch.cueKey, watch)
             local result = watch.result
-            -- Only the cue's last kick shows a result; an earlier kick just ends.
             local outcome = watch.ordinal == result.ordinal and "done" or "stopped"
             if outcome == "done" and self:ShouldShowSpell(watch.cueKey) then
                 local frame = self:_SpawnSynthetic(watch.owner, "cue", watch.cueKey .. "#ended",
@@ -5288,8 +5285,8 @@ function DT:_ReplayPullReceipts(id)
     dprint(string_format("pull replay encounter=%s replayed=%d of %d", tostring(id), replayed, #held))
 end
 
--- An interrupt cue belongs to the pull that showed it, so the next pull ends
--- every leg of it, its result included, even with no encounter end between.
+-- Without an encounter end before a pull, the previous pull's kick countdown
+-- or result would still be showing.
 local function EndInterruptCues(self)
     local ending = {}
     for owner, byKind in pairs(self._slotPresentations) do
