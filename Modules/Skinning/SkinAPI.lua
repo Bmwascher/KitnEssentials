@@ -75,10 +75,16 @@ local unsettled = setmetatable({}, { __mode = "k" })
 -- Read-only seam: the in-game check counts backdrops left unsettled.
 S._unsettled = unsettled
 
+---@type fun()
+local EnsureShared
+
 local skinState = setmetatable({}, { __mode = "k" })
 function S.data(obj)
     local d = skinState[obj]
-    if not d then d = {}; skinState[obj] = d end
+    if not d then
+        EnsureShared()
+        d = {}; skinState[obj] = d
+    end
     return d
 end
 
@@ -263,14 +269,12 @@ local BLIZZARD_REGIONS = {
 -- S.KillTexture now routes through S.Kill.
 -- The flyout no longer uses it -- that path moved to the ClearTexture
 -- idiom via S.ClearButtonArt, which is surgery-free.
-S.HiddenFrame = S.HiddenFrame or CreateFrame("Frame", nil, _G.UIParent)
-S.HiddenFrame:Hide()
-
 function S.Kill(object)
     if not object then return end
+    EnsureShared()
     if object.UnregisterAllEvents then
         object:UnregisterAllEvents()
-        if object.SetParent then object:SetParent(S.HiddenFrame) end
+        if object.SetParent and S.HiddenFrame then object:SetParent(S.HiddenFrame) end
     elseif object.Hide then
         object.Show = object.Hide
     end
@@ -515,6 +519,7 @@ function S.Backdrop(frame, inset, borderOnly)
         S.PixelSnap(bd)
         bd:SetBackdropBorderColor(unpack(S.borderColor))
         backdropCache[frame] = bd
+        EnsureShared()
     end
 
     bd:SetBackdropColor(S.bgColor[1], S.bgColor[2], S.bgColor[3], borderOnly and 0 or S.bgColor[4])
@@ -527,10 +532,6 @@ function S.Backdrop(frame, inset, borderOnly)
     return bd
 end
 
-local edgeRefresher = CreateFrame("Frame")
-edgeRefresher:RegisterEvent("PLAYER_ENTERING_WORLD")
-edgeRefresher:RegisterEvent("UI_SCALE_CHANGED")
-edgeRefresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
 -- An inset client's mode: true insets all four sides, VERTICAL_ONLY only top
 -- and bottom, for a row hover that spans the row's full width.
 local VERTICAL_ONLY = "vertical"
@@ -639,7 +640,10 @@ S._RefreshOwnEdge = RefreshOwnEdge
 -- For a frame that hosts S.InsetToEdge regions but wears no KE edge: no
 -- refresher walks it otherwise, so its regions would keep an old edge size.
 function S.TrackEdgeClients(frame)
-    if frame and ownEdges[frame] == nil then ownEdges[frame] = false end
+    if frame and ownEdges[frame] == nil then
+        ownEdges[frame] = false
+        EnsureShared()
+    end
 end
 
 -- A 1 px KE edge on the frame itself, for frames whose owner colors their own
@@ -654,6 +658,7 @@ function S.OwnBackdrop(frame, edgeOnly)
         info = { edgeFile = BG_TEX, bgFile = (not edgeOnly) and BG_TEX or nil }
         ownedInfo[info] = true
         ownEdges[frame] = info
+        EnsureShared()
     end
     if frame.backdropInfo == info then
         RefreshOwnEdge(frame)
@@ -673,14 +678,39 @@ function S.ReleaseOwnBackdrop(frame)
     unsettled[frame] = nil
 end
 
-edgeRefresher:SetScript("OnEvent", function()
+local function RefreshAllEdges()
     -- One frame that refuses a geometry read must not abort the sweep:
     -- that would leave every backdrop after it in the iteration order
     -- stale, and pairs order is arbitrary, so the damage would move
     -- around between sessions.
     for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
     for frame in pairs(ownEdges) do pcall(RefreshOwnEdge, frame) end
-end)
+end
+
+-- The parking frame, the edge refresher and the radio-button hook start with
+-- the first skin work, so a client whose skins are all off pays nothing.
+-- Before then there is no backdrop to refresh and no skinned button. A frame
+-- made by a start that could not finish is kept, so a retry makes no second.
+local sharedStarted, refresher = false, nil
+EnsureShared = function()
+    if sharedStarted then return end
+    if not S.HiddenFrame then
+        S.HiddenFrame = CreateFrame("Frame", nil, _G.UIParent)
+        if S.HiddenFrame then S.HiddenFrame:Hide() end
+    end
+    refresher = refresher or CreateFrame("Frame")
+    if not (S.HiddenFrame and refresher) then return end
+    sharedStarted = true
+    refresher:RegisterEvent("PLAYER_ENTERING_WORLD")
+    refresher:RegisterEvent("UI_SCALE_CHANGED")
+    refresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+    refresher:SetScript("OnEvent", RefreshAllEdges)
+    if _G.SetCheckButtonIsRadio then
+        hooksecurefunc("SetCheckButtonIsRadio", function(button)
+            S.CheckRefresh(button)
+        end)
+    end
+end
 
 -- True when this backdrop owes nothing to the roots. The climb shares the
 -- pcall with the refresh, so a parent read that raises costs this backdrop,
@@ -1272,6 +1302,44 @@ function S.StatusBar(bar, inset)
     S.data(bar).skinned = true
 end
 
+-- A ColoredProgressBarTemplate bar is a Frame, not a StatusBar: a Fill
+-- texture the mixin sizes, clipped by a Mask, over a track texture. The fill
+-- keeps its own atlas, which Blizzard tints through SetVertexColor; the track
+-- and the mask go, and the backdrop hugs the fill's row.
+local COLORED_BAR_FILL_H = 15
+
+function S.ColoredBar(bar, dampen)
+    local fill = bar and bar.Fill
+    if not fill or S.data(bar).keColoredBar then return end
+    S.data(bar).keColoredBar = true
+
+    S.StripKeepingIcon(bar, fill)
+    if bar.Mask and fill.RemoveMaskTexture then fill:RemoveMaskTexture(bar.Mask) end
+
+    local bd = S.Backdrop(bar)
+    local area = bar.FillArea
+    if bd and area then
+        local _, h = S.SafeSize(fill)
+        local half = ((h and h > 0) and h or COLORED_BAR_FILL_H) / 2 + 1
+        bd:ClearAllPoints()
+        bd:SetPoint("TOPLEFT", area, "LEFT", -1, half)
+        bd:SetPoint("BOTTOMRIGHT", area, "RIGHT", 1, -half)
+    end
+    if bar.Text then S.SetFont(bar.Text) end
+
+    if type(dampen) ~= "number" then return end
+    local function Dampen(tex, r, g, b, a)
+        local d = S.data(tex)
+        if d.keDampening or type(r) ~= "number" then return end
+        d.keDampening = true
+        tex:SetVertexColor(r * dampen, g * dampen, b * dampen, a or 1)
+        d.keDampening = false
+    end
+    hooksecurefunc(fill, "SetVertexColor", Dampen)
+    local r, g, b, a = fill:GetVertexColor()
+    if r then Dampen(fill, r, g, b, a) end
+end
+
 function S.ProgressFill(bar)
     if not bar or not bar.SetStatusBarTexture then return end
     bar:SetStatusBarTexture(HOVER_TEX)
@@ -1531,12 +1599,6 @@ function S.CheckRefresh(check)
     S.SweepCheckChildren(check)
     flat(checked)
     flat(disabledChecked)
-end
-
-if _G.SetCheckButtonIsRadio then
-    hooksecurefunc("SetCheckButtonIsRadio", function(button)
-        S.CheckRefresh(button)
-    end)
 end
 
 function S.CheckBox(check)
@@ -2377,8 +2439,10 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     S.Backdrop(tab)
     tab:SetSize(30, 40)
 
-    tab:ClearAllPoints()
+    -- With no anchor the tab keeps Blizzard's points, which the window's own
+    -- layout code re-applies.
     if prevTab then
+        tab:ClearAllPoints()
         tab:SetPoint("TOP", prevTab, "BOTTOM", 0, -1)
         hooksecurefunc(tab, "SetPoint", function(t, _, _, _, x, y)
             if (x ~= 0 or y ~= -1) and not S.data(t).anchoring then
@@ -2389,6 +2453,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
             end
         end)
     elseif anchorParent then
+        tab:ClearAllPoints()
         tab:SetPoint("TOPLEFT", anchorParent, "TOPRIGHT", 1, 0)
         hooksecurefunc(tab, "SetPoint", function(t, _, _, _, x, y)
             if (x ~= 1 or y ~= 0) and not S.data(t).anchoring then
@@ -2429,6 +2494,8 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
             resize()
             recenter()
         end)
+        -- Some clients' side-tab template rounds the icon with a mask.
+        if tab.Mask and icon.RemoveMaskTexture then icon:RemoveMaskTexture(tab.Mask) end
     end
 
     if tab.Background then tab.Background:SetAlpha(0) end
@@ -2440,6 +2507,14 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     S.KillSideTabArt(tab)
     S.HoverWash(tab)
     S.data(tab).keSideTab = true
+end
+
+-- A column of side tabs that keeps the places Blizzard's layout gives them.
+local IN_PLACE_ICON = 22
+
+function S.SideTabsInPlace(tabs)
+    if not tabs then return end
+    for _, tab in ipairs(tabs) do S.SideTab(tab, nil, nil, IN_PLACE_ICON) end
 end
 
 function S.NavCrumb(btn)
@@ -3366,7 +3441,26 @@ function S.TabsSettle(prefix, maxN)
     end
 end
 
+-- Under the Gamepad interface style the controller drives Blizzard's windows,
+-- and a skin cannot be taken off once applied, so the first answer read after
+-- login holds until the next reload.
+local padLatched
+
+function S.PadStandDown()
+    if padLatched ~= nil then return padLatched end
+    local style = _G.C_InputInterfaceStyle
+    local kinds = _G.Enum and _G.Enum.InputDeviceInterfaceType
+    local on = false
+    if style and style.GetCurrentStyle and kinds and kinds.Gamepad ~= nil then
+        ---@diagnostic disable-next-line: wrong-flavor-api
+        on = style.GetCurrentStyle() == kinds.Gamepad
+    end
+    if _G.IsLoggedIn and _G.IsLoggedIn() then padLatched = on end
+    return on
+end
+
 function S:IsActive()
+    if S.PadStandDown() then return false end
     if KE:ShouldNotLoadModule() then return false end
     local db = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
@@ -3452,6 +3546,10 @@ end
 
 local function SkinEnabled(key, addon)
     if not key then return true end
+    -- A skin this client withholds never runs, whatever its saved row says.
+    -- Guarded like the accessor below: a headless spec can load this file
+    -- without Core.
+    if KE.IsFrameSkinAvailable and not KE:IsFrameSkinAvailable(key) then return false end
     -- EllesmereUI already skins this window. Two engines backdropping one
     -- frame gives it two borders. This is a SEPARATE axis from the user's
     -- own toggle below and never writes to it, so a skin comes straight

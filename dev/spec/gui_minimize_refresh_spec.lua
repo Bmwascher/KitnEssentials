@@ -23,6 +23,8 @@ describe("GUI-Core RefreshContent guard", function()
         mock.install()
         local KE = { Theme = { headerHeight = 32, borderSize = 1 } }
         helpers.loadModule("Core/Secret.lua", KE)
+        -- GUI-Core asks the availability policy; a retail load admits all.
+        helpers.loadModule("Core/Availability.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
 

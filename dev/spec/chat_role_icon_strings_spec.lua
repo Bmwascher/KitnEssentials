@@ -157,4 +157,17 @@ describe("Chat role icon cache keys", function()
         assert.is_nil(keys(nil, nil, "Stormrage"))
         assert.is_nil(keys("", nil, "Stormrage"))
     end)
+
+    -- With surnames on, the unit API's second return is a surname and chat
+    -- names the sender by the joined full name, with no realm.
+    it("gives one joined key and no hyphen key in surname mode", function()
+        for _, row in ipairs({
+            { why = "member with a surname",    realm = "Smith", want = "Ally Smith" },
+            { why = "member without a surname", realm = nil,     want = "Ally" },
+        }) do
+            local bare, qualified = keys("Ally", row.realm, "Bingus", true)
+            assert.are.equal(row.want, bare, row.why)
+            assert.is_nil(qualified, row.why)
+        end
+    end)
 end)

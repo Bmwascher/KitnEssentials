@@ -1,11 +1,11 @@
 -- The CVars page is tabbed: GUI-CVars.lua declares the strip via
 -- RegisterTabbedContent, and offers the Dev tab only when the client has one of
--- the CVars that fill it -- AU:HasLiveDevCVars carries why. This spec proves
+-- the CVars that fill it -- CV:HasLiveDevCVars carries why. This spec proves
 -- that branch and that every declared tab id resolves to a registered content
 -- builder, the same discipline gui_automation_subtabs_spec.lua uses for the
 -- Automation page.
 --
--- The Automation stand-in exposes HasLiveDevCVars alone: the predicate's own
+-- The CVars module stand-in exposes HasLiveDevCVars alone: the predicate's own
 -- inputs (the live read AND the match predicate both biting) are already
 -- covered in cvars_live_read_spec.lua, so faking anything more here would test
 -- the fake. The fixture holds nothing the cases do not reach.
@@ -34,12 +34,12 @@ describe("GUI-CVars: subtab id coverage", function()
     end)
 
     -- The strip is declared as a function, evaluated per build. Resolve it the
-    -- same way GUI-TabbedContent.lua does, with the Automation module standing
+    -- same way GUI-TabbedContent.lua does, with the CVars module standing
     -- where GetModule would find it.
-    local function strip(automation)
+    local function strip(cvars)
         _G.KitnEssentials = {
             GetModule = function(_, name)
-                if name == "Automation" then return automation end
+                if name == "CVars" then return cvars end
                 return nil
             end,
         }
@@ -76,7 +76,7 @@ describe("GUI-CVars: subtab id coverage", function()
 
     -- A page built before GetModule can answer must not offer a tab whose card
     -- has nothing to fill it.
-    it("drops the Dev tab when the Automation module is absent entirely", function()
+    it("drops the Dev tab when the CVars module is absent entirely", function()
         local tabs = strip(nil)
         assert.equals(2, #tabs)
         assert.equals("CVarsGeneral", tabs[1].id)

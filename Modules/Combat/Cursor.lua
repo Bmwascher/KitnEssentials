@@ -31,7 +31,8 @@ local max              = math.max
 local ipairs           = ipairs
 local pcall            = pcall
 
-local GCD_SPELL_ID = 61304
+-- 61304 does not exist on the Forever client; 29515 does.
+local GCD_SPELL_ID = KE.IS_FOREVER and 29515 or 61304
 
 local TEX_BASE = "Interface\\AddOns\\KitnEssentials\\Media\\Cursor\\"
 local CIRCLE_TEXTURES = {

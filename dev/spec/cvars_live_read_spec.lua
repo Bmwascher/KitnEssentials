@@ -38,8 +38,8 @@ local function newFixture(getCVar)
     mock.installSpecInfo()
 
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/QoL/Automation/Automation.lua", { Print = function() end })
-    local AU = modules["Automation"]
+    helpers.loadModule("Modules/Core/CVars/CVars.lua", { Print = function() end })
+    local AU = modules["CVars"]
     AU.RegisterEvent = function() end
     AU.SetEnabledState = function() end
     return AU

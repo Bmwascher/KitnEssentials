@@ -40,3 +40,46 @@ jobs:
               exit 1
               ;;
           esac
+
+      # The loaded library closure per client, for comparison with the pins in
+      # .pkgmeta. Every loaded file under Libs is listed, XML included: an XML
+      # file decides what else loads and can carry inline code, as TaintLess
+      # does. Each line: a verdict, the path, and the file's first MINOR or
+      # NewLibrary line (empty for most XML). The verdict compares the archive
+      # file with the tracked copy in the checkout after CRLF line ends become
+      # LF, since the packager writes CRLF and the repository stores LF: match,
+      # delta, untracked (no copy in the checkout) or missing (not in the
+      # archive). Inline scripts also print as "<inline> <manifest>".
+      # A missing file fails the step; on this runner that includes a path
+      # whose letter case differs, which Windows would still load, and needs
+      # fixing all the same.
+      - name: List the loaded library files
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q lua5.1
+          cd out/KitnEssentials
+          lfhash() { sed 's/\r$//' "$1" | sha256sum | cut -c1-16; }
+          missing=0
+          for client in standard camelot; do
+            echo "== $client"
+            lua5.1 "$GITHUB_WORKSPACE/dev/scripts/load-list.lua" --client "$client" KitnEssentials.toc > "$RUNNER_TEMP/loaded-$client.txt"
+            grep '^<inline>' "$RUNNER_TEMP/loaded-$client.txt" || true
+            while read -r file; do
+              if [ ! -f "$file" ]; then
+                verdict=missing
+                missing=$((missing + 1))
+              elif [ ! -f "$GITHUB_WORKSPACE/$file" ]; then
+                verdict=untracked
+              elif [ "$(lfhash "$file")" = "$(lfhash "$GITHUB_WORKSPACE/$file")" ]; then
+                verdict=match
+              else
+                verdict=delta
+              fi
+              minor=$( (grep -m 1 -E 'MINOR|NewLibrary' "$file" 2>/dev/null || true) | tr -d '\r' | sed 's/^[[:space:]]*//')
+              printf '%-9s %s %s\n' "$verdict" "$file" "$minor"
+            done < <(grep '^Libs/' "$RUNNER_TEMP/loaded-$client.txt" || true)
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::loaded library files are missing from the archive; see the missing lines above"
+            exit 1
+          fi

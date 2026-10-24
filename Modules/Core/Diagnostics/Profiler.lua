@@ -405,7 +405,7 @@ local profilerPopupPending = false
 
 local function DisableProfilingAndReload()
     C_CVar_SetCVar("scriptProfile", "0")
-    ReloadUI()
+    KE:ReloadUI()
 end
 
 -- A Blizzard popup shown from addon code taints the popup list that secure

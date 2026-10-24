@@ -29,7 +29,8 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog", "theme", "color", "accent", "appearance", "skin", "preset", "tint" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset", "rename", "delete", "global", "sharing" } },
-            { id = "CVars", text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map", "ui scaling", "core panels", "services", "housing", "legacy / optional", "legacy", "panel scale", "panel scaling", "blizzard panels", "character frame", "professions scale", "group finder scale", "housing scale", "service panels", "legacy panels" } },
+            { id = "CVars", text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map", "ui scaling", "core panels", "services", "panel scale", "panel scaling", "blizzard panels", "character frame", "professions scale", "group finder scale", "service panels" },
+                gatedKeywords = { UIScalingHousing = { "housing", "housing scale" }, UIScalingLegacy = { "legacy / optional", "legacy", "legacy panels" } } },
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },
@@ -111,24 +112,30 @@ GUIFrame.sidebarConfig = {
             --
             -- The keyword list absorbs the rows this page swallowed, so
             -- searching "raid control", "ilvl", "hex" or "objective tracker"
-            -- still lands here.
+            -- still lands here. Words for a feature a client can withhold sit
+            -- in gatedKeywords under that feature's id (the filter loop below).
             { id = "SkinBlizzardFrames", text = "Dark Theme", alwaysEnabled = true, keywords = { "blizzard", "frames", "chat config", "chat settings", "gm", "skin", "window", "dark theme", "dialog", "context menu", "right click", "font", "socket", "taxi", "flight", "guild invite", "addon skins", "widget", "widgets", "status bar", "progress", "power bar", "top center", "bar text", "alert", "alerts", "toast", "toasts", "loot", "achievement", "banner", "recipe", "level up", "anchor", "move", "position",
-                "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect",
+                "character", "inspect",
                 "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color",
-                "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
+                "role", "roles", "tank", "healer",
                 "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail",
                 "vehicle", "vehicle exit", "vehicle exit button", "exit", "leave", "eject", "dismount", "button",
                 "frame skins", "loot roll", "loot window", "ui widgets", "alert frames",
                 "skinned windows", "blizzard text everywhere", "category sizes",
                 "on-screen messages", "error messages", "action status", "zone names", "zone text", "chat bubbles",
                 "status bars", "text widgets", "spell icons", "top-center container", "top-center position",
-                "alert stack position", "event toasts", "event toast position", } },
+                "alert stack position", "event toasts", "event toast position", },
+                gatedKeywords = {
+                    RaidControl = { "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "raid manager", "raid tools", "shared notes", "group" },
+                    CharacterPanel = { "panel", "stats", "item level", "ilvl", "gear", "durability" },
+                } },
             { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "gems", "sockets", "enchant", "great vault", "vault", "omnium", "window buttons" } },
             { id = "Chat",               text = "Chat", alwaysEnabled = true, keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
-            { id = "SkinTooltips",       text = "Tooltips", alwaysEnabled = true, keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
+            { id = "SkinTooltips",       text = "Tooltips", alwaysEnabled = true, keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "target", "health bar", "class color", "hide in combat" },
+                gatedKeywords = { TooltipMythicPlus = { "mythic rating" } } },
         },
     },
 }
@@ -145,6 +152,28 @@ for _, section in ipairs(GUIFrame.sidebarConfig) do
                 end
             end
         end
+    end
+end
+
+-- Rows for withheld features leave the table itself, so the sidebar, its
+-- search and Edit Mode's categories all agree. A section left empty goes too.
+-- An admitted row's words for a feature the client can withhold join its
+-- keywords only where that feature is admitted.
+for i = #GUIFrame.sidebarConfig, 1, -1 do
+    local section = GUIFrame.sidebarConfig[i]
+    section.items = KE:FilterAvailableEntries(section.items)
+    for _, item in ipairs(section.items) do
+        if item.gatedKeywords then
+            for featureId, words in pairs(item.gatedKeywords) do
+                if KE:IsFeatureAvailable(featureId) then
+                    for _, word in ipairs(words) do item.keywords[#item.keywords + 1] = word end
+                end
+            end
+            item.gatedKeywords = nil
+        end
+    end
+    if #section.items == 0 then
+        table.remove(GUIFrame.sidebarConfig, i)
     end
 end
 

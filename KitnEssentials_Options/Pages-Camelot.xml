@@ -1,0 +1,20 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <!-- Forever's settings pages: the admitted categories', in Pages.xml
+         order. Home and Profile Manager load with the main addon. -->
+    <Script file="Skinning\GUI-DamageMeter.lua" />
+    <Script file="Core\CVars\GUI-CVars.lua" />
+    <Script file="Core\CVars\GUI-UIScaling.lua" />
+    <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
+    <Script file="Skinning\GUI-Tooltips.lua" />
+    <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />
+    <Script file="Skinning\DarkTheme\GUI-UIWidgets.lua" />
+    <Script file="Skinning\DarkTheme\GUI-AlertFrames.lua" />
+    <Script file="Skinning\DarkTheme\GUI-LootRoll.lua" />
+    <Script file="Skinning\DarkTheme\GUI-LootFrame.lua" />
+    <Script file="Skinning\DarkTheme\GUI-VehicleExit.lua" />
+    <Script file="Skinning\GUI-Chat.lua" />
+    <Script file="Skinning\DarkTheme\GUI-BlizzardFrames.lua" />
+    <Script file="Core\GUI-Optimize.lua" />
+</Ui>

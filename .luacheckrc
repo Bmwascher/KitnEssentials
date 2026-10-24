@@ -243,7 +243,7 @@ read_globals = {
     "C_AddOns", "C_AddOnProfiler",
 
     -- CVar
-    "GetCVar", "SetCVar", "C_CVar",
+    "GetCVar", "SetCVar", "C_CVar", "C_VideoOptions",
 
     -- Map / Waypoint
     "C_Map",
@@ -378,7 +378,7 @@ read_globals = {
     "SecureHandlerExecute", "SecureHandlerWrapScript",
 
     -- Shapeshifting / Stance
-    "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo",
+    "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo", "GetShapeshiftFormID",
 
     -- Loot / Spec
     "GetLootSpecialization", "GetAverageItemLevel",

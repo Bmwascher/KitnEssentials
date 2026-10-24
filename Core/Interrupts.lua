@@ -10,8 +10,11 @@
 --   candidates     - ordered list of { id, cd } entries to try in priority
 --                    order (for pet-dependent specs where the available kick
 --                    changes with active pet, e.g. Warlock Felhunter vs
---                    Felguard). CacheInterruptId iterates and picks the first
---                    that is actually known in the player or pet spellbook.
+--                    Felguard). KE:ResolvePlayerInterrupt picks the first
+--                    that is known in the player or pet spellbook. A
+--                    candidate may carry `forms`, the shapeshift form ids
+--                    (GetShapeshiftFormID) it needs; without it any form
+--                    will do.
 --   announceExtras - optional array of additional spell IDs that count as
 --                    interrupts for announce purposes but not CD tracking.
 --   tracked        - optional candidate id a cooldown tracker shows for a
@@ -27,6 +30,11 @@
 --   KE:GetTrackedKickForSpec(specID) -> { id, cd } or nil.
 --   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate and
 --                                    tracker kick.
+--   KE:SelectInterruptCandidate(candidates, isKnown, formID) -> the first
+--                                    candidate isKnown accepts whose forms
+--                                    allow formID, or nil.
+--   KE:ResolvePlayerInterrupt(specID) -> that pick for the player's spellbook
+--                                        and current form, or nil.
 
 ---@class KE
 local KE = select(2, ...)
@@ -135,6 +143,97 @@ local EXTRA_KICKS_BY_SPEC = {
     [72] = WARRIOR_THROWS,
     [73] = WARRIOR_THROWS,
 }
+
+-- Forever rows, as printed by dev/scripts/derive-forever-kicks.lua. Ranks are
+-- listed highest first, so the first known one is the rank the trained spell
+-- casts; `forms` lists the shapeshift form ids a kick needs.
+local FOREVER_INTERRUPTS = {
+    [1482] = {  -- Mage
+        candidates = {
+            { id = 2139, cd = 30 },  -- Counterspell
+        },
+    },
+    [1484] = {  -- Druid
+        candidates = {
+            { id = 410176, cd = 10, forms = { 1, 5, 8 } },  -- Skull Bash
+            { id = 16979, cd = 15, forms = { 5, 8 } },  -- Feral Charge (Bear)
+            { id = 1238122, cd = 15, forms = { 1, 5, 8 } },  -- Feral Charge
+        },
+        announceExtras = { 19675, 414621 },
+    },
+    [1486] = {  -- Paladin
+        candidates = {
+            { id = 425609, cd = 15 },  -- Rebuke
+        },
+    },
+    [1487] = {  -- Priest
+        candidates = {
+            { id = 15487, cd = 45 },  -- Silence
+        },
+    },
+    [1488] = {  -- Rogue
+        candidates = {
+            { id = 1769, cd = 10 },  -- Kick
+            { id = 1768, cd = 10 },  -- Kick
+            { id = 1767, cd = 10 },  -- Kick
+            { id = 1766, cd = 10 },  -- Kick
+        },
+        tracked = 1766,
+    },
+    [1489] = {  -- Shaman
+        candidates = {
+            { id = 10414, cd = 6 },  -- Earth Shock
+            { id = 10413, cd = 6 },  -- Earth Shock
+            { id = 10412, cd = 6 },  -- Earth Shock
+            { id = 8046, cd = 6 },  -- Earth Shock
+            { id = 8045, cd = 6 },  -- Earth Shock
+            { id = 8044, cd = 6 },  -- Earth Shock
+            { id = 8042, cd = 6 },  -- Earth Shock
+        },
+        tracked = 8042,
+    },
+    [1490] = {  -- Warlock
+        candidates = {
+            { id = 19647, cd = 30 },  -- Spell Lock
+            { id = 19244, cd = 30 },  -- Spell Lock
+        },
+        tracked = 19244,
+    },
+    [1491] = {  -- Warrior
+        candidates = {
+            { id = 6554, cd = 10, forms = { 19 } },  -- Pummel
+            { id = 6552, cd = 10, forms = { 19 } },  -- Pummel
+            { id = 1672, cd = 12, forms = { 17, 18 } },  -- Shield Bash
+            { id = 1671, cd = 12, forms = { 17, 18 } },  -- Shield Bash
+            { id = 72, cd = 12, forms = { 17, 18 } },  -- Shield Bash
+        },
+        tracked = 6552,
+    },
+}
+local FOREVER_KICK_ALIASES = {
+    [1671] = 72,  -- Shield Bash
+    [1672] = 72,  -- Shield Bash
+    [1767] = 1766,  -- Kick
+    [1768] = 1766,  -- Kick
+    [1769] = 1766,  -- Kick
+    [6554] = 6552,  -- Pummel
+    [8044] = 8042,  -- Earth Shock
+    [8045] = 8042,  -- Earth Shock
+    [8046] = 8042,  -- Earth Shock
+    [10412] = 8042,  -- Earth Shock
+    [10413] = 8042,  -- Earth Shock
+    [10414] = 8042,  -- Earth Shock
+    [19647] = 19244,  -- Spell Lock
+}
+
+-- Each client sees only its own rows: Forever shares spell ids with retail
+-- (Earth Shock 8042 is no retail kick, Counterspell's cooldown differs) and
+-- has no talent kick data.
+if KE.IS_FOREVER then
+    INTERRUPTS = FOREVER_INTERRUPTS
+    KICK_ALIASES = FOREVER_KICK_ALIASES
+    EXTRA_KICKS_BY_SPEC = {}
+end
 local EXTRA_KICK_BY_ID = {}
 for _, list in pairs(EXTRA_KICKS_BY_SPEC) do
     for _, e in ipairs(list) do
@@ -188,10 +287,9 @@ end
 -- Accessors
 ---------------------------------------------------------------------------------
 
--- Returns an ordered list of { id, cd } entries to try in priority order.
--- Caller iterates and picks the first entry whose id is actually known in the
--- player's or pet's spellbook. Returns nil if spec is unknown or has no
--- candidate (a tracker kick is none).
+-- Returns an ordered list of { id, cd } entries to try in priority order;
+-- KE:ResolvePlayerInterrupt picks the player's kick from it. Returns nil if
+-- spec is unknown or has no candidate (a tracker kick is none).
 function KE:GetInterruptCandidatesForSpec(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end
@@ -239,6 +337,42 @@ function KE:GetInterruptKickSpellSet()
     return KICK_SPELL_SET
 end
 
+-- Pure: the caller supplies the known check and the form. A secret form is
+-- treated as unknown, so it meets no `forms` list.
+function KE:SelectInterruptCandidate(candidates, isKnown, formID)
+    if self:IsSecretValue(formID) then formID = nil end
+    for _, c in ipairs(candidates) do
+        local forms = c.forms
+        local formAllowed = not forms
+        if forms and formID then
+            for i = 1, #forms do
+                if forms[i] == formID then
+                    formAllowed = true
+                    break
+                end
+            end
+        end
+        if formAllowed and isKnown(c.id) then return c end
+    end
+    return nil
+end
+
+local function isKnownToPlayerOrPet(spellID)
+    local book = C_SpellBook
+    if not (book and book.IsSpellKnownOrInSpellBook) then return false end
+    return book.IsSpellKnownOrInSpellBook(spellID)
+        or book.IsSpellKnownOrInSpellBook(spellID, Enum.SpellBookSpellBank.Pet)
+end
+
+function KE:ResolvePlayerInterrupt(specID)
+    local candidates = self:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return nil end
+    local getForm = GetShapeshiftFormID
+    local formID
+    if getForm then formID = getForm() end
+    return self:SelectInterruptCandidate(candidates, isKnownToPlayerOrPet, formID)
+end
+
 -- Talents that change a kick's cooldown outright, keyed by kick spell ID.
 -- Each entry names its talent and one change: `seconds` off the cooldown, or
 -- `multiplier`, the share of the cooldown kept (10% off is 0.9).
@@ -246,6 +380,7 @@ local FLAT_KICK_TALENTS = {
     [2139] = { { talent = 382297, seconds = 5 } },       -- Counterspell: Quick Witted
     [6552] = { { talent = 391271, multiplier = 0.9 } },  -- Pummel: Honed Reflexes
 }
+if KE.IS_FOREVER then FLAT_KICK_TALENTS = {} end
 
 function KE:GetFlatKickTalents(kickSpellID)
     return FLAT_KICK_TALENTS[kickSpellID]
@@ -288,6 +423,7 @@ end
 local SUCCESS_REDUCTIONS = {
     [47528] = { talent = 378848, seconds = 3 },  -- Mind Freeze: Coldthirst
 }
+if KE.IS_FOREVER then SUCCESS_REDUCTIONS = {} end
 
 function KE:GetInterruptSuccessReduction(kickSpellID)
     local reduction = SUCCESS_REDUCTIONS[kickSpellID]

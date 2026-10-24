@@ -60,11 +60,12 @@ end
 local function StyleEntry(child)
     if not child or S.data(child).keRepRow then return end
     -- StripTextures clears every texture region, so the hover is added after it.
-    S.StripTextures(child)
+    -- A header that carries its expand icon as StateIcon keeps that icon.
+    S.StripKeepingIcon(child, child.StateIcon)
     S.RowHover(child)
     FixCollapseChevron(child)
 
-    if child.Right then
+    if child.Right or child.StateIcon then
         local hbd = S.Backdrop(child)
         if hbd then
             hbd:ClearAllPoints()
@@ -83,15 +84,20 @@ local function StyleEntry(child)
     local content = child.Content
     local bar = content and content.ReputationBar
     if bar then
-        S.StripTextures(bar)
-        if bar.SetStatusBarTexture then bar:SetStatusBarTexture(WHITE) end
-        S.StatusBar(bar)
+        if bar.SetStatusBarColor then
+            S.StripTextures(bar)
+            if bar.SetStatusBarTexture then bar:SetStatusBarTexture(WHITE) end
+            S.StatusBar(bar)
 
-        if not S.data(bar).keDampHooked then
-            hooksecurefunc(bar, "SetStatusBarColor", DampenBarColor)
-            S.data(bar).keDampHooked = true
-            local r, g, b, a = bar:GetStatusBarColor()
-            if r then DampenBarColor(bar, r, g, b, a) end
+            if not S.data(bar).keDampHooked then
+                hooksecurefunc(bar, "SetStatusBarColor", DampenBarColor)
+                S.data(bar).keDampHooked = true
+                local r, g, b, a = bar:GetStatusBarColor()
+                if r then DampenBarColor(bar, r, g, b, a) end
+            end
+        else
+            -- A colored progress bar: a Frame, so the StatusBar hook would raise.
+            S.ColoredBar(bar, DAMPEN)
         end
 
         S.FontStrings(content, REP_ROW_FONT, "")
@@ -113,9 +119,16 @@ local function Skin()
         S.StripTextures(detail)
         S.Backdrop(detail)
         if detail.CloseButton then S.CloseButton(detail.CloseButton) end
-        if detail.ScrollingDescriptionScrollBar then S.ScrollBar(detail.ScrollingDescriptionScrollBar) end
+        local descBar = detail.ScrollingDescriptionScrollBar or detail.DescriptionScrollBar
+        if descBar then S.ScrollBar(descBar) end
         for _, cb in ipairs({ "AtWarCheckbox", "MakeInactiveCheckbox", "WatchFactionCheckbox" }) do
             if detail[cb] then S.CheckBox(detail[cb]) end
+        end
+        -- The standing bar and Renown button exist only on the colored-bar
+        -- layout; the StatusBar layout leaves its Renown button as it is.
+        if detail.StandingBar then
+            S.ColoredBar(detail.StandingBar)
+            if detail.ViewRenownButton then S.Button(detail.ViewRenownButton) end
         end
     end
 end

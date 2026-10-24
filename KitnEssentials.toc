@@ -2,20 +2,24 @@
 ## Notes: Standalone combat, utilities, quality of life, dungeons, and skinning modules for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## X-Manual-Version: 4.14.1
+## X-Manual-Version: 4.14.5
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
 ## SavedVariablesPerCharacter: KitnEssentialsCharDB
-## Interface: 120105
+## Interface: 120105, 16001
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
 ## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
 ## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r
 ## X-Curse-Project-ID: 1485435
 ## X-Wago-ID: n6VLEEGd
 
-Libs\Init.xml
+Core\Client.lua
+Core\BaselineLoad.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+Libs\Init.xml [AllowLoadGameType standard]
+Libs\Init-Camelot.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 
 Modules\Core\Diagnostics\TaintReport.lua
 Core\Core.xml
-Modules\Modules.xml
+Modules\Modules.xml [AllowLoadGameType standard]
+Modules\Modules-Camelot.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 
 GUI\GUI.xml

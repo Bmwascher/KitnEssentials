@@ -1,0 +1,43 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <!-- Forever's module list: diagnostics and the admitted categories, in the
+         retail list's relative order, because load order is behavior
+         (Modules.xml). -->
+    <Include file="Core\Diagnostics\Diagnostics.xml" />
+    <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
+    <Script file="Core\CVars\CVars.lua" />
+    <Script file="Core\Optimize.lua" />
+    <Script file="Core\VersionCheck.lua" />
+    <Script file="Core\CVars\PanelScaleRegistry.lua" />
+    <Script file="Core\CVars\PanelScale.lua" />
+    <Script file="Core\CVars\MapScale.lua" />
+    <Script file="Skinning\DarkTheme\AlertFrames.lua" />
+    <Script file="Skinning\DarkTheme\ColorPicker.lua" />
+    <Script file="Skinning\DarkTheme\VehicleExit.lua" />
+    <Script file="Skinning\SkinAPI.lua" />
+    <Script file="Skinning\DarkTheme\EUIWindows.lua" />
+    <Script file="Skinning\DarkTheme\Dialogs.lua" />
+    <Script file="Skinning\DarkTheme\GlobalFonts.lua" />
+    <Script file="Skinning\DarkTheme\BlizzardFonts.lua" />
+    <Script file="Skinning\DarkTheme\UIWidgets.lua" />
+    <Script file="Skinning\DarkTheme\ContextMenus.lua" />
+    <Script file="Skinning\Tooltips\Tooltips.lua" />
+    <Script file="Skinning\Tooltips\TooltipStatusBar.lua" />
+    <Script file="Skinning\DarkTheme\BlizzardMessages.lua" />
+    <Script file="Skinning\Chat\ChatMessageHandler.lua" />
+    <Script file="Skinning\Chat\ChatRoleIcons.lua" />
+    <Script file="Skinning\Chat\ChatRecall.lua" />
+    <Script file="Skinning\DarkTheme\RoleIconSamples.lua" />
+    <Script file="Skinning\Chat\Chat.lua" />
+    <Script file="Skinning\Chat\ChatCopyText.lua" />
+    <Script file="Skinning\Chat\ChatCopy.lua" />
+    <Script file="Skinning\Chat\ChatLinks.lua" />
+    <Script file="Skinning\Chat\ChatHistory.lua" />
+    <Script file="Skinning\DarkTheme\LootRoll.lua" />
+    <Script file="Skinning\DarkTheme\LootRollBars.lua" />
+    <Script file="Skinning\DarkTheme\LootFrame.lua" />
+    <Include file="Skinning\DarkTheme\Frames\Frames-Camelot.xml" />
+    <Include file="Skinning\DarkTheme\Addons\Addons-Camelot.xml" />
+    <Include file="Skinning\DamageMeter\DamageMeter.xml" />
+</Ui>

@@ -41,6 +41,7 @@ GUIFrame.registeredContent = {}
 
 function GUIFrame:RegisterContent(id, buildFunc)
     if type(buildFunc) ~= "function" then return end
+    if not KE:IsFeatureAvailable(id) then return end
     self.registeredContent[id] = buildFunc
 end
 
@@ -1515,7 +1516,7 @@ function GUIFrame:RefreshContent()
     -- NEVER rebuild while the GUI is hidden. Every frame a page builds for
     -- itself is orphaned by the clear pass below, and frames are never
     -- garbage-collected, so an event-driven caller firing with the GUI closed
-    -- (Automation's CVAR_UPDATE handler) would leak on every event. Mark dirty
+    -- (the CVars module's CVAR_UPDATE handler) would leak on every event. Mark dirty
     -- and bail; Show() replays one refresh so a reopened page is never stale.
     -- Minimized counts as hidden here. The frame is still shown, so the test
     -- below passes, but the page is not on screen and every edit-mode drop
@@ -1540,6 +1541,13 @@ function GUIFrame:RefreshContent()
     end
 
     local itemId = self.selectedSidebarItem or "HomePage"
+    -- A page link or the last page shown can name a page this client
+    -- withholds; Home is always admitted. The selection keeps the withheld
+    -- id, which matches no sidebar row, so a sidebar rebuild highlights none.
+    if not KE:IsFeatureAvailable(itemId) then
+        itemId = "HomePage"
+        KE_GUI_REFRESH_ITEM = itemId
+    end
     local sameItem = (self.contentArea._lastItemId == itemId)
     -- Anything released or retired during the teardown below is counted
     -- against the page being torn down, not the one being built.

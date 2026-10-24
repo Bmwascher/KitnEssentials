@@ -180,6 +180,22 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.same(idSet(offTabs), idSet(onTabs))
     end)
 
+    -- A baseline load can withhold an element. The stub stands for the
+    -- policy: it keeps every entry but Vehicle Exit.
+    it("drops an element tab the policy withholds and keeps the rest in order", function()
+        KE.FilterAvailableEntries = function(_, list)
+            local kept = {}
+            for _, entry in ipairs(list) do
+                if entry.id ~= "VehicleExit" then kept[#kept + 1] = entry end
+            end
+            return kept
+        end
+        local tabs = GUIFrame._VisibleElementTabs()
+        assert.equals(4, #tabs)
+        assert.equals("SkinBlizzardFramesLootRoll", tabs[1].id)
+        assert.is_nil(idSet(tabs)["VehicleExit"])
+    end)
+
     -- Both nested rows: the Elements row in either conflict state, and the
     -- Fonts tab's own strip.
     it("registers a builder for every id on each nested row", function()
@@ -241,6 +257,24 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             elvui = false
             GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "CharacterPanel"
             assert.equals("SkinBlizzardFramesLootRoll", buildRow())
+        end)
+
+        -- With nothing admitted there is no first tab to select, and an empty
+        -- strip would still take its height on the page.
+        it("builds no sub-tab strip when the policy withholds every element", function()
+            KE.FilterAvailableEntries = function() return {} end
+            local built = false
+            GUIFrame.CreateSubTabs = function(_, _, yOffset)
+                built = true
+                return nil, yOffset
+            end
+            for _, id in ipairs({ "SkinBlizzardFramesLootRoll", "SkinBlizzardFramesLootWindow",
+                                  "SkinBlizzardFramesWidgets", "SkinBlizzardFramesAlertFrames",
+                                  "VehicleExit" }) do
+                GUIFrame.registeredContent[id] = function(_, yOffset) return yOffset end
+            end
+            assert.equals(7, GUIFrame.registeredContent["SkinBlizzardFramesElements"]({}, 7))
+            assert.is_false(built)
         end)
     end)
 end)

@@ -88,7 +88,9 @@ function GUIFrame:RegisterTabbedContent(itemId, tabs, opts)
             if collapse then return yOffset end
         end
 
-        local tabList = type(tabs) == "function" and tabs() or tabs
+        -- Filtered before resolution, so a withheld remembered, nested or
+        -- default tab falls back the way a stale one does.
+        local tabList = KE:FilterAvailableEntries(type(tabs) == "function" and tabs() or tabs)
 
         if opts and opts.defaultTab and GUIFrame.tabbedPageState[itemId] == nil then
             local pick = opts.defaultTab()

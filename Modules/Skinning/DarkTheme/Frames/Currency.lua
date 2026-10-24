@@ -59,6 +59,9 @@ local function StyleEntry(child)
             UpdateCollapse(child.HighlightRight)
             hooksecurefunc(child.HighlightRight, "SetAtlas", UpdateCollapse)
         end
+    elseif child.StateIcon then
+        S.StripKeepingIcon(child, child.StateIcon)
+        S.Backdrop(child)
     end
 
     local icon = child.Content and child.Content.CurrencyIcon
@@ -108,11 +111,12 @@ local function ApplySkin()
     -- toggle button moved off S.Button (KillAllTextures slot
     -- surgery on a button whose Refresh/UpdateEnabledState runs inside
     -- the protected transfer flow) onto the state-only recipe.
-    local popup = _G.TokenFramePopup
+    local popup = _G.TokenFramePopup or _G.TokenDetailFrame
     if popup and not S.data(popup).popupSkinned then
         S.data(popup).popupSkinned = true
         S.StripTextures(popup)
         S.Backdrop(popup)
+        if popup.DescriptionScrollBar then S.ScrollBar(popup.DescriptionScrollBar) end
         if popup.InactiveCheckbox then S.CheckBox(popup.InactiveCheckbox) end
         if popup.BackpackCheckbox then S.CheckBox(popup.BackpackCheckbox) end
         if popup.CurrencyTransferToggleButton then

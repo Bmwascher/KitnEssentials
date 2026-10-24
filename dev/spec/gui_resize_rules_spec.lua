@@ -13,6 +13,8 @@ describe("GUI-Core window size rules", function()
 
     before_each(function()
         local KE = { Theme = { headerHeight = 32, borderSize = 1 } }
+        -- GUI-Core asks the availability policy; a retail load admits all.
+        helpers.loadModule("Core/Availability.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
     end)

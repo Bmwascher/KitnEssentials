@@ -29,4 +29,11 @@ describe("HealerMana spec lookup key", function()
             assert.are.equal(case.want, HM:BuildHealerSnapshot("party1").specID, case.name)
         end
     end)
+
+    it("looks up nothing when the party cooldown files are not loaded", function()
+        local HM, KE = L.loadHealerMana()
+        HM.libSpecCache = { Tester = 256 }
+        KE.PartyCooldownsSpec = nil
+        assert.is_nil(HM:BuildHealerSnapshot("party1").specID)
+    end)
 end)

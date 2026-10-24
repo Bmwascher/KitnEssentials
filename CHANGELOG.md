@@ -1,5 +1,95 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.5
+
+### WoW Forever
+
+- System Optimization, with Forever's graphics values; the Mythic+ card is
+  hidden and rows for settings the client lacks are left out
+- The CVars page (General and Dev) and UI Scaling (General, Core Panels,
+  Services), with Forever's windows, including Progress Legacy
+- Version Check
+- `/kes mt` says the Mythic+ Timer is not available
+- Retail profile strings import, and the chat line names any turned-on
+  features this client does not have
+- Not yet tested on the live Forever client
+
+### General
+
+- System Optimization counts a graphics setting the game refuses as
+  "could not be applied"
+- A damaged block in an imported profile string is skipped instead of
+  breaking that setting
+
+---
+
+## v4.14.4
+
+### WoW Forever
+
+- The Loot window glows quest items, as on retail
+- Groundwork for the combat modules still to come: a kick list with every
+  rank and the stance or form each kick needs, and your role read from
+  your talents
+- Not yet tested on the live Forever client
+
+---
+
+## v4.14.3
+
+### WoW Forever
+
+- The Damage Meter settings page shows its Windows, Appearance, Behavior
+  and Spell History tabs
+- Dark Theme skins the Progress Legacy window, the Catalog Shop and the
+  Talking Head
+- Addon Skins: Ace3 windows, Baganator, BetterFriendlist, BigWigs, BugSack
+  and Simulationcraft
+- A Role Icons card picks the role icons chat draws
+- The ammo slot no longer shows a stray arrow in the Character window
+- Sidebar search no longer finds options that are hidden on Forever
+- Not yet tested on the live Forever client
+
+---
+
+## v4.14.2
+
+### Libraries
+
+- Bundled libraries updated to their current versions: LibSpecialization,
+  LibSharedMedia, AceDB, LibDBIcon and LibKeystone
+
+---
+
+## v4.14.1
+
+KitnEssentials now runs on WoW Forever.
+
+### WoW Forever
+
+- **NEW:** KitnEssentials loads on WoW Forever. Only the modules below run
+  there; everything else stays hidden, settings pages included
+- Available: Home and Profiles, Dark Theme, Color Picker, Tooltips, Chat
+  (with Chat History and Chat Links) and the Damage Meter
+- Dark Theme skins more than 50 Blizzard windows, including Character,
+  Professions, Collections and Stable in their Forever layouts, plus its
+  Elements, fonts and context menus
+- Chat treats a first name and surname as one name for role icons,
+  mentions and the keyword sound
+- Options that need realms, Mythic+ or keystones are hidden, as are
+  dual-spec profiles
+- With the Gamepad interface style on, the skins stay off until you
+  /reload in mouse and keyboard style
+- When the game won't let an addon reload the UI, a reload button appears
+  to click instead
+- Not on Forever yet: the Combat, Aura Tracking, QoL and Dungeon Tools
+  sections, the Character Panel and the Friends window skin
+- Not yet tested on the live Forever client
+
+### Tooltips
+
+- Darker default backdrop. A color you picked yourself is kept
+
 ## v4.14.1
 
 ### Party Cooldowns

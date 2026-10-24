@@ -432,8 +432,51 @@ local function SkinMounts()
     hooksecurefunc("MountJournal_InitMountButton", MountRowText)
 end
 
+-- The pet journal without loadout slots: its parts are read through their
+-- keys, and it has no battle, heal or loadout frames.
+local function SkinClassicPets(PetJournal)
+    local summon = PetJournal.SummonButton
+    if summon then
+        S.StripTextures(summon)
+        S.Button(summon)
+    end
+    S.Inset(PetJournal.RightInset)
+    S.Inset(PetJournal.LeftInset)
+    local random = PetJournal.SummonRandomPetSpellFrame
+    if random and random.Button then S.ItemButton(random.Button, true) end
+
+    if PetJournal.PetCount then
+        S.StripTextures(PetJournal.PetCount)
+        S.FontStrings(PetJournal.PetCount, 12, "")
+    end
+    local search = PetJournal.searchBox
+    if search then S.EditBox(search) end
+    local filter = PetJournal.FilterDropdown
+    if filter then
+        S.Button(filter)
+        UniformFilter(filter, search)
+        if filter.ResetButton then
+            S.CloseButton(filter.ResetButton)
+            filter.ResetButton:ClearAllPoints()
+            filter.ResetButton:SetPoint("CENTER", filter, "TOPRIGHT", 0, 0)
+        end
+    end
+
+    if PetJournal.ScrollBar then S.ScrollBar(PetJournal.ScrollBar) end
+    if PetJournal.ScrollBox then hooksecurefunc(PetJournal.ScrollBox, "Update", PetRows) end
+
+    local card = PetJournal.PetCard
+    if card then
+        S.StripTextures(card)
+        S.Template(card, "Window")
+        local info = card.PetInfo
+        if info and info.icon then S.SlotIcon(info.icon, info.qualityBorder) end
+    end
+end
+
 local function SkinPets()
     local PetJournal = _G.PetJournal
+    if not _G.PetJournalLoadoutPet1 then return SkinClassicPets(PetJournal) end
 
     S.StripTextures(_G.PetJournalSummonButton)
     S.StripTextures(_G.PetJournalFindBattle)
@@ -555,11 +598,16 @@ local function SkinToys()
     S.ArrowButton(ToyBox.PagingFrame.NextPageButton, "right")
     S.ArrowButton(ToyBox.PagingFrame.PrevPageButton, "left")
 
-    ToyBox.progressBar.border:Hide()
-    ToyBox.progressBar:DisableDrawLayer("BACKGROUND")
-    ToyBox.progressBar:SetStatusBarTexture(BarTex())
-    S.Backdrop(ToyBox.progressBar)
-    S.FontStrings(ToyBox.progressBar, 12, "OUTLINE")
+    if ToyBox.progressBar then
+        ToyBox.progressBar.border:Hide()
+        ToyBox.progressBar:DisableDrawLayer("BACKGROUND")
+        ToyBox.progressBar:SetStatusBarTexture(BarTex())
+        S.Backdrop(ToyBox.progressBar)
+        S.FontStrings(ToyBox.progressBar, 12, "OUTLINE")
+    elseif ToyBox.ProgressTracker then
+        S.StripTextures(ToyBox.ProgressTracker)
+        S.FontStrings(ToyBox.ProgressTracker, 12, "OUTLINE")
+    end
 
     for i = 1, 18 do
         local button = ToyBox.iconsFrame["spellButton" .. i]
@@ -611,6 +659,19 @@ local function MoveAppearancesTab()
 end
 
 local function SkinJournalTabs()
+    -- Side tabs keep Blizzard's own column; the moves and settle below serve
+    -- the bottom tab row only.
+    local first = _G.CollectionsJournalTab1
+    if first and first.SelectedTexture then
+        local tabs = {}
+        local n = 1
+        while _G["CollectionsJournalTab" .. n] do
+            tabs[n] = _G["CollectionsJournalTab" .. n]
+            n = n + 1
+        end
+        S.SideTabsInPlace(tabs)
+        return
+    end
 
     local index = 1
     local tab = _G.CollectionsJournalTab1
@@ -620,7 +681,10 @@ local function SkinJournalTabs()
         tab = _G["CollectionsJournalTab" .. index]
     end
     MoveAppearancesTab()
-    hooksecurefunc("CollectionsJournal_CheckAndDisplayHeirloomsTab", MoveAppearancesTab)
+    -- A string hook on a missing global raises.
+    if _G.CollectionsJournal_CheckAndDisplayHeirloomsTab then
+        hooksecurefunc("CollectionsJournal_CheckAndDisplayHeirloomsTab", MoveAppearancesTab)
+    end
 
     local function SettleTabs()
         local cj = _G.CollectionsJournal
@@ -807,12 +871,14 @@ end
 local function Skin()
     if not _G.CollectionsJournal then return S.Skip("CollectionsJournal missing") end
     S.Frame(_G.CollectionsJournal)
-    SkinWardrobe()
+    -- Each journal is skinned only where the client builds it, so a missing
+    -- one skips itself instead of stopping the rest.
+    if _G.WardrobeCollectionFrame then SkinWardrobe() end
     SkinJournalTabs()
-    SkinMounts()
-    SkinPets()
-    SkinToys()
-    SkinHeirlooms()
+    if _G.MountJournal then SkinMounts() end
+    if _G.PetJournal then SkinPets() end
+    if _G.ToyBox then SkinToys() end
+    if _G.HeirloomsJournal then SkinHeirlooms() end
     SkinWarbandScenes()
 end
 

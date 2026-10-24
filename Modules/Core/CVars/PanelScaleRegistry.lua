@@ -15,22 +15,26 @@ local ipairs = ipairs
 -- the enable pass finds those roots directly. Blizzard_GuildControlUI loads
 -- on demand but at startup, as a dependency of Blizzard_Communities, so
 -- GuildControlUI has none either.
+-- `client` marks a row only one client has a frame for; an unmarked row
+-- exists on both. The Housing and Legacy categories are retail's alone: their
+-- tabs are withheld on a baseline load, and a saved switch must not scale
+-- what no page there shows.
 local ENTRIES = {
     -- Core Panels
     { name = "CharacterFrame",                 category = "Core", label = "Character" },
     { name = "PlayerSpellsFrame",              category = "Core", label = "Spellbook and Talents",     addon = "Blizzard_PlayerSpells" },
     { name = "HeroTalentsSelectionDialog",     category = "Core", label = "Hero Talents",              addon = "Blizzard_PlayerSpells" },
-    { name = "ProfessionsBookFrame",           category = "Core", label = "Professions Book",          addon = "Blizzard_ProfessionsBook" },
+    { name = "ProfessionsBookFrame",           category = "Core", label = "Professions Book",          addon = "Blizzard_ProfessionsBook", client = "retail" },
     { name = "ProfessionsFrame",               category = "Core", label = "Professions",               addon = "Blizzard_Professions" },
     { name = "ProfessionsCustomerOrdersFrame", category = "Core", label = "Crafting Orders",           addon = "Blizzard_ProfessionsCustomerOrders" },
     { name = "InspectRecipeFrame",             category = "Core", label = "Inspected Recipe",          addon = "Blizzard_Professions" },
     { name = "PVEFrame",                       category = "Core", label = "Group Finder" },
-    { name = "EncounterJournal",               category = "Core", label = "Adventure Guide",           addon = "Blizzard_EncounterJournal" },
+    { name = "EncounterJournal",               category = "Core", label = "Adventure Guide",           addon = "Blizzard_EncounterJournal", client = "retail" },
     { name = "CollectionsJournal",             category = "Core", label = "Collections",               addon = "Blizzard_Collections" },
     { name = "CommunitiesFrame",               category = "Core", label = "Communities" },
     { name = "AchievementFrame",               category = "Core", label = "Achievements",              addon = "Blizzard_AchievementUI" },
     { name = "CalendarFrame",                  category = "Core", label = "Calendar",                  addon = "Blizzard_Calendar" },
-    { name = "ExpansionLandingPage",           category = "Core", label = "Expansion Summary" },
+    { name = "ExpansionLandingPage",           category = "Core", label = "Expansion Summary",         client = "retail" },
     { name = "WeeklyRewardsFrame",             category = "Core", label = "Great Vault",               addon = "Blizzard_WeeklyRewards" },
     { name = "SettingsPanel",                  category = "Core", label = "Game Settings" },
     { name = "FriendsFrame",                   category = "Core", label = "Friends" },
@@ -45,6 +49,7 @@ local ENTRIES = {
     { name = "MacroFrame",                     category = "Core", label = "Macros",                    addon = "Blizzard_MacroUI" },
     { name = "AddonList",                      category = "Core", label = "AddOn List" },
     { name = "AlliedRacesFrame",               category = "Core", label = "Allied Races",              addon = "Blizzard_AlliedRacesUI" },
+    { name = "LegacySystemFrame",              category = "Core", label = "Progress Legacy",           addon = "Blizzard_LegacySystem", client = "forever" },
 
     -- Services
     { name = "AuctionHouseFrame",              category = "Services", label = "Auction House",         addon = "Blizzard_AuctionHouseUI" },
@@ -59,7 +64,8 @@ local ENTRIES = {
     { name = "QuestFrame",                     category = "Services", label = "Quest Dialog" },
     { name = "QuestLogPopupDetailFrame",       category = "Services", label = "Quest Details" },
     { name = "ClassTrainerFrame",              category = "Services", label = "Trainer",               addon = "Blizzard_TrainerUI" },
-    { name = "StableFrame",                    category = "Services", label = "Stable" },
+    { name = "StableFrame",                    category = "Services", label = "Stable",                client = "retail" },
+    { name = "PetStableFrame",                 category = "Services", label = "Stable",                client = "forever" },
     { name = "FlightMapFrame",                 category = "Services", label = "Flight Map",            addon = "Blizzard_FlightMap" },
     { name = "TaxiFrame",                      category = "Services", label = "Flight Master" },
     { name = "TransmogFrame",                  category = "Services", label = "Transmogrification",    addon = "Blizzard_Transmog" },
@@ -155,10 +161,29 @@ local function BuildIndexes(entries)
     return byName, byAddon, categories, labelsByCategory
 end
 
-local byName, byAddon, categories, labelsByCategory = BuildIndexes(ENTRIES)
+local RETAIL_ONLY_CATEGORIES = { Housing = true, Legacy = true }
+
+local function IsOnClient(entry, baseline)
+    if baseline then
+        return entry.client ~= "retail" and not RETAIL_ONLY_CATEGORIES[entry.category]
+    end
+    return entry.client ~= "forever"
+end
+
+local function EntriesOnClient(entries, baseline)
+    local kept = {}
+    for _, entry in ipairs(entries) do
+        if IsOnClient(entry, baseline) then kept[#kept + 1] = entry end
+    end
+    return kept
+end
+
+local clientEntries = EntriesOnClient(ENTRIES, KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad())
+local byName, byAddon, categories, labelsByCategory = BuildIndexes(clientEntries)
 
 KE.PanelScaleRegistry = {
-    entries = ENTRIES,
+    entries = clientEntries,
+    IsOnClient = IsOnClient,
     byName = byName,
     byAddon = byAddon,
     categories = categories,

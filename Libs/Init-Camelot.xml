@@ -1,0 +1,20 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+    <!-- The libraries the Forever client loads: the baseline's, and the shared
+         ones later categories build on. A category adds any other when it is
+         admitted on this client. -->
+    <Script file="LibStub/LibStub.lua" />
+    <Include file="CallbackHandler-1.0/CallbackHandler-1.0.xml" />
+    <Include file="AceAddon-3.0/AceAddon-3.0.xml" />
+    <Include file="AceEvent-3.0/AceEvent-3.0.xml" />
+    <Include file="AceTimer-3.0/AceTimer-3.0.xml" />
+    <Include file="AceHook-3.0/AceHook-3.0.xml" />
+    <Include file="AceDB-3.0/AceDB-3.0.xml" />
+    <Script file="LibSharedMedia-3.0/LibSharedMedia-3.0.lua" />
+    <Script file="LibDataBroker-1.1/LibDataBroker-1.1.lua" />
+    <Script file="LibDBIcon-1.0/LibDBIcon-1.0.lua" />
+    <Script file="LibDualSpec-1.0/LibDualSpec-1.0.lua" />
+    <Script file="LibRangeCheck-3.0/LibRangeCheck-3.0.lua" />
+    <Script file="LibCustomGlow-1.0/LibCustomGlow-1.0.lua" />
+    <Script file="LibSpecialization/LibSpecialization.lua" />
+</Ui>

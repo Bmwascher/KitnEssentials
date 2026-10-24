@@ -22,7 +22,9 @@ describe("GUI-TabbedContent", function()
             CreateSubTabs = function(_, _, yOffset) return nil, yOffset + 30 end,
             RefreshContent = function() end,
         }
-        helpers.loadModule("GUI/GUIMain/GUI-TabbedContent.lua", { GUIFrame = GUIFrame })
+        -- Tab lists pass through the availability policy; a retail load admits all.
+        local KE = helpers.loadModule("Core/Availability.lua", { GUIFrame = GUIFrame })
+        helpers.loadModule("GUI/GUIMain/GUI-TabbedContent.lua", KE)
     end)
 
     local function register(name)

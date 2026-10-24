@@ -230,7 +230,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
 
     describe("header anyOn, in isolation", function()
         -- A metatable default of `false` models "every row off" without
-        -- hardcoding the full FRAME_SKINS key list (77 entries) -- only the
+        -- hardcoding the full FRAME_SKINS key list -- only the
         -- designated key is given a real, on-reading value.
         local function allOffExcept(key, value)
             return setmetatable({ [key] = value }, { __index = function() return false end })

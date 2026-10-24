@@ -34,6 +34,8 @@ describe("GUI-Core widget pools", function()
         local KE = { Theme = { headerHeight = 32, borderSize = 1 }, Print = function() end }
         -- ReleaseTracked's parent check goes through KE:SameParent.
         helpers.loadModule("Core/Secret.lua", KE)
+        -- GUI-Core asks the availability policy; a retail load admits all.
+        helpers.loadModule("Core/Availability.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
     end)
@@ -218,6 +220,7 @@ describe("GUI-Core widget pools", function()
             return f
         end })
         _G.UIParent = fakeFrame(0, 0)
+        helpers.loadModule("Core/Availability.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         local G = KE.GUIFrame
         local page = fakeFrame(0, 0)
@@ -242,6 +245,8 @@ describe("GUI-Core deferred widget callbacks", function()
         mock.install({ C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end } })
         local KE = { Theme = { headerHeight = 32, borderSize = 1 }, Print = function() end }
         helpers.loadModule("Core/Secret.lua", KE)
+        -- GUI-Core asks the availability policy; a retail load admits all.
+        helpers.loadModule("Core/Availability.lua", KE)
         helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
         GUIFrame = KE.GUIFrame
         rebuilt = 0

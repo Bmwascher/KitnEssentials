@@ -352,6 +352,124 @@ function KE:DecodeFromExport(encoded)
 end
 
 ---------------------------------------------------------------------------------
+-- Client filter
+---------------------------------------------------------------------------------
+-- A string from another client can carry blocks of modules this one does not
+-- run. They are dropped, so a later admission starts from defaults rather than
+-- from the other client's spell ids and spec lists. A block keyed by anything
+-- but a name, or whose type is not its default's, is malformed and dropped on
+-- every client. A nested container is kept even when emptied: AceDB refills
+-- its sub-blocks from the defaults.
+
+-- Labels the split at each capital gets wrong.
+local BLOCK_LABELS = {
+    DoTTracker = "DoT Tracker",
+}
+
+local function BlockLabel(key)
+    if BLOCK_LABELS[key] then return BLOCK_LABELS[key] end
+    return (key:gsub("(%l)(%u)", "%1 %2"):gsub("(%u)(%u%l)", "%1 %2"))
+end
+
+local function Malformed(value, default)
+    return default ~= nil and type(value) ~= type(default)
+end
+
+-- Blocks whose Enabled only keeps a container page reachable: they are on
+-- when one of these feature switches is.
+local FEATURE_SWITCHES = {
+    KeystoneHelper = { "ResetEnabled", "RerollEnabled", "YourKeyEnabled" },
+}
+
+local function SwitchOn(block, default, field)
+    if block[field] ~= nil then return block[field] == true end
+    return type(default) == "table" and default[field] == true
+end
+
+local function WasOn(key, block, default)
+    local switches = FEATURE_SWITCHES[key]
+    if not switches then return SwitchOn(block, default, "Enabled") end
+    for i = 1, #switches do
+        if SwitchOn(block, default, switches[i]) then return true end
+    end
+    return false
+end
+
+local function Drop(container, key, default, dropped)
+    local block = container[key]
+    if type(block) == "table" and WasOn(key, block, default) then
+        dropped[#dropped + 1] = BlockLabel(key)
+    end
+    container[key] = nil
+end
+
+--- Removes, in place, every block this client may not keep. Returns the
+--- labels of removed blocks that were turned on, sorted.
+---@param profile table
+---@param defaults table? the profile section of the defaults
+---@return string[] dropped
+function ProfileManager.FilterForClient(profile, defaults)
+    local dropped = {}
+    for key, block in pairs(profile) do
+        local default = defaults and defaults[key]
+        if type(key) ~= "string" or Malformed(block, default) then
+            profile[key] = nil
+        else
+            local kind, owner = KE:ProfileBlockOwner(key)
+            if kind == "nested" and type(block) == "table" then
+                for subKey, sub in pairs(block) do
+                    local subDefault = type(default) == "table" and default[subKey] or nil
+                    if type(subKey) ~= "string" or Malformed(sub, subDefault) then
+                        block[subKey] = nil
+                    elseif not KE:IsFeatureAvailable(subKey) then
+                        Drop(block, subKey, subDefault, dropped)
+                    end
+                end
+            elseif kind == "feature" and not KE:IsFeatureAvailable(owner) then
+                Drop(profile, key, default, dropped)
+            end
+        end
+    end
+    table.sort(dropped)
+    return dropped
+end
+
+--- The client an export envelope names; an untagged one reads as retail.
+---@param envelope table?
+---@return string client "forever" or "retail"
+function ProfileManager.EnvelopeClient(envelope)
+    if type(envelope) == "table" and envelope._c == "forever" then return "forever" end
+    return "retail"
+end
+
+local function IsBaseline()
+    return KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() == true
+end
+
+-- What an export encodes: on a baseline load a filtered copy, so the live
+-- profile is never touched. A nested container is copied one level, the level
+-- the filter edits.
+local function ExportData(profileData)
+    if not IsBaseline() then return profileData end
+    local copy = {}
+    for key, value in pairs(profileData) do
+        if type(value) == "table" and KE:ProfileBlockOwner(key) == "nested" then
+            local inner = {}
+            for subKey, sub in pairs(value) do inner[subKey] = sub end
+            value = inner
+        end
+        copy[key] = value
+    end
+    local defaults = KE.GetDefaultDB and KE:GetDefaultDB()
+    ProfileManager.FilterForClient(copy, defaults and defaults.profile)
+    return copy
+end
+
+-- Set by an install that dropped a block that was on, for the refresh that
+-- follows the switch to it: that refresh's reload prompt names them too.
+local pendingNotice
+
+---------------------------------------------------------------------------------
 -- Import / Export
 ---------------------------------------------------------------------------------
 
@@ -368,10 +486,11 @@ function ProfileManager:ExportProfile(profileName)
     if not profileData then return nil, "Profile '" .. profileName .. "' not found" end
 
     local encoded = KE:EncodeForExport({
-        _v = 1,           -- Version
-        _n = profileName, -- Original profile name
-        _t = time(),      -- Timestamp
-        d = profileData   -- Profile data
+        _v = 2,                                 -- Version
+        _c = IsBaseline() and "forever" or nil, -- Client; absent means retail
+        _n = profileName,                       -- Original profile name
+        _t = time(),                            -- Timestamp
+        d = ExportData(profileData)             -- Profile data
     })
     if not encoded then return nil, "Encoding failed" end
 
@@ -383,6 +502,7 @@ end
 ---@return table|nil profileData
 ---@return string|nil embeddedName
 ---@return string|nil error
+---@return string|nil client "forever" or "retail" for a decoded string
 function ProfileManager:DecodeImportString(importString)
     if not importString or importString == "" then return nil, nil, "Import string is empty" end
     if importString:sub(1, #LEGACY_PREFIX) == LEGACY_PREFIX then return nil, nil, KE.LEGACY_EXPORT_MESSAGE end
@@ -393,8 +513,10 @@ function ProfileManager:DecodeImportString(importString)
 
     -- The user-facing export wraps the profile in an envelope; the Wago API
     -- export is the raw profile table.
-    if type(data.d) == "table" then return data.d, type(data._n) == "string" and data._n or nil end
-    return data
+    if type(data.d) == "table" then
+        return data.d, type(data._n) == "string" and data._n or nil, nil, ProfileManager.EnvelopeClient(data)
+    end
+    return data, nil, nil, "retail"
 end
 
 --- Create a profile from a decoded table
@@ -437,6 +559,12 @@ function ProfileManager:InstallProfile(profileData, targetName)
     -- and no old key reaches KE.db.
     KE:MigrateProfileKeys(profileData)
 
+    -- After the renames, so a renamed block is judged under its new name.
+    local defaults = KE.GetDefaultDB and KE:GetDefaultDB()
+    local dropped = ProfileManager.FilterForClient(profileData, defaults and defaults.profile)
+    local notice = #dropped > 0 and ("Not available on this client: " .. table.concat(dropped, ", ")) or nil
+    if notice then KE:Print(notice) end
+
     -- Create the profile
     local currentProfile = self:GetCurrentProfile()
 
@@ -457,6 +585,7 @@ function ProfileManager:InstallProfile(profileData, targetName)
         KE.db:SetProfile(currentProfile)
     end)
 
+    pendingNotice = notice and { profile = finalName, text = notice } or nil
     return true, finalName
 end
 
@@ -519,7 +648,10 @@ local function RefreshAll()
 
     for name, module in KitnEssentials:IterateModules() do
         local wasEnabled = module:IsEnabled()
-        local wantEnabled = module.db and module.db.Enabled
+        -- A withheld module is rebound above but never enabled or re-applied,
+        -- whatever its saved flag says.
+        local available = KE:IsFeatureAvailable(name)
+        local wantEnabled = available and module.db and module.db.Enabled
         local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
             and (not wantEnabled) ~= (not wasEnabled)
         local skinDeferred = false
@@ -551,7 +683,7 @@ local function RefreshAll()
         -- profile's config). Same for reload-deferred modules: the new
         -- profile wants this module OFF, so applying its settings now would
         -- configure a module that's about to be torn down by /reload.
-        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred and not reloadDeferred then
+        if available and wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred and not reloadDeferred then
             module:ApplySettings()
         end
     end
@@ -565,12 +697,20 @@ local function RefreshAll()
     --
     -- ONE prompt, never two: KE:CreatePrompt stores KE.activePrompt, so a second
     -- call here would replace the first.
+    -- An import's notice rides on the refresh that switches to its profile;
+    -- any other refresh drops it.
+    local notice = pendingNotice
+    pendingNotice = nil
+    local extra = ""
+    if notice and KE.db and notice.profile == KE.db:GetCurrentProfile() then
+        extra = "\n\n" .. notice.text
+    end
     if skinningChanged and KE.SkinningReloadPrompt then
-        KE:SkinningReloadPrompt()
+        KE:SkinningReloadPrompt(extra)
     elseif KE.CreateReloadPrompt then
-        KE:CreateReloadPrompt(reloadNeeded
+        KE:CreateReloadPrompt((reloadNeeded
             and "This profile turns off a feature that needs a UI reload to fully take effect."
-            or "Profile changed. Reload your UI so every setting applies cleanly.")
+            or "Profile changed. Reload your UI so every setting applies cleanly.") .. extra)
     end
 
     -- Refresh theme
@@ -629,7 +769,7 @@ function KitnEssentialsAPI:ExportProfile(profileKey)
     if not profileData then return "" end
 
     -- Wago expects raw profile data, no envelope wrapper
-    local encoded = KE:EncodeForExport(profileData)
+    local encoded = KE:EncodeForExport(ExportData(profileData))
     return encoded and (EXPORT_PREFIX .. encoded) or ""
 end
 

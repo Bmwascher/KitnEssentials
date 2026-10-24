@@ -1,6 +1,8 @@
 # Exercises the tracked Claude Code hook templates (dev/claude-hooks/) and the
 # commit-msg git hook against every documented deny and allow case, using a
 # throwaway worktree on main so the branch rules can be tested from any branch.
+# It also exercises the parsec docs-root scripts (resolver, master registry,
+# retention rules) against throwaway projects.
 #
 #   pwsh dev/scripts/test-claude-hooks.ps1
 #
@@ -42,9 +44,14 @@ function Get-TextHash([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
 }
-$liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $root '.claude\hooks') }
-foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1', 'program-recovery.ps1')) {
-    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1', 'program-recovery.ps1')) { 'project' } else { 'user' }
+# The project-scope hooks and the .agents mirror are gitignored, so they exist
+# only in the primary checkout, the first worktree git lists.
+$primary = $root
+$wtList = @(git -C $root worktree list --porcelain 2>$null | Where-Object { $_ -like 'worktree *' })
+if ($LASTEXITCODE -eq 0 -and $wtList.Count) { $primary = [System.IO.Path]::GetFullPath($wtList[0].Substring(9)) }
+$liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $primary '.claude\hooks') }
+foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1', 'lib-update-check.ps1', 'program-recovery.ps1')) {
+    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1', 'lib-update-check.ps1', 'program-recovery.ps1')) { 'project' } else { 'user' }
     $other = if ($scope -eq 'user') { 'project' } else { 'user' }
     $live = Join-Path $liveDir[$scope] $n
     Check "$n has no stale copy in $other scope" (-not (Test-Path (Join-Path $liveDir[$other] $n))) 'run pwsh dev/scripts/install-claude-hooks.ps1'
@@ -54,7 +61,7 @@ foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', '
 
 # The live .agents mirror must match its sources (both trees are gitignored,
 # so a fresh checkout fails here until the sync script has run once).
-& pwsh -NoProfile -File (Join-Path $root 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
+& pwsh -NoProfile -File (Join-Path $primary 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
 Check 'agents mirror in sync' ($LASTEXITCODE -eq 0) 'run pwsh dev/scripts/sync-agents-mirror.ps1'
 
 $tag = [System.IO.Path]::GetRandomFileName().Replace('.', '')
@@ -64,8 +71,10 @@ $feature = "$wt-feature"
 $featureBranch = "hooktest/$tag"
 $outside = "$wt-outside"
 try {
-    git -C $root worktree add -q $wt main 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "could not add a worktree on main (is main checked out elsewhere?)" }
+    # --force: the primary usually has main checked out. The branch rules need
+    # a checkout on main, not a detached one, and this checkout never commits.
+    git -C $root worktree add --force -q $wt main 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "could not add a worktree on main" }
     New-Item -ItemType Junction -Path $link -Target $wt | Out-Null
     New-Item -ItemType Directory -Path $outside | Out-Null
     git -C $root worktree add -q -b $featureBranch $feature main 2>&1 | Out-Null
@@ -314,10 +323,10 @@ try {
     # master registry names, and only for the compact source.
     $pr = 'program-recovery.ps1'
     $pproj = Join-Path $outside 'pproj'
-    foreach ($d in @('.claude\skills\phased-program', 'dev\scripts', 'dev\docs\parsec\programs')) { New-Item -ItemType Directory -Path (Join-Path $pproj $d) -Force | Out-Null }
-    Copy-Item (Join-Path $root 'dev\scripts\program-master.ps1') (Join-Path $pproj 'dev\scripts\')
+    foreach ($d in @('.claude\skills\phased-program', 'dev\scripts', 'dev\docs\parsec\programs\2026-01-01-demo')) { New-Item -ItemType Directory -Path (Join-Path $pproj $d) -Force | Out-Null }
+    foreach ($s in @('program-master.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $pproj 'dev\scripts\') }
     [System.IO.File]::WriteAllText((Join-Path $pproj '.claude\skills\phased-program\recovery-card.md'), "CARD LINE`n")
-    $pdoc = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-program.md'
+    $pdoc = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-demo\program.md'
     [System.IO.File]::WriteAllText($pdoc, "# p`n`n## Open questions`n`nOQ ROW`n`n---`n`n## Status`n`nSTATUS ROW`n`n---`n`n## At the end`n`nTAIL ROW`n")
     $saved = @{ dir = $env:CLAUDE_PROJECT_DIR; reg = $env:KE_PROGRAM_MASTERS; sid = $env:CLAUDE_CODE_SESSION_ID; hid = $env:CLAUDE_CODE_HOST_SESSION_ID }
     $env:CLAUDE_PROJECT_DIR = $pproj
@@ -338,11 +347,248 @@ try {
         $env:CLAUDE_CODE_HOST_SESSION_ID = "hooktest-host-$tag"
         $r = Invoke-Hook (Join-Path $templates $pr) @{ session_id = 'resumed-new-id'; source = 'compact' }
         Check "$pr matches a master by its host id" ($r.out -match 'CARD LINE') $r.out.Trim()
-        $events = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-program-events.log'
+        $events = Join-Path $pproj 'dev\docs\parsec\programs\2026-01-01-demo\program-events.log'
         Check "$pr logs one compact event per recovery" ((Test-Path $events) -and @(Get-Content $events | Where-Object { $_ -match "`tcompact$" }).Count -eq 2)
     } finally {
         $env:CLAUDE_PROJECT_DIR = $saved.dir; $env:KE_PROGRAM_MASTERS = $saved.reg
         $env:CLAUDE_CODE_SESSION_ID = $saved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $saved.hid
+    }
+    # The docs-root resolver: the primary's config, absolute or relative, else
+    # the fallback; an unreadable value is an error, never the fallback.
+    $rr = Join-Path $root 'dev\scripts\parsec-docs-root.ps1'
+    $rproj0 = Join-Path $outside 'resolve'
+    New-Item -ItemType Directory -Path (Join-Path $rproj0 '.claude') -Force | Out-Null
+    $tomlPath = Join-Path $rproj0 '.claude\parsec.toml'
+    $abs = Join-Path $outside 'elsewhere'
+    $resolveCases = @(
+        @{ name = 'relative value'; toml = "docs_root = `"docs/here`"`n"; want = (Join-Path $rproj0 'docs\here'); code = 0 },
+        @{ name = 'absolute value'; toml = "docs_root = `"$($abs -replace '\\', '/')`"`n"; want = $abs; code = 0 },
+        @{ name = 'no docs_root line'; toml = "worktrees = `"x`"`n"; want = (Join-Path $rproj0 'dev\docs\parsec'); code = 0 },
+        @{ name = 'no config'; toml = $null; want = (Join-Path $rproj0 'dev\docs\parsec'); code = 0 },
+        @{ name = 'unreadable value'; toml = "docs_root = 'single'`n"; want = $null; code = 1 }
+    )
+    foreach ($c in $resolveCases) {
+        Remove-Item $tomlPath -Force -ErrorAction SilentlyContinue
+        if ($null -ne $c.toml) { [System.IO.File]::WriteAllText($tomlPath, $c.toml) }
+        $out = (& pwsh -NoProfile -File $rr -Root $rproj0 2>$null | Out-String).Trim()
+        $code = $LASTEXITCODE
+        Check "parsec-docs-root: $($c.name)" ($code -eq $c.code -and ($null -eq $c.want -or $out -eq $c.want)) "exit $code, $out"
+    }
+    $fromWt = (& pwsh -NoProfile -File $rr -Root $wt | Out-String).Trim()
+    $codeWt = $LASTEXITCODE
+    $fromRoot = (& pwsh -NoProfile -File $rr -Root $root | Out-String).Trim()
+    $codeRoot = $LASTEXITCODE
+    Check 'parsec-docs-root: a worktree reads the primary''s config' ($codeWt -eq 0 -and $codeRoot -eq 0 -and $fromWt -ne '' -and $fromWt -eq $fromRoot) "exit $codeWt/$codeRoot, $fromWt vs $fromRoot"
+    # The master registry lives under the docs root; a missing root refuses
+    # -Register and -Unregister and keeps -LogEvent and -Recover quiet.
+    $mproj = Join-Path $outside 'mproj'
+    foreach ($d in @('.claude', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $mproj $d) -Force | Out-Null }
+    foreach ($s in @('program-master.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $mproj 'dev\scripts\') }
+    $mdocs = Join-Path $outside 'mdocs'
+    $mdoc = Join-Path $outside 'mprog\program.md'
+    New-Item -ItemType Directory -Path (Split-Path $mdoc -Parent) -Force | Out-Null
+    [System.IO.File]::WriteAllText($mdoc, "# m`n")
+    [System.IO.File]::WriteAllText((Join-Path $mproj '.claude\parsec.toml'), "docs_root = `"$($mdocs -replace '\\', '/')`"`n")
+    $mpm = Join-Path $mproj 'dev\scripts\program-master.ps1'
+    $msaved = @{ reg = $env:KE_PROGRAM_MASTERS; sid = $env:CLAUDE_CODE_SESSION_ID; hid = $env:CLAUDE_CODE_HOST_SESSION_ID }
+    $env:KE_PROGRAM_MASTERS = ''
+    $env:CLAUDE_CODE_SESSION_ID = "hooktest-mreg-$tag"
+    $env:CLAUDE_CODE_HOST_SESSION_ID = ''
+    try {
+        $missingCases = @(
+            @{ name = '-Register refuses a missing docs root'; args = @('-Register', $mdoc); code = 1; out = '' },
+            @{ name = '-Unregister refuses a missing docs root'; args = @('-Unregister'); code = 1; out = 'does not exist' },
+            @{ name = '-LogEvent notes a missing docs root and exits 0'; args = @('-LogEvent', 'x'); code = 0; out = 'does not exist' },
+            @{ name = '-Recover is silent with a missing docs root'; args = @('-Recover'); code = 0; out = '^$' }
+        )
+        foreach ($c in $missingCases) {
+            $o = (& pwsh -NoProfile -File $mpm @($c.args) 2>&1 | Out-String).Trim()
+            $code = $LASTEXITCODE
+            Check "program-master: $($c.name)" ($code -eq $c.code -and $o -match $c.out -and -not (Test-Path $mdocs)) "exit $code, $o"
+        }
+        New-Item -ItemType Directory -Path $mdocs | Out-Null
+        & pwsh -NoProfile -File $mpm -Register $mdoc *> $null
+        $regCode = $LASTEXITCODE
+        $reg = Join-Path $mdocs 'programs\active-masters.tsv'
+        $line = if (Test-Path $reg) { (Get-Content $reg -Raw) } else { '' }
+        Check 'program-master: a control document outside the checkout is registered by its absolute path' ($regCode -eq 0 -and $line -match [regex]::Escape(($mdoc -replace '\\', '/'))) "exit $regCode, $line"
+    } finally {
+        $env:KE_PROGRAM_MASTERS = $msaved.reg; $env:CLAUDE_CODE_SESSION_ID = $msaved.sid; $env:CLAUDE_CODE_HOST_SESSION_ID = $msaved.hid
+    }
+    # The retention rules for the parsec docs root, against a throwaway project
+    # whose docs root sits outside it. The project is no git repository, so the
+    # same runs show the docs-root rules running when git fails.
+    $rproj = Join-Path $outside 'rproj'
+    $rdocs = Join-Path $outside 'rdocs'
+    $rarch = Join-Path $outside '_archive\KitnEssentials-process'
+    foreach ($d in @('.claude', 'dev\scripts', 'dev\docs')) { New-Item -ItemType Directory -Path (Join-Path $rproj $d) -Force | Out-Null }
+    foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $rproj 'dev\scripts\') }
+    [System.IO.File]::WriteAllText((Join-Path $rproj '.claude\parsec.toml'), "docs_root = `"$($rdocs -replace '\\', '/')`"`n")
+    $keepLines = @(
+        'docs:01-09-kept|until:2099-01-01|fixture',
+        'docs:01-17-kept-member|until:2099-01-01|fixture',
+        'docs:01-12-nofinish.|until:2099-01-01|fixture',
+        'dev/docs/parsec/01-01-x|until:2099-01-01|fixture'
+    )
+    [System.IO.File]::WriteAllText((Join-Path $rproj 'dev\docs\retention-keep.txt'), ($keepLines -join "`n") + "`n")
+    $head = "# F (2026)`ntopic: f   branch: f   base: 1`n"
+    $merged = "$head- 2026-01-01 10:00 -0500 finish: merged abc1234`n"
+    $fixture = [ordered]@{
+        '01-01-merged-template\ledger.md' = "$head- 2026-01-01 10:00 -0500 finish: stop and report`n- 2026-01-02 10:00 -0500 finish: merged abc1234`n"
+        '01-02-merged-bullet\ledger.md' = "# F (2026)`n- head: topic f, base 1, checkout x`n- 2026-01-02 merged: abc1234 on main, pushed`n"
+        '01-03-reported\ledger.md' = "$head- 2026-01-03 10:00 -0500 finish: stop and report, unmerged`n"
+        '01-04-reopened\ledger.md' = "$head- 2026-01-04 10:00 -0500 finish: merged abc1234`n- 2026-01-05 10:00 -0500 finish: stop and report`n"
+        '01-05-pending\ledger.md' = $merged
+        '01-05-pending\rounds\diff-r1-sol\pending.json' = '{}'
+        '01-06-noledger\notes.md' = "# n`n"
+        '01-06-noledger\shot.png' = 'x'
+        '01-07-open-member\ledger.md' = $merged
+        '01-08-closed-member\ledger.md' = "$head- 2026-01-08 10:00 -0500 finish: stop and report`n"
+        '01-09-kept\ledger.md' = $merged
+        '01-10-fresh\ledger.md' = $merged
+        '01-11-held-member\ledger.md' = $merged
+        '01-11-held-member\rounds\diff-r1-sol\pending.json' = '{}'
+        '01-12-nofinish\ledger.md' = "$head- 2026-01-12 10:00 -0500 go: Brandon`n"
+        '01-13-young\ledger.md' = "$head- 2026-01-13 10:00 -0500 finish: stop and report`n"
+        '01-14-shared\ledger.md' = $merged
+        '01-16-locked-member\notes.md' = "# n`n"
+        '01-17-kept-member\ledger.md' = $merged
+        '01-18-dead-round\ledger.md' = $merged
+        '01-18-dead-round\rounds\prereview-r1-opus.dead1\pending.json' = '{}'
+        'panels\01-01-panel\brief.md' = "# p`n"
+        'programs\2026-01-01-open\program.md' = "# Open`n`n## Feature folders`n`n- ``01-07-open-member```n- ``01-14-shared```n"
+        'programs\2026-01-02-shut\program.md' = "# Shut`nclosed: 2026-01-03`n`n## Feature folders`n`n- ``01-08-closed-member`` phase 1`n- ``01-15-gone```n`n---`n"
+        'programs\2026-01-03-held\program.md' = "# Held`nclosed: 2026-01-04`n`n## Feature folders`n`n- ``01-11-held-member```n"
+        'programs\2026-01-04-twin\program.md' = "# Twin`n`n## Feature folders`n`n- ``01-14-shared```n"
+        'programs\2026-01-05-noprog\scoping.md' = "# s`n"
+        'programs\2026-01-06-keptheld\program.md' = "# Kept held`nclosed: 2026-01-06`n`n## Feature folders`n`n- ``01-17-kept-member```n"
+        'programs\2026-01-07-locked\program.md' = "# Locked`nclosed: 2026-01-07`n`n## Feature folders`n`n- ``01-16-locked-member```n"
+        'programs\2026-01-08-badlist\program.md' = "# Bad list`nclosed: 2026-01-08`n`n## Feature folders`n`n- ``programs/2026-01-05-noprog```n"
+        'programs\2026-01-09-alias\program.md' = "# Alias`nclosed: 2026-01-09`n`n## Feature folders`n`n- ``01-09-kept.```n- ``01-06-noledger/```n"
+        'programs\2026-01-01-loose.md' = "# loose`n"
+        'programs\active-masters.tsv' = ''
+        'programs\.migrated' = "migrated`n"
+    }
+    foreach ($f in $fixture.Keys) {
+        $path = Join-Path $rdocs $f
+        New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
+        [System.IO.File]::WriteAllText($path, $fixture[$f])
+    }
+    $aged = (Get-Date).AddDays(-40)
+    Get-ChildItem -LiteralPath $rdocs -Recurse -File | Where-Object { $_.FullName -notlike '*\01-10-fresh\*' -and $_.FullName -notlike '*\01-13-young\*' } | ForEach-Object { $_.LastWriteTime = $aged }
+    $rret = Join-Path $rproj 'dev\scripts\check-artifact-retention.ps1'
+    $dry = (& pwsh -NoProfile -File $rret -Root $rproj -Soft 2>&1 | Out-String)
+    $dryOk = $LASTEXITCODE -eq 0 -and $dry -notmatch 'FAIL \[script\]'
+    # A file held open makes the locked program's member move fail during -Archive.
+    $lock = [System.IO.File]::Open((Join-Path $rdocs '01-16-locked-member\notes.md'), 'Open', 'Read', 'None')
+    try {
+        $arch = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Archive 2>&1 | Out-String)
+        $archOk = $LASTEXITCODE -eq 0 -and $arch -notmatch 'FAIL \[script\]'
+    } finally { $lock.Dispose() }
+    function RetMoved([string]$from, [string]$to) { (Test-Path (Join-Path $rarch $to)) -and -not (Test-Path (Join-Path $rdocs $from)) }
+    function RetStays([string]$from) { Test-Path (Join-Path $rdocs $from) }
+    $rows = @(
+        @{ n = '01-01-merged-template'; listed = '(?m)^\s+docs:01-01-merged-template\s*$'; place = (RetMoved '01-01-merged-template' 'parsec\2026\01-01-merged-template') },
+        @{ n = '01-02-merged-bullet'; listed = '(?m)^\s+docs:01-02-merged-bullet\s*$'; place = (RetMoved '01-02-merged-bullet' 'parsec\2026\01-02-merged-bullet') },
+        @{ n = '01-03-reported'; listed = 'docs:01-03-reported \(last finish: stop and report, unmerged\)'; place = (RetStays '01-03-reported') },
+        @{ n = '01-04-reopened'; listed = 'docs:01-04-reopened \(last finish: stop and report\)'; place = (RetStays '01-04-reopened') },
+        @{ n = '01-05-pending'; listed = 'docs:01-05-pending \(round pending\)'; place = (RetStays '01-05-pending') },
+        @{ n = '01-18-dead-round'; listed = '(?m)^\s+docs:01-18-dead-round\s*$'; place = (RetMoved '01-18-dead-round' 'parsec\2026\01-18-dead-round') },
+        @{ n = '01-06-noledger'; listed = 'docs:01-06-noledger \(no ledger\)'; place = (RetStays '01-06-noledger') },
+        @{ n = '01-12-nofinish'; listed = 'docs:01-12-nofinish \(no finish line\)'; place = (RetStays '01-12-nofinish') },
+        @{ n = '01-13-young'; listed = $null; place = (RetStays '01-13-young') },
+        @{ n = '01-07-open-member'; listed = $null; place = (RetStays '01-07-open-member') },
+        @{ n = '01-14-shared'; listed = 'docs:01-14-shared \(listed by two programs\)'; place = (RetStays '01-14-shared') },
+        @{ n = '01-08-closed-member'; listed = $null; place = (RetMoved '01-08-closed-member' 'programs\2026-01-02-shut\features\01-08-closed-member') },
+        @{ n = 'programs\2026-01-02-shut'; listed = '\[I\] closed program docs:programs/2026-01-02-shut,'; place = (RetMoved 'programs\2026-01-02-shut' 'programs\2026-01-02-shut\program.md') },
+        @{ n = '01-15-gone'; listed = '\[I\] listed folder missing: docs:01-15-gone'; place = (RetMoved 'programs\2026-01-02-shut' 'programs\2026-01-02-shut\program.md') },
+        @{ n = 'programs\2026-01-03-held'; listed = 'docs:programs/2026-01-03-held \(program held: docs:01-11-held-member round pending\)'; place = (RetStays 'programs\2026-01-03-held') },
+        @{ n = 'programs\2026-01-07-locked'; listed = '\[I\] closed program docs:programs/2026-01-07-locked,'; place = ($arch -match 'FAIL \[archive\] could not move docs:01-16-locked-member') -and (RetStays 'programs\2026-01-07-locked\program.md') -and -not (RetStays 'programs\2026-01-07-locked\features') -and (RetStays '01-16-locked-member') -and -not (Test-Path (Join-Path $rarch 'programs\2026-01-07-locked')) },
+        @{ n = 'programs\2026-01-05-noprog'; listed = 'docs:programs/2026-01-05-noprog \(program without program.md\)'; place = (RetStays 'programs\2026-01-05-noprog') },
+        @{ n = 'programs\2026-01-08-badlist'; listed = '\[I\] not a feature folder name in docs:programs/2026-01-08-badlist: programs/2026-01-05-noprog'; place = ($dry -match 'docs:programs/2026-01-08-badlist \(program held: not a feature folder name: programs/2026-01-05-noprog\)') -and (RetStays 'programs\2026-01-08-badlist\program.md') -and (RetStays 'programs\2026-01-05-noprog') },
+        @{ n = 'programs\2026-01-09-alias'; listed = '\[I\] not a feature folder name in docs:programs/2026-01-09-alias: 01-09-kept\.'; place = ($dry -match '\[I\] not a feature folder name in docs:programs/2026-01-09-alias: 01-06-noledger/') -and ($dry -match 'docs:programs/2026-01-09-alias \(program held: not a feature folder name: 01-09-kept\.\)') -and (RetStays 'programs\2026-01-09-alias\program.md') -and (RetStays '01-09-kept') -and (RetStays '01-06-noledger') },
+        @{ n = 'panels\01-01-panel'; listed = 'docs:panels/01-01-panel \(panel\)'; place = (RetStays 'panels\01-01-panel') },
+        @{ n = 'programs\2026-01-01-loose.md'; listed = 'docs:programs/2026-01-01-loose.md \(loose file\)'; place = (RetStays 'programs\2026-01-01-loose.md') },
+        @{ n = '01-09-kept'; listed = $null; place = (RetStays '01-09-kept') },
+        @{ n = '01-10-fresh'; listed = $null; place = (RetStays '01-10-fresh') }
+    )
+    foreach ($r in $rows) {
+        $name = $r.n -replace '\\', '/'
+        $listedOk = if ($r.listed) { $dry -match $r.listed } else { $dry -notmatch [regex]::Escape("docs:$name") }
+        Check "retention docs root: $($r.n)" ($dryOk -and $archOk -and $listedOk -and $r.place) "$dry`n$arch"
+    }
+    Check 'retention [A] sees media under the docs root' ($dryOk -and $dry -match '\[A\] 1 media files') $dry
+    Check 'retention [F] refuses a checkout path into the docs root' ($dryOk -and $dry -match 'FAIL \[F\] keep entry names a docs-root path by its checkout path') $dry
+    Check 'retention [F] refuses a keep entry that is not a canonical path' ($dryOk -and $dry -match 'FAIL \[F\] keep entry is not a canonical path.*docs:01-12-nofinish\.' -and $dry -match 'docs:01-12-nofinish \(no finish line\)') $dry
+
+    # -Pick moves a named unknown entry, a held program with its members, and
+    # refuses anything else.
+    $picked = (& pwsh -NoProfile -File $rret -Root $rproj -Soft -Pick 'docs:01-06-noledger,docs:programs/2026-01-03-held,docs:01-07-open-member,docs:programs/2026-01-06-keptheld,docs:01-14-shared,docs:programs/2026-01-08-badlist' 2>&1 | Out-String)
+    $pickOk = $LASTEXITCODE -eq 0 -and $picked -notmatch 'FAIL \[script\]'
+    $pickYear = (Get-Date).AddDays(-40).Year
+    $pickRows = @(
+        @{ name = 'an unknown entry moves'; ok = (RetMoved '01-06-noledger' "parsec\$pickYear\01-06-noledger") },
+        @{ name = 'a held program moves with its member'; ok = (RetMoved '01-11-held-member' 'programs\2026-01-03-held\features\01-11-held-member') },
+        @{ name = 'a member of an open program is refused'; ok = ($picked -match 'FAIL \[U\] not an unknown entry: docs:01-07-open-member') -and (RetStays '01-07-open-member') },
+        @{ name = 'a program held by a kept member is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:programs/2026-01-06-keptheld: docs:01-17-kept-member kept') -and (RetStays 'programs\2026-01-06-keptheld') -and (RetStays '01-17-kept-member') },
+        @{ name = 'a folder two programs list is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:01-14-shared: listed by two programs') -and (RetStays '01-14-shared') },
+        @{ name = 'a program blocked by a bullet that is not a folder name is refused'; ok = ($picked -match 'FAIL \[U\] cannot pick docs:programs/2026-01-08-badlist: not a feature folder name: programs/2026-01-05-noprog') -and (RetStays 'programs\2026-01-08-badlist') -and (RetStays 'programs\2026-01-05-noprog') }
+    )
+    foreach ($r in $pickRows) { Check "retention -Pick: $($r.name)" ($pickOk -and $r.ok) $picked }
+
+    # A configured docs root that is missing is a FAIL; a missing fallback is silent.
+    $r7 = Join-Path $outside 'r7'
+    foreach ($d in @('.claude', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $r7 $d) -Force | Out-Null }
+    foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $r7 'dev\scripts\') }
+    [System.IO.File]::WriteAllText((Join-Path $r7 '.claude\parsec.toml'), "docs_root = `"$((Join-Path $outside 'nodocs') -replace '\\', '/')`"`n")
+    $o7 = (& pwsh -NoProfile -File (Join-Path $r7 'dev\scripts\check-artifact-retention.ps1') -Root $r7 -Soft 2>&1 | Out-String)
+    $o7ok = $LASTEXITCODE -eq 0 -and $o7 -notmatch 'FAIL \[script\]'
+    Check 'retention: a configured docs root that is missing is a FAIL' ($o7ok -and $o7 -match 'FAIL \[H\] docs root missing') $o7
+    Remove-Item (Join-Path $r7 '.claude\parsec.toml') -Force
+    $o7 = (& pwsh -NoProfile -File (Join-Path $r7 'dev\scripts\check-artifact-retention.ps1') -Root $r7 -Soft 2>&1 | Out-String)
+    $o7ok = $LASTEXITCODE -eq 0 -and $o7 -notmatch 'FAIL \[script\]'
+    Check 'retention: a missing fallback docs root is silent' ($o7ok -and $o7 -notmatch '\[H\]') $o7
+
+    # Without the programs/.migrated marker the docs-root rules and -Pick wait,
+    # and -Archive moves nothing from the docs root.
+    $r8 = Join-Path $outside 'r8'
+    $r8docs = Join-Path $outside 'r8docs'
+    foreach ($d in @('.claude', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $r8 $d) -Force | Out-Null }
+    foreach ($s in @('check-artifact-retention.ps1', 'parsec-docs-root.ps1')) { Copy-Item (Join-Path $root "dev\scripts\$s") (Join-Path $r8 'dev\scripts\') }
+    [System.IO.File]::WriteAllText((Join-Path $r8 '.claude\parsec.toml'), "docs_root = `"$($r8docs -replace '\\', '/')`"`n")
+    foreach ($f in @('programs\active-masters.tsv', '01-01-done\ledger.md')) {
+        $path = Join-Path $r8docs $f
+        New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force | Out-Null
+        [System.IO.File]::WriteAllText($path, "# F (2026)`n- 2026-01-01 10:00 -0500 finish: merged abc1234`n")
+        (Get-Item $path).LastWriteTime = (Get-Date).AddDays(-40)
+    }
+    $o8 = (& pwsh -NoProfile -File (Join-Path $r8 'dev\scripts\check-artifact-retention.ps1') -Root $r8 -Soft -Archive -Pick 'docs:01-01-done' 2>&1 | Out-String)
+    $o8ok = $LASTEXITCODE -eq 0 -and $o8 -notmatch 'FAIL \[script\]'
+    Check 'retention: no migration marker holds the docs-root rules and -Pick' ($o8ok -and ($o8 -match 'wait for the program migration') -and ($o8 -match '-Pick skipped') -and ($o8 -notmatch 'FAIL \[U\]') -and (Test-Path (Join-Path $r8docs '01-01-done'))) $o8
+
+    # [C] honors the keep list: a merged review mirror that is kept, or holds
+    # a kept path, is not queued for -Archive. The repository is throwaway, so
+    # its one commit on main makes every mirror named for it merged.
+    $gproj = Join-Path $outside 'gproj'
+    New-Item -ItemType Directory -Path $gproj | Out-Null
+    git -C $gproj init -q -b main 2>&1 | Out-Null
+    git -C $gproj -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty --no-verify -m init 2>&1 | Out-Null
+    $gsha = "$(git -C $gproj rev-parse --short=7 main)".Trim()
+    $gmir = Join-Path $gproj '.superpowers\review-sources'
+    foreach ($d in @("plain-$gsha", "kept-$gsha", "shelter-$gsha\inner")) { New-Item -ItemType Directory -Path (Join-Path $gmir $d) -Force | Out-Null }
+    New-Item -ItemType Directory -Path (Join-Path $gproj 'dev\docs') -Force | Out-Null
+    $until = (Get-Date).AddDays(1).ToString('yyyy-MM-dd')
+    [System.IO.File]::WriteAllText((Join-Path $gproj 'dev\docs\retention-keep.txt'), ".superpowers/review-sources/kept-$gsha|until:$until|fixture`n.superpowers/review-sources/shelter-$gsha/inner|until:$until|fixture`n")
+    $oc = (& pwsh -NoProfile -File (Join-Path $root 'dev\scripts\check-artifact-retention.ps1') -Root $gproj -Soft 2>&1 | Out-String)
+    $ocOk = $LASTEXITCODE -eq 0 -and $oc -notmatch 'FAIL \[script\]' -and $gsha -match '^[0-9a-f]{7}$'
+    $cRows = @(
+        @{ name = 'a merged mirror is queued'; dir = "plain-$gsha"; queued = $true },
+        @{ name = 'a kept mirror is not queued'; dir = "kept-$gsha"; queued = $false },
+        @{ name = 'a mirror holding a kept path is not queued'; dir = "shelter-$gsha"; queued = $false }
+    )
+    foreach ($c in $cRows) {
+        $hit = $oc -match ('(?m)^\s+\.superpowers/review-sources/' + [regex]::Escape($c.dir) + '\s*$')
+        Check "retention [C]: $($c.name)" ($ocOk -and $hit -eq $c.queued) $oc
     }
 } finally {
     # Each step runs regardless of the others; native git exits are checked

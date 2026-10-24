@@ -7,8 +7,9 @@
 #   pwsh dev/scripts/program-master.ps1 -EventsLog <control document>
 #
 # A master chat runs -Register once, from its own shell, when it opens the
-# control document (phased-program skill, step 0). The registry,
-# dev/docs/parsec/programs/active-masters.tsv, holds one line per master:
+# control document (phased-program skill, step 3). The registry,
+# <parsec docs root>/programs/active-masters.tsv (parsec-docs-root.ps1 prints
+# the root), holds one line per master:
 # CLI session id, desktop host session id, control document path. A session
 # is a master when either of its ids is on a line; the CLI id comes from
 # CLAUDE_CODE_SESSION_ID (or the hook's stdin session_id), the host id from
@@ -25,7 +26,9 @@
 # document (`compact`, `relay PASS|FAIL <folder>`); program-tally.ps1 counts
 # them at close (-EventsLog prints the log's path for it). -Unregister at
 # close removes the session's line.
-# KE_PROGRAM_MASTERS overrides the registry path (hook tests).
+# KE_PROGRAM_MASTERS overrides the registry path (hook tests). Without it, a
+# docs root that does not exist refuses -Register and -Unregister, so no
+# second docs root is created; -LogEvent and -Recover stay quiet.
 
 param(
     [string]$Register,
@@ -41,7 +44,12 @@ $ErrorActionPreference = 'Stop'
 # prints as '?'. A process with no console cannot set it and keeps the default.
 try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$registry = if ($env:KE_PROGRAM_MASTERS) { $env:KE_PROGRAM_MASTERS } else { Join-Path $root 'dev\docs\parsec\programs\active-masters.tsv' }
+$docsRoot = $null; $docsProblem = $null
+if (-not $env:KE_PROGRAM_MASTERS) {
+    try { $docsRoot = [string](& (Join-Path $PSScriptRoot 'parsec-docs-root.ps1') -Root $root) } catch { $docsProblem = $_.Exception.Message }
+    if ($docsRoot -and -not (Test-Path -LiteralPath $docsRoot -PathType Container)) { $docsProblem = "docs root $docsRoot does not exist" }
+}
+$registry = if ($env:KE_PROGRAM_MASTERS) { $env:KE_PROGRAM_MASTERS } elseif ($docsRoot) { Join-Path $docsRoot 'programs\active-masters.tsv' } else { $null }
 $card = Join-Path $root '.claude\skills\phased-program\recovery-card.md'
 
 $cli = if ($SessionId) { $SessionId } else { [string]$env:CLAUDE_CODE_SESSION_ID }
@@ -115,7 +123,11 @@ if ($Register) {
     $docPath = Resolve-Doc $Register
     if (-not (Test-Path -LiteralPath $docPath)) { Write-Error "[program] no control document at $docPath"; exit 1 }
     if (-not $cli -and -not $hostId) { Write-Error '[program] no session id in the environment; run this from the master chat''s own shell'; exit 1 }
-    $rel = [System.IO.Path]::GetRelativePath($root, (Resolve-Path -LiteralPath $docPath).Path) -replace '\\', '/'
+    if ($docsProblem) { Write-Error "[program] $docsProblem; nothing registered"; exit 1 }
+    $full = (Resolve-Path -LiteralPath $docPath).Path
+    $rel = [System.IO.Path]::GetRelativePath($root, $full)
+    # A control document outside the checkout is stored by its absolute path.
+    $rel = if ($rel.StartsWith('..') -or [System.IO.Path]::IsPathRooted($rel)) { $full -replace '\\', '/' } else { $rel -replace '\\', '/' }
     Update-Registry {
         param($all)
         @($all | Where-Object { -not (Test-Mine $_) } | ForEach-Object { $_.line }) + "$cli`t$hostId`t$rel"
@@ -125,10 +137,16 @@ if ($Register) {
 }
 
 if ($Unregister) {
+    if ($docsProblem) { Write-Error "[program] $docsProblem; nothing unregistered"; exit 1 }
     if (-not @(Read-Registry | Where-Object { Test-Mine $_ }).Count) { Write-Output '[program] this session was not registered'; exit 0 }
     Update-Registry { param($all) @($all | Where-Object { -not (Test-Mine $_) } | ForEach-Object { $_.line }) }
     Write-Output '[program] unregistered this session'
     exit 0
+}
+
+if ($docsProblem) {
+    if ($LogEvent) { [Console]::Error.WriteLine("[program] $docsProblem; event not logged: $LogEvent") }
+    if ($LogEvent -or $Recover) { exit 0 }
 }
 
 $mine = @(Read-Registry | Where-Object { Test-Mine $_ }) | Select-Object -Last 1

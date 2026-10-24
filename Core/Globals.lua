@@ -17,7 +17,6 @@ local string_format = string.format
 local math_floor = math.floor
 local math_max = math.max
 local table_insert = table.insert
-local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 local EditModeManagerFrame = EditModeManagerFrame
@@ -30,6 +29,16 @@ local _G = _G
 KE.LSM = LibStub("LibSharedMedia-3.0")
 ---@type LibDualSpec-1.0?
 KE.LDS = LibStub("LibDualSpec-1.0", true)
+
+-- Another addon's copy of the library answers the lookup above as well, so
+-- presence alone never turns on per-spec profiles.
+---@param db AceDB
+---@return boolean enhanced
+function KE:EnhanceDualSpec(db)
+    if not (self.LDS and self:IsFeatureAvailable("LibDualSpec")) then return false end
+    self.LDS:EnhanceDatabase(db, "KitnEssentials")
+    return true
+end
 
 KE.PATH = ([[Interface\AddOns\%s\Media\]]):format(addonName)
 KE.FONT = KE.PATH .. [[Fonts\]] .. "Expressway.TTF"
@@ -299,6 +308,35 @@ end
 -- Slash Commands
 ---------------------------------------------------------------------------------
 
+-- A command served by a feature this load can withhold names that feature,
+-- so help never lists a command that does nothing here. With every feature
+-- admitted the line is the full list.
+local HELP_ENTRIES = {
+    { text = "/kes or gui (settings)" },
+    { text = "edit or unlock" },
+    { text = "wa [on|off]", feature = "SlashCommands" },
+    { text = "profiler or prof" },
+    { text = "trace [Frame] [secs]" },
+    { text = "taint [clear]" },
+    { text = "dm [reset | report [count] [channel]]", feature = "DamageMeter" },
+    { text = "mt [clearsplits]", feature = "MythicPlusTimer" },
+    { text = "skins [verify | rerun <key>]", feature = "SkinAPI" },
+    { text = "trash", feature = "DungeonTrash" },
+    { text = "conflicts" },
+    { text = "resetgui" },
+}
+
+local function HelpLine()
+    local parts = {}
+    for i = 1, #HELP_ENTRIES do
+        local entry = HELP_ENTRIES[i]
+        if not entry.feature or KE:IsFeatureAvailable(entry.feature) then
+            parts[#parts + 1] = entry.text
+        end
+    end
+    return "Commands: " .. table.concat(parts, " | ")
+end
+
 SLASH_KITNESSENTIALS1 = "/kes"
 SLASH_KITNESSENTIALS2 = "/kitnessentials"
 SLASH_KITNESSENTIALS3 = "/dunnigan"
@@ -337,6 +375,10 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
     -- phase for demo/preview subcommands; until then the GUI fallback runs.
     local mtRest = msg:match("^[Mm][Tt]%s*(.*)$")
     if mtRest ~= nil then
+        if not KE:IsFeatureAvailable("MythicPlusTimer") then
+            KE:Print("The Mythic+ Timer is not available on this client.")
+            return
+        end
         local mt = KitnEssentials and KitnEssentials:GetModule("MythicPlusTimer", true)
         if mt and mt.HandleSlash then
             mt:HandleSlash(mtRest)
@@ -422,10 +464,12 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         end
     elseif msg == "resetgui" then
         if KE.db and KE.db.global then
-            KE.db.global.GUIState = nil
+            -- Empty, not nil: where the reload waits on a prompt that can be
+            -- declined, the settings window still reads and saves this state.
+            KE.db.global.GUIState = { frame = {} }
             KE.db.global._guiReset = true
         end
-        ReloadUI()
+        KE:ReloadUI()
     elseif msg == "trash" then
         -- Diagnostic snapshot of the Dungeon Trash tracker (see DTrash:DumpState).
         local dt = KitnEssentials and KitnEssentials:GetModule("DungeonTrash", true)
@@ -442,8 +486,8 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE:ScanAddonConflicts()
         end
     else
-        -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | trace [Frame] [secs] | taint [clear] | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
+        -- "help" and anything unrecognized: list every subcommand this load runs.
+        KE:Print(HelpLine())
     end
 end
 
@@ -1821,7 +1865,7 @@ function PreviewManager:ShowSectionPreviews(sectionId, extras)
     for _, moduleName in ipairs(PREVIEW_MODULES) do
         local module = Addon:GetModule(moduleName, true)
         if module then
-            local wantPreview = wantedSet[moduleName]
+            local wantPreview = wantedSet[moduleName] and KE:IsFeatureAvailable(moduleName)
                 and module.ShowPreview and module.db and module.db.Enabled
                 and (not module.classRestriction or classMatch[module.classRestriction])
             if wantPreview then
@@ -1846,7 +1890,7 @@ function PreviewManager:ShowModules(moduleList)
     local states = self._moduleStates
     for _, moduleName in ipairs(moduleList) do
         local module = Addon:GetModule(moduleName, true)
-        if module and module.ShowPreview and module.db and module.db.Enabled then
+        if module and KE:IsFeatureAvailable(moduleName) and module.ShowPreview and module.db and module.db.Enabled then
             if not module.classRestriction or classMatch[module.classRestriction] then
                 if states[moduleName] ~= "preview" then
                     module:ShowPreview()
@@ -2030,12 +2074,56 @@ end
 ---------------------------------------------------------------------------------
 
 -- Your own spec is never secret. Index 0 is a character with no spec yet.
-function KE:GetPlayerSpecRole()
+local function readSpecRole()
     local specIndex = C_SpecializationInfo.GetSpecialization()
     if not specIndex or specIndex == 0 then return nil end
     local getRole = _G.GetSpecializationRole
     if not getRole then return nil end
     return getRole(specIndex)
+end
+
+-- Read apart from the role, which a missing role API would turn into none.
+local function hasPlayerSpec()
+    local specIndex = C_SpecializationInfo.GetSpecialization()
+    return type(specIndex) == "number" and specIndex > 0
+end
+
+-- Every Forever class has one damage spec, so the role there is the spec
+-- library's reading of the talent tree with the most points. Registered at
+-- file scope, Forever only: core infrastructure every role reader shares.
+-- The callback marks the cached role stale. A nil answer is never cached,
+-- so a read before the talents load asks again.
+local roleLib = KE.IS_FOREVER and LibStub and LibStub("LibSpecialization", true) or nil
+local foreverRole, foreverRoleKept = nil, false
+if roleLib and roleLib.RegisterPlayerSpecChange then
+    -- The library keys callbacks by owner table; this one is Core's own.
+    roleLib.RegisterPlayerSpecChange({}, function()
+        foreverRoleKept = false
+    end)
+end
+
+local function readForeverLibraryRole()
+    if foreverRoleKept then return foreverRole end
+    local read = roleLib and roleLib.MySpecialization
+    if not read then return nil end
+    local ok, _, role = pcall(read)
+    if not ok or not role then return nil end
+    foreverRole, foreverRoleKept = role, true
+    return role
+end
+
+function KE:ResolveForeverRole(libraryRole, hasSpec)
+    if libraryRole then return libraryRole end
+    if hasSpec then return "DAMAGER" end
+    return nil
+end
+
+-- On Forever, code run by the same talent change (another library callback
+-- or a talent event) can run before the callback above and get the old role.
+function KE:GetPlayerSpecRole()
+    if not self.IS_FOREVER then return readSpecRole() end
+    local libraryRole = readForeverLibraryRole()
+    return self:ResolveForeverRole(libraryRole, not libraryRole and hasPlayerSpec())
 end
 
 function KE:IsPlayerHealerSpec()

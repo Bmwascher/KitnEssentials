@@ -205,6 +205,8 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
 ---@field PlayerAbsorbsFormat { Format: fun(amount:any, abbreviate:boolean, hideWhenZero:boolean):string }
 ---@field DungeonTimerDungeons KE.DungeonTimerEntry[] # Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua
+---@field IS_FOREVER boolean # Core/Client.lua: true on the Forever client, decided once from the interface version
+---@field BASELINE_LOAD boolean? # Core/BaselineLoad.lua: true only when the TOC loaded the baseline lists
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
@@ -458,14 +460,45 @@ function KE:GetCharStore(create) end
 --- the per-character store. Runs right after AceDB:New.
 function KE:MigrateChatHistoryToCharStore() end
 
---- Deletes every other character's chat history from the account file.
+--- Deletes the chat history of every account record proven to be another
+--- character's (KE:ClassifyLegacyCharacterRecord); does nothing without an
+--- identity.
 ---@return number characters
 ---@return number lines
 function KE:ClearOtherCharsChatHistory() end
 
 --- Deletes another character's chat history from the account file when its
 --- newest dated line is over 90 days old; prints once when it clears any.
+--- Unresolved records are kept.
 function KE:ClearStaleChatHistory() end
+
+--- AceDB's key for this character plus the name parts the record classifier
+--- needs; nil when the database or a regional name cannot be read.
+---@return { charKey: string, name: string?, regional: boolean }|nil
+function KE:GetPlayerIdentityParts() end
+
+--- "owned" for the current key, "other" for a record proven to be another
+--- character's, "unresolved" when nothing tells them apart.
+---@param key any
+---@param entry any
+---@param identity table?
+---@return "owned"|"other"|"unresolved"
+function KE:ClassifyLegacyCharacterRecord(key, entry, identity) end
+
+--- Whether this client names characters "First Surname" (regional names on).
+---@return boolean
+function KE:UsesSurnames() end
+
+--- The separator the client puts between a first name and a surname.
+---@return string
+function KE:GetSurnameSeparator() end
+
+--- The full name the client shows for a first name and surname: nil for a
+--- secret, missing or empty name; the name alone without a usable surname.
+---@param name any
+---@param surname any
+---@return string?
+function KE:JoinCharacterName(name, surname) end
 
 -- Core/ProfileManager.lua export string codec
 ---@param tbl table
@@ -832,7 +865,29 @@ function KE:ClosePromptIfOwner(accept) end
 ---@return Frame
 function KE:CreateReloadPrompt(reason) end
 
-function KE:SkinningReloadPrompt() end
+--- A new Reload Now accept for a module's own reload prompt: it reloads as
+--- the shared prompt's does, and the secure reload button covers it where the
+--- client refuses addon reloads (Core/Widgets.lua).
+---@return fun()
+function KE:NewReloadAccept() end
+
+--- The skinning reload prompt; `extra` is appended to its text
+--- (Core/Widgets.lua).
+---@param extra string?
+---@return Frame
+function KE:SkinningReloadPrompt(extra) end
+
+--- ReloadUI where the client lets addon code call it; elsewhere the reload
+--- prompt, whose Reload Now reloads through a secure button (Core/Widgets.lua).
+function KE:ReloadUI() end
+
+--- Whether the secure reload button lies over Reload Now: the reload prompt,
+--- a client that refuses addon reloads, out of lockdown (Core/Widgets.lua).
+---@param isReloadPrompt boolean?
+---@param addonReloadAllowed boolean
+---@param inLockdown boolean
+---@return boolean
+function KE.SecureReloadWanted(isReloadPrompt, addonReloadAllowed, inLockdown) end
 
 --- Marks a reload as owed. Skinning toggles call this instead of prompting;
 --- the GUI frame's OnHide raises one prompt for the whole session.
@@ -922,11 +977,6 @@ function KE.Skins.RelevelPlate(owner, plate) end
 function KE.Skins.Skip(reason) end
 
 -- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
---- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
---- "blizzard" or "circle". Falls back to "modern" for anything else.
----@return string
-function KE.Skins.GetRoleIconSet() end
-
 --- Repaints the Group Finder search rows and role count strips with the
 --- current set. Applicant role buttons keep Blizzard's art.
 function KE.Skins.RefreshLFGRoleIcons() end
@@ -939,13 +989,16 @@ function KE.BuildChatRoleIconStrings(set) end
 
 --- Cache keys for one group member's chat role icon: the bare name, and the
 --- name qualified with a normalized realm. playerRealm substitutes for a
---- missing member realm. Callers must pass already-guarded plain values.
+--- missing member realm. With surnames on, realm is the member's surname and
+--- the one key is the joined full name. Callers must pass already-guarded
+--- plain values.
 ---@param name string?
 ---@param realm string?
 ---@param playerRealm string?
+---@param surnames boolean?
 ---@return string|nil bareKey
 ---@return string|nil qualifiedKey
-function KE.ChatRoleIconKeys(name, realm, playerRealm) end
+function KE.ChatRoleIconKeys(name, realm, playerRealm, surnames) end
 
 ---@param text string|nil
 ---@return boolean
@@ -969,6 +1022,11 @@ function KE.SanitizeCopyLine(text) end
 function KE.AcceptChatMember(role, name, realm) end
 
 -- ─── Skinning (Modules/Skinning/DarkTheme/RoleIconSamples.lua) ───────
+--- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
+--- "blizzard" or "circle". Falls back to "modern" for anything else.
+---@return string
+function KE.Skins.GetRoleIconSet() end
+
 --- Builds one role icon set's dropdown label: three inline icons, no text.
 ---@param set string
 ---@return string
@@ -1237,6 +1295,54 @@ function KE:GetChallengeMapIDByName(name) end
 ---@return string? sectionId
 function KE:GetSectionForItem(itemId) end
 
+--- Whether this load runs a feature: a module, sidebar row, sub-tab or
+--- optional integration id. A retail load admits every id; a baseline load
+--- (KE.BASELINE_LOAD) only the baseline. Decided once per session; saved
+--- flags never change it.
+---@param featureId string?
+---@return boolean available
+---@return string? reason
+function KE:IsFeatureAvailable(featureId) end
+
+--- True after a baseline load (KE.BASELINE_LOAD), the availability policy's
+--- own answer; for a branch that picks a Forever value.
+---@return boolean
+function KE:IsBaselineLoad() end
+
+--- How an import or export judges a top-level profile block: "core" always
+--- stays, "nested" is judged per sub-block, "feature" follows the owner id
+--- returned with it (Core/Availability.lua).
+---@param key string
+---@return string kind
+---@return string? owner
+---@return boolean? mapped
+function KE:ProfileBlockOwner(key) end
+
+--- Turns on per-spec profiles for db where this client admits them; false
+--- when the library is absent or the feature is withheld.
+---@param db AceDB
+---@return boolean enhanced
+function KE:EnhanceDualSpec(db) end
+
+--- The entries ({ id = ... }) this client admits; the same list when it
+--- withholds nothing.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableEntries(entries) end
+
+--- The entries ({ key = ... }) whose skin key this client admits, in input
+--- order; always a new table.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableFrameSkins(entries) end
+
+--- Whether a skin registered under key may run and show a Frame Skins row.
+--- A retail load admits every key except a Forever-only window's; a baseline
+--- load only its admitted window and addon skins.
+---@param key string?
+---@return boolean available
+function KE:IsFrameSkinAvailable(key) end
+
 ---@param value any
 ---@return number
 function KE:RoundOffset(value) end
@@ -1294,6 +1400,13 @@ function KE:IsPlayerHealerSpec() end
 
 ---@return boolean
 function KE:IsPlayerTankSpec() end
+
+--- The Forever role rule: the spec library's talent role as it is; with no
+--- answer, "DAMAGER" for a character with a spec and nil without one.
+---@param libraryRole string?
+---@param hasSpec boolean
+---@return string?
+function KE:ResolveForeverRole(libraryRole, hasSpec) end
 
 ---@param enabledSpecs table<number, boolean>?
 ---@param specId number?
@@ -1393,6 +1506,20 @@ function KE:GetKickCooldownCap(kickID) end
 ---@return number? talentSpellID
 ---@return number? seconds
 function KE:GetInterruptSuccessReduction(kickSpellID) end
+
+--- The first candidate isKnown accepts whose `forms` list, when present,
+--- holds formID. A nil or secret formID meets no `forms` list. Pure.
+---@param candidates { id: number, cd: number, forms: number[]? }[]
+---@param isKnown fun(spellID: number): boolean
+---@param formID number?
+---@return { id: number, cd: number, forms: number[]? }?
+function KE:SelectInterruptCandidate(candidates, isKnown, formID) end
+
+--- The player's kick for a spec: the first candidate in the player or pet
+--- spellbook whose form condition the current shapeshift form meets, or nil.
+---@param specID number?
+---@return { id: number, cd: number, forms: number[]? }?
+function KE:ResolvePlayerInterrupt(specID) end
 
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end

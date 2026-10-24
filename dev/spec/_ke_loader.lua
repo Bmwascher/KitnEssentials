@@ -15,8 +15,8 @@
 --   local DM = L.loadDMCore({ issecretvalue = myFn })
 --
 -- Loaders taking opts (loadDungeonTimers, loadPixelPerfect) accept mock
--- overrides as a second arg; the rest take overrides first (loadGlobals takes
--- overrides first AND an optional opts second). Override keys
+-- overrides as a second arg; the rest take overrides first (loadGlobals and
+-- loadConflicts take overrides first AND an optional opts second). Override keys
 -- _wow_mock manages (issecretvalue, C_Timer, AbbreviateNumbers, ...) win
 -- over the loader defaults; stubs _wow_mock does NOT manage live on _G and
 -- can simply be reassigned after the loader returns.
@@ -152,9 +152,10 @@ function L.loadGlobals(overrides, opts)
         Fetch = function(_, _, name) return name and ("path/" .. name) or nil end,
         IsValid = function(_, _, name) return name == "Expressway" or name == "GoodFont" end,
     }
+    -- opts.libs maps a library name to the stand-in LibStub returns for it.
     _G.LibStub = function(name)
         if name == "LibSharedMedia-3.0" then return lsm end
-        return nil
+        return opts.libs and opts.libs[name] or nil
     end
     -- opts.loadedAddOns is a name->true set of addons IsAddOnLoaded reports;
     -- absent means nothing is loaded, the historical behavior. It is an opt
@@ -189,6 +190,11 @@ function L.loadGlobals(overrides, opts)
             return issecretvalue and issecretvalue(value)
         end,
     }
+    -- Core/Availability.lua loads before Globals in-game. opts.forever seeds
+    -- a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end
 
@@ -369,7 +375,8 @@ end
 -- SYNCHRONOUSLY inside the mutating call (AceDB-3.0.lua).
 -- Specs replicate Core/Main.lua's callback registration themselves.
 -- Returns PM, KE, db.
-function L.loadProfileManager(overrides)
+-- opts.baseline loads Core/Availability.lua as a baseline load.
+function L.loadProfileManager(overrides, opts)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
     -- WoW's UTF-8 character count: every byte that is not a continuation byte.
@@ -419,7 +426,9 @@ function L.loadProfileManager(overrides)
     _G.KitnEssentials.IterateModules = _G.KitnEssentials.IterateModules or function() return pairs({}) end
     _G.KitnEssentials.EnableModule = _G.KitnEssentials.EnableModule or function() end
     _G.KitnEssentials.DisableModule = _G.KitnEssentials.DisableModule or function() end
-    local KE = { db = db }
+    -- Without opts.baseline, a retail load: Core/Availability.lua admits everything.
+    local KE = { db = db, BASELINE_LOAD = (opts and opts.baseline) or nil }
+    helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Core/ProfileManager.lua", KE)
     return KE.ProfileManager, KE, db
 end
@@ -429,7 +438,7 @@ end
 -- KE, prompts (every CreatePrompt/CreateReloadPrompt call, in order),
 -- disabled (addon names passed to C_AddOns.DisableAddOn), and printed (chat
 -- lines, kept separate so prompt-count assertions stay exact).
-function L.loadConflicts(overrides)
+function L.loadConflicts(overrides, opts)
     installMock(overrides, {})
     local disabled = {}
     -- Models production: DisableAddOn flips the enable state while the addon
@@ -483,6 +492,11 @@ function L.loadConflicts(overrides)
         -- break every "#prompts" assertion, since each choice prints.
         Print = function(_, msg) printed[#printed + 1] = msg end,
     }
+    -- Core/Availability.lua loads before Conflicts in-game. opts.forever seeds
+    -- a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts ~= nil and opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Core/Conflicts.lua", KE), prompts, disabled, printed
 end
 
@@ -531,20 +545,22 @@ function L.loadChatMessageHandler(overrides)
     -- by the handler. Without this line every new case dies on
     -- "attempt to call method 'NotSecretValue' (a nil value)".
     helpers.loadModule("Core/Secret.lua", KE)
+    -- The surname helpers the mention scan and the self test read.
+    helpers.loadModule("Core/Identity.lua", KE)
     helpers.loadModule("Core/Colors.lua", KE)
     return helpers.loadModule("Modules/Skinning/Chat/ChatMessageHandler.lua", KE)
 end
 
--- Modules/Skinning/SkinAPI.lua. Creates frames at file scope (the hidden
--- parking frame and the edge refresher), so CreateFrame must exist before
--- the load. GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
+-- Modules/Skinning/SkinAPI.lua. Creates its parking frame and edge refresher
+-- at the first skin work, so CreateFrame must exist before any case skins.
+-- GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
 -- which would drag in the whole profile stack for two color lookups.
 local SKINAPI_THEME = {
     accent      = { 1.0, 0.0, 0.549, 1 },
     accentHover = { 1.0, 0.0, 0.549, 0.25 },
 }
 
-function L.loadSkinAPI(overrides)
+function L.loadSkinAPI(overrides, opts)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
     _G.GetPhysicalScreenSize = function() return 2560, 1440 end
@@ -564,6 +580,11 @@ function L.loadSkinAPI(overrides)
         db = { profile = { Skinning = { BlizzardFrames = {} } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    -- Core/Availability.lua loads before the module lists in-game. opts.forever
+    -- seeds a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts ~= nil and opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     return helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
 end
 
@@ -612,6 +633,11 @@ function L.loadTooltips(opts, overrides)
         db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    -- Core/Availability.lua loads before the module lists in-game. opts.forever
+    -- seeds a baseline load on the Forever client; absent means a retail load.
+    KE.IS_FOREVER = opts.forever == true
+    KE.BASELINE_LOAD = KE.IS_FOREVER
+    helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/Tooltips/Tooltips.lua", KE)
     return modules["SkinTooltips"], KE
@@ -1128,10 +1154,11 @@ local function roleIconArt(PATH, extra)
     return art
 end
 
--- Modules/Skinning/DarkTheme/Frames/LFG.lua. Only the role-icon resolver and painters
--- are under test; the S stub carries the minimum the file touches at load,
--- which is Register (called at file scope) plus the data/PixelSnap pair the
--- painters use.
+-- Modules/Skinning/DarkTheme/Frames/LFG.lua, after RoleIconSamples.lua, which holds
+-- the role-icon resolver the painters read through S. Only the resolver and
+-- painters are under test; the S stub carries the minimum the files touch at
+-- load, which is Register (called at file scope) plus the data/PixelSnap pair
+-- the painters use.
 function L.loadLFGSkin(overrides)
     overrides = overrides or {}
     installMock(managedSubset(overrides), {
@@ -1175,6 +1202,7 @@ function L.loadLFGSkin(overrides)
         return frameData[f]
     end
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/RoleIconSamples.lua", KE)
     helpers.loadModule("Modules/Skinning/DarkTheme/Frames/LFG.lua", KE)
     return KE, KE.Skins
 end
@@ -1194,10 +1222,12 @@ function L.loadChatRoleIconStrings()
 end
 
 -- The cache-key rule from the same file. Pure, so it needs no art table and
--- no mock environment at all.
+-- no mock environment; Core/Identity.lua supplies the surname join, and the
+-- values here are plain, so the secret test is a stub.
 function L.loadChatRoleIconKeys()
     local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = "", ROLE_ICON_ART = {} }
+    local KE = { PATH = "", ROLE_ICON_ART = {}, IsSecretValue = function() return false end }
+    helpersLocal.loadModule("Core/Identity.lua", KE)
     helpersLocal.loadModule("Modules/Skinning/Chat/ChatRoleIcons.lua", KE)
     return KE.ChatRoleIconKeys
 end
@@ -1222,11 +1252,12 @@ function L.loadChatCopyText()
 end
 
 -- Modules/Skinning/DarkTheme/RoleIconSamples.lua. Same reason as the chat builder above:
--- the file holds one pure function and needs no KE.Skins and no frames, so it
--- loads against a bare KE carrying only the art table.
+-- the sample builder is pure and needs no frames, so it loads against a bare
+-- KE carrying the art table and an empty KE.Skins, which the file writes its
+-- resolver into.
 function L.loadRoleIconSample()
     local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }
+    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]], Skins = {} }
     KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
     helpersLocal.loadModule("Modules/Skinning/DarkTheme/RoleIconSamples.lua", KE)
     return KE.BuildRoleIconSample, KE.ROLE_ICON_ART
@@ -2312,7 +2343,17 @@ function L.loadOptimize(overrides)
 
     local rec = { cvars = {}, prints = {}, events = {}, difficultyID = 0 }
 
-    _G.SetCVar = function(cvar, value) rec.cvars[cvar] = tostring(value) end
+    -- `refused[cvar]` makes the client refuse that write: "throw" raises, as an
+    -- unknown or protected CVar does; "false" returns false, SetCVar's own
+    -- failure result. Every other write is stored and returns true.
+    rec.refused = {}
+    _G.SetCVar = function(cvar, value)
+        local how = rec.refused[cvar]
+        if how == "throw" then error("refused: " .. cvar) end
+        if how == "false" then return false end
+        rec.cvars[cvar] = tostring(value)
+        return true
+    end
     _G.GetCVar = function(cvar) return rec.cvars[cvar] end
     -- nameplateStackingTypes flags, keyed by Enum.NamePlateStackType index.
     rec.stackBits = {}

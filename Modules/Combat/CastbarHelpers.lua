@@ -273,17 +273,10 @@ function H.CacheInterruptId(self)
         -- in the player spellbook AND Axe Toss in the pet spellbook) counts as a
         -- cast. Priority-picked interruptId/CD still drive the visible bar.
         self.interruptSpellSet = KE:GetInterruptSpellSet(specID)
-        local candidates = KE:GetInterruptCandidatesForSpec(specID)
-        if candidates then
-            for i = 1, #candidates do
-                local data = candidates[i]
-                if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
-                    or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
-                    self.interruptId = data.id
-                    self.interruptCD = data.cd
-                    break
-                end
-            end
+        local kick = KE:ResolvePlayerInterrupt(specID)
+        if kick then
+            self.interruptId = kick.id
+            self.interruptCD = kick.cd
         end
     end
 
