@@ -8,12 +8,18 @@
 # Check. Every external in .pkgmeta is pinned to a tag or a commit. A tag pin
 # is compared with the newest upstream tag of the same shape (digits ignored:
 # v12.1.1 competes only with v#.#.#, so an alpha or a differently named tag
-# series never counts as newer). A commit pin is compared with upstream HEAD,
-# which can move without touching the pinned subfolder. Externals that share
-# a repository and a pin print as one line. Upstream answers are cached for
-# 20 hours in the git common dir (kitn-lib-updates.json, shared by every
-# worktree, never tracked); the pins are re-read on every run, so a moved pin
-# clears its note without a fetch. -Refresh ignores the cache. -Soft is the
+# series never counts as newer). Git tags rank by version number; SVN tags by
+# the revision that last changed them, because SVN tag names need not follow
+# release order (LibStub's 1.0.3-50001 is older than 1.0.2-70000). The pin
+# itself starts the ranking, so only a strictly newer tag replaces it: a tie
+# or an older tag never reads as newer. A commit pin is compared with
+# upstream HEAD, which can move without touching the pinned subfolder.
+# Externals that share a repository and a pin print as one line. Upstream
+# answers are cached for 20 hours in the git common dir
+# (kitn-lib-updates.json, shared by every worktree, never tracked), keyed by
+# the pin; the pins are re-read on every run, so a moved commit pin clears its
+# note without a fetch, and a moved tag pin is asked once. -Refresh ignores
+# the cache. -Soft is the
 # session-start mode: exit 0 always, and an unreachable upstream is silent.
 # Output: "[libs] note" for a pin behind upstream, "[libs] FAIL" for an
 # external with no pin, "[libs] skip" for an upstream that could not be read.
@@ -98,12 +104,20 @@ function Compare-Version([string]$a, [string]$b) {
     return [Math]::Sign($x.Count - $y.Count)
 }
 
-function Get-NewestTag([string[]]$tags, [string]$pinned) {
+# $revisions (SVN only) maps each tag to its revision and replaces version order.
+function Get-NewestTag([string[]]$tags, [string]$pinned, [hashtable]$revisions) {
     $shape = Get-Shape $pinned
-    $best = $null
+    # An SVN pin missing upstream has no revision to rank against.
+    if ($revisions -and -not $revisions.ContainsKey($pinned)) { return $null }
+    $best = if ($tags -ccontains $pinned) { $pinned } else { $null }
     foreach ($t in $tags) {
         if ((Get-Shape $t) -cne $shape) { continue }
-        if ($null -eq $best -or (Compare-Version $t $best) -gt 0) { $best = $t }
+        # A pin missing upstream still bounds a git answer from below.
+        if (-not $revisions -and $null -eq $best -and (Compare-Version $t $pinned) -le 0) { continue }
+        $newer = if ($null -eq $best) { $true }
+            elseif ($revisions) { $revisions[$t] -gt $revisions[$best] }
+            else { (Compare-Version $t $best) -gt 0 }
+        if ($newer) { $best = $t }
     }
     return $best
 }
@@ -118,7 +132,7 @@ function Invoke-UpstreamQueries($queries, [int]$timeoutSeconds) {
         $out = $null
         try {
             if ($q.type -eq 'svn') {
-                $out = (Invoke-WebRequest -Uri "$($q.repo)/tags/" -TimeoutSec 20 -UseBasicParsing).Content
+                $out = (Invoke-WebRequest -Uri "$($q.repo)/tags/" -CustomMethod PROPFIND -Headers @{ Depth = '1' } -TimeoutSec 20 -UseBasicParsing).Content
             } elseif ($q.kind -eq 'tag') {
                 $out = (& git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=15 ls-remote --tags --refs $q.repo 2>$null) -join "`n"
                 if ($LASTEXITCODE -ne 0) { $out = $null }
@@ -133,11 +147,21 @@ function Invoke-UpstreamQueries($queries, [int]$timeoutSeconds) {
     return $raw
 }
 
-function Get-TagNames([string]$type, [string]$raw) {
-    if ($type -eq 'svn') {
-        return @([regex]::Matches($raw, '<li><a href="([^"]+)/">') | ForEach-Object { [Uri]::UnescapeDataString($_.Groups[1].Value) } | Where-Object { $_ -ne '..' })
-    }
+function Get-TagNames([string]$raw) {
     return @($raw -split "`n" | Where-Object { $_ -match 'refs/tags/(.+)$' } | ForEach-Object { ($_ -split 'refs/tags/', 2)[1].Trim() })
+}
+
+# A Depth 1 PROPFIND answers one response per tag folder, each carrying the
+# folder's href and its last-changed revision (version-name).
+function Get-SvnTagRevisions([string]$raw) {
+    $revisions = @{}
+    foreach ($m in [regex]::Matches($raw, '(?s)<(?:\w+:)?response\b.*?</(?:\w+:)?response>')) {
+        $block = $m.Value
+        $href = [regex]::Match($block, '<(?:\w+:)?href>[^<]*/tags/([^/<]+)/</(?:\w+:)?href>')
+        $rev = [regex]::Match($block, 'version-name>(\d+)<')
+        if ($href.Success -and $rev.Success) { $revisions[[Uri]::UnescapeDataString($href.Groups[1].Value)] = [long]$rev.Groups[1].Value }
+    }
+    return $revisions
 }
 
 function Get-HeadSha([string]$raw) {
@@ -145,11 +169,12 @@ function Get-HeadSha([string]$raw) {
     return $null
 }
 
-# One upstream answer per repository, pin kind and tag shape: the newest
-# same-shape tag, or the HEAD commit.
+# One upstream answer per repository, pin kind and pinned tag (the pin seeds
+# the ranking): the newest same-shape tag, or the HEAD commit.
 function Get-QueryKey($src, $ext) {
-    $shape = if ($ext.kind -eq 'tag') { Get-Shape $ext.ref } else { '' }
-    return "$($src.type)|$($src.repo)|$($ext.kind)|$shape"
+    $pin = if ($ext.kind -eq 'tag') { $ext.ref } else { '' }
+    $order = if ($src.type -eq 'svn') { '|rev' } else { '' }
+    return "$($src.type)|$($src.repo)|$($ext.kind)|$pin$order"
 }
 
 function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$timeoutSeconds) {
@@ -173,7 +198,16 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
     $raw = Invoke-UpstreamQueries @($needed.Values) $timeoutSeconds
     foreach ($q in $needed.Values) {
         if (-not $raw.ContainsKey($q.key)) { continue }
-        $value = if ($q.kind -eq 'tag') { Get-NewestTag (Get-TagNames $q.type $raw[$q.key]) $q.pinned } else { Get-HeadSha $raw[$q.key] }
+        if ($q.kind -ne 'tag') {
+            $value = Get-HeadSha $raw[$q.key]
+        } else {
+            $revs = if ($q.type -eq 'svn') { Get-SvnTagRevisions $raw[$q.key] } else { $null }
+            $tags = if ($revs) { @($revs.Keys) } else { @(Get-TagNames $raw[$q.key]) }
+            # A response with no tag in it is unread, never "up to date".
+            if (-not $tags.Count) { continue }
+            $value = Get-NewestTag $tags $q.pinned $revs
+            if (-not $value) { $value = $q.pinned }
+        }
         if (-not $value) { continue }
         $answers[$q.key] = $value
         $cache[$q.key] = [pscustomobject]@{ checked = $now; value = $value }
@@ -255,7 +289,9 @@ function Invoke-Check {
             continue
         }
         $up = $answers[$key]
-        $behind = if ($ext.kind -eq 'tag') { (Compare-Version $up $ext.ref) -gt 0 } else { $up -ne $ext.ref }
+        # A tag answer differs from the pin only when a strictly newer tag exists;
+        # a commit answer is upstream HEAD.
+        $behind = $up -cne $ext.ref
         if ($behind) {
             $notes++
             $what = if ($ext.kind -eq 'tag') { "upstream $up" } else { "upstream HEAD $(Format-Ref commit $up)" }
