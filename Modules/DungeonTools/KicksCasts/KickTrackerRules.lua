@@ -511,3 +511,221 @@ function KT.ClassifyKicker(callOk, token, tokenSecret, guidSecret)
     return "guid"
 end
 
+---------------------------------------------------------------------------------
+-- The meter decision (who kicked when the game hides it)
+---------------------------------------------------------------------------------
+-- The group's units, and the meter's per-GUID slots: each member's own
+-- source and each pet's. A pet's growth is its owner's.
+KT.OWNERS = { "player", "party1", "party2", "party3", "party4" }
+KT.SLOTS = { "player", "party1", "party2", "party3", "party4",
+             "pet", "partypet1", "partypet2", "partypet3", "partypet4" }
+local SLOT_OWNER = {
+    player = "player", pet = "player",
+    party1 = "party1", partypet1 = "party1",
+    party2 = "party2", partypet2 = "party2",
+    party3 = "party3", partypet3 = "party3",
+    party4 = "party4", partypet4 = "party4",
+}
+
+function KT.SlotOwner(slot)
+    return SLOT_OWNER[slot]
+end
+
+local function clear(t)
+    for k in pairs(t) do t[k] = nil end
+    return t
+end
+
+-- A meter row's key, "CLASS:specIcon", from plain values. A row with no
+-- plain class or spec icon (a demon's row has no icon) and the player's own
+-- row get NO_ROW, which matches nobody.
+local NO_ROW = "-"
+local rowKeys, rowParts = {}, {}
+function KT.RowKey(class, icon, isLocal)
+    if isLocal == true or type(class) ~= "string" or type(icon) ~= "number" then return NO_ROW end
+    local byClass = rowKeys[class]
+    if not byClass then
+        byClass = {}
+        rowKeys[class] = byClass
+    end
+    local key = byClass[icon]
+    if not key then
+        key = class .. ":" .. icon
+        byClass[icon] = key
+        rowParts[key] = { class = class, icon = icon }
+    end
+    return key
+end
+
+-- A slot whose read failed keeps its last count and total while its GUID is
+-- the same, so a failed read is neither a shrink nor, when it reads again, a
+-- growth. A failed row read keeps the last rows.
+function KT.CarryCounts(read, last)
+    for _, slot in ipairs(KT.SLOTS) do
+        local guid = read.guid[slot]
+        if read.n[slot] == nil and guid ~= nil and guid == last.guid[slot] then
+            read.n[slot], read.a[slot] = last.n[slot], last.a[slot]
+        end
+    end
+    if not read.rowsOk then
+        clear(read.rows)
+        for i = 1, #last.rows do read.rows[i] = last.rows[i] end
+    end
+end
+
+-- The counts and totals a read is measured against: a slot whose GUID
+-- changed (a roster or pet swap), or that has no usable count under its GUID
+-- yet (its first read failed), starts from its own read, with no growth.
+-- Fills and returns outN and outA.
+function KT.BaselineCounts(read, last, outN, outA)
+    for _, slot in ipairs(KT.SLOTS) do
+        if read.guid[slot] ~= last.guid[slot] or last.n[slot] == nil then
+            outN[slot], outA[slot] = read.n[slot], read.a[slot]
+        else
+            outN[slot], outA[slot] = last.n[slot], last.a[slot]
+        end
+    end
+    return outN, outA
+end
+
+-- Whether a read shrank against its baseline: fewer rows, or a count that
+-- fell, is a new fight.
+function KT.ListsMoved(rows, n, prevRows, prevN)
+    if #rows < #prevRows then return true end
+    for _, slot in ipairs(KT.SLOTS) do
+        if (n[slot] or 0) < (prevN[slot] or 0) then return true end
+    end
+    return false
+end
+
+-- Each owner's list growth over the baseline, and their entries, a pet's
+-- counted for its owner. Fills growth and entries.
+function KT.OwnerGrowth(n, prevN, growth, entries)
+    for _, slot in ipairs(KT.SLOTS) do
+        local count = n[slot]
+        if count then
+            local owner = SLOT_OWNER[slot]
+            entries[owner] = (entries[owner] or 0) + count
+            local d = count - (prevN[slot] or 0)
+            if d > 0 then growth[owner] = (growth[owner] or 0) + d end
+        end
+    end
+end
+
+-- A member's growth less their readable kicks already charged: each adds one
+-- expected count, at its time. One older than window is dropped first, since
+-- a readable kick on a repeated spell grows no list and its count must not
+-- take a later kick's growth. Returns the growth left unexplained, and
+-- whether a readable kick inside the window was there, consumed or not.
+function KT.TakeGrowth(expected, owner, growth, T, window)
+    local e = expected[owner]
+    if e and T - e.at > window then
+        expected[owner] = nil
+        e = nil
+    end
+    if not e then return growth, false end
+    if growth <= 0 then return growth, true end
+    local used = (e.n < growth) and e.n or growth
+    e.n = e.n - used
+    if e.n <= 0 then expected[owner] = nil end
+    return growth - used, true
+end
+
+-- The row that is new (one more row) or moved (the first changed place),
+-- and how: "new row" or "reorder"; nil when neither.
+local leftScratch = {}
+function KT.ChangedRow(rows, prevRows)
+    if #rows > #prevRows then
+        local left = clear(leftScratch)
+        for i = 1, #prevRows do left[prevRows[i]] = (left[prevRows[i]] or 0) + 1 end
+        local key
+        for i = 1, #rows do
+            local k = rows[i]
+            if (left[k] or 0) > 0 then
+                left[k] = left[k] - 1
+            else
+                key = k
+            end
+        end
+        return key, "new row"
+    end
+    if #rows == #prevRows then
+        for i = 1, #rows do
+            if rows[i] ~= prevRows[i] then return rows[i], "reorder" end
+        end
+    end
+    return nil, nil
+end
+
+-- The teammates a row key names: a kick row, the class matches, the spec is
+-- known and its icon (iconOf) is the row's. Fills and returns out.
+function KT.KeyMembers(key, byUnit, iconOf, out)
+    clear(out)
+    local parts = rowParts[key]
+    if not parts then return out end
+    for i = 2, #KT.OWNERS do
+        local unit = KT.OWNERS[i]
+        local m = byUnit[unit]
+        if m and m.interruptData and m.matchClass == parts.class and type(m.specID) == "number"
+            and m.specID > 0 and iconOf(m.specID) == parts.icon then
+            out[#out + 1] = unit
+        end
+    end
+    return out
+end
+
+-- How many of list have entries (a working read with one at least), and the
+-- one when exactly one has: a kick that grew no list is nobody's first.
+function KT.Entered(list, entries)
+    local n, only = 0, nil
+    for i = 1, #list do
+        if (entries[list[i]] or 0) > 0 then n, only = n + 1, list[i] end
+    end
+    if n ~= 1 then only = nil end
+    return n, only
+end
+
+-- The member's main kick is modeled as cooling at T.
+function KT.MainCooling(member, T)
+    local start, duration = member.kickStart, member.kickDuration
+    return start ~= nil and duration ~= nil and T - start < duration
+end
+
+-- Who kicked, from one update's evidence, best first: a grown list, a new or
+-- moved row, the player's cast a moment before, then elimination. e: grew
+-- (units whose growth is unexplained), growthOf, entries, cooling,
+-- candidates (teammates with a kick row), rowKey, rowHow, rowList (the row's
+-- matches), ownPending, plates (the batch it takes). Returns who and how, and
+-- the growers when several grew. A row with one match names them: the row is
+-- the evidence, whether or not their per-GUID read works.
+function KT.Decide(e)
+    local grew = e.grew
+    if #grew == 1 then
+        local who = grew[1]
+        if (e.growthOf[who] or 0) > 1 or e.plates > 1 then return nil, "mass", nil end
+        if who == "player" then
+            if not e.ownPending then return nil, "grip", nil end
+        elseif e.cooling[who] then
+            return nil, "grip", nil
+        end
+        return who, "breakdown", nil
+    end
+    if #grew > 1 then return nil, "several", grew end
+    local list = e.rowKey and e.rowList or nil
+    if list then
+        if #list == 1 then return list[1], e.rowHow, nil end
+        if #list < 2 then list = nil end
+    end
+    if not list and e.ownPending then return "player", "cast", nil end
+    list = list or e.candidates
+    local n, only = KT.Entered(list, e.entries)
+    if n == 1 and #list > 1 then return only, "order", nil end
+    return nil, "nobody", nil
+end
+
+-- Whether a credit of the player confirms the cast's success: a growth
+-- credit does, the cast inside the own window; the own-cast claim does not.
+function KT.OwnSuccessFrom(how, ownPending)
+    return how == "breakdown" or (how == "several" and ownPending == true)
+end
+

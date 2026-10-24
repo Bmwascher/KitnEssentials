@@ -646,3 +646,191 @@ describe("KickTracker nameplate kicker", function()
         end
     end)
 end)
+
+describe("KickTracker meter counts", function()
+    local function read(rows, rowsOk, n, guid)
+        return { rows = rows, rowsOk = rowsOk, n = n, a = {}, guid = guid }
+    end
+
+    it("keeps a failed read's last count and rows, and shows the growth on the next good read", function()
+        local KT = L.loadKickTrackerRules()
+        local base = read({ "MAGE:1" }, true, { party1 = 2 }, { party1 = "P1" })
+        local failed = read({}, false, {}, { party1 = "P1" })
+        KT.CarryCounts(failed, base)
+        assert.equals(2, failed.n.party1)
+        assert.same({ "MAGE:1" }, failed.rows)
+        local prev = KT.BaselineCounts(failed, base, {}, {})
+        assert.is_false(KT.ListsMoved(failed.rows, failed.n, base.rows, prev))
+        assert.equals(0, failed.n.party1 - prev.party1)
+        local good = read({ "MAGE:1" }, true, { party1 = 3 }, { party1 = "P1" })
+        KT.CarryCounts(good, failed)
+        prev = KT.BaselineCounts(good, failed, {}, {})
+        assert.is_false(KT.ListsMoved(good.rows, good.n, failed.rows, prev))
+        assert.equals(1, good.n.party1 - prev.party1)
+    end)
+
+    it("takes a count that fell, or fewer rows, as a new fight", function()
+        local KT = L.loadKickTrackerRules()
+        local base = read({ "MAGE:1", "ROGUE:2" }, true, { party1 = 3 }, { party1 = "P1" })
+        local rows = {
+            { name = "a count that fell", read = read({ "MAGE:1", "ROGUE:2" }, true, { party1 = 1 }, { party1 = "P1" }) },
+            { name = "fewer rows", read = read({ "MAGE:1" }, true, { party1 = 3 }, { party1 = "P1" }) },
+        }
+        for _, row in ipairs(rows) do
+            local prev = KT.BaselineCounts(row.read, base, {}, {})
+            assert.is_true((KT.ListsMoved(row.read.rows, row.read.n, base.rows, prev)), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter slots", function()
+    it("counts a pet's list growth and entries for its owner", function()
+        local KT = L.loadKickTrackerRules()
+        local growth, entries = {}, {}
+        KT.OwnerGrowth({ party3 = 2, partypet3 = 3, pet = 1 }, { party3 = 2, partypet3 = 2, pet = 1 },
+            growth, entries)
+        assert.same({ party3 = 1 }, growth)
+        assert.same({ party3 = 5, player = 1 }, entries)
+    end)
+
+    it("restarts a slot from its first usable read when its GUID changed or it never read under it", function()
+        local KT = L.loadKickTrackerRules()
+        local base = { rows = {}, n = { party1 = 4, partypet1 = 2 }, a = {},
+                       guid = { party1 = "P1", partypet1 = "Pet-A", party2 = "P2" } }
+        local now = { rows = {}, n = { party1 = 5, partypet1 = 1, party2 = 6 }, a = {},
+                      guid = { party1 = "P1", partypet1 = "Pet-B", party2 = "P2" } }
+        local prev = KT.BaselineCounts(now, base, {}, {})
+        assert.equals(4, prev.party1)
+        assert.equals(1, prev.partypet1)
+        assert.equals(6, prev.party2)
+        assert.is_false((KT.ListsMoved(now.rows, now.n, base.rows, prev)))
+    end)
+end)
+
+describe("KickTracker expected counts", function()
+    it("lets a readable kick's count take its own growth once, drops one past the window, and reports it", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "its own growth", e = { n = 1, at = 10 }, growth = 1, T = 10.05, left = 0, kept = false,
+              readable = true },
+            { name = "a hidden kick beside it", e = { n = 1, at = 10 }, growth = 2, T = 10.05, left = 1, kept = false,
+              readable = true },
+            { name = "two readable kicks, one grew", e = { n = 2, at = 10 }, growth = 1, T = 10.05, left = 0, kept = true,
+              readable = true },
+            { name = "a repeated spell that grew nothing", e = { n = 1, at = 10 }, growth = 0, T = 10.05, left = 0,
+              kept = true, readable = true },
+            { name = "past the window", e = { n = 1, at = 10 }, growth = 1, T = 11, left = 1, kept = false,
+              readable = false },
+            { name = "no readable kick", e = nil, growth = 1, T = 11, left = 1, kept = false, readable = false },
+        }
+        for _, row in ipairs(rows) do
+            local expected = { party1 = row.e }
+            local left, readable = KT.TakeGrowth(expected, "party1", row.growth, row.T, 0.25)
+            assert.equals(row.left, left, row.name)
+            assert.equals(row.readable, readable, row.name)
+            assert.equals(row.kept, expected.party1 ~= nil, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker meter decision", function()
+    local function inputs(over)
+        local e = { grew = {}, growthOf = {}, entries = {}, cooling = {}, candidates = { "party1", "party2" },
+                    ownPending = false, plates = 0 }
+        for k, v in pairs(over) do e[k] = v end
+        return e
+    end
+
+    it("names one list that grew by one, and skips a mass interrupt and a grip", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "a teammate grew by one, one plate", who = "party1", how = "breakdown",
+              e = { grew = { "party1" }, growthOf = { party1 = 1 }, plates = 1 } },
+            { name = "a teammate grew by one, no plate", who = "party1", how = "breakdown",
+              e = { grew = { "party1" }, growthOf = { party1 = 1 } } },
+            { name = "one list grew by two", who = nil, how = "mass",
+              e = { grew = { "party1" }, growthOf = { party1 = 2 } } },
+            { name = "one grower and two plates", who = nil, how = "mass",
+              e = { grew = { "party1" }, growthOf = { party1 = 1 }, plates = 2 } },
+            { name = "the player grew with no cast pending", who = nil, how = "grip",
+              e = { grew = { "player" }, growthOf = { player = 1 } } },
+            { name = "the player grew with a cast pending", who = "player", how = "breakdown",
+              e = { grew = { "player" }, growthOf = { player = 1 }, ownPending = true } },
+            { name = "a teammate grew while cooling", who = nil, how = "grip",
+              e = { grew = { "party1" }, growthOf = { party1 = 1 }, cooling = { party1 = true } } },
+        }
+        for _, row in ipairs(rows) do
+            local who, how = KT.Decide(inputs(row.e))
+            assert.equals(row.who, who, row.name)
+            assert.equals(row.how, how, row.name)
+        end
+    end)
+
+    it("credits every teammate whose list grew in one update, cooling or not", function()
+        local KT = L.loadKickTrackerRules()
+        local who, how, several = KT.Decide(inputs({ grew = { "party1", "party2" },
+            growthOf = { party1 = 1, party2 = 1 }, cooling = { party2 = true }, plates = 1 }))
+        assert.is_nil(who)
+        assert.equals("several", how)
+        assert.same({ "party1", "party2" }, several)
+    end)
+
+    it("names a row's one inspected match, and nobody for a shared key, an unread icon or the player's row", function()
+        local KT = L.loadKickTrackerRules()
+        local icons = { [62] = 135932, [64] = 135846 }
+        local function iconOf(spec) return icons[spec] end
+        local function mage(unit, spec)
+            return { unit = unit, matchClass = "MAGE", specID = spec, interruptData = { id = 2139 } }
+        end
+        local rows = {
+            { name = "one teammate of that class and spec", class = "MAGE", icon = 135932, who = "party1",
+              byUnit = { party1 = mage("party1", 62), party2 = mage("party2", 64) } },
+            { name = "one match whose per-GUID read does not work", class = "MAGE", icon = 135932, who = "party1",
+              entries = {}, byUnit = { party1 = mage("party1", 62), party2 = mage("party2", 64) } },
+            { name = "a key two teammates share", class = "MAGE", icon = 135932, who = nil,
+              byUnit = { party1 = mage("party1", 62), party2 = mage("party2", 62) } },
+            { name = "a spec not inspected yet", class = "MAGE", icon = 135932, who = nil,
+              byUnit = { party1 = mage("party1", 0), party2 = mage("party2", 64) } },
+            { name = "a row with no spec icon (unread, or a demon's)", class = "MAGE", icon = nil, who = nil,
+              byUnit = { party1 = mage("party1", 62), party2 = mage("party2", 64) } },
+            { name = "the player's own row", class = "MAGE", icon = 135932, me = true, who = nil,
+              byUnit = { party1 = mage("party1", 62), party2 = mage("party2", 64) } },
+        }
+        for _, row in ipairs(rows) do
+            local key = KT.RowKey(row.class, row.icon, row.me)
+            local e = inputs({ rowKey = key, rowHow = "reorder", entries = row.entries or { party1 = 1, party2 = 1 },
+                               rowList = KT.KeyMembers(key, row.byUnit, iconOf, {}) })
+            assert.equals(row.who, (KT.Decide(e)), row.name)
+        end
+    end)
+
+    it("gives the player a kick nothing else names while their cast is pending, with no success reduction", function()
+        local KT = L.loadKickTrackerRules()
+        local who, how = KT.Decide(inputs({ ownPending = true, entries = { party1 = 1, party2 = 1 } }))
+        assert.equals("player", who)
+        assert.equals("cast", how)
+        local rows = {
+            { how = "cast", pending = true, want = false },
+            { how = "breakdown", pending = true, want = true },
+            { how = "several", pending = true, want = true },
+            { how = "several", pending = false, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.OwnSuccessFrom(row.how, row.pending), row.how .. " " .. tostring(row.pending))
+        end
+    end)
+
+    it("names the only teammate with entries among several, and nobody when two are left", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "one with entries, one without", entries = { party1 = 2, party2 = 0 }, who = "party1", how = "order" },
+            { name = "one with entries, one never read", entries = { party1 = 2 }, who = "party1", how = "order" },
+            { name = "two with entries", entries = { party1 = 2, party2 = 1 }, who = nil, how = "nobody" },
+        }
+        for _, row in ipairs(rows) do
+            local who, how = KT.Decide(inputs({ entries = row.entries }))
+            assert.equals(row.who, who, row.name)
+            assert.equals(row.how, how, row.name)
+        end
+    end)
+end)
