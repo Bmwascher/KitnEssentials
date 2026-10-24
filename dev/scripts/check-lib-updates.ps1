@@ -10,9 +10,11 @@
 # v12.1.1 competes only with v#.#.#, so an alpha or a differently named tag
 # series never counts as newer). Git tags rank by version number; SVN tags by
 # the revision that last changed them, because SVN tag names need not follow
-# release order (LibStub's 1.0.3-50001 is older than 1.0.2-70000). A commit
-# pin is compared with upstream HEAD,
-# which can move without touching the pinned subfolder. Externals that share
+# release order (LibStub's 1.0.3-50001 is older than 1.0.2-70000). The pin
+# itself starts the ranking, so only a strictly newer tag replaces it: a tie
+# or an older tag never reads as newer. A commit pin is compared with
+# upstream HEAD, which can move without touching the pinned subfolder.
+# Externals that share
 # a repository and a pin print as one line. Upstream answers are cached for
 # 20 hours in the git common dir (kitn-lib-updates.json, shared by every
 # worktree, never tracked); the pins are re-read on every run, so a moved pin
@@ -104,9 +106,11 @@ function Compare-Version([string]$a, [string]$b) {
 # $revisions (SVN only) maps each tag to its revision and replaces version order.
 function Get-NewestTag([string[]]$tags, [string]$pinned, [hashtable]$revisions) {
     $shape = Get-Shape $pinned
-    $best = $null
+    $best = if ($tags -ccontains $pinned) { $pinned } else { $null }
     foreach ($t in $tags) {
         if ((Get-Shape $t) -cne $shape) { continue }
+        # A pin missing upstream still bounds a git answer from below.
+        if (-not $revisions -and $null -eq $best -and (Compare-Version $t $pinned) -le 0) { continue }
         $newer = if ($null -eq $best) { $true }
             elseif ($revisions) { $revisions[$t] -gt $revisions[$best] }
             else { (Compare-Version $t $best) -gt 0 }
@@ -162,12 +166,12 @@ function Get-HeadSha([string]$raw) {
     return $null
 }
 
-# One upstream answer per repository, pin kind and tag shape: the newest
-# same-shape tag, or the HEAD commit.
+# One upstream answer per repository, pin kind and pinned tag (the pin seeds
+# the ranking): the newest same-shape tag, or the HEAD commit.
 function Get-QueryKey($src, $ext) {
-    $shape = if ($ext.kind -eq 'tag') { Get-Shape $ext.ref } else { '' }
+    $pin = if ($ext.kind -eq 'tag') { $ext.ref } else { '' }
     $order = if ($src.type -eq 'svn') { '|rev' } else { '' }
-    return "$($src.type)|$($src.repo)|$($ext.kind)|$shape$order"
+    return "$($src.type)|$($src.repo)|$($ext.kind)|$pin$order"
 }
 
 function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$timeoutSeconds) {
@@ -194,6 +198,8 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
         $value = if ($q.kind -ne 'tag') { Get-HeadSha $raw[$q.key] }
             elseif ($q.type -eq 'svn') { $revs = Get-SvnTagRevisions $raw[$q.key]; Get-NewestTag @($revs.Keys) $q.pinned $revs }
             else { Get-NewestTag (Get-TagNames $raw[$q.key]) $q.pinned $null }
+        # No tag newer than the pin answers the pin itself, not "unreachable".
+        if (-not $value -and $q.kind -eq 'tag') { $value = $q.pinned }
         if (-not $value) { continue }
         $answers[$q.key] = $value
         $cache[$q.key] = [pscustomobject]@{ checked = $now; value = $value }
@@ -275,7 +281,8 @@ function Invoke-Check {
             continue
         }
         $up = $answers[$key]
-        # The answer is the newest tag in this source's own order, so any other tag is newer.
+        # A tag answer differs from the pin only when a strictly newer tag exists;
+        # a commit answer is upstream HEAD.
         $behind = $up -cne $ext.ref
         if ($behind) {
             $notes++
