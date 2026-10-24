@@ -181,12 +181,16 @@ ng_staged_comments() {
 # endpoint: a comment added in one commit and removed in a later one is
 # invisible to a range diff yet still published. A merge is diffed against
 # its first parent, so text invented while resolving a conflict is caught
-# too.
+# too. The parents come from a checked read: a failed read returns 1, never
+# the root-commit form, which shows a merge as no patch at all.
 ng_commit_comments() {
-    local out paths=("${ng_paths[@]}")
+    local out parents self first rest paths=("${ng_paths[@]}")
     if [ "${2:-}" = dev ]; then paths=("${ng_dev_paths[@]}"); fi
-    if git rev-parse -q --verify "$1^" >/dev/null 2>&1; then
-        out="$(git diff -U0 --no-color "$1^" "$1" -- "${paths[@]}")" || return 1
+    parents="$(git rev-list --parents -n 1 "$1")" || return 1
+    read -r self first rest <<< "$parents"
+    [ -n "$self" ] || return 1
+    if [ -n "$first" ]; then
+        out="$(git diff -U0 --no-color "$first" "$1" -- "${paths[@]}")" || return 1
     else
         out="$(git show --format= -U0 --no-color "$1" -- "${paths[@]}")" || return 1
     fi
