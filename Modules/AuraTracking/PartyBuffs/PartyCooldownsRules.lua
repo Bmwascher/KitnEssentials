@@ -1364,6 +1364,25 @@ function Rules.HiddenChargeClear(t, n, isSecret)
     return true
 end
 
+-- The read-back self-check's tries before a miss fails it.
+Rules.CHECK_TRIES = 6
+
+-- One self-check step. a is whether the probe bar reads at least its value
+-- minus the margin, b whether it reads its value plus it; a pass needs both
+-- measures known, a true and b false. Returns the new pass count and
+-- "passed" on the second pass in a row, "failed" on a miss once tries has
+-- reached CHECK_TRIES, else nil. A secret answer cannot be checked, so it is
+-- a miss; both are tested for secrecy before any comparison.
+function Rules.SelfCheckStep(tries, passes, knownA, knownB, a, b, isSecret)
+    if not (isSecret(a) or isSecret(b)) and knownA and knownB and a == true and b == false then
+        passes = passes + 1
+        if passes >= 2 then return passes, "passed" end
+        return passes, nil
+    end
+    if tries >= Rules.CHECK_TRIES then return 0, "failed" end
+    return 0, nil
+end
+
 -- A member's read from the unit answers: true dead, false alive, nil when it
 -- cannot be told. An offline member cannot be told, since a disconnected
 -- unit's answers are not its state. A feigning member is alive. Each answer

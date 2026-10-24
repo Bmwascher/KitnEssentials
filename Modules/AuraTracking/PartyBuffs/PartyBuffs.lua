@@ -169,6 +169,11 @@ local function PlainTrue(fn, ...)
     return value == true
 end
 
+local function ReadsUnhidden()
+    local RA = C_RestrictedActions
+    return RA ~= nil and CDRules.ReadsUnhidden(Enum and Enum.AddOnRestrictionType, RA.IsAddOnRestrictionActive)
+end
+
 function PB:ReadFacts()
     local facts = {
         challengeActive = PlainTrue(C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive),
@@ -207,6 +212,9 @@ function PB:Activate()
         Track.ShowSensors()
         Pot.Activate()
         HX.Activate()
+        -- The restriction event is not heard while inactive, so an end missed
+        -- then would leave a check failed on hidden answers for the session.
+        if ReadsUnhidden() then Track.RearmHiddenCheck() end
         -- The spec can change the icon size while the tracker is off, with no
         -- event to say so; the drain below reconfigures and restyles.
         local built = self.styleSettings and self.styleSettings.IconSize
@@ -1248,11 +1256,7 @@ end
 function PB:OnRestrictionChanged()
     C_Timer.After(0, function()
         if not self:IsEnabled() then return end
-        local RA = C_RestrictedActions
-        local kinds = Enum and Enum.AddOnRestrictionType
-        if RA and CDRules.ReadsUnhidden(kinds, RA.IsAddOnRestrictionActive) then
-            Track.ChargeRestrictionsEnded()
-        end
+        if ReadsUnhidden() then Track.ChargeRestrictionsEnded() end
         self:OnRelease()
     end)
 end

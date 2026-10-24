@@ -99,7 +99,6 @@ function Track.DoorOpen() return Rules.DoorOpen(Track.door) end
 -- it. The answer may be secret; it only reaches EvaluateColorValueFromBoolean.
 ---------------------------------------------------------------------------------
 local CMP_LO, CMP_HI, CMP_HEIGHT = -0.02, 1.02, 520
-local CHECK_TRIES = 6
 local cmpLayer
 local cmpPool = {}
 -- A bar whose probe was refused, kept for the next pair.
@@ -250,8 +249,9 @@ local checkTry, checkPass, checkWant = 0, 0, nil
 
 -- One step a second until it decides: the probe bar set to 0.3, then 0.7,
 -- must read at least its value minus 0.05 and not its value plus 0.05, twice
--- in a row within CHECK_TRIES tries. A secret answer cannot be checked here
--- and is taken as passed; it is tested for secrecy before any comparison.
+-- in a row (Rules.SelfCheckStep). A secret answer cannot be checked, so it is
+-- a miss toward the same cap, and a check that fails on one fails as
+-- "hidden".
 local function CheckStep(n)
     local probe = Track.checkProbe
     if checkWant then
@@ -261,22 +261,18 @@ local function CheckStep(n)
             CheckFailed(n, tostring(okA and knownB or knownA))
             return
         end
-        if issecretvalue(a) or issecretvalue(b) then
-            Track.chargeCheck, Track.chargeWhy = true, "hidden"
+        local verdict
+        checkPass, verdict = Rules.SelfCheckStep(checkTry, checkPass, knownA, knownB, a, b, issecretvalue)
+        if verdict == "passed" then
+            Track.chargeCheck = true
             return
-        end
-        if knownA and knownB and a == true and b == false then
-            checkPass = checkPass + 1
-            if checkPass >= 2 then
-                Track.chargeCheck = true
-                return
-            end
-        else
-            checkPass = 0
-            if checkTry >= CHECK_TRIES then
+        elseif verdict == "failed" then
+            if issecretvalue(a) or issecretvalue(b) then
+                CheckFailed(n, "hidden")
+            else
                 CheckFailed(n, "a bar at " .. checkWant .. " read " .. tostring(a) .. " / " .. tostring(b))
-                return
             end
+            return
         end
     end
     checkTry = checkTry + 1
@@ -767,6 +763,15 @@ function Track.KeyStart()
     end
 end
 
+-- A self-check that failed only on hidden answers runs again, from its first
+-- step, once answers can be read; its probe pair is kept from the first run.
+function Track.RearmHiddenCheck()
+    if Track.chargeCheck ~= false or Track.chargeWhy ~= "hidden" or not Track.checkProbe then return end
+    checkTry, checkPass, checkWant = 0, 0, nil
+    Track.chargeCheck, Track.chargeWhy = nil, nil
+    Track.Wake()
+end
+
 -- Party rows and the externals box alike; a reset digit can read one charge
 -- high for up to one cooldown.
 function Track.ChargeRestrictionsEnded()
@@ -777,6 +782,7 @@ function Track.ChargeRestrictionsEnded()
             if t and Rules.HiddenChargeClear(t, n, issecretvalue) then Push(t, n) end
         end
     end
+    Track.RearmHiddenCheck()
 end
 
 -- Whether a party row holds a cell an ally's death cuts.
