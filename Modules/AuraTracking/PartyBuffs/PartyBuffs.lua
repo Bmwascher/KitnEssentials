@@ -324,6 +324,14 @@ local function AddCandidate(list, frame, family, raidIndex, fixedToken)
     if candidate.token then list[#list + 1] = candidate end
 end
 
+local function AddHeaderChildren(list, header, family, raidIndex)
+    if type(header) ~= "table" then return end
+    for i = 1, 5 do
+        local ok, child = pcall(header.GetAttribute, header, "child" .. i)
+        if ok then AddCandidate(list, child, family, raidIndex) end
+    end
+end
+
 function PB:FindFrames()
     local list = {}
     wipe(seen)
@@ -347,6 +355,13 @@ function PB:FindFrames()
         for key, value in pairs(buttons) do
             AddCandidate(list, type(key) == "table" and key or value, "eui", raidIndex)
         end
+    end
+    -- Read from the headers, not the addon's own getters, which skip a
+    -- button that has no unit yet and so never get it watched.
+    local danders = _G.DandersFrames
+    if type(danders) == "table" then
+        AddHeaderChildren(list, danders.partyHeader, "danders", raidIndex)
+        AddHeaderChildren(list, danders.arenaHeader, "danders", raidIndex)
     end
     for i = 1, 5 do
         AddCandidate(list, _G["CompactPartyFrameMember" .. i], "compact", raidIndex)
