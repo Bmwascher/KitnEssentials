@@ -39,22 +39,22 @@ ignore:
 externals:
   Libs/AceAddon-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceAddon-3.0
-    commit: 40f4cc1356ae7fcc0cf71fc0a19dc7d50d6ae6c2
+    commit: 5a9344990ef9b437012e9d9e8531c3c6f88f4f8e
   Libs/AceDB-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceDB-3.0
-    commit: 40f4cc1356ae7fcc0cf71fc0a19dc7d50d6ae6c2
+    commit: 5a9344990ef9b437012e9d9e8531c3c6f88f4f8e
   Libs/AceEvent-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceEvent-3.0
-    commit: 40f4cc1356ae7fcc0cf71fc0a19dc7d50d6ae6c2
+    commit: 5a9344990ef9b437012e9d9e8531c3c6f88f4f8e
   Libs/AceHook-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceHook-3.0
-    commit: 40f4cc1356ae7fcc0cf71fc0a19dc7d50d6ae6c2
+    commit: 5a9344990ef9b437012e9d9e8531c3c6f88f4f8e
   Libs/AceTimer-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceTimer-3.0
-    commit: 40f4cc1356ae7fcc0cf71fc0a19dc7d50d6ae6c2
+    commit: 5a9344990ef9b437012e9d9e8531c3c6f88f4f8e
   Libs/CallbackHandler-1.0:
     url: https://github.com/WoWUIDev/Ace3.git/CallbackHandler-1.0
-    commit: 40f4cc1356ae7fcc0cf71fc0a19dc7d50d6ae6c2
+    commit: 5a9344990ef9b437012e9d9e8531c3c6f88f4f8e
   Libs/LibCustomGlow-1.0:
     url: https://github.com/Stanzilla/LibCustomGlow
     commit: 4f8f5c2607d7384b26df9175bb99fa3df891b015
