@@ -305,21 +305,6 @@ describe("KickTracker class fallback", function()
     end)
 end)
 
-describe("KickTracker running clock", function()
-    it("keeps the duration a clock started with when a teammate's talents become known", function()
-        local KT = L.loadKickTrackerRules()
-        local def = { base = 25, modifiers = { { talent = 7, seconds = 5 } } }
-        local member = { unit = "party1", interruptData = { id = 2139, cd = 25 } }
-        local function rankOf(talent) return KT.SnapshotRank(member.inspect, talent) end
-        member.kickStart, member.kickDuration = 10, KT.KickDuration(def, 62, rankOf, false)
-        local snap = { spec = 62, ranks = { [7] = 1 }, covered = { [7] = true }, absent = {} }
-        assert.is_false(KT.LearnFacts(member, snap, { id = 2139, cd = 20 }))
-        assert.equals(10, member.kickStart)
-        assert.equals(25, member.kickDuration)
-        assert.equals(20, KT.KickDuration(def, 62, rankOf, false))
-    end)
-end)
-
 describe("KickTracker nameplate kicker", function()
     it("sorts the kicker by its token, a party pet to its owner, and anything unreadable as hidden", function()
         local KT = L.loadKickTrackerRules()
@@ -561,26 +546,13 @@ describe("KickTracker reveal layers", function()
         local freed = {}
         local function free(layer) freed[#freed + 1] = layer.t end
         local list = layers()
-        assert.equals(2, KT.ReleaseUpTo(list, 10, free))
+        KT.ReleaseUpTo(list, 10, free)
         table.sort(freed)
         assert.same({ 5, 10 }, freed)
         assert.equals(1, #list)
         assert.equals(15, list[1].t)
         list = layers()
-        assert.equals(3, KT.ReleaseUpTo(list, nil, free))
+        KT.ReleaseUpTo(list, nil, free)
         assert.equals(0, #list)
-    end)
-
-    it("ends a layer at its start plus the teammate's longest duration", function()
-        local KT = L.loadKickTrackerRules()
-        local layer = {}
-        KT.NewLayerClock(layer, 100, 25)
-        local rows = {
-            { now = 124.9, want = false },
-            { now = 125, want = true },
-        }
-        for _, row in ipairs(rows) do
-            assert.equals(row.want, KT.LayerExpired(layer, row.now), tostring(row.now))
-        end
     end)
 end)

@@ -228,12 +228,10 @@ end
 
 -- A teammate's inspected facts. The row's kick follows the spec; a clock
 -- already running keeps the duration it started with, so new talents count
--- from the next cast. Returns true when the row's kick changed.
+-- from the next cast.
 function KT.LearnFacts(member, snap, row)
-    local oldID = member.interruptData and member.interruptData.id
     member.inspect = snap
     member.interruptData = row
-    return oldID ~= (row and row.id)
 end
 
 ---------------------------------------------------------------------------------
@@ -485,18 +483,15 @@ function KT.AdmitGate(member, cooling, prevCount, curCount, hasTotals)
 end
 
 -- Releases the list's layers that started at or before upto (all of them
--- when upto is nil), handing each to free. Returns how many went.
+-- when upto is nil), handing each to free.
 function KT.ReleaseUpTo(list, upto, free)
-    local n = 0
     for i = #list, 1, -1 do
         local layer = list[i]
         if upto == nil or layer.t <= upto then
             free(layer)
             table.remove(list, i)
-            n = n + 1
         end
     end
-    return n
 end
 
 -- A layer's clock runs from the update's time for the teammate's longest
