@@ -436,6 +436,33 @@ function DM:OnThemeChanged()
     self:ApplySettings()
 end
 
+-- Core/PixelPerfect.lua recomputes the pixel size on the same two events in no
+-- set order, so the relayout waits a frame; the flag folds the pair into one.
+function DM:OnScreenChanged()
+    if self._screenPending then return end
+    self._screenPending = true
+    C_Timer.After(0, function()
+        DM._screenPending = false
+        if not DM.enabled then return end
+        DM:ForgetGeometry()
+        DM:ApplySettings()
+    end)
+end
+
+-- Drops every snapped size and layout key, so the next layout recomputes all.
+function DM:ForgetGeometry()
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        W._snapHeight, W._snapSpacing, W._snapStride = nil, nil, nil
+        W._lwHeaderFontSize, W._lwHeaderH, W._lwCenterBtns = nil, nil, nil
+        W._lwVisibleBars, W._lwStride, W._lwSpacing = nil, nil, nil
+        W._headerH, W._contentH, W._renderContentH = nil, nil, nil
+        if W.bars then
+            for i = 1, #W.bars do W.bars[i]._layoutKey = nil end
+        end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Blizzard meter replacement
 --
@@ -899,6 +926,10 @@ function DM:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
     self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
+    -- A UI scale or display size change moves the pixel grid every cached size
+    -- was snapped to.
+    self:RegisterEvent("UI_SCALE_CHANGED", "OnScreenChanged")
+    self:RegisterEvent("DISPLAY_SIZE_CHANGED", "OnScreenChanged")
     self._specHarvestOpen = false
     self._sawOutOfCombat = false
 

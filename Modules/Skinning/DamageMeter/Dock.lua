@@ -63,10 +63,6 @@ end
 
 local DEBUG_DOCK_TEST = false
 
--- Inter-window / inter-column gap, snapped to the pixel grid once at file load.
--- A local const, not a DB key.
-local GAP = KE:PixelSnap(1)
-
 ---------------------------------------------------------------------------------
 -- Dock frame
 --
@@ -391,6 +387,9 @@ function DM:LayoutDock()
     self._dockHeaderH = headerH
     self._dockStride  = stride
     self._dockSpacing = spacing
+    -- The inter-window gap, snapped on every pass so a scale change re-snaps it.
+    local GAP = KE:PixelSnap(1)
+    self._dockGap = GAP
 
     -- Splitter boundary descriptors, rebuilt every layout pass. A reused scratch
     -- list (wiped at the top of each LayoutDock) so the structural path allocates
@@ -876,9 +875,6 @@ end
 -- an active drag, and are positioned on the structural LayoutDock pass.
 ---------------------------------------------------------------------------------
 
--- Hit-zone thickness (centered on each gap), snapped to the pixel grid once.
-local HITW = KE:PixelSnap(8)
-
 -- ROW drag tick: cursor DOWN (screen y decreases) grows the TOP pane. The pair's
 -- combined height (and ratio sum) is conserved; each pane is clamped to a header
 -- band + one bar minimum. COL drag tick: cursor RIGHT grows the LEFT column.
@@ -1087,6 +1083,9 @@ function DM:_LayoutSplitters()
 
     local pad = self:_BackdropPad()
     local level = dock:GetFrameLevel() + 10
+    -- Snapped per pass, so a scale change re-snaps them.
+    local GAP = self._dockGap or KE:PixelSnap(1)
+    local HITW = KE:PixelSnap(8)
 
     for i = 1, #specs do
         local spec = specs[i]
