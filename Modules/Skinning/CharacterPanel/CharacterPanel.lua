@@ -1396,7 +1396,6 @@ local function OnStatsScrollUpdate(box)
     C_Timer.After(0, OnStatsWalkTimer)
 end
 
--- A settings change: every visible row takes the new sizes now.
 local function RestyleStatsScrollRows()
     statsFontGen = statsFontGen + 1
     WalkStatsScrollRows()
@@ -1421,9 +1420,8 @@ function CP:SetupDecimalItemLevel()
     if self._decimalIlvlHooked then return end
     self._decimalIlvlHooked = true
 
-    -- The frame Blizzard wrote into: the stats pane's item level frame, or the
-    -- visible row where the stats are a scroll box. There the pane's own
-    -- frames are scratch frames for the stat math, so they are skipped.
+    -- Where the stats are scroll boxes, the pane's own frames are scratch
+    -- frames for the stat math.
     self:SecureHook("PaperDollFrame_SetItemLevel", function(statFrame, unit)
         if not self.db.DecimalItemLevel then return end
         if unit ~= "player" then return end
@@ -1555,9 +1553,7 @@ function CP:SetupStatTextHook()
     hooksecurefunc("PaperDollFrame_SetLabelAndText", function(statFrame)
         if not CP:IsEnabled() then return end
         if CharacterStatsPane and statFrame == CharacterStatsPane.ItemLevelFrame then return end
-        -- Where the stats are scroll boxes, their rows (player and pet) take
-        -- fonts only from the stamped pass, and the pane's own frames are
-        -- scratch frames.
+        -- Scroll box rows take fonts only from the stamped pass.
         if StatsListsAreScrollBoxes() then return end
         local statsSize = CP.db.StatsFontSize or 12
         if statFrame.Label then CP:ApplyFont(statFrame.Label, statsSize) end
