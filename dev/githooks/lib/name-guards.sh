@@ -13,6 +13,11 @@ ng_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # version stamps by right, and the comment rules govern what this project
 # writes, not what it embeds.
 ng_paths=('*.lua' '*.xml' ':(exclude)dev/*' ':(exclude).claude/*' ':(exclude)Libs/*')
+# dev/scripts gets the provenance rules only: tooling comments legitimately
+# cite References/ paths, dates and file:line positions, so the history and
+# date rules stay off there. check-references-folders.lua documents the
+# References/ folder rule, naming a folder by example, so it is not scanned.
+ng_dev_paths=('dev/scripts/*.lua' ':(exclude)dev/scripts/check-references-folders.lua')
 
 # Plan-step references, review/session history, file:line citations.
 ng_history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per the plan|References/|\bv[0-9]+\.[0-9]+|\.(lua|xml):[0-9]+'
@@ -84,7 +89,7 @@ ng_load() {
     local tag="$1"; shift
     ng_names_file="$ng_dir/upstream-names.local.sh"
     if [ ! -f "$ng_names_file" ]; then
-        echo "[$tag] BLOCKED: missing local word list $ng_names_file (restore it from the local backup; format is in dev/README.md). Override with --no-verify" >&2
+        echo "[$tag] BLOCKED: missing local word list $ng_names_file (it has no tracked copy: restore it from the private copy you keep outside the checkout; the format is in dev/README.md). Override with --no-verify" >&2
         return 1
     fi
     unset stems shorts compat provenance namesCI namesCS
@@ -161,25 +166,29 @@ ng_comment_tails() {
     '
 }
 
-# ng_staged_comments — added comment lines in the index. Returns 1 when git
-# itself failed, so a broken call can never read as a clean scan.
+# ng_staged_comments [dev] — added comment lines in the index, from ng_paths
+# or, with dev, from ng_dev_paths. Returns 1 when git itself failed, so a
+# broken call can never read as a clean scan.
 ng_staged_comments() {
-    local out
-    out="$(git diff -U0 --no-color --cached -- "${ng_paths[@]}")" || return 1
+    local out paths=("${ng_paths[@]}")
+    if [ "${1:-}" = dev ]; then paths=("${ng_dev_paths[@]}"); fi
+    out="$(git diff -U0 --no-color --cached -- "${paths[@]}")" || return 1
     ng_comment_tails "$out"
 }
 
-# ng_commit_comments <sha> — added comment lines in ONE commit. Per-commit,
-# not endpoint to endpoint: a comment added in one commit and removed in a
-# later one is invisible to a range diff yet still published. A merge is
-# diffed against its first parent, so text invented while resolving a
-# conflict is caught too.
+# ng_commit_comments <sha> [dev] — added comment lines in ONE commit, from
+# ng_paths or, with dev, from ng_dev_paths. Per-commit, not endpoint to
+# endpoint: a comment added in one commit and removed in a later one is
+# invisible to a range diff yet still published. A merge is diffed against
+# its first parent, so text invented while resolving a conflict is caught
+# too.
 ng_commit_comments() {
-    local out
+    local out paths=("${ng_paths[@]}")
+    if [ "${2:-}" = dev ]; then paths=("${ng_dev_paths[@]}"); fi
     if git rev-parse -q --verify "$1^" >/dev/null 2>&1; then
-        out="$(git diff -U0 --no-color "$1^" "$1" -- "${ng_paths[@]}")" || return 1
+        out="$(git diff -U0 --no-color "$1^" "$1" -- "${paths[@]}")" || return 1
     else
-        out="$(git show --format= -U0 --no-color "$1" -- "${ng_paths[@]}")" || return 1
+        out="$(git show --format= -U0 --no-color "$1" -- "${paths[@]}")" || return 1
     fi
     ng_comment_tails "$out"
 }
@@ -216,14 +225,16 @@ ng_scan_text() {
     return 0
 }
 
-# ng_scan_comments <tag> <noun> <comment lines> — the full comment rule set.
+# ng_scan_comments <tag> <noun> <comment lines> [dev] — the full comment rule
+# set; with dev, the provenance rules alone, without the history and date
+# rules (ng_dev_paths says why).
 ng_scan_comments() {
-    local tag="$1" noun="$2" comments="$3" fail=0 hits chits hhits provlines ohits
+    local tag="$1" noun="$2" comments="$3" mode="${4:-}" fail=0 hits chits hhits provlines ohits
     [ -n "$comments" ] || return 0
-    # namesCI holds names that are not English or WoW words, so they scan
-    # case-insensitively; namesCS holds names that double as plausible WoW
-    # words and only match capitalized.
-    hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
+    # shorts and namesCI hold names that are not English or WoW words, so
+    # they scan case-insensitively at word boundaries; namesCS holds names
+    # that double as plausible WoW words and only match capitalized.
+    hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$shorts"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
     if [ -n "$hits" ]; then
         echo "[$tag] BLOCKED: $noun — personal/agent/upstream names: $hits" >&2
         fail=1
@@ -239,14 +250,20 @@ ng_scan_comments() {
         echo "[$tag] BLOCKED: $noun — origin vocabulary (an unnamed upstream is still provenance): $ohits" >&2
         fail=1
     fi
-    hhits="$( { printf '%s\n' "$comments" | grep -nE "$ng_history"; printf '%s\n' "$comments" | grep -niE "$ng_dates"; } | sort -u || true)"
-    if [ -n "$hhits" ]; then
-        echo "[$tag] BLOCKED: $noun — plan-step/date/history references:" >&2
-        printf '%s\n' "$hhits" | sed -n '1,5p' >&2
-        fail=1
+    if [ "$mode" != dev ]; then
+        hhits="$( { printf '%s\n' "$comments" | grep -nE "$ng_history"; printf '%s\n' "$comments" | grep -niE "$ng_dates"; } | sort -u || true)"
+        if [ -n "$hhits" ]; then
+            echo "[$tag] BLOCKED: $noun — plan-step/date/history references:" >&2
+            printf '%s\n' "$hhits" | sed -n '1,5p' >&2
+            fail=1
+        fi
     fi
     if [ "$fail" -eq 1 ]; then
-        echo "[$tag] Comment rules: decisions stand on their own — no names, no origin, no plan steps, no dates, no session history in shipped comments." >&2
+        if [ "$mode" = dev ]; then
+            echo "[$tag] Dev-script comments: no names and no origin wording; dates and References/ paths are allowed there." >&2
+        else
+            echo "[$tag] Comment rules: decisions stand on their own — no names, no origin, no plan steps, no dates, no session history in shipped comments." >&2
+        fi
         return 1
     fi
     return 0

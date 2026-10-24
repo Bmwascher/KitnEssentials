@@ -138,9 +138,10 @@ with a notice rather than blocking (CI still runs everything).
 The `commit-msg` and `pre-commit` guards match against a word list kept in
 `dev/githooks/upstream-names.local.sh`, which is gitignored: this repo is
 public, and publishing the list leaks the provenance the guards exist to keep
-out of history and shipped comments. Restore it from the local backup after a
-re-clone, alongside `.claude/` and `AGENTS.md`. Both guards block outright
-when the file is absent rather than waving everything through. Format:
+out of history and shipped comments. The list has no tracked copy, so keep a
+private copy outside the checkout and restore it from there after a re-clone,
+alongside `.claude/` and `AGENTS.md`. Both guards block outright when the file
+is absent rather than waving everything through. Format:
 
 ```sh
 stems='a|b|c'      # reference sources, matched anywhere in a token
@@ -159,8 +160,8 @@ ElvUI skin path" does not. Moving a name between the two sets is a one-line
 edit, and beats living on `--no-verify`.
 
 `commit-msg` uses `stems`, `shorts`, `compat`, and `provenance`; `pre-commit`
-uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
-when any set it needs is missing or empty.
+uses all of those plus `namesCI` and `namesCS`. A guard blocks when any set it
+needs is missing or empty.
 
 Every guard also blocks origin vocabulary that names no addon: "the upstream
 reference", "reference fix", "build 745", "ported verbatim". An unnamed
@@ -169,6 +170,16 @@ and why it is right, never where it came from. That pattern is `ng_origin` in
 `dev/githooks/lib/name-guards.sh`, tracked because it is ordinary English, and
 it scrubs the API reference clone first so "api reference" and
 "reference build 12.1.0.69382" pass.
+
+`dev/scripts/*.lua` comments get a second scan with the provenance rules
+only: the names, the short names, the origin vocabulary and the compat gate,
+but not the history and date rules, because tooling comments legitimately
+cite `References/` paths, dates and `file.lua:N` positions.
+`check-references-folders.lua` stays out of it, since it documents the
+`References/` folder rule. `pre-commit` and `pre-push` run it beside the
+shipped scan; `ng_dev_paths` in `dev/githooks/lib/name-guards.sh` is its path
+set. The extractor reads Lua and XML comments only, so `.ps1` and `.sh` files
+are swept by hand.
 
 `pre-commit` also reads the added code lines of the staged diff (comments
 stripped) and blocks `COMBAT_LOG_EVENT_UNFILTERED`,
@@ -210,6 +221,8 @@ strings from an accepted false positive to a correctness requirement.
 Which tier a name belongs in is not a judgment call: anything this project
 names in its own comments goes in `compat`, including a module that kept the
 title it was ported under and an addon the conflict registry documents.
+`compat` is matched inside words, not at word boundaries, so a short entry
+carries `\b` bounds, or a three-letter name matches inside longer words.
 `stems` is for names that never legitimately appear. The list is gitignored,
 so no diff review can check that, and
 
@@ -217,8 +230,9 @@ so no diff review can check that, and
 bash dev/scripts/check-comment-guards.sh
 ```
 
-is what does: it loads the list and fails if any name in `stems`, `namesCI` or
-`namesCS` appears in a shipped comment at HEAD. It reads the committed tree,
+is what does: it loads the list and fails if any name in `stems`, `shorts`,
+`namesCI` or `namesCS` appears in a shipped comment at HEAD. It reads the
+committed tree,
 so an uncommitted edit cannot talk it into passing, and it feeds each file to
 the hooks' own extractor as a synthetic diff, so block comment bodies are read
 by the one parser rather than a second approximation of it. Run it after every

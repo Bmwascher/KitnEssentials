@@ -250,9 +250,10 @@ try {
         $probeRel = 'Modules/QoL/_hooktest_probe.lua'
         $probeAbs = Join-Path $feature ($probeRel -replace '/', '\')
         $stubAbs = Join-Path $feature 'dev\Annotations\KE.lua'
-        $stage = { param($name, $code, $expect, $stubLine = $null)
-            [System.IO.File]::WriteAllText($probeAbs, $code)
-            git -C $feature add -- $probeRel 2>&1 | Out-Null
+        $stage = { param($name, $code, $expect, $stubLine = $null, $rel = $probeRel)
+            $abs = Join-Path $feature ($rel -replace '/', '\')
+            [System.IO.File]::WriteAllText($abs, $code)
+            git -C $feature add -- $rel 2>&1 | Out-Null
             if ($stubLine) {
                 [System.IO.File]::AppendAllText($stubAbs, "`n$stubLine`n")
                 git -C $feature add -- dev/Annotations/KE.lua 2>&1 | Out-Null
@@ -260,9 +261,9 @@ try {
             Push-Location $feature
             try { & $bash $pc 2>&1 | Out-Null; $code_ = $LASTEXITCODE } finally { Pop-Location }
             Check "pre-commit $expect`: $name" ($code_ -eq $(if ($expect -eq 'block') { 1 } else { 0 }))
-            git -C $feature reset -q -- $probeRel dev/Annotations/KE.lua 2>&1 | Out-Null
+            git -C $feature reset -q -- $rel dev/Annotations/KE.lua 2>&1 | Out-Null
             git -C $feature checkout -q -- dev/Annotations/KE.lua 2>&1 | Out-Null
-            Remove-Item $probeAbs -Force -ErrorAction SilentlyContinue
+            Remove-Item $abs -Force -ErrorAction SilentlyContinue
         }
         & $stage 'restricted combat log event'      "local f = CreateFrame('Frame')`nf:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')`n" 'block'
         & $stage 'restricted combat log accessor'   "local a = CombatLogGetCurrentEventInfo()`n" 'block'
@@ -278,6 +279,9 @@ try {
         & $stage 'new KE. assignment without a stub' "KE.HookTestProbe = function(a) return a end`n" 'block'
         & $stage 'new KE: method with a staged stub' "function KE:HookTestProbe(a) return a end`n" 'pass' "---@param a any`n---@return any`nfunction KE:HookTestProbe(a) end"
         & $stage 'plain code'                       "local x = 1`nreturn x`n" 'pass'
+        & $stage 'short name in a comment'          "-- matches the nui layout`nlocal x = 1`n" 'block'
+        & $stage 'origin vocabulary in a dev-script comment' "-- copied from the upstream tool`nlocal x = 1`n" 'block' $null 'dev/scripts/_hooktest_probe.lua'
+        & $stage 'date in a dev-script comment'     "-- probed 2026-10-23 against the live client`nlocal x = 1`n" 'pass' $null 'dev/scripts/_hooktest_probe.lua'
         # A staged deletion of the stub file must block a new method outright.
         git -C $feature rm -q --cached dev/Annotations/KE.lua 2>&1 | Out-Null
         [System.IO.File]::WriteAllText($probeAbs, "function KE:HookTestProbe(a) return a end`n")

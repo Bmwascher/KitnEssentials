@@ -121,11 +121,13 @@ for _line in "${pushed_refs[@]}"; do
     for _c in $_new; do
         if ! _short="$(git rev-parse --short "$_c")" \
             || ! _comments="$(ng_commit_comments "$_c")" \
+            || ! _dev_comments="$(ng_commit_comments "$_c" dev)" \
             || ! _msg="$(git log -1 --format='%s%n%b' "$_c")"; then
             echo "[pre-push] BLOCKED: could not read commit $_c." >&2
             exit 1
         fi
-        if ! ng_scan_comments pre-push "comments added in commit $_short" "$_comments"; then
+        if ! ng_scan_comments pre-push "comments added in commit $_short" "$_comments" \
+            || ! ng_scan_comments pre-push "dev-script comments added in commit $_short" "$_dev_comments" dev; then
             echo "[pre-push] Fix the comments and amend or rebase, or override a deliberate exception with: git push --no-verify" >&2
             exit 1
         fi

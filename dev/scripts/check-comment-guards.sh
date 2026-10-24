@@ -16,7 +16,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 # shellcheck source=/dev/null
 . dev/githooks/lib/name-guards.sh
-ng_load check-comment-guards stems compat provenance namesCI namesCS || exit 1
+ng_load check-comment-guards stems shorts compat provenance namesCI namesCS || exit 1
 
 # Read the committed tree, never the working tree: an uncommitted edit must
 # not let the audit pass while HEAD still breaks the invariant. Each file is
@@ -77,15 +77,16 @@ ng_collect() {
 
 fail=0
 if ! h_stems="$(ng_collect -io "$stems")" \
+    || ! h_sh="$(ng_collect -iwo "$shorts")" \
     || ! h_ci="$(ng_collect -iwo "$namesCI")" \
     || ! h_cs="$(ng_collect -wo "$namesCS")"; then
     echo "[check-comment-guards] BLOCKED: a match pass failed to run." >&2
     exit 1
 fi
-if [ -n "$h_stems$h_ci$h_cs" ]; then
-    hits="$(printf '%s %s %s' "$h_stems" "$h_ci" "$h_cs" | tr '\n' ' ')"
+if [ -n "$h_stems$h_sh$h_ci$h_cs" ]; then
+    hits="$(printf '%s %s %s %s' "$h_stems" "$h_sh" "$h_ci" "$h_cs" | tr '\n' ' ')"
     echo "[check-comment-guards] FAIL: shipped comments name: $hits" >&2
-    git grep -inE "$stems" HEAD -- "${ng_paths[@]}" 2>/dev/null | sed -n '1,5p' >&2 || true
+    { git grep -inwE "$shorts" HEAD -- "${ng_paths[@]}"; git grep -inE "$stems" HEAD -- "${ng_paths[@]}"; } 2>/dev/null | sed -n '1,5p' >&2 || true
     echo "[check-comment-guards] Move those to compat, or rename what the code calls itself." >&2
     fail=1
 fi

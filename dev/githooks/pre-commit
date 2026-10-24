@@ -3,6 +3,8 @@
 # impersonal") ban personal/agent names, upstream addon names, plan-step
 # references, dates, and review/session history from shipped source comments.
 # Broken 8+ times before this hook; every instance was greppable.
+# dev/scripts/*.lua comments get the provenance rules only (ng_dev_paths in
+# lib/name-guards.sh).
 # Also on added code lines: restricted combat-log identifiers, the AceEvent
 # RegisterUnitEvent misuse, and a new public KE: method with no stub in
 # dev/Annotations/KE.lua.
@@ -19,7 +21,7 @@ fi
 
 # Loaded before the empty-diff exit, so a missing word list is caught on every
 # commit rather than only on the ones that happen to touch a comment.
-ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
+ng_load pre-commit stems shorts compat provenance namesCI namesCS || exit 1
 
 if ! staged="$(git diff -U0 --no-color --cached -- "${ng_paths[@]}")"; then
     echo "[pre-commit] BLOCKED: could not read the staged diff." >&2
@@ -28,6 +30,17 @@ fi
 # American spelling on every added line of every staged file, not only the
 # comment-guard paths; the rule and its allow list live in the script.
 bash "$(dirname "$0")/../scripts/check-spelling.sh" --staged || exit 1
+
+# Before the empty-diff exit below, which reads only the shipped paths: a
+# commit that stages dev scripts alone must still be scanned.
+if ! dev_comments="$(ng_staged_comments dev)"; then
+    echo "[pre-commit] BLOCKED: could not read the staged dev-script diff." >&2
+    exit 1
+fi
+if ! ng_scan_comments pre-commit "staged dev-script comments" "$dev_comments" dev; then
+    echo "[pre-commit] Fix the lines, or override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
+fi
 
 [ -n "$staged" ] || exit 0
 
