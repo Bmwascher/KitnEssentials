@@ -92,6 +92,20 @@ function KE:FilterAvailableEntries(entries)
     return kept
 end
 
+-- Entries are { key = ... } tables: Frame Skins and Addon Skins rows. The
+-- frame-skin policy answers on every load, retail included, and a new table
+-- comes back.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableFrameSkins(entries)
+    local kept = {}
+    for i = 1, #entries do
+        local entry = entries[i]
+        if self:IsFrameSkinAvailable(entry.key) then kept[#kept + 1] = entry end
+    end
+    return kept
+end
+
 -- Skin registration keys a baseline load runs: the admitted window skins,
 -- plus Dialogs, the global font sweep, the shared dropdown list and the
 -- Context Menus row. Kept apart from the feature ids above so a skin key can

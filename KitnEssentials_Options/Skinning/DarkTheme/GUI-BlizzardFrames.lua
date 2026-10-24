@@ -226,19 +226,12 @@ local DROPDOWN_H = 40
 local function SortByText(list)
     table.sort(list, function(a, b) return a.text < b.text end)
 end
--- Rows for skins this client withholds leave the list before anything reads
--- it, so neither a row nor the bulk toggle can write a withheld choice, and a
+-- Rows for skins this client withholds leave both lists before anything reads
+-- them, so neither a row nor a bulk toggle can write a withheld choice, and a
 -- module-backed row never enables a module that is not loaded. A headless
--- load of this page has no policy and keeps every row, as on retail.
-local function AdmittedFrameSkins(list)
-    if not KE.IsFrameSkinAvailable then return list end
-    local kept = {}
-    for _, entry in ipairs(list) do
-        if KE:IsFrameSkinAvailable(entry.key) then kept[#kept + 1] = entry end
-    end
-    return kept
-end
-FRAME_SKINS = AdmittedFrameSkins(FRAME_SKINS)
+-- load of this page has no policy and keeps every row.
+FRAME_SKINS = KE.FilterAvailableFrameSkins and KE:FilterAvailableFrameSkins(FRAME_SKINS) or FRAME_SKINS
+ADDON_SKINS = KE.FilterAvailableFrameSkins and KE:FilterAvailableFrameSkins(ADDON_SKINS) or ADDON_SKINS
 SortByText(FRAME_SKINS)
 SortByText(ADDON_SKINS)
 

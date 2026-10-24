@@ -1306,6 +1306,12 @@ function KE:EnhanceDualSpec(db) end
 ---@return table[]
 function KE:FilterAvailableEntries(entries) end
 
+--- The entries ({ key = ... }) whose skin key this client admits, in input
+--- order; always a new table.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableFrameSkins(entries) end
+
 --- Whether a skin registered under key may run and show a Frame Skins row.
 --- A retail load admits every key; a baseline load only its admitted windows.
 ---@param key string?

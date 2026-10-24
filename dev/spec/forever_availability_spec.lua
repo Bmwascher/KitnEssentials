@@ -165,4 +165,19 @@ describe("Forever availability: frame skins", function()
             assert.equals(row.want, KE:IsFrameSkinAvailable(row.key), row.load .. " " .. tostring(row.key))
         end
     end)
+
+    -- The rows the Frame Skins and Addon Skins cards draw. Mail and Dialogs
+    -- stand for admitted rows, Friends for a withheld one.
+    it("keeps the admitted entries in input order after a baseline load and every admitted entry after a retail load", function()
+        local ENTRIES = { { key = "Mail" }, { key = "Friends" }, { key = "Dialogs" } }
+        for _, row in ipairs({
+            { load = "baseline", baseline = true, want = { "Mail", "Dialogs" } },
+            { load = "retail",   baseline = nil,  want = { "Mail", "Friends", "Dialogs" } },
+        }) do
+            local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = row.baseline })
+            local keys = {}
+            for i, entry in ipairs(KE:FilterAvailableFrameSkins(ENTRIES)) do keys[i] = entry.key end
+            assert.same(row.want, keys, row.load)
+        end
+    end)
 end)
