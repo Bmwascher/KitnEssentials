@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.5
+
+### WoW Forever
+
+- System Optimization, with Forever's graphics values; the Mythic+ card is
+  hidden and rows for settings the client lacks are left out
+- The CVars page (General and Dev) and UI Scaling (General, Core Panels,
+  Services), with Forever's windows, including Progress Legacy
+- Version Check
+- `/kes mt` says the Mythic+ Timer is not available
+- Retail profile strings import, and the chat line names any turned-on
+  features this client does not have
+- Not yet tested on the live Forever client
+
+### General
+
+- System Optimization counts a graphics setting the game refuses as
+  "could not be applied"
+- A damaged block in an imported profile string is skipped instead of
+  breaking that setting
+
+---
+
 ## v4.14.4
 
 ### WoW Forever
