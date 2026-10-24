@@ -83,6 +83,12 @@ local FOREVER_ALLOWED = {
     PanelScale = true,
     MapScale = true,
     VersionCheck = true,
+    -- Character Panel: the module, its inspect half, the comparison header
+    -- and the page. Its Mythic+, track, socket, enchant rank, widen and
+    -- window button options stay withheld.
+    CharacterPanel = true,
+    InspectPanel = true,
+    CompareHeader = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.

@@ -9,6 +9,8 @@
     <Script file="Core\CVars\CVars.lua" />
     <Script file="Core\Optimize.lua" />
     <Script file="Core\VersionCheck.lua" />
+    <Script file="Skinning\CharacterPanel\CharacterPanel.lua" />
+    <Script file="Skinning\CharacterPanel\InspectPanel.lua" />
     <Script file="Core\CVars\PanelScaleRegistry.lua" />
     <Script file="Core\CVars\PanelScale.lua" />
     <Script file="Core\CVars\MapScale.lua" />
@@ -37,6 +39,7 @@
     <Script file="Skinning\DarkTheme\LootRoll.lua" />
     <Script file="Skinning\DarkTheme\LootRollBars.lua" />
     <Script file="Skinning\DarkTheme\LootFrame.lua" />
+    <Script file="Skinning\CharacterPanel\CompareHeader.lua" />
     <Include file="Skinning\DarkTheme\Frames\Frames-Camelot.xml" />
     <Include file="Skinning\DarkTheme\Addons\Addons-Camelot.xml" />
     <Include file="Skinning\DamageMeter\DamageMeter.xml" />
