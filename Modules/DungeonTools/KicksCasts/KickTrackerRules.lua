@@ -381,6 +381,15 @@ function KT.NewFightAt(sid, baseSid, shrank)
     return sid ~= nil and baseSid ~= nil and sid > baseSid
 end
 
+-- The Current session's ID from an Interrupts update's plain sessionID, or
+-- nil. Every update comes twice, once for the Overall session with 0, so only
+-- a positive ID names a session; taken, a 0 would hide the Current ID or read
+-- as a new fight against it.
+function KT.CurrentSessionOf(id)
+    if type(id) ~= "number" or id <= 0 then return nil end
+    return id
+end
+
 -- Each owner's list growth over the baseline, and their entries, a pet's
 -- counted for its owner. Fills growth and entries.
 function KT.OwnerGrowth(n, prevN, growth, entries)

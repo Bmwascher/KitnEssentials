@@ -481,7 +481,7 @@ end
 -- The preview keeps the baseline current instead.
 function KT:OnMeterUpdate(_, meterType, sessionID)
     if not METER_INTERRUPTS or issecretvalue(meterType) or meterType ~= METER_INTERRUPTS then return end
-    local sid = PlainNumber(sessionID)
+    local sid = KT.CurrentSessionOf(PlainNumber(sessionID))
     if sid then self._meterSid = sid end
     if self._meterReadPending then return end
     self._meterReadPending, self._meterSid = true, sid

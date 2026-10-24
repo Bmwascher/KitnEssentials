@@ -613,3 +613,17 @@ describe("KickTracker new fight with a failed read", function()
         assert.same({}, read.rows)
     end)
 end)
+
+describe("KickTracker update session ID", function()
+    it("takes a positive ID as the Current session's, and neither the Overall update's 0 nor no ID", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the Current session's ID", id = 12, want = 12 },
+            { name = "the Overall update's 0", id = 0, want = nil },
+            { name = "no ID", id = nil, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.CurrentSessionOf(row.id), row.name)
+        end
+    end)
+end)
