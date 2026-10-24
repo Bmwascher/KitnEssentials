@@ -110,6 +110,7 @@ SS.editModeRegistered = false
 SS.versCached = nil
 SS.classHex = nil
 SS.pending = false
+SS.unitEventFrame = nil
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -125,14 +126,19 @@ local function ToHex(r, g, b)
     return KE:RGBAToHex(r, g, b)
 end
 
--- Cache only a RESOLVED class color. Caching the white fallback leaves the
--- labels white for the session when the first paint beats the color system.
 -- UnitClass is SecretWhenUnitIdentityRestricted and a secret must not index a
--- table, so the class is tested before the colors[class] lookup.
-function SS:ClassHex()
-    if self.classHex then return self.classHex end
+-- table, so a secret class reads as nil.
+function SS:ClassFile()
     local _, class = UnitClass("player")
     if issecretvalue and issecretvalue(class) then return nil end
+    return class
+end
+
+-- Cache only a RESOLVED class color. Caching the white fallback leaves the
+-- labels white for the session when the first paint beats the color system.
+function SS:ClassHex()
+    if self.classHex then return self.classHex end
+    local class = self:ClassFile()
     local colors = _G.RAID_CLASS_COLORS
     local color = class and colors and colors[class]
     if color then
@@ -141,7 +147,7 @@ function SS:ClassHex()
     return self.classHex
 end
 
-function SS:LabelHex(key)
+function SS:LabelHex(key, paletteHex)
     local db = self.db
     if TERTIARY[key] then
         if db.TertiaryColorMode == "custom" and db.TertiaryColor then
@@ -155,11 +161,15 @@ function SS:LabelHex(key)
     if db.ColorMode == "class" then
         return self:ClassHex() or "ffffff"
     end
-    return STAT_HEX[key] or "ffffff"
+    return paletteHex or STAT_HEX[key] or "ffffff"
 end
 
-function SS:Label(key)
+function SS:Label(key, row)
     local db = self.db
+    if row then
+        if db.LabelStyle == "short" then return row.short end
+        return row.label
+    end
     if db.LabelStyle == "short" then return SHORT_LABEL[key] end
     if db.LabelStyle == "custom" then
         local custom = db.CustomLabels and db.CustomLabels[key]
@@ -202,29 +212,64 @@ end
 ---------------------------------------------------------------------------------
 -- Render
 ---------------------------------------------------------------------------------
+-- The Forever stat catalog; its file loads on that client only.
+local FV = KE.SecondaryStatsForever
+
+-- Forever rows in catalog order. Each figure is read once and forwarded,
+-- never inspected; a number row takes the whole-number body.
+function SS:ForeverEntries()
+    local stats = self.db.Stats or {}
+    local classFile = self:ClassFile()
+    local entries = {}
+    for index = 1, #FV.order do
+        local key = FV.order[index]
+        if FV.IsShown(key, stats[key], classFile) then
+            local row = FV.byKey[key]
+            local entry = {
+                label = self:Label(key, row),
+                hex = self:LabelHex(key, row.hex),
+            }
+            if row.kind == "percent" then
+                entry.valueMode = "percent"
+                entry.percent = row.get()
+            else
+                entry.valueMode = "rating"
+                entry.rating = row.get()
+            end
+            entries[#entries + 1] = entry
+        end
+    end
+    return entries
+end
+
 function SS:UpdateDisplay()
     if not self.frame or not self.frame:IsShown() then return end
     local db = self.db
     local Format = KE.SecondaryStatsFormat
 
-    local entries = {}
-    local keys = Format.VisibleKeys(db.Order, db.Stats or {})
-    for index = 1, #keys do
-        local key = keys[index]
-        local mode = db.Stats[key].ValueMode or "percent"
-        -- Plain `if`, not an `and`/`or` chain: that idiom would evaluate the
-        -- truthiness of the figure it just read, and a restricted figure
-        -- refuses exactly that.
-        local percentValue, ratingValue
-        if mode ~= "rating" then percentValue = self:ReadPercent(key) end
-        if mode ~= "percent" then ratingValue = self:ReadRating(key) end
-        entries[#entries + 1] = {
-            label = self:Label(key),
-            hex = self:LabelHex(key),
-            valueMode = mode,
-            percent = percentValue,
-            rating = ratingValue,
-        }
+    local entries
+    if FV then
+        entries = self:ForeverEntries()
+    else
+        entries = {}
+        local keys = Format.VisibleKeys(db.Order, db.Stats or {})
+        for index = 1, #keys do
+            local key = keys[index]
+            local mode = db.Stats[key].ValueMode or "percent"
+            -- Plain `if`, not an `and`/`or` chain: that idiom would evaluate the
+            -- truthiness of the figure it just read, and a restricted figure
+            -- refuses exactly that.
+            local percentValue, ratingValue
+            if mode ~= "rating" then percentValue = self:ReadPercent(key) end
+            if mode ~= "percent" then ratingValue = self:ReadRating(key) end
+            entries[#entries + 1] = {
+                label = self:Label(key),
+                hex = self:LabelHex(key),
+                valueMode = mode,
+                percent = percentValue,
+                rating = ratingValue,
+            }
+        end
     end
 
     local template, vals = Format.BuildRows(entries, {
@@ -415,6 +460,7 @@ function SS:StartForSpec()
         self:RegisterEvent(STAT_EVENTS[index], "OnStatEvent")
     end
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    if FV then self:RegisterForeverEvents() end
 
     self.frame:Show()
     -- Re-applied even when the gate was already open, because this is also the
@@ -422,11 +468,26 @@ function SS:StartForSpec()
     self:ApplyLayout()
 end
 
+-- Forever's extra stat events, filtered to the player by the engine. AceEvent
+-- has no unit registration, so they get a frame of their own, made on first use.
+function SS:RegisterForeverEvents()
+    local frame = self.unitEventFrame
+    if not frame then
+        frame = CreateFrame("Frame")
+        frame:SetScript("OnEvent", function(_, event) self:OnStatEvent(event) end)
+        self.unitEventFrame = frame
+    end
+    for index = 1, #FV.events do
+        frame:RegisterUnitEvent(FV.events[index], "player")
+    end
+end
+
 function SS:StopForSpec()
     for index = 1, #STAT_EVENTS do
         self:UnregisterEvent(STAT_EVENTS[index])
     end
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    if self.unitEventFrame then self.unitEventFrame:UnregisterAllEvents() end
     self.pending = false
     -- The preview owns the frame while the settings page is open, so a spec the
     -- player just unticked still draws until they close the page.
@@ -450,6 +511,7 @@ end
 
 function SS:OnDisable()
     self:UnregisterAllEvents()
+    if self.unitEventFrame then self.unitEventFrame:UnregisterAllEvents() end
     if self.specTimer then
         self.specTimer:Cancel()
         self.specTimer = nil
