@@ -123,3 +123,23 @@ describe("Inspect slot: the pending retry bound", function()
         assert.is_nil(s.pendingRetries)
     end)
 end)
+
+describe("Inspect average: the spec gate", function()
+    -- Forever never reads the spec, so even a secret there opens without a
+    -- comparison; retail refuses a secret first and waits for a real id.
+    it("opens on Forever whatever the spec, and on retail only for a readable non-zero id", function()
+        local gate = loadIP()._SpecGateOpen
+        local cases = {
+            { name = "Forever, no spec", forever = true, spec = nil, want = true },
+            { name = "Forever, zero", forever = true, spec = 0, want = true },
+            { name = "Forever, secret, never compared", forever = true, spec = secret(), want = true },
+            { name = "retail, no spec", forever = false, spec = nil, want = false },
+            { name = "retail, zero", forever = false, spec = 0, want = false },
+            { name = "retail, secret, refused before any comparison", forever = false, spec = secret(), want = false },
+            { name = "retail, a spec id", forever = false, spec = 71, want = true },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, gate(c.forever, c.spec), c.name)
+        end
+    end)
+end)

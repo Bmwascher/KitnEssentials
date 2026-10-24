@@ -57,6 +57,7 @@ local TRACKS = Admitted("CharacterPanelTracks")
 local SOCKETS = Admitted("CharacterPanelSockets")
 local ENCHANT_RANK = Admitted("CharacterPanelEnchantRank")
 local WIDEN = Admitted("CharacterPanelWiden")
+local INSPECT_PANEL = Admitted("InspectPanel")
 
 -- Forever's missing-enchant rule: the Enchanting slots (enchantSlotButtons
 -- below), and only at that client's level cap.
@@ -4060,7 +4061,7 @@ function CP:ApplyInspectPanelState()
     -- `IsEnabled()` for the master, not `db.Enabled`. `CP:Disable()` is reachable
     -- without the key changing, so reading the key here would let a later GUI
     -- callback wake InspectPanel while CharacterPanel itself is disabled.
-    if self:IsEnabled() and self.db.InspectPanelEnabled ~= false then
+    if self:IsEnabled() and INSPECT_PANEL and self.db.InspectPanelEnabled ~= false then
         insp:Enable()
     else
         insp:Disable()
