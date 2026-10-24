@@ -730,6 +730,15 @@ function L.loadPartyCooldownsRules(data)
     return KE.PartyCooldownsRules, KE
 end
 
+-- Modules/Core/GroupInspect/GroupInspectRules.lua, the shared inspect queue's
+-- pure rules. Returns KE.GroupInspectRules, KE.
+function L.loadGroupInspectRules()
+    installMock(nil, {})
+    local KE = {}
+    helpers.loadModule("Modules/Core/GroupInspect/GroupInspectRules.lua", KE)
+    return KE.GroupInspectRules, KE
+end
+
 -- Modules/AuraTracking/PartyBuffs/PartyPotionsRules.lua beside the party
 -- cooldowns rules, whose stamp the cover range reads. Returns
 -- KE.PartyPotionsRules, KE.
