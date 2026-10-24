@@ -979,14 +979,11 @@ function S.RowHover(row)
     if row.SetHighlightTexture then
         armHover(row, row, true)
     elseif row.CreateTexture and row.HookScript then
-        -- AUDIT: never enable input on a row Blizzard left
-        -- mouse-disabled. This is our own hover standard, and it is the
-        -- exact call that put AES in the currency-transfer FORBIDDEN:
-        -- changing input state on Blizzard's rows drags us into
-        -- flows we have no business being in. If a row cannot take the
-        -- mouse, it does not get a manufactured hover: backdrop only,
-        -- no input changes. Tested before the texture is made, so a
-        -- refused row keeps nothing and can still be armed later.
+        -- AUDIT: never enable input on a row Blizzard left mouse-disabled.
+        -- Enabling it taints the currency-transfer flow, which then fails
+        -- as a forbidden action. Such a row gets a backdrop and no hover
+        -- texture. Tested before the texture is made, so a refused row
+        -- keeps nothing and can still be armed later.
         if row.IsMouseEnabled and not row:IsMouseEnabled() then
             return
         end
@@ -2328,14 +2325,11 @@ function S.Icon(icon, withBackdrop)
 end
 
 function S.ItemButton(button, opts)
-    -- (flyout equip taint, FINAL root): writing our dedupe
-    -- flag DIRECTLY ON Blizzard's button plants a tainted key in a
-    -- secure table -- contaminating iteration/field-fallback reads
-    -- Blizzard's item-button code performs mid-display-loop, which
-    -- tainted every subsequent button's location/id writes (the
-    -- combat flyout-equip ADDON_ACTION_BLOCKED). Same disease already
-    -- cured for ScrollBoxes; flag lives in S.data now. DOCTRINE:
-    -- NO AES-named fields on Blizzard frames, ever -- S.data only.
+    -- The dedupe flag lives in S.data, never on Blizzard's button: a key
+    -- written onto the button is tainted, Blizzard's item-button code
+    -- reads the table mid-display-loop, and every later button's
+    -- location/id write is tainted with it (ADDON_ACTION_BLOCKED on the
+    -- combat flyout equip). No addon fields on Blizzard frames; S.data only.
     if not button or S.data(button).itemSkinned then return end
 
     local keepAnchors = (opts == "keepAnchors")
@@ -2404,8 +2398,8 @@ function S.HookScrollBoxIcons(scrollBox, getIcon, withBackdrop)
         scrollBox:ForEachFrame(cropFrame)
     end
     apply()
-    -- same doctrine fix -- this planted an AES key directly on
-    -- a Blizzard ScrollBox, the exact object class cleaned up earlier.
+    -- The hook flag lives in S.data, not on the ScrollBox, for the same
+    -- taint reason as S.ItemButton.
     if scrollBox.Update and not S.data(scrollBox).keIconHook then
         hooksecurefunc(scrollBox, "Update", apply)
         S.data(scrollBox).keIconHook = true
