@@ -1,5 +1,12 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.1
+
+### Party Cooldowns
+
+- Party Cooldowns now show on DandersFrames party and arena frames, as they
+  already do on Blizzard's party frames and EllesmereUI's
+
 ## v4.14.0
 
 An update notice for new versions, a new K icon, and more Party Cooldowns
