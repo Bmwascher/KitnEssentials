@@ -479,28 +479,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Glow, while a buff is active
-    ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
-        title = "Glow",
-        db = db,
-        types = {
-            { key = "pixel",    text = "Pixel" },
-            { key = "ants",     text = "Ants" },
-            { key = "procloop", text = "Proc Loop" },
-            { key = "alert",    text = "Alert" },
-            { key = "border",   text = "Pulse Border" },
-        },
-        -- The pulse runs at a fixed rhythm.
-        showSpeed = function(glowType) return glowType ~= "border" end,
-        onChangeCallback = QueueApply,
-        onHeightChange = RebuildPage,
-    })
-    -- The buff icons glow too, so the card applies without the cooldown cells.
-    manager:Register(glowCard, "iconsOn")
-    yOffset = glowOffset
-
-    ----------------------------------------------------------------
     -- Card: Icon Position, one view per placement
     ----------------------------------------------------------------
     if activePlacement == nil then
@@ -586,6 +564,28 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     end
     cardPosition:AddRow(rowX3, Theme.rowHeightLast, 0)
     yOffset = cardPosition:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Glow, while a buff is active
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
+        title = "Glow",
+        db = db,
+        types = {
+            { key = "pixel",    text = "Pixel" },
+            { key = "ants",     text = "Ants" },
+            { key = "procloop", text = "Proc Loop" },
+            { key = "alert",    text = "Alert" },
+            { key = "border",   text = "Pulse Border" },
+        },
+        -- The pulse runs at a fixed rhythm.
+        showSpeed = function(glowType) return glowType ~= "border" end,
+        onChangeCallback = QueueApply,
+        onHeightChange = RebuildPage,
+    })
+    -- The buff icons glow too, so the card applies without the cooldown cells.
+    manager:Register(glowCard, "iconsOn")
+    yOffset = glowOffset
 
     ----------------------------------------------------------------
     -- Spell lists: one card for the active sub-tab
