@@ -217,9 +217,8 @@ end
 -- Edit Mode's writer, on the placed context's keys. While the starting place
 -- stands in for an anchor Placement cannot use, the mover works on the
 -- screen, so a moved position detaches the box and the starting place handed
--- back unchanged keeps the attachment. It places the box without resolving
--- again, so the box stays where it was dropped. A position measured under
--- another profile's settings is thrown away and the box placed fresh.
+-- back unchanged keeps the attachment. It never resolves the context, so the
+-- box stays where it was dropped.
 local function SetPosition(pos)
     local db = HX.pb.db
     if db ~= placedDB then return HX.ApplyPosition() end
