@@ -5,6 +5,7 @@
          retail list's relative order, because load order is behavior
          (Modules.xml). -->
     <Include file="Core\Diagnostics\Diagnostics.xml" />
+    <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="Skinning\DarkTheme\AlertFrames.lua" />
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
     <Script file="Skinning\DarkTheme\VehicleExit.lua" />
