@@ -14,11 +14,12 @@
 # itself starts the ranking, so only a strictly newer tag replaces it: a tie
 # or an older tag never reads as newer. A commit pin is compared with
 # upstream HEAD, which can move without touching the pinned subfolder.
-# Externals that share
-# a repository and a pin print as one line. Upstream answers are cached for
-# 20 hours in the git common dir (kitn-lib-updates.json, shared by every
-# worktree, never tracked); the pins are re-read on every run, so a moved pin
-# clears its note without a fetch. -Refresh ignores the cache. -Soft is the
+# Externals that share a repository and a pin print as one line. Upstream
+# answers are cached for 20 hours in the git common dir
+# (kitn-lib-updates.json, shared by every worktree, never tracked), keyed by
+# the pin; the pins are re-read on every run, so a moved commit pin clears its
+# note without a fetch, and a moved tag pin is asked once. -Refresh ignores
+# the cache. -Soft is the
 # session-start mode: exit 0 always, and an unreachable upstream is silent.
 # Output: "[libs] note" for a pin behind upstream, "[libs] FAIL" for an
 # external with no pin, "[libs] skip" for an upstream that could not be read.
@@ -203,7 +204,7 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
             $revs = if ($q.type -eq 'svn') { Get-SvnTagRevisions $raw[$q.key] } else { $null }
             $tags = if ($revs) { @($revs.Keys) } else { @(Get-TagNames $raw[$q.key]) }
             # A response with no tag in it is unread, never "up to date".
-            if (-not $tags.Count -or ($q.type -eq 'svn' -and -not $revs.Count)) { continue }
+            if (-not $tags.Count) { continue }
             $value = Get-NewestTag $tags $q.pinned $revs
             if (-not $value) { $value = $q.pinned }
         }
