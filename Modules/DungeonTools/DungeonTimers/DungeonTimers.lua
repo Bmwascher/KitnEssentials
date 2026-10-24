@@ -3245,7 +3245,7 @@ local function ReadCueCastBarID(result, ordinal)
     if not result or ordinal ~= result.ordinal or not UnitCastingInfo then return nil end
     local ok, castBarID = pcall(function() return select(10, UnitCastingInfo(result.unit)) end)
     if not ok or (issecretvalue and issecretvalue(castBarID)) then return nil end
-    if type(castBarID) ~= "number" then return nil end
+    if not State.IsCastBarId(castBarID) then return nil end
     return castBarID
 end
 
@@ -4266,7 +4266,7 @@ local SHIELD_FINISH_WINDOW = 2
 -- castBarID is documented as never secret; anything else counts as absent.
 local function PlainCastBarId(value)
     if issecretvalue and issecretvalue(value) then return nil end
-    if type(value) ~= "number" then return nil end
+    if not State.IsCastBarId(value) then return nil end
     return value
 end
 

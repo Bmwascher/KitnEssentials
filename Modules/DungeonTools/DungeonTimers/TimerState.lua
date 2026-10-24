@@ -260,6 +260,11 @@ local function isNonEmptyString(v)
     return type(v) == "string" and v ~= ""
 end
 
+-- Cast IDs are opaque and compared only with ==; callers screen secrets first.
+function State.IsCastBarId(v)
+    return isNonEmptyString(v) or isValidNumber(v)
+end
+
 local function isValidColor(c)
     if type(c) ~= "table" or #c ~= 3 then return false end
     for i = 1, 3 do
@@ -1696,7 +1701,7 @@ end
 
 function State.MatchCueInterrupt(store, watch, unit, castBarID, now)
     return not watch.completed and unit == watch.unit
-        and isValidNumber(castBarID) and isValidNumber(watch.castBarID)
+        and State.IsCastBarId(castBarID) and State.IsCastBarId(watch.castBarID)
         and castBarID == watch.castBarID and State.IsCueInterruptCurrent(store, watch, now)
 end
 
@@ -1904,7 +1909,7 @@ local CAST_CLOCK_TOLERANCE = 0.1
 function State.CastTimesFromEvidence(spells, startSpell, startBar, snapSpell, snapBar, startMs, endMs, now)
     if type(spells) ~= "table" or startSpell == nil or not spells[startSpell] then return nil, "not-allowed" end
     if snapSpell ~= startSpell then return nil, "snapshot-spell" end
-    if not isValidNumber(startBar) or snapBar ~= startBar then return nil, "cast-bar" end
+    if not State.IsCastBarId(startBar) or snapBar ~= startBar then return nil, "cast-bar" end
     if not isValidNumber(now) then return nil, "invalid-time" end
     if not isValidNumber(startMs) or not isValidNumber(endMs) or endMs <= startMs then return nil, "cast-times" end
     local castStart, castEnd = startMs / 1000, endMs / 1000
@@ -1981,7 +1986,7 @@ end
 
 -- One observed cast re-times at most one occurrence per pull.
 function State.TakeCastBar(store, encounterId, castBarId)
-    if not isValidNumber(castBarId) or not isValidNumber(encounterId) then return false end
+    if not State.IsCastBarId(castBarId) or not isValidNumber(encounterId) then return false end
     local seen = store.castBars[encounterId]
     if not seen then
         seen = {}
@@ -1993,7 +1998,7 @@ function State.TakeCastBar(store, encounterId, castBarId)
 end
 
 function State.IsCastBarUsed(store, encounterId, castBarId)
-    if not isValidNumber(castBarId) or not isValidNumber(encounterId) then return false end
+    if not State.IsCastBarId(castBarId) or not isValidNumber(encounterId) then return false end
     local seen = store.castBars[encounterId]
     return seen ~= nil and seen[castBarId] == true
 end

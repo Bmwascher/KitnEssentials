@@ -660,8 +660,8 @@ function DT:_WindMapCastStart(unit, spellID, castBarID)
     if spell ~= nil and spell ~= cfg.wind then return end
     local bar = Readable(castBarID)
     local token = Readable(unit)
-    if spell == nil or token == nil or type(bar) ~= "number" then
-        if type(bar) ~= "number" then bar = nil end
+    if spell == nil or token == nil or not State.IsCastBarId(bar) then
+        if not State.IsCastBarId(bar) then bar = nil end
         if Map.UnreadableCast(map, token, bar) then
             DT._dprint("windmap published-only reason=unreadable-cast")
         end
@@ -677,7 +677,7 @@ end
 function DT:_WindMapCastEnded(unit, castBarID, succeeded)
     local map = self._windMap
     local bar = Readable(castBarID)
-    if not map or type(bar) ~= "number" or Readable(unit) == nil then return end
+    if not map or not State.IsCastBarId(bar) or Readable(unit) == nil then return end
     if Map.CastEnded(map, unit, bar, succeeded) then self:_WindMapWake() end
 end
 

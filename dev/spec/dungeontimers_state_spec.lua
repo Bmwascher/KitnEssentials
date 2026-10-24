@@ -1273,6 +1273,10 @@ describe("DungeonTimers TimerState", function()
             { name = "already consumed", completed = true },
             { name = "new generation", replace = true },
             { name = "owner retired", retire = true },
+            { name = "equal string IDs", allowed = true, snapshotId = "cast-11", id = "cast-11" },
+            { name = "other string ID", snapshotId = "cast-11", id = "cast-12" },
+            { name = "number against its string spelling", snapshotId = "11", id = 11 },
+            { name = "empty IDs", snapshotId = "", id = "" },
         }
         for _, case in ipairs(cases) do
             local store = State.New()
@@ -1283,10 +1287,28 @@ describe("DungeonTimers TimerState", function()
             local id = case.id or 11
             if case.id == false then id = nil end
             if case.snapshot == false then watch.castBarID = nil end
+            if case.snapshotId ~= nil then watch.castBarID = case.snapshotId end
             if case.replace then State.NextSlot(store, "owner", "cue", "kick#plan") end
             if case.retire then State.RetireOwner(store, "owner") end
             assert.equal(case.allowed == true,
                 State.MatchCueInterrupt(store, watch, case.unit or "boss1", id, case.now or 1), case.name)
+        end
+    end)
+
+    it("a cast ID is a nonempty string or a finite number, never converted", function()
+        local cases = {
+            { name = "string", value = "cast-11", allowed = true },
+            { name = "number", value = 11, allowed = true },
+            { name = "empty string", value = "" },
+            { name = "NaN", value = 0 / 0 },
+            { name = "infinity", value = math.huge },
+            { name = "negative infinity", value = -math.huge },
+            { name = "nil", value = nil },
+            { name = "boolean", value = true },
+            { name = "table", value = {} },
+        }
+        for _, case in ipairs(cases) do
+            assert.equal(case.allowed == true, State.IsCastBarId(case.value), case.name)
         end
     end)
 
