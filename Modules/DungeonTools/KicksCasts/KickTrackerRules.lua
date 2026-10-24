@@ -492,3 +492,22 @@ function KT.LearnFacts(member, snap, row)
     return oldID ~= (row and row.id)
 end
 
+---------------------------------------------------------------------------------
+-- Nameplate kicker
+---------------------------------------------------------------------------------
+-- Who a nameplate interrupt's kicker is, from pcall(UnitTokenFromGUID,
+-- interruptedBy): "own" for the player or the pet; "member" and the party
+-- index for a plain party1-4 or partypet1-4 token (a pet credits its owner),
+-- even when the GUID is secret; "guid" for any other kicker whose token and
+-- GUID read plain; "hidden" otherwise.
+function KT.ClassifyKicker(callOk, token, tokenSecret, guidSecret)
+    if not callOk or tokenSecret then return "hidden" end
+    if type(token) == "string" then
+        if KT.IsOwnKickToken(token) then return "own" end
+        local index = token:match("^party([1-4])$") or token:match("^partypet([1-4])$")
+        if index then return "member", tonumber(index) end
+    end
+    if guidSecret then return "hidden" end
+    return "guid"
+end
+

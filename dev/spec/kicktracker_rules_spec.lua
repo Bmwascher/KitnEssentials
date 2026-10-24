@@ -152,21 +152,6 @@ describe("KickTracker success reduction", function()
     end)
 end)
 
-describe("KickTracker own-kick token", function()
-    it("takes only the player's own units as an own kick", function()
-        local KT = L.loadKickTrackerRules()
-        local rows = {
-            { name = "the player", token = "player", want = true },
-            { name = "the player's pet", token = "pet", want = true },
-            { name = "a teammate with a plain token", token = "party1", want = false },
-            { name = "a teammate's pet", token = "partypet1", want = false },
-        }
-        for _, row in ipairs(rows) do
-            assert.equals(row.want, KT.IsOwnKickToken(row.token), row.name)
-        end
-    end)
-end)
-
 describe("KickTracker own-kick duplicate", function()
     it("skips only the same kick inside the window", function()
         local KT = L.loadKickTrackerRules()
@@ -632,5 +617,32 @@ describe("KickTracker running clock", function()
         assert.equals(10, member.kickStart)
         assert.equals(25, member.kickDuration)
         assert.equals(20, KT.KickDuration(def, 62, rankOf, false))
+    end)
+end)
+
+describe("KickTracker nameplate kicker", function()
+    it("sorts the kicker by its token, a party pet to its owner, and anything unreadable as hidden", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the player", ok = true, token = "player", kind = "own" },
+            { name = "the player's pet", ok = true, token = "pet", kind = "own" },
+            { name = "a teammate, GUID secret", ok = true, token = "party2", guidSecret = true,
+              kind = "member", index = 2 },
+            { name = "a teammate's pet, GUID secret", ok = true, token = "partypet3", guidSecret = true,
+              kind = "member", index = 3 },
+            { name = "no token, GUID plain", ok = true, token = nil, kind = "guid" },
+            { name = "another plain token, GUID secret", ok = true, token = "nameplate4", guidSecret = true,
+              kind = "hidden" },
+            { name = "a party token outside 1-4, GUID secret", ok = true, token = "party5", guidSecret = true,
+              kind = "hidden" },
+            { name = "no token, GUID secret", ok = true, token = nil, guidSecret = true, kind = "hidden" },
+            { name = "a secret token", ok = true, token = "party1", tokenSecret = true, kind = "hidden" },
+            { name = "a failed call", ok = false, token = "error text", kind = "hidden" },
+        }
+        for _, row in ipairs(rows) do
+            local kind, index = KT.ClassifyKicker(row.ok, row.token, row.tokenSecret == true, row.guidSecret == true)
+            assert.equals(row.kind, kind, row.name)
+            assert.equals(row.index, index, row.name)
+        end
     end)
 end)
