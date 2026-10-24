@@ -1274,7 +1274,7 @@ KE.EncounterData[2143] = {
     phaseCues = {
         new_boss = { name = "New Boss", iconOverride = 269230, role = "other",
             source = { kind = "BossAppear", unit = "boss2" }, duration = 3,
-            display = "text", displayText = "NEW BOSS", color = { 1.0, 0.3, 0.8 }, showAtSeconds = 0 },
+            display = "text", displayText = "NEW BOSS", color = { 1.0, 0.3, 0.8 }, sound = "New Boss", showAtSeconds = 0 },
     },
     auraSounds = {
         { spellID = 1302945, trigger = "added", unit = "player", name = "Impaling Spear on you", sound = "Bleed" },
