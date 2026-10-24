@@ -402,7 +402,7 @@ function Handle:Refresh(guid, reason)
     end
 end
 
--- Only inside this owner's OnRead for guid, while the inspect data is valid.
+-- Only while the service hands out guid's answer, while the inspect data is valid.
 ---@param guid string
 ---@param specID number
 ---@param want table
