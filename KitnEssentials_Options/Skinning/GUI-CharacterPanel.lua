@@ -71,8 +71,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel(KE.IS_FOREVER
-        and "Adds to the character panel a decimal item level, a faction indicator and warnings for " ..
-            "missing enchants. The same per-slot readout can be drawn on the inspect window."
+        and "Adds to the character panel a decimal item level, item level and enchant text on each " ..
+            "slot, a faction indicator and warnings for missing enchants. The same per-slot readout " ..
+            "can be drawn on the inspect window."
         or "Adds to the character panel a decimal item level, your Mythic+ score, a faction " ..
             "indicator, upgrade track letters on each slot, warnings for missing enchants and gems, and " ..
             "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window.")

@@ -1126,7 +1126,8 @@ local function HookCharacterPanel()
             if CP.eventFrame then
                 CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
                 CP.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-                CP.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+                -- Only the gem scan requests item loads.
+                if SOCKETS then CP.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT") end
             end
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
@@ -1208,7 +1209,7 @@ local function HookCharacterPanel()
             if CP.socketContainer and CP.socketContainer:IsShown() then
                 QueueSocketRefresh()
             end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+            if CP:SlotDetailsWanted() then
                 CP:UpdateAllSlotDetails()
             end
         end
@@ -1338,6 +1339,18 @@ local function StatsRowStale(row, isItemLevel)
     return statsRowGen[row] ~= statsFontGen or statsRowIlvl[row] ~= isItemLevel
 end
 
+-- A stats row's item level text. The integer is the one Blizzard writes there,
+-- which never drops below the client's minimum item level. Nil while the
+-- average cannot be read.
+local function ItemLevelText(decimal)
+    local _, equipped = GetAverageItemLevel()
+    if not equipped then return nil end
+    if decimal then return string.format("%.2f", equipped) end
+    local getMin = C_PaperDollInfo and C_PaperDollInfo.GetMinItemLevel
+    local minLevel = getMin and getMin()
+    return string.format("%d", math.floor(math.max(minLevel or 0, equipped)))
+end
+
 local function StyleStatsScrollRow(row)
     local isItemLevel = IsItemLevelRow(row)
     if not StatsRowStale(row, isItemLevel) then return end
@@ -1355,13 +1368,8 @@ local function StyleStatsScrollRow(row)
         return
     end
     CP:ApplyFont(row.Value, db.IlvlValueSize or 16)
-    local _, equipped = GetAverageItemLevel()
-    if not equipped then return end
-    if db.Enabled and db.DecimalItemLevel then
-        row.Value:SetText(string.format("%.2f", equipped))
-    else
-        row.Value:SetText(string.format("%d", math.floor(equipped)))
-    end
+    local text = ItemLevelText(db.Enabled and db.DecimalItemLevel)
+    if text then row.Value:SetText(text) end
 end
 
 local function WalkStatsScrollRows()
@@ -1701,6 +1709,14 @@ CP._CraftedCrestTrack = CraftedCrestTrack
 -- key cannot draw letters where items carry no track.
 function CP:TrackLettersOn()
     return TRACKS and self.db.TrackIndicatorsEnabled and true or false
+end
+
+-- Any per-slot detail option on. The gem keys count only where gems are
+-- admitted: Show Missing Gems defaults on and would otherwise walk every slot.
+function CP:SlotDetailsWanted()
+    local db = self.db
+    return (db.ShowSlotItemLevel or db.ShowEnchantNames
+        or (SOCKETS and (db.ShowSlotGems or db.ShowMissingGems))) and true or false
 end
 
 -- Returns a WRAPPER, never an ITEM_TRACKS entry: the entries are a shared
@@ -2518,7 +2534,7 @@ function CP:RefreshSlot(slotID, unit)
 end
 
 function CP:UpdateAllSlotDetails()
-    if not (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems) then
+    if not self:SlotDetailsWanted() then
         self:HideAllSlotDetails()
         return
     end
@@ -4244,7 +4260,7 @@ function CP:OnEnable()
         if self.eventFrame then
             self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
             self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-            self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+            if SOCKETS then self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT") end
         end
         UpdateDisplay()                                   -- warnings
         self:RefreshSlotDisplays()

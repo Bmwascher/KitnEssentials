@@ -587,8 +587,7 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
             -- instead of flashing red empty-socket cues. Skip the cache write so
             -- the next retry re-evaluates fresh.
             CP:UpdateSlotWarning(button, unit, slotID)
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
-                or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+            if CP:SlotDetailsWanted() then
                 CP:UpdateSlotDetail(button, slotID, unit, true, data)
             end
             if CP:TrackLettersOn() then
@@ -606,8 +605,7 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
 
     CP:UpdateSlotWarning(button, unit, slotID)
     local fellBack, wDetail, wCorner
-    if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
-        or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+    if CP:SlotDetailsWanted() then
         fellBack, wDetail = CP:UpdateSlotDetail(button, slotID, unit, nil, data)
     end
     if CP:TrackLettersOn() then
