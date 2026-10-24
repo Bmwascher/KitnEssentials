@@ -1514,22 +1514,26 @@ end)
 describe("PartyCooldownsRules.SelfCheckStep", function()
     it("passes on two plain passes in a row, fails a miss at the cap, and counts a secret answer a miss", function()
         local R = loadRules()
-        local function isSecret(v) return type(v) == "table" and v.secret == true end
-        local hidden = { secret = true }
+        -- A secret row marks one answer of a pair that passes the plain test
+        -- (a true, b false) as secret, so only the secrecy test makes it a miss.
+        local function plain() return false end
+        local function aHidden(v) return v == true end
+        local function bHidden(v) return v == false end
         local cap = R.CHECK_TRIES
         local cases = {
-            { name = "a secret answer never passes", tries = 1, passes = 1, a = hidden, b = false,
-              want = { 0 } },
-            { name = "secret answers to the cap fail", tries = cap, passes = 0, a = true, b = hidden,
-              want = { 0, "failed" } },
+            { name = "a secret answer never passes", tries = 1, passes = 1, a = true, b = false,
+              isSecret = aHidden, want = { 0 } },
+            { name = "secret answers to the cap fail", tries = cap, passes = 0, a = true, b = false,
+              isSecret = bHidden, want = { 0, "failed" } },
             { name = "two plain passes pass", tries = 2, passes = 1, a = true, b = false,
-              want = { 2, "passed" } },
+              isSecret = plain, want = { 2, "passed" } },
             { name = "a plain miss resets the pass count", tries = 2, passes = 1, a = true, b = true,
-              want = { 0 } },
+              isSecret = plain, want = { 0 } },
         }
         for _, case in ipairs(cases) do
             assert.are.same(case.want,
-                { R.SelfCheckStep(case.tries, case.passes, true, true, case.a, case.b, isSecret) }, case.name)
+                { R.SelfCheckStep(case.tries, case.passes, true, true, case.a, case.b, case.isSecret) },
+                case.name)
         end
     end)
 end)
