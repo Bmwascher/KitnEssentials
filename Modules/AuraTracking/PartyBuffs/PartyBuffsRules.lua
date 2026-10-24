@@ -82,6 +82,44 @@ function Rules.CellCount(entryCount, db)
     return math_min(entryCount, Rules.CooldownIconCount(db))
 end
 
+-- The party frame icons' cooldown categories, in their default order.
+Rules.CELL_CATEGORIES = { "spells", "racial", "trinket" }
+local CELL_CATEGORY = {}
+for _, key in ipairs(Rules.CELL_CATEGORIES) do CELL_CATEGORY[key] = true end
+
+-- A saved order's known keys, each once, then any it lacks in the default
+-- order. Anything but a table reads as the default order.
+function Rules.CategoryOrder(saved)
+    local out, seen = {}, {}
+    if type(saved) == "table" then
+        for _, key in ipairs(saved) do
+            if CELL_CATEGORY[key] and not seen[key] then
+                out[#out + 1], seen[key] = key, true
+            end
+        end
+    end
+    for _, key in ipairs(Rules.CELL_CATEGORIES) do
+        if not seen[key] then out[#out + 1] = key end
+    end
+    return out
+end
+
+-- The cooldown cells: groups maps each category key to its entries, joined
+-- in the saved order and cut from the end at cap. A missing list is empty.
+function Rules.OrderCells(groups, saved, cap)
+    local out = {}
+    for _, key in ipairs(Rules.CategoryOrder(saved)) do
+        local list = groups[key]
+        if list then
+            for _, e in ipairs(list) do
+                if #out >= cap then return out end
+                out[#out + 1] = e
+            end
+        end
+    end
+    return out
+end
+
 -- The Max Cooldown Icons and Max Active Buff Icons slider ceilings. A row
 -- holds both, so no row is longer than their sum.
 Rules.MAX_COOLDOWN_ICONS = 6

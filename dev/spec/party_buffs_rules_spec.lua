@@ -352,6 +352,24 @@ describe("PartyBuffsRules.SeedHealerPlacement", function()
     end)
 end)
 
+describe("PartyBuffsRules.OrderCells", function()
+    it("joins the categories in the saved order and cuts from the end at the cap", function()
+        local R = L.loadPartyBuffsRules()
+        local groups = { spells = { "s1", "s2" }, racial = { "r" }, trinket = { "t13", "t14" } }
+        local cases = {
+            { name = "no saved order: today's order and cut", saved = nil, cap = 4,
+              want = { "s1", "s2", "r", "t13" } },
+            { name = "a saved order reorders the categories", saved = { "trinket", "racial", "spells" }, cap = 6,
+              want = { "t13", "t14", "r", "s1", "s2" } },
+            { name = "the cap keeps the leading categories", saved = { "trinket", "spells", "racial" }, cap = 2,
+              want = { "t13", "t14" } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.OrderCells(groups, case.saved, case.cap), case.name)
+        end
+    end)
+end)
+
 describe("PartyBuffsRules.PerRow", function()
     it("rounds a number to a whole count of at least 1 and reads anything else as 14", function()
         local R = L.loadPartyBuffsRules()
