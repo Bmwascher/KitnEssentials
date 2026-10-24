@@ -30,7 +30,8 @@
 #   - tracked files gone upstream are deleted
 #   - --@do-not-package@ ... --@end-do-not-package@ blocks (any comment
 #     style) are removed and text files get LF line ends; any other packager
-#     keyword is listed for a hand check, never transformed
+#     keyword, and a text file that is not valid UTF-8 (copied as is), is
+#     listed for a hand check, never transformed
 # Rebuilding at the current pin is a repair and a self-test: on a correct
 # copy it leaves no diff. Refuses on main and over uncommitted changes to
 # .pkgmeta or the folder. The packaged result is verified by the Package
@@ -152,7 +153,7 @@ function Get-QueryKey($src, $ext) {
 }
 
 function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$timeoutSeconds) {
-    $now = [DateTime]::UtcNow
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $answers = @{}
     $needed = @{}
     foreach ($ext in $externals) {
@@ -162,7 +163,8 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
         $key = Get-QueryKey $src $ext
         if ($answers.ContainsKey($key) -or $needed.ContainsKey($key)) { continue }
         $hit = if ($useCache) { $cache[$key] } else { $null }
-        if ($hit -and ($now - [DateTime]::Parse($hit.checked).ToUniversalTime()).TotalHours -lt $cacheHours) {
+        # Unix seconds, so no date text is parsed in the local time zone or culture.
+        if ($hit -and $hit.checked -is [long] -and ($now - $hit.checked) -lt $cacheHours * 3600) {
             $answers[$key] = $hit.value
         } else {
             $needed[$key] = [pscustomobject]@{ key = $key; type = $src.type; repo = $src.repo; kind = $ext.kind; pinned = $ext.ref }
@@ -174,7 +176,7 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
         $value = if ($q.kind -eq 'tag') { Get-NewestTag (Get-TagNames $q.type $raw[$q.key]) $q.pinned } else { Get-HeadSha $raw[$q.key] }
         if (-not $value) { continue }
         $answers[$q.key] = $value
-        $cache[$q.key] = [pscustomobject]@{ checked = $now.ToString('o'); value = $value }
+        $cache[$q.key] = [pscustomobject]@{ checked = $now; value = $value }
     }
     return $answers
 }
@@ -276,6 +278,7 @@ function Invoke-Check {
 # ---------------------------------------------------------------- update
 
 $textExtensions = @('.lua', '.xml', '.toc', '.txt', '.md')
+$strictUtf8 = [System.Text.UTF8Encoding]::new($false, $true)
 # Comment-marker keywords only (--@debug@, #@retail@, <!--@alpha@-->): a bare
 # @project-version@ in a .toc stays raw in the tracked copies.
 $keywordPattern = '(?:--|#|<!--)\s*@(?!do-not-package@|end-do-not-package@)[a-z]+(?:-[a-z]+)*@'
@@ -341,8 +344,8 @@ function Get-SvnBase($src, [string]$ref) {
     return $base
 }
 
-function Get-TrackedFiles([string]$folder) {
-    $prefix = "Libs/$folder/"
+function Get-TrackedFiles([string]$path) {
+    $prefix = "$path/"
     $names = Invoke-Git @('-C', $Root, 'ls-files', '--', $prefix)
     return @($names | ForEach-Object { ([string]$_).Substring($prefix.Length) })
 }
@@ -380,14 +383,14 @@ function Update-Group($group, [string]$target, [string]$targetKind) {
                 $oldFiles = @(Get-SvnFiles (Get-SvnBase $s $ext.ref))
             }
             if (-not $newFiles.Count) { throw "$($ext.name): no files at $target" }
-            $tracked = @(Get-TrackedFiles $ext.name)
+            $tracked = @(Get-TrackedFiles $ext.path)
             $keep = @($newFiles | Where-Object { ($tracked -contains $_) -or -not ($oldFiles -contains $_) })
             $added = @($keep | Where-Object { -not ($tracked -contains $_) })
             $removed = @($tracked | Where-Object { -not ($keep -contains $_) })
 
-            $dest = Join-Path $Root "Libs\$($ext.name)"
+            $dest = Join-Path $Root $ext.path
             foreach ($rel in $removed) { Remove-Item -LiteralPath (Join-Path $dest $rel) -Force }
-            $keywords = [System.Collections.Generic.List[string]]::new()
+            $hand = [System.Collections.Generic.List[string]]::new()
             foreach ($rel in $keep) {
                 if ($src.type -eq 'git') {
                     $spec = if ($s.sub) { "${target}:$($s.sub)/$rel" } else { "${target}:$rel" }
@@ -402,10 +405,13 @@ function Update-Group($group, [string]$target, [string]$targetKind) {
                 $out = Join-Path $dest $rel
                 New-Item -ItemType Directory -Path (Split-Path $out) -Force | Out-Null
                 if ($textExtensions -contains [System.IO.Path]::GetExtension($rel).ToLowerInvariant()) {
-                    $text = [System.Text.Encoding]::UTF8.GetString($bytes) -replace "`r`n", "`n"
-                    $text = Remove-DoNotPackage $text
-                    foreach ($m in [regex]::Matches($text, $keywordPattern)) { $keywords.Add("$rel $($m.Value)") }
-                    $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
+                    $text = $null
+                    try { $text = $strictUtf8.GetString($bytes) } catch { $hand.Add("$rel is not valid UTF-8 and was copied as is") }
+                    if ($null -ne $text) {
+                        $text = Remove-DoNotPackage ($text -replace "`r`n", "`n")
+                        foreach ($m in [regex]::Matches($text, $keywordPattern)) { $hand.Add("$rel carries $($m.Value), a packager keyword not applied here") }
+                        $bytes = $strictUtf8.GetBytes($text)
+                    }
                 }
                 [System.IO.File]::WriteAllBytes($out, $bytes)
             }
@@ -416,7 +422,7 @@ function Update-Group($group, [string]$target, [string]$targetKind) {
             if ($added.Count) { $summary += ", added: $($added -join ' ')" }
             if ($removed.Count) { $summary += ", removed: $($removed -join ' ')" }
             Out-Line $summary
-            foreach ($k in ($keywords | Select-Object -Unique)) { Out-Line "check by hand $($ext.name)/$k (packager keyword not applied here)" }
+            foreach ($h in ($hand | Select-Object -Unique)) { Out-Line "check by hand $($ext.name)/$h" }
         }
         Set-Pin @($group | ForEach-Object { $_.path }) $targetKind $target
     } finally {
@@ -440,7 +446,7 @@ function Invoke-Update {
     }
     if ($To -and $chosen.Count -gt 1) { Out-Line 'FAIL -To applies to one pin; name externals that share it'; exit 1 }
 
-    $paths = @('.pkgmeta') + @($chosen.Values | ForEach-Object { $_ } | ForEach-Object { "Libs/$($_.name)" })
+    $paths = @('.pkgmeta') + @($chosen.Values | ForEach-Object { $_ } | ForEach-Object { $_.path })
     $dirty = (& git -C $Root status --porcelain -- @paths 2>$null)
     if ($dirty) { Out-Line "FAIL uncommitted changes under $($paths -join ' '); commit or stash them first"; exit 1 }
 
@@ -467,4 +473,10 @@ function Invoke-Update {
     exit 0
 }
 
-if ($Update) { Invoke-Update } else { Invoke-Check }
+try {
+    if ($Update) { Invoke-Update } else { Invoke-Check }
+} catch {
+    if ($Soft) { exit 0 }
+    Out-Line "FAIL $($_.Exception.Message)"
+    exit 1
+}
