@@ -60,6 +60,7 @@ local INSPECT_SLOT_FRAMES = {
     [15] = "InspectBackSlot",
     [16] = "InspectMainHandSlot",  [17] = "InspectSecondaryHandSlot",
 }
+if IS_FOREVER then INSPECT_SLOT_FRAMES[18] = "InspectRangedSlot" end
 
 -- Average-item-level computation. C_PaperDollInfo.GetInspectItemLevel
 -- only returns a rounded integer, so to show real decimals we sum the equipped

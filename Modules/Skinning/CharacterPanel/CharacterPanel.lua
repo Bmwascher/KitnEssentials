@@ -42,6 +42,7 @@ local INVSLOT_FINGER2   = INVSLOT_FINGER2
 local INVSLOT_MAINHAND  = INVSLOT_MAINHAND
 local INVSLOT_OFFHAND   = INVSLOT_OFFHAND
 local INVSLOT_HAND      = INVSLOT_HAND
+local INVSLOT_RANGED    = INVSLOT_RANGED
 
 local function ElvUILoaded()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
@@ -98,6 +99,12 @@ local STRIP_LEFT_SLOTS = {
     [6] = true, [7] = true, [8] = true, [10] = true,
     [11] = true, [12] = true, [13] = true, [14] = true, [16] = true,
 }
+
+-- Forever's bottom row puts the ranged slot 6 px right of the off hand, so the
+-- off hand's strip sits centered above its icon instead.
+local STRIP_TOP_SLOTS = {}
+if IS_FOREVER then STRIP_TOP_SLOTS[INVSLOT_OFFHAND] = true end
+local TOP_STRIP_HEIGHT = 30
 
 -- Enchantable slot buttons
 local enchantSlotButtons = {
@@ -340,6 +347,7 @@ local SLOT_FRAMES = {
     [15] = "CharacterBackSlot",
     [16] = "CharacterMainHandSlot",  [17] = "CharacterSecondaryHandSlot",
 }
+if IS_FOREVER then SLOT_FRAMES[INVSLOT_RANGED] = "CharacterRangedSlot" end
 
 -- Inspect paperdoll mirrors the same slot layout; names swap Character->Inspect.
 local INSPECT_SLOT_FRAMES = {}
@@ -629,7 +637,10 @@ local function CreateSlotText(button, slot)
 
     -- On the strip's enchant line: the icon's bottom edge with the enchant's own
     -- offsets from CreateSlotDetail, so the warning takes the enchant's place.
-    if STRIP_LEFT_SLOTS[slot] then
+    if STRIP_TOP_SLOTS[slot] then
+        text:SetJustifyH("CENTER")
+        text:SetPoint("BOTTOM", button, "TOP", 0, 2)
+    elseif STRIP_LEFT_SLOTS[slot] then
         text:SetJustifyH("RIGHT")
         text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 2)
     else
@@ -2016,7 +2027,15 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     -- CreateSlotText uses the enchant's offsets, so the two share a line.
     detail.enchantText:ClearAllPoints()
     detail.ilvlText:ClearAllPoints()
-    if stripLeft then
+    if STRIP_TOP_SLOTS[slotID] then
+        detail:SetPoint("BOTTOM", slotFrame, "TOP", 0, 0)
+        detail:SetHeight(TOP_STRIP_HEIGHT)
+        detail.ilvlText:SetJustifyH("CENTER")
+        detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
+        detail.enchantText:SetJustifyH("CENTER")
+        detail.enchantText:SetPoint("BOTTOM", detail, "BOTTOM", 0, 2)
+        AnchorGemsRightOf(detail, detail.ilvlText)
+    elseif stripLeft then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
         detail.ilvlText:SetJustifyH("RIGHT")
@@ -2036,6 +2055,21 @@ function CP:CreateSlotDetail(slotFrame, slotID)
 
     ffd.detail = detail
     return detail
+end
+
+-- Forever's ammo slot sits 19 px right of the ranged slot and is 27 px wide.
+-- Blizzard decides on every show whether it is shown, so each render re-anchors.
+local RANGED_AMMO_CLEARANCE = 46
+
+local function AnchorRangedStrip(detail, slotFrame)
+    local x = 0
+    local usesAmmo = _G.UnitUsesAmmo
+    if slotFrame == _G.CharacterRangedSlot and usesAmmo and usesAmmo("player") then
+        x = RANGED_AMMO_CLEARANCE
+    end
+    detail:ClearAllPoints()
+    detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", x, 0)
+    detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", x, 0)
 end
 
 -- Facing slots across the model, by row. The shirt and tabard rows carry no
@@ -2200,6 +2234,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
+    if slotID == INVSLOT_RANGED then AnchorRangedStrip(detail, slotFrame) end
     local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = self.db.FontOutline or "OUTLINE"
