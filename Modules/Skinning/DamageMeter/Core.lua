@@ -130,8 +130,8 @@ local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 -- instances. Optional load. The meter uses it to resolve a spec icon for sources
 -- whose specIconID the client never filled in (common in a pug / cross-realm raid,
 -- where C_DamageMeter returns specIconID nil) -- see the Spec icon resolution
--- section and the spec-icon block in Window.lua:RenderBar. Same lib HealerMana /
--- KickTracker / DungeonTimers already rely on.
+-- section and the spec-icon block in Window.lua:RenderBar. HealerMana and
+-- DungeonTimers use the same lib.
 local LibSpec = LibStub("LibSpecialization", true)
 
 -- Pre-built group unit tokens. UNIT_FLAGS

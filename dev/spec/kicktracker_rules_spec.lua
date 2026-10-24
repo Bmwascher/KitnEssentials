@@ -8,10 +8,8 @@ describe("KickTracker row visibility", function()
         local kick = { id = 1766, cd = 15 }
         local rows = {
             { name = "own row", shown = true, member = { unit = "player", interruptData = kick } },
-            { name = "unverified teammate", shown = true, member = { unit = "party1", interruptData = kick } },
-            { name = "verified teammate", shown = true,
-              member = { unit = "party1", interruptData = kick, kickVerified = true } },
-            { name = "no kick", shown = false, member = { unit = "party1", kickVerified = true } },
+            { name = "a teammate", shown = true, member = { unit = "party1", interruptData = kick } },
+            { name = "no kick", shown = false, member = { unit = "party1" } },
         }
         for _, row in ipairs(rows) do
             assert.equals(row.shown, KT.RowShown(row.member), row.name)
