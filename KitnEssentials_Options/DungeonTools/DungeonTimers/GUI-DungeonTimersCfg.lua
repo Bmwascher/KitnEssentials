@@ -320,7 +320,7 @@ local function AddProviderSetupRow(card, DT, cueKey, info, status, reason)
     local Theme = KE.Theme
     local block = GetProviderSetupRow(cueKey)
     block.DT, block.cueKey, block.info = DT, cueKey, info
-    block.icon:SetTexture(DT:ResolveSpellIcon(cueKey) or 134400)
+    block.icon:SetTexture(DT:_ResolveProviderIcon(cueKey) or 134400)
     -- Cached widgets need their fonts and colors refreshed after a theme change.
     KE:ApplyThemeFont(block.text, "normal")
     block.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)

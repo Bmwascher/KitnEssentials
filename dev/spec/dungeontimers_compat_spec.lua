@@ -3504,6 +3504,21 @@ describe("DungeonTimers compatibility", function()
         assert.is_nil(m.DT._cueProviderKey)
     end)
 
+    it("the Storm Blessed alert follows Show WRONG TARGET, not the spell disable list", function()
+        local key = "warn:2124:shield"
+        for _, case in ipairs({
+            { name = "on", enabled = true, notice = "missing", written = 1 },
+            { name = "off", enabled = false, notice = "disabled", written = nil },
+        }) do
+            local m = providerSetupFixture()
+            m.KE.Print = function() end
+            m.DT.db.ShieldWarning = { Enabled = case.enabled }
+            assert.equal(case.notice, m.DT:_GetProviderSetupNotice(key), case.name)
+            m.DT:_AcceptCueProviderPrompt(key, "original")
+            assert.equal(case.written, m.flags[key], case.name)
+        end
+    end)
+
     it("provider checks attribute each failed addon once per click while preserving every cue check and later attempts", function()
         for _, case in ipairs({
             { name = "core", core = true, failures = { "BigWigs_Core" } },

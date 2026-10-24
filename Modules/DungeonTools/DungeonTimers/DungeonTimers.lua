@@ -3576,12 +3576,19 @@ local CUE_PROVIDER_OPTIONS = {
         manualPath = "Altar of Fangs > Zul'jan > Ritual of the Fang > Advanced options > Messages",
         instanceID = 2993, dungeonName = "Altar of Fangs", contentAddon = "LittleWigs",
     },
+    ["warn:2124:shield"] = {
+        moduleName = "Adderis and Aspix", encounterId = 2124, optionKey = 1310311,
+        label = "Storm Blessed (WRONG TARGET)",
+        manualPath = "Temple of Sethraliss > Adderis and Aspix > Storm Blessed > Advanced options > Messages",
+        instanceID = 1877, dungeonName = "Temple of Sethraliss", contentAddon = "LittleWigs_BattleForAzeroth",
+        mythicOnly = true,
+    },
 }
 
 local CUE_PROVIDER_ORDER = {
     "cue:3101:light_infusion", "cue:2609:awaken_whelps", "cue:3201:bear_form", "cue:3201:haranir_form",
     "cue:3456:pull_stomp", "cue:3457:toxic_atrophy_kicks", "cue:3457:burrowing_charge", "cue:3457:venom_jet",
-    "cue:3458:axegrinder_channel", "cue:3458:ritual_channel",
+    "cue:3458:axegrinder_channel", "cue:3458:ritual_channel", "warn:2124:shield",
 }
 
 local CUE_PROVIDER_PROMPT = "%s needs BigWigs Messages to show this alert. Enable Messages for %s"
@@ -3727,7 +3734,7 @@ function DT:_OpenCueProviderPrompt(cueKey, origin)
     self._cueProviderOrigin = origin or "explicit"
     self._cueProviderKey = cueKey
     KE:CreatePrompt(entry.label, string_format(CUE_PROVIDER_PROMPT, entry.label, entry.label),
-        false, nil, true, self:ResolveSpellIcon(cueKey) or 134400, 20, 20, nil, accept, decline,
+        false, nil, true, self:_ResolveProviderIcon(cueKey) or 134400, 20, 20, nil, accept, decline,
         "Enable Messages", "Later", false, nil,
         { waitIfBusy = true, parkKey = "DungeonTimers.providerSetup" })
 end
@@ -3747,7 +3754,7 @@ function DT:_AcceptCueProviderPrompt(cueKey, openedProfile)
     if not status then return end
     local current = {
         inCombat = InCombatLockdown() and true or false,
-        cueEnabled = not self:IsSpellDisabled(cueKey),
+        cueEnabled = self:_IsProviderCueEnabled(cueKey),
     }
     if context then
         current.profile, current.flags = context.profile, context.flags
@@ -5846,6 +5853,27 @@ function DT:SyncAuraSounds()
     self:_UpdateAuraSoundEvents(enabled and registry:IsPending())
 end
 
+-- The WRONG TARGET alert keeps its enable in its own setting, not in the
+-- spell disable list.
+function DT:_IsProviderCueEnabled(cueKey)
+    if type(cueKey) == "string" and cueKey:find("^warn:") then
+        local warning = self.db and self.db.ShieldWarning
+        return warning ~= nil and warning.Enabled == true
+    end
+    return not self:IsSpellDisabled(cueKey)
+end
+
+-- A warning key has no spell of its own; its encounter names the icon spell.
+function DT:_ResolveProviderIcon(cueKey)
+    local entry = CUE_PROVIDER_OPTIONS[cueKey]
+    if not (entry and cueKey:find("^warn:")) then return self:ResolveSpellIcon(cueKey) end
+    local enc = KE.EncounterData and KE.EncounterData[entry.encounterId]
+    local swap = enc and enc.shieldSwap
+    local icon = type(swap) == "table" and swap.icon or nil
+    if not (icon and C_Spell and C_Spell.GetSpellTexture) then return nil end
+    return C_Spell.GetSpellTexture(icon)
+end
+
 function DT:_ProviderSetupGate(cueKey, inCombat)
     local entry = CUE_PROVIDER_OPTIONS[cueKey]
     local applicable = true
@@ -5863,7 +5891,7 @@ function DT:_ProviderSetupGate(cueKey, inCombat)
         hasDescriptor = entry ~= nil,
         applicable = applicable,
         moduleEnabled = self._providerSetupActive == true and (self.db and self.db.Enabled) and true or false,
-        cueEnabled = not self:IsSpellDisabled(cueKey),
+        cueEnabled = self:_IsProviderCueEnabled(cueKey),
         inCombat = inCombat,
     })
 end
@@ -5941,7 +5969,7 @@ end
 
 function DT:_OnProviderCueChanged(spellId)
     if not CUE_PROVIDER_OPTIONS[spellId] then return end
-    if self:IsSpellDisabled(spellId) then self:_RetireProviderPrompt(spellId) end
+    if not self:_IsProviderCueEnabled(spellId) then self:_RetireProviderPrompt(spellId) end
     self:_RequestProviderSetupCheck()
 end
 

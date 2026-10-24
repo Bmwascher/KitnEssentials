@@ -3498,6 +3498,7 @@ local function BuildShieldWarningBody(parent, rowKey, contentWidth, onCaptionRes
             if not settings then return end
             settings.Enabled = checked
             if DT and DT.ApplyShieldWarningSettings then DT:ApplyShieldWarningSettings() end
+            if DT and DT._OnProviderCueChanged then DT:_OnProviderCueChanged(rowKey) end
         end,
     })
     enableToggle:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
