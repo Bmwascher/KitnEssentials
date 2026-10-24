@@ -43,6 +43,209 @@ local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side 
 
 local ICON_SIZE_MIN, ICON_SIZE_MAX = 16, 72
 
+----------------------------------------------------------------
+-- Icon Order strip: drag an icon to a new place
+----------------------------------------------------------------
+local ORDER_ICON = 36
+local ORDER_CELL = 96
+local ORDER_HEIGHT = ORDER_ICON + 22
+local ORDER_SLOTS = #KE.PartyBuffsRules.CELL_CATEGORIES
+local QUESTION_MARK = "Interface\\Icons\\INV_Misc_QuestionMark"
+-- Labeled as their Party Frame Icons picks.
+local ORDER_LABELS = { spells = "Class Cooldowns", racial = "Racials", trinket = "Trinkets" }
+
+-- Each category's picture, read when drawn: your class icon, the first
+-- tracked racial's spell icon, the empty trinket slot. One that cannot be
+-- read shows a question mark. A slot changes category on a reorder, so the
+-- atlas's texture coordinates are reset first.
+local function SetOrderIcon(tex, key)
+    tex:SetTexCoord(0, 1, 0, 1)
+    if key == "spells" then
+        local _, classFile = UnitClass("player")
+        local atlas = type(classFile) == "string" and ("classicon-" .. strlower(classFile))
+        if atlas and C_Texture.GetAtlasInfo(atlas) then
+            tex:SetAtlas(atlas)
+            return
+        end
+    elseif key == "racial" then
+        local racials = KE.PartyCooldownsData and KE.PartyCooldownsData.RACIALS
+        local icon = racials and racials[1] and C_Spell.GetSpellTexture(racials[1].id)
+        if icon then
+            tex:SetTexture(icon)
+            return
+        end
+    else
+        local _, icon = C_PaperDollInfo.GetInventorySlotInfo("Trinket0Slot")
+        if icon then
+            tex:SetTexture(icon)
+            return
+        end
+    end
+    tex:SetTexture(QUESTION_MARK)
+end
+
+local function OrderDropIndex(strip, cursorX)
+    local left = strip:GetLeft()
+    if not left then return 1 end
+    local idx = math.floor((cursorX - left) / ORDER_CELL) + 1
+    return math.max(1, math.min(ORDER_SLOTS, idx))
+end
+
+local function LayoutOrder(strip)
+    for i, slot in ipairs(strip._slots) do
+        slot:ClearAllPoints()
+        slot:SetPoint("TOPLEFT", strip, "TOPLEFT", (i - 1) * ORDER_CELL, 0)
+        SetOrderIcon(slot.icon, slot.key)
+        slot.label:SetText(ORDER_LABELS[slot.key])
+        slot:SetAlpha(1)
+    end
+end
+
+local function SaveOrder(strip)
+    local onOrderChanged = strip._onOrderChanged
+    if not onOrderChanged then return end
+    local list = {}
+    for i, slot in ipairs(strip._slots) do list[i] = slot.key end
+    onOrderChanged(list)
+end
+
+-- Attached to the held icon for the length of the drag only.
+local function OrderDragUpdate(slot)
+    local strip = slot._strip
+    local cursorX, cursorY = GetCursorPosition()
+    local scale = strip:GetEffectiveScale()
+    cursorX, cursorY = cursorX / scale, cursorY / scale
+    local ghost = strip._ghost
+    ghost:ClearAllPoints()
+    ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cursorX, cursorY)
+    local dropLine = strip._dropLine
+    dropLine:ClearAllPoints()
+    dropLine:SetPoint("CENTER", strip, "TOPLEFT",
+        (OrderDropIndex(strip, cursorX) - 1) * ORDER_CELL + (ORDER_CELL - ORDER_ICON) / 2 - 4, -(ORDER_ICON / 2 + 2))
+    dropLine:Show()
+end
+
+local function ConstructOrderStrip(parent)
+    local strip = CreateFrame("Frame", nil, parent)
+    strip:SetSize(ORDER_SLOTS * ORDER_CELL, ORDER_HEIGHT)
+    strip._enabled = true
+
+    local ghost = strip:CreateTexture(nil, "OVERLAY", nil, 7)
+    ghost:SetSize(ORDER_ICON, ORDER_ICON)
+    ghost:SetAlpha(0.7)
+    ghost:Hide()
+    strip._ghost = ghost
+
+    local dropLine = strip:CreateTexture(nil, "OVERLAY", nil, 6)
+    dropLine:SetSize(2, ORDER_ICON + 4)
+    dropLine:Hide()
+    strip._dropLine = dropLine
+
+    local slots = {}
+    strip._slots = slots
+    local owned = { strip }
+
+    for i = 1, ORDER_SLOTS do
+        local slot = CreateFrame("Button", nil, strip)
+        slot:SetSize(ORDER_CELL, ORDER_HEIGHT)
+        slot._strip = strip
+
+        local icon = slot:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(ORDER_ICON, ORDER_ICON)
+        icon:SetPoint("TOP", slot, "TOP", 0, -2)
+        slot.icon = icon
+
+        local highlight = slot:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints(icon)
+        slot.highlight = highlight
+
+        local label = slot:CreateFontString(nil, "OVERLAY")
+        KE:ApplyThemeFont(label, "small")
+        label:SetShadowColor(0, 0, 0, 0)
+        label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        label:SetPoint("TOP", icon, "BOTTOM", 0, -4)
+        slot.label = label
+
+        slot:EnableMouse(true)
+        slot:RegisterForDrag("LeftButton")
+
+        local function EndDrag()
+            slot:SetScript("OnUpdate", nil)
+            slot:SetAlpha(1)
+            strip._dragSlot = nil
+            ghost:Hide()
+            dropLine:Hide()
+        end
+        slot._endDrag = EndDrag
+
+        slot:SetScript("OnDragStart", function(self)
+            if not strip._enabled then return end
+            local unfinished = strip._dragSlot
+            if unfinished and unfinished ~= self then unfinished._endDrag() end
+            strip._dragSlot = self
+            SetOrderIcon(ghost, self.key)
+            ghost:Show()
+            self:SetAlpha(0.3)
+            slot:SetScript("OnUpdate", OrderDragUpdate)
+        end)
+
+        slot:SetScript("OnDragStop", function(self)
+            if strip._dragSlot ~= self then return end
+            EndDrag()
+            local cursorX = GetCursorPosition()
+            local dropIdx = OrderDropIndex(strip, cursorX / strip:GetEffectiveScale())
+            local fromIdx
+            for idx, s in ipairs(slots) do
+                if s == self then
+                    fromIdx = idx
+                    break
+                end
+            end
+            if fromIdx and dropIdx ~= fromIdx then
+                table.insert(slots, dropIdx, table.remove(slots, fromIdx))
+                LayoutOrder(strip)
+                SaveOrder(strip)
+            end
+        end)
+
+        slots[i] = slot
+        owned[#owned + 1] = slot
+    end
+
+    -- The page's state manager calls this.
+    function strip:SetEnabled(enabled)
+        self._enabled = enabled == true
+        if not self._enabled and self._dragSlot then self._dragSlot._endDrag() end
+        self:SetAlpha(self._enabled and 1 or 0.4)
+    end
+
+    -- Closing the settings hides the page without releasing it, and no
+    -- OnDragStop reaches a hidden icon.
+    strip:SetScript("OnHide", function(self)
+        if self._dragSlot then self._dragSlot._endDrag() end
+    end)
+
+    function strip:Configure(order, onOrderChanged)
+        self._onOrderChanged = onOrderChanged
+        dropLine:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
+        for i, slot in ipairs(slots) do
+            slot.key = order[i]
+            slot.highlight:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.3)
+        end
+        self:SetEnabled(true)
+        LayoutOrder(self)
+    end
+
+    strip._keOwned = owned
+    return strip
+end
+
+-- A strip released mid-drag would keep its OnUpdate running on a hidden page.
+GUIFrame:NewWidgetPool("pcd:orderstrip", ConstructOrderStrip, function(strip)
+    local dragging = strip._dragSlot
+    if dragging then dragging._endDrag() end
+end)
+
 local HEALER_KEY, PLACEMENT_PAIR = {}, {}
 for _, pair in ipairs(KE.PartyBuffsRules.PLACEMENT_KEYS) do
     HEALER_KEY[pair[1]] = pair[2]
@@ -202,6 +405,39 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     yOffset = cardTracked:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card: Icon Order, the cooldown categories' order on each row
+    ----------------------------------------------------------------
+    local cardOrder = GUIFrame:CreateCard(scrollChild, "Icon Order", yOffset)
+    manager:Register(cardOrder, "cellsOn")
+    cardOrder:AddLabel("Drag an icon to set the order of the cooldown icons on each row; "
+        .. KE:Gold("Max Cooldown Icons") .. " drops icons from the end. Active buffs (externals, potions "
+        .. "and trinket buffs) always show after these, in a fixed order.")
+    local rowStrip = GUIFrame:CreateRow(cardOrder.content, ORDER_HEIGHT)
+    local strip = GUIFrame:AcquirePooled("pcd:orderstrip", rowStrip)
+    strip:ClearAllPoints()
+    strip:SetPoint("CENTER", rowStrip, "CENTER", 0, 0)
+    strip:Configure(KE.PartyBuffsRules.CategoryOrder(db.CooldownCategoryOrder), function(list)
+        db.CooldownCategoryOrder = list
+        ApplySettings()
+    end)
+    manager:Register(strip, "cellsOn")
+    cardOrder:AddRow(rowStrip, ORDER_HEIGHT)
+    local rowOrderReset = GUIFrame:CreateRow(cardOrder.content, Theme.rowHeightLast)
+    local orderReset = GUIFrame:CreateButton(rowOrderReset, "Kitn Defaults", {
+        height = 24,
+        tooltip = "Class cooldowns, then racials, then trinkets.",
+        callback = function()
+            db.CooldownCategoryOrder = nil
+            ApplySettings()
+            RebuildPage()
+        end,
+    })
+    rowOrderReset:AddWidget(orderReset, 0.5)
+    manager:Register(orderReset, "cellsOn")
+    cardOrder:AddRow(rowOrderReset, Theme.rowHeightLast, 0)
+    yOffset = cardOrder:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card: Display Settings
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -213,7 +449,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddSlider(rowD2, "Max Cooldown Icons", "MaxCooldownIcons", 1,
         KE.PartyBuffsRules.MAX_COOLDOWN_ICONS, nil,
-        "Cooldown icons per member: spells first, then the racial, then trinkets."), "cellsOn")
+        "Cooldown icons per member, in the Icon Order card's order. Past this count, icons drop from the end."),
+        "cellsOn")
     manager:Register(AddSlider(rowD2, "Max Active Buff Icons", "MaxPerMember", 1,
         KE.PartyBuffsRules.MAX_BUFF_ICONS, nil,
         "Active buffs per member (trinket buffs, potions, externals), after the cooldown icons. "
