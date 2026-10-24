@@ -234,6 +234,25 @@ function KT.LearnFacts(member, snap, row)
     member.interruptData = row
 end
 
+local INSPECT_MISSES = 3  -- failed rank reads before the tracker stops asking about a teammate
+
+-- Whether a teammate's inspect is still wanted: with no snapshot, an unknown
+-- spec, or a respec not yet answered. Past that only a spec whose kicks need
+-- talents is wanted, while one is uncovered or the answer is stale, until
+-- INSPECT_MISSES reads failed: a stale mark is cleared only by a rank read,
+-- which a spec with no kick talents never makes.
+function KT.InspectWanted(snap, demand, respec, misses)
+    local spec = snap and snap.spec
+    if not snap or respec or type(spec) ~= "number" or spec <= 0 then return true end
+    if not demand or next(demand) == nil or (misses or 0) >= INSPECT_MISSES then return false end
+    if snap.stale then return true end
+    local covered = snap.covered
+    for talent in pairs(demand) do
+        if not (covered and covered[talent]) then return true end
+    end
+    return false
+end
+
 ---------------------------------------------------------------------------------
 -- Nameplate kicker
 ---------------------------------------------------------------------------------

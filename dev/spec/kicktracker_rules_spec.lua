@@ -556,3 +556,28 @@ describe("KickTracker reveal layers", function()
         assert.equals(0, #list)
     end)
 end)
+
+describe("KickTracker inspect wanting", function()
+    it("wants a teammate until their spec and kick talents are read, and a stale answer only for talents", function()
+        local KT = L.loadKickTrackerRules()
+        local talents = { [7] = true }
+        local function snap(covered, stale)
+            return { spec = 62, ranks = {}, covered = covered, absent = {}, stale = stale }
+        end
+        local rows = {
+            { name = "no snapshot", demand = talents, want = true },
+            { name = "an unknown spec", snap = { ranks = {}, covered = {}, absent = {} }, want = true },
+            { name = "a respec not yet answered", snap = snap({ [7] = true }), demand = talents, respec = true,
+              want = true },
+            { name = "a talent not covered", snap = snap({}), demand = talents, want = true },
+            { name = "a stale answer, talents needed", snap = snap({ [7] = true }, "ready-check"), demand = talents,
+              want = true },
+            { name = "a stale answer, no talents needed", snap = snap({}, "ready-check"), demand = {}, want = false },
+            { name = "three failed reads", snap = snap({}, "walks-spent"), demand = talents, misses = 3, want = false },
+            { name = "everything read", snap = snap({ [7] = true }), demand = talents, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.InspectWanted(row.snap, row.demand, row.respec, row.misses), row.name)
+        end
+    end)
+end)

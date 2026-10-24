@@ -118,6 +118,7 @@ KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview ov
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, matchClass, specID, interruptData, kickStart, kickDuration, inspect }
+-- A teammate also carries inspectRespec and inspectMisses (KT:WantsInspect).
 
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
@@ -373,6 +374,9 @@ function KT:EnsureInspect()
     if self.inspectHandle or not KE.GroupInspect then return end
     self.inspectHandle = KE.GroupInspect:Subscribe("KickTracker", {
         Wants = function(guid) return KT:WantsInspect(guid) end,
+        -- Every want takes the short try budget, so a teammate is never asked
+        -- more often for the tracker than other owners ask on their own.
+        OnlyStale = function() return true end,
         OnRead = function(guid, _, snapshot) KT:OnInspectRead(guid, snapshot) end,
         OnChanged = function(guid, snapshot) KT:OnInspectChanged(guid, snapshot) end,
     })
@@ -397,28 +401,36 @@ function KT:UpdateInspectDemand()
     handle:SetDemand(list)
 end
 
--- A teammate is wanted while their snapshot is missing, its spec unknown, it
--- is stale, or the spec's kick talents are not all covered.
+-- A teammate is wanted until their spec and their kick's talents are read
+-- (KT.InspectWanted).
 function KT:WantsInspect(guid)
     local member = self.partyMembers[guid]
     if not member or member.unit == "player" or not self.inspectHandle then return false end
     local snap = self.inspectHandle:Get(guid)
     local spec = snap and snap.spec
-    if not snap or snap.stale or type(spec) ~= "number" or spec <= 0 then return true end
-    for talent in pairs(KE:GetKickTalentDemand(spec)) do
-        if not (snap.covered and snap.covered[talent]) then return true end
-    end
-    return false
+    local demand = (type(spec) == "number" and spec > 0) and KE:GetKickTalentDemand(spec) or nil
+    return KT.InspectWanted(snap, demand, member.inspectRespec, member.inspectMisses)
 end
 
--- Inside the inspector's answer: the rank read, and nothing else.
+-- Inside the inspector's answer: the rank read, and nothing else. The answer
+-- settles a respec; a failed read counts toward KT.InspectWanted's limit,
+-- except one that waits for combat's end.
 function KT:OnInspectRead(guid, snapshot)
     local handle = self.inspectHandle
-    if not handle or not self.partyMembers[guid] then return end
+    local member = self.partyMembers[guid]
+    if not handle or not member then return end
     local spec = snapshot and snapshot.spec
     if type(spec) ~= "number" or spec <= 0 then return end
+    member.inspectRespec = nil
+    if member.specID ~= spec then member.inspectMisses = nil end
     local demand = KE:GetKickTalentDemand(spec)
-    if next(demand) then handle:ReadRanks(guid, spec, demand) end
+    if not next(demand) then return end
+    local ranks, reason = handle:ReadRanks(guid, spec, demand)
+    if ranks then
+        member.inspectMisses = nil
+    elseif reason ~= "combat" then
+        member.inspectMisses = (member.inspectMisses or 0) + 1
+    end
 end
 
 -- After the answer: the row follows the inspected spec, and the snapshot
@@ -433,14 +445,17 @@ function KT:OnInspectChanged(guid, snapshot)
     self:LayoutBars()
 end
 
--- A teammate's respec marks their snapshot stale and wakes the queue. Their
--- row keeps its last spec, with its talents unknown, until the re-read.
+-- A teammate's respec keeps them wanted until the next answer, marks their
+-- snapshot stale and wakes the queue. Their row keeps its last spec, with its
+-- talents unknown, until the re-read.
 function KT:RefreshInspectedSpec(unit)
     local handle = self.inspectHandle
     if not handle or not self.isActive or issecretvalue(unit) or type(unit) ~= "string" then return end
     if not string_find(unit, "^party[1-4]$") then return end
     local guid = KE:GetSafeUnitGUID(unit)
-    if not guid or not self.partyMembers[guid] then return end
+    local member = guid and self.partyMembers[guid]
+    if not member then return end
+    member.inspectRespec, member.inspectMisses = true, nil
     handle:Refresh(guid, "spec")
     handle:Wake()
 end
