@@ -1061,9 +1061,16 @@ function CP:ApplyHeaderCentering()
     end
 
     -- +10: the model is posed slightly right of the scene frame's own center.
+    -- A two-pane window centers the model on its left pane, and its level line
+    -- already sits centered on that pane's top strip.
+    local twoPane = cf.LeftPaneHost ~= nil
     titleText:ClearAllPoints()
-    titleText:SetPoint("TOP", model, "TOP", 10, self._titleModelTopOff)
+    titleText:SetPoint("TOP", model, "TOP", twoPane and 0 or 10, self._titleModelTopOff)
 
+    if twoPane then
+        RestoreAnchors(levelText)
+        return
+    end
     levelText:ClearAllPoints()
     levelText:SetPoint("TOP", titleText, "BOTTOM", 0, -1)
 end
@@ -1300,9 +1307,104 @@ function CP:ApplyFont(fontString, size)
     KE:ApplyFont(fontString, fontFace, size, fontOutline)
 end
 
-function CP:UpdateItemLevelText()
+-- Forever lists the stats in two scroll boxes, the player's and the pet's
+-- (shown by the pet sidebar tab). CharacterStatsPane stays hidden there and
+-- only lends its pool to Blizzard's stat math.
+local STATS_SCROLL_HOSTS = { "CharacterStatsPaneScrollBox", "CharacterStatsPanePetScrollBox" }
+
+local function StatsListsAreScrollBoxes()
+    return _G.CharacterStatsPaneScrollBox ~= nil
+end
+
+local function StatsScrollBoxAt(index)
+    local host = _G[STATS_SCROLL_HOSTS[index]]
+    return host and host.ScrollBox
+end
+
+-- A pool frame has no element data, so only a scroll box row can match.
+local function IsItemLevelRow(row)
+    local data = row and row.GetElementData and row:GetElementData()
+    if not data then return false end
+    return data.name == "ITEMLEVEL"
+end
+
+-- Update runs on every scroll step, a thumb drag included, so a row frame is
+-- styled once per settings generation and per item level role, not per Update.
+local statsFontGen = 0
+local statsRowGen = setmetatable({}, { __mode = "k" })
+local statsRowIlvl = setmetatable({}, { __mode = "k" })
+
+local function StatsRowStale(row, isItemLevel)
+    return statsRowGen[row] ~= statsFontGen or statsRowIlvl[row] ~= isItemLevel
+end
+
+local function StyleStatsScrollRow(row)
+    local isItemLevel = IsItemLevelRow(row)
+    if not StatsRowStale(row, isItemLevel) then return end
+    statsRowGen[row], statsRowIlvl[row] = statsFontGen, isItemLevel
+    local db = CP.db
+    if row.Title then
+        CP:ApplyFont(row.Title, db.CategoryFontSize or 12)
+        return
+    end
+    local statsSize = db.StatsFontSize or 12
+    if row.Label then CP:ApplyFont(row.Label, statsSize) end
+    if not row.Value then return end
+    if not isItemLevel then
+        CP:ApplyFont(row.Value, statsSize)
+        return
+    end
+    CP:ApplyFont(row.Value, db.IlvlValueSize or 16)
+    local _, equipped = GetAverageItemLevel()
+    if not equipped then return end
+    if db.Enabled and db.DecimalItemLevel then
+        row.Value:SetText(string.format("%.2f", equipped))
+    else
+        row.Value:SetText(string.format("%d", math.floor(equipped)))
+    end
+end
+
+local function WalkStatsScrollRows()
+    if not CP:IsEnabled() or ElvUILoaded() then return end
+    for i = 1, #STATS_SCROLL_HOSTS do
+        local box = StatsScrollBoxAt(i)
+        if box and box.ForEachFrame then box:ForEachFrame(StyleStatsScrollRow) end
+    end
+end
+
+-- Only the timer callback clears the latch, so a settings walk in between
+-- cannot let a second timer queue behind the first.
+local statsWalkPending = false
+local function OnStatsWalkTimer()
+    statsWalkPending = false
+    WalkStatsScrollRows()
+end
+
+local staleRowSeen = false
+local function NoteStaleRow(row)
+    if StatsRowStale(row, IsItemLevelRow(row)) then staleRowSeen = true end
+end
+
+-- Reads only. A row the Character skin fonts in this same Update takes these
+-- sizes on the next frame, after that skin's once-per-row pass.
+local function OnStatsScrollUpdate(box)
+    if statsWalkPending or not CP:IsEnabled() then return end
+    staleRowSeen = false
+    box:ForEachFrame(NoteStaleRow)
+    if not staleRowSeen then return end
+    statsWalkPending = true
+    C_Timer.After(0, OnStatsWalkTimer)
+end
+
+-- A settings change: every visible row takes the new sizes now.
+local function RestyleStatsScrollRows()
+    statsFontGen = statsFontGen + 1
+    WalkStatsScrollRows()
+end
+
+function CP:UpdateItemLevelText(statFrame)
     if not self:IsEnabled() then return end
-    local itemLevelFrame = CharacterStatsPane and CharacterStatsPane.ItemLevelFrame
+    local itemLevelFrame = statFrame or (CharacterStatsPane and CharacterStatsPane.ItemLevelFrame)
     if not itemLevelFrame or not itemLevelFrame.Value then return end
 
     local _, avgItemLevelEquipped = GetAverageItemLevel()
@@ -1311,6 +1413,7 @@ function CP:UpdateItemLevelText()
     else
         itemLevelFrame.Value:SetText(string.format("%d", math.floor(avgItemLevelEquipped)))
     end
+    if not statFrame then RestyleStatsScrollRows() end
 end
 
 function CP:SetupDecimalItemLevel()
@@ -1318,10 +1421,14 @@ function CP:SetupDecimalItemLevel()
     if self._decimalIlvlHooked then return end
     self._decimalIlvlHooked = true
 
-    self:SecureHook("PaperDollFrame_SetItemLevel", function(_, unit)
+    -- The frame Blizzard wrote into: the stats pane's item level frame, or the
+    -- visible row where the stats are a scroll box. There the pane's own
+    -- frames are scratch frames for the stat math, so they are skipped.
+    self:SecureHook("PaperDollFrame_SetItemLevel", function(statFrame, unit)
         if not self.db.DecimalItemLevel then return end
         if unit ~= "player" then return end
-        self:UpdateItemLevelText()
+        if StatsListsAreScrollBoxes() and not IsItemLevelRow(statFrame) then return end
+        self:UpdateItemLevelText(statFrame)
     end)
 end
 
@@ -1376,7 +1483,7 @@ function CP:StyleCharacterTexts()
     if ElvUILoaded() then return end
 
     local levelText = CharacterLevelText
-    local nameText = CharacterFrameTitleText
+    local _, nameText = HeaderRegions()
 
     -- EllesmereUI re-anchors both strings into its own header, so re-fonting
     -- them from here is two addons fighting over the same FontStrings. The
@@ -1437,6 +1544,7 @@ function CP:StyleStatsPaneTexts()
             end
         end
     end
+    RestyleStatsScrollRows()
 end
 
 function CP:SetupStatTextHook()
@@ -1447,10 +1555,19 @@ function CP:SetupStatTextHook()
     hooksecurefunc("PaperDollFrame_SetLabelAndText", function(statFrame)
         if not CP:IsEnabled() then return end
         if CharacterStatsPane and statFrame == CharacterStatsPane.ItemLevelFrame then return end
+        -- Where the stats are scroll boxes, their rows (player and pet) take
+        -- fonts only from the stamped pass, and the pane's own frames are
+        -- scratch frames.
+        if StatsListsAreScrollBoxes() then return end
         local statsSize = CP.db.StatsFontSize or 12
         if statFrame.Label then CP:ApplyFont(statFrame.Label, statsSize) end
         if statFrame.Value then CP:ApplyFont(statFrame.Value, statsSize) end
     end)
+
+    for i = 1, #STATS_SCROLL_HOSTS do
+        local box = StatsScrollBoxAt(i)
+        if box then hooksecurefunc(box, "Update", OnStatsScrollUpdate) end
+    end
 end
 
 ---------------------------------------------------------------------------------
