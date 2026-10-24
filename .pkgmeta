@@ -69,7 +69,7 @@ externals:
     tag: v1.35.0
   Libs/LibKeystone:
     url: https://github.com/BigWigsMods/LibKeystone.git/LibKeystone
-    tag: v12.1.0
+    tag: v12.1.1
   Libs/LibRangeCheck-3.0:
     url: https://github.com/WeakAuras/LibRangeCheck-3.0.git/LibRangeCheck-3.0
     commit: 95a6313a44f615738d216bd79cf132dc6f243284
