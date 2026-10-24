@@ -1300,6 +1300,11 @@ function KE:GetSectionForItem(itemId) end
 ---@return string? reason
 function KE:IsFeatureAvailable(featureId) end
 
+--- True after a baseline load (KE.BASELINE_LOAD), the availability policy's
+--- own answer; for a branch that picks a Forever value.
+---@return boolean
+function KE:IsBaselineLoad() end
+
 --- Turns on per-spec profiles for db where this client admits them; false
 --- when the library is absent or the feature is withheld.
 ---@param db AceDB

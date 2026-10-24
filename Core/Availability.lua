@@ -80,6 +80,13 @@ function KE:IsFeatureAvailable(featureId)
     return false, "withheld on this client"
 end
 
+-- True after a baseline load. For a branch that picks a Forever value, where
+-- there is no feature to admit or withhold.
+---@return boolean
+function KE:IsBaselineLoad()
+    return not RETAIL
+end
+
 -- Entries are { id = ... } tables: sidebar rows and sub-tabs. The same list
 -- comes back when nothing is withheld.
 ---@param entries table[]
