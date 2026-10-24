@@ -361,7 +361,7 @@ end
 -- every client. A nested container is kept even when emptied: AceDB refills
 -- its sub-blocks from the defaults.
 
--- Keys whose split at case changes reads wrong.
+-- Labels the split at each capital gets wrong.
 local BLOCK_LABELS = {
     DoTTracker = "DoT Tracker",
 }
@@ -395,7 +395,6 @@ local function WasOn(key, block, default)
     return false
 end
 
--- Removes container[key], naming it in `dropped` when it was turned on.
 local function Drop(container, key, default, dropped)
     local block = container[key]
     if type(block) == "table" and WasOn(key, block, default) then
