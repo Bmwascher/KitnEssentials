@@ -4,51 +4,22 @@
 --
 --   lua dev/scripts/lint-plan-fences.lua <plan.md> [more.md ...]
 --
--- Exit 0: every block clean. Exit 1: a syntax error (checked with THIS Lua
--- 5.1 parser via loadstring, which luacheck's multi-version parser cannot
--- do), a luacheck warning/error, or an unterminated fence. Requires luacheck
--- on PATH (PowerShell — the hererocks tree is not on the Git Bash PATH).
+-- Exit 0: every block clean or skipped as a fragment. Exit 1: a syntax
+-- error (checked with THIS Lua 5.1 parser via loadstring, which luacheck's
+-- multi-version parser cannot do), a luacheck warning/error, or an
+-- unterminated fence. Requires luacheck on PATH (PowerShell — the hererocks
+-- tree is not on the Git Bash PATH). Which fences are fragments:
+-- _plan_fences.lua.
 
-local function collect_blocks(path)
-    local f, err = io.open(path, "r")
-    if not f then return nil, err end
-    local blocks, current, start_line = {}, nil, nil
-    local n = 0
-    for line in f:lines() do
-        n = n + 1
-        if current then
-            -- A closing fence is backticks only — "```lua" here would OPEN a
-            -- fence in markdown, and treating it as a close would silently
-            -- truncate the block under lint.
-            if line:match("^%s*```+%s*$") then
-                blocks[#blocks + 1] = {
-                    first = start_line, last = n, code = table.concat(current, "\n"),
-                }
-                current = nil
-            else
-                current[#current + 1] = line
-            end
-        elseif line:match("^%s*```lua%s*$") then
-            current, start_line = {}, n + 1
-        end
-    end
-    f:close()
-    if current then
-        return nil, string.format("unterminated ```lua fence opened at line %d", start_line - 1)
-    end
-    return blocks
-end
+local _script = (arg[0] or ""):gsub("/", "\\")
+local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
+local PF = dofile(_dir .. "_plan_fences.lua")
 
 -- Table address gives per-process entropy os.time/os.clock cannot.
 local run_id = tostring(os.time()) .. "_" .. (tostring({}):match("x(%x+)$") or "0")
 
-local function lint_block(block, index, plan)
-    -- Exact 5.1 syntax first: luacheck's parser accepts newer-Lua syntax
-    -- (e.g. `//`) that WoW's 5.1 runtime rejects.
-    local chunk, syntax_err = loadstring(block.code, "fence")
-    if not chunk then
-        return false, "Lua 5.1 syntax error: " .. tostring(syntax_err)
-    end
+-- Runs only on a block that loads; PF.triage has checked its syntax.
+local function luacheck_block(block, index, plan)
     local tmp = os.getenv("TEMP") or os.getenv("TMP") or "."
     local snippet = string.format("%s\\plan-fence-%s-%d-%d.lua", tmp, run_id, index, block.first)
     local out = io.open(snippet, "w")
@@ -96,7 +67,7 @@ end
 
 local dirty = false
 for _, plan in ipairs(args) do
-    local blocks, err = collect_blocks(plan)
+    local blocks, err = PF.collect_file(plan)
     if not blocks then
         io.stderr:write(string.format("[plan-fences] %s: %s\n", plan, tostring(err)))
         os.exit(err and tostring(err):match("unterminated") and 1 or 2)
@@ -105,13 +76,26 @@ for _, plan in ipairs(args) do
         print(string.format("[plan-fences] %s: no ```lua fences", plan))
     end
     for i, block in ipairs(blocks) do
-        local ok, report = lint_block(block, i, plan)
-        if ok then
-            print(string.format("[plan-fences] %s lines %d-%d: clean", plan, block.first, block.last))
+        local where = string.format("[plan-fences] %s lines %d-%d", plan, block.first, block.last)
+        local status, syntax_err = PF.triage(block)
+        if status == "anchor" then
+            print(where .. ": fragment, skipped (anchor)")
+        elseif status == "fragment" then
+            print(where .. ": fragment, skipped")
         else
-            dirty = true
-            print(string.format("[plan-fences] %s lines %d-%d: FINDINGS", plan, block.first, block.last))
-            io.write(report or "", "\n")
+            local ok, report
+            if status == "syntax" then
+                ok, report = false, "Lua 5.1 syntax error: " .. tostring(syntax_err)
+            else
+                ok, report = luacheck_block(block, i, plan)
+            end
+            if ok then
+                print(where .. ": clean")
+            else
+                dirty = true
+                print(where .. ": FINDINGS")
+                io.write(report or "", "\n")
+            end
         end
     end
 end
