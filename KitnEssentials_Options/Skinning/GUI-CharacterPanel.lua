@@ -11,6 +11,18 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+-- Options a client can withhold, read once. A headless load without the
+-- availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local MYTHIC_PLUS = Admitted("CharacterPanelMythicPlus")
+local TRACKS = Admitted("CharacterPanelTracks")
+local SOCKETS = Admitted("CharacterPanelSockets")
+local ENCHANT_RANK = Admitted("CharacterPanelEnchantRank")
+local WIDEN = Admitted("CharacterPanelWiden")
+local WINDOW_BUTTONS = Admitted("CharacterPanelWindowButtons")
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("CharacterPanel", true)
@@ -58,9 +70,12 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Adds to the character panel a decimal item level, your Mythic+ score, a faction " ..
-        "indicator, upgrade track letters on each slot, warnings for missing enchants and gems, and " ..
-        "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window.")
+    card1:AddLabel(KE.IS_FOREVER
+        and "Adds to the character panel a decimal item level, a faction indicator and warnings for " ..
+            "missing enchants. The same per-slot readout can be drawn on the inspect window."
+        or "Adds to the character panel a decimal item level, your Mythic+ score, a faction " ..
+            "indicator, upgrade track letters on each slot, warnings for missing enchants and gems, and " ..
+            "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window.")
 
     local row1Insp = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local inspectCheck = GUIFrame:CreateCheckbox(row1Insp, "Show on Inspect Frame", {
@@ -69,7 +84,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             db.InspectPanelEnabled = checked
             if CP then CP:ApplyInspectPanelState() end
         end,
-        tooltip = "Draws the same per-slot item levels, enchants and gems on the inspect window when you inspect another player.",
+        tooltip = KE.IS_FOREVER
+            and "Draws the same per-slot item levels and enchants on the inspect window when you inspect another player."
+            or "Draws the same per-slot item levels, enchants and gems on the inspect window when you inspect another player.",
     })
     row1Insp:AddWidget(inspectCheck, 1)
     manager:Register(inspectCheck, "all")
@@ -93,21 +110,24 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         value = db.ShowEnchants ~= false,
         callback = function(checked) db.ShowEnchants = checked; ApplySettings() end,
     })
-    row2:AddWidget(enchantCheck, 1 / 3)
+    local warnWidth = SOCKETS and 1 / 3 or 1 / 2
+    row2:AddWidget(enchantCheck, warnWidth)
     manager:Register(enchantCheck, "all")
 
-    local gemCheck = GUIFrame:CreateCheckbox(row2, "Show Missing Gems", {
-        value = db.ShowMissingGems ~= false,
-        callback = function(checked) db.ShowMissingGems = checked; ApplySettings() end,
-    })
-    row2:AddWidget(gemCheck, 1 / 3)
-    manager:Register(gemCheck, "all")
+    if SOCKETS then
+        local gemCheck = GUIFrame:CreateCheckbox(row2, "Show Missing Gems", {
+            value = db.ShowMissingGems ~= false,
+            callback = function(checked) db.ShowMissingGems = checked; ApplySettings() end,
+        })
+        row2:AddWidget(gemCheck, warnWidth)
+        manager:Register(gemCheck, "all")
+    end
 
     local hideBGCheck = GUIFrame:CreateCheckbox(row2, "Hide Panel Background", {
         value = db.HideCharacterBackground == true,
         callback = function(checked) db.HideCharacterBackground = checked; ApplySettings() end,
     })
-    row2:AddWidget(hideBGCheck, 1 / 3)
+    row2:AddWidget(hideBGCheck, warnWidth)
     manager:Register(hideBGCheck, "all")
     card2:AddRow(row2, Theme.rowHeightLast, 0)
 
@@ -129,20 +149,22 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         card3:AddRow(elvuiNoteRow, 24)
     end
 
-    local rowWW = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local widerCheck = GUIFrame:CreateCheckbox(rowWW, "Widen Character Window", {
-        value = db.WiderFrame == true,
-        callback = function(checked)
-            db.WiderFrame = checked
-            -- The layout hooks install once per session and cannot be removed,
-            -- so neither direction settles without a reload.
-            KE:FlagReloadNeeded()
-        end,
-        tooltip = "Makes the character window wider so the item level and enchant text have room clear of the model. Moves the right-hand slot column outward. Needs a reload, and has no effect while ElvUI or an EllesmereUI themed character sheet is in use.",
-    })
-    rowWW:AddWidget(widerCheck, 1)
-    manager:Register(widerCheck, "elvuiOk")
-    card3:AddRow(rowWW, Theme.rowHeight)
+    if WIDEN then
+        local rowWW = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+        local widerCheck = GUIFrame:CreateCheckbox(rowWW, "Widen Character Window", {
+            value = db.WiderFrame == true,
+            callback = function(checked)
+                db.WiderFrame = checked
+                -- The layout hooks install once per session and cannot be removed,
+                -- so neither direction settles without a reload.
+                KE:FlagReloadNeeded()
+            end,
+            tooltip = "Makes the character window wider so the item level and enchant text have room clear of the model. Moves the right-hand slot column outward. Needs a reload, and has no effect while ElvUI or an EllesmereUI themed character sheet is in use.",
+        })
+        rowWW:AddWidget(widerCheck, 1)
+        manager:Register(widerCheck, "elvuiOk")
+        card3:AddRow(rowWW, Theme.rowHeight)
+    end
 
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local decimalCheck = GUIFrame:CreateCheckbox(row3, "Decimal Item Level", {
@@ -154,22 +176,25 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Shows item level with 2 decimal places instead of rounded.",
     })
-    row3:AddWidget(decimalCheck, 1 / 3)
+    local row3Width = MYTHIC_PLUS and 1 / 3 or 1 / 2
+    row3:AddWidget(decimalCheck, row3Width)
     manager:Register(decimalCheck, "elvuiOk")
 
-    local raceCheck = GUIFrame:CreateCheckbox(row3, "Show M+ Score", {
-        value = db.ShowRaceText,
-        callback = function(checked)
-            db.ShowRaceText = checked
-            local CP = GetModule()
-            if CP then
-                if checked then CP:ShowRaceText() else CP:HideRaceText() end
-            end
-        end,
-        tooltip = "Shows your overall Mythic+ score below the level text.",
-    })
-    row3:AddWidget(raceCheck, 1 / 3)
-    manager:Register(raceCheck, "elvuiOk")
+    if MYTHIC_PLUS then
+        local raceCheck = GUIFrame:CreateCheckbox(row3, "Show M+ Score", {
+            value = db.ShowRaceText,
+            callback = function(checked)
+                db.ShowRaceText = checked
+                local CP = GetModule()
+                if CP then
+                    if checked then CP:ShowRaceText() else CP:HideRaceText() end
+                end
+            end,
+            tooltip = "Shows your overall Mythic+ score below the level text.",
+        })
+        row3:AddWidget(raceCheck, row3Width)
+        manager:Register(raceCheck, "elvuiOk")
+    end
 
     local factionCheck = GUIFrame:CreateCheckbox(row3, "Show Faction on Level", {
         value = db.ShowFactionOnLevel,
@@ -180,12 +205,13 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Appends (A)/(H) in faction color after the level text.",
     })
-    row3:AddWidget(factionCheck, 1 / 3)
+    row3:AddWidget(factionCheck, row3Width)
     manager:Register(factionCheck, "elvuiOk")
     card3:AddRow(row3, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 
+    if TRACKS then
     ----------------------------------------------------------------
     -- Card 4: Item Track Indicators
     ----------------------------------------------------------------
@@ -249,6 +275,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     card4:AddRow(noteRow4, 30, 0)
 
     yOffset = card4:GetNextOffset()
+    end
 
     ----------------------------------------------------------------
     -- Card 5: Slot Details
@@ -271,16 +298,21 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         }
     end
 
-    manager:RegisterGroup(cardSD:AddCheckboxGrid({
+    local slotPicks = {
         SlotPick("Show Item Level", "ShowSlotItemLevel", db.ShowSlotItemLevel,
             "Shows the item level on each equipped gear slot."),
         SlotPick("Show Enchant Names", "ShowEnchantNames", db.ShowEnchantNames,
             "Shows the enchant name on enchantable gear slots."),
-        SlotPick("Show Gems", "ShowSlotGems", db.ShowSlotGems,
-            "Shows equipped gem icons on each gear slot."),
-        SlotPick("Show Enchant Rank", "ShowEnchantRank", db.ShowEnchantRank == true,
-            "Adds the crafted enchant's tier after its name, so a rank 1 enchant reads apart from a rank 3."),
-    }), "all")
+    }
+    if SOCKETS then
+        slotPicks[#slotPicks + 1] = SlotPick("Show Gems", "ShowSlotGems", db.ShowSlotGems,
+            "Shows equipped gem icons on each gear slot.")
+    end
+    if ENCHANT_RANK then
+        slotPicks[#slotPicks + 1] = SlotPick("Show Enchant Rank", "ShowEnchantRank", db.ShowEnchantRank == true,
+            "Adds the crafted enchant's tier after its name, so a rank 1 enchant reads apart from a rank 3.")
+    end
+    manager:RegisterGroup(cardSD:AddCheckboxGrid(slotPicks), "all")
 
     local rowSDSep = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightSeparator)
     local sepSD = GUIFrame:CreateSeparator(rowSDSep)
@@ -323,6 +355,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
 
     yOffset = cardSD:GetNextOffset()
 
+    if SOCKETS then
     ----------------------------------------------------------------
     -- Card 6: Socket & Enchant Helpers
     ----------------------------------------------------------------
@@ -410,6 +443,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     card5:AddRow(row5c, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
+    end
 
     ----------------------------------------------------------------
     -- Card 7: Font Settings
@@ -452,7 +486,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     -- settings on it would hide controls that still do something.
     ----------------------------------------------------------------
     local auDB = KE.db and KE.db.profile.Automation
-    if auDB then
+    if auDB and WINDOW_BUTTONS then
         local function ApplyAutomation()
             local AU = KitnEssentials and KitnEssentials:GetModule("Automation", true)
             if AU and AU.ApplyFromPage then AU:ApplyFromPage() end
