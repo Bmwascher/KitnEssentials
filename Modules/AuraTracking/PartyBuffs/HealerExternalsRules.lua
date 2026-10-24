@@ -196,6 +196,17 @@ function Rules.MoverDetaches(fallback, pos, start)
         and pos.XOffset == start.XOffset and pos.YOffset == start.YOffset)
 end
 
+-- The box's position context, "HEALER" or "DEFAULT". With the healer
+-- position on, the view the settings page shows wins while the box previews;
+-- otherwise a healer spec takes the healer position.
+function Rules.PositionContext(useHealer, healerSpec, previewing, previewContext)
+    if useHealer ~= true then return "DEFAULT" end
+    if previewing == true and previewContext ~= nil then
+        return previewContext == "HEALER" and "HEALER" or "DEFAULT"
+    end
+    return healerSpec == true and "HEALER" or "DEFAULT"
+end
+
 -- After a roster change the counts stay only for the same members in the
 -- same order, each kept by the party potions pair rule.
 function Rules.KeepOnRoster(old, new, isSecret)

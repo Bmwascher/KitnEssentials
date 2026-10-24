@@ -1708,6 +1708,13 @@ local Defaults = {
             HealerExtParentFrame = "KitnEssentialsHealerMana",
             HealerExtStrata   = "MEDIUM",
             HealerExtAttachSide = "TOP",
+            -- The position used in a healer spec while UseHealerExtPosition is
+            -- on. It starts on the screen at HX.DEFAULT_POSITION, clear of the
+            -- Healer Mana display a healer often has off.
+            UseHealerExtPosition = false,
+            HealerExtHealerPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 },
+            HealerExtHealerAnchorFrameType = "UIPARENT",
+            HealerExtHealerStrata = "MEDIUM",
             -- ListExternals is a row copy of the External Tracker list, made
             -- below this table.
             ListPotions = {

@@ -39,6 +39,24 @@ local DEBUG_HX = false
 
 HX.QUEUE_KEY = "healerExternals"
 HX.DEFAULT_POSITION = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 }
+-- Each position context's saved keys; the Raid Cooldowns page reads them too.
+HX.POSITION_KEYS = {
+    DEFAULT = { pos = "HealerExtPosition", kind = "HealerExtAnchorFrameType", parent = "HealerExtParentFrame",
+                strata = "HealerExtStrata" },
+    HEALER  = { pos = "HealerExtHealerPosition", kind = "HealerExtHealerAnchorFrameType",
+                parent = "HealerExtHealerParentFrame", strata = "HealerExtHealerStrata" },
+}
+-- "HEALER" or "DEFAULT": the view the Raid Cooldowns page shows, whatever
+-- the switch. Never cleared: reopening the settings shows the page again
+-- without rendering it.
+HX.previewContext = nil
+-- The context the box was last placed in, whether Use Healer Position was on
+-- then, and the settings table it was placed from. Only HX.ApplyPosition sets
+-- them; the label, the getters and the writer read them, so all three
+-- describe the box where it stands.
+local placedContext, placedSplit, placedDB = "DEFAULT", false, nil
+-- Seconds between checks for the end of a drag that refused a placement.
+local DRAG_RETRY = 0.2
 -- The cooldown icon with no active state laid over it.
 HX.VIEW = {
     New = Cell.New, Dress = Cell.Dress, Write = Cell.Write, Range = Cell.Range, Clear = Cell.Clear,
@@ -94,43 +112,128 @@ local function MakeSlot()
     HX.st = Track.NewSlot(HX.live, HX.VIEW, host)
 end
 
--- An attached box whose anchor the shared resolution refuses (unnamed,
--- missing or unsafe) takes its starting place: the attached points against
--- the screen would put it above the top edge. The third return says the
--- starting place is in use.
+-- The page's view counts while the box previews with the settings open.
+local function ResolveContext(db)
+    local PM = KE.PreviewManager
+    local pageView = PM and PM.guiOpen and HX.previewContext or nil
+    return Rules.PositionContext(db.UseHealerExtPosition == true, KE:IsPlayerHealerSpec(),
+        HX.previewing == true, pageView)
+end
+
+-- The placed position. An attached box whose anchor the shared resolution
+-- refuses (unnamed, missing or unsafe) takes its starting place: the
+-- attached points against the screen would put it above the top edge. The
+-- third return says the starting place is in use.
 local function Placement(db)
-    local kind, name = db.HealerExtAnchorFrameType, db.HealerExtParentFrame
-    screen.Strata, placement.Strata = db.HealerExtStrata, db.HealerExtStrata
+    local keys = HX.POSITION_KEYS[placedContext]
+    local kind, name, strata = db[keys.kind], db[keys.parent], db[keys.strata]
+    screen.Strata, placement.Strata = strata, strata
     if kind == "SELECTFRAME" and KE:ResolveSelectFrame(name, HX.box) == nil then
         return HX.DEFAULT_POSITION, screen, true
     end
     placement.anchorFrameType, placement.ParentFrame = kind, name
-    return db.HealerExtPosition, placement, false
+    return db[keys.pos], placement, false
 end
 
--- Every drain's resolve places the box again, so a refused move waits for it.
-function HX.ApplyPosition()
+-- With Use Healer Position on, the label names the position a drag writes.
+function HX.EditModeLabel()
+    if not placedSplit then return "Raid Cooldowns" end
+    return placedContext == "HEALER" and "Raid Cooldowns (Healer)" or "Raid Cooldowns (Default)"
+end
+
+-- Renamed in place: registering again would cancel a drag in progress.
+local function Relabel()
+    if HX.registered then KE.EditMode:SetElementLabel(EDIT_MODE_KEY, HX.EditModeLabel()) end
+end
+
+local function PlaceBox()
     if not HX.box or not KE:CanReanchorNow(HX.box) then return end
     local pos, config = Placement(HX.pb.db)
     KE:ApplyFramePosition(HX.box, pos, config)
 end
 
--- Edit Mode's writer. While the starting place stands in for an anchor
--- Placement cannot use, the mover works on the screen, so a moved position
--- detaches the box and the starting place handed back unchanged keeps the
--- attachment.
+-- Edit Mode keeps a Revert snapshot per element, and Revert hands it to the
+-- setter, which now writes the other key set; the selected box's readout
+-- shows the old one too.
+local function ContextMoved()
+    local EM = KE.EditMode
+    if not (HX.registered and EM) then return end
+    EM:SnapshotElementPosition(EDIT_MODE_KEY)
+    if EM.selectedElementKey == EDIT_MODE_KEY then EM:UpdateNudgeFrameInfo() end
+end
+
+local placePending, placeGen = false, 0
+
+-- A queued replay cannot be taken back out of the combat queue or a timer,
+-- so it carries the generation it was made in and does nothing once that
+-- has moved on.
+local function CancelPlacement()
+    placePending, placeGen = false, placeGen + 1
+end
+
+-- Edit Mode has no drag-end callback, and a drag can end by a drop, Escape,
+-- combat, a scale change or another element's re-registration.
+local function DeferPlacement(inCombat)
+    if placePending then return end
+    placePending = true
+    local gen = placeGen
+    local function Replay()
+        if gen ~= placeGen then return end
+        local EM = KE.EditMode
+        if EM and EM:IsAnyDragInFlight() then
+            C_Timer.After(DRAG_RETRY, Replay)
+            return
+        end
+        CancelPlacement()
+        HX.ApplyPosition()
+    end
+    if inCombat then
+        KE:RunAfterCombat(Replay)
+    else
+        C_Timer.After(0, Replay)
+    end
+end
+
+-- The one place the context is resolved. A respec, the settings closing or
+-- opening, or a view change moves nothing until the next call. A placement
+-- refused in combat or during an Edit Mode drag records nothing and runs
+-- again once that has ended: a drag measures against the parent it started
+-- with, so a placement during one would have the drop write the wrong offsets.
+function HX.ApplyPosition()
+    if not (HX.on and HX.box) then return end
+    if not KE:CanReanchorNow(HX.box) then return DeferPlacement(true) end
+    local EM = KE.EditMode
+    if EM and EM:IsAnyDragInFlight() then return DeferPlacement(false) end
+    CancelPlacement()
+    local db = HX.pb.db
+    local context = ResolveContext(db)
+    local moved = context ~= placedContext or db ~= placedDB
+    placedContext, placedSplit, placedDB = context, db.UseHealerExtPosition == true, db
+    Relabel()
+    PlaceBox()
+    if moved then ContextMoved() end
+end
+
+-- Edit Mode's writer, on the placed context's keys. While the starting place
+-- stands in for an anchor Placement cannot use, the mover works on the
+-- screen, so a moved position detaches the box and the starting place handed
+-- back unchanged keeps the attachment. It places the box without resolving
+-- again, so the box stays where it was dropped. A position measured under
+-- another profile's settings is thrown away and the box placed fresh.
 local function SetPosition(pos)
     local db = HX.pb.db
+    if db ~= placedDB then return HX.ApplyPosition() end
+    local keys = HX.POSITION_KEYS[placedContext]
     local _, _, fallback = Placement(db)
     if Rules.MoverDetaches(fallback, pos, HX.DEFAULT_POSITION) then
-        db.HealerExtAnchorFrameType, db.HealerExtParentFrame = "UIPARENT", nil
+        db[keys.kind], db[keys.parent] = "UIPARENT", nil
     elseif fallback then
-        return HX.ApplyPosition()
+        return PlaceBox()
     end
-    local p = db.HealerExtPosition
+    local p = db[keys.pos]
     p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
     p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
-    HX.ApplyPosition()
+    PlaceBox()
 end
 
 local function Restyle(db)
@@ -168,7 +271,7 @@ local function Register()
     if HX.registered then return end
     KE.EditMode:RegisterElement({
         key = EDIT_MODE_KEY,
-        displayName = "Raid Cooldowns",
+        displayName = HX.EditModeLabel(),
         frame = HX.box,
         module = HX.pb,
         getPosition = function() return (Placement(HX.pb.db)) end,
@@ -404,10 +507,14 @@ function HX.ShowPreview()
     Show()
 end
 
-function HX.HidePreview()
+-- A preview may have placed the box at the page's view. Hiding the whole
+-- interface passes keepPlace: it hides the drawing only, and the show that
+-- follows places the box, so the Revert snapshot is not retaken twice.
+function HX.HidePreview(keepPlace)
     if not HX.previewing then return end
     HX.previewing = false
     ForgetSamples()
+    if not keepPlace then HX.ApplyPosition() end
     Show()
 end
 
@@ -418,6 +525,7 @@ end
 -- stay hidden; a queued build finds the box off and ends.
 local function TurnOff()
     HX.on = false
+    CancelPlacement()
     Forget()
     ForgetSamples()
     HX.previewing = false

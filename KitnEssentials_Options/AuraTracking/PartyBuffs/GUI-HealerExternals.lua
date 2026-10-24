@@ -31,6 +31,10 @@ local SIDE_OPTIONS = {
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
 
+-- Survives the page rebuild a view switch triggers; nil until the first
+-- render picks the view the player's spec uses.
+local activePosition
+
 GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.PartyBuffs
     if not db then
@@ -61,6 +65,16 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
 
     manager:SetCondition("on", function() return db.HealerExternals == true end)
     manager:SetCondition("text", function() return db.HealerExternals == true and db.HealerExtShowText == true end)
+
+    if activePosition == nil then
+        activePosition = (db.UseHealerExtPosition == true and KE:IsPlayerHealerSpec()) and "HEALER" or "DEFAULT"
+    end
+    local healerView = activePosition == "HEALER"
+    -- Attaching sets the Default position, so the Healer view grays it.
+    manager:SetCondition("attachOn", function() return db.HealerExternals == true and not healerView end)
+    manager:SetCondition("healerOn", function()
+        return db.HealerExternals == true and db.UseHealerExtPosition == true
+    end)
 
     local function AddCheck(row, label, key, state, tooltip)
         local check = GUIFrame:CreateCheckbox(row, label, {
@@ -98,12 +112,13 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         cardMain:AddNote("Raid Cooldowns timers are unavailable on this client.")
     end
     cardMain:AddLabel("One icon per cooldown, with your party's single-target spells first and raid " ..
-        "cooldowns after. Yours come first in each group, whether or not |cffffd100Include Yourself|r is on." ..
+        "cooldowns after. Yours come first in each group, whether or not " .. KE:Gold("Include Yourself") ..
+        " is on." ..
         "\n\nAn icon is full color when ready. It turns gray with the time left once its buff shows: a " ..
         "single-target spell's on anyone in your party, a raid cooldown's on its caster. Another player's " ..
-        "cast of the same spell starts it too, such as a Retribution Paladin's |cffffd100Blessing of Sacrifice|r." ..
-        "\n\nShows in a party wherever the Cooldowns tab's |cffffd100Where It Shows|r allows. Never in a raid " ..
-        "or an arena.")
+        "cast of the same spell starts it too, such as a Retribution Paladin's Blessing of Sacrifice." ..
+        "\n\nShows in a party wherever the " .. KE:Gold("General") .. " tab's " .. KE:Gold("Show In") ..
+        " allows. Never in a raid or an arena.")
     local function Attach()
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
         db.HealerExtAnchorFrameType = "SELECTFRAME"
@@ -123,13 +138,14 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     local rowM1 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeightLast)
     local attach = GUIFrame:CreateButton(rowM1, "Attach to Healer Mana", {
         height = 24,
-        tooltip = "Places the box against the chosen side of the Healer Mana display and keeps it there when " ..
-            "that display moves. Also sets the box's Icon Size to Healer Mana's once; you can change it afterward.",
+        tooltip = "Sets the Default position: places the box against the chosen side of the Healer Mana " ..
+            "display and keeps it there when that display moves. Also sets the box's Icon Size to Healer " ..
+            "Mana's once; you can change it afterward.",
         callback = Attach,
     })
     -- Level with the Side box, which sits 14 px below the dropdown's top.
     rowM1:AddWidget(attach, 0.5, nil, 0, -14)
-    manager:Register(attach, "on")
+    manager:Register(attach, "attachOn")
     local side = GUIFrame:CreateDropdown(rowM1, "Side", {
         options = SIDE_OPTIONS,
         value = db.HealerExtAttachSide,
@@ -144,15 +160,16 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         end,
     })
     rowM1:AddWidget(side, 0.5)
-    manager:Register(side, "on")
+    manager:Register(side, "attachOn")
     cardMain:AddRow(rowM1, Theme.rowHeightLast, 0)
     yOffset = cardMain:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Display
+    -- Card: Display Settings
     ----------------------------------------------------------------
-    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
-    cardDisplay:AddLabel("Font face and outline follow the Cooldowns tab's Font Settings.")
+    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    cardDisplay:AddLabel("Font face and outline follow the " .. KE:Gold("General") .. " tab's " ..
+        KE:Gold("Font Settings") .. ".")
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddSlider(rowD1, "Icon Size", "HealerExtIconSize", ICON_MIN, ICON_MAX, "on")
     AddSlider(rowD1, "Spacing", "HealerExtSpacing", -1, 20, "on")
@@ -173,22 +190,61 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Position
+    -- Position, one view per position context
     ----------------------------------------------------------------
+    local HX = KE.HealerExternals
+    if HX.previewContext ~= activePosition then
+        HX.previewContext = activePosition
+        if HX.previewing then HX.ApplyPosition() end
+    end
+
+    local _, viewOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
+        tabs = GUIFrame.HEALER_VIEW_TABS,
+        activeId = activePosition,
+        onSwitch = function(newId) activePosition = newId end,
+        fill = true,
+    })
+    yOffset = viewOffset
+
+    if healerView then
+        local cardHealer = GUIFrame:CreateCard(scrollChild, "Healer Position", yOffset)
+        manager:Register(cardHealer, "on")
+        local rowHealer = GUIFrame:CreateRow(cardHealer.content, Theme.rowHeightLast)
+        local healerToggle = GUIFrame:CreateCheckbox(rowHealer, "Use Healer Position", {
+            value = db.UseHealerExtPosition == true,
+            callback = function(checked)
+                db.UseHealerExtPosition = checked
+                ApplySettings()
+                RebuildPage()
+            end,
+        })
+        rowHealer:AddWidget(healerToggle, 0.5)
+        manager:Register(healerToggle, "on")
+        local healerNote = GUIFrame:CreateText(rowHealer, KE:ColorTextByTheme("Note"),
+            "Used while you are in a healer spec.", Theme.rowHeight, "hide")
+        rowHealer:AddWidget(healerNote, 0.5)
+        cardHealer:AddRow(rowHealer, Theme.rowHeightLast, 0)
+        yOffset = cardHealer:GetNextOffset()
+    end
+
+    ----------------------------------------------------------------
+    -- Card: Position Settings, on the view's keys
+    ----------------------------------------------------------------
+    local keys = HX.POSITION_KEYS[activePosition]
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position",
+        title = "Position Settings",
         db = db,
-        positionKey = "HealerExtPosition",
+        positionKey = keys.pos,
         dbKeys = {
-            anchorFrameType = "HealerExtAnchorFrameType", anchorFrameFrame = "HealerExtParentFrame",
-            strata = "HealerExtStrata",
+            anchorFrameType = keys.kind, anchorFrameFrame = keys.parent,
+            strata = keys.strata,
         },
         defaults = { anchorFrameType = "UIPARENT", strata = "MEDIUM" },
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
     -- The card's own SetEnabled drives its widgets.
-    manager:Register(posCard, "on")
+    manager:Register(posCard, healerView and "healerOn" or "on")
     yOffset = posOffset
 
     ----------------------------------------------------------------

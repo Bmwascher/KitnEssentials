@@ -1774,7 +1774,7 @@ local function OnInterfaceHidden()
     if not PB.previewing then return end
     PB:HidePreviewFrames()
     Pot.HidePreview()
-    HX.HidePreview()
+    HX.HidePreview(true)
 end
 
 local function OnInterfaceShown()

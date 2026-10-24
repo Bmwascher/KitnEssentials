@@ -71,8 +71,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua|Element Positions"] = { phase = "16" },
         ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua|Glow Settings"] = { phase = "16" },
         ["KitnEssentials_Options/AuraTracking/GUI-AuraHeaders.lua|Font"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-HealerExternals.lua|Display"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-HealerExternals.lua|Position"] = { phase = "16" },
         ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyPotions.lua|Position"] = { phase = "16" },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-CustomCooldowns.lua|Font"] = { phase = "16" },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua|Warning Font Settings"] = { phase = "16" },
@@ -207,7 +205,6 @@ local ALLOWED = {
         -- Phase 17 moves these onto KE:Gold.
         ["GUI/GUIMain/GUI-Core.lua"] = { phase = "17", n = 1 },
         ["GUI/GUIWidgets/GUI-TauntCursorCard.lua"] = { phase = "17", n = 3 },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-HealerExternals.lua"] = { phase = "17", n = 3 },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-HavocTracker.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-HuntersMark.lua"] = { phase = "17", n = 1 },
