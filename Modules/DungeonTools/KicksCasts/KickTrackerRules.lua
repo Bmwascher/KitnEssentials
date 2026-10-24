@@ -14,7 +14,6 @@ local KT = KitnEssentials:GetModule("KickTracker")
 ---------------------------------------------------------------------------------
 -- Rows
 ---------------------------------------------------------------------------------
--- Every member with a kick has a row.
 function KT.RowShown(member)
     return member.interruptData ~= nil
 end
@@ -430,7 +429,6 @@ function KT.Entered(list, entries)
     return n, only
 end
 
--- The member's main kick is modeled as cooling at T.
 function KT.MainCooling(member, T)
     local start, duration = member.kickStart, member.kickDuration
     return start ~= nil and duration ~= nil and T - start < duration

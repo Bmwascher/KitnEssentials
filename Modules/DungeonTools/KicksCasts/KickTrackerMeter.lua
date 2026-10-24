@@ -177,7 +177,6 @@ end
 ---------------------------------------------------------------------------------
 -- Reads
 ---------------------------------------------------------------------------------
--- The group's members by unit, and their GUIDs.
 function KT:MembersByUnit()
     local byUnit, guidOf = wipe(self.meterByUnit), wipe(self.meterGuidOf)
     for guid, member in pairs(self.partyMembers) do

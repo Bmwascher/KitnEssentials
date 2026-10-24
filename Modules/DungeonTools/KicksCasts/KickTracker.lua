@@ -485,7 +485,6 @@ function KT:RefreshMemberRow(guid)
     self:LayoutBars()
 end
 
--- The member's kick is ready again.
 function KT:ClearKick(guid)
     local member = self.partyMembers[guid]
     if not member then return end
