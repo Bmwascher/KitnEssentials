@@ -12,9 +12,9 @@
 # Two scopes. The repo-agnostic guards (branch-guard, git-guard,
 # luacheck-postedit) find the repo from the edited path, so they install once
 # at user scope (~/.claude) and cover every project on the machine. The
-# agents-mirror, references-check, retention-check and program-recovery hooks
-# depend on this repo's scripts, so
-# they stay project scope (.claude). A moved hook's stale copy and settings
+# agents-mirror, references-check, retention-check, lib-update-check and
+# program-recovery hooks depend on this repo's scripts, so they stay project
+# scope (.claude). A moved hook's stale copy and settings
 # entry in the other scope are removed, or it would fire twice.
 
 $ErrorActionPreference = 'Stop'
@@ -24,7 +24,7 @@ $templates = Join-Path $root 'dev\claude-hooks'
 $scopes = @(
     @{ label = 'user'; hooks = @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1')
        dir = Join-Path $env:USERPROFILE '.claude'; template = Join-Path $templates 'user-settings.template.json' },
-    @{ label = 'project'; hooks = @('agents-mirror-sync.ps1', 'references-check.ps1', 'retention-check.ps1', 'program-recovery.ps1')
+    @{ label = 'project'; hooks = @('agents-mirror-sync.ps1', 'references-check.ps1', 'retention-check.ps1', 'lib-update-check.ps1', 'program-recovery.ps1')
        dir = Join-Path $root '.claude'; template = Join-Path $templates 'settings.template.json' }
 )
 

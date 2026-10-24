@@ -283,6 +283,22 @@ report before coding. `--report-only` re-prints without fetching;
 `--seed` re-baselines. Snapshots live in
 `KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the two clones.
 
+## Updating the embedded libraries
+
+```powershell
+pwsh dev/scripts/check-lib-updates.ps1
+pwsh dev/scripts/check-lib-updates.ps1 -Update LibSpecialization
+```
+
+Players get exactly the library versions pinned under `externals` in
+`.pkgmeta`, and `Libs/` holds the same files. The first command lists every
+pin that upstream has moved past; it also runs at Claude Code session start,
+asking upstream at most once per 20 hours. `-Update <name>` (feature branch
+only) moves the pin to the newest tag or HEAD, or to `-To <ref>`, and
+rebuilds `Libs/<name>` the way the packager would. Library code ships, so the
+bump gets a `/reload` smoke, then the Package check workflow confirms the zip
+matches. The script header holds the rules.
+
 ## wowlua-ls checker
 
 `dev/scripts/wowlua-check.ps1` runs the standalone wowlua-ls release in
@@ -349,7 +365,8 @@ repo from the edited path, not from the project setting.
 Project-scope hook (`.claude/hooks/`, from `settings.template.json`):
 `agents-mirror-sync.ps1` (PostToolUse, rebuilds the `.agents/skills` mirror
 through `dev/scripts/sync-agents-mirror.ps1` after any skill or command
-edit; `-Check` reports drift).
+edit; `-Check` reports drift). `lib-update-check.ps1` (SessionStart) prints
+the library pins behind upstream.
 
 Run `pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
 exercises every documented deny and allow case against a throwaway main
