@@ -2784,6 +2784,15 @@ function DM:GetDeathRecap(recapID)
     return rev, sinkMax, plainMax
 end
 
+-- The slice of an oldest-first recap that a capped list shows: the newest `cap`
+-- events, so the last row is the killing blow. Returns the first index and the
+-- row count.
+function DM.RecapWindow(total, cap)
+    local count = math_min(total, cap)
+    if count < 0 then count = 0 end
+    return total - count + 1, count
+end
+
 -- "-3.4s" style time-before-death. deathTime = the last (most recent) event's timestamp.
 local function FormatRecapDelta(deathTime, ts)
     if not ts or not deathTime then return "" end

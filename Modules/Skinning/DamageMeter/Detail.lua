@@ -1071,7 +1071,7 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
     local stride = m.stride
     d._stride = stride
     local deathTime = events[#events] and events[#events].timestamp
-    local count = math_min(#events, DETAIL_POOL_SIZE)
+    local first, count = DM.RecapWindow(#events, DETAIL_POOL_SIZE)
     EnsureDetailRows(W, count)
 
     for i = 1, #d.rows do
@@ -1085,7 +1085,7 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
             row:SetHeight(m.rowH)
             AnchorDetailLines(bar, true, m)
 
-            RenderRecapRow(self, row, events[i], i, count, barH, sinkMax, plainMax, deathTime, true)
+            RenderRecapRow(self, row, events[first + i - 1], i, count, barH, sinkMax, plainMax, deathTime, true)
 
             if not row:IsShown() then row:Show() end
         else
@@ -1823,12 +1823,12 @@ function DM:PopulateHoverTip(W, bar, isInitial)
             return false
         end
         local deathTime = events[#events] and events[#events].timestamp
-        local count = math_min(#events, HOVER_TIP_ROWS)
+        local first, count = DM.RecapWindow(#events, HOVER_TIP_ROWS)
         for i = 1, HOVER_TIP_ROWS do
             local tr = _tip.rows[i]
             local row = tr.row
             if i <= count then
-                local ev = events[i]
+                local ev = events[first + i - 1]
                 row:ClearAllPoints()
                 local yOff = -(headerH + bodyTop + (i - 1) * stride)
                 row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)

@@ -213,3 +213,23 @@ describe("GetDeathRecap maximum health", function()
         assert.is_nil(sinkMax); assert.is_nil(plainMax)
     end)
 end)
+
+describe("RecapWindow", function()
+    it("selects the newest events a capped list shows, ending on the killing blow", function()
+        load({ events = { {} } })
+        local cases = {
+            { name = "an empty recap", total = 0, cap = 15, first = 1, count = 0 },
+            { name = "fewer events than the cap", total = 5, cap = 15, first = 1, count = 5 },
+            { name = "exactly the cap", total = 15, cap = 15, first = 1, count = 15 },
+            { name = "more events than the cap", total = 22, cap = 15, first = 8, count = 15 },
+        }
+        for _, c in ipairs(cases) do
+            local first, count = DM.RecapWindow(c.total, c.cap)
+            assert.equals(c.first, first, c.name)
+            assert.equals(c.count, count, c.name)
+            if c.count > 0 then
+                assert.equals(c.total, first + count - 1, c.name .. ": the last row is the newest")
+            end
+        end
+    end)
+end)
