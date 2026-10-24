@@ -42,25 +42,16 @@ local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local UnitCanAttack = UnitCanAttack
 local C_DamageMeter = C_DamageMeter
 local issecretvalue = issecretvalue
-local GetNormalizedRealmName = GetNormalizedRealmName
 local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
 local math_abs = math.abs
 local math_max = math.max
-local math_random = math.random
 local pairs = pairs
 local ipairs = ipairs
 local wipe = wipe
 local table_insert = table.insert
 local table_sort = table.sort
-
--- LibSpecialization: passive group spec/role tracking via addon comms.
--- Replaces the prior CanInspect/NotifyInspect/INSPECT_READY plumbing
--- (~75 lines of throttle/queue management). Optional load — module
--- degrades to "no party member specs known until you re-zone with the
--- lib loaded" if absent.
-local LibSpec = LibStub("LibSpecialization", true)
 
 ---------------------------------------------------------------------------------
 -- Interrupt Database
@@ -90,9 +81,7 @@ local CLASS_FALLBACK_INTERRUPTS = {
 }
 
 local OWN_INTERRUPT_FIRST_WINDOW = 0.4  -- an own cast this soon after a hidden interrupt can claim it
-local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
-local HELLO_REPLY_JITTER = 0.6
 local ROW_SLOTS = 5  -- a party's rows
 local RAID_MARK_SHEET = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local OWN_KICK_MATCH_WINDOW = 0.5
@@ -139,8 +128,7 @@ KT.editModeRegistered = false
 KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview override)
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
-KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration, kickVerified }
-KT.nameSpecCache = {}    -- [playerName or Name-Realm] = specID, fed by LibSpec.RegisterGroup callback
+KT.partyMembers = {}     -- [guid] = { unit, name, classToken, matchClass, specID, interruptData, kickStart, kickDuration }
 
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
@@ -151,13 +139,10 @@ KT._readyList = {}        -- reusable temp table for LayoutBars
 KT.isActive = false
 KT.activationID = 0       -- bumped on each activation; deferred callbacks check it
 KT.combatEventsRegistered = false
-KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful send
-KT.kickPairing = { claims = {}, paired = {} }  -- keyed guid..":"..kickID; see KT.PairComm
 KT.ownClaim = {}  -- at: the player's last kick cast; see KT:ClaimOwnKick
 KT.recentKicks = {}  -- accepted interrupts, oldest first; see KT:HandleNameplateInterrupt
 KT.pendingKicks = {}  -- interrupts waiting for a meter report, oldest first; see KT.PairKicks
 KT.meterHits = {}    -- meter reports { at, owner, cands, extra }, oldest first; see KT:ReadMeter
-KT._claimable = {}   -- the claimable recentKicks handed to KT.PairComm; see KT:ClaimableKicks
 KT._meterBurstExtra = 0  -- Current updates past the first in the gathering burst
 KT._chargeSerial = 0     -- numbers each cooldown KT:ConfirmKick starts; see KT.HandBackGuess
 KT.meterSnap = {}    -- [sessionType] = the last read of that interrupt list
@@ -199,11 +184,8 @@ function KT:GetInterruptDataForSpec(specID)
     return KickRow(kick.id, kick.cd, specID)
 end
 
--- The spec's default kick, until a message has set or cleared the member's kick.
 function KT:ApplySpecKick(member, specID)
-    if not KT.KeepsMessageKick(member) then
-        member.interruptData = self:GetInterruptDataForSpec(specID)
-    end
+    member.interruptData = self:GetInterruptDataForSpec(specID)
     member.specID = specID
 end
 
@@ -249,10 +231,8 @@ end
 -- Every refresh that sets the player's main kick comes here (roster, spec,
 -- pet or spellbook change), so a change is handled once whichever runs first.
 -- A new spec ends the cast mark. A new kick has not been used, so its cooldown
--- starts clear. Either way synced teammates hear the kick, or spell 0 for
--- none, at once; a change to the talent-added kick alone is announced too.
--- Returns whether the main kick changed, then whether anything the row shows
--- changed.
+-- starts clear. Returns whether the main kick changed, then whether anything
+-- the row shows changed.
 function KT:ApplyOwnKicks(member, specID)
     local specChanged = member.ownKickSpec ~= specID
     if specChanged then
@@ -267,10 +247,6 @@ function KT:ApplyOwnKicks(member, specID)
     local mainChanged = oldID ~= (data and data.id)
     if mainChanged then
         member.kickStart, member.kickDuration = nil, nil
-    end
-    local hello = KT.OwnKickHello(mainChanged, specChanged, extrasChanged)
-    if hello then
-        self:BroadcastHello(true, hello == "tell")
     end
     return mainChanged, mainChanged or specChanged or extrasChanged
 end
@@ -325,7 +301,7 @@ function KT:RefreshPartyRoster()
             local guid = UnitGUID(unit)
             if guid then
                 currentGuids[guid] = unit
-                local name, realm = UnitName(unit)
+                local name = UnitName(unit)
                 local _, classToken = UnitClass(unit)
 
                 if not self.partyMembers[guid] then
@@ -335,47 +311,15 @@ function KT:RefreshPartyRoster()
                 member.unit = unit
                 member.name = name
                 SetMemberClass(member, classToken)
-                -- Identity is compared only through these plain fields;
-                -- member.name is for display. The realm-qualified key keeps two
-                -- teammates sharing a name apart when messages are matched.
-                if KE:IsSafeValue(name) and not issecretvalue(realm) then
-                    local raw = (realm and realm ~= "") and (name .. "-" .. realm) or name
-                    member.fullKey = KE:BuildNicknameKey(raw, GetNormalizedRealmName())
-                    member.shortName = name
-                else
-                    member.fullKey = nil
-                    member.shortName = nil
-                end
 
-                -- Spec lookup: player via GetSpecialization (always reliable for
-                -- self), party via the LibSpec name cache. If the cache hasn't
-                -- yet been populated for this party member (e.g. they just
-                -- joined and the comm hasn't arrived), specID stays 0 and the
-                -- LibSpec callback will fill it in shortly via ApplySpecData.
-                -- IsSafeValue mirrors HealerMana's pattern: UnitName for friendly
-                -- party members hasn't been observed secret in M+, but a secret
-                -- string used as a table key would silently miss every lookup.
-                local specID = 0
                 if unit == "player" then
-                    specID = GetPlayerSpecID() or 0
-                elseif name and KE:IsSafeValue(name) then
-                    specID = self.nameSpecCache[name] or 0
-                    -- Another realm's teammate the short-name read missed.
-                    if specID == 0 and member.fullKey and realm and realm ~= "" then
-                        specID = self.nameSpecCache[member.fullKey] or 0
-                    end
-                end
-
-                if specID > 0 then
-                    if unit == "player" then
+                    local specID = GetPlayerSpecID() or 0
+                    if specID > 0 then
                         member.specID = specID
                         self:ApplyOwnKicks(member, specID)
-                    else
-                        self:ApplySpecKick(member, specID)
                     end
-                elseif unit ~= "player" and not member.interruptData and not member.kickFromMessage then
-                    -- No spec data yet — class-default fallback so the bar
-                    -- exists at all (LibSpec/comm refinement overwrites it)
+                elseif not member.interruptData then
+                    -- Not inspected yet: the class kick, so the bar exists.
                     member.interruptData = self:GuessClassInterrupt(unit, classToken)
                 end
             end
@@ -410,33 +354,6 @@ function KT:ApplySpecData(guid, unit, specID)
         self:UpdateBars()
         self:LayoutBars()
     end
-end
-
--- LibSpec group callback: per-member spec/role updates via addon comms. Find
--- the matching partyMembers entry by name and apply the spec. New members may
--- arrive here BEFORE GROUP_ROSTER_UPDATE has populated partyMembers — in that
--- case we just cache the spec and the next RefreshPartyRoster will read it.
-function KT:OnLibSpecGroupUpdate(specID, _, _, playerName)
-    if not specID or specID == 0 or not playerName then return end
-    -- A secret name is never a table key and never compared.
-    if not KE:IsSafeValue(playerName) then return end
-    self.nameSpecCache[playerName] = specID
-    -- Another realm's teammate arrives as Name-Realm, which no short name
-    -- equals; their spec is also kept under the key the roster gives them.
-    local crossKey = KE:BuildNicknameKey(playerName, nil)
-    if crossKey then self.nameSpecCache[crossKey] = specID end
-
-    if not self.isActive then return end
-    for guid, member in pairs(self.partyMembers) do
-        if member.shortName == playerName and member.unit ~= "player" then
-            self:ApplySpecData(guid, member.unit, specID)
-            return
-        end
-    end
-    -- Reached only when the loop above matched nobody.
-    if not crossKey then return end
-    local guid, member = KT.MemberForSender(self.partyMembers, crossKey, nil)
-    if guid and member then self:ApplySpecData(guid, member.unit, specID) end
 end
 
 function KT:OnPlayerSpecChanged()
@@ -497,7 +414,7 @@ function KT:RefreshMemberRow(guid)
     self:LayoutBars()
 end
 
--- The member's kick is ready again (a message said so).
+-- The member's kick is ready again.
 function KT:ClearKick(guid)
     local member = self.partyMembers[guid]
     if not member then return end
@@ -536,10 +453,9 @@ local function KickedFrom(entry)
 end
 
 -- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
--- truth that someone's kick landed. The player's own goes on the own row; an
--- open KICK claim takes the next one; a teammate the game names plainly is
--- charged at once unless their messages drive their row; a hidden kicker's
--- waits for its meter report.
+-- truth that someone's kick landed. The player's own goes on the own row; a
+-- teammate the game names plainly is charged at once; a hidden kicker's waits
+-- for its meter report.
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     -- The payload may be secret while unit spellcasts are restricted; a
@@ -600,19 +516,6 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         return
     end
 
-    -- A synced teammate's KICK that arrived first takes this interrupt, and
-    -- the kicked spell goes to that teammate's row.
-    if self.commMode ~= "feed" then
-        local paired, key = KT.PairRecord(self.kickPairing, now, KICK_PAIR_WINDOW)
-        if paired then
-            entry.state = "claimed"
-            self:ShowKicked(KT.PairKeyGuid(key), KickedFrom(entry))
-            if DEBUG_KT then KE:Print("[KT] interrupt taken by an open KICK claim") end
-            if hidden or rosterGuid then self:QueueKick(entry, now) end
-            return
-        end
-    end
-
     if not hidden then
         -- A kicker outside the party has no row and no meter report.
         if not rosterGuid then
@@ -621,15 +524,9 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
             return
         end
         entry.claimable = true
-        local member = self.partyMembers[rosterGuid]
-        if KT.RowTakesKick(member, self:MessagesHeard()) then
+        if self.partyMembers[rosterGuid].interruptData then
             entry.state = "exact"
             self:ChargeKick(entry, rosterGuid)
-        elseif member.interruptData then
-            -- A synced teammate's row follows their messages: their KICK
-            -- claims this interrupt and brings its kicked spell. A kicked spell
-            -- stored now would draw on a later, unrelated cooldown.
-            entry.state = "synced"
         else
             entry.state = "dropped"
         end
@@ -640,12 +537,6 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 
     entry.claimable = true
     self:QueueKick(entry, now)
-end
-
--- Teammates' messages can arrive: chat is open and the player syncs kicks.
--- KT:OnCommReceived drops every message while they cannot.
-function KT:MessagesHeard()
-    return self.commMode ~= "feed" and self.db.KickSync ~= false
 end
 
 -- The roster member a plain kicker GUID belongs to: a teammate, or the owner
@@ -692,19 +583,16 @@ function KT:ChargeInterrupt(entry, hit)
         elseif member.unit == "player" then
             entry.state = "own"
             self:ShowKicked(owner, KickedFrom(entry))
-        elseif KT.RowTakesKick(member, self:MessagesHeard()) then
+        elseif member.interruptData then
             entry.state = "fold"
             self:ChargeKick(entry, owner)
-        elseif member.interruptData then
-            -- As at intake: their KICK claims it and brings the kicked spell.
-            entry.state = "synced"
         else
             entry.state = "dropped"
         end
         if DEBUG_KT then KE:Print("[KT] charge named: " .. entry.state) end
         return
     end
-    local guid, tier = KT.GuessTarget(self.partyMembers, hit.cands, GetTime(), self:MessagesHeard())
+    local guid, tier = KT.GuessTarget(self.partyMembers, hit.cands, GetTime(), false)
     local guessed = guid and self.partyMembers[guid]
     if not guessed then
         entry.state = "dropped"
@@ -799,21 +687,7 @@ function KT:ClearKickQueues()
     wipe(self.recentKicks)
     wipe(self.pendingKicks)
     wipe(self.meterHits)
-    wipe(self._claimable)
     wipe(self.lastEventAt)
-    self:ClearPairing()
-end
-
-function KT:ClearPairing()
-    wipe(self.kickPairing.claims)
-    wipe(self.kickPairing.paired)
-end
-
--- Everything teammates' messages taught, dropped together whenever those
--- messages cannot arrive (the chat lock, Kick Sync off).
-function KT:DropTeammateMessageState()
-    KT.DropMessageState(self.partyMembers)
-    self:ClearPairing()
 end
 
 -- A claim looks back at most KICK_PAIR_WINDOW; the pairing queues expire
@@ -821,15 +695,6 @@ end
 function KT:PruneKicks(now)
     local list = self.recentKicks
     while list[1] and now - list[1].startTime > KICK_PAIR_WINDOW do table.remove(list, 1) end
-end
-
--- One reused list, so a KICK message never allocates a new one.
-function KT:ClaimableKicks()
-    local list = wipe(self._claimable)
-    for _, entry in ipairs(self.recentKicks) do
-        if entry.claimable then list[#list + 1] = entry end
-    end
-    return list
 end
 
 ---------------------------------------------------------------------------------
@@ -934,106 +799,8 @@ function KT:OnMeterReset()
 end
 
 ---------------------------------------------------------------------------------
--- KE-to-KE Kick Sync (addon comm)
+-- Own kick success
 ---------------------------------------------------------------------------------
--- Party members also running KitnEssentials broadcast their own kicks, letting
--- receivers flip the sender's roster bar with the exact CD. Other teammates'
--- kicks come from nameplate interrupts (KT:HandleNameplateInterrupt). Sends
--- are refused inside a running key, and every send and parse is pcall'd, so a
--- blocked context loses only the sync.
-local COMM_PREFIX = "KEKick"
--- BliZzi Party Tools interop: their dispatcher accepts
--- KICK from any class-auto-registered party member — no HELLO handshake
--- required — and normalizes senders with Ambiguate like we do. Wire format:
--- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored
--- messages, never errors.
-local BLIZZI_PREFIX = "BliZziIT"
-
--- Success and DuplicatePrefix both leave a prefix registered; any other
--- result is tried again on the next activation.
-local PREFIX_RESULT    = Enum and Enum.RegisterAddonMessagePrefixResult
-local PREFIX_SUCCESS   = PREFIX_RESULT and PREFIX_RESULT.Success or 0
-local PREFIX_DUPLICATE = PREFIX_RESULT and PREFIX_RESULT.DuplicatePrefix or 1
-local COMM_PREFIXES = { COMM_PREFIX, BLIZZI_PREFIX }
-local prefixHeld = {}
-
-local whisperTargets = {}
-
-local function sendAddonMessage(prefix, msg, channel, target)
-    return pcall(C_ChatInfo.SendAddonMessage, prefix, msg, channel, target)
-end
-
--- Every send checks the chat lock first (KT.TransmitComm); while locked no
--- roster name is read. A whisper target is built only from plain values.
-function KT:Transmit(prefix, msg)
-    local locked = KE:IsChatMessagingLocked()
-    wipe(whisperTargets)
-    if not locked then
-        for i = 1, 4 do
-            local unit = "party" .. i
-            if UnitExists(unit) then
-                local n, r = UnitName(unit)
-                if KE:IsSafeValue(n) and not issecretvalue(r) then
-                    whisperTargets[#whisperTargets + 1] = (r and r ~= "") and (n .. "-" .. r) or n
-                end
-            end
-        end
-    end
-    return KT.TransmitComm(self.commState, locked, sendAddonMessage,
-        prefix, msg, IsInGroup(LE_PARTY_CATEGORY_INSTANCE), whisperTargets)
-end
-
--- skipMirror: a talent-added kick, which the mirror's receivers may take for
--- the sender's main kick.
-function KT:BroadcastKick(spellID, cd, skipMirror)
-    if not self.db.KickSync then return end
-    if not IsInGroup() then return end
-
-    if self:Transmit(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd) == "refused" or skipMirror then return end
-    self:Transmit(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
-end
-
--- Presence announce: lets other KE users verify us (and show our bar at
--- Ready) from dungeon start instead of on our first kick. Sent on activation
--- and roster changes (throttled), as a reply to a HELLO (forced when it
--- asked), and forced when the chat lock lifts or the own kicks change.
--- noAnswer marks a reply or a talent-added kick update; neither is answered.
-function KT:BroadcastHello(force, noAnswer)
-    if not self.db.KickSync then return end
-    if not self.isActive or not IsInGroup() then return end
-
-    local guid = UnitGUID("player")
-    local member = guid and self.partyMembers[guid]
-    local data = member and member.interruptData
-    if not member then return end
-
-    local now = GetTime()
-    if not KT.HelloAllowed(KE:IsChatMessagingLocked(), self._lastHelloSent, now, force, HELLO_THROTTLE) then
-        return
-    end
-    self._lastHelloSent = now
-
-    -- Spell 0 says the player has no kick now (a demon without one), so
-    -- teammates drop the row instead of keeping the last kick they heard.
-    local id, cd, remaining = 0, 0, 0
-    if data then
-        id, cd = data.id, self:OwnKickCooldown(data)
-        if member.kickStart and member.kickDuration then
-            remaining = math_max(0, member.kickStart + member.kickDuration - now)
-        end
-    end
-    self:Transmit(COMM_PREFIX, KT.EncodeHello(id, cd, remaining, noAnswer,
-        member.extraKicks and member.extraKicks[1], now))
-    -- Deliberately NO BliZzi-format hello: we stay out of their handshake
-    -- (kick-data-only participation, established interop posture).
-end
-
--- R: the sender's own corrected remaining time after a talent shortened its
--- kick. Sync mode only; the mirror carries nothing for it.
-function KT:BroadcastReduction(spellID, cd, remaining)
-    if not self.db.KickSync or self.commMode ~= "sync" or not IsInGroup() then return end
-    self:Transmit(COMM_PREFIX, "1;R;" .. spellID .. ";" .. cd .. ";" .. string_format("%.1f", remaining))
-end
 
 -- A kick the player cast and a nameplate interrupt credited to the player
 -- are one success when they land within the window, in either order.
@@ -1063,155 +830,6 @@ function KT:ApplyOwnSuccess()
     else
         self:ClearKick(guid)
     end
-    self:BroadcastReduction(data.id, duration, remaining)
-end
-
-local function getExtraKick(id)
-    return KE:GetExtraKick(id)
-end
-
-function KT:OnCommReceived(_, prefix, message, _, sender)
-    local isKE = prefix == COMM_PREFIX
-    if not isKE and prefix ~= BLIZZI_PREFIX then return end
-    if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    -- A message sent before the chat lock can arrive after it; it must not
-    -- re-teach what the lock dropped.
-    if not self:MessagesHeard() then return end
-    if not KE:IsSafeValue(sender) then return end
-
-    -- Wire input is untrusted; one pcall wraps parse + attribution so bad
-    -- input is dropped, not thrown.
-    local ok = pcall(function()
-        local shortSender = Ambiguate(sender, "short")
-        local senderKey = KE:BuildNicknameKey(sender, GetNormalizedRealmName())
-        -- Own echo, compared through the plain identity fields only.
-        local playerGuid = UnitGUID("player")
-        local own = playerGuid and self.partyMembers[playerGuid]
-        if not own then return end
-        if (own.fullKey and senderKey == own.fullKey)
-            or (not own.fullKey and own.shortName and shortSender == own.shortName) then
-            return
-        end
-
-        --   KE:     "1;KICK;spellID;cd"
-        --           "1;HELLO;spellID;cd;remaining;replyFlag;extraID;extraRemaining"
-        --           "1;R;spellID;cd;remaining"
-        --   BliZzi: "B1;KICK;spellID;cd" "B1;HELLO;class;spellID;cd"
-        local verb, sid, cd, remField, replyFlag, extraField, extraRemField
-        if isKE then
-            local ver, v, sidStr, cdStr, remStr, flagStr, extraStr, extraRemStr = strsplit(";", message)
-            if ver ~= "1" then return end  -- version-gate our own wire
-            verb, sid, cd, remField, replyFlag = v, tonumber(sidStr), tonumber(cdStr), remStr, flagStr
-            extraField, extraRemField = extraStr, extraRemStr
-        else
-            local hdr, cmd, a3, a4, a5 = strsplit(";", message)
-            if hdr ~= "B1" then return end
-            if cmd == "KICK" then
-                verb, sid, cd = "KICK", tonumber(a3), tonumber(a4)
-            elseif cmd == "HELLO" then
-                verb, sid, cd = "HELLO", tonumber(a4), tonumber(a5)  -- a3 = class
-            end
-        end
-        if verb ~= "KICK" and verb ~= "HELLO" and verb ~= "R" then return end
-        local valid
-        valid, sid, cd = KT.CleanWireKick(verb, sid, cd)
-        if not valid then return end
-        -- Wire cd is untrusted external input: cap it at the kick's table cd
-        -- so a bad client can't wedge a bar for hours.
-        local kickID = (sid and sid > 0) and KE:GetCanonicalKickSpell(sid) or nil
-        if cd then cd = KT.WireCooldownCap(cd, kickID and KE:GetKickCooldownCap(kickID)) end
-        local extra = kickID and KE:GetExtraKick(kickID)
-
-        local guid, member = KT.MemberForSender(self.partyMembers, senderKey, shortSender)
-        if not guid then return end
-        member.kickVerified = true  -- comm user: bar is tracked for real
-        if verb == "HELLO" and isKE then
-            local mode = KT.HelloReplyMode(replyFlag)
-            if mode then self:ScheduleHelloReply(mode == "force") end
-        end
-        -- The sender knows their own main kick best (also fills members our
-        -- spec logic had to defer); a talent-added kick has its own entry and
-        -- never replaces it. Once a message sets or clears the main kick, only
-        -- their messages do (KT:ApplySpecKick never re-guesses it); a cleared
-        -- kick drops their row until a message names one.
-        local change = KT.KickFromMessage(verb, isKE, sid, cd, extra)
-        if change == "set" then
-            member.kickFromMessage = true
-            local role = member.interruptData and member.interruptData.role or "DAMAGER"
-            member.interruptData = { id = kickID, cd = cd, role = role }
-        elseif change == "clear" then
-            member.kickFromMessage = true
-            member.interruptData = nil
-            member.kickStart, member.kickDuration = nil, nil
-            member.extraKicks = nil
-            self:UpdateBars()
-            self:LayoutBars()
-            return
-        end
-        local now = GetTime()
-        local extrasTouched = verb == "HELLO" and isKE
-            and KT.HelloExtras(member, extraField, extraRemField, getExtraKick, now)
-        if not member.interruptData then return end
-        self:UpdateBars()
-        if extrasTouched then self:RefreshMemberRow(guid) end
-
-        if verb == "KICK" and self.commMode ~= "feed" then
-            -- Keyed by teammate and canonical kick: Pummel then a throw inside
-            -- the window are two kicks, and each pairs with its own interrupt.
-            local claimable = self:ClaimableKicks()
-            local result, index = KT.PairComm(self.kickPairing, claimable,
-                guid .. ":" .. (kickID or 0), now, KICK_PAIR_WINDOW)
-            if result == "duplicate" then return end
-            member.kicked = nil
-            if result == "claimed" then
-                local entry = claimable[index]
-                member.kicked = KickedFrom(entry)
-                self:ClaimKick(entry, guid, "KICK")
-            end
-        end
-
-        if extra then
-            if verb == "KICK" then
-                local entry = KT.ExtraKick(member, kickID, cd)
-                entry.kickStart, entry.kickDuration = now, entry.cd
-                self:RefreshMemberRow(guid)
-            end
-            return
-        end
-
-        local duration, remaining = KT.MessageBarTimes(remField, cd, member.interruptData.cd)
-        -- Only an R that moved the row stamps it; a malformed R changes nothing.
-        local action, stamp = KT.CooldownFromMessage(verb, remaining, member.reducedAt, now, KICK_PAIR_WINDOW)
-        if stamp then member.reducedAt = now end
-        if action == "start" then
-            self:ConfirmKick(guid, cd)
-        elseif action == "set" then
-            self:ConfirmKick(guid, duration, remaining)
-        elseif action == "ready" then
-            self:ClearKick(guid)
-        end
-        if verb == "KICK" then self:RedrawKicked(guid) end
-    end)
-    if not ok and DEBUG_KT then
-        local okS, senderStr = pcall(tostring, sender)
-        KE:Print("[KT] kick comm parse failed from " .. (okS and senderStr or "?"))
-    end
-end
-
--- One reply per burst of HELLOs, spread so a party does not answer at once.
--- force: the burst held a HELLO asking for an answer, which the throttle does
--- not hold back; the reply itself is flagged, so it is never answered.
-function KT:ScheduleHelloReply(force)
-    if force then self._helloReplyForce = true end
-    if self._helloReplyPending then return end
-    self._helloReplyPending = true
-    local activation = self.activationID
-    C_Timer.After(math_random() * HELLO_REPLY_JITTER, function()
-        if self.activationID ~= activation then return end
-        local forceReply = self._helloReplyForce
-        self._helloReplyPending, self._helloReplyForce = false, false
-        if self.isActive then self:BroadcastHello(forceReply, true) end
-    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -1267,7 +885,6 @@ function KT:StartOwnExtraKick(guid, spellID)
             entry.kickStart, entry.kickDuration = GetTime(), entry.cd
             self:ClaimOwnKick(entry.kickStart, member)
             self:RefreshMemberRow(guid)
-            self:BroadcastKick(spellID, entry.cd, true)
             return
         end
     end
@@ -1311,7 +928,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         end
         -- A demon swap the events have not shown yet, or a demon kick the
         -- spellbook check missed: the kick just cast is the kick, and a
-        -- missing row appears. The KICK below announces it.
+        -- missing row appears.
         if not data or data.id ~= kickID then
             data = KickRow(kickID, kickCd, member.specID, data and data.role)
             member.interruptData = data
@@ -1322,8 +939,6 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     local cd = data and self:OwnKickCooldown(data, false)
     self:ConfirmKick(guid, cd)
     self:RedrawKicked(guid)
-    -- Tell party KE users so they can flip our roster bar with the real CD
-    if data then self:BroadcastKick(data.id, cd) end
     self:TryOwnReduction()
 end
 
@@ -1350,27 +965,13 @@ function KT:CreateCastFrame()
     self.castFrame = frame
 end
 
--- Another kick tracker's prefix is registered so its users' kicks reach us.
-function KT:EnsureCommPrefixes()
-    if not (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) then return end
-    for _, prefix in ipairs(COMM_PREFIXES) do
-        if not prefixHeld[prefix] then
-            local ok, result = pcall(C_ChatInfo.RegisterAddonMessagePrefix, prefix)
-            prefixHeld[prefix] = ok and (result == PREFIX_SUCCESS or result == PREFIX_DUPLICATE) or nil
-        end
-    end
-end
-
 function KT:RegisterCombatEvents()
     if self.combatEventsRegistered then return end
-    self:EnsureCommPrefixes()
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
     self.castFrame:RegisterUnitEvent("UNIT_PET", "player")
     self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
-    self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
-    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
     -- The first read after a gap must not be diffed against a list from before it.
     wipe(self.meterSnap)
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnMeterUpdate")
@@ -1383,16 +984,11 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
-    self:UnregisterEvent("CHAT_MSG_ADDON")
-    self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     self:UnregisterEvent("SPELLS_CHANGED")
     self:UnregisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
     self:UnregisterEvent("DAMAGE_METER_RESET")
     wipe(self.meterSnap)
     self.combatEventsRegistered = false
-    self.commMode = nil
-    self._lastHelloSent = nil
-    self.commState.commBlocked = nil
 
     self:ClearKickQueues()
 end
@@ -1415,8 +1011,7 @@ function KT:CheckActivation()
         self.isActive = true
         -- A callback scheduled before a disable must not act in this activation.
         self.activationID = self.activationID + 1
-        self._helloReplyPending, self._helloReplyForce = false, false
-        self._modeCheckPending, self._ownKickCheckPending = false, false
+        self._ownKickCheckPending = false
         -- A burst cut off by a deactivation must not carry into this one.
         self._meterReadPending, self._meterBurstExtra = false, 0
         wipe(self.meterBurstSessions)
@@ -1426,9 +1021,6 @@ function KT:CheckActivation()
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
-        self.commState.commBlocked = nil  -- new instance: re-probe the comm channel
-        self:UpdateCommMode()
-        self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
         self:UnregisterCombatEvents()  -- also clears the interrupt queues
@@ -1447,46 +1039,13 @@ end
 function KT:OnRosterUpdate()
     if self.isActive then
         self:RefreshPartyRoster()
-        self:BroadcastHello()  -- late joiners need to learn us (throttled)
     else
         self:CheckActivation()
     end
 end
 
--- Locked chat means teammates' messages cannot arrive: feed mode keeps each
--- teammate's row and running cooldown, and drops what only their messages
--- keep true (verification, talent-added kicks, reduction stamps, pairings).
-function KT:UpdateCommMode()
-    local mode, action = KT.CommModeStep(self.commMode, KE:IsChatMessagingLocked())
-    self.commMode = mode
-    if action == "enter-feed" then
-        self:DropTeammateMessageState()
-        self:UpdateBars()
-        self:LayoutBars()
-    elseif action == "enter-sync" then
-        self.commState.commBlocked = nil
-        self:ClearPairing()
-        self:UpdateBars()
-        self:LayoutBars()
-        self:BroadcastHello(true)
-    end
-end
-
--- The payload is not read: Core/Secret.lua records the change in its own
--- handler, so the lock check waits a frame for it.
-function KT:OnRestrictionChanged()
-    if self._modeCheckPending then return end
-    self._modeCheckPending = true
-    local activation = self.activationID
-    C_Timer.After(0, function()
-        if self.activationID ~= activation then return end
-        self._modeCheckPending = false
-        if self.isActive then self:UpdateCommMode() end
-    end)
-end
-
 -- A demon swap, a talent change or a respec can change the player's kick
--- (KT:ApplyOwnKicks clears and announces it). The live spec is read, so a
+-- (KT:ApplyOwnKicks clears it). The live spec is read, so a
 -- respec is applied here if this runs before OnPlayerSpecChanged. Most
 -- SPELLS_CHANGED events change nothing and redraw nothing.
 function KT:RefreshOwnKicks()
@@ -2385,20 +1944,10 @@ function KT:OnEnable()
     self:CreateCastFrame()
     self:RegWithEditMode()
 
-    self:EnsureCommPrefixes()
-
-    -- Register non-combat events. INSPECT_READY/PLAYER_REGEN_ENABLED no longer
-    -- needed — LibSpec handles party spec discovery passively via comms.
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnPlayerSpecChanged")
-
-    if LibSpec then
-        LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
-            KT:OnLibSpecGroupUpdate(specID, role, position, playerName)
-        end)
-    end
 
     -- OnUpdate is gated by _RefreshOnUpdate based on activeBars membership.
     -- It attaches the first time a bar is created (group entered, party
@@ -2413,7 +1962,6 @@ end
 function KT:OnDisable()
     self:UnregisterAllEvents()
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
-    if LibSpec then LibSpec.UnregisterGroup(self) end
     self.combatEventsRegistered = false
     self:CancelAllTimers()
     self:StopOnUpdate()
@@ -2421,20 +1969,15 @@ function KT:OnDisable()
     self:ClearKickQueues()
     self:HideAllBars()
     wipe(self.partyMembers)
-    wipe(self.nameSpecCache)
 
     self.isActive = false
     self.isPreview = false
-    self.commMode = nil
 
     if self.containerFrame then self.containerFrame:Hide() end
 end
 
 function KT:ApplySettings()
     self:UpdateDB()
-    -- Kick Sync off (the page or a profile change) drops what messages
-    -- taught, as the chat lock does; the redraw below shows it.
-    if not self:MessagesHeard() then self:DropTeammateMessageState() end
     if not self.containerFrame then return end
 
     self:ApplyContainerPosition()
