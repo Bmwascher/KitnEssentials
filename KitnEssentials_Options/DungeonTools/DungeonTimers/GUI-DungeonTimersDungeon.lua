@@ -245,6 +245,18 @@ local function GetModule()
     return nil
 end
 
+-- Test plays even when preset sounds are muted: muting is for live encounters,
+-- not the editor's preview.
+local function PreviewSound(soundKey)
+    if not soundKey or soundKey == "None" or soundKey == "" then return end
+    local LSM = KE.LSM
+    if not LSM then return end
+    local file = LSM:Fetch("sound", soundKey)
+    if not file then return end
+    local dtModule = GetModule()
+    PlaySoundFile(file, (dtModule and dtModule.db and dtModule.db.SoundChannel) or "Master")
+end
+
 -- The standalone DungeonTrash module owns the trash-ability override backend
 -- (keyed mapID:npcID:spellID). Trash rows are folded into the same list+detail
 -- editor as boss spells/phases; this fetches the module the trash branches read.
@@ -1367,7 +1379,6 @@ local function BuildActionsTabBody(parent, spellId)
 
     -- None is an explicit mute; nil retains the curated defaults.
     local soundList = GUIFrame.BuildSoundOptions()
-    local LSM = KE.LSM
 
     local spellData = DT and DT:GetSpellInfo(spellId)
     local hasNumberedSounds = spellData and type(spellData.ordinalSounds) == "table"
@@ -1391,20 +1402,6 @@ local function BuildActionsTabBody(parent, spellId)
             showCaption:SetText(numbered
                 and defaultSoundHint
                 or "Plays when the bar appears on screen (after the Reveal at delay if set).")
-        end
-    end
-
-    -- Test buttons always play even when the master mute is on — muting is
-    -- about live encounters, not the editor's preview. Channel still tracks
-    -- the user's SoundChannel choice so Test reflects in-encounter playback.
-    local function PreviewSound(soundKey)
-        if not soundKey or soundKey == "None" or soundKey == "" then return end
-        if not LSM then return end
-        local file = LSM:Fetch("sound", soundKey)
-        if file then
-            local DT_mod = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
-            local channel = (DT_mod and DT_mod.db and DT_mod.db.SoundChannel) or "Master"
-            PlaySoundFile(file, channel)
         end
     end
 
@@ -2458,21 +2455,6 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     body:SetAllPoints()
 
     local soundList = GUIFrame.BuildSoundOptions()
-    local LSM = KE.LSM
-
-    -- Test buttons always play even when the master mute is on — muting is
-    -- about live encounters, not the editor's preview. Channel still tracks
-    -- the user's SoundChannel choice so Test reflects in-encounter playback.
-    local function PreviewSound(soundKey)
-        if not soundKey or soundKey == "None" or soundKey == "" then return end
-        if not LSM then return end
-        local file = LSM:Fetch("sound", soundKey)
-        if file then
-            local DT_mod = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
-            local channel = (DT_mod and DT_mod.db and DT_mod.db.SoundChannel) or "Master"
-            PlaySoundFile(file, channel)
-        end
-    end
 
     local secondaryWidgets = {}
 
@@ -3054,20 +3036,6 @@ local function BuildTrashActionsTabBody(parent, item)
     body:SetAllPoints()
 
     local soundList = GUIFrame.BuildSoundOptions()
-    local LSM = KE.LSM
-
-    -- Preview always plays (editor preview, not gated by the live mute). Channel
-    -- tracks the DungeonTimers SoundChannel so it matches in-encounter playback.
-    local function PreviewSound(soundKey)
-        if not soundKey or soundKey == "None" or soundKey == "" then return end
-        if not LSM then return end
-        local file = LSM:Fetch("sound", soundKey)
-        if file then
-            local DT_mod = GetModule()
-            local channel = (DT_mod and DT_mod.db and DT_mod.db.SoundChannel) or "Master"
-            PlaySoundFile(file, channel)
-        end
-    end
 
     local secondaryWidgets = {}
 
@@ -3293,18 +3261,6 @@ local function BuildAuraSoundBody(parent, auraKey, contentWidth, onCaptionResize
     })
     soundRow:AddWidget(soundDropdown, 0.7)
 
-    -- Plays even when preset sounds are muted: muting is for live encounters,
-    -- not the editor's preview.
-    local function PreviewSound(soundKey)
-        if not soundKey or soundKey == "None" or soundKey == "" then return end
-        local LSM = KE.LSM
-        if not LSM then return end
-        local file = LSM:Fetch("sound", soundKey)
-        if file then
-            local channel = (DT and DT.db and DT.db.SoundChannel) or "Master"
-            PlaySoundFile(file, channel)
-        end
-    end
     testButton = GUIFrame:CreateButton(soundRow, "Test", {
         height = 28,
         callback = function()
@@ -3518,14 +3474,10 @@ local function BuildShieldWarningBody(parent, rowKey, contentWidth, onCaptionRes
         searchable = true,
     })
     soundRow:AddWidget(soundDropdown, 0.7)
-    -- Plays even when preset sounds are muted: muting is for live encounters,
-    -- not the editor's preview.
     local testButton = GUIFrame:CreateButton(soundRow, "Test", {
         height = 28,
         callback = function()
-            local key = DT and DT.GetShieldWarningSound and DT:GetShieldWarningSound()
-            local file = key and KE.LSM and KE.LSM:Fetch("sound", key)
-            if file then PlaySoundFile(file, (DT and DT.db and DT.db.SoundChannel) or "Master") end
+            PreviewSound(DT and DT.GetShieldWarningSound and DT:GetShieldWarningSound())
         end,
     })
     soundRow:AddWidget(testButton, 0.3, 0, 0, -12)
