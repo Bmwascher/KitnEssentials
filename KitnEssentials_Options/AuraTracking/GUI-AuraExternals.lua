@@ -10,6 +10,20 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 
+-- Each client's examples name spells that client has.
+local INTRO_TEXT, SELF_CAST_TOOLTIP, DEFENSIVES_TOOLTIP
+if KE.IS_FOREVER then
+    INTRO_TEXT = "Shows the external defensives other players put on you, Blessing of Protection and " ..
+        "Blessing of Sacrifice and the like, as icons with a glow, and can include your own defensives too."
+    SELF_CAST_TOOLTIP = "Shows only what other players put on you. Your own casts are hidden, which includes your own raid cooldowns such as Tranquility."
+    DEFENSIVES_TOOLTIP = "Include your own large defensive cooldowns (Shield Wall, Divine Shield, etc.) alongside externally-applied defensives."
+else
+    INTRO_TEXT = "Shows the external defensives other players put on you, Pain Suppression and " ..
+        "Ironbark and the like, as icons with a glow, and can include your own defensives too."
+    SELF_CAST_TOOLTIP = "Shows only what other players put on you. Your own casts are hidden, which includes your own raid cooldowns such as Rallying Cry or Aura Mastery."
+    DEFENSIVES_TOOLTIP = "Include your own large defensive cooldowns (Shield Wall, Iron Bark, etc.) alongside externally-applied defensives."
+end
+
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("AuraExternals", true) end
 
 local function RefreshPage()
@@ -65,8 +79,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
-    card1:AddLabel("Shows the external defensives other players put on you, Pain Suppression and " ..
-        "Ironbark and the like, as icons with a glow, and can include your own defensives too.")
+    card1:AddLabel(INTRO_TEXT)
     yOffset = card1:GetNextOffset()
 
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Auras", yOffset)
@@ -76,7 +89,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local selfCastCheck = GUIFrame:CreateCheckbox(row1b, "Hide Buffs You Cast Yourself", {
         value = db.HideSelfCast == true,
         callback = function(checked) db.HideSelfCast = checked; ApplySettings() end,
-        tooltip = "Shows only what other players put on you. Your own casts are hidden, which includes your own raid cooldowns such as Rallying Cry or Aura Mastery.",
+        tooltip = SELF_CAST_TOOLTIP,
     })
     row1b:AddWidget(selfCastCheck, 0.5)
     manager:Register(selfCastCheck, "all")
@@ -84,7 +97,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local defensivesCheck = GUIFrame:CreateCheckbox(row1b, "Include Defensives", {
         value = db.ShowBigDefensives ~= false,
         callback = function(checked) db.ShowBigDefensives = checked; ApplySettings() end,
-        tooltip = "Include your own large defensive cooldowns (Shield Wall, Iron Bark, etc.) alongside externally-applied defensives.",
+        tooltip = DEFENSIVES_TOOLTIP,
     })
     row1b:AddWidget(defensivesCheck, 0.5)
     manager:Register(defensivesCheck, "all")
