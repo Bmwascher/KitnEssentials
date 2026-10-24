@@ -581,3 +581,20 @@ describe("KickTracker inspect wanting", function()
         end
     end)
 end)
+
+describe("KickTracker new fight", function()
+    it("takes a read that shrank, or a plain session ID above the last read's, as a new fight", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "a higher plain ID", sid = 12, baseSid = 11, shrank = false, want = true },
+            { name = "the same plain ID", sid = 11, baseSid = 11, shrank = false, want = false },
+            { name = "a lower plain ID", sid = 10, baseSid = 11, shrank = false, want = false },
+            { name = "a plain ID, the last read's hidden", sid = 12, baseSid = nil, shrank = false, want = false },
+            { name = "a hidden ID, nothing fell", sid = nil, baseSid = 11, shrank = false, want = false },
+            { name = "a count fell, the same plain ID", sid = 11, baseSid = 11, shrank = true, want = true },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.NewFightAt(row.sid, row.baseSid, row.shrank), row.name)
+        end
+    end)
+end)

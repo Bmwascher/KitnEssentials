@@ -359,6 +359,15 @@ function KT.ListsMoved(rows, n, prevRows, prevN)
     return false
 end
 
+-- Whether an Interrupts update starts a new fight: its read shrank, or its
+-- plain session ID is above the last read's. A lower or equal ID, or a
+-- missing one, adds nothing: a wrong new fight would take every teammate's
+-- entries as kicks, a missed one only misses a kick.
+function KT.NewFightAt(sid, baseSid, shrank)
+    if shrank then return true end
+    return sid ~= nil and baseSid ~= nil and sid > baseSid
+end
+
 -- Each owner's list growth over the baseline, and their entries, a pet's
 -- counted for its owner. Fills growth and entries.
 function KT.OwnerGrowth(n, prevN, growth, entries)

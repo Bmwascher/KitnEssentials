@@ -78,8 +78,8 @@ local function NewRead()
     return { rows = {}, rowsOk = false, n = {}, a = {}, guid = {} }
 end
 
--- A read: rows (KT.RowKey per meter row, in order), rowsOk, sid (the plain
--- session ID), and per slot n (list length, plain), a (total, opaque: only
+-- A read: rows (KT.RowKey per meter row, in order), rowsOk, sid (its
+-- update's plain session ID, or nil), and per slot n (list length, plain), a (total, opaque: only
 -- ever handed to a layer) and guid.
 KT.meterBase = NewRead()   -- the read the next update is measured against
 KT.meterRead = NewRead()   -- the spare the next read fills
@@ -122,15 +122,13 @@ end
 
 -- The Current session's rows in the meter's order, each keyed by KT.RowKey (a
 -- row whose class or icon does not read keeps its place with a key that
--- matches nobody), and its plain session ID. Returns whether the rows read,
--- then the ID.
+-- matches nobody). Returns whether the rows read.
 local function ReadRows(rows)
     wipe(rows)
     local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, CURRENT, METER_INTERRUPTS)
-    if not ok or not Usable(session) then return false, nil end
-    local sid = PlainNumber(session.sessionID)
+    if not ok or not Usable(session) then return false end
     local sources = session.combatSources
-    if not Usable(sources) then return false, sid end
+    if not Usable(sources) then return false end
     for i = 1, #sources do
         local src = sources[i]
         local class, icon, isLocal
@@ -143,7 +141,7 @@ local function ReadRows(rows)
         end
         rows[i] = KT.RowKey(class, icon, isLocal)
     end
-    return true, sid
+    return true
 end
 
 -- One source by its GUID: its list length (plain) and its total (opaque,
@@ -154,13 +152,6 @@ local function ReadSource(guid)
     local spells = source.combatSpells
     if not Usable(spells) then return nil, nil end
     return #spells, source.totalAmount
-end
-
-local function CurrentSessionID()
-    if not MeterReady() then return nil end
-    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, CURRENT, METER_INTERRUPTS)
-    if not ok or not Usable(session) then return nil end
-    return PlainNumber(session.sessionID)
 end
 
 local specIcons = {}
@@ -199,7 +190,7 @@ function KT:ReadMeter(read)
         read.rowsOk, read.sid = false, nil
         return
     end
-    read.rowsOk, read.sid = ReadRows(read.rows)
+    read.rowsOk, read.sid = ReadRows(read.rows), nil
     for i = 1, #KT.SLOTS do
         local slot = KT.SLOTS[i]
         local guid = guidOf[slot]
@@ -314,12 +305,13 @@ function KT:SettleMeter(T, e, landedHere)
 end
 
 -- The first Interrupts update of a frame, read a frame later against the last
--- read; T is the update's time. A count that fell or fewer rows is a new
--- fight, and growth is then measured from nothing. An update with no growth,
+-- read; T is the update's time and sid its plain session ID, or nil. A new
+-- fight (KT.NewFightAt) starts growth from nothing. An update with no growth,
 -- no row, no own cast pending and no plate waiting decides nothing.
-function KT:AttributeMeter(T)
+function KT:AttributeMeter(T, sid)
     if self.meterNeedsBase then
-        self:RebaseMeter(true)
+        self:RebaseMeter()
+        self.meterBase.sid = sid
         return
     end
     local base, read = self.meterBase, self.meterRead
@@ -328,7 +320,8 @@ function KT:AttributeMeter(T)
     KT.CarryCounts(read, base)
     local prevN = KT.BaselineCounts(read, base, wipe(self.meterPrevN), wipe(self.meterPrevA))
     local prevRows = base.rows
-    local shrank = KT.ListsMoved(read.rows, read.n, prevRows, prevN)
+    local shrank = KT.NewFightAt(sid, base.sid, KT.ListsMoved(read.rows, read.n, prevRows, prevN))
+    read.sid = sid
     self:ReleasePetSwaps(read, base)
     self.meterBase, self.meterRead = read, base
     self._meterReadT = GetTime()
@@ -467,20 +460,10 @@ end
 ---------------------------------------------------------------------------------
 -- Baselines and events
 ---------------------------------------------------------------------------------
--- A new baseline: on the session event only when the session ID reads plain
--- and changed. A hidden ID is left to the next Interrupts update, which takes
--- a count that fell as a new fight; adopting a read here could take a
--- repeated-spell kick's raised total as the baseline before its own update
--- reads it. force (activation, a meter reset, a read that must be a
--- baseline) adopts a read at once.
-function KT:RebaseMeter(force)
-    local base = self.meterBase
-    if not force then
-        if self._meterReadPending or self._meterReadT == GetTime() then return end
-        local sid = CurrentSessionID()
-        if sid == nil or sid == base.sid then return end
-    end
-    local read = self.meterRead
+-- A new baseline (activation, a meter reset, the preview, a read that must
+-- be a baseline): the read is adopted as it stands.
+function KT:RebaseMeter()
+    local base, read = self.meterBase, self.meterRead
     self:ReadMeter(read)
     KT.CarryCounts(read, base)
     wipe(self.meterExpected)
@@ -492,30 +475,29 @@ end
 -- The meter event fires for every meter type, hundreds of times a second in
 -- a big pull; any other type is one check and a return. The first Interrupts
 -- update of a frame starts one read a frame later, after that frame's other
--- updates and plates. The preview keeps the baseline current instead.
-function KT:OnMeterUpdate(_, meterType)
+-- updates and plates; the read takes the last plain session ID they carried.
+-- The preview keeps the baseline current instead.
+function KT:OnMeterUpdate(_, meterType, sessionID)
     if not METER_INTERRUPTS or issecretvalue(meterType) or meterType ~= METER_INTERRUPTS then return end
+    local sid = PlainNumber(sessionID)
+    if sid then self._meterSid = sid end
     if self._meterReadPending then return end
-    self._meterReadPending = true
+    self._meterReadPending, self._meterSid = true, sid
     local activation, T = self.activationID, GetTime()
     C_Timer.After(0, function()
         if self.activationID ~= activation then return end
         self._meterReadPending = false
         if not self.isActive then return end
         if self.isPreview then
-            self:RebaseMeter(true)
+            self:RebaseMeter()
         else
-            self:AttributeMeter(T)
+            self:AttributeMeter(T, self._meterSid)
         end
     end)
 end
 
-function KT:OnMeterSessionUpdate()
-    if self.isActive then self:RebaseMeter(false) end
-end
-
 function KT:OnMeterReset()
-    if self.isActive then self:RebaseMeter(true) end
+    if self.isActive then self:RebaseMeter() end
 end
 
 -- Every meter state goes together (deactivation, preview, disable): the

@@ -831,7 +831,6 @@ function KT:RegisterCombatEvents()
     self.castFrame:RegisterUnitEvent("UNIT_PET", "player")
     self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnMeterUpdate")
-    self:RegisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED", "OnMeterSessionUpdate")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
     self.combatEventsRegistered = true
 end
@@ -843,7 +842,6 @@ function KT:UnregisterCombatEvents()
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("SPELLS_CHANGED")
     self:UnregisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
-    self:UnregisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED")
     self:UnregisterEvent("DAMAGE_METER_RESET")
     self.combatEventsRegistered = false
 
@@ -880,7 +878,7 @@ function KT:CheckActivation()
         self:RefreshPartyRoster()
         -- The first read is the baseline: kicks before the activation are
         -- not credited.
-        self:RebaseMeter(true)
+        self:RebaseMeter()
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
         self:UnregisterCombatEvents()  -- also clears the interrupt queues
