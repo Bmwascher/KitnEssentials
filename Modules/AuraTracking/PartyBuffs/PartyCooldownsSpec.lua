@@ -9,22 +9,17 @@
 ---@class KE
 local KE = select(2, ...)
 
-local _G = _G
+local C_SpecializationInfo = C_SpecializationInfo
 local C_Timer = C_Timer
-local CanInspect = CanInspect
-local ClearInspectPlayer = ClearInspectPlayer
 local CreateFrame = CreateFrame
-local GetInspectSpecialization = GetInspectSpecialization
 local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
 local IsGUIDInGroup = IsGUIDInGroup
 local IsInRaid = IsInRaid
-local NotifyInspect = NotifyInspect
 local UnitClass = UnitClass
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
-local UnitIsConnected = UnitIsConnected
 local UnitNameUnmodified = UnitNameUnmodified
 local UnitRace = UnitRace
 local ipairs = ipairs
@@ -36,7 +31,6 @@ local wipe = wipe
 -- Optional: without it the chain starts at the inspect.
 local LibSpec = LibStub("LibSpecialization", true)
 
-local INSPECT_TIMEOUT = 5
 local TICK = 1
 
 local Spec = {}
@@ -55,8 +49,12 @@ Spec.libSpecs = {}
 -- Name -> the talent string of that name's last library message.
 Spec.libTalents = {}
 Spec.members = {}
+-- GUID -> its record in the bound list.
+Spec.listed = {}
 
-local events, foreignHooked
+-- The shared inspect queue's handle, taken on the first enable.
+local handle
+local events
 
 local function Plain(value)
     if KE:IsSecretValue(value) then return nil end
@@ -143,7 +141,7 @@ function Spec.Resolve(m)
     else
         local unit = m.unit
         sources.lib, m.libKey = LibSpecFor(unit)
-        sources.inspect = m.inspected or Ask(GetInspectSpecialization, unit)
+        sources.inspect = m.inspected or Ask(C_SpecializationInfo.GetInspectSpecialization, unit)
         local ok, _, class = pcall(UnitClass, unit)
         if ok then sources.class = Plain(class) end
         sources.role = Ask(UnitGroupRolesAssigned, unit)
@@ -203,73 +201,41 @@ function Spec.ReadSelf(m)
     end
 end
 
--- Whether Blizzard's Inspect window is shown, and whether its talent view
--- shows another player.
-local function InspectViews()
-    local inspectFrame, spells = _G.InspectFrame, _G.PlayerSpellsFrame
-    local talentsInspecting = false
-    if spells and type(spells.IsInspecting) == "function" then
-        local ok, inspecting = pcall(spells.IsInspecting, spells)
-        talentsInspecting = ok and inspecting == true
-    end
-    return inspectFrame ~= nil and inspectFrame:IsShown() == true, talentsInspecting
+-- The record listed for a GUID, else the one kept for it: an inspect answer
+-- can arrive after a roster change emptied the list.
+local function Record(guid)
+    return Spec.listed[guid] or Spec.byGUID[guid]
 end
 
--- One request at most per tick, and none in the cases NextInspect refuses.
-function Spec.Tick()
-    local now = GetTime()
-    local rules = KE.PartyCooldownsRules
-    if Spec.pending then
-        if now - Spec.lastRequest < INSPECT_TIMEOUT then return end
-        rules.CountTry(Spec.pending, now, OnlyStale(Spec.pending))
-        Spec.pending = nil
-    end
-    local waiting = false
-    for _, m in ipairs(Spec.members) do
-        m.done = Done(m)
-        if not m.done then
-            waiting = true
-            m.canInspect = Ask(CanInspect, m.unit) == true
-            m.offline = Ask(UnitIsConnected, m.unit) == false
-        end
-    end
-    if not waiting then
-        Spec.ticker:Cancel()
-        Spec.ticker = nil
-        return
-    end
-    local inspectShown, talentsInspecting = InspectViews()
-    local m = rules.NextInspect({
-        inspectShown = inspectShown,
-        talentsInspecting = talentsInspecting,
-        inCombat = InCombatLockdown(),
-        now = now,
-        lastRequest = Spec.lastRequest,
-        foreignAt = Spec.foreignAt,
-    }, Spec.members)
-    if not m then return end
-    Spec.lastRequest = now
-    if pcall(NotifyInspect, m.unit) then
-        Spec.pending = m
+-- With Class Cooldowns, Trinkets, Racials and the box all off nothing needs
+-- a spec, so nobody is listed and the queue hears no event.
+local function AnyTracked()
+    return Spec.trackClass == true or Spec.trackTrinkets == true or Spec.trackRacials == true
+        or Spec.trackHealers == true
+end
+
+-- The bound records are the queue's demand: Spec.Member keeps each one's
+-- unit current, and the queue reads it at every use.
+local function SendDemand()
+    if not handle then return end
+    if Spec.active and AnyTracked() then
+        handle:SetDemand(Spec.members)
     else
-        rules.CountTry(m, now, OnlyStale(m))
+        handle:SetDemand(nil)
     end
 end
 
 function Spec.Wake()
-    if Spec.ticker or not Spec.active then return end
-    for _, m in ipairs(Spec.members) do
-        if not Done(m) then
-            Spec.ticker = C_Timer.NewTicker(TICK, Spec.Tick)
-            return
-        end
-    end
+    if Spec.active and handle then handle:Wake() end
 end
 
 -- The bound members, in slot order.
 function Spec.SetMembers(list)
     Spec.members = list
-    Spec.Wake()
+    local listed = {}
+    for _, m in ipairs(list) do listed[m.guid] = m end
+    Spec.listed = listed
+    SendDemand()
 end
 
 -- Nothing was watched for a teammate who left, so their record goes, and
@@ -305,28 +271,31 @@ function Spec.ForgetSpec(guid)
     Spec.Wake()
 end
 
--- Another addon's inspect answers here too; only the queued GUID counts.
-local function OnInspectReady(guid)
-    if KE:IsSecretValue(guid) then return end
-    local m = Spec.pending
-    if not m or m.guid ~= guid then return end
-    Spec.pending = nil
-    local unit = m.unit
-    if KE:GetSafeUnitGUID(unit) == guid then
-        m.inspected = Ask(GetInspectSpecialization, unit)
+-- The queue asks these at every tick and answer. OnRead runs inside the valid
+-- inspect, before it is cleared; OnChanged after the clear and the try count.
+local callbacks = {
+    Wants = function(guid)
+        local m = Record(guid)
+        return m ~= nil and not Done(m)
+    end,
+    OnlyStale = function(guid)
+        local m = Record(guid)
+        return m ~= nil and OnlyStale(m)
+    end,
+    OnRead = function(guid, unit, snapshot)
+        local m = Record(guid)
+        if not m then return end
+        m.inspected = snapshot.spec
         Spec.Resolve(m)
         for _, reader in ipairs(Spec.readers) do
             if IsOn(reader) and reader.Wanted(m) then reader.Read(m, unit) end
         end
-    end
-    local rules = KE.PartyCooldownsRules
-    if not (rules.InspectInUse(InspectViews()) or rules.ForeignBusy(GetTime(), Spec.foreignAt)) then
-        pcall(ClearInspectPlayer)
-    end
-    m.done = Done(m)
-    if not m.done then KE.PartyCooldownsRules.CountTry(m, GetTime(), OnlyStale(m)) end
-    Changed(m)
-end
+    end,
+    OnChanged = function(guid)
+        local m = Record(guid)
+        if m then Changed(m) end
+    end,
+}
 
 -- The library sends a teammate's message again on a talent change, and also,
 -- unchanged, whenever anyone in the group asks, so only a talent string that
@@ -354,10 +323,6 @@ local function OnLibSpec(specID, _, _, playerName, talents)
 end
 
 local function OnEvent(_, event, arg1, arg2)
-    if event == "INSPECT_READY" then
-        OnInspectReady(arg1)
-        return
-    end
     -- Two readers may share an event.
     for _, reader in ipairs(Spec.readers) do
         if reader.OnEvent and IsOn(reader) then reader.OnEvent(event, arg1, arg2) end
@@ -366,7 +331,6 @@ end
 
 local function RegisterEvents()
     events:UnregisterAllEvents()
-    events:RegisterEvent("INSPECT_READY")
     for _, reader in ipairs(Spec.readers) do
         if IsOn(reader) then
             for _, event in ipairs(reader.events or {}) do events:RegisterEvent(event) end
@@ -374,41 +338,29 @@ local function RegisterEvents()
     end
 end
 
--- Module enable: only the library registration, a callback in the library's
+-- Module enable: the library registration, a callback in the library's
 -- own table that stores one number per message, so a spec sent while the
--- content gate is closed is known on the next activation.
+-- content gate is closed is known on the next activation; and the queue
+-- subscription, which starts nothing.
 function Spec.Enable(onChange)
     Spec.onChange = onChange
+    if not handle then handle = KE.GroupInspect:Subscribe("PartyCooldowns", callbacks) end
     if Spec.enabled then return end
     Spec.enabled = true
     if LibSpec then LibSpec.RegisterGroup(Spec, OnLibSpec) end
 end
 
--- Another addon's inspect request. KE's own never reach the hook: they call
--- the local captured at load, and the hook wraps only the global.
-local function OnForeignInspect()
-    if Spec.active then Spec.foreignAt = GetTime() end
-end
-
--- The content gate: every event and the inspect ticker live only between
--- these two. The inspect hook is installed on the first activation and is
--- inert while inactive; a hook cannot be removed.
+-- The content gate: every reader event lives only between these two, and the
+-- bound members are the queue's demand only while something needs a spec.
 function Spec.Activate()
     if Spec.active or not Spec.enabled then return end
     Spec.active = true
-    if not foreignHooked then
-        local notify = _G.NotifyInspect
-        if type(notify) == "function" then
-            hooksecurefunc("NotifyInspect", OnForeignInspect)
-            foreignHooked = true
-        end
-    end
     if not events then
         events = CreateFrame("Frame")
         events:SetScript("OnEvent", OnEvent)
     end
     RegisterEvents()
-    Spec.Wake()
+    SendDemand()
 end
 
 -- Which cooldown cells can show, from the Class Cooldowns, Trinkets and Show
@@ -433,7 +385,7 @@ function Spec.SetTracked(class, trinkets, racials, healers)
     if boxChanged then
         for _, m in pairs(Spec.byGUID) do ClearTalents(m) end
     end
-    Spec.Wake()
+    SendDemand()
 end
 
 -- Nothing is watched while the gate is closed, so every member record goes
@@ -442,14 +394,11 @@ function Spec.Deactivate()
     if not Spec.active then return end
     Spec.active = false
     events:UnregisterAllEvents()
-    if Spec.ticker then
-        Spec.ticker:Cancel()
-        Spec.ticker = nil
-    end
-    Spec.pending = nil
     Spec.members = {}
+    Spec.listed = {}
     Spec.player = nil
     wipe(Spec.byGUID)
+    SendDemand()
 end
 
 function Spec.Disable()
@@ -473,13 +422,16 @@ local GetInventoryItemID = GetInventoryItemID
 local TRINKET_SLOTS = { 13, 14 }
 local CHEST_AND_MAIN_HAND = { 5, 16 }
 
-local loadTries, lengthTries = {}, {}
+-- Item ID -> requests and counted empty reads; and when the last empty read
+-- was counted.
+local loadTries, lengthTries, lengthAt = {}, {}, {}
 
 -- Out of combat. Returns whether the length is settled. A tooltip with no
 -- cooldown line may not have finished loading, so it is read again at the
 -- next combat end, item load, read or timed retry; past LOAD_TRIES such reads
 -- the item stores false and gets no cell. A timed retry's read is not
--- counted: the retries run per member, the count per item.
+-- counted: the retries run per member, the count per item. Nor is a read
+-- within LENGTH_GAP of a counted one: one item load reads it per wearer.
 local function ReadLength(itemID, retry)
     if Spec.lengths[itemID] ~= nil then return true end
     if InCombatLockdown() then return false end
@@ -494,7 +446,9 @@ local function ReadLength(itemID, retry)
             return true
         end
     end
-    if retry or KE.PartyCooldownsRules.TakeLoadTry(lengthTries, itemID) then return false end
+    if retry or KE.PartyCooldownsRules.TakeLengthTry(lengthTries, lengthAt, itemID, GetTime()) then
+        return false
+    end
     Spec.lengths[itemID] = false
     return true
 end
@@ -652,15 +606,18 @@ Spec.readers[#Spec.readers + 1] = {
             end
             -- Changed can add a record, and a key added during a pairs walk
             -- is undefined.
-            local changed = {}
+            local changed
             for _, m in pairs(Spec.byGUID) do
                 if m.trinketItems and not m.trinketsComplete
                     and (not itemID or HasItem(m, itemID)) then
                     Fill(m)
+                    changed = changed or {}
                     changed[#changed + 1] = m
                 end
             end
-            for _, m in ipairs(changed) do Changed(m) end
+            if changed then
+                for _, m in ipairs(changed) do Changed(m) end
+            end
         end
     end,
 }
@@ -671,106 +628,17 @@ Spec.readers[#Spec.readers + 1] = {
 ---------------------------------------------------------------------------------
 local C_ClassTalents = C_ClassTalents
 local C_Traits = C_Traits
-local debugprofilestop = debugprofilestop
 local INSPECT_CONFIG = Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID
 local MAX_MISSES = 3
 
--- spec -> talent -> the nodes and entries holding it, found by one walk of
--- the class tree; and per spec, the walks that found none. Per spec: two
--- specs can hold the same talent on nodes of their own.
-local index, misses = {}, {}
-
--- One walk of the tree, keeping the spec's wanted talents. Spec.locateMs keeps
--- the longest walk in milliseconds, so its cost can be read in game. A hero
--- selection entry has no definition and is skipped.
-local function Index(specID, tree, config, want)
-    local start = debugprofilestop()
-    local found, any = {}, false
-    for _, nodeID in ipairs(C_Traits.GetTreeNodes(tree) or {}) do
-        local node = C_Traits.GetNodeInfo(config, nodeID)
-        for _, entryID in ipairs(type(node) == "table" and node.entryIDs or {}) do
-            local entry = C_Traits.GetEntryInfo(config, entryID)
-            local definitionID = type(entry) == "table" and entry.definitionID
-            local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
-            -- A talent missing from the index reads 0, so an entry that cannot
-            -- be read fails the walk instead of leaving a gap.
-            if type(entry) ~= "table" or (definitionID and type(definition) ~= "table") then
-                misses[specID] = (misses[specID] or 0) + 1
-                return nil
-            end
-            local talent = definition and definition.spellID
-            if talent and want[talent] then
-                local spots = found[talent] or {}
-                found[talent] = spots
-                spots[#spots + 1] = { node = nodeID, entry = entryID }
-                any = true
-            end
-        end
-    end
-    local ms = debugprofilestop() - start
-    if ms > (Spec.locateMs or 0) then Spec.locateMs = ms end
-    if not any then
-        misses[specID] = (misses[specID] or 0) + 1
-        return nil
-    end
-    index[specID] = found
-    return found
-end
-
-local function HasTree(trees, tree)
-    if type(tree) ~= "number" then return false end
-    for _, id in ipairs(trees) do
-        if id == tree then return true end
-    end
-    return false
-end
-
--- Every wanted talent's rank in config: the active entry's rank, the largest
--- over the talent's nodes, 0 when not taken. While the box is off, a talent
--- only box rows name is not read; the walk still keeps it, since the walk
--- visits every node either way. Nil when it cannot be answered yet: no
--- inspect data, a loadout not of this spec's class, no wanted talent found,
--- or a node unreadable; the reader counts that as a miss. A second result
--- true means the answer is skipped without a miss: a first walk would run in
--- combat. The first walk's gate is Rules.FirstWalk.
-local function ReadRanks(specID, config, loadoutSpec)
-    local out = {}
+-- The spec's talents and the ones a read skips, or nil when none of them
+-- counts now and the answer is empty at once.
+local function TalentsToRead(specID)
     local rules = KE.PartyCooldownsRules
     local talents = rules.TalentsFor(specID)
     local boxOn = Spec.trackHealers == true
-    if not (talents and (talents.rows or boxOn)) then return out end
-    if config == INSPECT_CONFIG and C_Traits.HasValidInspectData() ~= true then return nil end
-    local info = C_Traits.GetConfigInfo(config)
-    local trees = type(info) == "table" and info.treeIDs
-    if type(trees) ~= "table" then return nil end
-    -- The inspect config names no player; a loadout of another class is not
-    -- this member's and must not cost the spec a walk.
-    local tree = C_ClassTalents.GetTraitTreeForSpec(specID)
-    if not HasTree(trees, tree) then return nil end
-    local found = index[specID]
-    if not found then
-        local walk = rules.FirstWalk((misses[specID] or 0) >= MAX_MISSES, specID, loadoutSpec, InCombatLockdown())
-        if walk == "miss" then return nil end
-        if walk == "skip" then return nil, true end
-        found = Index(specID, tree, config, talents.want)
-        if not found then return nil end
-    end
-    for talent, spots in pairs(found) do
-        if rules.TalentRead(talents, talent, boxOn) then
-            local rank = 0
-            for _, at in ipairs(spots) do
-                local node = C_Traits.GetNodeInfo(config, at.node)
-                if not (type(node) == "table" and type(node.ID) == "number" and node.ID > 0) then return nil end
-                local active = node.activeEntry
-                if node.subTreeActive ~= false and type(active) == "table" and active.entryID == at.entry
-                    and type(node.activeRank) == "number" and node.activeRank > rank then
-                    rank = node.activeRank
-                end
-            end
-            out[talent] = rank
-        end
-    end
-    return rules.FillAbsent(out, talents, found, boxOn)
+    if not (talents and (talents.rows or boxOn)) then return nil end
+    return talents, rules.TalentSkip(talents, boxOn)
 end
 
 -- A member's unreadable reads belong to the answer: a new spec gets its own
@@ -778,7 +646,7 @@ end
 -- the walk for everyone, so the walk's misses go too.
 local function ForgetTalents(m)
     ClearTalents(m)
-    wipe(misses)
+    if handle then handle:Refresh(m.guid, "forget") end
 end
 
 -- Companion, skyriding and profession configs fire TRAIT_CONFIG_UPDATED too;
@@ -810,18 +678,26 @@ Spec.readers[#Spec.readers + 1] = {
             and TalentsWanted(m)
     end,
     Read = function(m)
+        if not handle then return end
         -- The walk's misses are cleared as the retry reads, not as it waits:
         -- another member's reads in the wait could use them up again.
         if m.talentsRetryAt then
             m.talentsRetryAt = nil
-            wipe(misses)
+            handle:Refresh(m.guid, "retry")
         end
-        local ok, ranks, skip = pcall(ReadRanks, m.spec, INSPECT_CONFIG, m.inspected)
-        if ok and ranks then
+        local talents, skip = TalentsToRead(m.spec)
+        local ranks, reason
+        if talents then
+            ranks, reason = handle:ReadRanks(m.guid, m.spec, talents.want, skip)
+        else
+            ranks = {}
+        end
+        if ranks then
             m.talents, m.talentMisses, m.talentsStale = ranks, nil, nil
             return
         end
-        if ok and skip then return end
+        -- A first walk due in combat waits for its end without a miss.
+        if reason == "combat" then return end
         m.talentMisses = (m.talentMisses or 0) + 1
         if m.talentMisses >= MAX_MISSES then
             local rules = KE.PartyCooldownsRules
@@ -843,10 +719,15 @@ Spec.readers[#Spec.readers + 1] = {
         if m.talents ~= nil or not m.spec then return end
         local config = Ask(C_ClassTalents.GetActiveConfigID)
         if config == nil then return end
-        local ok, ranks, skip = pcall(ReadRanks, m.spec, config, m.spec)
-        if ok and ranks then
+        local talents, skip = TalentsToRead(m.spec)
+        if not talents then
+            m.talents = {}
+            return
+        end
+        local ranks, reason = KE.GroupInspect:ReadOwnRanks(m.spec, talents.want, skip)
+        if ranks then
             m.talents = ranks
-        elseif ok and skip then
+        elseif reason == "combat" then
             Spec.selfOwed = true
         end
     end,
@@ -867,7 +748,7 @@ Spec.readers[#Spec.readers + 1] = {
             for _, member in pairs(Spec.byGUID) do
                 if not member.isPlayer and member.talents then member.talentsStale = true end
             end
-            wipe(misses)
+            if handle then handle:Refresh(nil, "ready-check") end
             Spec.Wake()
         end
     end,

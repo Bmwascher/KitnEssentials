@@ -1,7 +1,7 @@
 -- Tier 1: Party Cooldowns' pure rules
 -- (Modules/AuraTracking/PartyBuffs/PartyCooldownsRules.lua): which spells a
 -- spec shows and for how long, the icon a talent picks, where a teammate's
--- spec comes from, who is inspected next, and which trinkets get a cell.
+-- spec comes from, and which trinkets get a cell.
 -- The rules run on DATA, never the shipped table, and limits are read from
 -- the rules' constants, so a balance or tuning edit fails no case.
 local L = require("dev.spec._ke_loader")
@@ -135,70 +135,6 @@ describe("PartyCooldownsRules.ResolveSpec", function()
         for _, case in ipairs(cases) do
             local spec, src = R.ResolveSpec(case.s)
             assert.are.same({ case.spec, case.src }, { spec, src }, case.name)
-        end
-    end)
-end)
-
-describe("PartyCooldownsRules.NextInspect", function()
-    local function member(name, extra)
-        local m = { name = name, canInspect = true }
-        for key, value in pairs(extra or {}) do m[key] = value end
-        return m
-    end
-
-    it("asks nothing while an inspect view is open, in combat, or within INSPECT_GAP of the last request", function()
-        local R = loadRules()
-        local members = { member("a") }
-        local cases = {
-            { name = "window open", state = { inspectShown = true, now = 10 } },
-            { name = "talent view inspecting", state = { talentsInspecting = true, now = 10 } },
-            { name = "in combat", state = { inCombat = true, now = 10 } },
-            { name = "within the gap", state = { now = 10, lastRequest = 10.5 - R.INSPECT_GAP } },
-        }
-        for _, case in ipairs(cases) do
-            assert.is_nil(R.NextInspect(case.state, members), case.name)
-        end
-        assert.are.equal("a", R.NextInspect({ now = 10, lastRequest = 10 - R.INSPECT_GAP }, members).name)
-    end)
-
-    it("skips a member that is done, cannot be inspected, is offline or is resting", function()
-        local R = loadRules()
-        local members = {
-            member("done", { done = true }), member("far", { canInspect = false }),
-            member("offline", { offline = true }), member("resting", { waitUntil = 40 }), member("next"),
-        }
-        assert.are.equal("next", R.NextInspect({ now = 10 }, members).name)
-    end)
-
-    it("asks nobody within FOREIGN_GAP seconds of another addon's inspect request", function()
-        local R = loadRules()
-        local members = { member("a") }
-        local cases = {
-            { name = "inside the gap", foreignAt = 10.5 - R.FOREIGN_GAP },
-            { name = "at the gap", foreignAt = 10 - R.FOREIGN_GAP, want = "a" },
-            { name = "no foreign request", want = "a" },
-        }
-        for _, case in ipairs(cases) do
-            local got = R.NextInspect({ now = 10, foreignAt = case.foreignAt }, members)
-            assert.are.equal(case.want, got and got.name, case.name)
-        end
-    end)
-
-    it("rests a member for TRY_WAIT seconds after MAX_TRIES tries, or STALE_TRIES when only stale", function()
-        local R = loadRules()
-        local cases = {
-            { name = "unread", stale = false, cap = R.MAX_TRIES },
-            { name = "stale", stale = true, cap = R.STALE_TRIES },
-        }
-        for _, case in ipairs(cases) do
-            local m = member("a")
-            for _ = 1, case.cap - 1 do R.CountTry(m, 100, case.stale) end
-            assert.is_nil(m.waitUntil, case.name)
-            R.CountTry(m, 100, case.stale)
-            local back = 100 + R.TRY_WAIT
-            assert.are.same({ 0, back }, { m.tries, m.waitUntil }, case.name)
-            assert.is_nil(R.NextInspect({ now = back - 1 }, { m }), case.name)
-            assert.are.equal(m, R.NextInspect({ now = back }, { m }), case.name)
         end
     end)
 end)
@@ -761,37 +697,6 @@ describe("PartyCooldownsRules.AfterTalentMisses", function()
     end)
 end)
 
-describe("PartyCooldownsRules.FillAbsent", function()
-    it("reads a wanted talent the trees lack as rank 0, keeping found ranks and unread box talents", function()
-        local R = loadRules()
-        local talents = { want = { [1] = true, [2] = true, [3] = true }, boxOnly = { [3] = true } }
-        local found = { [1] = { {} } }
-        local cases = {
-            { name = "box off", boxOn = false, want = { [1] = 2, [2] = 0 } },
-            { name = "box on", boxOn = true, want = { [1] = 2, [2] = 0, [3] = 0 } },
-        }
-        for _, case in ipairs(cases) do
-            assert.are.same(case.want, R.FillAbsent({ [1] = 2 }, talents, found, case.boxOn), case.name)
-        end
-    end)
-end)
-
-describe("PartyCooldownsRules.FirstWalk", function()
-    it("walks only an unspent spec's own loadout out of combat", function()
-        local R = loadRules()
-        local cases = {
-            { name = "own loadout", spent = false, loadout = 65, combat = false, want = "walk" },
-            { name = "tries spent", spent = true, loadout = 65, combat = false, want = "miss" },
-            { name = "another spec's loadout", spent = false, loadout = 70, combat = false, want = "miss" },
-            { name = "no loadout spec", spent = false, loadout = nil, combat = false, want = "miss" },
-            { name = "in combat", spent = false, loadout = 65, combat = true, want = "skip" },
-        }
-        for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.FirstWalk(case.spent, 65, case.loadout, case.combat), case.name)
-        end
-    end)
-end)
-
 describe("PartyCooldownsRules.TrinketReadStands", function()
     it("lets a read with an empty slot stand only once a second read agrees", function()
         local R = loadRules()
@@ -1098,17 +1003,11 @@ describe("PartyCooldownsRules talent read guards", function()
         end
     end)
 
-    it("skips a talent only box rows name while the box is off", function()
+    it("skips the talents only box rows name while the box is off", function()
         local R = loadRules()
         local talents = { boxOnly = { [77] = true } }
-        local cases = {
-            { name = "box-only, box off", talent = 77, box = false, want = false },
-            { name = "box-only, box on", talent = 77, box = true, want = true },
-            { name = "its own cast's, box off", talent = 55, box = false, want = true },
-        }
-        for _, case in ipairs(cases) do
-            assert.are.equal(case.want, R.TalentRead(talents, case.talent, case.box), case.name)
-        end
+        assert.are.equal(talents.boxOnly, R.TalentSkip(talents, false), "box off")
+        assert.is_nil(R.TalentSkip(talents, true), "box on")
     end)
 end)
 

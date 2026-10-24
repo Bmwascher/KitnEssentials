@@ -19,13 +19,7 @@ local Rules = {}
 KE.PartyCooldownsRules = Rules
 
 Rules.CD_MIN, Rules.CD_MAX = 5, 900
-Rules.INSPECT_GAP = 2
-Rules.MAX_TRIES = 12
-Rules.STALE_TRIES = 3
 Rules.TRY_WAIT = 30
--- Seconds after another addon's inspect request in which nobody is asked and
--- no answer is cleared: that request may still be reading the data.
-Rules.FOREIGN_GAP = 3
 
 local function Table(value)
     if type(value) == "table" then return value end
@@ -129,44 +123,6 @@ function Rules.ResolveSpec(sources)
         if guess then return guess, "guess" end
     end
     return nil, nil
-end
-
--- Blizzard's Inspect window, or its talent view of another player, reads the
--- inspect data too: KE neither asks for an inspect nor clears one then.
-function Rules.InspectInUse(inspectShown, talentsInspecting)
-    return inspectShown == true or talentsInspecting == true
-end
-
--- Whether another addon's inspect request, made at foreignAt, may still be in
--- use.
-function Rules.ForeignBusy(now, foreignAt)
-    if type(foreignAt) ~= "number" then return false end
-    return now - foreignAt < Rules.FOREIGN_GAP
-end
-
--- At most one member per call, and none while an inspect view is in use, in
--- combat, within INSPECT_GAP seconds of the last request or within
--- FOREIGN_GAP seconds of another addon's. An offline member never answers,
--- and asking it would hold back everyone behind it.
-function Rules.NextInspect(state, members)
-    if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
-    if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
-    if Rules.ForeignBusy(state.now, state.foreignAt) then return nil end
-    for _, m in ipairs(members) do
-        if not m.done and m.canInspect and not m.offline and not (m.waitUntil and state.now < m.waitUntil) then
-            return m
-        end
-    end
-    return nil
-end
-
--- A request with no answer is a try; MAX_TRIES of them rest the member, or
--- STALE_TRIES when every answer it is wanted for is in hand and only stale.
-function Rules.CountTry(m, now, stale)
-    m.tries = (m.tries or 0) + 1
-    if m.tries >= (stale and Rules.STALE_TRIES or Rules.MAX_TRIES) then
-        m.tries, m.waitUntil = 0, now + Rules.TRY_WAIT
-    end
 end
 
 -- An item tooltip names its use cooldown as "(2 Min Cooldown)",
@@ -1209,29 +1165,10 @@ function Rules.TalentsWanted(talents, trackClass, trackHealers)
     return trackHealers == true and talents.box == true
 end
 
--- Whether a read keeps the talent: one only box rows name waits for the box.
-function Rules.TalentRead(talents, talent, boxOn)
-    return boxOn == true or not talents.boxOnly[talent]
-end
-
--- A finished walk's ranks: a kept talent the member's trees lack reads 0, so
--- another spec's talent never holds back a length's other mods.
-function Rules.FillAbsent(out, talents, found, boxOn)
-    for talent in pairs(talents.want) do
-        if out[talent] == nil and not found[talent] and Rules.TalentRead(talents, talent, boxOn) then
-            out[talent] = 0
-        end
-    end
-    return out
-end
-
--- Whether a spec's first walk runs now: "walk", "miss" (its tries are spent,
--- or the loadout is another spec's, whose index could lack this spec's nodes)
--- or "skip" (in combat; waits without a miss).
-function Rules.FirstWalk(spent, specID, loadoutSpec, inCombat)
-    if spent or loadoutSpec ~= specID then return "miss" end
-    if inCombat then return "skip" end
-    return "walk"
+-- The talents a read skips: those only box rows name, while the box is off.
+function Rules.TalentSkip(talents, boxOn)
+    if boxOn == true then return nil end
+    return talents.boxOnly
 end
 
 function Rules.TalentAllows(entry, taken, specID)
