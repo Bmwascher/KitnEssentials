@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.8
+
+### Dungeon Timers
+
+- The Writhing Coil: an interrupted KICK 1 or KICK 2 line clears at once,
+  silently, and an interrupted KICK 3 turns into a green DONE with a "Done"
+  voice
+- Boss timers read the game's cast IDs again, which now arrive as text, so
+  timers that follow or match a boss cast can recognize it
+
+---
+
 ## v4.14.7
 
 ### Party Cooldowns
