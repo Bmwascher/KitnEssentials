@@ -344,6 +344,9 @@ local BlizzardFramesOnDemand = {
     ["Blizzard_Kiosk"] = {
         "GameKioskSessionStartedDialog",
     },
+    ["Blizzard_LegacySystem"] = {
+        "LegacySystemFrame",
+    },
     ["Blizzard_MacroUI"] = {
         "MacroFrame",
     },

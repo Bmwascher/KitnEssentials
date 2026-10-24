@@ -219,7 +219,9 @@ local function RegisterKitnCommands()
     table_insert(KitnSlashLines, "  /kitn essentials   - Open KitnEssentials settings")
     table_insert(KitnSlashLines, "  /kitn cd           - Toggle Cooldown Manager panel")
     table_insert(KitnSlashLines, "  /kitn edit         - Toggle Edit Mode (drag UI elements)")
-    table_insert(KitnSlashLines, "  /kitn pi           - Set PI macro target (mouseover or target)")
+    if not KE.IsFeatureAvailable or KE:IsFeatureAvailable("PIMacroBuilder") == true then
+        table_insert(KitnSlashLines, "  /kitn pi           - Set PI macro target (mouseover or target)")
+    end
     table_insert(KitnSlashLines, "  /kitn clearchat    - Clear all chat frames")
     table_insert(KitnSlashLines, "  /kitn chatbubbles  - Toggle chat bubbles")
     table_insert(KitnSlashLines, "  /kitn nameplates   - Toggle enemy nameplates")

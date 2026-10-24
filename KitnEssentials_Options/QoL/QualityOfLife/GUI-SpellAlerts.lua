@@ -68,31 +68,35 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2: Opacity (CVar slider)
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Opacity", yOffset)
-    manager:Register(card2, "all")
+    -- Drawn only where the client has the CVar, as the client's own settings do.
+    local opacityCVar = C_CVar.GetCVar("spellActivationOverlayOpacity")
+    if opacityCVar ~= nil then
+        local card2 = GUIFrame:CreateCard(scrollChild, "Opacity", yOffset)
+        manager:Register(card2, "all")
 
-    local currentOpacity = tonumber(C_CVar.GetCVar("spellActivationOverlayOpacity")) or 0.65
-    local opacityRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local opacitySlider = GUIFrame:CreateSlider(opacityRow, "Opacity", {
-        min = 0, max = 100, step = 5,
-        value = math_floor(currentOpacity * 100),
-        callback = function(val)
-            if SetCVar then
-                SetCVar("spellActivationOverlayOpacity", tostring(val / 100))
-                -- Blizzard's own settings callback drives
-                -- displaySpellActivationOverlays off this slider, so moving it
-                -- silently overrides the per-spec choice. Re-assert ours after.
-                if SA and SA.ApplyForCurrentSpec then
-                    SA:ApplyForCurrentSpec()
+        local currentOpacity = tonumber(opacityCVar) or 0.65
+        local opacityRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+        local opacitySlider = GUIFrame:CreateSlider(opacityRow, "Opacity", {
+            min = 0, max = 100, step = 5,
+            value = math_floor(currentOpacity * 100),
+            callback = function(val)
+                if SetCVar then
+                    SetCVar("spellActivationOverlayOpacity", tostring(val / 100))
+                    -- Blizzard's own settings callback drives
+                    -- displaySpellActivationOverlays off this slider, so moving it
+                    -- silently overrides the per-spec choice. Re-assert ours after.
+                    if SA and SA.ApplyForCurrentSpec then
+                        SA:ApplyForCurrentSpec()
+                    end
                 end
-            end
-        end,
-    })
-    opacityRow:AddWidget(opacitySlider, 1)
-    manager:Register(opacitySlider, "all")
-    card2:AddRow(opacityRow, Theme.rowHeightLast, 0)
+            end,
+        })
+        opacityRow:AddWidget(opacitySlider, 1)
+        manager:Register(opacitySlider, "all")
+        card2:AddRow(opacityRow, Theme.rowHeightLast, 0)
 
-    yOffset = card2:GetNextOffset()
+        yOffset = card2:GetNextOffset()
+    end
 
     ----------------------------------------------------------------
     -- Card 3: Enable Alerts per Spec (all classes, 4-column grid)
