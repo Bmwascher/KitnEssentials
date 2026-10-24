@@ -156,8 +156,7 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     }
 
     if FV then
-        -- Each group's title, then its rows on the shared checkbox grid. A row
-        -- the player has never touched shows its class default.
+        -- A row the player has never touched shows its class default.
         local classFile = SS and SS:ClassFile()
         for groupIndex = 1, #FV.groups do
             local group = FV.groups[groupIndex]

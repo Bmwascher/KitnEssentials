@@ -50,8 +50,9 @@ local function SchoolPower(school)
     return function() return (Call("GetSpellBonusDamage", school)) end
 end
 
+-- The third return: the effective resistance, the figure the character pane shows.
 local function Resist(school)
-    return function() return (select(2, Call("UnitResistance", "player", school))) end
+    return function() return (select(3, Call("UnitResistance", "player", school))) end
 end
 
 local function BestSchoolPower()
