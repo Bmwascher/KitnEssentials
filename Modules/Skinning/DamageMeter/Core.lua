@@ -4148,7 +4148,6 @@ function DM:Tick(skipQuiet)
     for _, W in ipairs(self:VisibleWindows(context)) do
         local nowType = self:EffectiveMeterType(W.idx, self:ResolveWindowConfig(W.idx, context))
         local nowSeq = TypeSeq(nowType)
-        -- A quiet window keeps its last paint.
         if not (skipQuiet and DM.PaintSkip(W._paintType, W._paintSeq, nowType, nowSeq, W._detailOpen)) then
             if (debugprofilestop() - frameStart) > budget then
                 if not deferred then deferred = {} end

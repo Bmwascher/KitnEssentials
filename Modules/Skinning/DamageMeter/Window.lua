@@ -1789,11 +1789,9 @@ function DM:RenderWindow(W)
     -- filled + shown; sample rows take the slots after the real ones while
     -- sampling; everything else is hidden (no stale bar lingers).
     local maxAmount = session and session.maxAmount
-    -- As many sample rows as the viewport has room for below the real rows. The
-    -- scroll range above follows the real rows only, so they never scroll.
-    -- Every slot of the bar pool below the real rows gets a sample row, and the
-    -- body ScrollFrame clips the ones past the window's bottom. A resize then
-    -- shows the right rows with no repaint.
+    -- The scroll range above follows the real rows only, so they never scroll.
+    -- Every bar-pool slot below the real rows gets a sample row; the body
+    -- ScrollFrame clips those past the window's bottom.
     local nSamples, samples, sampleMax = 0, nil, nil
     if sampling then
         nSamples = DM.SampleCount(BAR_POOL_SIZE, count)

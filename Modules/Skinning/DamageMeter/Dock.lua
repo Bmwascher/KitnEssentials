@@ -847,8 +847,6 @@ local function _DoDockRefresh()
         DM._needsRenderAfterLayout = false
         if DM.Tick then DM:Tick() end
     elseif DM._guiPreview and not DM._resizeDragging then
-        -- A resize with the settings preview open: one redraw after the last
-        -- change, so the rows the last render culled fill the new height.
         DM:RequestPreviewRedraw()
     end
 end
