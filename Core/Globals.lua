@@ -2087,8 +2087,8 @@ end
 -- Every Forever class has one damage spec, so the role there is the spec
 -- library's reading of the talent tree with the most points. Registered at
 -- file scope, Forever only: core infrastructure every role reader shares.
--- The callback marks the kept answer stale; no answer is ever kept, so a
--- read before the talents load asks again next time.
+-- The callback marks the cached role stale. A nil answer is never cached,
+-- so a read before the talents load asks again.
 local roleLib = KE.IS_FOREVER and LibStub and LibStub("LibSpecialization", true) or nil
 local foreverRole, foreverRoleKept = nil, false
 if roleLib and roleLib.RegisterPlayerSpecChange then
@@ -2108,16 +2108,12 @@ local function readForeverLibraryRole()
     return role
 end
 
--- Pure: the library's role as it is; with no answer, damage for a
--- character with a spec and none without one.
 function KE:ResolveForeverRole(libraryRole, hasSpec)
     if libraryRole then return libraryRole end
     if hasSpec then return "DAMAGER" end
     return nil
 end
 
--- On Forever the answer changes with a talent change, which the spec
--- library reports through its RegisterPlayerSpecChange callback.
 function KE:GetPlayerSpecRole()
     if not self.IS_FOREVER then return readSpecRole() end
     local libraryRole = readForeverLibraryRole()
