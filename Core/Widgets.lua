@@ -476,6 +476,7 @@ end
 -- queue keeps it, one per key, until it has room, and a prompt that replaces
 -- it on screen sends it back to wait.
 -- acceptOnly (confirm mode only) shows the accept button alone, centered.
+-- onShown runs each time the prompt opens, an open from the queue included.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
@@ -999,6 +1000,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
 
     dialog:Show()
     KE.activePrompt = dialog
+    if opts and type(opts.onShown) == "function" then opts.onShown() end
 
     return dialog
 end
