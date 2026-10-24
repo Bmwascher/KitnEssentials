@@ -53,6 +53,7 @@
     <Script file="Raid.lua" />
     <Script file="Reputation.lua" />
     <Script file="SettingsPanel.lua" />
+    <Script file="Skills.lua" />
     <Script file="Socket.lua" />
     <Script file="Stable.lua" />
     <Script file="SubscriptionInterstitial.lua" />

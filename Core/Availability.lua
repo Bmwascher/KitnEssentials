@@ -248,6 +248,7 @@ local FOREVER_FRAME_SKINS = {
 -- show on retail and a stray load there cannot run them.
 local FOREVER_ONLY_FRAME_SKINS = {
     LegacySystem = true,
+    Skills = true,
 }
 
 -- Whether a skin registered under `key` may run and show a Frame Skins row.

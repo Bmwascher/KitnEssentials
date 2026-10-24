@@ -154,6 +154,7 @@ local FRAME_SKINS = {
     { key = "Raid",                     text = "Raid (Legacy)" },
     { key = "Reputation",               text = "Reputation" },
     { key = "SettingsPanel",            text = "Settings Panel" },
+    { key = "Skills",                   text = "Skills" },
     { key = "Socket",                   text = "Item Socketing" },
     { key = "SpellBook",                text = "Professions Book" },
     { key = "Stable",                   text = "Stable" },
