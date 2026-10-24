@@ -1074,6 +1074,21 @@ function Rules.TakeLoadTry(tries, itemID)
     return true
 end
 
+-- One item load reads the item's tooltip once per wearer, so empty reads of
+-- one item within LENGTH_GAP seconds of a counted one are not counted.
+Rules.LENGTH_GAP = 1
+
+-- TakeLoadTry for tooltip reads with no cooldown line, at most one counted
+-- per item per LENGTH_GAP; at stamps each counted read. True while the read
+-- may be tried again, false once the item's tries are spent.
+function Rules.TakeLengthTry(tries, at, itemID, now)
+    local last = at[itemID]
+    if last and now - last < Rules.LENGTH_GAP then return true end
+    if not Rules.TakeLoadTry(tries, itemID) then return false end
+    at[itemID] = now
+    return true
+end
+
 -- Seconds before each re-derive of a member whose trinkets are incomplete out
 -- of combat: a tooltip can lack its cooldown line until the use spell's text
 -- loads, and no event says when.

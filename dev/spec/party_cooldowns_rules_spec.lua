@@ -681,6 +681,16 @@ describe("PartyCooldownsRules.TakeLoadTry", function()
     end)
 end)
 
+describe("PartyCooldownsRules.TakeLengthTry", function()
+    it("counts one empty read for four wearers in the same second and never stores no cooldown", function()
+        local R = loadRules()
+        local tries, at, got = {}, {}, {}
+        for i = 1, 4 do got[i] = R.TakeLengthTry(tries, at, 111, 50) end
+        assert.are.same({ true, true, true, true }, got, "no read stores false")
+        assert.are.equal(1, tries[111], "one counted try")
+    end)
+end)
+
 describe("PartyCooldownsRules.TrinketShow", function()
     it("shows an icon only once the row surely leaves its trinket out", function()
         local R = loadRules()
