@@ -1,4 +1,4 @@
--- The reference preset is the authority on WHICH spells exist. Which of them
+-- The movement preset is the authority on WHICH spells exist. Which of them
 -- ship switched on is a KitnEssentials product decision, so the shipped-off
 -- set lives here and is asserted exactly. A source row marked disabled must
 -- still be disabled locally; the reverse is allowed.

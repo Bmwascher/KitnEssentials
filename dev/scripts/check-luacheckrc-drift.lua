@@ -17,7 +17,7 @@
 -- KitnEssentials_Options/.
 --
 -- Report groups (allowlist: dev/scripts/luacheckrc-drift-allow.lua):
---   [A] rc entries not in the reference   — non-allowlisted = failure
+--   [A] rc entries not in the API reference — non-allowlisted = failure
 --   [B] rc entries unused in KE code      — ALWAYS advisory, never gates
 --   [C] duplicate rc entries              — failure
 --   [D] Register*Event literals not in documented events — failure
@@ -79,7 +79,7 @@ if allowSrc then
     end
 end
 
--- ---- reference version + docs presence ----------------------------------
+-- ---- API reference version + docs presence ------------------------------
 local version = (readAll(REF .. "\\version.txt") or "unknown"):match("[^\r\n]+") or "unknown"
 
 local docFiles = listFiles(DOCS, "*.lua")
@@ -233,7 +233,7 @@ for _, c in ipairs({ "in API docs", "source definition", "source mention",
     if clsCounts[c] then print(("  %-38s %d"):format(c, clsCounts[c])) end
 end
 
--- [A] not in the reference
+-- [A] not in the API reference
 local missing, missingAllowed = {}, {}
 for _, sym in ipairs(order) do
     if rows[sym].cls == "MISSING" then

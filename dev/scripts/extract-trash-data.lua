@@ -1,22 +1,21 @@
--- extract-trash-data.lua — deterministic port of ExBoss / DungeonAlerts
--- dungeon-trash cast-timer data into KitnEssentials.
+-- extract-trash-data.lua — deterministic import of the dungeon-trash
+-- cast-timer data into KitnEssentials.
 --
 -- Run from the repo ROOT with the local Lua 5.1 interpreter:
 --   lua dev/scripts/extract-trash-data.lua
 --
 -- Loads the pure-data source tables by dofile (so every spellID / timing is
 -- copied by the interpreter, never retyped), decodes each mob's packed
--- identity bitfield with a verbatim port of ExBoss's EXDB._r, then emits:
+-- identity bitfield with decodeIdentity below, then emits:
 --   Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua    (KE.TrashData)
 --   Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua  (KE.TrashTraits)
 --   dev/docs/dungeon-trash-data-discrepancies.md (cross-build diff)
 --
--- Sources (References/ is gitignored — present only on the maintainer box):
---   PRIMARY  EXBoss v26.6.29.1618  (newest — source of truth)
---   DIFF     EXBoss v26.6.4.1821, EXBoss v26.5.12.2252, DungeonAlerts v1
--- Precedence for the discrepancy log: v26.6.29 > v26.6.4 > v26.5.12 > DA.
--- ExBoss always wins; nothing is silently reconciled — every field that
--- differs across builds is logged for human review.
+-- Sources: the local, gitignored data builds named in Paths below. The
+-- PRIMARY build is the source of truth; the DIFF builds are compared against
+-- it in order, newest first. The primary always wins; nothing is silently
+-- reconciled — every field that differs across builds is logged for human
+-- review.
 --
 -- The Trash/ output directory must already exist (it does once these files
 -- are committed). Re-running overwrites the three generated files in place.
@@ -71,8 +70,7 @@ local function loadDataFile(path)
 end
 
 ---------------------------------------------------------------------------
--- Identity bitfield decoder — VERBATIM port of EXDB._r
--- (References/ExBoss/EXBoss-v26.6.29.1618/ExwindCore/Core/ExwindDB.lua:877).
+-- Identity bitfield decoder: unpacks each mob's packed identity value.
 ---------------------------------------------------------------------------
 
 local function decodeIdentity(p)
