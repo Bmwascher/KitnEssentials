@@ -474,3 +474,40 @@ function KT.OwnSuccessFrom(how, ownPending)
     return how == "breakdown" or (how == "several" and ownPending == true)
 end
 
+---------------------------------------------------------------------------------
+-- Reveal layers
+---------------------------------------------------------------------------------
+-- A teammate gets a layer for an update when they have a kick row, are not
+-- modeled as cooling after the update's credits, and their gate source had
+-- an entry before the update and has one after, with both totals present.
+function KT.AdmitGate(member, cooling, prevCount, curCount, hasTotals)
+    if not member or member.unit == "player" or not member.interruptData then return false end
+    if cooling or not hasTotals then return false end
+    return (prevCount or 0) >= 1 and (curCount or 0) >= 1
+end
+
+-- Releases the list's layers that started at or before upto (all of them
+-- when upto is nil), handing each to free. Returns how many went.
+function KT.ReleaseUpTo(list, upto, free)
+    local n = 0
+    for i = #list, 1, -1 do
+        local layer = list[i]
+        if upto == nil or layer.t <= upto then
+            free(layer)
+            table.remove(list, i)
+            n = n + 1
+        end
+    end
+    return n
+end
+
+-- A layer's clock runs from the update's time for the teammate's longest
+-- duration.
+function KT.NewLayerClock(layer, t, longest)
+    layer.t, layer.endAt = t, t + longest
+end
+
+function KT.LayerExpired(layer, now)
+    return now >= layer.endAt
+end
+

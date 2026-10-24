@@ -536,3 +536,53 @@ describe("KickTracker meter decision", function()
         end
     end)
 end)
+
+describe("KickTracker reveal layers", function()
+    it("admits a teammate with a kick row, not cooling, an entry before and after, and both totals", function()
+        local KT = L.loadKickTrackerRules()
+        local mate = { unit = "party1", interruptData = { id = 2139 } }
+        local rows = {
+            { name = "a teammate who could have kicked", member = mate, prev = 1, cur = 2, totals = true, want = true },
+            { name = "the player", member = { unit = "player", interruptData = { id = 2139 } },
+              prev = 1, cur = 2, totals = true, want = false },
+            { name = "no kick row", member = { unit = "party1" }, prev = 1, cur = 2, totals = true, want = false },
+            { name = "cooling", member = mate, cooling = true, prev = 1, cur = 2, totals = true, want = false },
+            { name = "no entry before the update", member = mate, prev = 0, cur = 1, totals = true, want = false },
+            { name = "no count read", member = mate, prev = 1, cur = nil, totals = true, want = false },
+            { name = "a total missing", member = mate, prev = 1, cur = 2, totals = false, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.AdmitGate(row.member, row.cooling == true, row.prev, row.cur, row.totals),
+                row.name)
+        end
+    end)
+
+    it("releases the layers started at or before a sure kick, and all of them with no time", function()
+        local KT = L.loadKickTrackerRules()
+        local function layers() return { { t = 5 }, { t = 10 }, { t = 15 } } end
+        local freed = {}
+        local function free(layer) freed[#freed + 1] = layer.t end
+        local list = layers()
+        assert.equals(2, KT.ReleaseUpTo(list, 10, free))
+        table.sort(freed)
+        assert.same({ 5, 10 }, freed)
+        assert.equals(1, #list)
+        assert.equals(15, list[1].t)
+        list = layers()
+        assert.equals(3, KT.ReleaseUpTo(list, nil, free))
+        assert.equals(0, #list)
+    end)
+
+    it("ends a layer at its start plus the teammate's longest duration", function()
+        local KT = L.loadKickTrackerRules()
+        local layer = {}
+        KT.NewLayerClock(layer, 100, 25)
+        local rows = {
+            { now = 124.9, want = false },
+            { now = 125, want = true },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.LayerExpired(layer, row.now), tostring(row.now))
+        end
+    end)
+end)
