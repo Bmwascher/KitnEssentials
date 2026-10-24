@@ -34,7 +34,8 @@ ignore:
 
 # Every external is pinned to an exact commit or tag, and the tracked copy
 # under Libs/ holds the same files, so the dev checkout runs what ships.
-# Update both together.
+# Update both together: `pwsh dev/scripts/check-lib-updates.ps1` lists pins
+# behind upstream, and its -Update mode moves a pin and rebuilds the copy.
 externals:
   Libs/AceAddon-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceAddon-3.0
