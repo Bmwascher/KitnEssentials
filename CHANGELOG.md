@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.10
+
+### WoW Forever
+
+- Player Buffs, Player Debuffs, Advanced Debuffs, External Tracker,
+  Movement Buffs and Totem Tracker, with their settings pages; Party
+  Cooldowns stays retail-only
+- External Tracker and Movement Buffs start with Forever spell lists:
+  every rank of the external defensives, and the movement buffs from
+  trainer, talent and item spells
+- The External Tracker page names Forever spells, and the Totem Tracker
+  page no longer mentions Evokers
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.9
 
 ### WoW Forever
