@@ -185,11 +185,18 @@ local FOREVER_FRAME_SKINS = {
     WorldMap = true,
 }
 
+-- Skin keys of windows only the Forever client has. Their files load only
+-- from the camelot list, and a retail load refuses them, so their rows never
+-- show on retail and a stray load there cannot run them.
+local FOREVER_ONLY_FRAME_SKINS = {
+    LegacySystem = true,
+}
+
 -- Whether a skin registered under `key` may run and show a Frame Skins row.
--- A retail load admits every key.
+-- A retail load admits every key except the Forever-only ones.
 ---@param key string?
 ---@return boolean available
 function KE:IsFrameSkinAvailable(key)
-    if RETAIL then return true end
-    return key ~= nil and FOREVER_FRAME_SKINS[key] == true
+    if RETAIL then return not (key and FOREVER_ONLY_FRAME_SKINS[key]) end
+    return key ~= nil and (FOREVER_FRAME_SKINS[key] == true or FOREVER_ONLY_FRAME_SKINS[key] == true)
 end

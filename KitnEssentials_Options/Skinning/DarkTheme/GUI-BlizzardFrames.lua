@@ -130,6 +130,7 @@ local FRAME_SKINS = {
     { key = "ItemUpgrade",              text = "Item Upgrade" },
     { key = "LFG",                      text = "Group Finder (LFG)" },
     { key = "LFGuild",                  text = "Guild Finder" },
+    { key = "LegacySystem",             text = "Progress Legacy" },
     { key = "Loot",                     text = "Loot Window" },
     { key = "LootToast",                text = "Loot Toasts" },
     { key = "LossControl",              text = "Loss of Control" },

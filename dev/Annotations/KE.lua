@@ -1313,7 +1313,8 @@ function KE:FilterAvailableEntries(entries) end
 function KE:FilterAvailableFrameSkins(entries) end
 
 --- Whether a skin registered under key may run and show a Frame Skins row.
---- A retail load admits every key; a baseline load only its admitted windows.
+--- A retail load admits every key except a Forever-only window's; a baseline
+--- load only its admitted window and addon skins.
 ---@param key string?
 ---@return boolean available
 function KE:IsFrameSkinAvailable(key) end

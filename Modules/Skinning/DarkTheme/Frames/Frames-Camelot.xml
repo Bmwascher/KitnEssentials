@@ -1,9 +1,10 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\..\FrameXML\UI.xsd">
 
-    <!-- The windows a baseline load skins, in Frames.xml order. Each key also
-         needs its entry in Core/Availability.lua's frame skin list, or it
-         never dispatches. -->
+    <!-- The windows a baseline load skins, in Frames.xml order; a window only
+         Forever has sits where its name sorts. Each key also needs its entry
+         in one of Core/Availability.lua's frame skin lists, or it never
+         dispatches. -->
     <Script file="Ace3.lua" />
     <Script file="AddonManager.lua" />
     <Script file="Alerts.lua" />
@@ -35,6 +36,7 @@
     <Script file="GuildRegistrar.lua" />
     <Script file="Help.lua" />
     <Script file="Inspect.lua" />
+    <Script file="LegacySystem.lua" />
     <Script file="Loot.lua" />
     <Script file="LossControl.lua" />
     <Script file="Macro.lua" />
