@@ -2342,7 +2342,17 @@ function L.loadOptimize(overrides)
 
     local rec = { cvars = {}, prints = {}, events = {}, difficultyID = 0 }
 
-    _G.SetCVar = function(cvar, value) rec.cvars[cvar] = tostring(value) end
+    -- `refused[cvar]` makes the client refuse that write: "throw" raises, as an
+    -- unknown or protected CVar does; "false" returns false, SetCVar's own
+    -- failure result. Every other write is stored and returns true.
+    rec.refused = {}
+    _G.SetCVar = function(cvar, value)
+        local how = rec.refused[cvar]
+        if how == "throw" then error("refused: " .. cvar) end
+        if how == "false" then return false end
+        rec.cvars[cvar] = tostring(value)
+        return true
+    end
     _G.GetCVar = function(cvar) return rec.cvars[cvar] end
     -- nameplateStackingTypes flags, keyed by Enum.NamePlateStackType index.
     rec.stackBits = {}

@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Optimize.lua                                            ║
--- ║  Module: CVars                                           ║
+-- ║  Module: Optimize                                        ║
 -- ║  Purpose: One-click CVar optimization panel for          ║
 -- ║           graphics, UI, and performance settings.        ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -364,6 +364,21 @@ function OPT:GetCurrentValue(cvar)
     return raw
 end
 
+-- A CVar this client does not have reads nil. Its row is left off the page and
+-- out of every preset, so a missing CVar is never written, counted or compared.
+function OPT:IsCVarPresent(cvar)
+    local ok, val = pcall(_GetCVar, cvar)
+    return ok and val ~= nil
+end
+
+function OPT:GetPresentEntries(category)
+    local kept = {}
+    for _, entry in ipairs(category.cvars) do
+        if self:IsCVarPresent(entry.cvar) then kept[#kept + 1] = entry end
+    end
+    return kept
+end
+
 function OPT:IsOptimal(cvar, optimal)
     local current = self:GetCurrentValue(cvar)
     if not current then return false end
@@ -386,15 +401,17 @@ function OPT:ApplyCVar(cvar, value)
         local mask = tonumber(value)
         return mask ~= nil and WriteStackMask(mask)
     end
-    local ok = pcall(_SetCVar, cvar, tostring(value))
-    return ok
+    -- SetCVar refuses a write by raising or by returning false.
+    local ok, set = pcall(_SetCVar, cvar, tostring(value))
+    return ok and set ~= false
 end
 
 function OPT:RevertCVar(cvar)
     local backup = GetBackupDB()
     local saved = backup.SavedSettings[cvar]
     if not saved then return false end
-    local ok = pcall(_SetCVar, cvar, tostring(saved))
+    local ok, set = pcall(_SetCVar, cvar, tostring(saved))
+    ok = ok and set ~= false
     if ok then
         backup.SavedSettings[cvar] = nil
     end
@@ -459,7 +476,7 @@ function OPT:ApplyPreset(presetName, overrides)
 
     local applied, failed = 0, 0
     for _, cat in ipairs(self.Categories) do
-        for _, entry in ipairs(cat.cvars) do
+        for _, entry in ipairs(self:GetPresentEntries(cat)) do
             local value = (overrides and overrides[entry.cvar]) or entry.optimal
             if entry.cvar == "graphicsViewDistance" and self:IsMythicOverrideActive() then
                 -- The Mythic+ override is holding View Distance at its floor
@@ -521,7 +538,7 @@ function OPT:GetActivePreset()
 
     local matches = true
     for _, cat in ipairs(self.Categories) do
-        for _, entry in ipairs(cat.cvars) do
+        for _, entry in ipairs(self:GetPresentEntries(cat)) do
             if not (skipViewDistance and entry.cvar == "graphicsViewDistance") then
                 local want = (overrides and overrides[entry.cvar]) or entry.optimal
                 local live = self:GetCurrentValue(entry.cvar)
@@ -546,10 +563,17 @@ function OPT:GetActivePreset()
     return nil
 end
 
+-- On a client without Mythic+ the whole override is inert: the saved toggle
+-- and a saved held state are both ignored, and nothing writes View Distance.
+local function MythicPlusWithheld()
+    return KE.IsFeatureAvailable ~= nil and not KE:IsFeatureAvailable("OptimizeMythicPlus")
+end
+
 --- True while the Mythic+ override is currently holding View Distance down.
 -- The rest of that feature arrives with the override block below; this one
 -- predicate lives up here because both preset functions above consult it.
 function OPT:IsMythicOverrideActive()
+    if MythicPlusWithheld() then return false end
     local state = GetBackupDB().MythicVD
     return state ~= nil and state.active == true
 end
@@ -568,7 +592,9 @@ local MPLUS_DIFFICULTY_ID = 8     -- Mythic Keystone
 local MPLUS_VIEW_DISTANCE = "0"   -- reads as "1" on the in-game slider
 
 --- Whether the override is enabled. Account-wide, stored with the backups.
+--- Never on a client without Mythic+, whatever was saved.
 function OPT:IsMythicViewDistanceEnabled()
+    if MythicPlusWithheld() then return false end
     return GetBackupDB().MythicViewDistanceEnabled == true
 end
 
@@ -612,6 +638,7 @@ end
 --- first pass of an entry, or a later event would record the floor as the
 --- value to restore.
 function OPT:UpdateMythicViewDistance()
+    if MythicPlusWithheld() then return end
     if not self:IsMythicViewDistanceEnabled() then
         self:RestoreMythicViewDistance()
         return
@@ -647,8 +674,8 @@ function OPT:RevertAll()
 
     local count = 0
     for cvar, val in pairs(backup.SavedSettings) do
-        local ok = pcall(_SetCVar, cvar, tostring(val))
-        if ok then count = count + 1 end
+        local ok, set = pcall(_SetCVar, cvar, tostring(val))
+        if ok and set ~= false then count = count + 1 end
     end
     backup.SavedSettings = {}
     -- Everything is back at the user's own values, so no preset describes them.

@@ -2,6 +2,9 @@
 -- get no assertions here (the tiered test policy skips data tables); what is
 -- tested is the branching over them: which value a preset resolves to, and
 -- whether a stored preset still describes the live cvars.
+-- The loader's SetCVar can refuse a write (rec.refused): what counts as a
+-- refused write is the API's own return and error, read inside ApplyCVar,
+-- so there is no pure predicate to lift out and test instead.
 local L = require("dev.spec._ke_loader")
 
 -- Stacking nameplates is a packed bitfield read through its flags, so both
@@ -30,6 +33,16 @@ local function seedMaxFPS(OPT, rec)
         end
     end
     seedStacking(rec)
+end
+
+-- Every listed cvar exists on a real client; the store starts empty, which
+-- reads as a client missing every row, and a preset skips a missing row.
+local function seedPresent(OPT, rec)
+    for _, cat in ipairs(OPT.Categories) do
+        for _, entry in ipairs(cat.cvars) do
+            rec.cvars[entry.cvar] = rec.cvars[entry.cvar] or "-1"
+        end
+    end
 end
 
 describe("Optimize presets", function()
@@ -67,6 +80,7 @@ describe("Optimize presets", function()
     describe("applying a preset", function()
         it("balanced writes every listed optimal", function()
             local OPT, rec = L.loadOptimize()
+            seedPresent(OPT, rec)
             OPT:ApplyPreset("balanced", nil)
             assert.equals("1", rec.cvars["RAIDsettingsEnabled"])
             assert.equals("200", rec.cvars["maxFPS"])
@@ -75,6 +89,7 @@ describe("Optimize presets", function()
 
         it("maxfps writes the override where one exists, the optimal elsewhere", function()
             local OPT, rec = L.loadOptimize()
+            seedPresent(OPT, rec)
             OPT:MaxFPS()
             -- Overridden: base shadow quality drops to the Raid & BG value.
             assert.equals("0", rec.cvars["graphicsShadowQuality"])
@@ -307,5 +322,71 @@ describe("Optimize presets", function()
             assert.equals("6", rec.cvars["graphicsViewDistance"])
             assert.is_false(OPT:IsMythicOverrideActive())
         end)
+    end)
+end)
+
+describe("Optimize on a client without every CVar or without Mythic+", function()
+    -- Max FPS, not Balanced: Balanced's raid-split fallback would call the
+    -- state selected with or without the comparison skip.
+    it("leaves a row whose cvar the client lacks unwritten, uncounted and out of the selection check", function()
+        local OPT, rec = L.loadOptimize()
+        seedPresent(OPT, rec)
+        rec.cvars["cameraFov"] = nil
+        local total = 0
+        for _, cat in ipairs(OPT.Categories) do total = total + #cat.cvars end
+        OPT:MaxFPS()
+        assert.is_nil(rec.cvars["cameraFov"])
+        assert.same({ "|cff00ff00" .. (total - 1) .. " settings optimized (Max FPS).|r" }, rec.prints)
+        assert.equals("maxfps", OPT:GetActivePreset())
+    end)
+
+    it("counts a write the client refuses, by an error or by a false return, as could not be applied", function()
+        for _, row in ipairs({ { name = "error", how = "throw" }, { name = "false return", how = "false" } }) do
+            local OPT, rec = L.loadOptimize()
+            seedPresent(OPT, rec)
+            rec.refused["cameraFov"] = row.how
+            local total = 0
+            for _, cat in ipairs(OPT.Categories) do total = total + #cat.cvars end
+            OPT:MaxFPS()
+            assert.same({
+                "|cff00ff00" .. (total - 1) .. " settings optimized (Max FPS).|r",
+                "|cffFF008CWarning:|r 1 settings could not be applied.",
+            }, rec.prints, row.name)
+        end
+    end)
+
+    it("counts a revert the client refuses as not done: the row keeps its backup and Revert All leaves it out of its count", function()
+        for _, row in ipairs({ { name = "error", how = "throw" }, { name = "false return", how = "false" } }) do
+            local OPT, rec = L.loadOptimize()
+            _G.KitnEssentialsOptimizeDB = { SavedSettings = { cameraFov = "70", maxFPS = "144" } }
+            rec.refused["cameraFov"] = row.how
+            assert.is_false(OPT:RevertCVar("cameraFov"), row.name)
+            assert.equals("70", _G.KitnEssentialsOptimizeDB.SavedSettings.cameraFov, row.name)
+            OPT:RevertAll()
+            assert.same({ "|cff00ff001 settings reverted.|r" }, rec.prints, row.name)
+        end
+    end)
+
+    -- A held state saved true (a session that ended inside a key) must not
+    -- bank or skip View Distance where Mythic+ does not exist.
+    it("leaves the Mythic+ override inert while OptimizeMythicPlus is withheld, whatever was saved", function()
+        local OPT, rec, KE = L.loadOptimize()
+        KE.IsFeatureAvailable = function(_, id) return id ~= "OptimizeMythicPlus" end
+        _G.KitnEssentialsOptimizeDB = {
+            SavedSettings = {},
+            MythicViewDistanceEnabled = true,
+            MythicVD = { active = true, saved = "3" },
+        }
+        rec.cvars["graphicsViewDistance"] = "2"
+        OPT:OnInitialize()
+        rec.difficultyID = 8   -- Mythic Keystone
+        OPT:UpdateMythicViewDistance()
+        assert.is_false(OPT:IsMythicViewDistanceEnabled())
+        assert.is_false(OPT:IsMythicOverrideActive())
+        assert.is_nil(rec.events["CHALLENGE_MODE_START"])
+        assert.equals("2", rec.cvars["graphicsViewDistance"])
+        OPT:OptimizeAll()
+        assert.equals("6", rec.cvars["graphicsViewDistance"])
+        assert.equals("3", _G.KitnEssentialsOptimizeDB.MythicVD.saved)
     end)
 end)
