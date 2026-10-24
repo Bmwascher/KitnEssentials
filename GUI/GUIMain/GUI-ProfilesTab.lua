@@ -75,7 +75,6 @@ local function AutoFillName(text, dialog)
     dialog.editBox:SetText(name)
 end
 
--- The name a Retail copy installs under until the player types another.
 local RETAIL_PROFILE_NAME = "KitnUI - Retail"
 
 local RETAIL_COPY_TEXT = "Copy your KitnEssentials settings from Retail?\n\n"
@@ -181,7 +180,6 @@ function GUIFrame:OfferRetailCopy()
     )
 end
 
--- The Copy from Retail popup is offered once per account, on a baseline load.
 ---@param baselineLoad boolean?
 ---@param seen boolean?
 ---@return boolean

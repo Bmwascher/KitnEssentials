@@ -199,9 +199,8 @@ local function OnEncounterStart()
     end
 end
 
--- Set at enable, cleared on the first entering-world event: one offer a
--- session. The delay lets the addon-conflict scan, whose prompt replaces any
--- open one, raise first.
+-- One offer a session. The delay lets the addon-conflict scan, whose prompt
+-- replaces any open one, raise first.
 local offerRetailCopy = false
 local RETAIL_COPY_DELAY = 3
 
