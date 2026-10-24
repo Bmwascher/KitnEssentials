@@ -89,6 +89,16 @@ local FOREVER_ALLOWED = {
     CharacterPanel = true,
     InspectPanel = true,
     CompareHeader = true,
+    -- Aura Tracking: six displays and their pages. Party Cooldowns stays
+    -- withheld.
+    BuffTracking = true,
+    PlayerDebuffTracking = true,
+    AuraHeaders_Buffs = true,
+    AuraHeaders_Debuffs = true,
+    AuraDebuffs = true,
+    AuraExternals = true,
+    AuraMovement = true,
+    TotemTracker = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.

@@ -5,7 +5,12 @@
          retail list's relative order, because load order is behavior
          (Modules.xml). -->
     <Include file="Core\Diagnostics\Diagnostics.xml" />
+    <Script file="AuraTracking\TotemTracker.lua" />
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
+    <Script file="AuraTracking\AuraExternals.lua" />
+    <Script file="AuraTracking\AuraMovement.lua" />
+    <Script file="AuraTracking\AuraDebuffs.lua" />
+    <Script file="AuraTracking\AuraHeaders.lua" />
     <Script file="Core\CVars\CVars.lua" />
     <Script file="Core\Optimize.lua" />
     <Script file="Core\VersionCheck.lua" />

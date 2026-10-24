@@ -23,6 +23,18 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Appearance",   want = true },
             { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Behavior",     want = true },
             { load = "baseline",            seed = BASELINE,             id = "DamageMeter_SpellHistory", want = true },
+            -- Aura Tracking: six modules and the two header sidebar ids are
+            -- admitted; Party Cooldowns and its tabs are not.
+            { load = "baseline",            seed = BASELINE,             id = "BuffTracking",             want = true },
+            { load = "baseline",            seed = BASELINE,             id = "PlayerDebuffTracking",     want = true },
+            { load = "baseline",            seed = BASELINE,             id = "AuraHeaders_Buffs",        want = true },
+            { load = "baseline",            seed = BASELINE,             id = "AuraHeaders_Debuffs",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "AuraDebuffs",              want = true },
+            { load = "baseline",            seed = BASELINE,             id = "AuraExternals",            want = true },
+            { load = "baseline",            seed = BASELINE,             id = "AuraMovement",             want = true },
+            { load = "baseline",            seed = BASELINE,             id = "TotemTracker",             want = true },
+            { load = "baseline",            seed = BASELINE,             id = "PartyBuffs",               want = false },
+            { load = "baseline",            seed = BASELINE,             id = "PartyBuffsCooldowns",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "NotAFeature",      want = false },
