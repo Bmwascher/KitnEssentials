@@ -53,6 +53,22 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/lib-update-check.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 45,
+            "statusMessage": "library update check"
+          }
+        ]
+      },
+      {
         "matcher": "compact",
         "hooks": [
           {
