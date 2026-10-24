@@ -99,25 +99,31 @@ function Track.DoorOpen() return Rules.DoorOpen(Track.door) end
 -- it. The answer may be secret; it only reaches EvaluateColorValueFromBoolean.
 ---------------------------------------------------------------------------------
 local CMP_LO, CMP_HI, CMP_HEIGHT = -0.02, 1.02, 520
-local cmpLayer
+local cmpLayer, cmpLayerReady
 local cmpPool = {}
--- A bar whose probe was refused, kept for the next pair.
-local spareBar
+-- A bar or probe not yet handed out, kept with whether its setup has run, so
+-- a refused setup is finished by the next call instead of making another.
+local spareBar, spareBarReady
+local spareProbe, spareProbeReady
 
 -- Made only for two-charge cells: the self-check's pair when the first is
 -- bound, three per cell when it is revealed. The layer is shown so the hit
--- test has a laid-out frame to measure.
+-- test has a laid-out frame to measure. A pair is handed out only once both
+-- its frames are set up.
 local function NewCompare()
     local cmp = table_remove(cmpPool)
     if cmp then return cmp end
-    if not cmpLayer then
-        cmpLayer = CreateFrame("Frame", nil, UIParent)
+    if not cmpLayer then cmpLayer = CreateFrame("Frame", nil, UIParent) end
+    if not cmpLayerReady then
         cmpLayer:SetSize(1, 1)
         cmpLayer:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        cmpLayerReady = true
+    end
+    if not spareBar then
+        spareBar, spareBarReady = CreateFrame("StatusBar", nil, cmpLayer), false
     end
     local bar = spareBar
-    if not bar then
-        bar = CreateFrame("StatusBar", nil, cmpLayer)
+    if not spareBarReady then
         bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
         bar:SetStatusBarColor(0, 0, 0, 0)
         bar:SetOrientation("VERTICAL")
@@ -125,12 +131,19 @@ local function NewCompare()
         bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
         bar:SetMinMaxValues(CMP_LO, CMP_HI)
         bar:SetValue(1)
-        spareBar = bar
+        spareBarReady = true
     end
-    local probe = CreateFrame("Frame", nil, cmpLayer)
-    probe:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
-    probe:SetPoint("TOPRIGHT", bar:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-    spareBar = nil
+    if not spareProbe then
+        spareProbe, spareProbeReady = CreateFrame("Frame", nil, cmpLayer), false
+    end
+    local probe = spareProbe
+    if not spareProbeReady then
+        probe:ClearAllPoints()
+        probe:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+        probe:SetPoint("TOPRIGHT", bar:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
+        spareProbeReady = true
+    end
+    spareBar, spareProbe = nil, nil
     return { bar = bar, probe = probe }
 end
 

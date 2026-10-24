@@ -249,19 +249,27 @@ local function DressCharges(c, style, e, px, level)
         c.win:SetAlpha(1)
         return
     end
-    -- Stored only once all three exist, so a refused frame never leaves a
-    -- partial table for the next dress or clear.
+    -- Each digit is kept as soon as it exists and its setup finished by a
+    -- later dress when refused, so no digit is made twice. c.cnt is set only
+    -- once all three are ready, so a dress or clear never meets a partial set.
     if not c.cnt then
-        local cnt = {}
+        local part = c.cntPart or {}
+        c.cntPart = part
         for i = 1, 3 do
-            local f = CreateFrame("Frame", nil, c)
-            f:SetAllPoints(c)
-            f:SetAlpha(0)
-            f.text = f:CreateFontString(nil, "OVERLAY")
-            f.text:SetJustifyH("RIGHT")
-            cnt[i] = f
+            local f = part[i]
+            if not f then
+                f = CreateFrame("Frame", nil, c)
+                part[i] = f
+            end
+            if not f.keReady then
+                f:SetAllPoints(c)
+                f:SetAlpha(0)
+                f.text = f.text or f:CreateFontString(nil, "OVERLAY")
+                f.text:SetJustifyH("RIGHT")
+                f.keReady = true
+            end
         end
-        c.cnt = cnt
+        c.cnt, c.cntPart = part, nil
     end
     local size = math_max(8, math_floor(style.fontSize * 0.85 + 0.5))
     for i = 1, 3 do
