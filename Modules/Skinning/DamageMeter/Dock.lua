@@ -1515,17 +1515,6 @@ function DM:SetColumnBoundaryShare(colIdx, pct)
     self:RefreshDock()
 end
 
-function DM:GetColumnBoundaryShare(colIdx)
-    local cols = self.db and self.db.Dock and self.db.Dock.Columns
-    local a = cols and cols[colIdx]
-    local b = cols and cols[colIdx + 1]
-    if not (a and b) then return 50 end
-    local av, bv = (a.WidthRatio) or 1, (b.WidthRatio) or 1
-    local pair = av + bv
-    if pair <= 0 then return 50 end
-    return (av / pair) * 100
-end
-
 -- Row gap between rowIdx and rowIdx+1 in column colIdx. pct = top window's share.
 function DM:SetRowBoundaryShare(colIdx, rowIdx, pct)
     local cols = self.db and self.db.Dock and self.db.Dock.Columns
@@ -1538,17 +1527,6 @@ function DM:SetRowBoundaryShare(colIdx, rowIdx, pct)
     ratios[rowIdx] = pct * pair
     ratios[rowIdx + 1] = pair - ratios[rowIdx]
     self:RefreshDock()
-end
-
-function DM:GetRowBoundaryShare(colIdx, rowIdx)
-    local cols = self.db and self.db.Dock and self.db.Dock.Columns
-    local col = cols and cols[colIdx]
-    local ratios = col and col.RowRatios
-    if not ratios or not ratios[rowIdx] or not ratios[rowIdx + 1] then return 50 end
-    local a, b = (ratios[rowIdx]) or 0, (ratios[rowIdx + 1]) or 0
-    local pair = a + b
-    if pair <= 0 then return 50 end
-    return (a / pair) * 100
 end
 
 ---------------------------------------------------------------------------------

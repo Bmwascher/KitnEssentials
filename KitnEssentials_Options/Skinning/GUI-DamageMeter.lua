@@ -1977,7 +1977,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     cardHeader:AddRow(rowHdr3, Theme.rowHeight)
 
     -- Header Height grays while Match Text Size keeps the band at the header text
-    -- size + 6; turning the match off starts from the current band, so nothing moves.
+    -- size + 6; turning the match off starts from the current band height.
     manager:SetCondition("headerheight", function() return type(db.HeaderHeight) == "number" end)
     local rowHdr4 = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeightLast)
     local headerHeightSlider
