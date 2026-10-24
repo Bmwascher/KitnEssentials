@@ -865,7 +865,17 @@ function KE:ClosePromptIfOwner(accept) end
 ---@return Frame
 function KE:CreateReloadPrompt(reason) end
 
-function KE:SkinningReloadPrompt() end
+--- A new Reload Now accept for a module's own reload prompt: it reloads as
+--- the shared prompt's does, and the secure reload button covers it where the
+--- client refuses addon reloads (Core/Widgets.lua).
+---@return fun()
+function KE:NewReloadAccept() end
+
+--- The skinning reload prompt; `extra` is appended to its text
+--- (Core/Widgets.lua).
+---@param extra string?
+---@return Frame
+function KE:SkinningReloadPrompt(extra) end
 
 --- ReloadUI where the client lets addon code call it; elsewhere the reload
 --- prompt, whose Reload Now reloads through a secure button (Core/Widgets.lua).
@@ -1293,6 +1303,20 @@ function KE:GetSectionForItem(itemId) end
 ---@return boolean available
 ---@return string? reason
 function KE:IsFeatureAvailable(featureId) end
+
+--- True after a baseline load (KE.BASELINE_LOAD), the availability policy's
+--- own answer; for a branch that picks a Forever value.
+---@return boolean
+function KE:IsBaselineLoad() end
+
+--- How an import or export judges a top-level profile block: "core" always
+--- stays, "nested" is judged per sub-block, "feature" follows the owner id
+--- returned with it (Core/Availability.lua).
+---@param key string
+---@return string kind
+---@return string? owner
+---@return boolean? mapped
+function KE:ProfileBlockOwner(key) end
 
 --- Turns on per-spec profiles for db where this client admits them; false
 --- when the library is absent or the feature is withheld.

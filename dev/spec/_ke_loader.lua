@@ -375,7 +375,8 @@ end
 -- SYNCHRONOUSLY inside the mutating call (AceDB-3.0.lua).
 -- Specs replicate Core/Main.lua's callback registration themselves.
 -- Returns PM, KE, db.
-function L.loadProfileManager(overrides)
+-- opts.baseline loads Core/Availability.lua as a baseline load.
+function L.loadProfileManager(overrides, opts)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
     -- WoW's UTF-8 character count: every byte that is not a continuation byte.
@@ -425,8 +426,8 @@ function L.loadProfileManager(overrides)
     _G.KitnEssentials.IterateModules = _G.KitnEssentials.IterateModules or function() return pairs({}) end
     _G.KitnEssentials.EnableModule = _G.KitnEssentials.EnableModule or function() end
     _G.KitnEssentials.DisableModule = _G.KitnEssentials.DisableModule or function() end
-    -- No BASELINE_LOAD: a retail load, so Core/Availability.lua admits everything.
-    local KE = { db = db }
+    -- Without opts.baseline, a retail load: Core/Availability.lua admits everything.
+    local KE = { db = db, BASELINE_LOAD = (opts and opts.baseline) or nil }
     helpers.loadModule("Core/Availability.lua", KE)
     helpers.loadModule("Core/ProfileManager.lua", KE)
     return KE.ProfileManager, KE, db
@@ -2342,7 +2343,17 @@ function L.loadOptimize(overrides)
 
     local rec = { cvars = {}, prints = {}, events = {}, difficultyID = 0 }
 
-    _G.SetCVar = function(cvar, value) rec.cvars[cvar] = tostring(value) end
+    -- `refused[cvar]` makes the client refuse that write: "throw" raises, as an
+    -- unknown or protected CVar does; "false" returns false, SetCVar's own
+    -- failure result. Every other write is stored and returns true.
+    rec.refused = {}
+    _G.SetCVar = function(cvar, value)
+        local how = rec.refused[cvar]
+        if how == "throw" then error("refused: " .. cvar) end
+        if how == "false" then return false end
+        rec.cvars[cvar] = tostring(value)
+        return true
+    end
     _G.GetCVar = function(cvar) return rec.cvars[cvar] end
     -- nameplateStackingTypes flags, keyed by Enum.NamePlateStackType index.
     rec.stackBits = {}

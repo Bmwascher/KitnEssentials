@@ -375,6 +375,10 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
     -- phase for demo/preview subcommands; until then the GUI fallback runs.
     local mtRest = msg:match("^[Mm][Tt]%s*(.*)$")
     if mtRest ~= nil then
+        if not KE:IsFeatureAvailable("MythicPlusTimer") then
+            KE:Print("The Mythic+ Timer is not available on this client.")
+            return
+        end
         local mt = KitnEssentials and KitnEssentials:GetModule("MythicPlusTimer", true)
         if mt and mt.HandleSlash then
             mt:HandleSlash(mtRest)

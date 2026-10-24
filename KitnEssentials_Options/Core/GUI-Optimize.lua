@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-Optimize.lua                                        ║
--- ║  GUI: CVars (Optimize Panel)                             ║
+-- ║  GUI: Optimize                                           ║
 -- ║  Purpose: Configuration panel for the Optimize module.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -346,6 +346,8 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
     InstallCloseHook()
 
+    local mythicPlus = KE:IsFeatureAvailable("OptimizeMythicPlus")
+
     ----------------------------------------------------------------
     -- Card 1: Presets
     ----------------------------------------------------------------
@@ -402,8 +404,8 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
             else
                 OPT:OptimizeAll()
                 -- The Mythic+ drop is part of what Balanced means, so it comes
-                -- on with the preset.
-                OPT:SetMythicViewDistanceEnabled(true)
+                -- on with the preset where the client has Mythic+.
+                if mythicPlus then OPT:SetMythicViewDistanceEnabled(true) end
             end
             MarkDirty()
             GUIFrame:RefreshContent()
@@ -429,7 +431,8 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     card1:AddLabel("\226\128\162 " .. KE:ColorTextByTheme("Max FPS") ..
         " gives the highest FPS without sacrificing visual clarity in raids, dungeons and outdoors.")
     card1:AddLabel("\226\128\162 " .. KE:ColorTextByTheme("Balanced") ..
-        " uses the Raid & BG setting for a more immersive world and outdoor experience, while maximizing in-raid performance. There is also a Lower View Distance option for Mythic+ to help FPS in some outdoor dungeons.")
+        " uses the Raid & BG setting for a more immersive world and outdoor experience, while maximizing in-raid performance." ..
+        (mythicPlus and " There is also a Lower View Distance option for Mythic+ to help FPS in some outdoor dungeons." or ""))
     if not selectedPreset then
         card1:AddLabel("Select a preset above to load its recommended values.")
     end
@@ -441,7 +444,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Balanced-gated on purpose: Max FPS already runs View Distance at its
     -- floor, so the toggle would do nothing there.
-    if selectedPreset == "balanced" then
+    if selectedPreset == "balanced" and mythicPlus then
         local mvdCard = GUIFrame:CreateCard(scrollChild, "Mythic+", yOffset)
         -- Label ABOVE the toggle. A trailing label measures against the row and
         -- clips into the checkbox.
@@ -477,13 +480,18 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Cards 2-N: One card per category
     ----------------------------------------------------------------
+    -- A row whose CVar this client lacks is left off, and a card left with no
+    -- row is not drawn.
     for _, cat in ipairs(OPT.Categories) do
-        local card = GUIFrame:CreateCard(scrollChild, cat.name, yOffset)
-        AddColumnHeaders(card)
-        for _, entry in ipairs(cat.cvars) do
-            AddCVarRow(card, entry)
+        local entries = OPT:GetPresentEntries(cat)
+        if #entries > 0 then
+            local card = GUIFrame:CreateCard(scrollChild, cat.name, yOffset)
+            AddColumnHeaders(card)
+            for _, entry in ipairs(entries) do
+                AddCVarRow(card, entry)
+            end
+            yOffset = card:GetNextOffset()
         end
-        yOffset = card:GetNextOffset()
     end
 
     return yOffset

@@ -67,6 +67,22 @@ local FOREVER_ALLOWED = {
     DamageMeter_Appearance = true,
     DamageMeter_Behavior = true,
     DamageMeter_SpellHistory = true,
+    -- Core: System Optimization, the CVars page with its General and Dev
+    -- tabs, UI Scaling with its General, Core Panels and Services tabs, Panel
+    -- and Map Scale, and Version Check. The Housing and Legacy tabs and the
+    -- Optimize Mythic+ card stay withheld, and so does Automation, whose
+    -- switch the CVars login apply waits on.
+    CVars = true,
+    CVarsGeneral = true,
+    CVarsDev = true,
+    UIScaling = true,
+    UIScalingGeneral = true,
+    UIScalingCore = true,
+    UIScalingServices = true,
+    Optimize = true,
+    PanelScale = true,
+    MapScale = true,
+    VersionCheck = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
@@ -78,6 +94,48 @@ function KE:IsFeatureAvailable(featureId)
     if RETAIL then return true end
     if featureId and FOREVER_ALLOWED[featureId] then return true end
     return false, "withheld on this client"
+end
+
+-- True after a baseline load. For a branch that picks a Forever value, where
+-- there is no feature to admit or withhold.
+---@return boolean
+function KE:IsBaselineLoad()
+    return not RETAIL
+end
+
+-- Which feature owns each top-level profile block, for imports and exports
+-- that drop what this client does not run. A core key always stays, a nested
+-- container's sub-blocks are each judged by their own key, and any other
+-- block is owned by the mapped id or else by the module of its own name.
+local PROFILE_CORE_KEYS = {
+    ShowChatMessage = true,
+    ExpandSidebarOnOpen = true,
+    UseSlugFonts = true,
+    GlobalFont = true,
+    Minimap = true,
+    UseElvUI = true,
+}
+local NESTED_PROFILE_BLOCKS = {
+    Dungeons = true,
+}
+local PROFILE_BLOCK_OWNERS = {
+    -- It holds the CVars page's keys beside Automation's own.
+    Automation = "CVars",
+    -- Each sub-block belongs to a module the skinning engine runs.
+    Skinning = "SkinAPI",
+    -- No module carries the name; the id is the settings row's.
+    SlashCommands = "SlashCommands",
+}
+
+---@param key string
+---@return string kind "core", "nested" or "feature"
+---@return string? owner the owning feature id, for "feature"
+---@return boolean? mapped true when the owner comes from the map
+function KE:ProfileBlockOwner(key)
+    if PROFILE_CORE_KEYS[key] then return "core" end
+    if NESTED_PROFILE_BLOCKS[key] then return "nested" end
+    local mapped = PROFILE_BLOCK_OWNERS[key]
+    return "feature", mapped or key, mapped ~= nil
 end
 
 -- Entries are { id = ... } tables: sidebar rows and sub-tabs. The same list

@@ -455,7 +455,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     if auDB then
         local function ApplyAutomation()
             local AU = KitnEssentials and KitnEssentials:GetModule("Automation", true)
-            if AU and AU.ApplySettings then AU:ApplySettings() end
+            if AU and AU.ApplyFromPage then AU:ApplyFromPage() end
         end
 
         local cardWB = GUIFrame:CreateCard(scrollChild, "Window Buttons", yOffset)

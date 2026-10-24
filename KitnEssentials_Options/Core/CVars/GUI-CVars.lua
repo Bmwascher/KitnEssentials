@@ -12,9 +12,9 @@ local Theme = KE.Theme
 
 local C_CVar = C_CVar
 
-local function GetAutomationModule()
+local function GetCVarsModule()
     if KitnEssentials then
-        return KitnEssentials:GetModule("Automation", true)
+        return KitnEssentials:GetModule("CVars", true)
     end
     return nil
 end
@@ -27,7 +27,7 @@ local function NewContext()
     if not db then return nil end
     return {
         db = db,
-        AU = GetAutomationModule(),
+        CV = GetCVarsModule(),
         manager = GUIFrame:CreateWidgetStateManager(),
     }
 end
@@ -39,7 +39,7 @@ end
 -- The label and config both CVar widgets take: the General tab's switches and
 -- the Dev tab's checkbox list.
 local function CVarPick(ctx, def)
-    local db, AU = ctx.db, ctx.AU
+    local db, CV = ctx.db, ctx.CV
     local key = def.key
     local label = def.label
     if def.desc then
@@ -48,16 +48,16 @@ local function CVarPick(ctx, def)
     return {
         label = label,
         config = {
-            value = AU and AU:GetLiveCVar(def) or false,
+            value = CV and CV:GetLiveCVar(def) or false,
             callback = function(checked)
                 -- The write goes through the profile as well as the client, so
                 -- the value travels with the profile and "Apply CVars on Login"
                 -- keeps working.
                 db[key] = checked
-                if AU then
-                    AU._suppressCVarUpdate = true
-                    AU:ApplyCVars()
-                    AU._suppressCVarUpdate = false
+                if CV then
+                    CV._suppressCVarUpdate = true
+                    CV:ApplyCVars()
+                    CV._suppressCVarUpdate = false
                 end
             end,
         },
@@ -79,18 +79,18 @@ end
 -- rather than through ApplyCVars, which would re-walk every def for one
 -- value.
 local function AddCVarSlider(ctx, card, def, existingRow, widthPct)
-    local db, AU = ctx.db, ctx.AU
+    local db, CV = ctx.db, ctx.CV
     local key = def.key
     local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local slider = GUIFrame:CreateSlider(row, def.label, {
         min = def.min, max = def.max, step = def.step,
-        value = AU and AU:GetLiveCVar(def) or 0,
+        value = CV and CV:GetLiveCVar(def) or 0,
         callback = function(val)
             db[key] = val
-            if AU then
-                AU._suppressCVarUpdate = true
+            if CV then
+                CV._suppressCVarUpdate = true
                 C_CVar.SetCVar(key, tostring(val))
-                AU._suppressCVarUpdate = false
+                CV._suppressCVarUpdate = false
             end
         end,
     })
@@ -110,16 +110,16 @@ local function IsFloatingCombatTextDef(def)
 end
 
 -- The rule itself lives on the module so it can be tested; this only covers
--- the page being built before Automation exists.
+-- the page being built before the CVars module exists.
 local function LiveDefs(ctx, defs, match)
-    if not ctx.AU then return {} end
-    return ctx.AU:FilterLiveDefs(defs, match)
+    if not ctx.CV then return {} end
+    return ctx.CV:FilterLiveDefs(defs, match)
 end
 
 GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     local ctx = NewContext()
     if not ctx then return yOffset end
-    local db, AU, manager = ctx.db, ctx.AU, ctx.manager
+    local db, CV, manager = ctx.db, ctx.CV, ctx.manager
 
     ----------------------------------------------------------------
     -- Card 1: CVars Enable
@@ -131,7 +131,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
         value = db.CVarsEnabled ~= false,
         callback = function(checked)
             db.CVarsEnabled = checked
-            if AU and checked then AU:ApplyCVars() end
+            if CV and checked then CV:ApplyCVars() end
             RefreshStates(ctx)
         end,
         msgPopup = true,
@@ -147,8 +147,8 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2: Floating Combat Text
     ----------------------------------------------------------------
-    local ftDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, IsFloatingCombatTextDef)
-    local ftSliderDefs = LiveDefs(ctx, AU and AU.CVAR_SLIDER_DEFS or {}, IsFloatingCombatTextDef)
+    local ftDefs = LiveDefs(ctx, CV and CV.CVAR_DEFS or {}, IsFloatingCombatTextDef)
+    local ftSliderDefs = LiveDefs(ctx, CV and CV.CVAR_SLIDER_DEFS or {}, IsFloatingCombatTextDef)
     if #ftDefs + #ftSliderDefs > 0 then
         local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
         manager:Register(card2, "all")
@@ -168,7 +168,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
         findYourselfModeOutline = true,
         occludedSilhouettePlayer = true,
     }
-    local charDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
+    local charDefs = LiveDefs(ctx, CV and CV.CVAR_DEFS or {}, function(def)
         return charEffectKeys[def.key] == true
     end)
     if #charDefs > 0 then
@@ -183,7 +183,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Tooltips
     ----------------------------------------------------------------
-    local tooltipDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
+    local tooltipDefs = LiveDefs(ctx, CV and CV.CVAR_DEFS or {}, function(def)
         return def.key == "alwaysCompareItems"
     end)
     if #tooltipDefs > 0 then
@@ -198,7 +198,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Nameplates
     ----------------------------------------------------------------
-    local nameplateDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
+    local nameplateDefs = LiveDefs(ctx, CV and CV.CVAR_DEFS or {}, function(def)
         return def.key:find("^nameplate") ~= nil
     end)
     if #nameplateDefs > 0 then
@@ -228,7 +228,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Sliders
     ----------------------------------------------------------------
-    local sliderDefs = LiveDefs(ctx, AU and AU.CVAR_SLIDER_DEFS or {}, function(def)
+    local sliderDefs = LiveDefs(ctx, CV and CV.CVAR_SLIDER_DEFS or {}, function(def)
         return not IsFloatingCombatTextDef(def)
     end)
     if #sliderDefs > 0 then
@@ -270,7 +270,7 @@ GUIFrame:RegisterContent("CVarsDev", function(scrollChild, yOffset)
     local ctx = NewContext()
     if not ctx then return yOffset end
 
-    local devDefs = LiveDefs(ctx, ctx.AU and ctx.AU.CVAR_DEFS or {}, function(def)
+    local devDefs = LiveDefs(ctx, ctx.CV and ctx.CV.CVAR_DEFS or {}, function(def)
         return def.dev == true
     end)
     if #devDefs == 0 then return yOffset end
@@ -299,8 +299,8 @@ GUIFrame:RegisterTabbedContent("CVars", function()
     local SCALING = { id = "UIScaling",    label = "UI Scaling" }
     local DEV     = { id = "CVarsDev",     label = "Dev" }
 
-    local AU = GetAutomationModule()
-    if AU and AU:HasLiveDevCVars() then
+    local CV = GetCVarsModule()
+    if CV and CV:HasLiveDevCVars() then
         return { GENERAL, SCALING, DEV }
     end
     return { GENERAL, SCALING }

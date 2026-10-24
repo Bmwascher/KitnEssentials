@@ -1516,7 +1516,7 @@ function GUIFrame:RefreshContent()
     -- NEVER rebuild while the GUI is hidden. Every frame a page builds for
     -- itself is orphaned by the clear pass below, and frames are never
     -- garbage-collected, so an event-driven caller firing with the GUI closed
-    -- (Automation's CVAR_UPDATE handler) would leak on every event. Mark dirty
+    -- (the CVars module's CVAR_UPDATE handler) would leak on every event. Mark dirty
     -- and bail; Show() replays one refresh so a reopened page is never stale.
     -- Minimized counts as hidden here. The frame is still shown, so the test
     -- below passes, but the page is not on screen and every edit-mode drop

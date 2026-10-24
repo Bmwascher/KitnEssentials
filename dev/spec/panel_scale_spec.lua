@@ -545,3 +545,27 @@ describe("PanelScale skin edges", function()
         assert.same({ a, b }, c.shows())
     end)
 end)
+
+describe("PanelScale registry rows by client", function()
+    -- Synthetic rows: one unmarked, one per client mark, and one in each
+    -- category only retail shows.
+    it("keeps a row only on the client that has its frame", function()
+        local KE = helpers.loadModule("Modules/Core/CVars/PanelScaleRegistry.lua", {})
+        local IsOnClient = KE.PanelScaleRegistry.IsOnClient
+        for _, row in ipairs({
+            { entry = { category = "Core" },                     baseline = false, want = true },
+            { entry = { category = "Core" },                     baseline = true,  want = true },
+            { entry = { category = "Core", client = "retail" },  baseline = false, want = true },
+            { entry = { category = "Core", client = "retail" },  baseline = true,  want = false },
+            { entry = { category = "Core", client = "forever" }, baseline = false, want = false },
+            { entry = { category = "Core", client = "forever" }, baseline = true,  want = true },
+            { entry = { category = "Housing" },                  baseline = false, want = true },
+            { entry = { category = "Housing" },                  baseline = true,  want = false },
+            { entry = { category = "Legacy" },                   baseline = false, want = true },
+            { entry = { category = "Legacy" },                   baseline = true,  want = false },
+        }) do
+            local name = row.entry.category .. " " .. tostring(row.entry.client) .. " baseline " .. tostring(row.baseline)
+            assert.equals(row.want, IsOnClient(row.entry, row.baseline), name)
+        end
+    end)
+end)

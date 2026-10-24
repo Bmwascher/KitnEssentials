@@ -80,6 +80,7 @@
     <Script file="Skinning\MythicPlusTimer\MythicPlusTimer_Pull.lua" />
     <Script file="Combat\StatusTexts\HealerMana.lua" />
     <Include file="DungeonTools\DungeonTimers\DungeonTimers.xml" />
+    <Script file="Core\CVars\CVars.lua" />
     <Script file="QoL\Automation\Automation.lua" />
     <Script file="Skinning\DragonRiding.lua" />
     <Script file="Core\Optimize.lua" />

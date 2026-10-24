@@ -33,7 +33,7 @@ end
 
 local function ApplySettings()
     local AU = GetModule()
-    if AU then AU:ApplySettings() end
+    if AU then AU:ApplyFromPage() end
 end
 
 -- Renders above the tab strip. Never collapses: the tab list already drops
@@ -44,12 +44,19 @@ local function BuildHeader(scrollChild, yOffset)
     local db = GetDB()
     if not db then return yOffset, false end
 
+    -- The CVars module shares this block and this switch, so it follows the
+    -- switch here as the profile refresh makes it follow there.
     local function ApplyAutomationState(enabled)
         local AU = GetModule()
         if not AU then return end
         AU.db.Enabled = enabled
-        if enabled then KitnEssentials:EnableModule("Automation")
-        else KitnEssentials:DisableModule("Automation") end
+        if enabled then
+            KitnEssentials:EnableModule("Automation")
+            KitnEssentials:EnableModule("CVars")
+        else
+            KitnEssentials:DisableModule("Automation")
+            KitnEssentials:DisableModule("CVars")
+        end
     end
 
     local card1 = GUIFrame:CreateCard(scrollChild, "Automation", yOffset)

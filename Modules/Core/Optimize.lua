@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Optimize.lua                                            ║
--- ║  Module: CVars                                           ║
+-- ║  Module: Optimize                                        ║
 -- ║  Purpose: One-click CVar optimization panel for          ║
 -- ║           graphics, UI, and performance settings.        ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -45,6 +45,9 @@ end
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
+-- `forever` replaces an entry's optimal and desc on a baseline load, where the
+-- CVar's levels mean something else; `foreverLit` does the same while the
+-- client reports secondary lighting, which renumbers particle density.
 OPT.Categories = {
     {
         id = "render",
@@ -53,7 +56,7 @@ OPT.Categories = {
             { cvar = "renderScale",         optimal = "1",    name = "Render Scale",       desc = "100% native resolution" },
             { cvar = "VSync",               optimal = "0",    name = "VSync",              desc = "Disabled" },
             { cvar = "MSAAQuality",          optimal = "0",    name = "Multisampling",      desc = "None" },
-            { cvar = "LowLatencyMode",       optimal = "3",    name = "Low Latency Mode",   desc = "Reflex + Boost" },
+            { cvar = "LowLatencyMode",       optimal = "3",    name = "Low Latency Mode",   desc = "Reflex + Boost", forever = { optimal = "4", desc = "Reflex + Boost" } },
             { cvar = "ffxAntiAliasingMode",  optimal = "4",    name = "Anti-Aliasing",      desc = "CMAA2" },
         },
     },
@@ -63,7 +66,7 @@ OPT.Categories = {
         cvars = {
             { cvar = "graphicsShadowQuality",      optimal = "3", name = "Shadow Quality",      desc = "High" },
             { cvar = "graphicsLiquidDetail",        optimal = "2", name = "Liquid Detail",        desc = "Good" },
-            { cvar = "graphicsParticleDensity",     optimal = "4", name = "Particle Density",     desc = "High" },
+            { cvar = "graphicsParticleDensity",     optimal = "4", name = "Particle Density",     desc = "High", foreverLit = { optimal = "3", desc = "High" } },
             { cvar = "graphicsSSAO",                optimal = "3", name = "SSAO",                 desc = "High" },
             { cvar = "graphicsDepthEffects",        optimal = "3", name = "Depth Effects",        desc = "High" },
             { cvar = "graphicsComputeEffects",      optimal = "3", name = "Compute Effects",      desc = "High" },
@@ -83,10 +86,10 @@ OPT.Categories = {
             { cvar = "RAIDsettingsEnabled",             optimal = "1", name = "Separate Raid Settings",  desc = "Enabled" },
             { cvar = "raidGraphicsShadowQuality",       optimal = "0", name = "Shadow Quality",          desc = "Low" },
             { cvar = "raidGraphicsLiquidDetail",        optimal = "0", name = "Liquid Detail",            desc = "Low" },
-            { cvar = "raidGraphicsParticleDensity",     optimal = "3", name = "Particle Density",         desc = "Good" },
+            { cvar = "raidGraphicsParticleDensity",     optimal = "3", name = "Particle Density",         desc = "Good", foreverLit = { optimal = "2", desc = "Good" } },
             { cvar = "raidGraphicsSSAO",                optimal = "0", name = "SSAO",                     desc = "Disabled" },
             { cvar = "raidGraphicsDepthEffects",        optimal = "0", name = "Depth Effects",            desc = "Disabled" },
-            { cvar = "raidGraphicsComputeEffects",      optimal = "0", name = "Compute Effects",          desc = "Disabled" },
+            { cvar = "raidGraphicsComputeEffects",      optimal = "0", name = "Compute Effects",          desc = "Disabled", forever = { optimal = "0", desc = "Low" } },
             { cvar = "raidGraphicsOutlineMode",         optimal = "2", name = "Outline Mode",             desc = "High" },
             { cvar = "raidGraphicsTextureResolution",   optimal = "2", name = "Texture Resolution",       desc = "High" },
             { cvar = "raidGraphicsSpellDensity",        optimal = "0", name = "Spell Density",            desc = "Essential" },
@@ -134,7 +137,7 @@ OPT.Categories = {
         cvars = {
             { cvar = "AutoPushSpellToActionBar", optimal = "0", name = "Auto Push Spells to Action Bar", desc = "Disabled" },
             { cvar = "cameraFov", optimal = "90", name = "Camera FOV", desc = "90 degrees" },
-            { cvar = "cameraDistanceMaxZoomFactor", optimal = "2.6", name = "Max Camera Zoom", desc = "2.6x" },
+            { cvar = "cameraDistanceMaxZoomFactor", optimal = "2.6", name = "Max Camera Zoom", desc = "2.6x", forever = { optimal = "2.0", desc = "2.0x" } },
             { cvar = "nameplateShowFriendlyClassColor", optimal = "1", name = "Class Color Names", desc = "Enabled" },
             { cvar = "UnitNameFriendlyPlayerName", optimal = "1", name = "Friendly Player Names", desc = "Show only player names" },
             { cvar = "nameplateStackingTypes", optimal = "1", name = "Stacking Nameplates", desc = "Enemy Units" },
@@ -319,13 +322,49 @@ local VALUE_LABELS = {
     ShakeStrengthUI = function(v) return tonumber(v) == 0 and "Disabled" or tostring(v) end,
 }
 
+-- A baseline load's levels where they differ from retail's. The lit set
+-- applies only while the client reports secondary lighting.
+local function LevelLabel(levels)
+    return function(v) return levels[tonumber(v) or -1] or v end
+end
+local FOREVER_FIVE_LEVELS = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
+local FOREVER_VALUE_LABELS = {
+    LowLatencyMode = LevelLabel({ [0] = "Auto-detect", [1] = "Disabled", [2] = "Built-In", [3] = "Reflex", [4] = "Reflex+Boost", [5] = "XeLL" }),
+    graphicsComputeEffects = LevelLabel(FOREVER_FIVE_LEVELS),
+    raidGraphicsComputeEffects = LevelLabel(FOREVER_FIVE_LEVELS),
+}
+local FOREVER_LIT_LABELS = {
+    graphicsParticleDensity = LevelLabel(FOREVER_FIVE_LEVELS),
+    raidGraphicsParticleDensity = LevelLabel(FOREVER_FIVE_LEVELS),
+}
+
+local function IsBaseline()
+    return KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() == true
+end
+
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
 function OPT:GetValueLabel(cvar, value)
-    local fn = VALUE_LABELS[cvar]
+    local fn
+    if IsBaseline() then
+        fn = (self.secondaryLighting and FOREVER_LIT_LABELS[cvar]) or FOREVER_VALUE_LABELS[cvar]
+    end
+    fn = fn or VALUE_LABELS[cvar]
     if fn then return fn(value) end
     return tostring(value)
+end
+
+--- The recommended value and its description for this client: the entry's own
+--- on retail; on a baseline load `foreverLit` while lit, else `forever`.
+---@return string optimal
+---@return string desc
+function OPT.ResolveEntryValues(entry, baseline, lit)
+    if baseline then
+        local pick = (lit and entry.foreverLit) or entry.forever
+        if pick then return pick.optimal, pick.desc end
+    end
+    return entry.optimal, entry.desc
 end
 
 -- nameplateStackingTypes is a packed bitfield (a version byte, then flag
@@ -364,6 +403,21 @@ function OPT:GetCurrentValue(cvar)
     return raw
 end
 
+-- A CVar this client does not have reads nil. Its row is left off the page and
+-- out of every preset, so a missing CVar is never written, counted or compared.
+function OPT:IsCVarPresent(cvar)
+    local ok, val = pcall(_GetCVar, cvar)
+    return ok and val ~= nil
+end
+
+function OPT:GetPresentEntries(category)
+    local kept = {}
+    for _, entry in ipairs(category.cvars) do
+        if self:IsCVarPresent(entry.cvar) then kept[#kept + 1] = entry end
+    end
+    return kept
+end
+
 function OPT:IsOptimal(cvar, optimal)
     local current = self:GetCurrentValue(cvar)
     if not current then return false end
@@ -386,15 +440,17 @@ function OPT:ApplyCVar(cvar, value)
         local mask = tonumber(value)
         return mask ~= nil and WriteStackMask(mask)
     end
-    local ok = pcall(_SetCVar, cvar, tostring(value))
-    return ok
+    -- SetCVar refuses a write by raising or by returning false.
+    local ok, set = pcall(_SetCVar, cvar, tostring(value))
+    return ok and set ~= false
 end
 
 function OPT:RevertCVar(cvar)
     local backup = GetBackupDB()
     local saved = backup.SavedSettings[cvar]
     if not saved then return false end
-    local ok = pcall(_SetCVar, cvar, tostring(saved))
+    local ok, set = pcall(_SetCVar, cvar, tostring(saved))
+    ok = ok and set ~= false
     if ok then
         backup.SavedSettings[cvar] = nil
     end
@@ -459,7 +515,7 @@ function OPT:ApplyPreset(presetName, overrides)
 
     local applied, failed = 0, 0
     for _, cat in ipairs(self.Categories) do
-        for _, entry in ipairs(cat.cvars) do
+        for _, entry in ipairs(self:GetPresentEntries(cat)) do
             local value = (overrides and overrides[entry.cvar]) or entry.optimal
             if entry.cvar == "graphicsViewDistance" and self:IsMythicOverrideActive() then
                 -- The Mythic+ override is holding View Distance at its floor
@@ -521,7 +577,7 @@ function OPT:GetActivePreset()
 
     local matches = true
     for _, cat in ipairs(self.Categories) do
-        for _, entry in ipairs(cat.cvars) do
+        for _, entry in ipairs(self:GetPresentEntries(cat)) do
             if not (skipViewDistance and entry.cvar == "graphicsViewDistance") then
                 local want = (overrides and overrides[entry.cvar]) or entry.optimal
                 local live = self:GetCurrentValue(entry.cvar)
@@ -546,10 +602,17 @@ function OPT:GetActivePreset()
     return nil
 end
 
+-- On a client without Mythic+ the whole override is inert: the saved toggle
+-- and a saved held state are both ignored, and nothing writes View Distance.
+local function MythicPlusWithheld()
+    return KE.IsFeatureAvailable ~= nil and not KE:IsFeatureAvailable("OptimizeMythicPlus")
+end
+
 --- True while the Mythic+ override is currently holding View Distance down.
 -- The rest of that feature arrives with the override block below; this one
 -- predicate lives up here because both preset functions above consult it.
 function OPT:IsMythicOverrideActive()
+    if MythicPlusWithheld() then return false end
     local state = GetBackupDB().MythicVD
     return state ~= nil and state.active == true
 end
@@ -568,7 +631,9 @@ local MPLUS_DIFFICULTY_ID = 8     -- Mythic Keystone
 local MPLUS_VIEW_DISTANCE = "0"   -- reads as "1" on the in-game slider
 
 --- Whether the override is enabled. Account-wide, stored with the backups.
+--- Never on a client without Mythic+, whatever was saved.
 function OPT:IsMythicViewDistanceEnabled()
+    if MythicPlusWithheld() then return false end
     return GetBackupDB().MythicViewDistanceEnabled == true
 end
 
@@ -612,6 +677,7 @@ end
 --- first pass of an entry, or a later event would record the floor as the
 --- value to restore.
 function OPT:UpdateMythicViewDistance()
+    if MythicPlusWithheld() then return end
     if not self:IsMythicViewDistanceEnabled() then
         self:RestoreMythicViewDistance()
         return
@@ -631,10 +697,27 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- The lighting flag is read once: it renumbers particle density for the whole
+-- session. It is Forever's own API, absent on retail, so it is looked up raw.
+function OPT:ApplyClientValues()
+    if not IsBaseline() then return end
+    local video = C_VideoOptions
+    local isLit = video and rawget(video, "IsSecondaryLightingSupported")
+    local ok, lit = false, nil
+    if type(isLit) == "function" then ok, lit = pcall(isLit) end
+    self.secondaryLighting = ok and lit == true
+    for _, cat in ipairs(self.Categories) do
+        for _, entry in ipairs(cat.cvars) do
+            entry.optimal, entry.desc = OPT.ResolveEntryValues(entry, true, self.secondaryLighting)
+        end
+    end
+    maxFPSOverrides = nil
+end
+
 function OPT:OnInitialize()
-    -- Presets act on demand and need nothing here. This one call wires the
-    -- Mythic+ override if it is on, and is also what recovers a held override
-    -- after a reload inside a key.
+    self:ApplyClientValues()
+    -- This call wires the Mythic+ override if it is on, and is also what
+    -- recovers a held override after a reload inside a key.
     self:UpdateMVDEventRegistration()
 end
 
@@ -647,8 +730,8 @@ function OPT:RevertAll()
 
     local count = 0
     for cvar, val in pairs(backup.SavedSettings) do
-        local ok = pcall(_SetCVar, cvar, tostring(val))
-        if ok then count = count + 1 end
+        local ok, set = pcall(_SetCVar, cvar, tostring(val))
+        if ok and set ~= false then count = count + 1 end
     end
     backup.SavedSettings = {}
     -- Everything is back at the user's own values, so no preset describes them.
@@ -665,11 +748,15 @@ end
 ---------------------------------------------------------------------------------
 -- Reload Prompt
 ---------------------------------------------------------------------------------
--- Its own function, so ClosePromptIfOwner matches this prompt alone.
-local function ReloadNow() ReloadUI() end
+-- Its own accept, so ClosePromptIfOwner matches this prompt alone. Made on
+-- first use by the shared factory, so the secure reload button covers it
+-- where the client refuses addon reloads.
+---@type fun()?
+local ReloadNow
 
 -- Raised from the settings window's close.
 function OPT:PromptReload()
+    ReloadNow = ReloadNow or KE:NewReloadAccept()
     KE:ClosePromptIfOwner(ReloadNow)
     KE:CreatePrompt("Reload Required",
         "Settings applied. Some changes require a reload to take effect.\n\nReload now?",

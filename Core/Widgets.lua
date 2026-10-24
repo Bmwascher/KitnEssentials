@@ -333,6 +333,16 @@ local function ReloadAccept()
     end
 end
 
+-- Accepts KE:NewReloadAccept made. Their prompts get the secure button as
+-- ReloadAccept's do, and each owner can still close its own prompt alone.
+local madeReloadAccepts = setmetatable({}, { __mode = "k" })
+
+function KE:NewReloadAccept()
+    local accept = function() ReloadAccept() end
+    madeReloadAccepts[accept] = true
+    return accept
+end
+
 -- Closes the singleton prompt. Snapshots and NILS the callback fields
 -- before invoking — the immortal dialog would otherwise pin multi-KB
 -- export-string closures, and the close-then-invoke order lets a chained
@@ -726,6 +736,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     dialog._onAccept = onAccept
     dialog._onCancel = onCancel
     dialog._isReloadPrompt = onAccept == ReloadAccept
+        or (onAccept ~= nil and madeReloadAccepts[onAccept] == true)
     dialog._keyedEntry = parkKey and entry or nil
     dialog._closeIsNeutral = (opts and opts.closeIsNeutral == true) or false
     dialog._showEditBox = showEditBox and true or false
@@ -1011,8 +1022,9 @@ function KE:CreateReloadPrompt(reason)
     )
 end
 
-function KE:SkinningReloadPrompt()
-    return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
+-- `extra` is appended to the text: an import's notice of dropped features.
+function KE:SkinningReloadPrompt(extra)
+    return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect." .. (extra or ""))
 end
 
 -- ReloadUI where the client lets addon code call it; elsewhere the reload
