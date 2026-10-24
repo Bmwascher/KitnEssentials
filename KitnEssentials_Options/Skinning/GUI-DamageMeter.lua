@@ -90,7 +90,8 @@ local ARRANGEMENT_BUTTONS = {
       tooltip = "Lit when you have arranged the windows yourself. Drag the boxes on the map to make your own layout." },
 }
 
-local SPLIT_TOOLTIP = "Moves only the split between these two; the other windows stay put. " ..
+local SPLIT_TOOLTIP = "Sets the first window's size in pixels; type a number for an exact size. " ..
+    "Moves only the split between these two; the other windows stay put. " ..
     "Same as dragging this gap on the meter."
 
 local DESCRIPTION = "A damage meter built on the game's own combat data, standing in for the " ..
@@ -1353,7 +1354,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     -- Not registered, like Add Window: it stays off with no gap to even out.
     local evenBtn = GUIFrame:CreateButton(rowMeter, "Even Sizes", {
         height = 24,
-        tooltip = "Makes every column the Window Width and splits every column's height evenly.",
+        tooltip = "Makes every column the Bar Width and splits every column's height evenly.",
         callback = function()
             if DM.EvenSizes then DM:EvenSizes() end
         end,
@@ -1363,34 +1364,35 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     cardSize:AddRow(rowMeter, 24)
 
     local rowWidth = GUIFrame:CreateRow(cardSize.content, Theme.rowHeight)
-    local widthSlider = GUIFrame:CreateSlider(rowWidth, "Window Width", {
+    local widthSlider = GUIFrame:CreateSlider(rowWidth, "Bar Width", {
         min = 120, max = 600, step = 1,
         value = db.Width or 240,
-        tooltip = "The width of one column when the columns are even, in pixels.",
+        tooltip = "The width of the bars, in pixels. A column moved off even by its split " ..
+            "has its own width, shown in px on its split; Even Sizes restores it.",
         callback = function(val) db.Width = val; ApplySettings() end,
     })
     rowWidth:AddWidget(widthSlider, 0.5)
     manager:Register(widthSlider, "all")
 
-    local visSlider = GUIFrame:CreateSlider(rowWidth, "Visible Bars", {
+    local heightSlider = GUIFrame:CreateSlider(rowWidth, "Bar Height", {
+        min = 8, max = 40, step = 1,
+        value = db.BarHeight or 16,
+        callback = function(val) db.BarHeight = val; ApplySettings() end,
+    })
+    rowWidth:AddWidget(heightSlider, 0.5)
+    manager:Register(heightSlider, "all")
+    cardSize:AddRow(rowWidth, Theme.rowHeight)
+
+    local barsLast = nGaps == 0
+    local rowBars = GUIFrame:CreateRow(cardSize.content, barsLast and Theme.rowHeightLast or Theme.rowHeight)
+    local visSlider = GUIFrame:CreateSlider(rowBars, "Visible Bars", {
         min = 1, max = 40, step = 1,
         value = db.VisibleBars or 10,
         tooltip = "How many bars fit the meter's height. Stacked windows share that height.",
         callback = function(val) db.VisibleBars = val; ApplySettings() end,
     })
-    rowWidth:AddWidget(visSlider, 0.5)
+    rowBars:AddWidget(visSlider, 0.5)
     manager:Register(visSlider, "all")
-    cardSize:AddRow(rowWidth, Theme.rowHeight)
-
-    local barsLast = nGaps == 0
-    local rowBars = GUIFrame:CreateRow(cardSize.content, barsLast and Theme.rowHeightLast or Theme.rowHeight)
-    local heightSlider = GUIFrame:CreateSlider(rowBars, "Bar Height", {
-        min = 8, max = 40, step = 1,
-        value = db.BarHeight or 16,
-        callback = function(val) db.BarHeight = val; ApplySettings() end,
-    })
-    rowBars:AddWidget(heightSlider, 0.5)
-    manager:Register(heightSlider, "all")
 
     local spacingSlider = GUIFrame:CreateSlider(rowBars, "Bar Spacing", {
         min = -1, max = 10, step = 1,
@@ -1404,10 +1406,10 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     local splits = {}
 
-    -- The left or top side's share of the pair, in percent.
-    local function ShareOf(split)
-        if split.kind == "col" then return DM:GetColumnBoundaryShare(split.c) end
-        return DM:GetRowBoundaryShare(split.c, split.r)
+    -- The left or top side's px, its slider range and the pair's px.
+    local function PxOf(split)
+        if split.kind == "col" then return DM:GetColumnBoundaryPx(split.c) end
+        return DM:GetRowBoundaryPx(split.c, split.r)
     end
 
     local function SizeText(pct, px)
@@ -1423,18 +1425,13 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         return DM:GetWindowHeightPx(split.leftIdx), DM:GetWindowHeightPx(split.rightIdx)
     end
 
-    -- value is the slider's 0-1 left share; the right share is its complement.
+    -- value is the slider's left px; the right side is the rest of the pair.
     local function PaintSplit(split, value)
-        local left = math_floor((value or 0.5) * 100 + 0.5)
+        local pair = split.pairPx or 0
+        local left = 50
+        if pair > 0 then left = math_floor((value or 0) / pair * 100 + 0.5) end
         if left < 0 then left = 0 elseif left > 100 then left = 100 end
         split.label:SetSizes(SizeText(left, split.leftPx), SizeText(100 - left, split.rightPx))
-    end
-
-    -- The split's range in percent. It follows the pair's pixels, so a change
-    -- to Window Width, Visible Bars or a bar size moves it.
-    local function RangeOf(split)
-        if split.kind == "col" then return DM:GetColumnBoundaryRange(split.c) end
-        return DM:GetRowBoundaryRange(split.c, split.r)
     end
 
     -- A single window is named; a column of several is shown by its chips alone.
@@ -1455,7 +1452,8 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             leftList = leftList, rightList = rightList,
             leftIdx = leftList[1], rightIdx = rightList[1],
         }
-        local lo, hi = RangeOf(split)
+        local px, lo, hi, pairPx, grid = PxOf(split)
+        split.pairPx = pairPx
         local row = GUIFrame:CreateRow(cardSize.content, SPLIT_ROW_H)
         local label = GUIFrame:AcquirePooled("dm:splitlabel", row)
         label:Configure(SideOf(leftList), SideOf(rightList))
@@ -1467,16 +1465,17 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         -- The neighbors that share a pane follow on the next layout, through
         -- OnDockLayout below.
         local slider = GUIFrame:CreateSlider(row, "", {
-            min = lo / 100, max = hi / 100, step = 0.01, isPercent = true,
-            value = ShareOf(split) / 100,
+            -- One pixel per step, so every value is a size the dock can draw.
+            min = lo or 0, max = hi or 1, step = grid or 1,
+            value = px or 0,
             tooltip = SPLIT_TOOLTIP,
             onValueChanged = function(val) PaintSplit(split, val) end,
             onHover = function(entering) Hover.Note(target, target.catcher, entering) end,
             callback = function(val)
                 if kind == "col" then
-                    DM:SetColumnBoundaryShare(c, val * 100)
+                    DM:SetColumnBoundaryPx(c, val)
                 else
-                    DM:SetRowBoundaryShare(c, r, val * 100)
+                    DM:SetRowBoundaryPx(c, r, val)
                 end
                 if schematic then schematic.Relayout() end
             end,
@@ -1647,18 +1646,20 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             local split = splits[i]
             split.leftPx, split.rightPx = ReadSplitPx(split)
             -- A silent range or value under a thumb being dragged would make it
-            -- jitter; that drag writes the share itself.
+            -- jitter; that drag writes the size itself.
             local track = split.slider.slider
-            local share
-            if track and track:IsDraggingThumb() then
-                share = split.slider:GetValue()
-            else
-                local lo, hi = RangeOf(split)
-                split.slider:SetMinMaxValues(lo / 100, hi / 100, true)
-                share = ShareOf(split) / 100
-                split.slider:SetValue(share, true)
+            if not (track and track:IsDraggingThumb()) then
+                local px, lo, hi, pairPx, grid = PxOf(split)
+                split.pairPx = pairPx
+                if px then
+                    -- The pixel size changes with the UI scale; the step follows it.
+                    split.slider._step = grid
+                    if track then track:SetValueStep(grid) end
+                    split.slider:SetMinMaxValues(lo, hi, true)
+                    split.slider:SetValue(px, true)
+                end
             end
-            PaintSplit(split, share)
+            PaintSplit(split, split.slider:GetValue())
         end
         if schematic then schematic.Relayout() end
     end
@@ -1953,7 +1954,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     -- Header text and bar text size are independent sliders. HeaderFontSize falls back
     -- to FontSize when unset, so an existing config's header keeps its current size until
     -- this slider is moved; the bar rows always read FontSize.
-    local rowHdr3 = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeightLast)
+    local rowHdr3 = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeight)
     local headerThemeChk = GUIFrame:CreateCheckbox(rowHdr3, "Theme Color Header", {
         value = db.HeaderThemeColor == true,
         callback = function(checked) db.HeaderThemeColor = checked; ApplySettings() end,
@@ -1968,7 +1969,41 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     rowHdr3:AddWidget(headerSizeSlider, 0.5)
     manager:Register(headerSizeSlider, "all")
-    cardHeader:AddRow(rowHdr3, Theme.rowHeightLast, 0)
+    cardHeader:AddRow(rowHdr3, Theme.rowHeight)
+
+    -- Header Height grays while Match Text Size keeps the band at the header text
+    -- size + 6; turning the match off starts from the current band, so nothing moves.
+    manager:SetCondition("headerheight", function() return type(db.HeaderHeight) == "number" end)
+    local rowHdr4 = GUIFrame:CreateRow(cardHeader.content, Theme.rowHeightLast)
+    local headerHeightSlider
+    local matchChk = GUIFrame:CreateCheckbox(rowHdr4, "Match Text Size", {
+        value = db.HeaderHeight == nil,
+        tooltip = "Sizes the header band to the header text. Turn it off to set the band's height yourself.",
+        callback = function(checked)
+            if checked then
+                db.HeaderHeight = nil
+            else
+                local dm = GetDM()
+                db.HeaderHeight = (dm and dm.HeaderBandHeight and dm:HeaderBandHeight()) or 20
+                if headerHeightSlider then headerHeightSlider:SetValue(db.HeaderHeight, true) end
+            end
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowHdr4:AddWidget(matchChk, 0.5)
+    manager:Register(matchChk, "all")
+
+    local bandDM = GetDM()
+    headerHeightSlider = GUIFrame:CreateSlider(rowHdr4, "Header Height", {
+        min = 12, max = 40, step = 1,
+        value = db.HeaderHeight or (bandDM and bandDM.HeaderBandHeight and bandDM:HeaderBandHeight()) or 20,
+        tooltip = "The header band's height, in pixels. It never goes below the header text size + 2.",
+        callback = function(val) db.HeaderHeight = val; ApplySettings() end,
+    })
+    rowHdr4:AddWidget(headerHeightSlider, 0.5)
+    manager:Register(headerHeightSlider, "headerheight")
+    cardHeader:AddRow(rowHdr4, Theme.rowHeightLast, 0)
 
     yOffset = cardHeader:GetNextOffset()
 

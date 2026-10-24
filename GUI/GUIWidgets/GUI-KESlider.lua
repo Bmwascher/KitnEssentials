@@ -397,8 +397,9 @@ local function ConstructSlider(parent)
     local function UpdateFill()
         local val = slider:GetValue()
         local minVal, maxVal = slider:GetMinMaxValues()
-        if maxVal == minVal then return end
-        local pct = (val - minVal) / (maxVal - minVal)
+        -- A collapsed range still shows its one value in the box.
+        local pct = 0
+        if maxVal > minVal then pct = (val - minVal) / (maxVal - minVal) end
         local width = math_max(1, (slider:GetWidth() - 2) * pct)
         fill:SetWidth(width)
         if not isUpdating then

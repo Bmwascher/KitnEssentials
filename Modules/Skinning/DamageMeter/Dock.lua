@@ -1720,7 +1720,7 @@ end
 -- Sizes for the settings page
 ---------------------------------------------------------------------------------
 
--- Every column back to Window Width and every stacked window to an equal share:
+-- Every column back to Bar Width and every stacked window to an equal share:
 -- the ratios SetArrangement and AddWindow seed.
 function DM:EvenSizes()
     local cols = self.db and self.db.Dock and self.db.Dock.Columns
