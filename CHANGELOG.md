@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.4
+
+### WoW Forever
+
+- The Loot window glows quest items, as on retail
+- Groundwork for the combat modules still to come: a kick list with every
+  rank and the stance or form each kick needs, and your role read from
+  your talents
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.3
 
 ### WoW Forever
