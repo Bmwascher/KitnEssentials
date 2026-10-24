@@ -2114,6 +2114,8 @@ function KE:ResolveForeverRole(libraryRole, hasSpec)
     return nil
 end
 
+-- On Forever, code run by the same talent change (another library callback
+-- or a talent event) can run before the callback above and get the old role.
 function KE:GetPlayerSpecRole()
     if not self.IS_FOREVER then return readSpecRole() end
     local libraryRole = readForeverLibraryRole()

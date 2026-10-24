@@ -287,10 +287,9 @@ end
 -- Accessors
 ---------------------------------------------------------------------------------
 
--- Returns an ordered list of { id, cd } entries to try in priority order.
--- Caller iterates and picks the first entry whose id is actually known in the
--- player's or pet's spellbook. Returns nil if spec is unknown or has no
--- candidate (a tracker kick is none).
+-- Returns an ordered list of { id, cd } entries to try in priority order;
+-- KE:ResolvePlayerInterrupt picks the player's kick from it. Returns nil if
+-- spec is unknown or has no candidate (a tracker kick is none).
 function KE:GetInterruptCandidatesForSpec(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end

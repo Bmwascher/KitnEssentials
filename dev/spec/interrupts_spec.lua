@@ -77,9 +77,11 @@ describe("Interrupts (Core/Interrupts.lua)", function()
 end)
 
 -- A fixture list, so no data cell is pinned: ids 3 and 2 are two ranks of one
--- form-gated kick, 5 needs one of two forms, 7 has no form condition.
+-- form-gated kick, 5 needs one of three forms, 7 has no form condition. Form
+-- 99 stands in for a secret value; 5's list holds it, so only the secret
+-- guard keeps 5 from being picked.
 describe("KE:SelectInterruptCandidate", function()
-    local SECRET = {}
+    local SECRET = 99
     local KE
     setup(function()
         KE = helpers.loadModule("Core/Interrupts.lua", {
@@ -91,7 +93,7 @@ describe("KE:SelectInterruptCandidate", function()
         local list = {
             { id = 3, cd = 10, forms = { 19 } },
             { id = 2, cd = 10, forms = { 19 } },
-            { id = 5, cd = 12, forms = { 17, 18 } },
+            { id = 5, cd = 12, forms = { 17, 18, SECRET } },
             { id = 7, cd = 30 },
         }
         local all = { [3] = true, [2] = true, [5] = true, [7] = true }
