@@ -702,9 +702,9 @@ function Rules.ChargeHas(t, isSecret, past)
 end
 
 -- The digit alphas. Plain state only.
-function Rules.ChargeCount(t, n, isSecret, past)
-    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
-    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+function Rules.ChargeCount(t, n, isSecret)
+    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret)
+    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret)
     local have = 1
     if f1 and f2 then have = 2 elseif t.b > 0.5 then have = 0 end
     t.a0, t.a1, t.a2 = have == 0 and 1 or 0, have == 1 and 1 or 0, have == 2 and 1 or 0
@@ -752,18 +752,18 @@ end
 -- on that second takes the charge it leaves; then with both charges ready the
 -- use starts a recharge, else it waits behind the running one. Plain state
 -- only.
-function Rules.ChargeUsePlain(t, n, isSecret, past)
+function Rules.ChargeUsePlain(t, n, isSecret)
     Rules.Roll(t, n)
     Rules.ChargeAdvance(t, n)
-    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
-    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret)
+    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret)
     if f1 and f2 then
         local sl, other = t.slot[t.cur], t.slot[3 - t.cur]
         sl.c, sl.v, other.v, t.b = Rules.Stamp(t, n), 1, 0, 0
     else
         t.b = 1
     end
-    Rules.ChargeCount(t, n, isSecret, past)
+    Rules.ChargeCount(t, n, isSecret)
 end
 
 -- Uses in one read from plain answers: 0, 1, or 2 when two or more units of a
@@ -878,7 +878,7 @@ function Rules.ChargeUse(t, lit, short, n, isSecret, pick, past, checked)
     local plainUse = plain and r and freeKnown
     if checked == nil and not plainUse then return true, resumed end
     if plainUse then
-        for _ = 1, r do Rules.ChargeUsePlain(t, n, isSecret, past) end
+        for _ = 1, r do Rules.ChargeUsePlain(t, n, isSecret) end
         return true, true
     end
     local known1, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
@@ -921,13 +921,13 @@ end
 
 -- The plain pass: a waiting recharge whose turn has come starts, and the digit
 -- is recounted. Returns whether a value changed.
-function Rules.ChargeTickPlain(t, n, isSecret, past)
+function Rules.ChargeTickPlain(t, n, isSecret)
     local moved = Rules.ChargeAdvance(t, n)
     local a0, a1, a2 = t.a0, t.a1, t.a2
-    Rules.ChargeCount(t, n, isSecret, past)
+    Rules.ChargeCount(t, n, isSecret)
     if a0 ~= t.a0 or a1 ~= t.a1 or a2 ~= t.a2 then moved = true end
-    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret, past)
-    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret, past)
+    local _, f1 = Rules.ChargeFin(t, 1, n, isSecret)
+    local _, f2 = Rules.ChargeFin(t, 2, n, isSecret)
     t.f1, t.f2, t.fRead = f1, f2, true
     return moved
 end
@@ -943,7 +943,7 @@ function Rules.ChargeTick(t, n, isSecret, pick, past, checked)
     if Rules.ChargePlain(t, isSecret) then
         local resumed = t.legacy == true
         if resumed then Rules.ChargeResume(t, n, isSecret) end
-        local moved = Rules.ChargeTickPlain(t, n, isSecret, past)
+        local moved = Rules.ChargeTickPlain(t, n, isSecret)
         return moved or rolled or resumed
     end
     if t.legacy then return rolled end
@@ -1119,7 +1119,7 @@ end
 
 -- A spec's talents: rules maps castID to the talent rule of each entry that
 -- has one (its hide, else its swap, where it applies to the spec, else its
--- needs); ids and want list every talent those rules and the mods of the
+-- needs); want lists every talent those rules and the mods of the
 -- spec's casts name, the externals box's casts and box rows included. rows is
 -- set when the spec's own casts or its healer externals name a talent, box
 -- when its healer externals or its box rows do; boxOnly holds the talents
@@ -1131,7 +1131,8 @@ local talentsBySpec = {}
 local function AddTalent(out, talent)
     if talent and not out.want[talent] then
         out.want[talent] = true
-        out.ids[#out.ids + 1] = talent
+        out.count = out.count + 1
+        if out.boxing then out.boxOnly[talent] = true end
     end
 end
 
@@ -1178,7 +1179,7 @@ function Rules.TalentsFor(specID)
     local cached = talentsBySpec[specID]
     if cached == nil then
         local data = KE.PartyCooldownsData
-        local out = { rules = {}, ids = {}, want = {}, rows = false, box = false, boxOnly = {} }
+        local out = { rules = {}, want = {}, count = 0, rows = false, box = false, boxOnly = {} }
         for _, item in ipairs(data.SPECS[specID] or {}) do
             local castID = Rules.UnpackItem(item)
             if AddCast(out, castID, data.SPELLS[castID], specID) then out.rows = true end
@@ -1187,13 +1188,13 @@ function Rules.TalentsFor(specID)
         for _, castID in ipairs(healer and healer.casts or {}) do
             if AddModTalents(out, data.SPELLS[castID]) then out.rows, out.box = true, true end
         end
-        -- ids lists each talent once, in the order first named.
-        local own = #out.ids
+        -- A talent first named by a box row is box-only.
+        out.boxing = true
         for _, row in ipairs(data.BOX_ROWS or {}) do
             if row.specs[specID] and AddCast(out, row.id, data.SPELLS[row.id], specID) then out.box = true end
         end
-        for k = own + 1, #out.ids do out.boxOnly[out.ids[k]] = true end
-        cached = #out.ids > 0 and out or false
+        out.boxing = nil
+        cached = out.count > 0 and out or false
         talentsBySpec[specID] = cached
     end
     return cached or nil
