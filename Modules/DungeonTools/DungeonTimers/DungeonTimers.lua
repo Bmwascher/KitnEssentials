@@ -5304,6 +5304,70 @@ local function EndInterruptCues(self)
     for i = 1, #ending do self:_EndCue(ending[i].owner, ending[i].cueKey) end
 end
 
+-- A secret answer reads as unknown.
+local function ReadBossSlot(unit)
+    local present = UnitExists(unit)
+    if issecretvalue and issecretvalue(present) then return nil end
+    return present == true
+end
+
+function DT:_StopBossAppearWatch()
+    if not self._bossAppear then return end
+    self._bossAppear = nil
+    self:UnregisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
+end
+
+-- Registered only for an encounter with a boss-appear cue.
+function DT:_StartBossAppearWatch(id)
+    local byEncounter = self._bindings and self._bindings.bossAppear
+    local units = id and byEncounter and byEncounter[id]
+    if not units then
+        self:_StopBossAppearWatch()
+        return
+    end
+    local watch = {}
+    for unit, binding in pairs(units) do
+        local track = State.NewBossAppearTrack()
+        State.NoteBossAppear(track, ReadBossSlot(unit))
+        watch[unit] = { cueKey = binding.cueKey, track = track }
+    end
+    self._bossAppear = watch
+    self:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT", "OnBossAppearEvent")
+end
+
+function DT:OnBossAppearEvent()
+    local watch = self._bossAppear
+    if not watch then return end
+    for unit, entry in pairs(watch) do
+        if State.NoteBossAppear(entry.track, ReadBossSlot(unit)) then
+            self:_ShowBossAppearCue(entry.cueKey, GetTime())
+        end
+    end
+end
+
+-- The cue draws under the one boss module admitted for the active encounter.
+function DT:_ShowBossAppearCue(cueKey, now)
+    if not self:ShouldShowSpell(cueKey) then
+        dprint("boss appear suppressed reason=filtered cue=" .. cueKey)
+        return
+    end
+    local data = self:GetSpellInfo(cueKey)
+    if not data then return end
+    local owner, ownerReason = State.SoleEncounterOwner(self._state, self._activeEncounterId)
+    if not owner then
+        dprint("boss appear refused reason=" .. tostring(ownerReason) .. " cue=" .. cueKey)
+        return
+    end
+    local display = self:GetSpellDisplay(cueKey)
+    local window = self:GetSpellEffectiveShowAtSeconds(cueKey, display)
+    local revealAt, endAt = State.PlanSequel(now, 0, data.duration, window)
+    if not revealAt then
+        dprint("boss appear refused reason=" .. tostring(endAt) .. " cue=" .. cueKey)
+        return
+    end
+    self:_ScheduleCueWindow(owner, cueKey, display, revealAt, endAt, now)
+end
+
 function DT:OnEncounterStart(_, encounterID)
     EndInterruptCues(self)
     CloseCueInterrupts(self)
@@ -5329,6 +5393,7 @@ function DT:OnEncounterStart(_, encounterID)
         self:_UnregisterAbsorbEvent()
     end
     self:_WindMapEncounterStart(id, true)
+    self:_StartBossAppearWatch(id)
     self:_ReplayPullReceipts(id)
 end
 
@@ -5356,6 +5421,7 @@ function DT:OnEncounterEnd()
     self._activeShieldSpellIds = {}
     self:_ReleaseAllUnitCastEvents()
     self:_WindMapTeardown()
+    self:_StopBossAppearWatch()
 end
 
 -- Settings preview bars/texts: looping fake bars for live feedback while editing GUI panels.
@@ -6031,6 +6097,7 @@ end
 -- re-publishes after re-engage, so no instance-ID comparison is needed.
 function DT:OnPlayerEnteringWorld()
     RetireOrdinaryWork(self)
+    self:_StopBossAppearWatch()
     self:StopDiagnosticTrace("world-change")
     -- One frame later the instance map ID has settled.
     C_Timer.After(0, function() self:SyncAuraSounds() end)
@@ -6064,6 +6131,7 @@ function DT:OnDisable()
     self:UnregisterEvent("ENCOUNTER_END")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:_UnregisterTimelineEvent()
+    self:_StopBossAppearWatch()
     if KE.db and KE.db.UnregisterCallback then
         KE.db.UnregisterCallback(self, "OnProfileChanged")
         KE.db.UnregisterCallback(self, "OnProfileCopied")
