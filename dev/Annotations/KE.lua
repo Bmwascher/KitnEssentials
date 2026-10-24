@@ -893,11 +893,26 @@ function KE:ClosePromptIfOwner(accept) end
 ---@return Frame
 function KE:CreateReloadPrompt(reason) end
 
---- A new Reload Now accept for a module's own reload prompt: it reloads as
---- the shared prompt's does, and the secure reload button covers it where the
---- client refuses addon reloads (Core/Widgets.lua).
+--- A new Reload Now accept for a module's own reload prompt. Its click asks
+--- for the reload first, as the shared prompt's does, then runs `work`
+--- (Core/Widgets.lua).
+---@param work fun()?
 ---@return fun()
-function KE:NewReloadAccept() end
+function KE:NewReloadAccept(work) end
+
+--- Whether `accept` came from KE:NewReloadAccept, which makes its prompt a
+--- reload prompt (Core/Widgets.lua).
+---@param accept function?
+---@return boolean
+function KE.IsReloadAccept(accept) end
+
+--- The prompt accept click: on a reload prompt `reload` first, then
+--- `closePrompt(dialog, false)`, then the accept it returns, with the edit box
+--- texts the prompt's mode passes (Core/Widgets.lua).
+---@param dialog table
+---@param closePrompt fun(dialog: table, runCancel: boolean): function?
+---@param reload fun()
+function KE.RunPromptAccept(dialog, closePrompt, reload) end
 
 --- The skinning reload prompt; `extra` is appended to its text
 --- (Core/Widgets.lua).
@@ -905,17 +920,9 @@ function KE:NewReloadAccept() end
 ---@return Frame
 function KE:SkinningReloadPrompt(extra) end
 
---- ReloadUI where the client lets addon code call it; elsewhere the reload
---- prompt, whose Reload Now reloads through a secure button (Core/Widgets.lua).
+--- Reloads the UI. For a click or keypress only, as its first step; an event
+--- or timer caller opens KE:CreateReloadPrompt instead (Core/Widgets.lua).
 function KE:ReloadUI() end
-
---- Whether the secure reload button lies over Reload Now: the reload prompt,
---- a client that refuses addon reloads, out of lockdown (Core/Widgets.lua).
----@param isReloadPrompt boolean?
----@param addonReloadAllowed boolean
----@param inLockdown boolean
----@return boolean
-function KE.SecureReloadWanted(isReloadPrompt, addonReloadAllowed, inLockdown) end
 
 --- Marks a reload as owed. Skinning toggles call this instead of prompting;
 --- the GUI frame's OnHide raises one prompt for the whole session.
