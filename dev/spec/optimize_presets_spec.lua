@@ -390,3 +390,25 @@ describe("Optimize on a client without every CVar or without Mythic+", function(
         assert.equals("3", _G.KitnEssentialsOptimizeDB.MythicVD.saved)
     end)
 end)
+
+describe("Optimize recommended value by client", function()
+    -- Synthetic entries: one with no client field, one per field.
+    it("uses Forever's pair on a baseline load, the lit pair while lit, and the entry's own elsewhere", function()
+        local OPT = L.loadOptimize()
+        local plain = { optimal = "1", desc = "Base" }
+        local forever = { optimal = "1", desc = "Base", forever = { optimal = "2", desc = "Forever" } }
+        local lit = { optimal = "1", desc = "Base", foreverLit = { optimal = "3", desc = "Lit" } }
+        for _, row in ipairs({
+            { name = "retail, forever field",      entry = forever, baseline = false, lit = true,  optimal = "1", desc = "Base" },
+            { name = "retail, lit field",          entry = lit,     baseline = false, lit = true,  optimal = "1", desc = "Base" },
+            { name = "baseline, no field",         entry = plain,   baseline = true,  lit = true,  optimal = "1", desc = "Base" },
+            { name = "baseline, forever field",    entry = forever, baseline = true,  lit = false, optimal = "2", desc = "Forever" },
+            { name = "baseline, lit field, lit",   entry = lit,     baseline = true,  lit = true,  optimal = "3", desc = "Lit" },
+            { name = "baseline, lit field, unlit", entry = lit,     baseline = true,  lit = false, optimal = "1", desc = "Base" },
+        }) do
+            local optimal, desc = OPT.ResolveEntryValues(row.entry, row.baseline, row.lit)
+            assert.equals(row.optimal, optimal, row.name)
+            assert.equals(row.desc, desc, row.name)
+        end
+    end)
+end)

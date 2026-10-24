@@ -45,6 +45,9 @@ end
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
+-- `forever` replaces an entry's optimal and desc on a baseline load, where the
+-- CVar's levels mean something else; `foreverLit` does the same while the
+-- client reports secondary lighting, which renumbers particle density.
 OPT.Categories = {
     {
         id = "render",
@@ -53,7 +56,7 @@ OPT.Categories = {
             { cvar = "renderScale",         optimal = "1",    name = "Render Scale",       desc = "100% native resolution" },
             { cvar = "VSync",               optimal = "0",    name = "VSync",              desc = "Disabled" },
             { cvar = "MSAAQuality",          optimal = "0",    name = "Multisampling",      desc = "None" },
-            { cvar = "LowLatencyMode",       optimal = "3",    name = "Low Latency Mode",   desc = "Reflex + Boost" },
+            { cvar = "LowLatencyMode",       optimal = "3",    name = "Low Latency Mode",   desc = "Reflex + Boost", forever = { optimal = "4", desc = "Reflex + Boost" } },
             { cvar = "ffxAntiAliasingMode",  optimal = "4",    name = "Anti-Aliasing",      desc = "CMAA2" },
         },
     },
@@ -63,7 +66,7 @@ OPT.Categories = {
         cvars = {
             { cvar = "graphicsShadowQuality",      optimal = "3", name = "Shadow Quality",      desc = "High" },
             { cvar = "graphicsLiquidDetail",        optimal = "2", name = "Liquid Detail",        desc = "Good" },
-            { cvar = "graphicsParticleDensity",     optimal = "4", name = "Particle Density",     desc = "High" },
+            { cvar = "graphicsParticleDensity",     optimal = "4", name = "Particle Density",     desc = "High", foreverLit = { optimal = "3", desc = "High" } },
             { cvar = "graphicsSSAO",                optimal = "3", name = "SSAO",                 desc = "High" },
             { cvar = "graphicsDepthEffects",        optimal = "3", name = "Depth Effects",        desc = "High" },
             { cvar = "graphicsComputeEffects",      optimal = "3", name = "Compute Effects",      desc = "High" },
@@ -83,10 +86,10 @@ OPT.Categories = {
             { cvar = "RAIDsettingsEnabled",             optimal = "1", name = "Separate Raid Settings",  desc = "Enabled" },
             { cvar = "raidGraphicsShadowQuality",       optimal = "0", name = "Shadow Quality",          desc = "Low" },
             { cvar = "raidGraphicsLiquidDetail",        optimal = "0", name = "Liquid Detail",            desc = "Low" },
-            { cvar = "raidGraphicsParticleDensity",     optimal = "3", name = "Particle Density",         desc = "Good" },
+            { cvar = "raidGraphicsParticleDensity",     optimal = "3", name = "Particle Density",         desc = "Good", foreverLit = { optimal = "2", desc = "Good" } },
             { cvar = "raidGraphicsSSAO",                optimal = "0", name = "SSAO",                     desc = "Disabled" },
             { cvar = "raidGraphicsDepthEffects",        optimal = "0", name = "Depth Effects",            desc = "Disabled" },
-            { cvar = "raidGraphicsComputeEffects",      optimal = "0", name = "Compute Effects",          desc = "Disabled" },
+            { cvar = "raidGraphicsComputeEffects",      optimal = "0", name = "Compute Effects",          desc = "Disabled", forever = { optimal = "0", desc = "Low" } },
             { cvar = "raidGraphicsOutlineMode",         optimal = "2", name = "Outline Mode",             desc = "High" },
             { cvar = "raidGraphicsTextureResolution",   optimal = "2", name = "Texture Resolution",       desc = "High" },
             { cvar = "raidGraphicsSpellDensity",        optimal = "0", name = "Spell Density",            desc = "Essential" },
@@ -134,7 +137,7 @@ OPT.Categories = {
         cvars = {
             { cvar = "AutoPushSpellToActionBar", optimal = "0", name = "Auto Push Spells to Action Bar", desc = "Disabled" },
             { cvar = "cameraFov", optimal = "90", name = "Camera FOV", desc = "90 degrees" },
-            { cvar = "cameraDistanceMaxZoomFactor", optimal = "2.6", name = "Max Camera Zoom", desc = "2.6x" },
+            { cvar = "cameraDistanceMaxZoomFactor", optimal = "2.6", name = "Max Camera Zoom", desc = "2.6x", forever = { optimal = "2.0", desc = "2.0x" } },
             { cvar = "nameplateShowFriendlyClassColor", optimal = "1", name = "Class Color Names", desc = "Enabled" },
             { cvar = "UnitNameFriendlyPlayerName", optimal = "1", name = "Friendly Player Names", desc = "Show only player names" },
             { cvar = "nameplateStackingTypes", optimal = "1", name = "Stacking Nameplates", desc = "Enemy Units" },
@@ -319,13 +322,49 @@ local VALUE_LABELS = {
     ShakeStrengthUI = function(v) return tonumber(v) == 0 and "Disabled" or tostring(v) end,
 }
 
+-- A baseline load's levels where they differ from retail's. The lit set
+-- applies only while the client reports secondary lighting.
+local function LevelLabel(levels)
+    return function(v) return levels[tonumber(v) or -1] or v end
+end
+local FOREVER_FIVE_LEVELS = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
+local FOREVER_VALUE_LABELS = {
+    LowLatencyMode = LevelLabel({ [0] = "Auto-detect", [1] = "Disabled", [2] = "Built-In", [3] = "Reflex", [4] = "Reflex+Boost", [5] = "XeLL" }),
+    graphicsComputeEffects = LevelLabel(FOREVER_FIVE_LEVELS),
+    raidGraphicsComputeEffects = LevelLabel(FOREVER_FIVE_LEVELS),
+}
+local FOREVER_LIT_LABELS = {
+    graphicsParticleDensity = LevelLabel(FOREVER_FIVE_LEVELS),
+    raidGraphicsParticleDensity = LevelLabel(FOREVER_FIVE_LEVELS),
+}
+
+local function IsBaseline()
+    return KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() == true
+end
+
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
 function OPT:GetValueLabel(cvar, value)
-    local fn = VALUE_LABELS[cvar]
+    local fn
+    if IsBaseline() then
+        fn = (self.secondaryLighting and FOREVER_LIT_LABELS[cvar]) or FOREVER_VALUE_LABELS[cvar]
+    end
+    fn = fn or VALUE_LABELS[cvar]
     if fn then return fn(value) end
     return tostring(value)
+end
+
+--- The recommended value and its description for this client: the entry's own
+--- on retail; on a baseline load `foreverLit` while lit, else `forever`.
+---@return string optimal
+---@return string desc
+function OPT.ResolveEntryValues(entry, baseline, lit)
+    if baseline then
+        local pick = (lit and entry.foreverLit) or entry.forever
+        if pick then return pick.optimal, pick.desc end
+    end
+    return entry.optimal, entry.desc
 end
 
 -- nameplateStackingTypes is a packed bitfield (a version byte, then flag
@@ -658,10 +697,27 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- The lighting flag is read once: it renumbers particle density for the whole
+-- session. It is Forever's own API, absent on retail, so it is looked up raw.
+function OPT:ApplyClientValues()
+    if not IsBaseline() then return end
+    local video = C_VideoOptions
+    local isLit = video and rawget(video, "IsSecondaryLightingSupported")
+    local ok, lit = false, nil
+    if type(isLit) == "function" then ok, lit = pcall(isLit) end
+    self.secondaryLighting = ok and lit == true
+    for _, cat in ipairs(self.Categories) do
+        for _, entry in ipairs(cat.cvars) do
+            entry.optimal, entry.desc = OPT.ResolveEntryValues(entry, true, self.secondaryLighting)
+        end
+    end
+    maxFPSOverrides = nil
+end
+
 function OPT:OnInitialize()
-    -- Presets act on demand and need nothing here. This one call wires the
-    -- Mythic+ override if it is on, and is also what recovers a held override
-    -- after a reload inside a key.
+    self:ApplyClientValues()
+    -- This call wires the Mythic+ override if it is on, and is also what
+    -- recovers a held override after a reload inside a key.
     self:UpdateMVDEventRegistration()
 end
 
