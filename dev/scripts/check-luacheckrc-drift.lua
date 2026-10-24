@@ -51,8 +51,8 @@ local rcSrc = readAll(ROOT .. "\\.luacheckrc")
 assert(rcSrc, "cannot read " .. ROOT .. "\\.luacheckrc — repo root resolution failed?")
 local rcEnv = { files = {} }
 assert(loadSandboxed(rcSrc, "@.luacheckrc", rcEnv))()
-local rcGlobals = rcEnv.globals or {}
-local rcRead = rcEnv.read_globals or {}
+local rcGlobals = P.rcSymbols(rcEnv.globals)
+local rcRead = P.rcSymbols(rcEnv.read_globals)
 
 -- internal + cross-list duplicates
 local seenWhere, dupes = {}, {}

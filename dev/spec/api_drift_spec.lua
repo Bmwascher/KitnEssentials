@@ -133,6 +133,13 @@ describe("api-drift core (dev/scripts/_api_drift_core.lua)", function()
         end)
     end)
 
+    describe("rcSymbols (dev/scripts/_apidocs_parser.lua)", function()
+        it("lists array entries, then hash-form keys", function()
+            local P = dofile("dev/scripts/_apidocs_parser.lua")
+            assert.same({ "A", "B", "math" }, P.rcSymbols({ "A", "B", math = { fields = { "clamp" } } }))
+        end)
+    end)
+
     describe("snapshot round-trip", function()
         it("serialize -> load restores the maps", function()
             local P = dofile("dev/scripts/_apidocs_parser.lua")

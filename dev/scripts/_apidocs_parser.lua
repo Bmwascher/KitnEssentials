@@ -142,4 +142,21 @@ function P.harvestLua(src, set)
     end
 end
 
+-- ---- .luacheckrc symbol lists -----------------------------------------------
+-- A globals list mixes array entries ("GetTime") with hash-form entries
+-- (math = { fields = { "clamp" } }); both name a global. Array entries keep
+-- their order and string keys follow sorted, so reports stay stable.
+function P.rcSymbols(list)
+    local out = {}
+    if type(list) ~= "table" then return out end
+    for _, sym in ipairs(list) do out[#out + 1] = sym end
+    local keys = {}
+    for k in pairs(list) do
+        if type(k) == "string" then keys[#keys + 1] = k end
+    end
+    table.sort(keys)
+    for _, k in ipairs(keys) do out[#out + 1] = k end
+    return out
+end
+
 return P
