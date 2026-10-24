@@ -69,25 +69,23 @@ local LibSpec = LibStub("LibSpecialization", true)
 -- the player's kick cooldown.
 local INTERRUPT_SPELL_IDS = KE:GetInterruptKickSpellSet()
 
--- Class-default kicks for members whose spec is still unknown (teammates
--- without a LibSpec-carrying addon never broadcast their spec). Values match
--- Core/Interrupts.lua; where specs differ the lowest CD wins.
--- allRoles = every spec of the class has this kick; otherwise only a
--- DAMAGER/TANK role assignment proves a kicking spec. Healer shamans keep
--- Wind Shear at its 30s CD.
+-- Class kicks for teammates not yet inspected, each at the class's longest
+-- kick time (KT.FallbackKick holds the role rule). allRoles: every spec of
+-- the class has this kick; otherwise only a DAMAGER or TANK role proves a
+-- kicking spec. tankCd and healerCd replace cd for that role.
 local CLASS_FALLBACK_INTERRUPTS = {
-    DEATHKNIGHT = { id = 47528,  cd = 12, allRoles = true },
+    DEATHKNIGHT = { id = 47528,  cd = 15, allRoles = true },
     DEMONHUNTER = { id = 183752, cd = 15, allRoles = true },
-    DRUID       = { id = 106839, cd = 15 },
-    EVOKER      = { id = 351338, cd = 18 },
-    HUNTER      = { id = 187707, cd = 15, allRoles = true },
-    MAGE        = { id = 2139,   cd = 20, allRoles = true },
+    DRUID       = { id = 106839, cd = 60, tankCd = 15 },  -- Balance's Solar Beam
+    EVOKER      = { id = 351338, cd = 20 },
+    HUNTER      = { id = 147362, cd = 24, allRoles = true },
+    MAGE        = { id = 2139,   cd = 25, allRoles = true },
     MONK        = { id = 116705, cd = 15 },
     PALADIN     = { id = 96231,  cd = 15 },
     PRIEST      = { id = 15487,  cd = 30 },  -- Shadow only; a DPS role proves it
     ROGUE       = { id = 1766,   cd = 15, allRoles = true },
     SHAMAN      = { id = 57994,  cd = 12, allRoles = true, healerCd = 30 },
-    WARLOCK     = { id = 19647,  cd = 24, allRoles = true },
+    WARLOCK     = { id = 19647,  cd = 30, allRoles = true },  -- Demonology's Axe Toss
     WARRIOR     = { id = 6552,   cd = 15, allRoles = true },
 }
 
@@ -213,10 +211,17 @@ local function isTalentKnown(talentID)
     return C_SpellBook.IsSpellKnown(talentID) == true
 end
 
--- The player's own kick cooldown with flat talent changes applied. KICK and
--- HELLO carry it, so receivers see the true cooldown.
-function KT:OwnKickCooldown(data)
-    return KT.TalentedCooldown(data.cd, KE:GetFlatKickTalents(data.id), isTalentKnown)
+-- The player's own talents read as rank 1 or 0, never unknown.
+local function ownRank(talentID)
+    return isTalentKnown(talentID) and 1 or 0
+end
+
+-- The player's kick duration from its definition (KT.KickDuration); a kick
+-- without one keeps the row's cooldown.
+function KT:OwnKickCooldown(data, succeeded)
+    local def = KE:GetKickDefinition(KE:GetCanonicalKickSpell(data.id))
+    if not def then return data.cd end
+    return KT.KickDuration(def, GetPlayerSpecID(), ownRank, succeeded)
 end
 
 local function isOwnKickKnown(id)
@@ -270,36 +275,29 @@ function KT:ApplyOwnKicks(member, specID)
     return mainChanged, mainChanged or specChanged or extrasChanged
 end
 
--- Spec unknown (teammate without a LibSpec-carrying addon): the
--- safe-optimistic rule — assign the class-default kick only when it can't
--- be wrong (every spec of the class kicks, or a DPS/TANK role proves a
--- kicking spec; ambiguous healer/NONE stays hidden rather than showing a
--- phantom bar). Refined or cleared as soon as the real spec arrives.
+-- A teammate not yet inspected gets the class kick (KT.FallbackKick).
 function KT:GuessClassInterrupt(unit, classToken)
-    -- IsSafeValue before the table key: plain today for party units, but a
-    -- secret key would throw (parity with the name-cache guard above).
+    -- IsSafeValue before the table key: a secret key would throw.
     local fallback = classToken and KE:IsSafeValue(classToken)
         and CLASS_FALLBACK_INTERRUPTS[classToken]
     if not fallback then return nil end
+    return KT.FallbackKick(fallback, UnitGroupRolesAssigned(unit))
+end
 
-    local role = UnitGroupRolesAssigned(unit)
-    if role == "HEALER" then
-        if fallback.healerCd then
-            return { id = fallback.id, cd = fallback.healerCd, role = "HEALER" }
-        end
-        if fallback.allRoles then
-            return { id = fallback.id, cd = fallback.cd, role = "HEALER" }
-        end
-        return nil
-    end
-    if not fallback.allRoles and role ~= "DAMAGER" and role ~= "TANK" then
-        return nil
-    end
-    return {
-        id = fallback.id,
-        cd = fallback.cd,
-        role = (role == "TANK") and "TANK" or "DAMAGER",
-    }
+-- A clock's length for a member's main kick: the player's from their own
+-- talents, a teammate's from their inspected facts (an unknown talent gives
+-- the longest), a class fallback row's own duration. succeeded: the kick's
+-- interrupt is confirmed.
+function KT:ClockDuration(member, succeeded)
+    local data = member.interruptData
+    if not data then return nil end
+    if member.unit == "player" then return self:OwnKickCooldown(data, succeeded) end
+    if data.fallback then return data.cd end
+    local def = KE:GetKickDefinition(KE:GetCanonicalKickSpell(data.id))
+    if not def then return data.cd end
+    local snap = member.inspect
+    return KT.KickDuration(def, member.specID, function(talent) return KT.SnapshotRank(snap, talent) end,
+        succeeded)
 end
 
 -- classToken is for display: the C-side class color takes it secret or not.
@@ -460,13 +458,13 @@ end
 ---------------------------------------------------------------------------------
 -- Self Kick Confirmation
 ---------------------------------------------------------------------------------
--- durationOverride: comm-synced kicks carry the sender's exact CD; nil = spec CD.
--- remaining: a cooldown already under way (a HELLO's remaining time).
-function KT:ConfirmKick(guid, durationOverride, remaining)
+-- duration: the clock's length, nil for KT:ClockDuration's. remaining: a
+-- cooldown already under way.
+function KT:ConfirmKick(guid, duration, remaining)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
 
-    local duration = durationOverride or member.interruptData.cd
+    duration = duration or self:ClockDuration(member, false)
     member.kickDuration = duration
     member.kickStart = GetTime() - (remaining and (duration - remaining) or 0)
     KT._chargeSerial = KT._chargeSerial + 1
@@ -669,12 +667,12 @@ function KT:RosterKicker(interrupterGuid)
     return nil
 end
 
--- A teammate's kick on their own row, timed from the interrupt, for their
--- row's kick cooldown. Returns true when it charged.
+-- A teammate's kick on their own row, timed from the interrupt, with the
+-- duration of a confirmed success. Returns true when it charged.
 function KT:ChargeKick(entry, guid)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return false end
-    local cd = member.interruptData.cd
+    local cd = self:ClockDuration(member, true)
     local remaining = cd - (GetTime() - entry.startTime)
     if remaining <= 0 then return false end
     self:ConfirmKick(guid, cd, remaining)
@@ -1038,18 +1036,25 @@ function KT:BroadcastReduction(spellID, cd, remaining)
 end
 
 -- A kick the player cast and a nameplate interrupt credited to the player
--- are one success when they land within the window, in either order. The
--- shorter cooldown is the own row's arithmetic, never a cooldown read.
+-- are one success when they land within the window, in either order.
 function KT:TryOwnReduction()
     if not KT.OwnKickMatched(self._ownKickAt, self._ownLandedAt, OWN_KICK_MATCH_WINDOW) then return end
-    local spellID = self._ownKickSpell
-    self._ownKickAt, self._ownLandedAt, self._ownKickSpell = nil, nil, nil
+    self._ownKickAt, self._ownLandedAt = nil, nil
+    self:ApplyOwnSuccess()
+end
 
-    local talentID, seconds = KE:GetInterruptSuccessReduction(spellID)
-    if not talentID or not isTalentKnown(talentID) then return end
+-- A confirmed success takes the success rule's seconds off the running own
+-- clock, once per cast: the one change to a clock already running. The
+-- shorter cooldown is the own row's arithmetic, never a cooldown read.
+function KT:ApplyOwnSuccess()
+    if self._ownSucceeded then return end
+    self._ownSucceeded = true
     local guid = UnitGUID("player")
     local member = guid and self.partyMembers[guid]
-    if not member or not member.interruptData then return end
+    local data = member and member.interruptData
+    if not data then return end
+    local seconds = self:OwnKickCooldown(data, false) - self:OwnKickCooldown(data, true)
+    if seconds <= 0 then return end
     local duration = member.kickDuration
     local remaining = KT.ReducedRemaining(member.kickStart, duration, GetTime(), seconds)
     if not remaining then return end
@@ -1058,7 +1063,7 @@ function KT:TryOwnReduction()
     else
         self:ClearKick(guid)
     end
-    self:BroadcastReduction(member.interruptData.id, duration, remaining)
+    self:BroadcastReduction(data.id, duration, remaining)
 end
 
 local function getExtraKick(id)
@@ -1292,7 +1297,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         return
     end
     self._lastOwnKickID, self._lastOwnKickAt = kickID, now
-    self._ownKickAt, self._ownKickSpell = now, kickID
+    self._ownKickAt, self._ownSucceeded = now, nil
     local member = self.partyMembers[guid]
     local landedAt = self:ClaimOwnKick(now, member)
     if landedAt then self._ownLandedAt = landedAt end
@@ -1314,7 +1319,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
             self:LayoutBars()
         end
     end
-    local cd = data and self:OwnKickCooldown(data)
+    local cd = data and self:OwnKickCooldown(data, false)
     self:ConfirmKick(guid, cd)
     self:RedrawKicked(guid)
     -- Tell party KE users so they can flip our roster bar with the real CD

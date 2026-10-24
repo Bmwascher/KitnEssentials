@@ -24,3 +24,20 @@ describe("KickTracker own-kick guard", function()
         end
     end)
 end)
+
+describe("KickTracker own success reduction", function()
+    it("takes the success reduction off a running own clock once per cast", function()
+        local KT = L.loadKickTracker({ issecretvalue = function() return false end })
+        KT.db = { Enabled = true }
+        local guid = UnitGUID("player")
+        KT.partyMembers[guid] = { unit = "player", interruptData = { id = 47528 },
+                                  kickStart = GetTime(), kickDuration = 15 }
+        KT.OwnKickCooldown = function(_, _, succeeded) return succeeded and 12 or 15 end
+        local reductions = 0
+        KT.ConfirmKick = function() reductions = reductions + 1 end
+        KT.ClearKick = function() reductions = reductions + 1 end
+        KT:ApplyOwnSuccess()
+        KT:ApplyOwnSuccess()
+        assert.equals(1, reductions)
+    end)
+end)

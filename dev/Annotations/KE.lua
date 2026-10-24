@@ -1499,11 +1499,6 @@ function KE:GetTrackedKickForSpec(specID) end
 ---@return table<number, true>
 function KE:GetInterruptKickSpellSet() end
 
---- Flat talent changes to one kick's cooldown, or nil.
----@param kickSpellID number
----@return { talent: number, seconds: number?, multiplier: number? }[]?
-function KE:GetFlatKickTalents(kickSpellID) end
-
 --- The spell ID a cooldown tracker keys a kick on (aliases collapsed).
 ---@param spellID number
 ---@return number
@@ -1529,13 +1524,6 @@ function KE:GetExtraKick(spellID) end
 ---@param kickID number
 ---@return number?
 function KE:GetKickCooldownCap(kickID) end
-
---- The talent that shortens a kick after a successful interrupt, and by how
---- many seconds; nil when none.
----@param kickSpellID number
----@return number? talentSpellID
----@return number? seconds
-function KE:GetInterruptSuccessReduction(kickSpellID) end
 
 --- The first candidate isKnown accepts whose `forms` list, when present,
 --- holds formID. A nil or secret formID meets no `forms` list. Pure.

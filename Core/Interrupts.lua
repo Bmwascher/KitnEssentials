@@ -380,19 +380,6 @@ function KE:ResolvePlayerInterrupt(specID)
     return self:SelectInterruptCandidate(candidates, isKnownToPlayerOrPet, formID)
 end
 
--- Talents that change a kick's cooldown outright, keyed by kick spell ID.
--- Each entry names its talent and one change: `seconds` off the cooldown, or
--- `multiplier`, the share of the cooldown kept (10% off is 0.9).
-local FLAT_KICK_TALENTS = {
-    [2139] = { { talent = 382297, seconds = 5 } },       -- Counterspell: Quick Witted
-    [6552] = { { talent = 391271, multiplier = 0.9 } },  -- Pummel: Honed Reflexes
-}
-if KE.IS_FOREVER then FLAT_KICK_TALENTS = {} end
-
-function KE:GetFlatKickTalents(kickSpellID)
-    return FLAT_KICK_TALENTS[kickSpellID]
-end
-
 function KE:GetCanonicalKickSpell(spellID)
     return KICK_ALIASES[spellID] or spellID
 end
@@ -423,19 +410,6 @@ end
 -- The largest table cooldown of a canonical kick ID, or nil when unknown.
 function KE:GetKickCooldownCap(kickID)
     return KICK_CD_CAP[kickID]
-end
-
--- Talents that shorten a kick after it interrupts something, keyed by kick
--- spell ID.
-local SUCCESS_REDUCTIONS = {
-    [47528] = { talent = 378848, seconds = 3 },  -- Mind Freeze: Coldthirst
-}
-if KE.IS_FOREVER then SUCCESS_REDUCTIONS = {} end
-
-function KE:GetInterruptSuccessReduction(kickSpellID)
-    local reduction = SUCCESS_REDUCTIONS[kickSpellID]
-    if not reduction then return nil end
-    return reduction.talent, reduction.seconds
 end
 
 ---------------------------------------------------------------------------------
