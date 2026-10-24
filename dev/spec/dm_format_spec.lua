@@ -229,62 +229,127 @@ describe("Death-time stamps", function()
         assert.equals(t, ABBR_CALLS[1])
     end)
 
-    it("stamps only within the duration bound of the previous read", function()
-        local cases = {
-            { name = "no previous read", prev = nil, now = 10, mode = "mark" },
-            { name = "no current read", prev = 10, now = nil, mode = "mark" },
-            { name = "a falling duration", prev = 10, now = 4, mode = "mark" },
-            { name = "a gap over the bound", prev = 10, now = 10.8, mode = "mark" },
-            { name = "within the bound", prev = 10, now = 10.75, mode = "stamp" },
-        }
-        for _, c in ipairs(cases) do
-            assert.equals(c.mode, DM.DeathStampMode(c.prev, c.now, 0.75), c.name)
-        end
-    end)
-
-    it("takes the bound from the configured Combat Refresh", function()
-        local t = 3006
-        SECRET[t] = true
-        local read = 10.3
-        _G.C_DamageMeter = { GetSessionDurationSeconds = function() return read end }
-        DM.db = { RefreshRate = 0.1 }
-        DM._deathTickOver = false   -- a render inside a tick's own loop
-        local W = { _deathPrevDur = 10, _deathPrevSeq = 0 }
-        DM.windows_rt = { W }
-        DM:UpdateDeathStamps(W, true, { { deathRecapID = 7, deathTimeSeconds = t } })
-        read = 10.7
-        DM:UpdateDeathStamps(W, true, {
-            { deathRecapID = 7, deathTimeSeconds = t },
-            { deathRecapID = 8, deathTimeSeconds = t },
-        })
-        assert.equals(10.3, DM._deathStamps[7])   -- 0.3 s gap: within 0.1 + jitter
-        assert.is_false(DM._deathStamps[8])       -- 0.4 s gap: past it
-    end)
-
-    it("clears every stamp and every window's previous read at a session boundary", function()
+    it("clears every stamp and the pass's previous read at a session boundary", function()
         DM._deathStamps[7] = 61
         DM._deathStamps[8] = false
-        DM.windows_rt = { { _deathPrevDur = 7 }, { _deathPrevDur = 42 } }
+        DM._deathPassAt, DM._deathPassDur, DM._deathPassSeq = 12, 7, 3
         DM:ResetDeathStamps()
         assert.is_nil(next(DM._deathStamps))
-        for _, W in ipairs(DM.windows_rt) do
-            assert.is_nil(W._deathPrevDur)
-        end
+        assert.is_nil(DM._deathPassAt)
+        assert.is_nil(DM._deathPassDur)
+        assert.is_nil(DM._deathPassSeq)
     end)
 
-    it("writes no numeric stamp from a secret duration read, and clears the old ones", function()
-        local t, d = 3002, 3003
+    it("forgets the highest session ID when the module stops watching", function()
+        DM._liveSessionID, DM._sessionRolled = 9, true
+        DM.windows_rt = {}
+        DM:DropDeathStamps()
+        assert.is_nil(DM._liveSessionID)
+        assert.is_nil(DM._sessionRolled)
+    end)
+
+    it("stamps each new death from the module pass, with no window present", function()
+        local savedGetTime = _G.GetTime
+        finally(function() _G.GetTime = savedGetTime end)
+        local t, secretDur = 3010, 3011
         SECRET[t] = true
-        SECRET[d] = true
-        _G.C_DamageMeter = { GetSessionDurationSeconds = function() return d end }
-        DM._deathTickOver = false   -- a render inside a tick's own loop
-        DM._deathStamps[5] = 40
-        local W = { _deathPrevDur = 20, _deathPrevSeq = 0 }
-        DM.windows_rt = { W }
-        DM:UpdateDeathStamps(W, true, { { deathRecapID = 7, deathTimeSeconds = t } })
-        assert.is_nil(DM._deathStamps[5])       -- a failed read counts as a roll
-        assert.is_false(DM._deathStamps[7])
-        assert.is_nil(W._deathPrevDur)
+        SECRET[secretDur] = true
+        local clock, dur, reads = 0, 0, 0
+        local sources = { { deathRecapID = 9, deathTimeSeconds = t } }
+        _G.GetTime = function() return clock end
+        _G.C_DamageMeter = {
+            GetSessionDurationSeconds = function() return dur end,
+            GetCombatSessionFromType = function()
+                reads = reads + 1
+                return { combatSources = sources }
+            end,
+        }
+        local deaths = Enum.DamageMeterType.Deaths
+        local cases = {
+            { name = "a pass within the bound stamps the duration",
+              prevAt = 10, prevDur = 5, now = 10.5, dur = 5, moved = true, want = 5, reads = 1 },
+            { name = "a whole-second step 0.5 s later still stamps",
+              prevAt = 10, prevDur = 5, now = 10.5, dur = 6, moved = true, want = 6, reads = 1 },
+            { name = "no previous pass marks",
+              now = 10, dur = 5, moved = true, want = false, reads = 1 },
+            { name = "a real-time gap past the bound marks at a 0.1 s rate",
+              rate = 0.1, prevAt = 10, prevDur = 5, now = 10.9, dur = 5, moved = true, want = false, reads = 1 },
+            { name = "the same gap stamps at the 0.5 s rate",
+              rate = 0.5, prevAt = 10, prevDur = 5, now = 10.9, dur = 5, moved = true, want = 5, reads = 1 },
+            { name = "a roll within the bound clears the old stamps and stamps the new session's duration",
+              prevAt = 10, prevDur = 50, lastDur = 50, now = 10.5, dur = 2, old = true, want = 2, reads = 1 },
+            { name = "a roll after a gap past the bound marks",
+              prevAt = 10, prevDur = 50, lastDur = 50, now = 12, dur = 2, old = true, want = false, reads = 1 },
+            -- 0 -> 0 across a roll: only the session ID can tell, and the new
+            -- death reuses the old session's recap id.
+            { name = "a session ID roll with an unchanged duration restamps a reused recap id",
+              prevAt = 10, prevDur = 0, lastDur = 0, now = 10.5, dur = 0, reused = true, rolled = true, want = 0, reads = 1 },
+            { name = "a secret duration read clears the old stamps and marks",
+              prevAt = 10, prevDur = 5, lastDur = 5, now = 10.5, dur = secretDur, old = true, want = false, reads = 1 },
+            { name = "an unmoved Deaths seq makes no session read",
+              prevAt = 10, prevDur = 5, now = 10.5, dur = 5, moved = false, want = nil, reads = 0 },
+        }
+        for _, c in ipairs(cases) do
+            DM.db = { RefreshRate = c.rate or 0.5 }
+            DM.windows_rt = {}
+            DM._sessionCache = nil
+            for k in pairs(DM._deathStamps) do DM._deathStamps[k] = nil end
+            if c.old then DM._deathStamps[1] = 40 end
+            if c.reused then DM._deathStamps[9] = 40 end
+            DM._sessionRolled = c.rolled
+            DM._deathLastDur = c.lastDur
+            DM._deathPassAt, DM._deathPassDur = c.prevAt, c.prevDur
+            local seqNow = (DM._typeSeq[deaths] or 0) + DM._allSeq
+            DM._deathPassSeq = c.moved and -1 or seqNow
+            clock, dur, reads = c.now, c.dur, 0
+            DM:RunDeathStampPass()
+            assert.equals(c.want, DM._deathStamps[9], c.name)
+            assert.equals(c.reads, reads, c.name .. ": session reads")
+            if c.old then assert.is_nil(DM._deathStamps[1], c.name .. ": old stamp cleared") end
+        end
+
+        -- A boundary takes a baseline at once: the rows listed then were not
+        -- seen arriving, and a death after it is stamped on the next pass.
+        for k in pairs(DM._deathStamps) do DM._deathStamps[k] = nil end
+        DM.db = { RefreshRate = 0.5 }
+        DM._sessionCache, DM._deathLastDur = nil, nil
+        clock, dur = 20, 3
+        DM:RestartDeathStamps()
+        assert.is_false(DM._deathStamps[9], "restart: a row listed at the boundary marks")
+        sources = {
+            { deathRecapID = 9, deathTimeSeconds = t },
+            { deathRecapID = 10, deathTimeSeconds = t },
+        }
+        DM._sessionCache = nil
+        DM:BumpDeathsSeq()
+        clock, dur = 20.5, 4
+        DM:RunDeathStampPass()
+        assert.equals(4, DM._deathStamps[10], "restart: the next pass stamps a later death")
+    end)
+
+    it("flags a roll only for a session ID above every one seen", function()
+        local savedICL = _G.InCombatLockdown
+        finally(function() _G.InCombatLockdown = savedICL end)
+        -- In combat the handler returns after the bookkeeping, before its timer.
+        _G.InCombatLockdown = function() return true end
+        local secretID = 3020
+        SECRET[secretID] = true
+        local ev = "DAMAGE_METER_COMBAT_SESSION_UPDATED"
+        local cases = {
+            { name = "the first ID is a baseline", id = 5, live = 5 },
+            { name = "the overall session's ID 0 is never a baseline", id = 0 },
+            { name = "a higher ID is a roll", seen = 5, id = 6, rolled = true, live = 6 },
+            { name = "the same ID again, one event per meter type, is not", seen = 6, id = 6, live = 6 },
+            { name = "the overall session's ID 0 changes nothing", seen = 6, id = 0, live = 6 },
+            { name = "a lower ID is a late update", seen = 6, id = 4, live = 6 },
+            { name = "a secret ID changes nothing", seen = 6, id = secretID, live = 6 },
+        }
+        for _, c in ipairs(cases) do
+            DM._liveSessionID, DM._sessionRolled = c.seen, nil
+            DM:OnSessionUpdated(ev, 1, c.id)
+            assert.equals(c.rolled, DM._sessionRolled, c.name)
+            assert.equals(c.live, DM._liveSessionID, c.name .. ": live ID")
+        end
     end)
 
     it("never stamps a death first seen without a vouching read", function()
@@ -302,35 +367,5 @@ describe("Death-time stamps", function()
         assert.is_false(stamps[7])
         assert.equals(61, stamps[8])
         assert.equals(61, stamps[9])
-    end)
-
-    it("clears every stamp at a tick when the Current duration falls, whatever the views", function()
-        _G.C_DamageMeter = { GetSessionDurationSeconds = function() return 2 end }
-        DM._deathStamps[5] = 40
-        DM._deathLastDur = 50
-        local W = { _deathPrevDur = 40 }
-        DM.windows_rt = { W }
-        DM:BeginDeathTick()
-        assert.is_nil(DM._deathStamps[5])
-        assert.is_nil(W._deathPrevDur)
-        assert.equals(2, DM._deathLastDur)
-    end)
-
-    it("stamps only inside a tick, from a read taken in that tick or the one before", function()
-        local t = 3007
-        SECRET[t] = true
-        _G.C_DamageMeter = { GetSessionDurationSeconds = function() return 10.2 end }
-        DM._deathSeq = 5
-        local cases = {
-            { name = "read in the previous tick", seq = 4, rid = 7, want = 10.2 },
-            { name = "read two ticks back", seq = 3, rid = 8, want = false },
-            { name = "a render after the tick ended", seq = 4, rid = 9, over = true, want = nil },
-        }
-        for _, c in ipairs(cases) do
-            DM._deathTickOver = c.over
-            local W = { _deathPrevDur = 10, _deathPrevSeq = c.seq }
-            DM:UpdateDeathStamps(W, true, { { deathRecapID = c.rid, deathTimeSeconds = t } })
-            assert.equals(c.want, DM._deathStamps[c.rid], c.name)
-        end
     end)
 end)

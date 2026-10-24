@@ -57,9 +57,6 @@ DM._overallLeaverUnknown = true
 
 -- [deathRecapID] = seconds, or false when no read could vouch for the time.
 DM._deathStamps = {}
-DM._deathSeq = 0
--- Starts outside a tick, so a render before the first one records no read.
-DM._deathTickOver = true
 
 -- Instance-entry reset. The last entry's key and scope; a generation, bumped
 -- by every meter reset, key start and move the key compare cannot see, so an
@@ -1104,7 +1101,7 @@ function DM:_CombatStartBody()
     -- OnStart, which is exactly when the hold is wanted.
     if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
-    self:ResetDeathStamps()
+    self:RestartDeathStamps()
     self:BeginLeaverWatch()
     self:StartTicker()
 end
@@ -1442,9 +1439,6 @@ end
 
 -- Only the UI teardown a fresh fight needs; liveness is the service's call.
 function DM:OnRegenDisabled()
-    -- The player re-entering combat inside a live group fight can start a new
-    -- Current session that no combat-state start marks.
-    self:ResetDeathStamps()
     -- Only the player entering combat opens the spec harvest: Current follows the
     -- player's combat, and a group-only start could lift a block while Current
     -- still shows the fight before a respec. Not a fight already running at a
@@ -1539,7 +1533,7 @@ function DM:OnEncounterStart()
     self:ClearFeignTags("encounter start")
     -- A boss pull starts a new Current session; a recap id from the last one may
     -- name a different death in this one.
-    self:ResetDeathStamps()
+    self:RestartDeathStamps()
     -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
     -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
     -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
@@ -1679,10 +1673,23 @@ end
 -- The damage-meter session changed. In combat the ticker already covers
 -- repaints, so only react out of combat. Debounce to one paint per 0.1s burst
 -- (the event can fire rapidly as the API finalizes a segment).
-function DM:OnSessionUpdated(event, meterType)
+function DM:OnSessionUpdated(event, meterType, sessionID)
     -- Data may have arrived, in or out of combat, so the store is no longer
     -- empty since this module's own wipe: a key start must reset again.
     self._wipeBoundary = false
+    -- A session ID above every one seen is a new session: the next stamp pass
+    -- drops the old session's stamps, whose recap ids may name a new death. A
+    -- late update for an older session carries a lower ID and changes nothing,
+    -- and so does the repeat sent once per meter type. Every update also comes
+    -- once for the overall session with ID 0, which names no fight.
+    if event == "DAMAGE_METER_COMBAT_SESSION_UPDATED" and not issecretvalue(sessionID)
+        and type(sessionID) == "number" and sessionID > 0 then
+        local seen = self._liveSessionID
+        if not seen or sessionID > seen then
+            if seen then self._sessionRolled = true end
+            self._liveSessionID = sessionID
+        end
+    end
     -- Counted in combat too: the ticker skips a window whose type saw none. The
     -- payload type carries no secret annotation and is tested anyway before it
     -- keys a table; CURRENT_SESSION_UPDATED names no type and counts for all.
@@ -1715,8 +1722,10 @@ end
 function DM:OnMeterReset()
     self:ClearFeignTags("meter reset")
     self:ResetOverallMembers()
-    -- Current is emptied, so a recap id may next name a different death.
-    self:ResetDeathStamps()
+    -- Current is emptied, so a recap id may next name a different death. Session
+    -- IDs may start over, so the next one seen is a new baseline, not a roll.
+    self._liveSessionID, self._sessionRolled = nil, nil
+    self:RestartDeathStamps()
     -- The ONLY thing that enables feign filtering. A reset clears the data those
     -- rows lived in, so nothing pending can be held against a later list. Every
     -- cheaper signal -- leaving combat, an empty list, a login -- is an inference
@@ -2583,9 +2592,9 @@ DM.ClockText = ClockText
 -- duration reads plain, so a death is stamped with that duration when it appears.
 ---------------------------------------------------------------------------------
 
--- Slack over the configured Combat Refresh for a tick that lands a little late.
--- A later one leaves new rows unstamped.
-local STAMP_JITTER = 0.25
+-- Slack over the configured Combat Refresh, in real time between passes, for a
+-- pass that lands late. A later one leaves new rows unstamped.
+local STAMP_JITTER = 0.75
 
 -- Row text for a death time: a secret time with a stamp renders the
 -- stamp, anything else is FormatDeathTime's answer. Returns (text, isSecret).
@@ -2600,11 +2609,11 @@ local function DeathTimeText(value, recapID, stamps)
     return FormatDeathTime(value)
 end
 
--- "stamp" only when this window's previous read is at most bound older in the
--- same session. Otherwise the death may have happened any time since then. With
--- no previous read, rows already listed were not seen arriving.
-local function DeathStampMode(prev, duration, bound)
-    if not prev or not duration or duration < prev or duration - prev > bound then
+-- "stamp" only when the previous pass ran at most bound seconds ago, in real
+-- time. The duration steps in whole seconds, so its change cannot measure the
+-- gap. With no previous pass, rows already listed were not seen arriving.
+local function DeathStampMode(prevAt, now, prevDur, duration, bound)
+    if not prevAt or not duration or (prevDur and duration < prevDur) or now - prevAt > bound then
         return "mark"
     end
     return "stamp"
@@ -2641,8 +2650,8 @@ DM.DeathTimeText = DeathTimeText
 DM.DeathStampMode = DeathStampMode
 DM.StampDeaths = StampDeaths
 
--- The only view that writes or reads stamps: unpinned, no fallback session, and
--- set to Current.
+-- The only view that reads stamps: unpinned, no fallback session, and set to
+-- Current.
 function DM:IsLiveCurrent(W, cfg)
     return not W._curSessionID and not W._fallbackSessionID
         and cfg.SessionType == Enum.DamageMeterSessionType.Current
@@ -2650,10 +2659,8 @@ end
 
 -- The Current duration with the roll check. A read below the last one means
 -- Current rolled without a start event this module sees; the stamps belong to
--- the old session, where a recap id can name a different death. Inside a tick
--- the tick's read is reused, so a render makes no second call.
+-- the old session, where a recap id can name a different death.
 function DM:ReadDeathDuration()
-    if self._deathTickRead then return self._deathTickDur end
     local duration = ReadCurrentDuration()
     if next(self._deathStamps) ~= nil
         and (not duration or (self._deathLastDur and duration < self._deathLastDur)) then
@@ -2665,44 +2672,6 @@ function DM:ReadDeathDuration()
     return duration
 end
 
--- Tick's bracket around its renders. While any stamp exists every tick reads
--- once, whatever the windows show, so a roll is caught within one tick.
-function DM:BeginDeathTick()
-    self._deathSeq = self._deathSeq + 1
-    self._deathTickRead, self._deathTickDur, self._deathTickOver = nil, nil, false
-    if next(self._deathStamps) == nil then return end
-    self._deathTickDur = self:ReadDeathDuration()
-    self._deathTickRead = true
-end
-
--- A render after this, deferred a frame or called outside a tick, stamps
--- nothing and records no read: it carries the tick's sequence, so a roll in the
--- gap could land within the bound of the window's old read.
-function DM:EndDeathTick()
-    self._deathTickRead, self._deathTickDur, self._deathTickOver = nil, nil, true
-end
-
--- Called by RenderWindow with the raw list, before the Deaths filter and before
--- the no-data early return, so every render keeps or ends the window's watch.
----@param sources table?
-function DM:UpdateDeathStamps(W, liveView, sources)
-    W._deathLiveView = liveView or nil
-    if not liveView then
-        W._deathPrevDur, W._deathPrevSeq = nil, nil
-        return
-    end
-    local duration = self:ReadDeathDuration()
-    if self._deathTickOver then return end
-    local seq = self._deathSeq
-    local prev = W._deathPrevDur
-    -- A read older than the previous tick does not vouch: the window missed a
-    -- tick, and Current may have rolled unseen meanwhile.
-    if not W._deathPrevSeq or seq - W._deathPrevSeq > 1 then prev = nil end
-    W._deathPrevDur, W._deathPrevSeq = duration, seq
-    local bound = ((self.db and self.db.RefreshRate) or 0.5) + STAMP_JITTER
-    StampDeaths(sources, self._deathStamps, DeathStampMode(prev, duration, bound), duration)
-end
-
 -- Deaths rows changed with no session update to say so: the stamps were wiped,
 -- or a feign tag hid or restored a row. The combat ticker then repaints a
 -- Deaths window instead of skipping it as quiet.
@@ -2711,24 +2680,26 @@ function DM:BumpDeathsSeq()
     self._typeSeq[deaths] = (self._typeSeq[deaths] or 0) + 1
 end
 
--- A Current-session boundary: forget every stamp, and every window's previous
--- read, which belongs to the old session. A Deaths window then repaints on the
--- next tick instead of keeping rows stamped from the old session.
+-- A Current-session boundary: forget every stamp and the pass's previous read,
+-- which belong to the old session. A Deaths window then repaints on the next
+-- tick instead of keeping rows stamped from the old session.
 function DM:ResetDeathStamps()
     wipe(self._deathStamps)
     self:BumpDeathsSeq()
-    if not self.windows_rt then return end
-    for _, W in pairs(self.windows_rt) do
-        W._deathPrevDur = nil
-    end
+    self._deathPassAt, self._deathPassDur, self._deathPassSeq = nil, nil, nil
 end
 
+-- Called when the module stops watching (OnDisable unregisters the events). A
+-- meter reset while it is off can restart the session IDs, so the highest ID
+-- seen goes too; the first ID after re-enabling is a fresh baseline.
 function DM:DropDeathStamps()
     wipe(self._deathStamps)
     self._deathLastDur = nil
+    self._deathPassAt, self._deathPassDur, self._deathPassSeq = nil, nil, nil
+    self._liveSessionID, self._sessionRolled = nil, nil
     if not self.windows_rt then return end
     for _, W in pairs(self.windows_rt) do
-        W._deathPrevDur, W._deathPrevSeq, W._deathLiveView = nil, nil, nil
+        W._deathLiveView = nil
     end
 end
 
@@ -3054,7 +3025,8 @@ function DM:HeaderReset(_)
     -- (mirrors OnMeterReset; covers a reset that doesn't fire the event).
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
     -- Death stamps too, before this function's own Tick below.
-    self:ResetDeathStamps()
+    self._liveSessionID, self._sessionRolled = nil, nil
+    self:RestartDeathStamps()
     -- A reset that failed leaves Overall's rows, and their owners, in place.
     if wiped then self:ResetOverallMembers() end
     -- Key history is part of a manual reset by design (the GUI note
@@ -4013,6 +3985,42 @@ function DM.PaintSkip(paintType, paintSeq, nowType, nowSeq, panelOpen)
     return paintType ~= nil and nowType == paintType and nowSeq == paintSeq and not panelOpen
 end
 
+-- One stamp pass per Tick, independent of the windows. The Deaths session is
+-- read only when the Deaths data moved since the last read; a live Deaths window
+-- in the same Tick reuses it through CachedSession.
+function DM:RunDeathStampPass()
+    -- The real-time anchor is read before either roll check, so a roll found
+    -- below keeps it: every death in the new session arrived after the last
+    -- pass. The previous duration is read after them, since a roll clears it.
+    local prevAt = self._deathPassAt
+    -- A new session ID seen since the last pass is a roll however the duration
+    -- reads; a whole-second clock can read the same across one.
+    if self._sessionRolled then
+        self._sessionRolled = nil
+        self:ResetDeathStamps()
+    end
+    local duration = self:ReadDeathDuration()
+    local now = GetTime()
+    local prevDur = self._deathPassDur
+    self._deathPassAt, self._deathPassDur = now, duration
+    local seq = TypeSeq(Enum.DamageMeterType.Deaths)
+    if seq == self._deathPassSeq then return end
+    local session = self:CachedSession(Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
+    self._deathPassSeq = seq
+    local bound = ((self.db and self.db.RefreshRate) or 0.5) + STAMP_JITTER
+    StampDeaths(session and session.combatSources, self._deathStamps,
+        DeathStampMode(prevAt, now, prevDur, duration, bound), duration)
+end
+
+-- A boundary seen as it happens: reset, then take the baseline pass at once, so
+-- the rows listed now are marked and the ticker's first pass can stamp a death
+-- that arrives after it.
+function DM:RestartDeathStamps()
+    self:ResetDeathStamps()
+    if self._sessionCache then wipe(self._sessionCache) end
+    self:RunDeathStampPass()
+end
+
 -- Repaints every visible window under a per-frame UI budget. Whole-window spill
 -- only: if rendering a window would push the elapsed frame time over the budget,
 -- that window (and every window after it) is deferred to the next frame rather
@@ -4030,9 +4038,9 @@ function DM:Tick(skipQuiet)
     -- re-judging itself against a roster walk from an earlier tick.
     self._rosterIndex = nil
 
-    -- One Current duration read per tick while stamps exist: the roll check runs
-    -- whatever the windows show, and the Deaths renders below reuse the read.
-    self:BeginDeathTick()
+    -- Every death the meter sees arrive is stamped here, whatever the windows
+    -- show or whether their render is deferred; the renders only read stamps.
+    self:RunDeathStampPass()
 
     local frameStart = debugprofilestop()
     local budget = (self.db and self.db.UIBudgetMs) or 1.2
@@ -4053,23 +4061,20 @@ function DM:Tick(skipQuiet)
     for _, W in ipairs(self:VisibleWindows(context)) do
         local nowType = self:EffectiveMeterType(W.idx, self:ResolveWindowConfig(W.idx, context))
         local nowSeq = TypeSeq(nowType)
-        if skipQuiet and DM.PaintSkip(W._paintType, W._paintSeq, nowType, nowSeq, W._detailOpen) then
-            -- A live Deaths window still takes this tick's duration read, or the
-            -- next death would find no read from the tick before and go unstamped.
-            if W._deathLiveView then self:UpdateDeathStamps(W, true, nil) end
-        elseif (debugprofilestop() - frameStart) > budget then
-            if not deferred then deferred = {} end
-            deferred[#deferred + 1] = W
-            -- Painted a frame later from this tick's cache: record no paint, so the
-            -- next tick paints it again.
-            W._paintType = nil
-        else
-            self:RenderWindowAndDetail(W)
-            W._paintType, W._paintSeq = nowType, nowSeq
+        -- A quiet window keeps its last paint.
+        if not (skipQuiet and DM.PaintSkip(W._paintType, W._paintSeq, nowType, nowSeq, W._detailOpen)) then
+            if (debugprofilestop() - frameStart) > budget then
+                if not deferred then deferred = {} end
+                deferred[#deferred + 1] = W
+                -- Painted a frame later from this tick's cache: record no paint, so the
+                -- next tick paints it again.
+                W._paintType = nil
+            else
+                self:RenderWindowAndDetail(W)
+                W._paintType, W._paintSeq = nowType, nowSeq
+            end
         end
     end
-
-    self:EndDeathTick()
 
     if deferred then
         C_Timer.After(0, function()

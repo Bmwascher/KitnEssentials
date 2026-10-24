@@ -1507,7 +1507,7 @@ function DM:RenderWindow(W)
     self:UpdateCombatClock(W, session)
 
     local sources = session and session.combatSources
-    self:UpdateDeathStamps(W, isDeaths and self:IsLiveCurrent(W, cfg), sources)
+    W._deathLiveView = (isDeaths and self:IsLiveCurrent(W, cfg)) or nil
     -- Sources per class in the session, excluding the player's own. The roster
     -- side excludes the player too; counting one population against the other is
     -- what made a player and an ally of the same class refuse each other.
