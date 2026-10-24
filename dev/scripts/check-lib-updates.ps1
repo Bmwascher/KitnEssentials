@@ -8,7 +8,10 @@
 # Check. Every external in .pkgmeta is pinned to a tag or a commit. A tag pin
 # is compared with the newest upstream tag of the same shape (digits ignored:
 # v12.1.1 competes only with v#.#.#, so an alpha or a differently named tag
-# series never counts as newer). A commit pin is compared with upstream HEAD,
+# series never counts as newer). Git tags rank by version number; SVN tags by
+# the revision that last changed them, because SVN tag names need not follow
+# release order (LibStub's 1.0.3-50001 is older than 1.0.2-70000). A commit
+# pin is compared with upstream HEAD,
 # which can move without touching the pinned subfolder. Externals that share
 # a repository and a pin print as one line. Upstream answers are cached for
 # 20 hours in the git common dir (kitn-lib-updates.json, shared by every
@@ -98,12 +101,16 @@ function Compare-Version([string]$a, [string]$b) {
     return [Math]::Sign($x.Count - $y.Count)
 }
 
-function Get-NewestTag([string[]]$tags, [string]$pinned) {
+# $revisions (SVN only) maps each tag to its revision and replaces version order.
+function Get-NewestTag([string[]]$tags, [string]$pinned, [hashtable]$revisions) {
     $shape = Get-Shape $pinned
     $best = $null
     foreach ($t in $tags) {
         if ((Get-Shape $t) -cne $shape) { continue }
-        if ($null -eq $best -or (Compare-Version $t $best) -gt 0) { $best = $t }
+        $newer = if ($null -eq $best) { $true }
+            elseif ($revisions) { $revisions[$t] -gt $revisions[$best] }
+            else { (Compare-Version $t $best) -gt 0 }
+        if ($newer) { $best = $t }
     }
     return $best
 }
@@ -118,7 +125,7 @@ function Invoke-UpstreamQueries($queries, [int]$timeoutSeconds) {
         $out = $null
         try {
             if ($q.type -eq 'svn') {
-                $out = (Invoke-WebRequest -Uri "$($q.repo)/tags/" -TimeoutSec 20 -UseBasicParsing).Content
+                $out = (Invoke-WebRequest -Uri "$($q.repo)/tags/" -CustomMethod PROPFIND -Headers @{ Depth = '1' } -TimeoutSec 20 -UseBasicParsing).Content
             } elseif ($q.kind -eq 'tag') {
                 $out = (& git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=15 ls-remote --tags --refs $q.repo 2>$null) -join "`n"
                 if ($LASTEXITCODE -ne 0) { $out = $null }
@@ -133,11 +140,21 @@ function Invoke-UpstreamQueries($queries, [int]$timeoutSeconds) {
     return $raw
 }
 
-function Get-TagNames([string]$type, [string]$raw) {
-    if ($type -eq 'svn') {
-        return @([regex]::Matches($raw, '<li><a href="([^"]+)/">') | ForEach-Object { [Uri]::UnescapeDataString($_.Groups[1].Value) } | Where-Object { $_ -ne '..' })
-    }
+function Get-TagNames([string]$raw) {
     return @($raw -split "`n" | Where-Object { $_ -match 'refs/tags/(.+)$' } | ForEach-Object { ($_ -split 'refs/tags/', 2)[1].Trim() })
+}
+
+# A Depth 1 PROPFIND answers one response per tag folder, each carrying the
+# folder's href and its last-changed revision (version-name).
+function Get-SvnTagRevisions([string]$raw) {
+    $revisions = @{}
+    foreach ($m in [regex]::Matches($raw, '(?s)<(?:\w+:)?response\b.*?</(?:\w+:)?response>')) {
+        $block = $m.Value
+        $href = [regex]::Match($block, '<(?:\w+:)?href>[^<]*/tags/([^/<]+)/</(?:\w+:)?href>')
+        $rev = [regex]::Match($block, 'version-name>(\d+)<')
+        if ($href.Success -and $rev.Success) { $revisions[[Uri]::UnescapeDataString($href.Groups[1].Value)] = [long]$rev.Groups[1].Value }
+    }
+    return $revisions
 }
 
 function Get-HeadSha([string]$raw) {
@@ -149,7 +166,8 @@ function Get-HeadSha([string]$raw) {
 # same-shape tag, or the HEAD commit.
 function Get-QueryKey($src, $ext) {
     $shape = if ($ext.kind -eq 'tag') { Get-Shape $ext.ref } else { '' }
-    return "$($src.type)|$($src.repo)|$($ext.kind)|$shape"
+    $order = if ($src.type -eq 'svn') { '|rev' } else { '' }
+    return "$($src.type)|$($src.repo)|$($ext.kind)|$shape$order"
 }
 
 function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$timeoutSeconds) {
@@ -173,7 +191,9 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
     $raw = Invoke-UpstreamQueries @($needed.Values) $timeoutSeconds
     foreach ($q in $needed.Values) {
         if (-not $raw.ContainsKey($q.key)) { continue }
-        $value = if ($q.kind -eq 'tag') { Get-NewestTag (Get-TagNames $q.type $raw[$q.key]) $q.pinned } else { Get-HeadSha $raw[$q.key] }
+        $value = if ($q.kind -ne 'tag') { Get-HeadSha $raw[$q.key] }
+            elseif ($q.type -eq 'svn') { $revs = Get-SvnTagRevisions $raw[$q.key]; Get-NewestTag @($revs.Keys) $q.pinned $revs }
+            else { Get-NewestTag (Get-TagNames $raw[$q.key]) $q.pinned $null }
         if (-not $value) { continue }
         $answers[$q.key] = $value
         $cache[$q.key] = [pscustomobject]@{ checked = $now; value = $value }
@@ -255,7 +275,8 @@ function Invoke-Check {
             continue
         }
         $up = $answers[$key]
-        $behind = if ($ext.kind -eq 'tag') { (Compare-Version $up $ext.ref) -gt 0 } else { $up -ne $ext.ref }
+        # The answer is the newest tag in this source's own order, so any other tag is newer.
+        $behind = $up -cne $ext.ref
         if ($behind) {
             $notes++
             $what = if ($ext.kind -eq 'tag') { "upstream $up" } else { "upstream HEAD $(Format-Ref commit $up)" }
