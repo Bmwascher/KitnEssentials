@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.2
+
+### Libraries
+
+- Bundled libraries updated to their current versions: LibSpecialization,
+  LibSharedMedia, AceDB, LibDBIcon and LibKeystone
+
+---
+
 ## v4.14.1
 
 KitnEssentials now runs on WoW Forever.
