@@ -41,6 +41,7 @@ local INVSLOT_FINGER1   = INVSLOT_FINGER1
 local INVSLOT_FINGER2   = INVSLOT_FINGER2
 local INVSLOT_MAINHAND  = INVSLOT_MAINHAND
 local INVSLOT_OFFHAND   = INVSLOT_OFFHAND
+local INVSLOT_HAND      = INVSLOT_HAND
 
 local function ElvUILoaded()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
@@ -57,9 +58,15 @@ local SOCKETS = Admitted("CharacterPanelSockets")
 local ENCHANT_RANK = Admitted("CharacterPanelEnchantRank")
 local WIDEN = Admitted("CharacterPanelWiden")
 
+-- Forever's missing-enchant rule: the Enchanting slots (enchantSlotButtons
+-- below), and only at that client's level cap.
+local IS_FOREVER = KE.IS_FOREVER == true
+local FOREVER_MAX_LEVEL = 60
+
 -- 12.1 removed the IsLevelAtEffectiveMaxLevel global; Blizzard code now
 -- compares against GameRulesUtil.GetEffectiveMaxLevelForPlayer (GameRulesUtil.lua).
 local function IsLevelAtEffectiveMaxLevel(level)
+    if IS_FOREVER then return level >= FOREVER_MAX_LEVEL end
     return GameRulesUtil and GameRulesUtil.GetEffectiveMaxLevelForPlayer
         and level >= GameRulesUtil.GetEffectiveMaxLevelForPlayer()
 end
@@ -105,6 +112,17 @@ local enchantSlotButtons = {
     [INVSLOT_MAINHAND]  = "CharacterMainHandSlot",
     [INVSLOT_OFFHAND]   = "CharacterSecondaryHandSlot",
 }
+if IS_FOREVER then
+    enchantSlotButtons = {
+        [INVSLOT_BACK]      = "CharacterBackSlot",
+        [INVSLOT_CHEST]     = "CharacterChestSlot",
+        [INVSLOT_WRIST]     = "CharacterWristSlot",
+        [INVSLOT_HAND]      = "CharacterHandsSlot",
+        [INVSLOT_FEET]      = "CharacterFeetSlot",
+        [INVSLOT_MAINHAND]  = "CharacterMainHandSlot",
+        [INVSLOT_OFFHAND]   = "CharacterSecondaryHandSlot",
+    }
+end
 
 -- Slots that can have gem sockets this expansion
 local gemSlotButtons = {
@@ -554,6 +572,14 @@ end
 -- The level is a parameter so a caller that has already checked it for
 -- secrecy decides on that same value, not on a second read.
 local function CanEnchantSlotAtLevel(unit, slot, level)
+    -- Forever: the off hand only for a shield; a weapon there takes no cue.
+    if IS_FOREVER then
+        if slot == INVSLOT_OFFHAND then
+            local itemLink = GetInventoryItemLink(unit, slot)
+            return itemLink ~= nil and select(4, GetItemInfoInstant(itemLink)) == "INVTYPE_SHIELD"
+        end
+        return enchantSlotButtons[slot] ~= nil
+    end
     local expansion = GetExpansionForLevel(level)
     local slots = expansion and expansionEnchantableSlots[expansion]
     if not slots then return false end

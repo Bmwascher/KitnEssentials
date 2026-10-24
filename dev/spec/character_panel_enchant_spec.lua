@@ -13,7 +13,7 @@
 --      silently and is awkward to smoke (you would have to pull a mob first).
 local helpers = require("dev.spec._helpers")
 
-local function loadCP(overrides)
+local function loadCP(overrides, seed)
     helpers.installAddonShim()
 
     -- Captured as file-locals when CharacterPanel.lua loads, so they must be
@@ -39,7 +39,7 @@ local function loadCP(overrides)
         INVSLOT_HEAD = 1, INVSLOT_NECK = 2, INVSLOT_SHOULDER = 3, INVSLOT_CHEST = 5,
         INVSLOT_WAIST = 6, INVSLOT_LEGS = 7, INVSLOT_FEET = 8, INVSLOT_WRIST = 9,
         INVSLOT_FINGER1 = 11, INVSLOT_FINGER2 = 12, INVSLOT_BACK = 15,
-        INVSLOT_MAINHAND = 16, INVSLOT_OFFHAND = 17,
+        INVSLOT_MAINHAND = 16, INVSLOT_OFFHAND = 17, INVSLOT_HAND = 10, INVSLOT_RANGED = 18,
     }
     for name, id in pairs(invslots) do _G[name] = id end
 
@@ -52,6 +52,7 @@ local function loadCP(overrides)
         Print = function() end,
         IsSafeValue = function(_, v) return v ~= nil end,
     }
+    for k, v in pairs(seed or {}) do KE[k] = v end
     helpers.loadModule("Core/Colors.lua", KE)
     helpers.loadModule("Modules/Skinning/CharacterPanel/CharacterPanel.lua", KE)
     return _G.KitnEssentials:GetModule("CharacterPanel"), KE
@@ -738,5 +739,40 @@ describe("Enchant auto-apply: the action", function()
         })
         CP:ApplyEnchantFromBags(enchantData())
         assert.same({}, picked)
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Forever: the missing-enchant cue slots
+---------------------------------------------------------------------------------
+describe("Forever enchant cue", function()
+    -- Each row loads the module again: the slot rule and the item info lookup
+    -- are read once at load.
+    it("cues only the Enchanting slots, only at 60, and the off hand only for a shield", function()
+        local cases = {
+            { name = "back", slot = 15, level = 60, want = true },
+            { name = "chest", slot = 5, level = 60, want = true },
+            { name = "wrist", slot = 9, level = 60, want = true },
+            { name = "hands", slot = 10, level = 60, want = true },
+            { name = "feet", slot = 8, level = 60, want = true },
+            { name = "main hand", slot = 16, level = 60, want = true },
+            { name = "head", slot = 1, level = 60, want = false },
+            { name = "shoulder", slot = 3, level = 60, want = false },
+            { name = "legs", slot = 7, level = 60, want = false },
+            { name = "waist", slot = 6, level = 60, want = false },
+            { name = "ranged", slot = 18, level = 60, want = false },
+            { name = "back below the cap", slot = 15, level = 59, want = false },
+            { name = "off-hand shield", slot = 17, level = 60, equipLoc = "INVTYPE_SHIELD", want = true },
+            { name = "off-hand weapon", slot = 17, level = 60, equipLoc = "INVTYPE_WEAPON", want = false },
+            { name = "off-hand holdable", slot = 17, level = 60, equipLoc = "INVTYPE_HOLDABLE", want = false },
+        }
+        for _, c in ipairs(cases) do
+            local CP = loadCP({
+                UnitLevel = function() return c.level end,
+                GetInventoryItemLink = function() return "link" end,
+                C_Item = { GetItemInfoInstant = function() return 1, nil, nil, c.equipLoc end },
+            }, { IS_FOREVER = true })
+            assert.equals(c.want, CP:IsEnchantableSlot("player", c.slot, true), c.name)
+        end
     end)
 end)
