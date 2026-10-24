@@ -199,11 +199,21 @@ local function OnEncounterStart()
     end
 end
 
+-- Set at enable, cleared on the first entering-world event: one offer a
+-- session. The delay lets the addon-conflict scan, whose prompt replaces any
+-- open one, raise first.
+local offerRetailCopy = false
+local RETAIL_COPY_DELAY = 3
+
 local function OnPlayerEnteringWorld()
     for name, module in KitnEssentials:IterateModules() do
         if module:IsEnabled() and module.ApplySettings and KE:IsFeatureAvailable(name) then
             module:ApplySettings()
         end
+    end
+    if offerRetailCopy then
+        offerRetailCopy = false
+        C_Timer.After(RETAIL_COPY_DELAY, function() KE.GUIFrame:OfferRetailCopy() end)
     end
 end
 
@@ -239,4 +249,7 @@ function KitnEssentials:OnEnable()
     self:RegisterEvent("ENCOUNTER_END", OnEncounterEnd)
     self:RegisterEvent("ENCOUNTER_START", OnEncounterStart)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", OnPlayerEnteringWorld)
+
+    offerRetailCopy = KE.GUIFrame ~= nil
+        and KE.GUIFrame.ShouldOfferRetailCopy(KE:IsBaselineLoad(), KE.db.global.CopyFromRetailSeen)
 end
