@@ -21,6 +21,7 @@
     <Script file="Skinning\Chat\ChatMessageHandler.lua" />
     <Script file="Skinning\Chat\ChatRoleIcons.lua" />
     <Script file="Skinning\Chat\ChatRecall.lua" />
+    <Script file="Skinning\DarkTheme\RoleIconSamples.lua" />
     <Script file="Skinning\Chat\Chat.lua" />
     <Script file="Skinning\Chat\ChatCopyText.lua" />
     <Script file="Skinning\Chat\ChatCopy.lua" />

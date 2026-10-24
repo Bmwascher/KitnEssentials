@@ -439,8 +439,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGroupFinder", function(scrollChild, 
     local db = GetDB()
     if not db then return yOffset end
 
-    local card = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
-    card:AddLabel("Which role icons the Group Finder and group chat both draw.")
+    -- Where the Group Finder skin cannot run, this setting drives chat alone,
+    -- and in chat circle draws the same atlases as blizzard.
+    local lfgSkin = not KE.IsFrameSkinAvailable or KE:IsFrameSkinAvailable("LFG")
+
+    local card = GUIFrame:CreateCard(scrollChild, lfgSkin and "Group Finder" or "Role Icons", yOffset)
+    card:AddLabel(lfgSkin and "Which role icons the Group Finder and group chat both draw."
+        or "Which role icons group chat draws.")
 
     -- Each entry's label IS its sample: three inline role icons and no text,
     -- so the list shows the art rather than naming it. Built once here, not
@@ -454,18 +459,25 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGroupFinder", function(scrollChild, 
     local roleIconOptions = {}
     for i = 1, #ROLE_ICON_SET_ORDER do
         local set = ROLE_ICON_SET_ORDER[i]
-        roleIconOptions[i] = { value = set, text = KE.BuildRoleIconSample(set) }
+        if lfgSkin or set ~= "circle" then
+            roleIconOptions[#roleIconOptions + 1] = { value = set, text = KE.BuildRoleIconSample(set) }
+        end
     end
+
+    -- A saved circle is shown as the set chat actually draws for it; the saved
+    -- value is left alone until another set is picked.
+    local current = KE.Skins.GetRoleIconSet()
+    if not lfgSkin and current == "circle" then current = "blizzard" end
 
     local row = GUIFrame:CreateRow(card.content, DROPDOWN_H)
     row:AddWidget(GUIFrame:CreateDropdown(row, "Role Icon Style", {
         -- ORDERED array form. A key/value map is sorted by key, which would
         -- put the three original entries in an arbitrary order.
         options = roleIconOptions,
-        value = KE.Skins.GetRoleIconSet(),
+        value = current,
         callback = function(key)
             db.RoleIconSet = key
-            KE.Skins.RefreshLFGRoleIcons()
+            if KE.Skins.RefreshLFGRoleIcons then KE.Skins.RefreshLFGRoleIcons() end
             local CHAT = GetChatModule()
             if CHAT and CHAT.RebuildLFGRoles then CHAT:RebuildLFGRoles() end
         end,

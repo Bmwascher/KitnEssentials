@@ -21,8 +21,8 @@ local FOREVER_ALLOWED = {
     ProfilesSharing = true,
     ProfilesReset = true,
     -- Dark Theme: the engine, Color Picker, the skins command, the page
-    -- with the tabs that configure what loads, and the Addon Skins card.
-    -- Group Finder and Raid Control stay withheld.
+    -- with the tabs that configure what loads, the Addon Skins card and the
+    -- role icon card. Raid Control and the Group Finder skin stay withheld.
     BlizzardFrames = true,
     ColorPicker = true,
     SkinAPI = true,
@@ -34,6 +34,7 @@ local FOREVER_ALLOWED = {
     SkinBlizzardFramesSkins = true,
     SkinBlizzardFramesFrames = true,
     SkinBlizzardFramesAddons = true,
+    SkinBlizzardFramesGroupFinder = true,
     -- Elements: the five modules with their own switches, and their pages.
     AlertFrames = true,
     LootFrame = true,

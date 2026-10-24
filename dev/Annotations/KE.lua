@@ -967,11 +967,6 @@ function KE.Skins.RelevelPlate(owner, plate) end
 function KE.Skins.Skip(reason) end
 
 -- ─── Skinning (Modules/Skinning/DarkTheme/Frames/LFG.lua) ──────────
---- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
---- "blizzard" or "circle". Falls back to "modern" for anything else.
----@return string
-function KE.Skins.GetRoleIconSet() end
-
 --- Repaints the Group Finder search rows and role count strips with the
 --- current set. Applicant role buttons keep Blizzard's art.
 function KE.Skins.RefreshLFGRoleIcons() end
@@ -1017,6 +1012,11 @@ function KE.SanitizeCopyLine(text) end
 function KE.AcceptChatMember(role, name, realm) end
 
 -- ─── Skinning (Modules/Skinning/DarkTheme/RoleIconSamples.lua) ───────
+--- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
+--- "blizzard" or "circle". Falls back to "modern" for anything else.
+---@return string
+function KE.Skins.GetRoleIconSet() end
+
 --- Builds one role icon set's dropdown label: three inline icons, no text.
 ---@param set string
 ---@return string
