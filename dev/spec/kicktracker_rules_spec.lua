@@ -598,3 +598,18 @@ describe("KickTracker new fight", function()
         end
     end)
 end)
+
+describe("KickTracker new fight with a failed read", function()
+    it("starts a carried count at 0 and keeps no carried rows", function()
+        local KT = L.loadKickTrackerRules()
+        local base = { rows = { "MAGE:1", "ROGUE:2" }, rowsOk = true, n = { party1 = 1, party2 = 1 }, a = {},
+                       guid = { party1 = "P1", party2 = "P2" } }
+        local read = { rows = {}, rowsOk = false, n = { party1 = 1 }, a = {}, guid = { party1 = "P1", party2 = "P2" } }
+        KT.CarryCounts(read, base)
+        KT.RestartCarried(read)
+        local growth, entries = {}, {}
+        KT.OwnerGrowth(read.n, {}, growth, entries)
+        assert.same({ party1 = 1 }, growth)
+        assert.same({}, read.rows)
+    end)
+end)

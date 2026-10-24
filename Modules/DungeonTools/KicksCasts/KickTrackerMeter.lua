@@ -331,6 +331,7 @@ function KT:AttributeMeter(T, sid)
         prevRows = EMPTY
         wipe(prevN)
         wipe(self.meterPrevA)
+        KT.RestartCarried(read)
     end
 
     local e = self:DecisionInputs(T, byUnit)

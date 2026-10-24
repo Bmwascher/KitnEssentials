@@ -320,18 +320,31 @@ end
 
 -- A slot whose read failed keeps its last count and total while its GUID is
 -- the same, so a failed read is neither a shrink nor, when it reads again, a
--- growth. A failed row read keeps the last rows.
+-- growth. A failed row read keeps the last rows. read.carried and
+-- read.rowsCarried name what was kept (KT.RestartCarried).
 function KT.CarryCounts(read, last)
+    local carried = clear(read.carried or {})
+    read.carried = carried
     for _, slot in ipairs(KT.SLOTS) do
         local guid = read.guid[slot]
         if read.n[slot] == nil and guid ~= nil and guid == last.guid[slot] then
             read.n[slot], read.a[slot] = last.n[slot], last.a[slot]
+            carried[slot] = true
         end
     end
+    read.rowsCarried = not read.rowsOk
     if not read.rowsOk then
         clear(read.rows)
         for i = 1, #last.rows do read.rows[i] = last.rows[i] end
     end
+end
+
+-- A new fight starts every count at 0: a slot whose read failed holds 0, not
+-- its last fight's count, and a failed row read holds no rows, so nothing
+-- kept from the last fight reads as this fight's kicks or rows.
+function KT.RestartCarried(read)
+    for slot in pairs(read.carried) do read.n[slot], read.a[slot] = 0, nil end
+    if read.rowsCarried then clear(read.rows) end
 end
 
 -- The counts and totals a read is measured against: a slot whose GUID
