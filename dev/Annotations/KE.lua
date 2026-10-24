@@ -302,6 +302,10 @@ function KE:GetAccentColor(mode, color) end
 ---@return string
 function KE:ColorTextByTheme(text) end
 
+---@param text string
+---@return string
+function KE:Gold(text) end
+
 ---@param db table
 ---@param entry table
 ---@return number r, number g, number b, number a

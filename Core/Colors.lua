@@ -117,6 +117,12 @@ function KE:ColorTextByTheme(text)
     return "|cFF" .. hex .. text .. "|r"
 end
 
+-- Slash commands, macro and addon names, class-gate lead-ins, and the names of
+-- controls, tabs and cards a note points at. Plain text only, never a secret.
+function KE:Gold(text)
+    return "|cffffd100" .. text .. "|r"
+end
+
 ---------------------------------------------------------------------------------
 -- Accent Color Resolution
 ---------------------------------------------------------------------------------

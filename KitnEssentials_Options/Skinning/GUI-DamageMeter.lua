@@ -93,16 +93,12 @@ local ARRANGEMENT_BUTTONS = {
 local SPLIT_TOOLTIP = "Moves only the split between these two; the other windows stay put. " ..
     "Same as dragging this gap on the meter."
 
-local function Gold(text)
-    return "|cffffd100" .. text .. "|r"
-end
-
 local DESCRIPTION = "A damage meter built on the game's own combat data, standing in for the " ..
     "built-in meter while it is on. Switch what it shows and which fight it shows on the meter " ..
     "itself; these settings set the defaults and the look." ..
-    "\n\nMove it in " .. Gold("/kes edit") .. " and resize windows by dragging the gaps between " ..
-    "them. " .. Gold("/kes dm") .. " shows or hides it, " .. Gold("/kes dm reset") ..
-    " clears every segment, " .. Gold("/kes dm report") .. " posts window 1 to chat (out of combat)."
+    "\n\nMove it in " .. KE:Gold("/kes edit") .. " and resize windows by dragging the gaps between " ..
+    "them. " .. KE:Gold("/kes dm") .. " shows or hides it, " .. KE:Gold("/kes dm reset") ..
+    " clears every segment, " .. KE:Gold("/kes dm report") .. " posts window 1 to chat (out of combat)."
 
 -- Resolves the live module handle (may be nil very early in load).
 local function GetDM()

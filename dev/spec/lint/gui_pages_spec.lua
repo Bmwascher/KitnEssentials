@@ -225,15 +225,12 @@ local ALLOWED = {
         ["KitnEssentials_Options/Combat/StatusTexts/GUI-PetStatusText.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersCfg.lua"] = { phase = "17", n = 2 },
         ["KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-LFGReminder.lua"] = { phase = "17", n = 1 },
-        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-FocusMarker.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/QoL/Automation/GUI-CombatLogger.lua"] = { phase = "17", n = 3 },
         ["KitnEssentials_Options/QoL/QualityOfLife/GUI-MoveFrames.lua"] = { phase = "17", n = 2 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-AlertFrames.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua"] = { phase = "17", n = 2 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-ColorPicker.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-RaidControl.lua"] = { phase = "17", n = 1 },
-        -- Phase 18 handles these special pages.
-        ["KitnEssentials_Options/Skinning/GUI-DamageMeter.lua"] = { phase = "18", n = 1 },
     },
 }
 

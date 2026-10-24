@@ -173,11 +173,6 @@ local function ClassName(token)
     return token
 end
 
--- Macro names, like addon names and slash commands, read in gold.
-local function Gold(text)
-    return "|cffffd100" .. text .. "|r"
-end
-
 -- The /macro window's own tab labels, read from the game so the page matches it.
 local function GeneralTabName()
     return _G.GENERAL_MACROS or "General Macros"
@@ -193,7 +188,7 @@ end
 local function AddPreviewSection(card, heading, body, bodyMax, macroName, tabName, scope)
     card:AddLabel(KE:ColorTextByTheme(heading) .. (macroName or ""))
     if tabName then
-        card:AddLabel("Saved in " .. Gold("/macro") .. " > " .. Gold(tabName) .. ", " .. scope .. ".")
+        card:AddLabel("Saved in " .. KE:Gold("/macro") .. " > " .. KE:Gold(tabName) .. ", " .. scope .. ".")
     end
     card:AddLabel("|cff888888" .. #body .. " of " .. bodyMax .. " characters, read-only|r")
     card:AddLabel(body)
@@ -228,10 +223,10 @@ local function BuildHeader(scrollChild, yOffset)
     local disabled = db.Enabled == false
     if not disabled then
         local FM = GetModule()
-        local kickName = FM and (", " .. Gold(FM.KICK_MACRO_NAME) .. ",") or ""
+        local kickName = FM and (", " .. KE:Gold(FM.KICK_MACRO_NAME) .. ",") or ""
         card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
             "a kick target can be called and taken together. The Focus Kick tab can add a second macro" ..
-            kickName .. " that casts your interrupt at that focus. Drag either from " .. Gold("/macro") .. " onto " ..
+            kickName .. " that casts your interrupt at that focus. Drag either from " .. KE:Gold("/macro") .. " onto " ..
             "a bar; both are kept up to date as you change the settings below." ..
             "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
             "target." ..
@@ -407,7 +402,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     local markerBody = FM and FM:BuildMacroBody()
     if markerBody then
         AddPreviewSection(cardMarker, "What KE writes to ", markerBody, FM.MACRO_BODY_MAX,
-            Gold(db.MacroName or "!FocusMarker"), GeneralTabName(), "shared by every character")
+            KE:Gold(db.MacroName or "!FocusMarker"), GeneralTabName(), "shared by every character")
     else
         cardMarker:AddLabel("Nothing to preview.")
     end
@@ -426,7 +421,7 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     local FM = GetModule()
     if not db or not FM then return Unavailable(scrollChild, yOffset) end
 
-    local kickName = Gold(FM.KICK_MACRO_NAME)
+    local kickName = KE:Gold(FM.KICK_MACRO_NAME)
     local bodyMax = FM.MACRO_BODY_MAX
 
     -- Writes before the page rebuilds, so the status below reads the result
@@ -487,8 +482,8 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
         elseif FM:GetPlayerClass() == "WARLOCK" then
             status = kickName .. " written for " .. spellText .. ". Summoning a different demon rewrites it."
         else
-            status = kickName .. " is up to date. Drag it from " .. Gold("/macro") .. " > " ..
-                Gold(CharacterTabName()) .. " onto a bar."
+            status = kickName .. " is up to date. Drag it from " .. KE:Gold("/macro") .. " > " ..
+                KE:Gold(CharacterTabName()) .. " onto a bar."
         end
     end
     cardSpec:AddLabel(status)
