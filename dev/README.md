@@ -299,6 +299,12 @@ rebuilds `Libs/<name>` the way the packager would. Library code ships, so the
 bump gets a `/reload` smoke, then the Package check workflow confirms the zip
 matches. The script header holds the rules.
 
+LibRangeCheck-3.0 is the exception: it is no external, because its tracked
+copy carries a local fix. `dev/scripts/tracked-libs.psd1` records its
+upstream base and the fixed line; the first command reports when upstream
+moves past that base or the line goes missing, and `-Update` refuses it and
+prints the hand process instead.
+
 ## wowlua-ls checker
 
 `dev/scripts/wowlua-check.ps1` runs the standalone wowlua-ls release in

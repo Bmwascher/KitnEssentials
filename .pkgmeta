@@ -39,6 +39,8 @@ ignore:
 # LibRangeCheck-3.0 is no external: its tracked copy carries a local fix in
 # getCachedRange (a secret GUID keys the cache by unit token on any client)
 # and ships as it is, so it is updated by hand and keeps that fix.
+# dev/scripts/tracked-libs.psd1 records its upstream base and the fix, and
+# the checker reports an upstream move past that base or a lost fix.
 externals:
   Libs/AceAddon-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceAddon-3.0

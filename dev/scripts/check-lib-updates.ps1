@@ -42,6 +42,13 @@
 # copy it leaves no diff. Refuses on main and over uncommitted changes to
 # .pkgmeta or the folder. The packaged result is verified by the Package
 # check workflow (every loaded library file reads "match").
+#
+# Tracked-only libraries. dev/scripts/tracked-libs.psd1 lists libraries that
+# ship from their tracked copy instead of an external, because the copy
+# carries a local fix. Check mode reads each one's upstream HEAD like a commit
+# pin: "[libs] note" when HEAD has moved past the recorded Base, "[libs] FAIL"
+# when File no longer holds the Fix line. -Update refuses such a name and
+# prints the record's hand process instead.
 
 param(
     [switch]$Soft,
@@ -76,6 +83,20 @@ function Read-Externals([string]$path) {
         if ($cur -and $line -match '^    (url|tag|commit):\s*[''"]?([^''"\s]+)') {
             if ($Matches[1] -eq 'url') { $cur.url = $Matches[2] } else { $cur.kind = $Matches[1]; $cur.ref = $Matches[2] }
         }
+    }
+    return $list
+}
+
+# The tracked-only libraries, shaped like an external with a commit pin on
+# the recorded upstream base.
+function Read-TrackedLibs {
+    $path = Join-Path $Root 'dev\scripts\tracked-libs.psd1'
+    $list = [System.Collections.Generic.List[object]]::new()
+    if (-not (Test-Path -LiteralPath $path)) { return $list }
+    $data = Import-PowerShellDataFile -LiteralPath $path
+    foreach ($name in ($data.Keys | Sort-Object)) {
+        $r = $data[$name]
+        $list.Add([pscustomobject]@{ path = $r.Path; name = $name; url = $r.Url; kind = 'commit'; ref = $r.Base; file = $r.File; fix = $r.Fix; update = $r.Update })
     }
     return $list
 }
@@ -261,10 +282,11 @@ function Invoke-Check {
         exit 1
     }
     $externals = @(Read-Externals $pkgmeta)
+    $tracked = @(Read-TrackedLibs)
     $cachePath = Get-CachePath
     $cache = Read-Cache $cachePath
     $timeout = if ($Soft) { 25 } else { 90 }
-    $answers = Resolve-Upstream $externals (-not $Refresh) $cache $timeout
+    $answers = Resolve-Upstream @($externals + $tracked) (-not $Refresh) $cache $timeout
     Write-Cache $cachePath $cache
 
     $notes = 0; $fails = 0; $skips = 0
@@ -298,16 +320,40 @@ function Invoke-Check {
             Out-Line "note ${names}: pinned $(Format-Ref $ext.kind $ext.ref), $what"
         }
     }
+    $lost = 0
+    foreach ($lib in $tracked) {
+        $file = Join-Path (Join-Path $Root $lib.path) $lib.file
+        $text = if (Test-Path -LiteralPath $file) { [System.IO.File]::ReadAllText($file) } else { '' }
+        if (-not $text.Contains($lib.fix)) {
+            $lost++
+            Out-Line "FAIL $($lib.name): $($lib.path)/$($lib.file) no longer holds its local fix (Fix in dev/scripts/tracked-libs.psd1)"
+            continue
+        }
+        $key = Get-QueryKey (Get-Source $lib.url) $lib
+        if (-not $answers.ContainsKey($key)) {
+            $skips++
+            if (-not $Soft) { Out-Line "skip $($lib.name): upstream unreachable" }
+            continue
+        }
+        $up = $answers[$key]
+        if ($up -cne $lib.ref) {
+            $notes++
+            Out-Line "note $($lib.name): tracked copy with a local fix, base $(Format-Ref commit $lib.ref), upstream HEAD $(Format-Ref commit $up); update by hand (Update in dev/scripts/tracked-libs.psd1)"
+        }
+    }
     $unchecked = if ($skips) { ", $skips unchecked" } else { '' }
-    if ($fails) {
-        Out-Line "FAIL $fails external(s) without a pin"
+    if ($fails -or $lost) {
+        $what = @()
+        if ($fails) { $what += "$fails external(s) without a pin" }
+        if ($lost) { $what += "$lost tracked copy(ies) without their local fix" }
+        Out-Line "FAIL $($what -join ', ')"
     } elseif ($notes) {
         Out-Line "OK with $notes note(s)$unchecked"
     } elseif (-not $Soft) {
         Out-Line "OK: no pin behind upstream$unchecked"
     }
     if ($Soft) { exit 0 }
-    if ($fails -or $skips) { exit 1 }
+    if ($fails -or $lost -or $skips) { exit 1 }
     exit 0
 }
 
@@ -475,7 +521,14 @@ function Invoke-Update {
     $externals = @(Read-Externals $pkgmeta)
     $groups = Get-PinGroups $externals
     $chosen = [ordered]@{}
-    foreach ($n in ($Update | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+    $names = @($Update | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+    foreach ($lib in @(Read-TrackedLibs)) {
+        if ($names -contains $lib.name -or $names -contains $lib.path) {
+            Out-Line "FAIL $($lib.name) ships from its tracked copy with a local fix, not an external: $($lib.update)"
+            exit 1
+        }
+    }
+    foreach ($n in $names) {
         $match = @($groups.Keys | Where-Object { @($groups[$_] | Where-Object { $_.name -eq $n -or $_.path -eq $n }).Count })
         if (-not $match.Count) { Out-Line "FAIL no external named $n in .pkgmeta"; exit 1 }
         $chosen[$match[0]] = $groups[$match[0]]
