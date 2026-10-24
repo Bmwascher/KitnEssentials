@@ -178,6 +178,29 @@ function KE_Context:SubscribeSpec(key, fn) end
 ---@param key string
 function KE_Context:UnsubscribeSpec(key) end
 
+--- Shared inspect queue and talent reader
+--- (Modules/Core/GroupInspect/GroupInspect.lua).
+---@class KE.GroupInspect
+---@field frame Frame?
+---@field locateMs number?
+
+---@class KE.GroupInspectHandle
+
+---@class KE.GroupInspectCallbacks
+---@field Wants fun(guid: string): boolean
+---@field OnlyStale (fun(guid: string): boolean)?
+---@field OnRead (fun(guid: string, unit: string, snapshot: KE.GroupInspectSnapshot))?
+---@field OnChanged (fun(guid: string, snapshot: KE.GroupInspectSnapshot?))?
+
+---@class KE.GroupInspectSnapshot
+---@field spec number?
+---@field ranks table<number, number>
+---@field absent table<number, boolean>
+---@field covered table<number, boolean>
+---@field readAt number?
+---@field stale string?
+---@field reason string?
+
 ---@class KE
 ---@field db AceDB
 ---@field FONT string
@@ -197,6 +220,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table
 ---@field CombatState KE.CombatState
+---@field GroupInspect KE.GroupInspect
 ---@field Context KE.Context
 ---@field curves KE.Curves
 ---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)

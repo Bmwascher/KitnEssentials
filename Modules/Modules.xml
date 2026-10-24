@@ -43,6 +43,8 @@
     <Script file="Combat\RangeChecker.lua" />
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="AuraTracking\AuraExternals.lua" />
+    <Script file="Core\GroupInspect\GroupInspectRules.lua" />
+    <Script file="Core\GroupInspect\GroupInspect.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyBuffsRules.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsData.lua" />
     <Script file="AuraTracking\PartyBuffs\PartyCooldownsRules.lua" />
