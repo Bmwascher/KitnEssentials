@@ -17,6 +17,12 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HomePage",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "Profiles",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "ProfilesReset",    want = true },
+            -- A page's tabs are ids of their own: an admitted page with a
+            -- refused tab renders its header alone.
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Windows",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Appearance",   want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Behavior",     want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_SpellHistory", want = true },
             { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "NotAFeature",      want = false },
