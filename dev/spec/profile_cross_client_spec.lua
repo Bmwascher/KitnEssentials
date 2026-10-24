@@ -5,6 +5,8 @@
 -- nothing, and a malformed block is refused on both. The payload and the
 -- defaults are synthetic; the ids are real (DamageMeter and the CVars owner of
 -- the Automation block admitted, PartyBuffs and EnemyCounter withheld).
+-- VantusRune is the withheld block that was off: its runes are retail items,
+-- so Forever never admits it.
 local helpers = require("dev.spec._helpers")
 
 local function load(baseline)
@@ -21,7 +23,7 @@ local DEFAULTS = {
     DamageMeter = { Enabled = false },
     PartyBuffs = { Enabled = false },
     CustomCooldowns = { Enabled = true },
-    TotemTracker = { Enabled = false },
+    VantusRune = { Enabled = false },
     -- A container: Enabled ships true, the feature switches are the real ones.
     KeystoneHelper = { Enabled = true, ResetEnabled = false, RerollEnabled = false, YourKeyEnabled = false },
     Skinning = { Chat = { Enabled = true } },
@@ -36,7 +38,7 @@ local function payload()
         PartyBuffs = { Enabled = true },
         -- Enabled absent: the default, which is on.
         CustomCooldowns = { Spells = {} },
-        TotemTracker = { Enabled = false },
+        VantusRune = { Enabled = false },
         -- Container on, every feature off: not on.
         KeystoneHelper = { Enabled = true },
         Skinning = { Chat = { Enabled = true } },
@@ -56,7 +58,7 @@ describe("ProfileManager.FilterForClient", function()
         assert.is_table(profile.Automation)
         assert.is_nil(profile.PartyBuffs)
         assert.is_nil(profile.CustomCooldowns)
-        assert.is_nil(profile.TotemTracker)
+        assert.is_nil(profile.VantusRune)
         -- The container stays, emptied; AceDB refills its sub-blocks.
         assert.same({}, profile.Dungeons)
         assert.is_nil(profile.KeystoneHelper)
