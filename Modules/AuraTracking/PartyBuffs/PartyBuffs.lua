@@ -868,12 +868,14 @@ end
 ---------------------------------------------------------------------------------
 -- Cooldown cells
 ---------------------------------------------------------------------------------
--- The member's spec list, cut to the icon budget. A member whose spec is not
--- known yet gets no cooldown cell of any kind.
+-- The member's spec list, racial and trinkets in the Icon Order card's
+-- order, cut to the icon budget. A member whose spec is not known yet gets
+-- no cooldown cell of any kind.
 function PB:CooldownEntries(m)
-    local db, entries = self.db, {}
-    if not (m and m.spec) then return entries end
+    local db = self.db
+    if not (m and m.spec) then return {} end
     local specID = m.spec
+    local spells, racials, trinkets = {}, {}, {}
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
             local taken = CDRules.CastTaken(specID, e.id, m.talents)
@@ -882,23 +884,24 @@ function PB:CooldownEntries(m)
                 e.cd = CDRules.CellLength(e, specID, m.talents, e.charges)
                 e.lockOn = CDRules.LockOn(e, m.talents, m.isPlayer == true)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, taken))
-                entries[#entries + 1] = e
+                spells[#spells + 1] = e
             end
         end
     end
     local racial = CDRules.MemberRacial(m.race, db)
     if racial then
         racial.texture = C_Spell.GetSpellTexture(racial.id)
-        entries[#entries + 1] = racial
+        racials[1] = racial
     end
     if m.trinkets and db.TrackTrinket == true then
         for _, e in ipairs(CDRules.TrinketEntries(m.trinkets, Spec.lengths, db)) do
             e.texture = C_Item.GetItemIconByID(e.item)
-            entries[#entries + 1] = e
+            trinkets[#trinkets + 1] = e
         end
     end
-    for i = #entries, KE.PartyBuffsRules.CellCount(#entries, db) + 1, -1 do entries[i] = nil end
-    return entries
+    local rules = KE.PartyBuffsRules
+    return rules.OrderCells({ spells = spells, racial = racials, trinket = trinkets },
+        db.CooldownCategoryOrder, rules.CooldownIconCount(db))
 end
 
 -- Re-run on every bind and on each change to the member's spec, trinkets or
@@ -1551,50 +1554,48 @@ local function SampleTrinkets(row, db)
     return {}
 end
 
--- In the live row's order, cut to Max Cooldown Icons: the spec's switched-on
--- spells, then the racial, then the trinkets. A known member's spec, race and
--- trinkets when grouped; a stand-in row's samples otherwise.
+-- In the live row's order, cut to Max Cooldown Icons. A known member's spec,
+-- race and trinkets when grouped; a stand-in row's samples otherwise.
 function PB:PreviewEntries(k)
-    local db, entries = self.db, {}
+    local db = self.db
     local binding = self.bindings[k]
     local m = binding and Spec.Member(binding.token)
     local row = (k - 1) % #PREVIEW_SPECS + 1
     local specID = (m and m.spec) or PREVIEW_SPECS[row]
     local talents = m and m.talents
-    local want = math_min(KE.PartyBuffsRules.CooldownIconCount(db), PREVIEW_CELLS)
+    local rules = KE.PartyBuffsRules
+    local want = math_min(rules.CooldownIconCount(db), PREVIEW_CELLS)
+    local spells, racials, trinkets = {}, {}, {}
     if db.TrackBurst == true then
         for _, e in ipairs(CDRules.SpellList(specID, db)) do
-            if #entries >= want then break end
             local has = CDRules.CastTaken(specID, e.id, talents)
             if CDRules.TalentAllows(e, has, specID) then
                 e.charges = CDRules.CellCharges(e, specID, talents)
                 e.cd = CDRules.CellLength(e, specID, talents, e.charges)
                 e.texture = C_Spell.GetSpellTexture(CDRules.ShowID(e, specID, has))
-                entries[#entries + 1] = e
+                spells[#spells + 1] = e
             end
         end
     end
     local race
     if m then race = m.race else race = PREVIEW_RACES[row] end
     local racial = CDRules.MemberRacial(race, db)
-    if racial and #entries < want then
+    if racial then
         racial.texture = C_Spell.GetSpellTexture(racial.id)
-        entries[#entries + 1] = racial
+        racials[1] = racial
     end
     if db.TrackTrinket == true then
-        local trinkets
         if m then
             trinkets = m.trinkets and CDRules.TrinketEntries(m.trinkets, Spec.lengths, db) or {}
         else
             trinkets = SampleTrinkets(row, db)
         end
         for _, e in ipairs(trinkets) do
-            if #entries >= want then break end
             e.texture = e.texture or (e.item and C_Item.GetItemIconByID(e.item))
-            entries[#entries + 1] = e
         end
     end
-    return entries
+    return rules.OrderCells({ spells = spells, racial = racials, trinket = trinkets },
+        db.CooldownCategoryOrder, want)
 end
 
 -- Every cell ready but cell 3, cooling with PREVIEW_LEFT seconds to go (one

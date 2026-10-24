@@ -78,10 +78,6 @@ function Rules.CooldownIconCount(db)
     return math_floor(count + 0.5)
 end
 
-function Rules.CellCount(entryCount, db)
-    return math_min(entryCount, Rules.CooldownIconCount(db))
-end
-
 -- The party frame icons' cooldown categories, in their default order.
 Rules.CELL_CATEGORIES = { "spells", "racial", "trinket" }
 local CELL_CATEGORY = {}

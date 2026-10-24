@@ -439,7 +439,6 @@ describe("PartyBuffsRules.RowLayout", function()
     it("continues the cells' line while cells plus buffs fit in perRow, as every row does at 14", function()
         local R = L.loadPartyBuffsRules()
         local db = layoutDb()
-        assert.are.same({ 4, 2 }, { R.CellCount(6, db), R.CellCount(2, db) })
         local cases = {
             { name = "at 14, with cells", cells = 4, perRow = 14, want = { 37, 4, 0, 4, 295, 36 } },
             { name = "at 14, no cells", cells = 0, perRow = 14, want = { 37, 0, 0, 4, 147, 36 } },
