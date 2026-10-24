@@ -60,7 +60,7 @@ externals:
     commit: 4f8f5c2607d7384b26df9175bb99fa3df891b015
   Libs/LibDBIcon-1.0:
     url: https://repos.curseforge.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
-    tag: v12.1.1
+    tag: v12.1.2
   Libs/LibDataBroker-1.1:
     url: https://github.com/tekkub/libdatabroker-1-1
     commit: 1a63ede0248c11aa1ee415187c1f9c9489ce3e02
