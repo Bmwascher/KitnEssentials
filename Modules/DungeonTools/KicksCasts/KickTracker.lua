@@ -97,6 +97,7 @@ local function SetTimerText(bar, text)
         bar.lastTimerText = text
     end
 end
+KT.FormatRemaining, KT.SetTimerText = FormatRemaining, SetTimerText
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
@@ -619,6 +620,7 @@ end
 function KT:ChargeKick(entry, guid)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return false end
+    self:ReleaseLayers(guid, entry.startTime)
     local cd = self:ClockDuration(member, true)
     local remaining = cd - (GetTime() - entry.startTime)
     if remaining <= 0 then return false end
@@ -1045,6 +1047,7 @@ end
 function KT:ReleaseBar(guid)
     local bar = self.activeBars[guid]
     if not bar then return end
+    self:ReleaseLayers(guid)
 
     bar:Hide()
     bar:SetScript("OnUpdate", nil)
@@ -1551,8 +1554,10 @@ function KT:OnUpdateBars(elapsed)
         self:LayoutBars()
     end
 
-    -- Idle: no main kick running, so nothing can change until a countdown
-    -- starts or a bar is made, and each of those attaches this again.
+    if self:TickLayers(now) then busy = true end
+
+    -- Idle: no main kick or layer running, so nothing can change until a
+    -- countdown starts or a bar is made, and each of those attaches this again.
     if not busy then self:StopOnUpdate() end
 end
 
@@ -1827,6 +1832,8 @@ end
 
 function KT:ApplySettings()
     self:UpdateDB()
+    -- A layer copies the bar's settings when it is made.
+    self:ReleaseAllLayers()
     if not self.containerFrame then return end
 
     self:ApplyContainerPosition()

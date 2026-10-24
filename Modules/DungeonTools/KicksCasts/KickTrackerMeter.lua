@@ -14,6 +14,17 @@
 -- kicked. Hidden nameplate interrupts within PAIR_WINDOW of an update take
 -- its answer for their kicked spell and raid mark. The meter's totals are
 -- secret in combat and are never read here.
+--
+-- A kick nobody is named for gets a reveal layer over the bar of each
+-- teammate who could have landed it: a copy of their bar on cooldown inside a
+-- clip whose left edge hangs from the fill of a hidden status bar, fed their
+-- total before the update as its value and after it as its maximum. The fill
+-- is whole, and the clip empty, unless the total rose; then the clip opens
+-- over the whole bar. Only the teammate who kicked shows the kick, and Lua
+-- never learns who. Layers are pooled, newest on top, each with an opaque
+-- backing, and go when their clock ends, when a sure kick of the teammate
+-- supersedes them, when the bar goes, and on deactivation, preview, disable
+-- and every settings change. Nothing is ever read back from a layer.
 
 ---@class KE
 local KE = select(2, ...)
@@ -48,6 +59,21 @@ local EMPTY = {}
 -- Default false; revert after diagnosis.
 local DEBUG_KT_METER = false
 
+local CreateFrame = CreateFrame
+local table_remove = table.remove
+local unpack = unpack
+local WHITE = "Interface\\Buttons\\WHITE8X8"
+-- A layer's gate is GATE_SPAN bar widths (each GATE_PAD wider) long, so a
+-- total that rose by one opens the clip over the whole bar up to GATE_SPAN
+-- interrupts in a fight; its right end sits GATE_EDGE past the bar's, and it
+-- is GATE_TALL taller than the bar, centered.
+local GATE_SPAN, GATE_PAD, GATE_EDGE, GATE_TALL = 100, 4, 2, 24
+local LAYER_STEP = 4    -- frame levels a bar copy takes: the bar, its fill, its icon two above
+local LAYER_DEPTH = 29  -- the deepest stack drawn in order; deeper layers share the top level
+-- Main kicks a Warlock's demon casts: the demon's own list moves for them.
+local DEMON_KICKS = { [19647] = true, [89766] = true }
+local PET_SLOT = { party1 = "partypet1", party2 = "partypet2", party3 = "partypet3", party4 = "partypet4" }
+
 local function NewRead()
     return { rows = {}, rowsOk = false, n = {}, a = {}, guid = {} }
 end
@@ -68,6 +94,8 @@ KT.meterMemo = { lastT = -1, pairedT = -1, grew = false }  -- the last update's 
 KT.meterNeedsBase = true  -- the next read is a baseline, not evidence
 KT.plates = {}    -- the hidden-plate batch, oldest first
 KT.platesT = -1   -- the batch's start
+KT.layersOf = {}    -- [guid] = that teammate's live layers, oldest first
+KT.freeLayers = {}  -- released layers, ready for reuse
 
 local function ClearRead(read)
     wipe(read.rows)
@@ -247,6 +275,7 @@ function KT:RecordMeterKick(unit, T, at, plate, how, ownPending)
         if plate then self:ShowKicked(guid, KT.KickedFrom(plate)) end
         return
     end
+    self:ReleaseLayers(guid, (at > T) and at or T)
     local duration = self:ClockDuration(member, true)
     if not duration then return end
     local remaining = duration - (GetTime() - at)
@@ -270,6 +299,11 @@ function KT:SettleMeter(T, e, landedHere)
     end
     local memo = self.meterMemo
     memo.lastT, memo.who, memo.how, memo.grew = T, who, how, #e.grew > 0
+    -- A grip or a mass interrupt is no kick: no layer. The plate's mark goes
+    -- on the layers only when nobody was named.
+    if how ~= "mass" and how ~= "grip" then
+        self:BuildGate(T, (not who and not several) and first or nil)
+    end
     if DEBUG_KT_METER then
         KE:Print(string_format("[KT] meter grew=%d row=%s plates=%d how=%s who=%s", #e.grew,
             tostring(e.rowHow), e.plates, tostring(how), tostring(who)))
@@ -296,6 +330,7 @@ function KT:AttributeMeter(T)
     local prevN = KT.BaselineCounts(read, base, wipe(self.meterPrevN), wipe(self.meterPrevA))
     local prevRows = base.rows
     local shrank = KT.ListsMoved(read.rows, read.n, prevRows, prevN)
+    self:ReleasePetSwaps(read, base)
     self.meterBase, self.meterRead = read, base
     self._meterReadT = GetTime()
     if shrank then
@@ -332,6 +367,7 @@ function KT:AttributeMeter(T)
     if not rowKey and #e.grew == 0 and not e.ownPending and not landedHere then
         local memo = self.meterMemo
         memo.lastT, memo.who, memo.how, memo.grew = T, nil, "none", false
+        self:BuildGate(T, nil)
         return
     end
     self:SettleMeter(T, e, landedHere)
@@ -360,6 +396,7 @@ function KT:PairWith(T0)
         memo.how = how
     end
     memo.pairedT = T0
+    if not memo.who then self:MarkLayers(T0, plates[1]) end
     if DEBUG_KT_METER then
         KE:Print(string_format("[KT] late plates=%d how=%s who=%s", #plates, tostring(memo.how), tostring(memo.who)))
     end
@@ -448,6 +485,7 @@ function KT:RebaseMeter(force)
     self:ReadMeter(read)
     KT.CarryCounts(read, base)
     wipe(self.meterExpected)
+    self:ReleasePetSwaps(read, base)
     self.meterBase, self.meterRead = read, base
     self.meterNeedsBase = false
 end
@@ -496,4 +534,251 @@ function KT:ClearMeterState()
     memo.lastT, memo.pairedT, memo.who, memo.how, memo.grew = -1, -1, nil, nil, false
     self._meterReadPending, self._latePairArmed, self._plateFlushArmed = false, false, false
     self.meterNeedsBase = true
+    self:ReleaseAllLayers()
+end
+
+---------------------------------------------------------------------------------
+-- Reveal layers
+---------------------------------------------------------------------------------
+-- The slot whose totals gate a teammate's layer: their demon's when their
+-- main kick is a demon's and the demon has entries, else their own.
+local function GateSlot(member, unit, counts)
+    local data, pet = member.interruptData, PET_SLOT[unit]
+    if data and DEMON_KICKS[data.id] and pet and (counts[pet] or 0) >= 1 then return pet end
+    return unit
+end
+
+-- One update's layers: each teammate KT.AdmitGate takes gets one over their
+-- bar, fed the gate slot's totals from before and after the update. plate is
+-- the update's first hidden plate, for its raid mark, when nobody was named.
+function KT:BuildGate(T, plate)
+    local base, prevN, prevA = self.meterBase, self.meterPrevN, self.meterPrevA
+    local byUnit, guidOf = self.meterByUnit, self.meterGuidOf
+    for i = 2, #KT.OWNERS do
+        local unit = KT.OWNERS[i]
+        local member = byUnit[unit]
+        if member then
+            local slot = GateSlot(member, unit, base.n)
+            local before, after = prevA[slot], base.a[slot]
+            local hasTotals = before ~= nil and after ~= nil
+            if KT.AdmitGate(member, KT.MainCooling(member, T), prevN[slot], base.n[slot], hasTotals) then
+                self:AddLayer(guidOf[unit], member, T, before, after, plate)
+            end
+        end
+    end
+end
+
+-- A layer: holder > gate (a hidden StatusBar) + clip > a copy of a bar, built
+-- once and pooled. Only the clip's left edge moves, with the gate's fill.
+function KT:NewLayer()
+    local layer = CreateFrame("Frame", nil, self.containerFrame)
+    layer:Hide()
+    layer:EnableMouse(false)
+    -- The gate draws nothing, and the clip is not its child, so the copy keeps
+    -- its alpha. Its fill is not snapped to the pixel grid, so its edge sits
+    -- exactly where the values put it.
+    local gate = CreateFrame("StatusBar", nil, layer)
+    gate:EnableMouse(false)
+    gate:SetStatusBarTexture(WHITE)
+    gate:SetAlpha(0)
+    local fill = gate:GetStatusBarTexture()
+    fill:SetVertexColor(0, 0, 0, 0)
+    if fill.SetSnapToPixelGrid then
+        fill:SetSnapToPixelGrid(false)
+        fill:SetTexelSnappingBias(0)
+    end
+    local clip = CreateFrame("Frame", nil, layer)
+    clip:SetClipsChildren(true)
+    clip:EnableMouse(false)
+    local copy = self:CreateBar()
+    copy:SetParent(clip)
+    -- Opaque backing: neither the teammate's own bar nor an older layer
+    -- shows through.
+    copy.cover = copy:CreateTexture(nil, "BACKGROUND", nil, -8)
+    copy.cover:SetAllPoints(copy)
+    copy:Show()
+    layer.gate, layer.fill, layer.clip, layer.copy = gate, fill, clip, copy
+    layer.member = {}
+    return layer
+end
+
+local function LayerLevels(layer, base)
+    layer:SetFrameLevel(base)
+    layer.gate:SetFrameLevel(base)
+    layer.clip:SetFrameLevel(base)
+    local copy = layer.copy
+    copy:SetFrameLevel(base)
+    copy.statusBar:SetFrameLevel(base + 1)
+    copy.iconFrame:SetFrameLevel(base + 3)
+end
+
+-- Above the teammate's own bar, each newer layer above the older ones.
+local function LayerBase(bar, depth)
+    if depth > LAYER_DEPTH then depth = LAYER_DEPTH end
+    return bar:GetFrameLevel() + LAYER_STEP + LAYER_STEP * depth
+end
+
+-- The layer laid over the teammate's bar, depth layers up their stack.
+function KT:PlaceLayer(layer, bar, depth)
+    local db = self.db
+    layer:ClearAllPoints()
+    layer:SetAllPoints(bar)
+    local copy = layer.copy
+    copy:ClearAllPoints()
+    copy:SetAllPoints(bar)
+    local gate = layer.gate
+    gate:SetSize(GATE_SPAN * (db.BarWidth + GATE_PAD), db.BarHeight + GATE_TALL)
+    gate:ClearAllPoints()
+    gate:SetPoint("RIGHT", bar, "RIGHT", GATE_EDGE, 0)
+    LayerLevels(layer, LayerBase(bar, depth))
+end
+
+-- The copy drawn as the teammate's bar cooling from the layer's start, with
+-- an opaque backing in the background color and the plate's raid mark.
+function KT:PaintLayer(layer, member, plate)
+    local copy, fake = layer.copy, layer.member
+    fake.name, fake.classToken, fake.interruptData = member.name, member.classToken, member.interruptData
+    fake.kickStart, fake.kickDuration = layer.t, layer.endAt - layer.t
+    self:UpdateBarVisuals(copy, fake)
+    local r, g, b = unpack(self.db.BackgroundColor)
+    copy.cover:SetColorTexture(r, g, b, 1)
+    if plate then self:ApplyNameMarks(copy, plate.raidMark, plate.hasRaidMark) end
+end
+
+-- The totals handed to the gate (before as its value, after as its maximum),
+-- then the clip hung from the fill again: its left edge on the fill's right
+-- edge, its right edge the gate's.
+local function FeedLayer(layer)
+    local gate, fill, clip = layer.gate, layer.fill, layer.clip
+    gate:SetMinMaxValues(0, layer.after)
+    gate:SetValue(layer.before)
+    clip:ClearAllPoints()
+    clip:SetPoint("TOPLEFT", fill, "TOPRIGHT", 0, 0)
+    clip:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT", 0, 0)
+    clip:SetPoint("TOPRIGHT", gate, "TOPRIGHT", 0, 0)
+    clip:SetPoint("BOTTOMRIGHT", gate, "BOTTOMRIGHT", 0, 0)
+end
+
+-- Back to the pool: hidden, the copy reset (its icon and mark may be secret),
+-- the gate whole, the totals dropped.
+function KT:FreeLayer(layer)
+    layer:Hide()
+    self:ResetBarRegions(layer.copy)
+    layer.gate:SetMinMaxValues(0, 1)
+    layer.gate:SetValue(1)
+    layer.t, layer.endAt, layer.before, layer.after, layer.feed = nil, nil, nil, nil, nil
+    self.freeLayers[#self.freeLayers + 1] = layer
+end
+
+local function freeLayer(layer)
+    KT:FreeLayer(layer)
+end
+
+-- A layer over the teammate's bar from the update's time T for their longest
+-- duration, fed now and once more on the next display pass.
+function KT:AddLayer(guid, member, T, before, after, plate)
+    local bar = guid and self.activeBars[guid]
+    local longest = bar and self:ClockDuration(member, false)
+    if not longest or T + longest <= GetTime() then return end
+    local list = self.layersOf[guid]
+    if not list then
+        list = {}
+        self.layersOf[guid] = list
+    end
+    local layer = table_remove(self.freeLayers) or self:NewLayer()
+    list[#list + 1] = layer
+    KT.NewLayerClock(layer, T, longest)
+    layer.before, layer.after = before, after
+    self:PlaceLayer(layer, bar, #list - 1)
+    self:PaintLayer(layer, member, plate)
+    FeedLayer(layer)
+    layer.feed = true
+    if self.db.ShowTimer then KT.SetTimerText(layer.copy, KT.FormatRemaining(layer.endAt - GetTime())) end
+    layer:Show()
+end
+
+-- The teammate's layers that started at or before upto go (all with nil): a
+-- sure kick of theirs supersedes them, or their bar went.
+function KT:ReleaseLayers(guid, upto)
+    local list = self.layersOf[guid]
+    if not list then return end
+    KT.ReleaseUpTo(list, upto, freeLayer)
+    self:RelevelLayers(guid)
+end
+
+-- Levels the teammate's layers again by their place in the stack, or drops
+-- the teammate's list once it is empty, so the display pass walks only
+-- teammates with a live layer.
+function KT:RelevelLayers(guid)
+    local list, bar = self.layersOf[guid], self.activeBars[guid]
+    if not list then return end
+    if #list == 0 then
+        self.layersOf[guid] = nil
+        return
+    end
+    if not bar then return end
+    for i = 1, #list do LayerLevels(list[i], LayerBase(bar, i - 1)) end
+end
+
+function KT:ReleaseAllLayers()
+    for _, list in pairs(self.layersOf) do KT.ReleaseUpTo(list, nil, freeLayer) end
+    wipe(self.layersOf)
+end
+
+-- A teammate whose demon appeared, went or was replaced loses the layers
+-- gated on the old source. Pets are compared through the member's GUID, so a
+-- move to another party slot neither hides a change nor fakes one.
+function KT:ReleasePetSwaps(read, last)
+    for i = 2, #KT.OWNERS do
+        local unit = KT.OWNERS[i]
+        local guid = read.guid[unit]
+        if guid then
+            for j = 2, #KT.OWNERS do
+                local was = KT.OWNERS[j]
+                if last.guid[was] == guid then
+                    if read.guid[PET_SLOT[unit]] ~= last.guid[PET_SLOT[was]] then self:ReleaseLayers(guid) end
+                    break
+                end
+            end
+        end
+    end
+end
+
+-- A plate paired after its update joins that update's layers for its mark.
+function KT:MarkLayers(T, plate)
+    if not (plate and plate.hasRaidMark) then return end
+    for _, list in pairs(self.layersOf) do
+        for i = 1, #list do
+            local layer = list[i]
+            if layer.t == T then self:ApplyNameMarks(layer.copy, plate.raidMark, true) end
+        end
+    end
+end
+
+-- The display pass over the layers: an ended clock releases its layer, a
+-- running one writes its countdown, and a layer fed since the last pass is
+-- fed once more and then forgets the totals. Returns whether any layer lives.
+function KT:TickLayers(now)
+    local any, showTimer = false, self.db.ShowTimer
+    for guid, list in pairs(self.layersOf) do
+        local removed = false
+        for i = #list, 1, -1 do
+            local layer = list[i]
+            if KT.LayerExpired(layer, now) then
+                freeLayer(layer)
+                table_remove(list, i)
+                removed = true
+            else
+                any = true
+                if layer.feed then
+                    FeedLayer(layer)
+                    layer.feed, layer.before, layer.after = nil, nil, nil
+                end
+                if showTimer then KT.SetTimerText(layer.copy, KT.FormatRemaining(layer.endAt - now)) end
+            end
+        end
+        -- Setting an existing key to nil during pairs is allowed in Lua.
+        if removed then self:RelevelLayers(guid) end
+    end
+    return any
 end
