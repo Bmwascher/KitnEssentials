@@ -14,6 +14,19 @@ local STAT_CATEGORIES = { "ItemLevelCategory", "AttributesCategory", "Enhancemen
 local ILVL_SIZE, HEADER_SIZE, ROW_SIZE = 20, 14, 12
 local HEADER_INSET = 6
 
+-- The ammo slot draws an arrow overlay alone in an unnamed child frame. Found
+-- by its atlas: the slot's own backdrop is a child frame too, and so is its
+-- cooldown.
+local AMMO_ARROW_ATLAS = "UI-Character-Info-GearSlot-Arrow"
+local function HideAmmoArrow(button)
+    for _, child in ipairs({ button:GetChildren() }) do
+        local region = child.GetRegions and child:GetRegions()
+        if region and region.GetAtlas and region:GetAtlas() == AMMO_ARROW_ATLAS then
+            S.KillTexture(region)
+        end
+    end
+end
+
 local ItemLocation = ItemLocation
 
 local ILVL_FONT = 13
@@ -594,6 +607,7 @@ local function Skin()
         if button then
             S.ItemButton(button)
             if button.BorderFrame then S.StripTextures(button.BorderFrame) end
+            if slot == "Ammo" then HideAmmoArrow(button) end
             if qualityBorders and button.IconBorder then
                 S.IconBorder(button.IconBorder, S.GetBackdrop(button))
             end
