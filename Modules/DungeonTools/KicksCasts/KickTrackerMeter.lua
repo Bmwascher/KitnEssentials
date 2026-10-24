@@ -324,7 +324,6 @@ function KT:AttributeMeter(T, sid)
     read.sid = sid
     self:ReleasePetSwaps(read, base)
     self.meterBase, self.meterRead = read, base
-    self._meterReadT = GetTime()
     if shrank then
         prevRows = EMPTY
         wipe(prevN)
