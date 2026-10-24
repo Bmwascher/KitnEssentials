@@ -106,6 +106,8 @@ function Compare-Version([string]$a, [string]$b) {
 # $revisions (SVN only) maps each tag to its revision and replaces version order.
 function Get-NewestTag([string[]]$tags, [string]$pinned, [hashtable]$revisions) {
     $shape = Get-Shape $pinned
+    # An SVN pin missing upstream has no revision to rank against.
+    if ($revisions -and -not $revisions.ContainsKey($pinned)) { return $null }
     $best = if ($tags -ccontains $pinned) { $pinned } else { $null }
     foreach ($t in $tags) {
         if ((Get-Shape $t) -cne $shape) { continue }
@@ -195,11 +197,16 @@ function Resolve-Upstream($externals, [bool]$useCache, [hashtable]$cache, [int]$
     $raw = Invoke-UpstreamQueries @($needed.Values) $timeoutSeconds
     foreach ($q in $needed.Values) {
         if (-not $raw.ContainsKey($q.key)) { continue }
-        $value = if ($q.kind -ne 'tag') { Get-HeadSha $raw[$q.key] }
-            elseif ($q.type -eq 'svn') { $revs = Get-SvnTagRevisions $raw[$q.key]; Get-NewestTag @($revs.Keys) $q.pinned $revs }
-            else { Get-NewestTag (Get-TagNames $raw[$q.key]) $q.pinned $null }
-        # No tag newer than the pin answers the pin itself, not "unreachable".
-        if (-not $value -and $q.kind -eq 'tag') { $value = $q.pinned }
+        if ($q.kind -ne 'tag') {
+            $value = Get-HeadSha $raw[$q.key]
+        } else {
+            $revs = if ($q.type -eq 'svn') { Get-SvnTagRevisions $raw[$q.key] } else { $null }
+            $tags = if ($revs) { @($revs.Keys) } else { @(Get-TagNames $raw[$q.key]) }
+            # A response with no tag in it is unread, never "up to date".
+            if (-not $tags.Count -or ($q.type -eq 'svn' -and -not $revs.Count)) { continue }
+            $value = Get-NewestTag $tags $q.pinned $revs
+            if (-not $value) { $value = $q.pinned }
+        }
         if (-not $value) { continue }
         $answers[$q.key] = $value
         $cache[$q.key] = [pscustomobject]@{ checked = $now; value = $value }
