@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.3
+
+### WoW Forever
+
+- The Damage Meter settings page shows its Windows, Appearance, Behavior
+  and Spell History tabs
+- Dark Theme skins the Progress Legacy window, the Catalog Shop and the
+  Talking Head
+- Addon Skins: Ace3 windows, Baganator, BetterFriendlist, BigWigs, BugSack
+  and Simulationcraft
+- A Role Icons card picks the role icons chat draws
+- The ammo slot no longer shows a stray arrow in the Character window
+- Sidebar search no longer finds options that are hidden on Forever
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.2
 
 ### Libraries
