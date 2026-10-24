@@ -73,10 +73,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/AuraTracking/GUI-AuraHeaders.lua|Font"] = { phase = "16" },
         ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-HealerExternals.lua|Display"] = { phase = "16" },
         ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-HealerExternals.lua|Position"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyCooldowns.lua|Display"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyCooldowns.lua|Glow While Active"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyCooldowns.lua|Position"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyCooldowns.lua|Where It Shows"] = { phase = "16" },
         ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyPotions.lua|Position"] = { phase = "16" },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-CustomCooldowns.lua|Font"] = { phase = "16" },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua|Warning Font Settings"] = { phase = "16" },
@@ -125,7 +121,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/AuraTracking/GUI-AuraMovement.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/AuraTracking/GUI-TotemTracker.lua"] = { phase = "17" }, -- Display after Font
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyCooldowns.lua"] = { phase = "17" }, -- Font after Glow
         ["KitnEssentials_Options/Combat/ClassTools/GUI-AlterTime.lua"] = { phase = "17" }, -- Position after Colors
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DivineArbiter.lua"] = { phase = "17" }, -- Position after Glow
         ["KitnEssentials_Options/Combat/ClassTools/GUI-TimeSpiral.lua"] = { phase = "17" }, -- Position after Glow
@@ -164,7 +159,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/AuraTracking/GUI-AuraMovement.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/AuraTracking/GUI-TotemTracker.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyBuffs.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/Combat/ClassTools/GUI-CustomCooldowns.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/Combat/GUI-CombatRes.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/Combat/GUI-CombatTexts.lua"] = { phase = "16" }, -- return before description
@@ -214,7 +208,6 @@ local ALLOWED = {
         ["GUI/GUIMain/GUI-Core.lua"] = { phase = "17", n = 1 },
         ["GUI/GUIWidgets/GUI-TauntCursorCard.lua"] = { phase = "17", n = 3 },
         ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-HealerExternals.lua"] = { phase = "17", n = 3 },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyBuffs.lua"] = { phase = "17", n = 4 },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-HavocTracker.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Combat/ClassTools/GUI-HuntersMark.lua"] = { phase = "17", n = 1 },

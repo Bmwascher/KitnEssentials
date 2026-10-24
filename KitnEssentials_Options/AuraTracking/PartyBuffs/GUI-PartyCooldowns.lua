@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PartyCooldowns.lua                                  ║
 -- ║  GUI: Party Cooldowns, Cooldowns tab                     ║
--- ║  Purpose: every setting of the Party Cooldowns module.   ║
+-- ║  Purpose: the party frame icons' settings.               ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -40,17 +40,6 @@ local GROW_TOOLTIP = "Which way the icons run and wrap. The choices follow Side 
     "edge, Left at its right edge, Center centers the cooldown icons on the frame with the active buffs on " ..
     "the next line, Up or Down stacks the icons in a column centered on the frame, further columns to its " ..
     "right. Inside has one layout."
-
--- state: the picker's one state group, when not colorsOn. The healer
--- externals box reads the Externals color, so it alone stays on colorsOn and
--- live with Party Frame Icons off.
-local COLOR_PICKERS = {
-    { key = "ColorExternal",     label = "Externals" },
-    { key = "ColorBigDefensive", label = "Defensive CDs", state = "defensiveOn" },
-    { key = "ColorBurst",        label = "Offensive CDs", state = "rowColorsOn" },
-    { key = "ColorPotion",       label = "Potion", state = "rowColorsOn" },
-    { key = "ColorTrinket",      label = "Trinket", state = "rowColorsOn" },
-}
 
 local ICON_SIZE_MIN, ICON_SIZE_MAX = 16, 72
 
@@ -96,7 +85,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         if PB and PB.ApplySettings then PB:ApplySettings() end
     end
 
-    -- A color or glow drag calls back on every mouse move.
+    -- A glow drag calls back on every mouse move.
     local function QueueApply()
         if PB and PB.QueueApplySettings then PB:QueueApplySettings() end
     end
@@ -114,22 +103,15 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     -- Party Frame Icons off grays every setting of the rows beside party
     -- frames; Potion bars and the raid cooldowns box keep theirs live.
     manager:SetCondition("iconsOn", function() return db.FrameIcons == true end)
-    manager:SetCondition("colorsOn", function() return db.CategoryColors == true end)
-    manager:SetCondition("rowColorsOn", function()
-        return db.CategoryColors == true and db.FrameIcons == true
-    end)
     manager:SetCondition("healerOn", function()
         return db.UseHealerPlacement == true and db.FrameIcons == true
     end)
     manager:SetCondition("classOn", function() return db.TrackBurst == true and db.FrameIcons == true end)
     manager:SetCondition("racialsOn", function() return db.ShowRacials == true and db.FrameIcons == true end)
     -- Without the sensor file the cooldown cells do not exist, and their
-    -- settings are grayed. Only the cells use the defensive color.
+    -- settings are grayed.
     manager:SetCondition("cellsOn", function()
         return KE.PartyCooldownsSensor ~= nil and db.FrameIcons == true
-    end)
-    manager:SetCondition("defensiveOn", function()
-        return db.CategoryColors == true and KE.PartyCooldownsSensor ~= nil and db.FrameIcons == true
     end)
 
     local function CheckConfig(key, tooltip, onChange)
@@ -190,18 +172,6 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         return dropdown
     end
 
-    local function AddColor(row, spec)
-        local picker = GUIFrame:CreateColorPicker(row, spec.label, {
-            color = db[spec.key],
-            callback = function(r, g, b, a)
-                db[spec.key] = { r, g, b, a }
-                QueueApply()
-            end,
-        })
-        row:AddWidget(picker, 1 / 3)
-        manager:Register(picker, spec.state or "colorsOn")
-    end
-
     ----------------------------------------------------------------
     -- Card: Party Frame Icons, the switch for everything beside the party
     -- frames
@@ -232,23 +202,9 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     yOffset = cardTracked:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Where It Shows
+    -- Card: Display Settings
     ----------------------------------------------------------------
-    local cardPlaces = GUIFrame:CreateCard(scrollChild, "Where It Shows", yOffset)
-    cardPlaces:AddLabel("Not shown in raids, battlegrounds or other raid groups.")
-    AddPicks(cardPlaces, {
-        { "Mythic+", "ShowInKeys" },
-        { "All Other Dungeon Types", "ShowInDungeons" },
-        { "Delves", "ShowInDelves" },
-        { "Open World", "ShowInWorld" },
-        { "Arenas", "ShowInArenas" },
-    }, true)
-    yOffset = cardPlaces:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card: Display
-    ----------------------------------------------------------------
-    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddSlider(rowD1, "Icon Size", "IconSize", ICON_SIZE_MIN, ICON_SIZE_MAX, nil,
         "In a healer spec with Use in Healer Specs on, the Healer tab's Icon Size is used."), "iconsOn")
@@ -272,29 +228,24 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     manager:Register(AddCheck(rowD3, "Timer Text", "ShowTimer", nil, nil, 1 / 3), "iconsOn")
     manager:Register(AddCheck(rowD3, "Cooldown Text", "ShowCooldownText",
-        "The time left on a gray icon after its buff falls, in the Font Settings font and Timer Size.",
+        "The time left on a gray icon after its buff falls, in the General tab's Font Settings font and this "
+            .. "card's Timer Size.",
         nil, 1 / 3), "cellsOn")
     manager:Register(AddCheck(rowD3, "Time-Left Swipe", "Swipe", nil, nil, 1 / 3), "iconsOn")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
-
-    local rowDSep2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightSeparator)
-    rowDSep2:AddWidget(GUIFrame:CreateSeparator(rowDSep2), 1)
-    cardDisplay:AddRow(rowDSep2, Theme.rowHeightSeparator)
-
-    local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddCheck(rowD4, "Border Color by Category", "CategoryColors", nil, RefreshStates, 1 / 3)
-    for i = 1, 2 do AddColor(rowD4, COLOR_PICKERS[i]) end
-    cardDisplay:AddRow(rowD4, Theme.rowHeight)
-    local rowD5 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
-    for i = 3, 5 do AddColor(rowD5, COLOR_PICKERS[i]) end
-    cardDisplay:AddRow(rowD5, Theme.rowHeightLast, 0)
+    -- The timer, the cooldown text and the stack count share this size.
+    local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
+    manager:Register(AddSlider(rowD4, "Timer Size", "TimerFontSize", 8, 48), "iconsOn")
+    manager:Register(AddSlider(rowD4, "Show Decimals Below (sec)", "DecimalThreshold", 0, 10,
+        KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold)), "iconsOn")
+    cardDisplay:AddRow(rowD4, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Glow While Active
+    -- Card: Glow, while a buff is active
     ----------------------------------------------------------------
     local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
-        title = "Glow While Active",
+        title = "Glow",
         db = db,
         types = {
             { key = "pixel",    text = "Pixel" },
@@ -313,41 +264,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
     yOffset = glowOffset
 
     ----------------------------------------------------------------
-    -- Card: Font Settings (the timer, the cooldown text and the stack
-    -- count share the font and outline)
-    ----------------------------------------------------------------
-    local _, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font Settings",
-        db = db,
-        dbKeys = {
-            fontFace    = "FontFace",
-            fontOutline = "FontOutline",
-        },
-        fontSizes = {
-            { label = "Timer Size", dbKey = "TimerFontSize", default = 12 },
-        },
-        fontSizeRange = { 8, 48 },
-        extraSlider = {
-            label = "Show Decimals Below (sec)",
-            dbKey = "DecimalThreshold",
-            min = 0, max = 10, step = 1,
-            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
-        },
-        onChangeCallback = ApplySettings,
-    })
-    -- The card itself is not registered: its SetEnabled drives all four
-    -- widgets. Potion bars and the raid cooldowns box read the font and
-    -- outline.
-    if fontWidgets then
-        manager:Register(fontWidgets[1], "all")
-        manager:Register(fontWidgets[2], "all")
-        manager:Register(fontWidgets[3], "iconsOn")
-        manager:Register(fontWidgets[4], "iconsOn")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
-    -- Card: Position, one view per placement
+    -- Card: Icon Position, one view per placement
     ----------------------------------------------------------------
     if activePlacement == nil then
         activePlacement = (db.UseHealerPlacement == true and KE:IsPlayerHealerSpec()) and "HEALER" or "DEFAULT"
@@ -384,7 +301,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         manager:Register(widget, healerView and "healerOn" or "iconsOn")
     end
 
-    local cardPosition = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
+    local cardPosition = GUIFrame:CreateCard(scrollChild, "Icon Position", yOffset)
     if healerView then
         local rowX0 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
         local healerToggle = GUIFrame:CreateCheckbox(rowX0, "Use in Healer Specs", {
@@ -427,7 +344,8 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
             .. KE.PartyBuffsRules.MAX_PER_ROW .. " it never wraps."))
     if healerView then
         AddPlacement(AddSlider(rowX3, "Icon Size", PlacementKey("IconSize"), ICON_SIZE_MIN, ICON_SIZE_MAX,
-            PlacementValue("IconSize"), "Icon size in a healer spec. Other specs use Icon Size on the Display card."))
+            PlacementValue("IconSize"),
+            "Icon size in a healer spec. Other specs use Icon Size on the Display Settings card."))
     end
     cardPosition:AddRow(rowX3, Theme.rowHeightLast, 0)
     yOffset = cardPosition:GetNextOffset()
