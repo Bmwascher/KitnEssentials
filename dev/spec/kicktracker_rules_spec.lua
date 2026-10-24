@@ -983,3 +983,106 @@ describe("KickTracker guess hand-back", function()
         end
     end)
 end)
+
+describe("KickTracker kick durations", function()
+    local function ranksOf(t) return function(talent) return t[talent] end end
+
+    it("applies the base, a spec base, flat seconds and a multiplier, keeping fractions", function()
+        local KT = L.loadKickTrackerRules()
+        local counterspell = { base = 25, modifiers = { { talent = 1, seconds = 5 } } }
+        local pummel = { base = 15, modifiers = { { talent = 2, multiplier = 0.9 } } }
+        local quell = { base = 20, modifiers = { { talent = 3, multiplier = 0.9 } } }
+        local windShear = { base = 12, specBase = { [264] = 30 } }
+        local rows = {
+            { name = "Counterspell", def = counterspell, rank = {}, want = 25 },
+            { name = "Counterspell with Quick Witted", def = counterspell, rank = { [1] = 1 }, want = 20 },
+            { name = "Pummel with Honed Reflexes", def = pummel, rank = { [2] = 1 }, want = 13.5 },
+            { name = "Quell with Interwoven Threads", def = quell, rank = { [3] = 1 }, want = 18 },
+            { name = "Wind Shear, Enhancement", def = windShear, spec = 263, rank = {}, want = 12 },
+            { name = "Wind Shear, Restoration", def = windShear, spec = 264, rank = {}, want = 30 },
+        }
+        for _, row in ipairs(rows) do
+            assert.near(row.want, KT.KickDuration(row.def, row.spec, ranksOf(row.rank), false), 1e-9, row.name)
+        end
+    end)
+
+    it("counts a selected talent and reads rank 0, an absent node and an unknown rank as not selected", function()
+        local KT = L.loadKickTrackerRules()
+        local def = { base = 25, modifiers = { { talent = 7, seconds = 5 } } }
+        local rows = {
+            { name = "selected", known = true, want = 20,
+              snap = { ranks = { [7] = 1 }, covered = { [7] = true }, absent = {} } },
+            { name = "rank 0", known = true, want = 25,
+              snap = { ranks = { [7] = 0 }, covered = { [7] = true }, absent = {} } },
+            { name = "absent from the tree", known = true, want = 25,
+              snap = { ranks = { [7] = 0 }, covered = { [7] = true }, absent = { [7] = true } } },
+            { name = "not covered by the read", known = false, want = 25,
+              snap = { ranks = {}, covered = {}, absent = {} } },
+            { name = "a stale read", known = false, want = 25,
+              snap = { ranks = { [7] = 1 }, covered = { [7] = true }, absent = {}, stale = "spec" } },
+            { name = "no snapshot", known = false, want = 25, snap = nil },
+        }
+        for _, row in ipairs(rows) do
+            local function rankOf(talent) return KT.SnapshotRank(row.snap, talent) end
+            assert.equals(row.known, KT.SnapshotRank(row.snap, 7) ~= nil, row.name)
+            assert.equals(row.want, KT.KickDuration(def, nil, rankOf, false), row.name)
+        end
+    end)
+
+    it("takes a success rule off a confirmed cast only, and never a primary-only rule", function()
+        local KT = L.loadKickTrackerRules()
+        local mindFreeze = { base = 15, success = { talent = 8, seconds = 3 } }
+        local solarBeam = { base = 60, success = { talent = 9, seconds = 15, primaryOnly = true } }
+        local rows = {
+            { name = "a confirmed success with the talent", def = mindFreeze, rank = { [8] = 1 },
+              succeeded = true, want = 12 },
+            { name = "an unconfirmed cast", def = mindFreeze, rank = { [8] = 1 }, succeeded = false, want = 15 },
+            { name = "a confirmed success, the talent unknown", def = mindFreeze, rank = {},
+              succeeded = true, want = 15 },
+            { name = "a primary-only rule", def = solarBeam, rank = { [9] = 1 }, succeeded = true, want = 60 },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.KickDuration(row.def, nil, ranksOf(row.rank), row.succeeded), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker class fallback", function()
+    it("keeps the role rule and gives the role's duration", function()
+        local KT = L.loadKickTrackerRules()
+        local druid = { id = 106839, cd = 60, tankCd = 15 }
+        local shaman = { id = 57994, cd = 12, allRoles = true, healerCd = 30 }
+        local mage = { id = 2139, cd = 25, allRoles = true }
+        local priest = { id = 15487, cd = 30 }
+        local rows = {
+            { name = "a damage-role druid", fb = druid, role = "DAMAGER", cd = 60, rowRole = "DAMAGER" },
+            { name = "a tank druid", fb = druid, role = "TANK", cd = 15, rowRole = "TANK" },
+            { name = "a healer druid", fb = druid, role = "HEALER", cd = nil },
+            { name = "a druid with no role", fb = druid, role = "NONE", cd = nil },
+            { name = "a healer shaman", fb = shaman, role = "HEALER", cd = 30, rowRole = "HEALER" },
+            { name = "an every-spec class with no role", fb = mage, role = "NONE", cd = 25, rowRole = "DAMAGER" },
+            { name = "a damage-role priest", fb = priest, role = "DAMAGER", cd = 30, rowRole = "DAMAGER" },
+            { name = "a healer priest", fb = priest, role = "HEALER", cd = nil },
+        }
+        for _, row in ipairs(rows) do
+            local kick = KT.FallbackKick(row.fb, row.role)
+            assert.equals(row.cd, kick and kick.cd, row.name)
+            assert.equals(row.rowRole, kick and kick.role, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker running clock", function()
+    it("keeps the duration a clock started with when a teammate's talents become known", function()
+        local KT = L.loadKickTrackerRules()
+        local def = { base = 25, modifiers = { { talent = 7, seconds = 5 } } }
+        local member = { unit = "party1", interruptData = { id = 2139, cd = 25 } }
+        local function rankOf(talent) return KT.SnapshotRank(member.inspect, talent) end
+        member.kickStart, member.kickDuration = 10, KT.KickDuration(def, 62, rankOf, false)
+        local snap = { spec = 62, ranks = { [7] = 1 }, covered = { [7] = true }, absent = {} }
+        assert.is_false(KT.LearnFacts(member, snap, { id = 2139, cd = 20 }))
+        assert.equals(10, member.kickStart)
+        assert.equals(25, member.kickDuration)
+        assert.equals(20, KT.KickDuration(def, 62, rankOf, false))
+    end)
+end)

@@ -737,3 +737,75 @@ function KT.RowTakesKick(member, messagesHeard)
     return member.interruptData ~= nil and not (member.kickVerified and messagesHeard)
 end
 
+---------------------------------------------------------------------------------
+-- Kick durations and teammate facts
+---------------------------------------------------------------------------------
+-- A kick's duration from its definition (KE:GetKickDefinition). rankOf(talent)
+-- gives a rank, or nil when it is unknown; an unknown talent counts as not
+-- selected, which gives the longest duration. Flat seconds come off first,
+-- then multipliers; a success rule comes off once, after them, only for a
+-- confirmed success and a known positive rank; a primaryOnly rule never.
+function KT.KickDuration(def, specID, rankOf, succeeded)
+    local duration = (def.specBase and def.specBase[specID]) or def.base
+    local mods = def.modifiers
+    if mods then
+        local mult = 1
+        for i = 1, #mods do
+            local m = mods[i]
+            local rank = rankOf(m.talent)
+            if rank and rank > 0 then
+                if m.seconds then duration = duration - m.seconds end
+                if m.multiplier then mult = mult * m.multiplier end
+            end
+        end
+        duration = duration * mult
+    end
+    local s = def.success
+    if succeeded == true and s and not s.primaryOnly then
+        local rank = rankOf(s.talent)
+        if rank and rank > 0 then duration = duration - s.seconds end
+    end
+    if duration < 0 then duration = 0 end
+    return duration
+end
+
+-- A teammate's rank for a talent from their inspect snapshot, or nil when it
+-- is not known: no snapshot, a stale one, or a talent its read did not cover.
+function KT.SnapshotRank(snap, talent)
+    if not snap or snap.stale or not (snap.covered and snap.covered[talent]) then return nil end
+    local rank = snap.ranks and snap.ranks[talent]
+    if type(rank) ~= "number" then return nil end
+    return rank
+end
+
+-- The class kick for a teammate not yet inspected: allRoles shows it for any
+-- role; otherwise a DAMAGER or TANK role proves a kicking spec. A healer gets
+-- it only with allRoles or healerCd. tankCd and healerCd replace cd for their
+-- role. Returns the row's kick, marked as a fallback, or nil.
+function KT.FallbackKick(fallback, role)
+    if not fallback then return nil end
+    if role == "HEALER" then
+        if fallback.healerCd then
+            return { id = fallback.id, cd = fallback.healerCd, role = "HEALER", fallback = true }
+        end
+        if fallback.allRoles then
+            return { id = fallback.id, cd = fallback.cd, role = "HEALER", fallback = true }
+        end
+        return nil
+    end
+    if not fallback.allRoles and role ~= "DAMAGER" and role ~= "TANK" then return nil end
+    local cd = fallback.cd
+    if role == "TANK" and fallback.tankCd then cd = fallback.tankCd end
+    return { id = fallback.id, cd = cd, role = (role == "TANK") and "TANK" or "DAMAGER", fallback = true }
+end
+
+-- A teammate's inspected facts. The row's kick follows the spec; a clock
+-- already running keeps the duration it started with, so new talents count
+-- from the next cast. Returns true when the row's kick changed.
+function KT.LearnFacts(member, snap, row)
+    local oldID = member.interruptData and member.interruptData.id
+    member.inspect = snap
+    member.interruptData = row
+    return oldID ~= (row and row.id)
+end
+
