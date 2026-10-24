@@ -356,8 +356,9 @@ function PB:FindFrames()
             AddCandidate(list, type(key) == "table" and key or value, "eui", raidIndex)
         end
     end
-    -- Read from the headers, not the addon's own getters, which skip a
-    -- button that has no unit yet and so never get it watched.
+    -- Read from the headers, not the addon's own getters: they return only a
+    -- party header button already showing player or partyN, so any other
+    -- button would never be watched.
     local danders = _G.DandersFrames
     if type(danders) == "table" then
         AddHeaderChildren(list, danders.partyHeader, "danders", raidIndex)
