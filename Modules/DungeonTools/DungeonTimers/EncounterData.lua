@@ -506,6 +506,10 @@
 --   { kind="Sequel", parent=<spellId>, after=<s >= 0> }
 --     from the parent row's timeline-finished anchor;
 --     requires duration.
+--   { kind="BossAppear", unit="boss1".."boss5" }   each
+--     time that boss token reads present after a readable
+--     absent reading this encounter; an unreadable reading
+--     changes nothing. Requires duration; no ended text.
 -- endedText + endedDuration (Message or Timer source, both
 -- or neither): text shown after the window's natural end.
 -- endedColor = { r, g, b } (needs endedText): the ended
@@ -1243,7 +1247,7 @@ KE.EncounterData[2143] = {
     dungeon = "KingsRest",
     bossOrder = 4,
     timerPolicy = "explicit",
-    rowOrder = { 268586, 1303488, 269230, 269369, 1303115, 1303327, 1303267 },
+    rowOrder = { 268586, 1303488, 269230, 269369, "new_boss", 1303115, 1303327, 1303267 },
     spells = {
         -- Timeline Finished can arrive late; retain the estimate unless a readable cast confirms its end.
         [269230] = { name = "Hunting Leap", castType = "begincast", castDuration = 2, role = "other", displayText = "ADD FRONTAL", color = { 0.77, 0.17, 0.17 }, sound = "Add Frontal",
@@ -1265,6 +1269,11 @@ KE.EncounterData[2143] = {
     },
     phases = {
         { unit = "boss1", threshold = 80, lead = 5 },
+    },
+    phaseCues = {
+        new_boss = { name = "New Boss", iconOverride = 269230, role = "other",
+            source = { kind = "BossAppear", unit = "boss2" }, duration = 3,
+            display = "text", displayText = "NEW BOSS", color = { 1.0, 0.3, 0.8 }, showAtSeconds = 0 },
     },
     auraSounds = {
         { spellID = 1302945, trigger = "added", unit = "player", name = "Impaling Spear on you", sound = "Bleed" },

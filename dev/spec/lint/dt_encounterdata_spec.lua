@@ -670,6 +670,8 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                         installed = bindings.phaseTimers[encId] and bindings.phaseTimers[encId][source.key]
                     elseif source.kind == "Sequel" and source.parent ~= nil then
                         installed = bindings.sequels[encId] and bindings.sequels[encId][source.parent]
+                    elseif source.kind == "BossAppear" and source.unit ~= nil then
+                        installed = bindings.bossAppear[encId] and bindings.bossAppear[encId][source.unit]
                     end
                     if not (installed and installed.cueKey == State.CueKey(encId, cueName)) then
                         failures[#failures + 1] = ctx .. ": the runtime builder installed no binding for this cue"

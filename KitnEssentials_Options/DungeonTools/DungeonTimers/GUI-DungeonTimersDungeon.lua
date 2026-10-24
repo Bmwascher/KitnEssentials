@@ -3213,6 +3213,7 @@ local CUE_TRIGGER_TEXT = {
     Message = "Starts on a boss mod message.",
     Timer   = "Runs for the boss mod's own phase timer; its real length comes from the boss mod.",
     Sequel  = "Follows its parent countdown row.",
+    BossAppear = "Shows when a new boss joins the fight.",
 }
 
 local AURA_TRIGGER_TEXT = {
