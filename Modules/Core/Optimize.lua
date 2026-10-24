@@ -665,11 +665,15 @@ end
 ---------------------------------------------------------------------------------
 -- Reload Prompt
 ---------------------------------------------------------------------------------
--- Its own function, so ClosePromptIfOwner matches this prompt alone.
-local function ReloadNow() ReloadUI() end
+-- Its own accept, so ClosePromptIfOwner matches this prompt alone. Made on
+-- first use by the shared factory, so the secure reload button covers it
+-- where the client refuses addon reloads.
+---@type fun()?
+local ReloadNow
 
 -- Raised from the settings window's close.
 function OPT:PromptReload()
+    ReloadNow = ReloadNow or KE:NewReloadAccept()
     KE:ClosePromptIfOwner(ReloadNow)
     KE:CreatePrompt("Reload Required",
         "Settings applied. Some changes require a reload to take effect.\n\nReload now?",

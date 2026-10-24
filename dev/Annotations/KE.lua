@@ -865,6 +865,12 @@ function KE:ClosePromptIfOwner(accept) end
 ---@return Frame
 function KE:CreateReloadPrompt(reason) end
 
+--- A new Reload Now accept for a module's own reload prompt: it reloads as
+--- the shared prompt's does, and the secure reload button covers it where the
+--- client refuses addon reloads (Core/Widgets.lua).
+---@return fun()
+function KE:NewReloadAccept() end
+
 function KE:SkinningReloadPrompt() end
 
 --- ReloadUI where the client lets addon code call it; elsewhere the reload
