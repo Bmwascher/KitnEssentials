@@ -364,6 +364,12 @@ local function ValidateCue(name, cue)
         or cue.pullReceipt ~= nil then
         return nil
     end
+    if kind == "BossAppear" then
+        if type(source.unit) ~= "string" or not source.unit:find("^boss[1-5]$") then return nil end
+        if not isValidNumber(cue.duration) or cue.duration <= 0 then return nil end
+        if hasEndedText then return nil end
+        return kind
+    end
     if kind == "Timer" then
         if not isValidNumber(source.key) then return nil end
         if source.isCooldown ~= false then return nil end
@@ -383,14 +389,14 @@ end
 -- Phase Timers have no anchor: their uncounted bars expire without a provider stop.
 local function BuildCueBindings(encounterId, phaseCues, bindings)
     local sequelCues, accepted, gateCues = {}, {}, {}
-    local claims = { Message = {}, Timer = {} }
+    local claims = { Message = {}, Timer = {}, BossAppear = {} }
     for name, cue in pairs(phaseCues) do
         local kind = ValidateCue(name, cue)
         local cueKey = State.CueKey(encounterId, name)
         if kind == "Sequel" then
             sequelCues[#sequelCues + 1] = { cueKey = cueKey, cue = cue }
         elseif kind then
-            local key = cue.source.key
+            local key = kind == "BossAppear" and cue.source.unit or cue.source.key
             claims[kind][key] = (claims[kind][key] or 0) + 1
             accepted[#accepted + 1] = { kind = kind, key = key, cueKey = cueKey, hides = cue.hidesForecasts,
                 pullReceipt = cue.pullReceipt }
@@ -408,6 +414,12 @@ local function BuildCueBindings(encounterId, phaseCues, bindings)
                 if entry.hides then
                     gateCues[#gateCues + 1] = { cueKey = entry.cueKey, hides = entry.hides }
                 end
+            elseif entry.kind == "BossAppear" then
+                bindings.bossAppear[encounterId] = bindings.bossAppear[encounterId] or {}
+                bindings.bossAppear[encounterId][entry.key] = {
+                    encounterId = encounterId, unit = entry.key, kind = "BossAppear",
+                    curationId = entry.cueKey, cueKey = entry.cueKey,
+                }
             else
                 bindings.phaseTimers[encounterId] = bindings.phaseTimers[encounterId] or {}
                 bindings.phaseTimers[encounterId][entry.key] = {
@@ -609,6 +621,7 @@ function State.BuildBindings(encounterData)
     local bindings = {
         timers = {}, messages = {}, casts = {}, phantoms = {}, sequels = {}, phaseTimers = {},
         cueEnders = {}, cuesEndedByWindow = {}, forecastGates = {}, queues = {}, shields = {},
+        bossAppear = {},
     }
     for encounterId, encounter in pairs(encounterData) do
         local timerPolicy = encounter.timerPolicy
@@ -787,6 +800,19 @@ function State.IsScopeCurrent(store, owner, scope)
     if current.moduleEpoch ~= store.moduleEpoch then return false end
     if current.encounterEpoch ~= (store.encounterEpochs[current.encounterId] or 0) then return false end
     return true
+end
+
+-- A boss-appear cue draws only under the one current owner of its encounter.
+function State.SoleEncounterOwner(store, encounterId)
+    local owner
+    for candidate, scope in pairs(store.scopes) do
+        if scope.encounterId == encounterId and State.IsScopeCurrent(store, candidate, scope) then
+            if owner ~= nil then return nil, "two-owners" end
+            owner = candidate
+        end
+    end
+    if owner == nil then return nil, "no-owner" end
+    return owner
 end
 
 function State.NewClock(remaining, span, now)
@@ -1882,6 +1908,24 @@ function State.GateCovers(gates, curationId, now)
     if not gates or not isValidNumber(now) then return false end
     for _, gate in pairs(gates) do
         if gate.spells[curationId] and now < gate.endsAt then return true end
+    end
+    return false
+end
+
+-- A boss slot counts as new only when it fills after a readable empty
+-- reading; an unreadable reading changes nothing.
+function State.NewBossAppearTrack()
+    return { absent = false }
+end
+
+function State.NoteBossAppear(track, present)
+    if present == false then
+        track.absent = true
+        return false
+    end
+    if present == true and track.absent then
+        track.absent = false
+        return true
     end
     return false
 end

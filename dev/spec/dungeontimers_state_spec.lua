@@ -1189,6 +1189,13 @@ describe("DungeonTimers TimerState", function()
         return cue
     end
 
+    local function bossAppearCue(extra)
+        local cue = { name = "New Boss", iconOverride = 134400, duration = 3,
+                      source = { kind = "BossAppear", unit = "boss2" } }
+        for k, v in pairs(extra or {}) do cue[k] = v end
+        return cue
+    end
+
     local function cueWithout(cue, field)
         cue[field] = nil
         return cue
@@ -1344,6 +1351,11 @@ describe("DungeonTimers TimerState", function()
             encounterId = CUE_ENC, key = CUE_KEY, kind = "Message",
             curationId = "cue:77:window", cueKey = "cue:77:window",
         }, good.messages[CUE_ENC][CUE_KEY])
+        local appear = buildCues({ arrival = bossAppearCue() })
+        assert.same({
+            encounterId = CUE_ENC, unit = "boss2", kind = "BossAppear",
+            curationId = "cue:77:arrival", cueKey = "cue:77:arrival",
+        }, appear.bossAppear[CUE_ENC].boss2)
 
         local parent = { [CUE_KEY] = cueTimerRow() }
         local cases = {
@@ -1370,12 +1382,23 @@ describe("DungeonTimers TimerState", function()
             { name = "ended duration without a text", cues = { window = messageCue({ endedDuration = 2 }) } },
             { name = "duration on a Timer cue", cues = { window = timerCue({ duration = 15 }) } },
             { name = "refused field", cues = { window = messageCue({ castDuration = 3 }) } },
+            { name = "BossAppear unit outside boss1 to boss5",
+              cues = { window = bossAppearCue({ source = { kind = "BossAppear", unit = "boss6" } }) } },
+            { name = "BossAppear unit not a boss token",
+              cues = { window = bossAppearCue({ source = { kind = "BossAppear", unit = "target" } }) } },
+            { name = "BossAppear missing unit", cues = { window = bossAppearCue({ source = { kind = "BossAppear" } }) } },
+            { name = "BossAppear missing duration", cues = { window = cueWithout(bossAppearCue(), "duration") } },
+            { name = "BossAppear zero duration", cues = { window = bossAppearCue({ duration = 0 }) } },
+            { name = "BossAppear lead delay", cues = { window = bossAppearCue({ leadDelay = 1 }) } },
+            { name = "BossAppear ended text",
+              cues = { window = bossAppearCue({ endedText = "GONE", endedDuration = 2 }) } },
         }
         for _, case in ipairs(cases) do
             local bindings = buildCues(case.cues, case.spells)
             assert.is_nil(bindings.messages[CUE_ENC], case.name)
             assert.is_nil(bindings.phaseTimers[CUE_ENC], case.name)
             assert.is_nil(bindings.sequels[CUE_ENC], case.name)
+            assert.is_nil(bindings.bossAppear[CUE_ENC], case.name)
         end
 
         local legacy = State.BuildBindings({ [CUE_ENC] = { spells = {}, phaseCues = { window = messageCue() } } })
@@ -1560,12 +1583,14 @@ describe("DungeonTimers TimerState", function()
             { name = "Message", cues = { a = messageCue(), b = messageCue() } },
             { name = "Timer", cues = { a = timerCue(), b = timerCue() } },
             { name = "Sequel", cues = { a = sequelCue(), b = sequelCue() } },
+            { name = "BossAppear", cues = { a = bossAppearCue(), b = bossAppearCue() } },
         }
         for _, case in ipairs(cases) do
             local bindings = buildCues(case.cues, { [CUE_KEY] = cueTimerRow() })
             assert.is_nil(bindings.messages[CUE_ENC], case.name)
             assert.is_nil(bindings.phaseTimers[CUE_ENC], case.name)
             assert.is_nil(bindings.sequels[CUE_ENC], case.name)
+            assert.is_nil(bindings.bossAppear[CUE_ENC], case.name)
             assert.is_nil(bindings.timers[CUE_ENC][CUE_KEY].ownsExpiry, case.name)
         end
     end)
@@ -2112,6 +2137,55 @@ describe("DungeonTimers TimerState", function()
                 local want = explicit and status == "missing" and "open" or "keep"
                 assert.equal(want, State.PlanProviderSetup(input), status .. tostring(explicit))
             end
+        end
+    end)
+
+    it("NoteBossAppear shows a boss slot each time it fills after a readable empty reading", function()
+        local UNREADABLE = {}
+        local cases = {
+            { name = "absent then present shows", readings = { false, true }, want = { false, true } },
+            { name = "present at the start does not show", readings = { true, true }, want = { false, false } },
+            { name = "shown, absent, present shows again",
+              readings = { false, true, false, true }, want = { false, true, false, true } },
+            { name = "absent then present twice in a row shows once",
+              readings = { false, true, true }, want = { false, true, false } },
+            { name = "an unreadable reading between absent and present still shows",
+              readings = { false, UNREADABLE, true }, want = { false, false, true } },
+            { name = "unreadable at the start then present does not show",
+              readings = { UNREADABLE, true }, want = { false, false } },
+        }
+        for _, case in ipairs(cases) do
+            local track = State.NewBossAppearTrack()
+            local got = {}
+            for i, reading in ipairs(case.readings) do
+                local present = reading
+                if present == UNREADABLE then present = nil end
+                got[i] = State.NoteBossAppear(track, present)
+            end
+            assert.same(case.want, got, case.name)
+        end
+    end)
+
+    it("SoleEncounterOwner names the one current owner of the encounter and refuses none or two", function()
+        local ENC, OTHER = 2143, 9999
+        local cases = {
+            { name = "no owner", admit = {}, reason = "no-owner" },
+            { name = "one current owner", admit = { { "a", ENC } }, want = "a" },
+            { name = "an owner admitted for another encounter", admit = { { "a", OTHER } }, reason = "no-owner" },
+            { name = "a stale owner after its encounter retired",
+              admit = { { "a", ENC } }, retire = true, reason = "no-owner" },
+            { name = "a stale owner beside a current one",
+              admit = { { "a", ENC } }, retire = true, after = { { "b", ENC } }, want = "b" },
+            { name = "two current owners", admit = { { "a", ENC }, { "b", ENC } }, reason = "two-owners" },
+        }
+        for _, case in ipairs(cases) do
+            local store = State.New()
+            for _, entry in ipairs(case.admit) do State.AdmitOwner(store, entry[1], entry[2]) end
+            if case.retire then State.RetireEncounter(store, ENC) end
+            for _, entry in ipairs(case.after or {}) do State.AdmitOwner(store, entry[1], entry[2]) end
+            local owner, reason = State.SoleEncounterOwner(store, ENC)
+            assert.equal(case.want, owner, case.name)
+            assert.equal(case.reason, reason, case.name)
         end
     end)
 
