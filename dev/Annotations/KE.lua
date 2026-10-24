@@ -871,7 +871,11 @@ function KE:CreateReloadPrompt(reason) end
 ---@return fun()
 function KE:NewReloadAccept() end
 
-function KE:SkinningReloadPrompt() end
+--- The skinning reload prompt; `extra` is appended to its text
+--- (Core/Widgets.lua).
+---@param extra string?
+---@return Frame
+function KE:SkinningReloadPrompt(extra) end
 
 --- ReloadUI where the client lets addon code call it; elsewhere the reload
 --- prompt, whose Reload Now reloads through a secure button (Core/Widgets.lua).

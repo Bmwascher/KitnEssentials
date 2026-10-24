@@ -435,6 +435,41 @@ function ProfileManager.FilterForClient(profile, defaults)
     return dropped
 end
 
+--- The client an export envelope names; an untagged one reads as retail.
+---@param envelope table?
+---@return string client "forever" or "retail"
+function ProfileManager.EnvelopeClient(envelope)
+    if type(envelope) == "table" and envelope._c == "forever" then return "forever" end
+    return "retail"
+end
+
+local function IsBaseline()
+    return KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() == true
+end
+
+-- What an export encodes: on a baseline load a filtered copy, so the live
+-- profile is never touched. A nested container is copied one level, the level
+-- the filter edits.
+local function ExportData(profileData)
+    if not IsBaseline() then return profileData end
+    local copy = {}
+    for key, value in pairs(profileData) do
+        if type(value) == "table" and KE:ProfileBlockOwner(key) == "nested" then
+            local inner = {}
+            for subKey, sub in pairs(value) do inner[subKey] = sub end
+            value = inner
+        end
+        copy[key] = value
+    end
+    local defaults = KE.GetDefaultDB and KE:GetDefaultDB()
+    ProfileManager.FilterForClient(copy, defaults and defaults.profile)
+    return copy
+end
+
+-- Set by an install that dropped a block that was on, for the refresh that
+-- follows the switch to it: that refresh's reload prompt names them too.
+local pendingNotice
+
 ---------------------------------------------------------------------------------
 -- Import / Export
 ---------------------------------------------------------------------------------
@@ -452,10 +487,11 @@ function ProfileManager:ExportProfile(profileName)
     if not profileData then return nil, "Profile '" .. profileName .. "' not found" end
 
     local encoded = KE:EncodeForExport({
-        _v = 1,           -- Version
-        _n = profileName, -- Original profile name
-        _t = time(),      -- Timestamp
-        d = profileData   -- Profile data
+        _v = 2,                                 -- Version
+        _c = IsBaseline() and "forever" or nil, -- Client; absent means retail
+        _n = profileName,                       -- Original profile name
+        _t = time(),                            -- Timestamp
+        d = ExportData(profileData)             -- Profile data
     })
     if not encoded then return nil, "Encoding failed" end
 
@@ -467,6 +503,7 @@ end
 ---@return table|nil profileData
 ---@return string|nil embeddedName
 ---@return string|nil error
+---@return string|nil client "forever" or "retail" for a decoded string
 function ProfileManager:DecodeImportString(importString)
     if not importString or importString == "" then return nil, nil, "Import string is empty" end
     if importString:sub(1, #LEGACY_PREFIX) == LEGACY_PREFIX then return nil, nil, KE.LEGACY_EXPORT_MESSAGE end
@@ -477,8 +514,10 @@ function ProfileManager:DecodeImportString(importString)
 
     -- The user-facing export wraps the profile in an envelope; the Wago API
     -- export is the raw profile table.
-    if type(data.d) == "table" then return data.d, type(data._n) == "string" and data._n or nil end
-    return data
+    if type(data.d) == "table" then
+        return data.d, type(data._n) == "string" and data._n or nil, nil, ProfileManager.EnvelopeClient(data)
+    end
+    return data, nil, nil, "retail"
 end
 
 --- Create a profile from a decoded table
@@ -524,9 +563,8 @@ function ProfileManager:InstallProfile(profileData, targetName)
     -- After the renames, so a renamed block is judged under its new name.
     local defaults = KE.GetDefaultDB and KE:GetDefaultDB()
     local dropped = ProfileManager.FilterForClient(profileData, defaults and defaults.profile)
-    if #dropped > 0 then
-        KE:Print("Not available on this client: " .. table.concat(dropped, ", "))
-    end
+    local notice = #dropped > 0 and ("Not available on this client: " .. table.concat(dropped, ", ")) or nil
+    if notice then KE:Print(notice) end
 
     -- Create the profile
     local currentProfile = self:GetCurrentProfile()
@@ -548,6 +586,7 @@ function ProfileManager:InstallProfile(profileData, targetName)
         KE.db:SetProfile(currentProfile)
     end)
 
+    pendingNotice = notice and { profile = finalName, text = notice } or nil
     return true, finalName
 end
 
@@ -659,12 +698,20 @@ local function RefreshAll()
     --
     -- ONE prompt, never two: KE:CreatePrompt stores KE.activePrompt, so a second
     -- call here would replace the first.
+    -- An import's notice rides on the refresh that switches to its profile;
+    -- any other refresh drops it.
+    local notice = pendingNotice
+    pendingNotice = nil
+    local extra = ""
+    if notice and KE.db and notice.profile == KE.db:GetCurrentProfile() then
+        extra = "\n\n" .. notice.text
+    end
     if skinningChanged and KE.SkinningReloadPrompt then
-        KE:SkinningReloadPrompt()
+        KE:SkinningReloadPrompt(extra)
     elseif KE.CreateReloadPrompt then
-        KE:CreateReloadPrompt(reloadNeeded
+        KE:CreateReloadPrompt((reloadNeeded
             and "This profile turns off a feature that needs a UI reload to fully take effect."
-            or "Profile changed. Reload your UI so every setting applies cleanly.")
+            or "Profile changed. Reload your UI so every setting applies cleanly.") .. extra)
     end
 
     -- Refresh theme
@@ -723,7 +770,7 @@ function KitnEssentialsAPI:ExportProfile(profileKey)
     if not profileData then return "" end
 
     -- Wago expects raw profile data, no envelope wrapper
-    local encoded = KE:EncodeForExport(profileData)
+    local encoded = KE:EncodeForExport(ExportData(profileData))
     return encoded and (EXPORT_PREFIX .. encoded) or ""
 end
 

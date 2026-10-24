@@ -1022,8 +1022,9 @@ function KE:CreateReloadPrompt(reason)
     )
 end
 
-function KE:SkinningReloadPrompt()
-    return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
+-- `extra` is appended to the text: an import's notice of dropped features.
+function KE:SkinningReloadPrompt(extra)
+    return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect." .. (extra or ""))
 end
 
 -- ReloadUI where the client lets addon code call it; elsewhere the reload

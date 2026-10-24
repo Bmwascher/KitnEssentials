@@ -91,3 +91,20 @@ describe("ProfileManager.FilterForClient", function()
         end
     end)
 end)
+
+describe("ProfileManager:ExportProfile on a baseline load", function()
+    it("exports a filtered, tagged copy on a baseline load and leaves the live profile whole", function()
+        local PM, KE = load(true)
+        local live = payload()
+        KE.db = { profiles = { Live = live } }
+        local sent
+        KE.EncodeForExport = function(_, envelope) sent = envelope; return "x" end
+        assert.equals("!KE2!x", PM:ExportProfile("Live"))
+        assert.equals(2, sent._v)
+        assert.equals("forever", sent._c)
+        assert.is_table(sent.d.DamageMeter)
+        assert.is_nil(sent.d.PartyBuffs)
+        assert.is_nil(sent.d.Dungeons.EnemyCounter)
+        assert.same(payload(), live)
+    end)
+end)

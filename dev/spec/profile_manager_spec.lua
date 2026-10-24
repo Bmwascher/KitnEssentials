@@ -382,3 +382,49 @@ describe("ProfileManager profile-name refusal", function()
         assert.is_nil(db.profiles[base .. " (2)"])
     end)
 end)
+
+describe("ProfileManager.EnvelopeClient", function()
+    it("reads the forever tag as Forever and anything else as retail", function()
+        local PM = L.loadProfileManager()
+        for _, row in ipairs({
+            { name = "untagged",    envelope = { d = {} },                 want = "retail" },
+            { name = "forever tag", envelope = { d = {}, _c = "forever" }, want = "forever" },
+            { name = "other tag",   envelope = { d = {}, _c = "classic" }, want = "retail" },
+        }) do
+            assert.equals(row.want, PM.EnvelopeClient(row.envelope), row.name)
+        end
+    end)
+end)
+
+-- The notice is pending state: set by an install that dropped a block that was
+-- on, taken by the next refresh, shown only when that refresh is for the
+-- imported profile. No frame or event is involved; the prompt is captured.
+describe("the import notice in the reload prompt", function()
+    it("shows once, on the refresh for the imported profile, and any other refresh drops it", function()
+        local PM, KE, db = L.loadProfileManager(nil, { baseline = true })
+        -- InstallProfile runs the saved-key renames and reads the defaults.
+        require("dev.spec._helpers").loadModule("Core/Defaults.lua", KE)
+        KE.Print = function() end
+        local texts = {}
+        KE.CreateReloadPrompt = function(_, text) texts[#texts + 1] = text end
+        local GENERIC = "Profile changed. Reload your UI so every setting applies cleanly."
+        local WITH_NOTICE = GENERIC .. "\n\nNot available on this client: Party Buffs"
+
+        -- A refresh for another profile takes the notice and shows nothing,
+        -- and a later switch to the imported profile does not bring it back.
+        local ok, first = PM:InstallProfile({ PartyBuffs = { Enabled = true } }, "First")
+        assert.is_true(ok)
+        PM:RefreshAllModules()
+        db:SetProfile(first)
+        PM:RefreshAllModules()
+
+        -- The refresh for the imported profile shows it, once.
+        local ok2, second = PM:InstallProfile({ PartyBuffs = { Enabled = true } }, "Second")
+        assert.is_true(ok2)
+        db:SetProfile(second)
+        PM:RefreshAllModules()
+        PM:RefreshAllModules()
+
+        assert.same({ GENERIC, GENERIC, WITH_NOTICE, GENERIC }, texts)
+    end)
+end)
