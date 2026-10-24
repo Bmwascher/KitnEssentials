@@ -305,8 +305,6 @@ function Invoke-Git([string[]]$gitArgs) {
     return $out
 }
 
-# A fetched source answers two questions: which shipped files exist at a ref
-# (relative to the external's folder), and where to read one at the new ref.
 function Open-GitSource($src, [string]$work) {
     $dir = Join-Path $work 'repo'
     Invoke-Git @('-c', 'core.autocrlf=false', 'clone', '--quiet', '--filter=blob:none', '--no-checkout', $src.repo, $dir) | Out-Null
