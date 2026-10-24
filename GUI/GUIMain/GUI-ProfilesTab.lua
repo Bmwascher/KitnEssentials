@@ -162,8 +162,9 @@ function PasteRetailString()
 end
 
 -- Core/Main.lua decides whether it is due. The flag is set as the popup
--- opens, so no answer, close or reload brings it back; the park key keeps it
--- when a prompt that does not wait replaces it on screen.
+-- opens (and by the card), so no answer, close or reload brings it back;
+-- the park key keeps it when a prompt that does not wait replaces it on
+-- screen.
 function GUIFrame:OfferRetailCopy()
     -- Read again here: the card may have been used since login.
     if KE.db.global.CopyFromRetailSeen then return end
