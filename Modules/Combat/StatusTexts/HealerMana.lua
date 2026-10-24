@@ -490,12 +490,14 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 -- Build one healer snapshot (class/name/connection/spec) from the LibSpec
--- cache. specID stays nil if unknown -> class-default icon.
+-- cache. specID stays nil if unknown -> class-default icon. The key rule
+-- lives in the Party Cooldowns files, which a client may not load.
 function HM:BuildHealerSnapshot(unit)
     local _, class = UnitClass(unit)
     local displayName = KE:GetNicknameOrName(unit)
     local connected = UnitIsConnected(unit)
-    local key = KE.PartyCooldownsSpec.LibKey(unit)
+    local spec = KE.PartyCooldownsSpec
+    local key = spec and spec.LibKey(unit)
     return {
         unit = unit,
         name = displayName,
