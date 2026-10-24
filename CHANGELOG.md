@@ -1,6 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.14.5
+## v4.14.7
+
+### Party Cooldowns
+
+- Trinket cooldowns no longer disappear for the rest of the session when
+  the game is slow to return a trinket's details
+- Talent-based cooldowns use each teammate's correct talent ranks, including
+  after they change spec
+
+---
+
+## v4.14.6
 
 ### WoW Forever
 
@@ -23,7 +34,7 @@
 
 ---
 
-## v4.14.4
+## v4.14.5
 
 ### WoW Forever
 
@@ -35,7 +46,7 @@
 
 ---
 
-## v4.14.3
+## v4.14.4
 
 ### WoW Forever
 
@@ -52,7 +63,7 @@
 
 ---
 
-## v4.14.2
+## v4.14.3
 
 ### Libraries
 
@@ -61,7 +72,7 @@
 
 ---
 
-## v4.14.1
+## v4.14.2
 
 KitnEssentials now runs on WoW Forever.
 
