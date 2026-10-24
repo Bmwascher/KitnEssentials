@@ -35,6 +35,13 @@
 --                                    allow formID, or nil.
 --   KE:ResolvePlayerInterrupt(specID) -> that pick for the player's spellbook
 --                                        and current form, or nil.
+--   KE:GetKickDefinition(kickID) -> the Kick Tracker's definition of a
+--                                   canonical kick, or nil.
+--   KE:GetKickTalentDemand(specID) -> { [talentID]=true, ... } the tracker
+--                                     inspects for the spec's kicks.
+--
+-- `cd` is the value castbars use; the Kick Tracker times kicks from the
+-- definitions at the end of this file.
 
 ---@class KE
 local KE = select(2, ...)
@@ -429,4 +436,77 @@ function KE:GetInterruptSuccessReduction(kickSpellID)
     local reduction = SUCCESS_REDUCTIONS[kickSpellID]
     if not reduction then return nil end
     return reduction.talent, reduction.seconds
+end
+
+---------------------------------------------------------------------------------
+-- Kick definitions (the Kick Tracker's durations)
+---------------------------------------------------------------------------------
+-- One per canonical kick ID. `base` seconds, or `specBase[specID]`;
+-- `modifiers` apply while their talent's rank is positive, `seconds` off or a
+-- `multiplier` (the share kept). `success` comes off once, only for a cast
+-- whose interrupt is confirmed; `primaryOnly` marks one the tracker can never
+-- confirm.
+local QUICK_WITTED = 382297
+local COLDTHIRST = 378848
+local LIGHT_OF_THE_SUN = 202918
+local HONED_REFLEXES = 391271
+local INTERWOVEN_THREADS = 412713
+
+local KICK_DEFINITIONS = {
+    [2139]   = { base = 25, modifiers = { { talent = QUICK_WITTED, seconds = 5 } } },  -- Counterspell
+    [47528]  = { base = 15, success = { talent = COLDTHIRST, seconds = 3 } },  -- Mind Freeze
+    [78675]  = { base = 60, success = { talent = LIGHT_OF_THE_SUN, seconds = 15, primaryOnly = true } },  -- Solar Beam
+    [6552]   = { base = 15, modifiers = { { talent = HONED_REFLEXES, multiplier = 0.9 } } },  -- Pummel
+    [351338] = { base = 20, modifiers = { { talent = INTERWOVEN_THREADS, multiplier = 0.9 } } },  -- Quell
+    [57994]  = { base = 12, specBase = { [264] = 30 } },  -- Wind Shear
+    [147362] = { base = 24 },  -- Counter Shot
+    [187707] = { base = 15 },  -- Muzzle
+    [19647]  = { base = 24 },  -- Spell Lock
+    [89766]  = { base = 30 },  -- Axe Toss
+    [96231]  = { base = 15 },  -- Rebuke
+    [1766]   = { base = 15 },  -- Kick
+    [15487]  = { base = 30 },  -- Silence
+    [116705] = { base = 15 },  -- Spear Hand Strike
+    [106839] = { base = 15 },  -- Skull Bash
+    [183752] = { base = 15 },  -- Disrupt
+}
+if KE.IS_FOREVER then KICK_DEFINITIONS = {} end
+
+-- The talents a kick's definition reads, added to set (made on the first).
+-- A primaryOnly rule is never applied, so its talent is never read.
+local function AddKickTalents(set, kickID)
+    local def = KICK_DEFINITIONS[KICK_ALIASES[kickID] or kickID]
+    if not def then return set end
+    if def.modifiers then
+        for _, m in ipairs(def.modifiers) do
+            set = set or {}
+            set[m.talent] = true
+        end
+    end
+    local s = def.success
+    if s and not s.primaryOnly then
+        set = set or {}
+        set[s.talent] = true
+    end
+    return set
+end
+
+-- Per spec, the talents of every kick it can show: each candidate (a
+-- warlock's demons both) and its tracker kick.
+local EMPTY_DEMAND = {}
+local TALENT_DEMAND = {}
+for specID, entry in pairs(INTERRUPTS) do
+    local set
+    for _, c in ipairs(entry.candidateList) do set = AddKickTalents(set, c.id) end
+    if entry.trackerKick then set = AddKickTalents(set, entry.trackerKick.id) end
+    TALENT_DEMAND[specID] = set
+end
+
+function KE:GetKickDefinition(kickID)
+    return KICK_DEFINITIONS[kickID]
+end
+
+-- Callers treat the returned set as read-only.
+function KE:GetKickTalentDemand(specID)
+    return TALENT_DEMAND[specID] or EMPTY_DEMAND
 end

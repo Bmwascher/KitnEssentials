@@ -1551,6 +1551,19 @@ function KE:SelectInterruptCandidate(candidates, isKnown, formID) end
 ---@return { id: number, cd: number, forms: number[]? }?
 function KE:ResolvePlayerInterrupt(specID) end
 
+--- The Kick Tracker's definition of a canonical kick: `base` seconds, an
+--- optional `specBase`, talent `modifiers` and a `success` rule; nil when the
+--- kick has none.
+---@param kickID number
+---@return { base: number, specBase: table<number, number>?, modifiers: { talent: number, seconds: number?, multiplier: number? }[]?, success: { talent: number, seconds: number, primaryOnly: boolean? }? }?
+function KE:GetKickDefinition(kickID) end
+
+--- The talents to inspect for a spec's kicks, as a set; empty when none.
+--- Callers treat the returned table as read-only.
+---@param specID number
+---@return table<number, true>
+function KE:GetKickTalentDemand(specID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 
