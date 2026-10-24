@@ -248,6 +248,7 @@ local FOREVER_FRAME_SKINS = {
 -- show on retail and a stray load there cannot run them.
 local FOREVER_ONLY_FRAME_SKINS = {
     LegacySystem = true,
+    PVPRank = true,
     Skills = true,
     Statistics = true,
 }

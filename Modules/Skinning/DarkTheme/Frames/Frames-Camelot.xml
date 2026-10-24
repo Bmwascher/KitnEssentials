@@ -49,6 +49,7 @@
     <Script file="PlayerSpells.lua" />
     <Script file="Professions.lua" />
     <Script file="PvPMatch.lua" />
+    <Script file="PVPRank.lua" />
     <Script file="Quest.lua" />
     <Script file="Raid.lua" />
     <Script file="Reputation.lua" />

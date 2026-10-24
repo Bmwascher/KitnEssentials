@@ -149,6 +149,7 @@ local FRAME_SKINS = {
     { key = "ProfessionsOrders",        text = "Crafting Orders" },
     { key = "PvP",                      text = "PvP" },
     { key = "PvPMatch",                 text = "PvP Match" },
+    { key = "PVPRank",                  text = "PvP Rank" },
     { key = "Quest",                    text = "Quests" },
     { key = "QuestChoice",              text = "Quest Choice" },
     { key = "Raid",                     text = "Raid (Legacy)" },
