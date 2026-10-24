@@ -3002,6 +3002,15 @@ function AU:ApplySettings()
     SetupTrainAllButton()
 end
 
+-- A settings page's apply after an edit. The CVar apply also runs, as it did
+-- when it ended ApplySettings: it turns a companion flag back on that
+-- something outside KE turned off.
+function AU:ApplyFromPage()
+    self:ApplySettings()
+    local CV = KitnEssentials:GetModule("CVars", true)
+    if CV then CV:ApplySettings() end
+end
+
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------

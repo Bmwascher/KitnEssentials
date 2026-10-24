@@ -33,7 +33,7 @@ end
 
 local function ApplySettings()
     local AU = GetModule()
-    if AU then AU:ApplySettings() end
+    if AU then AU:ApplyFromPage() end
 end
 
 -- Renders above the tab strip. Never collapses: the tab list already drops
