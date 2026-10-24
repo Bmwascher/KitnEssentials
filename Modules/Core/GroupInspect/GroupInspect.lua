@@ -22,6 +22,7 @@ local IsGUIDInGroup = IsGUIDInGroup
 local NotifyInspect = NotifyInspect
 local UnitIsConnected = UnitIsConnected
 local debugprofilestop = debugprofilestop
+local geterrorhandler = geterrorhandler
 local hooksecurefunc = hooksecurefunc
 local ipairs = ipairs
 local pairs = pairs
@@ -218,9 +219,14 @@ local function OnInspectReady(guid)
         end
         snap.spec = spec
         readingGUID = guid
+        -- An owner's error reaches the error handler, and the answer still
+        -- finishes for every owner.
         Rules.Dispatch(owners, function(owner)
             local fn = owner.callbacks.OnRead
-            if fn then fn(guid, unit, snap) end
+            if fn then
+                local ok, err = pcall(fn, guid, unit, snap)
+                if not ok then geterrorhandler()(err) end
+            end
         end)
         readingGUID = nil
     end
