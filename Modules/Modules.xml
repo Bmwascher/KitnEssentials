@@ -1,9 +1,11 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
-    <!-- Load order is behavior: AceAddon creates, initializes and enables
-         modules in file order, and files above Skinning\SkinAPI.lua cannot
-         capture KE.Skins at file scope. Put a new file where its load
+    <!-- Load order is behavior: AceAddon creates and initializes modules in
+         file order, and files above Skinning\SkinAPI.lua cannot capture
+         KE.Skins at file scope. A module that starts disabled is enabled
+         by Core\Main.lua through IterateModules, a pairs walk, so its
+         enable order is not file order. Put a new file where its load
          dependencies need it, not by folder. -->
     <Script file="QoL\GroupTools\RaidNotifications.lua" />
     <Script file="Combat\StatusTexts\NoMovementAlert.lua" />
