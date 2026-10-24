@@ -158,6 +158,7 @@ local FRAME_SKINS = {
     { key = "Socket",                   text = "Item Socketing" },
     { key = "SpellBook",                text = "Professions Book" },
     { key = "Stable",                   text = "Stable" },
+    { key = "Statistics",               text = "Statistics" },
     { key = "SubscriptionInterstitial", text = "Subscription Popup" },
     { key = "Tabard",                   text = "Tabard Designer" },
     { key = "TalkingHead",              text = "Talking Head" },

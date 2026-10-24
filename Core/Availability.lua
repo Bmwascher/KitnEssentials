@@ -249,6 +249,7 @@ local FOREVER_FRAME_SKINS = {
 local FOREVER_ONLY_FRAME_SKINS = {
     LegacySystem = true,
     Skills = true,
+    Statistics = true,
 }
 
 -- Whether a skin registered under `key` may run and show a Frame Skins row.

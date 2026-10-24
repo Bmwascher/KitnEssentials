@@ -56,6 +56,7 @@
     <Script file="Skills.lua" />
     <Script file="Socket.lua" />
     <Script file="Stable.lua" />
+    <Script file="Statistics.lua" />
     <Script file="SubscriptionInterstitial.lua" />
     <Script file="Tabard.lua" />
     <Script file="TalkingHead.lua" />
