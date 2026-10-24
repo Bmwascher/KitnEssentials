@@ -369,7 +369,7 @@ function DM:LayoutDock()
     -----------------------------------------------------------------------------
     -- Shared per-layout geometry (computed ONCE)
     -----------------------------------------------------------------------------
-    local headerH = KE:PixelSnap((db.FontSize or 12) + 6)
+    local headerH = self:HeaderBandHeight()
     local spacing = KE:PixelSnap(db.BarSpacing or 2)
     local stride  = KE:PixelSnap(db.BarHeight or 16) + spacing
     if stride <= 0 then stride = 1 end
@@ -761,7 +761,7 @@ function DM:UpdateBackdrop()
     skin:SetFrameLevel(dock:GetFrameLevel())
     skin:ClearAllPoints()
     if cfg.Enabled and db.BackdropBehindBarsOnly then
-        local headerH = self._dockHeaderH or KE:PixelSnap((db.FontSize or 12) + 6)
+        local headerH = self._dockHeaderH or self:HeaderBandHeight()
         skin:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -headerH)
         skin:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, 0)
     else
@@ -1553,7 +1553,7 @@ function DM:GetRowBoundaryRange(colIdx, rowIdx)
 
     -- Header band + per-bar stride: prefer the values LayoutDock stashed (exact
     -- pixel-snapped match to the splitter); recompute from db if not laid out yet.
-    local headerH = self._dockHeaderH or KE:PixelSnap((db.FontSize or 12) + 6)
+    local headerH = self._dockHeaderH or self:HeaderBandHeight()
     local spacing = self._dockSpacing or KE:PixelSnap(db.BarSpacing or 2)
     local stride = self._dockStride or (KE:PixelSnap(db.BarHeight or 16) + spacing)
     if stride <= 0 then stride = 1 end

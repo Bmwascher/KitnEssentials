@@ -435,11 +435,8 @@ function DM:CreateWindow(winIdx)
         size = size or 15
         local b = CreateFrame("Button", nil, W.frame)
         b:SetSize(size, size)
-        -- Right edges stay on the 18px step grid, so a 15px icon leaves a 3px
-        -- gap. An icon larger than that baseline grows LEFT into its own empty
-        -- slot and rises by half the size delta (top -2) so every icon shares one
-        -- vertical center line. Top -2 centers 15px inside the 18px header band.
-        b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -2 - ((15 - size) / 2))
+        -- DM:AnchorHeaderButtons places it from these on every header layout.
+        b._xStep, b._size = xStep, size
         b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
         b.icon = b:CreateTexture(nil, "OVERLAY")
         b.icon:SetAllPoints(b)
@@ -619,38 +616,61 @@ end
 -- OnSizeChanged handler remains the safety net that re-syncs content width when
 -- the dock resizes the frame.
 ---------------------------------------------------------------------------------
+-- The header action buttons step left from the frame's TOPRIGHT on an 18px
+-- grid. By default a 15px icon sits at top -2, centered in an 18px band, and a
+-- larger icon grows left and rises by half the size delta so every icon shares
+-- one center line. A set Header Height centers each button on the band instead.
+function DM:AnchorHeaderButtons(W, headerH, centerBtns)
+    if not W.headerBtns then return end
+    for _, b in pairs(W.headerBtns) do
+        local xStep, size = b._xStep or 0, b._size or 15
+        b:ClearAllPoints()
+        if centerBtns then
+            b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -math_floor((headerH - size) / 2))
+        else
+            b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -2 - ((15 - size) / 2))
+        end
+    end
+end
+
 function DM:LayoutWindow(W)
     local db = self.db
-    -- The header band + meter-type glyph track the HEADER font size (the per-header
-    -- override, falling back to the shared FontSize when unset). Bar TEXT size (FontSize)
-    -- drives row layout via the snapped stride, not this band.
+    -- The meter-type glyph tracks the HEADER font size (the per-header override,
+    -- falling back to the shared FontSize when unset); the band is HeaderBandHeight.
+    -- Bar TEXT size (FontSize) drives row layout via the snapped stride, not this band.
     local headerFontSize = (db and (db.HeaderFontSize or db.FontSize)) or 12
+    local headerH = self:HeaderBandHeight()
+    local centerBtns = type(db and db.HeaderHeight) == "number"
     local visibleDB = (db and db.VisibleBars) or 10
     local stride = W._snapStride or 1
 
-    -- Input-identity short-circuit. The header band derives ONLY from HeaderFontSize, and
-    -- the content height from VisibleBars + the snapped stride and spacing -- all plain
-    -- numbers, never secret. RenderWindow calls this every tick; when none of those changed
-    -- the PixelSnap / min / multiply below reproduce the identical result, so skip them.
-    -- ApplyWindowGeometry updates _snapStride before calling here, so keying on it
-    -- keeps a bar-size change from being short-circuited away. Spacing is keyed too: a
-    -- profile can keep the stride while the spacing changes, and the height follows both.
-    if W._lwHeaderFontSize == headerFontSize and W._lwVisibleBars == visibleDB and W._lwStride == stride
-        and W._lwSpacing == W._snapSpacing then
+    -- Input-identity short-circuit over plain numbers only. RenderWindow calls this
+    -- every tick; when none of these changed the work below reproduces the identical
+    -- result. ApplyWindowGeometry updates _snapStride before calling here, so keying on
+    -- it keeps a bar-size change from being short-circuited away. Spacing is keyed too:
+    -- a profile can keep the stride while the spacing changes.
+    if W._lwHeaderFontSize == headerFontSize and W._lwHeaderH == headerH and W._lwCenterBtns == centerBtns
+        and W._lwVisibleBars == visibleDB and W._lwStride == stride and W._lwSpacing == W._snapSpacing then
         return
     end
-    W._lwHeaderFontSize, W._lwVisibleBars, W._lwStride = headerFontSize, visibleDB, stride
+    W._lwHeaderFontSize, W._lwHeaderH, W._lwCenterBtns = headerFontSize, headerH, centerBtns
+    W._lwVisibleBars, W._lwStride = visibleDB, stride
     W._lwSpacing = W._snapSpacing
-
-    -- Fixed header band (header-font-size driven, snapped). The header FontString is
-    -- anchored TOPLEFT inside this band; the body starts immediately below it.
-    local headerH = KE:PixelSnap(headerFontSize + 6)
 
     -- Body height fits VisibleBars rows (clamped to the pool). Guard a 0 stride.
     local visible = math_min(visibleDB, BAR_POOL_SIZE)
     if stride <= 0 then stride = 1 end
     local barsH = DM.RowSpan(visible, stride, W._snapSpacing)
     self:EnsureBars(W, visible)
+
+    -- The meter-type glyph sits a bit larger than the header text and is vertically
+    -- centered in the band -- anchored to the header strip (W.headerBar spans exactly
+    -- the band), so it tracks the band height without any manual offset math.
+    if W.headerIcon and W.headerBar then
+        local iconSize = headerFontSize + 4
+        W.headerIcon:SetSize(iconSize, iconSize)
+    end
+    self:AnchorHeaderButtons(W, headerH, centerBtns)
 
     -- Re-anchor the body only when the header band changes (first call always
     -- runs; SetPoint is idempotent so re-running is harmless either way).
@@ -661,13 +681,6 @@ function DM:LayoutWindow(W)
         W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
         -- Keep the header hover region spanning exactly the header band.
         if W.headerBar then W.headerBar:SetHeight(headerH) end
-        -- The meter-type glyph sits a bit larger than the header text and is vertically
-        -- centered in the band -- anchored to the header strip (W.headerBar spans exactly
-        -- the band), so it tracks the band height without any manual offset math.
-        if W.headerIcon and W.headerBar then
-            local iconSize = headerFontSize + 4
-            W.headerIcon:SetSize(iconSize, iconSize)
-        end
         self:AnchorHeaderStart(W)
         -- The detail panel covers the same area as the body; keep its top edge in
         -- sync with the header band. Its anchor was baked at EnsureDetail time, so a

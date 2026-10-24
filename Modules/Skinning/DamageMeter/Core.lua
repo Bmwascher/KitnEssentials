@@ -387,6 +387,18 @@ DM.FillMissingDefaults = FillMissing
 -- per combat tick), so iterating every built window's pool is acceptable cost.
 ---------------------------------------------------------------------------------
 
+-- The header band's height: the Header Height when one is set, never under the
+-- header text + 2 so the title is not clipped; else the header text + 6.
+function DM:HeaderBandHeight()
+    local db = self.db
+    local text = (db and (db.HeaderFontSize or db.FontSize)) or 12
+    local custom = db and db.HeaderHeight
+    if type(custom) == "number" then
+        return KE:PixelSnap(math.max(custom, text + 2))
+    end
+    return KE:PixelSnap(text + 6)
+end
+
 function DM:ApplySettings()
     if not self.db then self:UpdateDB() end
     if not self.enabled then return end
