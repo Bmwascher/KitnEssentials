@@ -324,11 +324,13 @@ function KT:AttributeMeter(T, sid)
     read.sid = sid
     self:ReleasePetSwaps(read, base)
     self.meterBase, self.meterRead = read, base
+    -- A new fight keeps the expected counts: one inside PAIR_WINDOW is a
+    -- readable kick of this fight, already charged, and growth from nothing
+    -- would charge it again.
     if shrank then
         prevRows = EMPTY
         wipe(prevN)
         wipe(self.meterPrevA)
-        wipe(self.meterExpected)
     end
 
     local e = self:DecisionInputs(T, byUnit)
