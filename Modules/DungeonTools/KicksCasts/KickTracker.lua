@@ -128,7 +128,7 @@ KT.editModeRegistered = false
 KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview override)
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
-KT.partyMembers = {}     -- [guid] = { unit, name, classToken, matchClass, specID, interruptData, kickStart, kickDuration }
+KT.partyMembers = {}     -- [guid] = { unit, name, classToken, matchClass, specID, interruptData, kickStart, kickDuration, inspect }
 
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
@@ -184,8 +184,10 @@ function KT:GetInterruptDataForSpec(specID)
     return KickRow(kick.id, kick.cd, specID)
 end
 
-function KT:ApplySpecKick(member, specID)
-    member.interruptData = self:GetInterruptDataForSpec(specID)
+-- The spec's kick, and the inspect snapshot its talents come from
+-- (KT.LearnFacts).
+function KT:ApplySpecKick(member, specID, snap)
+    KT.LearnFacts(member, snap, self:GetInterruptDataForSpec(specID))
     member.specID = specID
 end
 
@@ -318,9 +320,17 @@ function KT:RefreshPartyRoster()
                         member.specID = specID
                         self:ApplyOwnKicks(member, specID)
                     end
-                elseif not member.interruptData then
-                    -- Not inspected yet: the class kick, so the bar exists.
-                    member.interruptData = self:GuessClassInterrupt(unit, classToken)
+                else
+                    local snap = self.inspectHandle and self.inspectHandle:Get(guid)
+                    local spec = snap and snap.spec
+                    if type(spec) == "number" and spec > 0 then
+                        if member.inspect ~= snap or member.specID ~= spec then
+                            self:ApplySpecKick(member, spec, snap)
+                        end
+                    elseif not member.interruptData then
+                        -- Not inspected yet: the class kick, so the bar exists.
+                        member.interruptData = self:GuessClassInterrupt(unit, classToken)
+                    end
                 end
             end
         end
@@ -336,27 +346,27 @@ function KT:RefreshPartyRoster()
         end
     end
 
+    self:UpdateInspectDemand()
     self:UpdateBars()
     self:LayoutBars()
 end
 
+-- The player's own spec; teammates' specs come from inspection
+-- (KT:OnInspectRead).
 function KT:ApplySpecData(guid, unit, specID)
     local _, classToken = UnitClass(unit)
     local member = self.partyMembers[guid]
     if member then
         SetMemberClass(member, classToken)
-        if unit == "player" then
-            member.specID = specID
-            self:ApplyOwnKicks(member, specID)
-        else
-            self:ApplySpecKick(member, specID)
-        end
+        member.specID = specID
+        self:ApplyOwnKicks(member, specID)
         self:UpdateBars()
         self:LayoutBars()
     end
 end
 
-function KT:OnPlayerSpecChanged()
+function KT:OnPlayerSpecChanged(_, unit)
+    self:RefreshInspectedSpec(unit)
     local specID = GetPlayerSpecID()
     if not specID or specID == 0 then return end
 
@@ -370,6 +380,87 @@ function KT:OnPlayerSpecChanged()
         self:ApplySettings()
         self:RefreshEditMode()  -- relabel overlay if spec crossed the healer boundary
     end
+end
+
+---------------------------------------------------------------------------------
+-- Teammate facts (the shared inspector)
+---------------------------------------------------------------------------------
+-- Subscribed on the first activation, never at load or while disabled.
+-- Without the inspector teammates keep the class kick.
+function KT:EnsureInspect()
+    if self.inspectHandle or not KE.GroupInspect then return end
+    self.inspectHandle = KE.GroupInspect:Subscribe("KickTracker", {
+        Wants = function(guid) return KT:WantsInspect(guid) end,
+        OnRead = function(guid, _, snapshot) KT:OnInspectRead(guid, snapshot) end,
+        OnChanged = function(guid, snapshot) KT:OnInspectChanged(guid, snapshot) end,
+    })
+end
+
+-- The teammates, party1 to party4, while the tracker is active: a new list
+-- each time, since the inspector reads the entries live and never writes them.
+function KT:UpdateInspectDemand()
+    local handle = self.inspectHandle
+    if not handle then return end
+    if not self.isActive then
+        handle:SetDemand(nil)
+        return
+    end
+    local list = {}
+    for i = 1, 4 do
+        local unit = "party" .. i
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit == unit then list[#list + 1] = { guid = guid, unit = unit } end
+        end
+    end
+    handle:SetDemand(list)
+end
+
+-- A teammate is wanted while their snapshot is missing, its spec unknown, it
+-- is stale, or the spec's kick talents are not all covered.
+function KT:WantsInspect(guid)
+    local member = self.partyMembers[guid]
+    if not member or member.unit == "player" or not self.inspectHandle then return false end
+    local snap = self.inspectHandle:Get(guid)
+    local spec = snap and snap.spec
+    if not snap or snap.stale or type(spec) ~= "number" or spec <= 0 then return true end
+    for talent in pairs(KE:GetKickTalentDemand(spec)) do
+        if not (snap.covered and snap.covered[talent]) then return true end
+    end
+    return false
+end
+
+-- Inside the inspector's answer: the rank read, and nothing else.
+function KT:OnInspectRead(guid, snapshot)
+    local handle = self.inspectHandle
+    if not handle or not self.partyMembers[guid] then return end
+    local spec = snapshot and snapshot.spec
+    if type(spec) ~= "number" or spec <= 0 then return end
+    local demand = KE:GetKickTalentDemand(spec)
+    if next(demand) then handle:ReadRanks(guid, spec, demand) end
+end
+
+-- After the answer: the row follows the inspected spec, and the snapshot
+-- gives the talent ranks (KT.SnapshotRank).
+function KT:OnInspectChanged(guid, snapshot)
+    local member = self.partyMembers[guid]
+    if not self.isActive or not member or member.unit == "player" then return end
+    local spec = snapshot and snapshot.spec
+    if type(spec) ~= "number" or spec <= 0 then return end
+    self:ApplySpecKick(member, spec, snapshot)
+    self:UpdateBars()
+    self:LayoutBars()
+end
+
+-- A teammate's respec marks their snapshot stale and wakes the queue. Their
+-- row keeps its last spec, with its talents unknown, until the re-read.
+function KT:RefreshInspectedSpec(unit)
+    local handle = self.inspectHandle
+    if not handle or not self.isActive or issecretvalue(unit) or type(unit) ~= "string" then return end
+    if not string_find(unit, "^party[1-4]$") then return end
+    local guid = KE:GetSafeUnitGUID(unit)
+    if not guid or not self.partyMembers[guid] then return end
+    handle:Refresh(guid, "spec")
+    handle:Wake()
 end
 
 ---------------------------------------------------------------------------------
@@ -1016,6 +1107,7 @@ function KT:CheckActivation()
         self._meterReadPending, self._meterBurstExtra = false, 0
         wipe(self.meterBurstSessions)
         self:RegisterCombatEvents()
+        self:EnsureInspect()
         if self.containerFrame then
             self:ApplyContainerPosition()
             self.containerFrame:Show()
@@ -1027,6 +1119,7 @@ function KT:CheckActivation()
         self:HideAllBars()
         if self.containerFrame then self.containerFrame:Hide() end
         wipe(self.partyMembers)
+        self:UpdateInspectDemand()
     end
 end
 
@@ -1969,6 +2062,10 @@ function KT:OnDisable()
     self:ClearKickQueues()
     self:HideAllBars()
     wipe(self.partyMembers)
+    if self.inspectHandle then
+        self.inspectHandle:Release()
+        self.inspectHandle = nil
+    end
 
     self.isActive = false
     self.isPreview = false
