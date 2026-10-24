@@ -126,6 +126,14 @@ local function OpenImportPrompt()
     )
 end
 
+-- The Copy from Retail popup is offered once per account, on a baseline load.
+---@param baselineLoad boolean?
+---@param seen boolean?
+---@return boolean
+function GUIFrame.ShouldOfferRetailCopy(baselineLoad, seen)
+    return baselineLoad == true and seen ~= true
+end
+
 ---------------------------------------------------------------------------------
 -- Profile tab
 ---------------------------------------------------------------------------------
