@@ -5324,7 +5324,6 @@ function DT:_StopBossAppearWatch()
     self:UnregisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 end
 
--- Registered only for an encounter with a boss-appear cue.
 function DT:_StartBossAppearWatch(id)
     local byEncounter = self._bindings and self._bindings.bossAppear
     local units = id and byEncounter and byEncounter[id]
@@ -5352,7 +5351,6 @@ function DT:OnBossAppearEvent()
     end
 end
 
--- The cue draws under the one boss module admitted for the active encounter.
 function DT:_ShowBossAppearCue(cueKey, now)
     if not self:ShouldShowSpell(cueKey) then
         dprint("boss appear suppressed reason=filtered cue=" .. cueKey)
