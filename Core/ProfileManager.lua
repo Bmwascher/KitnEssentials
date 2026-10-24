@@ -352,6 +352,90 @@ function KE:DecodeFromExport(encoded)
 end
 
 ---------------------------------------------------------------------------------
+-- Client filter
+---------------------------------------------------------------------------------
+-- A string from another client can carry blocks of modules this one does not
+-- run. They are dropped, so a later admission starts from defaults rather than
+-- from the other client's spell ids and spec lists. A block keyed by anything
+-- but a name, or whose type is not its default's, is malformed and dropped on
+-- every client. A nested container is kept even when emptied: AceDB refills
+-- its sub-blocks from the defaults.
+
+-- Keys whose split at case changes reads wrong.
+local BLOCK_LABELS = {
+    DoTTracker = "DoT Tracker",
+}
+
+local function BlockLabel(key)
+    if BLOCK_LABELS[key] then return BLOCK_LABELS[key] end
+    return (key:gsub("(%l)(%u)", "%1 %2"):gsub("(%u)(%u%l)", "%1 %2"))
+end
+
+local function Malformed(value, default)
+    return default ~= nil and type(value) ~= type(default)
+end
+
+-- Blocks whose Enabled only keeps a container page reachable: they are on
+-- when one of these feature switches is.
+local FEATURE_SWITCHES = {
+    KeystoneHelper = { "ResetEnabled", "RerollEnabled", "YourKeyEnabled" },
+}
+
+local function SwitchOn(block, default, field)
+    if block[field] ~= nil then return block[field] == true end
+    return type(default) == "table" and default[field] == true
+end
+
+local function WasOn(key, block, default)
+    local switches = FEATURE_SWITCHES[key]
+    if not switches then return SwitchOn(block, default, "Enabled") end
+    for i = 1, #switches do
+        if SwitchOn(block, default, switches[i]) then return true end
+    end
+    return false
+end
+
+-- Removes container[key], naming it in `dropped` when it was turned on.
+local function Drop(container, key, default, dropped)
+    local block = container[key]
+    if type(block) == "table" and WasOn(key, block, default) then
+        dropped[#dropped + 1] = BlockLabel(key)
+    end
+    container[key] = nil
+end
+
+--- Removes, in place, every block this client may not keep. Returns the
+--- labels of removed blocks that were turned on, sorted.
+---@param profile table
+---@param defaults table? the profile section of the defaults
+---@return string[] dropped
+function ProfileManager.FilterForClient(profile, defaults)
+    local dropped = {}
+    for key, block in pairs(profile) do
+        local default = defaults and defaults[key]
+        if type(key) ~= "string" or Malformed(block, default) then
+            profile[key] = nil
+        else
+            local kind, owner = KE:ProfileBlockOwner(key)
+            if kind == "nested" and type(block) == "table" then
+                for subKey, sub in pairs(block) do
+                    local subDefault = type(default) == "table" and default[subKey] or nil
+                    if type(subKey) ~= "string" or Malformed(sub, subDefault) then
+                        block[subKey] = nil
+                    elseif not KE:IsFeatureAvailable(subKey) then
+                        Drop(block, subKey, subDefault, dropped)
+                    end
+                end
+            elseif kind == "feature" and not KE:IsFeatureAvailable(owner) then
+                Drop(profile, key, default, dropped)
+            end
+        end
+    end
+    table.sort(dropped)
+    return dropped
+end
+
+---------------------------------------------------------------------------------
 -- Import / Export
 ---------------------------------------------------------------------------------
 
@@ -436,6 +520,13 @@ function ProfileManager:InstallProfile(profileData, targetName)
     -- Before the copy, so a string exported before a rename lands converted
     -- and no old key reaches KE.db.
     KE:MigrateProfileKeys(profileData)
+
+    -- After the renames, so a renamed block is judged under its new name.
+    local defaults = KE.GetDefaultDB and KE:GetDefaultDB()
+    local dropped = ProfileManager.FilterForClient(profileData, defaults and defaults.profile)
+    if #dropped > 0 then
+        KE:Print("Not available on this client: " .. table.concat(dropped, ", "))
+    end
 
     -- Create the profile
     local currentProfile = self:GetCurrentProfile()

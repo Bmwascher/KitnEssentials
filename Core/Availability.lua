@@ -103,6 +103,41 @@ function KE:IsBaselineLoad()
     return not RETAIL
 end
 
+-- Which feature owns each top-level profile block, for imports and exports
+-- that drop what this client does not run. A core key always stays, a nested
+-- container's sub-blocks are each judged by their own key, and any other
+-- block is owned by the mapped id or else by the module of its own name.
+local PROFILE_CORE_KEYS = {
+    ShowChatMessage = true,
+    ExpandSidebarOnOpen = true,
+    UseSlugFonts = true,
+    GlobalFont = true,
+    Minimap = true,
+    UseElvUI = true,
+}
+local NESTED_PROFILE_BLOCKS = {
+    Dungeons = true,
+}
+local PROFILE_BLOCK_OWNERS = {
+    -- It holds the CVars page's keys beside Automation's own.
+    Automation = "CVars",
+    -- Each sub-block belongs to a module the skinning engine runs.
+    Skinning = "SkinAPI",
+    -- No module carries the name; the id is the settings row's.
+    SlashCommands = "SlashCommands",
+}
+
+---@param key string
+---@return string kind "core", "nested" or "feature"
+---@return string? owner the owning feature id, for "feature"
+---@return boolean? mapped true when the owner comes from the map
+function KE:ProfileBlockOwner(key)
+    if PROFILE_CORE_KEYS[key] then return "core" end
+    if NESTED_PROFILE_BLOCKS[key] then return "nested" end
+    local mapped = PROFILE_BLOCK_OWNERS[key]
+    return "feature", mapped or key, mapped ~= nil
+end
+
 -- Entries are { id = ... } tables: sidebar rows and sub-tabs. The same list
 -- comes back when nothing is withheld.
 ---@param entries table[]

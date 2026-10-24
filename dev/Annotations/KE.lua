@@ -1305,6 +1305,15 @@ function KE:IsFeatureAvailable(featureId) end
 ---@return boolean
 function KE:IsBaselineLoad() end
 
+--- How an import or export judges a top-level profile block: "core" always
+--- stays, "nested" is judged per sub-block, "feature" follows the owner id
+--- returned with it (Core/Availability.lua).
+---@param key string
+---@return string kind
+---@return string? owner
+---@return boolean? mapped
+function KE:ProfileBlockOwner(key) end
+
 --- Turns on per-spec profiles for db where this client admits them; false
 --- when the library is absent or the feature is withheld.
 ---@param db AceDB
