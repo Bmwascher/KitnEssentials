@@ -286,8 +286,8 @@ local ReloadAccept = KE:NewReloadAccept()
 
 -- The accept click. On a reload prompt the reload is asked for first: a client
 -- can refuse one asked for after the prompt has closed and other work has run.
--- It happens when the click's code ends. The close and the reload are passed
--- in so the order is testable without frames. Branch on the per-call FLAGS,
+-- The reload itself runs when the click's code ends. The close and the reload
+-- are passed in so the order is testable without frames. Branch on the per-call FLAGS,
 -- never on widget existence — the singleton keeps editBox/editBox2 around
 -- across modes. Confirm mode must invoke with ZERO args.
 function KE.RunPromptAccept(dialog, closePrompt, reload)
