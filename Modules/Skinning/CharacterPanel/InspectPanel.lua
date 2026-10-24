@@ -587,7 +587,7 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
                 or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
                 CP:UpdateSlotDetail(button, slotID, unit, true, data)
             end
-            if CP.db.TrackIndicatorsEnabled then
+            if CP:TrackLettersOn() then
                 CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
             end
             return
@@ -606,7 +606,7 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
         or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
         fellBack, wDetail = CP:UpdateSlotDetail(button, slotID, unit, nil, data)
     end
-    if CP.db.TrackIndicatorsEnabled then
+    if CP:TrackLettersOn() then
         wCorner = CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
     end
 

@@ -46,6 +46,17 @@ local function ElvUILoaded()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
 end
 
+-- Features a client can withhold, read once: the answers cannot change during
+-- a session. A headless load without the availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local MYTHIC_PLUS = Admitted("CharacterPanelMythicPlus")
+local TRACKS = Admitted("CharacterPanelTracks")
+local SOCKETS = Admitted("CharacterPanelSockets")
+local ENCHANT_RANK = Admitted("CharacterPanelEnchantRank")
+local WIDEN = Admitted("CharacterPanelWiden")
+
 -- 12.1 removed the IsLevelAtEffectiveMaxLevel global; Blizzard code now
 -- compares against GameRulesUtil.GetEffectiveMaxLevelForPlayer (GameRulesUtil.lua).
 local function IsLevelAtEffectiveMaxLevel(level)
@@ -104,6 +115,7 @@ local gemSlotButtons = {
     [INVSLOT_FINGER1] = "CharacterFinger0Slot",
     [INVSLOT_FINGER2] = "CharacterFinger1Slot",
 }
+if not SOCKETS then gemSlotButtons = {} end
 
 -- Gem socket types for socket helper scanning. Canonical list lives on KE
 -- (Core/Globals.lua) because the Character window skin needs the same one.
@@ -124,7 +136,7 @@ local SOCKET_LINE_TYPE = (Enum and Enum.TooltipDataLineType and Enum.TooltipData
 local DEBUG_CP = false
 
 -- Slot IDs the gem socket helper scans.
-local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
+local socketableSlots = SOCKETS and { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 } or {}
 
 -- Set form of socketableSlots for O(1) membership (used by per-slot detail gems).
 local socketableSlotSet = {}
@@ -514,7 +526,7 @@ function CP:ResolveEnchantLabel(unit, slot, data)
     -- knows to read the slot again.
     if not name then return "Enchanted", true end
     name = ProcessEnchantText(name, self.db.EnchantNameStyle)
-    return FinishEnchantLabel(name, rank, self.db.ShowEnchantRank)
+    return FinishEnchantLabel(name, rank, ENCHANT_RANK and self.db.ShowEnchantRank)
 end
 
 function CP:GetSlotItemLevel(unit, slot)
@@ -723,6 +735,7 @@ end
 -- each re-scanned all 11 socketable slots; this folds a burst into one scan.
 local socketRefreshPending = false
 local function QueueSocketRefresh()
+    if not SOCKETS then return end
     if socketRefreshPending then return end
     if not CP:IsEnabled() then return end
     if not (PaperDollFrame and PaperDollFrame:IsShown()) then return end
@@ -807,6 +820,7 @@ local WIDEN_BY = 40
 local function ExtraWidth()
     local db = CP.db
     if not db or not db.WiderFrame then return 0 end
+    if not WIDEN then return 0 end
     -- The module's LIFECYCLE STATE, not the preference key. The hooks below
     -- install once and cannot be removed, so without this they keep re-widening
     -- after the module is switched off -- and the control for this setting lives
@@ -1481,6 +1495,7 @@ function CP:ShowRaceText()
     if not self:IsEnabled() then return end
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
+    if not MYTHIC_PLUS then return end
     -- EUI has already re-anchored the level string into its own header, so our
     -- line would land on top of its text. Stand down rather than fight over the
     -- anchor.
@@ -1531,6 +1546,12 @@ local function CraftedCrestTrack(link)
 end
 CP._CraftedCrestTrack = CraftedCrestTrack
 
+-- The track letter setting, read through the client's availability so a saved
+-- key cannot draw letters where items carry no track.
+function CP:TrackLettersOn()
+    return TRACKS and self.db.TrackIndicatorsEnabled and true or false
+end
+
 -- Returns a WRAPPER, never an ITEM_TRACKS entry: the entries are a shared
 -- constant, and writing the per-slot count onto one would leak that count onto
 -- every other slot of the same track.
@@ -1538,6 +1559,7 @@ CP._CraftedCrestTrack = CraftedCrestTrack
 -- tooltip prints no upgrade line. Crafted gear has no track there, and its
 -- crest id gives the tier without a tooltip.
 function CP:GetItemTrack(unit, slotID, data)
+    if not TRACKS then return nil end
     unit = unit or "player"
     local link = GetInventoryItemLink(unit, slotID)
     if not link then return nil end
@@ -1684,9 +1706,10 @@ function CP:InspectEnchantPending(unit, slotID, held, provisional, fellBack, enc
 end
 
 function CP:InspectTrackPending(unit, held, provisional, data, w)
+    if not TRACKS then return nil end
     local db = self.db
     if not (held and db) or w then return nil end
-    local corner = db.TrackIndicatorsEnabled
+    local corner = self:TrackLettersOn()
     local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
     if not (corner or mergedOnly) then return nil end
     if not (provisional or TrackPending(held, data)) then return nil end
@@ -1833,7 +1856,7 @@ function CP:RefreshSlotDisplays()
     if not self:IsEnabled() then return end
     wipe(_lastSlotState)
     InvalidateInspectSlots()
-    if self.db.TrackIndicatorsEnabled then
+    if self:TrackLettersOn() then
         self:UpdateAllTrackIndicators()
     else
         self:HideAllTrackIndicators()
@@ -1842,7 +1865,7 @@ function CP:RefreshSlotDisplays()
 end
 
 function CP:UpdateAllTrackIndicators()
-    if not self.db.TrackIndicatorsEnabled then return end
+    if not self:TrackLettersOn() then return end
     for slotID, frameName in pairs(SLOT_FRAMES) do
         self:UpdateSlotTrackIndicator(_G[frameName], slotID, "player")
     end
@@ -1870,7 +1893,7 @@ end
 
 function CP:SetupTrackIndicators()
     if not self:IsEnabled() then return end
-    if not self.db.TrackIndicatorsEnabled then return end
+    if not self:TrackLettersOn() then return end
     if self._trackIndicatorsHooked then return end
     self._trackIndicatorsHooked = true
     -- Track indicators register on PaperDollFrame OnShow via the combined
@@ -2103,7 +2126,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     -- is wiped when the inspect frame hides, so a reopen is the reliable trigger.
     local wantsText = (self.db.ShowEnchantNames and not euiOwnsEnchant)
         or (self.db.ShowSlotItemLevel and not euiOwnsIlvl)
-    local wantsGems = (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+    local wantsGems = SOCKETS and (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
         and not euiOwnsGems and not suppressGems
     if not (wantsText or wantsGems) then
         local existing = FFD[slotFrame]
@@ -2185,7 +2208,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         local span
         w = self:GetItemTrack(unit, slotID, data)
         if MergeTrackIntoIlvl(self.db, w, euiOwnsIlvl, euiOwnsTrack) then
-            span = UpgradeSpan(w, self.db.TrackIndicatorsEnabled, true)
+            span = UpgradeSpan(w, self:TrackLettersOn(), true)
         end
 
         local base
@@ -2260,7 +2283,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         -- GetInventoryItemLink, not the `link` from the dirty check: that one is
         -- scoped to the block above and the inspect path never computes it. This
         -- is a cached string lookup, not another tooltip allocation.
-        s.detailTrackPending = TrackPending(GetInventoryItemLink(unit, slotID), data)
+        s.detailTrackPending = TRACKS and TrackPending(GetInventoryItemLink(unit, slotID), data) or nil
     end
 
     -- Transparent container — element visibility controls what's drawn.
@@ -2299,12 +2322,12 @@ function CP:RefreshSlot(slotID, unit)
     -- that stand-down is what hides the leftover frame and clears the dirty key.
     -- Gating the call on ownership instead would leave KE's old text sitting on
     -- top of EUI's, stale, until something else refreshed the slot.
-    local wantsTrack  = self.db.TrackIndicatorsEnabled
+    local wantsTrack  = self:TrackLettersOn()
         and not KE:EUIDrawsSlotElement(unit, "track")
     local wantsDetail =
         (self.db.ShowSlotItemLevel and not KE:EUIDrawsSlotElement(unit, "ilvl"))
         or (self.db.ShowEnchantNames and not KE:EUIDrawsSlotElement(unit, "enchant"))
-        or ((self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+        or (SOCKETS and (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
             and not KE:EUIDrawsSlotElement(unit, "gems"))
     local data
     if wantsTrack or wantsDetail then
@@ -2313,7 +2336,7 @@ function CP:RefreshSlot(slotID, unit)
 
     -- The track overlay has no enable check of its own, so the setting is still
     -- the caller's to test. UpdateSlotDetail tests every one of its own.
-    if self.db.TrackIndicatorsEnabled then
+    if self:TrackLettersOn() then
         self:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     end
     self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
@@ -3088,6 +3111,7 @@ function CP:RefreshSocketButtons()
     -- Two socket-click timers land here a tenth of a second later, and the
     -- guards below cannot see a teardown: the container is only hidden, never
     -- released, and the preference key is untouched.
+    if not SOCKETS then return end
     if not self:IsEnabled() then return end
     if not self.socketContainer then return end
     if not self.db.SocketHelperEnabled then return end
@@ -3332,6 +3356,7 @@ function CP:HideSlotHighlight()
 end
 
 function CP:SetupGemSocketHelper()
+    if not SOCKETS then return end
     if not self:IsEnabled() then return end
     if not self.db.SocketHelperEnabled then return end
     if self._gemSocketHooked then return end
@@ -3965,6 +3990,7 @@ end
 -- without the gem's item data (Blizzard PaperDollFrame pattern).
 function CP:PrimeGemCache(_, isInitialLogin)
     if not isInitialLogin then return end
+    if not SOCKETS then return end
     -- Only warm what a gem feature will actually render (ShowMissingGems is
     -- default-on, hence the ~= false form matching UpdateSlotDetail's gate).
     if not (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false or self.db.SocketHelperEnabled) then
@@ -4032,8 +4058,8 @@ function CP:OnEnable()
 
     -- Warm the gem cache during the login loading screen (see PrimeGemCache).
     -- AceEvent unregisters automatically on module disable.
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache")
-    self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "ShowRaceText")
+    if SOCKETS then self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache") end
+    if MYTHIC_PLUS then self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "ShowRaceText") end
 
     -- Score line: if the character pane is already shown when the module
     -- enables (e.g. toggled on with the pane open), the PaperDollFrame
