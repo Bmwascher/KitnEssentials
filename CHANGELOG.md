@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.9
+
+### WoW Forever
+
+- Character Panel, Inspect Panel and Compare Header, with their settings
+  page; Mythic+ score, upgrade tracks, gems and the socket helpers, enchant
+  rank, Widen Character Window and Window Buttons are hidden
+- Missing-enchant warnings on back, chest, wrist, hands, feet, main hand and
+  a shield, at level 60
+- Item level and enchant text on the ranged slot, and above the off hand
+- The inspect item level shows once the inspected gear has loaded
+- The header and stat fonts fit the two-pane Character window, including the
+  pet stats list
+- Dark Theme skins for the PvP Rank, Skills and Statistics pages
+- Retail profile strings keep their Character Panel and Compare Header
+  settings
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.8
 
 ### Dungeon Timers
