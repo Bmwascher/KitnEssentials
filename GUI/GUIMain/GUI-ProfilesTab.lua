@@ -3,7 +3,8 @@
 -- ║  GUI: Profile Manager                                    ║
 -- ║  Purpose: The Profiles page as three sub-tabs: Profile   ║
 -- ║  (switch, create, copy, rename, global mode), Sharing    ║
--- ║  (export, import) and Reset (delete, reset).             ║
+-- ║  (export, import, copy from Retail) and Reset (delete,   ║
+-- ║  reset).                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -74,9 +75,26 @@ local function AutoFillName(text, dialog)
     dialog.editBox:SetText(name)
 end
 
--- Shared by the Import button and the Import Failed dialog's Try again, so
--- both open the same two-field prompt.
-local function OpenImportPrompt()
+-- The name a Retail copy installs under until the player types another.
+local RETAIL_PROFILE_NAME = "KitnUI - Retail"
+
+local RETAIL_COPY_TEXT = "Copy your KitnEssentials settings from Retail?\n\n"
+    .. "On Retail, type /kes, open Profiles, then Sharing, click Export Active Profile and copy "
+    .. "the string. Then click Paste Retail string and paste it into the box.\n\n"
+    .. "This shows once. Later, use Profiles, Sharing, Copy from Retail."
+
+-- The popup's accept, defined below: the import opener closes the popup by it.
+---@type fun()?
+local PasteRetailString
+
+-- Shared by the Import button, both Copy from Retail routes and the Import
+-- Failed dialog's Try again, so all open the same two-field prompt. A
+-- startName fills the name box and puts the cursor in the paste box.
+---@param startName string?
+local function OpenImportPrompt(startName)
+    -- Any import box ends the popup. Replaced like other prompts, it would
+    -- wait and reopen over a player who has just imported.
+    KE:ClosePromptIfOwner(PasteRetailString)
     local PM = KE.ProfileManager
     lastAutoName = nil
     KE:CreatePrompt(
@@ -110,7 +128,7 @@ local function OpenImportPrompt()
                     "Import Failed",
                     nameOrErr or "Unknown error",
                     false, nil, false, nil, nil, nil, nil,
-                    OpenImportPrompt,
+                    function() OpenImportPrompt(startName) end,
                     nil,
                     "Try again",
                     "Close"
@@ -123,6 +141,43 @@ local function OpenImportPrompt()
         true,
         "Paste Import String",
         { onSecondTextChanged = AutoFillName }
+    )
+    -- This prompt never waits, so the open prompt is this one. The text
+    -- argument would also fill the message line over the name label.
+    local dialog = KE.activePrompt
+    if startName and dialog then
+        dialog.editBox:SetText(startName)
+        dialog.editBox2:SetFocus()
+    end
+end
+
+local function MarkRetailCopySeen()
+    KE.db.global.CopyFromRetailSeen = true
+end
+
+-- One function for the popup's accept and the card's button, so the popup's
+-- copies have one owner. Either route counts as seen.
+function PasteRetailString()
+    MarkRetailCopySeen()
+    OpenImportPrompt(RETAIL_PROFILE_NAME)
+end
+
+-- Core/Main.lua decides whether it is due. The flag is set as the popup
+-- opens, so no answer, close or reload brings it back; the park key keeps it
+-- when a prompt that does not wait replaces it on screen.
+function GUIFrame:OfferRetailCopy()
+    -- Read again here: the card may have been used since login.
+    if KE.db.global.CopyFromRetailSeen then return end
+    KE:CreatePrompt(
+        "Copy from Retail",
+        RETAIL_COPY_TEXT,
+        false, nil, false, nil, nil, nil, nil,
+        PasteRetailString,
+        nil,
+        "Paste Retail string",
+        "No thanks",
+        nil, nil,
+        { waitIfBusy = true, parkKey = "Profiles.copyFromRetail", onShown = MarkRetailCopySeen }
     )
 end
 
@@ -365,7 +420,24 @@ GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
     row2:AddWidget(importBtn, 1)
     card2:AddRow(row2, Theme.rowHeightLast, 0)
 
-    return card2:GetNextOffset()
+    if not KE:IsBaselineLoad() then return card2:GetNextOffset() end
+    yOffset = card2:GetNextOffset()
+
+    ---------------------------------------------------------------------------------
+    -- Card 3: Copy from Retail
+    ---------------------------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Copy from Retail", yOffset)
+    card3:AddLabel("On Retail, type /kes, open Profiles, then Sharing, click Export Active " ..
+        "Profile and copy the string. Then click below and paste it here.")
+
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local retailBtn = GUIFrame:CreateButton(row3, "Paste Retail string", {
+        callback = PasteRetailString,
+    })
+    row3:AddWidget(retailBtn, 1)
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
+
+    return card3:GetNextOffset()
 end)
 
 ---------------------------------------------------------------------------------
