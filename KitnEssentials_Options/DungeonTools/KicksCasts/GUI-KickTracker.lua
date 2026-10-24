@@ -77,32 +77,20 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick. " ..
-        "Only active in 5-player dungeons.\n\n" ..
+        "Only active in 5-player dungeons. Kicks are tracked from what the game shows; no addon " ..
+        "messages are sent or read.\n\n" ..
         "A kick goes on the kicker's bar, and the bar reads " .. KE:ColorTextByTheme("Ready") ..
-        " when the kick is back. A kick that interrupts nothing does not show.\n\n" ..
-        "In a dungeon the game often hides who kicked. The Damage Meter then names the kicker " ..
-        "when it can. When it cannot, the kick goes on the bar of the teammate most likely to " ..
-        "have used it, a teammate whose kick was ready first. These guesses are not marked and " ..
-        "can now and then be wrong.")
+        " when the tracker's timing says the kick is back. A kick that interrupts nothing does not show.\n\n" ..
+        "In a dungeon the game often hides who kicked. The Damage Meter then names the kicker when it " ..
+        "can: the teammate whose interrupt list grew, a teammate whose class and spec match its row, " ..
+        "your own kick a moment before, or the only teammate who could have kicked. When it cannot, " ..
+        "each teammate who could have kicked gets a copy of their bar on cooldown that the game shows " ..
+        "only on the bar of the teammate who really kicked.")
 
     yOffset = card1:GetNextOffset()
 
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
-
-    local cardSync = GUIFrame:CreateCard(scrollChild, "Kick Sync", yOffset)
-    manager:Register(cardSync, "all")
-
-    local rowSync = GUIFrame:CreateRow(cardSync.content, Theme.rowHeightLast)
-    local syncCheck = GUIFrame:CreateCheckbox(rowSync, "Sync Kicks with Party Addon Users", {
-        value = db.KickSync ~= false,
-        callback = function(checked) db.KickSync = checked; ApplySettings() end,
-    })
-    rowSync:AddWidget(syncCheck, 1)
-    manager:Register(syncCheck, "all")
-    cardSync:AddRow(rowSync, Theme.rowHeightLast, 0)
-
-    yOffset = cardSync:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position, one view per position

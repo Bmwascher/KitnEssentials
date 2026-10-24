@@ -831,7 +831,6 @@ local Defaults = {
             -- Ready state
             ShowReadyText = true,
             ReadyText = "Ready",
-            KickSync = true,                -- broadcast own kicks to party KE users (real CD sync)
             -- Sort priorities (1=first, 3=last)
             SortTankPriority = 1,
             SortHealerPriority = 2,
