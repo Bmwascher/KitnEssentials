@@ -22,6 +22,7 @@ local function loadProfiler(options)
     local lifecycle = {}
     local eventFrames = {}
     local prompts = {}
+    local reloadAccepts = {}
     local scriptProfile = tostring(options.scriptProfile == nil and 1 or options.scriptProfile)
     local inCombat = options.inCombat == true
     local fps = options.fps
@@ -188,6 +189,15 @@ local function loadProfiler(options)
         end,
         -- KE:ReloadUI after a retail load (Core/Widgets.lua).
         ReloadUI = function() _G.ReloadUI() end,
+        -- KE:NewReloadAccept (Core/Widgets.lua): the click that runs the
+        -- accept asks for the reload, so the stub only records the accept.
+        NewReloadAccept = function(_, work)
+            local accept = function()
+                if work then work() end
+            end
+            reloadAccepts[accept] = true
+            return accept
+        end,
         -- SEVEN placeholders between text and onAccept, matching the real
         -- signature (Core/Widgets.lua).
         CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
@@ -208,6 +218,7 @@ local function loadProfiler(options)
         calls = calls,
         lifecycle = lifecycle,
         prompts = prompts,
+        reloadAccepts = reloadAccepts,
         setNow = function(value)
             now = value
         end,
@@ -1171,22 +1182,19 @@ describe("Profiler reload warning", function()
         assert.is_false(state.isEventRegistered("PLAYER_LOGIN"))
     end)
 
-    it("sets scriptProfile to zero before reloading from Disable and Reload", function()
+    it("makes Disable and Reload a reload accept that switches scriptProfile off", function()
         local state = loadProfiler({ scriptProfile = 1 })
         state.fireEvent("PLAYER_LOGIN")
         local prompt = state.prompts[1]
         assert.is_table(prompt)
         assert.are.equal("Disable & Reload", prompt.acceptText)
         assert.are.equal("Keep Enabled", prompt.cancelText)
+        assert.is_true(state.reloadAccepts[prompt.onAccept] == true)
 
         state.clearLifecycle()
         prompt.onAccept()
 
-        local cvarIndex = indexOf(state.lifecycle, "cvar:scriptProfile=0")
-        local reloadIndex = indexOf(state.lifecycle, "reload")
-        assert.is_number(cvarIndex)
-        assert.is_number(reloadIndex)
-        assert.is_true(cvarIndex < reloadIndex)
+        assert.same({ "cvar:scriptProfile=0" }, state.lifecycle)
     end)
 
     it("prints immediately in combat and tears down before one deferred popup", function()
