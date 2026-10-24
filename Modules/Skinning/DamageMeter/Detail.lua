@@ -390,6 +390,8 @@ end
 function DM:OpenDetail(bar, button)
     local W = bar and bar.win
     if not W then return end
+    -- A sample row from the settings preview has nothing to open.
+    if bar._sample then return end
     -- The detail panel takes over the viewport; unconditionally clear the hover tip
     -- (and stop its poll) regardless of how we got here. ShowHoverTip early-returns
     -- on W._detailOpen, so without this the poll could spin idle if _detailOpen is

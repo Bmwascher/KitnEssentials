@@ -570,6 +570,7 @@ function DM:ShowPreview()
     -- honors _guiPreview) so a user with a hide condition enabled can still see + position
     -- the meter while configuring it. Cleared in HidePreview when the GUI closes.
     self._guiPreview = true
+    self._resizeDragging = nil
     self:EnsureDock()
     self:SetWindowBadges(true)
     self:RefreshDock()
@@ -586,7 +587,10 @@ function DM:HidePreview()
     -- meter re-hides if HideOutOfCombat / OnlyInInstances now say it should. UpdateBackdrop
     -- (Dock.lua) is resolved at runtime; guard for load order.
     self._guiPreview = false
+    self._resizeDragging = nil
     if self.UpdateBackdrop then self:UpdateBackdrop() end
+    -- Repaints now, so the sample rows go with the settings.
+    if self.enabled and self.Tick then self:Tick() end
     if self.ApplySpellHistory then self:ApplySpellHistory() end
 end
 
@@ -2849,6 +2853,32 @@ local RATE_METER_TYPES = {
 -- half of the bar value. Non-underscore name per the DM.RANK_STRINGS convention.
 DM.RATE_METER_TYPES = RATE_METER_TYPES
 
+-- Bar slots that fit a window's body, from the dock's rect once laid out, else
+-- the body height passed in. Plain numbers only.
+function DM.SampleFit(W, viewH)
+    local stride = W._snapStride or 1
+    if stride <= 0 then stride = 1 end
+    local rc = W._dockRect
+    local h = (rc and rc.h and (rc.h - (W._headerH or 0))) or viewH or 0
+    if h <= 0 then return 0 end
+    return math_min(math.ceil(h / stride), DM.BAR_POOL_SIZE or 40)
+end
+
+-- How many sample rows go below count real rows in fit slots.
+function DM.SampleCount(fit, count)
+    local n = fit - count
+    if n < 0 then return 0 end
+    return n
+end
+
+-- True when a sample row is on screen in W now. Sample rows fill every pool
+-- slot and the body clips them, so this is judged from the window's current
+-- size, not from the last render.
+function DM.SamplesInView(W)
+    if not W._sampleShown then return false end
+    return DM.SampleCount(DM.SampleFit(W), W._realCount or 0) > 0
+end
+
 function DM:ReportView(rest, winIdx)
     -- winIdx selects which window to report: the header Report button passes the clicked
     -- window's index; the slash command omits it -> the window numbered 1 on screen,
@@ -2860,6 +2890,11 @@ function DM:ReportView(rest, winIdx)
             self._reportScratch = self._reportScratch or {}
             winIdx = self:DockWindowIndices(self._reportScratch)[1] or 1
         end
+    end
+    -- The window shows sample rows from the settings preview, not its data.
+    if self.windows_rt and self.windows_rt[winIdx] and DM.SamplesInView(self.windows_rt[winIdx]) then
+        KE:Print("Damage Meter: report unavailable while the settings show sample bars. Close the settings first.")
+        return
     end
     -- Guard the captured chat API: a missing namespace is a clean no-op, not a nil call.
     if not SendChat then return end

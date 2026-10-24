@@ -796,6 +796,41 @@ end
 -- mirrors the OnSessionUpdated debounce style in Core.lua (boolean pending flag).
 ---------------------------------------------------------------------------------
 
+-- One redraw while the settings preview is open, REDRAW_DELAY after the last
+-- resize request, so a pane that grew shows the rows the last render culled.
+-- Every request schedules this same function, so a run of requests allocates
+-- no closure, and only the timer of the last one redraws: timers of one delay
+-- fire in the order they were set. A drag begun since the request skips it:
+-- the drag's end asks again.
+local REDRAW_DELAY = 0.2
+DM._redrawAsked, DM._redrawFired = 0, 0
+
+local function PreviewRedrawFire()
+    DM._redrawFired = DM._redrawFired + 1
+    if DM._redrawFired ~= DM._redrawAsked then return end
+    if not (DM.enabled and DM._guiPreview) or DM._resizeDragging then return end
+    if InCombatLockdown() then return end
+    if DM.Tick then DM:Tick() end
+end
+
+function DM:RequestPreviewRedraw()
+    if not self._guiPreview then return end
+    self._redrawAsked = self._redrawAsked + 1
+    C_Timer.After(REDRAW_DELAY, PreviewRedrawFire)
+end
+
+-- A drag owns the resize while it runs: no request per frame, one at its end.
+-- The owner is the dragging frame, so another frame's stop cannot end it.
+function DM:BeginResizeDrag(owner)
+    self._resizeDragging = owner
+end
+
+function DM:EndResizeDrag(owner)
+    if owner == nil or self._resizeDragging ~= owner then return end
+    self._resizeDragging = nil
+    self:RequestPreviewRedraw()
+end
+
 -- Hoisted once (captures only the DM file upvalue) so the per-frame splitter-drag
 -- path -- SplitterOnUpdate -> RefreshDock every frame while dragging -- reuses one
 -- function reference instead of allocating a fresh closure per frame.
@@ -812,6 +847,10 @@ local function _DoDockRefresh()
     if DM._needsRenderAfterLayout then
         DM._needsRenderAfterLayout = false
         if DM.Tick then DM:Tick() end
+    elseif DM._guiPreview and not DM._resizeDragging then
+        -- A resize with the settings preview open: one redraw after the last
+        -- change, so the rows the last render culled fill the new height.
+        DM:RequestPreviewRedraw()
     end
 end
 
@@ -909,6 +948,9 @@ local function SplitterOnUpdate(s)
 end
 
 local function SplitterStopDrag(s)
+    -- Before the early return: SplitterOnUpdate's own bail-outs clear
+    -- _dragging without ending the drag.
+    DM:EndResizeDrag(s)
     if not s._dragging then return end
     s._dragging = false
     s:SetScript("OnUpdate", nil)
@@ -983,6 +1025,7 @@ local function SplitterStartDrag(s)
 
     s.hi:Show()
     s:SetScript("OnUpdate", SplitterOnUpdate)
+    DM:BeginResizeDrag(s)
 end
 
 -- Returns a pooled splitter (building one on first need, scripts wired ONCE).

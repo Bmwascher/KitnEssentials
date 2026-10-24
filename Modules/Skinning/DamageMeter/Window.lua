@@ -84,6 +84,67 @@ end
 DM.RANK_STRINGS = RANK_STRINGS
 DM.BAR_POOL_SIZE = BAR_POOL_SIZE
 
+-- Sample rows for the settings preview, filling what a window's real rows leave
+-- empty. Plain numbers only and no identity fields, so the hover tip and the
+-- detail panel have nothing to open.
+local SAMPLE_CLASSES = {
+    { "WARRIOR", "Warrior" }, { "PALADIN", "Paladin" }, { "HUNTER", "Hunter" },
+    { "ROGUE", "Rogue" }, { "PRIEST", "Priest" }, { "DEATHKNIGHT", "Death Knight" },
+    { "SHAMAN", "Shaman" }, { "MAGE", "Mage" }, { "WARLOCK", "Warlock" },
+    { "MONK", "Monk" }, { "DRUID", "Druid" }, { "DEMONHUNTER", "Demon Hunter" },
+    { "EVOKER", "Evoker" },
+}
+local SAMPLE_ROWS = {}
+for i = 1, BAR_POOL_SIZE do
+    local class = SAMPLE_CLASSES[(i - 1) % #SAMPLE_CLASSES + 1]
+    local amount = math_floor(2400000 * 0.9 ^ (i - 1))
+    SAMPLE_ROWS[i] = {
+        name = class[2], classFilename = class[1], isSample = true, isLocalPlayer = false,
+        totalAmount = amount, amountPerSecond = math_floor(amount / 180),
+        deathTimeSeconds = 12 + (i - 1) * 23,
+    }
+end
+local SAMPLE_MAX = SAMPLE_ROWS[1].totalAmount
+-- The list a sampling window with no session starts from; never written.
+local NO_SOURCES = {}
+
+-- The n rows that fill a sampling window below its count real rows, and the
+-- maximum they fill against. Under real rows they continue the last real bar,
+-- each 0.9 of the one above, against the real maximum, so none is longer than a
+-- real bar. The fill keeps the exact amount and the label rounds it, so a bar
+-- under a count of 1 still draws, shorter each row. With no real rows, and in a
+-- Deaths window (every bar full), the fixed list. nil when a real amount is
+-- secret or not a positive number: no sample rows then.
+function DM.SampleRows(W, n, count, isDeaths, last, maxAmount)
+    if n <= 0 then return nil end
+    if count <= 0 or isDeaths then return SAMPLE_ROWS, SAMPLE_MAX end
+    if issecretvalue(last) or issecretvalue(maxAmount) then return nil end
+    if type(last) ~= "number" or type(maxAmount) ~= "number" or last <= 0 or maxAmount <= 0 then
+        return nil
+    end
+    local list = W._sampleRows
+    if not list then
+        list = {}
+        W._sampleRows = list
+    end
+    local amount = last
+    for k = 1, n do
+        amount = amount * 0.9
+        local row = list[k]
+        if not row then
+            row = { isSample = true, isLocalPlayer = false }
+            list[k] = row
+        end
+        local base = SAMPLE_ROWS[k]
+        row.name, row.classFilename = base.name, base.classFilename
+        row.fillAmount = amount
+        row.totalAmount = math_floor(amount + 0.5)
+        row.amountPerSecond = math_floor(amount / 180 + 0.5)
+        row.deathTimeSeconds = base.deathTimeSeconds
+    end
+    return list, maxAmount
+end
+
 -- AlwaysShowSelf role relevance: the pin only applies where the player's own row
 -- is meaningful for their assigned role -- a DPS pinned at zero in the healing
 -- meter (or a healer in the damage meter) is noise. Damage views pin DAMAGER and
@@ -1521,6 +1582,10 @@ function DM:RenderWindow(W)
 
     local sources = session and session.combatSources
     W._deathLiveView = (isDeaths and self:IsLiveCurrent(W, cfg)) or nil
+    -- While the settings are open out of combat, sample rows fill whatever the
+    -- real rows leave of the viewport; the real rows keep all their behavior.
+    local sampling = self._guiPreview and not InCombatLockdown() and not self._ticker
+    if not sources and sampling then sources = NO_SOURCES end
     -- Sources per class in the session, excluding the player's own. The roster
     -- side excludes the player too; counting one population against the other is
     -- what made a player and an ally of the same class refuse each other.
@@ -1531,6 +1596,7 @@ function DM:RenderWindow(W)
     W._classSpecRowCounts = W._classSpecRowCounts or {}
     for _, bySpec in pairs(W._classSpecRowCounts) do wipe(bySpec) end
     if not sources then
+        W._sampleShown = nil
         -- No session/data this segment: hide every built row so stale bars from
         -- a prior segment don't linger. Gate on IsShown so already-hidden rows
         -- skip the redundant widget call.
@@ -1720,15 +1786,33 @@ function DM:RenderWindow(W)
     -- maxAmount may be secret in combat; SetMinMaxValues accepts it, and the
     -- per-bar `or 1` fallback in RenderBar hardens against a malformed session
     -- that omits it. Read once here and pass down. Rows in [firstVis, lastVis] are
-    -- filled + shown; everything else (above the fold, below count, or past count) is
-    -- hidden (no stale bar lingers).
-    local maxAmount = session.maxAmount
+    -- filled + shown; sample rows take the slots after the real ones while
+    -- sampling; everything else is hidden (no stale bar lingers).
+    local maxAmount = session and session.maxAmount
+    -- As many sample rows as the viewport has room for below the real rows. The
+    -- scroll range above follows the real rows only, so they never scroll.
+    -- Every slot of the bar pool below the real rows gets a sample row, and the
+    -- body ScrollFrame clips the ones past the window's bottom. A resize then
+    -- shows the right rows with no repaint.
+    local nSamples, samples, sampleMax = 0, nil, nil
+    if sampling then
+        nSamples = DM.SampleCount(BAR_POOL_SIZE, count)
+        local real = sources[count]
+        samples, sampleMax = DM.SampleRows(W, nSamples, count, isDeaths, real and real.totalAmount, maxAmount)
+        if not samples then nSamples = 0 end
+    end
+    -- Read by DM.SamplesInView, which decides at click time whether any of them
+    -- is on screen.
+    W._sampleShown = nSamples > 0 or nil
+    W._realCount = count
+    local lastRow = math_max(lastVis, count + nSamples)
     -- A list longer than the viewport, or a scroll, needs rows not built yet.
-    if lastVis > #W.bars then self:EnsureBars(W, lastVis) end
+    if lastRow > #W.bars then self:EnsureBars(W, lastRow) end
     for i = 1, #W.bars do
         local bar = W.bars[i]
         local row = bar.row
         if i >= firstVis and i <= lastVis then
+            bar._sample = nil
             -- The pin slot (last fully-visible row) shows the pinned player at their
             -- real rank when AlwaysShowSelf pinned one; otherwise the slot's own
             -- source. RenderBar's `rank` arg is the displayed rank; the wheel handler
@@ -1739,6 +1823,10 @@ function DM:RenderWindow(W)
             end
             self:RenderBar(W, bar, rank, src, maxAmount)
             -- Show only if not already shown.
+            if not row:IsShown() then row:Show() end
+        elseif i > count and i <= count + nSamples then
+            bar._sample = true
+            self:RenderBar(W, bar, i, samples[i - count], sampleMax)
             if not row:IsShown() then row:Show() end
         else
             -- Hide only if currently shown.
@@ -1805,7 +1893,9 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.fill:SetValue(1)
     else
         row.fill:SetMinMaxValues(0, maxAmount or 1)
-        row.fill:SetValue(src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
+        -- A sample row fills by its exact amount; its label shows the rounded one.
+        -- No real row has fillAmount, and the test is truthiness only.
+        row.fill:SetValue(src.fillAmount or src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
     end
 
     -- Fill color. BarColorMode: Class (per-source class color), Custom (db.BarColor),
@@ -2003,7 +2093,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         local sn = self._selfNick
         if sn == nil then sn = self:ResolveSelfNickname() end
         if sn then nick = sn end
-    else
+    elseif not src.isSample then
         local guid = bar._sourceGUID
         -- Truthiness FIRST, never ==/~= -- the GUID itself can be SECRET
         -- (creature rows in instances), and an equality compare on a secret

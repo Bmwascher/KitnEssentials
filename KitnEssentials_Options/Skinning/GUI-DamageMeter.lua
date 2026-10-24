@@ -438,7 +438,11 @@ local function ConstructSchematic(parent)
         gapDrag.handle = nil
         gapDriver:SetScript("OnUpdate", nil)
         PaintHandle(h)
+        local dm = GetDM()
+        if dm and dm.EndResizeDrag then dm:EndResizeDrag(gapDriver) end
     end
+    -- Set once, like the handles' scripts: a page hidden mid-drag ends the drag.
+    gapDriver:SetScript("OnHide", StopGapDrag)
 
     -- The pointer's place across the pair, less half the gap, is the left or
     -- top side's share. The pair's outer edges do not move during the drag: a
@@ -493,6 +497,7 @@ local function ConstructSchematic(parent)
         gapDrag.handle = h
         PaintHandle(h)
         gapDriver:SetScript("OnUpdate", GapDragUpdate)
+        if dm.BeginResizeDrag then dm:BeginResizeDrag(gapDriver) end
     end
 
     local function NewHandle()
