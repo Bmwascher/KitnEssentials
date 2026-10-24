@@ -1,11 +1,38 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  RoleIconSamples.lua                                     ║
--- ║  Purpose: Builds the inline icon samples that label the  ║
--- ║           role icon set dropdown.                        ║
+-- ║  Purpose: The saved role icon set's read path, and the   ║
+-- ║           inline samples that label its dropdown.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 local KE = select(2, ...)
+local S = KE.Skins
 local format = string.format
+local pairs = pairs
+
+-- The one place the art decision is made. Returns a texture path for an art
+-- set, or nil for a set that draws atlases instead. Exported so the routing
+-- can be tested without a mocked frame tree; the Group Finder painters stay
+-- file-local to Frames/LFG.lua and reachable only through Blizzard's hooks.
+function S.RoleArtPath(set, role)
+    local art = KE.ROLE_ICON_ART[set]
+    return art and art[role] or nil
+end
+
+-- Derived from the art table, so this list never drifts from the art. The two
+-- non-art keys are the only literals. A new set still needs its own entry in
+-- the GUI's display order and in the spec loader's mirror of the art table.
+local ROLE_ICON_SETS = { blizzard = true, circle = true }
+for set in pairs(KE.ROLE_ICON_ART) do ROLE_ICON_SETS[set] = true end
+
+-- The single read path for the saved role-icon-set key. LFG.lua, Chat.lua and
+-- the GUI callback all come through GetRoleIconSet, so an absent or
+-- unrecognized value cannot mean different things on different surfaces.
+function S.GetRoleIconSet()
+    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    local set = bs and bs.RoleIconSet
+    return ROLE_ICON_SETS[set] and set or "modern"
+end
 
 -- Drawn by the `blizzard` set. Chat uses these same three.
 local LARGE_ROLE_ATLASES = {

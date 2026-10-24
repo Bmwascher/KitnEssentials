@@ -17,6 +17,12 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HomePage",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "Profiles",         want = true },
             { load = "baseline",            seed = BASELINE,             id = "ProfilesReset",    want = true },
+            -- A page's tabs are ids of their own: an admitted page with a
+            -- refused tab renders its header alone.
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Windows",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Appearance",   want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_Behavior",     want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DamageMeter_SpellHistory", want = true },
             { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "NotAFeature",      want = false },
@@ -145,8 +151,9 @@ end)
 
 describe("Forever availability: frame skins", function()
     -- Mail stands for an admitted window, ContextMenus for an admitted row
-    -- backed by its own module, and Friends for a withheld one.
-    it("admits only the listed skin keys after a baseline load and every key after a retail load", function()
+    -- backed by its own module, Friends for a withheld one, and LegacySystem
+    -- for a window only the Forever client has.
+    it("admits only the listed skin keys after a baseline load and every key but the Forever-only ones after a retail load", function()
         for _, row in ipairs({
             { load = "baseline", baseline = true, key = "Mail",         want = true },
             { load = "baseline", baseline = true, key = "Friends",      want = false },
@@ -154,9 +161,27 @@ describe("Forever availability: frame skins", function()
             { load = "baseline", baseline = true, key = nil,            want = false },
             { load = "retail",   baseline = nil,  key = "Friends",      want = true },
             { load = "retail",   baseline = nil,  key = "ContextMenus", want = true },
+            { load = "baseline", baseline = true, key = "LegacySystem", want = true },
+            { load = "retail",   baseline = nil,  key = "LegacySystem", want = false },
         }) do
             local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = row.baseline })
             assert.equals(row.want, KE:IsFrameSkinAvailable(row.key), row.load .. " " .. tostring(row.key))
+        end
+    end)
+
+    -- The rows the Frame Skins and Addon Skins cards draw. Mail and Dialogs
+    -- stand for admitted rows, Friends for a withheld one, LegacySystem for a
+    -- window only the Forever client has.
+    it("keeps the admitted entries in input order after a baseline load and every admitted entry after a retail load", function()
+        local ENTRIES = { { key = "Mail" }, { key = "Friends" }, { key = "Dialogs" }, { key = "LegacySystem" } }
+        for _, row in ipairs({
+            { load = "baseline", baseline = true, want = { "Mail", "Dialogs", "LegacySystem" } },
+            { load = "retail",   baseline = nil,  want = { "Mail", "Friends", "Dialogs" } },
+        }) do
+            local KE = helpers.loadModule("Core/Availability.lua", { BASELINE_LOAD = row.baseline })
+            local keys = {}
+            for i, entry in ipairs(KE:FilterAvailableFrameSkins(ENTRIES)) do keys[i] = entry.key end
+            assert.same(row.want, keys, row.load)
         end
     end)
 end)

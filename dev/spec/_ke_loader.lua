@@ -1152,10 +1152,11 @@ local function roleIconArt(PATH, extra)
     return art
 end
 
--- Modules/Skinning/DarkTheme/Frames/LFG.lua. Only the role-icon resolver and painters
--- are under test; the S stub carries the minimum the file touches at load,
--- which is Register (called at file scope) plus the data/PixelSnap pair the
--- painters use.
+-- Modules/Skinning/DarkTheme/Frames/LFG.lua, after RoleIconSamples.lua, which holds
+-- the role-icon resolver the painters read through S. Only the resolver and
+-- painters are under test; the S stub carries the minimum the files touch at
+-- load, which is Register (called at file scope) plus the data/PixelSnap pair
+-- the painters use.
 function L.loadLFGSkin(overrides)
     overrides = overrides or {}
     installMock(managedSubset(overrides), {
@@ -1199,6 +1200,7 @@ function L.loadLFGSkin(overrides)
         return frameData[f]
     end
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/Skinning/DarkTheme/RoleIconSamples.lua", KE)
     helpers.loadModule("Modules/Skinning/DarkTheme/Frames/LFG.lua", KE)
     return KE, KE.Skins
 end
@@ -1248,11 +1250,12 @@ function L.loadChatCopyText()
 end
 
 -- Modules/Skinning/DarkTheme/RoleIconSamples.lua. Same reason as the chat builder above:
--- the file holds one pure function and needs no KE.Skins and no frames, so it
--- loads against a bare KE carrying only the art table.
+-- the sample builder is pure and needs no frames, so it loads against a bare
+-- KE carrying the art table and an empty KE.Skins, which the file writes its
+-- resolver into.
 function L.loadRoleIconSample()
     local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }
+    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]], Skins = {} }
     KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
     helpersLocal.loadModule("Modules/Skinning/DarkTheme/RoleIconSamples.lua", KE)
     return KE.BuildRoleIconSample, KE.ROLE_ICON_ART

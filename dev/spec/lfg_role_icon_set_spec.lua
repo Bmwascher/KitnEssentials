@@ -1,6 +1,8 @@
--- Modules/Skinning/DarkTheme/Frames/LFG.lua — S.GetRoleIconSet. The resolver is the
--- single read path for the saved key: five files would otherwise each decide
--- what an absent or unrecognized value means, and they would drift.
+-- Modules/Skinning/DarkTheme/RoleIconSamples.lua — S.GetRoleIconSet and
+-- S.RoleArtPath, loaded with Frames/LFG.lua for its slot and member rules. The
+-- resolver is the single read path for the saved key: five files would
+-- otherwise each decide what an absent or unrecognized value means, and they
+-- would drift.
 local loader = require("dev.spec._ke_loader")
 
 describe("S.GetRoleIconSet", function()

@@ -20,9 +20,9 @@ local FOREVER_ALLOWED = {
     ProfilesMain = true,
     ProfilesSharing = true,
     ProfilesReset = true,
-    -- Dark Theme: the engine, Color Picker, the skins command, and the page
-    -- with the tabs that configure what loads. Group Finder, Raid Control and
-    -- Addon Skins stay withheld.
+    -- Dark Theme: the engine, Color Picker, the skins command, the page
+    -- with the tabs that configure what loads, the Addon Skins card and the
+    -- role icon card. Raid Control and the Group Finder skin stay withheld.
     BlizzardFrames = true,
     ColorPicker = true,
     SkinAPI = true,
@@ -33,6 +33,8 @@ local FOREVER_ALLOWED = {
     SkinBlizzardFramesFontsWindows = true,
     SkinBlizzardFramesSkins = true,
     SkinBlizzardFramesFrames = true,
+    SkinBlizzardFramesAddons = true,
+    SkinBlizzardFramesGroupFinder = true,
     -- Elements: the five modules with their own switches, and their pages.
     AlertFrames = true,
     LootFrame = true,
@@ -58,9 +60,13 @@ local FOREVER_ALLOWED = {
     Chat = true,
     ChatHistory = true,
     ChatLinks = true,
-    -- Damage Meter: the module and its page. Its realm-name, Mythic+ and
-    -- keystone options stay withheld.
+    -- Damage Meter: the module, its page and the page's four tabs. Its
+    -- realm-name, Mythic+ and keystone options stay withheld.
     DamageMeter = true,
+    DamageMeter_Windows = true,
+    DamageMeter_Appearance = true,
+    DamageMeter_Behavior = true,
+    DamageMeter_SpellHistory = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
@@ -88,19 +94,39 @@ function KE:FilterAvailableEntries(entries)
     return kept
 end
 
--- Skin registration keys a baseline load runs: the admitted window skins,
--- plus Dialogs, the global font sweep, the shared dropdown list and the
+-- Entries are { key = ... } tables: Frame Skins and Addon Skins rows. The
+-- frame-skin policy answers on every load, retail included, and a new table
+-- comes back.
+---@param entries table[]
+---@return table[]
+function KE:FilterAvailableFrameSkins(entries)
+    local kept = {}
+    for i = 1, #entries do
+        local entry = entries[i]
+        if self:IsFrameSkinAvailable(entry.key) then kept[#kept + 1] = entry end
+    end
+    return kept
+end
+
+-- Skin registration keys a baseline load runs: the admitted window and addon
+-- skins, plus Dialogs, the global font sweep, the shared dropdown list and the
 -- Context Menus row. Kept apart from the feature ids above so a skin key can
 -- never collide with a module or page id.
 local FOREVER_FRAME_SKINS = {
+    Ace3 = true,
     AddonManager = true,
     Alerts = true,
     AuctionHouse = true,
+    Baganator = true,
     Barber = true,
     Battlenet = true,
+    BetterFriendlist = true,
+    BigWigs = true,
     Binding = true,
     BlackMarket = true,
+    BugSack = true,
     Calendar = true,
+    CatalogShop = true,
     Channels = true,
     Character = true,
     ChatConfig = true,
@@ -144,10 +170,12 @@ local FOREVER_FRAME_SKINS = {
     Reputation = true,
     SettingsPanel = true,
     SharedDropDownList = true,
+    Simulationcraft = true,
     Socket = true,
     Stable = true,
     SubscriptionInterstitial = true,
     Tabard = true,
+    TalkingHead = true,
     Taxi = true,
     TimeManager = true,
     Trade = true,
@@ -157,11 +185,18 @@ local FOREVER_FRAME_SKINS = {
     WorldMap = true,
 }
 
+-- Skin keys of windows only the Forever client has. Their files load only
+-- from the camelot list, and a retail load refuses them, so their rows never
+-- show on retail and a stray load there cannot run them.
+local FOREVER_ONLY_FRAME_SKINS = {
+    LegacySystem = true,
+}
+
 -- Whether a skin registered under `key` may run and show a Frame Skins row.
--- A retail load admits every key.
+-- A retail load admits every key except the Forever-only ones.
 ---@param key string?
 ---@return boolean available
 function KE:IsFrameSkinAvailable(key)
-    if RETAIL then return true end
-    return key ~= nil and FOREVER_FRAME_SKINS[key] == true
+    if RETAIL then return not (key and FOREVER_ONLY_FRAME_SKINS[key]) end
+    return key ~= nil and (FOREVER_FRAME_SKINS[key] == true or FOREVER_ONLY_FRAME_SKINS[key] == true)
 end
