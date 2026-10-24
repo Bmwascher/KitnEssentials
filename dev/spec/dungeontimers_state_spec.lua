@@ -1312,6 +1312,29 @@ describe("DungeonTimers TimerState", function()
         end
     end)
 
+    it("a kick Message is a duplicate when the cue's current watch holds its cast ID, or completed that kick number and the Message has no ID", function()
+        local cases = {
+            { name = "same ID, same ordinal", duplicate = true },
+            { name = "same ID, other ordinal", ordinal = 3, duplicate = true },
+            { name = "missing ID, same completed ordinal", id = false, completed = true, duplicate = true },
+            { name = "missing ID, other completed ordinal", id = false, completed = true, ordinal = 2 },
+            { name = "different ID", id = "cast-12", completed = true },
+            { name = "expired watch", now = 4 },
+        }
+        for _, case in ipairs(cases) do
+            local store = State.New()
+            local scope = State.AdmitOwner(store, "owner", CUE_ENC)
+            local generation = State.NextSlot(store, "owner", "cue", "kick#plan")
+            local watch = { owner = "owner", scope = scope, slotKey = "kick#plan", generation = generation,
+                startedAt = 0, endAt = 4, unit = "boss1", castBarID = "cast-11", ordinal = 1,
+                completed = case.completed }
+            local id = case.id or "cast-11"
+            if case.id == false then id = nil end
+            assert.equal(case.duplicate == true,
+                State.IsCueMessageDuplicate(store, watch, case.ordinal or 1, id, case.now or 1), case.name)
+        end
+    end)
+
     it("BuildBindings installs one Message binding for a valid Message cue and nothing for a malformed cue", function()
         local good = buildCues({ window = messageCue({
             leadDelay = 1.7, maxPerPull = 4, prepareText = "SOON", endedText = "ENDED", endedDuration = 2,

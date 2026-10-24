@@ -2960,7 +2960,6 @@ local function CloseCueInterrupts(self, owner, cueKey, keep)
     if next(self._cueInterrupts) == nil then
         self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_INTERRUPTED", "cue")
         self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_FAILED", "cue")
-        self:_ReleaseUnitCastEvent("UNIT_SPELLCAST_FAILED_QUIET", "cue")
     end
 end
 
@@ -3241,20 +3240,20 @@ function DT:_ScheduleCueWindow(owner, cueKey, display, revealAt, endAt, now, ord
     return generation
 end
 
-local function ReadCueCastBarID(result, ordinal)
-    if not result or ordinal ~= result.ordinal or not UnitCastingInfo then return nil end
+local function ReadCueCastBarID(result)
+    if not result or not UnitCastingInfo then return nil end
     local ok, castBarID = pcall(function() return select(10, UnitCastingInfo(result.unit)) end)
     if not ok or (issecretvalue and issecretvalue(castBarID)) then return nil end
     if not State.IsCastBarId(castBarID) then return nil end
     return castBarID
 end
 
-function DT:_ArmCueInterrupt(owner, cueKey, generation, result, castBarID, now, endAt)
+function DT:_ArmCueInterrupt(owner, cueKey, generation, result, castBarID, now, endAt, ordinal)
     if not generation or not castBarID or not self:ShouldShowSpell(cueKey) then return end
     local watch = {
         owner = owner, cueKey = cueKey, scope = self._state.scopes[owner],
         slotKey = cueKey .. "#plan", generation = generation, result = result,
-        unit = result.unit, castBarID = castBarID, startedAt = now, endAt = endAt,
+        unit = result.unit, castBarID = castBarID, ordinal = ordinal, startedAt = now, endAt = endAt,
     }
     local job = {
         owner = owner, scope = watch.scope, kind = "cue", cueKey = cueKey,
@@ -3268,9 +3267,8 @@ function DT:_ArmCueInterrupt(owner, cueKey, generation, result, castBarID, now, 
     self._cueInterrupts[watch] = true
     self:_AcquireUnitCastEvent("UNIT_SPELLCAST_INTERRUPTED", "cue")
     self:_AcquireUnitCastEvent("UNIT_SPELLCAST_FAILED", "cue")
-    self:_AcquireUnitCastEvent("UNIT_SPELLCAST_FAILED_QUIET", "cue")
     ScheduleJob(self, job, now)
-    dprint("cue interrupt armed cue=" .. cueKey .. " castBarID=" .. tostring(castBarID))
+    dprint("cue interrupt armed cue=" .. cueKey .. " ordinal=" .. tostring(ordinal) .. " castBarID=" .. tostring(castBarID))
 end
 
 function DT:OnUnitCastInterrupted(_, unit, _castGUID, _spellID, _interruptedBy, castBarID)
@@ -3278,9 +3276,12 @@ function DT:OnUnitCastInterrupted(_, unit, _castGUID, _spellID, _interruptedBy, 
     self:_OnCueCastEnded(unit, castBarID, "interrupted")
 end
 
-function DT:OnUnitCastFailed(_, unit, _castGUID, _spellID, castBarID)
+-- Cast-follow still takes the quiet failure; a kick ends only on a real one.
+function DT:OnUnitCastFailed(event, unit, _castGUID, _spellID, castBarID)
     self:_OnFollowedCastEnded(unit, castBarID, "failed")
-    self:_OnCueCastEnded(unit, castBarID, "failed")
+    if event == "UNIT_SPELLCAST_FAILED" then
+        self:_OnCueCastEnded(unit, castBarID, "failed")
+    end
 end
 
 local function SetStaticCueResult(frame, color)
@@ -3303,14 +3304,16 @@ function DT:_OnCueCastEnded(unit, castBarID, reason)
             -- Keep the consumed ID until its original deadline to refuse duplicate Messages.
             watch.completed = true
             self:_EndCue(watch.owner, watch.cueKey, watch)
-            if self:ShouldShowSpell(watch.cueKey) then
-                local result = watch.result
+            local result = watch.result
+            -- Only the cue's last kick shows a result; an earlier kick just ends.
+            local outcome = watch.ordinal == result.ordinal and "done" or "stopped"
+            if outcome == "done" and self:ShouldShowSpell(watch.cueKey) then
                 local frame = self:_SpawnSynthetic(watch.owner, "cue", watch.cueKey .. "#ended",
                     result.duration, "text", self:ResolveSpellIcon(watch.cueKey), result.displayText,
                     watch.cueKey, now, { silent = true })
                 SetStaticCueResult(frame, result.color)
             end
-            dprint("cue interrupt done cue=" .. watch.cueKey .. " castBarID=" .. tostring(castBarID) .. " reason=" .. reason)
+            dprint("cue interrupt " .. outcome .. " cue=" .. watch.cueKey .. " castBarID=" .. tostring(castBarID) .. " reason=" .. reason)
         end
     end
 end
@@ -3347,12 +3350,13 @@ function DT:_OnCueMessage(owner, binding, now, message)
         return
     end
     local ordinal = ordinalOrReason
-    local castBarID = ReadCueCastBarID(data.interruptResult, ordinal)
-    if data.interruptResult and ordinal == data.interruptResult.ordinal then
+    -- A hidden cue reads no cast; its Message bookkeeping below still runs.
+    local castBarID
+    if data.interruptResult and self:ShouldShowSpell(cueKey) then
+        castBarID = ReadCueCastBarID(data.interruptResult)
         for watch in pairs(self._cueInterrupts) do
             if watch.owner == owner and watch.cueKey == cueKey
-                and State.IsCueInterruptCurrent(self._state, watch, now)
-                and (watch.castBarID == castBarID or (watch.completed and castBarID == nil)) then return end
+                and State.IsCueMessageDuplicate(self._state, watch, ordinal, castBarID, now) then return end
         end
     end
     -- Phase knowledge precedes the cap and every display filter of the cue.
@@ -3377,7 +3381,7 @@ function DT:_OnCueMessage(owner, binding, now, message)
             self:ResolveSpellIcon(cueKey), data.prepareText, cueKey, now, { silent = true })
     end
     local generation = self:_ScheduleCueWindow(owner, cueKey, display, revealAt, endAt, now, ordinal)
-    self:_ArmCueInterrupt(owner, cueKey, generation, data.interruptResult, castBarID, now, endAt)
+    self:_ArmCueInterrupt(owner, cueKey, generation, data.interruptResult, castBarID, now, endAt, ordinal)
 end
 
 -- A covered forecast loses only its frames until the gate closes or its
@@ -5274,7 +5278,27 @@ function DT:_ReplayPullReceipts(id)
     dprint(string_format("pull replay encounter=%s replayed=%d of %d", tostring(id), replayed, #held))
 end
 
+-- An interrupt cue belongs to the pull that showed it, so the next pull ends
+-- every leg of it, its result included, even with no encounter end between.
+local function EndInterruptCues(self)
+    local ending = {}
+    for owner, byKind in pairs(self._slotPresentations) do
+        local byKey = byKind.cue
+        if byKey then
+            for slotKey in pairs(byKey) do
+                local cueKey = slotKey:match("^[^#]+")
+                local data = cueKey and self:GetSpellInfo(cueKey)
+                if data and data.interruptResult then
+                    ending[#ending + 1] = { owner = owner, cueKey = cueKey }
+                end
+            end
+        end
+    end
+    for i = 1, #ending do self:_EndCue(ending[i].owner, ending[i].cueKey) end
+end
+
 function DT:OnEncounterStart(_, encounterID)
+    EndInterruptCues(self)
     CloseCueInterrupts(self)
     self._activeEncounterId = tonumber(encounterID)
     local id = self._activeEncounterId

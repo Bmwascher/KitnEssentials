@@ -2043,7 +2043,7 @@ describe("DungeonTimers compatibility", function()
     local function loadInterruptModule()
         local m = loadCountModule({ ordinal = 3, unit = "boss1", displayText = "DONE",
             duration = 1.5, color = { 0, 1, 0 } })
-        m.castBarID = 10
+        m.castBarID = "10"
         _G.UnitCastingInfo = function()
             return nil, nil, nil, nil, nil, nil, nil, nil, { __secret = true }, m.castBarID
         end
@@ -2065,18 +2065,18 @@ describe("DungeonTimers compatibility", function()
         assert.equal(kick, m.DT._slotPresentations[m.owner].cue[KICK_CUE])
         assert.equal(sounds, #soundCalls)
         m.clock.now = 1
-        interruptKick(m, "boss2", 10)
-        interruptKick(m, "boss1", 11)
-        interruptKick(m, "boss9", 10)
+        interruptKick(m, "boss2", "10")
+        interruptKick(m, "boss1", "11")
+        interruptKick(m, "boss9", "10")
         interruptKick(m, "boss1", { __secret = true })
         assert.same({ "KICK 3" }, kickTexts(m))
-        interruptKick(m, "boss1", 10)
+        interruptKick(m, "boss1", "10")
         assert.same({}, kickTexts(m))
         assert.same({ "DONE" }, cueTexts(m, KICK_CUE .. "#ended"))
         local result = m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"]
         m.clock.now = 1.2
-        interruptKick(m, "boss1", 10)
-        for _, id in ipairs({ 10, false }) do
+        interruptKick(m, "boss1", "10")
+        for _, id in ipairs({ "10", false }) do
             m.castBarID = id or nil
             sendKick(m, "Toxic Atrophy (3/3)")
             assert.equal(result, m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"])
@@ -2086,25 +2086,44 @@ describe("DungeonTimers compatibility", function()
         m.clock.now = 2.6
         m.tick(result)
         assert.same({}, cueTexts(m, KICK_CUE .. "#ended"))
-        m.castBarID = 11
+        m.castBarID = "11"
         sendKick(m, "Toxic Atrophy (3/3)")
         assert.same({ "KICK 3" }, kickTexts(m))
     end)
 
-    it("earlier kicks, missing cast identity and natural expiry do not create interrupt success", function()
-        for _, case in ipairs({ "earlier", "missing", "secret", "natural" }) do
+    it("a matched Kick 1 or Kick 2 interrupt removes that kick at once and silently, with no DONE", function()
+        for _, ordinal in ipairs({ 1, 2 }) do
+            local label = "kick " .. ordinal
+            local m = loadInterruptModule()
+            sendKick(m, ("Toxic Atrophy (%d/3)"):format(ordinal))
+            assert.same({ "KICK " .. ordinal }, kickTexts(m), label)
+            local sounds = #soundCalls
+            m.clock.now = 1
+            interruptKick(m, "boss1", "10")
+            assert.same({}, kickTexts(m), label)
+            assert.same({}, cueTexts(m, KICK_CUE .. "#ended"), label)
+            assert.equal(sounds, #soundCalls, label)
+        end
+    end)
+
+    it("missing cast identity, a quiet failure and natural expiry neither end a kick early nor show DONE", function()
+        for _, case in ipairs({ "missing", "secret", "quiet", "natural" }) do
             local m = loadInterruptModule()
             if case == "missing" then m.castBarID = nil end
             if case == "secret" then m.castBarID = { __secret = true } end
-            local ordinal = case == "earlier" and 2 or 3
-            sendKick(m, ("Toxic Atrophy (%d/3)"):format(ordinal))
-            if case ~= "natural" then interruptKick(m, "boss1", 10) end
-            assert.same({ "KICK " .. ordinal }, kickTexts(m), case)
+            sendKick(m, "Toxic Atrophy (3/3)")
+            if case == "quiet" then
+                m.DT:OnUnitCastFailed("UNIT_SPELLCAST_FAILED_QUIET", "boss1", nil, nil, "10")
+            elseif case ~= "natural" then
+                interruptKick(m, "boss1", "10")
+            end
+            assert.same({ "KICK 3" }, kickTexts(m), case)
+            assert.same({}, cueTexts(m, KICK_CUE .. "#ended"), case)
             local frame = m.DT._slotPresentations[m.owner].cue[KICK_CUE]
             m.clock.now = 4
             m.tick(frame)
             for _, h in ipairs(m.timers) do if not h.canceled then h.fn(h.arg) end end
-            interruptKick(m, "boss1", 10)
+            interruptKick(m, "boss1", "10")
             assert.same({}, kickTexts(m), case)
             assert.same({}, cueTexts(m, KICK_CUE .. "#ended"), case)
             assert.is_nil(next(m.DT._cueInterrupts), case)
@@ -2112,34 +2131,48 @@ describe("DungeonTimers compatibility", function()
         end
     end)
 
-    it("matched failure events complete early stops once across mixed failure and interrupt deliveries", function()
-        for _, event in ipairs({ "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_FAILED_QUIET" }) do
+    it("a matched failure completes the third kick once across mixed failure and interrupt deliveries", function()
+        local m = loadInterruptModule()
+        local failed = "UNIT_SPELLCAST_FAILED"
+        sendKick(m, "Toxic Atrophy (3/3)")
+        m.DT:OnUnitCastFailed(failed, "boss1", { __secret = true }, { __secret = true }, "11")
+        assert.same({ "KICK 3" }, kickTexts(m))
+        m.clock.now = 1
+        m.DT:OnUnitCastFailed(failed, "boss1", { __secret = true }, { __secret = true }, "10")
+        assert.same({}, kickTexts(m))
+        assert.same({ "DONE" }, cueTexts(m, KICK_CUE .. "#ended"))
+        local result = m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"]
+        m.clock.now = 1.2
+        interruptKick(m, "boss1", "10")
+        m.DT:OnUnitCastFailed(failed, "boss1", nil, nil, "10")
+        assert.equal(result, m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"])
+    end)
+
+    local lifecycleActions = {
+        replacement = function(m) m.castBarID = "11"; sendKick(m, "Toxic Atrophy (3/3)") end,
+        owner = function(m) m.DT:EventCallback("BigWigs_StopBars", m.owner) end,
+        encounter = function(m) m.DT:OnEncounterEnd() end,
+        start = function(m) m.DT:OnEncounterStart(nil, 2) end,
+        profile = function(m) m.DT:OnProfileBoundary() end,
+        world = function(m) m.DT:OnPlayerEnteringWorld() end,
+        disable = function(m) m.DT:OnDisable() end,
+    }
+
+    it("a visible DONE leaves at every lifecycle boundary, encounter start included, and at a replacing Message", function()
+        for name, action in pairs(lifecycleActions) do
             local m = loadInterruptModule()
             sendKick(m, "Toxic Atrophy (3/3)")
-            m.DT:OnUnitCastFailed(event, "boss1", { __secret = true }, { __secret = true }, 11)
-            assert.same({ "KICK 3" }, kickTexts(m))
             m.clock.now = 1
-            m.DT:OnUnitCastFailed(event, "boss1", { __secret = true }, { __secret = true }, 10)
-            assert.same({}, kickTexts(m))
-            assert.same({ "DONE" }, cueTexts(m, KICK_CUE .. "#ended"))
-            local result = m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"]
-            m.clock.now = 1.2
-            interruptKick(m, "boss1", 10)
-            m.DT:OnUnitCastFailed(event, "boss1", nil, nil, 10)
-            assert.equal(result, m.DT._slotPresentations[m.owner].cue[KICK_CUE .. "#ended"])
+            interruptKick(m, "boss1", "10")
+            assert.same({ "DONE" }, cueTexts(m, KICK_CUE .. "#ended"), name)
+            m.clock.now = 1.5
+            action(m)
+            assert.same({}, cueTexts(m, KICK_CUE .. "#ended"), name)
         end
     end)
 
     it("replacement and lifecycle cleanup prevent late interrupts and canceled jobs from reviving a result", function()
-        local actions = {
-            replacement = function(m) m.castBarID = 11; sendKick(m, "Toxic Atrophy (3/3)") end,
-            owner = function(m) m.DT:EventCallback("BigWigs_StopBars", m.owner) end,
-            encounter = function(m) m.DT:OnEncounterEnd() end,
-            start = function(m) m.DT:OnEncounterStart(nil, 2) end,
-            profile = function(m) m.DT:OnProfileBoundary() end,
-            world = function(m) m.DT:OnPlayerEnteringWorld() end,
-            disable = function(m) m.DT:OnDisable() end,
-        }
+        local actions = lifecycleActions
         for name, action in pairs(actions) do
             local m = loadInterruptModule()
             sendKick(m, "Toxic Atrophy (3/3)")
@@ -2147,11 +2180,11 @@ describe("DungeonTimers compatibility", function()
             m.clock.now = 1
             action(m)
             old.job.action()
-            interruptKick(m, "boss1", 10)
+            interruptKick(m, "boss1", "10")
             assert.same({}, cueTexts(m, KICK_CUE .. "#ended"), name)
             if name == "replacement" then
                 assert.same({ "KICK 3" }, kickTexts(m))
-                interruptKick(m, "boss1", 11)
+                interruptKick(m, "boss1", "11")
                 assert.same({ "DONE" }, cueTexts(m, KICK_CUE .. "#ended"))
             else
                 assert.is_nil(next(m.DT._cueInterrupts), name)

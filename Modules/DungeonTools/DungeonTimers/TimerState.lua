@@ -1705,6 +1705,14 @@ function State.MatchCueInterrupt(store, watch, unit, castBarID, now)
         and castBarID == watch.castBarID and State.IsCueInterruptCurrent(store, watch, now)
 end
 
+-- One cast ID belongs to one kick. A completed kick also refuses a repeat of
+-- its own number whose ID could not be read; another kick number still shows.
+function State.IsCueMessageDuplicate(store, watch, ordinal, castBarID, now)
+    if not State.IsCueInterruptCurrent(store, watch, now) then return false end
+    if castBarID ~= nil then return castBarID == watch.castBarID end
+    return watch.completed == true and watch.ordinal == ordinal
+end
+
 -- Whether a source-owned delayed operation may still act. Retired, replaced
 -- (generation mismatch) or previous-epoch tokens always fail.
 function State.IsCurrent(store, instance, generation, moduleEpoch, encounterEpoch)
