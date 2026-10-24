@@ -3,7 +3,12 @@
 
     <!-- Forever's settings pages: the admitted categories', in Pages.xml
          order. Home and Profile Manager load with the main addon. -->
+    <Script file="AuraTracking\GUI-AuraDebuffs.lua" />
+    <Script file="AuraTracking\GUI-AuraHeaders.lua" />
+    <Script file="AuraTracking\GUI-AuraExternals.lua" />
+    <Script file="AuraTracking\GUI-AuraMovement.lua" />
     <Script file="Skinning\GUI-DamageMeter.lua" />
+    <Script file="AuraTracking\GUI-TotemTracker.lua" />
     <Script file="Core\CVars\GUI-CVars.lua" />
     <Script file="Core\CVars\GUI-UIScaling.lua" />
     <Script file="Skinning\GUI-CharacterPanel.lua" />
