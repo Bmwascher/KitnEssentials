@@ -4,6 +4,7 @@
     <!-- The windows a baseline load skins, in Frames.xml order. Each key also
          needs its entry in Core/Availability.lua's frame skin list, or it
          never dispatches. -->
+    <Script file="Ace3.lua" />
     <Script file="AddonManager.lua" />
     <Script file="Alerts.lua" />
     <Script file="AuctionHouse.lua" />

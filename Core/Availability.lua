@@ -20,9 +20,9 @@ local FOREVER_ALLOWED = {
     ProfilesMain = true,
     ProfilesSharing = true,
     ProfilesReset = true,
-    -- Dark Theme: the engine, Color Picker, the skins command, and the page
-    -- with the tabs that configure what loads. Group Finder, Raid Control and
-    -- Addon Skins stay withheld.
+    -- Dark Theme: the engine, Color Picker, the skins command, the page
+    -- with the tabs that configure what loads, and the Addon Skins card.
+    -- Group Finder and Raid Control stay withheld.
     BlizzardFrames = true,
     ColorPicker = true,
     SkinAPI = true,
@@ -33,6 +33,7 @@ local FOREVER_ALLOWED = {
     SkinBlizzardFramesFontsWindows = true,
     SkinBlizzardFramesSkins = true,
     SkinBlizzardFramesFrames = true,
+    SkinBlizzardFramesAddons = true,
     -- Elements: the five modules with their own switches, and their pages.
     AlertFrames = true,
     LootFrame = true,
@@ -106,18 +107,23 @@ function KE:FilterAvailableFrameSkins(entries)
     return kept
 end
 
--- Skin registration keys a baseline load runs: the admitted window skins,
--- plus Dialogs, the global font sweep, the shared dropdown list and the
+-- Skin registration keys a baseline load runs: the admitted window and addon
+-- skins, plus Dialogs, the global font sweep, the shared dropdown list and the
 -- Context Menus row. Kept apart from the feature ids above so a skin key can
 -- never collide with a module or page id.
 local FOREVER_FRAME_SKINS = {
+    Ace3 = true,
     AddonManager = true,
     Alerts = true,
     AuctionHouse = true,
+    Baganator = true,
     Barber = true,
     Battlenet = true,
+    BetterFriendlist = true,
+    BigWigs = true,
     Binding = true,
     BlackMarket = true,
+    BugSack = true,
     Calendar = true,
     Channels = true,
     Character = true,
@@ -162,6 +168,7 @@ local FOREVER_FRAME_SKINS = {
     Reputation = true,
     SettingsPanel = true,
     SharedDropDownList = true,
+    Simulationcraft = true,
     Socket = true,
     Stable = true,
     SubscriptionInterstitial = true,
