@@ -13,9 +13,9 @@
 --
 -- Sources: the local, gitignored data builds named in Paths below. The
 -- PRIMARY build is the source of truth; the DIFF builds are compared against
--- it in order, newest first. The primary always wins; nothing is silently
--- reconciled — every field that differs across builds is logged for human
--- review.
+-- it in precedence order, highest first. The primary always wins; nothing is
+-- silently reconciled — every field that differs across builds is logged for
+-- human review.
 --
 -- The Trash/ output directory must already exist (it does once these files
 -- are committed). Re-running overwrites the three generated files in place.

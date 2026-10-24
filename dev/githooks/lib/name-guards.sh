@@ -89,7 +89,7 @@ ng_load() {
     local tag="$1"; shift
     ng_names_file="$ng_dir/upstream-names.local.sh"
     if [ ! -f "$ng_names_file" ]; then
-        echo "[$tag] BLOCKED: missing local word list $ng_names_file (it has no tracked copy: restore it from the private copy you keep outside the checkout; the format is in dev/README.md). Override with --no-verify" >&2
+        echo "[$tag] BLOCKED: missing local word list $ng_names_file (it has no tracked copy: restore it from a private copy kept outside the checkout, or rebuild it from the format in dev/README.md). Override with --no-verify" >&2
         return 1
     fi
     unset stems shorts compat provenance namesCI namesCS

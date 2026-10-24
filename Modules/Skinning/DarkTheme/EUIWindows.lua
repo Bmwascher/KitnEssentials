@@ -119,10 +119,10 @@ function KE:BuildSkinSuppressionSet(env)
         if not gated then
             local style = env.getStyle(entry.euiKey)
             if style and style ~= "off" then
-                -- SPARSE on purpose: an unfiltered row stores its euiKey
-                -- string, and only a filtered row (one with `addons`) stores a
-                -- record. S.GetSuppression and S.GetSuppressionState branch on
-                -- that type.
+                -- Sparse: an unfiltered row stores its euiKey string, and only
+                -- a filtered row (one with `addons`) stores a record.
+                -- S.GetSuppression and S.GetSuppressionState branch on that
+                -- type.
                 local value = entry.euiKey
                 if entry.addons then
                     local addons = {}
