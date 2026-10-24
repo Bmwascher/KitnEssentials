@@ -507,13 +507,15 @@ function HX.ShowPreview()
 end
 
 -- A preview may have placed the box at the page's view. Hiding the whole
--- interface passes keepPlace: it hides the drawing only, and the show that
--- follows places the box, so the Revert snapshot is not retaken twice.
+-- interface passes keepPlace: the drawing stops but HX.previewing stays set,
+-- so the interface showing again, or the preview's end if that comes first,
+-- places the box once.
 function HX.HidePreview(keepPlace)
     if not HX.previewing then return end
-    HX.previewing = false
     ForgetSamples()
-    if not keepPlace then HX.ApplyPosition() end
+    if keepPlace then return end
+    HX.previewing = false
+    HX.ApplyPosition()
     Show()
 end
 
