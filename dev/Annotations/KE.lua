@@ -1476,6 +1476,20 @@ function KE:GetKickCooldownCap(kickID) end
 ---@return number? seconds
 function KE:GetInterruptSuccessReduction(kickSpellID) end
 
+--- The first candidate isKnown accepts whose `forms` list, when present,
+--- holds formID. A nil or secret formID meets no `forms` list. Pure.
+---@param candidates { id: number, cd: number, forms: number[]? }[]
+---@param isKnown fun(spellID: number): boolean
+---@param formID number?
+---@return { id: number, cd: number, forms: number[]? }?
+function KE:SelectInterruptCandidate(candidates, isKnown, formID) end
+
+--- The player's kick for a spec: the first candidate in the player or pet
+--- spellbook whose form condition the current shapeshift form meets, or nil.
+---@param specID number?
+---@return { id: number, cd: number, forms: number[]? }?
+function KE:ResolvePlayerInterrupt(specID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 

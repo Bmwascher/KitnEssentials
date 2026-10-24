@@ -75,3 +75,38 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         assert.is_nil(KE:GetKickCooldownCap(1))
     end)
 end)
+
+-- A fixture list, so no data cell is pinned: ids 3 and 2 are two ranks of one
+-- form-gated kick, 5 needs one of two forms, 7 has no form condition.
+describe("KE:SelectInterruptCandidate", function()
+    local SECRET = {}
+    local KE
+    setup(function()
+        KE = helpers.loadModule("Core/Interrupts.lua", {
+            IsSecretValue = function(_, v) return v == SECRET end,
+        })
+    end)
+
+    it("picks the first known candidate whose forms allow the current form", function()
+        local list = {
+            { id = 3, cd = 10, forms = { 19 } },
+            { id = 2, cd = 10, forms = { 19 } },
+            { id = 5, cd = 12, forms = { 17, 18 } },
+            { id = 7, cd = 30 },
+        }
+        local all = { [3] = true, [2] = true, [5] = true, [7] = true }
+        local rows = {
+            { name = "first known in list order", known = all, form = 19, want = 3 },
+            { name = "an unknown higher rank is skipped", known = { [2] = true }, form = 19, want = 2 },
+            { name = "nothing known", known = {}, form = 19, want = nil },
+            { name = "a form outside a list moves on", known = all, form = 18, want = 5 },
+            { name = "no forms takes any form", known = all, form = 24, want = 7 },
+            { name = "a nil form meets no forms list", known = all, form = nil, want = 7 },
+            { name = "a secret form meets no forms list", known = all, form = SECRET, want = 7 },
+        }
+        for _, row in ipairs(rows) do
+            local pick = KE:SelectInterruptCandidate(list, function(id) return row.known[id] == true end, row.form)
+            assert.equals(row.want, pick and pick.id, row.name)
+        end
+    end)
+end)

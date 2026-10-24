@@ -10,8 +10,11 @@
 --   candidates     - ordered list of { id, cd } entries to try in priority
 --                    order (for pet-dependent specs where the available kick
 --                    changes with active pet, e.g. Warlock Felhunter vs
---                    Felguard). CacheInterruptId iterates and picks the first
---                    that is actually known in the player or pet spellbook.
+--                    Felguard). KE:ResolvePlayerInterrupt picks the first
+--                    that is known in the player or pet spellbook. A
+--                    candidate may carry `forms`, the shapeshift form ids
+--                    (GetShapeshiftFormID) it needs; without it any form
+--                    will do.
 --   announceExtras - optional array of additional spell IDs that count as
 --                    interrupts for announce purposes but not CD tracking.
 --   tracked        - optional candidate id a cooldown tracker shows for a
@@ -27,6 +30,11 @@
 --   KE:GetTrackedKickForSpec(specID) -> { id, cd } or nil.
 --   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate and
 --                                    tracker kick.
+--   KE:SelectInterruptCandidate(candidates, isKnown, formID) -> the first
+--                                    candidate isKnown accepts whose forms
+--                                    allow formID, or nil.
+--   KE:ResolvePlayerInterrupt(specID) -> that pick for the player's spellbook
+--                                        and current form, or nil.
 
 ---@class KE
 local KE = select(2, ...)
@@ -237,6 +245,42 @@ end
 -- never the announce extras, which are not kicks.
 function KE:GetInterruptKickSpellSet()
     return KICK_SPELL_SET
+end
+
+-- Pure: the caller supplies the known check and the form. A secret form is
+-- treated as unknown, so it meets no `forms` list.
+function KE:SelectInterruptCandidate(candidates, isKnown, formID)
+    if self:IsSecretValue(formID) then formID = nil end
+    for _, c in ipairs(candidates) do
+        local forms = c.forms
+        local formAllowed = not forms
+        if forms and formID then
+            for i = 1, #forms do
+                if forms[i] == formID then
+                    formAllowed = true
+                    break
+                end
+            end
+        end
+        if formAllowed and isKnown(c.id) then return c end
+    end
+    return nil
+end
+
+local function isKnownToPlayerOrPet(spellID)
+    local book = C_SpellBook
+    if not (book and book.IsSpellKnownOrInSpellBook) then return false end
+    return book.IsSpellKnownOrInSpellBook(spellID)
+        or book.IsSpellKnownOrInSpellBook(spellID, Enum.SpellBookSpellBank.Pet)
+end
+
+function KE:ResolvePlayerInterrupt(specID)
+    local candidates = self:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return nil end
+    local getForm = GetShapeshiftFormID
+    local formID
+    if getForm then formID = getForm() end
+    return self:SelectInterruptCandidate(candidates, isKnownToPlayerOrPet, formID)
 end
 
 -- Talents that change a kick's cooldown outright, keyed by kick spell ID.
