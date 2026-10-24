@@ -378,7 +378,7 @@ read_globals = {
     "SecureHandlerExecute", "SecureHandlerWrapScript",
 
     -- Shapeshifting / Stance
-    "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo",
+    "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo", "GetShapeshiftFormID",
 
     -- Loot / Spec
     "GetLootSpecialization", "GetAverageItemLevel",

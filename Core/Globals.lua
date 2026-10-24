@@ -2070,12 +2070,56 @@ end
 ---------------------------------------------------------------------------------
 
 -- Your own spec is never secret. Index 0 is a character with no spec yet.
-function KE:GetPlayerSpecRole()
+local function readSpecRole()
     local specIndex = C_SpecializationInfo.GetSpecialization()
     if not specIndex or specIndex == 0 then return nil end
     local getRole = _G.GetSpecializationRole
     if not getRole then return nil end
     return getRole(specIndex)
+end
+
+-- Read apart from the role, which a missing role API would turn into none.
+local function hasPlayerSpec()
+    local specIndex = C_SpecializationInfo.GetSpecialization()
+    return type(specIndex) == "number" and specIndex > 0
+end
+
+-- Every Forever class has one damage spec, so the role there is the spec
+-- library's reading of the talent tree with the most points. Registered at
+-- file scope, Forever only: core infrastructure every role reader shares.
+-- The callback marks the cached role stale. A nil answer is never cached,
+-- so a read before the talents load asks again.
+local roleLib = KE.IS_FOREVER and LibStub and LibStub("LibSpecialization", true) or nil
+local foreverRole, foreverRoleKept = nil, false
+if roleLib and roleLib.RegisterPlayerSpecChange then
+    -- The library keys callbacks by owner table; this one is Core's own.
+    roleLib.RegisterPlayerSpecChange({}, function()
+        foreverRoleKept = false
+    end)
+end
+
+local function readForeverLibraryRole()
+    if foreverRoleKept then return foreverRole end
+    local read = roleLib and roleLib.MySpecialization
+    if not read then return nil end
+    local ok, _, role = pcall(read)
+    if not ok or not role then return nil end
+    foreverRole, foreverRoleKept = role, true
+    return role
+end
+
+function KE:ResolveForeverRole(libraryRole, hasSpec)
+    if libraryRole then return libraryRole end
+    if hasSpec then return "DAMAGER" end
+    return nil
+end
+
+-- On Forever, code run by the same talent change (another library callback
+-- or a talent event) can run before the callback above and get the old role.
+function KE:GetPlayerSpecRole()
+    if not self.IS_FOREVER then return readSpecRole() end
+    local libraryRole = readForeverLibraryRole()
+    return self:ResolveForeverRole(libraryRole, not libraryRole and hasPlayerSpec())
 end
 
 function KE:IsPlayerHealerSpec()

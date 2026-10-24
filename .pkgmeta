@@ -36,6 +36,11 @@ ignore:
 # under Libs/ holds the same files, so the dev checkout runs what ships.
 # Update both together: `pwsh dev/scripts/check-lib-updates.ps1` lists pins
 # behind upstream, and its -Update mode moves a pin and rebuilds the copy.
+# LibRangeCheck-3.0 is no external: its tracked copy carries a local fix in
+# getCachedRange (a secret GUID keys the cache by unit token on any client)
+# and ships as it is, so it is updated by hand and keeps that fix.
+# dev/scripts/tracked-libs.psd1 records its upstream base and the fix, and
+# the checker reports an upstream move past that base or a lost fix.
 externals:
   Libs/AceAddon-3.0:
     url: https://github.com/WoWUIDev/Ace3.git/AceAddon-3.0
@@ -70,9 +75,6 @@ externals:
   Libs/LibKeystone:
     url: https://github.com/BigWigsMods/LibKeystone.git/LibKeystone
     tag: v12.1.1
-  Libs/LibRangeCheck-3.0:
-    url: https://github.com/WeakAuras/LibRangeCheck-3.0.git/LibRangeCheck-3.0
-    commit: 95a6313a44f615738d216bd79cf132dc6f243284
   Libs/LibSharedMedia-3.0:
     url: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
     tag: v12.1.3

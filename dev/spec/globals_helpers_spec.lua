@@ -900,6 +900,89 @@ describe("KE:GetPlayerSpecRole", function()
     end)
 end)
 
+-- The Forever role rule. Every Forever class has one damage spec, so the
+-- library's talent role decides.
+describe("KE:ResolveForeverRole", function()
+    local KE
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("returns the library's role as it is, with or without a spec", function()
+        for _, role in ipairs({ "TANK", "HEALER", "DAMAGER" }) do
+            assert.equals(role, KE:ResolveForeverRole(role, true), role .. " with a spec")
+            assert.equals(role, KE:ResolveForeverRole(role, false), role .. " without one")
+        end
+    end)
+
+    it("reads as damage with a spec and as none without one when the library has no answer", function()
+        assert.equals("DAMAGER", KE:ResolveForeverRole(nil, true))
+        assert.is_nil(KE:ResolveForeverRole(nil, false))
+    end)
+end)
+
+-- A stand-in for the two library members the Forever role cache uses: its
+-- talent read and its spec-change callback. The refresh rule lives between
+-- them, so it cannot be lifted into a pure predicate.
+describe("KE:GetPlayerSpecRole on Forever", function()
+    local KE, saved, lib, answer, raise
+    local STUBBED = { "GetSpecialization", "GetSpecializationRole" }
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = _G[name] end
+        answer, raise = nil, false
+        lib = {
+            MySpecialization = function()
+                if raise then error("talent read failed") end
+                if answer then return 11541, answer, "MELEE" end
+            end,
+            RegisterPlayerSpecChange = function(_, fn) lib.onSpecChange = fn end,
+        }
+        KE = L.loadGlobals(nil, { forever = true, libs = { LibSpecialization = lib } })
+        _G.GetSpecialization = function() return 1 end
+        _G.GetSpecializationRole = function() return "DAMAGER" end
+    end)
+    after_each(function()
+        for _, name in ipairs(STUBBED) do _G[name] = saved[name] end
+    end)
+
+    it("reads the library's talent role, not the spec role", function()
+        answer = "HEALER"
+        assert.is_true(KE:IsPlayerHealerSpec())
+        assert.is_false(KE:IsPlayerTankSpec())
+    end)
+
+    it("keeps an answer until the library reports a spec change, and asks again while it has none", function()
+        assert.equals("DAMAGER", KE:GetPlayerSpecRole(), "no answer yet")
+        answer = "TANK"
+        assert.equals("TANK", KE:GetPlayerSpecRole(), "asked again")
+        answer = "HEALER"
+        assert.equals("TANK", KE:GetPlayerSpecRole(), "kept")
+        lib.onSpecChange()
+        assert.equals("HEALER", KE:GetPlayerSpecRole(), "asked after the change")
+    end)
+
+    it("takes spec presence from the spec index, not the role API, when the library has no answer", function()
+        local rows = {
+            { name = "a spec, no role API", index = 1, getRole = nil, want = "DAMAGER" },
+            { name = "a spec, a role API returning nil", index = 1, getRole = function() return nil end, want = "DAMAGER" },
+            { name = "no spec", index = 0, getRole = function() return "DAMAGER" end, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            _G.GetSpecialization = function() return row.index end
+            _G.GetSpecializationRole = row.getRole
+            assert.equals(row.want, KE:GetPlayerSpecRole(), row.name)
+        end
+    end)
+
+    it("treats a library read that raises as no answer and asks again on the next read", function()
+        raise, answer = true, "HEALER"
+        assert.equals("DAMAGER", KE:GetPlayerSpecRole(), "the read raised")
+        raise = false
+        assert.equals("HEALER", KE:GetPlayerSpecRole(), "asked after the error")
+    end)
+end)
+
 describe("KE:FormatCountdown", function()
     local KE
     before_each(function()
