@@ -23,6 +23,8 @@ local GetCursorPosition = GetCursorPosition
 local IsInInstance = IsInInstance
 local math_min = math.min
 local math_ceil = math.ceil
+local math_floor = math.floor
+local math_abs = math.abs
 local wipe = wipe
 
 -- Symmetric clamp helper for the splitter drag math (plain numbers only --
@@ -30,6 +32,9 @@ local wipe = wipe
 local function clamp(v, lo, hi)
     if v < lo then return lo elseif v > hi then return hi else return v end
 end
+
+-- The narrowest a column may be dragged or set, in pixels.
+local COLUMN_FLOOR_PX = 80
 
 -- 1-based index of the column holding window `w` in a Columns array (nil if absent
 -- or `w` is nil). Plain table walk over window storage indices -- never a secret.
@@ -889,7 +894,7 @@ local function SplitterOnUpdate(s)
 
         -- cursor RIGHT -> mx INCREASES -> dPx POSITIVE -> left column grows.
         local dPx = (mx - s._startMX) / scale
-        local minPx = 80
+        local minPx = COLUMN_FLOOR_PX
         local baseW = db.Width or 240
         if baseW <= 0 then baseW = 240 end
         local newAPx = clamp(s._aPx + dPx, minPx, s._pairPx - minPx)
@@ -1536,23 +1541,24 @@ function DM:GetColumnBoundaryRange(colIdx)
     local pairPx = ((ciA and ciA.w) or (baseW * ((a.WidthRatio) or 1)))
                  + ((ciB and ciB.w) or (baseW * ((b.WidthRatio) or 1)))
     if pairPx <= 0 then return 5, 95 end
-    local minPct = clamp(math_ceil(80 / pairPx * 100), 5, 45)
+    local minPct = clamp(math_ceil(COLUMN_FLOOR_PX / pairPx * 100), 5, 45)
     return minPct, 100 - minPct
 end
 
--- Row gap rowIdx|rowIdx+1 in column colIdx: floor = header + one bar (matches the
--- row SplitterStartDrag min). The column's content height is Hdock (the single
--- natural height = header + the visible rows' DM.RowSpan); the pair occupies its
--- normalized share of that.
-function DM:GetRowBoundaryRange(colIdx, rowIdx)
+-- A row gap's pair in column colIdx: the RowRatios table, the pair's combined
+-- ratio, its exact pixel size (its share of the column's height after the
+-- inter-row gaps, before LayoutDock snaps each pane), the pane floor (header
+-- band + one bar, the row SplitterStartDrag min) and the two panes' drawn
+-- heights from the last layout. nil when either side is missing or no ratio is set.
+local function RowPair(self, colIdx, rowIdx)
     local db = self.db
     local cols = db and db.Dock and db.Dock.Columns
     local col = cols and cols[colIdx]
     local ratios = col and col.RowRatios
-    if not (ratios and ratios[rowIdx] and ratios[rowIdx + 1]) then return 5, 95 end
+    if not (ratios and ratios[rowIdx] and ratios[rowIdx + 1]) then return nil end
 
-    -- Header band + per-bar stride: prefer the values LayoutDock stashed (exact
-    -- pixel-snapped match to the splitter); recompute from db if not laid out yet.
+    -- Prefer the values LayoutDock stashed (exact pixel-snapped match to the
+    -- splitter); recompute from db if not laid out yet.
     local headerH = self._dockHeaderH or self:HeaderBandHeight()
     local spacing = self._dockSpacing or KE:PixelSnap(db.BarSpacing or 2)
     local stride = self._dockStride or (KE:PixelSnap(db.BarHeight or 16) + spacing)
@@ -1560,10 +1566,7 @@ function DM:GetRowBoundaryRange(colIdx, rowIdx)
     local visible = math_min((db.VisibleBars or 10), self.BAR_POOL_SIZE or 40)
     local Hdock = headerH + DM.RowSpan(visible, stride, spacing)
 
-    -- The rows split the column's content height MINUS the inter-row gaps (matches
-    -- LayoutDock's availH), so subtract them before apportioning the pair's share.
-    local nRows = #ratios
-    local availH = Hdock - (nRows - 1) * GAP
+    local availH = Hdock - (#ratios - 1) * (self._dockGap or KE:PixelSnap(1))
     if availH < 0 then availH = 0 end
 
     local sumR = 0
@@ -1571,14 +1574,146 @@ function DM:GetRowBoundaryRange(colIdx, rowIdx)
         local rr = ratios[r]
         if type(rr) == "number" and rr > 0 then sumR = sumR + rr end
     end
-    if sumR <= 0 then return 5, 95 end
+    if sumR <= 0 then return nil end
 
     local pairRatio = ((ratios[rowIdx]) or 0) + ((ratios[rowIdx + 1]) or 0)
-    local pairPx = availH * (pairRatio / sumR)
-    if pairPx <= 0 then return 5, 95 end
+    local ws, rt = col.Windows, self.windows_rt
+    local WA = ws and rt and rt[ws[rowIdx]]
+    local WB = ws and rt and rt[ws[rowIdx + 1]]
+    local rcA, rcB = WA and WA._dockRect, WB and WB._dockRect
+    return ratios, pairRatio, availH * (pairRatio / sumR), headerH + DM.RowSpan(1, stride, spacing),
+        rcA and rcA.h, rcB and rcB.h
+end
 
-    local minPct = clamp(math_ceil((headerH + DM.RowSpan(1, stride, spacing)) / pairPx * 100), 5, 45)
+-- Row gap rowIdx|rowIdx+1 in column colIdx, in percent of the pair.
+function DM:GetRowBoundaryRange(colIdx, rowIdx)
+    local ratios, _, pairPx, floorPx = RowPair(self, colIdx, rowIdx)
+    if not ratios or pairPx <= 0 then return 5, 95 end
+    local minPct = clamp(math_ceil(floorPx / pairPx * 100), 5, 45)
     return minPct, 100 - minPct
+end
+
+---------------------------------------------------------------------------------
+-- Boundary split in pixels (the Sizing card's split sliders)
+--
+-- Each pane draws PixelSnap(K * ratio), K = exactPx / pairRatio, so a pair's
+-- drawn size can sit up to a pixel off its exact size. The conversion works on
+-- the drawn pair so a set size keeps the pair's outer edges where they are.
+-- Every size here is a whole number of grid steps (grid = the pixel size), so a
+-- range end is always a size LayoutDock can draw. Plain numbers only.
+---------------------------------------------------------------------------------
+
+-- The first pane's slider range on the pixel grid, lo <= hi always. The floor
+-- holds whenever two fit; a smaller pair splits no further than half and half.
+function DM.SplitPxRange(drawnPx, floorPx, grid)
+    if not (grid and grid > 0) then return 0, 0 end
+    local steps = math_floor(drawnPx / grid + 0.5)
+    if steps <= 0 then return 0, 0 end
+    local floorSteps = math_ceil(floorPx / grid - 1e-6)
+    local lo
+    if floorSteps >= 0 and steps >= 2 * floorSteps then
+        lo = floorSteps
+    else
+        lo = math_floor(steps / 2)
+    end
+    return lo * grid, (steps - lo) * grid
+end
+
+-- A typed or dragged size, rounded to the grid and clamped into the range.
+function DM.SplitPxSnap(value, lo, hi, grid)
+    if not (grid and grid > 0) then return lo end
+    return clamp(math_floor(value / grid + 0.5) * grid, lo, hi)
+end
+
+-- The pair's two ratios for a first-pane size px on the pixel grid. The half
+-- difference between the exact and drawn sizes makes the first pane draw px and
+-- the second drawnPx - px, and the pair's ratio is conserved. nil for a pair
+-- with no size.
+function DM.SplitPxToRatios(px, drawnPx, exactPx, pairRatio)
+    if not (exactPx and exactPx > 0 and pairRatio and pairRatio > 0) then return nil end
+    local a = pairRatio * (px + (exactPx - drawnPx) / 2) / exactPx
+    return a, pairRatio - a
+end
+
+-- The first pane's size for its ratio, as LayoutDock would snap it, before a
+-- first layout.
+function DM.SplitRatioToPx(a, pairRatio, exactPx, grid)
+    if not (pairRatio and pairRatio > 0 and grid and grid > 0) then return 0 end
+    return math_floor(exactPx * a / pairRatio / grid + 0.5) * grid
+end
+
+-- The pair as LayoutDock drew it: its size and its first pane's. A missing
+-- record, or one more than a grid step off the exact size (stale), falls back
+-- to the pair as LayoutDock would draw it from the ratios.
+local function DrawnPair(aPx, bPx, exactPx, ratioA, pairRatio, grid)
+    if aPx and bPx and math_abs(aPx + bPx - exactPx) <= grid * 1.01 then
+        return aPx + bPx, aPx
+    end
+    local a = DM.SplitRatioToPx(ratioA, pairRatio, exactPx, grid)
+    return a + DM.SplitRatioToPx(pairRatio - ratioA, pairRatio, exactPx, grid), a
+end
+
+-- A column gap's pair: both columns, the combined ratio, the exact pixel size
+-- (Width x ratio) and the two columns' drawn widths from the last layout.
+local function ColumnPair(self, colIdx)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    local a = cols and cols[colIdx]
+    local b = cols and cols[colIdx + 1]
+    if not (a and b) then return nil end
+    local baseW = self.db.Width or 240
+    if baseW <= 0 then baseW = 240 end
+    local pairRatio = (a.WidthRatio or 1) + (b.WidthRatio or 1)
+    local ci = self._dockColInfo
+    local ciA, ciB = ci and ci[colIdx], ci and ci[colIdx + 1]
+    return a, b, pairRatio, baseW * pairRatio, ciA and ciA.w, ciB and ciB.w
+end
+
+-- The left column's drawn px, the slider range, the drawn pair and the grid
+-- step (the slider's step); nil without a pair.
+function DM:GetColumnBoundaryPx(colIdx)
+    local a, _, pairRatio, exactPx, aPx, bPx = ColumnPair(self, colIdx)
+    if not a or exactPx <= 0 then return nil end
+    local grid = KE:GetPixelSize()
+    local drawnPx, px = DrawnPair(aPx, bPx, exactPx, a.WidthRatio or 1, pairRatio, grid)
+    local lo, hi = DM.SplitPxRange(drawnPx, COLUMN_FLOOR_PX, grid)
+    return px, lo, hi, drawnPx, grid
+end
+
+function DM:SetColumnBoundaryPx(colIdx, px)
+    local a, b, pairRatio, exactPx, aPx, bPx = ColumnPair(self, colIdx)
+    if not a or exactPx <= 0 then return end
+    local grid = KE:GetPixelSize()
+    local drawnPx = DrawnPair(aPx, bPx, exactPx, a.WidthRatio or 1, pairRatio, grid)
+    local lo, hi = DM.SplitPxRange(drawnPx, COLUMN_FLOOR_PX, grid)
+    local target = DM.SplitPxSnap(px, lo, hi, grid)
+    local ra, rb = DM.SplitPxToRatios(target, drawnPx, exactPx, pairRatio)
+    if not ra then return end
+    a.WidthRatio, b.WidthRatio = ra, rb
+    self:RefreshDock()
+end
+
+-- The top window's drawn px, the slider range, the drawn pair and the grid
+-- step; nil without a pair.
+function DM:GetRowBoundaryPx(colIdx, rowIdx)
+    local ratios, pairRatio, exactPx, floorPx, aPx, bPx = RowPair(self, colIdx, rowIdx)
+    if not ratios or exactPx <= 0 then return nil end
+    local grid = KE:GetPixelSize()
+    local drawnPx, px = DrawnPair(aPx, bPx, exactPx, ratios[rowIdx] or 0, pairRatio, grid)
+    local lo, hi = DM.SplitPxRange(drawnPx, floorPx, grid)
+    return px, lo, hi, drawnPx, grid
+end
+
+function DM:SetRowBoundaryPx(colIdx, rowIdx, px)
+    local ratios, pairRatio, exactPx, floorPx, aPx, bPx = RowPair(self, colIdx, rowIdx)
+    if not ratios or exactPx <= 0 then return end
+    local grid = KE:GetPixelSize()
+    local drawnPx = DrawnPair(aPx, bPx, exactPx, ratios[rowIdx] or 0, pairRatio, grid)
+    local lo, hi = DM.SplitPxRange(drawnPx, floorPx, grid)
+    local target = DM.SplitPxSnap(px, lo, hi, grid)
+    local ra, rb = DM.SplitPxToRatios(target, drawnPx, exactPx, pairRatio)
+    if not ra then return end
+    ratios[rowIdx], ratios[rowIdx + 1] = ra, rb
+    self:RefreshDock()
 end
 
 ---------------------------------------------------------------------------------
