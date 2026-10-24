@@ -2752,6 +2752,58 @@ local Defaults = {
     },
 }
 
+-- Forever rows, as printed by dev/scripts/derive-forever-auras.lua.
+local FOREVER_EXTERNALS_ALLOWLIST = {
+    [1022] = { enabled = true, default = true },  -- Blessing of Protection
+    [5599] = { enabled = true, default = true },  -- Blessing of Protection
+    [10278] = { enabled = true, default = true },  -- Blessing of Protection
+    [6940] = { enabled = true, default = true },  -- Blessing of Sacrifice
+    [20729] = { enabled = true, default = true },  -- Blessing of Sacrifice
+    [19753] = { enabled = true, default = true },  -- Divine Intervention
+    [740] = { enabled = true, default = true },  -- Tranquility
+    [8918] = { enabled = true, default = true },  -- Tranquility
+    [9862] = { enabled = true, default = true },  -- Tranquility
+    [9863] = { enabled = true, default = true },  -- Tranquility
+    [29166] = { enabled = true, default = true },  -- Innervate
+    [10060] = { enabled = true, default = true },  -- Power Infusion
+}
+local FOREVER_MOVEMENT_ALLOWLIST = {
+    [130] = { enabled = true, default = true },  -- Slow Fall
+    [12438] = { enabled = true, default = true },  -- Slow Fall (Parachute Cloak)
+    [1044] = { enabled = true, default = true },  -- Blessing of Freedom
+    [1784] = { enabled = false, default = true },  -- Stealth
+    [1785] = { enabled = false, default = true },  -- Stealth
+    [1786] = { enabled = false, default = true },  -- Stealth
+    [1787] = { enabled = false, default = true },  -- Stealth
+    [1850] = { enabled = true, default = true },  -- Dash
+    [9821] = { enabled = true, default = true },  -- Dash
+    [2645] = { enabled = true, default = true },  -- Ghost Wolf
+    [2983] = { enabled = true, default = true },  -- Sprint
+    [8696] = { enabled = true, default = true },  -- Sprint
+    [11305] = { enabled = true, default = true },  -- Sprint
+    [5215] = { enabled = true, default = true },  -- Prowl
+    [6783] = { enabled = true, default = true },  -- Prowl
+    [9913] = { enabled = true, default = true },  -- Prowl
+    [5384] = { enabled = true, default = true },  -- Feign Death
+    [1706] = { enabled = true, default = true },  -- Levitate
+    [5118] = { enabled = true, default = true },  -- Aspect of the Cheetah
+    [13159] = { enabled = true, default = true },  -- Aspect of the Pack
+    [18708] = { enabled = false, default = true },  -- Fel Domination
+    [2379] = { enabled = true, default = true },  -- Speed (Swiftness Potion)
+    [14530] = { enabled = true, default = true },  -- Speed (Nifty Stopwatch)
+    [8892] = { enabled = true, default = true },  -- Goblin Rocket Boots (Goblin Rocket Boots)
+    [13141] = { enabled = true, default = true },  -- Gnomish Rocket Boots (Gnomish Rocket Boots)
+    [5024] = { enabled = true, default = true },  -- Flee (Skull of Impending Doom)
+    [6615] = { enabled = true, default = true },  -- Free Action (Free Action Potion)
+    [24364] = { enabled = true, default = true },  -- Living Free Action (Living Action Potion)
+}
+
+-- Replaced, not merged: AceDB copies every default row into the saved list.
+if KE.IS_FOREVER then
+    Defaults.profile.AuraExternals.Allowlist = FOREVER_EXTERNALS_ALLOWLIST
+    Defaults.profile.AuraMovement.Allowlist = FOREVER_MOVEMENT_ALLOWLIST
+end
+
 -- Copies, never aliases: each module saves its own list, and one shipped
 -- source keeps each ID in one place.
 local function CopyAllowlistRows(source)
