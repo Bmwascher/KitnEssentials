@@ -586,9 +586,9 @@ local FILTER_EVENTS = {
     "CHAT_MSG_CURRENCY",
     "CHAT_MSG_EMOTE",
     "CHAT_MSG_GUILD",
-    -- The guild variant is a separate event from CHAT_MSG_ACHIEVEMENT, and the
-    -- port source omits it, so guild achievement lines arrived undecorated
-    -- while a hand-linked achievement worked.
+    -- The guild variant is a separate event from CHAT_MSG_ACHIEVEMENT. Without
+    -- it, guild achievement lines arrive undecorated while a hand-linked
+    -- achievement works.
     "CHAT_MSG_GUILD_ACHIEVEMENT",
     "CHAT_MSG_INSTANCE_CHAT",
     "CHAT_MSG_INSTANCE_CHAT_LEADER",

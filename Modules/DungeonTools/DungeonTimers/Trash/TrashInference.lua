@@ -14,8 +14,7 @@
 -- ║                                                          ║
 -- ║  This file is PURE (no WoW API, no per-nameplate state); ║
 -- ║  DungeonTrash.lua owns the event loop + runtime state    ║
--- ║  and calls these decision functions. Engine spec:        ║
--- ║  dev/docs/dungeon-trash-engine-port-spec.md.             ║
+-- ║  and calls these decision functions.                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

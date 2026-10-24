@@ -1112,8 +1112,8 @@ function MPT:RenderForces()
 
     -- Forces PB: bare PB target after the %/count while filling; once capped,
     -- a completion PREFIX to the LEFT of the forces text — "<delta> [<time>]
-    -- <forces text>" (user direction, screenshot parity; no extra
-    -- separator — the " - " seen in COUNT_PERCENT belongs to that format).
+    -- <forces text>" (no extra separator — the " - " seen in COUNT_PERCENT
+    -- belongs to that format).
     -- The delta keeps the boss-row style/gate (ShowPBDelta, ahead/behind
     -- colors, bare unpadded); the bracketed forces clear time shares the boss
     -- rows' "Show Clear Times" gate and needs NO PB (a first-ever run has a

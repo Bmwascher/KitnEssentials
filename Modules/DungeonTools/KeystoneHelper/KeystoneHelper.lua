@@ -352,7 +352,7 @@ function KH:CheckYourKeyTimer()
 end
 
 function KH:ShowYourKey()
-    -- Re-triggering while shown restarts the auto-hide clock (WA parity).
+    -- Re-triggering while shown restarts the auto-hide clock.
     self.yourKeyShowTime = GetTime()
     if self.yourKeyActive then return end
 

@@ -248,7 +248,7 @@ end
 -- helper so the resolutions have one home and the helper stays comparable
 -- against any font or outline a caller wants to ask about.
 --
--- These are the same two calls the entry builder makes, verbatim. That is the
+-- These are exactly the two calls the entry builder makes. That is the
 -- whole point: the FILE is what gets drawn with, and the name is several
 -- lookups away from it — a stored name absent from the media library falls back
 -- to the default font, so two names nobody registered render identically. Key
@@ -814,7 +814,7 @@ function TS:PopulateEntry(entry, unit, info)
         end)
     end
 
-    -- THE verbatim core (spec "Visibility binding"): the secret targeting
+    -- The visibility binding: the secret targeting
     -- boolean never enters Lua; durationAlpha doubles as the >60s gate; the
     -- spacer mirrors alpha so hidden entries compact out of the stack.
     local durationAlpha = info.duration:EvaluateRemainingDuration(KE.curves.IsLongCast)

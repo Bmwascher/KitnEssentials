@@ -490,7 +490,7 @@ function CP:Enhance()
 
     -- Make the color picker movable (drag strip across the header). Blizzard's
     -- own DragBar already covers this same header hitbox and moves the same
-    -- frame -- harmless duplication, kept as ported.
+    -- frame; the duplication is harmless.
     local mover = CreateFrame("Frame", nil, frame)
     mover:SetPoint("TOPLEFT", frame, "TOP", -60, 0)
     mover:SetPoint("BOTTOMRIGHT", frame, "TOP", 60, -15)

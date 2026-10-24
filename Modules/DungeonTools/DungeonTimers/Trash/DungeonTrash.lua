@@ -6,8 +6,7 @@
 -- ║  loop + per-nameplate runtime state; delegates every     ║
 -- ║  decision to KE.TrashInference (pure). Detection is      ║
 -- ║  behavioral inference because 12.0 makes a nameplate's   ║
--- ║  npcID (UnitGUID) and a cast's spellID secret — see      ║
--- ║  dev/docs/dungeon-trash-engine-port-spec.md.             ║
+-- ║  npcID (UnitGUID) and a cast's spellID secret.           ║
 -- ║                                                          ║
 -- ║  SECRET-SAFETY (do not regress): the engine NEVER reads  ║
 -- ║  a spellID/GUID/cast-time/aura-value for identity. Mobs  ║

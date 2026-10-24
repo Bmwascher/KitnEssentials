@@ -78,15 +78,15 @@ S.WINDOW_MAP = {
       partialLabel = "Delves (EllesmereUI: companion only)",
       partialTooltip = "EllesmereUI currently skins Companion Configuration. While that overlap is active, this toggle controls Difficulty Picker and Delves Dashboard. Your saved choice also applies to Companion Configuration if EllesmereUI stops covering it." },
     { euiKey = "itemupgrade",     skins = { "ItemUpgrade" },  since = "8.6.4" },
-    -- This row was deleted once, when it mapped to the whole `Alerts` key: an
-    -- unfiltered row cost up to nineteen alert systems to avoid one collision.
-    -- The key split above is the remedy for that shape: suppression
-    -- now reaches only our six item-drop toasts instead of all twenty-five.
-    -- It does NOT follow that EllesmereUI visits exactly those six. Its sweep
-    -- walks every active alert subsystem and duck-types on a label field
-    -- (EllesmereUIBlizzardSkin_WindowPacks.lua), so over-suppression
-    -- is bounded here, not eliminated -- which is the accepted trade, in the
-    -- visible-failure direction A6.3a chose.
+    -- Mapped to the whole `Alerts` key, an unfiltered row would suppress up
+    -- to nineteen alert systems to avoid one collision. The key split above
+    -- limits suppression to KE's six item-drop toasts instead of all
+    -- twenty-five. It does NOT follow that EllesmereUI visits exactly those
+    -- six. Its sweep walks every active alert subsystem and duck-types on a
+    -- label field (EllesmereUIBlizzardSkin_WindowPacks.lua), so
+    -- over-suppression is bounded here, not eliminated. That is the accepted
+    -- trade: a toast suppressed by mistake is left unskinned, which the
+    -- player can see.
     -- Its sibling `loot` row stays deleted: EllesmereUI's loot pack touches
     -- only _G.LootFrame while our `Loot` key covers four families.
     { euiKey = "loottoast",       skins = { "LootToast" },  since = "8.6.4" },
@@ -119,13 +119,10 @@ function KE:BuildSkinSuppressionSet(env)
         if not gated then
             local style = env.getStyle(entry.euiKey)
             if style and style ~= "off" then
-                -- SPARSE on purpose: only a filtered row (one with `addons`)
-                -- gets a table value. A uniform record would give every
-                -- already-ported key with a row (Socket today) a table too,
-                -- and those keys DO get dispatched, so the concatenation at
-                -- SkinAPI.lua would hit a table the first time anyone
-                -- ran /kes skins verify. Step 4 removes that crash
-                -- regardless; sparse means it was never reachable at all.
+                -- SPARSE on purpose: an unfiltered row stores its euiKey
+                -- string, and only a filtered row (one with `addons`) stores a
+                -- record. S.GetSuppression and S.GetSuppressionState branch on
+                -- that type.
                 local value = entry.euiKey
                 if entry.addons then
                     local addons = {}

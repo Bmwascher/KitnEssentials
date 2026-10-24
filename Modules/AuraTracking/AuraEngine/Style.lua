@@ -17,9 +17,9 @@ local BLACK = { 0, 0, 0, 1 }
 local WHITE = { 1, 1, 1, 1 }
 local DEFAULT_RING = { 0.8, 0, 0, 1 }
 
--- The dispel badge is a fixed fraction of the icon, not a setting -- ported
--- from the modules this engine replaces. A field rather than a local so the
--- Edit Mode hitbox math can share this one definition instead of copying it.
+-- The dispel badge is a fixed fraction of the icon, not a setting. A field
+-- rather than a local so the Edit Mode hitbox math can share this one
+-- definition instead of copying it.
 Style.DISPEL_ICON_FRACTION = 0.40
 
 ---------------------------------------------------------------------------------
@@ -119,10 +119,10 @@ Style.GetDurationFormatter = GetDurationFormatter
 -- The trade: a mid-fight UI-scale change leaves these borders unsnapped until
 -- the next reconfiguration. That is the correct side to err on.
 --
--- Defaults to black, matching the plain border both modules being replaced
--- draw (their dispel-colored decoration is a SEPARATE region, now the
--- dispel host below). Sized from settings.IconSize at creation; StyleAuraFrame
--- re-sizes on every reconfiguration the same way, in case IconSize changed.
+-- Defaults to a plain black border; the dispel-colored decoration is a
+-- SEPARATE region, the dispel host below. Sized from settings.IconSize at
+-- creation; StyleAuraFrame re-sizes on every reconfiguration the same way,
+-- in case IconSize changed.
 function Style.CreateBorderHost(button, settings, color)
     local px   = KE:GetPixelSize()
     local size = settings.IconSize or 0
@@ -638,8 +638,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         -- Color: "dispel" mode is Blizzard's to paint, via the vertex
         -- tint RegisterRegions wires up -- kept white here so that tint
         -- is never multiplied against a color of ours. Any other mode
-        -- paints the flat setting directly, the same final fallback the
-        -- module this engine replaces used.
+        -- paints the flat setting directly.
         local r, g, b, a
         if settings.BorderColorMode == "dispel" then
             r, g, b, a = 1, 1, 1, 1
