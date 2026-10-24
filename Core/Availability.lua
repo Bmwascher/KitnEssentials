@@ -67,6 +67,22 @@ local FOREVER_ALLOWED = {
     DamageMeter_Appearance = true,
     DamageMeter_Behavior = true,
     DamageMeter_SpellHistory = true,
+    -- Core: System Optimization, the CVars page with its General and Dev
+    -- tabs, UI Scaling with its General, Core Panels and Services tabs, Panel
+    -- and Map Scale, and Version Check. The Housing and Legacy tabs and the
+    -- Optimize Mythic+ card stay withheld, and so does Automation, whose
+    -- switch the CVars login apply waits on.
+    CVars = true,
+    CVarsGeneral = true,
+    CVarsDev = true,
+    UIScaling = true,
+    UIScalingGeneral = true,
+    UIScalingCore = true,
+    UIScalingServices = true,
+    Optimize = true,
+    PanelScale = true,
+    MapScale = true,
+    VersionCheck = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
