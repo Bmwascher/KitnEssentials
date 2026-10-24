@@ -30,17 +30,6 @@ local function DampenBarColor(bar, r, g, b, a)
     d.keDampening = false
 end
 
-local function UpdateToggleAtlas(button)
-    local header = (button.GetHeader and button:GetHeader()) or button:GetParent()
-    local collapsed = header and header.IsCollapsed and header:IsCollapsed()
-    local atlas = collapsed and "Soulbinds_Collection_CategoryHeader_Expand"
-        or "Soulbinds_Collection_CategoryHeader_Collapse"
-    for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture" }) do
-        local t = button[getter] and button[getter](button)
-        if t then t:SetAtlas(atlas) end
-    end
-end
-
 local function FixCollapseChevron(child)
     if not child.Right then return end
     UpdateCollapse(child.Right)
@@ -76,10 +65,10 @@ local function StyleEntry(child)
     local tcb = child.ToggleCollapseButton
     if tcb then
         if tcb.RefreshIcon and not S.data(tcb).keToggleHooked then
-            hooksecurefunc(tcb, "RefreshIcon", UpdateToggleAtlas)
+            hooksecurefunc(tcb, "RefreshIcon", S.CharacterToggleAtlas)
             S.data(tcb).keToggleHooked = true
         end
-        UpdateToggleAtlas(tcb)
+        S.CharacterToggleAtlas(tcb)
     end
     local content = child.Content
     local bar = content and content.ReputationBar

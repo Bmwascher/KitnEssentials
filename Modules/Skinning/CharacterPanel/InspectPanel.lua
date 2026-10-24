@@ -33,6 +33,7 @@ local math = math
 local table = table
 local tostring = tostring
 local GetTime = GetTime
+local IS_FOREVER = KE.IS_FOREVER == true
 
 ---------------------------------------------------------------------------------
 -- Debug
@@ -59,11 +60,14 @@ local INSPECT_SLOT_FRAMES = {
     [15] = "InspectBackSlot",
     [16] = "InspectMainHandSlot",  [17] = "InspectSecondaryHandSlot",
 }
+if IS_FOREVER then INSPECT_SLOT_FRAMES[18] = "InspectRangedSlot" end
 
 -- Average-item-level computation. C_PaperDollInfo.GetInspectItemLevel
 -- only returns a rounded integer, so to show real decimals we sum the equipped
--- slots and divide by 16 ourselves.
+-- slots and divide by their count ourselves. Forever adds the ranged slot.
 local AVG_ARMOR_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }
+if IS_FOREVER then AVG_ARMOR_SLOTS[#AVG_ARMOR_SLOTS + 1] = 18 end
+local AVG_DIVISOR = IS_FOREVER and 17 or 16
 local AVG_X2_INVTYPES = {
     INVTYPE_2HWEAPON = true,
     INVTYPE_RANGEDRIGHT = true,
@@ -583,11 +587,10 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
             -- instead of flashing red empty-socket cues. Skip the cache write so
             -- the next retry re-evaluates fresh.
             CP:UpdateSlotWarning(button, unit, slotID)
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
-                or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+            if CP:SlotDetailsWanted() then
                 CP:UpdateSlotDetail(button, slotID, unit, true, data)
             end
-            if CP.db.TrackIndicatorsEnabled then
+            if CP:TrackLettersOn() then
                 CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
             end
             return
@@ -602,11 +605,10 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
 
     CP:UpdateSlotWarning(button, unit, slotID)
     local fellBack, wDetail, wCorner
-    if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
-        or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+    if CP:SlotDetailsWanted() then
         fellBack, wDetail = CP:UpdateSlotDetail(button, slotID, unit, nil, data)
     end
-    if CP.db.TrackIndicatorsEnabled then
+    if CP:TrackLettersOn() then
         wCorner = CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
     end
 
@@ -694,13 +696,23 @@ function InspectPanel:InvalidateSlotCache()
     ClearDirtyKeys(_inspectCache)
 end
 
+-- Retail trusts the inspect data once the spec reads clean and non-zero, with
+-- the secret test ahead of any comparison. Forever never reads the spec: its
+-- readiness is the gear alone, checked slot by slot below.
+local function SpecGateOpen(forever, spec)
+    if forever then return true end
+    if issecretvalue(spec) then return false end
+    return spec ~= nil and spec ~= 0
+end
+InspectPanel._SpecGateOpen = SpecGateOpen
+
 -- Returns the equipped average item level to 2 decimals, or nil if the inspect
 -- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
 function InspectPanel:GetInspectAverageItemLevel(unit)
-    local spec = GetInspectSpecialization(unit)
+    local spec
+    if not IS_FOREVER then spec = GetInspectSpecialization(unit) end
     -- The Fury weapon-slot branch requires a clean specialization value.
-    if issecretvalue(spec) then return nil end
-    if not spec or spec == 0 then return nil end  -- inspect data not resolved yet
+    if not SpecGateOpen(IS_FOREVER, spec) then return nil end
 
     local total = 0
     for _, id in ipairs(AVG_ARMOR_SLOTS) do
@@ -747,7 +759,7 @@ function InspectPanel:GetInspectAverageItemLevel(unit)
     end
 
     if total == 0 then return nil end
-    return math.floor((total / 16) * 100 + 0.5) / 100
+    return math.floor((total / AVG_DIVISOR) * 100 + 0.5) / 100
 end
 
 -- Blizzard's inspect frame shows no average item level, so render our own.

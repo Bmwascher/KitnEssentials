@@ -36,6 +36,75 @@ local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 
 -- Slot item level and gem icons are drawn by CharacterPanel.lua, not here.
 
+-- The list pages only Forever has (Skills, Statistics, PvP Rank) take the
+-- Reputation tab's treatment. Statistics headers carry no IsCollapsed and
+-- read their tree node instead.
+local LIST_ROW_FONT = 12
+local LIST_BAR_DAMPEN = 0.55
+
+local function ListHeaderCollapsed(header)
+    if not header then return false end
+    if header.IsCollapsed then return header:IsCollapsed() and true or false end
+    local node = header.treeNode
+    return node and node.IsCollapsed and node:IsCollapsed() and true or false
+end
+
+-- Shared with Reputation.lua's subheaders.
+function S.CharacterToggleAtlas(button)
+    if not button then return end
+    local header = (button.GetHeader and button:GetHeader()) or button:GetParent()
+    local atlas = ListHeaderCollapsed(header) and "Soulbinds_Collection_CategoryHeader_Expand"
+        or "Soulbinds_Collection_CategoryHeader_Collapse"
+    for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture" }) do
+        local t = button[getter] and button[getter](button)
+        if t then t:SetAtlas(atlas) end
+    end
+end
+
+function S.CharacterListRow(child)
+    if not child or S.data(child).keListRow then return end
+    S.data(child).keListRow = true
+    -- StripTextures clears every texture region, so the hover is added after it.
+    S.StripKeepingIcon(child, child.StateIcon)
+    S.RowHover(child)
+    if child.StateIcon then
+        local bd = S.Backdrop(child)
+        if bd then
+            bd:ClearAllPoints()
+            bd:SetPoint("TOPLEFT", child, "TOPLEFT", 1, -1)
+            bd:SetPoint("BOTTOMRIGHT", child, "BOTTOMRIGHT", -1, 1)
+        end
+    end
+    local tcb = child.ToggleCollapseButton
+    if tcb then
+        if tcb.RefreshIcon then hooksecurefunc(tcb, "RefreshIcon", S.CharacterToggleAtlas) end
+        S.CharacterToggleAtlas(tcb)
+    end
+    local content = child.Content
+    if content then
+        -- A colored progress bar, though its object type is StatusBar: the fill
+        -- is a texture the mixin sizes, so the StatusBar path would miss it.
+        if content.SkillsBar then S.ColoredBar(content.SkillsBar, LIST_BAR_DAMPEN) end
+        S.FontStrings(content, LIST_ROW_FONT, "")
+    end
+end
+
+function S.CharacterListPage(frame)
+    if not frame then return end
+    S.StripTextures(frame)
+    if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end
+    if frame.ScrollBox then S.HookScrollBox(frame.ScrollBox, S.CharacterListRow) end
+end
+
+function S.CharacterSidePane(pane)
+    if not pane or S.data(pane).keSidePane then return end
+    S.data(pane).keSidePane = true
+    S.StripTextures(pane)
+    S.Backdrop(pane)
+    if pane.CloseButton then S.CloseButton(pane.CloseButton) end
+    if pane.DescriptionScrollBar then S.ScrollBar(pane.DescriptionScrollBar) end
+end
+
 -- Two mirrored fades from the row's center outward, replacing the plate rather
 -- than merely hiding it.
 --

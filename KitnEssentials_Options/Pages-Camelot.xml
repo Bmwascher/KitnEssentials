@@ -6,6 +6,7 @@
     <Script file="Skinning\GUI-DamageMeter.lua" />
     <Script file="Core\CVars\GUI-CVars.lua" />
     <Script file="Core\CVars\GUI-UIScaling.lua" />
+    <Script file="Skinning\GUI-CharacterPanel.lua" />
     <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
     <Script file="Skinning\GUI-Tooltips.lua" />
     <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />

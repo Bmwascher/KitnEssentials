@@ -185,3 +185,41 @@ describe("Forever availability: frame skins", function()
         end
     end)
 end)
+
+describe("Forever availability: Character pages", function()
+    -- The module family loads on Forever, its options for content Forever
+    -- lacks stay withheld there and admitted on retail, and the three pages
+    -- only Forever has skin there and never on retail.
+    it("admits the Character Panel family, withholds its retail-only options and keeps the new page skins Forever-only", function()
+        local rows = {
+            { kind = "feature", id = "CharacterPanel", baseline = true, retail = true },
+            { kind = "feature", id = "InspectPanel", baseline = true, retail = true },
+            { kind = "feature", id = "CompareHeader", baseline = true, retail = true },
+            { kind = "feature", id = "CharacterPanelMythicPlus", baseline = false, retail = true },
+            { kind = "feature", id = "CharacterPanelTracks", baseline = false, retail = true },
+            { kind = "feature", id = "CharacterPanelSockets", baseline = false, retail = true },
+            { kind = "feature", id = "CharacterPanelEnchantRank", baseline = false, retail = true },
+            { kind = "feature", id = "CharacterPanelWiden", baseline = false, retail = true },
+            { kind = "feature", id = "CharacterPanelWindowButtons", baseline = false, retail = true },
+            { kind = "skin", id = "PVPRank", baseline = true, retail = false },
+            { kind = "skin", id = "Skills", baseline = true, retail = false },
+            { kind = "skin", id = "Statistics", baseline = true, retail = false },
+        }
+        for _, row in ipairs(rows) do
+            for _, load in ipairs({
+                { name = "baseline", baselineLoad = true, forever = true, want = row.baseline },
+                { name = "retail", baselineLoad = nil, forever = false, want = row.retail },
+            }) do
+                local KE = helpers.loadModule("Core/Availability.lua",
+                    { BASELINE_LOAD = load.baselineLoad, IS_FOREVER = load.forever })
+                local got
+                if row.kind == "skin" then
+                    got = KE:IsFrameSkinAvailable(row.id)
+                else
+                    got = (KE:IsFeatureAvailable(row.id))
+                end
+                assert.equals(load.want, got, load.name .. " " .. row.id)
+            end
+        end
+    end)
+end)

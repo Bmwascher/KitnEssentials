@@ -41,14 +41,34 @@ local INVSLOT_FINGER1   = INVSLOT_FINGER1
 local INVSLOT_FINGER2   = INVSLOT_FINGER2
 local INVSLOT_MAINHAND  = INVSLOT_MAINHAND
 local INVSLOT_OFFHAND   = INVSLOT_OFFHAND
+local INVSLOT_HAND      = INVSLOT_HAND
+local INVSLOT_RANGED    = INVSLOT_RANGED
 
 local function ElvUILoaded()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
 end
 
+-- Features a client can withhold, read once: the answers cannot change during
+-- a session. A headless load without the availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local MYTHIC_PLUS = Admitted("CharacterPanelMythicPlus")
+local TRACKS = Admitted("CharacterPanelTracks")
+local SOCKETS = Admitted("CharacterPanelSockets")
+local ENCHANT_RANK = Admitted("CharacterPanelEnchantRank")
+local WIDEN = Admitted("CharacterPanelWiden")
+local INSPECT_PANEL = Admitted("InspectPanel")
+
+-- Forever's missing-enchant rule: the Enchanting slots (enchantSlotButtons
+-- below), and only at that client's level cap.
+local IS_FOREVER = KE.IS_FOREVER == true
+local FOREVER_MAX_LEVEL = 60
+
 -- 12.1 removed the IsLevelAtEffectiveMaxLevel global; Blizzard code now
 -- compares against GameRulesUtil.GetEffectiveMaxLevelForPlayer (GameRulesUtil.lua).
 local function IsLevelAtEffectiveMaxLevel(level)
+    if IS_FOREVER then return level >= FOREVER_MAX_LEVEL end
     return GameRulesUtil and GameRulesUtil.GetEffectiveMaxLevelForPlayer
         and level >= GameRulesUtil.GetEffectiveMaxLevelForPlayer()
 end
@@ -80,6 +100,12 @@ local STRIP_LEFT_SLOTS = {
     [11] = true, [12] = true, [13] = true, [14] = true, [16] = true,
 }
 
+-- Forever's bottom row puts the ranged slot 6 px right of the off hand, so the
+-- off hand's strip sits centered above its icon instead.
+local STRIP_TOP_SLOTS = {}
+if IS_FOREVER then STRIP_TOP_SLOTS[INVSLOT_OFFHAND] = true end
+local TOP_STRIP_HEIGHT = 30
+
 -- Enchantable slot buttons
 local enchantSlotButtons = {
     [INVSLOT_HEAD]      = "CharacterHeadSlot",
@@ -94,6 +120,17 @@ local enchantSlotButtons = {
     [INVSLOT_MAINHAND]  = "CharacterMainHandSlot",
     [INVSLOT_OFFHAND]   = "CharacterSecondaryHandSlot",
 }
+if IS_FOREVER then
+    enchantSlotButtons = {
+        [INVSLOT_BACK]      = "CharacterBackSlot",
+        [INVSLOT_CHEST]     = "CharacterChestSlot",
+        [INVSLOT_WRIST]     = "CharacterWristSlot",
+        [INVSLOT_HAND]      = "CharacterHandsSlot",
+        [INVSLOT_FEET]      = "CharacterFeetSlot",
+        [INVSLOT_MAINHAND]  = "CharacterMainHandSlot",
+        [INVSLOT_OFFHAND]   = "CharacterSecondaryHandSlot",
+    }
+end
 
 -- Slots that can have gem sockets this expansion
 local gemSlotButtons = {
@@ -104,6 +141,7 @@ local gemSlotButtons = {
     [INVSLOT_FINGER1] = "CharacterFinger0Slot",
     [INVSLOT_FINGER2] = "CharacterFinger1Slot",
 }
+if not SOCKETS then gemSlotButtons = {} end
 
 -- Gem socket types for socket helper scanning. Canonical list lives on KE
 -- (Core/Globals.lua) because the Character window skin needs the same one.
@@ -124,7 +162,7 @@ local SOCKET_LINE_TYPE = (Enum and Enum.TooltipDataLineType and Enum.TooltipData
 local DEBUG_CP = false
 
 -- Slot IDs the gem socket helper scans.
-local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
+local socketableSlots = SOCKETS and { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 } or {}
 
 -- Set form of socketableSlots for O(1) membership (used by per-slot detail gems).
 local socketableSlotSet = {}
@@ -309,6 +347,7 @@ local SLOT_FRAMES = {
     [15] = "CharacterBackSlot",
     [16] = "CharacterMainHandSlot",  [17] = "CharacterSecondaryHandSlot",
 }
+if IS_FOREVER then SLOT_FRAMES[INVSLOT_RANGED] = "CharacterRangedSlot" end
 
 -- Inspect paperdoll mirrors the same slot layout; names swap Character->Inspect.
 local INSPECT_SLOT_FRAMES = {}
@@ -514,7 +553,7 @@ function CP:ResolveEnchantLabel(unit, slot, data)
     -- knows to read the slot again.
     if not name then return "Enchanted", true end
     name = ProcessEnchantText(name, self.db.EnchantNameStyle)
-    return FinishEnchantLabel(name, rank, self.db.ShowEnchantRank)
+    return FinishEnchantLabel(name, rank, ENCHANT_RANK and self.db.ShowEnchantRank)
 end
 
 function CP:GetSlotItemLevel(unit, slot)
@@ -542,6 +581,14 @@ end
 -- The level is a parameter so a caller that has already checked it for
 -- secrecy decides on that same value, not on a second read.
 local function CanEnchantSlotAtLevel(unit, slot, level)
+    -- Forever: the off hand only for a shield; a weapon there takes no cue.
+    if IS_FOREVER then
+        if slot == INVSLOT_OFFHAND then
+            local itemLink = GetInventoryItemLink(unit, slot)
+            return itemLink ~= nil and select(4, GetItemInfoInstant(itemLink)) == "INVTYPE_SHIELD"
+        end
+        return enchantSlotButtons[slot] ~= nil
+    end
     local expansion = GetExpansionForLevel(level)
     local slots = expansion and expansionEnchantableSlots[expansion]
     if not slots then return false end
@@ -590,7 +637,10 @@ local function CreateSlotText(button, slot)
 
     -- On the strip's enchant line: the icon's bottom edge with the enchant's own
     -- offsets from CreateSlotDetail, so the warning takes the enchant's place.
-    if STRIP_LEFT_SLOTS[slot] then
+    if STRIP_TOP_SLOTS[slot] then
+        text:SetJustifyH("CENTER")
+        text:SetPoint("BOTTOM", button, "TOP", 0, 2)
+    elseif STRIP_LEFT_SLOTS[slot] then
         text:SetJustifyH("RIGHT")
         text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 2)
     else
@@ -723,6 +773,7 @@ end
 -- each re-scanned all 11 socketable slots; this folds a burst into one scan.
 local socketRefreshPending = false
 local function QueueSocketRefresh()
+    if not SOCKETS then return end
     if socketRefreshPending then return end
     if not CP:IsEnabled() then return end
     if not (PaperDollFrame and PaperDollFrame:IsShown()) then return end
@@ -807,6 +858,7 @@ local WIDEN_BY = 40
 local function ExtraWidth()
     local db = CP.db
     if not db or not db.WiderFrame then return 0 end
+    if not WIDEN then return 0 end
     -- The module's LIFECYCLE STATE, not the preference key. The hooks below
     -- install once and cannot be removed, so without this they keep re-widening
     -- after the module is switched off -- and the control for this setting lives
@@ -1009,9 +1061,16 @@ function CP:ApplyHeaderCentering()
     end
 
     -- +10: the model is posed slightly right of the scene frame's own center.
+    -- A two-pane window centers the model on its left pane, and its level line
+    -- already sits centered on that pane's top strip.
+    local twoPane = cf.LeftPaneHost ~= nil
     titleText:ClearAllPoints()
-    titleText:SetPoint("TOP", model, "TOP", 10, self._titleModelTopOff)
+    titleText:SetPoint("TOP", model, "TOP", twoPane and 0 or 10, self._titleModelTopOff)
 
+    if twoPane then
+        RestoreAnchors(levelText)
+        return
+    end
     levelText:ClearAllPoints()
     levelText:SetPoint("TOP", titleText, "BOTTOM", 0, -1)
 end
@@ -1067,7 +1126,8 @@ local function HookCharacterPanel()
             if CP.eventFrame then
                 CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
                 CP.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-                CP.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+                -- Only the gem scan requests item loads.
+                if SOCKETS then CP.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT") end
             end
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
@@ -1149,7 +1209,7 @@ local function HookCharacterPanel()
             if CP.socketContainer and CP.socketContainer:IsShown() then
                 QueueSocketRefresh()
             end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+            if CP:SlotDetailsWanted() then
                 CP:UpdateAllSlotDetails()
             end
         end
@@ -1248,9 +1308,110 @@ function CP:ApplyFont(fontString, size)
     KE:ApplyFont(fontString, fontFace, size, fontOutline)
 end
 
-function CP:UpdateItemLevelText()
+-- Forever lists the stats in two scroll boxes, the player's and the pet's
+-- (shown by the pet sidebar tab). CharacterStatsPane stays hidden there and
+-- only lends its pool to Blizzard's stat math.
+local STATS_SCROLL_HOSTS = { "CharacterStatsPaneScrollBox", "CharacterStatsPanePetScrollBox" }
+
+local function StatsListsAreScrollBoxes()
+    return _G.CharacterStatsPaneScrollBox ~= nil
+end
+
+local function StatsScrollBoxAt(index)
+    local host = _G[STATS_SCROLL_HOSTS[index]]
+    return host and host.ScrollBox
+end
+
+-- A pool frame has no element data, so only a scroll box row can match.
+local function IsItemLevelRow(row)
+    local data = row and row.GetElementData and row:GetElementData()
+    if not data then return false end
+    return data.name == "ITEMLEVEL"
+end
+
+-- Update runs on every scroll step, a thumb drag included, so a row frame is
+-- styled once per settings generation and per item level role, not per Update.
+local statsFontGen = 0
+local statsRowGen = setmetatable({}, { __mode = "k" })
+local statsRowIlvl = setmetatable({}, { __mode = "k" })
+
+local function StatsRowStale(row, isItemLevel)
+    return statsRowGen[row] ~= statsFontGen or statsRowIlvl[row] ~= isItemLevel
+end
+
+-- A stats row's item level text. The integer is the one Blizzard writes there,
+-- which never drops below the client's minimum item level. Nil while the
+-- average cannot be read.
+local function ItemLevelText(decimal)
+    local _, equipped = GetAverageItemLevel()
+    if not equipped then return nil end
+    if decimal then return string.format("%.2f", equipped) end
+    local getMin = C_PaperDollInfo and C_PaperDollInfo.GetMinItemLevel
+    local minLevel = getMin and getMin()
+    return string.format("%d", math.floor(math.max(minLevel or 0, equipped)))
+end
+
+local function StyleStatsScrollRow(row)
+    local isItemLevel = IsItemLevelRow(row)
+    if not StatsRowStale(row, isItemLevel) then return end
+    statsRowGen[row], statsRowIlvl[row] = statsFontGen, isItemLevel
+    local db = CP.db
+    if row.Title then
+        CP:ApplyFont(row.Title, db.CategoryFontSize or 12)
+        return
+    end
+    local statsSize = db.StatsFontSize or 12
+    if row.Label then CP:ApplyFont(row.Label, statsSize) end
+    if not row.Value then return end
+    if not isItemLevel then
+        CP:ApplyFont(row.Value, statsSize)
+        return
+    end
+    CP:ApplyFont(row.Value, db.IlvlValueSize or 16)
+    local text = ItemLevelText(db.Enabled and db.DecimalItemLevel)
+    if text then row.Value:SetText(text) end
+end
+
+local function WalkStatsScrollRows()
+    if not CP:IsEnabled() or ElvUILoaded() then return end
+    for i = 1, #STATS_SCROLL_HOSTS do
+        local box = StatsScrollBoxAt(i)
+        if box and box.ForEachFrame then box:ForEachFrame(StyleStatsScrollRow) end
+    end
+end
+
+-- Only the timer callback clears the latch, so a settings walk in between
+-- cannot let a second timer queue behind the first.
+local statsWalkPending = false
+local function OnStatsWalkTimer()
+    statsWalkPending = false
+    WalkStatsScrollRows()
+end
+
+local staleRowSeen = false
+local function NoteStaleRow(row)
+    if StatsRowStale(row, IsItemLevelRow(row)) then staleRowSeen = true end
+end
+
+-- Reads only. A row the Character skin fonts in this same Update takes these
+-- sizes on the next frame, after that skin's once-per-row pass.
+local function OnStatsScrollUpdate(box)
+    if statsWalkPending or not CP:IsEnabled() then return end
+    staleRowSeen = false
+    box:ForEachFrame(NoteStaleRow)
+    if not staleRowSeen then return end
+    statsWalkPending = true
+    C_Timer.After(0, OnStatsWalkTimer)
+end
+
+local function RestyleStatsScrollRows()
+    statsFontGen = statsFontGen + 1
+    WalkStatsScrollRows()
+end
+
+function CP:UpdateItemLevelText(statFrame)
     if not self:IsEnabled() then return end
-    local itemLevelFrame = CharacterStatsPane and CharacterStatsPane.ItemLevelFrame
+    local itemLevelFrame = statFrame or (CharacterStatsPane and CharacterStatsPane.ItemLevelFrame)
     if not itemLevelFrame or not itemLevelFrame.Value then return end
 
     local _, avgItemLevelEquipped = GetAverageItemLevel()
@@ -1259,6 +1420,7 @@ function CP:UpdateItemLevelText()
     else
         itemLevelFrame.Value:SetText(string.format("%d", math.floor(avgItemLevelEquipped)))
     end
+    if not statFrame then RestyleStatsScrollRows() end
 end
 
 function CP:SetupDecimalItemLevel()
@@ -1266,10 +1428,13 @@ function CP:SetupDecimalItemLevel()
     if self._decimalIlvlHooked then return end
     self._decimalIlvlHooked = true
 
-    self:SecureHook("PaperDollFrame_SetItemLevel", function(_, unit)
+    -- Where the stats are scroll boxes, the pane's own frames are scratch
+    -- frames for the stat math.
+    self:SecureHook("PaperDollFrame_SetItemLevel", function(statFrame, unit)
         if not self.db.DecimalItemLevel then return end
         if unit ~= "player" then return end
-        self:UpdateItemLevelText()
+        if StatsListsAreScrollBoxes() and not IsItemLevelRow(statFrame) then return end
+        self:UpdateItemLevelText(statFrame)
     end)
 end
 
@@ -1324,7 +1489,7 @@ function CP:StyleCharacterTexts()
     if ElvUILoaded() then return end
 
     local levelText = CharacterLevelText
-    local nameText = CharacterFrameTitleText
+    local _, nameText = HeaderRegions()
 
     -- EllesmereUI re-anchors both strings into its own header, so re-fonting
     -- them from here is two addons fighting over the same FontStrings. The
@@ -1385,6 +1550,7 @@ function CP:StyleStatsPaneTexts()
             end
         end
     end
+    RestyleStatsScrollRows()
 end
 
 function CP:SetupStatTextHook()
@@ -1395,10 +1561,17 @@ function CP:SetupStatTextHook()
     hooksecurefunc("PaperDollFrame_SetLabelAndText", function(statFrame)
         if not CP:IsEnabled() then return end
         if CharacterStatsPane and statFrame == CharacterStatsPane.ItemLevelFrame then return end
+        -- Scroll box rows take fonts only from the stamped pass.
+        if StatsListsAreScrollBoxes() then return end
         local statsSize = CP.db.StatsFontSize or 12
         if statFrame.Label then CP:ApplyFont(statFrame.Label, statsSize) end
         if statFrame.Value then CP:ApplyFont(statFrame.Value, statsSize) end
     end)
+
+    for i = 1, #STATS_SCROLL_HOSTS do
+        local box = StatsScrollBoxAt(i)
+        if box then hooksecurefunc(box, "Update", OnStatsScrollUpdate) end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -1481,6 +1654,7 @@ function CP:ShowRaceText()
     if not self:IsEnabled() then return end
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
+    if not MYTHIC_PLUS then return end
     -- EUI has already re-anchored the level string into its own header, so our
     -- line would land on top of its text. Stand down rather than fight over the
     -- anchor.
@@ -1531,6 +1705,20 @@ local function CraftedCrestTrack(link)
 end
 CP._CraftedCrestTrack = CraftedCrestTrack
 
+-- The track letter setting, read through the client's availability so a saved
+-- key cannot draw letters where items carry no track.
+function CP:TrackLettersOn()
+    return TRACKS and self.db.TrackIndicatorsEnabled and true or false
+end
+
+-- Any per-slot detail option on. The gem keys count only where gems are
+-- admitted: Show Missing Gems defaults on and would otherwise walk every slot.
+function CP:SlotDetailsWanted()
+    local db = self.db
+    return (db.ShowSlotItemLevel or db.ShowEnchantNames
+        or (SOCKETS and (db.ShowSlotGems or db.ShowMissingGems))) and true or false
+end
+
 -- Returns a WRAPPER, never an ITEM_TRACKS entry: the entries are a shared
 -- constant, and writing the per-slot count onto one would leak that count onto
 -- every other slot of the same track.
@@ -1538,6 +1726,7 @@ CP._CraftedCrestTrack = CraftedCrestTrack
 -- tooltip prints no upgrade line. Crafted gear has no track there, and its
 -- crest id gives the tier without a tooltip.
 function CP:GetItemTrack(unit, slotID, data)
+    if not TRACKS then return nil end
     unit = unit or "player"
     local link = GetInventoryItemLink(unit, slotID)
     if not link then return nil end
@@ -1684,9 +1873,10 @@ function CP:InspectEnchantPending(unit, slotID, held, provisional, fellBack, enc
 end
 
 function CP:InspectTrackPending(unit, held, provisional, data, w)
+    if not TRACKS then return nil end
     local db = self.db
     if not (held and db) or w then return nil end
-    local corner = db.TrackIndicatorsEnabled
+    local corner = self:TrackLettersOn()
     local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
     if not (corner or mergedOnly) then return nil end
     if not (provisional or TrackPending(held, data)) then return nil end
@@ -1833,7 +2023,7 @@ function CP:RefreshSlotDisplays()
     if not self:IsEnabled() then return end
     wipe(_lastSlotState)
     InvalidateInspectSlots()
-    if self.db.TrackIndicatorsEnabled then
+    if self:TrackLettersOn() then
         self:UpdateAllTrackIndicators()
     else
         self:HideAllTrackIndicators()
@@ -1842,7 +2032,7 @@ function CP:RefreshSlotDisplays()
 end
 
 function CP:UpdateAllTrackIndicators()
-    if not self.db.TrackIndicatorsEnabled then return end
+    if not self:TrackLettersOn() then return end
     for slotID, frameName in pairs(SLOT_FRAMES) do
         self:UpdateSlotTrackIndicator(_G[frameName], slotID, "player")
     end
@@ -1870,7 +2060,7 @@ end
 
 function CP:SetupTrackIndicators()
     if not self:IsEnabled() then return end
-    if not self.db.TrackIndicatorsEnabled then return end
+    if not self:TrackLettersOn() then return end
     if self._trackIndicatorsHooked then return end
     self._trackIndicatorsHooked = true
     -- Track indicators register on PaperDollFrame OnShow via the combined
@@ -1966,7 +2156,15 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     -- CreateSlotText uses the enchant's offsets, so the two share a line.
     detail.enchantText:ClearAllPoints()
     detail.ilvlText:ClearAllPoints()
-    if stripLeft then
+    if STRIP_TOP_SLOTS[slotID] then
+        detail:SetPoint("BOTTOM", slotFrame, "TOP", 0, 0)
+        detail:SetHeight(TOP_STRIP_HEIGHT)
+        detail.ilvlText:SetJustifyH("CENTER")
+        detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
+        detail.enchantText:SetJustifyH("CENTER")
+        detail.enchantText:SetPoint("BOTTOM", detail, "BOTTOM", 0, 2)
+        AnchorGemsRightOf(detail, detail.ilvlText)
+    elseif stripLeft then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
         detail.ilvlText:SetJustifyH("RIGHT")
@@ -1986,6 +2184,21 @@ function CP:CreateSlotDetail(slotFrame, slotID)
 
     ffd.detail = detail
     return detail
+end
+
+-- Forever's ammo slot sits 19 px right of the ranged slot and is 27 px wide.
+-- Blizzard decides on every show whether it is shown, so each render re-anchors.
+local RANGED_AMMO_CLEARANCE = 46
+
+local function AnchorRangedStrip(detail, slotFrame)
+    local x = 0
+    local usesAmmo = _G.UnitUsesAmmo
+    if slotFrame == _G.CharacterRangedSlot and usesAmmo and usesAmmo("player") then
+        x = RANGED_AMMO_CLEARANCE
+    end
+    detail:ClearAllPoints()
+    detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", x, 0)
+    detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", x, 0)
 end
 
 -- Facing slots across the model, by row. The shirt and tabard rows carry no
@@ -2103,7 +2316,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     -- is wiped when the inspect frame hides, so a reopen is the reliable trigger.
     local wantsText = (self.db.ShowEnchantNames and not euiOwnsEnchant)
         or (self.db.ShowSlotItemLevel and not euiOwnsIlvl)
-    local wantsGems = (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+    local wantsGems = SOCKETS and (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
         and not euiOwnsGems and not suppressGems
     if not (wantsText or wantsGems) then
         local existing = FFD[slotFrame]
@@ -2150,6 +2363,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
+    if slotID == INVSLOT_RANGED then AnchorRangedStrip(detail, slotFrame) end
     local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = self.db.FontOutline or "OUTLINE"
@@ -2185,7 +2399,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         local span
         w = self:GetItemTrack(unit, slotID, data)
         if MergeTrackIntoIlvl(self.db, w, euiOwnsIlvl, euiOwnsTrack) then
-            span = UpgradeSpan(w, self.db.TrackIndicatorsEnabled, true)
+            span = UpgradeSpan(w, self:TrackLettersOn(), true)
         end
 
         local base
@@ -2260,7 +2474,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         -- GetInventoryItemLink, not the `link` from the dirty check: that one is
         -- scoped to the block above and the inspect path never computes it. This
         -- is a cached string lookup, not another tooltip allocation.
-        s.detailTrackPending = TrackPending(GetInventoryItemLink(unit, slotID), data)
+        s.detailTrackPending = TRACKS and TrackPending(GetInventoryItemLink(unit, slotID), data) or nil
     end
 
     -- Transparent container — element visibility controls what's drawn.
@@ -2299,12 +2513,12 @@ function CP:RefreshSlot(slotID, unit)
     -- that stand-down is what hides the leftover frame and clears the dirty key.
     -- Gating the call on ownership instead would leave KE's old text sitting on
     -- top of EUI's, stale, until something else refreshed the slot.
-    local wantsTrack  = self.db.TrackIndicatorsEnabled
+    local wantsTrack  = self:TrackLettersOn()
         and not KE:EUIDrawsSlotElement(unit, "track")
     local wantsDetail =
         (self.db.ShowSlotItemLevel and not KE:EUIDrawsSlotElement(unit, "ilvl"))
         or (self.db.ShowEnchantNames and not KE:EUIDrawsSlotElement(unit, "enchant"))
-        or ((self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+        or (SOCKETS and (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
             and not KE:EUIDrawsSlotElement(unit, "gems"))
     local data
     if wantsTrack or wantsDetail then
@@ -2313,14 +2527,14 @@ function CP:RefreshSlot(slotID, unit)
 
     -- The track overlay has no enable check of its own, so the setting is still
     -- the caller's to test. UpdateSlotDetail tests every one of its own.
-    if self.db.TrackIndicatorsEnabled then
+    if self:TrackLettersOn() then
         self:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     end
     self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
 end
 
 function CP:UpdateAllSlotDetails()
-    if not (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems) then
+    if not self:SlotDetailsWanted() then
         self:HideAllSlotDetails()
         return
     end
@@ -3088,6 +3302,7 @@ function CP:RefreshSocketButtons()
     -- Two socket-click timers land here a tenth of a second later, and the
     -- guards below cannot see a teardown: the container is only hidden, never
     -- released, and the preference key is untouched.
+    if not SOCKETS then return end
     if not self:IsEnabled() then return end
     if not self.socketContainer then return end
     if not self.db.SocketHelperEnabled then return end
@@ -3332,6 +3547,7 @@ function CP:HideSlotHighlight()
 end
 
 function CP:SetupGemSocketHelper()
+    if not SOCKETS then return end
     if not self:IsEnabled() then return end
     if not self.db.SocketHelperEnabled then return end
     if self._gemSocketHooked then return end
@@ -3965,6 +4181,7 @@ end
 -- without the gem's item data (Blizzard PaperDollFrame pattern).
 function CP:PrimeGemCache(_, isInitialLogin)
     if not isInitialLogin then return end
+    if not SOCKETS then return end
     -- Only warm what a gem feature will actually render (ShowMissingGems is
     -- default-on, hence the ~= false form matching UpdateSlotDetail's gate).
     if not (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false or self.db.SocketHelperEnabled) then
@@ -4008,7 +4225,7 @@ function CP:ApplyInspectPanelState()
     -- `IsEnabled()` for the master, not `db.Enabled`. `CP:Disable()` is reachable
     -- without the key changing, so reading the key here would let a later GUI
     -- callback wake InspectPanel while CharacterPanel itself is disabled.
-    if self:IsEnabled() and self.db.InspectPanelEnabled ~= false then
+    if self:IsEnabled() and INSPECT_PANEL and self.db.InspectPanelEnabled ~= false then
         insp:Enable()
     else
         insp:Disable()
@@ -4032,8 +4249,8 @@ function CP:OnEnable()
 
     -- Warm the gem cache during the login loading screen (see PrimeGemCache).
     -- AceEvent unregisters automatically on module disable.
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache")
-    self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "ShowRaceText")
+    if SOCKETS then self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache") end
+    if MYTHIC_PLUS then self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "ShowRaceText") end
 
     -- Score line: if the character pane is already shown when the module
     -- enables (e.g. toggled on with the pane open), the PaperDollFrame
@@ -4043,7 +4260,7 @@ function CP:OnEnable()
         if self.eventFrame then
             self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
             self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
-            self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+            if SOCKETS then self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT") end
         end
         UpdateDisplay()                                   -- warnings
         self:RefreshSlotDisplays()

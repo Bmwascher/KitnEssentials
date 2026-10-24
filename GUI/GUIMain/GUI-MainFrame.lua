@@ -129,7 +129,11 @@ GUIFrame.sidebarConfig = {
                     RaidControl = { "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "raid manager", "raid tools", "shared notes", "group" },
                     CharacterPanel = { "panel", "stats", "item level", "ilvl", "gear", "durability" },
                 } },
-            { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "gems", "sockets", "enchant", "great vault", "vault", "omnium", "window buttons" } },
+            { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "enchant" },
+                gatedKeywords = {
+                    CharacterPanelSockets = { "gems", "sockets" },
+                    CharacterPanelWindowButtons = { "great vault", "vault", "omnium", "window buttons" },
+                } },
             { id = "Chat",               text = "Chat", alwaysEnabled = true, keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
