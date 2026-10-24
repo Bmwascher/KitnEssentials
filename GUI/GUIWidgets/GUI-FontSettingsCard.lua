@@ -246,6 +246,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     local fontSizeRange = config.fontSizeRange or { 8, 72 }
     local fontSizes = config.fontSizes
     local searchable = config.searchable ~= false
+    local showSize = config.showSize ~= false
     -- Optional WidgetStateManager. When passed, size-slider entries flagged
     -- elvuiGated register into the "elvuiOk" group ONLY (never also "all" — a
     -- widget in two groups gets last-group-wins non-determinism). Gated sliders
@@ -279,7 +280,8 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     local widgets = {}
     local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
 
-    local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    -- Without a size row, the face and outline row ends the card.
+    local row1 = GUIFrame:CreateRow(card.content, showSize and Theme.rowHeight or Theme.rowHeightLast)
 
     local fontDropdown = GUIFrame:CreateDropdown(row1, "Font", {
         options = KE:AddFollowGlobalFont(BuildFontList()),
@@ -298,9 +300,13 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     })
     row1:AddWidget(outlineDropdown, 0.5)
     table_insert(widgets, outlineDropdown)
-    card:AddRow(row1, Theme.rowHeight)
+    if showSize then
+        card:AddRow(row1, Theme.rowHeight)
+    else
+        card:AddRow(row1, Theme.rowHeightLast, 0)
+    end
 
-    if fontSizes and #fontSizes > 0 then
+    if showSize and fontSizes and #fontSizes > 0 then
         -- An extraSlider alongside fontSizes is laid out as one more entry, so
         -- it shares a row with an odd-count size slider instead of stranding a
         -- half-empty row above it.
@@ -356,7 +362,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
                 card:AddRow(row, rowHeight)
             end
         end
-    else
+    elseif showSize then
         local extraSlider = config.extraSlider
         local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
         local fontSizeSlider = GUIFrame:CreateSlider(row2, "Font Size", {
@@ -427,9 +433,11 @@ function GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, config)
     -- — KEDropdown's searchable is set at construction with no setter, and
     -- the pooled factory builds with searchable=true, so searchable=false
     -- takes the legacy path to get the correct non-searchable dropdown.
+    -- showSize=false, face and outline with no size row, is a legacy shape too.
     if (config.fontSizes and #config.fontSizes > 0)
         or config.extraSlider
-        or config.searchable == false then
+        or config.searchable == false
+        or config.showSize == false then
         return CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     end
 
