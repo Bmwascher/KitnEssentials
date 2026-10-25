@@ -52,6 +52,9 @@ local CATEGORY_ROW_HEIGHT = 20
 local TOOL_HEIGHT = 330
 local RESTORE_ROW = 28
 
+-- The line a refused drag prints, from both refusals in OnDragStart.
+local PROTECTED_DRAG = "Cannot drag this element: its position is protected. Use the nudge arrows instead."
+
 -- Center-guide diagnosis. Set true, /reload, drag through the center, read the
 -- log. It prints only inside a band around the origin and only when the center
 -- moves a whole unit, so one pass is readable instead of several hundred lines.
@@ -165,6 +168,48 @@ local function EffectiveDragParent(frame, parent, dragAnchor)
 end
 EditMode._EffectiveDragParent = EffectiveDragParent
 
+-- GetEffectiveScale can answer secret.
+local function UsableScale(scale)
+    return not issecretvalue(scale) and type(scale) == "number" and scale > 0
+end
+
+-- The two ratios a drag converts by. unitRatio takes UIParent units to the
+-- frame's own, parentRatio takes the drag parent's. Only an element that sets
+-- ownScale has its scales read, so every other drag is the one it always was;
+-- nil refuses the drag.
+local function DragUnitRatios(ownScale, uiParent, target, parent)
+    if ownScale ~= true then return 1, 1 end
+    local uiScale, targetScale = uiParent:GetEffectiveScale(), target:GetEffectiveScale()
+    local parentScale = parent:GetEffectiveScale()
+    if not (UsableScale(uiScale) and UsableScale(targetScale) and UsableScale(parentScale)) then
+        return nil
+    end
+    return uiScale / targetScale, parentScale / targetScale
+end
+EditMode._DragUnitRatios = DragUnitRatios
+
+-- Moves a drag's snap lattice and magnets from UIParent units into the frame's.
+local function ScaleSnapContext(context, unitRatio)
+    context.spacing = context.spacing * unitRatio
+    context.originX = context.originX * unitRatio
+    context.originY = context.originY * unitRatio
+    local xs, ys = context.candidatesX, context.candidatesY
+    if xs then
+        for i = 1, #xs do xs[i] = xs[i] * unitRatio end
+    end
+    if ys then
+        for i = 1, #ys do ys[i] = ys[i] * unitRatio end
+    end
+end
+EditMode._ScaleSnapContext = ScaleSnapContext
+
+-- The cursor in the dragged frame's own units; UIParent units at ratio 1.
+local function DragCursor(unitRatio)
+    local scale = UIParent:GetEffectiveScale()
+    local x, y = GetCursorPosition()
+    return x / scale * unitRatio, y / scale * unitRatio
+end
+
 local function AddCoordinate(list, seen, value)
     if seen[value] then return end
     seen[value] = true
@@ -226,6 +271,8 @@ function EditMode:RegisterElement(config)
         displayName = config.displayName or config.key,
         frame = config.frame,
         frameName = config.frameName,
+        -- Set by a mover whose frame carries its own Scale (DragUnitRatios).
+        ownScale = config.ownScale == true,
         getPosition = config.getPosition,
         setPosition = config.setPosition,
         getParentFrame = config.getParentFrame,
@@ -677,12 +724,19 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
     targetFrame:ClearAllPoints()
     targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", snappedX, snappedY)
 
+    -- Stored offsets are in the frame's own units, so the parent rect is too.
+    local unitRatio = context and context.unitRatio or 1
+    local parentRatio = context and context.parentRatio or 1
     local parentLeft, parentBottom, parentWidth, parentHeight = dragParent:GetRect()
     if issecretvalue(parentLeft) or issecretvalue(parentBottom)
         or issecretvalue(parentWidth) or issecretvalue(parentHeight)
         or not parentLeft then
         parentLeft, parentBottom = 0, 0
-        parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
+        parentWidth = UIParent:GetWidth() * unitRatio
+        parentHeight = UIParent:GetHeight() * unitRatio
+    else
+        parentLeft, parentBottom = parentLeft * parentRatio, parentBottom * parentRatio
+        parentWidth, parentHeight = parentWidth * parentRatio, parentHeight * parentRatio
     end
 
     -- The offsets that will be stored, and the center they actually reach. A
@@ -701,6 +755,18 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
         -- an alignment the frame does not have.
         if guideX then guideX = guideX + representedX - snappedX end
         if guideY then guideY = guideY + representedY - snappedY end
+    end
+
+    -- An opted-in element's setter places through KE:ApplyFramePosition, which
+    -- pixel-snaps the frame. Snapping here too shows where the release will put
+    -- it; the guides move with the frame. The default path keeps the residual
+    -- ResolveRepresentablePlacement documents.
+    if context and context.ownScale then
+        local beforeX, beforeY = targetFrame:GetLeft(), targetFrame:GetBottom()
+        KE:SnapFrameToPixels(targetFrame)
+        local afterX, afterY = targetFrame:GetLeft(), targetFrame:GetBottom()
+        if guideX and beforeX and afterX then guideX = guideX + afterX - beforeX end
+        if guideY and beforeY and afterY then guideY = guideY + afterY - beforeY end
     end
 
     if DEBUG_GUIDES then
@@ -726,7 +792,8 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
     overlay.draggedPos = pos
 
     self:SetCenterGuides(onCenterX, onCenterY)
-    self:SetElementSnapGuides(guideX, guideY)
+    -- Guides are drawn in UIParent units; the snap ran in the frame's own.
+    self:SetElementSnapGuides(guideX and guideX / unitRatio, guideY and guideY / unitRatio)
     self:ShowDraggedOffsets(offsetX, offsetY)
 
     return pos
@@ -791,7 +858,7 @@ function EditMode:SetupDragHandlers(overlay)
         local left, bottom, width, height = targetFrame:GetRect()
         if issecretvalue(left) or issecretvalue(bottom)
             or issecretvalue(width) or issecretvalue(height) then
-            KE:Print("Cannot drag this element: its position is protected. Use the nudge arrows instead.")
+            KE:Print(PROTECTED_DRAG)
             return
         end
         -- GetRect may also return nothing at all, and the commit leans on this
@@ -809,6 +876,12 @@ function EditMode:SetupDragHandlers(overlay)
         dragAnchorTo = (currentPos and currentPos.AnchorTo) or "CENTER"
         dragParent = EffectiveDragParent(targetFrame,
             (element.getParentFrame and element.getParentFrame()) or UIParent)
+        local unitRatio, parentRatio = DragUnitRatios(element.ownScale, UIParent,
+            targetFrame, dragParent)
+        if not unitRatio then
+            KE:Print(PROTECTED_DRAG)
+            return
+        end
         self.dragAnchor = dragParent
         -- Overlays are pooled and outlive the drag, and the retire path does
         -- not touch these, so they are cleared next to the position they
@@ -817,15 +890,14 @@ function EditMode:SetupDragHandlers(overlay)
         self.draggedPos = nil
         self.snapVersion, self.snapUsedElement = nil, nil
 
-        -- Get cursor start position
-        local scale = UIParent:GetEffectiveScale()
-        startX, startY = GetCursorPosition()
-        startX, startY = startX / scale, startY / scale
+        startX, startY = DragCursor(unitRatio)
 
         frameStartX = left + width / 2
         frameStartY = bottom + height / 2
 
         snapContext = EditMode:BuildSnapContext()
+        snapContext.unitRatio, snapContext.parentRatio = unitRatio, parentRatio
+        snapContext.ownScale = element.ownScale
 
         -- The dragged box's own edges, as offsets from the frame center. Not
         -- half-extents: an inset can be asymmetric, or move the box off the
@@ -835,6 +907,9 @@ function EditMode:SetupDragHandlers(overlay)
         -- candidate, it is what every comparison is measured from.
         local oLeft, oBottom, oWidth, oHeight = EditMode._ReadableRect(self)
         if not oLeft then return end
+        -- The box sits on UIParent; the frame center above is in the frame's units.
+        oLeft, oBottom = oLeft * unitRatio, oBottom * unitRatio
+        oWidth, oHeight = oWidth * unitRatio, oHeight * unitRatio
         snapContext.edgeLeft = oLeft - frameStartX
         snapContext.edgeCenterX = oLeft + oWidth / 2 - frameStartX
         snapContext.edgeRight = oLeft + oWidth - frameStartX
@@ -843,6 +918,7 @@ function EditMode:SetupDragHandlers(overlay)
         snapContext.edgeTop = oBottom + oHeight - frameStartY
 
         EditMode:BuildElementCandidates(snapContext, self)
+        if unitRatio ~= 1 then ScaleSnapContext(snapContext, unitRatio) end
 
         self.isDragging = true
         didDrag = true
@@ -895,9 +971,7 @@ function EditMode:SetupDragHandlers(overlay)
             -- The one place the commit reads the cursor. Nothing has
             -- re-anchored the frame, so the drag-start refusal is still what
             -- proves this geometry readable.
-            local scale = UIParent:GetEffectiveScale()
-            local curX, curY = GetCursorPosition()
-            curX, curY = curX / scale, curY / scale
+            local curX, curY = DragCursor(snapContext.unitRatio)
 
             newPos = EditMode:ResolveDragPosition(self, targetFrame,
                 frameStartX + (curX - startX), frameStartY + (curY - startY),
@@ -940,9 +1014,7 @@ function EditMode:SetupDragHandlers(overlay)
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
-        local scale = UIParent:GetEffectiveScale()
-        local curX, curY = GetCursorPosition()
-        curX, curY = curX / scale, curY / scale
+        local curX, curY = DragCursor(snapContext.unitRatio)
 
         EditMode:ResolveDragPosition(self, targetFrame,
             frameStartX + (curX - startX), frameStartY + (curY - startY),
