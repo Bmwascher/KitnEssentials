@@ -7,8 +7,8 @@
 -- ║           sends nothing.                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 -- The cache is saved per character with the party instance it was learned
--- in, and comes back only on a reload or login inside that instance; a
--- zone-in starts it empty.
+-- in, for one visit: any activation inside that instance reads it back, and
+-- only a zone change empties it.
 
 ---@class KE
 local KE = select(2, ...)
@@ -63,12 +63,14 @@ function KT:LearnMarker(guid, marker)
     self:RailsResync()
 end
 
--- After a reload or login inside the instance the record was saved in, it
--- comes back; otherwise the cache starts empty and the record is written over.
+-- Inside the instance the record was saved in, it comes back at any
+-- activation: a switch turned off and on, a reload or a login, whichever of
+-- the activation and PLAYER_ENTERING_WORLD runs first. Otherwise the cache
+-- starts empty and the record is written over.
 function KT:RestoreMarkers()
     wipe(self.markerOf)
     local inst, rec = CurrentInstance(), SavedRecord(false)
-    if self._zoneReload and inst and rec and rec.inst == inst and type(rec.m) == "table" then
+    if inst and rec and rec.inst == inst and type(rec.m) == "table" then
         for guid, marker in pairs(rec.m) do
             if type(guid) == "string" and type(marker) == "number" and marker >= 1 and marker <= 8 then
                 self.markerOf[guid] = marker
@@ -79,10 +81,12 @@ function KT:RestoreMarkers()
     end
 end
 
--- A zone-in: the last visit's markers are gone.
+-- A zone change: the last visit's markers are gone. A player with no record
+-- gets none.
 function KT:ForgetMarkers()
     wipe(self.markerOf)
-    self:SaveMarkers()
+    local rec = SavedRecord(false)
+    if rec then rec.inst, rec.m = nil, nil end
     self:RailsResync()
 end
 
