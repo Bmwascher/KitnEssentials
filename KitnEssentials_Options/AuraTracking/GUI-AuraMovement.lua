@@ -275,7 +275,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
         db = db,
         dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
         notes = {
-            "Plays for any enabled spell on the Allowlist card above, whether you cast it or another player does.",
+            "Plays for any enabled spell on the " .. KE:Gold("Allowlist") .. " card above, whether you cast it or another player does.",
             "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
         },
         onChangeCallback = ApplySettings,

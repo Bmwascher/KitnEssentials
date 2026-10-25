@@ -361,7 +361,7 @@ GUIFrame:RegisterContent("HealerManaRaid", function(scrollChild, yOffset)
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " " .. (editsRaid
             and "Raid keeps its own position, appearance and font."
-            or "Raid follows the Party tab. Turn on for its own position, appearance and font."),
+            or "Raid follows the " .. KE:Gold("Party") .. " tab. Turn on for its own position, appearance and font."),
         Theme.rowHeight, "hide", true)
     rowRaid5:AddWidget(splitNote, 0.5)
     card:AddRow(rowRaid5, Theme.rowHeight, 0)
