@@ -195,7 +195,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(tooltipCheck, "all")
     card2:AddRow(row2d, Theme.rowHeight)
 
-    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local timerBarCheck = GUIFrame:CreateCheckbox(row2e, "Show a timer bar under the popup", {
         value = db.ShowTimerBar ~= false,
         callback = function(checked) db.ShowTimerBar = checked; ApplySettings() end,
@@ -209,18 +209,10 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     })
     row2e:AddWidget(hideMockCheck, 0.5)
     manager:Register(hideMockCheck, "all")
-    card2:AddRow(row2e, Theme.rowHeightLast, 0)
+    card2:AddRow(row2e, Theme.rowHeight)
 
-    yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 4: Position Settings (custom auto/custom mode — manual)
-    ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
-    manager:Register(card4, "all")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local posModeDropdown = GUIFrame:CreateDropdown(row4a, "Position Mode", {
+    local row2f = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local posModeDropdown = GUIFrame:CreateDropdown(row2f, "Position Mode", {
         options = {
             { key = "auto",   text = "Auto (anchor to ready check popup)" },
             { key = "custom", text = "Custom (manual position)" },
@@ -232,49 +224,34 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
             RefreshStates()
         end,
     })
-    row4a:AddWidget(posModeDropdown, 1)
+    row2f:AddWidget(posModeDropdown, 1)
     manager:Register(posModeDropdown, "all")
-    card4:AddRow(row4a, Theme.rowHeight)
+    card2:AddRow(row2f, Theme.rowHeightLast, 0)
 
-    local anchorPoints = GUIFrame.AnchorPointOptions
+    yOffset = card2:GetNextOffset()
 
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local selfPointDropdown = GUIFrame:CreateDropdown(row4b, "Self Point", {
-        options = anchorPoints,
-        value = db.SelfPoint or "BOTTOM",
-        callback = function(key) db.SelfPoint = key; ApplySettings() end,
+    ----------------------------------------------------------------
+    -- Card 4: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            selfPoint = "SelfPoint",
+            anchorPoint = "AnchorPoint",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+        },
+        defaults = { selfPoint = "BOTTOM", anchorPoint = "CENTER", xOffset = 0, yOffset = 100 },
+        showAnchorFrameType = false,
+        showStrata = false,
+        onChangeCallback = ApplySettings,
     })
-    row4b:AddWidget(selfPointDropdown, 0.5)
-    manager:Register(selfPointDropdown, "customPosition")
-
-    local anchorPointDropdown = GUIFrame:CreateDropdown(row4b, "Anchor Point", {
-        options = anchorPoints,
-        value = db.AnchorPoint or "CENTER",
-        callback = function(key) db.AnchorPoint = key; ApplySettings() end,
-    })
-    row4b:AddWidget(anchorPointDropdown, 0.5)
-    manager:Register(anchorPointDropdown, "customPosition")
-    card4:AddRow(row4b, Theme.rowHeight)
-
-    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local xOffsetSlider = GUIFrame:CreateSlider(row4c, "X Offset", {
-        min = -1000, max = 1000, step = 1,
-        value = db.XOffset or 0,
-        callback = function(val) db.XOffset = val; ApplySettings() end,
-    })
-    row4c:AddWidget(xOffsetSlider, 0.5)
-    manager:Register(xOffsetSlider, "customPosition")
-
-    local yOffsetSlider = GUIFrame:CreateSlider(row4c, "Y Offset", {
-        min = -1000, max = 1000, step = 1,
-        value = db.YOffset or 100,
-        callback = function(val) db.YOffset = val; ApplySettings() end,
-    })
-    row4c:AddWidget(yOffsetSlider, 0.5)
-    manager:Register(yOffsetSlider, "customPosition")
-    card4:AddRow(row4c, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
+    -- The kit's SetEnabled walks its own widgets, so registering the card as
+    -- well would undo the custom-mode gate.
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "customPosition")
+    end
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 5: Font Settings

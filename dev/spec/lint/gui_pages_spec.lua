@@ -78,7 +78,6 @@ local ALLOWED = {
     },
     L2 = {
         -- Phase 17 moves these onto CreatePositionCard.
-        ["KitnEssentials_Options/QoL/GroupTools/GUI-ReadyCheckConsumables.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootFrame.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootRoll.lua"] = { phase = "17", n = 1 },
     },
