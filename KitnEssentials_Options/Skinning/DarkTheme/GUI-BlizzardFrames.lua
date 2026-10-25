@@ -268,7 +268,7 @@ local function AnySuppressed(entries)
 end
 
 -- Renders `entries` as a PER_ROW-wide grid of checkboxes. One column would
--- be unusable at 91 rows.
+-- be too long to use.
 --
 -- S.GetSuppressionState answers one of three states per key:
 --   "full"    -- EllesmereUI covers every registration behind this key. The
