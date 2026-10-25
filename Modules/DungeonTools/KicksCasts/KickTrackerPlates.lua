@@ -695,9 +695,13 @@ local function StyleRail(rail)
     LevelRail(rail, rail:GetFrameStrata(), rail:GetFrameLevel())
 end
 
+-- The range starts at -1: a kicker with no kicks yet reads 0..0, an empty
+-- range that draws no fill and so closes the clip.
 local function RefeedLane(lane)
     if lane.cCur ~= nil then
-        FeedWhole(lane.gateB, lane.fillB, lane.clipB, lane.cBase, lane.cCur)
+        lane.gateB:SetMinMaxValues(-1, lane.cCur)
+        lane.gateB:SetValue(lane.cBase)
+        HangWhole(lane.clipB, lane.fillB, lane.gateB)
     else
         ResetWhole(lane.gateB, lane.fillB, lane.clipB)
     end
