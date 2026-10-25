@@ -47,8 +47,8 @@ local function SavedRecord(create)
 end
 
 -- KT.visitInst, KT.visitAt: the visit the player is in, its party instance
--- and zone-in time. GetServerTime() reads plain and, unlike GetTime(), keeps
--- counting through a reload or a login, so a saved visit keeps its identity.
+-- and zone-in time. GetServerTime() is plain server epoch time, not this
+-- machine's uptime, so a saved visit keeps its identity across sessions.
 -- After a reload or login there is no runtime copy, and the saved record is
 -- the visit before. A move empties the cache; a record of another visit is
 -- cleared, and a player with no record gets none.
