@@ -26,6 +26,14 @@ local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
+local GetTime = GetTime
+local IsInInstance = IsInInstance
+local GetNumGroupMembers = GetNumGroupMembers
+local UnitFullName = UnitFullName
+local GetNormalizedRealmName = GetNormalizedRealmName
+---@type fun(unit: string): string?
+local UnitGUID = UnitGUID
+local issecretvalue = issecretvalue
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local table_concat = table.concat
@@ -53,6 +61,10 @@ local NAME_TO_INDEX = {
     Star = 1, Circle = 2, Diamond = 3, Triangle = 4,
     Moon = 5, Square = 6, Cross = 7, Skull = 8, None = 0,
 }
+
+local FA = KE.FocusAnnounce
+local ASK_GAP = 2      -- seconds between marker requests: a zone-in's roster burst asks once
+local REPLY_DELAY = 1  -- seconds an answer waits, so a burst of requests gets one
 
 local KICK_MACRO_NAME = "!FocusKick"
 local KICK_MACRO_ICON = 134400
@@ -442,9 +454,18 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+-- A marker change inside a party instance is told at once, and the Kick
+-- Tracker's own lane hears it.
 function FM:ApplySettings()
     self:ApplyMacro()
     self:UpdateKickEvents()
+    self:SyncAnnounceEvents(false)
+    local index = self:MarkerIndex()
+    if self:IsEnabled() and index ~= self.sentIndex then
+        self.sentIndex = index
+        self:SendMarkerMessages("F", "stateUpdate")
+        self:SendMessage(FA.MARKER_CHANGED)
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -459,6 +480,13 @@ function FM.AnnounceAllowed(specID, inGroup, inRaid, inCombat, chatLocked)
     return true
 end
 
+-- The effective marker as its index, 1 to 8; nil for None.
+function FM:MarkerIndex()
+    local index = NAME_TO_INDEX[self:GetEffectiveMarker() or "Star"]
+    if index and index >= 1 then return index end
+    return nil
+end
+
 function FM:_AnnounceFocusMarkerOnReadyCheck()
     local db = self.db
     if not db.AnnounceReadyCheck then return end
@@ -467,8 +495,124 @@ function FM:_AnnounceFocusMarkerOnReadyCheck()
         KE:IsChatMessagingLocked()) then
         return
     end
-    local marker = self:GetEffectiveMarker() or "Star"
-    C_ChatInfo.SendChatMessage("My Focus Marker is {" .. marker .. "}", "PARTY")
+    local index = self:MarkerIndex()
+    if not index then return end
+    C_ChatInfo.SendChatMessage(FA.ChatLine(index), "PARTY")
+    self:SendMarkerMessages("F", "stateUpdate")
+end
+
+local function InPartyInstance()
+    local _, instanceType = IsInInstance()
+    return instanceType == "party"
+end
+
+-- "Name-Realm" and the bare name, plain, or nil.
+local function OwnFullName()
+    local name, realm = UnitFullName("player")
+    if issecretvalue(name) or issecretvalue(realm) or type(name) ~= "string" then return nil end
+    if type(realm) ~= "string" or realm == "" then realm = GetNormalizedRealmName() end
+    if type(realm) ~= "string" then return nil end
+    return name .. "-" .. realm, name
+end
+
+-- The addon messages pass the chat announce's own gate, inside a party
+-- instance, with a marker to tell. A nil kind skips that message.
+function FM:SendMarkerMessages(euiKind, mdtKind)
+    if not self.db.AnnounceReadyCheck or not InPartyInstance() then return end
+    if not FM.AnnounceAllowed(KE:GetPlayerSpecId(), IsInGroup(), IsInRaid(), InCombatLockdown(),
+        KE:IsChatMessagingLocked()) then
+        return
+    end
+    local index = self:MarkerIndex()
+    if not index then return end
+    FA.RegisterPrefixes()
+    local guid = UnitGUID("player")
+    if euiKind and guid then
+        C_ChatInfo.SendAddonMessage(FA.EUIKT_PREFIX, FA.EUIKTMessage(euiKind, index, guid), "PARTY")
+    end
+    local fullName, name = OwnFullName()
+    if mdtKind and fullName then
+        local text = FA.EncodeMDT(FA.MDTPayload(mdtKind, fullName, name, self:GetPlayerClass(), index))
+        if text then C_ChatInfo.SendAddonMessage(FA.MDT_PREFIX, text, "PARTY") end
+    end
+end
+
+-- A full party asks for the others' markers, at most once per ASK_GAP.
+function FM:RequestMarkers()
+    if GetNumGroupMembers() ~= 5 then return end
+    local now = GetTime()
+    if self.askedAt and now - self.askedAt < ASK_GAP then return end
+    self.askedAt = now
+    self:SendMarkerMessages("R", "stateRequest")
+end
+
+function FM:ReplyMarker()
+    if self.replyArmed then return end
+    self.replyArmed = true
+    C_Timer.After(REPLY_DELAY, function()
+        self.replyArmed = false
+        if self:IsEnabled() then self:SendMarkerMessages("F", nil) end
+    end)
+end
+
+-- Requests from teammates' addons get the player's marker; nothing else is
+-- read here. A request inside a key, on another channel, or from the player
+-- or anyone outside the party is refused.
+function FM:OnMarkerAddon(prefix, text, channel, sender)
+    if issecretvalue(prefix) or issecretvalue(text) or issecretvalue(channel) or issecretvalue(sender) then return end
+    local locked = KE:IsChatMessagingLocked()
+    if prefix == FA.EUIKT_PREFIX then
+        local kind, _, guid = FA.ParseEUIKT(text)
+        if kind ~= "R" or FA.AddonRefused(prefix, channel, locked, FA.TeammateGuid(guid) ~= nil) then return end
+        self:ReplyMarker()
+    elseif prefix == FA.MDT_PREFIX then
+        if FA.AddonRefused(prefix, channel, locked, FA.TeammateByName(sender) ~= nil) then return end
+        local payload = FA.DecodeMDT(text)
+        if not payload or payload.kind ~= "stateRequest" then return end
+        self:SendMarkerMessages(nil, "stateResponse")
+    end
+end
+
+function FM:OnAnnounceEvent(event, ...)
+    if event == "PLAYER_ENTERING_WORLD" then
+        C_Timer.After(1, function()
+            if self:IsEnabled() then self:SyncAnnounceEvents(true) end
+        end)
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        local size = GetNumGroupMembers()
+        if size == 5 and (self.groupSize or 0) < 5 then self:RequestMarkers() end
+        self.groupSize = size
+    elseif event == "CHAT_MSG_ADDON" then
+        self:OnMarkerAddon(...)
+    end
+end
+
+-- The zone-in listener runs while the announce is on; the addon channel and
+-- the roster are heard only inside a party instance. A zone-in asks.
+function FM:SyncAnnounceEvents(zoneIn)
+    local frame = self.announceFrame
+    if not (self:IsEnabled() and self.db.AnnounceReadyCheck) then
+        if frame then frame:UnregisterAllEvents() end
+        return
+    end
+    if not frame then
+        frame = CreateFrame("Frame")
+        frame:SetScript("OnEvent", function(_, event, ...) self:OnAnnounceEvent(event, ...) end)
+        self.announceFrame = frame
+    end
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    if InPartyInstance() then
+        FA.RegisterPrefixes()
+        frame:RegisterEvent("CHAT_MSG_ADDON")
+        frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+        if zoneIn then
+            self.groupSize = GetNumGroupMembers()
+            self:RequestMarkers()
+        end
+    else
+        frame:UnregisterEvent("CHAT_MSG_ADDON")
+        frame:UnregisterEvent("GROUP_ROSTER_UPDATE")
+    end
 end
 
 function FM:OnEnable()
@@ -492,6 +636,9 @@ function FM:OnEnable()
     end)
 
     self:UpdateKickEvents()
+    self.sentIndex = self:MarkerIndex()
+    self:SyncAnnounceEvents(true)
+    self:SendMessage(FA.MARKER_CHANGED)
 end
 
 function FM:OnDisable()
@@ -499,6 +646,10 @@ function FM:OnDisable()
     if self.readyCheckFrame then
         self.readyCheckFrame:UnregisterAllEvents()
     end
+    if self.announceFrame then
+        self.announceFrame:UnregisterAllEvents()
+    end
+    self:SendMessage(FA.MARKER_CHANGED)
     self.lastMacroName = nil
     self.pendingKick = false
     self.pendingSpellID = nil

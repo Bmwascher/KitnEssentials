@@ -366,7 +366,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         { key = "NoOverwrite", label = "No Overwrite",
           desc = "Skip marking targets that are already marked.", default = true },
         { key = "AnnounceReadyCheck", label = "Ready Check Announce",
-          desc = "Announce your marker in party chat on ready check.", default = true },
+          desc = "Announce your marker in party chat on ready check. In a dungeon before the key, " ..
+              "EllesmereUI and MDT users' addons are told your marker too.", default = true },
     }
 
     for i, def in ipairs(macroOptionDefs) do
