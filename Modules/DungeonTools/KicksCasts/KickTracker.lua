@@ -944,11 +944,11 @@ function KT:CheckActivation()
     end
 end
 
--- The marker cache forgets once the player is outside the instance it was
--- saved in, also while the intake is off; read with activation's own timing.
-function KT:OnZoneChange()
+-- The dungeon visit moves at the event itself, from the instance read then,
+-- also while the intake is off; activation still waits its second.
+function KT:OnZoneChange(event)
+    if event == "PLAYER_ENTERING_WORLD" then self:MoveVisit() end
     C_Timer.After(1, function()
-        self:ForgetMarkers()
         self:CheckActivation()
     end)
 end
