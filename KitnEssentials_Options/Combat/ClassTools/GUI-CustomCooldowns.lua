@@ -60,10 +60,10 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
         ApplySettings()
     end)
 
+    card1:AddLabel("Tracks the cooldowns of spells you add for each class, as lines you can stack under Combat Texts.")
     if db.Enabled ~= true then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
-    card1:AddLabel("Tracks the cooldowns of spells you add for each class, as lines you can stack under Combat Texts.")
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ------------------------------------------------------------------

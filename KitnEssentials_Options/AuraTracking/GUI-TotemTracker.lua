@@ -57,11 +57,6 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         end
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     -- Forever has no Evoker.
     if KE.IS_FOREVER then
         card1:AddLabel("A bar of your active totems with a cooldown swipe and a timer, plus a Destroy " ..
@@ -72,6 +67,9 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
             "totem slots and show here too.")
     end
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     -- No manual preview card: the tracker previews itself whenever this page is
     -- open (SECTION_PREVIEW_MODULES' aura_section entry in

@@ -122,17 +122,6 @@ local ALLOWED = {
     },
     L5 = {
         -- Phase 16 moves the description above the module-off return.
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraDebuffs.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraMovement.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/AuraTracking/GUI-TotemTracker.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-CustomCooldowns.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/GUI-CombatRes.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/GUI-CombatTexts.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/GUI-CombatTimer.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/GUI-Cursor.lua"] = { phase = "16" }, -- description behind an enable test
-        ["KitnEssentials_Options/Combat/GUI-FocusCastbar.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/GUI-RangeChecker.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/Combat/StatusTexts/GUI-HealerMana.lua"] = { phase = "16" }, -- description behind an enable test
         ["KitnEssentials_Options/Combat/StatusTexts/GUI-PetStatusText.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/Combat/StatusTexts/GUI-PlayerAbsorbs.lua"] = { phase = "16" }, -- return before description

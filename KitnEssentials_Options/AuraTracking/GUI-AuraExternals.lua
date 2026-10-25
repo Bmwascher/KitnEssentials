@@ -74,13 +74,11 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel(INTRO_TEXT)
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Auras", yOffset)
     manager:Register(cardTracked, "all")

@@ -56,14 +56,12 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("Shows how long the current fight has lasted, counting from the moment you enter " ..
         "combat, and can print the duration to chat when it ends.")
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings

@@ -118,15 +118,13 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("Floating messages for the moments the game does not call out: entering and " ..
         "leaving combat, having no target, a mob attacking you, the spell you just interrupted " ..
         "with its icon, and low durability. Each message has its own card below.")
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings

@@ -811,8 +811,7 @@ GUIFrame:RegisterContent("CursorTaunt", function(scrollChild, yOffset)
 end)
 
 -- The module's master enable renders ABOVE the tab strip: a disabled Cursor
--- collapses to a lone header bar with no tabs and no content, matching every
--- other KE page.
+-- shows only this card, its switch and description, with no tabs.
 GUIFrame:RegisterTabbedContent("Cursor", {
     { id = "CursorGeneral", label = "Cursor" },
     { id = "CursorDispel",  label = "Dispel" },
@@ -828,11 +827,9 @@ GUIFrame:RegisterTabbedContent("Cursor", {
             ApplyModuleState(checked)
         end)
 
-        if db.Enabled ~= false then
-            card:AddLabel("Draws a ring at your cursor so it is never lost in a fight, with an " ..
-                "optional GCD ring, cast circle and trail. The Dispel and Taunt tabs put those " ..
-                "cooldowns at the cursor too.")
-        end
+        card:AddLabel("Draws a ring at your cursor so it is never lost in a fight, with an " ..
+            "optional GCD ring, cast circle and trail. The Dispel and Taunt tabs put those " ..
+            "cooldowns at the cursor too.")
 
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled == false
