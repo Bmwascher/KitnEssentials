@@ -1556,7 +1556,7 @@ function KE:ResolvePlayerInterrupt(specID) end
 --- optional `specBase`, talent `modifiers` and a `success` rule; nil when the
 --- kick has none.
 ---@param kickID number
----@return { base: number, specBase: table<number, number>?, modifiers: { talent: number, seconds: number?, multiplier: number? }[]?, success: { talent: number, seconds: number, primaryOnly: boolean? }? }?
+---@return { base: number, specBase: table<number, number>?, modifiers: { talent: number, seconds: number?, multiplier: number? }[]?, success: { talent: number, seconds: number }? }?
 function KE:GetKickDefinition(kickID) end
 
 --- The talents to inspect for a spec's kicks, as a set; empty when none.

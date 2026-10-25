@@ -418,8 +418,7 @@ end
 -- One per canonical kick ID. `base` seconds, or `specBase[specID]`;
 -- `modifiers` apply while their talent's rank is positive, `seconds` off or a
 -- `multiplier` (the share kept). `success` comes off once, only for a cast
--- whose interrupt is confirmed; `primaryOnly` marks one the tracker can never
--- confirm.
+-- whose interrupt is confirmed.
 local QUICK_WITTED = 382297
 local COLDTHIRST = 378848
 local LIGHT_OF_THE_SUN = 202918
@@ -429,7 +428,7 @@ local INTERWOVEN_THREADS = 412713
 local KICK_DEFINITIONS = {
     [2139]   = { base = 25, modifiers = { { talent = QUICK_WITTED, seconds = 5 } } },  -- Counterspell
     [47528]  = { base = 15, success = { talent = COLDTHIRST, seconds = 3 } },  -- Mind Freeze
-    [78675]  = { base = 60, success = { talent = LIGHT_OF_THE_SUN, seconds = 15, primaryOnly = true } },  -- Solar Beam
+    [78675]  = { base = 60, success = { talent = LIGHT_OF_THE_SUN, seconds = 15 } },  -- Solar Beam
     [6552]   = { base = 15, modifiers = { { talent = HONED_REFLEXES, multiplier = 0.9 } } },  -- Pummel
     [351338] = { base = 20, modifiers = { { talent = INTERWOVEN_THREADS, multiplier = 0.9 } } },  -- Quell
     [57994]  = { base = 12, specBase = { [264] = 30 } },  -- Wind Shear
@@ -447,7 +446,6 @@ local KICK_DEFINITIONS = {
 if KE.IS_FOREVER then KICK_DEFINITIONS = {} end
 
 -- The talents a kick's definition reads, added to set (made on the first).
--- A primaryOnly rule is never applied, so its talent is never read.
 local function AddKickTalents(set, kickID)
     local def = KICK_DEFINITIONS[KICK_ALIASES[kickID] or kickID]
     if not def then return set end
@@ -458,7 +456,7 @@ local function AddKickTalents(set, kickID)
         end
     end
     local s = def.success
-    if s and not s.primaryOnly then
+    if s then
         set = set or {}
         set[s.talent] = true
     end

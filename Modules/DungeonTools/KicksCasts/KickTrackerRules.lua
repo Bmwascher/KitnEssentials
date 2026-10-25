@@ -171,7 +171,7 @@ end
 -- gives a rank, or nil when it is unknown; an unknown talent counts as not
 -- selected, which gives the longest duration. Flat seconds come off first,
 -- then multipliers; a success rule comes off once, after them, only for a
--- confirmed success and a known positive rank; a primaryOnly rule never.
+-- confirmed success and a known positive rank.
 function KT.KickDuration(def, specID, rankOf, succeeded)
     local duration = (def.specBase and def.specBase[specID]) or def.base
     local mods = def.modifiers
@@ -188,7 +188,7 @@ function KT.KickDuration(def, specID, rankOf, succeeded)
         duration = duration * mult
     end
     local s = def.success
-    if succeeded == true and s and not s.primaryOnly then
+    if succeeded == true and s then
         local rank = rankOf(s.talent)
         if rank and rank > 0 then duration = duration - s.seconds end
     end

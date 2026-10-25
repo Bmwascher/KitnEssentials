@@ -262,17 +262,15 @@ describe("KickTracker kick durations", function()
         end
     end)
 
-    it("takes a success rule off a confirmed cast only, and never a primary-only rule", function()
+    it("takes a success rule off a confirmed cast only", function()
         local KT = L.loadKickTrackerRules()
         local mindFreeze = { base = 15, success = { talent = 8, seconds = 3 } }
-        local solarBeam = { base = 60, success = { talent = 9, seconds = 15, primaryOnly = true } }
         local rows = {
             { name = "a confirmed success with the talent", def = mindFreeze, rank = { [8] = 1 },
               succeeded = true, want = 12 },
             { name = "an unconfirmed cast", def = mindFreeze, rank = { [8] = 1 }, succeeded = false, want = 15 },
             { name = "a confirmed success, the talent unknown", def = mindFreeze, rank = {},
               succeeded = true, want = 15 },
-            { name = "a primary-only rule", def = solarBeam, rank = { [9] = 1 }, succeeded = true, want = 60 },
         }
         for _, row in ipairs(rows) do
             assert.equals(row.want, KT.KickDuration(row.def, nil, ranksOf(row.rank), row.succeeded), row.name)
