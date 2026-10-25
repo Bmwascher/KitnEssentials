@@ -601,10 +601,6 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
             db.AutoAcceptRes = checked
             ApplySettings()
         end,
-        msgPopup = true,
-        msgText = "Auto Accept Resurrection",
-        msgOn = "Enabled",
-        msgOff = "Disabled",
     })
     row3b:AddWidget(autoAcceptResCheck, 1)
     manager:Register(autoAcceptResCheck, "all")

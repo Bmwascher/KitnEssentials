@@ -213,7 +213,6 @@ local function ConstructCheckbox(parent)
         -- Read before any callback runs: a callback can rebuild the page and
         -- hand this toggle to another setting.
         local callback, immediate = row._callback, row._immediate
-        local msgPopup, msgText, msgOn, msgOff = row._msgPopup, row._msgText, row._msgOn, row._msgOff
         local gen = row._keGen
         AnimateToState(newState, false)
         if callback then
@@ -236,15 +235,6 @@ local function ConstructCheckbox(parent)
             else
                 GUIFrame:DeferWidgetCallback(ANIMATION_DURATION, Fire)
             end
-        end
-        if msgPopup then
-            local toggleOnOrOff
-            if newState then
-                toggleOnOrOff = "|cff4DCC66" .. msgOn .. "|r"
-            else
-                toggleOnOrOff = "|cffE64D4D" .. msgOff .. "|r"
-            end
-            KE:Print(msgText .. ": " .. toggleOnOrOff)
         end
     end)
 
@@ -357,10 +347,6 @@ local function ConfigureCheckbox(row, labelText, config)
     label:SetText(labelText or "")
     row._tooltip = config.tooltip
     row._onHover = config.onHover
-    row._msgPopup = config.msgPopup
-    row._msgText = config.msgText
-    row._msgOn = config.msgOn
-    row._msgOff = config.msgOff
     row._immediate = config.immediateCallback
     row:SetEnabled(true)
     row:_setStateNow(config.value)
@@ -372,8 +358,8 @@ local checkboxPool = GUIFrame:NewWidgetPool("checkbox", ConstructCheckbox, funct
     row:_setStateNow(false)
 end)
 
--- Checkbox Widget — config-table API: { value, callback, msgPopup, msgText, msgOn, msgOff, tooltip,
--- immediateCallback, onHover }
+-- Checkbox Widget — config-table API: { value, callback, tooltip, immediateCallback,
+-- onHover }
 -- onHover(entering) runs as the pointer enters and leaves the toggle.
 function GUIFrame:CreateCheckbox(parent, labelText, config)
     config = config or {}
@@ -393,8 +379,7 @@ end
 
 -- A square checkbox for DENSE lists, where the sliding toggle above is too tall
 -- and too wide to fit three to a row. Config-table API, matching every other
--- widget here: { value, tooltip, callback, disabled, msgPopup, msgText, msgOn,
--- msgOff }. The msg fields print the chat line the sliding toggle prints.
+-- widget here: { value, tooltip, callback, disabled }.
 --
 -- The disabled state belongs to the widget, not the caller: it owns the alpha
 -- and the click refusal so no call site has to remember both. The fill is
@@ -477,24 +462,14 @@ local function ConstructCompactCheckbox(parent)
     cell:SetScript("OnClick", function(self)
         -- The refusal rule. A fully suppressed row must not be writable: its
         -- saved value is the user's real choice, kept intact until the row is
-        -- enabled again. A refused click prints no chat line either.
+        -- enabled again.
         if not self._enabled then return end
         self:SetChecked(not self._checked)
         -- Read before the callback runs: a callback can rebuild the page and
         -- hand this cell to another setting.
         local checked = self._checked
         local callback = self._callback
-        local msgPopup, msgText, msgOn, msgOff = self._msgPopup, self._msgText, self._msgOn, self._msgOff
         if callback then callback(checked) end
-        if msgPopup then
-            local onOrOff
-            if checked then
-                onOrOff = "|cff4DCC66" .. msgOn .. "|r"
-            else
-                onOrOff = "|cffE64D4D" .. msgOff .. "|r"
-            end
-            KE:Print(msgText .. ": " .. onOrOff)
-        end
     end)
 
     cell:SetScript("OnEnter", function(self)
@@ -550,11 +525,6 @@ local function ConfigureCompactCheckbox(cell, labelText, config)
     ApplyCompactHitRect(cell)
     cell._tooltip = config.tooltip
     cell._callback = config.callback
-    -- Every use: a pooled cell keeps no chat line from its last owner.
-    cell._msgPopup = config.msgPopup
-    cell._msgText = config.msgText
-    cell._msgOn = config.msgOn
-    cell._msgOff = config.msgOff
     cell:ApplyThemeColors()
     cell:SetChecked(config.value)
     cell:SetEnabled(not config.disabled)

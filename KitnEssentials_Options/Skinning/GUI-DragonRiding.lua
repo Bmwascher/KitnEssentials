@@ -104,10 +104,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
             db.HideWhenGrounded = checked
             if not checked and DR and DR.container then DR.container:Show() end
         end,
-        msgPopup = true,
-        msgText = "Hide Grounded",
-        msgOn = "On",
-        msgOff = "Off",
     })
     bRow1:AddWidget(groundedCheck, 1/3)
     manager:Register(groundedCheck, "all")
@@ -118,10 +114,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
             db.HideWhenFull = checked
             if not checked and DR and DR.container then DR.container:Show() end
         end,
-        msgPopup = true,
-        msgText = "Hide Full",
-        msgOn = "On",
-        msgOff = "Off",
     })
     bRow1:AddWidget(fullCheck, 1/3)
     manager:Register(fullCheck, "all")
@@ -133,10 +125,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
             ApplySettings()
             RefreshStates()
         end,
-        msgPopup = true,
-        msgText = "Thrill Color",
-        msgOn = "On",
-        msgOff = "Off",
     })
     bRow1:AddWidget(thrillCheck, 1/3)
     manager:Register(thrillCheck, "all")
@@ -146,10 +134,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     local secondWindCheck = GUIFrame:CreateCheckbox(bRow2, "Show Second Wind", {
         value = db.ShowSecondWind ~= false,
         callback = function(checked) db.ShowSecondWind = checked; ApplyLayout() end,
-        msgPopup = true,
-        msgText = "Second Wind",
-        msgOn = "On",
-        msgOff = "Off",
     })
     bRow2:AddWidget(secondWindCheck, 1/3)
     manager:Register(secondWindCheck, "all")
@@ -157,10 +141,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     local flipCheck = GUIFrame:CreateCheckbox(bRow2, "Flip Bar Order", {
         value = db.FlipBars == true,
         callback = function(checked) db.FlipBars = checked; ApplyLayout() end,
-        msgPopup = true,
-        msgText = "Flip Bars",
-        msgOn = "On",
-        msgOff = "Off",
     })
     bRow2:AddWidget(flipCheck, 1/3)
     manager:Register(flipCheck, "all")
@@ -168,10 +148,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     local speedTextCheck = GUIFrame:CreateCheckbox(bRow2, "Show Speed Text", {
         value = db.ShowSpeedText ~= false,
         callback = function(checked) db.ShowSpeedText = checked; ApplyLayout() end,
-        msgPopup = true,
-        msgText = "Speed Text",
-        msgOn = "On",
-        msgOff = "Off",
     })
     bRow2:AddWidget(speedTextCheck, 1/3)
     manager:Register(speedTextCheck, "all")
@@ -237,10 +213,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     local showSurgeCheck = GUIFrame:CreateCheckbox(sRow1, "Show Surge Icon", {
         value = db.ShowSurgeIcon ~= false,
         callback = function(checked) db.ShowSurgeIcon = checked; ApplySurgeIcon() end,
-        msgPopup = true,
-        msgText = "Surge Icon",
-        msgOn = "On",
-        msgOff = "Off",
     })
     sRow1:AddWidget(showSurgeCheck, 1/3)
     manager:Register(showSurgeCheck, "all")
@@ -248,10 +220,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     local leftSideCheck = GUIFrame:CreateCheckbox(sRow1, "Place on Left Side", {
         value = db.SurgeIconOnLeft == true,
         callback = function(checked) db.SurgeIconOnLeft = checked; ApplySurgeIcon() end,
-        msgPopup = true,
-        msgText = "Left Side",
-        msgOn = "On",
-        msgOff = "Off",
     })
     sRow1:AddWidget(leftSideCheck, 1/3)
     manager:Register(leftSideCheck, "all")
@@ -263,10 +231,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
             ApplySurgeIcon()
             RefreshStates()
         end,
-        msgPopup = true,
-        msgText = "Auto Size",
-        msgOn = "On",
-        msgOff = "Off",
     })
     sRow1:AddWidget(autoSizeCheck, 1/3)
     manager:Register(autoSizeCheck, "all")

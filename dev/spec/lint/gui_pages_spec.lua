@@ -125,17 +125,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua"] = { phase = "18" }, -- return before description
     },
     L6 = {
-        -- Phase 16 removes these body-control chat lines.
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-Recuperate.lua"] = { phase = "16", n = 2 },
-        ["KitnEssentials_Options/Combat/GUI-FocusCastbar.lua"] = { phase = "16", n = 8 },
-        ["KitnEssentials_Options/Core/CVars/GUI-CVars.lua"] = { phase = "16", n = 1 },
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-DeathNotifications.lua"] = { phase = "16", n = 7 },
-        ["KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-KeystoneHelper.lua"] = { phase = "16", n = 1 },
-        ["KitnEssentials_Options/QoL/Automation/GUI-Automation.lua"] = { phase = "16", n = 1 },
-        ["KitnEssentials_Options/QoL/QualityOfLife/GUI-SlashCommands.lua"] = { phase = "16", n = 2 },
-        ["KitnEssentials_Options/QoL/QualityOfLife/GUI-SpellAlerts.lua"] = { phase = "16", n = 1 },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootRoll.lua"] = { phase = "16", n = 1 },
-        ["KitnEssentials_Options/Skinning/GUI-DragonRiding.lua"] = { phase = "16", n = 9 },
     },
     L7 = {
         -- Phase 17 moves these onto KE:Gold.

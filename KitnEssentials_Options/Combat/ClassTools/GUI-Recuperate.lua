@@ -71,10 +71,6 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
             config = {
                 value = db.LoadInRaid ~= false,
                 callback = function(checked) db.LoadInRaid = checked; UpdateStateDriver() end,
-                msgPopup = true,
-                msgText = "Load in Raid",
-                msgOn = "On",
-                msgOff = "Off",
             },
         },
         {
@@ -82,10 +78,6 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
             config = {
                 value = db.LoadInParty == true,
                 callback = function(checked) db.LoadInParty = checked; UpdateStateDriver() end,
-                msgPopup = true,
-                msgText = "Load in Party",
-                msgOn = "On",
-                msgOff = "Off",
             },
         },
     }), "all")

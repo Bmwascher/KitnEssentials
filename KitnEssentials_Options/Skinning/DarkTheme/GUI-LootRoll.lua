@@ -102,13 +102,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
             -- recreates the widget whose callback is still running.
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
-        -- msgOn/msgOff are REQUIRED whenever msgPopup is set: the toggle
-        -- concatenates them unguarded and there is no default, so omitting them
-        -- throws on every click. Every KE page passes all four.
-        msgPopup = true,
-        msgText = "Slim Loot Roll Bars",
-        msgOn = "On",
-        msgOff = "Off",
     })
     rowRep:AddWidget(repCheck, 1)
     manager:Register(repCheck, "all")

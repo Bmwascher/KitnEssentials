@@ -70,10 +70,6 @@ GUIFrame:RegisterContent("KeystoneHelperReset", function(scrollChild, yOffset)
     local resetEnableCheck = GUIFrame:CreateCheckbox(rowReset1, "Announce on Instance Reset", {
         value = db.ResetEnabled ~= false,
         callback = function(checked) db.ResetEnabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Reset Announcer",
-        msgOn = "On",
-        msgOff = "Off",
     })
     rowReset1:AddWidget(resetEnableCheck, 1)
     manager:Register(resetEnableCheck, "all")

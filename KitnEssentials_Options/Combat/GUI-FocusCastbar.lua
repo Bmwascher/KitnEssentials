@@ -137,10 +137,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row2b, "Hide Non-Interruptible Casts", {
         value = db.HideNotInterruptible == true,
         callback = function(checked) db.HideNotInterruptible = checked end,
-        msgPopup = true,
-        msgText = "Hide",
-        msgOn = "On",
-        msgOff = "Off",
     })
     row2b:AddWidget(hideNotInterruptCheck, 1)
     manager:Register(hideNotInterruptCheck, "all")
@@ -215,10 +211,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
             db.TargetNames.Enabled = checked
             ApplySettings()
         end,
-        msgPopup = true,
-        msgText = "Target Names",
-        msgOn = "On",
-        msgOff = "Off",
     })
     rowTnEnable:AddWidget(tnEnableCheck, 1)
     manager:Register(tnEnableCheck, "all")
@@ -281,10 +273,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
                 mod:ToggleTargetMarkerIntegration()
             end
         end,
-        msgPopup = true,
-        msgText = "Raid Marker",
-        msgOn = "On",
-        msgOff = "Off",
     })
     rowMarkerEnable:AddWidget(markerEnableCheck, 1)
     manager:Register(markerEnableCheck, "all")
@@ -361,10 +349,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local ignoreFriendlyCheck = GUIFrame:CreateCheckbox(rangeRow1, "Ignore Friendly Focus", {
         value = db.IgnoreFriendlies == true,
         callback = function(checked) db.IgnoreFriendlies = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Ignore Friendly",
-        msgOn = "On",
-        msgOff = "Off",
     })
     rangeRow1:AddWidget(ignoreFriendlyCheck, 0.5)
     manager:Register(ignoreFriendlyCheck, "all")
@@ -401,10 +385,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local glowCheck = GUIFrame:CreateCheckbox(glowRow1, "Important Spell Glow", {
         value = db.ImportantGlow.Enabled == true,
         callback = function(checked) db.ImportantGlow.Enabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Important Glow",
-        msgOn = "On",
-        msgOff = "Off",
     })
     glowRow1:AddWidget(glowCheck, 0.5)
     manager:Register(glowCheck, "all")
@@ -485,10 +465,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local glowBorderCheck = GUIFrame:CreateCheckbox(glowRow5, "Glow Border", {
         value = db.ImportantGlow.GlowBorder ~= false,
         callback = function(checked) db.ImportantGlow.GlowBorder = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Glow Border",
-        msgOn = "On",
-        msgOff = "Off",
     })
     glowRow5:AddWidget(glowBorderCheck, 0.5)
     manager:Register(glowBorderCheck, "all")
@@ -590,10 +566,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
             db.HoldTimer.Enabled = checked
             RefreshStates()
         end,
-        msgPopup = true,
-        msgText = "Hold Timer",
-        msgOn = "On",
-        msgOff = "Off",
     })
     row8a:AddWidget(holdEnableCheck, 0.5)
     manager:Register(holdEnableCheck, "all")
@@ -637,10 +609,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
             db.KickIndicator.Enabled = checked
             RefreshStates()
         end,
-        msgPopup = true,
-        msgText = "Kick Indicator",
-        msgOn = "On",
-        msgOff = "Off",
     })
     row9a:AddWidget(kickEnableCheck, 1)
     manager:Register(kickEnableCheck, "all")

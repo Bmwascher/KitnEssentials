@@ -160,10 +160,6 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
                                     SA:ApplyForCurrentSpec()
                                 end
                             end,
-                            msgPopup = true,
-                            msgText  = spec.name,
-                            msgOn    = "Show",
-                            msgOff   = "Hide",
                         })
                         specRow:AddWidget(specCheck, 1 / COLUMNS)
                         manager:Register(specCheck, "all")

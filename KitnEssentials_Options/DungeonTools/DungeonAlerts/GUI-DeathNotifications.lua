@@ -73,10 +73,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
             config = {
                 value = db.EnableInDungeons ~= false,
                 callback = function(checked) db.EnableInDungeons = checked end,
-                msgPopup = true,
-                msgText = "Dungeons",
-                msgOn = "On",
-                msgOff = "Off",
             },
         },
         {
@@ -84,10 +80,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
             config = {
                 value = db.EnableInRaids == true,
                 callback = function(checked) db.EnableInRaids = checked end,
-                msgPopup = true,
-                msgText = "Raids",
-                msgOn = "On",
-                msgOff = "Off",
             },
         },
     }, { isLast = true }), "all")
@@ -131,10 +123,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local pdEnableCheck = GUIFrame:CreateCheckbox(pdRow1, "Show Party Death", {
         value = db.PartyDeath.Enabled ~= false,
         callback = function(checked) db.PartyDeath.Enabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Party Death",
-        msgOn = "On",
-        msgOff = "Off",
     })
     pdRow1:AddWidget(pdEnableCheck, 0.5)
     manager:Register(pdEnableCheck, "all")
@@ -142,10 +130,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local pdClassCheck = GUIFrame:CreateCheckbox(pdRow1, "Use Class Color for Name", {
         value = db.PartyDeath.UseClassColor ~= false,
         callback = function(checked) db.PartyDeath.UseClassColor = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Class Color",
-        msgOn = "On",
-        msgOff = "Off",
     })
     pdRow1:AddWidget(pdClassCheck, 0.5)
     manager:Register(pdClassCheck, "all")
@@ -185,10 +169,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local fdEnableCheck = GUIFrame:CreateCheckbox(fdRow1, "Show Focus Death", {
         value = db.FocusDeath.Enabled ~= false,
         callback = function(checked) db.FocusDeath.Enabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Focus Death",
-        msgOn = "On",
-        msgOff = "Off",
     })
     fdRow1:AddWidget(fdEnableCheck, 1)
     manager:Register(fdEnableCheck, "all")
@@ -220,10 +200,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local fdTTSCheck = GUIFrame:CreateCheckbox(fdRow3, "Speak Reminder (TTS) in Combat", {
         value = db.FocusDeath.TTSReminder == true,
         callback = function(checked) db.FocusDeath.TTSReminder = checked end,
-        msgPopup = true,
-        msgText = "Focus TTS",
-        msgOn = "On",
-        msgOff = "Off",
     })
     fdRow3:AddWidget(fdTTSCheck, 1)
     manager:Register(fdTTSCheck, "all")
@@ -295,10 +271,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local classIconCheck = GUIFrame:CreateCheckbox(dRow2, "Show Class Icon", {
         value = db.ShowClassIcon ~= false,
         callback = function(checked) db.ShowClassIcon = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Class Icon",
-        msgOn = "On",
-        msgOff = "Off",
     })
     dRow2:AddWidget(classIconCheck, 0.5)
     manager:Register(classIconCheck, "all")

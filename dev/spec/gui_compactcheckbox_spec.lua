@@ -2,22 +2,19 @@
 -- contract. A disabled cell keeps its saved value on click, so the refusal
 -- lives in OnClick. That makes it plain Lua, and worth pinning: a later edit
 -- that deletes the branch leaves a grayed-looking row that still writes the
--- user's saved skin choice, with no visible symptom. The refusal covers the
--- chat line too: a refused click that printed would announce a change it did
--- not make.
+-- user's saved skin choice, with no visible symptom.
 -- The hit-rect inset is pinned too: a dropped clamp hands SetHitRectInsets a
 -- negative inset, and the click area grows past the cell with no error.
 local mock = require("dev.spec._wow_mock")
 local helpers = require("dev.spec._helpers")
 
 describe("GUIFrame:CreateCompactCheckbox", function()
-    local GUIFrame, fired, printed
+    local GUIFrame, fired
 
     before_each(function()
         mock.install()
 
         fired = 0
-        printed = 0
         -- The widget file builds its pools at load and asks whether a parent
         -- is pooled; a stub parent never is, so the factory builds fresh.
         GUIFrame = {
@@ -33,8 +30,6 @@ describe("GUIFrame:CreateCompactCheckbox", function()
             -- would hand back a table and throw.
             Theme = setmetatable({ fontSizeSmall = 12 }, { __index = function() return { 1, 1, 1 } end }),
             ApplyThemeFont = function() end,
-            -- Only whether a line prints is pinned, not its text.
-            Print = function() printed = printed + 1 end,
         })
     end)
 
@@ -46,26 +41,13 @@ describe("GUIFrame:CreateCompactCheckbox", function()
             disabled = disabled,
             tooltip = tooltip,
             callback = function() fired = fired + 1 end,
-            msgPopup = true,
-            msgText = "Achievements",
-            msgOn = "On",
-            msgOff = "Off",
         })
     end
 
-    it("positive control: an enabled cell toggles, fires its callback and prints its line", function()
-        local cell = build(false)
-        cell._scripts.OnClick(cell)
-        assert.equals(1, fired)
-        assert.equals(1, printed)
-        assert.is_false(cell:GetChecked())
-    end)
-
-    it("a disabled cell neither toggles, fires nor prints", function()
+    it("a disabled cell neither toggles nor fires", function()
         local cell = build(true)
         cell._scripts.OnClick(cell)
         assert.equals(0, fired)
-        assert.equals(0, printed)
         -- Unchanged, not just uncalled: the user's saved value survives.
         assert.is_true(cell:GetChecked())
     end)

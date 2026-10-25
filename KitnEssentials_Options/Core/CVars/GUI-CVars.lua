@@ -134,10 +134,6 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
             if CV and checked then CV:ApplyCVars() end
             RefreshStates(ctx)
         end,
-        msgPopup = true,
-        msgText = "CVars",
-        msgOn = "On",
-        msgOff = "Off",
     })
     row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, Theme.rowHeightLast, 0)

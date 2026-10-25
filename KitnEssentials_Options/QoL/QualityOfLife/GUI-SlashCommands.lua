@@ -27,10 +27,6 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
     local cdmCheck = GUIFrame:CreateCheckbox(row1, "Enable /cd and /wa", {
         value = db.CDMEnabled ~= false,
         callback = function(checked) db.CDMEnabled = checked; Apply() end,
-        msgPopup = true,
-        msgText = "CDM Slash Commands",
-        msgOn = "On",
-        msgOff = "Off",
     })
     row1:AddWidget(cdmCheck, 1)
     card1:AddRow(row1, Theme.rowHeightLast, 0)
@@ -48,10 +44,6 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
     local rlCheck = GUIFrame:CreateCheckbox(row2, "Enable /rl", {
         value = db.RLEnabled ~= false,
         callback = function(checked) db.RLEnabled = checked; Apply() end,
-        msgPopup = true,
-        msgText = "Reload Shortcut",
-        msgOn = "On",
-        msgOff = "Off",
     })
     row2:AddWidget(rlCheck, 1)
     card2:AddRow(row2, Theme.rowHeightLast, 0)
