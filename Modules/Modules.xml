@@ -64,6 +64,7 @@
     <Script file="AuraTracking\AuraDebuffs.lua" />
     <Script file="AuraTracking\AuraHeaders.lua" />
     <Script file="DungeonTools\DungeonAlerts\EnemyCounter.lua" />
+    <Script file="DungeonTools\KicksCasts\FocusAnnounce.lua" />
     <Script file="DungeonTools\KicksCasts\KickTracker.lua" />
     <Script file="DungeonTools\KicksCasts\KickTrackerRules.lua" />
     <Script file="DungeonTools\KicksCasts\KickTrackerMeter.lua" />

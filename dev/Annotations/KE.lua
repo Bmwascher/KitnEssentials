@@ -224,6 +224,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field CombatState KE.CombatState
 ---@field GroupInspect KE.GroupInspect
 ---@field Context KE.Context
+---@field FocusAnnounce table # Modules/DungeonTools/KicksCasts/FocusAnnounce.lua
 ---@field curves KE.Curves
 ---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)

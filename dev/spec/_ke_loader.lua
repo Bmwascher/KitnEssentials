@@ -3282,6 +3282,13 @@ function L.loadKickTrackerRules()
     return modules["KickTracker"]
 end
 
+-- Modules/DungeonTools/KicksCasts/FocusAnnounce.lua. Its parsers call no WoW API: nothing to
+-- stub (the sender checks do, and no case calls them). Returns KE.FocusAnnounce.
+function L.loadFocusAnnounce()
+    local KE = helpers.loadModule("Modules/DungeonTools/KicksCasts/FocusAnnounce.lua", {})
+    return KE.FocusAnnounce
+end
+
 -- Modules/DungeonTools/KicksCasts/CCTrackerRules.lua. Pure logic: nothing to stub. Returns
 -- Rules, seeds.
 function L.loadCCTrackerRules()
