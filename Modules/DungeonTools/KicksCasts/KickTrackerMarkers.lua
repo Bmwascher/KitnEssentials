@@ -27,6 +27,14 @@ local pairs = pairs
 local type = type
 local wipe = wipe
 
+-- Flip true to trace the marker intake: each marker learned, the visit
+-- moving, and the saved record read back.
+local DEBUG_KTM = false
+
+local function dbgguid(guid)
+    return type(guid) == "string" and guid:sub(-8) or tostring(guid)
+end
+
 local function CurrentInstance()
     local _, instanceType, _, _, _, _, _, instanceID = GetInstanceInfo()
     if instanceType ~= "party" then return nil end
@@ -60,6 +68,9 @@ function KT:MoveVisit()
     local moved = inst ~= self.visitInst or at ~= self.visitAt
     self.visitInst, self.visitAt = inst, at
     if rec and (rec.inst ~= inst or rec.at ~= at) then rec.inst, rec.at, rec.m = nil, nil, nil end
+    if DEBUG_KTM then
+        KE:Print("[KTM] MoveVisit inst=" .. tostring(inst) .. " at=" .. tostring(at) .. " moved=" .. tostring(moved))
+    end
     if moved then
         wipe(self.markerOf)
         self:RailsResync()
@@ -80,6 +91,10 @@ end
 -- source; 0 clears.
 function KT:LearnMarker(guid, marker)
     local value = (type(marker) == "number" and marker >= 1 and marker <= 8) and marker or nil
+    if DEBUG_KTM then
+        KE:Print("[KTM] LearnMarker guid=" .. dbgguid(guid) .. " marker=" .. tostring(value) ..
+            " was=" .. tostring(self.markerOf[guid]))
+    end
     if self.markerOf[guid] == value then return end
     self.markerOf[guid] = value
     self:SaveMarkers()
@@ -96,6 +111,7 @@ function KT:RestoreMarkers()
     for guid, marker in pairs(rec.m) do
         if type(guid) == "string" and type(marker) == "number" and marker >= 1 and marker <= 8 then
             self.markerOf[guid] = marker
+            if DEBUG_KTM then KE:Print("[KTM] RestoreMarkers guid=" .. dbgguid(guid) .. " marker=" .. marker) end
         end
     end
 end

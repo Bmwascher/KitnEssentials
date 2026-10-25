@@ -56,6 +56,18 @@ local MAX_PLATES = 40
 local PLATE_UNITS = {}
 for i = 1, MAX_PLATES do PLATE_UNITS[i] = "nameplate" .. i end
 
+-- Flip true to trace the Rails: kickers, each rail's attach, feed, layout and
+-- release, and every lane's state after each step.
+local DEBUG_KTP = false
+
+local function dbgval(v)
+    return issecretvalue(v) and "<secret>" or tostring(v)
+end
+
+local function dbgguid(guid)
+    return type(guid) == "string" and guid:sub(-8) or tostring(guid)
+end
+
 local P = {
     live = {},     -- [member GUID] = that kicker's live icon
     rows = {},     -- [nameplate token] = { head, list }
@@ -727,6 +739,30 @@ local function FeedRail(rail, index)
     end
 end
 
+local function DebugLanes(where, unit, rail)
+    KE:Print("[KTP] " .. where .. " " .. tostring(unit) .. " lanes=" .. #rail.lanes .. " kickers=" .. #P.kickers ..
+        " railShown=" .. tostring(rail:IsShown()) .. " railVisible=" .. tostring(rail:IsVisible()) ..
+        " level=" .. rail:GetFrameStrata() .. "/" .. rail:GetFrameLevel())
+    for i = 1, #rail.lanes do
+        local lane, k = rail.lanes[i], P.kickers[i]
+        local lo, hi = lane.gate:GetMinMaxValues()
+        local okPoint, _, rel = pcall(lane.icon.GetPoint, lane.icon, 1)
+        local live = lane.guid and P.live[lane.guid]
+        KE:Print("[KTP]   lane " .. i .. " guid=" .. dbgguid(lane.guid) .. " kicker=" .. dbgguid(k and k.guid) ..
+            " rank=" .. dbgval(lane.rank) .. " marker=" .. dbgval(k and k.marker) ..
+            " range=" .. dbgval(lo) .. ".." .. dbgval(hi) .. " value=" .. dbgval(lane.gate:GetValue()) ..
+            " onFill=" .. tostring(okPoint and rel == lane.fill))
+        local start, duration = lane.icon.cd:GetCooldownTimes()
+        KE:Print("[KTP]   lane " .. i .. " clip=" .. tostring(lane.clip:IsShown()) .. "/" .. tostring(lane.clip:IsVisible()) ..
+            " icon=" .. tostring(lane.icon:IsShown()) .. "/" .. tostring(lane.icon:IsVisible()) ..
+            " alpha=" .. dbgval(lane.icon:GetEffectiveAlpha()) ..
+            " levels=" .. lane.clip:GetFrameLevel() .. "," .. lane.clipB:GetFrameLevel() .. "," .. lane.icon:GetFrameLevel() ..
+            " art=" .. dbgval(lane.icon.art:GetTexture()) .. " cd=" .. dbgval(start) .. "+" .. dbgval(duration) ..
+            " count=" .. tostring(lane.cCur ~= nil) .. "/" .. tostring(lane.cBase ~= nil) ..
+            " live=" .. tostring(live ~= nil) .. "/" .. tostring(live and live.unit))
+    end
+end
+
 -- Lanes at the slot plus their rank; nothing follows the rail.
 local function AnchorRail(rail, from, fromPoint, offset, leftward)
     local point = leftward and "RIGHT" or "LEFT"
@@ -740,7 +776,13 @@ local function AnchorRail(rail, from, fromPoint, offset, leftward)
             lane.clip:ClearAllPoints()
             lane.clip:SetPoint(point, from, fromPoint, offset + dir * lane.rank * pitch, 0)
         end
+        if DEBUG_KTP then
+            KE:Print("[KTP] AnchorRail lane " .. i .. " rank=" .. dbgval(lane and lane.rank) .. " x=" ..
+                dbgval(lane and lane.rank and (offset + dir * lane.rank * pitch)) .. " from=" ..
+                tostring(from and from.kind or from == nil and "nil" or "frame") .. ":" .. fromPoint)
+        end
     end
+    if DEBUG_KTP then DebugLanes("AnchorRail", rail.plate, rail) end
     return from, fromPoint, offset
 end
 
@@ -892,6 +934,12 @@ local function LayoutRow(unit)
         return
     end
     local anchor = AnchorOf(unit)
+    if DEBUG_KTP then
+        local kinds = ""
+        for i = 1, #list do kinds = kinds .. list[i].kind .. " " end
+        KE:Print("[KTP] LayoutRow " .. unit .. " list=" .. kinds .. "anchor=" ..
+            (anchor and tostring(anchor:GetDebugName()) or "none") .. " gap=" .. KT.db.PlateBarGap)
+    end
     if not anchor then return end
     PlaceHead(row.head, anchor)
     local now = GetTime()
@@ -1354,6 +1402,10 @@ function KT:SyncKickers()
         local k = list[i]
         k.rank = rank[k.marker] or 0
         rank[k.marker] = k.rank + 1
+        if DEBUG_KTP then
+            KE:Print("[KTP] SyncKickers " .. i .. " guid=" .. dbgguid(k.guid) .. " unit=" .. k.unit ..
+                " marker=" .. k.marker .. " rank=" .. k.rank)
+        end
     end
 end
 
@@ -1365,6 +1417,10 @@ function KT:RailsResync()
     if not self.platesOn then return end
     self:SyncKickers()
     local run = #P.kickers > 0 and not self.isPreview
+    if DEBUG_KTP then
+        KE:Print("[KTP] RailsResync kickers=" .. #P.kickers .. " preview=" .. tostring(self.isPreview) ..
+            " railsOn=" .. tostring(P.railsOn) .. " run=" .. tostring(run))
+    end
     if run ~= (P.railsOn == true) then
         P.railsOn = run
         if run then
@@ -1393,23 +1449,32 @@ function KT:RailsPlate(unit)
         index, marked = KT.RaidMarkOf(unit)
     end
     if not marked then
+        if DEBUG_KTP and rail then KE:Print("[KTP] RailsPlate " .. unit .. " unmarked: release") end
         if rail then self:ReleaseRail(rail) end
         return
     end
+    local made = not rail
     if not rail then
+        local pooled = #P.free.rail > 0
         rail = table_remove(P.free.rail) or BuildRail()
         if not Attach(rail, unit) then
+            if DEBUG_KTP then KE:Print("[KTP] RailsPlate " .. unit .. " attach FAILED") end
             P.free.rail[#P.free.rail + 1] = rail
             return
         end
         rail.plate = unit
         P.rails[unit] = rail
         AddToRow(rail, unit)
+        if DEBUG_KTP then
+            KE:Print("[KTP] RailsPlate " .. unit .. " attach " .. (pooled and "pooled" or "built") ..
+                " lanesBefore=" .. #rail.lanes .. " rowLen=" .. #P.rows[unit].list)
+        end
     end
     StyleRail(rail)
     DressRail(rail)
     FeedRailCounts(rail, GetTime())
     FeedRail(rail, index)
+    if DEBUG_KTP then DebugLanes(made and "RailsPlate new" or "RailsPlate again", unit, rail) end
     self:LayoutPlate(unit)
     rail.seq = rail.seq + 1
     local seq, gen, activation = rail.seq, P.gen, self.activationID
@@ -1417,6 +1482,7 @@ function KT:RailsPlate(unit)
         if self.activationID ~= activation or P.gen ~= gen or rail.seq ~= seq or rail.plate ~= unit then return end
         local again, stillMarked = KT.RaidMarkOf(unit)
         if stillMarked then FeedRail(rail, again) end
+        if DEBUG_KTP then DebugLanes("RailsPlate refeed marked=" .. tostring(stillMarked), unit, rail) end
     end)
 end
 
@@ -1433,6 +1499,7 @@ end
 function KT:ReleaseRail(rail)
     local unit = rail.plate
     if not unit then return end
+    if DEBUG_KTP then KE:Print("[KTP] ReleaseRail " .. unit .. " lanes=" .. #rail.lanes) end
     P.rails[unit] = nil
     local old = self:Unplace(rail)
     for i = 1, #rail.lanes do
@@ -1560,6 +1627,7 @@ function KT:PlatesRoster()
 end
 
 function KT:PlatesReset()
+    if DEBUG_KTP then KE:Print("[KTP] PlatesReset gen=" .. P.gen) end
     P.gen = P.gen + 1
     wipe(P.pending)
     P.packetT = -1
@@ -1585,6 +1653,7 @@ end
 
 function KT:PlatesRestyle()
     if not P.lift then return end
+    if DEBUG_KTP then KE:Print("[KTP] PlatesRestyle preview=" .. tostring(self.isPreview)) end
     ReadScale()
     for guid, e in pairs(P.live) do
         if e.unit then Attach(e, e.unit) else Scaled(e) end
