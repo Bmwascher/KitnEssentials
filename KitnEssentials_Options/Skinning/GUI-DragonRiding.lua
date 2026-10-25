@@ -68,30 +68,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Card 3: Behavior
     ----------------------------------------------------------------
     local cardBehavior = GUIFrame:CreateCard(scrollChild, "Behavior", yOffset)
@@ -255,6 +231,30 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
     card5:AddRow(sRow2, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 6: Colors

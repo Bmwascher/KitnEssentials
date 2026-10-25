@@ -82,12 +82,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootRoll.lua"] = { phase = "17", n = 1 },
     },
     L3 = {
-        -- Phase 17 reorders these.
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-AlertFrames.lua"] = { phase = "17" }, -- content after Position
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-UIWidgets.lua"] = { phase = "17" }, -- content after Font
-        ["KitnEssentials_Options/Skinning/GUI-Chat.lua"] = { phase = "17" }, -- content after Colors
-        ["KitnEssentials_Options/Skinning/GUI-DragonRiding.lua"] = { phase = "17" }, -- content after Position
-        ["KitnEssentials_Options/Skinning/GUI-Tooltips.lua"] = { phase = "17" }, -- Display after Position
         -- Phase 18 handles these special pages.
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DoTTracker.lua"] = { phase = "18" }, -- content after Font
         ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-CCTracker.lua"] = { phase = "18" }, -- content after Font

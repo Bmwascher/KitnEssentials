@@ -102,68 +102,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Font Settings
-    ----------------------------------------------------------------
-    local cardFont = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    manager:Register(cardFont, "all")
-
-    local rowFace = GUIFrame:CreateRow(cardFont.content, Theme.rowHeight)
-    local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {
-        options = KE:AddFollowGlobalFont(fontList),
-        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
-        callback = function(key)
-            db.FontFace = KE:StoredFontFace(key)
-            ApplySettings()
-        end,
-        searchable = true,
-        isFontPreview = true
-    })
-    rowFace:AddWidget(fontDropdown, 0.5)
-    manager:Register(fontDropdown, "all")
-
-    local outlineDropdown = GUIFrame:CreateDropdown(rowFace, "Outline", {
-        options = OUTLINE_OPTIONS,
-        value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
-        callback = function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end
-    })
-    rowFace:AddWidget(outlineDropdown, 0.5)
-    manager:Register(outlineDropdown, "all")
-    cardFont:AddRow(rowFace, Theme.rowHeight)
-
-    local rowSizes = GUIFrame:CreateRow(cardFont.content, Theme.rowHeightLast)
-    local labelSizeSlider = GUIFrame:CreateSlider(rowSizes, "Bar Label Size", {
-        min = 8,
-        max = 24,
-        step = 1,
-        value = barDB.LabelSize or 14,
-        callback = function(val)
-            barDB.LabelSize = val
-            ApplySettings()
-        end
-    })
-    rowSizes:AddWidget(labelSizeSlider, 0.5)
-    manager:Register(labelSizeSlider, "barlabel")
-
-    local barTextSizeSlider = GUIFrame:CreateSlider(rowSizes, "Bar Text Size", {
-        min = 8,
-        max = 24,
-        step = 1,
-        value = barDB.BarTextSize or 12,
-        callback = function(val)
-            barDB.BarTextSize = val
-            ApplySettings()
-        end
-    })
-    rowSizes:AddWidget(barTextSizeSlider, 0.5)
-    manager:Register(barTextSizeSlider, "bartext")
-    cardFont:AddRow(rowSizes, Theme.rowHeightLast, 0)
-
-    yOffset = cardFont:GetNextOffset()
-
-    ----------------------------------------------------------------
     -- Card 3: Status Bars
     ----------------------------------------------------------------
     local cardBars = GUIFrame:CreateCard(scrollChild, "Status Bars", yOffset)
@@ -403,6 +341,68 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     end
     manager:Register(tcPosCard, "topcenter")
     yOffset = tcPosOffset
+
+    ----------------------------------------------------------------
+    -- Card 2: Font Settings
+    ----------------------------------------------------------------
+    local cardFont = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
+    manager:Register(cardFont, "all")
+
+    local rowFace = GUIFrame:CreateRow(cardFont.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {
+        options = KE:AddFollowGlobalFont(fontList),
+        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(key)
+            db.FontFace = KE:StoredFontFace(key)
+            ApplySettings()
+        end,
+        searchable = true,
+        isFontPreview = true
+    })
+    rowFace:AddWidget(fontDropdown, 0.5)
+    manager:Register(fontDropdown, "all")
+
+    local outlineDropdown = GUIFrame:CreateDropdown(rowFace, "Outline", {
+        options = OUTLINE_OPTIONS,
+        value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
+        callback = function(key)
+            db.FontOutline = key
+            ApplySettings()
+        end
+    })
+    rowFace:AddWidget(outlineDropdown, 0.5)
+    manager:Register(outlineDropdown, "all")
+    cardFont:AddRow(rowFace, Theme.rowHeight)
+
+    local rowSizes = GUIFrame:CreateRow(cardFont.content, Theme.rowHeightLast)
+    local labelSizeSlider = GUIFrame:CreateSlider(rowSizes, "Bar Label Size", {
+        min = 8,
+        max = 24,
+        step = 1,
+        value = barDB.LabelSize or 14,
+        callback = function(val)
+            barDB.LabelSize = val
+            ApplySettings()
+        end
+    })
+    rowSizes:AddWidget(labelSizeSlider, 0.5)
+    manager:Register(labelSizeSlider, "barlabel")
+
+    local barTextSizeSlider = GUIFrame:CreateSlider(rowSizes, "Bar Text Size", {
+        min = 8,
+        max = 24,
+        step = 1,
+        value = barDB.BarTextSize or 12,
+        callback = function(val)
+            barDB.BarTextSize = val
+            ApplySettings()
+        end
+    })
+    rowSizes:AddWidget(barTextSizeSlider, 0.5)
+    manager:Register(barTextSizeSlider, "bartext")
+    cardFont:AddRow(rowSizes, Theme.rowHeightLast, 0)
+
+    yOffset = cardFont:GetNextOffset()
 
     RefreshStates()
     return yOffset

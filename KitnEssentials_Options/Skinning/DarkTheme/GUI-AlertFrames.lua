@@ -62,6 +62,23 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAlertFrames", function(scrollChild, 
     if afDB.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
+    -- Card 3: Event Toasts
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Event Toasts", yOffset)
+    afManager:Register(card3, "all")
+    card3:AddHeaderToggle(afDB.MoveEventToasts == true, function(checked)
+        afDB.MoveEventToasts = checked
+        if AF then AF:ApplySettings() end
+        -- Decides whether Edit Mode shows the Event Toasts mover.
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end)
+    if afDB.MoveEventToasts == true then
+        card3:AddLabel("Moves recipe and level-up banners on their own, away from the toast stack.")
+    end
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Alert Stack Position
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
@@ -85,23 +102,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAlertFrames", function(scrollChild, 
     end
     afManager:Register(posCard, "all")
     yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Event Toasts
-    ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Event Toasts", yOffset)
-    afManager:Register(card3, "all")
-    card3:AddHeaderToggle(afDB.MoveEventToasts == true, function(checked)
-        afDB.MoveEventToasts = checked
-        if AF then AF:ApplySettings() end
-        -- Decides whether Edit Mode shows the Event Toasts mover.
-        if KE.EditMode then KE.EditMode:RefreshLiveState() end
-    end)
-    if afDB.MoveEventToasts == true then
-        card3:AddLabel("Moves recipe and level-up banners on their own, away from the toast stack.")
-    end
-
-    yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 4: Event Toast Position

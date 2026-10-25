@@ -101,109 +101,6 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db.Position,
-        dbKeys = {
-            anchorFrameType = "AnchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = function() ApplySettings() end,
-    })
-    -- Strata still applies to every tooltip under cursor anchoring. The card
-    -- itself joins no group: its SetEnabled would gray Strata with it.
-    if posCard.positionWidgets then
-        for _, widget in ipairs(posCard.positionWidgets) do
-            if widget == posCard.strataWidget then
-                manager:Register(widget, "all")
-            else
-                manager:Register(widget, "position")
-            end
-        end
-    end
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Display Settings
-    ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    manager:Register(card3, "all")
-
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local cursorAnchorCheck = GUIFrame:CreateCheckbox(row3a, "Anchor To Cursor", {
-        value = db.CursorAnchor == true,
-        tooltip = "Default-anchored tooltips follow the mouse cursor instead.",
-        callback = function(checked)
-            db.CursorAnchor = checked
-            -- Also decides whether Edit Mode shows the Tooltip mover.
-            if KE.EditMode then KE.EditMode:RefreshLiveState() end
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    row3a:AddWidget(cursorAnchorCheck, 0.5)
-    manager:Register(cursorAnchorCheck, "all")
-
-    local hideInCombatCheck = GUIFrame:CreateCheckbox(row3a, "Hide In Combat", {
-        value = db.HideInCombat == true,
-        tooltip = "Hides unit tooltips during combat. Hold any modifier key to show them anyway.",
-        callback = function(checked) db.HideInCombat = checked; ApplySettings() end,
-    })
-    row3a:AddWidget(hideInCombatCheck, 0.5)
-    manager:Register(hideInCombatCheck, "all")
-    card3:AddRow(row3a, 40)
-
-    -- No ApplySettings: the anchor reads both offsets for every tooltip.
-    local row3b = GUIFrame:CreateRow(card3.content, 44)
-    local cursorXSlider = GUIFrame:CreateSlider(row3b, "Cursor X Offset", {
-        min = -128, max = 128, step = 1,
-        value = db.CursorOffsetX or 10,
-        callback = function(value) db.CursorOffsetX = value end,
-    })
-    row3b:AddWidget(cursorXSlider, 0.5)
-    manager:Register(cursorXSlider, "cursor")
-
-    local cursorYSlider = GUIFrame:CreateSlider(row3b, "Cursor Y Offset", {
-        min = -128, max = 128, step = 1,
-        value = db.CursorOffsetY or -10,
-        callback = function(value) db.CursorOffsetY = value end,
-    })
-    row3b:AddWidget(cursorYSlider, 0.5)
-    manager:Register(cursorYSlider, "cursor")
-    card3:AddRow(row3b, 44)
-
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
-    local showIDsDropdown = GUIFrame:CreateDropdown(row3c, "Show Spell/Item IDs", {
-        options = ID_OPTIONS,
-        value = db.ShowIDs or "MODIFIER",
-        callback = function(value)
-            db.ShowIDs = value
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    row3c:AddWidget(showIDsDropdown, 0.5)
-    manager:Register(showIDsDropdown, "all")
-
-    local showIconIDsCheck = GUIFrame:CreateCheckbox(row3c, "Show Icon IDs", {
-        value = db.ShowIconIDs == true,
-        tooltip = "Adds the icon's file ID beneath the Spell ID and Item ID lines. Needs Show Spell/Item IDs to be showing.",
-        callback = function(checked) db.ShowIconIDs = checked; ApplySettings() end,
-    })
-    row3c:AddWidget(showIconIDsCheck, 0.5)
-    manager:Register(showIconIDsCheck, "iconIDs")
-    card3:AddRow(row3c, 40, 0)
-    yOffset = card3:GetNextOffset()
-
-    ----------------------------------------------------------------
     -- Card 4: Unit Lines
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Unit Lines", yOffset)
@@ -355,6 +252,109 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     -- readout is reachable. See StyleHealthBar in
     -- Modules/Skinning/Tooltips/Tooltips.lua.
     yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Display Settings
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    manager:Register(card3, "all")
+
+    local row3a = GUIFrame:CreateRow(card3.content, 40)
+    local cursorAnchorCheck = GUIFrame:CreateCheckbox(row3a, "Anchor To Cursor", {
+        value = db.CursorAnchor == true,
+        tooltip = "Default-anchored tooltips follow the mouse cursor instead.",
+        callback = function(checked)
+            db.CursorAnchor = checked
+            -- Also decides whether Edit Mode shows the Tooltip mover.
+            if KE.EditMode then KE.EditMode:RefreshLiveState() end
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row3a:AddWidget(cursorAnchorCheck, 0.5)
+    manager:Register(cursorAnchorCheck, "all")
+
+    local hideInCombatCheck = GUIFrame:CreateCheckbox(row3a, "Hide In Combat", {
+        value = db.HideInCombat == true,
+        tooltip = "Hides unit tooltips during combat. Hold any modifier key to show them anyway.",
+        callback = function(checked) db.HideInCombat = checked; ApplySettings() end,
+    })
+    row3a:AddWidget(hideInCombatCheck, 0.5)
+    manager:Register(hideInCombatCheck, "all")
+    card3:AddRow(row3a, 40)
+
+    -- No ApplySettings: the anchor reads both offsets for every tooltip.
+    local row3b = GUIFrame:CreateRow(card3.content, 44)
+    local cursorXSlider = GUIFrame:CreateSlider(row3b, "Cursor X Offset", {
+        min = -128, max = 128, step = 1,
+        value = db.CursorOffsetX or 10,
+        callback = function(value) db.CursorOffsetX = value end,
+    })
+    row3b:AddWidget(cursorXSlider, 0.5)
+    manager:Register(cursorXSlider, "cursor")
+
+    local cursorYSlider = GUIFrame:CreateSlider(row3b, "Cursor Y Offset", {
+        min = -128, max = 128, step = 1,
+        value = db.CursorOffsetY or -10,
+        callback = function(value) db.CursorOffsetY = value end,
+    })
+    row3b:AddWidget(cursorYSlider, 0.5)
+    manager:Register(cursorYSlider, "cursor")
+    card3:AddRow(row3b, 44)
+
+    local row3c = GUIFrame:CreateRow(card3.content, 40)
+    local showIDsDropdown = GUIFrame:CreateDropdown(row3c, "Show Spell/Item IDs", {
+        options = ID_OPTIONS,
+        value = db.ShowIDs or "MODIFIER",
+        callback = function(value)
+            db.ShowIDs = value
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row3c:AddWidget(showIDsDropdown, 0.5)
+    manager:Register(showIDsDropdown, "all")
+
+    local showIconIDsCheck = GUIFrame:CreateCheckbox(row3c, "Show Icon IDs", {
+        value = db.ShowIconIDs == true,
+        tooltip = "Adds the icon's file ID beneath the Spell ID and Item ID lines. Needs Show Spell/Item IDs to be showing.",
+        callback = function(checked) db.ShowIconIDs = checked; ApplySettings() end,
+    })
+    row3c:AddWidget(showIconIDsCheck, 0.5)
+    manager:Register(showIconIDsCheck, "iconIDs")
+    card3:AddRow(row3c, 40, 0)
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db.Position,
+        dbKeys = {
+            anchorFrameType = "AnchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = function() ApplySettings() end,
+    })
+    -- Strata still applies to every tooltip under cursor anchoring. The card
+    -- itself joins no group: its SetEnabled would gray Strata with it.
+    if posCard.positionWidgets then
+        for _, widget in ipairs(posCard.positionWidgets) do
+            if widget == posCard.strataWidget then
+                manager:Register(widget, "all")
+            else
+                manager:Register(widget, "position")
+            end
+        end
+    end
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 6: Font Settings

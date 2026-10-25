@@ -171,44 +171,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         return yOffset
     end
 
-    ----------------------------------------------------------------
-    -- Card 2: Chat Colors
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Chat Colors", yOffset)
-    manager:Register(card2, "all")
-
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local classColorCheck = GUIFrame:CreateCheckbox(row2a, "Class Color BNet Whispers", {
-        value = db.ClassColorWhispers ~= false,
-        tooltip = "Class-colors sender names on Battle.net whispers in the default Blizzard chat, matching how regular whispers are already colored.",
-        callback = function(checked)
-            db.ClassColorWhispers = checked
-            ApplySettings()
-        end,
-    })
-    row2a:AddWidget(classColorCheck, 0.5)
-    manager:Register(classColorCheck, "all")
-
-    local mentionsCheck = GUIFrame:CreateCheckbox(row2a, "Class Color Mentions", {
-        value = db.ClassColorMentions == true,
-        tooltip = "Colors player names typed inside a message.",
-        callback = function(checked) db.ClassColorMentions = checked end,
-    })
-    row2a:AddWidget(mentionsCheck, 0.5)
-    manager:Register(mentionsCheck, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
-
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local excludeBox = GUIFrame:CreateEditBox(row2b, "Never Color These Names", {
-        value = db.ExcludedMentions or "",
-        tooltip = "Comma separated. Use it for names that are also ordinary words.",
-        callback = function(text) db.ExcludedMentions = text end,
-    })
-    row2b:AddWidget(excludeBox, 1)
-    manager:Register(excludeBox, "all")
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
+    local soundOptions = GUIFrame.BuildSoundOptions()
 
     ----------------------------------------------------------------
     -- Card 3: Social
@@ -249,273 +212,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     card3:AddRow(row3, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 4: Display Settings
-    ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    manager:Register(card4, "all")
-
-    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
-        value = db.MatchDamageMeterSize == true,
-        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
-            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
-        callback = function(checked)
-            db.MatchDamageMeterSize = checked
-            ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-    })
-    row4match:AddWidget(matchChk, 1)
-    manager:Register(matchChk, "all")
-    card4:AddRow(row4match, Theme.rowHeight)
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local widthSlider = GUIFrame:CreateSlider(row4a, "Panel Width", {
-        min = 300, max = 900, step = 1,
-        value = db.Width or 448,
-        callback = function(value)
-            db.Width = value
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(widthSlider, 0.5)
-    manager:Register(widthSlider, "panelsize")
-
-    local heightSlider = GUIFrame:CreateSlider(row4a, "Panel Height", {
-        min = 120, max = 500, step = 1,
-        value = db.Height or 245,
-        callback = function(value)
-            db.Height = value
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(heightSlider, 0.5)
-    manager:Register(heightSlider, "panelsize")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    AddSeparatorRow(card4, manager)
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local editBoxPosDropdown = GUIFrame:CreateDropdown(row4b, "Edit Box Position", {
-        options = EDITBOX_POSITIONS,
-        value = db.EditBoxPosition or "ABOVE_CHAT_INSIDE",
-        callback = function(value)
-            db.EditBoxPosition = value
-            ApplySettings()
-        end,
-    })
-    row4b:AddWidget(editBoxPosDropdown, 0.5)
-    manager:Register(editBoxPosDropdown, "all")
-
-    local editBoxFontSlider = GUIFrame:CreateSlider(row4b, "Edit Box Font Size", {
-        min = 8, max = 24, step = 1,
-        value = db.EditBoxFontSize or 14,
-        callback = function(value)
-            db.EditBoxFontSize = value
-            ApplySettings()
-        end,
-    })
-    row4b:AddWidget(editBoxFontSlider, 0.5)
-    manager:Register(editBoxFontSlider, "all")
-    card4:AddRow(row4b, Theme.rowHeight)
-
-    AddSeparatorRow(card4, manager)
-
-    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local maxLinesSlider = GUIFrame:CreateSlider(row4c, "Max History Lines", {
-        min = 100, max = 2000, step = 50,
-        value = db.MaxLines or 500,
-        callback = function(value)
-            db.MaxLines = value
-            ApplySettings()
-        end,
-    })
-    row4c:AddWidget(maxLinesSlider, 0.5)
-    manager:Register(maxLinesSlider, "all")
-
-    local scrollMsgSlider = GUIFrame:CreateSlider(row4c, "Messages Per Scroll", {
-        min = 1, max = 10, step = 1,
-        value = db.NumScrollMessages or 3,
-        callback = function(value)
-            db.NumScrollMessages = value
-            ApplySettings()
-        end,
-    })
-    row4c:AddWidget(scrollMsgSlider, 0.5)
-    manager:Register(scrollMsgSlider, "all")
-    card4:AddRow(row4c, Theme.rowHeight)
-
-    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local fadeCheck = GUIFrame:CreateCheckbox(row4e, "Fade Chat Text", {
-        value = db.FadeEnabled ~= false,
-        callback = function(checked)
-            db.FadeEnabled = checked
-            ApplySettings()
-        end,
-    })
-    row4e:AddWidget(fadeCheck, 0.5)
-    manager:Register(fadeCheck, "all")
-
-    local fadeTimeSlider = GUIFrame:CreateSlider(row4e, "Fade After (seconds)", {
-        min = 5, max = 120, step = 5,
-        value = db.FadeTime or 30,
-        callback = function(value)
-            db.FadeTime = value
-            ApplySettings()
-        end,
-    })
-    row4e:AddWidget(fadeTimeSlider, 0.5)
-    manager:Register(fadeTimeSlider, "all")
-    card4:AddRow(row4e, Theme.rowHeight)
-
-    AddSeparatorRow(card4, manager)
-
-    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local shortChannelsCheck = GUIFrame:CreateCheckbox(row4d, "Short Channel Names", {
-        value = db.ShortChannels ~= false,
-        callback = function(checked)
-            db.ShortChannels = checked
-            ApplySettings()
-        end,
-    })
-    row4d:AddWidget(shortChannelsCheck, 0.34)
-    manager:Register(shortChannelsCheck, "all")
-
-    local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
-        value = db.RoleIcons ~= false,
-        tooltip = "Shows tank, healer, and DPS role icons before sender names in party, raid, and instance chat.",
-        callback = function(checked)
-            db.RoleIcons = checked
-            ApplySettings()
-        end,
-    })
-    row4d:AddWidget(roleIconsCheck, 0.33)
-    manager:Register(roleIconsCheck, "all")
-
-    local afkDndCheck = GUIFrame:CreateCheckbox(row4d, "AFK/DND Tags", {
-        value = db.AFKDNDTags ~= false,
-        tooltip = "Shows [AFK] or [DND] before the name of a player who is away or busy, as the default chat does.",
-        callback = function(checked) db.AFKDNDTags = checked end,
-    })
-    row4d:AddWidget(afkDndCheck, 0.33)
-    manager:Register(afkDndCheck, "all")
-    card4:AddRow(row4d, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 5: Position
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 6: Font
-    ----------------------------------------------------------------
-    local fontCard, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        fontSizeRange = { 8, 24 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
-    -- Card 7: Backdrop
-    ----------------------------------------------------------------
-    local card7 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
-    manager:Register(card7, "all")
-
-    local row7a = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-    local panelBackdropCheck = GUIFrame:CreateCheckbox(row7a, "Panel Backdrop", {
-        value = db.Backdrop.Enabled ~= false,
-        callback = function(checked)
-            db.Backdrop.Enabled = checked
-            ApplySettings()
-        end,
-    })
-    row7a:AddWidget(panelBackdropCheck, 0.5)
-    manager:Register(panelBackdropCheck, "all")
-
-    local tabBackdropCheck = GUIFrame:CreateCheckbox(row7a, "Tab Bar Backdrop", {
-        value = db.TabBackdrop.Enabled ~= false,
-        callback = function(checked)
-            db.TabBackdrop.Enabled = checked
-            ApplySettings()
-        end,
-    })
-    row7a:AddWidget(tabBackdropCheck, 0.5)
-    manager:Register(tabBackdropCheck, "all")
-    card7:AddRow(row7a, Theme.rowHeight)
-
-    local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-    local panelColorPicker = GUIFrame:CreateColorPicker(row7b, "Panel Color", {
-        color = db.Backdrop.Color or { 0.031, 0.031, 0.031, 0.8 },
-        callback = function(r, g, b, a)
-            db.Backdrop.Color = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7b:AddWidget(panelColorPicker, 0.5)
-    manager:Register(panelColorPicker, "all")
-
-    local tabColorPicker = GUIFrame:CreateColorPicker(row7b, "Tab Bar Color", {
-        color = db.TabBackdrop.Color or { 0, 0, 0, 0.2 },
-        callback = function(r, g, b, a)
-            db.TabBackdrop.Color = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7b:AddWidget(tabColorPicker, 0.5)
-    manager:Register(tabColorPicker, "all")
-    card7:AddRow(row7b, Theme.rowHeight)
-
-    local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-    local panelBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Panel Border Color", {
-        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.Backdrop.BorderColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7c:AddWidget(panelBorderColorPicker, 0.5)
-    manager:Register(panelBorderColorPicker, "all")
-
-    local tabBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Tab Bar Border Color", {
-        color = db.TabBackdrop.BorderColor or { 0, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.TabBackdrop.BorderColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7c:AddWidget(tabBorderColorPicker, 0.5)
-    manager:Register(tabBorderColorPicker, "all")
-    card7:AddRow(row7c, Theme.rowHeight)
-
-    AddSeparatorRow(card7, manager)
-
-    -- Edit Box Border Color has no control here: the edit box border is
-    -- chat-type colored on every header update (say/whisper/channel), so a
-    -- static color option would be applied then instantly overridden.
-    local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
-    local editBoxColorPicker = GUIFrame:CreateColorPicker(row7d, "Edit Box Color", {
-        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
-        callback = function(r, g, b, a)
-            db.EditBox.BackdropColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row7d:AddWidget(editBoxColorPicker, 0.5)
-    manager:Register(editBoxColorPicker, "all")
-    card7:AddRow(row7d, Theme.rowHeightLast, 0)
-
-    yOffset = card7:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 8: Timestamps
@@ -670,54 +366,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     card9:AddRow(row9d, Theme.rowHeightLast, 0)
 
     yOffset = card9:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 10: Whisper Sound
-    ----------------------------------------------------------------
-    local card10 = GUIFrame:CreateCard(scrollChild, "Whisper Sound", yOffset)
-    manager:Register(card10, "all")
-
-    local soundOptions = GUIFrame.BuildSoundOptions()
-
-    local row10a = GUIFrame:CreateRow(card10.content, Theme.rowHeight)
-    local whisperSoundEnabledCheck = GUIFrame:CreateCheckbox(row10a, "Play Sound On Whisper", {
-        value = db.WhisperSounds.Enabled == true,
-        callback = function(checked)
-            db.WhisperSounds.Enabled = checked
-            OnWhisperSoundsChanged()
-        end,
-    })
-    row10a:AddWidget(whisperSoundEnabledCheck, 1)
-    manager:Register(whisperSoundEnabledCheck, "all")
-    card10:AddRow(row10a, Theme.rowHeight)
-
-    local row10b = GUIFrame:CreateRow(card10.content, Theme.rowHeightLast)
-    local whisperSoundDropdown = GUIFrame:CreateDropdown(row10b, "Whisper Sound", {
-        options = soundOptions,
-        searchable = true,
-        value = db.WhisperSounds.WhisperSound or "None",
-        callback = function(value)
-            db.WhisperSounds.WhisperSound = value
-            OnWhisperSoundsChanged(value)
-        end,
-    })
-    row10b:AddWidget(whisperSoundDropdown, 0.5)
-    manager:Register(whisperSoundDropdown, "all")
-
-    local bnetWhisperSoundDropdown = GUIFrame:CreateDropdown(row10b, "Battle.net Whisper Sound", {
-        options = soundOptions,
-        searchable = true,
-        value = db.WhisperSounds.BNetWhisperSound or "None",
-        callback = function(value)
-            db.WhisperSounds.BNetWhisperSound = value
-            OnWhisperSoundsChanged(value)
-        end,
-    })
-    row10b:AddWidget(bnetWhisperSoundDropdown, 0.5)
-    manager:Register(bnetWhisperSoundDropdown, "all")
-    card10:AddRow(row10b, Theme.rowHeightLast, 0)
-
-    yOffset = card10:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 11: Chat Links
@@ -934,6 +582,358 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
         yOffset = card14:GetNextOffset()
     end
+
+    ----------------------------------------------------------------
+    -- Card 4: Display Settings
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    manager:Register(card4, "all")
+
+    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
+        value = db.MatchDamageMeterSize == true,
+        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
+            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
+        callback = function(checked)
+            db.MatchDamageMeterSize = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row4match:AddWidget(matchChk, 1)
+    manager:Register(matchChk, "all")
+    card4:AddRow(row4match, Theme.rowHeight)
+
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local widthSlider = GUIFrame:CreateSlider(row4a, "Panel Width", {
+        min = 300, max = 900, step = 1,
+        value = db.Width or 448,
+        callback = function(value)
+            db.Width = value
+            ApplySettings()
+        end,
+    })
+    row4a:AddWidget(widthSlider, 0.5)
+    manager:Register(widthSlider, "panelsize")
+
+    local heightSlider = GUIFrame:CreateSlider(row4a, "Panel Height", {
+        min = 120, max = 500, step = 1,
+        value = db.Height or 245,
+        callback = function(value)
+            db.Height = value
+            ApplySettings()
+        end,
+    })
+    row4a:AddWidget(heightSlider, 0.5)
+    manager:Register(heightSlider, "panelsize")
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local editBoxPosDropdown = GUIFrame:CreateDropdown(row4b, "Edit Box Position", {
+        options = EDITBOX_POSITIONS,
+        value = db.EditBoxPosition or "ABOVE_CHAT_INSIDE",
+        callback = function(value)
+            db.EditBoxPosition = value
+            ApplySettings()
+        end,
+    })
+    row4b:AddWidget(editBoxPosDropdown, 0.5)
+    manager:Register(editBoxPosDropdown, "all")
+
+    local editBoxFontSlider = GUIFrame:CreateSlider(row4b, "Edit Box Font Size", {
+        min = 8, max = 24, step = 1,
+        value = db.EditBoxFontSize or 14,
+        callback = function(value)
+            db.EditBoxFontSize = value
+            ApplySettings()
+        end,
+    })
+    row4b:AddWidget(editBoxFontSlider, 0.5)
+    manager:Register(editBoxFontSlider, "all")
+    card4:AddRow(row4b, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
+
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local maxLinesSlider = GUIFrame:CreateSlider(row4c, "Max History Lines", {
+        min = 100, max = 2000, step = 50,
+        value = db.MaxLines or 500,
+        callback = function(value)
+            db.MaxLines = value
+            ApplySettings()
+        end,
+    })
+    row4c:AddWidget(maxLinesSlider, 0.5)
+    manager:Register(maxLinesSlider, "all")
+
+    local scrollMsgSlider = GUIFrame:CreateSlider(row4c, "Messages Per Scroll", {
+        min = 1, max = 10, step = 1,
+        value = db.NumScrollMessages or 3,
+        callback = function(value)
+            db.NumScrollMessages = value
+            ApplySettings()
+        end,
+    })
+    row4c:AddWidget(scrollMsgSlider, 0.5)
+    manager:Register(scrollMsgSlider, "all")
+    card4:AddRow(row4c, Theme.rowHeight)
+
+    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local fadeCheck = GUIFrame:CreateCheckbox(row4e, "Fade Chat Text", {
+        value = db.FadeEnabled ~= false,
+        callback = function(checked)
+            db.FadeEnabled = checked
+            ApplySettings()
+        end,
+    })
+    row4e:AddWidget(fadeCheck, 0.5)
+    manager:Register(fadeCheck, "all")
+
+    local fadeTimeSlider = GUIFrame:CreateSlider(row4e, "Fade After (seconds)", {
+        min = 5, max = 120, step = 5,
+        value = db.FadeTime or 30,
+        callback = function(value)
+            db.FadeTime = value
+            ApplySettings()
+        end,
+    })
+    row4e:AddWidget(fadeTimeSlider, 0.5)
+    manager:Register(fadeTimeSlider, "all")
+    card4:AddRow(row4e, Theme.rowHeight)
+
+    AddSeparatorRow(card4, manager)
+
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local shortChannelsCheck = GUIFrame:CreateCheckbox(row4d, "Short Channel Names", {
+        value = db.ShortChannels ~= false,
+        callback = function(checked)
+            db.ShortChannels = checked
+            ApplySettings()
+        end,
+    })
+    row4d:AddWidget(shortChannelsCheck, 0.34)
+    manager:Register(shortChannelsCheck, "all")
+
+    local roleIconsCheck = GUIFrame:CreateCheckbox(row4d, "Role Icons in Group Chat", {
+        value = db.RoleIcons ~= false,
+        tooltip = "Shows tank, healer, and DPS role icons before sender names in party, raid, and instance chat.",
+        callback = function(checked)
+            db.RoleIcons = checked
+            ApplySettings()
+        end,
+    })
+    row4d:AddWidget(roleIconsCheck, 0.33)
+    manager:Register(roleIconsCheck, "all")
+
+    local afkDndCheck = GUIFrame:CreateCheckbox(row4d, "AFK/DND Tags", {
+        value = db.AFKDNDTags ~= false,
+        tooltip = "Shows [AFK] or [DND] before the name of a player who is away or busy, as the default chat does.",
+        callback = function(checked) db.AFKDNDTags = checked end,
+    })
+    row4d:AddWidget(afkDndCheck, 0.33)
+    manager:Register(afkDndCheck, "all")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
+
+    yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Position
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Font
+    ----------------------------------------------------------------
+    local fontCard, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        fontSizeRange = { 8, 24 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 2: Chat Colors
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Chat Colors", yOffset)
+    manager:Register(card2, "all")
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local classColorCheck = GUIFrame:CreateCheckbox(row2a, "Class Color BNet Whispers", {
+        value = db.ClassColorWhispers ~= false,
+        tooltip = "Class-colors sender names on Battle.net whispers in the default Blizzard chat, matching how regular whispers are already colored.",
+        callback = function(checked)
+            db.ClassColorWhispers = checked
+            ApplySettings()
+        end,
+    })
+    row2a:AddWidget(classColorCheck, 0.5)
+    manager:Register(classColorCheck, "all")
+
+    local mentionsCheck = GUIFrame:CreateCheckbox(row2a, "Class Color Mentions", {
+        value = db.ClassColorMentions == true,
+        tooltip = "Colors player names typed inside a message.",
+        callback = function(checked) db.ClassColorMentions = checked end,
+    })
+    row2a:AddWidget(mentionsCheck, 0.5)
+    manager:Register(mentionsCheck, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local excludeBox = GUIFrame:CreateEditBox(row2b, "Never Color These Names", {
+        value = db.ExcludedMentions or "",
+        tooltip = "Comma separated. Use it for names that are also ordinary words.",
+        callback = function(text) db.ExcludedMentions = text end,
+    })
+    row2b:AddWidget(excludeBox, 1)
+    manager:Register(excludeBox, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7: Backdrop
+    ----------------------------------------------------------------
+    local card7 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
+    manager:Register(card7, "all")
+
+    local row7a = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local panelBackdropCheck = GUIFrame:CreateCheckbox(row7a, "Panel Backdrop", {
+        value = db.Backdrop.Enabled ~= false,
+        callback = function(checked)
+            db.Backdrop.Enabled = checked
+            ApplySettings()
+        end,
+    })
+    row7a:AddWidget(panelBackdropCheck, 0.5)
+    manager:Register(panelBackdropCheck, "all")
+
+    local tabBackdropCheck = GUIFrame:CreateCheckbox(row7a, "Tab Bar Backdrop", {
+        value = db.TabBackdrop.Enabled ~= false,
+        callback = function(checked)
+            db.TabBackdrop.Enabled = checked
+            ApplySettings()
+        end,
+    })
+    row7a:AddWidget(tabBackdropCheck, 0.5)
+    manager:Register(tabBackdropCheck, "all")
+    card7:AddRow(row7a, Theme.rowHeight)
+
+    local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local panelColorPicker = GUIFrame:CreateColorPicker(row7b, "Panel Color", {
+        color = db.Backdrop.Color or { 0.031, 0.031, 0.031, 0.8 },
+        callback = function(r, g, b, a)
+            db.Backdrop.Color = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7b:AddWidget(panelColorPicker, 0.5)
+    manager:Register(panelColorPicker, "all")
+
+    local tabColorPicker = GUIFrame:CreateColorPicker(row7b, "Tab Bar Color", {
+        color = db.TabBackdrop.Color or { 0, 0, 0, 0.2 },
+        callback = function(r, g, b, a)
+            db.TabBackdrop.Color = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7b:AddWidget(tabColorPicker, 0.5)
+    manager:Register(tabColorPicker, "all")
+    card7:AddRow(row7b, Theme.rowHeight)
+
+    local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local panelBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Panel Border Color", {
+        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a)
+            db.Backdrop.BorderColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7c:AddWidget(panelBorderColorPicker, 0.5)
+    manager:Register(panelBorderColorPicker, "all")
+
+    local tabBorderColorPicker = GUIFrame:CreateColorPicker(row7c, "Tab Bar Border Color", {
+        color = db.TabBackdrop.BorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a)
+            db.TabBackdrop.BorderColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7c:AddWidget(tabBorderColorPicker, 0.5)
+    manager:Register(tabBorderColorPicker, "all")
+    card7:AddRow(row7c, Theme.rowHeight)
+
+    AddSeparatorRow(card7, manager)
+
+    -- Edit Box Border Color has no control here: the edit box border is
+    -- chat-type colored on every header update (say/whisper/channel), so a
+    -- static color option would be applied then instantly overridden.
+    local row7d = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local editBoxColorPicker = GUIFrame:CreateColorPicker(row7d, "Edit Box Color", {
+        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
+        callback = function(r, g, b, a)
+            db.EditBox.BackdropColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row7d:AddWidget(editBoxColorPicker, 0.5)
+    manager:Register(editBoxColorPicker, "all")
+    card7:AddRow(row7d, Theme.rowHeightLast, 0)
+
+    yOffset = card7:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 10: Whisper Sound
+    ----------------------------------------------------------------
+    local card10 = GUIFrame:CreateCard(scrollChild, "Whisper Sound", yOffset)
+    manager:Register(card10, "all")
+
+    local row10a = GUIFrame:CreateRow(card10.content, Theme.rowHeight)
+    local whisperSoundEnabledCheck = GUIFrame:CreateCheckbox(row10a, "Play Sound On Whisper", {
+        value = db.WhisperSounds.Enabled == true,
+        callback = function(checked)
+            db.WhisperSounds.Enabled = checked
+            OnWhisperSoundsChanged()
+        end,
+    })
+    row10a:AddWidget(whisperSoundEnabledCheck, 1)
+    manager:Register(whisperSoundEnabledCheck, "all")
+    card10:AddRow(row10a, Theme.rowHeight)
+
+    local row10b = GUIFrame:CreateRow(card10.content, Theme.rowHeightLast)
+    local whisperSoundDropdown = GUIFrame:CreateDropdown(row10b, "Whisper Sound", {
+        options = soundOptions,
+        searchable = true,
+        value = db.WhisperSounds.WhisperSound or "None",
+        callback = function(value)
+            db.WhisperSounds.WhisperSound = value
+            OnWhisperSoundsChanged(value)
+        end,
+    })
+    row10b:AddWidget(whisperSoundDropdown, 0.5)
+    manager:Register(whisperSoundDropdown, "all")
+
+    local bnetWhisperSoundDropdown = GUIFrame:CreateDropdown(row10b, "Battle.net Whisper Sound", {
+        options = soundOptions,
+        searchable = true,
+        value = db.WhisperSounds.BNetWhisperSound or "None",
+        callback = function(value)
+            db.WhisperSounds.BNetWhisperSound = value
+            OnWhisperSoundsChanged(value)
+        end,
+    })
+    row10b:AddWidget(bnetWhisperSoundDropdown, 0.5)
+    manager:Register(bnetWhisperSoundDropdown, "all")
+    card10:AddRow(row10b, Theme.rowHeightLast, 0)
+
+    yOffset = card10:GetNextOffset()
 
     manager:UpdateAll(db.Enabled == true)
     return yOffset
