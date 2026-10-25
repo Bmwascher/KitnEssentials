@@ -55,9 +55,12 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel(KE:Gold("Hunter, Warlock, Death Knight and Mage only.") .. " Shows a warning text " ..
-        "when your pet is missing, dead, on passive, or not the pet your spec wants. With it on, each " ..
-        "state has its own text and color below.")
+    card1:AddLabel(KE.IS_FOREVER
+        and (KE:Gold("Hunter and Warlock only.") .. " Shows a warning text when your pet is " ..
+            "missing, dead or on passive. With it on, each state has its own text and color below.")
+        or (KE:Gold("Hunter, Warlock, Death Knight and Mage only.") .. " Shows a warning text " ..
+            "when your pet is missing, dead, on passive, or not the pet your spec wants. With it on, each " ..
+            "state has its own text and color below."))
 
     yOffset = card1:GetNextOffset()
 
