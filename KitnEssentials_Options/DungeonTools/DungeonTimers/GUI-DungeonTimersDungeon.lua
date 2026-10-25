@@ -3708,7 +3708,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
     hint:SetJustifyH("LEFT")
     hint:SetText(isTrashView
         and "Pick a trash ability on the left to edit it."
-        or "Pick a timer, cue, health phase or reminder sound on the left to edit it. Boss role filters need the Role Filter toggle on the General tab.")
+        or "Pick a timer, cue, health phase or reminder sound on the left to edit it. Boss role filters need the Filter bars by your role/spec switch on the General tab's Role Filter card.")
     hint:SetTextColor(0.85, 0.85, 0.85)
     hintCard:AddRow(hintRow, Theme.rowHeightLast, 0)
     yOffset = hintCard:GetNextOffset()

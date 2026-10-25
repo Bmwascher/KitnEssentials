@@ -54,8 +54,8 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Shows the enemy casts aimed at you as an icon with a countdown, so you know what " ..
-        "is about to land." ..
+    card1:AddLabel("Shows each enemy cast aimed at you as an icon with a countdown to when it " ..
+        "lands." ..
         "\n\nCasts longer than 60 seconds (junk NPC channels) are hidden. Casters off screen need " ..
         "the nameplateShowOffscreen CVar, which you are asked about when you turn this on.")
 

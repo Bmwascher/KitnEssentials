@@ -436,8 +436,8 @@ function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
         ApplyModuleState(checked)
         KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
     end)
-    card:AddLabel("Hand-tuned timers and reminder sounds for each season's dungeon bosses. Set how they look " ..
-        "on the Bars, Texts and Nameplates tabs.\n\n" ..
+    card:AddLabel("Hand-tuned timers and reminder sounds for each season's dungeon bosses. With it on, " ..
+        "the Bars, Texts and Nameplates tabs set how they look.\n\n" ..
         "Needs |cffffd100BigWigs|r and |cffffd100LittleWigs|r. In BigWigs Timeline settings, show BigWigs " ..
         "enhanced timers as BigWigs bars. Blizzard's timeline display can stay off.")
     if db.Enabled == false then

@@ -63,7 +63,7 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
     local specCard, specOffset = GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, {
         db = db,
         scope = "EnemyCounter",
-        note = "Untick a specialization to stop the counter there. It stops watching nameplates on that spec, not just hiding. Specs you never touch stay on.",
+        note = "Untick a specialization to turn the counter off there: it stops watching nameplates on that spec rather than only hiding. Specs you never change stay on.",
         onChange = function()
             local mod = KitnEssentials and KitnEssentials:GetModule("EnemyCounter", true)
             if mod and mod:IsEnabled() then mod:ApplySpecGate() end

@@ -223,7 +223,7 @@ local function BuildHeader(scrollChild, yOffset)
     local FM = GetModule()
     local kickName = FM and (", " .. KE:Gold(FM.KICK_MACRO_NAME) .. ",") or ""
     card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
-        "a kick target can be called and taken together. The Focus Kick tab can add a second macro" ..
+        "a kick target can be called and taken together. With it on, the Focus Kick tab can add a second macro" ..
         kickName .. " that casts your interrupt at that focus. Drag either from " .. KE:Gold("/macro") .. " onto " ..
         "a bar; both are kept up to date as you change the settings below." ..
         "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..

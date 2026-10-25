@@ -63,8 +63,7 @@ GUIFrame:RegisterContent("KeystoneHelperReset", function(scrollChild, yOffset)
 
     local cardReset = GUIFrame:CreateCard(scrollChild, "Instance Reset Announcer", yOffset)
     manager:Register(cardReset, "all")
-    cardReset:AddLabel("Sends your reset message to the group when you reset the instance, so nobody " ..
-        "wonders whether it took.")
+    cardReset:AddLabel("Sends your reset message to the group when you reset the instance.")
 
     local rowReset1 = GUIFrame:CreateRow(cardReset.content, Theme.rowHeight)
     local resetEnableCheck = GUIFrame:CreateCheckbox(rowReset1, "Announce on Instance Reset", {
@@ -113,7 +112,7 @@ GUIFrame:RegisterContent("KeystoneHelperReminders", function(scrollChild, yOffse
         db.YourKeyEnabled = checked
         ApplySettings()
     end)
-    cardYourKey:AddLabel("Shown while you stand in a Mythic 0 of the dungeon your own keystone points at, so you remember to slot it. Hides itself after five minutes.")
+    cardYourKey:AddLabel("Shown while you stand in a Mythic 0 of the dungeon your own keystone is for, as a reminder to slot it. Hides itself after five minutes.")
     yOffset = cardYourKey:GetNextOffset()
 
     -- Both switches off: nothing to style, so the shared cards stay away.
