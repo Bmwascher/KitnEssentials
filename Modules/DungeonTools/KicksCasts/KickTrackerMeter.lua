@@ -97,6 +97,7 @@ KT.platesT = -1   -- the batch's start
 KT.layersOf = {}    -- [guid] = that teammate's live layers, oldest first
 KT.freeLayers = {}  -- released layers, ready for reuse
 KT.meterFight = 0   -- moves at each new fight and baseline, so an older baseline counts as 0
+KT.plateAdmitted = {}  -- one update's teammates KT.AdmitGate took, for the plate display
 
 local function ClearRead(read)
     wipe(read.rows)
@@ -264,15 +265,18 @@ function KT:RecordMeterKick(unit, T, at, plate, how, ownPending)
         self._ownPending = false
         if KT.OwnSuccessFrom(how, ownPending) then self:ApplyOwnSuccess() end
         if plate then self:ShowKicked(guid, KT.KickedFrom(plate)) end
+        if plate and self.platesOn then self:PlaceKickIcon(guid, plate.unit, plate.stamp, true) end
         return
     end
     self:ReleaseLayers(guid, (at > T) and at or T)
+    if self.platesOn then self:PlatesSupersede(guid, (at > T) and at or T) end
     local duration = self:ClockDuration(member, true)
     if not duration then return end
     local remaining = duration - (GetTime() - at)
     if remaining <= 0 then return end
     self:ConfirmKick(guid, duration, remaining)
     self:ShowKicked(guid, plate and KT.KickedFrom(plate) or nil)
+    if plate and self.platesOn then self:PlaceKickIcon(guid, plate.unit, plate.stamp, true) end
 end
 
 -- Decides the update, credits it, and lets the waiting plates go with its
@@ -333,7 +337,9 @@ function KT:AttributeMeter(T, sid)
         wipe(prevN)
         wipe(self.meterPrevA)
         KT.RestartCarried(read)
+        self.meterFight = self.meterFight + 1
     end
+    if self.platesOn then self:PlatesCounts(T, self.meterBase.a) end
 
     local e = self:DecisionInputs(T, byUnit)
     local growth = wipe(self.meterGrowth)
@@ -380,6 +386,7 @@ function KT:PairWith(T0)
     if memo.who then
         local guid = self.meterGuidOf[memo.who]
         if #plates == 1 and guid then self:ShowKicked(guid, KT.KickedFrom(plates[1])) end
+        if #plates == 1 and guid and self.platesOn then self:PlaceKickIcon(guid, plates[1].unit, plates[1].stamp, true) end
     elseif not memo.grew then
         e.plates = #plates
         local who, how = KT.Decide(e)
@@ -392,6 +399,7 @@ function KT:PairWith(T0)
     end
     memo.pairedT = T0
     if not memo.who then self:MarkLayers(T0, plates[1]) end
+    if not memo.who and self.platesOn then self:PlatesLatePlates(T0, plates) end
     if DEBUG_KT_METER then
         KE:Print(string_format("[KT] late plates=%d how=%s who=%s", #plates, tostring(memo.how), tostring(memo.who)))
     end
@@ -473,6 +481,8 @@ function KT:RebaseMeter()
     self:ReleasePetSwaps(read, base)
     self.meterBase, self.meterRead = read, base
     self.meterNeedsBase = false
+    self.meterFight = self.meterFight + 1
+    if self.platesOn then self:PlatesCounts(GetTime(), self.meterBase.a) end
 end
 
 -- The meter event fires for every meter type, hundreds of times a second in
@@ -519,6 +529,7 @@ function KT:ClearMeterState()
     self._meterReadPending, self._latePairArmed, self._plateFlushArmed = false, false, false
     self.meterNeedsBase = true
     self:ReleaseAllLayers()
+    if self.platesOn then self:PlatesReset() end
 end
 
 ---------------------------------------------------------------------------------
@@ -539,6 +550,7 @@ KT.GateSlot = GateSlot
 function KT:BuildGate(T, plate)
     local base, prevN, prevA = self.meterBase, self.meterPrevN, self.meterPrevA
     local byUnit, guidOf = self.meterByUnit, self.meterGuidOf
+    local admitted = self.platesOn and wipe(self.plateAdmitted) or nil
     for i = 2, #KT.OWNERS do
         local unit = KT.OWNERS[i]
         local member = byUnit[unit]
@@ -548,9 +560,11 @@ function KT:BuildGate(T, plate)
             local hasTotals = before ~= nil and after ~= nil
             if KT.AdmitGate(member, KT.MainCooling(member, T), prevN[slot], base.n[slot], hasTotals) then
                 self:AddLayer(guidOf[unit], member, T, before, after, plate)
+                if admitted then admitted[#admitted + 1] = unit end
             end
         end
     end
+    if admitted then self:PlatesGate(T, admitted, prevA, base.a, plate and self.plates or nil) end
 end
 
 -- A layer: holder > gate (a hidden StatusBar) + clip > a copy of a bar, built

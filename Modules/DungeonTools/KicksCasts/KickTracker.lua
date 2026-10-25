@@ -347,6 +347,7 @@ function KT:RefreshPartyRoster()
     self:UpdateInspectDemand()
     self:UpdateBars()
     self:LayoutBars()
+    if self.platesOn then self:PlatesRoster() end
 end
 
 -- The player's own spec; teammates' specs come from inspection
@@ -458,6 +459,7 @@ function KT:OnInspectChanged(guid, snapshot)
     self:ApplySpecKick(member, spec, snapshot)
     self:UpdateBars()
     self:LayoutBars()
+    if self.platesOn then self:PlatesRoster() end
 end
 
 -- A teammate's respec keeps them wanted until the next answer, marks their
@@ -506,6 +508,7 @@ function KT:ConfirmKick(guid, duration, remaining)
         end
     end
 
+    if self.platesOn then self:PlatesCooldown(guid) end
     self:LayoutBars()
 end
 
@@ -545,6 +548,7 @@ function KT:ClearKick(guid)
     member.kickStart = nil
     member.kickDuration = nil
     self:RefreshMemberRow(guid)
+    if self.platesOn then self:PlatesCooldown(guid) end
 end
 
 ---------------------------------------------------------------------------------
@@ -561,7 +565,7 @@ local function InterruptedSpellIcon(spellID)
     return nil
 end
 
--- The mob's raid marker now; the nameplate token is never kept.
+-- The mob's raid marker now.
 local function RaidMarkOf(unit)
     local ok, index = pcall(GetRaidTargetIndex, unit)
     if ok and (issecretvalue(index) or index ~= nil) then return index, true end
@@ -610,6 +614,8 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         iconID = InterruptedSpellIcon(spellID),  -- possibly secret; SetTexture-only
         raidMark = mark,                          -- possibly secret; SetSpriteSheetCell-only
         hasRaidMark = hasMark,
+        unit = unit,                              -- plain nameplate token, for the plate icons
+        stamp = self.platesOn and self:PlateStamp(unit) or nil,  -- that plate's lifetime now
     }
 
     if kind == "own" then
@@ -627,6 +633,7 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         self._ownLandedAt = now
         self:ExpectMeter("player", UnitGUID("player"), now)
         self:TryOwnReduction()
+        if self.platesOn then self:PlaceKickIcon(UnitGUID("player"), unit) end
         return
     end
 
@@ -675,11 +682,13 @@ function KT:ChargeKick(entry, guid)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return false end
     self:ReleaseLayers(guid, entry.startTime)
+    if self.platesOn then self:PlatesSupersede(guid, entry.startTime) end
     local cd = self:ClockDuration(member, true)
     local remaining = cd - (GetTime() - entry.startTime)
     if remaining <= 0 then return false end
     self:ConfirmKick(guid, cd, remaining)
     self:ShowKicked(guid, KickedFrom(entry))
+    if self.platesOn then self:PlaceKickIcon(guid, entry.unit, entry.stamp) end
     return true
 end
 
@@ -836,6 +845,9 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     end
     local cd = data and self:OwnKickCooldown(data, false)
     self:ConfirmKick(guid, cd)
+    -- Only while this cast's readable interrupt is still to come: one that
+    -- came first already placed the icon on the plate it stopped.
+    if self.platesOn and self._ownPending then self:PlaceOwnCast(guid) end
     self:RedrawKicked(guid)
     self:TryOwnReduction()
 end
@@ -921,6 +933,7 @@ function KT:CheckActivation()
         -- The first read is the baseline: kicks before the activation are
         -- not credited.
         self:RebaseMeter()
+        self:SyncPlates()
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
         self:UnregisterCombatEvents()  -- also clears the interrupt queues
@@ -928,6 +941,7 @@ function KT:CheckActivation()
         if self.containerFrame then self.containerFrame:Hide() end
         wipe(self.partyMembers)
         self:UpdateInspectDemand()
+        self:SyncPlates()
     end
 end
 
@@ -960,6 +974,7 @@ function KT:RefreshOwnKicks()
     if not anyChanged then return end
     self:UpdateBars()
     self:LayoutBars()
+    if self.platesOn then self:PlatesRoster() end
 end
 
 -- UNIT_PET and SPELLS_CHANGED can arrive together; one check a frame later
@@ -1662,6 +1677,7 @@ function KT:ShowPreview()
     -- Drop the live interrupt lists too, so nothing charges or hands back a
     -- row while the preview holds the bars.
     self:ClearKickQueues()
+    self:PlatesPreview()
 
     if self.db.ShowBars == false then
         self.containerFrame:Hide()
@@ -1797,6 +1813,7 @@ function KT:HidePreview()
         KE:Print(string.format("[KT] HidePreview enter, activeBars=%d", activeCount))
     end
     self.isPreview = false
+    self:PlatesPreviewEnd()
     self.previewContext = nil  -- resume live spec-driven resolution
     if not self.containerFrame then return end
 
@@ -1883,6 +1900,8 @@ function KT:OnDisable()
     self:CancelAllTimers()
     self:StopOnUpdate()
 
+    if self.platesOn then self:PlatesDeactivate() end
+    self:PlatesPreviewEnd()
     self:ClearKickQueues()
     self:HideAllBars()
     wipe(self.partyMembers)
@@ -1931,4 +1950,8 @@ function KT:ApplySettings()
     if self.isPreview then
         self:ShowPreview()
     end
+    -- Show Bars and Nameplate Icons both off deactivates the tracker.
+    self:CheckActivation()
+    self:SyncPlates()
+    if self.platesOn then self:PlatesRestyle() end
 end
