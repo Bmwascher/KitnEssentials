@@ -835,6 +835,24 @@ local Defaults = {
             SortTankPriority = 1,
             SortHealerPriority = 2,
             SortDPSPriority = 3,
+            -- Bars and names
+            ShowBars = true,
+            UseNicknames = true,
+            -- Nameplate icons
+            PlateIcons = true,
+            PlatePremark = true,            -- icons on the mobs teammates' announced markers sit on
+            PlateIconStyle = "kick",        -- "kick" | "spec" | "class"
+            PlateClassBorder = true,
+            PlateSide = "LEFT",             -- "LEFT" | "RIGHT" | "TOP" | "BOTTOM"
+            PlateIconSize = 28,
+            PlateBarGap = 4,                -- pixels from the health bar to the first icon
+            PlateSpacing = 1,               -- pixels between icons
+            PlateAboveOverlap = true,
+            PlateOffsetX = 0,
+            PlateOffsetY = 0,
+            PlateShowTimer = true,
+            PlateTimerSize = 11,
+            PlateSwipe = true,
         },
 
         CCTracker = {

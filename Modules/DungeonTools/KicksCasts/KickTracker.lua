@@ -272,6 +272,19 @@ local function SetMemberClass(member, classToken)
     end
 end
 
+-- The bar's name: a nickname may be secret, so it only ever reaches SetText.
+local function DisplayName(unit)
+    local ok, name = pcall(KE.GetNicknameOrName, KE, unit)
+    if ok then return name end
+    return nil
+end
+
+-- The nickname while Use Nicknames is on and one is known, else the name.
+local function ShownName(db, member)
+    if db.UseNicknames ~= false and member.displayName then return member.displayName end
+    return member.name
+end
+
 function KT:RefreshPartyRoster()
     if not self.db or not self.db.Enabled then return end
 
@@ -295,6 +308,7 @@ function KT:RefreshPartyRoster()
                 local member = self.partyMembers[guid]
                 member.unit = unit
                 member.name = name
+                member.displayName = DisplayName(unit)
                 SetMemberClass(member, classToken)
 
                 if unit == "player" then
@@ -498,6 +512,30 @@ function KT:RefreshMemberRow(guid)
     local bar = self.activeBars[guid]
     if bar then self:UpdateBarVisuals(bar, self.partyMembers[guid]) end
     self:LayoutBars()
+end
+
+-- A nickname changed: every member's bar name is read again, on their bar
+-- and on each reveal copy over it. A copy keeps its clock; only its name is
+-- written again.
+function KT:RefreshNames()
+    if not self.isActive then return end
+    for _, member in pairs(self.partyMembers) do
+        if member.unit then member.displayName = DisplayName(member.unit) end
+    end
+    for guid, bar in pairs(self.activeBars) do
+        local member = self.partyMembers[guid]
+        if member then self:UpdateBarVisuals(bar, member) end
+    end
+    for guid, list in pairs(self.layersOf) do
+        local member = self.partyMembers[guid]
+        if member then
+            for i = 1, #list do
+                local layer = list[i]
+                layer.member.displayName = member.displayName
+                layer.copy.nameText:SetText(ShownName(self.db, member) or "")
+            end
+        end
+    end
 end
 
 function KT:ClearKick(guid)
@@ -1201,7 +1239,7 @@ function KT:UpdateBarVisuals(bar, member)
     KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
     bar.nameText:SetShown(db.ShowName)
     if member then
-        bar.nameText:SetText(member.name or "")
+        bar.nameText:SetText(ShownName(db, member) or "")
         if isDarkMode and isReady and member.classToken then
             local color = GetClassColor(member.classToken)
             if color then
@@ -1620,7 +1658,8 @@ function KT:ShowPreview()
 
     -- Create 5 mock bars: 3 ready + 2 cooling
     local previewData = {
-        { name = UnitName("player"), classToken = select(2, UnitClass("player")), spellID = 1766, ready = true },
+        { name = UnitName("player"), displayName = KE:GetNicknameOrName("player"),
+          classToken = select(2, UnitClass("player")), spellID = 1766, ready = true },
         { name = "Warrior", classToken = "WARRIOR", spellID = 6552, ready = true },
         { name = "Mage", classToken = "MAGE", spellID = 2139, ready = true },
         { name = "Hunter", classToken = "HUNTER", spellID = 147362, ready = false, remaining = 8.2, cd = 24 },
@@ -1640,6 +1679,7 @@ function KT:ShowPreview()
         local bar = self:GetOrCreateBar("preview_" .. i)
         local fakeMember = {
             name = data.name,
+            displayName = data.displayName,
             classToken = data.classToken,
             interruptData = { id = data.spellID, cd = data.cd or 15, role = "DAMAGER" },
             kickStart = (not data.ready) and GetTime() or nil,

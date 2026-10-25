@@ -5,7 +5,7 @@
 -- ║           nickname, and the Name-Realm key builder. Read ║
 -- ║           by the Damage Meter, Death Notifications,      ║
 -- ║           Healer Mana, the LFG Reminder, Party Potions   ║
--- ║           and the Kick Tracker (the key builder only).   ║
+-- ║           and the Kick Tracker.                          ║
 -- ╚══════════════════════════════════════════════════════════╝
 ---@class KE
 local KE = select(2, ...)
@@ -143,6 +143,8 @@ function KE:RefreshNicknameTags()
     -- The potion bars write a name only when a row binds.
     local Pot = KE.PartyPotions
     if Pot and Pot.RefreshNames then Pot.RefreshNames() end
+    local KT = KEAddon:GetModule("KickTracker", true)
+    if KT and KT.isActive then KT:RefreshNames() end
 end
 
 ---------------------------------------------------------------------------------

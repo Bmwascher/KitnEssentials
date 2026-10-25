@@ -620,7 +620,8 @@ end
 -- an opaque backing in the background color and the plate's raid mark.
 function KT:PaintLayer(layer, member, plate)
     local copy, fake = layer.copy, layer.member
-    fake.name, fake.classToken, fake.interruptData = member.name, member.classToken, member.interruptData
+    fake.name, fake.displayName = member.name, member.displayName
+    fake.classToken, fake.interruptData = member.classToken, member.interruptData
     fake.kickStart, fake.kickDuration = layer.t, layer.endAt - layer.t
     self:UpdateBarVisuals(copy, fake)
     local r, g, b = unpack(self.db.BackgroundColor)
