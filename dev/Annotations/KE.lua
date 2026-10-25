@@ -214,6 +214,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field FramePool KE.FramePool
 ---@field CCTrackerRules table
 ---@field CC_TRACKER_SEEDS table
+---@field PartyStopsRules table
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
 ---@field ShamanProcRules table

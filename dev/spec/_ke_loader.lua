@@ -3289,6 +3289,12 @@ function L.loadCCTrackerRules()
     return KE.CCTrackerRules, KE.CC_TRACKER_SEEDS
 end
 
+-- Modules/DungeonTools/KicksCasts/PartyStopsRules.lua. Pure logic: nothing to stub.
+function L.loadPartyStopsRules()
+    local KE = helpers.loadModule("Modules/DungeonTools/KicksCasts/PartyStopsRules.lua", {})
+    return KE.PartyStopsRules
+end
+
 -- Modules/QoL/GroupTools/ReadyCheckConsumables.lua. The module captures its API
 -- surface as upvalues at load, so every global below exists before
 -- loadModule and InCombatLockdown rides mock.install's override as a closure
