@@ -133,7 +133,7 @@ GUIFrame:RegisterContent("CharacterPanelCharacter", function(scrollChild, yOffse
     if elvuiLoaded then
         local elvuiNoteRow = GUIFrame:CreateRow(card3.content, 24)
         local elvuiNote = GUIFrame:CreateText(elvuiNoteRow,
-            "", "|cffff5555Disabled while ElvUI is loaded — ElvUI handles this.|r",
+            "", "|cffff5555Disabled while ElvUI is loaded - ElvUI handles this.|r",
             24, "hide")
         elvuiNoteRow:AddWidget(elvuiNote, 1)
         card3:AddRow(elvuiNoteRow, 24)
@@ -164,7 +164,7 @@ GUIFrame:RegisterContent("CharacterPanelCharacter", function(scrollChild, yOffse
             local CP = GetModule()
             if CP then CP:UpdateItemLevelText() end
         end,
-        tooltip = "Shows item level with 2 decimal places instead of rounded.",
+        tooltip = "Shows the item level with 2 decimal places instead of a whole number.",
     })
     local row3Width = MYTHIC_PLUS and 1 / 3 or 1 / 2
     row3:AddWidget(decimalCheck, row3Width)
@@ -259,7 +259,7 @@ GUIFrame:RegisterContent("CharacterPanelCharacter", function(scrollChild, yOffse
 
     local noteRow4 = GUIFrame:CreateRow(card4.content, 30)
     local note4 = GUIFrame:CreateText(noteRow4, "",
-        "Colors: |cffff8000M|r Myth · |cffc74dc7H|r Hero · |cff00b3ffC|r Champion · |cff00cc00V|r Veteran · |cffb3b3b3A|r Adventurer",
+        "Colors: |cffff8000M|r Myth, |cffc74dc7H|r Hero, |cff00b3ffC|r Champion, |cff00cc00V|r Veteran, |cffb3b3b3A|r Adventurer",
         30, "hide")
     noteRow4:AddWidget(note4, 1)
     card4:AddRow(noteRow4, 30, 0)
@@ -561,7 +561,7 @@ GUIFrame:RegisterContent("CharacterPanelInspect", function(scrollChild, yOffset)
             local IT = TalentsModule()
             if IT then IT:RequestCompare() end
         end,
-        tooltip = "Marks talents where their build differs from yours. Only when you share their spec.",
+        tooltip = "Marks talents where their build differs from yours, when you share their spec.",
     })
     rowIT2:AddWidget(compareCheck, 1 / 3)
     manager:Register(compareCheck, "talentsOn")
