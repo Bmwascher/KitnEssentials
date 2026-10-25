@@ -1,5 +1,30 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.18
+
+### Custom Cooldowns
+
+- A single pipe character in the separator or a spell name no longer breaks
+  the line's colors
+- The Spec pick on the settings page stays after Add or Remove
+
+### DoT Tracker
+
+- The Spec pick on the settings page stays after Add, Remove or a color Reset
+
+### Focus Castbar
+
+- Mute Sound On Kick CD keeps the cast sound muted for your kick's real
+  cooldown, talents included (for example Counterspell 25 s, Mind Freeze 15 s,
+  Solar Beam 60 s)
+
+### No Movement Alert
+
+- A single pipe character in the separator or a custom text no longer breaks
+  the line's colors
+
+---
+
 ## v4.14.17
 
 ### Dark Theme
