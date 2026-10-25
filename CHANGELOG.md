@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.16
+
+### Interrupt Tracker
+
+- Sends and reads no addon messages, so it works the same whether or not
+  teammates run KitnEssentials; the Kick Sync card is removed and an old
+  Kick Sync setting does nothing
+- A teammate's kick is named from the Damage Meter's Interrupts list, and
+  their bar shows the kick as the meter counts it, even when the game hides
+  who kicked
+- Corrected cooldowns: Counterspell 20 s with Quick Witted, Mind Freeze 12 s
+  after a qualifying kick, Solar Beam 45 s on the main target only, Pummel
+  13.5 s, Quell 18 s with Interwoven Threads
+- Teammates' kick talents are read by inspecting them; a teammate whose
+  talents cannot be read shows their longest cooldown
+
+---
+
 ## v4.14.15
 
 ### Damage Meter
