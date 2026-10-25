@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.19
+
+### Party Stops
+
+- New module, off by default, on its own Party Stops tab under Kicks & Casts:
+  one grid of icons for your party's crowd control (stuns, fears, knockbacks
+  and grips, 19 spells), each counting down its cooldown once used, with the
+  player's nickname in class color along the bottom
+- A teammate's stop starts when its debuff appears on an enemy nameplate; your
+  own starts from your cast. Talents are read inside dungeons, so a stop shows
+  only for players who can have it
+- Pick which spells show and their order, Icons Per Row, grow direction, icon
+  size, spacing, timer and name text; any party, never raids, with an Only in
+  Dungeons option; moves in KE Edit Mode
+
+---
+
 ## v4.14.18
 
 ### Custom Cooldowns
