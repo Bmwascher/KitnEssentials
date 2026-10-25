@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.14
+
+### Party Cooldowns
+
+- A new General tab, first in the strip, holds Show In, the font face and
+  outline, and the colors the party frame icons, Potion bars and Raid
+  Cooldowns share
+- Icon Order card on the Cooldowns tab: drag Class Cooldowns, Racials and
+  Trinkets into the order you want beside each party frame; the order also
+  decides which icons stay when Max Cooldown Icons cuts the row. Active
+  buffs always follow the cooldowns
+- Timer Size and Show Decimals Below moved to the Cooldowns tab's Display
+  Settings card
+- Raid Cooldowns: an optional Healer position (Use Healer Position, off by
+  default) moves the box to its own spot in a healer spec; its Edit Mode box
+  is labeled Healer or Default
+- The charge count no longer trusts its self-check when the game hides the
+  answers, so a count it cannot confirm stays off
+
+---
+
 ## v4.14.13
 
 ### Dungeon Timers
