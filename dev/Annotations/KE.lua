@@ -656,7 +656,8 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent, fo
 ---@return boolean
 function KE:IsUnsafeAnchor(frame, candidate, asParent, followers) end
 
---- True when `name` is an Edit Mode box's name, or a dotted name inside one.
+--- True when `name` is an Edit Mode box's or tool frame's name, or a dotted
+--- name inside one.
 ---@param name any
 ---@return boolean
 function KE:IsEditModeBoxName(name) end

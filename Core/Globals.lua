@@ -621,9 +621,13 @@ end
 
 KE.EDIT_MODE_BOX_PREFIX = "KE_EditMode_"
 
+-- Every Edit Mode frame starts with this: the boxes, named with the prefix
+-- above, and the tool frames (nudge, guides, key catchers), which are not.
+local EDIT_MODE_NAME_PREFIX = "KE_EditMode"
+
 -- A plain find, so the chooser's per-frame call allocates no substring.
 function KE:IsEditModeBoxName(name)
-    return type(name) == "string" and string_find(name, KE.EDIT_MODE_BOX_PREFIX, 1, true) == 1
+    return type(name) == "string" and string_find(name, EDIT_MODE_NAME_PREFIX, 1, true) == 1
 end
 
 -- Select Frame names an unnamed child Parent.key, printing the key with

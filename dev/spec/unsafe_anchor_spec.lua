@@ -316,4 +316,23 @@ describe("unsafe anchor guard", function()
             assert.equal(row.missing, missing, row.name)
         end
     end)
+
+    it("IsEditModeBoxName matches every Edit Mode frame name and nothing else", function()
+        local rows = {
+            { name = "KE_EditMode_Chat", want = true },
+            { name = "KE_EditMode_Chat.text", want = true },
+            { name = "KE_EditMode", want = true },
+            { name = "KE_EditModeNudge", want = true },
+            { name = "KE_EditModeEscape", want = true },
+            { name = "KE_EditModeShift", want = true },
+            { name = "KE_EditModeGuides", want = true },
+            { name = "KE_ChatPanel", want = false },
+            { name = "MyKE_EditModeNudge", want = false },
+            { name = nil, want = false },
+            { name = 42, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equal(row.want, KE:IsEditModeBoxName(row.name), tostring(row.name))
+        end
+    end)
 end)
