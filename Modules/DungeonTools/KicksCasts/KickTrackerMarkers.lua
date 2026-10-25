@@ -63,9 +63,8 @@ function KT:LearnMarker(guid, marker)
     self:RailsResync()
 end
 
--- Inside the instance the record was saved in, it comes back at any
--- activation: a switch turned off and on, a reload or a login, whichever of
--- the activation and PLAYER_ENTERING_WORLD runs first. Otherwise the cache
+-- Inside the record's instance it comes back at any activation, whichever of
+-- the activation and PLAYER_ENTERING_WORLD runs first; elsewhere the cache
 -- starts empty and the record is written over.
 function KT:RestoreMarkers()
     wipe(self.markerOf)
