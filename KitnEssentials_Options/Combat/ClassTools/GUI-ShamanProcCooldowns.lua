@@ -63,7 +63,7 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
             else KitnEssentials:DisableModule("ShamanProcCooldowns") end
         end
     end)
-    card1:AddLabel("|cffffd100Shaman only.|r Counts down the internal cooldowns of Nature's Guardian " ..
+    card1:AddLabel(KE:Gold("Shaman only.") .. " Counts down the internal cooldowns of Nature's Guardian " ..
         "and Thunderous Paws, which Blizzard's Cooldown Manager cannot show. A tracker appears " ..
         "only while you have its talent.")
     yOffset = card1:GetNextOffset()

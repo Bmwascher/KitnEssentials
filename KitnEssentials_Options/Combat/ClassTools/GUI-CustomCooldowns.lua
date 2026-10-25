@@ -177,7 +177,7 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
         })
         card2:AddRow(addRow, Theme.rowHeight)
 
-        card2:AddNote("All Specs adds to every spec of the class; a spec adds to that spec only. " ..
+        card2:AddNote(KE:Gold("All Specs") .. " adds to every spec of the class; a spec adds to that spec only. " ..
             "A spell shows only where it is known.")
     end
 

@@ -60,7 +60,7 @@ GUIFrame:RegisterContent("DivineArbiter", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Retribution Paladin only. Shows which spender consumes your Divine Arbiter " ..
+    card1:AddLabel(KE:Gold("Retribution Paladin only.") .. " Shows which spender consumes your Divine Arbiter " ..
         "buff (Retribution tier set) and how long you have to use it. The preview shows only " ..
         "while you are Retribution.")
 

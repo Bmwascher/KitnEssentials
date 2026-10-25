@@ -56,7 +56,7 @@ GUIFrame:RegisterContent("AlterTime", function(scrollChild, yOffset)
         end
     end)
 
-    card1:AddLabel("Mage only. Shows the health Alter Time will return you to, taken when you " ..
+    card1:AddLabel(KE:Gold("Mage only.") .. " Shows the health Alter Time will return you to, taken when you " ..
         "cast it. The number sits on Alter Time's icon in Blizzard's Cooldown Manager, or at " ..
         "its own screen position when the Cooldown Manager does not show Alter Time.")
 
@@ -121,7 +121,7 @@ GUIFrame:RegisterContent("AlterTime", function(scrollChild, yOffset)
     local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local note = GUIFrame:CreateText(row2c, KE:ColorTextByTheme("Note"),
         "Add Alter Time to the Cooldown Manager's Tracked Buffs (icons). Without it, the number " ..
-        "uses the Position Settings card below.", 40, "hide")
+        "uses the " .. KE:Gold("Position Settings") .. " card below.", 40, "hide")
     row2c:AddWidget(note, 1)
     manager:Register(note, "all")
     card2:AddRow(row2c, Theme.rowHeightLast, 0)

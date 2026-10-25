@@ -55,7 +55,7 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("|cffffd100Hunter, Warlock, Death Knight and Mage only.|r Shows a warning text " ..
+    card1:AddLabel(KE:Gold("Hunter, Warlock, Death Knight and Mage only.") .. " Shows a warning text " ..
         "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
         "its own text and color below.")
 

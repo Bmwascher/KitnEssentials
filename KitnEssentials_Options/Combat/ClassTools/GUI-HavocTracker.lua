@@ -48,7 +48,7 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
         end
     end)
 
-    card1:AddLabel("|cffffd100Destruction Warlock only.|r Warns you when your Havoc is sitting on the " ..
+    card1:AddLabel(KE:Gold("Destruction Warlock only.") .. " Warns you when your Havoc is sitting on the " ..
         "target you are hitting, which wastes it.")
 
     yOffset = card1:GetNextOffset()

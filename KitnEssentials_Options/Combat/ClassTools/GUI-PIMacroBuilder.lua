@@ -76,9 +76,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("|cffffd100Priest only.|r Writes a Power Infusion macro aimed at the player you " ..
+    card1:AddLabel(KE:Gold("Priest only.") .. " Writes a Power Infusion macro aimed at the player you " ..
         "pick, with optional extras such as trinkets or a racial in the same press, and rewrites it " ..
-        "as you change the settings below. Drag the macro from |cffffd100/macro|r onto your action bar.")
+        "as you change the settings below. Drag the macro from " .. KE:Gold("/macro") .. " onto your action bar.")
 
     yOffset = card1:GetNextOffset()
 
@@ -95,8 +95,8 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     local usageText = GUIFrame:CreateText(usageRow,
         "",
         KE:ColorTextByTheme("-") .. " The options below set what the PI macro casts.\n" ..
-        KE:ColorTextByTheme("-") .. " Use " .. KE:ColorTextByTheme("/kitn pi") .. " while hovering or targeting a friendly player to point the macro at them (out of combat only).\n" ..
-        KE:ColorTextByTheme("-") .. " A helper macro holding " .. KE:ColorTextByTheme("/kitn pi") .. " updates the target in one press.",
+        KE:ColorTextByTheme("-") .. " Use " .. KE:Gold("/kitn pi") .. " while hovering or targeting a friendly player to point the macro at them (out of combat only).\n" ..
+        KE:ColorTextByTheme("-") .. " A helper macro holding /kitn pi updates the target in one press.",
         70, "hide")
     usageRow:AddWidget(usageText, 1)
     card2:AddRow(usageRow, 70)
@@ -238,7 +238,7 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     local rowCustomNote = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
     local customNote = GUIFrame:CreateText(rowCustomNote,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Add any spell or item to the macro. Example: " .. KE:ColorTextByTheme("Shadowfiend") .. " or " .. KE:ColorTextByTheme("item:12345"),
+        KE:ColorTextByTheme("-") .. " Add any spell or item to the macro. Example: Shadowfiend or item:12345",
         Theme.rowHeight, "hide")
     rowCustomNote:AddWidget(customNote, 1)
     manager:Register(customNote, "all")
@@ -284,8 +284,8 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     local advNoteRow = GUIFrame:CreateRow(card5.content, 55)
     local advNoteText = GUIFrame:CreateText(advNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs. Default is " .. KE:ColorTextByTheme("135939") .. " (Power Infusion).\n   " ..
-        KE:ColorTextByTheme(">") .. " Find IDs by clicking any spell or item icon on Wowhead.",
+        KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs. Default is 135939 (Power Infusion).\n   " ..
+        "> Find IDs by clicking any spell or item icon on Wowhead.",
         55, "hide")
     advNoteRow:AddWidget(advNoteText, 1)
     card5:AddRow(advNoteRow, 55, 0)

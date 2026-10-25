@@ -73,7 +73,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         "with an optional icon." ..
         "\n\nThe game keeps absorb amounts secret from addons, so abbreviated numbers fade on a " ..
         "timer after the last change instead of clearing the instant a shield drops; full numbers " ..
-        "clear at once. The Abbreviate Numbers switch below picks which.")
+        "clear at once. The " .. KE:Gold("Abbreviate Numbers") .. " switch below picks which.")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.
@@ -101,11 +101,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     manager:Register(iconCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Behavior note explaining the Abbreviate toggle, then a divider before the
-    -- layout settings below. The theme's text tiers are all white, so dim this note
-    -- explicitly to read as gray helper text distinct from the row labels.
-    local behaviorNote = card3:AddLabel("With Abbreviate Numbers off, full numbers stay while a shield is up and clear at 0. With it on, 1.2M-style numbers fade once Fade Duration (sec) has passed since the last change.")
-    behaviorNote:SetTextColor(0.6, 0.6, 0.6, 1)
+    card3:AddLabel("With " .. KE:Gold("Abbreviate Numbers") .. " off, full numbers stay while a shield is up and clear at 0. With it on, 1.2M-style numbers fade once " .. KE:Gold("Fade Duration (sec)") .. " has passed since the last change.")
     card3:AddSeparator()
 
     local row3grow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)

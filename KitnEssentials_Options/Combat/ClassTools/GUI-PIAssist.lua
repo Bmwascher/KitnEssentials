@@ -54,7 +54,7 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("|cffffd100Priest only.|r Glows the raid frame of the player your PI macro targets " ..
+    card1:AddLabel(KE:Gold("Priest only.") .. " Glows the raid frame of the player your PI macro targets " ..
         "while their burst cooldown is running - the moment to give them Power Infusion." ..
         "\n\nThe game matches the buff and draws the glow; nothing a fight hides is read.")
 
@@ -77,7 +77,7 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
     local watching = PA and PA.TargetName and PA:TargetName() or nil
     local line
     if watching then
-        line = "Watching |cffffd100" .. watching .. "|r."
+        line = "Watching " .. watching .. "."
         if stored ~= watching then
             line = line .. " |cff888888The macro has not caught up with "
                 .. (stored and ("\"" .. stored .. "\"") or "the cleared target") .. " yet.|r"
@@ -92,8 +92,8 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
     local targetNoteRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightNote)
     local targetNote = GUIFrame:CreateText(targetNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Use " .. KE:ColorTextByTheme("/kitn pi") .. " while hovering or targeting a player. It rewrites the PI macro and points the glow at the same person.\n" ..
-        KE:ColorTextByTheme("-") .. " Both need the " .. KE:ColorTextByTheme("PI Macro") .. " tab switched on; the name can also be typed there.",
+        KE:ColorTextByTheme("-") .. " Use " .. KE:Gold("/kitn pi") .. " while hovering or targeting a player. It rewrites the PI macro and points the glow at the same person.\n" ..
+        KE:ColorTextByTheme("-") .. " Both need the " .. KE:Gold("PI Macro") .. " tab switched on; the name can also be typed there.",
         50, "hide")
     targetNoteRow:AddWidget(targetNote, 1)
     card2:AddRow(targetNoteRow, Theme.rowHeightNote)

@@ -403,9 +403,9 @@ GUIFrame:RegisterTabbedContent("HealerMana", {
             end
         end)
         card:AddLabel("Shows your healers' mana as a percentage. In a party or keystone it " ..
-            "follows the one healer (Party mode); with Enable in Raid on the Raid tab, a raid " ..
+            "follows the one healer (Party mode); with " .. KE:Gold("Enable in Raid") .. " on the " .. KE:Gold("Raid") .. " tab, a raid " ..
             "stacks every healer (Raid mode). The mode switches with the group type. With the " ..
-            "tracker on, the Party and Raid tabs set up each mode.")
+            "tracker on, the " .. KE:Gold("Party") .. " and Raid tabs set up each mode.")
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled ~= true
     end,
