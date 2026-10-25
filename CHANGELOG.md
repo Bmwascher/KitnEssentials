@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.26
+
+### Settings
+
+- DoT Tracker, Character Panel and Mythic+ Timer settings open on inner
+  tabs (DoT: Tracking and Display; Character Panel: Character, Inspect and
+  Extras; Mythic+ Timer: General, Timer, Forces, Objectives & Deaths and
+  Enemy Overlay)
+- CC Tracker gains Show Time Left, Swipe and Time Left Color, and its cards
+  follow the standard order
+- Damage Meter shows its description while switched off
+
+---
+
 ## v4.14.25
 
 ### Settings
