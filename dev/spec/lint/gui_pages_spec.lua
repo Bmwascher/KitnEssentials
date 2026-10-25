@@ -67,7 +67,6 @@ local ALLOWED = {
     L1 = {
         -- Phase 18 handles these special pages.
         ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-CCTracker.lua|Display"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-DamageMeter.lua|Font"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Affixes & Key — Colors"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Deaths — Colors"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Forces — Colors"] = { phase = "18" },

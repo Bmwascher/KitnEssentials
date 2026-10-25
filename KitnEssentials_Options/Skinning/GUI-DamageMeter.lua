@@ -203,12 +203,9 @@ local function BuildHeader(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else. Any
-    -- label would give the card a body, and collapse only hides the tabs.
-    local disabled = db.Enabled == false
-    if not disabled then card:AddLabel(DESCRIPTION) end
+    card:AddLabel(DESCRIPTION)
 
-    return card:GetNextOffset(), disabled
+    return card:GetNextOffset(), db.Enabled == false
 end
 
 ---------------------------------------------------------------------------------
@@ -1523,29 +1520,6 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     end
 
     ----------------------------------------------------------------
-    -- Position Settings (the dock is the positioned frame)
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
-        db = db,
-        positionKey = "Position",
-        dbKeys = {
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Default Display (Configure For: <context>)
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Default Display", yOffset)
@@ -1640,6 +1614,29 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     end
 
     yOffset = cardDisplay:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Position Settings (the dock is the positioned frame)
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = db,
+        positionKey = "Position",
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- The settings link: the readout, the split labels, ranges and values
@@ -2013,9 +2010,9 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     yOffset = cardHeader:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Font
+    -- Font Settings
     ----------------------------------------------------------------
-    local cardFont = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    local cardFont = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(cardFont, "all")
 
     local rowFont = GUIFrame:CreateRow(cardFont.content, Theme.rowHeight)
