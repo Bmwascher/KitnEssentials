@@ -177,7 +177,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local rowP2 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
     local plateSizeSlider = GUIFrame:CreateSlider(rowP2, "Icon Size", {
         min = 16, max = 48, step = 1,
-        value = db.PlateIconSize or 28,
+        value = db.PlateIconSize or 30,
         callback = function(val) db.PlateIconSize = val; ApplySettings() end,
     })
     rowP2:AddWidget(plateSizeSlider, 0.5)
@@ -185,7 +185,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     local plateTimerSlider = GUIFrame:CreateSlider(rowP2, "Timer Size", {
         min = 6, max = 24, step = 1,
-        value = db.PlateTimerSize or 11,
+        value = db.PlateTimerSize or 13,
         callback = function(val) db.PlateTimerSize = val; ApplySettings() end,
     })
     rowP2:AddWidget(plateTimerSlider, 0.5)
@@ -215,7 +215,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local rowP3 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
     local plateGapSlider = GUIFrame:CreateSlider(rowP3, "Gap to Health Bar", {
         min = 0, max = 20, step = 1,
-        value = db.PlateBarGap or 4,
+        value = db.PlateBarGap or 1,
         callback = function(val) db.PlateBarGap = val; ApplySettings() end,
     })
     rowP3:AddWidget(plateGapSlider, 0.5)
