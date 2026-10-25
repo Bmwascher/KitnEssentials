@@ -72,6 +72,7 @@
     <Script file="DungeonTools\KicksCasts\CCTracker.lua" />
     <Script file="DungeonTools\KicksCasts\PartyStopsRules.lua" />
     <Script file="DungeonTools\KicksCasts\PartyStopsData.lua" />
+    <Script file="DungeonTools\KicksCasts\PartyStops.lua" />
     <Script file="DungeonTools\DungeonAlerts\TargetedSpellsGlow.lua" />
     <Script file="DungeonTools\DungeonAlerts\TargetedSpells.lua" />
     <Script file="DungeonTools\DungeonAlerts\DeathNotifications.lua" />

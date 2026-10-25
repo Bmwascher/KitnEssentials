@@ -870,6 +870,32 @@ local Defaults = {
             Position = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 0, YOffset = 59 },
         },
 
+        PartyStops = {
+            Enabled = false,
+            IncludeSelf = true,
+            OnlyInParty = true,
+            OnlyInDungeons = false,
+            EnemiesWatched = 10,
+            -- Switched-off stops only. The tracked order is saved once the
+            -- Spells card moves a stop: an array here would refill on load.
+            SpellOff = {},
+            IconSize = 38,
+            Spacing = 1,
+            Grow = "RIGHT",
+            ShowText = true,
+            TextSize = 14,
+            IconsPerRow = 8,
+            ShowNames = true,
+            NameSize = 10,
+            NameLength = 4,
+            FontFace = nil,
+            FontOutline = "OUTLINE",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Strata = "MEDIUM",
+            Position = { AnchorFrom = "TOPLEFT", AnchorTo = "CENTER", XOffset = -179, YOffset = -131 },
+        },
+
         StanceText = {
             Enabled = false,
             IconSize = 44,
