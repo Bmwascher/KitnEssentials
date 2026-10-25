@@ -153,18 +153,19 @@ local function OnBlueprintRowInitialized(_, frame)
     BlueprintRow(frame)
 end
 
--- Rows are dressed as the list initializes them: an Update post-hook also
--- fires when Update returns early, and recycled rows never pass through it.
--- The helper's own existing-frame walk passes the frame first while its event
--- passes the owner first, so the walk is done here.
+-- Each pooled frame is dressed once, when the list initializes it, instead
+-- of walking every frame on each Update. The helper's own existing-frame
+-- walk passes the frame first while its event passes the owner first, so the
+-- walk is done here. The flag is set last, so it means the callback is in.
 local function HookBlueprintRows(collection)
     local sb = collection.ScrollBox
     local util = _G.ScrollUtil
     if not (sb and sb.ForEachFrame and util and util.AddInitializedFrameCallback) then return end
-    if S.data(sb).keBlueprintHook then return end
-    S.data(sb).keBlueprintHook = true
+    local d = S.data(sb)
+    if d.keBlueprintHook then return end
     sb:ForEachFrame(BlueprintRow)
     util.AddInitializedFrameCallback(sb, OnBlueprintRowInitialized)
+    d.keBlueprintHook = true
 end
 
 local function SkinBlueprints(content)
