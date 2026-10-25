@@ -170,6 +170,17 @@ function Rules.NodeEntries(node)
     return node.entryIDs
 end
 
+-- A failed walk adds a miss to its spec. Inside one inspect answer (answer
+-- set) every owner reads the same data, so the spec takes one miss however
+-- many owners' reads walked it; counted keeps the answer that took it.
+function Rules.CountMiss(misses, counted, specID, answer)
+    if answer ~= nil then
+        if counted[specID] == answer then return end
+        counted[specID] = answer
+    end
+    misses[specID] = (misses[specID] or 0) + 1
+end
+
 -- What a rank read does: "read" from a covering index, "walk" the tree first,
 -- "miss" (the loadout is not of the requested spec, cached index included,
 -- or the spec's walks are spent) or "skip" (a walk due in combat waits

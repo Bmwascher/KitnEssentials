@@ -187,6 +187,27 @@ describe("GroupInspectRules.WalkPlan", function()
     end)
 end)
 
+describe("GroupInspectRules.CountMiss", function()
+    it("counts one miss per spec per inspect answer, however many reads walked it", function()
+        local R = loadRules()
+        local misses, counted = {}, {}
+        R.CountMiss(misses, counted, 65, 1)
+        R.CountMiss(misses, counted, 65, 1)
+        R.CountMiss(misses, counted, 70, 1)
+        assert.are.same({ [65] = 1, [70] = 1 }, misses, "answer 1")
+        R.CountMiss(misses, counted, 65, 2)
+        assert.are.equal(2, misses[65], "answer 2")
+    end)
+
+    it("counts every failed walk outside an inspect answer", function()
+        local R = loadRules()
+        local misses, counted = {}, {}
+        R.CountMiss(misses, counted, 65, nil)
+        R.CountMiss(misses, counted, 65, nil)
+        assert.are.equal(2, misses[65])
+    end)
+end)
+
 describe("GroupInspectRules coverage", function()
     it("calls an index short when a newly wanted talent is outside the IDs it was built for", function()
         local R = loadRules()

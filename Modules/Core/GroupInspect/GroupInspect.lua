@@ -53,10 +53,13 @@ local active, hooked = false, false
 local ticker
 local pendingGUID, pendingEntry, lastRequest, foreignAt
 -- The GUID whose answer is being handed out; rank reads are valid only then.
+-- answer numbers each answer handed out.
 local readingGUID
+local answer = 0
 -- spec -> { found = talent -> its node and entry spots, covered = the IDs the
--- walk kept }, and spec -> walks that failed. Both last the session.
-local index, misses = {}, {}
+-- walk kept }, and spec -> walks that failed. Both last the session. counted:
+-- spec -> the answer that took its last miss (Rules.CountMiss).
+local index, misses, counted = {}, {}, {}
 
 local function Plain(value)
     if KE:IsSecretValue(value) then return nil end
@@ -97,10 +100,11 @@ end
 local function Index(specID, tree, config, want)
     local start = debugprofilestop()
     local found, any = {}, false
+    local inAnswer = (config == INSPECT_CONFIG and readingGUID ~= nil) and answer or nil
     for _, nodeID in ipairs(C_Traits.GetTreeNodes(tree) or {}) do
         local entries = Rules.NodeEntries(C_Traits.GetNodeInfo(config, nodeID))
         if not entries then
-            misses[specID] = (misses[specID] or 0) + 1
+            Rules.CountMiss(misses, counted, specID, inAnswer)
             return nil
         end
         for _, entryID in ipairs(entries) do
@@ -108,7 +112,7 @@ local function Index(specID, tree, config, want)
             local definitionID = type(entry) == "table" and entry.definitionID
             local definition = definitionID and C_Traits.GetDefinitionInfo(definitionID)
             if type(entry) ~= "table" or (definitionID and type(definition) ~= "table") then
-                misses[specID] = (misses[specID] or 0) + 1
+                Rules.CountMiss(misses, counted, specID, inAnswer)
                 return nil
             end
             local talent = definition and definition.spellID
@@ -123,7 +127,7 @@ local function Index(specID, tree, config, want)
     local ms = debugprofilestop() - start
     if ms > (GroupInspect.locateMs or 0) then GroupInspect.locateMs = ms end
     if not any then
-        misses[specID] = (misses[specID] or 0) + 1
+        Rules.CountMiss(misses, counted, specID, inAnswer)
         return nil
     end
     local covered = {}
@@ -218,6 +222,7 @@ local function OnInspectReady(guid)
             snapshots[guid] = snap
         end
         snap.spec = spec
+        answer = answer + 1
         readingGUID = guid
         -- An owner's error reaches the error handler, and the answer still
         -- finishes for every owner.
@@ -401,6 +406,7 @@ end
 function Handle:Refresh(guid, reason)
     if self.owner.released then return end
     wipe(misses)
+    wipe(counted)
     if guid == nil then
         for _, snap in pairs(snapshots) do snap.stale = reason end
     elseif snapshots[guid] then
