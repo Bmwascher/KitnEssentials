@@ -30,7 +30,6 @@ local C_Timer = C_Timer
 local C_TooltipInfo = C_TooltipInfo
 local C_Traits = C_Traits
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
-local UnitName = UnitName
 local issecretvalue = issecretvalue
 local ipairs, pairs, pcall, type = ipairs, pairs, pcall, type
 local tonumber, tostring = tonumber, tostring
@@ -44,38 +43,46 @@ local INSPECT_CONFIG_ID = -1
 local GRID_UNIT = 300
 local SPEC_SPLIT = 12.5
 local SPEC_SHIFT = 2
-local HEADER_H = 34
+local HEADER_H = 38
 local PAD = 10
 local COL_GAP = 20
 local HERO_LABEL_H = 14
-local LEGEND_H = 16
+local LEGEND_H = 18
 local NODE_GAP = 10
 local APEX_EXTRA = 10
--- Room for the name, four chips and Copy Loadout above a narrow tree.
+-- A floor only: DrawTree measures the header row itself.
 local MIN_WIDTH = 460
 local STATE_W, STATE_H = 220, 80
-local SUBLINE_Y = -19
+-- The header row's center line; the spec line, chips and Copy Loadout
+-- all center on it.
+local HEADER_MID_Y = -19
 local SUBLINE_GAP = 3
-local ICON_SIZE = 12
-local CHIP_W, CHIP_H, CHIP_GAP, CHIP_Y = 46, 26, 4, 4
-local COPY_W, COPY_H, COPY_Y = 86, 20, 7
-local SWATCH = 10
-local DIFF_THICKNESS = 2
+local HEADER_GAP = 12
+local ICON_SIZE = 14
+local CHIP_W, CHIP_H, CHIP_GAP, CHIP_Y = 50, 30, 4, 4
+local COPY_W, COPY_H, COPY_Y = 92, 22, 8
+local SWATCH = 12
+-- Difference ring width in KE pixels: the wide ring from RING_WIDE_AT up.
+local RING_WIDE, RING_NARROW, RING_WIDE_AT = 3, 2, 22
 local UNTAKEN_SHADE = 0.45
-local DEFAULT_NODE_SIZE = 22
+local DEFAULT_NODE_SIZE = 26
 local FALLBACK_ICON = 134400
 local CHOICE_TEX = "Interface\\ChatFrame\\ChatFrameExpandArrow"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
-local ARROW_SIZE, ARROW_GLYPH, ARROW_GAP = 18, 12, 2
+-- Sized and colored like the skinned close button's cross above it, so
+-- the two read as one control.
+local ARROW_SIZE, ARROW_GLYPH, ARROW_GAP = 22, 16, 2
 local ARROW_RIGHT, ARROW_LEFT = 1.5708, -1.5708
-local ARROW_REST = { 0.85, 0.85, 0.85 }
+local ARROW_REST = { 1, 1, 1 }
 local MUTED = { 0.6, 0.6, 0.6 }
 local EDGE_INACTIVE = { 0.46, 0.46, 0.52, 0.9 }
 local NEUTRAL_BORDER = { 0, 0, 0, 1 }
+-- Fixed, since they carry meaning: hues far from the pink and cyan accents
+-- the links can take, and none white, which light icons share.
 local DIFF_COLORS = {
-    theirs = { 0.239, 0.608, 1, 1 },
+    theirs = { 0.251, 1, 0.251, 1 },
     yours = { 1, 0.643, 0.227, 1 },
-    different = { 1, 1, 1, 1 },
+    different = { 0.765, 0.549, 1, 1 },
 }
 local LEGEND = {
     { key = "theirs", text = "They have, you don't" },
@@ -112,6 +119,16 @@ for _, def in ipairs(STAT_ORDER) do
             pat = "%+([%d%.,%s]-)%s*" .. name:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1") .. "(.*)",
         }
     end
+end
+
+-- Chip labels take the Secondary Stats readout's default hues.
+local STAT_RGB = {}
+for key, hex in pairs(KE.SecondaryStatHex or {}) do
+    STAT_RGB[key] = {
+        (tonumber(hex:sub(1, 2), 16) or 255) / 255,
+        (tonumber(hex:sub(3, 4), 16) or 255) / 255,
+        (tonumber(hex:sub(5, 6), 16) or 255) / 255,
+    }
 end
 
 -- Use, equip and proc text quotes numbers that are not gear stats.
@@ -232,7 +249,7 @@ local rowMin, rowMax, heroShift = {}, {}, {}
 local stats, chipOrder, sublinePieces = {}, {}, {}
 local wanted, foreign, readPending = false, false, false
 local readValid, readResult, readGUID = false, nil, nil
-local playerName, specName, specIcon, theirSpecRaw
+local specName, specIcon, theirSpecRaw
 local heroSub, heroName, heroIcon
 local compareState, yourSpecName = "none", nil
 local statsShown, statTries, statTimer = false, 0, nil
@@ -459,10 +476,8 @@ local function ReadTree()
 end
 
 local function ReadIdentity(unit)
-    playerName, specName, specIcon, theirSpecRaw = nil, nil, nil, nil
+    specName, specIcon, theirSpecRaw = nil, nil, nil
     if not unit then return end
-    local name = Call(UnitName, unit)
-    if not issecretvalue(name) and type(name) == "string" and name ~= "" then playerName = name end
     local id
     if C_SpecializationInfo then id = Call(C_SpecializationInfo.GetInspectSpecialization, unit) end
     theirSpecRaw = id
@@ -736,8 +751,6 @@ local function EnsurePanel()
     p.bg:SetAllPoints()
     KE:AddBorders(p, KE.Theme.border)
 
-    p.name = NewText(p)
-    p.name:SetPoint("TOPLEFT", p, "TOPLEFT", PAD, -5)
     local specFrame = CreateFrame("Frame", nil, p)
     specFrame:SetSize(ICON_SIZE, ICON_SIZE)
     specFrame.icon = specFrame:CreateTexture(nil, "ARTWORK")
@@ -792,9 +805,9 @@ local function EnsurePanel()
         local chip = NewBox(p)
         chip:SetSize(CHIP_W, CHIP_H)
         chip.label = NewText(chip, "CENTER")
-        chip.label:SetPoint("TOP", chip, "TOP", 0, -3)
+        chip.label:SetPoint("TOP", chip, "TOP", 0, -2)
         chip.value = NewText(chip, "CENTER")
-        chip.value:SetPoint("BOTTOM", chip, "BOTTOM", 0, 3)
+        chip.value:SetPoint("BOTTOM", chip, "BOTTOM", 0, 2)
         p.chips[i] = chip
     end
 
@@ -872,8 +885,9 @@ end
 ---------------------------------------------------------------------------------
 -- Drawing
 ---------------------------------------------------------------------------------
--- The border is a texture under an inset icon, so the difference border can
--- be two pixels wide; KE:AddIconBorders re-snaps its borders to one.
+-- The border is a texture under an inset icon, so the difference ring can be
+-- wider than one pixel; KE:AddIconBorders re-snaps its borders to one. The
+-- black keyline inside the ring keeps a light icon from blending into it.
 local function AcquireNode(i)
     local btn = nodePool[i]
     if btn then return btn end
@@ -882,6 +896,9 @@ local function AcquireNode(i)
     btn:Hide()
     btn.border = btn:CreateTexture(nil, "BACKGROUND")
     btn.border:SetAllPoints()
+    btn.keyline = btn:CreateTexture(nil, "BACKGROUND", nil, 1)
+    btn.keyline:SetColorTexture(0, 0, 0, 1)
+    btn.keyline:Hide()
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     KE:ApplyIconZoom(btn.icon, 0.3)
     btn.rank = NewText(btn, "CENTER")
@@ -936,8 +953,7 @@ end
 local function PaintHeader(tree)
     local T = KE.Theme
     IconBorderColor(panel.specFrame, T.border)
-    Style(panel.name, 12, T.textPrimary)
-    panel.name:SetText(playerName or "Talents")
+    panel.sublineW = 0
     panel.specFrame:Hide()
     panel.specText:Hide()
     panel.dot:Hide()
@@ -950,34 +966,40 @@ local function PaintHeader(tree)
             panel.specFrame.icon:SetTexture(specIcon)
             sublinePieces[#sublinePieces + 1] = panel.specFrame
         end
-        Style(panel.specText, 10, MUTED)
+        Style(panel.specText, 12, T.textPrimary)
         panel.specText:SetText(specName)
         sublinePieces[#sublinePieces + 1] = panel.specText
     end
     if heroName then
         if specName then
-            Style(panel.dot, 10, MUTED)
+            Style(panel.dot, 12, MUTED)
             sublinePieces[#sublinePieces + 1] = panel.dot
         end
         if heroIcon then
             panel.heroIcon:SetAtlas(heroIcon)
             sublinePieces[#sublinePieces + 1] = panel.heroIcon
         end
-        Style(panel.heroText, 10, MUTED)
+        Style(panel.heroText, 12, T.textPrimary)
         panel.heroText:SetText(heroName)
         sublinePieces[#sublinePieces + 1] = panel.heroText
     end
-    local prev
-    for _, piece in ipairs(sublinePieces) do
+    local prev, width = nil, 0
+    for i, piece in ipairs(sublinePieces) do
         piece:ClearAllPoints()
         if prev then
             piece:SetPoint("LEFT", prev, "RIGHT", SUBLINE_GAP, 0)
         else
-            piece:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD, SUBLINE_Y)
+            piece:SetPoint("LEFT", panel, "TOPLEFT", PAD, HEADER_MID_Y)
         end
         piece:Show()
+        local w = ICON_SIZE
+        if piece.GetStringWidth then w = piece:GetStringWidth() end
+        if issecretvalue(w) or type(w) ~= "number" then w = 0 end
+        width = width + w + (i > 1 and SUBLINE_GAP or 0)
         prev = piece
     end
+    -- DrawTree widens the panel to this, so the chips never cover the line.
+    panel.sublineW = width
 end
 
 -- Largest rating first; an insertion sort, so equal ratings keep the
@@ -1008,9 +1030,9 @@ local function PaintChips(show)
             local def = chipOrder[i]
             chip.bg:SetColorTexture(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 1)
             chip:SetBorderColor(T.border[1], T.border[2], T.border[3], T.border[4] or 1)
-            Style(chip.label, 8, MUTED)
+            Style(chip.label, 10, STAT_RGB[def.key] or MUTED)
             chip.label:SetText(def.label)
-            Style(chip.value, 11, T.textPrimary)
+            Style(chip.value, 13, T.textPrimary)
             chip.value:SetText(tostring(stats[def.key] or 0))
             chip:ClearAllPoints()
             chip:SetPoint("TOPRIGHT", panel, "TOPRIGHT",
@@ -1030,7 +1052,7 @@ local function PaintCopy(show)
     end
     copy.bg:SetColorTexture(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 1)
     CopyBorder(copy)
-    Style(copy.label, 10, T.textPrimary)
+    Style(copy.label, 12, T.textPrimary)
     copy.label:SetText("Copy Loadout")
     copy:Show()
 end
@@ -1038,7 +1060,7 @@ end
 local function PaintLegend(active)
     local T = KE.Theme
     local state = active and compareState or "none"
-    local px2 = KE:GetPixelSize() * DIFF_THICKNESS
+    local px2 = KE:GetPixelSize() * RING_NARROW
     for _, swatch in ipairs(panel.swatches) do
         if state == "on" then
             local c = DIFF_COLORS[swatch.key]
@@ -1047,7 +1069,7 @@ local function PaintLegend(active)
             swatch.fill:SetPoint("TOPLEFT", swatch, "TOPLEFT", px2, -px2)
             swatch.fill:SetPoint("BOTTOMRIGHT", swatch, "BOTTOMRIGHT", -px2, px2)
             swatch.fill:SetColorTexture(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
-            Style(swatch.label, 9, T.textPrimary)
+            Style(swatch.label, 10, T.textPrimary)
             swatch.label:SetText(swatch.text)
             swatch:Show()
             swatch.label:Show()
@@ -1057,7 +1079,7 @@ local function PaintLegend(active)
         end
     end
     if state == "differs" then
-        Style(panel.legendNote, 9, MUTED)
+        Style(panel.legendNote, 10, MUTED)
         panel.legendNote:SetText(("Comparison off: you are %s, they are %s."):format(
             yourSpecName or "another spec", specName or "another spec"))
         panel.legendNote:Show()
@@ -1071,7 +1093,19 @@ local function PaintNode(btn, rec, size, rankSize, compareOn)
     btn.rec = rec
     local diff = compareOn and rec.diff or nil
     local color = diff and DIFF_COLORS[diff] or NEUTRAL_BORDER
-    local inset = KE:GetPixelSize() * (diff and DIFF_THICKNESS or 1)
+    local px = KE:GetPixelSize()
+    local inset = px
+    local keyline = btn.keyline
+    if diff then
+        local ring = px * (size >= RING_WIDE_AT and RING_WIDE or RING_NARROW)
+        keyline:ClearAllPoints()
+        keyline:SetPoint("TOPLEFT", btn, "TOPLEFT", ring, -ring)
+        keyline:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -ring, ring)
+        keyline:Show()
+        inset = ring + px
+    else
+        keyline:Hide()
+    end
     btn.border:SetColorTexture(color[1], color[2], color[3], color[4])
     local icon = btn.icon
     icon:ClearAllPoints()
@@ -1185,7 +1219,11 @@ local function DrawTree(db)
     if BR.maxY > -1e8 then mainRows = max(mainRows, BR.maxY - lrMinY + 1) end
     local heroRows = BH.maxY > -1e8 and (BH.maxY - BH.minY + 1) or 0
     local body = max(ColumnWidth(mainRows, pitch, size), heroTop + ColumnWidth(heroRows, pitch, size))
-    panel:SetSize(max(rightX + rW + PAD, MIN_WIDTH), treeTop + body + PAD + (anyApex and APEX_EXTRA or 0))
+    -- Room for all four chips while stats can show, so a stats retry that
+    -- adds them later never needs a resize.
+    local chipsW = db.InspectTalentsShowStats ~= false and #STAT_ORDER * (CHIP_W + CHIP_GAP) or 0
+    local headerW = PAD + (panel.sublineW or 0) + HEADER_GAP + chipsW + COPY_W + PAD
+    panel:SetSize(max(rightX + rW + PAD, headerW, MIN_WIDTH), treeTop + body + PAD + (anyApex and APEX_EXTRA or 0))
 
     local label = panel.heroLabel
     if hW > 0 and heroName then
@@ -1305,9 +1343,9 @@ local function ResetWindowState()
     CancelStatsRetry()
     wipe(stats)
     statsShown, statTries = false, 0
-    -- The header reads these; the reopened window's waiting panel must not
-    -- show the last player.
-    playerName, specName, specIcon, theirSpecRaw = nil, nil, nil, nil
+    -- The header, the legend and the compare gate read these; a reopened
+    -- window must not use the last player's.
+    specName, specIcon, theirSpecRaw = nil, nil, nil
     heroSub, heroName, heroIcon = nil, nil, nil
 end
 
@@ -1391,8 +1429,6 @@ function IT:OnInspectShow()
     local db = DB()
     wanted = db ~= nil and db.InspectTalentsAutoOpen ~= false
     foreign = false
-    -- The name comes from the window's own unit, not the inspect data.
-    ReadIdentity(_G.InspectFrame and _G.InspectFrame.unit)
     -- The arrow, and the waiting state when requested, show at once.
     Apply()
     ScheduleRead()

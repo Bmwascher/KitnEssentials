@@ -1431,7 +1431,7 @@ local Defaults = {
             InspectTalentsAutoOpen   = true,
             InspectTalentsShowStats  = true,
             InspectTalentsCompare    = true,
-            InspectTalentsNodeSize   = 22,
+            InspectTalentsNodeSize   = 26,
             ShowSlotItemLevel    = true,
             ShowEnchantNames     = true,
             -- short = abbreviated stats, verbose = stats spelled out, full = the tooltip's own text

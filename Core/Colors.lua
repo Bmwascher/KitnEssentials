@@ -38,6 +38,15 @@ KE.ClassColorHex = {
     WARRIOR = "C69B6D",
 }
 
+-- One hue per secondary stat: the Secondary Stats readout's defaults and
+-- the inspect talents stat chips.
+KE.SecondaryStatHex = {
+    crit = "ffd100",
+    haste = "2ecc71",
+    mastery = "55aaff",
+    vers = "c77dff",
+}
+
 ---------------------------------------------------------------------------------
 -- Class Color Lookups
 ---------------------------------------------------------------------------------

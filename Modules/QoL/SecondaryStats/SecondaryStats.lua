@@ -33,12 +33,7 @@ local unpack = unpack
 ---------------------------------------------------------------------------------
 -- One hue per secondary so the rows scan at a glance; the three tertiaries
 -- share a hue of their own so the block reads as two groups.
-local STAT_HEX = {
-    crit = "ffd100",
-    haste = "2ecc71",
-    mastery = "55aaff",
-    vers = "c77dff",
-}
+local STAT_HEX = KE.SecondaryStatHex or {}
 
 local TERTIARY = { leech = true, avoidance = true, speed = true }
 
