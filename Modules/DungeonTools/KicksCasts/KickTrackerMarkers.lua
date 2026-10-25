@@ -51,19 +51,42 @@ local function SavedRecord(create)
     return rec
 end
 
+-- Saved only under a party instance: a record with none would belong to no
+-- visit, and nothing would ever end it.
 function KT:SaveMarkers()
+    local inst = CurrentInstance()
+    if not inst then return end
     local rec = SavedRecord(true)
     if not rec then return end
     local m = {}
     for guid, marker in pairs(self.markerOf) do m[guid] = marker end
-    rec.inst, rec.m = CurrentInstance(), m
+    rec.inst, rec.m = inst, m
+end
+
+local function EmptyVisit(rec)
+    wipe(KT.markerOf)
+    rec.inst, rec.m = nil, nil
+end
+
+-- Before the cache is merged into or read, which can happen in the second
+-- before KT:ForgetMarkers runs: another party instance ends the last visit
+-- now. No instance at all, as a loading screen can read, is left to
+-- KT:ForgetMarkers. No resync, so a resync can call it.
+function KT:CheckVisit()
+    local rec = SavedRecord(false)
+    if not rec or rec.inst == nil then return false end
+    local inst = CurrentInstance()
+    if inst == nil or inst == rec.inst then return false end
+    EmptyVisit(rec)
+    return true
 end
 
 -- A later message for the same member replaces an earlier one, whatever its
 -- source; 0 clears.
 function KT:LearnMarker(guid, marker)
     local value = (type(marker) == "number" and marker >= 1 and marker <= 8) and marker or nil
-    if self.markerOf[guid] == value then return end
+    local emptied = self:CheckVisit()
+    if self.markerOf[guid] == value and not emptied then return end
     self.markerOf[guid] = value
     self:SaveMarkers()
     self:RailsResync()
@@ -92,8 +115,7 @@ end
 function KT:ForgetMarkers()
     local rec = SavedRecord(false)
     if not rec or rec.inst == nil or KT.SameInstance(rec.inst, CurrentInstance()) then return end
-    wipe(self.markerOf)
-    rec.inst, rec.m = nil, nil
+    EmptyVisit(rec)
     self:RailsResync()
 end
 

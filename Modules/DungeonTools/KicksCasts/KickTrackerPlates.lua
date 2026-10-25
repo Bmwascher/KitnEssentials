@@ -1325,6 +1325,7 @@ function KT:SyncKickers()
     local list = P.kickers
     wipe(list)
     if self.db.PlatePremark == false then return end
+    self:CheckVisit()
     for guid, member in pairs(self.partyMembers) do
         local marker
         if member.unit == "player" then marker = OwnMarker() else marker = self.markerOf[guid] end
