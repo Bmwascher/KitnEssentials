@@ -317,7 +317,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
 
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "", {
         title = "Font Settings",
-        note = "Applies to the affix line, key level, and PB text — and any per-section font left unset.",
+        note = "Applies to the affix line, key level and PB text, and to any per-section font left unset.",
     })
 
     -- Affixes & Key Colors
@@ -501,7 +501,7 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
         KE:ColorTextByTheme("State-Colored Fill"),
         "Recolors the timer bar by chest state: |cff66ff66green|r while +3 is live, " ..
         "|cff4dccffblue|r once +3 is lost, |cffb059ccpurple|r once +2 is lost.\n" ..
-        "Overrides the Bar Fill color (including at completion).",
+        "Overrides the " .. KE:Gold("Bar Fill") .. " color on the " .. KE:Gold("Timer Colors") .. " card, at completion too.",
         48, "hide")
     rowTNote:AddWidget(tNote, 1)
     manager:Register(tNote, "timerBar")
@@ -650,11 +650,9 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
     local fNoteRow = GUIFrame:CreateRow(forcesCard.content, 78)
     local fNoteText = GUIFrame:CreateText(fNoteRow,
         KE:ColorTextByTheme("Tokens"),
-        KE:ColorTextByTheme(":percent:") .. " current %  " ..
-        KE:ColorTextByTheme(":count:") .. " current count\n" ..
-        KE:ColorTextByTheme(":totalcount:") .. " total  " ..
-        KE:ColorTextByTheme(":remainingcount:") .. " count remaining\n" ..
-        KE:ColorTextByTheme(":remainingpercent:") .. " % remaining",
+        ":percent: current %  :count: current count\n" ..
+        ":totalcount: total  :remainingcount: count remaining\n" ..
+        ":remainingpercent: % remaining",
         78, "hide")
     fNoteRow:AddWidget(fNoteText, 1)
     manager:Register(fNoteText, "all")
@@ -841,8 +839,8 @@ BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
     local dNoteRow = GUIFrame:CreateRow(deathsCard.content, Theme.rowHeightNote)
     local dNoteText = GUIFrame:CreateText(dNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Count and time-penalty read from Blizzard's authoritative death tracker.\n" ..
-        KE:ColorTextByTheme("-") .. " Hover the deaths line for a class-colored log: each death with its time, or a count per player.",
+        KE:ColorTextByTheme("-") .. " The count and time penalty come from the game's own death tracker.\n" ..
+        KE:ColorTextByTheme("-") .. " With " .. KE:Gold("Hover Death Log") .. " on, hover the deaths line for a class-colored log: each death with its time, or a count per player.",
         50, "hide")
     dNoteRow:AddWidget(dNoteText, 1)
     manager:Register(dNoteText, "all")
@@ -938,8 +936,8 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     local noteRow = GUIFrame:CreateRow(card1.content, 64)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Per-mob forces count on enemy tooltips (12.0.5 API).\n" ..
-        KE:ColorTextByTheme("-") .. " Optional per-pull % overlay on nameplates (Mythic+ only).\n",
+        KE:ColorTextByTheme("-") .. " " .. KE:Gold("Enemy Count on Tooltip") .. " adds each enemy's forces count to its tooltip.\n" ..
+        KE:ColorTextByTheme("-") .. " " .. KE:Gold("Show % on Nameplates") .. " adds each pull's forces % on enemy nameplates (Mythic+ only).",
         64, "hide")
     noteRow:AddWidget(noteText, 1)
     manager:Register(noteText, "all")
