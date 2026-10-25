@@ -108,7 +108,7 @@ function GUIFrame:CreateAuraCasterNameCard(scrollChild, yOffset, config)
     card:AddRow(row3, Theme.rowHeight)
 
     db.CasterPosition = db.CasterPosition
-        or { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 0, YOffset = -1 }
+        or { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -14 }
     local pos = db.CasterPosition
 
     local row4 = GUIFrame:CreateRow(card.content, Theme.rowHeight)

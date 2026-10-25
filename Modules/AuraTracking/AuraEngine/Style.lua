@@ -574,7 +574,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         if cp then
             caster:SetPoint(cp.AnchorFrom, frame, cp.AnchorTo, cp.XOffset, cp.YOffset)
         else
-            caster:SetPoint("TOP", frame, "BOTTOM", 0, -1)
+            caster:SetPoint("CENTER", frame, "CENTER", 0, -14)
         end
         local width, justify = KE.AuraRules.ResolveCasterLayout(settings)
         caster:SetWidth(width)

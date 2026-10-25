@@ -1551,15 +1551,15 @@ local Defaults = {
 
         AuraExternals = {
             Enabled           = false,
-            ShowCasterName    = false,
+            ShowCasterName    = true,
             -- No CasterFontSize default: unset follows FontSize, so a changed
             -- Count Size still sizes the name until the player sets one.
-            HideOwnCasterName = false,
+            HideOwnCasterName = true,
             CasterClassColor  = true,
             CasterNameColor   = { 1, 1, 1, 1 },
             CasterShowRealm   = false,
             CasterWidth       = 0, -- 0 follows IconSize
-            CasterPosition    = { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 0, YOffset = -1 },
+            CasterPosition    = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -16 },
             ShowBigDefensives = false,
             HideSelfCast      = false,
             Strata            = "MEDIUM",
@@ -1788,14 +1788,14 @@ local Defaults = {
 
         AuraMovement = {
             Enabled = false,
-            ShowCasterName = false,
+            ShowCasterName = true,
             -- No CasterFontSize default: unset follows FontSize.
-            HideOwnCasterName = false,
+            HideOwnCasterName = true,
             CasterClassColor = true,
             CasterNameColor = { 1, 1, 1, 1 },
             CasterShowRealm = false,
             CasterWidth = 0, -- 0 follows IconSize
-            CasterPosition = { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 0, YOffset = -1 },
+            CasterPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -14 },
             Strata = "MEDIUM",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
