@@ -30,6 +30,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:SetCondition("plates", function()
         return db.PlateIcons ~= false
     end)
+    manager:SetCondition("plateTimer", function()
+        return db.PlateIcons ~= false and db.PlateShowTimer ~= false
+    end)
     -- "classOnly": widgets only meaningful when ColorMode is "class"
     manager:SetCondition("classOnly", function()
         return db.ShowBars ~= false and db.ColorMode ~= "dark"
@@ -122,30 +125,29 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local cardPlates = GUIFrame:CreateCard(scrollChild, "Nameplate Icons", yOffset)
     manager:Register(cardPlates, "plates")
 
-    local plateSwitches = {
-        { key = "PlateAboveOverlap", label = "Show Above Overlapping Nameplates",
-          tooltip = "The icons draw over every other nameplate, so an overlapping plate never hides " ..
-              "one. When off, an icon stays inside its own nameplate, behind any plate that covers it." },
-        { key = "PlatePremark", label = "Icons on Marked Mobs",
-          tooltip = "Before any kick, a teammate's icon sits on the mob carrying the focus marker " ..
-              "they announced, until their own icon is on a nameplate." },
-        { key = "PlateClassBorder", label = "Class Color Border" },
-        { key = "PlateShowTimer", label = "Show Timer" },
-        { key = "PlateSwipe", label = "Show Cooldown Swipe" },
-    }
-    local switchRow
-    for i, s in ipairs(plateSwitches) do
-        if i % 2 == 1 then switchRow = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight) end
-        local key = s.key
-        local switch = GUIFrame:CreateCheckbox(switchRow, s.label, {
+    local function PlateSwitch(row, key, label, tooltip, refresh)
+        local switch = GUIFrame:CreateCheckbox(row, label, {
             value = db[key] ~= false,
-            tooltip = s.tooltip,
-            callback = function(checked) db[key] = checked; ApplySettings() end,
+            tooltip = tooltip,
+            callback = function(checked)
+                db[key] = checked
+                ApplySettings()
+                if refresh then RefreshStates() end
+            end,
         })
-        switchRow:AddWidget(switch, 0.5)
+        row:AddWidget(switch, 0.5)
         manager:Register(switch, "plates")
-        if i % 2 == 0 or i == #plateSwitches then cardPlates:AddRow(switchRow, Theme.rowHeight) end
     end
+
+    local rowB = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    PlateSwitch(rowB, "PlatePremark", "Icons on Marked Mobs",
+        "Before any kick, a teammate's icon sits on the mob carrying the focus marker " ..
+        "they announced, until their own icon is on a nameplate.")
+    PlateSwitch(rowB, "PlateAboveOverlap", "Show Above Overlapping Nameplates",
+        "The icons draw over every other nameplate, so an overlapping plate never hides " ..
+        "one. When off, an icon stays inside its own nameplate, behind any plate that covers it.")
+    cardPlates:AddRow(rowB, Theme.rowHeight)
+    cardPlates:AddSeparator()
 
     local rowP1 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
     local plateStyleDropdown = GUIFrame:CreateDropdown(rowP1, "Icon", {
@@ -160,7 +162,23 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     rowP1:AddWidget(plateStyleDropdown, 0.5)
     manager:Register(plateStyleDropdown, "plates")
 
-    local plateSideDropdown = GUIFrame:CreateDropdown(rowP1, "Side", {
+    local plateSizeSlider = GUIFrame:CreateSlider(rowP1, "Icon Size", {
+        min = 16, max = 48, step = 1,
+        value = db.PlateIconSize or 30,
+        callback = function(val) db.PlateIconSize = val; ApplySettings() end,
+    })
+    rowP1:AddWidget(plateSizeSlider, 0.5)
+    manager:Register(plateSizeSlider, "plates")
+    cardPlates:AddRow(rowP1, Theme.rowHeight)
+
+    local rowL = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    PlateSwitch(rowL, "PlateClassBorder", "Class Color Border")
+    PlateSwitch(rowL, "PlateSwipe", "Show Cooldown Swipe")
+    cardPlates:AddRow(rowL, Theme.rowHeight)
+    cardPlates:AddSeparator()
+
+    local rowP2 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateSideDropdown = GUIFrame:CreateDropdown(rowP2, "Side", {
         options = {
             { key = "LEFT",   text = "Left" },
             { key = "RIGHT",  text = "Right" },
@@ -170,57 +188,19 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         value = db.PlateSide or "LEFT",
         callback = function(key) db.PlateSide = key; ApplySettings() end,
     })
-    rowP1:AddWidget(plateSideDropdown, 0.5)
+    rowP2:AddWidget(plateSideDropdown, 0.5)
     manager:Register(plateSideDropdown, "plates")
-    cardPlates:AddRow(rowP1, Theme.rowHeight)
 
-    local rowP2 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
-    local plateSizeSlider = GUIFrame:CreateSlider(rowP2, "Icon Size", {
-        min = 16, max = 48, step = 1,
-        value = db.PlateIconSize or 30,
-        callback = function(val) db.PlateIconSize = val; ApplySettings() end,
-    })
-    rowP2:AddWidget(plateSizeSlider, 0.5)
-    manager:Register(plateSizeSlider, "plates")
-
-    local plateTimerSlider = GUIFrame:CreateSlider(rowP2, "Timer Size", {
-        min = 6, max = 24, step = 1,
-        value = db.PlateTimerSize or 13,
-        callback = function(val) db.PlateTimerSize = val; ApplySettings() end,
-    })
-    rowP2:AddWidget(plateTimerSlider, 0.5)
-    manager:Register(plateTimerSlider, "plates")
-    cardPlates:AddRow(rowP2, Theme.rowHeight)
-
-    local rowPF = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
-    local plateFontDropdown = GUIFrame:CreateDropdown(rowPF, "Font", {
-        options = KE:AddFollowGlobalFont(fontList),
-        value = db.PlateFontFace or KE.FONT_FOLLOW_GLOBAL,
-        callback = function(key) db.PlateFontFace = KE:StoredFontFace(key); ApplySettings() end,
-        searchable = true,
-        isFontPreview = true,
-    })
-    rowPF:AddWidget(plateFontDropdown, 0.5)
-    manager:Register(plateFontDropdown, "plates")
-
-    local plateOutlineDropdown = GUIFrame:CreateDropdown(rowPF, "Font Outline", {
-        options = KE:GetFontOutlineOptions(),
-        value = KE:NormalizeFontOutline(db.PlateFontOutline or "OUTLINE"),
-        callback = function(key) db.PlateFontOutline = key; ApplySettings() end,
-    })
-    rowPF:AddWidget(plateOutlineDropdown, 0.5)
-    manager:Register(plateOutlineDropdown, "plates")
-    cardPlates:AddRow(rowPF, Theme.rowHeight)
-
-    local rowP3 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
-    local plateGapSlider = GUIFrame:CreateSlider(rowP3, "Gap to Health Bar", {
+    local plateGapSlider = GUIFrame:CreateSlider(rowP2, "Gap to Health Bar", {
         min = 0, max = 20, step = 1,
         value = db.PlateBarGap or 1,
         callback = function(val) db.PlateBarGap = val; ApplySettings() end,
     })
-    rowP3:AddWidget(plateGapSlider, 0.5)
+    rowP2:AddWidget(plateGapSlider, 0.5)
     manager:Register(plateGapSlider, "plates")
+    cardPlates:AddRow(rowP2, Theme.rowHeight)
 
+    local rowP3 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
     local plateSpacingSlider = GUIFrame:CreateSlider(rowP3, "Icon Spacing", {
         min = 0, max = 10, step = 1,
         value = db.PlateSpacing or 1,
@@ -247,9 +227,46 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     rowP4:AddWidget(plateYSlider, 0.5)
     manager:Register(plateYSlider, "plates")
     cardPlates:AddRow(rowP4, Theme.rowHeight)
+    cardPlates:AddSeparator()
 
-    cardPlates:AddNote(KE:Gold("EllesmereUI") .. "'s Kick Tracker can show its own nameplate icons too. " ..
-        "With both on, two rows sit beside the same health bar: turn one off, or move these with the offsets.")
+    local rowT = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    PlateSwitch(rowT, "PlateShowTimer", "Show Timer", nil, true)
+    local plateTimerSlider = GUIFrame:CreateSlider(rowT, "Timer Size", {
+        min = 6, max = 24, step = 1,
+        value = db.PlateTimerSize or 13,
+        callback = function(val) db.PlateTimerSize = val; ApplySettings() end,
+    })
+    rowT:AddWidget(plateTimerSlider, 0.5)
+    manager:Register(plateTimerSlider, "plateTimer")
+    cardPlates:AddRow(rowT, Theme.rowHeight)
+
+    local rowPF = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateFontDropdown = GUIFrame:CreateDropdown(rowPF, "Font", {
+        options = KE:AddFollowGlobalFont(fontList),
+        value = db.PlateFontFace or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(key) db.PlateFontFace = KE:StoredFontFace(key); ApplySettings() end,
+        searchable = true,
+        isFontPreview = true,
+    })
+    rowPF:AddWidget(plateFontDropdown, 0.5)
+    manager:Register(plateFontDropdown, "plateTimer")
+
+    local plateOutlineDropdown = GUIFrame:CreateDropdown(rowPF, "Font Outline", {
+        options = KE:GetFontOutlineOptions(),
+        value = KE:NormalizeFontOutline(db.PlateFontOutline or "OUTLINE"),
+        callback = function(key) db.PlateFontOutline = key; ApplySettings() end,
+    })
+    rowPF:AddWidget(plateOutlineDropdown, 0.5)
+    manager:Register(plateOutlineDropdown, "plateTimer")
+    cardPlates:AddRow(rowPF, Theme.rowHeight)
+
+    -- EllesmereUI's own test for its kick plate icons; the handle is nil while that addon is not loaded.
+    local eui = _G._EMT_AceDB
+    local euiKT = eui and eui.profile and eui.profile.kickTracker
+    if type(euiKT) == "table" and euiKT.enabled == true and euiKT.showPlates ~= false then
+        cardPlates:AddNote(KE:Gold("EllesmereUI") .. "'s Kick Tracker is showing its own nameplate icons too. " ..
+            "With both on, two rows sit beside the same health bar: turn one off, or move these with the offsets.")
+    end
 
     yOffset = cardPlates:GetNextOffset()
 
