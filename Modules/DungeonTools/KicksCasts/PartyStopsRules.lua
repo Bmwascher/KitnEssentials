@@ -110,6 +110,25 @@ function Rules.WantByClass(data)
     return out
 end
 
+local function Covered(snap, want)
+    for id in pairs(want) do
+        if not snap.covered[id] then return false end
+    end
+    return true
+end
+
+-- A teammate's inspect is wanted until the snapshot covers want, carries no
+-- stale mark, and Party Stops' own last read of it worked. readFailed is kept
+-- here because another owner's read clears the shared mark.
+function Rules.InspectWanted(snap, want, readFailed)
+    return not (snap ~= nil and Covered(snap, want) and snap.stale == nil and not readFailed)
+end
+
+-- Every wanted talent is in hand and only marked stale or failed last time.
+function Rules.OnlyStale(snap, want, readFailed)
+    return snap ~= nil and Covered(snap, want) and (snap.stale ~= nil or readFailed == true)
+end
+
 local function Clamp(value, low, high, default)
     if type(value) ~= "number" or value ~= value then return default end
     return math_max(low, math_min(high, math_floor(value)))

@@ -87,4 +87,22 @@ describe("party stops rules", function()
             assert.equals(case[3], Rules.Live(case[1], case[2]), "case " .. i)
         end
     end)
+
+    it("wants an inspect until the talents are covered, unmarked and its own last read worked; a covered one is only stale", function()
+        local want = { [1] = true, [2] = true }
+        local covered = { covered = { [1] = true, [2] = true } }
+        local stale = { covered = { [1] = true, [2] = true }, stale = "ready check" }
+        local short = { covered = { [1] = true } }
+        local cases = {
+            { nil, false, true, false, "no snapshot" },
+            { short, false, true, false, "a talent uncovered" },
+            { covered, false, false, false, "read" },
+            { stale, false, true, true, "marked stale" },
+            { covered, true, true, true, "own read failed, mark cleared by another owner" },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case[3], Rules.InspectWanted(case[1], want, case[2]), case[5])
+            assert.equals(case[4], Rules.OnlyStale(case[1], want, case[2]), case[5])
+        end
+    end)
 end)

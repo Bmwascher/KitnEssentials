@@ -937,13 +937,6 @@ end
 ---------------------------------------------------------------------------------
 -- Inspector
 ---------------------------------------------------------------------------------
-local function Covered(snap, want)
-    for id in pairs(want) do
-        if not snap.covered[id] then return false end
-    end
-    return true
-end
-
 local function Teammate(guid)
     local m = PS.byKey[guid]
     if not (m and not m.isPlayer and m.class and WANT[m.class]) then return nil end
@@ -955,18 +948,24 @@ local callbacks = {
         local m = Teammate(guid)
         if not m then return false end
         local snap = handle and handle:Get(guid) or nil
-        return not (snap ~= nil and Covered(snap, WANT[m.class]) and snap.stale == nil)
+        return Rules.InspectWanted(snap, WANT[m.class], m.readFailed)
     end,
     OnlyStale = function(guid)
         local m = Teammate(guid)
         if not m then return false end
         local snap = handle and handle:Get(guid) or nil
-        return snap ~= nil and Covered(snap, WANT[m.class]) and snap.stale ~= nil
+        return Rules.OnlyStale(snap, WANT[m.class], m.readFailed)
     end,
+    -- A read that waits for combat's end is not a failure.
     OnRead = function(guid, _, snap)
         local m = Teammate(guid)
         if m and handle and type(snap.spec) == "number" then
-            handle:ReadRanks(guid, snap.spec, WANT[m.class])
+            local ranks, reason = handle:ReadRanks(guid, snap.spec, WANT[m.class])
+            if ranks then
+                m.readFailed = nil
+            elseif reason ~= "combat" then
+                m.readFailed = true
+            end
         end
     end,
     OnChanged = function() QueueRefresh() end,
