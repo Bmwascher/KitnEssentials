@@ -2160,7 +2160,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     rowVis:AddWidget(instChk, 0.5)
     manager:Register(instChk, "all")
     cardVis:AddRow(rowVis, Theme.rowHeight)
-    cardVis:AddNote("Always shown while these settings or " .. KE:ColorTextByTheme("/kes edit") .. " are open.")
+    cardVis:AddNote("Always shown while these settings or " .. KE:Gold("/kes edit") .. " are open.")
 
     yOffset = cardVis:GetNextOffset()
 
@@ -2521,9 +2521,10 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     rowEdge:AddWidget(gapSlider, 0.5)
     manager:Register(gapSlider, "shattached")
     cardPlace:AddRow(rowEdge, Theme.rowHeight)
-    cardPlace:AddNote("Free, the strip moves in " .. KE:ColorTextByTheme("/kes edit") ..
-        "; attached, it follows the meter. For any other spot, such as inside the meter, turn Attach " ..
-        "off and use Anchored To in Position Settings.")
+    cardPlace:AddNote("Free, the strip moves in " .. KE:Gold("/kes edit") ..
+        "; attached, it follows the meter. For any other spot, such as inside the meter, turn the " ..
+        KE:Gold("Attach to Meter") .. " switch off and use " .. KE:Gold("Anchored To") .. " on the " ..
+        KE:Gold("Position Settings") .. " card.")
 
     yOffset = cardPlace:GetNextOffset()
 
