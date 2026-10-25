@@ -67,8 +67,7 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
         "them back when you release it, but nothing tells you which three you have in there or how " ..
         "long is left to spend them." ..
         "\n\nThe icons fill in as you cast. Once the third lands, the bar counts down the 30 seconds " ..
-        "you have to release it." ..
-        "\n\nOn any other specialization it registers nothing at all.")
+        "you have to release it.")
 
     yOffset = card1:GetNextOffset()
 

@@ -67,9 +67,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("|cffffd100Evoker only (Devastation and Preservation).|r Marks each tick of a " ..
-        "Disintegrate channel on your cast bar, so you can see when it is safe to chain the next " ..
-        "cast or clip the channel.")
+    card1:AddLabel("|cffffd100Devastation and Preservation Evoker only.|r Marks each tick of a " ..
+        "Disintegrate channel on your cast bar, showing when it is safe to chain the next cast " ..
+        "or clip the channel.")
 
     yOffset = card1:GetNextOffset()
 

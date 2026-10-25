@@ -56,8 +56,8 @@ GUIFrame:RegisterContent("AlterTime", function(scrollChild, yOffset)
         end
     end)
 
-    card1:AddLabel("Shows your health at the moment you cast Alter Time, so you know what it will " ..
-        "return you to. The number sits on Alter Time's icon in Blizzard's Cooldown Manager, or at " ..
+    card1:AddLabel("Mage only. Shows the health Alter Time will return you to, taken when you " ..
+        "cast it. The number sits on Alter Time's icon in Blizzard's Cooldown Manager, or at " ..
         "its own screen position when the Cooldown Manager does not show Alter Time.")
 
     yOffset = card1:GetNextOffset()

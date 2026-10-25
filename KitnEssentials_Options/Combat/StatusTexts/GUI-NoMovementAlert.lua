@@ -43,7 +43,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
         db.Enabled = checked
         ApplySettings()
     end)
-    card1:AddLabel("Tracks your specialization's mobility cooldowns on screen, so you always know when your gap-closer or escape is back up. Spells with no cooldown are tracked by their buff instead.")
+    card1:AddLabel("Shows your specialization's mobility cooldowns on screen until your gap-closer or escape is ready. Spells with no cooldown are tracked by their buff instead.")
 
     if db.Enabled ~= true then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall

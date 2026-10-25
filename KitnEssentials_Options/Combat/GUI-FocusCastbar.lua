@@ -257,8 +257,8 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local rangeNoteRow = GUIFrame:CreateRow(cardRange.content, Theme.rowHeightNote)
     local rangeNote = GUIFrame:CreateText(rangeNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Out-of-Range dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
-        KE:ColorTextByTheme("-") .. " Ignore Friendly hides the bar for a focus you can't attack.",
+        KE:ColorTextByTheme("-") .. " Out-of-Range Opacity dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
+        KE:ColorTextByTheme("-") .. " Ignore Friendly Focus hides the bar for a focus you can't attack.",
         50, "hide")
     rangeNoteRow:AddWidget(rangeNote, 1)
     manager:Register(rangeNote, "all")
@@ -586,7 +586,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local glowNote = GUIFrame:CreateText(glowNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Fires only on casts Blizzard flags important; changes apply on the next cast.\n" ..
-        KE:ColorTextByTheme("-") .. " Pixel uses Lines/Length/Thickness/Border. Autocast uses Lines/Scale.",
+        KE:ColorTextByTheme("-") .. " Pixel: Glow Lines, Glow Length, Glow Thickness, Glow Border. Autocast: Glow Lines, Glow Scale.",
         50, "hide")
     glowNoteRow:AddWidget(glowNote, 1)
     manager:Register(glowNote, "all")

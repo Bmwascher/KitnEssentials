@@ -94,10 +94,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     local usageRow = GUIFrame:CreateRow(card2.content, 70)
     local usageText = GUIFrame:CreateText(usageRow,
         "",
-        KE:ColorTextByTheme("-") .. " Configure the macro options below to customize your PI macro.\n" ..
-        KE:ColorTextByTheme("-") .. " Use " .. KE:ColorTextByTheme("/kitn pi") .. " while hovering or targeting a friendly player to update the macro target.\n" ..
-        "   (out of combat only)\n" ..
-        KE:ColorTextByTheme("-") .. " We recommend creating a helper macro containing " .. KE:ColorTextByTheme("/kitn pi") .. " for easy instant target updating!",
+        KE:ColorTextByTheme("-") .. " The options below set what the PI macro casts.\n" ..
+        KE:ColorTextByTheme("-") .. " Use " .. KE:ColorTextByTheme("/kitn pi") .. " while hovering or targeting a friendly player to point the macro at them (out of combat only).\n" ..
+        KE:ColorTextByTheme("-") .. " A helper macro holding " .. KE:ColorTextByTheme("/kitn pi") .. " updates the target in one press.",
         70, "hide")
     usageRow:AddWidget(usageText, 1)
     card2:AddRow(usageRow, 70)
@@ -221,7 +220,7 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     local rowFleetNote = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
     local fleetNote = GUIFrame:CreateText(rowFleetNote,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Fleeting potions are placed first in the macro so they are used before regular potions when available.",
+        KE:ColorTextByTheme("-") .. " Fleeting potions go first in the macro, so they are used before regular potions when you have them.",
         Theme.rowHeight, "hide")
     rowFleetNote:AddWidget(fleetNote, 1)
     manager:Register(fleetNote, "all")

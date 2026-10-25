@@ -247,7 +247,7 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     local row5note = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
     local note5 = GUIFrame:CreateText(row5note,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows persistent warning when in combat with no target selected.",
+        KE:ColorTextByTheme("-") .. " Stays on screen while you are in combat with no target.",
         Theme.rowHeight, "hide")
     row5note:AddWidget(note5, 1)
     manager:Register(note5, "noTarget")
@@ -436,7 +436,7 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
     local note6 = GUIFrame:CreateText(row6note,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Displays [text] [spell icon] [spell name] on successful interrupt.",
+        KE:ColorTextByTheme("-") .. " Shows the text, then the spell's icon and name, when your interrupt lands.",
         Theme.rowHeight, "hide")
     row6note:AddWidget(note6, 1)
     manager:Register(note6, "interrupt")
