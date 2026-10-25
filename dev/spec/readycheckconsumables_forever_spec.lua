@@ -374,3 +374,87 @@ describe("ReadyCheckConsumables Forever weapon layers", function()
         end
     end)
 end)
+
+describe("ReadyCheckConsumables Forever Soulstone", function()
+    it("counts any listed rank the player cast, and never another caster's stone or an unreadable source", function()
+        local RCC, _, seams = L.loadReadyCheckConsumables()
+        seams.group.units = { raid3 = { isPlayer = true }, party2 = { name = "Other-Realm" } }
+        local BUFFS = { { item = 16896, buff = 20765 }, { item = 5232, buff = 20707 } }
+        for _, row in ipairs({
+            { name = "a low rank cast by the player", auras = { [20707] = { sourceUnit = "player" } }, want = true },
+            { name = "cast by the player's raid token", auras = { [20765] = { sourceUnit = "raid3" } }, want = true },
+            { name = "another caster's stone", auras = { [20765] = { sourceUnit = "party2" } }, want = false },
+            { name = "an unreadable source", auras = { [20707] = { sourceUnit = seams.SECRET } }, want = false },
+            { name = "no stone", auras = {}, want = false },
+        }) do
+            local function readAura(_, buff) return row.auras[buff] end
+            assert.equals(row.want, RCC._SoulstoneFromPlayer("party1", BUFFS, readAura), row.name)
+        end
+    end)
+
+    it("uses the best stocked stone on the target chain, else creates one at the highest known rank, else arms nothing", function()
+        for _, row in ipairs({
+            { name = "two ranks stocked: the best", stock = { 5232, 16896 }, known = {},
+              macro = "/stopmacro [combat]\n/use [@mouseover,help,nodead][@target,help,nodead][@player] item 16896" },
+            { name = "none stocked, two ranks known", stock = {}, known = { 693, 20757 },
+              macro = "/stopmacro [combat]\n/cast spell 20757" },
+            { name = "none stocked, none known", stock = {}, known = {}, macro = nil },
+        }) do
+            local RCC, _, seams = L.loadReadyCheckConsumables(nil, { forever = true, foreverData = foreverData() })
+            seams.playerClass = "WARLOCK"
+            for _, item in ipairs(row.stock) do
+                seams.bagCounts[item] = 1
+                seams.itemNames[item] = "item " .. item
+            end
+            for _, id in ipairs(row.known) do seams.knownSpells[id] = true end
+            local btn = recordingButton()
+            btn.click.shown = true
+            RCC.buttons = { class = btn }
+            RCC:UpdateClassSlot()
+            if row.macro then
+                assert.is_true(btn.click.shown, row.name)
+                assert.equals(row.macro, btn.click.attributes.macrotext, row.name)
+            else
+                assert.is_false(btn.click.shown, row.name)
+            end
+        end
+        local RCC = L.loadReadyCheckConsumables()
+        assert.equals("/stopmacro [combat]\n/use [@mouseover,help,nodead][@target,help,nodead]"
+            .. "[@Stoned-Realm,help,nodead][@Healer-Realm,help,nodead][@player] item 16896",
+            RCC._ForeverSoulstoneMacro("item 16896", "Stoned-Realm", "Healer-Realm"))
+    end)
+
+    it("leaves the stone click untouched in combat and hides it while the stone's name is uncached", function()
+        for _, row in ipairs({
+            { name = "in combat: untouched",    combat = true,  named = true,  shown = true },
+            { name = "name not cached: hidden", combat = false, named = false, shown = false },
+        }) do
+            local RCC, _, seams = L.loadReadyCheckConsumables(nil, { forever = true, foreverData = foreverData() })
+            seams.playerClass = "WARLOCK"
+            seams.bagCounts[16896] = 1
+            if row.named then seams.itemNames[16896] = "item 16896" end
+            seams.combat.inCombat = row.combat
+            local btn = recordingButton()
+            btn.click.shown = true
+            RCC.buttons = { class = btn }
+            RCC:UpdateClassSlot()
+            assert.equals(row.shown, btn.click.shown, row.name)
+            assert.is_nil(btn.click.attributes.macrotext, row.name)
+        end
+    end)
+
+    it("confirms a member's Forever stone by its rank id, and reads none while the aura gate hides it", function()
+        for _, row in ipairs({
+            { name = "readable: confirmed",              hidden = false,            confirmed = true },
+            { name = "one Forever rank hidden: not read", hidden = { [20707] = true }, confirmed = false },
+        }) do
+            local RCC, _, seams = L.loadReadyCheckConsumables(nil, { forever = true, foreverData = foreverData() })
+            seams.playerClass = "WARLOCK"
+            seams.group = { mode = "party", units = { party1 = { name = "Mate-Realm" } } }
+            seams.unitAuras.party1 = { [20707] = { sourceUnit = "player" } }
+            seams.soulstoneHidden = row.hidden
+            local confirmed = RCC:_ResolveSoulstoneForever()
+            assert.equals(row.confirmed, confirmed, row.name)
+        end
+    end)
+end)

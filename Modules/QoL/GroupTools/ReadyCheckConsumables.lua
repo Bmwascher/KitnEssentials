@@ -1359,17 +1359,51 @@ function RCC:_IsNameInGroup(name)
     return false
 end
 
--- True when `unit` carries a Soulstone the player cast. A secret or missing
--- sourceUnit reads as "not from us"; the caller has already asked the
--- per-spell gate, so the query itself cannot hard-error.
-local function HasPlayerSoulstone(unit)
-    local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
+-- True when the aura was cast by the player. A secret or missing sourceUnit
+-- reads as "not from us".
+local function IsFromPlayer(auraData)
     if not auraData then return false end
     local source = auraData.sourceUnit
     if not KE:IsSafeValue(source) then return false end
     if source == "player" then return true end
     local same = UnitIsUnit(source, "player")
     return canaccessvalue(same) and same == true
+end
+
+--- SoulstoneFromPlayer
+--- The Forever stone check: any Soulstone Resurrection rank in `buffs`, read
+--- with `readAura(unit, buffID)`, that the player cast.
+local function SoulstoneFromPlayer(unit, buffs, readAura)
+    for _, row in ipairs(buffs) do
+        if IsFromPlayer(readAura(unit, row.buff)) then return true end
+    end
+    return false
+end
+RCC._SoulstoneFromPlayer = SoulstoneFromPlayer
+
+-- True when `unit` carries a Soulstone the player cast. The caller has
+-- already asked the per-spell gate, so the query itself cannot hard-error.
+local function HasPlayerSoulstone(unit)
+    return IsFromPlayer(C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL"))
+end
+
+-- The roster pass's aura gate, asked once per pass.
+local function IsSoulstoneHidden()
+    return KE:IsAuraHiddenForSpell("Soulstone")
+end
+
+-- Forever stones carry one aura id per rank, read by id.
+if FV then
+    local readUnitAura = C_UnitAuras.GetUnitAuraBySpellID
+    HasPlayerSoulstone = function(unit)
+        return SoulstoneFromPlayer(unit, FV.soulstones, readUnitAura)
+    end
+    IsSoulstoneHidden = function()
+        for _, row in ipairs(FV.soulstones) do
+            if KE:IsAuraHiddenForSpell(row.buff) then return true end
+        end
+        return false
+    end
 end
 
 --- _ScanSoulstoneRoster
@@ -1383,7 +1417,7 @@ end
 --- Returns recipient, healer, selfStoned.
 function RCC:_ScanSoulstoneRoster()
     self._rosterScans = self._rosterScans + 1
-    local hidden = KE:IsAuraHiddenForSpell("Soulstone")
+    local hidden = IsSoulstoneHidden()
     local recipient, healer, selfStoned
 
     local function visit(unit)
@@ -1448,21 +1482,35 @@ function RCC:_GetSoulstonedTarget(live)
     return nil
 end
 
---- _BuildSoulstoneMacrotext
---- `@target` precedes the sticky name so targeting someone else overrides it
---- for one pull; the post-cast refresh then makes that person the sticky.
---- `@mouseover` is unreachable from the icon click and stays for macro
---- consistency. `,help,nodead` falls through past a dead name, so an
---- out-of-combat refresh is enough.
-function RCC:_BuildSoulstoneMacrotext(stoned, healer)
-    local cast = "/cast [@mouseover,help,nodead][@target,help,nodead]"
+--- SoulstoneTargets
+--- The click's target chain. `@target` precedes the sticky name so targeting
+--- someone else overrides it for one pull; the post-cast refresh then makes
+--- that person the sticky. `@mouseover` is unreachable from the icon click
+--- and stays for macro consistency. `,help,nodead` falls through past a dead
+--- name, so an out-of-combat refresh is enough.
+local function SoulstoneTargets(stoned, healer)
+    local targets = "[@mouseover,help,nodead][@target,help,nodead]"
     if stoned then
-        cast = cast .. "[@" .. stoned .. ",help,nodead]"
+        targets = targets .. "[@" .. stoned .. ",help,nodead]"
     end
     if healer and healer ~= stoned then
-        cast = cast .. "[@" .. healer .. ",help,nodead]"
+        targets = targets .. "[@" .. healer .. ",help,nodead]"
     end
-    cast = cast .. "[@player] Soulstone"
+    return targets .. "[@player]"
+end
+
+--- ForeverSoulstoneMacro
+--- A Forever stone is an item used on the target, so the chain leads a
+--- `/use` of the stone.
+local function ForeverSoulstoneMacro(itemName, stoned, healer)
+    return "/stopmacro [combat]\n/use " .. SoulstoneTargets(stoned, healer) .. " " .. itemName
+end
+RCC._ForeverSoulstoneMacro = ForeverSoulstoneMacro
+
+--- _BuildSoulstoneMacrotext
+--- The retail click: the target chain leading a Soulstone cast.
+function RCC:_BuildSoulstoneMacrotext(stoned, healer)
+    local cast = "/cast " .. SoulstoneTargets(stoned, healer) .. " Soulstone"
 
     if DEBUG_RCC then
         KE:Print(string_format("[RCC] BuildSoulstoneMacrotext: stoned=%s healer=%s",
@@ -1479,6 +1527,14 @@ function RCC:_ResolveSoulstone()
     local live, healer, selfStoned = self:_ScanSoulstoneRoster()
     local stoned = self:_GetSoulstonedTarget(live)
     return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
+end
+
+--- _ResolveSoulstoneForever
+--- The Forever slot's roster answers from the same pass: whether a stone is
+--- confirmed, who the click nominates first, and the healer fallback.
+function RCC:_ResolveSoulstoneForever()
+    local live, healer, selfStoned = self:_ScanSoulstoneRoster()
+    return (live ~= nil) or selfStoned, self:_GetSoulstonedTarget(live), healer
 end
 
 -- Pre-declared so a load request allocates no closure. RequestRefresh
@@ -2190,6 +2246,20 @@ function RCC:_UpdateSoulstoneSlot(btn)
     btn.nominatedSpell = classData.spellID
     btn.nominatedItem = nil
 
+    self:_PaintSoulstoneState(btn, state, remain)
+    btn.countText:SetText("")
+
+    if click and not InCombatLockdown() then
+        click:SetAttribute("type", "macro")
+        click:SetAttribute("macrotext", macrotext)
+        click:Show()
+    end
+end
+
+--- _PaintSoulstoneState
+--- SoulstoneState's paint: green tick, yellow waiting mark, or red cross
+--- plus the cast glow; the timer is the remaining cooldown.
+function RCC:_PaintSoulstoneState(btn, state, remain)
     if state == "cast" then
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
         btn.texture:SetDesaturated(true)
@@ -2202,13 +2272,66 @@ function RCC:_UpdateSoulstoneSlot(btn)
         StopGlow(btn)
     end
     btn.statusTexture:Show()
-    btn.countText:SetText("")
+end
 
-    if click and not InCombatLockdown() then
-        click:SetAttribute("type", "macro")
-        click:SetAttribute("macrotext", macrotext)
-        click:Show()
+-- Reused per repaint; SoulstoneState reads only startTime and duration.
+local soulstoneCooldown = {}
+
+--- _UpdateSoulstoneSlotForever
+--- The Warlock class slot on Forever, where the stone is an item: its
+--- cooldown is the timer, the best stocked stone is used on the target
+--- chain, and with none stocked the click creates one at the highest known
+--- rank.
+function RCC:_UpdateSoulstoneSlotForever(btn)
+    local stone, stoneCount
+    for _, row in ipairs(FV.soulstones) do
+        local n = BagCount(row.item)
+        if n > 0 then
+            stone, stoneCount = row, n
+            break
+        end
     end
+    local start, duration = C_Item.GetItemCooldown((stone or FV.soulstones[1]).item)
+    soulstoneCooldown.startTime, soulstoneCooldown.duration = start, duration
+    local confirmed, stoned, healer = self:_ResolveSoulstoneForever()
+    local state, remain = SoulstoneState(soulstoneCooldown, confirmed)
+    btn.soulstoneState = state
+    self:_PaintSoulstoneState(btn, state, remain)
+
+    local createRank = HighestKnown(FV.createSoulstone, IsSpellKnown)
+    if stone then
+        btn.nominatedItem, btn.nominatedSpell = stone.item, nil
+        self:SetIconFromItem(btn.texture, stone.item)
+        btn.countText:SetText(tostring(stoneCount))
+    else
+        btn.nominatedItem, btn.nominatedSpell = nil, createRank
+        btn.texture:SetTexture(DEFAULT_ICONS[SLOT_CLASS])
+        btn.countText:SetText("")
+    end
+
+    local click = btn.click
+    if not stone then
+        self:_ArmSpellClick(click, createRank, nil)
+    elseif click and not InCombatLockdown() then
+        local name = self:SafeItemName(stone.item)
+        if name then
+            click:SetAttribute("type", "macro")
+            click:SetAttribute("macrotext", ForeverSoulstoneMacro(name, stoned, healer))
+            click:Show()
+        else
+            click:Hide()
+        end
+    end
+end
+
+-- The Forever stone's cooldown belongs to the item, so the slot listens to
+-- bag cooldowns instead of a spell's.
+if FV then
+    CLASS_SLOT.WARLOCK = {
+        itemCooldown = true,
+        applies = function() return true end,
+        update  = function(rcc, btn) rcc:_UpdateSoulstoneSlotForever(btn) end,
+    }
 end
 
 --- _UpdateShieldSlot
@@ -2786,12 +2909,14 @@ function RCC:_SetCheckEvents(on)
     if not on then
         for _, event in ipairs(CHECK_EVENTS) do self:UnregisterEvent(event) end
         self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+        if FV then self:UnregisterEvent("BAG_UPDATE_COOLDOWN") end
         return
     end
     for _, event in ipairs(CHECK_EVENTS) do self:RegisterEvent(event) end
     local _, playerClass = UnitClass("player")
     local classSlot = CLASS_SLOT[playerClass]
     if classSlot and classSlot.spellID then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
+    if classSlot and classSlot.itemCooldown then self:RegisterEvent("BAG_UPDATE_COOLDOWN") end
 end
 
 --- UNIT_AURA fires for every unit whose aura set changes. The player's
@@ -2856,6 +2981,12 @@ function RCC:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
     else
         self._cooldownAll = self._cooldownAll + 1
     end
+    self:RequestRefresh()
+end
+
+--- BAG_UPDATE_COOLDOWN drives the Forever Soulstone slot, whose cooldown
+--- belongs to the stone item.
+function RCC:BAG_UPDATE_COOLDOWN()
     self:RequestRefresh()
 end
 

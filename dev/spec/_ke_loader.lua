@@ -3311,7 +3311,9 @@ end
 -- and the spec drains it -- the combat-exit queue is the only thing that
 -- can deliver the deferred hide, which is why it is the one stateful fake.
 -- opts.forever loads it as the Forever client, with opts.foreverData as the
--- table the Forever data file would publish and the two enums it reads.
+-- table the Forever data file would publish and the two enums it reads;
+-- C_Item.GetItemCooldown reports no cooldown, and
+-- C_UnitAuras.GetUnitAuraBySpellID reads seams.unitAuras[unit][spellID].
 -- Returns RCC, KE, seams.
 function L.loadReadyCheckConsumables(overrides, opts)
     opts = opts or {}
@@ -3362,6 +3364,7 @@ function L.loadReadyCheckConsumables(overrides, opts)
         auraPageSize = nil,
         enchants = {},
         weaponEnchants = {},
+        unitAuras = {},
         SECRET = {},
     }
     installMock(overrides, {
@@ -3441,6 +3444,7 @@ function L.loadReadyCheckConsumables(overrides, opts)
         end,
         GetItemIconByID = function() return nil end,
         GetWeaponEnchantInfo = function(weaponSlot) return seams.weaponEnchants[weaponSlot] end,
+        GetItemCooldown = function() return 0, 0, 1 end,
     }
     _G.Item = {
         CreateFromItemID = function(_, itemID)
@@ -3488,6 +3492,10 @@ function L.loadReadyCheckConsumables(overrides, opts)
             return { sourceUnit = u.stone }
         end,
         GetPlayerAuraBySpellID = function(id) return seams.playerAuras[id] end,
+        GetUnitAuraBySpellID = function(unit, id)
+            local auras = seams.unitAuras[unit]
+            return auras and auras[id]
+        end,
     }
     _G.C_UnitAuras = unitAuras
     _G.AuraUtil = {
@@ -3516,7 +3524,12 @@ function L.loadReadyCheckConsumables(overrides, opts)
         Print = function() end,
         IsSafeValue = function(_, v) return v ~= nil and v ~= seams.SECRET end,
         AreAuraIdentitiesHidden = function() return false end,
-        IsAuraHiddenForSpell = function() return seams.soulstoneHidden end,
+        -- A table answers per spell id, so a spec can hide one Forever rank.
+        IsAuraHiddenForSpell = function(_, spell)
+            local hidden = seams.soulstoneHidden
+            if type(hidden) == "table" then return hidden[spell] == true end
+            return hidden
+        end,
         RunAfterCombat = function(_, fn) seams.queue[#seams.queue + 1] = fn end,
         ResolveColor = function(_, saved, default)
             if not saved then return default[1], default[2], default[3], default[4] or 1 end
