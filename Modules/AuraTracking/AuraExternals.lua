@@ -25,7 +25,7 @@ local function BuildCandidates()
 end
 
 -- No isFromPlayerOrPlayerPet here: it is true for any player's cast. Hide Self
--- Cast is the group's PLAYER filter string instead.
+-- Cast is the group's !PLAYER filter string instead.
 local function BuildExternalCandidates(settings)
     return {
         excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil),
