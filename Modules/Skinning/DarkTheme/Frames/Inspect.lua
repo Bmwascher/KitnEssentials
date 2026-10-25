@@ -18,8 +18,7 @@ end
 
 -- S.Frame only fades the portrait, so the title keeps its portrait-mode
 -- anchors (centered 17 px right of the window) and the level line stays below
--- the stripped title bar. Center the name and hang the level line under it,
--- as the Character window does.
+-- the stripped title bar. Center the name and hang the level line under it.
 local function CenterHeader(frame)
     if KE.IS_FOREVER then return end
     if frame.SetTitleOffsets then frame:SetTitleOffsets(24, -24) end
@@ -33,7 +32,7 @@ local function CenterHeader(frame)
     title:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -5)
     title:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, -5)
     level:ClearAllPoints()
-    level:SetPoint("TOP", title, "BOTTOM", 0, -1)
+    level:SetPoint("TOP", title, "BOTTOM", 0, -4)
 end
 
 local function Skin()
