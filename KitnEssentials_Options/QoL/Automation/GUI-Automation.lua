@@ -67,8 +67,8 @@ local function BuildHeader(scrollChild, yOffset)
 
     card1:AddLabel("Small conveniences, each with its own switch on the tabs below: looting, " ..
         "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
-        "and the vendor and auction house windows. With Automation off, the Interface and " ..
-        "Quests & Social tabs are hidden.")
+        "and the vendor and auction house windows. With Automation off, the " .. KE:Gold("Interface") .. " and " ..
+        KE:Gold("Quests & Social") .. " tabs are hidden.")
 
     return card1:GetNextOffset(), false
 end
@@ -434,7 +434,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Quest Automation", yOffset)
     manager:Register(card1, "all")
-    card1:AddLabel("Hold the key set in Hold to Pause Auto-Quest while talking to an NPC to pause auto-quest. A quest with several rewards always asks you to pick.\n\nAuto Complete Voidcores accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off. The Hold to Pause Auto-Quest key still applies.")
+    card1:AddLabel("Hold the key set in " .. KE:Gold("Hold to Pause Auto-Quest") .. " while talking to an NPC to pause auto-quest. A quest with several rewards always asks you to pick.\n\n" .. KE:Gold("Auto Complete Voidcores") .. " accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off. The Hold to Pause Auto-Quest key still applies.")
 
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local autoAcceptCheck = GUIFrame:CreateCheckbox(row1a, "Auto Accept Quests", {
@@ -509,7 +509,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
     manager:Register(card2, "all")
-    card2:AddLabel("Quick Signup: hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.")
+    card2:AddLabel(KE:Gold("Quick Signup") .. ": hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.")
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local autoRoleCheck = GUIFrame:CreateCheckbox(row2a, "Auto Accept Role Check", {

@@ -110,10 +110,10 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
     card1:AddLabel("Turns the game's combat log on for the content you tick below, and " ..
         "off again when you leave." ..
-        "\n\nThat log file is what |cffffd100Warcraft Logs|r uploads and what " ..
-        "|cffffd100Warcraft Recorder|r reads to know when a pull, a key or a match starts " ..
+        "\n\nThat log file is what " .. KE:Gold("Warcraft Logs") .. " uploads and what " ..
+        KE:Gold("Warcraft Recorder") .. " reads to know when a pull, a key or a match starts " ..
         "and ends." ..
-        "\n\nA log you started yourself with |cffffd100/combatlog|r is left alone - this " ..
+        "\n\nA log you started yourself with " .. KE:Gold("/combatlog") .. " is left alone - this " ..
         "only closes logs it opened.")
 
     -- A disabled module shows only this card: its switch and description.

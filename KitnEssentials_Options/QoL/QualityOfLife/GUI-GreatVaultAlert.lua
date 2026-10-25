@@ -153,7 +153,7 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
         ApplyCover()
         RefreshStates()
     end)
-    card3:AddLabel("Hides each reward behind a KitnUI card when you open the vault to choose this " ..
+    card3:AddLabel("Hides each reward behind a " .. KE:Gold("KitnUI") .. " card when you open the vault to choose this " ..
         "week's reward. Click a card to reveal what is under it. A revealed card stays revealed on " ..
         "that character until you claim.")
     manager:SetCondition("cover", function() return db.CoverEnabled ~= false end)

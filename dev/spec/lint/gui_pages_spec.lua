@@ -114,8 +114,6 @@ local ALLOWED = {
         ["GUI/GUIWidgets/GUI-TauntCursorCard.lua"] = { phase = "17", n = 3 },
         ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersCfg.lua"] = { phase = "17", n = 2 },
         ["KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-LFGReminder.lua"] = { phase = "17", n = 1 },
-        ["KitnEssentials_Options/QoL/Automation/GUI-CombatLogger.lua"] = { phase = "17", n = 3 },
-        ["KitnEssentials_Options/QoL/QualityOfLife/GUI-MoveFrames.lua"] = { phase = "17", n = 2 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-AlertFrames.lua"] = { phase = "17", n = 1 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua"] = { phase = "17", n = 2 },
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-ColorPicker.lua"] = { phase = "17", n = 1 },

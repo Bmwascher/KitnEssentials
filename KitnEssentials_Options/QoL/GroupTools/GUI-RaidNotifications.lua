@@ -133,7 +133,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
 
     AddAlertGrid(card2, GENERAL_ALERTS)
     AddAlertRow(card2, AUTO_READY)
-    card2:AddNote("Each alert stays up while its condition holds. Auto Ready When Benched shows no alert; it answers the ready check.")
+    card2:AddNote("Each alert stays up while its condition holds. " .. KE:Gold("Auto Ready When Benched") .. " shows no alert; it answers the ready check.")
 
     yOffset = card2:GetNextOffset()
 
@@ -156,7 +156,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     manager:Register(durationSlider, "all")
     card3:AddRow(row3, Theme.rowHeight)
 
-    card3:AddNote("Duration is the longest either stays up. Reset Boss also hides when combat starts or the lust debuff ends; Loot Boss when you loot or the next pull starts.")
+    card3:AddNote(KE:Gold("Duration") .. " is the longest either stays up. " .. KE:Gold("Reset Boss") .. " also hides when combat starts or the lust debuff ends; " .. KE:Gold("Loot Boss") .. " when you loot or the next pull starts.")
 
     yOffset = card3:GetNextOffset()
 
