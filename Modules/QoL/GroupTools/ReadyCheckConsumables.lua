@@ -480,6 +480,263 @@ local function ForeverElixirState(elixirs, auras, rememberedBuff, countOf, remai
 end
 RCC._ForeverElixirState = ForeverElixirState
 
+local function IsSafe(value)
+    return KE:IsSafeValue(value)
+end
+
+-- C_Item.GetWeaponEnchantInfo's enchant types and hand indexes. Only the
+-- Forever client defines Enum.ItemEnchantType, so it is read through _G.
+local TEMP_TYPE, IMBUE_TYPE, WEAPON_SLOT
+if FV then
+    local enchantType = _G.Enum.ItemEnchantType
+    TEMP_TYPE, IMBUE_TYPE = enchantType.Temporary, enchantType.Imbue
+    WEAPON_SLOT = { [16] = Enum.WeaponSlot.MainHand, [17] = Enum.WeaponSlot.OffHand }
+end
+
+-- The stone or oil kinds each class tries first when nothing is remembered.
+local CLASS_FIRST_KINDS = {
+    WARRIOR = { "stone" },
+    ROGUE   = { "stone" },
+    HUNTER  = { "stone" },
+    MAGE    = { "wizard" },
+    WARLOCK = { "wizard" },
+    PRIEST  = { "wizard" },
+    DRUID   = { "wizard", "mana", "stone" },
+    PALADIN = { "wizard", "mana", "stone" },
+    SHAMAN  = { "wizard", "mana", "stone" },
+}
+local NO_KINDS = {}
+local POISON_HAND_DEFAULT = { [16] = "Instant Poison", [17] = "Deadly Poison" }
+
+-- The layers a hand needs, in click order.
+local BOTH_LAYERS = { "imbue", "temp" }
+local IMBUE_LAYER = { "imbue" }
+local TEMP_LAYER  = { "temp" }
+
+local IMBUE_MEMORY_KEY  = { [16] = "LastImbueMH" }
+local POISON_MEMORY_KEY = { [16] = "LastPoisonMH", [17] = "LastPoisonOH" }
+
+--- ClassifyHandLayers
+--- Splits C_Item.GetWeaponEnchantInfo's list into the stone or oil layer
+--- (`temp`) and the poison or imbue layer (`imbue`), each { enchantID,
+--- remain }. An entry whose presence or type is unreadable is left out; an
+--- unreadable enchant id or time left keeps the layer without that field.
+--- timeLeft is in milliseconds.
+local function ClassifyHandLayers(list, isSafe, tempType, imbueType)
+    local layers = {}
+    if type(list) ~= "table" then return layers end
+    for _, entry in ipairs(list) do
+        local has, kind = entry.hasEnchant, entry.enchantType
+        if isSafe(has) and has == true and isSafe(kind) then
+            local key = (kind == tempType and "temp") or (kind == imbueType and "imbue") or nil
+            if key and not layers[key] then
+                local id, left = entry.enchantID, entry.timeLeft
+                layers[key] = {
+                    enchantID = isSafe(id) and id or nil,
+                    remain = (isSafe(left) and left > 0) and left / 1000 or nil,
+                }
+            end
+        end
+    end
+    return layers
+end
+RCC._ClassifyHandLayers = ClassifyHandLayers
+
+--- HandRule
+--- The layers a hand needs: a Rogue or Shaman main hand both, a Rogue off
+--- hand its poison, every other hand its stone or oil.
+local function HandRule(classFile, invSlot)
+    if invSlot == 16 and (classFile == "ROGUE" or classFile == "SHAMAN") then return BOTH_LAYERS end
+    if invSlot == 17 and classFile == "ROGUE" then return IMBUE_LAYER end
+    return TEMP_LAYER
+end
+RCC._HandRule = HandRule
+
+--- HandPlan
+--- Ready when every needed layer is on; the timer is the one that runs out
+--- first. The click applies the first missing layer, else refreshes the one
+--- that runs out first, else (no timer read) the first needed.
+local function HandPlan(layers, needed)
+    local missing, soonest, soonestRemain
+    for _, key in ipairs(needed) do
+        local layer = layers[key]
+        if not layer then
+            missing = missing or key
+        elseif layer.remain and (soonestRemain == nil or layer.remain < soonestRemain) then
+            soonest, soonestRemain = key, layer.remain
+        end
+    end
+    if missing then return false, nil, missing end
+    return true, soonestRemain, soonest or needed[1]
+end
+RCC._HandPlan = HandPlan
+
+-- A poison serves the imbue layer and nothing else; a row with no
+-- `applies` takes any weapon.
+local function Eligible(row, wantPoison, subclass)
+    return (row.kind == "poison") == wantPoison and (row.applies == nil or row.applies[subclass] == true)
+end
+
+-- The highest-rank stocked eligible row whose `field` is `value`; ties go
+-- to print order.
+local function BestStocked(rows, wantPoison, subclass, field, value, countOf)
+    local pick, pickCount, pickRank
+    for _, row in ipairs(rows) do
+        if row[field] == value and Eligible(row, wantPoison, subclass) then
+            local n = countOf(row.item)
+            if n > 0 and (pickRank == nil or row.rank > pickRank) then
+                pick, pickCount, pickRank = row.item, n, row.rank
+            end
+        end
+    end
+    return pick, pickCount
+end
+
+--- PickForeverEnhancement
+--- The item a weapon click applies for `layer` ("imbue": a poison; "temp":
+--- a stone or oil). A remembered item the weapon takes: itself while
+--- stocked, else its family's highest stocked rank. Then the hand's poison
+--- or the class's kinds in turn, then the first stocked eligible row.
+--- Returns the item and count, or nil and 0.
+local function PickForeverEnhancement(rows, layer, classFile, invSlot, subclass, remembered, countOf)
+    local wantPoison = layer == "imbue"
+    if remembered then
+        for _, row in ipairs(rows) do
+            if row.item == remembered then
+                if Eligible(row, wantPoison, subclass) then
+                    local n = countOf(remembered)
+                    if n > 0 then return remembered, n end
+                    local item, count = BestStocked(rows, wantPoison, subclass, "family", row.family, countOf)
+                    if item then return item, count end
+                end
+                break
+            end
+        end
+    end
+    if wantPoison then
+        local item, count = BestStocked(rows, true, subclass, "family", POISON_HAND_DEFAULT[invSlot], countOf)
+        if item then return item, count end
+    else
+        for _, kind in ipairs(CLASS_FIRST_KINDS[classFile] or NO_KINDS) do
+            local item, count = BestStocked(rows, false, subclass, "kind", kind, countOf)
+            if item then return item, count end
+        end
+    end
+    for _, row in ipairs(rows) do
+        if Eligible(row, wantPoison, subclass) then
+            local n = countOf(row.item)
+            if n > 0 then return row.item, n end
+        end
+    end
+    return nil, 0
+end
+RCC._PickForeverEnhancement = PickForeverEnhancement
+
+--- PickImbue
+--- The remembered imbue family while one of its ranks is known, else the
+--- first family with a known rank. Returns the family's first rank and the
+--- highest known rank, or nil.
+local function PickImbue(imbues, rememberedFamily, isKnown)
+    if rememberedFamily then
+        for _, family in ipairs(imbues) do
+            if family.ranks[1] == rememberedFamily then
+                local rank = HighestKnown(family.ranks, isKnown)
+                if rank then return family.ranks[1], rank end
+            end
+        end
+    end
+    for _, family in ipairs(imbues) do
+        local rank = HighestKnown(family.ranks, isKnown)
+        if rank then return family.ranks[1], rank end
+    end
+    return nil
+end
+RCC._PickImbue = PickImbue
+
+--- ImbueClickMacro
+--- The Shaman main-hand click: the cast, then `/use 16`, which lands a
+--- pending enchant on the hand when the cast asks for a weapon.
+local function ImbueClickMacro(name)
+    if not name then return nil end
+    return "/stopmacro [combat]\n/cast " .. name .. "\n/use 16"
+end
+RCC._ImbueClickMacro = ImbueClickMacro
+
+--- _UpdateWeaponEnchantForever
+--- UpdateWeaponEnchant on Forever. The hand's enchant list splits into its
+--- stone or oil layer and its poison or imbue layer; HandRule says which the
+--- hand needs, and the click applies the first one missing, else refreshes
+--- the one that runs out first.
+function RCC:_UpdateWeaponEnchantForever(slotKey, invSlot)
+    local btn = self.buttons[slotKey]
+    if not btn then return end
+    local db = self.db
+    local _, classFile = UnitClass("player")
+    ---@diagnostic disable-next-line: wrong-flavor-api
+    local layers = ClassifyHandLayers(C_Item.GetWeaponEnchantInfo(WEAPON_SLOT[invSlot]), IsSafe, TEMP_TYPE, IMBUE_TYPE)
+    local ready, remain, clickLayer = HandPlan(layers, HandRule(classFile, invSlot))
+    self:_PaintReady(btn, ready, remain)
+
+    if db then
+        for _, layer in pairs(layers) do
+            local row = layer.enchantID and FV.byEnchant[layer.enchantID]
+            if row and row.kind == "imbue" then
+                if IMBUE_MEMORY_KEY[invSlot] then db[IMBUE_MEMORY_KEY[invSlot]] = row.family end
+            elseif row and row.kind == "poison" then
+                db[POISON_MEMORY_KEY[invSlot]] = row.item
+            elseif row then
+                db[HAND_MEMORY_KEY[invSlot]] = row.item
+            end
+        end
+    end
+
+    btn.nominatedSpell = nil
+    if clickLayer == "imbue" and classFile == "SHAMAN" then
+        self:_ArmImbueClick(btn, slotKey, db and db[IMBUE_MEMORY_KEY[invSlot]])
+        return
+    end
+
+    local pickItem, bagCount
+    local weaponID = GetInventoryItemID("player", invSlot)
+    if weaponID then
+        local _, _, _, _, _, classID, subClassID = GetItemInfoInstant(weaponID)
+        if classID == 2 and subClassID then
+            local memoryKey = clickLayer == "imbue" and POISON_MEMORY_KEY[invSlot] or HAND_MEMORY_KEY[invSlot]
+            pickItem, bagCount = PickForeverEnhancement(FV.enhancements, clickLayer, classFile, invSlot,
+                subClassID, db and db[memoryKey], BagCount)
+        end
+    end
+    self:_ArmWeaponItem(btn, slotKey, invSlot, pickItem, bagCount or 0)
+end
+
+--- _ArmImbueClick
+--- A Shaman main hand's imbue click: PickImbue's rank by name, then
+--- `/use 16`. With no imbue known the slot shows its placeholder and no
+--- click.
+function RCC:_ArmImbueClick(btn, slotKey, rememberedFamily)
+    local _, rank = PickImbue(FV.imbues, rememberedFamily, IsSpellKnown)
+    btn.nominatedItem = nil
+    btn.nominatedSpell = rank
+    btn.countText:SetText("")
+    if rank then
+        self:SetIconFromSpell(btn.texture, rank)
+    else
+        btn.texture:SetTexture(DEFAULT_ICONS[slotKey == "oil" and SLOT_OIL or SLOT_OILOH])
+    end
+
+    local click = btn.click
+    if not click or InCombatLockdown() then return end
+    local name = rank and C_Spell.GetSpellName(rank)
+    local macrotext = KE:IsSafeValue(name) and ImbueClickMacro(name) or nil
+    if macrotext then
+        click:SetAttribute("type", "macro")
+        click:SetAttribute("macrotext", macrotext)
+        click:Show()
+    else
+        click:Hide()
+    end
+end
+
 --- _UpdateFlaskForever
 --- UpdateFlask on Forever: ready on any listed flask buff, which is
 --- remembered for the click.
@@ -1697,9 +1954,9 @@ end
 --- choice. The icon always shows the click target, never the active enchant.
 --- slotKey: "oil" (MH) or "oiloh" (OH). invSlot: 16 or 17.
 function RCC:UpdateWeaponEnchant(slotKey, invSlot)
+    if FV then return self:_UpdateWeaponEnchantForever(slotKey, invSlot) end
     local btn = self.buttons[slotKey]
     if not btn then return end
-    local click = btn.click
 
     local hand = self._classCheck and self._classCheck.hands[invSlot]
     if hand then
@@ -1744,6 +2001,15 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
     end
 
     local pickItem, bagCount = self:_PickWeaponEnhancement(invSlot)
+    self:_ArmWeaponItem(btn, slotKey, invSlot, pickItem, bagCount)
+end
+
+--- _ArmWeaponItem
+--- A weapon slot's item click: the item's icon and count and a secure item
+--- use on the hand, or the hand's placeholder and no click when nothing was
+--- picked or its name is not cached yet.
+function RCC:_ArmWeaponItem(btn, slotKey, invSlot, pickItem, bagCount)
+    local click = btn.click
     btn.nominatedItem = pickItem
     if pickItem then
         self:SetIconFromItem(btn.texture, pickItem)

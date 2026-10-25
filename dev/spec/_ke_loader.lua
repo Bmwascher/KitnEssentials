@@ -3361,6 +3361,7 @@ function L.loadReadyCheckConsumables(overrides, opts)
         auras = {},
         auraPageSize = nil,
         enchants = {},
+        weaponEnchants = {},
         SECRET = {},
     }
     installMock(overrides, {
@@ -3439,6 +3440,7 @@ function L.loadReadyCheckConsumables(overrides, opts)
             return itemID, "", "", "", 0, info[1], info[2]
         end,
         GetItemIconByID = function() return nil end,
+        GetWeaponEnchantInfo = function(weaponSlot) return seams.weaponEnchants[weaponSlot] end,
     }
     _G.Item = {
         CreateFromItemID = function(_, itemID)
