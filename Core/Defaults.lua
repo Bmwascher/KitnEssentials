@@ -97,6 +97,10 @@ local Defaults = {
         VersionCheck = {
             ShowNotice = true,
         },
+
+        -- Set when the Copy from Retail popup opens or its Sharing card is
+        -- used: one offer per account.
+        CopyFromRetailSeen = false,
     },
     profile = {
         -- Global

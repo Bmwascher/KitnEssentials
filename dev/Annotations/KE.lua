@@ -818,7 +818,7 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
----@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean?, parkKey: string?, acceptOnly: boolean? }?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean?, parkKey: string?, acceptOnly: boolean?, onShown: fun()? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts) end
