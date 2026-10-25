@@ -15,6 +15,7 @@
 --                    candidate may carry `forms`, the shapeshift form ids
 --                    (GetShapeshiftFormID) it needs; without it any form
 --                    will do.
+--                    A candidate with `shield` needs a shield equipped.
 --   announceExtras - optional array of additional spell IDs that count as
 --                    interrupts for announce purposes but not CD tracking.
 --   tracked        - optional candidate id a cooldown tracker shows for a
@@ -30,9 +31,11 @@
 --   KE:GetTrackedKickForSpec(specID) -> { id, cd } or nil.
 --   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate and
 --                                    tracker kick.
---   KE:SelectInterruptCandidate(candidates, isKnown, formID) -> the first
---                                    candidate isKnown accepts whose forms
---                                    allow formID, or nil.
+--   KE:SelectInterruptCandidate(candidates, isKnown, formID, hasShield)
+--                                 -> the first candidate isKnown accepts
+--                                    whose forms allow formID and, for a
+--                                    shield kick, whose hasShield() is
+--                                    true, or nil.
 --   KE:ResolvePlayerInterrupt(specID) -> that pick for the player's spellbook
 --                                        and current form, or nil.
 --   KE:GetKickDefinition(kickID) -> the Kick Tracker's definition of a
@@ -210,9 +213,9 @@ local FOREVER_INTERRUPTS = {
         candidates = {
             { id = 6554, cd = 10, forms = { 19 } },  -- Pummel
             { id = 6552, cd = 10, forms = { 19 } },  -- Pummel
-            { id = 1672, cd = 12, forms = { 17, 18 } },  -- Shield Bash
-            { id = 1671, cd = 12, forms = { 17, 18 } },  -- Shield Bash
-            { id = 72, cd = 12, forms = { 17, 18 } },  -- Shield Bash
+            { id = 1672, cd = 12, forms = { 17, 18 }, shield = true },  -- Shield Bash
+            { id = 1671, cd = 12, forms = { 17, 18 }, shield = true },  -- Shield Bash
+            { id = 72, cd = 12, forms = { 17, 18 }, shield = true },  -- Shield Bash
         },
         tracked = 6552,
     },
@@ -344,10 +347,12 @@ function KE:GetInterruptKickSpellSet()
     return KICK_SPELL_SET
 end
 
--- Pure: the caller supplies the known check and the form. A secret form is
--- treated as unknown, so it meets no `forms` list.
-function KE:SelectInterruptCandidate(candidates, isKnown, formID)
+-- Pure: the caller supplies the known check, the form and the shield
+-- reader. A secret form is treated as unknown, so it meets no `forms` list.
+-- The reader runs at most once, and only for a shield kick the form allows.
+function KE:SelectInterruptCandidate(candidates, isKnown, formID, hasShield)
     if self:IsSecretValue(formID) then formID = nil end
+    local shieldRead, shieldOn = false, false
     for _, c in ipairs(candidates) do
         local forms = c.forms
         local formAllowed = not forms
@@ -358,6 +363,13 @@ function KE:SelectInterruptCandidate(candidates, isKnown, formID)
                     break
                 end
             end
+        end
+        if formAllowed and c.shield then
+            if not shieldRead then
+                shieldRead = true
+                shieldOn = hasShield ~= nil and hasShield() == true
+            end
+            formAllowed = shieldOn
         end
         if formAllowed and isKnown(c.id) then return c end
     end
@@ -371,13 +383,23 @@ local function isKnownToPlayerOrPet(spellID)
         or book.IsSpellKnownOrInSpellBook(spellID, Enum.SpellBookSpellBank.Pet)
 end
 
+-- Item class 4, subclass 6: the shield the game data asks of Shield Bash.
+-- The ids read the same in every client language; a type name does not.
+local function playerHasShield()
+    if not (GetInventoryItemID and C_Item and C_Item.GetItemInfoInstant) then return false end
+    local itemID = GetInventoryItemID("player", INVSLOT_OFFHAND or 17)
+    if not itemID then return false end
+    local _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(itemID)
+    return classID == 4 and subclassID == 6
+end
+
 function KE:ResolvePlayerInterrupt(specID)
     local candidates = self:GetInterruptCandidatesForSpec(specID)
     if not candidates then return nil end
     local getForm = GetShapeshiftFormID
     local formID
     if getForm then formID = getForm() end
-    return self:SelectInterruptCandidate(candidates, isKnownToPlayerOrPet, formID)
+    return self:SelectInterruptCandidate(candidates, isKnownToPlayerOrPet, formID, playerHasShield)
 end
 
 function KE:GetCanonicalKickSpell(spellID)

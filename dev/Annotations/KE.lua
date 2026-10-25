@@ -1540,17 +1540,21 @@ function KE:GetExtraKick(spellID) end
 function KE:GetKickCooldownCap(kickID) end
 
 --- The first candidate isKnown accepts whose `forms` list, when present,
---- holds formID. A nil or secret formID meets no `forms` list. Pure.
----@param candidates { id: number, cd: number, forms: number[]? }[]
+--- holds formID. A nil or secret formID meets no `forms` list. A `shield`
+--- candidate also needs hasShield() to return true; without a reader it is
+--- skipped. The reader runs at most once. Pure.
+---@param candidates { id: number, cd: number, forms: number[]?, shield: boolean? }[]
 ---@param isKnown fun(spellID: number): boolean
 ---@param formID number?
----@return { id: number, cd: number, forms: number[]? }?
-function KE:SelectInterruptCandidate(candidates, isKnown, formID) end
+---@param hasShield (fun(): boolean)?
+---@return { id: number, cd: number, forms: number[]?, shield: boolean? }?
+function KE:SelectInterruptCandidate(candidates, isKnown, formID, hasShield) end
 
 --- The player's kick for a spec: the first candidate in the player or pet
---- spellbook whose form condition the current shapeshift form meets, or nil.
+--- spellbook whose form condition the current shapeshift form meets and,
+--- for a shield kick, with a shield equipped; or nil.
 ---@param specID number?
----@return { id: number, cd: number, forms: number[]? }?
+---@return { id: number, cd: number, forms: number[]?, shield: boolean? }?
 function KE:ResolvePlayerInterrupt(specID) end
 
 --- The Kick Tracker's definition of a canonical kick: `base` seconds, an
