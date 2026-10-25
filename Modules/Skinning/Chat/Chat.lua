@@ -551,6 +551,13 @@ local function PanelFollowers()
     return panelFollowers
 end
 
+-- The frame chooser's claim for the panel, which takes no mouse: its tabs pick
+-- it. The chat windows are not claimed, so a window is still picked by its own
+-- name.
+local function PanelClaims(name)
+    return strfind(name, "^ChatFrame%d+Tab$") ~= nil
+end
+
 function CHAT:RegisterEditMode()
     if not self.editModeConfig then
         self.editModeConfig = {
@@ -628,6 +635,10 @@ function CHAT:CreateChatPanel()
     tabBackdrop:SetFrameLevel(panel:GetFrameLevel() + 1)
     self.tabBackdrop = tabBackdrop
     self:UpdateTabBackdrop()
+
+    if KE.FrameChooser then KE.FrameChooser:RegisterProxy(panel, PanelClaims, true) end
+    -- Frames placed on the panel before it existed are waiting for it.
+    KE:AnnounceAnchorTarget("KE_ChatPanel")
 end
 
 function CHAT:UpdateTabBackdrop()

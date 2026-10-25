@@ -26,6 +26,7 @@ local math_ceil = math.ceil
 local math_floor = math.floor
 local math_abs = math.abs
 local wipe = wipe
+local strfind = string.find
 
 -- Symmetric clamp helper for the splitter drag math (plain numbers only --
 -- cursor coords, pixel sizes, ratios; never a secret value).
@@ -183,6 +184,12 @@ function DM:ReleaseChatSize()
     CHAT:UpdatePanel()
 end
 
+-- The frame chooser's claim for the dock: hovering any window picks the dock,
+-- the one meter frame that stays while windows are added and removed.
+local function DockClaims(name)
+    return strfind(name, "^KE_DamageMeter_Window%d+$") ~= nil
+end
+
 function DM:EnsureDock()
     if self.dock then return self.dock end
 
@@ -207,6 +214,10 @@ function DM:EnsureDock()
     if self.db then
         KE:ApplyFramePosition(dock, self.db.Position, self.db)
     end
+
+    if KE.FrameChooser then KE.FrameChooser:RegisterProxy(dock, DockClaims) end
+    -- Frames placed on the dock before it existed are waiting for it.
+    KE:AnnounceAnchorTarget("KE_DamageMeter_Dock")
 
     return dock
 end
