@@ -193,7 +193,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     local plateGapSlider = GUIFrame:CreateSlider(rowP2, "Gap to Health Bar", {
         min = 0, max = 20, step = 1,
-        value = db.PlateBarGap or 1,
+        value = db.PlateBarGap or 4,
         callback = function(val) db.PlateBarGap = val; ApplySettings() end,
     })
     rowP2:AddWidget(plateGapSlider, 0.5)
