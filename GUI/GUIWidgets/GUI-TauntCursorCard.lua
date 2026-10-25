@@ -34,11 +34,16 @@ function GUIFrame:CreateTauntCursorCard(scrollChild, yOffset, config)
     local card = GUIFrame:CreateCard(scrollChild, "Taunt Countdown", yOffset)
     manager:Register(card, "all")
 
-    card:AddNote("Shows the cooldown of your taunt at the cursor, or of " ..
-        "Flame Shock on Elemental and Restoration Shaman and " ..
-        "Garrote on Assassination Rogue. The spell is detected from " ..
-        "your spellbook, so any spec that has one gets it. Nothing " ..
-        "is drawn on a spec that has none.")
+    card:AddNote(KE.IS_FOREVER
+        and ("Shows the cooldown of your taunt at the cursor: " .. KE:Gold("Taunt") ..
+            " for a Warrior, " .. KE:Gold("Growl") .. " for a Druid, or " .. KE:Gold("Flame Shock") ..
+            " for a Shaman. The spell is found in your spellbook, so nothing is drawn until " ..
+            "you have learned one.")
+        or ("Shows the cooldown of your taunt at the cursor, or of " ..
+            "Flame Shock on Elemental and Restoration Shaman and " ..
+            "Garrote on Assassination Rogue. The spell is detected from " ..
+            "your spellbook, so any spec that has one gets it. Nothing " ..
+            "is drawn on a spec that has none."))
 
     local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local tauntEnable = GUIFrame:CreateCheckbox(row1, "Enable Taunt Countdown", {

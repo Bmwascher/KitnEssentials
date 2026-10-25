@@ -106,6 +106,16 @@ local TRACKED_SPELLS = {
     { ids = { 703 }, specs = { [SPEC_ASSASSINATION] = true } },
 }
 
+-- Forever has no Hand of Reckoning and one spec per class, so the spec
+-- gates above never match there: it tracks Taunt, Growl and every Flame
+-- Shock rank, highest first, for every Shaman.
+local FOREVER_TRACKED_SPELLS = {
+    { ids = { 355 } },    -- Taunt (Warrior)
+    { ids = { 6795 } },   -- Growl (Druid)
+    { ids = { 29228, 10448, 10447, 8053, 8052, 8050 } },  -- Flame Shock (Shaman)
+}
+if KE.IS_FOREVER then TRACKED_SPELLS = FOREVER_TRACKED_SPELLS end
+
 C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
 C.TEXTURE_ORDER   = { "circle_thin", "circle_light", "circle_normal", "circle_heavy", "circle_thick", "circle_backup" }
 C.TEXTURE_LABELS  = {
