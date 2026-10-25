@@ -634,13 +634,17 @@ function KE:ApplyCooldownTextStyle(cooldown, fontFace, fontSize, fontOutline) en
 ---@param borderParent Frame? # frame level control; defaults to `frame` (Core/Widgets.lua)
 function KE:AddBorders(frame, color, borderParent) end
 
+--- Never nil: every refusal and every missing name falls back to UIParent.
+--- With `asParent` the result is always a frame. Without it, a texture or
+--- font string can also come back; the checker cannot pick a return type by
+--- an argument's value, so that case is stated here and not in the type.
 ---@param anchorFrameType string?
----@param parentFrame string?
+---@param parentFrameName string?
 ---@param frame Frame? # the frame being placed; SELECTFRAME refuses it, its children and its dependents
 ---@param asParent boolean? # the result becomes a parent, so it must also be a frame
 ---@param followers Frame[]? # frames moved onto `frame` after placement; SELECTFRAME refuses them and their dependents
----@return Frame?
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrame, frame, asParent, followers) end
+---@return Frame
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent, followers) end
 
 --- True when `candidate` cannot anchor `frame` (or parent it, with `asParent`):
 --- not a region (a secret value, an unreadable table or a forbidden region
