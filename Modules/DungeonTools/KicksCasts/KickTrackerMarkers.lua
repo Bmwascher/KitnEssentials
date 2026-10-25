@@ -58,8 +58,7 @@ end
 -- and zone-in time. GetServerTime() is plain server epoch time, not this
 -- machine's uptime, so a saved visit keeps its identity across sessions.
 -- After a reload or login there is no runtime copy, and the saved record is
--- the visit before. A move empties the cache; a record of another visit is
--- cleared, and a player with no record gets none.
+-- the visit before.
 function KT:MoveVisit()
     local rec = SavedRecord(false)
     local fromInst, fromAt = self.visitInst, self.visitAt
