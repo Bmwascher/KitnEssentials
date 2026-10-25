@@ -112,8 +112,7 @@
   their bar shows the kick as the meter counts it, even when the game hides
   who kicked
 - Corrected cooldowns: Counterspell 20 s with Quick Witted, Mind Freeze 12 s
-  after a qualifying kick, Solar Beam 45 s on the main target only, Pummel
-  13.5 s, Quell 18 s with Interwoven Threads
+  after a qualifying kick, Pummel 13.5 s, Quell 18 s with Interwoven Threads
 - Teammates' kick talents are read by inspecting them; a teammate whose
   talents cannot be read shows their longest cooldown
 
