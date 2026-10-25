@@ -832,7 +832,8 @@ GUIFrame:RegisterTabbedContent("Cursor", {
             (KE:IsFeatureAvailable("CursorDispel")
                 and ("With it on, the " .. KE:Gold("Dispel") .. " and " .. KE:Gold("Taunt") .. " tabs " ..
                     "put those cooldowns at the cursor too.")
-                or "The Taunt tab puts your taunt's cooldown at the cursor too."))
+                or ("With it on, the " .. KE:Gold("Taunt") .. " tab puts the Taunt, Growl or Flame Shock " ..
+                    "cooldown at the cursor too.")))
 
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled == false

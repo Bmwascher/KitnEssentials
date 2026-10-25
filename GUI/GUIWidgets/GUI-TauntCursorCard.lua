@@ -35,9 +35,9 @@ function GUIFrame:CreateTauntCursorCard(scrollChild, yOffset, config)
     manager:Register(card, "all")
 
     card:AddNote(KE.IS_FOREVER
-        and ("Shows the cooldown of your taunt at the cursor: " .. KE:Gold("Taunt") ..
+        and ("Shows the cooldown of " .. KE:Gold("Taunt") ..
             " for a Warrior, " .. KE:Gold("Growl") .. " for a Druid, or " .. KE:Gold("Flame Shock") ..
-            " for a Shaman. The spell is found in your spellbook, so nothing is drawn until " ..
+            " for a Shaman at the cursor. The spell is found in your spellbook, so nothing is drawn until " ..
             "you have learned one.")
         or ("Shows the cooldown of your taunt at the cursor, or of " ..
             "Flame Shock on Elemental and Restoration Shaman and " ..
