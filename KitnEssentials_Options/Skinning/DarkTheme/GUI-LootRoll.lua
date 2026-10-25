@@ -57,9 +57,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     -- the controls it enables. The page rebuilds on the Replace toggle, so the
     -- text follows the mode.
     if db.Replace then
-        card1:AddLabel("Slim bars mode. KitnEssentials draws its own roll bars and hides Blizzard's roll windows. While Loot Roll is on, bar size and color are on the Display Settings card, and turning off Replace with Slim Bars asks for a /reload.")
+        card1:AddLabel("Slim bars mode. KitnEssentials draws its own roll bars and hides Blizzard's roll windows. While Loot Roll is on, bar size and color are on the " .. KE:Gold("Display Settings") .. " card, and turning off " .. KE:Gold("Replace with Slim Bars") .. " asks for a " .. KE:Gold("/reload") .. ".")
     else
-        card1:AddLabel("Blizzard mode. Blizzard draws the roll windows. While Loot Roll is on, Skin Roll Windows (Blizzard mode) on the Display Settings card styles them, and Move Loot Rolls lets the Position Settings card move them.")
+        card1:AddLabel("Blizzard mode. Blizzard draws the roll windows. While Loot Roll is on, " .. KE:Gold("Skin Roll Windows (Blizzard mode)") .. " on the " .. KE:Gold("Display Settings") .. " card styles them, and " .. KE:Gold("Move Loot Rolls") .. " lets the " .. KE:Gold("Position Settings") .. " card move them.")
     end
 
     -- A disabled module shows only this card: its switch and description.
@@ -117,9 +117,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     -- Same reason as card1's label: this card holds controls for BOTH modes,
     -- and the grayed-out ones give no clue why. Name which set is live.
     if db.Replace then
-        card3:AddLabel("Slim bars mode: the bar size options apply. Skin Roll Windows (Blizzard mode) is for Blizzard mode only.")
+        card3:AddLabel("Slim bars mode: the bar size options apply. " .. KE:Gold("Skin Roll Windows (Blizzard mode)") .. " is for Blizzard mode only.")
     else
-        card3:AddLabel("Blizzard mode: Skin Roll Windows (Blizzard mode) and Move Loot Rolls apply. The bar size options are for the slim bars only.")
+        card3:AddLabel("Blizzard mode: " .. KE:Gold("Skin Roll Windows (Blizzard mode)") .. " and " .. KE:Gold("Move Loot Rolls") .. " apply. The bar size options are for the slim bars only.")
     end
 
     local rowS = GUIFrame:CreateRow(card3.content, Theme.rowHeight)

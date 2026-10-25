@@ -99,10 +99,6 @@ local ALLOWED = {
         -- Phase 17 moves these onto KE:Gold.
         ["GUI/GUIMain/GUI-Core.lua"] = { phase = "17", n = 1 },
         ["GUI/GUIWidgets/GUI-TauntCursorCard.lua"] = { phase = "17", n = 3 },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-AlertFrames.lua"] = { phase = "17", n = 1 },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardFrames.lua"] = { phase = "17", n = 2 },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-ColorPicker.lua"] = { phase = "17", n = 1 },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-RaidControl.lua"] = { phase = "17", n = 1 },
     },
 }
 

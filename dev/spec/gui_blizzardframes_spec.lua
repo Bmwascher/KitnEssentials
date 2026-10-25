@@ -145,9 +145,10 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             -- GUI-BlizzardMessages.lua gets away with `LSM = {}` because it
             -- never calls HashTable.
             LSM = { HashTable = function() return {} end },
-            -- The accent-colored lead-in on this page's notes. Identity here:
-            -- the color is a look, and no assertion reads it.
+            -- The accent lead-in and the gold names on this page's notes.
+            -- Identity here: the color is a look, and no assertion reads it.
             ColorTextByTheme = function(_, text) return text end,
+            Gold = function(_, text) return text end,
         }
         -- ContextMenus' onToggle calls KitnEssentials:EnableModule /
         -- :DisableModule, so the addon object has to exist before the file

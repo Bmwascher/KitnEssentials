@@ -49,7 +49,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFontsBlizzard", function(scrollChild
     end
 
     local cardAll = GUIFrame:CreateCard(scrollChild, "Blizzard Text Everywhere", yOffset)
-    cardAll:AddLabel("Quest text, the objective tracker, mail and numbers, in the skinned-window font. Base Size also sizes the Blizzard Fonts row on Frame Skins.")
+    cardAll:AddLabel("Quest text, the objective tracker, mail and numbers, in the skinned-window font. " .. KE:Gold("Base Size") .. " also sizes the " .. KE:Gold("Blizzard Fonts") .. " row on " .. KE:Gold("Frame Skins") .. ".")
 
     local rowAll = GUIFrame:CreateRow(cardAll.content, Theme.rowHeightLast)
     rowAll:AddWidget(GUIFrame:CreateCheckbox(rowAll, "Replace All Blizzard Fonts", {
@@ -90,7 +90,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFontsBlizzard", function(scrollChild
 
     local cardSizes = GUIFrame:CreateCard(scrollChild, "Category Sizes", yOffset)
     manager:Register(cardSizes, "sweep")
-    cardSizes:AddLabel("One size per category, overriding Base Size. Grayed while Replace All Blizzard Fonts is off.")
+    cardSizes:AddLabel("One size per category, overriding " .. KE:Gold("Base Size") .. ". Grayed while " .. KE:Gold("Replace All Blizzard Fonts") .. " is off.")
 
     local rowA = GUIFrame:CreateRow(cardSizes.content, Theme.rowHeight)
     rowA:AddWidget(GUIFrame:CreateSlider(rowA, "Objective Tracker", {
@@ -494,7 +494,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     manager:Register(getLinkBtn, "bubble")
     card:AddRow(rowBubble, Theme.rowHeight)
 
-    card:AddNote("Recommended: ChatBubbleReplacements by Luckyone swaps the bubble backdrop (invisible, small, medium or large).")
+    card:AddNote("Recommended: " .. KE:Gold("ChatBubbleReplacements") .. " by Luckyone swaps the bubble backdrop (invisible, small, medium or large).")
 
     yOffset = card:GetNextOffset()
 

@@ -29,7 +29,7 @@ GUIFrame:RegisterContent("ColorPicker", function(scrollChild, yOffset)
     card:AddLabel("Adds red, green, blue and transparency boxes to Blizzard's color picker, plus " ..
         "copy and paste, a class-color button, and a title bar you can drag. It applies " ..
         "everywhere colors are picked, this window included. Turning it off needs a reload." ..
-        "\n\nSkipped automatically if |cffffd100ElvUI|r or a dedicated color-picker addon is " ..
+        "\n\nSkipped automatically if " .. KE:Gold("ElvUI") .. " or a dedicated color-picker addon is " ..
         "loaded, since those change the same window.")
 
     return card:GetNextOffset()

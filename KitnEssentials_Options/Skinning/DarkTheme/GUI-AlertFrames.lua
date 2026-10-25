@@ -53,7 +53,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAlertFrames", function(scrollChild, 
 
     afCard1:AddLabel("Moves the whole Blizzard toast stack, loot, achievements, dungeon completion, " ..
         "to a spot you choose. The stack grows upward when the anchor is in the lower half of the " ..
-        "screen and downward when it is in the upper half. Use |cffffd100/kes edit|r to drag it. " ..
+        "screen and downward when it is in the upper half. Use " .. KE:Gold("/kes edit") .. " to drag it. " ..
         "Turning it off needs a reload.")
 
     yOffset = afCard1:GetNextOffset()

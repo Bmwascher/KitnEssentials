@@ -533,10 +533,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
         if needsReload then KE:FlagReloadNeeded() end
     end)
 
-    card:AddLabel("Untick a window to keep Blizzard's original look there. Changes apply after a /reload.")
+    card:AddLabel("Untick a window to keep Blizzard's original look there. Changes apply after a " .. KE:Gold("/reload") .. ".")
 
     if AnySuppressed(FRAME_SKINS) then
-        card:AddNote("Grayed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+        card:AddNote("Grayed windows are already skinned by " .. KE:Gold("EllesmereUI") .. ". Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
     for _, entry in ipairs(FRAME_SKINS) do
         local blocker, why = BlockedBy(entry)
@@ -586,7 +586,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
         if needsReload then KE:FlagReloadNeeded() end
     end)
 
-    card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
+    card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a " .. KE:Gold("/reload") .. ".")
     BuildSoloRows(card, ADDON_SKINS, db.Skins)
     BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
     return card:GetNextOffset()
@@ -834,22 +834,22 @@ end, {
         -- Picker stands down under ElvUI too and says so on its own card, so a
         -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-            card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning,|r so KitnEssentials leaves those windows alone. Your settings are kept and apply again if you turn ElvUI off.")
+            card:AddNote(KE:Gold("ElvUI") .. " is handling Blizzard frame skinning, so KitnEssentials leaves those windows alone. Your settings are kept and apply again if you turn ElvUI off.")
         elseif KE.Skins and KE.Skins.PadStandDown and KE.Skins.PadStandDown() then
-            card:AddNote("|cffffd100The Gamepad interface style is on.|r KitnEssentials leaves Blizzard's windows, fonts and menus unskinned in that style, so the controller's own navigation keeps working. Your settings are kept and apply after a /reload in the mouse and keyboard style.")
+            card:AddNote("The Gamepad interface style is on. KitnEssentials leaves Blizzard's windows, fonts and menus unskinned in that style, so the controller's own navigation keeps working. Your settings are kept and apply after a " .. KE:Gold("/reload") .. " in the mouse and keyboard style.")
         elseif GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesElements"] then
-            card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
-                "windows and drops out of the tab row while this is off. Fonts and Elements have " ..
-                "their own switches and keep working with this off. The Skinned Windows size and " ..
-                "outline only show in skinned windows; its font face is also the one Blizzard Text " ..
-                "uses. Changes apply after a /reload.")
+            card:AddLabel("Skins Blizzard's windows to match the theme. The " .. KE:Gold("Frame Skins") .. " tab picks the " ..
+                "windows and drops out of the tab row while this is off. " .. KE:Gold("Fonts") .. " and " .. KE:Gold("Elements") .. " have " ..
+                "their own switches and keep working with this off. The " .. KE:Gold("Skinned Windows") .. " size and " ..
+                "outline only show in skinned windows; its font face is also the one " .. KE:Gold("Blizzard Text") .. " " ..
+                "uses. Changes apply after a " .. KE:Gold("/reload") .. ".")
         else
             -- Elements is unregistered only where the client withholds it, and
             -- Blizzard Text with it, so the label names neither.
-            card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
-                "windows and drops out of the tab row while this is off. Fonts keeps working with " ..
-                "this off. The Skinned Windows size and outline only show in skinned windows. " ..
-                "Changes apply after a /reload.")
+            card:AddLabel("Skins Blizzard's windows to match the theme. The " .. KE:Gold("Frame Skins") .. " tab picks the " ..
+                "windows and drops out of the tab row while this is off. " .. KE:Gold("Fonts") .. " keeps working with " ..
+                "this off. The " .. KE:Gold("Skinned Windows") .. " size and outline only show in skinned windows. " ..
+                "Changes apply after a " .. KE:Gold("/reload") .. ".")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own

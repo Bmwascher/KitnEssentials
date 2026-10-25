@@ -36,7 +36,7 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
         "\n\nIn a raid the panel also offers group arrangement, a check for who is missing a Vantus " ..
         "Rune, and a strip of raid buff icons that dims the ones nobody brings. None of that " ..
         "applies in a party, so the panel drops those rows and shrinks. Shared Notes and Personal " ..
-        "Notes appear when |cffffd100Northern Sky Raid Tools|r is installed." ..
+        "Notes appear when " .. KE:Gold("Northern Sky Raid Tools") .. " is installed." ..
         "\n\nThis replaces the Blizzard Raid Manager tab. Reload the UI after turning it off to get " ..
         "that tab back.")
 

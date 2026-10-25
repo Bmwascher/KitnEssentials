@@ -165,7 +165,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         if historyDb then
             local historyStub = GUIFrame:CreateCard(scrollChild, "Chat History", yOffset)
             historyStub:AddHeaderToggle(historyDb.Enabled == true, OnHistoryToggled)
-            historyStub:AddNote("Needs the chat skin: switch on Chat at the top of this page. Nothing is saved while it is off.")
+            historyStub:AddNote("Needs the chat skin: switch on " .. KE:Gold("Chat") .. " at the top of this page. Nothing is saved while it is off.")
             yOffset = historyStub:GetNextOffset()
         end
         return yOffset
