@@ -252,6 +252,95 @@ function Rules.SplitExternalsLimit(total, showBig)
     }
 end
 
+-- The one meaning of "the split is on". With Hide Self Cast on, your own
+-- casts are already hidden, so there is nothing to move into their own block.
+function Rules.IsOwnNameSplit(settings)
+    settings = settings or {}
+    return settings.ShowCasterName == true
+        and settings.HideOwnCasterName == true
+        and settings.HideSelfCast ~= true
+end
+
+-- A filter-string token, not the isFromPlayerOrPlayerPet candidate flag: that
+-- flag is true for any player's cast, so it cannot tell yours from a
+-- teammate's. PLAYER covers you, your pet and your vehicle.
+Rules.OWN_FILTER = "HELPFUL|PLAYER"
+
+function Rules.OthersFilterString(settings, honorHideSelfCast)
+    settings = settings or {}
+    if Rules.IsOwnNameSplit(settings)
+        or (honorHideSelfCast and settings.HideSelfCast == true) then
+        return "HELPFUL|!PLAYER"
+    end
+    return "HELPFUL"
+end
+
+-- Divided for the same reason as SplitExternalsLimit. The odd slot goes to
+-- the block the display exists for, which the caller names.
+function Rules.SplitOwnCastLimit(budget, split, ownPrimary)
+    budget = tonumber(budget) or 0
+    if budget < 0 then budget = 0 end
+
+    if not split then
+        return { others = budget, own = 0 }
+    end
+
+    local major, minor = math_ceil(budget / 2), math_floor(budget / 2)
+    if ownPrimary then
+        return { others = minor, own = major }
+    end
+    return { others = major, own = minor }
+end
+
+-- Others' externals keep the odd slot: they are what the display is for.
+function Rules.SplitExternalsOwnLimit(total, showBig, splitOwn)
+    local base = Rules.SplitExternalsLimit(total, showBig)
+    local own  = Rules.SplitOwnCastLimit(base.external, splitOwn, false)
+    return { external = own.others, externalOwn = own.own, big = base.big }
+end
+
+-- Unset follows the count size, the size the name always had.
+function Rules.CasterFontSize(settings)
+    return settings.CasterFontSize or settings.FontSize
+end
+
+-- 0 or unset follows the icon, the width the name always had. The text lines
+-- up against the side of the icon it is anchored to.
+function Rules.ResolveCasterLayout(settings)
+    settings = settings or {}
+    local width = tonumber(settings.CasterWidth)
+    if not width or width <= 0 then
+        width = settings.IconSize or 0
+    end
+
+    local pos = settings.CasterPosition
+    local point = type(pos) == "table" and pos.AnchorFrom or nil
+    local justify = "CENTER"
+    if type(point) == "string" then
+        if point:find("LEFT", 1, true) then
+            justify = "LEFT"
+        elseif point:find("RIGHT", 1, true) then
+            justify = "RIGHT"
+        end
+    end
+
+    return width, justify
+end
+
+-- The name attaches by the point opposite the one picked on the icon, so
+-- BOTTOM puts it under the icon.
+Rules.CASTER_OPPOSITE_POINT = {
+    TOPLEFT     = "BOTTOMRIGHT",
+    TOP         = "BOTTOM",
+    TOPRIGHT    = "BOTTOMLEFT",
+    LEFT        = "RIGHT",
+    CENTER      = "CENTER",
+    RIGHT       = "LEFT",
+    BOTTOMLEFT  = "TOPRIGHT",
+    BOTTOM      = "TOP",
+    BOTTOMRIGHT = "TOPLEFT",
+}
+
 -- One timing rule for every display. Both halves come from the same source
 -- so the phase and the duration cannot drift apart.
 function Rules.PreviewTiming(index)
@@ -263,8 +352,8 @@ end
 -- The mixed preview is BLOCKED, not alternating, and reserves capacity the
 -- same way the live display does. A preview that filled every slot with
 -- externals would show a fuller display than the user actually gets.
-function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig)
-    local split   = Rules.SplitExternalsLimit(total, showBig)
+function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig, splitOwn)
+    local split   = Rules.SplitExternalsOwnLimit(total, showBig, splitOwn)
     local entries = {}
 
     -- Each source cycles from ITS OWN start. Indexing by the running entry
@@ -283,8 +372,9 @@ function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig)
         end
     end
 
-    append(icons,    split.external, "external")
-    append(iconsBig, split.big,      "big")
+    append(icons,    split.external,    "external")
+    append(icons,    split.externalOwn, "externalOwn")
+    append(iconsBig, split.big,         "big")
 
     return entries
 end

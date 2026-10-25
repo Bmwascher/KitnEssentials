@@ -481,3 +481,86 @@ describe("first include spell id", function()
         assert.is_nil(R.FirstIncludeSpellID(nil))
     end)
 end)
+
+describe("own-name split switch", function()
+    it("is on only with the name shown, own names hidden and own casts kept", function()
+        local R = L.loadAuraRules()
+        local rows = {
+            { s = { ShowCasterName = true, HideOwnCasterName = true }, want = true },
+            { s = { ShowCasterName = false, HideOwnCasterName = true }, want = false },
+            { s = { ShowCasterName = true, HideOwnCasterName = false }, want = false },
+            { s = { ShowCasterName = true, HideOwnCasterName = true, HideSelfCast = true }, want = false },
+        }
+        for i, row in ipairs(rows) do
+            assert.equals(row.want, R.IsOwnNameSplit(row.s), "row " .. i)
+        end
+    end)
+end)
+
+describe("others' group filter string", function()
+    it("drops your own casts while split, or with Hide Self Cast where honored", function()
+        local R = L.loadAuraRules()
+        local split = { ShowCasterName = true, HideOwnCasterName = true }
+        local hide = { HideSelfCast = true }
+        local rows = {
+            { s = {}, honor = true, want = "HELPFUL" },
+            { s = split, want = "HELPFUL|!PLAYER" },
+            { s = hide, honor = true, want = "HELPFUL|!PLAYER" },
+            { s = hide, want = "HELPFUL" },
+        }
+        for i, row in ipairs(rows) do
+            assert.equals(row.want, R.OthersFilterString(row.s, row.honor), "row " .. i)
+        end
+    end)
+end)
+
+describe("own-cast icon limit split", function()
+    it("halves the budget only while split, the odd slot to the primary block", function()
+        local R = L.loadAuraRules()
+        local rows = {
+            { budget = 5, split = false, ownPrimary = false, want = { others = 5, own = 0 } },
+            { budget = 6, split = true, ownPrimary = false, want = { others = 3, own = 3 } },
+            { budget = 3, split = true, ownPrimary = false, want = { others = 2, own = 1 } },
+            { budget = 3, split = true, ownPrimary = true, want = { others = 1, own = 2 } },
+            { budget = 1, split = true, ownPrimary = false, want = { others = 1, own = 0 } },
+            { budget = 0, split = true, ownPrimary = true, want = { others = 0, own = 0 } },
+            { budget = -2, split = true, ownPrimary = false, want = { others = 0, own = 0 } },
+            { split = true, ownPrimary = false, want = { others = 0, own = 0 } },
+        }
+        for i, row in ipairs(rows) do
+            assert.same(row.want, R.SplitOwnCastLimit(row.budget, row.split, row.ownPrimary), "row " .. i)
+        end
+    end)
+end)
+
+describe("caster name width and justification", function()
+    it("follows the icon at 0 and lines the text up against its anchored side", function()
+        local R = L.loadAuraRules()
+        local rows = {
+            { s = { IconSize = 52, CasterWidth = 0 }, width = 52, justify = "CENTER" },
+            { s = { IconSize = 52 }, width = 52, justify = "CENTER" },
+            { s = { IconSize = 52, CasterWidth = -4 }, width = 52, justify = "CENTER" },
+            { s = { IconSize = 52, CasterWidth = 90, CasterPosition = { AnchorFrom = "TOP" } },
+              width = 90, justify = "CENTER" },
+            { s = { IconSize = 52, CasterPosition = { AnchorFrom = "RIGHT" } }, width = 52, justify = "RIGHT" },
+            { s = { IconSize = 52, CasterPosition = { AnchorFrom = "BOTTOMLEFT" } }, width = 52, justify = "LEFT" },
+        }
+        for i, row in ipairs(rows) do
+            local width, justify = R.ResolveCasterLayout(row.s)
+            assert.equals(row.width, width, "row " .. i)
+            assert.equals(row.justify, justify, "row " .. i)
+        end
+    end)
+end)
+
+describe("Externals preview with own casts split out", function()
+    it("yields others', own and big blocks, the own block from its own first icon", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview({ 1, 2, 3 }, { 7, 8, 9 }, 6, true, true)
+        local keys = {}
+        for i, e in ipairs(entries) do keys[i] = e.groupKey end
+        assert.same({ "external", "external", "externalOwn", "big", "big", "big" }, keys)
+        assert.equals(1, entries[3].icon)
+    end)
+end)
+
