@@ -25,6 +25,7 @@
 --   * The Voidcore quest guard on the general quest handler.
 --   * Hide Zone Text's event bookkeeping, which gives back only what it took.
 --   * The retail-only features, refused where their ids are withheld.
+--   * The Group Finder hook guard, which waits for its target.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -53,6 +54,7 @@ local function newFixture(opts)
     local ledger = {}
     local timers = {}
     local hookedGlobals = {}
+    local hookCounts = {}
     local hookedMethods = {}
     local named = {}
     local cvarSets = {}
@@ -100,6 +102,7 @@ local function newFixture(opts)
     _G.hooksecurefunc = function(a, b, c)
         if type(a) == "string" then
             hookedGlobals[a] = b
+            hookCounts[a] = (hookCounts[a] or 0) + 1
         else
             hookedMethods[a] = hookedMethods[a] or {}
             hookedMethods[a][b] = c
@@ -150,6 +153,11 @@ local function newFixture(opts)
     _G.LFGListApplicationDialog.SignUpButton = newSpy("LFGListSignUpButton")
     _G.LFGListApplicationDialog.SignUpButton.IsEnabled = function() return true end
     _G.LFGListApplicationDialog.SignUpButton.Click = function() record("LFGListSignUpButton", "Click") end
+
+    -- The two Blizzard functions the Group Finder hooks target. Present by
+    -- default, as on retail; a case removes one to stand for a client without it.
+    _G.LFGListSearchEntry_OnClick = function() end
+    _G.LFGListSearchPanel_SelectResult = function() end
 
     -- The role check popup, its three role buttons and Accept. Each role
     -- button carries a checkButton spy because the handler indexes it.
@@ -270,7 +278,7 @@ local function newFixture(opts)
     return {
         AU = AU, KE = KE,
         ledger = ledger, timers = timers,
-        hookedGlobals = hookedGlobals, hookedMethods = hookedMethods,
+        hookedGlobals = hookedGlobals, hookedMethods = hookedMethods, hookCounts = hookCounts,
         named = named, cvarSets = cvarSets,
         setSecrets = function(t) _G.C_Secrets = t end,
         setCombat = function(v) combat = v end,
@@ -2028,6 +2036,55 @@ describe("Automation retail-only features", function()
                     assert.equals(load.want, got, row.id .. " " .. load.name .. ": " .. what)
                 end
             end
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The Group Finder hooks. A missing target installs nothing and leaves the
+-- latch open, so a later apply hooks it once it exists, and never twice.
+---------------------------------------------------------------------------------
+describe("Automation Group Finder hook guard", function()
+    it("installs nothing while its target is absent, once when it appears, and never twice", function()
+        local function globalHook(name)
+            return {
+                remove = function() _G[name] = nil end,
+                restore = function() _G[name] = function() end end,
+                count = function(fx) return fx.hookCounts[name] or 0 end,
+            }
+        end
+        local dialogHook = {
+            remove = function(fx)
+                local dialog = _G.LFGListApplicationDialog
+                local hookScript = dialog.HookScript
+                fx.dialogHooks = 0
+                dialog.HookScript = function(frame, script, fn)
+                    if script == "OnShow" then fx.dialogHooks = fx.dialogHooks + 1 end
+                    return hookScript(frame, script, fn)
+                end
+                fx.heldDialog = dialog
+                _G.LFGListApplicationDialog = nil
+            end,
+            restore = function(fx) _G.LFGListApplicationDialog = fx.heldDialog end,
+            count = function(fx) return fx.dialogHooks end,
+        }
+        for _, row in ipairs({
+            { name = "search-entry hook",  flags = { AutoQueueConfirm = true },  hook = globalHook("LFGListSearchEntry_OnClick") },
+            { name = "select-result hook", flags = { PersistSignupNote = true }, hook = globalHook("LFGListSearchPanel_SelectResult") },
+            { name = "dialog OnShow hook", flags = { AutoQueueConfirm = true },  hook = dialogHook },
+        }) do
+            local fx = newFixture()
+            local AU = fx.AU
+            AU.db = { Enabled = true }
+            for key, value in pairs(row.flags) do AU.db[key] = value end
+            row.hook.remove(fx)
+            AU:ApplySettings()
+            assert.equals(0, row.hook.count(fx), row.name .. ": target absent")
+            row.hook.restore(fx)
+            AU:ApplySettings()
+            assert.equals(1, row.hook.count(fx), row.name .. ": target present")
+            AU:ApplySettings()
+            assert.equals(1, row.hook.count(fx), row.name .. ": a later apply")
         end
     end)
 end)

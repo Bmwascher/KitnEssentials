@@ -1259,12 +1259,8 @@ end
 
 local function SetupAutoQueueConfirm()
     if not Admitted("AutomationGroupFinder") then return end
-    if AU._lfgHooked then return end
-    AU._lfgHooked = true
 
-    -- Installed above the dialog guard: the two hooks are independent, and a
-    -- missing dialog global must not take the double click down with it.
-    hooksecurefunc("LFGListSearchEntry_OnClick", function(entry, button)
+    local function OnSearchEntryClick(entry, button)
         if not AU.db or not AU.db.Enabled then return end
         if button == "RightButton" then return end
         if not entry then return end
@@ -1296,10 +1292,18 @@ local function SetupAutoQueueConfirm()
 
         LFGListSearchPanel_SignUp(panel)
         lastClickEntry, lastClickTime = nil, 0
-    end)
+    end
+
+    -- Each hook latches only once installed, and the two latch apart: hooking
+    -- a missing global throws, and a target missing now is hooked by a later
+    -- apply.
+    if not AU._lfgHooked and type(_G.LFGListSearchEntry_OnClick) == "function" then
+        hooksecurefunc("LFGListSearchEntry_OnClick", OnSearchEntryClick)
+        AU._lfgHooked = true
+    end
 
     local dialog = LFGListApplicationDialog
-    if not dialog then return end
+    if AU._lfgDialogHooked or not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.AutoQueueConfirm then return end
@@ -1309,6 +1313,7 @@ local function SetupAutoQueueConfirm()
             confirmBtn:Click()
         end
     end)
+    AU._lfgDialogHooked = true
 end
 
 -- Persistent Signup Note --
@@ -1391,13 +1396,13 @@ end
 
 local function SetupPersistSignupNote()
     if not Admitted("AutomationGroupFinder") then return end
-    if not AU._noteHooked then
-        AU._noteHooked = true
+    if not AU._noteHooked and type(_G.LFGListSearchPanel_SelectResult) == "function" then
         hooksecurefunc("LFGListSearchPanel_SelectResult", function(_, resultID)
             if not AU.db or not AU.db.Enabled then return end
             if not AU.db.PersistSignupNote then return end
             PlantActivityID(resultID)
         end)
+        AU._noteHooked = true
     end
 
     local on = AU.db.Enabled and AU.db.PersistSignupNote
