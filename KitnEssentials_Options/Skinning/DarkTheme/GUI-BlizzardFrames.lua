@@ -187,7 +187,6 @@ local ADDON_SKINS = {
     { key = "BetterFriendlist",   text = "Better Friendlist",    addon = "BetterFriendlist" },
     { key = "BigWigs",            text = "BigWigs",              addon = "BigWigs" },
     { key = "BugSack",            text = "BugSack",              addon = "BugSack" },
-    { key = "MythicDungeonTools", text = "Mythic Dungeon Tools", addon = "MythicDungeonTools" },
     { key = "RCLootCouncil",      text = "RCLootCouncil",        addon = "RCLootCouncil" },
     { key = "SimpleAddonManager", text = "Simple Addon Manager", addon = "SimpleAddonManager" },
     { key = "Simulationcraft",    text = "SimulationCraft",      addon = "Simulationcraft" },
@@ -211,9 +210,9 @@ local function SetEntry(entry, skins, checked)
 end
 
 -- Frame Skins takes three columns; Addon Skins takes two. Their labels are
--- longer ("Mythic Dungeon Tools (not installed)" is 36 characters against the
--- roughly 29 a third of the content width holds) and the list is only ten
--- rows, so squeezing it costs readability and buys nothing.
+-- longer ("Simple Addon Manager (not installed)" is 36 characters against the
+-- roughly 29 a third of the content width holds) and the list is short, so
+-- squeezing it costs readability and buys nothing.
 local FRAME_PER_ROW = 3
 local ADDON_PER_ROW = 2
 local CELL_H = 24

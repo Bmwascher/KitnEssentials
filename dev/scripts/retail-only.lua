@@ -55,7 +55,6 @@ return {
     "Modules/QoL/HousingDashboardFix.lua",
     "Modules/QoL/QualityOfLife/GreatVaultAlert.lua",
     "Modules/QoL/QualityOfLife/GreatVaultCover.lua",
-    "Modules/Skinning/DarkTheme/Addons/MythicDungeonTools.lua",
     "Modules/Skinning/DarkTheme/Frames/AdventureMap.lua",
     "Modules/Skinning/DarkTheme/Frames/Archaeology.lua",
     "Modules/Skinning/DarkTheme/Frames/Delves.lua",

@@ -682,8 +682,6 @@ function S.AceFixPullout(dropdown)
     Relevel(p)
 end
 
-S.AceWidgetSkinners = S.AceWidgetSkinners or {}
-
 local function SkinPulloutFrame(pf)
     if not pf or S.data(pf).keBackdropLocked then return end
     S.data(pf).keBackdropLocked = true
@@ -777,7 +775,6 @@ local function WrapRegisterAsWidget(orig)
     return function(self, widget)
         local r = orig(self, widget)
         pcall(SkinWidget, widget)
-        for i = 1, #S.AceWidgetSkinners do pcall(S.AceWidgetSkinners[i], widget) end
         if widget and widget.frame then pcall(LevelLock, widget.frame, widget) end
         return r
     end
