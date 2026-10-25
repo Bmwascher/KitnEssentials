@@ -1105,6 +1105,45 @@ local function ModernPass(frame)
     KeepKitnClose(nil, frame.CloseButton)
 end
 
+-- KE draws its own Legacy portrait icon when the addon made none. The addon's
+-- dark theme draws a separate icon and toggles it from several places, so KE's
+-- follows that texture's own Show and Hide: exactly one of the two shows.
+local function SyncKeIcon(pb)
+    local ke = S.data(pb).keIcon
+    if not ke then return end
+    local dark = pb.BFL_DarkPortraitIcon
+    ke:SetShown(not (dark and dark:IsShown()))
+end
+
+local function FollowDarkIcon(pb)
+    if not pb then return end
+    local dark = pb.BFL_DarkPortraitIcon
+    if dark and not S.data(dark).keFollowed then
+        S.data(dark).keFollowed = true
+        local function Sync() SyncKeIcon(pb) end
+        hooksecurefunc(dark, "Show", Sync)
+        hooksecurefunc(dark, "Hide", Sync)
+        hooksecurefunc(dark, "SetShown", Sync)
+    end
+    SyncKeIcon(pb)
+end
+
+local function FollowPortrait()
+    local frame = _G.BetterFriendsFrame
+    FollowDarkIcon(frame and frame.PortraitButton)
+end
+
+-- The addon re-anchors raid slot backgrounds on every layout pass. KE's inset
+-- follows each of its SetPoint calls, so KE's placement is the last one; a
+-- method lock would also swallow KE's own refit when the border changes.
+local function ReinsetSlotBackground(tex)
+    local d = S.data(tex)
+    if d.keInsetting then return end
+    d.keInsetting = true
+    S.InsetToEdge(tex, d.keInsetTo)
+    d.keInsetting = nil
+end
+
 local function ReStrip()
     local frame = _G.BetterFriendsFrame
     if frame then
@@ -1121,6 +1160,7 @@ local function ReStrip()
             end
             CenterBattlenetRow(bnet)
         end
+        FollowDarkIcon(frame.PortraitButton)
 
         local ins = frame.Inset
 
@@ -1153,22 +1193,23 @@ local function Skin()
             pb:SetSize(26, 26)
             pb:SetFrameLevel(frame:GetFrameLevel() + 5)
             local bd = S.Backdrop(pb, 0)
-            if not pb.Icon then
-                pb.Icon = pb:CreateTexture(nil, "ARTWORK")
-                pb.Icon:SetTexture("Interface\\AddOns\\BetterFriendlist\\Textures\\PortraitIcon")
+            -- Kept off the addon's Icon field: its dark theme hides whatever
+            -- sits there.
+            local icon = pb.Icon or S.data(pb).keIcon
+            if not icon then
+                icon = pb:CreateTexture(nil, "ARTWORK")
+                icon:SetTexture("Interface\\AddOns\\BetterFriendlist\\Textures\\PortraitIcon")
+                S.data(pb).keIcon = icon
             end
-            pb.Icon:ClearAllPoints()
-            pb.Icon:SetPoint("TOPLEFT", pb, "TOPLEFT", 1, -1)
-            pb.Icon:SetPoint("BOTTOMRIGHT", pb, "BOTTOMRIGHT", -1, 1)
-            pb.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            pb.Icon:Show()
+            S.InsetToEdge(icon, bd or pb)
+            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            icon:Show()
             if pb.Glow then
-                pb.Glow:ClearAllPoints()
-                pb.Glow:SetPoint("TOPLEFT", pb, "TOPLEFT", 1, -1)
-                pb.Glow:SetPoint("BOTTOMRIGHT", pb, "BOTTOMRIGHT", -1, 1)
+                S.InsetToEdge(pb.Glow, bd or pb)
                 pb.Glow:SetDrawLayer("OVERLAY")
             end
             S.Hover(pb, bd)
+            FollowDarkIcon(pb)
         end
 
         -- The seam is the anchor offset plus four: S.Tab draws its backdrop through
@@ -1318,11 +1359,9 @@ local function Skin()
                                 bgTex:SetTexCoord(0, 1, 0, 1)
                                 bgTex:SetVertexColor(S.palette.control[1], S.palette.control[2], S.palette.control[3])
 
-                                bgTex:ClearAllPoints()
-                                bgTex:SetPoint("TOPLEFT", bd or slot, "TOPLEFT", 1, -1)
-                                bgTex:SetPoint("BOTTOMRIGHT", bd or slot, "BOTTOMRIGHT", -1, 1)
-                                bgTex.ClearAllPoints = NOOP
-                                bgTex.SetPoint = NOOP
+                                S.data(bgTex).keInsetTo = bd or slot
+                                ReinsetSlotBackground(bgTex)
+                                hooksecurefunc(bgTex, "SetPoint", ReinsetSlotBackground)
                             end
                         end
                     end
@@ -1374,7 +1413,7 @@ local function Skin()
 
     HookBFLTooltip()
     if not tooltipHooked and _G.C_Timer then
-        _G.C_Timer.After(0, HookBFLTooltip) -- was 2s
+        _G.C_Timer.After(0, HookBFLTooltip)
     end
     FontFriendsTooltip()
     if not S.data(frame).fttShowHook and frame.HookScript then
@@ -1524,6 +1563,12 @@ local function Skin()
         local DT = BFLNS:GetModule("DarkTheme")
         if DT and type(DT.Remove) == "function" then
             hooksecurefunc(DT, "Remove", DeferredReStrip)
+        end
+        -- The addon also shows or hides its portrait outside a theme pass.
+        if type(BFLNS.UpdatePortraitVisibility) == "function" then
+            hooksecurefunc(BFLNS, "UpdatePortraitVisibility", function()
+                _G.C_Timer.After(0, FollowPortrait)
+            end)
         end
 
         DeferredReStrip()
