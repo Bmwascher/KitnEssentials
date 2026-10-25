@@ -642,3 +642,21 @@ describe("KickTracker plate return", function()
         end
     end)
 end)
+
+describe("KickTracker dungeon visit", function()
+    it("goes on in the same instance, starts anew in another or without a zone-in time, and ends outside", function()
+        local KT = L.loadKickTrackerRules()
+        -- fi, fa: the visit before (instance, zone-in time); inst, now: the instance and time at the change
+        local rows = {
+            { name = "outside a party instance: the visit ends", fi = 1, fa = 100, inst = nil, now = 200 },
+            { name = "the same instance: the visit goes on", fi = 1, fa = 100, inst = 1, now = 200, wi = 1, wa = 100 },
+            { name = "another instance: a new visit from now", fi = 1, fa = 100, inst = 2, now = 200, wi = 2, wa = 200 },
+            { name = "the same instance with no zone-in time: a new visit", fi = 1, inst = 1, now = 200, wi = 1, wa = 200 },
+        }
+        for _, row in ipairs(rows) do
+            local inst, at = KT.VisitAfter(row.fi, row.fa, row.inst, row.now)
+            assert.equals(row.wi, inst, row.name)
+            assert.equals(row.wa, at, row.name)
+        end
+    end)
+end)

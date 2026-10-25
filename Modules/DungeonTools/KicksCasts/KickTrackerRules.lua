@@ -564,3 +564,14 @@ function KT.PlateReturns(waitGuid, plateGuid, waitTarget, isTarget)
     return waitTarget == true and isTarget == true
 end
 
+-- The dungeon visit after a zone change, from the visit before it (fromInst,
+-- fromAt: its party instance and zone-in time) and the party instance read
+-- at the change (inst, nil outside one). The same instance goes on with its
+-- time; anything else starts a visit at now. A map ID names the dungeon, not
+-- one run of it, so the zone-in time tells two visits to it apart.
+function KT.VisitAfter(fromInst, fromAt, inst, now)
+    if inst == nil then return nil, nil end
+    if inst == fromInst and fromAt ~= nil then return fromInst, fromAt end
+    return inst, now
+end
+
