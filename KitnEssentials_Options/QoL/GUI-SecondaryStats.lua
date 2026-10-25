@@ -70,48 +70,6 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
-        db = db,
-        dbKeys = {
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 32 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
     -- Card 4: Stats to Show
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Stats to Show", yOffset)
@@ -293,6 +251,62 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card 7: Enable per Specialization
+    ----------------------------------------------------------------
+    local specCard, specOffset = GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, {
+        db = db,
+        scope = "SecondaryStats",
+        note = "Untick a specialization to stop the readout there. It stops reading stats on that spec, not just hiding. Specs you never touch stay on.",
+        onChange = function()
+            if SS and SS.ApplySpecGate then SS:ApplySpecGate() end
+        end,
+    })
+    manager:Register(specCard, "all")
+    yOffset = specOffset
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = db,
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 3: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 32 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
     -- Card 6: Colors
     ----------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
@@ -360,20 +374,6 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     card6:AddRow(row6c, Theme.rowHeightLast, 0)
 
     yOffset = card6:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 7: Enable per Specialization
-    ----------------------------------------------------------------
-    local specCard, specOffset = GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, {
-        db = db,
-        scope = "SecondaryStats",
-        note = "Untick a specialization to stop the readout there. It stops reading stats on that spec, not just hiding. Specs you never touch stay on.",
-        onChange = function()
-            if SS and SS.ApplySpecGate then SS:ApplySpecGate() end
-        end,
-    })
-    manager:Register(specCard, "all")
-    yOffset = specOffset
 
     RefreshStates()
     return yOffset

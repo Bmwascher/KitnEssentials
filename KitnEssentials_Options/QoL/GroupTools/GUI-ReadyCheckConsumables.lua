@@ -70,6 +70,43 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
+    -- Card 3: Visible Consumables
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Visible Consumables", yOffset)
+    manager:Register(card3, "all")
+
+    local function ConsumablePick(label, key, tooltip)
+        return {
+            label = label,
+            config = {
+                value = db[key] ~= false,
+                callback = function(checked) db[key] = checked; ApplySettings() end,
+                tooltip = tooltip,
+            },
+        }
+    end
+
+    local consumables = {
+        ConsumablePick("Food", "ShowFood"),
+        ConsumablePick("Flask", "ShowFlask"),
+        ConsumablePick("Augment Rune", "ShowAugmentRune"),
+        ConsumablePick("Weapon Enchant (MH)", "ShowWeaponOil"),
+        ConsumablePick("Weapon Enchant (OH)", "ShowOffHandOil"),
+        ConsumablePick("Healthstone", "ShowHealthstone", "Needs a Warlock in your group."),
+    }
+    if playerClass == "WARLOCK" or playerClass == "SHAMAN" then
+        consumables[#consumables + 1] = ConsumablePick(
+            playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", "ShowClassItem")
+    end
+    if playerClass == "SHAMAN" or playerClass == "PALADIN" then
+        consumables[#consumables + 1] = ConsumablePick(
+            playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", "ClassChecks")
+    end
+    manager:RegisterGroup(card3:AddCheckboxGrid(consumables, { isLast = true }), "all")
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Display Settings
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -175,43 +212,6 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     card2:AddRow(row2e, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 3: Visible Consumables
-    ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Visible Consumables", yOffset)
-    manager:Register(card3, "all")
-
-    local function ConsumablePick(label, key, tooltip)
-        return {
-            label = label,
-            config = {
-                value = db[key] ~= false,
-                callback = function(checked) db[key] = checked; ApplySettings() end,
-                tooltip = tooltip,
-            },
-        }
-    end
-
-    local consumables = {
-        ConsumablePick("Food", "ShowFood"),
-        ConsumablePick("Flask", "ShowFlask"),
-        ConsumablePick("Augment Rune", "ShowAugmentRune"),
-        ConsumablePick("Weapon Enchant (MH)", "ShowWeaponOil"),
-        ConsumablePick("Weapon Enchant (OH)", "ShowOffHandOil"),
-        ConsumablePick("Healthstone", "ShowHealthstone", "Needs a Warlock in your group."),
-    }
-    if playerClass == "WARLOCK" or playerClass == "SHAMAN" then
-        consumables[#consumables + 1] = ConsumablePick(
-            playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", "ShowClassItem")
-    end
-    if playerClass == "SHAMAN" or playerClass == "PALADIN" then
-        consumables[#consumables + 1] = ConsumablePick(
-            playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", "ClassChecks")
-    end
-    manager:RegisterGroup(card3:AddCheckboxGrid(consumables, { isLast = true }), "all")
-
-    yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 4: Position Settings (custom auto/custom mode — manual)
