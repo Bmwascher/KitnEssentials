@@ -463,13 +463,13 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE:Print("slash commands are not loaded.")
         end
     elseif msg == "resetgui" then
+        -- Asked for first; the writes below still run, and persist, before the
+        -- reload happens at the end of this handler.
+        KE:ReloadUI()
         if KE.db and KE.db.global then
-            -- Empty, not nil: where the reload waits on a prompt that can be
-            -- declined, the settings window still reads and saves this state.
             KE.db.global.GUIState = { frame = {} }
             KE.db.global._guiReset = true
         end
-        KE:ReloadUI()
     elseif msg == "trash" then
         -- Diagnostic snapshot of the Dungeon Trash tracker (see DTrash:DumpState).
         local dt = KitnEssentials and KitnEssentials:GetModule("DungeonTrash", true)

@@ -69,7 +69,9 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
     card3:AddLabel(KE:ColorTextByTheme("/kitn essentials") .. "  |cff888888— Open KitnEssentials settings|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn cd") .. "  |cff888888— Toggle Cooldown Manager panel|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn edit") .. "  |cff888888— Toggle KitnEssentials Edit Mode|r")
-    card3:AddLabel(KE:ColorTextByTheme("/kitn pi") .. "  |cff888888— Set PI macro target (mouseover or target)|r")
+    if KE:IsFeatureAvailable("PIMacroBuilder") then
+        card3:AddLabel(KE:ColorTextByTheme("/kitn pi") .. "  |cff888888— Set PI macro target (mouseover or target)|r")
+    end
     card3:AddLabel(KE:ColorTextByTheme("/kitn clearchat") .. "  |cff888888— Clear all chat frames|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn chatbubbles") .. "  |cff888888— Toggle chat bubbles|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn nameplates") .. "  |cff888888— Toggle |cffFF4444enemy|r|cff888888 nameplates|r")

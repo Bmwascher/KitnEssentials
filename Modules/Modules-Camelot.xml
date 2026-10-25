@@ -6,6 +6,7 @@
          (Modules.xml). -->
     <Include file="Core\Diagnostics\Diagnostics.xml" />
     <Script file="AuraTracking\TotemTracker.lua" />
+    <Script file="QoL\QualityOfLife\SpellAlerts.lua" />
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="AuraTracking\AuraExternals.lua" />
     <Script file="AuraTracking\AuraMovement.lua" />
@@ -14,14 +15,20 @@
     <Script file="Core\CVars\CVars.lua" />
     <Script file="Core\Optimize.lua" />
     <Script file="Core\VersionCheck.lua" />
+    <Script file="QoL\QualityOfLife\SlashCommands.lua" />
     <Script file="Skinning\CharacterPanel\CharacterPanel.lua" />
     <Script file="Skinning\CharacterPanel\InspectPanel.lua" />
     <Script file="Core\CVars\PanelScaleRegistry.lua" />
     <Script file="Core\CVars\PanelScale.lua" />
     <Script file="Core\CVars\MapScale.lua" />
+    <Script file="QoL\QualityOfLife\CopyAnything.lua" />
     <Script file="Skinning\DarkTheme\AlertFrames.lua" />
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
+    <Script file="QoL\QualityOfLife\MoveFrames.lua" />
     <Script file="Skinning\DarkTheme\VehicleExit.lua" />
+    <Script file="QoL\SecondaryStats\SecondaryStatsFormat.lua" />
+    <Script file="QoL\SecondaryStats\SecondaryStatsForever.lua" />
+    <Script file="QoL\SecondaryStats\SecondaryStats.lua" />
     <Script file="Skinning\SkinAPI.lua" />
     <Script file="Skinning\DarkTheme\EUIWindows.lua" />
     <Script file="Skinning\DarkTheme\Dialogs.lua" />

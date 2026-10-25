@@ -749,8 +749,7 @@ end
 -- Reload Prompt
 ---------------------------------------------------------------------------------
 -- Its own accept, so ClosePromptIfOwner matches this prompt alone. Made on
--- first use by the shared factory, so the secure reload button covers it
--- where the client refuses addon reloads.
+-- first use by the shared factory, whose click asks for the reload first.
 ---@type fun()?
 local ReloadNow
 

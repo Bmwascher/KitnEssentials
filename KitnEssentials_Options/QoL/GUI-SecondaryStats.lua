@@ -54,8 +54,16 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    card1:AddLabel("Shows your secondary stats (critical strike, haste, mastery, versatility) and " ..
-        "tertiary stats (leech, avoidance, speed) on screen, as a readout you can place and style.")
+    -- The Forever stat catalog; nil on retail, where its file never loads.
+    local FV = KE.SecondaryStatsForever
+    if FV then
+        card1:AddLabel("Shows the character pane stats you pick, from attack power, crit, haste and hit " ..
+            "to spell power, defenses, resistances, regen and movement speed, on screen as a readout " ..
+            "you can place and style.")
+    else
+        card1:AddLabel("Shows your secondary stats (critical strike, haste, mastery, versatility) and " ..
+            "tertiary stats (leech, avoidance, speed) on screen, as a readout you can place and style.")
+    end
 
     yOffset = card1:GetNextOffset()
 
@@ -147,34 +155,59 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
         { key = "custom", text = "Custom" },
     }
 
-    for index = 1, #STAT_KEYS do
-        local key = STAT_KEYS[index]
-        local isLast = index == #STAT_KEYS
-        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(card4.content, rowHeight)
+    if FV then
+        -- A row the player has never touched shows its class default.
+        local classFile = SS and SS:ClassFile()
+        for groupIndex = 1, #FV.groups do
+            local group = FV.groups[groupIndex]
+            card4:AddLabel(group.title)
+            local picks = {}
+            for statIndex = 1, #group.stats do
+                local key = group.stats[statIndex].key
+                picks[statIndex] = {
+                    label = group.stats[statIndex].label,
+                    config = {
+                        value = FV.IsShown(key, db.Stats[key], classFile),
+                        callback = function(checked)
+                            db.Stats[key] = db.Stats[key] or {}
+                            db.Stats[key].Shown = checked
+                            ApplySettings()
+                        end,
+                    },
+                }
+            end
+            manager:RegisterGroup(card4:AddCheckboxGrid(picks, { isLast = groupIndex == #FV.groups }), "all")
+        end
+    else
+        for index = 1, #STAT_KEYS do
+            local key = STAT_KEYS[index]
+            local isLast = index == #STAT_KEYS
+            local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
+            local row = GUIFrame:CreateRow(card4.content, rowHeight)
 
-        local shownCheck = GUIFrame:CreateCheckbox(row, STAT_TEXT[key], {
-            value = db.Stats[key].Shown == true,
-            callback = function(checked)
-                db.Stats[key].Shown = checked
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(shownCheck, 0.5)
-        manager:Register(shownCheck, "all")
+            local shownCheck = GUIFrame:CreateCheckbox(row, STAT_TEXT[key], {
+                value = db.Stats[key].Shown == true,
+                callback = function(checked)
+                    db.Stats[key].Shown = checked
+                    ApplySettings()
+                end,
+            })
+            row:AddWidget(shownCheck, 0.5)
+            manager:Register(shownCheck, "all")
 
-        local modeDropdown = GUIFrame:CreateDropdown(row, "Show As", {
-            options = modeList,
-            value = db.Stats[key].ValueMode or "percent",
-            callback = function(selected)
-                db.Stats[key].ValueMode = selected
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(modeDropdown, 0.5)
-        manager:Register(modeDropdown, "all")
+            local modeDropdown = GUIFrame:CreateDropdown(row, "Show As", {
+                options = modeList,
+                value = db.Stats[key].ValueMode or "percent",
+                callback = function(selected)
+                    db.Stats[key].ValueMode = selected
+                    ApplySettings()
+                end,
+            })
+            row:AddWidget(modeDropdown, 0.5)
+            manager:Register(modeDropdown, "all")
 
-        card4:AddRow(row, rowHeight, isLast and 0 or nil)
+            card4:AddRow(row, rowHeight, isLast and 0 or nil)
+        end
     end
 
     yOffset = card4:GetNextOffset()
@@ -288,28 +321,31 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     manager:Register(customPicker, "all")
     card6:AddRow(row6a, Theme.rowHeight)
 
-    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local tertDropdown = GUIFrame:CreateDropdown(row6b, "Leech / Avoidance / Speed Color", {
-        options = tertiaryModeList,
-        value = db.TertiaryColorMode or "class",
-        callback = function(selected)
-            db.TertiaryColorMode = selected
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(tertDropdown, 0.5)
-    manager:Register(tertDropdown, "all")
+    -- Forever has no tertiary stats.
+    if not FV then
+        local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+        local tertDropdown = GUIFrame:CreateDropdown(row6b, "Leech / Avoidance / Speed Color", {
+            options = tertiaryModeList,
+            value = db.TertiaryColorMode or "class",
+            callback = function(selected)
+                db.TertiaryColorMode = selected
+                ApplySettings()
+            end,
+        })
+        row6b:AddWidget(tertDropdown, 0.5)
+        manager:Register(tertDropdown, "all")
 
-    local tertPicker = GUIFrame:CreateColorPicker(row6b, "Custom Tertiary Color", {
-        color = db.TertiaryColor,
-        callback = function(r, g, b)
-            db.TertiaryColor = { r, g, b }
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(tertPicker, 0.5)
-    manager:Register(tertPicker, "all")
-    card6:AddRow(row6b, Theme.rowHeight)
+        local tertPicker = GUIFrame:CreateColorPicker(row6b, "Custom Tertiary Color", {
+            color = db.TertiaryColor,
+            callback = function(r, g, b)
+                db.TertiaryColor = { r, g, b }
+                ApplySettings()
+            end,
+        })
+        row6b:AddWidget(tertPicker, 0.5)
+        manager:Register(tertPicker, "all")
+        card6:AddRow(row6b, Theme.rowHeight)
+    end
 
     local row6c = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
     local coloredCheck = GUIFrame:CreateCheckbox(row6c, "Color the Numbers Too", {

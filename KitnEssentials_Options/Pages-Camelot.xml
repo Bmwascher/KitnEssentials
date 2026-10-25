@@ -9,10 +9,16 @@
     <Script file="AuraTracking\GUI-AuraMovement.lua" />
     <Script file="Skinning\GUI-DamageMeter.lua" />
     <Script file="AuraTracking\GUI-TotemTracker.lua" />
+    <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
     <Script file="Core\CVars\GUI-CVars.lua" />
     <Script file="Core\CVars\GUI-UIScaling.lua" />
+    <Script file="QoL\QualityOfLife\GUI-SlashCommands.lua" />
     <Script file="Skinning\GUI-CharacterPanel.lua" />
+    <Script file="QoL\QualityOfLife\GUI-CopyAnything.lua" />
     <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
+    <Script file="QoL\QualityOfLife\GUI-MoveFrames.lua" />
+    <Script file="QoL\QualityOfLife\GUI-QualityOfLife.lua" />
+    <Script file="QoL\GUI-SecondaryStats.lua" />
     <Script file="Skinning\GUI-Tooltips.lua" />
     <Script file="Skinning\DarkTheme\GUI-BlizzardMessages.lua" />
     <Script file="Skinning\DarkTheme\GUI-UIWidgets.lua" />

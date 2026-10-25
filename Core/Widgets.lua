@@ -264,83 +264,52 @@ local function ResetPromptKeyboard(dialog)
     dialog:SetPropagateKeyboardInput(true)
 end
 
--- A client can refuse ReloadUI from addon code. There a click on a secure
--- macro button still reloads, so one such button lies over the reload
--- prompt's Reload Now. It is parented to UIParent and lifted off before
--- lockdown: a protected frame anchored to the dialog would stop the dialog
--- moving or hiding in combat.
-local secureReload, reloadTarget
-
-local function AddonReloadAllowed()
-    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable("AddonReload") == true
-end
-
--- A protected frame's attributes and anchors cannot change in lockdown.
----@param isReloadPrompt boolean?
----@param addonReloadAllowed boolean
----@param inLockdown boolean
----@return boolean
-function KE.SecureReloadWanted(isReloadPrompt, addonReloadAllowed, inLockdown)
-    return isReloadPrompt == true and not addonReloadAllowed and not inLockdown
-end
-
-local function ForwardHover(script)
-    return function()
-        local handler = reloadTarget and reloadTarget:GetScript(script)
-        if handler then handler(reloadTarget) end
-    end
-end
-
-local function LiftSecureReload()
-    if not secureReload or InCombatLockdown() then return end
-    secureReload:Hide()
-    secureReload:ClearAllPoints()
-    reloadTarget = nil
-end
-
-local function SyncSecureReload(dialog)
-    local target = dialog and dialog.acceptBtn
-    if not (target and KE.SecureReloadWanted(dialog._isReloadPrompt, AddonReloadAllowed(), InCombatLockdown())) then
-        LiftSecureReload()
-        return
-    end
-    if not secureReload then
-        local button = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
-        if not button then return end
-        button:SetAttribute("type", "macro")
-        button:SetAttribute("macrotext", "/reload")
-        button:RegisterForClicks("AnyUp", "AnyDown")
-        button:SetScript("OnEnter", ForwardHover("OnEnter"))
-        button:SetScript("OnLeave", ForwardHover("OnLeave"))
-        secureReload = button
-    end
-    reloadTarget = target
-    secureReload:SetFrameStrata(target:GetFrameStrata())
-    secureReload:SetFrameLevel(target:GetFrameLevel() + 5)
-    secureReload:ClearAllPoints()
-    secureReload:SetAllPoints(target)
-    secureReload:Show()
-end
-
--- Reload Now's accept. Where addon reloads are refused the secure button takes
--- the click, so this runs there only when combat kept the button off, and it
--- never reopens the prompt.
-local function ReloadAccept()
-    if AddonReloadAllowed() then
-        ReloadUI()
-    else
-        KE:Print("Type /reload to reload the interface.")
-    end
-end
-
--- Accepts KE:NewReloadAccept made. Their prompts get the secure button as
--- ReloadAccept's do, and each owner can still close its own prompt alone.
+-- Accepts KE:NewReloadAccept made. A prompt with one is a reload prompt, and
+-- each owner can still close its own prompt alone. `work` runs in the same
+-- click, after the reload is asked for.
 local madeReloadAccepts = setmetatable({}, { __mode = "k" })
 
-function KE:NewReloadAccept()
-    local accept = function() ReloadAccept() end
+function KE:NewReloadAccept(work)
+    local accept = function()
+        if work then work() end
+    end
     madeReloadAccepts[accept] = true
     return accept
+end
+
+function KE.IsReloadAccept(accept)
+    return accept ~= nil and madeReloadAccepts[accept] == true
+end
+
+-- The shared reload prompt's accept. The click has already asked for the reload.
+local ReloadAccept = KE:NewReloadAccept()
+
+-- The accept click. On a reload prompt the reload is asked for first: a client
+-- can refuse one asked for after the prompt has closed and other work has run.
+-- The reload itself runs when the click's code ends. The close and the reload
+-- are passed in so the order is testable without frames. Branch on the per-call FLAGS,
+-- never on widget existence — the singleton keeps editBox/editBox2 around
+-- across modes. Confirm mode must invoke with ZERO args.
+function KE.RunPromptAccept(dialog, closePrompt, reload)
+    if dialog._isReloadPrompt then reload() end
+    local wasEdit = dialog._showEditBox
+    local wasSecond = dialog._showSecondEditBox
+    local wasTyped = dialog._requireTyped
+    local text1 = dialog.editBox and dialog.editBox:GetText()
+    local text2 = dialog.editBox2 and dialog.editBox2:GetText()
+    local accept = closePrompt(dialog, false)
+    if not accept then return end
+    if wasTyped then
+        accept()
+    elseif wasEdit then
+        if wasSecond then
+            accept(text1, text2)
+        else
+            accept(text1)
+        end
+    else
+        accept()
+    end
 end
 
 -- Closes the singleton prompt. Snapshots and NILS the callback fields
@@ -355,7 +324,6 @@ local function ClosePrompt(dialog, runCancel)
     dialog._onCancel = nil
     dialog._keyedEntry = nil
     dialog:Hide()
-    LiftSecureReload()
     KE.activePrompt = nil
     if #promptQueue > 0 then C_Timer.After(0, OpenQueuedPrompt) end
     if runCancel and onCancel then onCancel() end
@@ -698,28 +666,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         local acceptBtn = CreateThemedButton(buttonContainer, Theme, acceptText or "Accept", true)
         acceptBtn:SetPoint("RIGHT", buttonContainer, "CENTER", -4, 0)
         acceptBtn:SetScript("OnClick", function()
-            local d = KE.promptDialog
-            -- Branch on the per-call FLAGS, never on widget existence — the
-            -- singleton keeps editBox/editBox2 around across modes. Confirm
-            -- mode must invoke with ZERO args.
-            local wasEdit = d._showEditBox
-            local wasSecond = d._showSecondEditBox
-            local wasTyped = d._requireTyped
-            local text1 = d.editBox and d.editBox:GetText()
-            local text2 = d.editBox2 and d.editBox2:GetText()
-            local accept = ClosePrompt(d, false)
-            if not accept then return end
-            if wasTyped then
-                accept()
-            elseif wasEdit then
-                if wasSecond then
-                    accept(text1, text2)
-                else
-                    accept(text1)
-                end
-            else
-                accept()
-            end
+            KE.RunPromptAccept(KE.promptDialog, ClosePrompt, ReloadUI)
         end)
         dialog.acceptBtn = acceptBtn
 
@@ -736,8 +683,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     ------------------------------------------------------------------
     dialog._onAccept = onAccept
     dialog._onCancel = onCancel
-    dialog._isReloadPrompt = onAccept == ReloadAccept
-        or (onAccept ~= nil and madeReloadAccepts[onAccept] == true)
+    dialog._isReloadPrompt = KE.IsReloadAccept(onAccept)
     dialog._keyedEntry = parkKey and entry or nil
     dialog._closeIsNeutral = (opts and opts.closeIsNeutral == true) or false
     dialog._showEditBox = showEditBox and true or false
@@ -996,7 +942,6 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- keeps what it inherited: propagation on (an Escape close restores it the
     -- next frame), or no keyboard at all when the dialog was built in combat.
     ResetPromptKeyboard(dialog)
-    SyncSecureReload(dialog)
 
     dialog:Show()
     KE.activePrompt = dialog
@@ -1029,33 +974,24 @@ function KE:SkinningReloadPrompt(extra)
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect." .. (extra or ""))
 end
 
--- ReloadUI where the client lets addon code call it; elsewhere the reload
--- prompt, whose Reload Now reloads through the secure button.
+-- For a click or keypress only, as its first step. A caller that may run from
+-- an event or a timer opens KE:CreateReloadPrompt instead.
 function KE:ReloadUI()
-    if AddonReloadAllowed() then
-        ReloadUI()
-    else
-        self:CreateReloadPrompt()
-    end
+    ReloadUI()
 end
 
 -- Both combat edges restore the dialog's keyboard, shown or hidden. Entry
 -- catches an Escape close in the frame a fight starts, when it still runs
 -- before lockdown; end arms a dialog built in combat and repairs the rest.
 -- Neither edge disarms: that needs EnableKeyboard(false), which is protected.
--- Entry also lifts the secure reload button, still before lockdown, and end
--- lays it back over an open reload prompt. A prompt that waited through the
--- fight opens at the end.
+-- A prompt that waited through the fight opens at the end.
 local promptCombatWatcher = CreateFrame("Frame")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 promptCombatWatcher:SetScript("OnEvent", function(_, event)
     ResetPromptKeyboard(KE.promptDialog)
     if event == "PLAYER_REGEN_ENABLED" then
-        if KE.activePrompt then SyncSecureReload(KE.activePrompt) end
         OpenQueuedPrompt()
-    else
-        LiftSecureReload()
     end
 end)
 
