@@ -434,17 +434,27 @@ function GUIFrame:CreateMainFrame()
     local closeBtn = CreateFrame("Button", nil, header)
     closeBtn:SetSize(22, 22)
     closeBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
-    closeBtn:SetScript("OnClick", function() GUIFrame:Hide() end)
+    -- The window hides under the mouse, so the tooltip is cleared here rather
+    -- than left to OnLeave.
+    closeBtn:SetScript("OnClick", function(self)
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+        GUIFrame:Hide()
+    end)
     local closeIcon = closeBtn:CreateTexture(nil, "ARTWORK")
     closeIcon:SetAllPoints()
     closeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png")
     closeIcon:SetRotation(math.rad(45))
     closeIcon:SetVertexColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], T.textPrimary[4])
-    closeBtn:SetScript("OnEnter", function()
+    closeBtn:SetScript("OnEnter", function(self)
         closeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        if GameTooltip:IsForbidden() then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Close")
+        GameTooltip:Show()
     end)
-    closeBtn:SetScript("OnLeave", function()
+    closeBtn:SetScript("OnLeave", function(self)
         closeIcon:SetVertexColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], T.textPrimary[4])
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
 
     -- Minimize button: collapses the window to its title bar so in-world
@@ -470,6 +480,7 @@ function GUIFrame:CreateMainFrame()
 
     minimizeBtn:SetScript("OnEnter", function(self)
         minimizeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        if GameTooltip:IsForbidden() then return end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetText(GUIFrame.minimized and "Expand" or "Minimize")
         GameTooltip:Show()
@@ -534,11 +545,16 @@ function GUIFrame:CreateMainFrame()
     homeIcon:SetAllPoints()
     homeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\HomeButtonv2.png")
     homeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-    homeBtn:SetScript("OnEnter", function()
+    homeBtn:SetScript("OnEnter", function(self)
         homeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        if GameTooltip:IsForbidden() then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Home Page")
+        GameTooltip:Show()
     end)
-    homeBtn:SetScript("OnLeave", function()
+    homeBtn:SetScript("OnLeave", function(self)
         homeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
     homeBtn:SetScript("OnClick", function()
         GUIFrame:DropQueuedPage()
