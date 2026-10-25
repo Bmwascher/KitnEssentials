@@ -847,7 +847,7 @@ function EditMode:SetupDragHandlers(overlay)
     local dragParent = nil
     local dragUIScale = 1
 
-    -- Assigned below. Attached at drag start and detached wherever a drag ends
+    -- Attached at drag start and detached wherever a drag ends
     -- (OnDragStop, EditMode:CancelDrag), so an idle box runs no OnUpdate.
     local DragUpdate
 
