@@ -307,9 +307,10 @@ local function HangShort(clip, fill, gate)
 end
 
 -- The count at placing as the value, the latest as the maximum: whole until
--- the count rose.
+-- the count rose. The range starts at -1: a count of 0 at both ends would be
+-- an empty range, which draws no fill and so closes the clip.
 local function FeedWhole(gate, fill, clip, base, cur)
-    gate:SetMinMaxValues(0, cur)
+    gate:SetMinMaxValues(-1, cur)
     gate:SetValue(base)
     HangWhole(clip, fill, gate)
 end
@@ -541,7 +542,7 @@ end
 -- second a pitch, or none once it rose past its value after it. Less two
 -- pitches a cell, the chain is one pitch per cell that shows.
 local function FeedCell(cell, leftward)
-    cell.gate:SetMinMaxValues(0, cell.after)
+    cell.gate:SetMinMaxValues(-1, cell.after)
     cell.gate:SetValue(cell.before)
     HangShort(cell.clip, cell.fill, cell.gate)
     local cur = (cell.cCur ~= nil) and cell.cCur or cell.after
@@ -695,13 +696,9 @@ local function StyleRail(rail)
     LevelRail(rail, rail:GetFrameStrata(), rail:GetFrameLevel())
 end
 
--- The range starts at -1: a kicker with no kicks yet reads 0..0, an empty
--- range that draws no fill and so closes the clip.
 local function RefeedLane(lane)
     if lane.cCur ~= nil then
-        lane.gateB:SetMinMaxValues(-1, lane.cCur)
-        lane.gateB:SetValue(lane.cBase)
-        HangWhole(lane.clipB, lane.fillB, lane.gateB)
+        FeedWhole(lane.gateB, lane.fillB, lane.clipB, lane.cBase, lane.cCur)
     else
         ResetWhole(lane.gateB, lane.fillB, lane.clipB)
     end
@@ -1471,8 +1468,8 @@ function KT:RailsAll()
     for i = 1, MAX_PLATES do self:RailsPlate(PLATE_UNITS[i]) end
 end
 
--- A rail on each hostile plate whose marker index is not plain nil, fed
--- again a frame after it shows.
+-- A rail on each hostile plate whose marker index is not plain nil, styled
+-- and fed again a frame after each layout.
 function KT:RailsPlate(unit)
     local rail = P.rails[unit]
     local index, marked
@@ -1533,7 +1530,7 @@ function KT:ReleaseRail(rail)
         lane.guid, lane.rank, lane.cBase, lane.cCur = nil, nil, nil, nil
         ResetWhole(lane.gateB, lane.fillB, lane.clipB)
     end
-    rail.plate = nil
+    rail.plate, rail.restyled = nil, nil
     rail.seq = rail.seq + 1
     P.free.rail[#P.free.rail + 1] = rail
     if old then self:LayoutPlate(old) end
