@@ -84,9 +84,12 @@ local FOREVER_ALLOWED = {
     MapScale = true,
     VersionCheck = true,
     -- Character Panel: the module, its inspect half, the comparison header
-    -- and the page. Its Mythic+, track, socket, enchant rank, widen and
-    -- window button options stay withheld.
+    -- and the page with its three tabs. Its Mythic+, track, socket, enchant
+    -- rank, widen and window button options stay withheld.
     CharacterPanel = true,
+    CharacterPanelCharacter = true,
+    CharacterPanelInspect = true,
+    CharacterPanelExtras = true,
     InspectPanel = true,
     CompareHeader = true,
     -- Aura Tracking: six displays and their pages. Party Cooldowns stays

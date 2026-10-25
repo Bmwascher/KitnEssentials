@@ -213,6 +213,9 @@ describe("Forever availability: Character pages", function()
     it("admits the Character Panel family, withholds its retail-only options and keeps the new page skins Forever-only", function()
         local rows = {
             { kind = "feature", id = "CharacterPanel", baseline = true, retail = true },
+            { kind = "feature", id = "CharacterPanelCharacter", baseline = true, retail = true },
+            { kind = "feature", id = "CharacterPanelInspect", baseline = true, retail = true },
+            { kind = "feature", id = "CharacterPanelExtras", baseline = true, retail = true },
             { kind = "feature", id = "InspectPanel", baseline = true, retail = true },
             { kind = "feature", id = "CompareHeader", baseline = true, retail = true },
             { kind = "feature", id = "CharacterPanelMythicPlus", baseline = false, retail = true },

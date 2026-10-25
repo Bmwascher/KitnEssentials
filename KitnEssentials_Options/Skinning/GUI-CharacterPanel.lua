@@ -30,22 +30,11 @@ local function GetModule()
     return nil
 end
 
-GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
+local function BuildHeader(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.CharacterPanel
-    if not db then return yOffset end
+    if not db then return yOffset, true end
 
     local CP = GetModule()
-    local manager = GUIFrame:CreateWidgetStateManager()
-
-    manager:SetCondition("elvuiOk", function()
-        return not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI"))
-    end)
-    manager:SetCondition("socketHelperOn", function() return db.SocketHelperEnabled end)
-    manager:SetCondition("trackOn", function() return db.TrackIndicatorsEnabled end)
-
-    local function ApplySettings()
-        if CP then CP:Refresh() end
-    end
 
     local function ApplyModuleState(enabled)
         if not CP then return end
@@ -55,10 +44,6 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         else
             KitnEssentials:DisableModule("CharacterPanel")
         end
-    end
-
-    local function RefreshStates()
-        manager:UpdateAll(db.Enabled ~= false)
     end
 
     ----------------------------------------------------------------
@@ -79,27 +64,30 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window, " ..
             "with an optional talent tree beside it.")
 
-    local row1Insp = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local inspectCheck = GUIFrame:CreateCheckbox(row1Insp, "Show on Inspect Frame", {
-        value = db.InspectPanelEnabled ~= false,
-        callback = function(checked)
-            db.InspectPanelEnabled = checked
-            if CP then CP:ApplyInspectPanelState() end
-        end,
-        tooltip = KE.IS_FOREVER
-            and "Draws the same per-slot item levels and enchants on the inspect window when you inspect another player."
-            or "Draws the same per-slot item levels, enchants and gems on the inspect window when you inspect another player.",
-    })
-    row1Insp:AddWidget(inspectCheck, 1)
-    manager:Register(inspectCheck, "all")
-    card1:AddRow(row1Insp, Theme.rowHeight)
+    -- Never collapses: the Extras tab stays reachable while Character Panel is off.
+    return card1:GetNextOffset(), false
+end
 
-    yOffset = card1:GetNextOffset()
+GUIFrame:RegisterContent("CharacterPanelCharacter", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.CharacterPanel
+    if not db then return yOffset end
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    -- Wrapped (not an early return) so the cards below the gate still render
-    -- while Character Panel itself is off -- they belong to other modules.
-    if db.Enabled ~= false then
+    local CP = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
+
+    manager:SetCondition("elvuiOk", function()
+        return not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI"))
+    end)
+    manager:SetCondition("socketHelperOn", function() return db.SocketHelperEnabled end)
+    manager:SetCondition("trackOn", function() return db.TrackIndicatorsEnabled end)
+
+    local function ApplySettings()
+        if CP then CP:Refresh() end
+    end
+
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
+    end
 
     ----------------------------------------------------------------
     -- Card 2: Warning Display
@@ -447,6 +435,73 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
     end
 
+    ----------------------------------------------------------------
+    -- Card 7: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font Settings",
+        db = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontOutline = "FontOutline",
+        },
+        fontSizes = {
+            { label = "Warning Text",      dbKey = "FontSize"          },
+            { label = "Level Text",        dbKey = "LevelTextSize",    elvuiGated = true },
+            { label = "Name Text",         dbKey = "NameTextSize",     elvuiGated = true },
+            { label = "Stats",             dbKey = "StatsFontSize",    elvuiGated = true },
+            { label = "Stat Categories",   dbKey = "CategoryFontSize", elvuiGated = true },
+            { label = "Item Level Value",  dbKey = "IlvlValueSize",    elvuiGated = true },
+        },
+        fontSizeRange = { 8, 24 },
+        manager = manager,
+        onChangeCallback = function()
+            local CP = GetModule()
+            if CP then CP:Refresh() end   -- Refresh ends in ApplySettings
+        end,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
+    yOffset = fontOffset
+
+    RefreshStates()
+    return yOffset
+end)
+
+GUIFrame:RegisterContent("CharacterPanelInspect", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.CharacterPanel
+    if not db then return yOffset end
+
+    local CP = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
+
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
+    end
+
+    ----------------------------------------------------------------
+    -- Card: Inspect Frame
+    ----------------------------------------------------------------
+    local cardIF = GUIFrame:CreateCard(scrollChild, "Inspect Frame", yOffset)
+    manager:Register(cardIF, "all")
+
+    local rowIF = GUIFrame:CreateRow(cardIF.content, Theme.rowHeightLast)
+    local inspectCheck = GUIFrame:CreateCheckbox(rowIF, "Show on Inspect Frame", {
+        value = db.InspectPanelEnabled ~= false,
+        callback = function(checked)
+            db.InspectPanelEnabled = checked
+            if CP then CP:ApplyInspectPanelState() end
+        end,
+        tooltip = KE.IS_FOREVER
+            and "Draws the same per-slot item levels and enchants on the inspect window when you inspect another player."
+            or "Draws the same per-slot item levels, enchants and gems on the inspect window when you inspect another player.",
+    })
+    rowIF:AddWidget(inspectCheck, 1)
+    manager:Register(inspectCheck, "all")
+    cardIF:AddRow(rowIF, Theme.rowHeightLast, 0)
+
+    yOffset = cardIF:GetNextOffset()
+
     if Admitted("InspectTalents") then
     ----------------------------------------------------------------
     -- Card: Inspect Talents (its own module, cascaded from this one)
@@ -529,45 +584,19 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = cardIT:GetNextOffset()
     end
 
-    ----------------------------------------------------------------
-    -- Card 7: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font Settings",
-        db = db,
-        dbKeys = {
-            fontFace    = "FontFace",
-            fontOutline = "FontOutline",
-        },
-        fontSizes = {
-            { label = "Warning Text",      dbKey = "FontSize"          },
-            { label = "Level Text",        dbKey = "LevelTextSize",    elvuiGated = true },
-            { label = "Name Text",         dbKey = "NameTextSize",     elvuiGated = true },
-            { label = "Stats",             dbKey = "StatsFontSize",    elvuiGated = true },
-            { label = "Stat Categories",   dbKey = "CategoryFontSize", elvuiGated = true },
-            { label = "Item Level Value",  dbKey = "IlvlValueSize",    elvuiGated = true },
-        },
-        fontSizeRange = { 8, 24 },
-        manager = manager,
-        onChangeCallback = function()
-            local CP = GetModule()
-            if CP then CP:Refresh() end   -- Refresh ends in ApplySettings
-        end,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
-    yOffset = fontOffset
-
-    end
-
     RefreshStates()
+    return yOffset
+end)
+
+-- Window Buttons, Character Skin and Compare Header belong to other modules
+-- and keep working with Character Panel off, so this tab is offered in both
+-- states.
+GUIFrame:RegisterContent("CharacterPanelExtras", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.CharacterPanel
+    if not db then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 8: Window Buttons (Automation keys — own cascade)
-    --
-    -- Outside the master gate above: these buttons are drawn by Automation
-    -- and keep working with the Character Panel module off, so gating their
-    -- settings on it would hide controls that still do something.
+    -- Card 8: Window Buttons (Automation keys, own cascade)
     ----------------------------------------------------------------
     local auDB = KE.db and KE.db.profile.Automation
     if auDB and WINDOW_BUTTONS then
@@ -631,14 +660,8 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         tooltip = "Colors each equipped slot's border by item rarity, the way a bag addon does. Off leaves the standard dark border. Needs a reload, and has no effect while ElvUI is skinning the character sheet.",
     })
     rowSDQual:AddWidget(qualityBorderCheck, 1)
-    -- Set DIRECTLY, not through the widget state manager. Two reasons, and the
-    -- manager gets neither right for a control that lives outside the gate:
-    --   * `Register` only stores a widget; only `UpdateAll` applies a condition.
-    --     `RefreshStates()` has already run by the time this card is built, so a
-    --     registration here would never be applied and the control would sit
-    --     enabled under ElvUI while its tooltip says it does nothing.
-    --   * Calling `RefreshStates()` again would apply `CharacterPanel.Enabled` to
-    --     it, which is exactly the coupling this card exists to avoid.
+    -- Set directly: this tab has no widget state manager, and one would apply
+    -- CharacterPanel.Enabled to a control that works with the module off.
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") then
         qualityBorderCheck:SetEnabled(false)
     end
@@ -680,3 +703,18 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
 
     return yOffset
 end)
+
+GUIFrame:RegisterTabbedContent("CharacterPanel", function()
+    local db = KE.db and KE.db.profile.CharacterPanel
+    local EXTRAS = { id = "CharacterPanelExtras", label = "Extras" }
+    if not db or db.Enabled == false then
+        return { EXTRAS }
+    end
+    return {
+        { id = "CharacterPanelCharacter", label = "Character" },
+        { id = "CharacterPanelInspect",   label = "Inspect" },
+        EXTRAS,
+    }
+end, {
+    headerBuilder = BuildHeader,
+})
