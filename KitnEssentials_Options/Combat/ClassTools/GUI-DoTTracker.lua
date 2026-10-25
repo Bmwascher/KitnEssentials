@@ -340,9 +340,9 @@ GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
         })
         card2:AddRow(addRow, Theme.rowHeight)
 
-        card2:AddNote("Adds to the chosen class and spec. Use the DEBUFF's id, which for many " ..
-            "spells differs from the button you press. Remove takes off only DoTs you added; " ..
-            "untick a shipped one instead.")
+        card2:AddNote("Adds to the chosen class and spec. Enter the debuff's ID in " .. KE:Gold("Debuff Spell ID") ..
+            "; for many spells it differs from the button you press. " .. KE:Gold("Remove") ..
+            " takes off only DoTs you added; untick a shipped one instead.")
     end
 
     local classRow, shownClass = GUIFrame:CreateClassPickerRow(card2.content, {
@@ -383,10 +383,10 @@ GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
         end,
     }), 1 / 3)
     card3:AddRow(row3, Theme.rowHeight)
-    card3:AddNote("Attackable, alive enemies with a nameplate. Fighting your group: you, your pet or a " ..
-        "party member is on the enemy's threat list. Enemy players and their pets are exempt, and in a " ..
-        "raid this toggle has no effect. While you are in combat and no enemy passes, as on training " ..
-        "dummies, every attackable enemy counts.")
+    card3:AddNote("Counts attackable, living enemies with a nameplate. " .. KE:Gold("Only Enemies Fighting Your Group") ..
+        " keeps those whose threat list holds you, your pet or a party member; enemy players and their " ..
+        "pets are exempt from it, and in a raid it has no effect. While you are in combat and no enemy " ..
+        "passes, as on training dummies, every attackable enemy counts.")
     yOffset = card3:GetNextOffset()
 
     return yOffset
@@ -419,7 +419,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "DoT Colors", {
         value = db.DoTColors ~= false,
         tooltip = "Each DoT's count and icon border take its own color, set in Your DoTs " ..
-            "on the Tracking tab. Off: Some Have It and a black border for every DoT.",
+            "on the Tracking tab. Off, every DoT uses Some Have It and a black border.",
         callback = function(checked)
             db.DoTColors = checked
             ApplySettings()
@@ -427,7 +427,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     }), 0.5)
     row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "Full Coverage Color", {
         value = db.FullCoverageColor ~= false,
-        tooltip = "The count turns All Have It when every counted enemy has the DoT.",
+        tooltip = "The count takes the All Have It color when every counted enemy has the DoT.",
         callback = function(checked)
             db.FullCoverageColor = checked
             manager:UpdateAll(true)
@@ -618,10 +618,11 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     rowCDM2:AddWidget(iconY, 0.5)
     manager:Register(iconY, "attach")
     card4:AddRow(rowCDM2, Theme.rowHeight)
-    card4:AddNote("DoTs in the Cooldown Manager's Essential, Utility or Tracked Buffs icons show their " ..
-        "count on that icon, with no glow or target timer. The others stay in the row. With EllesmereUI's " ..
-        "Cooldown Manager on, an attached count and its preview stay hidden until that addon shows the " ..
-        "icon: for a Tracked Buffs icon, usually the DoT's first application since /reload.")
+    card4:AddNote("A DoT in the Cooldown Manager's Essential, Utility or Tracked Buffs icons shows its " ..
+        "count on that icon, with no glow or target timer; the others stay in the row. With " ..
+        KE:Gold("EllesmereUI") .. "'s Cooldown Manager on, an attached count and its preview stay hidden " ..
+        "until that addon shows the icon, which for a Tracked Buffs icon is usually the DoT's first " ..
+        "application since " .. KE:Gold("/reload") .. ".")
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
