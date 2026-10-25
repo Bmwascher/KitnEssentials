@@ -136,7 +136,6 @@ local FRAME_SKINS = {
     { key = "LossControl",              text = "Loss of Control" },
     { key = "Macro",                    text = "Macros" },
     { key = "Mail",                     text = "Mail" },
-    { key = "MajorFaction",             text = "Renown" },
     { key = "Merchant",                 text = "Merchant" },
     { key = "MirrorTimers",             text = "Mirror Timers" },
     { key = "Misc",                     text = "Misc Dialogs" },

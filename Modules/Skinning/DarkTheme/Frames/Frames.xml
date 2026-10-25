@@ -50,7 +50,6 @@
     <Script file="LossControl.lua" />
     <Script file="Macro.lua" />
     <Script file="Mail.lua" />
-    <Script file="MajorFaction.lua" />
     <Script file="Merchant.lua" />
     <Script file="MirrorTimers.lua" />
     <Script file="Misc.lua" />

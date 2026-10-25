@@ -63,7 +63,6 @@ return {
     "Modules/Skinning/DarkTheme/Frames/Housing.lua",
     "Modules/Skinning/DarkTheme/Frames/ItemUpgrade.lua",
     "Modules/Skinning/DarkTheme/Frames/LFGuild.lua",
-    "Modules/Skinning/DarkTheme/Frames/MajorFaction.lua",
     "Modules/Skinning/DarkTheme/Frames/PerksProgram.lua",
     "Modules/Skinning/DarkTheme/Frames/PetBattle.lua",
     "Modules/Skinning/DarkTheme/Frames/ProfessionsOrders.lua",
