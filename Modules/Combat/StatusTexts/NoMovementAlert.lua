@@ -625,6 +625,22 @@ local function Hex(c)
     return KE:RGBAToHex(c[1], c[2], c[3])
 end
 
+-- An odd run of pipes ends in one the client reads as the start of a code; an
+-- even run is already escaped, which is how the settings box stores a typed pipe.
+local function PadOddRun(run)
+    if #run % 2 == 1 then return run .. "|" end
+end
+
+-- For text drawn as it is: every pipe shows as one pipe.
+function NMA.EscapePipes(s)
+    return (tostring(s):gsub("|+", PadOddRun))
+end
+
+-- For text inside a format string, where a literal % would read as a specifier.
+function NMA.EscapeFormat(s)
+    return (NMA.EscapePipes(s):gsub("%%", "%%%%"))
+end
+
 -- Color-wrapped line with a printf slot for the time, so a secret
 -- number can be rendered via SetFormattedText without being read.
 function NMA:ComposeFormat(name, numberFmt)
@@ -635,9 +651,7 @@ function NMA:ComposeFormat(name, numberFmt)
     -- itself a format string whose number slot must survive untouched
     -- for SetFormattedText. Running it through format here consumed that
     -- slot and threw "bad argument to 'format'".
-    -- Any literal % in a name or separator is escaped for the same
-    -- reason -- it would otherwise be read as a specifier downstream.
-    local function esc(s) return (tostring(s):gsub("%%", "%%%%")) end
+    local esc = NMA.EscapeFormat
     return "|cff" .. Hex(self:RoleColor("TextColor")) .. esc(name) .. "|r "
         .. "|cff" .. Hex(self:RoleColor("SeparatorColor")) .. esc(sep) .. "|r "
         .. "|cff" .. Hex(self:RoleColor("TimerColor")) .. numberFmt .. "|r"
@@ -645,6 +659,7 @@ end
 
 function NMA:ComposeLine(name, timeText)
     local db = self.db
+    name = NMA.EscapePipes(name)
     local nameHex = Hex(self:RoleColor("TextColor"))
     if not timeText then
         return string.format("|cff%s%s|r", nameHex, name)
@@ -652,6 +667,7 @@ function NMA:ComposeLine(name, timeText)
     local timeHex = Hex(self:RoleColor("TimerColor"))
     local sep = db.Separator
     if sep == nil or sep == "" then sep = "-" end
+    sep = NMA.EscapePipes(sep)
     return string.format("|cff%s%s|r |cff%s%s|r |cff%s%s|r",
         nameHex, name, Hex(self:RoleColor("SeparatorColor")), sep, timeHex, timeText)
 end

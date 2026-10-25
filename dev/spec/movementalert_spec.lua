@@ -2,8 +2,9 @@
 -- silently: spell resolution end to end (the exported tables and key format,
 -- which spells count as enabled and for which spec, replacement choices, and
 -- alias and category durations), how role colors resolve, how a cooldown reads
--- back, and whether an unreadable aura is allowed to masquerade as an absent
--- one. The tracking engine, the frames and the event wiring are a verbatim port
+-- back, whether an unreadable aura is allowed to masquerade as an absent one,
+-- and how line text escapes pipes and percents. The tracking engine, the frames
+-- and the event wiring are a verbatim port
 -- and are verified in game.
 local L = require("dev.spec._ke_loader")
 
@@ -552,5 +553,23 @@ describe("NoMovementAlert buff readback asks per spell", function()
         NMA:RefreshBuffStates()
 
         assert.is_false(NMA.auraActive[realId])
+    end)
+end)
+
+describe("NoMovementAlert line text escapes", function()
+    it("shows every pipe as one pipe, and doubles percents only for a format string", function()
+        local NMA = L.loadMovementAlert()
+        -- text, drawn as it is, inside a format string
+        local rows = {
+            { "-", "-", "-" },
+            { "|", "||", "||" },
+            { "||", "||", "||" },
+            { "%", "%", "%%" },
+            { "a|b%", "a||b%", "a||b%%" },
+        }
+        for _, r in ipairs(rows) do
+            assert.equals(r[2], NMA.EscapePipes(r[1]), "pipes: " .. r[1])
+            assert.equals(r[3], NMA.EscapeFormat(r[1]), "format: " .. r[1])
+        end
     end)
 end)
