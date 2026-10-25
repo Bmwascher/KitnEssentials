@@ -18,7 +18,6 @@ local _G = _G
 local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemTexture = GetInventoryItemTexture
-local GetInspectSpecialization = GetInspectSpecialization
 local issecretvalue = issecretvalue
 local C_Timer = C_Timer
 local C_Item = C_Item
@@ -34,6 +33,16 @@ local table = table
 local tostring = tostring
 local GetTime = GetTime
 local IS_FOREVER = KE.IS_FOREVER == true
+
+-- The inspect window's Shown aspect can be secret; a secret answer reads as
+-- not shown, so no caller ever tests one.
+local function InspectFrameShown(frame)
+    if not frame then return false end
+    local shown = frame:IsShown()
+    if issecretvalue(shown) then return false end
+    return shown == true
+end
+InspectPanel.InspectFrameShown = InspectFrameShown
 
 ---------------------------------------------------------------------------------
 -- Debug
@@ -173,7 +182,7 @@ local function SweepRetries()
     local guid = _sweepGUID
     _sweepGUID, _sweepTimer = nil, nil
     if not guid then return end
-    if not InspectFrame or not InspectFrame:IsShown() then return end
+    if not InspectFrameShown(InspectFrame) then return end
     if _currentInspectGUID ~= guid then return end
     local g = _inspectCache[guid]
     if not g then return end
@@ -216,11 +225,13 @@ local function ReadyForFrame(guid, frameGUID)
     return guid == frameGUID
 end
 InspectPanel._ReadyForFrame = ReadyForFrame
+InspectPanel.ReadyForFrame = ReadyForFrame
 
 local function InspectFrameGUID()
     local unit = InspectFrame and InspectFrame.unit
     return unit and KE:GetSafeUnitGUID(unit) or nil
 end
+InspectPanel.InspectFrameGUID = InspectFrameGUID
 
 -- The inspect frame shows from inside the first INSPECT_READY, before this
 -- file's data events are registered, so the frame's showing is where an
@@ -289,7 +300,7 @@ end
 local function InspectSheetLive()
     return InspectPanel:IsEnabled()
         and InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
-        and InspectFrame and InspectFrame:IsShown()
+        and InspectFrameShown(InspectFrame)
 end
 
 -- Debounced, next-frame batch of the full inspect refresh. A first inspect fires
@@ -490,7 +501,7 @@ function InspectPanel:OnEnable()
         -- If InspectFrame is already shown at re-enable time, the OnShow hook
         -- won't fire, so re-register the data events manually and refresh the
         -- currently-visible overlays.
-        if InspectFrame and InspectFrame:IsShown() then
+        if InspectFrameShown(InspectFrame) then
             self.eventFrame:RegisterEvent("INSPECT_READY")
             self.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
@@ -534,7 +545,7 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
     -- has not seen stamped (no readable GUID when the frame showed, or a return
     -- to an earlier target) starts here, so the grace window always opens and
     -- closes and a pending slot always reaches the sweep.
-    if _currentInspectGUID ~= guid and InspectFrame and InspectFrame:IsShown() then
+    if _currentInspectGUID ~= guid and InspectFrameShown(InspectFrame) then
         StampInspectStart(guid)
     end
 
@@ -710,7 +721,11 @@ InspectPanel._SpecGateOpen = SpecGateOpen
 -- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
 function InspectPanel:GetInspectAverageItemLevel(unit)
     local spec
-    if not IS_FOREVER then spec = GetInspectSpecialization(unit) end
+    if not IS_FOREVER then
+        spec = C_SpecializationInfo.GetInspectSpecialization(unit)
+        -- Inline so the secret checker sees it; SpecGateOpen refuses the same value.
+        if issecretvalue(spec) then return nil end
+    end
     -- The Fury weapon-slot branch requires a clean specialization value.
     if not SpecGateOpen(IS_FOREVER, spec) then return nil end
 
@@ -876,7 +891,7 @@ function InspectPanel:SetupInspectSupport()
             end
             InspectFrame:HookScript("OnShow", regData)
             InspectFrame:HookScript("OnHide", unregData)
-            if InspectFrame:IsShown() then regData() end
+            if InspectFrameShown(InspectFrame) then regData() end
         end
     end
 
@@ -929,7 +944,7 @@ function InspectPanel:SetupInspectSupport()
             -- waiting on this exact itemID (targeted, not blanket), and recompute the
             -- average once the last pending slot drains.
             local itemID = arg1
-            if itemID and _self._inspectQueue and InspectFrame and InspectFrame:IsShown() then
+            if itemID and _self._inspectQueue and InspectFrameShown(InspectFrame) then
                 for slotID, queuedID in pairs(_self._inspectQueue) do
                     if queuedID == itemID then
                         _self._inspectQueue[slotID] = nil

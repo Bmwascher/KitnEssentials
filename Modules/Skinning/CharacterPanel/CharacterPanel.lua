@@ -1281,9 +1281,10 @@ function CP:ApplySettings()
     end
     -- EITHER frame: the inspect overlays follow the same settings, and the
     -- inspect frame can be open while the character panel is not.
-    local inspectFrame = _G.InspectFrame
-    if (PaperDollFrame and PaperDollFrame:IsShown())
-        or (inspectFrame and inspectFrame:IsShown()) then
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    local inspectShown = insp and insp.InspectFrameShown
+        and insp.InspectFrameShown(_G.InspectFrame)
+    if (PaperDollFrame and PaperDollFrame:IsShown()) or inspectShown then
         self:RefreshSlotDisplays()
     end
 end
@@ -2004,10 +2005,10 @@ local function InvalidateInspectSlots()
 end
 
 local function RepaintInspectSlots()
-    local frame = _G.InspectFrame
-    if not (frame and frame:IsShown()) then return end
     local insp = KitnEssentials:GetModule("InspectPanel", true)
-    if insp and insp:IsEnabled() then insp:UpdateAllInspectSlots() end
+    if not (insp and insp:IsEnabled()) then return end
+    if not (insp.InspectFrameShown and insp.InspectFrameShown(_G.InspectFrame)) then return end
+    insp:UpdateAllInspectSlots()
 end
 
 -- Settings-change entry point for both per-slot displays. The dirty checks in
