@@ -327,6 +327,21 @@ local function BuildIcon(parent)
     return icon
 end
 
+-- The bar's numbers (KT.FormatRemaining): whole seconds rounded down above 6,
+-- tenths below. The game's own countdown rounds up, one second off the bar.
+local countdownFormatter
+local function CountdownFormatter()
+    if not countdownFormatter then
+        local rounding = Enum.NumericRuleFormatRounding
+        countdownFormatter = C_StringUtil.CreateNumericRuleFormatter()
+        countdownFormatter:SetBreakpoints({
+            { threshold = 6, step = 1, rounding = rounding.Down, format = "%d" },
+            { threshold = 0, step = 0.1, rounding = rounding.Nearest, format = "%.1f" },
+        })
+    end
+    return countdownFormatter
+end
+
 local function StyleIcon(icon)
     local db = KT.db
     local px = KE:GetPixelSize()
@@ -335,6 +350,7 @@ local function StyleIcon(icon)
     icon.art:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -px, px)
     icon.cd:SetDrawSwipe(db.PlateSwipe ~= false)
     icon.cd:SetHideCountdownNumbers(db.PlateShowTimer == false)
+    icon.cd:SetCountdownFormatter(CountdownFormatter())
     KE:ApplyFontToText(icon.cd:GetCountdownFontString(), db.PlateFontFace, db.PlateTimerSize, db.PlateFontOutline)
 end
 
