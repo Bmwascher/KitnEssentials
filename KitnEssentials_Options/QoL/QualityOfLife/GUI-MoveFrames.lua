@@ -31,12 +31,12 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
 
     card:AddLabel("Left-click and drag almost any Blizzard window, the character panel, map, " ..
         "merchant, professions and most others, to move it anywhere on screen." ..
-        "\n\nPositions are temporary unless Remember Positions is on: every window returns to its " ..
-        "normal spot the next time it opens." ..
+        "\n\nWith Remember Positions off, every window returns to its normal spot the next time " ..
+        "it opens." ..
         "\n\nSteps aside automatically if |cffffd100BlizzMove|r or |cffffd100MoveAnything|r is " ..
-        "installed. Protected windows cannot be moved while you are in combat." ..
-        "\n\nLoot roll windows can be dragged but go back to their managed spot on the next roll, " ..
-        "even with Remember Positions on.")
+        "installed. Protected windows cannot be moved in combat." ..
+        "\n\nLoot roll windows can be dragged, but they go back to their managed spot on the next " ..
+        "roll, even with Remember Positions on.")
 
     -- A disabled module shows only this card: its switch and description.
     if db.Enabled ~= true then return card:GetNextOffset() end

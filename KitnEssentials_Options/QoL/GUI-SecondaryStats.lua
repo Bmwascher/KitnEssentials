@@ -256,7 +256,7 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     local specCard, specOffset = GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, {
         db = db,
         scope = "SecondaryStats",
-        note = "Untick a specialization to stop the readout there. It stops reading stats on that spec, not just hiding. Specs you never touch stay on.",
+        note = "Untick a specialization to turn the readout off there: it stops reading stats on that spec rather than only hiding. Specs you never change stay on.",
         onChange = function()
             if SS and SS.ApplySpecGate then SS:ApplySpecGate() end
         end,

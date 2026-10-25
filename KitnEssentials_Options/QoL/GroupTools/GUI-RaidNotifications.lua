@@ -156,7 +156,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     manager:Register(durationSlider, "all")
     card3:AddRow(row3, Theme.rowHeight)
 
-    card3:AddNote("The longest either stays up. Reset Boss also hides when combat starts or the lust debuff ends; Loot Boss when you loot or the next pull starts.")
+    card3:AddNote("Duration is the longest either stays up. Reset Boss also hides when combat starts or the lust debuff ends; Loot Boss when you loot or the next pull starts.")
 
     yOffset = card3:GetNextOffset()
 

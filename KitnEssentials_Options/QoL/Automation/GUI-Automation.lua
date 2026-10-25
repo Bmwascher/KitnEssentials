@@ -67,7 +67,8 @@ local function BuildHeader(scrollChild, yOffset)
 
     card1:AddLabel("Small conveniences, each with its own switch on the tabs below: looting, " ..
         "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
-        "and the vendor and auction house windows.")
+        "and the vendor and auction house windows. With Automation off, the Interface and " ..
+        "Quests & Social tabs are hidden.")
 
     return card1:GetNextOffset(), false
 end
@@ -145,7 +146,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         ----------------------------------------------------------------
         local cardHousing = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
         manager:Register(cardHousing, "all")
-        cardHousing:AddLabel("Auto-rolls on Housing items based on your roll type selection. Useful in raids and dungeons where housing decor drops are not gear upgrades.")
+        cardHousing:AddLabel("Rolls on housing items for you, with the roll type you pick. Handy in raids and dungeons, where housing decor is not a gear upgrade.")
 
         GUIFrame:CreatePairedRow(cardHousing, {
             height = Theme.rowHeightLast,
@@ -306,7 +307,7 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local hideHelptipsCheck = GUIFrame:CreateCheckbox(row2b, "Hide Helptips", {
         value = db.HideHelptips ~= false,
-        tooltip = "Suppresses Blizzard's tutorial and \"Did you know\" popups. Works whether or not Automation itself is on -- but this switch is only reachable while Automation is on.",
+        tooltip = "Suppresses Blizzard's tutorial and \"Did you know\" popups. Works whether or not Automation itself is on, but this switch is only reachable while Automation is on.",
         callback = function(checked)
             db.HideHelptips = checked
             ApplySettings()
@@ -316,7 +317,7 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
 
     local hideZoneTextCheck = GUIFrame:CreateCheckbox(row2b, "Hide Zone Text", {
         value = db.HideZoneText == true,
-        tooltip = "Hides the zone and subzone names shown when you enter a new area. Works whether or not Automation itself is on -- but this switch is only reachable while Automation is on.",
+        tooltip = "Hides the zone and subzone names shown when you enter a new area. Works whether or not Automation itself is on, but this switch is only reachable while Automation is on.",
         callback = function(checked)
             db.HideZoneText = checked
             ApplySettings()
@@ -433,7 +434,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Quest Automation", yOffset)
     manager:Register(card1, "all")
-    card1:AddLabel("Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards always prompt.\n\nAuto Complete Voidcores accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off; the Hold to Pause modifier still applies.")
+    card1:AddLabel("Hold the key set in Hold to Pause Auto-Quest while talking to an NPC to pause auto-quest. A quest with several rewards always asks you to pick.\n\nAuto Complete Voidcores accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off. The Hold to Pause Auto-Quest key still applies.")
 
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local autoAcceptCheck = GUIFrame:CreateCheckbox(row1a, "Auto Accept Quests", {
