@@ -246,13 +246,16 @@ local function SkinDashboard()
     if dash.CatalogTabButton and dash.CatalogTabButton.SelectedTexture then
         dash.CatalogTabButton.SelectedTexture:SetShown(dash.CatalogContent and dash.CatalogContent:IsShown())
     end
+    -- One dropdown, owned by the dashboard, serves the House Information and
+    -- Blueprints tabs; its Dropdown child carries the art.
+    local houseDropdown = dash.HouseDropdown and dash.HouseDropdown.Dropdown
+    if houseDropdown then S.DropDown(houseDropdown, true) end
     local info = dash.HouseInfoContent
     if info then
         if info.DashboardNoHousesFrame and info.DashboardNoHousesFrame.NoHouseButton then
             S.Button(info.DashboardNoHousesFrame.NoHouseButton)
         end
         if info.HouseFinderButton then S.Button(info.HouseFinderButton) end
-        if info.HouseDropdown then S.DropDown(info.HouseDropdown, true) end
 
         local content = info.ContentFrame
         if content then
