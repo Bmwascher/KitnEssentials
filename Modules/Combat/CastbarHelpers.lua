@@ -590,6 +590,11 @@ function H.UpdateKickIndicator(self, cooldown)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
         self.kickTick:SetAlpha(0)
+        -- Forever only: without this the bar keeps the color of a kick that
+        -- is gone, or of the cast's previous interruptible state.
+        if KE.IS_FOREVER then
+            H.UpdateBarColor(self)
+        end
         return
     end
 
@@ -603,8 +608,15 @@ function H.UpdateKickIndicator(self, cooldown)
     end
     if not cooldown then return end
 
-    self.kickTick:SetAlphaFromBoolean(cooldown:IsZero(), 0,
-        C_CurveUtil.EvaluateColorValueFromBoolean(self.notInterruptible, 0, 1))
+    -- Forever only: the tick marks where the kick picked at cast start comes
+    -- off cooldown. A kick picked mid-cast has no such mark: the cast's
+    -- elapsed time can be secret, so it cannot be added to the cooldown.
+    if KE.IS_FOREVER and self.tickKickId ~= self.interruptId then
+        self.kickTick:SetAlpha(0)
+    else
+        self.kickTick:SetAlphaFromBoolean(cooldown:IsZero(), 0,
+            C_CurveUtil.EvaluateColorValueFromBoolean(self.notInterruptible, 0, 1))
+    end
 
     H.UpdateBarColor(self, cooldown)
 end
@@ -612,12 +624,14 @@ end
 function H.SetupKickCooldownBar(self)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
+        self.tickKickId = nil
         self.kickTick:SetAlpha(0)
         return
     end
 
     local duration = self.cachedDuration
     if not duration then
+        self.tickKickId = nil
         self.kickTick:SetAlpha(0)
         return
     end
@@ -648,6 +662,7 @@ function H.SetupKickCooldownBar(self)
     else
         self.kickTick:SetPoint("LEFT", self.kickCooldownBar:GetStatusBarTexture(), "RIGHT")
     end
+    self.tickKickId = self.interruptId
 
     H.StartKickReadyTimer(self)
 end
