@@ -862,8 +862,10 @@ local function FeedRailCounts(rail, T)
     end
 end
 
+-- By GUID, not unit token: a unit token names a different member on each
+-- client, so lanes on the same marker would sit in a different order.
 local function KickerOrder(a, b)
-    return a.unit < b.unit
+    return a.guid < b.guid
 end
 
 -- The player's own lane follows Focus Marker's marker while it is enabled.
@@ -1413,7 +1415,7 @@ end
 ---------------------------------------------------------------------------------
 -- Rails: engine calls
 ---------------------------------------------------------------------------------
--- Members with a kick row and a marker, in party order, ranked per marker.
+-- Members with a kick row and a marker, in GUID order, ranked per marker.
 function KT:SyncKickers()
     local list = P.kickers
     wipe(list)
