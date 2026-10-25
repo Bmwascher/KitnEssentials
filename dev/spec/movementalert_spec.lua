@@ -4,8 +4,7 @@
 -- alias and category durations), how role colors resolve, how a cooldown reads
 -- back, whether an unreadable aura is allowed to masquerade as an absent one,
 -- and how line text escapes pipes and percents. The tracking engine, the frames
--- and the event wiring are a verbatim port
--- and are verified in game.
+-- and the event wiring are a verbatim port and are verified in game.
 local L = require("dev.spec._ke_loader")
 
 describe("movement alert spell resolution", function()
