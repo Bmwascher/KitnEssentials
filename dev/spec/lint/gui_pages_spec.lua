@@ -49,6 +49,7 @@ local FACTORY_FILES = {
     "GUI/GUIWidgets/GUI-DispelTypeColorsCard.lua",
     "GUI/GUIWidgets/GUI-GlowSettingsCard.lua",
     "GUI/GUIWidgets/GUI-AuraApplicationSoundCard.lua",
+    "GUI/GUIWidgets/GUI-AuraCasterNameCard.lua",
     "GUI/GUIWidgets/GUI-AuraAllowlistCard.lua",
     "GUI/GUIWidgets/GUI-SpecPicker.lua",
     "GUI/GUIWidgets/GUI-TauntCursorCard.lua",
