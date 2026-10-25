@@ -257,12 +257,42 @@ local function Layout(cells, count, parent)
     end
 end
 
+-- The box is one icon wide and the rest of the row grows past it. The KE
+-- Edit Mode box takes the whole row through these insets; the drag still
+-- measures the box itself.
+local overhang = { left = 0, right = 0, top = 0, bottom = 0 }
+
+local function OverlayInset()
+    return overhang.left, overhang.right, overhang.top, overhang.bottom
+end
+
+-- The Edit Mode box reads its insets only when it refreshes.
+local function SyncOverhang()
+    local s = HX.style
+    local g = s.grow
+    if not g then return end
+    local count = 0
+    if HX.previewing then
+        count = #SAMPLES
+    elseif HX.bound and HX.entries then
+        count = #HX.entries
+    end
+    local extra = math.max(count - 1, 0) * (s.size + s.spacing)
+    local left, right = g.dx < 0 and extra or 0, g.dx > 0 and extra or 0
+    local top, bottom = g.dy > 0 and extra or 0, g.dy < 0 and extra or 0
+    if left == overhang.left and right == overhang.right
+        and top == overhang.top and bottom == overhang.bottom then return end
+    overhang.left, overhang.right, overhang.top, overhang.bottom = left, right, top, bottom
+    if HX.registered and KE.EditMode then KE.EditMode:RefreshLiveState() end
+end
+
 local function Show()
     local box = HX.box
     if not box then return end
     HX.live:SetShown(not HX.previewing)
     if HX.sampleLayer then HX.sampleLayer:SetShown(HX.previewing == true) end
     box:SetShown(HX.on == true and (HX.bound == true or HX.previewing == true))
+    SyncOverhang()
 end
 
 -- Registering again would cancel a drag in progress.
@@ -275,6 +305,7 @@ local function Register()
         module = HX.pb,
         getPosition = function() return (Placement(HX.pb.db)) end,
         setPosition = SetPosition,
+        getOverlayInset = OverlayInset,
         getParentFrame = function()
             local _, config = Placement(HX.pb.db)
             return KE:ResolveAnchorFrame(config.anchorFrameType, config.ParentFrame)
