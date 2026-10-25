@@ -335,7 +335,7 @@ local function StyleIcon(icon)
     icon.art:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -px, px)
     icon.cd:SetDrawSwipe(db.PlateSwipe ~= false)
     icon.cd:SetHideCountdownNumbers(db.PlateShowTimer == false)
-    KE:ApplyFontToText(icon.cd:GetCountdownFontString(), db.FontFace, db.PlateTimerSize, db.FontOutline)
+    KE:ApplyFontToText(icon.cd:GetCountdownFontString(), db.PlateFontFace, db.PlateTimerSize, db.PlateFontOutline)
 end
 
 -- The kick spell, or the spec or class icon; a spec or class not known

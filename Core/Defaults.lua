@@ -857,6 +857,8 @@ local Defaults = {
             PlateOffsetY = 0,
             PlateShowTimer = true,
             PlateTimerSize = 11,
+            PlateFontFace = nil,            -- nil: the global font
+            PlateFontOutline = "OUTLINE",
             PlateSwipe = true,
         },
 

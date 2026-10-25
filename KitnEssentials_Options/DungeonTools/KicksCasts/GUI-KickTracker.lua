@@ -192,6 +192,26 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:Register(plateTimerSlider, "plates")
     cardPlates:AddRow(rowP2, Theme.rowHeight)
 
+    local rowPF = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateFontDropdown = GUIFrame:CreateDropdown(rowPF, "Font", {
+        options = KE:AddFollowGlobalFont(fontList),
+        value = db.PlateFontFace or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(key) db.PlateFontFace = KE:StoredFontFace(key); ApplySettings() end,
+        searchable = true,
+        isFontPreview = true,
+    })
+    rowPF:AddWidget(plateFontDropdown, 0.5)
+    manager:Register(plateFontDropdown, "plates")
+
+    local plateOutlineDropdown = GUIFrame:CreateDropdown(rowPF, "Font Outline", {
+        options = KE:GetFontOutlineOptions(),
+        value = KE:NormalizeFontOutline(db.PlateFontOutline or "OUTLINE"),
+        callback = function(key) db.PlateFontOutline = key; ApplySettings() end,
+    })
+    rowPF:AddWidget(plateOutlineDropdown, 0.5)
+    manager:Register(plateOutlineDropdown, "plates")
+    cardPlates:AddRow(rowPF, Theme.rowHeight)
+
     local rowP3 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
     local plateGapSlider = GUIFrame:CreateSlider(rowP3, "Gap to Health Bar", {
         min = 0, max = 20, step = 1,
