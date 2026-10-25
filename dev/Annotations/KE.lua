@@ -1566,6 +1566,13 @@ function KE:GetKickDefinition(kickID) end
 ---@return table<number, true>
 function KE:GetKickTalentDemand(specID) end
 
+-- Modules/DungeonTools/PlateAnchor.lua
+--- The health bar a nameplate addon draws for this plate, to anchor icons
+--- beside; the plate itself when none is usable, nil without a plate.
+---@param plate table?
+---@return table?
+function KE:ResolvePlateAnchor(plate) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 
