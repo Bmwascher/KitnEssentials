@@ -1,14 +1,15 @@
 -- Tier: rules KE invented for the inspect talent panel (tiered test policy):
 -- the open gate with the shared shown predicate, the node keep rule, the hero
--- subtree pick, the compare gate, the difference rule and the chip order. C_Traits reads,
+-- subtree pick, the compare gate, the hero compare gate, the difference rule
+-- and the chip order. C_Traits reads,
 -- layout, tooltips and event timing are smoke-tested, not here.
 local helpers = require("dev.spec._helpers")
 
--- A secret stand-in raises when compared with a number or with another
--- secret, so a missed secret test on a path that compares the value raises.
--- A secret compared with true or nil cannot be made to raise in Lua 5.1;
--- those rows assert the outcome, and the order of the test is checked by
--- reading the diff and by the api-validator gate.
+-- A secret stand-in raises only when ordered against a number (< or >) or
+-- compared with another secret. In Lua 5.1, == and ~= against a number,
+-- true or nil do not reach __eq, so they do not raise; those rows assert
+-- the outcome (a missed test gives another answer), and the order of the
+-- test is checked by reading the diff and by the api-validator gate.
 local SECRET_MT = { __eq = function() error("a secret value was compared") end }
 local secrets = setmetatable({}, { __mode = "k" })
 local function secret() local v = setmetatable({}, SECRET_MT); secrets[v] = true; return v end
@@ -146,6 +147,23 @@ describe("Inspect talents: the chip order", function()
             local labels = {}
             for i, def in ipairs(order(c.values, {})) do labels[i] = def.label end
             assert.equals(c.want, table.concat(labels, " "), c.name)
+        end
+    end)
+end)
+
+describe("Inspect talents: the hero compare gate", function()
+    it("compares your hero column only on an active signal and nothing against it", function()
+        local gate = loadIT()._HeroCompareOn
+        local cases = {
+            { name = "a node flagged active", active = true, want = true },
+            { name = "the subtree info says active", info = true, want = true },
+            { name = "ranks alone, no active signal", want = false },
+            { name = "a node flagged inactive or secret refuses, even with the info active", active = true, other = true, info = true, want = false },
+            { name = "secret subtree info, no flag", info = secret(), want = false },
+            { name = "secret subtree info with a flag", active = true, info = secret(), want = true },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, gate(c.active == true, c.other == true, c.info), c.name)
         end
     end)
 end)

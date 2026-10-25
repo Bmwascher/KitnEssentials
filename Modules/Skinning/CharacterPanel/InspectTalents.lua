@@ -207,6 +207,17 @@ local function DiffCategory(theirEntry, theirRank, yourEntry, yourRank)
 end
 IT._DiffCategory = DiffCategory
 
+-- Your hero column compares only on a plain "active" signal for the drawn
+-- subtree and nothing against it. Ranks never count: a hero tree you
+-- switched away from keeps its purchased ranks.
+local function HeroCompareOn(sawActive, sawOther, infoActive)
+    if sawOther then return false end
+    if sawActive then return true end
+    if issecretvalue(infoActive) then return false end
+    return infoActive == true
+end
+IT._HeroCompareOn = HeroCompareOn
+
 ---------------------------------------------------------------------------------
 -- State
 ---------------------------------------------------------------------------------
@@ -487,7 +498,7 @@ local function ReadYours(settingOn)
         compareState = "unknown"
         return
     end
-    local flagged, heroRanks = false, 0
+    local sawActive, sawOther = false, false
     for i = 1, numRecords do
         local rec = records[i]
         local info = Call(C_Traits.GetNodeInfo, configID, rec.id)
@@ -496,19 +507,20 @@ local function ReadYours(settingOn)
             yourEntry, yourRank = ActiveEntryID(info), RankOf(info)
             if rec.sub then
                 local active = info.subTreeActive
-                if not issecretvalue(active) and active == true then flagged = true end
-                if not issecretvalue(yourRank) then heroRanks = heroRanks + yourRank end
+                if issecretvalue(active) or active == false then
+                    sawOther = true
+                elseif active == true then
+                    sawActive = true
+                end
             end
         end
         rec.diff = DiffCategory(rec.entryRaw, rec.rank, yourEntry, yourRank)
     end
     if not heroSub then return end
-    local active
+    local infoActive
     local si = Call(C_Traits.GetSubTreeInfo, configID, heroSub)
-    if type(si) == "table" then active = si.isActive end
-    local mine = { id = heroSub, flagged = flagged, ranks = heroRanks,
-        infoActive = not issecretvalue(active) and active == true }
-    if PickHeroSubTree({ mine }) ~= heroSub then
+    if type(si) == "table" then infoActive = si.isActive end
+    if not HeroCompareOn(sawActive, sawOther, infoActive) then
         for i = 1, numRecords do
             if records[i].sub then records[i].diff = nil end
         end
@@ -583,7 +595,7 @@ RetryStats = function()
     if readGUID == nil or readGUID ~= WindowGUID() then return end
     local frame = _G.InspectFrame
     ReadStats(frame and frame.unit)
-    Apply()
+    IT:RepaintChips()
 end
 
 ---------------------------------------------------------------------------------
@@ -812,6 +824,8 @@ FillTooltip = function(tt, btn)
         local info = btn.tipInfo
         info.getterArgs[1], info.getterArgs[2] = ref.entryID, rec.rank
         info.tooltipData = nil
+        -- A declined rebuild clears append on the primary info.
+        info.append = true
         local ok = pcall(tt.ProcessInfo, tt, info)
         filled = ok and tt:NumLines() > before
     end
@@ -859,7 +873,9 @@ local function AcquireNode(i)
     btn.choice:SetPoint("CENTER", btn, "RIGHT", 0, 0)
     local function Rebuild(tt)
         if tt:GetOwner() ~= btn or not btn.rec then return false end
-        return FillTooltip(tt, btn)
+        -- Blizzard's default rebuild would replay the description alone.
+        if not FillTooltip(tt, btn) then tt:Hide() end
+        return true
     end
     btn.tipInfo = { getterName = "GetTraitEntry", getterArgs = { n = 2 }, append = true,
         rebuildPreCall = Rebuild }
@@ -1207,6 +1223,7 @@ Apply = function()
     local settingOn = db ~= nil and db.InspectTalentsEnabled ~= false
     local moduleOn = IT:IsEnabled() and CP ~= nil and CP:IsEnabled()
     local state = OpenGate(settingOn, moduleOn, _G.InspectFrame, wanted, readValid, readResult)
+    if panel then panel.shownState = nil end
     if state == "hidden" then
         if arrow then arrow:Hide() end
         if panel then panel:Hide() end
@@ -1230,7 +1247,19 @@ Apply = function()
     else
         DrawState(state)
     end
+    panel.shownState = state
     panel:Show()
+end
+
+-- A stats retry changes only the chips; redrawing the tree would also hide
+-- and reshow the hovered talent and its tooltip.
+function IT:RepaintChips()
+    if not (panel and panel.shownState == "tree") then
+        Apply()
+        return
+    end
+    local db = DB()
+    PaintChips(db ~= nil and db.InspectTalentsShowStats ~= false and statsShown)
 end
 
 ---------------------------------------------------------------------------------
@@ -1327,12 +1356,21 @@ function IT:OnInspectShow()
     local db = DB()
     wanted = db ~= nil and db.InspectTalentsAutoOpen ~= false
     foreign = false
+    -- The arrow, and the waiting state when requested, show at once.
+    Apply()
     ScheduleRead()
 end
 
+-- A child frame keeps its own shown flag, so the reopened window would
+-- show the last player's panel until the next apply.
 function IT:OnInspectHide()
     self:UnregisterEvent("INSPECT_READY")
     ResetWindowState()
+    if panel then
+        panel:Hide()
+        panel.shownState = nil
+    end
+    if arrow then arrow:Hide() end
 end
 
 function IT:INSPECT_READY(event, guid)
