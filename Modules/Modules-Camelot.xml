@@ -24,9 +24,11 @@
     <Script file="AuraTracking\AuraDebuffs.lua" />
     <Script file="AuraTracking\AuraHeaders.lua" />
     <Script file="Core\CVars\CVars.lua" />
+    <Script file="QoL\Automation\Automation.lua" />
     <Script file="Core\Optimize.lua" />
     <Script file="Core\VersionCheck.lua" />
     <Script file="QoL\QualityOfLife\SlashCommands.lua" />
+    <Script file="QoL\Automation\CombatLogger.lua" />
     <Script file="Skinning\CharacterPanel\CharacterPanel.lua" />
     <Script file="Skinning\CharacterPanel\InspectPanel.lua" />
     <Script file="Core\CVars\PanelScaleRegistry.lua" />
@@ -34,6 +36,7 @@
     <Script file="Core\CVars\MapScale.lua" />
     <Script file="QoL\QualityOfLife\CopyAnything.lua" />
     <Script file="Skinning\DarkTheme\AlertFrames.lua" />
+    <Script file="QoL\Automation\MerchantPages.lua" />
     <Script file="Skinning\DarkTheme\ColorPicker.lua" />
     <Script file="QoL\QualityOfLife\MoveFrames.lua" />
     <Script file="Skinning\DarkTheme\VehicleExit.lua" />

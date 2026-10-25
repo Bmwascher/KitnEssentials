@@ -50,6 +50,7 @@ return {
     "Modules/DungeonTools/KeystoneHelper/GroupFinderPanel.lua",
     "Modules/DungeonTools/KeystoneHelper/LFGQuickCreate.lua",
     "Modules/DungeonTools/KeystoneHelper/LFGReminder.lua",
+    "Modules/QoL/Automation/AuctionHouseFilter.lua",
     "Modules/QoL/Automation/VantusRune.lua",
     "Modules/QoL/BonusRoll.lua",
     "Modules/QoL/HousingDashboardFix.lua",

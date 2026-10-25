@@ -70,8 +70,7 @@ local FOREVER_ALLOWED = {
     -- Core: System Optimization, the CVars page with its General and Dev
     -- tabs, UI Scaling with its General, Core Panels and Services tabs, Panel
     -- and Map Scale, and Version Check. The Housing and Legacy tabs and the
-    -- Optimize Mythic+ card stay withheld, and so does Automation, whose
-    -- switch the CVars login apply waits on.
+    -- Optimize Mythic+ card stay withheld.
     CVars = true,
     CVarsGeneral = true,
     CVarsDev = true,
@@ -126,6 +125,18 @@ local FOREVER_ALLOWED = {
     StatusTexts = true,
     PlayerAbsorbs = true,
     PetStatusText = true,
+    -- Automation: the module and page with its General, Interface, Quests &
+    -- Social and Vendors & Bags tabs, Combat Logger and Merchant Pages.
+    -- Vantus Rune, the Auction House Filter, the housing dashboard fix, Bonus
+    -- Roll, and the Group Finder, keystone, housing roll, Voidcores, pet
+    -- battle and full Combat Logger content options stay withheld.
+    Automation = true,
+    AutomationGeneral = true,
+    AutomationInterface = true,
+    AutomationQuests = true,
+    AutomationVendors = true,
+    CombatLogger = true,
+    MerchantPages = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.

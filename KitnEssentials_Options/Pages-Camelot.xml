@@ -19,9 +19,11 @@
     <Script file="Combat\StatusTexts\GUI-PetStatusText.lua" />
     <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
     <Script file="Combat\StatusTexts\GUI-PlayerAbsorbs.lua" />
+    <Script file="QoL\Automation\GUI-Automation.lua" />
     <Script file="Core\CVars\GUI-CVars.lua" />
     <Script file="Core\CVars\GUI-UIScaling.lua" />
     <Script file="QoL\QualityOfLife\GUI-SlashCommands.lua" />
+    <Script file="QoL\Automation\GUI-CombatLogger.lua" />
     <Script file="Skinning\GUI-CharacterPanel.lua" />
     <Script file="QoL\QualityOfLife\GUI-CopyAnything.lua" />
     <Script file="Skinning\DarkTheme\GUI-ColorPicker.lua" />
