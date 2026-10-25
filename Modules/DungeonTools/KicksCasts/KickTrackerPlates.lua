@@ -38,6 +38,7 @@ local type = type
 local wipe = wipe
 local table_remove = table.remove
 local table_sort = table.sort
+local FA = KE.FocusAnnounce
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local ICON_CROP = 0.08
@@ -48,6 +49,7 @@ local SAMPLE_CD = 30
 local GHOST_CELLS = 4     -- a ghost's cells; the player is never one
 local CELL_LEVELS = 4     -- frame levels one ghost cell takes
 local BASE_SLACK = 0.1    -- a read this much before a kick still serves as its baseline
+local RAIL_SPAN = 8       -- marker indexes of fill travel on either side of a lane's marker
 local READY_SLACK = 0.05  -- a relayout this long after a cooldown's end finds it over
 local MAX_PLATES = 40
 
@@ -70,6 +72,10 @@ P.ghosts = {}       -- live ghosts, oldest first
 P.free.ghost = {}
 P.packet = { units = {}, before = {}, after = {} }  -- the last update's gate totals, until the next read
 P.packetT = -1
+P.rails = {}        -- [nameplate token] = rail
+P.kickers = {}      -- members with a kick row and a marker: { guid, unit, marker, rank }
+P.free.rail = {}
+KT.markerOf = {}    -- [member GUID] = their announced marker, 1 to 8
 P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt is its plain time
 
 -- A plate's lifetime: a kick seen on it carries this, so a placement whose
@@ -601,6 +607,192 @@ WAITS.ghost = true
 RELEASE.ghost = function(g) KT:ReleaseGhost(g) end
 
 ---------------------------------------------------------------------------------
+-- Rails: icons on the mobs teammates' announced markers sit on
+---------------------------------------------------------------------------------
+-- One slot at the row's end. A lane per member with a marker, one icon wide,
+-- at that slot plus the member's rank among members on the same marker: a
+-- mob carries one marker, so only one marker's lanes can open. In each lane's
+-- clip a marker gate, 2 * RAIL_SPAN icons wide over the marker plus or minus
+-- RAIL_SPAN, takes the plate's marker index; the icon hangs from its fill
+-- edge and lands inside the clip only when the index is the lane's marker.
+-- A count gate closes it once the member interrupted again.
+local function BuildRail()
+    local rail = CreateFrame("Frame", nil, P.lift)
+    rail:EnableMouse(false)
+    rail:Hide()
+    rail.kind = "rail"
+    rail.lanes = {}
+    rail.seq = 0
+    return rail
+end
+
+-- The marker gate draws nothing at full alpha: the icon descends from it.
+local function BuildLane(rail)
+    local lane = {}
+    lane.clip = NewClip(rail)
+    lane.gate, lane.fill = NewGate(lane.clip, false)
+    lane.gateB, lane.fillB = NewGate(lane.gate, true)
+    lane.clipB = NewClip(lane.gate)
+    lane.icon = BuildIcon(lane.clipB)
+    return lane
+end
+
+local function LevelRail(rail, strata, level)
+    Level(rail, strata, level)
+    for i = 1, #rail.lanes do
+        local lane = rail.lanes[i]
+        Level(lane.clip, strata, level + 1)
+        Level(lane.gate, strata, level + 1)
+        Level(lane.gateB, strata, level + 1)
+        Level(lane.clipB, strata, level + 2)
+        Level(lane.icon, strata, level + 3)
+        Level(lane.icon.cd, strata, level + 4)
+    end
+end
+
+-- One lane per kicker; lanes built here take the rail's levels.
+local function StyleRail(rail)
+    local cw = KT.db.PlateIconSize
+    rail:SetSize(cw, cw)
+    for i = 1, #P.kickers do
+        local lane = rail.lanes[i]
+        if not lane then
+            lane = BuildLane(rail)
+            rail.lanes[i] = lane
+        end
+        lane.clip:SetSize(cw, cw)
+        lane.gate:SetSize(2 * RAIL_SPAN * cw, cw)
+        lane.gate:ClearAllPoints()
+        lane.gate:SetPoint("LEFT", lane.clip, "LEFT", -RAIL_SPAN * cw, 0)
+        lane.icon:SetSize(cw, cw)
+        StyleIcon(lane.icon)
+        SizeGate(lane.gateB, lane.icon, cw)
+        HangWhole(lane.clipB, lane.fillB, lane.gateB)
+    end
+    LevelRail(rail, rail:GetFrameStrata(), rail:GetFrameLevel())
+end
+
+local function RefeedLane(lane)
+    if lane.cCur ~= nil then
+        FeedWhole(lane.gateB, lane.fillB, lane.clipB, lane.cBase, lane.cCur)
+    else
+        ResetWhole(lane.gateB, lane.fillB, lane.clipB)
+    end
+end
+
+-- Each lane for its kicker: picture, current cooldown, the gate's range
+-- about their marker. A lane hides plainly while its kicker's live icon is on
+-- a plate.
+local function DressRail(rail)
+    for i = 1, #P.kickers do
+        local k, lane = P.kickers[i], rail.lanes[i]
+        local member = KT.partyMembers[k.guid]
+        if lane.guid ~= k.guid then lane.cBase, lane.cCur = nil, nil end
+        lane.guid, lane.rank = k.guid, k.rank
+        if member then
+            PaintIcon(lane.icon, member)
+            PaintCooldown(lane.icon, member.kickStart, member.kickDuration)
+        end
+        lane.gate:SetMinMaxValues(k.marker - RAIL_SPAN, k.marker + RAIL_SPAN)
+        local live = P.live[k.guid]
+        lane.clip:SetShown(not (live and live.unit))
+        RefeedLane(lane)
+    end
+    for i = #P.kickers + 1, #rail.lanes do
+        local lane = rail.lanes[i]
+        lane.guid, lane.cBase, lane.cCur = nil, nil, nil
+        lane.clip:Hide()
+    end
+end
+
+-- The plate's marker index into every lane's gate, the icon hung from the
+-- fill again, and the count gate that rides the icon fed again with it.
+local function FeedRail(rail, index)
+    for i = 1, #P.kickers do
+        local lane = rail.lanes[i]
+        lane.gate:SetValue(index)
+        lane.icon:ClearAllPoints()
+        lane.icon:SetPoint("LEFT", lane.fill, "RIGHT", 0, 0)
+        RefeedLane(lane)
+    end
+end
+
+-- Lanes at the slot plus their rank; nothing follows the rail.
+local function AnchorRail(rail, from, fromPoint, offset, leftward)
+    local point = leftward and "RIGHT" or "LEFT"
+    local pitch = KT.db.PlateIconSize + KT.db.PlateSpacing
+    local dir = leftward and -1 or 1
+    rail:ClearAllPoints()
+    rail:SetPoint(point, from, fromPoint, offset, 0)
+    for i = 1, #P.kickers do
+        local lane = rail.lanes[i]
+        if lane and lane.rank then
+            lane.clip:ClearAllPoints()
+            lane.clip:SetPoint(point, from, fromPoint, offset + dir * lane.rank * pitch, 0)
+        end
+    end
+    return from, fromPoint, offset
+end
+
+LEVEL.rail, ANCHOR.rail = LevelRail, AnchorRail
+RELEASE.rail = function(rail) KT:ReleaseRail(rail) end
+
+-- The baseline the oldest ghost still holding the member's cell gives.
+local function LaneBase(guid)
+    for i = 1, #P.ghosts do
+        local g = P.ghosts[i]
+        for k = 1, g.used do
+            local cell = g.cells[k]
+            if cell.guid == guid then return Base(cell.before, cell.gen) end
+        end
+    end
+    return nil
+end
+
+-- Fed past the member's current cooldown: against the oldest ghost still
+-- holding their cell, else whole at the count now. A read during the
+-- cooldown is skipped until KT:WakeAt's wake at its end.
+local function FeedLaneCount(lane, member, cur, T)
+    if cur == nil then
+        lane.cBase, lane.cCur = nil, nil
+        RefeedLane(lane)
+        return
+    end
+    if KT.MainCooling(member, T) then
+        KT:WakeAt(member.kickStart + member.kickDuration + READY_SLACK)
+        return
+    end
+    local base = LaneBase(lane.guid)
+    if base == nil then base = cur end
+    lane.cBase, lane.cCur = base, cur
+    RefeedLane(lane)
+end
+
+-- A rail's lanes fed from the latest read (opaque, the engine's own current
+-- totals): at each read, when the rail is made, and when a ghost comes or
+-- goes, since the oldest ghost holding a member's cell gives their baseline.
+local function FeedRailCounts(rail, T)
+    local totals = KT.meterBase and KT.meterBase.a
+    if not totals then return end
+    for i = 1, #P.kickers do
+        local lane = rail.lanes[i]
+        local member = lane and KT.partyMembers[lane.guid]
+        if member then FeedLaneCount(lane, member, totals[KT:GateSlotOf(member)], T) end
+    end
+end
+
+local function KickerOrder(a, b)
+    return a.unit < b.unit
+end
+
+-- The player's own lane follows Focus Marker's marker while it is enabled.
+local function OwnMarker()
+    local FM = KitnEssentials:GetModule("FocusMarker", true)
+    if not FM or not FM:IsEnabled() then return nil end
+    return FA.NameIndex(FM:GetEffectiveMarker())
+end
+
+---------------------------------------------------------------------------------
 -- Rows
 ---------------------------------------------------------------------------------
 local function RowOf(unit)
@@ -830,6 +1022,7 @@ function KT:PutKickIcon(guid, unit, pend)
     self:LayoutPlate(unit)
     FlushLayouts()
     self:WatchReady(e, member)
+    self:RailsRefresh()
 end
 
 -- A cooling icon moves to the ready end of its row when the cooldown ends:
@@ -855,6 +1048,7 @@ function KT:ReleaseLive(guid)
     e.guid, e.mobGuid, e.cBase, e.cCur = nil, nil, nil, nil
     P.free.live[#P.free.live + 1] = e
     if old then self:LayoutPlate(old) end
+    self:RailsRefresh()
 end
 
 ---------------------------------------------------------------------------------
@@ -950,6 +1144,7 @@ function KT:FeedCounts(T, totals, ready)
             if member then FeedCellCount(cell, totals[self:GateSlotOf(member)], T, leftward) end
         end
     end
+    self:FeedLanes(T)
 end
 
 -- The wake, and any cooldown change: the latest read (opaque, the engine's
@@ -1035,6 +1230,7 @@ function KT:MakeGhost(T, unit, stamp)
     g.used, g.t, g.start, g.plate, g.stamp = n, T, T, unit, now
     g.seq = g.seq + 1
     P.ghosts[#P.ghosts + 1] = g
+    self:FeedLanes(T)
     local seq, gen, activation = g.seq, P.gen, self.activationID
     C_Timer.After(0, function()
         if self.activationID ~= activation or P.gen ~= gen or g.seq ~= seq then return end
@@ -1092,6 +1288,7 @@ function KT:ReleaseGhost(g)
     g.seq = g.seq + 1
     P.free.ghost[#P.free.ghost + 1] = g
     if old then self:LayoutPlate(old) end
+    self:FeedLanes(GetTime())
 end
 
 -- A sure kick of the member takes their cells out of every ghost that started
@@ -1124,7 +1321,124 @@ function KT:PlatesSupersede(guid, upto)
             end
         end
     end
+    if changed then self:FeedLanes(GetTime()) end
     return changed
+end
+
+---------------------------------------------------------------------------------
+-- Rails: engine calls
+---------------------------------------------------------------------------------
+-- Members with a kick row and a marker, in party order, ranked per marker.
+function KT:SyncKickers()
+    local list = P.kickers
+    wipe(list)
+    if self.db.PlatePremark == false then return end
+    for guid, member in pairs(self.partyMembers) do
+        local marker
+        if member.unit == "player" then marker = OwnMarker() else marker = self.markerOf[guid] end
+        if marker and member.interruptData and member.unit then
+            list[#list + 1] = { guid = guid, unit = member.unit, marker = marker }
+        end
+    end
+    table_sort(list, KickerOrder)
+    local rank = {}
+    for i = 1, #list do
+        local k = list[i]
+        k.rank = rank[k.marker] or 0
+        rank[k.marker] = k.rank + 1
+    end
+end
+
+-- Rails run while some member has a marker, and never during the settings
+-- preview, whose samples never mix with live elements; RAID_TARGET_UPDATE is
+-- heard only then. A marker change, the roster, settings and the preview's
+-- end come here.
+function KT:RailsResync()
+    if not self.platesOn then return end
+    self:SyncKickers()
+    local run = #P.kickers > 0 and not self.isPreview
+    if run ~= (P.railsOn == true) then
+        P.railsOn = run
+        if run then
+            self:RegisterEvent("RAID_TARGET_UPDATE", "RailsAll")
+        else
+            self:UnregisterEvent("RAID_TARGET_UPDATE")
+        end
+    end
+    self:RailsAll()
+end
+
+function KT:RailsAll()
+    if not P.railsOn then
+        for _, rail in pairs(P.rails) do self:ReleaseRail(rail) end
+        return
+    end
+    for i = 1, MAX_PLATES do self:RailsPlate(PLATE_UNITS[i]) end
+end
+
+-- A rail on each hostile plate whose marker index is not plain nil, fed
+-- again a frame after it shows.
+function KT:RailsPlate(unit)
+    local rail = P.rails[unit]
+    local index, marked
+    if P.railsOn and C_NamePlate.GetNamePlateForUnit(unit) and IsHostile(unit) then
+        index, marked = KT.RaidMarkOf(unit)
+    end
+    if not marked then
+        if rail then self:ReleaseRail(rail) end
+        return
+    end
+    if not rail then
+        rail = table_remove(P.free.rail) or BuildRail()
+        if not Attach(rail, unit) then
+            P.free.rail[#P.free.rail + 1] = rail
+            return
+        end
+        rail.plate = unit
+        P.rails[unit] = rail
+        AddToRow(rail, unit)
+    end
+    StyleRail(rail)
+    DressRail(rail)
+    FeedRailCounts(rail, GetTime())
+    FeedRail(rail, index)
+    self:LayoutPlate(unit)
+    rail.seq = rail.seq + 1
+    local seq, gen, activation = rail.seq, P.gen, self.activationID
+    C_Timer.After(0, function()
+        if self.activationID ~= activation or P.gen ~= gen or rail.seq ~= seq or rail.plate ~= unit then return end
+        local again, stillMarked = KT.RaidMarkOf(unit)
+        if stillMarked then FeedRail(rail, again) end
+    end)
+end
+
+-- Every lane repainted: a live icon placed or gone, a cooldown changed.
+function KT:RailsRefresh()
+    for _, rail in pairs(P.rails) do DressRail(rail) end
+end
+
+-- Every lane's count gate fed again: a read, or a ghost made, superseded or gone.
+function KT:FeedLanes(T)
+    for _, rail in pairs(P.rails) do FeedRailCounts(rail, T) end
+end
+
+function KT:ReleaseRail(rail)
+    local unit = rail.plate
+    if not unit then return end
+    P.rails[unit] = nil
+    local old = self:Unplace(rail)
+    for i = 1, #rail.lanes do
+        local lane = rail.lanes[i]
+        lane.icon.cd:Clear()
+        lane.gate:SetMinMaxValues(0, 1)
+        lane.gate:SetValue(0)
+        lane.guid, lane.rank, lane.cBase, lane.cCur = nil, nil, nil, nil
+        ResetWhole(lane.gateB, lane.fillB, lane.clipB)
+    end
+    rail.plate = nil
+    rail.seq = rail.seq + 1
+    P.free.rail[#P.free.rail + 1] = rail
+    if old then self:LayoutPlate(old) end
 end
 
 ---------------------------------------------------------------------------------
@@ -1159,7 +1473,11 @@ function KT:PlateArrived(unit)
             end
         end
     end
-    if back then self:LayoutPlate(unit) end
+    if back then
+        self:LayoutPlate(unit)
+        self:RailsRefresh()
+    end
+    if P.railsOn then self:RailsPlate(unit) end
     FlushLayouts()
 end
 
@@ -1186,6 +1504,7 @@ function KT:OnPlateRemoved(_, unit)
         end
     end
     DropRow(row)
+    self:RailsRefresh()
 end
 
 -- A new target ends every wait that counted on the old one.
@@ -1211,6 +1530,7 @@ end
 function KT:PlatesCooldown(guid)
     self:FeedReady()
     local e, member = P.live[guid], self.partyMembers[guid]
+    self:RailsRefresh()
     if not e or not member then return end
     PaintCooldown(e.icon, member.kickStart, member.kickDuration)
     if e.unit then self:LayoutPlate(e.unit) end
@@ -1228,6 +1548,7 @@ function KT:PlatesRoster()
         end
     end
     for i = 1, #P.ghosts do PaintGhost(P.ghosts[i]) end
+    self:RailsResync()
 end
 
 function KT:PlatesReset()
@@ -1239,6 +1560,11 @@ function KT:PlatesReset()
     wipe(P.packet.after)
     for guid in pairs(P.live) do self:ReleaseLive(guid) end
     for i = #P.ghosts, 1, -1 do self:ReleaseGhost(P.ghosts[i]) end
+    for _, rail in pairs(P.rails) do self:ReleaseRail(rail) end
+    if P.railsOn then
+        P.railsOn = false
+        self:UnregisterEvent("RAID_TARGET_UPDATE")
+    end
     self:ReleaseSamples()
     for i = #P.waiting, 1, -1 do
         local e = P.waiting[i]
@@ -1266,8 +1592,10 @@ function KT:PlatesRestyle()
         PaintGhost(g)
         FeedGhost(g)
     end
+    for _, rail in pairs(P.rails) do self:ReleaseRail(rail) end
     if self.isPreview then self:PlaceSamples() end
     for unit in pairs(P.rows) do self:LayoutPlate(unit) end
+    self:RailsResync()
 end
 
 function KT:PlatesActivate()
@@ -1374,7 +1702,9 @@ function KT:ReleaseSamples()
     if unit then self:LayoutPlate(unit) end
 end
 
+-- The Rails held off for the preview come back with it gone.
 function KT:PlatesPreviewEnd()
     if P.previewFrame then P.previewFrame:UnregisterAllEvents() end
     self:ReleaseSamples()
+    if self.platesOn then self:RailsResync() end
 end

@@ -567,6 +567,7 @@ local function RaidMarkOf(unit)
     if ok and (issecretvalue(index) or index ~= nil) then return index, true end
     return nil, false
 end
+KT.RaidMarkOf = RaidMarkOf
 
 local function KickedFrom(entry)
     return { icon = entry.iconID, mark = entry.raidMark, hasMark = entry.hasRaidMark }
