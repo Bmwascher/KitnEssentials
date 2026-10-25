@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.15
+
+### Damage Meter
+
+- In combat, every death the meter sees happen reads as a clock time
+  (1:07); raw seconds (240s) show only for a death already listed after a
+  /reload or a long hitch
+- A death recap longer than its list shows the newest lines, ending on the
+  killing blow, in both the hover tip and the opened recap
+- Death logs show damage only: the game's death recap does not include
+  heals
+- Windows tab, Sizing card: Window Width is now Bar Width, beside Bar
+  Height, and the split sliders set exact pixel sizes
+- Appearance tab, Header card: Match Text Size (on by default) and a Header
+  Height slider for a taller or shorter header
+- While the settings are open, sample bars fill each window below its real
+  rows, so sizes can be judged on an empty meter
+- A UI scale change lays the meter out again without a /reload
+
+---
+
 ## v4.14.14
 
 ### Party Cooldowns
