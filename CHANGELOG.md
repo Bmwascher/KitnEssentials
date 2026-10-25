@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.12
+
+### General
+
+- Reload Now, the Home page's Reload UI button, the minimap button's
+  middle-click and /kes resetgui reload right away, in combat too
+
+### WoW Forever
+
+- Quality of Life page: Spell Alert Opacity, Move Frames (now including the
+  Progress Legacy window), Copy Anything and Slash Commands
+- Secondary Stats: choose from the character pane's stats, grouped; each
+  class starts with its three core stats shown
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.11
 
 ### WoW Forever
