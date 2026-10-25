@@ -347,16 +347,15 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     -- Info "Blocklist Filter Info" header
     -- CreateText reserves ~23px for the title line (16pt + 2px spacer)
-    -- before the body starts. This note runs ~265 characters at 12pt --
-    -- three wrapped lines needing ~47px of body space. 23 + 47 = 70, plus
-    -- a small buffer against font-metric rounding.
+    -- before the body starts; 76 holds up to three wrapped body lines at
+    -- 12pt with a small buffer against font-metric rounding.
     local textRowSize = 76
     local infoRow = GUIFrame:CreateRow(card8.content, textRowSize)
     local infoText = GUIFrame:CreateText(infoRow,
         KE:ColorTextByTheme("Blocklist Filter Info"),
         KE:ColorTextByTheme("-") ..
-            " Only possible to add auras that have been made non secret by Blizzard, for example all the Bloodlust ID's." ..
-            " Adding a boss debuff's spell ID will not hide it -- filtering only works for spells Blizzard has made non-secret, so an unsupported ID silently does nothing.",
+            " Only spells Blizzard has made non-secret can be added, such as the Bloodlust IDs." ..
+            " A boss debuff's ID does nothing here, because the game keeps it secret.",
         textRowSize, "hide")
     infoRow:AddWidget(infoText, 1)
     manager:Register(infoText, "all")

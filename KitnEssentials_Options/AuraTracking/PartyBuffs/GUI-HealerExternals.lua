@@ -111,12 +111,13 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     if Sensor and Sensor.door and not Sensor.DoorOpen() then
         cardMain:AddNote("Raid Cooldowns timers are unavailable on this client.")
     end
-    cardMain:AddLabel("One icon per cooldown, with your party's single-target spells first and raid " ..
-        "cooldowns after. Yours come first in each group, whether or not " .. KE:Gold("Include Yourself") ..
-        " is on." ..
-        "\n\nAn icon is full color when ready. It turns gray with the time left once its buff shows: a " ..
-        "single-target spell's on anyone in your party, a raid cooldown's on its caster. Another player's " ..
-        "cast of the same spell starts it too, such as a Retribution Paladin's Blessing of Sacrifice." ..
+    cardMain:AddLabel("One icon per cooldown: your party's single-target spells first, then raid " ..
+        "cooldowns. Your own come first in each group, whether or not " .. KE:Gold("Include Yourself") ..
+        " on the Cooldowns tab is on." ..
+        "\n\nAn icon is full color when ready. Once the buff appears it turns gray and counts down: " ..
+        "on anyone in your party for a single-target spell, on the caster for a raid cooldown. " ..
+        "Another player casting the same spell starts it too, such as a Retribution Paladin's " ..
+        "Blessing of Sacrifice." ..
         "\n\nShows in a party wherever the " .. KE:Gold("General") .. " tab's " .. KE:Gold("Show In") ..
         " allows. Never in a raid or an arena.")
     local function Attach()
