@@ -198,12 +198,14 @@ end
 -- the place: a raid queued as a party reports "party", and a Lair
 -- may not report "raid". 220 (Story) and 250 (World) are listed so
 -- they resolve in the raid branch, where neither has a toggle and both
--- answer no.
+-- answer no. 242 and 243 are the 20- and 10-player classic raids, which only
+-- the Forever client has.
 local RAID_DIFFICULTIES = {
     [3] = true, [4] = true, [5] = true, [6] = true, [7] = true, [9] = true,
     [14] = true, [15] = true, [16] = true, [17] = true,
     [33] = true, [151] = true,
     [220] = true, [233] = true, [250] = true,
+    [242] = true, [243] = true,
 }
 
 function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
@@ -226,7 +228,8 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
 
     elseif instanceType == "raid" then
         if difficultyID == 7 or difficultyID == 17 then return db.RaidLFR == true, "LFR" end
-        if difficultyID == 3 or difficultyID == 4 or difficultyID == 9 or difficultyID == 14 then
+        if difficultyID == 3 or difficultyID == 4 or difficultyID == 9 or difficultyID == 14
+            or difficultyID == 242 or difficultyID == 243 then
             return db.RaidNormal == true, "a Normal raid"
         end
         if difficultyID == 5 or difficultyID == 6 or difficultyID == 15 then
