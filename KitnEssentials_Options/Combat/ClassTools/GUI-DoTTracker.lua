@@ -83,21 +83,16 @@ local function RefreshPage()
     GUIFrame:RefreshContent()
 end
 
-GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
+local function ApplySettings()
+    local DT = GetModule()
+    if DT then DT:ApplySettings() end
+end
+
+local function BuildHeader(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.DoTTracker
-    if not db then return yOffset end
+    if not db then return yOffset, true end
 
     local DT = GetModule()
-    local Rules = KE.DoTTrackerRules
-    local seeds = KE.DOT_TRACKER_SEEDS
-    local manager = GUIFrame:CreateWidgetStateManager()
-    manager:SetCondition("icon", function() return db.ShowIcon ~= false end)
-    manager:SetCondition("fullCoverage", function() return db.FullCoverageColor ~= false end)
-    manager:SetCondition("attach", function() return db.AttachToCDM == true end)
-
-    local function ApplySettings()
-        if DT then DT:ApplySettings() end
-    end
 
     ----------------------------------------------------------------
     -- Card 1: Enable
@@ -125,9 +120,15 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         }), 1 / 3)
         card1:AddRow(row1, Theme.rowHeight)
     end
-    yOffset = card1:GetNextOffset()
+    return card1:GetNextOffset(), db.Enabled ~= true
+end
 
-    if db.Enabled ~= true then return yOffset end
+GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.DoTTracker
+    if not db then return yOffset end
+
+    local Rules = KE.DoTTrackerRules
+    local seeds = KE.DOT_TRACKER_SEEDS
 
     ----------------------------------------------------------------
     -- Card: Show In
@@ -187,24 +188,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     -- Rebuilt with the body on every draw, so it never holds a pooled widget
     -- from an earlier one.
     local colorManager
-
-    -- The swatches of rows drawn without a color of their own, each with the
-    -- pool generation it had then. Rebuilt with the body, like colorManager.
-    local followers = {}
-    -- SetColor runs the swatch's callback; this turns that write away.
-    local repainting = false
-
-    -- Shows the current Some Have It on every follower that still has no color
-    -- of its own and still belongs to this page.
-    local function RepaintFollowers(r, g, b, a)
-        repainting = true
-        for _, f in ipairs(followers) do
-            if f.picker._keGen == f.gen and Rules.ColorOf(db.Spells[f.key], nil, true) == nil then
-                f.picker:SetColor(r, g, b, a)
-            end
-        end
-        repainting = false
-    end
 
     local function RowLabel(entry)
         local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.id)
@@ -268,7 +251,7 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
             local picker = GUIFrame:CreateColorPicker(line, "Color", {
                 color = own or db.SomeColor,
                 callback = function(r, g, b, a)
-                    if repainting or ColorEpoch(key) ~= epoch then return end
+                    if ColorEpoch(key) ~= epoch then return end
                     local session = ColorPickerFrame and ColorPickerFrame.swatchFunc
                     if session ~= pick or not shown then
                         pick = session
@@ -281,9 +264,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
                 end,
             })
             line:AddWidget(picker, 0.25)
-            if not own then
-                followers[#followers + 1] = { picker = picker, gen = picker._keGen, key = key }
-            end
             -- Redrawn, not repainted: setting the picker's color would run its
             -- callback and save the color straight back.
             local reset = GUIFrame:CreateButton(line, "Reset", {
@@ -306,7 +286,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
 
     DrawClass = function(classToken)
         colorManager = GUIFrame:CreateWidgetStateManager()
-        followers = {}
         colorManager:SetCondition("colors", function() return db.DoTColors ~= false end)
         local currentSpecId = KE:GetPlayerSpecId()
         local specIds = classSpecs[classToken] or {}
@@ -410,10 +389,123 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         "dummies, every attackable enemy counts.")
     yOffset = card3:GetNextOffset()
 
+    return yOffset
+end)
+
+GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.DoTTracker
+    if not db then return yOffset end
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("icon", function() return db.ShowIcon ~= false end)
+    manager:SetCondition("fullCoverage", function() return db.FullCoverageColor ~= false end)
+    manager:SetCondition("attach", function() return db.AttachToCDM == true end)
+
     ----------------------------------------------------------------
-    -- Card 4: Layout
+    -- Card 5: Count Text
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
+    local card5 = GUIFrame:CreateCard(scrollChild, "Count Text", yOffset)
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    row5a:AddWidget(GUIFrame:CreateDropdown(row5a, "Format", {
+        options = COUNT_FORMATS,
+        value = db.CountFormat or "FRACTION",
+        callback = function(key)
+            db.CountFormat = key
+            ApplySettings()
+        end,
+    }), 0.5)
+    card5:AddRow(row5a, Theme.rowHeight)
+    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "DoT Colors", {
+        value = db.DoTColors ~= false,
+        tooltip = "Each DoT's count and icon border take its own color, set in Your DoTs " ..
+            "on the Tracking tab. Off: Some Have It and a black border for every DoT.",
+        callback = function(checked)
+            db.DoTColors = checked
+            ApplySettings()
+        end,
+    }), 0.5)
+    row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "Full Coverage Color", {
+        value = db.FullCoverageColor ~= false,
+        tooltip = "The count turns All Have It when every counted enemy has the DoT.",
+        callback = function(checked)
+            db.FullCoverageColor = checked
+            manager:UpdateAll(true)
+            ApplySettings()
+        end,
+    }), 0.5)
+    card5:AddRow(row5c, Theme.rowHeight)
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    row5b:AddWidget(GUIFrame:CreateColorPicker(row5b, "Some Have It", {
+        color = db.SomeColor,
+        callback = function(r, g, b, a)
+            db.SomeColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    }), 0.5)
+    local allPicker = GUIFrame:CreateColorPicker(row5b, "All Have It", {
+        color = db.AllColor,
+        callback = function(r, g, b, a)
+            db.AllColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row5b:AddWidget(allPicker, 0.5)
+    manager:Register(allPicker, "fullCoverage")
+    card5:AddRow(row5b, Theme.rowHeight)
+    yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Target Timer
+    ----------------------------------------------------------------
+    local card6 = GUIFrame:CreateCard(scrollChild, "Target Timer", yOffset)
+    card6:AddHeaderToggle(db.TimerEnabled ~= false, function(checked)
+        db.TimerEnabled = checked
+        ApplySettings()
+    end)
+    card6:AddLabel("Your DoT's time left on your current target, centered on the icon. " ..
+        "Hidden when the target does not have it.")
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    row6a:AddWidget(GUIFrame:CreateSlider(row6a, "Font Size", {
+        min = 8, max = 40, step = 1,
+        value = db.TimerFontSize or 18,
+        callback = function(value)
+            db.TimerFontSize = value
+            ApplySettings()
+        end,
+    }), 0.5)
+    row6a:AddWidget(GUIFrame:CreateColorPicker(row6a, "Color", {
+        color = db.TimerColor,
+        callback = function(r, g, b, a)
+            db.TimerColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    }), 0.5)
+    card6:AddRow(row6a, Theme.rowHeight)
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    row6b:AddWidget(GUIFrame:CreateSlider(row6b, "Timer X", {
+        min = -50, max = 50, step = 1,
+        value = db.TimerX or 0,
+        callback = function(value)
+            db.TimerX = value
+            ApplySettings()
+        end,
+    }), 0.5)
+    row6b:AddWidget(GUIFrame:CreateSlider(row6b, "Timer Y", {
+        min = -50, max = 50, step = 1,
+        value = db.TimerY or 0,
+        callback = function(value)
+            db.TimerY = value
+            ApplySettings()
+        end,
+    }), 0.5)
+    card6:AddRow(row6b, Theme.rowHeight)
+    yOffset = card6:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Display Settings
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     row4a:AddWidget(GUIFrame:CreateSlider(row4a, "Icon Size", {
         min = 16, max = 80, step = 1,
@@ -481,13 +573,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         end,
     }), 1 / 3)
     card4:AddRow(row4c, Theme.rowHeight)
-    yOffset = card4:GetNextOffset()
+    card4:AddSeparator()
 
-    ----------------------------------------------------------------
-    -- Card: Cooldown Manager
-    ----------------------------------------------------------------
-    local cardCDM = GUIFrame:CreateCard(scrollChild, "Cooldown Manager", yOffset)
-    local rowCDM1 = GUIFrame:CreateRow(cardCDM.content, Theme.rowHeight)
+    local rowCDM1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     rowCDM1:AddWidget(GUIFrame:CreateCheckbox(rowCDM1, "Attach to Cooldown Manager", {
         value = db.AttachToCDM == true,
         callback = function(checked)
@@ -506,9 +594,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     })
     rowCDM1:AddWidget(iconPosition, 0.5)
     manager:Register(iconPosition, "attach")
-    cardCDM:AddRow(rowCDM1, Theme.rowHeight)
+    card4:AddRow(rowCDM1, Theme.rowHeight)
 
-    local rowCDM2 = GUIFrame:CreateRow(cardCDM.content, Theme.rowHeight)
+    local rowCDM2 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local iconX = GUIFrame:CreateSlider(rowCDM2, "X Offset", {
         min = -50, max = 50, step = 1,
         value = db.IconX or 0,
@@ -529,69 +617,40 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     })
     rowCDM2:AddWidget(iconY, 0.5)
     manager:Register(iconY, "attach")
-    cardCDM:AddRow(rowCDM2, Theme.rowHeight)
-    cardCDM:AddNote("DoTs in the Cooldown Manager's Essential, Utility or Tracked Buffs icons show their " ..
+    card4:AddRow(rowCDM2, Theme.rowHeight)
+    card4:AddNote("DoTs in the Cooldown Manager's Essential, Utility or Tracked Buffs icons show their " ..
         "count on that icon, with no glow or target timer. The others stay in the row. With EllesmereUI's " ..
         "Cooldown Manager on, an attached count and its preview stay hidden until that addon shows the " ..
         "icon: for a Tracked Buffs icon, usually the DoT's first application since /reload.")
-    yOffset = cardCDM:GetNextOffset()
+    yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Count Text, then its font
+    -- Card 8: Position
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Count Text", yOffset)
-    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    row5a:AddWidget(GUIFrame:CreateDropdown(row5a, "Format", {
-        options = COUNT_FORMATS,
-        value = db.CountFormat or "FRACTION",
-        callback = function(key)
-            db.CountFormat = key
-            ApplySettings()
-        end,
-    }), 0.5)
-    card5:AddRow(row5a, Theme.rowHeight)
-    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "DoT Colors", {
-        value = db.DoTColors ~= false,
-        tooltip = "Each DoT's count and icon border take its own color, set in Your DoTs. " ..
-            "Off: Some Have It and a black border for every DoT.",
-        callback = function(checked)
-            db.DoTColors = checked
-            colorManager:UpdateAll(true)
-            ApplySettings()
-        end,
-    }), 0.5)
-    row5c:AddWidget(GUIFrame:CreateCheckbox(row5c, "Full Coverage Color", {
-        value = db.FullCoverageColor ~= false,
-        tooltip = "The count turns All Have It when every counted enemy has the DoT.",
-        callback = function(checked)
-            db.FullCoverageColor = checked
-            manager:UpdateAll(true)
-            ApplySettings()
-        end,
-    }), 0.5)
-    card5:AddRow(row5c, Theme.rowHeight)
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    row5b:AddWidget(GUIFrame:CreateColorPicker(row5b, "Some Have It", {
-        color = db.SomeColor,
-        callback = function(r, g, b, a)
-            db.SomeColor = { r, g, b, a }
-            RepaintFollowers(r, g, b, a)
-            ApplySettings()
-        end,
-    }), 0.5)
-    local allPicker = GUIFrame:CreateColorPicker(row5b, "All Have It", {
-        color = db.AllColor,
-        callback = function(r, g, b, a)
-            db.AllColor = { r, g, b, a }
-            ApplySettings()
-        end,
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        positionKey = "Position",
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showStrata = true,
+        onChangeCallback = ApplySettings,
     })
-    row5b:AddWidget(allPicker, 0.5)
-    manager:Register(allPicker, "fullCoverage")
-    card5:AddRow(row5b, Theme.rowHeight)
-    yOffset = card5:GetNextOffset()
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
+    ----------------------------------------------------------------
+    -- Card: Count Font
+    ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Count Font",
         db = db,
@@ -608,53 +667,6 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         manager:RegisterGroup(fontWidgets, "all")
     end
     yOffset = fontOffset
-
-    ----------------------------------------------------------------
-    -- Card 6: Target Timer
-    ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Target Timer", yOffset)
-    card6:AddHeaderToggle(db.TimerEnabled ~= false, function(checked)
-        db.TimerEnabled = checked
-        ApplySettings()
-    end)
-    card6:AddLabel("Your DoT's time left on your current target, centered on the icon. " ..
-        "Hidden when the target does not have it.")
-    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    row6a:AddWidget(GUIFrame:CreateSlider(row6a, "Font Size", {
-        min = 8, max = 40, step = 1,
-        value = db.TimerFontSize or 18,
-        callback = function(value)
-            db.TimerFontSize = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    row6a:AddWidget(GUIFrame:CreateColorPicker(row6a, "Color", {
-        color = db.TimerColor,
-        callback = function(r, g, b, a)
-            db.TimerColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    }), 0.5)
-    card6:AddRow(row6a, Theme.rowHeight)
-    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    row6b:AddWidget(GUIFrame:CreateSlider(row6b, "Timer X", {
-        min = -50, max = 50, step = 1,
-        value = db.TimerX or 0,
-        callback = function(value)
-            db.TimerX = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    row6b:AddWidget(GUIFrame:CreateSlider(row6b, "Timer Y", {
-        min = -50, max = 50, step = 1,
-        value = db.TimerY or 0,
-        callback = function(value)
-            db.TimerY = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    card6:AddRow(row6b, Theme.rowHeight)
-    yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 7: Glow (engine styles)
@@ -681,30 +693,13 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
     manager:Register(glowCard, "all")
     yOffset = glowOffset
 
-    ----------------------------------------------------------------
-    -- Card 8: Position
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        positionKey = "Position",
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
     manager:UpdateAll(true)
     return yOffset
 end)
+
+GUIFrame:RegisterTabbedContent("DoTTracker", {
+    { id = "DoTTrackerTracking", label = "Tracking" },
+    { id = "DoTTrackerDisplay",  label = "Display" },
+}, {
+    headerBuilder = BuildHeader,
+})

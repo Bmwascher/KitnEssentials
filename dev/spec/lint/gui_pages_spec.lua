@@ -78,7 +78,6 @@ local ALLOWED = {
     },
     L3 = {
         -- Phase 18 handles these special pages.
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-DoTTracker.lua"] = { phase = "18" }, -- content after Font
         ["KitnEssentials_Options/Skinning/GUI-CharacterPanel.lua"] = { phase = "18" }, -- content after Font
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua"] = { phase = "18" }, -- content after Position
         -- Interrupt Tracker page: edited only with an approval that names the item.
