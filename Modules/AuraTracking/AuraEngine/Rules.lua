@@ -290,13 +290,13 @@ function Rules.SplitExternalsOwnLimit(total, showBig, splitOwn)
     return { external = own.others, externalOwn = own.own, big = base.big }
 end
 
--- Unset follows the count size, the size the name always had.
+-- Unset follows the count size.
 function Rules.CasterFontSize(settings)
     return settings.CasterFontSize or settings.FontSize
 end
 
--- 0 or unset follows the icon, the width the name always had. The text lines
--- up against the side of the icon it is anchored to.
+-- 0 or unset follows the icon width. The text lines up against the side of
+-- the icon it is anchored to.
 function Rules.ResolveCasterLayout(settings)
     settings = settings or {}
     local width = tonumber(settings.CasterWidth)

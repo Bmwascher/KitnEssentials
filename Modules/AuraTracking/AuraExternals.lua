@@ -24,9 +24,8 @@ local function BuildCandidates()
     return { excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil) }
 end
 
--- Hide Self Cast works through the group's filter string (PLAYER), not here:
--- the isFromPlayerOrPlayerPet flag is true for any player's cast, so it hid
--- teammates' externals too.
+-- No isFromPlayerOrPlayerPet here: it is true for any player's cast. Hide Self
+-- Cast is the group's PLAYER filter string instead.
 local function BuildExternalCandidates(settings)
     return {
         excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil),
