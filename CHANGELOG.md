@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.11
+
+### WoW Forever
+
+- Copy from Retail: on the first Forever login of an account, a one-time
+  popup explains how to export your Retail profile and opens the import box
+  to paste it; the copy lands as a new profile, "KitnUI - Retail"
+- Profiles, Sharing gains a "Copy from Retail" card that opens the same box
+  any time
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.10
 
 ### WoW Forever
