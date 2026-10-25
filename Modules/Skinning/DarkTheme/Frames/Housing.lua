@@ -98,6 +98,103 @@ local function HookCatalogTiles(optionsContainer)
     end
 end
 
+-- A collection header rewrites only its right cap when it collapses or
+-- expands. The cap becomes KE's arrow; the highlight cap stays clear so the
+-- hover wash is the only hover.
+local function BlueprintHeaderAtlas(tex, atlas)
+    local header = tex:GetParent()
+    if not header then return end
+    if tex == header.HighlightRight then
+        tex:SetAlpha(0)
+        return
+    end
+    if not atlas or atlas == "" then return end
+    S.ArrowTexture(tex, atlas:find("_Expanded", 1, true) and "down" or "right")
+    tex:SetSize(12, 12)
+    tex:ClearAllPoints()
+    tex:SetPoint("RIGHT", header, "RIGHT", -8, 0)
+end
+
+local function SkinBlueprintHeader(header)
+    -- Read before the strip: StripTextures clears the atlas, and the hooks go
+    -- in after it for the same reason.
+    local cap = header.Right and header.Right.GetAtlas and header.Right:GetAtlas()
+    S.StripTextures(header)
+    S.Backdrop(header)
+    S.Hover(header)
+    if header.Right then
+        hooksecurefunc(header.Right, "SetAtlas", BlueprintHeaderAtlas)
+        BlueprintHeaderAtlas(header.Right, cap)
+    end
+    if header.HighlightRight then
+        hooksecurefunc(header.HighlightRight, "SetAtlas", BlueprintHeaderAtlas)
+        BlueprintHeaderAtlas(header.HighlightRight)
+    end
+end
+
+-- The list pools two frame kinds: group frames, which hold a header, and
+-- entries, whose highlight Blizzard shows on hover.
+local function BlueprintRow(child)
+    local d = S.data(child)
+    if d.keBlueprintRow then return end
+    d.keBlueprintRow = true
+    if child.Header then
+        SkinBlueprintHeader(child.Header)
+    elseif child.HighlightBackground then
+        local hl = child.HighlightBackground
+        local c = S.palette.hover
+        hl:SetTexture("Interface\\Buttons\\WHITE8x8")
+        hl:SetVertexColor(c[1], c[2], c[3], c[4])
+        hl:SetAlpha(1)
+    end
+end
+
+local function OnBlueprintRowInitialized(_, frame)
+    BlueprintRow(frame)
+end
+
+-- Rows are dressed as the list initializes them: an Update post-hook also
+-- fires when Update returns early, and recycled rows never pass through it.
+-- The helper's own existing-frame walk passes the frame first while its event
+-- passes the owner first, so the walk is done here.
+local function HookBlueprintRows(collection)
+    local sb = collection.ScrollBox
+    local util = _G.ScrollUtil
+    if not (sb and sb.ForEachFrame and util and util.AddInitializedFrameCallback) then return end
+    if S.data(sb).keBlueprintHook then return end
+    S.data(sb).keBlueprintHook = true
+    sb:ForEachFrame(BlueprintRow)
+    util.AddInitializedFrameCallback(sb, OnBlueprintRowInitialized)
+end
+
+local function SkinBlueprints(content)
+    if not content then return end
+    if content.Background then content.Background:Hide() end
+    if content.Divider then content.Divider:Hide() end
+    local categories = content.Categories
+    if categories then
+        if categories.TopBorder then categories.TopBorder:Hide() end
+        if categories.Background then categories.Background:Hide() end
+    end
+    local collection = content.BlueprintCollection
+    if collection then
+        if collection.Divider then collection.Divider:Hide() end
+        if collection.ScrollBar then S.TrimScrollBar(collection.ScrollBar) end
+        HookBlueprintRows(collection)
+    end
+    local details = content.BlueprintDetails
+    if details then
+        if details.PreviewBackground then details.PreviewBackground:Hide() end
+        local summary = details.ContentSummary
+        local budgets = summary and summary.BudgetsContainer
+        if budgets then
+            if budgets.Background then budgets.Background:Hide() end
+            S.Backdrop(budgets)
+        end
+        if summary and summary.ContentsListButton then S.Button(summary.ContentsListButton) end
+    end
+end
+
 local function TreatNeighborhoodRow(row)
     if not (row.ButtonBackground and row.Select and row.Deselect) then return end
     local d = S.data(row)
@@ -338,6 +435,8 @@ local function SkinDashboard()
             if preview.PreviewCornerRight then preview.PreviewCornerRight:Hide() end
         end
     end
+
+    SkinBlueprints(dash.CollectionContent)
 end
 
 local function SkinCornerstone()
