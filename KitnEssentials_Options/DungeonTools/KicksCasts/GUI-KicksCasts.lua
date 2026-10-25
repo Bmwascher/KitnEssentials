@@ -14,4 +14,5 @@ GUIFrame:RegisterTabbedContent("KicksCasts", {
     { id = "KickTracker",  label = "Interrupt Tracker" },
     { id = "DungeonCasts", label = "Dungeon Casts" },
     { id = "CCTracker",    label = "CC Tracker" },
+    { id = "PartyStops",   label = "Party Stops" },
 })

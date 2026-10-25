@@ -48,6 +48,7 @@
     <Script file="QoL\GroupTools\GUI-ReadyCheckConsumables.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-DungeonCasts.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-CCTracker.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-PartyStops.lua" />
     <Script file="DungeonTools\DungeonAlerts\GUI-TargetedSpells.lua" />
     <Script file="DungeonTools\DungeonAlerts\GUI-EnemyCounter.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-FocusMarker.lua" />
