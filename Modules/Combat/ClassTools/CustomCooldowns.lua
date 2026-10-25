@@ -25,8 +25,8 @@ local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
 local ipairs, pcall, tostring, type, wipe = ipairs, pcall, tostring, type, wipe
 local string_format = string.format
 local math_max, math_min = math.max, math.min
--- Absent only if that file failed to load; every line, the preview's
--- included, then goes unescaped.
+-- Absent only if NoMovementAlert.lua failed to load; every line, the
+-- preview's included, then goes without pipe or % escaping.
 local EscapePipes = NMA and NMA.EscapePipes or tostring
 local EscapeFormat = NMA and NMA.EscapeFormat or tostring
 
