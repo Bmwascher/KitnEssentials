@@ -52,7 +52,6 @@ local CATEGORY_ROW_HEIGHT = 20
 local TOOL_HEIGHT = 330
 local RESTORE_ROW = 28
 
--- The line a refused drag prints, from both refusals in OnDragStart.
 local PROTECTED_DRAG = "Cannot drag this element: its position is protected. Use the nudge arrows instead."
 
 -- Center-guide diagnosis. Set true, /reload, drag through the center, read the

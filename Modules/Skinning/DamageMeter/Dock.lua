@@ -216,7 +216,6 @@ function DM:EnsureDock()
     end
 
     if KE.FrameChooser then KE.FrameChooser:RegisterProxy(dock, DockClaims) end
-    -- Frames placed on the dock before it existed are waiting for it.
     KE:AnnounceAnchorTarget("KE_DamageMeter_Dock")
 
     return dock

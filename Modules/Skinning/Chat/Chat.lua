@@ -639,7 +639,6 @@ function CHAT:CreateChatPanel()
     self:UpdateTabBackdrop()
 
     if KE.FrameChooser then KE.FrameChooser:RegisterProxy(panel, PanelClaims, true) end
-    -- Frames placed on the panel before it existed are waiting for it.
     KE:AnnounceAnchorTarget("KE_ChatPanel")
 end
 
