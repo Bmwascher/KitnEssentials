@@ -771,15 +771,22 @@ local function DebugLanes(where, unit, rail)
     end
 end
 
--- A gate fed before the game has drawn its lane at the new layout keeps a
--- stale fill, so each layout feeds the rail again a frame later.
+-- A lane fed before its clip moved keeps its icon at the old fill, and
+-- feeding the same index again does not move it; sizing and dressing the
+-- rail again does. So a frame after each layout the rail is styled, dressed
+-- and fed again.
 local function RefeedAfterLayout(rail)
     rail.seq = rail.seq + 1
     local seq, gen, activation, unit = rail.seq, P.gen, KT.activationID, rail.plate
     C_Timer.After(0, function()
         if KT.activationID ~= activation or P.gen ~= gen or rail.seq ~= seq or rail.plate ~= unit then return end
         local index, marked = KT.RaidMarkOf(unit)
-        if marked then FeedRail(rail, index) end
+        if marked then
+            StyleRail(rail)
+            DressRail(rail)
+            FeedRail(rail, index)
+            rail.restyled = true
+        end
         if DEBUG_KTP then DebugLanes("RefeedAfterLayout marked=" .. tostring(marked), unit, rail) end
     end)
 end
