@@ -77,9 +77,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Timer — Colors"] = { phase = "18" },
     },
     L2 = {
-        -- Phase 17 moves these onto CreatePositionCard.
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootFrame.lua"] = { phase = "17", n = 1 },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootRoll.lua"] = { phase = "17", n = 1 },
     },
     L3 = {
         -- Phase 18 handles these special pages.

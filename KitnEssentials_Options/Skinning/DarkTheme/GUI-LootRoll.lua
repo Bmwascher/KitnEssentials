@@ -96,9 +96,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
             if not checked then
                 KE:FlagReloadNeeded() -- unified close-time prompt
             end
-            -- The Position card's contents differ by mode -- "Move Loot Rolls"
-            -- exists only in legacy mode -- so the page is rebuilt, not just
-            -- re-enabled. Deferred a frame: RefreshContent destroys and
+            -- The Display Settings card's contents differ by mode -- "Move Loot
+            -- Rolls" exists only in legacy mode -- so the page is rebuilt, not
+            -- just re-enabled. Deferred a frame: RefreshContent destroys and
             -- recreates the widget whose callback is still running.
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
@@ -134,6 +134,31 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     rowS:AddWidget(skinCheck, 1)
     manager:Register(skinCheck, "legacy")
     card3:AddRow(rowS, Theme.rowHeight)
+
+    -- Omitted entirely in Replace mode rather than grayed. A grayed row shows a
+    -- ticked checkbox the user cannot untick while the X/Y sliders on the
+    -- Position Settings card stay live, which reads as "locked on" when the
+    -- truth is "does not apply". Reposition only means anything in legacy
+    -- mode: Replace mode positions through RollBars_Anchor and never consults
+    -- it. The Replace toggle refreshes the page, so the row appears and
+    -- disappears with the mode.
+    if not db.Replace then
+        local rowR = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+        local repoCheck = GUIFrame:CreateCheckbox(rowR, "Move Loot Rolls", {
+            value = db.Reposition ~= false,
+            callback = function(checked)
+                db.Reposition = checked
+                Apply()
+                UpdateAllWidgetStates()
+                -- With neither mode on, nothing owns the loot roll position,
+                -- so the mover stops deserving a box.
+                if KE.EditMode then KE.EditMode:RefreshLiveState() end
+            end,
+        })
+        rowR:AddWidget(repoCheck, 1)
+        manager:Register(repoCheck, "legacy")
+        card3:AddRow(rowR, Theme.rowHeight)
+    end
 
     -- Slim-bar geometry (replacement mode).
     local rowG1 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
@@ -190,55 +215,27 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     yOffset = card3:GetNextOffset()
 
     -- Card 3: Position
-    local card2 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
-    manager:Register(card2, "all")
-
-    -- Omitted entirely in Replace mode rather than grayed. A grayed row shows a
-    -- ticked checkbox the user cannot untick while the X/Y sliders under it stay
-    -- live, which reads as "locked on" when the truth is "does not apply".
-    -- Reposition only means anything in legacy mode: Replace mode positions
-    -- through RollBars_Anchor and never consults it. The Replace toggle
-    -- refreshes the page, so the row appears and disappears with the mode.
-    if not db.Replace then
-        local rowR = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-        local repoCheck = GUIFrame:CreateCheckbox(rowR, "Move Loot Rolls", {
-            value = db.Reposition ~= false,
-            callback = function(checked)
-                db.Reposition = checked
-                Apply()
-                UpdateAllWidgetStates()
-                -- With neither mode on, nothing owns the loot roll position,
-                -- so the mover stops deserving a box.
-                if KE.EditMode then KE.EditMode:RefreshLiveState() end
-            end,
-        })
-        -- "Unlock (drag to move)" was removed. It was a second anchor UI
-        -- competing with /kes edit on the same frame and the two disagreed about
-        -- where the anchor was. Positioning is /kes edit + these offsets now.
-        rowR:AddWidget(repoCheck, 1)
-        manager:Register(repoCheck, "legacy")
-        card2:AddRow(rowR, Theme.rowHeight)
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        positionKey = "Position",
+        dbKeys = {
+            selfPoint = "Point",
+            anchorPoint = "RelPoint",
+            xOffset = "X",
+            yOffset = "Y",
+        },
+        defaults = { selfPoint = "BOTTOM", anchorPoint = "CENTER", xOffset = 0, yOffset = 205 },
+        showAnchorFrameType = false,
+        showStrata = false,
+        sliderRange = { -1500, 1500 },
+        onChangeCallback = ApplyPos,
+    })
+    -- The kit's SetEnabled walks its own widgets, so registering the card as
+    -- well would undo the reposition gate.
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "reposition")
     end
-
-    local rowX = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local xSlider = GUIFrame:CreateSlider(rowX, "X Offset", {
-        min = -1500, max = 1500, step = 1, value = db.Position.X,
-        callback = function(val) db.Position.X = val; ApplyPos() end -- ApplyPos -> SyncMover
-    })
-    rowX:AddWidget(xSlider, 1)
-    manager:Register(xSlider, "reposition")
-    card2:AddRow(rowX, Theme.rowHeight)
-
-    local rowY = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local ySlider = GUIFrame:CreateSlider(rowY, "Y Offset", {
-        min = -900, max = 900, step = 1, value = db.Position.Y,
-        callback = function(val) db.Position.Y = val; ApplyPos() end
-    })
-    rowY:AddWidget(ySlider, 1)
-    manager:Register(ySlider, "reposition")
-    card2:AddRow(rowY, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
+    yOffset = posOffset
 
 
     UpdateAllWidgetStates()
