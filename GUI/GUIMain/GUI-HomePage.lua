@@ -241,7 +241,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     local tips = {
         "Use the sidebar to navigate between different module settings.",
-        "Edit Mode allows you to drag and reposition UI elements.",
+        "Edit Mode lets you drag UI elements to new places.",
         "Most changes apply instantly without needing a reload. Modules where a reload is required will prompt you.",
     }
     for _, tip in ipairs(tips) do
@@ -262,8 +262,8 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         elvCard:AddLabel("ElvUI Skinning: " .. statusText)
         elvCard:AddSpacing(4)
         local elvDesc = elvCard:AddLabel(
-            KE:ColorTextByTheme("- ") .. "Disables all skinning modules when ElvUI is loaded.\n" ..
-            "This way you can still use the non skinning features of the addon without conflict.")
+            KE:ColorTextByTheme("- ") .. "Turns off every skinning module while ElvUI is loaded, so the rest of " ..
+            "KitnEssentials works alongside it.")
         elvDesc:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
         yOffset = elvCard:GetNextOffset()
