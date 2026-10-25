@@ -38,7 +38,6 @@ local PREVIEW_ICONS = {
     [2] = 136024, -- Capacitor Totem
     [3] = 136114, -- Tremor Totem
     [4] = 136013, -- Earthbind Totem
-    [5] = 7514181, -- Future Self (Augmentation Evoker dupe)
 }
 
 -- MAX_TOTEMS (4) and STANDARD_TOTEM_PRIORITIES are legacy constants that
@@ -305,14 +304,21 @@ function TT:UpdateTotems()
 
     if isPreviewActive then
         local currentTime = GetTime()
-        for slot = 1, slotCount do
+        local previewCount = math.min(slotCount, #PREVIEW_ICONS)
+        for slot = 1, previewCount do
             local btn = self:EnsureButton(slot)
             if btn then
-                btn.icon:SetTexture(PREVIEW_ICONS[slot] or PREVIEW_ICONS[1])
+                btn.icon:SetTexture(PREVIEW_ICONS[slot])
                 btn.cooldown:SetCooldown(currentTime - (slot * 10), 120)
                 btn:Show()
                 visibleButtons[#visibleButtons + 1] = btn
             end
+        end
+        -- ShowPreview shows every button, and a client can report more slots
+        -- than the preview fills.
+        for slot = previewCount + 1, #totemButtons do
+            totemButtons[slot].cooldown:Clear()
+            totemButtons[slot]:Hide()
         end
         self:LayoutButtons(visibleButtons)
         return
