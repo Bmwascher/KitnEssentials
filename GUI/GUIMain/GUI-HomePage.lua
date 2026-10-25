@@ -276,7 +276,8 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     card6:AddLabel("Found a bug or have a suggestion?")
     card6:AddSpacing(4)
-    local discordLabel = card6:AddLabel("Send a message for support directly on Discord: glizzygordo or dunnni")
+    local discordLabel = card6:AddLabel("Send a message for support directly on Discord: " ..
+        KE:Gold("glizzygordo") .. " or " .. KE:Gold("dunnni"))
     discordLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
     yOffset = card6:GetNextOffset()
