@@ -539,11 +539,11 @@ end
 local function RaiseCell(cell, icon)
     local frame = cell.frame
     local strata = icon:GetFrameStrata()
-    if strata and not issecretvalue(strata) and frame:GetFrameStrata() ~= strata then
+    if not issecretvalue(strata) and strata and frame:GetFrameStrata() ~= strata then
         pcall(frame.SetFrameStrata, frame, strata)
     end
     local level = icon:GetFrameLevel()
-    if level and not issecretvalue(level) and level + ICON_LEVEL_OFFSET > frame:GetFrameLevel() then
+    if not issecretvalue(level) and level and level + ICON_LEVEL_OFFSET > frame:GetFrameLevel() then
         pcall(frame.SetFrameLevel, frame, level + ICON_LEVEL_OFFSET)
     end
 end
