@@ -24,11 +24,16 @@ local function CenterHeader(frame)
     if KE.IS_FOREVER then return end
     if frame.SetTitleOffsets then frame:SetTitleOffsets(24, -24) end
     local title = frame.GetTitleText and frame:GetTitleText()
+    local container = frame.TitleContainer
     local level = _G.InspectPaperDollFrame and _G.InspectPaperDollFrame.LevelTextWrapper
-    if title and level then
-        level:ClearAllPoints()
-        level:SetPoint("TOP", title, "BOTTOM", 0, -1)
-    end
+    if not (title and container and level) then return end
+    -- Blizzard's TOP plus LEFT/RIGHT anchors pin the name's box to half the
+    -- container, shorter than the text; top-only anchors let it fit the text.
+    title:ClearAllPoints()
+    title:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -5)
+    title:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, -5)
+    level:ClearAllPoints()
+    level:SetPoint("TOP", title, "BOTTOM", 0, -1)
 end
 
 local function Skin()
