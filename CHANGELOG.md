@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.21
+
+### Dark Theme
+
+- Inspect: the player's name is centered over the window, with the level
+  and spec line just below it
+
+---
+
 ## v4.14.20
 
 ### Character Panel
