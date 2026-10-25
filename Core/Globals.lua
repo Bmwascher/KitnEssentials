@@ -2269,9 +2269,27 @@ local function NamesUnder(name, root)
     return string_find(name, root, 1, true) == 1 and name:sub(#root + 1, #root + 1) == "."
 end
 
+-- Whether the frame still sits where its missed placement left it: one point,
+-- on UIParent, with the saved pair. Offsets are not compared, because the pixel
+-- snap shifts them. Any other answer means another path placed it since, such
+-- as Combat Texts seating an attached display, and that placement wins.
+local function StillOnFallback(frame, posConfig)
+    if frame:GetNumPoints() ~= 1 then return false end
+    local point, relativeTo, relativePoint = frame:GetPoint(1)
+    if issecretvalue(point) or issecretvalue(relativeTo) or issecretvalue(relativePoint) then
+        return false
+    end
+    return relativeTo == UIParent and point == (posConfig.AnchorFrom or "CENTER")
+        and relativePoint == (posConfig.AnchorTo or "CENTER")
+end
+
 local function ReplaceWaiting(frame, root)
     local wait = anchorWaits[frame]
     if not (wait and wait.waiting and NamesUnder(wait.name, root)) then return end
+    if not StillOnFallback(frame, wait.posConfig) then
+        wait.waiting = false
+        return
+    end
     local rootMissing = PlaceOnAnchor(frame, wait.posConfig, wait.config, wait.setParent, wait.followers)
     KE:SnapFrameToPixels(frame)
     NoteAnchorWait(frame, rootMissing, wait.posConfig, wait.config, wait.setParent, wait.followers)

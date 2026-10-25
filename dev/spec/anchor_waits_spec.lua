@@ -1,8 +1,8 @@
 -- Tier 1: a guard rule KE invented. A frame placed on a Select Frame name whose
 -- first part is not a global yet waits for that name's announce, and a broken
 -- wait leaves it on the screen with no message. The fakes are static region
--- tables like unsafe_anchor_spec.lua's, plus a note of the last SetPoint
--- target; no Blizzard subsystem is faked.
+-- tables like unsafe_anchor_spec.lua's, plus a note of the last SetPoint,
+-- read back through GetNumPoints and GetPoint; no Blizzard subsystem is faked.
 local L = require("dev.spec._ke_loader")
 
 local function region()
@@ -18,8 +18,12 @@ end
 
 local function placed()
     local f = region()
-    f.ClearAllPoints = function(self) self.anchor = nil end
-    f.SetPoint = function(self, _, relativeTo) self.anchor = relativeTo end
+    f.ClearAllPoints = function(self) self.point, self.anchor, self.relativePoint = nil, nil, nil end
+    f.SetPoint = function(self, point, relativeTo, relativePoint)
+        self.point, self.anchor, self.relativePoint = point, relativeTo, relativePoint
+    end
+    f.GetNumPoints = function(self) return self.point and 1 or 0 end
+    f.GetPoint = function(self) return self.point, self.anchor, self.relativePoint end
     f.SetParent = function() end
     f.SetFrameStrata = function() end
     return f
@@ -40,7 +44,7 @@ describe("late anchor targets", function()
     it("waits on a missing root, moves on its announce, and stops waiting once placed elsewhere", function()
         local pos = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 }
         local onLate = { anchorFrameType = "SELECTFRAME", ParentFrame = "KE_SpecLateTarget" }
-        local other = region()
+        local other, seat = region(), region()
         _G.KE_SpecOtherTarget = other
         local rows = {
             { name = "waiting", frame = placed() },
@@ -48,11 +52,16 @@ describe("late anchor targets", function()
               thenPlace = { anchorFrameType = "UIPARENT" }, want = _G.UIParent },
             { name = "moved onto a frame that exists", frame = placed(),
               thenPlace = { anchorFrameType = "SELECTFRAME", ParentFrame = "KE_SpecOtherTarget" }, want = other },
+            { name = "seated by another path", frame = placed(), thenSeat = seat, want = seat },
         }
         for _, row in ipairs(rows) do
             KE:ApplyFramePosition(row.frame, pos, onLate)
             assert.equal(_G.UIParent, row.frame.anchor, row.name .. ": a missing root falls back to the screen")
             if row.thenPlace then KE:ApplyFramePosition(row.frame, pos, row.thenPlace) end
+            if row.thenSeat then
+                row.frame:ClearAllPoints()
+                row.frame:SetPoint("TOP", row.thenSeat, "BOTTOM", 0, 0)
+            end
         end
 
         local target = region()
