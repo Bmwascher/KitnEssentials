@@ -94,8 +94,8 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel("Shows the debuffs on you that matter - the ones you can dispel, boss debuffs, " ..
-        "and anything you allowlist - as icons you can place and style. The filters and blocklist " ..
-        "below decide what stays hidden.")
+        "and anything you allowlist - as icons you can place and style. With it on, the filters and " ..
+        "blocklist below decide what stays hidden.")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.

@@ -119,7 +119,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         "Another player casting the same spell starts it too, such as a Retribution Paladin's " ..
         "Blessing of Sacrifice." ..
         "\n\nShows in a party wherever the " .. KE:Gold("General") .. " tab's " .. KE:Gold("Show In") ..
-        " allows. Never in a raid or an arena.")
+        " card allows. Never in a raid or an arena.")
     local function Attach()
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
         db.HealerExtAnchorFrameType = "SELECTFRAME"
@@ -170,7 +170,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     cardDisplay:AddLabel("Font face and outline follow the " .. KE:Gold("General") .. " tab's " ..
-        KE:Gold("Font Settings") .. ".")
+        KE:Gold("Font Settings") .. " card.")
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddSlider(rowD1, "Icon Size", "HealerExtIconSize", ICON_MIN, ICON_MAX, "on")
     AddSlider(rowD1, "Spacing", "HealerExtSpacing", -1, 20, "on")

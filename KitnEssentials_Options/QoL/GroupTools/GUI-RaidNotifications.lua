@@ -73,7 +73,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("On-screen reminders for the moments a raid forgets. Hover an alert for what it watches.")
+    card1:AddLabel("On-screen reminders for the moments a raid forgets. With it on, hover an alert for what it watches.")
 
     yOffset = card1:GetNextOffset()
 

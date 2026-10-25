@@ -77,8 +77,8 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel(KE:Gold("Priest only.") .. " Writes a Power Infusion macro aimed at the player you " ..
-        "pick, with optional extras such as trinkets or a racial in the same press, and rewrites it " ..
-        "as you change the settings below. Drag the macro from " .. KE:Gold("/macro") .. " onto your action bar.")
+        "pick, with optional extras such as trinkets or a racial in the same press. With it on, it rewrites " ..
+        "the macro as you change the settings below. Drag the macro from " .. KE:Gold("/macro") .. " onto your action bar.")
 
     yOffset = card1:GetNextOffset()
 

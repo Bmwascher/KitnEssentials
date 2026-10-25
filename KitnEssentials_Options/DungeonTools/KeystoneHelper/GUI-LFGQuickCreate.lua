@@ -52,7 +52,7 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Adds a row of season-dungeon buttons to the Group Finder's create form. One click lists a group for that dungeon using the " .. KE:Gold("Default Playstyle") .. " below. Your own keystone's dungeon glows gold with its key level; party members' keys glow blue.")
+    card1:AddLabel("Adds a row of season-dungeon buttons to the Group Finder's create form. One click lists a group for that dungeon; with it on, the " .. KE:Gold("Default Playstyle") .. " dropdown below sets its playstyle. Your own keystone's dungeon glows gold with its key level; party members' keys glow blue.")
 
     -- A disabled module shows only this card: its switch and description.
     if db.Enabled ~= true then return card1:GetNextOffset() end

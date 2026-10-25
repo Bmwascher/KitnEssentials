@@ -330,7 +330,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     local rowKickNote = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
     local kickNote = GUIFrame:CreateText(rowKickNote,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " When enabled, bar color reflects kick readiness instead of cast type (Casting/Channeling colors).",
+        KE:ColorTextByTheme("-") .. " When on, the bar color shows kick readiness instead of the Casting and Channeling colors.",
         Theme.rowHeight, "hide")
     rowKickNote:AddWidget(kickNote, 1)
     manager:Register(kickNote, "kickIndicator")

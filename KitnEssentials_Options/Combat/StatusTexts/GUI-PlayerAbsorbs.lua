@@ -73,7 +73,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         "with an optional icon." ..
         "\n\nThe game keeps absorb amounts secret from addons, so abbreviated numbers fade on a " ..
         "timer after the last change instead of clearing the instant a shield drops; full numbers " ..
-        "clear at once. The " .. KE:Gold("Abbreviate Numbers") .. " switch below picks which.")
+        "clear at once. With it on, the " .. KE:Gold("Abbreviate Numbers") .. " switch below picks which.")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.

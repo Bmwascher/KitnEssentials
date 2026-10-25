@@ -839,16 +839,16 @@ end, {
             card:AddNote("The Gamepad interface style is on. KitnEssentials leaves Blizzard's windows, fonts and menus unskinned in that style, so the controller's own navigation keeps working. Your settings are kept and apply after a " .. KE:Gold("/reload") .. " in the mouse and keyboard style.")
         elseif GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesElements"] then
             card:AddLabel("Skins Blizzard's windows to match the theme. The " .. KE:Gold("Frame Skins") .. " tab picks the " ..
-                "windows and drops out of the tab row while this is off. " .. KE:Gold("Fonts") .. " and " .. KE:Gold("Elements") .. " have " ..
-                "their own switches and keep working with this off. The " .. KE:Gold("Skinned Windows") .. " size and " ..
-                "outline only show in skinned windows; its font face is also the one " .. KE:Gold("Blizzard Text") .. " " ..
+                "windows and drops out of the tab row while this is off. The " .. KE:Gold("Fonts") .. " and " .. KE:Gold("Elements") .. " tabs have " ..
+                "their own switches and keep working with this off. The " .. KE:Gold("Skinned Windows") .. " sub-tab's size and " ..
+                "outline only show in skinned windows; its font face is also the one the " .. KE:Gold("Blizzard Text") .. " sub-tab " ..
                 "uses. Changes apply after a " .. KE:Gold("/reload") .. ".")
         else
             -- Elements is unregistered only where the client withholds it, and
             -- Blizzard Text with it, so the label names neither.
             card:AddLabel("Skins Blizzard's windows to match the theme. The " .. KE:Gold("Frame Skins") .. " tab picks the " ..
-                "windows and drops out of the tab row while this is off. " .. KE:Gold("Fonts") .. " keeps working with " ..
-                "this off. The " .. KE:Gold("Skinned Windows") .. " size and outline only show in skinned windows. " ..
+                "windows and drops out of the tab row while this is off. The " .. KE:Gold("Fonts") .. " tab keeps working with " ..
+                "this off. The " .. KE:Gold("Skinned Windows") .. " sub-tab's size and outline only show in skinned windows. " ..
                 "Changes apply after a " .. KE:Gold("/reload") .. ".")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall

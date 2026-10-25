@@ -426,7 +426,7 @@ GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
     -- Card 3: Copy from Retail
     ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Copy from Retail", yOffset)
-    card3:AddLabel("On Retail, type " .. KE:Gold("/kes") .. ", open " .. KE:Gold("Profile Manager") .. ", then " .. KE:Gold("Sharing") .. ", " ..
+    card3:AddLabel("On Retail, type " .. KE:Gold("/kes") .. ", open " .. KE:Gold("Profile Manager") .. ", then the " .. KE:Gold("Sharing") .. " tab, " ..
         "click " .. KE:Gold("Export Active Profile") .. " and copy the string. Then click below and paste it here.")
 
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)

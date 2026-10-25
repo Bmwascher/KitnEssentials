@@ -14,7 +14,7 @@ local DESCRIPTION = "Shows the cooldowns that matter to your group beside each p
     "\n\nA member's spec comes from " .. KE:Gold("LibSpecialization") .. " or a quiet automatic inspect. " ..
     "Until it is known, that member shows no cooldown icons. Externals and potions your party members " ..
     "receive still show while active, after the cooldown icons." ..
-    "\n\nThe " .. KE:Gold("General") .. " tab holds " .. KE:Gold("Show In") .. ", the font and the colors, " ..
+    "\n\nWith it on, the " .. KE:Gold("General") .. " tab holds the " .. KE:Gold("Show In") .. " card, the font and the colors, " ..
     "which the party frame icons, Potion bars and Raid Cooldowns share. The " .. KE:Gold("Potions") ..
     " tab shows each member's potion cooldown as a bar. The " .. KE:Gold("Raid Cooldowns") ..
     " tab shows your party's externals and raid cooldowns in a box you can move." ..

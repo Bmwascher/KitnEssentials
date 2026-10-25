@@ -120,7 +120,7 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
 
     card1:AddLabel("Floating messages for the moments the game does not call out: entering and " ..
         "leaving combat, having no target, a mob attacking you, the spell you just interrupted " ..
-        "with its icon, and low durability. Each message has its own card below.")
+        "with its icon, and low durability. With it on, each message has its own card below.")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.

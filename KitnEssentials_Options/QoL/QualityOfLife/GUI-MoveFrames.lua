@@ -31,7 +31,7 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
 
     card:AddLabel("Left-click and drag almost any Blizzard window, the character panel, map, " ..
         "merchant, professions and most others, to move it anywhere on screen." ..
-        "\n\nWith " .. KE:Gold("Remember Positions") .. " off, every window returns to its normal spot the next time " ..
+        "\n\nWith it on, turning the " .. KE:Gold("Remember Positions") .. " switch off sends every window back to its normal spot the next time " ..
         "it opens." ..
         "\n\nSteps aside automatically if " .. KE:Gold("BlizzMove") .. " or " .. KE:Gold("MoveAnything") .. " is " ..
         "installed. Protected windows cannot be moved in combat." ..

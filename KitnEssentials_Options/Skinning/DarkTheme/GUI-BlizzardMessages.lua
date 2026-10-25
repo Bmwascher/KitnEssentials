@@ -49,7 +49,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFontsBlizzard", function(scrollChild
     end
 
     local cardAll = GUIFrame:CreateCard(scrollChild, "Blizzard Text Everywhere", yOffset)
-    cardAll:AddLabel("Quest text, the objective tracker, mail and numbers, in the skinned-window font. " .. KE:Gold("Base Size") .. " also sizes the " .. KE:Gold("Blizzard Fonts") .. " row on " .. KE:Gold("Frame Skins") .. ".")
+    cardAll:AddLabel("Quest text, the objective tracker, mail and numbers, in the skinned-window font. " .. KE:Gold("Base Size") .. " also sizes the " .. KE:Gold("Blizzard Fonts") .. " row on the " .. KE:Gold("Frame Skins") .. " tab.")
 
     local rowAll = GUIFrame:CreateRow(cardAll.content, Theme.rowHeightLast)
     rowAll:AddWidget(GUIFrame:CreateCheckbox(rowAll, "Replace All Blizzard Fonts", {

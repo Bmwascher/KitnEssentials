@@ -423,7 +423,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             -- spell id and no caster field, so a registration fires for the
             -- spell however it was applied. The display filters on the caster;
             -- the sound cannot.
-            "Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.",
+            "Plays for any enabled spell on the Allowlist card above, including ones you cast on yourself.",
             -- Not a caution about the GUI but about the sound registry:
             -- removing a registration is always allowed, adding one is not
             -- while aura identities are hidden, so an Allowlist edit made in
