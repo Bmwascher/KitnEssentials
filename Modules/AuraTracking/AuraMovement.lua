@@ -20,15 +20,26 @@ local function BuildMovementCandidates(settings)
     }
 end
 
-local function BuildMovementPreview(_, total)
+-- Own casts take the odd slot: most movement buffs are your own.
+local function SplitLimit(total, settings)
+    local split = KE.AuraRules.SplitOwnCastLimit(total, KE.AuraRules.IsOwnNameSplit(settings), true)
+    return { movement = split.others, movementOwn = split.own }
+end
+
+local function BuildMovementPreview(settings, total)
+    local limits = SplitLimit(total, settings)
     local entries = {}
-    for i = 1, total do
-        entries[i] = {
-            icon = PREVIEW_ICONS[((i - 1) % #PREVIEW_ICONS) + 1],
-            groupKey = "movement",
-            count = 0,
-        }
+    local function append(groupKey)
+        for i = 1, limits[groupKey] do
+            entries[#entries + 1] = {
+                icon = PREVIEW_ICONS[((i - 1) % #PREVIEW_ICONS) + 1],
+                groupKey = groupKey,
+                count = 0,
+            }
+        end
     end
+    append("movement")
+    append("movementOwn")
     return entries
 end
 
@@ -39,10 +50,12 @@ local DECLARATION = {
     sortMethod = "AuraInstanceIDOnly",
     defaultIconsPerRow = 3,
 
+    -- Registration order is the on-screen block order: others' buffs first,
+    -- your own next.
     groups = {
         {
             key = "movement",
-            buildFilter = function() return "HELPFUL" end,
+            buildFilter = function(settings) return KE.AuraRules.OthersFilterString(settings) end,
             buildCandidates = BuildMovementCandidates,
             capabilities = {
                 hasBorder = true,
@@ -52,11 +65,23 @@ local DECLARATION = {
                 hasCasterName = true,
             },
         },
+        {
+            -- Your own movement buffs while Hide My Own Name is on, with no
+            -- name region, so the game never writes your name under them.
+            -- Zero icons otherwise.
+            key = "movementOwn",
+            buildFilter = function() return KE.AuraRules.OWN_FILTER end,
+            buildCandidates = BuildMovementCandidates,
+            capabilities = {
+                hasBorder = true,
+                hasDispelBadge = false,
+                hasDispelRing = false,
+                hasGlow = true,
+            },
+        },
     },
 
-    splitLimit = function(total)
-        return { movement = total }
-    end,
+    splitLimit = SplitLimit,
 
     sounds = {
         buildSpellIDs = function(settings)
