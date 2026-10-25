@@ -23,13 +23,20 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local KT = KitnEssentials and KitnEssentials:GetModule("KickTracker", true)
 
     local manager = GUIFrame:CreateWidgetStateManager()
+    -- "all" is the bar cards' group: grayed while Show Bars is off.
+    manager:SetCondition("all", function()
+        return db.ShowBars ~= false
+    end)
+    manager:SetCondition("plates", function()
+        return db.PlateIcons ~= false
+    end)
     -- "classOnly": widgets only meaningful when ColorMode is "class"
     manager:SetCondition("classOnly", function()
-        return db.ColorMode ~= "dark"
+        return db.ShowBars ~= false and db.ColorMode ~= "dark"
     end)
     -- "cooling": cooling color picker requires class mode AND ClassColorCooling off
     manager:SetCondition("cooling", function()
-        return db.ColorMode ~= "dark" and not db.ClassColorCooling
+        return db.ShowBars ~= false and db.ColorMode ~= "dark" and not db.ClassColorCooling
     end)
 
     local function ApplySettings()
@@ -76,21 +83,156 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick. " ..
-        "Only active in 5-player dungeons. Kicks are tracked from what the game shows; no addon " ..
-        "messages are sent or read.\n\n" ..
+    card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick, and " ..
+        "as icons on enemy nameplates. Only active in 5-player dungeons.\n\n" ..
         "A kick goes on the kicker's bar, and the bar reads " .. KE:ColorTextByTheme("Ready") ..
-        " when the tracker's timing says the kick is back. A kick that interrupts nothing does not show.\n\n" ..
+        " when the tracker's timing says the kick is back. The kicker's icon goes on the nameplate of " ..
+        "the mob they stopped; yours goes on your target's nameplate as you cast. Before a key starts, " ..
+        "the focus markers teammates announce are read, so their icon can wait on their marked mob.\n\n" ..
         "In a dungeon the game often hides who kicked. The Damage Meter then names the kicker when it " ..
-        "can: the teammate whose interrupt list grew, a teammate whose class and spec match its row, " ..
-        "your own kick a moment before, or the only teammate who could have kicked. When it cannot, " ..
-        "each teammate who could have kicked gets a copy of their bar on cooldown that the game shows " ..
-        "only on the bar of the teammate who really kicked.")
+        "can. When it cannot, each teammate who could have kicked gets a copy of their bar on cooldown, " ..
+        "and the mob a hidden icon of theirs, that the game shows only for the teammate who really kicked.")
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return card1:GetNextOffset() end
+
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local showBarsCheck = GUIFrame:CreateCheckbox(row1a, "Show Bars", {
+        value = db.ShowBars ~= false,
+        tooltip = "The cooldown bars, and their box in Edit Mode. With this off the nameplate icons still show.",
+        callback = function(checked) db.ShowBars = checked; ApplySettings(); RefreshStates() end,
+    })
+    row1a:AddWidget(showBarsCheck, 0.5)
+    manager:Register(showBarsCheck, "module")
+
+    local plateIconsCheck = GUIFrame:CreateCheckbox(row1a, "Nameplate Icons", {
+        value = db.PlateIcons ~= false,
+        tooltip = "Each kicker's icon, with their kick's cooldown, on the nameplate of the mob they stopped.",
+        callback = function(checked) db.PlateIcons = checked; ApplySettings(); RefreshStates() end,
+    })
+    row1a:AddWidget(plateIconsCheck, 0.5)
+    manager:Register(plateIconsCheck, "module")
+    card1:AddRow(row1a, Theme.rowHeight)
 
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
+    ----------------------------------------------------------------
+    -- Card 1b: Nameplate Icons
+    ----------------------------------------------------------------
+    local cardPlates = GUIFrame:CreateCard(scrollChild, "Nameplate Icons", yOffset)
+    manager:Register(cardPlates, "plates")
+
+    -- Each is one standalone on/off setting, so each is a switch.
+    local plateSwitches = {
+        { key = "PlateAboveOverlap", label = "Show Above Overlapping Nameplates",
+          tooltip = "The icons draw over every other nameplate, so an overlapping plate never hides " ..
+              "one. When off, an icon stays inside its own nameplate, behind any plate that covers it." },
+        { key = "PlatePremark", label = "Icons on Marked Mobs",
+          tooltip = "Before any kick, a teammate's icon sits on the mob carrying the focus marker " ..
+              "they announced, until their own icon is on a nameplate." },
+        { key = "PlateClassBorder", label = "Class Color Border" },
+        { key = "PlateShowTimer", label = "Show Timer" },
+        { key = "PlateSwipe", label = "Show Cooldown Swipe" },
+    }
+    local switchRow
+    for i, s in ipairs(plateSwitches) do
+        if i % 2 == 1 then switchRow = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight) end
+        local key = s.key
+        local switch = GUIFrame:CreateCheckbox(switchRow, s.label, {
+            value = db[key] ~= false,
+            tooltip = s.tooltip,
+            callback = function(checked) db[key] = checked; ApplySettings() end,
+        })
+        switchRow:AddWidget(switch, 0.5)
+        manager:Register(switch, "plates")
+        if i % 2 == 0 or i == #plateSwitches then cardPlates:AddRow(switchRow, Theme.rowHeight) end
+    end
+
+    local rowP1 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateStyleDropdown = GUIFrame:CreateDropdown(rowP1, "Icon", {
+        options = {
+            { key = "kick",  text = "Kick Spell" },
+            { key = "spec",  text = "Spec" },
+            { key = "class", text = "Class" },
+        },
+        value = db.PlateIconStyle or "kick",
+        callback = function(key) db.PlateIconStyle = key; ApplySettings() end,
+    })
+    rowP1:AddWidget(plateStyleDropdown, 0.5)
+    manager:Register(plateStyleDropdown, "plates")
+
+    local plateSideDropdown = GUIFrame:CreateDropdown(rowP1, "Side", {
+        options = {
+            { key = "LEFT",   text = "Left" },
+            { key = "RIGHT",  text = "Right" },
+            { key = "TOP",    text = "Top" },
+            { key = "BOTTOM", text = "Bottom" },
+        },
+        value = db.PlateSide or "LEFT",
+        callback = function(key) db.PlateSide = key; ApplySettings() end,
+    })
+    rowP1:AddWidget(plateSideDropdown, 0.5)
+    manager:Register(plateSideDropdown, "plates")
+    cardPlates:AddRow(rowP1, Theme.rowHeight)
+
+    local rowP2 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateSizeSlider = GUIFrame:CreateSlider(rowP2, "Icon Size", {
+        min = 16, max = 48, step = 1,
+        value = db.PlateIconSize or 28,
+        callback = function(val) db.PlateIconSize = val; ApplySettings() end,
+    })
+    rowP2:AddWidget(plateSizeSlider, 0.5)
+    manager:Register(plateSizeSlider, "plates")
+
+    local plateTimerSlider = GUIFrame:CreateSlider(rowP2, "Timer Size", {
+        min = 6, max = 24, step = 1,
+        value = db.PlateTimerSize or 11,
+        callback = function(val) db.PlateTimerSize = val; ApplySettings() end,
+    })
+    rowP2:AddWidget(plateTimerSlider, 0.5)
+    manager:Register(plateTimerSlider, "plates")
+    cardPlates:AddRow(rowP2, Theme.rowHeight)
+
+    local rowP3 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateGapSlider = GUIFrame:CreateSlider(rowP3, "Gap to Health Bar", {
+        min = 0, max = 20, step = 1,
+        value = db.PlateBarGap or 4,
+        callback = function(val) db.PlateBarGap = val; ApplySettings() end,
+    })
+    rowP3:AddWidget(plateGapSlider, 0.5)
+    manager:Register(plateGapSlider, "plates")
+
+    local plateSpacingSlider = GUIFrame:CreateSlider(rowP3, "Icon Spacing", {
+        min = 0, max = 10, step = 1,
+        value = db.PlateSpacing or 1,
+        callback = function(val) db.PlateSpacing = val; ApplySettings() end,
+    })
+    rowP3:AddWidget(plateSpacingSlider, 0.5)
+    manager:Register(plateSpacingSlider, "plates")
+    cardPlates:AddRow(rowP3, Theme.rowHeight)
+
+    local rowP4 = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
+    local plateXSlider = GUIFrame:CreateSlider(rowP4, "X Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.PlateOffsetX or 0,
+        callback = function(val) db.PlateOffsetX = val; ApplySettings() end,
+    })
+    rowP4:AddWidget(plateXSlider, 0.5)
+    manager:Register(plateXSlider, "plates")
+
+    local plateYSlider = GUIFrame:CreateSlider(rowP4, "Y Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.PlateOffsetY or 0,
+        callback = function(val) db.PlateOffsetY = val; ApplySettings() end,
+    })
+    rowP4:AddWidget(plateYSlider, 0.5)
+    manager:Register(plateYSlider, "plates")
+    cardPlates:AddRow(rowP4, Theme.rowHeight)
+
+    cardPlates:AddNote(KE:Gold("EllesmereUI") .. "'s Kick Tracker can show its own nameplate icons too. " ..
+        "With both on, two rows sit beside the same health bar: turn one off, or move these with the offsets.")
+
+    yOffset = cardPlates:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position, one view per position
@@ -128,7 +270,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     })
     yOffset = viewOffset
 
-    manager:SetCondition("healerConfig", function() return db.UseHealerPosition == true end)
+    manager:SetCondition("healerConfig", function()
+        return db.ShowBars ~= false and db.UseHealerPosition == true
+    end)
 
     if isHealerView then
         local cardHealer = GUIFrame:CreateCard(scrollChild, "Healer Position", yOffset)
@@ -336,6 +480,16 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     row4e:AddWidget(readyCheck, 0.5)
     manager:Register(readyCheck, "all")
     card4:AddRow(row4e, Theme.rowHeight)
+
+    local row4n = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local nickCheck = GUIFrame:CreateCheckbox(row4n, "Use Nicknames", {
+        value = db.UseNicknames ~= false,
+        tooltip = "Bar names use NSRT nicknames while NSRT's nickname switch is on.",
+        callback = function(checked) db.UseNicknames = checked; ApplySettings() end,
+    })
+    row4n:AddWidget(nickCheck, 0.5)
+    manager:Register(nickCheck, "all")
+    card4:AddRow(row4n, Theme.rowHeight)
 
     local row4f = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local iconSizeSlider = GUIFrame:CreateSlider(row4f, "Icon Size", {
