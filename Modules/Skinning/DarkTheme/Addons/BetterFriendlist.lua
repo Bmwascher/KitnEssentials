@@ -835,16 +835,21 @@ local function CardCues(card)
     edge:SetTexture(WHITE)
     edge:SetPoint("TOPLEFT", fill, "TOPLEFT")
     edge:SetPoint("BOTTOMLEFT", fill, "BOTTOMLEFT")
-    edge:SetWidth(STATUS_EDGE_WIDTH)
     edge:Hide()
     local icon = bd:CreateTexture(nil, "OVERLAY")
     icon:SetPoint("LEFT", card.status, "LEFT", 0, 0)
     icon:Hide()
-    d.cueFill, d.cueEdge, d.cueIcon = fill, edge, icon
+    d.cueFill, d.cueEdge, d.cueIcon, d.cueBd = fill, edge, icon, bd
     return d
 end
 
 local function PaintCardCues(card, d)
+    -- The addon scales its window on its own, so the width is read per paint.
+    local w = S.PixelsIn(d.cueBd, STATUS_EDGE_WIDTH)
+    if w ~= d.cueEdgeW then
+        d.cueEdge:SetWidth(w)
+        d.cueEdgeW = w
+    end
     local friend = card.friendData
     local state = StatusEdge(friend)
     local color = state and STATUS_EDGE_COLORS[state]

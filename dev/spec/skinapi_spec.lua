@@ -26,6 +26,20 @@ describe("SkinAPI EdgeFor", function()
     end)
 end)
 
+describe("SkinAPI PixelsIn", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    it("is n times the per-frame edge", function()
+        for _, scale in ipairs({ 1, 1.1, 0.8 }) do
+            for _, n in ipairs({ 1, 2 }) do
+                local bd = { GetEffectiveScale = function() return scale end }
+                assert.near(n * (768 / 1440) / scale, S.PixelsIn(bd, n), 1e-9)
+            end
+        end
+    end)
+end)
+
 describe("SkinAPI secret guards", function()
     local S
     before_each(function()

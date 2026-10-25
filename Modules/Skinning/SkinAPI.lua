@@ -56,10 +56,14 @@ local function EdgeFor(bd)
     return px / factor
 end
 
--- Test seam: EdgeFor is file-local by design (nothing outside this file
--- should size a border), but its scale math is the one piece of the
--- backdrop layer that is worth pinning headlessly.
+-- Test seam: EdgeFor stays file-local; S.PixelsIn is the public way to size
+-- something in physical pixels with the same scale math.
 S._EdgeFor = EdgeFor
+
+-- n physical pixels in bd's own units.
+function S.PixelsIn(bd, n)
+    return n * EdgeFor(bd)
+end
 
 local backdropCache = setmetatable({}, { __mode = "k" })
 
