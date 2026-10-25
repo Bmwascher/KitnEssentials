@@ -494,7 +494,6 @@ function CC:OnSpecChanged(_, unit)
     self:OnRangeInputChanged()
 end
 
--- Re-reads the range spell and restarts the range loop on it.
 function CC:OnRangeInputChanged()
     local oldAbility, oldType = self.rangeAbility, self.specType
     self:ResolveRangeAbility()
