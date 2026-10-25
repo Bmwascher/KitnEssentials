@@ -26,6 +26,7 @@
 --   * Hide Zone Text's event bookkeeping, which gives back only what it took.
 --   * The retail-only features, refused where their ids are withheld.
 --   * The Group Finder hook guard, which waits for its target.
+--   * The Hide Transforms list each load picks, and the fishing watcher.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -251,6 +252,9 @@ local function newFixture(opts)
     if opts.withheld then
         local withheld = opts.withheld
         KE.IsFeatureAvailable = function(_, id) return not withheld[id] end
+    end
+    if opts.baseline then
+        KE.IsBaselineLoad = function() return true end
     end
     -- The module indexes C_SpecializationInfo at file scope.
     mock.installSpecInfo()
@@ -2086,5 +2090,35 @@ describe("Automation Group Finder hook guard", function()
             AU:ApplySettings()
             assert.equals(1, row.hook.count(fx), row.name .. ": a later apply")
         end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The Hide Transforms list by load. A baseline load cancels its own client's
+-- list and has no fishing outfit, so it never gets the fishing watcher.
+---------------------------------------------------------------------------------
+describe("Automation Hide Transforms list by load", function()
+    it("cancels a Forever transform without a fishing watcher on a baseline load, and leaves it with one on retail", function()
+        for _, row in ipairs({
+            { name = "baseline", baseline = true,  canceled = { 77 }, watcher = false },
+            { name = "retail",   baseline = false, canceled = {},     watcher = true },
+        }) do
+            local fx = newFixture({ baseline = row.baseline })
+            -- One buff on the player, 8219 (Flip Out): only the Forever list has it.
+            local canceled = {}
+            _G.C_UnitAuras = {
+                GetBuffDataByIndex = function(unit, index)
+                    if unit == "player" and index == 1 then return { spellId = 8219, auraInstanceID = 77 } end
+                end,
+                CancelAuraByInstanceID = function(_, instanceID) canceled[#canceled + 1] = instanceID end,
+            }
+            local AU = fx.AU
+            AU.db = { Enabled = true, HideTransforms = true, HideTransformItems = {} }
+            AU:ApplySettings()
+            assert.same(row.canceled, canceled, row.name .. " cancels")
+            local apply = findUpvalue(AU.ApplySettings, "ApplyHideTransforms")
+            assert.equals(row.watcher, findUpvalue(apply, "transformFishFrame") ~= nil, row.name .. " fishing watcher")
+        end
+        _G.C_UnitAuras = nil
     end)
 end)

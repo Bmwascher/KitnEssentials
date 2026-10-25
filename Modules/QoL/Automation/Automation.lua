@@ -2816,6 +2816,21 @@ local transformFishFrame     -- lazy
 local FISHING_OUTFIT_AURA = 394009
 local FISHING_CHANNEL_ID  = 131476
 
+-- A baseline load cancels its own client's transforms, derived from that
+-- client's game data by dev/scripts/derive-forever-transforms.lua.
+do
+    local FOREVER_TRANSFORMS = {
+        { key = "hallowed", cat = "holiday", label = "Hallowed Wand", ids = { 24708, 24709, 24710, 24711, 24712, 24713, 24723, 24732, 24735, 24736, 24740 } },
+        { key = "noggenfogger", cat = "items", label = "Noggenfogger Elixir", ids = { 16593, 16595 } },
+        { key = "deviate", cat = "items", label = "Savory Deviate Delight", ids = { 8213, 8219, 8221 } },
+        { key = "whimsyfin", cat = "items", label = "Savory Whimsyfin Delight", ids = { 1252576 } },
+        { key = "deception", cat = "items", label = "Orb of Deception", ids = { 16739 } },
+    }
+    if KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() then
+        TRANSFORMS = FOREVER_TRANSFORMS
+    end
+end
+
 -- The outfit cancel is a restricted call: refused in combat, while aura
 -- identities are hidden (a key, an encounter, a PvP match) whatever the
 -- per-spell answer says, and when the outfit aura itself is secret.
@@ -2927,25 +2942,32 @@ local function ApplyHideTransforms()
             end
         end)
         -- Fishing outfit: aura 394009 sticks while the fishing channel
-        -- (131476) runs; clear it when the channel stops instead.
-        transformFishFrame = CreateFrame("Frame")
-        transformFishFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
-            -- The payload is secret while unit spellcasts are restricted.
-            if (issecretvalue and issecretvalue(spellID)) or spellID ~= FISHING_CHANNEL_ID then return end
-            if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-            C_Timer.After(0.3, function()
-                if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-                if AU.FishingCancelRefused(UnitAffectingCombat("player"), KE:AreAuraIdentitiesHidden(),
-                    KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA)) then return end
-                if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
-                local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
-                if aura and aura.auraInstanceID ~= nil
-                    and not (issecretvalue and issecretvalue(aura.auraInstanceID))
-                    and C_UnitAuras.CancelAuraByInstanceID then
-                    C_UnitAuras.CancelAuraByInstanceID("player", aura.auraInstanceID)
-                end
+        -- (131476) runs; clear it when the channel stops instead. Only a list
+        -- with the fishing row gets the watcher.
+        local fishingListed = false
+        for _, item in ipairs(TRANSFORMS) do
+            if item.key == "fishing" then fishingListed = true end
+        end
+        if fishingListed then
+            transformFishFrame = CreateFrame("Frame")
+            transformFishFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
+                -- The payload is secret while unit spellcasts are restricted.
+                if (issecretvalue and issecretvalue(spellID)) or spellID ~= FISHING_CHANNEL_ID then return end
+                if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
+                C_Timer.After(0.3, function()
+                    if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
+                    if AU.FishingCancelRefused(UnitAffectingCombat("player"), KE:AreAuraIdentitiesHidden(),
+                        KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA)) then return end
+                    if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
+                    local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
+                    if aura and aura.auraInstanceID ~= nil
+                        and not (issecretvalue and issecretvalue(aura.auraInstanceID))
+                        and C_UnitAuras.CancelAuraByInstanceID then
+                        C_UnitAuras.CancelAuraByInstanceID("player", aura.auraInstanceID)
+                    end
+                end)
             end)
-        end)
+        end
     end
 
     if on and next(transformCTable) ~= nil then
@@ -2959,10 +2981,12 @@ local function ApplyHideTransforms()
         transformAuraFrame:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     end
 
-    if on and TransformItemEnabled("fishing") then
-        transformFishFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
-    else
-        transformFishFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    if transformFishFrame then
+        if on and TransformItemEnabled("fishing") then
+            transformFishFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+        else
+            transformFishFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+        end
     end
 end
 
