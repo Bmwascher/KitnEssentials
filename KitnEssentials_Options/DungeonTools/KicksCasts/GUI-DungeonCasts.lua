@@ -83,7 +83,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
 
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
+    -- A disabled module shows only this card: its switch and description.
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------

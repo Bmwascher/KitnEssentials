@@ -880,8 +880,8 @@ local function NewHeaderToggle(card)
         if onValueChanged then onValueChanged(checked) end
         -- The chat line lives here so that no page prints its own.
         KE:Print(label .. ": " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
-        -- A disabled module renders as a lone header bar, so the page must
-        -- rebuild here for that to apply immediately.
+        -- A disabled module shows only its switch and description, so the
+        -- page must rebuild here for that to apply immediately.
         GUIFrame:RefreshContent()
         GUIFrame:RefreshSidebar()
     end)
@@ -1049,11 +1049,10 @@ function CardMethods:TruncateBody(mark)
     self:UpdateHeight()
 end
 
--- Header-only collapse: a card with no body rows or labels — a module whose
--- only control is its header toggle, or any module rendered as a lone header
--- bar while disabled — is just its title bar. Without this branch the card
--- still reserves paddingMedium*2 of empty body beneath the header, which
--- reads as a stray gap between it and the next card.
+-- Header-only collapse: a card with no body rows or labels, such as a module
+-- whose only control is its header toggle, is just its title bar. Without
+-- this branch the card still reserves paddingMedium*2 of empty body beneath
+-- the header, which reads as a stray gap between it and the next card.
 function CardMethods:UpdateHeight()
     local totalHeight
     if self.currentY == 0 and self.headerHeight > 0 then

@@ -63,7 +63,8 @@ end
 --   back to the first tab when the remembered id is gone.
 -- opts.headerBuilder(scrollChild, yOffset) -> (newYOffset, collapse)
 --   Renders above the tab strip; collapse = true returns immediately with no
---   strip and no tab content (the lone-header-bar state for a disabled module).
+--   strip and no tab content (a disabled module's header card alone: its
+--   switch and description).
 -- opts.defaultTab() -> tabId | nil
 --   Consulted only while this page remembers no tab, so an Edit Mode jump and a
 --   tab picked this session both win over it. The pick is remembered like a
