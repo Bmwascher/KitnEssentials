@@ -56,9 +56,9 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel("Shows a teleport popup when you join a Group Finder group for a dungeon whose teleport you know, and for the group leader once their own listing fills. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat.\n\n" ..
-        "With Show Role on, the popup also shows the role you were accepted as, in the Role Icon Style set on the Group Finder card of the General tab under Skinning > Dark Theme.\n\n" ..
-        "With Party Teleports on, it also pops up when a party member uses a dungeon teleport, if their " ..
-        "addons share it (KitnEssentials with this on, or |cffffd100Mythic+ Tweaks|r). Your own dungeon " ..
+        "With " .. KE:Gold("Show Role") .. " on, the popup also shows the role you were accepted as, in the " .. KE:Gold("Role Icon Style") .. " set on the " .. KE:Gold("Group Finder") .. " card of the " .. KE:Gold("General") .. " tab under Skinning > " .. KE:Gold("Dark Theme") .. ".\n\n" ..
+        "With " .. KE:Gold("Party Teleports") .. " on, it also pops up when a party member uses a dungeon teleport, if their " ..
+        "addons share it (KitnEssentials with this on, or " .. KE:Gold("Mythic+ Tweaks") .. "). Your own dungeon " ..
         "teleports are shared with your party the same way.")
 
     -- A disabled module shows only this card: its switch and description.

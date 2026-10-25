@@ -55,7 +55,7 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
 
     card1:AddLabel("Announces on screen when a party or raid member dies, and when your focus target " ..
         "dies, with a spoken reminder in combat if you want one. On in dungeons by default; raids " ..
-        "are opt-in on the Show In card.")
+        "are opt-in on the " .. KE:Gold("Show In") .. " card.")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.

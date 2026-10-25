@@ -2193,7 +2193,7 @@ local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     desc:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     desc:SetJustifyH("LEFT")
     desc:SetWordWrap(true)
-    desc:SetTextColor(0.85, 0.85, 0.85)
+    desc:SetTextColor(KE.Theme.textPrimary[1], KE.Theme.textPrimary[2], KE.Theme.textPrimary[3], 1)
     local thr = (rule and rule.threshold) or 0
     local curatedLead = (rule and rule.lead) or 0
     desc:SetText(string_format(
@@ -3325,7 +3325,7 @@ local WIND_MAP_TOOLTIP =
 
 local WIND_MAP_DESCRIPTION =
     "Shows the arena with the next Winds of Change side and where to drop Inferno Spit fire for it, "
-    .. "and below it the next Winds and Inferno Spit timers in BigWigs order. The side holds through a "
+    .. "and below it the next Winds and Inferno Spit timers in " .. KE:Gold("BigWigs") .. " order. The side holds through a "
     .. "late wind and moves on one step only once Erkhart's Winds of Change cast succeeds; Inferno Spit "
     .. "timers never move it. Syncing means the wind sequence was lost; it clears only when a later cast "
     .. "can be tied to its BigWigs timer, and otherwise lasts the rest of the pull. The fire marker sits "
@@ -3334,7 +3334,7 @@ local WIND_MAP_DESCRIPTION =
     .. "while the dragon flies and higher once BigWigs forecasts its landing.\n\n"
     .. "It reads the timers BigWigs publishes, which needs BigWigs' enhanced timer mode (its default). "
     .. "Turning their rows off here, or their BigWigs bars, does not stop the map. It plays no sound. Move "
-    .. "it with /kes edit. The 40% phase reminder is this boss's Phase row and works with the map off."
+    .. "it with " .. KE:Gold("/kes edit") .. ". The 40% phase reminder is this boss's Phase row and works with the map off."
 
 local function BuildWindMapBody(parent, contentWidth, onCaptionResize)
     local DT = GetModule()
@@ -3431,7 +3431,7 @@ local SHIELD_WARNING_TOOLTIP =
 local SHIELD_WARNING_DESCRIPTION =
     "Shows a red WRONG TARGET text, with Storm Blessed's icon on each side, above the center of "
     .. "the screen while your target is the boss that carries Storm Blessed and cannot be damaged. "
-    .. "It follows BigWigs' \"Storm Blessed on ...\" messages, so it needs BigWigs with LittleWigs. "
+    .. "It follows " .. KE:Gold("BigWigs") .. "' \"Storm Blessed on ...\" messages, so it needs BigWigs with " .. KE:Gold("LittleWigs") .. ". "
     .. "Mythic and Mythic+ only. It hides once either boss dies. The sound plays each time the text "
     .. "appears, at most once every 3 seconds. While this row is selected the text shows as a preview."
 
@@ -3708,8 +3708,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName, v
     hint:SetJustifyH("LEFT")
     hint:SetText(isTrashView
         and "Pick a trash ability on the left to edit it."
-        or "Pick a timer, cue, health phase or reminder sound on the left to edit it. Boss role filters need the Filter bars by your role/spec switch on the General tab's Role Filter card.")
-    hint:SetTextColor(0.85, 0.85, 0.85)
+        or "Pick a timer, cue, health phase or reminder sound on the left to edit it. Boss role filters need the " .. KE:Gold("Filter bars by your role/spec") .. " switch on the " .. KE:Gold("General") .. " tab's " .. KE:Gold("Role Filter") .. " card.")
+    hint:SetTextColor(KE.Theme.textPrimary[1], KE.Theme.textPrimary[2], KE.Theme.textPrimary[3], 1)
     hintCard:AddRow(hintRow, Theme.rowHeightLast, 0)
     yOffset = hintCard:GetNextOffset()
 

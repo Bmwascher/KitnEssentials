@@ -344,7 +344,7 @@ local function AddProviderSection(card, DT)
 
     card:AddSeparator()
     card:AddLabel(KE:ColorTextByTheme("BigWigs Messages"))
-    card:AddLabel("Some timers start from a BigWigs message, so that message must be on in BigWigs.")
+    card:AddLabel("Some timers start from a " .. KE:Gold("BigWigs") .. " message, so that message must be on in BigWigs.")
 
     local row = GetProviderSummaryRow()
     row.DT, row.keys, row.expanded = DT, keys, providerDetailsExpanded
@@ -437,8 +437,8 @@ function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
         KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
     end)
     card:AddLabel("Hand-tuned timers and reminder sounds for each season's dungeon bosses. With it on, " ..
-        "the Bars, Texts and Nameplates tabs set how they look.\n\n" ..
-        "Needs |cffffd100BigWigs|r and |cffffd100LittleWigs|r. In BigWigs Timeline settings, show BigWigs " ..
+        "the " .. KE:Gold("Bars") .. ", " .. KE:Gold("Texts") .. " and " .. KE:Gold("Nameplates") .. " tabs set how they look.\n\n" ..
+        "Needs " .. KE:Gold("BigWigs") .. " and " .. KE:Gold("LittleWigs") .. ". In BigWigs Timeline settings, show BigWigs " ..
         "enhanced timers as BigWigs bars. Blizzard's timeline display can stay off.")
     if db.Enabled == false then
         -- Also covers arriving here already-disabled (e.g. a profile

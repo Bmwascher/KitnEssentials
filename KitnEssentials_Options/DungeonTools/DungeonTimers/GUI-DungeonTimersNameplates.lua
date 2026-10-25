@@ -146,7 +146,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
         detectedName = FRIENDLY_ADDON[previewMod:BuildNameplatePreview(previewHost)] or detectedName
     end
     previewCard:AddLabel("Reflects your nameplate addon: |cffffffff" .. detectedName
-        .. "|r - a stand-in plate (health bar, name and cast bar). For Plater and EllesmereUI the bar is sized from your saved profile; other addons use a representative default. Icon size, spacing, side and offset are drawn by the real layout; only the plate skin itself is a static stand-in.")
+        .. "|r - a stand-in plate (health bar, name and cast bar). For " .. KE:Gold("Plater") .. " and " .. KE:Gold("EllesmereUI") .. " the bar is sized from your saved profile; other addons use a representative default. Icon size, spacing, side and offset are drawn by the real layout; only the plate skin itself is a static stand-in.")
     yOffset = previewCard:GetNextOffset()
 
     ---------------------------------------------------------------------------

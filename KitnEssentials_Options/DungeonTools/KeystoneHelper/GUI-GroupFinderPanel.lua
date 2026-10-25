@@ -43,7 +43,7 @@ GUIFrame:RegisterContent("GroupFinderPanel", function(scrollChild, yOffset)
 
     -- Measured AFTER the label, not before: the label grows the card, so an
     -- offset read ahead of it puts the next card on top of this one.
-    card1:AddLabel("Adds a panel beside the Group Finder while you browse Mythic+ groups: dungeon toggles, role filters and a minimum leader score, with this week's affixes and your weekly run count. It appears with the Mythic+ search and hides the rest of the time. The filters are Blizzard's own, so turning this module off clears them. Steps aside automatically if Premade Groups Filter is installed.")
+    card1:AddLabel("Adds a panel beside the Group Finder while you browse Mythic+ groups: dungeon toggles, role filters and a minimum leader score, with this week's affixes and your weekly run count. It appears with the Mythic+ search and hides the rest of the time. The filters are Blizzard's own, so turning this module off clears them. Steps aside automatically if " .. KE:Gold("Premade Groups Filter") .. " is installed.")
 
     return card1:GetNextOffset()
 end)

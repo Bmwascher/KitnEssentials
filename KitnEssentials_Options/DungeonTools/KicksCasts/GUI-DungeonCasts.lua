@@ -256,7 +256,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     manager:Register(separatorDropdown, "all")
     card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
-    card7:AddLabel("|cff888888Show the target of enemy casts on the cast bar.|r")
+    card7:AddLabel("Show the target of enemy casts on the cast bar.")
 
     yOffset = card7:GetNextOffset()
 
