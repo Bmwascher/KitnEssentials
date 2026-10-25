@@ -294,7 +294,8 @@ function Style.CreateRegions(frame, group, settings)
         frame.keCaster = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
         frame.keCaster:SetJustifyH("CENTER")
         frame.keCaster:SetWordWrap(false)
-        KE:ApplyFontToText(frame.keCaster, settings.FontFace, settings.FontSize, settings.FontOutline)
+        KE:ApplyFontToText(frame.keCaster, settings.FontFace, KE.AuraRules.CasterFontSize(settings),
+            settings.FontOutline)
         frame.keCaster:Hide()
     end
 
@@ -432,7 +433,10 @@ function Style.RegisterRegions(button, _display, group, settings)
     -- the registration is cleared and the string emptied so no name lingers.
     if button.keCaster then
         if settings.ShowCasterName == true then
-            button:SetCasterName(button.keCaster, { useClassColors = true, showRealmName = false })
+            button:SetCasterName(button.keCaster, {
+                useClassColors = settings.CasterClassColor ~= false,
+                showRealmName  = settings.CasterShowRealm == true,
+            })
         else
             button:ClearCasterName()
             button.keCaster:SetText("")
@@ -558,14 +562,23 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         caption:SetShown(settings.ShowText ~= false)
     end
 
-    -- Font, anchor and width only: a live button's caster text and shown
-    -- state are the game's once registered, and the preview writes its own.
+    -- Font, color, anchor and width only: a live button's caster text and
+    -- shown state are the game's once registered, and the preview writes its
+    -- own. A class color the game writes into the text wins over this color.
     if caps.hasCasterName and frame.keCaster then
         local caster = frame.keCaster
-        KE:ApplyFontToText(caster, settings.FontFace, settings.FontSize, settings.FontOutline)
+        KE:ApplyFontToText(caster, settings.FontFace, KE.AuraRules.CasterFontSize(settings), settings.FontOutline)
+        caster:SetTextColor(KE:ResolveColor(settings.CasterNameColor, WHITE))
         caster:ClearAllPoints()
-        caster:SetPoint("TOP", frame, "BOTTOM", 0, -1)
-        caster:SetWidth(settings.IconSize or 0)
+        local cp = settings.CasterPosition
+        if cp then
+            caster:SetPoint(cp.AnchorFrom, frame, cp.AnchorTo, cp.XOffset, cp.YOffset)
+        else
+            caster:SetPoint("TOP", frame, "BOTTOM", 0, -1)
+        end
+        local width, justify = KE.AuraRules.ResolveCasterLayout(settings)
+        caster:SetWidth(width)
+        caster:SetJustifyH(justify)
     end
 
     if caps.hasBorder and frame.keBorder then

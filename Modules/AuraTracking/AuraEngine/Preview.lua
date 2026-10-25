@@ -222,11 +222,24 @@ local function ApplyPreviewSwipe(frame, swipe)
 end
 
 -- A live button's caster name is the game's to write; a preview frame
--- registers nothing, so a sample stands in while the setting is on.
-local function ApplyPreviewCaster(frame, shown)
+-- registers nothing, so a sample stands in while the setting is on. The
+-- sample takes a fixed class color, wrapped into the text as the game wraps a
+-- live name: UnitClass can return a secret while the settings are open.
+local SAMPLE_CLASS = "MAGE"
+
+local function ApplyPreviewCaster(frame, settings)
     local caster = frame.keCaster
     if not caster then return end
-    caster:SetText(shown and "Caster" or "")
+    local shown = settings.ShowCasterName == true
+    local text = ""
+    if shown then
+        text = settings.CasterShowRealm == true and "Caster-Realm" or "Caster"
+        local color = settings.CasterClassColor ~= false and RAID_CLASS_COLORS[SAMPLE_CLASS]
+        if color then
+            text = color:WrapTextInColorCode(text)
+        end
+    end
+    caster:SetText(text)
     caster:SetShown(shown)
 end
 
@@ -320,7 +333,7 @@ local function BuildFrames(state, handle, display, settings)
             RepaintDispelRing(frame, group, settings, entry.dispelType)
             PopulateDispelBadge(frame, entry.dispelType)
             ApplyPreviewSwipe(frame, state.swipe)
-            ApplyPreviewCaster(frame, settings.ShowCasterName == true)
+            ApplyPreviewCaster(frame, settings)
 
             PositionEntryFrame(frame, i, display, settings)
             PopulateEntryContent(frame, entry, now, state.decimalThreshold, state.swipe)
