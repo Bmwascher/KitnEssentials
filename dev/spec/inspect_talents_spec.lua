@@ -1,8 +1,9 @@
 -- Tier: rules KE invented for the inspect talent panel (tiered test policy):
 -- the open gate with the shared shown predicate, the node keep rule, the hero
 -- subtree pick, the compare gate, the hero compare gate, the difference rule,
--- the chip order and the window hooks installing once. C_Traits reads,
--- layout, tooltips and event timing are smoke-tested, not here.
+-- the chip order, the header line width and the window hooks installing
+-- once. C_Traits reads, layout, tooltips and event timing are smoke-tested,
+-- not here.
 --
 -- The window hook case uses a stub frame that counts HookScript calls: the
 -- rule is a call count across a disable and enable, and a predicate lifted
@@ -185,5 +186,20 @@ describe("Inspect talents: the window hooks", function()
         IT:OnDisable()
         IT:InstallWindow()
         assert.same({ OnShow = 1, OnHide = 1 }, count)
+    end)
+end)
+
+describe("Inspect talents: the header line width", function()
+    it("measures the header line only when every width reads plain", function()
+        local width = loadIT()._LineWidth
+        local cases = {
+            { name = "plain widths sum with a gap between pieces", widths = { 14, 60, 5 }, n = 3, want = 14 + 60 + 5 + 2 * 3 },
+            { name = "no pieces", widths = {}, n = 0, want = 0 },
+            { name = "a secret width, never added", widths = { 14, secret(), 5 }, n = 3, want = nil },
+            { name = "a width that is not a number", widths = { 14, "60" }, n = 2, want = nil },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, width(c.widths, c.n, 3), c.name)
+        end
     end)
 end)

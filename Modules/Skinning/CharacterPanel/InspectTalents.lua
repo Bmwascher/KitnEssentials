@@ -124,11 +124,8 @@ end
 -- Chip labels take the Secondary Stats readout's default hues.
 local STAT_RGB = {}
 for key, hex in pairs(KE.SecondaryStatHex or {}) do
-    STAT_RGB[key] = {
-        (tonumber(hex:sub(1, 2), 16) or 255) / 255,
-        (tonumber(hex:sub(3, 4), 16) or 255) / 255,
-        (tonumber(hex:sub(5, 6), 16) or 255) / 255,
-    }
+    local c = KE:CreateColor(hex)
+    STAT_RGB[key] = { c.r, c.g, c.b }
 end
 
 -- Use, equip and proc text quotes numbers that are not gear stats.
@@ -234,6 +231,19 @@ local function HeroCompareOn(sawActive, sawOther, infoActive)
     return infoActive == true
 end
 IT._HeroCompareOn = HeroCompareOn
+
+-- The header line's width, or nil when any piece's width is unreadable:
+-- GetStringWidth reads secret while the text's anchoring is secret.
+local function LineWidth(widths, n, gap)
+    local total = 0
+    for i = 1, n do
+        local w = widths[i]
+        if issecretvalue(w) or type(w) ~= "number" then return nil end
+        total = total + w + (i > 1 and gap or 0)
+    end
+    return total
+end
+IT._LineWidth = LineWidth
 
 ---------------------------------------------------------------------------------
 -- State
@@ -942,6 +952,26 @@ local function ReleaseAll()
     numNodes, numEdges = 0, 0
 end
 
+-- On close, the hidden frames drop the last player's strings, icons and
+-- Blizzard's tooltip data; the next paint sets them again.
+local function ForgetFrames()
+    for _, btn in ipairs(nodePool) do
+        local tip, spell = btn.tipInfo, btn.spellInfo
+        tip.tooltipData, tip.getterArgs[1], tip.getterArgs[2] = nil, nil, nil
+        spell.tooltipData, spell.getterArgs[1] = nil, nil
+        btn.rank:SetText("")
+        btn.icon:SetTexture(nil)
+    end
+    if not panel then return end
+    panel.specText:SetText("")
+    panel.heroText:SetText("")
+    panel.heroLabel:SetText("")
+    panel.legendNote:SetText("")
+    panel.specFrame.icon:SetTexture(nil)
+    panel.heroIcon:SetTexture(nil)
+    for _, chip in ipairs(panel.chips) do chip.value:SetText("") end
+end
+
 -- KE:AddIconBorders gives no recolor method; the border is repainted from
 -- the theme here so a theme change reaches it.
 local function IconBorderColor(frame, c)
@@ -952,6 +982,8 @@ local function IconBorderColor(frame, c)
         tex:SetSnapToPixelGrid(false)
     end
 end
+
+local pieceWidths = {}
 
 local function PaintHeader(tree)
     local T = KE.Theme
@@ -986,7 +1018,7 @@ local function PaintHeader(tree)
         panel.heroText:SetText(heroName)
         sublinePieces[#sublinePieces + 1] = panel.heroText
     end
-    local prev, width = nil, 0
+    local prev
     for i, piece in ipairs(sublinePieces) do
         piece:ClearAllPoints()
         if prev then
@@ -994,13 +1026,16 @@ local function PaintHeader(tree)
         else
             piece:SetPoint("LEFT", panel, "TOPLEFT", PAD, HEADER_MID_Y)
         end
-        piece:Show()
         local w = ICON_SIZE
         if piece.GetStringWidth then w = piece:GetStringWidth() end
-        if issecretvalue(w) or type(w) ~= "number" then w = 0 end
-        width = width + w + (i > 1 and SUBLINE_GAP or 0)
+        pieceWidths[i] = w
         prev = piece
     end
+    -- An unreadable width keeps the whole line hidden for this paint, so the
+    -- panel is never sized for less than it shows.
+    local width = LineWidth(pieceWidths, #sublinePieces, SUBLINE_GAP)
+    if not width then return end
+    for _, piece in ipairs(sublinePieces) do piece:Show() end
     -- DrawTree widens the panel to this, so the chips never cover the line.
     panel.sublineW = width
 end
@@ -1407,6 +1442,7 @@ function IT:OnDisable()
     ResetWindowState()
     if panel then
         ReleaseAll()
+        ForgetFrames()
         panel:Hide()
     end
     if arrow then arrow:Hide() end
@@ -1452,8 +1488,9 @@ function IT:OnInspectHide()
     if not self:IsEnabled() then return end
     self:UnregisterEvent("INSPECT_READY")
     ResetWindowState()
-    -- Released buttons drop their links to the last player's records.
+    -- Released and cleared frames keep none of the last player's data.
     ReleaseAll()
+    ForgetFrames()
     if panel then
         panel:Hide()
         panel.shownState = nil
