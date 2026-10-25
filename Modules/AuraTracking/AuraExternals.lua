@@ -44,8 +44,8 @@ local DECLARATION = {
     sortMethod         = "AuraInstanceIDOnly",
     defaultIconsPerRow = 6,   -- this module's existing fallback; Debuffs uses 8
 
-    -- ORDER IS LOAD-BEARING. Registration order is the on-screen block order,
-    -- so externals must be declared first.
+    -- ORDER IS LOAD-BEARING. Registration order is the on-screen block order:
+    -- others' externals first, your own next, big defensives last.
     groups = {
         {
             key          = "external",
@@ -54,12 +54,21 @@ local DECLARATION = {
             -- keeping Blizzard's component would make the user's list an
             -- intersection with it rather than a replacement for it, and an
             -- added spell would never appear.
-            buildFilter  = function() return "HELPFUL" end,
+            buildFilter  = function(settings) return KE.AuraRules.OthersFilterString(settings) end,
             buildCandidates = BuildExternalCandidates,
             capabilities = {
                 hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true,
                 hasCasterName = true,
             },
+        },
+        {
+            -- Your own externals while Hide My Own Name is on, dressed like the
+            -- group above but with no name region, so the game never writes
+            -- your name under them. Zero icons otherwise.
+            key          = "externalOwn",
+            buildFilter  = function() return KE.AuraRules.OWN_FILTER end,
+            buildCandidates = BuildExternalCandidates,
+            capabilities = { hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true },
         },
         {
             key          = "big",
@@ -73,7 +82,8 @@ local DECLARATION = {
     },
 
     splitLimit = function(total, settings)
-        return KE.AuraRules.SplitExternalsLimit(total, settings.ShowBigDefensives)
+        return KE.AuraRules.SplitExternalsOwnLimit(total, settings.ShowBigDefensives,
+            KE.AuraRules.IsOwnNameSplit(settings))
     end,
 
     sounds = {
@@ -95,7 +105,8 @@ local DECLARATION = {
 
     buildPreview = function(settings, total)
         return KE.AuraRules.BuildExternalsPreview(
-            PREVIEW_ICONS, PREVIEW_ICONS_BIG, total, settings.ShowBigDefensives)
+            PREVIEW_ICONS, PREVIEW_ICONS_BIG, total, settings.ShowBigDefensives,
+            KE.AuraRules.IsOwnNameSplit(settings))
     end,
 }
 
