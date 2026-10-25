@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.25
+
+### Settings
+
+- About 26 pages list their cards in one order: the module's own cards
+  first, then Display, Position, Font, Colors, Glow and Sound
+- Loot Roll and Ready Check Consumables use the standard Position Settings
+  card, with Anchor From and To Screen added; the Loot Window card is now
+  "Loot Window Position"
+- Notes are reworded, with gold marking commands, other addons and the
+  names of controls, tabs and cards; the support Discord names on Home are
+  gold
+
+---
+
 ## v4.14.24
 
 ### Settings
