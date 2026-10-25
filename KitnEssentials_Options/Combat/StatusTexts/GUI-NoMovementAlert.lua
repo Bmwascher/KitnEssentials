@@ -51,6 +51,127 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ------------------------------------------------------------------
+    -- Card 7: Tracked Spells
+    -- The drift escape hatch: hardcoded spell IDs go stale every patch,
+    -- so users can untick a preset or re-enable one we ship disabled
+    -- without waiting on a build.
+    ------------------------------------------------------------------
+    local card7 = GUIFrame:CreateCard(scrollChild, "Tracked Spells", yOffset)
+    -- Every spec of the class, not just the active one -- you should be
+    -- able to set up your off-specs without respeccing first. Overrides
+    -- are keyed per spec ("specID:spellID"), so a spell shared across specs
+    -- (Roll on all three Monk specs) has its own setting in each; an older
+    -- bare spellID key is still read as the fallback.
+    card7:AddLabel("All specializations for the selected class. Unticking a spell stops tracking it on that spec only; other specs keep their own setting.")
+
+    db.Spells = db.Spells or {}
+    local _, playerClass = UnitClass("player")
+
+    -- Class picker -- overrides are account/profile data, not character
+    -- data, so an author building a profile for subscribers needs to
+    -- reach every class, not just the one they happen to be on.
+    local classTokens = {}
+    for token in pairs(KE.MOVEMENT_ABILITIES or {}) do
+        classTokens[#classTokens + 1] = token
+    end
+
+    local mark
+
+    local function DrawClass(classToken)
+        local currentSpecId = KE:GetPlayerSpecId()
+        local byClass = KE.MOVEMENT_ABILITIES and KE.MOVEMENT_ABILITIES[classToken]
+
+        if byClass then
+            local specIds = {}
+            for specId in pairs(byClass) do
+                if type(specId) == "number" then specIds[#specIds + 1] = specId end
+            end
+            table.sort(specIds)
+
+            for _, specId in ipairs(specIds) do
+                local specName, specIcon = "Spec " .. specId, nil
+                if GetSpecializationInfoForSpecID then
+                    local _, n, _, icon = GetSpecializationInfoForSpecID(specId)
+                    if n then specName = n end
+                    specIcon = icon
+                end
+                local header = GUIFrame:CreateRow(card7.content, 26)
+                header:AddWidget(GUIFrame:CreateSpecHeaderRow(header, specName, {
+                    icon = specIcon,
+                    current = specId == currentSpecId and classToken == playerClass,
+                }), 1)
+                card7:AddRow(header, 26)
+
+                -- One row per ability name: several presets are the same ability
+                -- under different ids, so its checkbox writes every id behind it.
+                local order, byName = {}, {}
+                for _, spellId in ipairs(byClass[specId]) do
+                    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellId)
+                    local name = (info and info.name) or ("Spell " .. spellId)
+                    if not byName[name] then
+                        byName[name] = {}
+                        order[#order + 1] = name
+                    end
+                    table.insert(byName[name], spellId)
+                end
+
+                -- Three per row: these are short labels and the card is wide.
+                local pending, PER_ROW = nil, 3
+                for idx, name in ipairs(order) do
+                    local ids = byName[name]
+                    local key1 = KE.MOVEMENT_SPELL_KEY(specId, ids[1])
+                    local override = db.Spells[key1] or db.Spells[tostring(ids[1])]
+                    local enabled
+                    if override and override.enabled ~= nil then
+                        enabled = override.enabled ~= false
+                    else
+                        enabled = not (KE.MOVEMENT_DEFAULT_OFF and KE.MOVEMENT_DEFAULT_OFF[ids[1]])
+                    end
+
+                    if not pending then pending = GUIFrame:CreateRow(card7.content, GUIFrame.CheckboxRowHeight) end
+                    pending:AddWidget(GUIFrame:CreateCompactCheckbox(pending, name, {
+                        value = enabled,
+                        callback = function(v)
+                            for _, id in ipairs(ids) do
+                                local k = KE.MOVEMENT_SPELL_KEY(specId, id)
+                                db.Spells[k] = db.Spells[k] or {}
+                                db.Spells[k].enabled = v
+                                -- The legacy account-wide key stays: specs with no
+                                -- entry of their own still resolve through it, and
+                                -- deleting it would reset them to the preset default.
+                            end
+                            ApplySettings()
+                        end,
+                    }), 1 / PER_ROW)
+
+                    if idx % PER_ROW == 0 or idx == #order then
+                        card7:AddRow(pending, GUIFrame.CheckboxRowHeight, idx < #order and GUIFrame.CheckboxRowGap or nil)
+                        pending = nil
+                    end
+                end
+            end
+        else
+            card7:AddLabel("No mobility presets for this class.")
+        end
+    end
+
+    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card7.content, {
+        scope = "NoMovementAlert",
+        classTokens = classTokens,
+        onPick = function(key)
+            local oldHeight = card7:GetContentHeight()
+            card7:TruncateBody(mark)
+            DrawClass(key)
+            GUIFrame:ResizeCardInPlace(card7, oldHeight)
+        end,
+    })
+    card7:AddRow(classRow, 36)
+    mark = card7:MarkBody()
+
+    DrawClass(shownClass)
+    yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
+
+    ------------------------------------------------------------------
     -- Card 2: Display Settings
     ------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -243,128 +364,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
         }), 0.5)
     end
     card6:AddRow(soundRow, 40)
-    yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
-
-    ------------------------------------------------------------------
-    -- Card 7: Tracked Spells
-    -- The drift escape hatch: hardcoded spell IDs go stale every patch,
-    -- so users can untick a preset or re-enable one we ship disabled
-    -- without waiting on a build.
-    ------------------------------------------------------------------
-    local card7 = GUIFrame:CreateCard(scrollChild, "Tracked Spells", yOffset)
-    -- Every spec of the class, not just the active one -- you should be
-    -- able to set up your off-specs without respeccing first. Overrides
-    -- are keyed per spec ("specID:spellID"), so a spell shared across specs
-    -- (Roll on all three Monk specs) has its own setting in each; an older
-    -- bare spellID key is still read as the fallback.
-    card7:AddLabel("All specializations for the selected class. Unticking a spell stops tracking it on that spec only; other specs keep their own setting.")
-
-    db.Spells = db.Spells or {}
-    local _, playerClass = UnitClass("player")
-
-    -- Class picker -- overrides are account/profile data, not character
-    -- data, so an author building a profile for subscribers needs to
-    -- reach every class, not just the one they happen to be on.
-    local classTokens = {}
-    for token in pairs(KE.MOVEMENT_ABILITIES or {}) do
-        classTokens[#classTokens + 1] = token
-    end
-
-    local mark
-
-    local function DrawClass(classToken)
-        local currentSpecId = KE:GetPlayerSpecId()
-        local byClass = KE.MOVEMENT_ABILITIES and KE.MOVEMENT_ABILITIES[classToken]
-
-        if byClass then
-            local specIds = {}
-            for specId in pairs(byClass) do
-                if type(specId) == "number" then specIds[#specIds + 1] = specId end
-            end
-            table.sort(specIds)
-
-            for _, specId in ipairs(specIds) do
-                local specName, specIcon = "Spec " .. specId, nil
-                if GetSpecializationInfoForSpecID then
-                    local _, n, _, icon = GetSpecializationInfoForSpecID(specId)
-                    if n then specName = n end
-                    specIcon = icon
-                end
-                local header = GUIFrame:CreateRow(card7.content, 26)
-                header:AddWidget(GUIFrame:CreateSpecHeaderRow(header, specName, {
-                    icon = specIcon,
-                    current = specId == currentSpecId and classToken == playerClass,
-                }), 1)
-                card7:AddRow(header, 26)
-
-                -- One row per ability name: several presets are the same ability
-                -- under different ids, so its checkbox writes every id behind it.
-                local order, byName = {}, {}
-                for _, spellId in ipairs(byClass[specId]) do
-                    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellId)
-                    local name = (info and info.name) or ("Spell " .. spellId)
-                    if not byName[name] then
-                        byName[name] = {}
-                        order[#order + 1] = name
-                    end
-                    table.insert(byName[name], spellId)
-                end
-
-                -- Three per row: these are short labels and the card is wide.
-                local pending, PER_ROW = nil, 3
-                for idx, name in ipairs(order) do
-                    local ids = byName[name]
-                    local key1 = KE.MOVEMENT_SPELL_KEY(specId, ids[1])
-                    local override = db.Spells[key1] or db.Spells[tostring(ids[1])]
-                    local enabled
-                    if override and override.enabled ~= nil then
-                        enabled = override.enabled ~= false
-                    else
-                        enabled = not (KE.MOVEMENT_DEFAULT_OFF and KE.MOVEMENT_DEFAULT_OFF[ids[1]])
-                    end
-
-                    if not pending then pending = GUIFrame:CreateRow(card7.content, GUIFrame.CheckboxRowHeight) end
-                    pending:AddWidget(GUIFrame:CreateCompactCheckbox(pending, name, {
-                        value = enabled,
-                        callback = function(v)
-                            for _, id in ipairs(ids) do
-                                local k = KE.MOVEMENT_SPELL_KEY(specId, id)
-                                db.Spells[k] = db.Spells[k] or {}
-                                db.Spells[k].enabled = v
-                                -- The legacy account-wide key stays: specs with no
-                                -- entry of their own still resolve through it, and
-                                -- deleting it would reset them to the preset default.
-                            end
-                            ApplySettings()
-                        end,
-                    }), 1 / PER_ROW)
-
-                    if idx % PER_ROW == 0 or idx == #order then
-                        card7:AddRow(pending, GUIFrame.CheckboxRowHeight, idx < #order and GUIFrame.CheckboxRowGap or nil)
-                        pending = nil
-                    end
-                end
-            end
-        else
-            card7:AddLabel("No mobility presets for this class.")
-        end
-    end
-
-    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card7.content, {
-        scope = "NoMovementAlert",
-        classTokens = classTokens,
-        onPick = function(key)
-            local oldHeight = card7:GetContentHeight()
-            card7:TruncateBody(mark)
-            DrawClass(key)
-            GUIFrame:ResizeCardInPlace(card7, oldHeight)
-        end,
-    })
-    card7:AddRow(classRow, 36)
-    mark = card7:MarkBody()
-
-    DrawClass(shownClass)
-    yOffset = yOffset + card7:GetContentHeight() + Theme.paddingMedium
+    yOffset = yOffset + card6:GetContentHeight() + Theme.paddingMedium
 
     return yOffset
 end)

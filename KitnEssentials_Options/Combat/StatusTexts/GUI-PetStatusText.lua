@@ -98,52 +98,6 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
     end
     yOffset = card1:GetNextOffset()
 
-    -- Combat Texts owns the anchor and the font while attached.
-    if not attached then
-        ----------------------------------------------------------------
-        -- Card 2: Position Settings
-        ----------------------------------------------------------------
-        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            db = db,
-            dbKeys = {
-                anchorFrameType = "anchorFrameType",
-                anchorFrameFrame = "ParentFrame",
-                selfPoint = "AnchorFrom",
-                anchorPoint = "AnchorTo",
-                xOffset = "XOffset",
-                yOffset = "YOffset",
-                strata = "Strata",
-            },
-            showAnchorFrameType = true,
-            showStrata = true,
-            onChangeCallback = ApplySettings,
-        })
-
-        if posCard.positionWidgets then
-            manager:RegisterGroup(posCard.positionWidgets, "all")
-        end
-        manager:Register(posCard, "all")
-        yOffset = posOffset
-
-        ----------------------------------------------------------------
-        -- Card 3: Font Settings
-        ----------------------------------------------------------------
-        local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-            db = db,
-            dbKeys = {
-                fontFace = "FontFace",
-                fontSize = "FontSize",
-                fontOutline = "FontOutline",
-            },
-            onChangeCallback = ApplySettings,
-        })
-        manager:Register(fontCard, "all")
-        if fontWidgets then
-            manager:RegisterGroup(fontWidgets, "all")
-        end
-        yOffset = fontOffset
-    end
-
     ----------------------------------------------------------------
     -- Card 4: State Settings
     ----------------------------------------------------------------
@@ -191,6 +145,52 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
     end
 
     yOffset = card4:GetNextOffset()
+
+    -- Combat Texts owns the anchor and the font while attached.
+    if not attached then
+        ----------------------------------------------------------------
+        -- Card 2: Position Settings
+        ----------------------------------------------------------------
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
+
+        if posCard.positionWidgets then
+            manager:RegisterGroup(posCard.positionWidgets, "all")
+        end
+        manager:Register(posCard, "all")
+        yOffset = posOffset
+
+        ----------------------------------------------------------------
+        -- Card 3: Font Settings
+        ----------------------------------------------------------------
+        local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                fontFace = "FontFace",
+                fontSize = "FontSize",
+                fontOutline = "FontOutline",
+            },
+            onChangeCallback = ApplySettings,
+        })
+        manager:Register(fontCard, "all")
+        if fontWidgets then
+            manager:RegisterGroup(fontWidgets, "all")
+        end
+        yOffset = fontOffset
+    end
 
     RefreshStates()
     return yOffset

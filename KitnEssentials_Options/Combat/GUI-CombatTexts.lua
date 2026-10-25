@@ -127,62 +127,6 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Font Settings (Font Size shares row with Message Spacing)
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        extraSlider = {
-            label = "Message Spacing",
-            dbKey = "Spacing",
-            min = 0, max = 20, step = 1,
-            default = 4,
-        },
-        -- An attached Havoc warning takes this font, and the game builds it
-        -- once, so a change here reaches it only after a reload.
-        onChangeCallback = function()
-            local ht = KitnEssentials:GetModule("HavocTracker", true)
-            if ht and ht.container and ht.db and ht.db.AttachToCombatTexts then
-                KE:FlagReloadNeeded()
-            end
-            ApplySettings()
-        end,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
     -- Card 4: Combat Messages (Enter + Exit)
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Combat Messages", yOffset)
@@ -553,6 +497,62 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
     yOffset = card7:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 3: Font Settings (Font Size shares row with Message Spacing)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        extraSlider = {
+            label = "Message Spacing",
+            dbKey = "Spacing",
+            min = 0, max = 20, step = 1,
+            default = 4,
+        },
+        -- An attached Havoc warning takes this font, and the game builds it
+        -- once, so a change here reaches it only after a reload.
+        onChangeCallback = function()
+            local ht = KitnEssentials:GetModule("HavocTracker", true)
+            if ht and ht.container and ht.db and ht.db.AttachToCombatTexts then
+                KE:FlagReloadNeeded()
+            end
+            ApplySettings()
+        end,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
 
     ----------------------------------------------------------------
     -- Card 8: Backdrop

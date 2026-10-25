@@ -64,31 +64,6 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Card 3: Format (Separator + Charge Prefix + Bracket Style)
     ----------------------------------------------------------------
     local cardFormat = GUIFrame:CreateCard(scrollChild, "Format", yOffset)
@@ -127,25 +102,6 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     yOffset = cardFormat:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Font Settings (font + outline + size)
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 36 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
     -- Card 5: Layout (Text Spacing + Growth Direction)
     ----------------------------------------------------------------
     local cardLayout = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
@@ -170,6 +126,50 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     cardLayout:AddRow(rowLayout, Theme.rowHeightLast, 0)
 
     yOffset = cardLayout:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 4: Font Settings (font + outline + size)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 36 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
 
     ----------------------------------------------------------------
     -- Card 6: Colors

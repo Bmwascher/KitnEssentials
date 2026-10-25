@@ -88,17 +88,6 @@ local ALLOWED = {
         ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/AuraTracking/GUI-AuraMovement.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/AuraTracking/GUI-TotemTracker.lua"] = { phase = "17" }, -- Display after Font
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-AlterTime.lua"] = { phase = "17" }, -- Position after Colors
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-DivineArbiter.lua"] = { phase = "17" }, -- Position after Glow
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-TimeSpiral.lua"] = { phase = "17" }, -- Position after Glow
-        ["KitnEssentials_Options/Combat/GUI-CombatCross.lua"] = { phase = "17" }, -- content after Colors
-        ["KitnEssentials_Options/Combat/GUI-CombatRes.lua"] = { phase = "17" }, -- content after Position
-        ["KitnEssentials_Options/Combat/GUI-CombatTexts.lua"] = { phase = "17" }, -- content after Font
-        ["KitnEssentials_Options/Combat/GUI-CombatTimer.lua"] = { phase = "17" }, -- content after Position
-        ["KitnEssentials_Options/Combat/GUI-FocusCastbar.lua"] = { phase = "17" }, -- content after Font
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-NoMovementAlert.lua"] = { phase = "17" }, -- content after Sound
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-PetStatusText.lua"] = { phase = "17" }, -- content after Font
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-PlayerAbsorbs.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-DeathNotifications.lua"] = { phase = "17" }, -- content after Position
         ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-EnemyCounter.lua"] = { phase = "17" }, -- content after Colors
         ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-TargetedSpells.lua"] = { phase = "17" }, -- content after Font

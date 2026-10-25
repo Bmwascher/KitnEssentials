@@ -64,31 +64,6 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Card 3: Format (Print to Chat + Format + Bracket Style)
     ----------------------------------------------------------------
     local cardFormat = GUIFrame:CreateCard(scrollChild, "Format", yOffset)
@@ -132,6 +107,31 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
     cardFormat:AddRow(rowF, Theme.rowHeightLast, 0)
 
     yOffset = cardFormat:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 4: Font Settings

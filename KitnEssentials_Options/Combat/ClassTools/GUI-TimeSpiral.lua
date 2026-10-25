@@ -69,63 +69,6 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Display Settings
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    manager:Register(card2, "all")
-
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local iconSizeSlider = GUIFrame:CreateSlider(row2a, "Icon Size", {
-        min = 20, max = 100, step = 1,
-        value = db.IconSize or 40,
-        callback = function(val) db.IconSize = val; ApplySettings() end,
-    })
-    row2a:AddWidget(iconSizeSlider, 1)
-    manager:Register(iconSizeSlider, "all")
-    card2:AddRow(row2a, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 2b: Glow
-    ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
-        title = "Glow",
-        db = db,
-        onChangeCallback = ApplySettings,
-        -- Pixel shows a row of controls the other styles do not; the cards
-        -- below sit at fixed offsets, so the page is rebuilt.
-        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
-    })
-    manager:Register(glowCard, "all")
-    yOffset = glowOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Card 4: Label Text
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Label Text", yOffset)
@@ -166,26 +109,6 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Label Font
-    ----------------------------------------------------------------
-    local labelFontCard, labelFontOffset, labelFontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Label Font",
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 36 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(labelFontCard, "text")
-    if labelFontWidgets then
-        manager:RegisterGroup(labelFontWidgets, "text")
-    end
-    yOffset = labelFontOffset
-
-    ----------------------------------------------------------------
     -- Card 6: Timer Display
     ----------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Timer Display", yOffset)
@@ -217,6 +140,69 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card 2: Display Settings
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    manager:Register(card2, "all")
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local iconSizeSlider = GUIFrame:CreateSlider(row2a, "Icon Size", {
+        min = 20, max = 100, step = 1,
+        value = db.IconSize or 40,
+        callback = function(val) db.IconSize = val; ApplySettings() end,
+    })
+    row2a:AddWidget(iconSizeSlider, 1)
+    manager:Register(iconSizeSlider, "all")
+    card2:AddRow(row2a, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 5: Label Font
+    ----------------------------------------------------------------
+    local labelFontCard, labelFontOffset, labelFontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Label Font",
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 36 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(labelFontCard, "text")
+    if labelFontWidgets then
+        manager:RegisterGroup(labelFontWidgets, "text")
+    end
+    yOffset = labelFontOffset
+
+    ----------------------------------------------------------------
     -- Card 7: Timer Font
     ----------------------------------------------------------------
     local timerFontCard, timerFontOffset, timerFontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
@@ -235,6 +221,20 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         manager:RegisterGroup(timerFontWidgets, "timer")
     end
     yOffset = timerFontOffset
+
+    ----------------------------------------------------------------
+    -- Card 2b: Glow
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
+        title = "Glow",
+        db = db,
+        onChangeCallback = ApplySettings,
+        -- Pixel shows a row of controls the other styles do not; the cards
+        -- below sit at fixed offsets, so the page is rebuilt.
+        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
+    })
+    manager:Register(glowCard, "all")
+    yOffset = glowOffset
 
     ----------------------------------------------------------------
     -- Card 8: Sound

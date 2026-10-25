@@ -63,6 +63,61 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
+    -- Card 5: Range Warning (1×3: melee | ranged | color)
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Range Warning", yOffset)
+    manager:Register(card4, "all")
+
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", {
+        value = db.RangeColorMeleeEnabled == true,
+        callback = function(checked)
+            db.RangeColorMeleeEnabled = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row4a:AddWidget(meleeRangeCheck, 1/3)
+    manager:Register(meleeRangeCheck, "all")
+
+    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for ranged specs", {
+        value = db.RangeColorRangedEnabled == true,
+        callback = function(checked)
+            db.RangeColorRangedEnabled = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row4a:AddWidget(rangedRangeCheck, 1/3)
+    manager:Register(rangedRangeCheck, "all")
+
+    local outOfRangeColorPicker = GUIFrame:CreateColorPicker(row4a, "Out of Range Color", {
+        color = db.OutOfRangeColor or { 1, 0, 0, 1 },
+        callback = function(r, g, b, a)
+            db.OutOfRangeColor = { r, g, b, a }
+            if CC then CC.lastInRange = nil end
+        end,
+    })
+    row4a:AddWidget(outOfRangeColorPicker, 1/3)
+    manager:Register(outOfRangeColorPicker, "rangeColor")
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local hideInRangeCheck = GUIFrame:CreateCheckbox(row4b, "Hide When In Range", {
+        value = db.HideWhenInRange == true,
+        tooltip = "Only draw the crosshair while your target is out of range. Works on its own; the range warning colors above are a separate choice.",
+        callback = function(checked)
+            db.HideWhenInRange = checked
+            ApplySettings()
+        end,
+    })
+    row4b:AddWidget(hideInRangeCheck, 1)
+    manager:Register(hideInRangeCheck, "all")
+    card4:AddRow(row4b, Theme.rowHeightLast, 0)
+
+    yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Display Settings (Size + Font Outline)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -149,61 +204,6 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
             { label = "Custom Color", key = "Color", default = { 0, 1, 0.169, 1 }, group = "customColor" },
         },
     })
-
-    ----------------------------------------------------------------
-    -- Card 5: Range Warning (1×3: melee | ranged | color)
-    ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Range Warning", yOffset)
-    manager:Register(card4, "all")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", {
-        value = db.RangeColorMeleeEnabled == true,
-        callback = function(checked)
-            db.RangeColorMeleeEnabled = checked
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    row4a:AddWidget(meleeRangeCheck, 1/3)
-    manager:Register(meleeRangeCheck, "all")
-
-    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for ranged specs", {
-        value = db.RangeColorRangedEnabled == true,
-        callback = function(checked)
-            db.RangeColorRangedEnabled = checked
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    row4a:AddWidget(rangedRangeCheck, 1/3)
-    manager:Register(rangedRangeCheck, "all")
-
-    local outOfRangeColorPicker = GUIFrame:CreateColorPicker(row4a, "Out of Range Color", {
-        color = db.OutOfRangeColor or { 1, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.OutOfRangeColor = { r, g, b, a }
-            if CC then CC.lastInRange = nil end
-        end,
-    })
-    row4a:AddWidget(outOfRangeColorPicker, 1/3)
-    manager:Register(outOfRangeColorPicker, "rangeColor")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local hideInRangeCheck = GUIFrame:CreateCheckbox(row4b, "Hide When In Range", {
-        value = db.HideWhenInRange == true,
-        tooltip = "Only draw the crosshair while your target is out of range. Works on its own; the range warning colors above are a separate choice.",
-        callback = function(checked)
-            db.HideWhenInRange = checked
-            ApplySettings()
-        end,
-    })
-    row4b:AddWidget(hideInRangeCheck, 1)
-    manager:Register(hideInRangeCheck, "all")
-    card4:AddRow(row4b, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
 
     RefreshStates()
     return yOffset

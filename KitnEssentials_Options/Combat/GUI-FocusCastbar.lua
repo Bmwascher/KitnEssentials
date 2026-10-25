@@ -110,95 +110,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Display Settings (Width, Height, Bar Texture)
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    manager:Register(card2, "all")
-
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local widthSlider = GUIFrame:CreateSlider(row2a, "Width", {
-        min = 100, max = 600, step = 1,
-        value = db.Width or 200,
-        callback = function(val) db.Width = val; ApplySettings() end,
-    })
-    row2a:AddWidget(widthSlider, 0.5)
-    manager:Register(widthSlider, "all")
-
-    local heightSlider = GUIFrame:CreateSlider(row2a, "Height", {
-        min = 5, max = 60, step = 1,
-        value = db.Height or 18,
-        callback = function(val) db.Height = val; ApplySettings() end,
-    })
-    row2a:AddWidget(heightSlider, 0.5)
-    manager:Register(heightSlider, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
-
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row2b, "Hide Non-Interruptible Casts", {
-        value = db.HideNotInterruptible == true,
-        callback = function(checked) db.HideNotInterruptible = checked end,
-    })
-    row2b:AddWidget(hideNotInterruptCheck, 1)
-    manager:Register(hideNotInterruptCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local statusbarDropdown = GUIFrame:CreateDropdown(row2c, "Bar Texture", {
-        options = statusbarList,
-        value = db.StatusBarTexture or "KitnUI",
-        callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
-        searchable = true,
-    })
-    row2c:AddWidget(statusbarDropdown, 1)
-    manager:Register(statusbarDropdown, "all")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplyPosition,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 4: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 24 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
     -- Card 5: Target Names
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Target Names", yOffset)
@@ -321,25 +232,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = cardMarker:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Colors
-    ----------------------------------------------------------------
-    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
-        db         = db,
-        manager    = manager,
-        onChange   = ApplySettings,
-        stateGroup = "all",
-        colors     = {
-            { label = "Casting", key = "CastingColor", default = { 1, 0.7, 0, 1 } },
-            { label = "Channeling", key = "ChannelingColor", default = { 0, 0.7, 1, 1 } },
-            { label = "Empowering", key = "EmpoweringColor", default = { 0.8, 0.4, 1, 1 } },
-            { label = "Not Interruptible", key = "NotInterruptibleColor", default = { 0.7, 0.7, 0.7, 1 } },
-            { label = "Text", key = "TextColor", default = { 1, 1, 1, 1 } },
-            { label = "Background", key = "BackdropColor", default = { 0, 0, 0, 0.8 } },
-            { label = "Border", key = "BorderColor", default = { 0, 0, 0, 1 } },
-        },
-    })
-
-    ----------------------------------------------------------------
     -- Card 7.5: Range & Visibility
     ----------------------------------------------------------------
     local cardRange = GUIFrame:CreateCard(scrollChild, "Range & Visibility", yOffset)
@@ -373,6 +265,226 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     cardRange:AddRow(rangeNoteRow, Theme.rowHeightNote, 0)
 
     yOffset = cardRange:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 9: Hold Timer
+    ----------------------------------------------------------------
+    local cardHold = GUIFrame:CreateCard(scrollChild, "Hold Timer", yOffset)
+    manager:Register(cardHold, "all")
+
+    local row8a = GUIFrame:CreateRow(cardHold.content, Theme.rowHeight)
+    local holdEnableCheck = GUIFrame:CreateCheckbox(row8a, "Enable Hold Timer", {
+        value = db.HoldTimer.Enabled ~= false,
+        callback = function(checked)
+            db.HoldTimer.Enabled = checked
+            RefreshStates()
+        end,
+    })
+    row8a:AddWidget(holdEnableCheck, 0.5)
+    manager:Register(holdEnableCheck, "all")
+
+    local holdSlider = GUIFrame:CreateSlider(row8a, "Hold Duration", {
+        min = 0, max = 2, step = 0.1,
+        value = db.HoldTimer.Duration or 0.5,
+        callback = function(val) db.HoldTimer.Duration = val end,
+    })
+    row8a:AddWidget(holdSlider, 0.5)
+    manager:Register(holdSlider, "holdTimer")
+    cardHold:AddRow(row8a, Theme.rowHeight)
+
+    local rowSep3 = GUIFrame:CreateRow(cardHold.content, Theme.rowHeightSeparator)
+    local sep3 = GUIFrame:CreateSeparator(rowSep3)
+    rowSep3:AddWidget(sep3, 1)
+    manager:Register(sep3, "holdTimer")
+    cardHold:AddRow(rowSep3, Theme.rowHeightSeparator)
+
+    local row8b = GUIFrame:CreateRow(cardHold.content, Theme.rowHeightLast)
+    local interruptedPicker = GUIFrame:CreateColorPicker(row8b, "Interrupted", {
+        color = db.HoldTimer.InterruptedColor or { 0.1, 0.8, 0.1, 1 },
+        callback = function(r, g, b, a) db.HoldTimer.InterruptedColor = { r, g, b, a } end,
+    })
+    row8b:AddWidget(interruptedPicker, 1)
+    manager:Register(interruptedPicker, "holdTimer")
+    cardHold:AddRow(row8b, Theme.rowHeightLast, 0)
+
+    yOffset = cardHold:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 10: Kick Indicator
+    ----------------------------------------------------------------
+    local cardKick = GUIFrame:CreateCard(scrollChild, "Kick Indicator", yOffset)
+    manager:Register(cardKick, "all")
+
+    local row9a = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
+    local kickEnableCheck = GUIFrame:CreateCheckbox(row9a, "Enable Kick Indicator", {
+        value = db.KickIndicator.Enabled ~= false,
+        callback = function(checked)
+            db.KickIndicator.Enabled = checked
+            RefreshStates()
+        end,
+    })
+    row9a:AddWidget(kickEnableCheck, 1)
+    manager:Register(kickEnableCheck, "all")
+    cardKick:AddRow(row9a, Theme.rowHeight)
+
+    local rowKickNote = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
+    local kickNote = GUIFrame:CreateText(rowKickNote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " When enabled, bar color reflects kick readiness instead of cast type (Casting/Channeling colors).",
+        Theme.rowHeight, "hide")
+    rowKickNote:AddWidget(kickNote, 1)
+    manager:Register(kickNote, "kickIndicator")
+    cardKick:AddRow(rowKickNote, Theme.rowHeight)
+
+    local rowSepKick = GUIFrame:CreateRow(cardKick.content, Theme.rowHeightSeparator)
+    local sepKick = GUIFrame:CreateSeparator(rowSepKick)
+    rowSepKick:AddWidget(sepKick, 1)
+    manager:Register(sepKick, "kickIndicator")
+    cardKick:AddRow(rowSepKick, Theme.rowHeightSeparator)
+
+    local row9b = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
+    local readyPicker = GUIFrame:CreateColorPicker(row9b, "Kick Ready", {
+        color = db.KickIndicator.ReadyColor or { 0.1, 0.8, 0.1, 1 },
+        callback = function(r, g, b, a)
+            db.KickIndicator.ReadyColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row9b:AddWidget(readyPicker, 0.5)
+    manager:Register(readyPicker, "kickIndicator")
+
+    local notReadyPicker = GUIFrame:CreateColorPicker(row9b, "Kick Not Ready", {
+        color = db.KickIndicator.NotReadyColor or { 0.5, 0.5, 0.5, 1 },
+        callback = function(r, g, b, a)
+            db.KickIndicator.NotReadyColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row9b:AddWidget(notReadyPicker, 0.5)
+    manager:Register(notReadyPicker, "kickIndicator")
+    cardKick:AddRow(row9b, Theme.rowHeight)
+
+    local row9c = GUIFrame:CreateRow(cardKick.content, Theme.rowHeightLast)
+    local tickPicker = GUIFrame:CreateColorPicker(row9c, "Kick Ready Tick", {
+        color = db.KickIndicator.TickColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.KickIndicator.TickColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row9c:AddWidget(tickPicker, 0.5)
+    manager:Register(tickPicker, "kickIndicator")
+    cardKick:AddRow(row9c, Theme.rowHeightLast, 0)
+
+    yOffset = cardKick:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Display Settings (Width, Height, Bar Texture)
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    manager:Register(card2, "all")
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local widthSlider = GUIFrame:CreateSlider(row2a, "Width", {
+        min = 100, max = 600, step = 1,
+        value = db.Width or 200,
+        callback = function(val) db.Width = val; ApplySettings() end,
+    })
+    row2a:AddWidget(widthSlider, 0.5)
+    manager:Register(widthSlider, "all")
+
+    local heightSlider = GUIFrame:CreateSlider(row2a, "Height", {
+        min = 5, max = 60, step = 1,
+        value = db.Height or 18,
+        callback = function(val) db.Height = val; ApplySettings() end,
+    })
+    row2a:AddWidget(heightSlider, 0.5)
+    manager:Register(heightSlider, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row2b, "Hide Non-Interruptible Casts", {
+        value = db.HideNotInterruptible == true,
+        callback = function(checked) db.HideNotInterruptible = checked end,
+    })
+    row2b:AddWidget(hideNotInterruptCheck, 1)
+    manager:Register(hideNotInterruptCheck, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local statusbarDropdown = GUIFrame:CreateDropdown(row2c, "Bar Texture", {
+        options = statusbarList,
+        value = db.StatusBarTexture or "KitnUI",
+        callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
+        searchable = true,
+    })
+    row2c:AddWidget(statusbarDropdown, 1)
+    manager:Register(statusbarDropdown, "all")
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplyPosition,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 4: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 24 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 7: Colors
+    ----------------------------------------------------------------
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        colors     = {
+            { label = "Casting", key = "CastingColor", default = { 1, 0.7, 0, 1 } },
+            { label = "Channeling", key = "ChannelingColor", default = { 0, 0.7, 1, 1 } },
+            { label = "Empowering", key = "EmpoweringColor", default = { 0.8, 0.4, 1, 1 } },
+            { label = "Not Interruptible", key = "NotInterruptibleColor", default = { 0.7, 0.7, 0.7, 1 } },
+            { label = "Text", key = "TextColor", default = { 1, 1, 1, 1 } },
+            { label = "Background", key = "BackdropColor", default = { 0, 0, 0, 0.8 } },
+            { label = "Border", key = "BorderColor", default = { 0, 0, 0, 1 } },
+        },
+    })
 
     ----------------------------------------------------------------
     -- Card 7.6: Important Cast Glow
@@ -552,118 +664,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     cardSound:AddRow(rowSndNote, Theme.rowHeightNote, 0)
 
     yOffset = cardSound:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 9: Hold Timer
-    ----------------------------------------------------------------
-    local cardHold = GUIFrame:CreateCard(scrollChild, "Hold Timer", yOffset)
-    manager:Register(cardHold, "all")
-
-    local row8a = GUIFrame:CreateRow(cardHold.content, Theme.rowHeight)
-    local holdEnableCheck = GUIFrame:CreateCheckbox(row8a, "Enable Hold Timer", {
-        value = db.HoldTimer.Enabled ~= false,
-        callback = function(checked)
-            db.HoldTimer.Enabled = checked
-            RefreshStates()
-        end,
-    })
-    row8a:AddWidget(holdEnableCheck, 0.5)
-    manager:Register(holdEnableCheck, "all")
-
-    local holdSlider = GUIFrame:CreateSlider(row8a, "Hold Duration", {
-        min = 0, max = 2, step = 0.1,
-        value = db.HoldTimer.Duration or 0.5,
-        callback = function(val) db.HoldTimer.Duration = val end,
-    })
-    row8a:AddWidget(holdSlider, 0.5)
-    manager:Register(holdSlider, "holdTimer")
-    cardHold:AddRow(row8a, Theme.rowHeight)
-
-    local rowSep3 = GUIFrame:CreateRow(cardHold.content, Theme.rowHeightSeparator)
-    local sep3 = GUIFrame:CreateSeparator(rowSep3)
-    rowSep3:AddWidget(sep3, 1)
-    manager:Register(sep3, "holdTimer")
-    cardHold:AddRow(rowSep3, Theme.rowHeightSeparator)
-
-    local row8b = GUIFrame:CreateRow(cardHold.content, Theme.rowHeightLast)
-    local interruptedPicker = GUIFrame:CreateColorPicker(row8b, "Interrupted", {
-        color = db.HoldTimer.InterruptedColor or { 0.1, 0.8, 0.1, 1 },
-        callback = function(r, g, b, a) db.HoldTimer.InterruptedColor = { r, g, b, a } end,
-    })
-    row8b:AddWidget(interruptedPicker, 1)
-    manager:Register(interruptedPicker, "holdTimer")
-    cardHold:AddRow(row8b, Theme.rowHeightLast, 0)
-
-    yOffset = cardHold:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 10: Kick Indicator
-    ----------------------------------------------------------------
-    local cardKick = GUIFrame:CreateCard(scrollChild, "Kick Indicator", yOffset)
-    manager:Register(cardKick, "all")
-
-    local row9a = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
-    local kickEnableCheck = GUIFrame:CreateCheckbox(row9a, "Enable Kick Indicator", {
-        value = db.KickIndicator.Enabled ~= false,
-        callback = function(checked)
-            db.KickIndicator.Enabled = checked
-            RefreshStates()
-        end,
-    })
-    row9a:AddWidget(kickEnableCheck, 1)
-    manager:Register(kickEnableCheck, "all")
-    cardKick:AddRow(row9a, Theme.rowHeight)
-
-    local rowKickNote = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
-    local kickNote = GUIFrame:CreateText(rowKickNote,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " When enabled, bar color reflects kick readiness instead of cast type (Casting/Channeling colors).",
-        Theme.rowHeight, "hide")
-    rowKickNote:AddWidget(kickNote, 1)
-    manager:Register(kickNote, "kickIndicator")
-    cardKick:AddRow(rowKickNote, Theme.rowHeight)
-
-    local rowSepKick = GUIFrame:CreateRow(cardKick.content, Theme.rowHeightSeparator)
-    local sepKick = GUIFrame:CreateSeparator(rowSepKick)
-    rowSepKick:AddWidget(sepKick, 1)
-    manager:Register(sepKick, "kickIndicator")
-    cardKick:AddRow(rowSepKick, Theme.rowHeightSeparator)
-
-    local row9b = GUIFrame:CreateRow(cardKick.content, Theme.rowHeight)
-    local readyPicker = GUIFrame:CreateColorPicker(row9b, "Kick Ready", {
-        color = db.KickIndicator.ReadyColor or { 0.1, 0.8, 0.1, 1 },
-        callback = function(r, g, b, a)
-            db.KickIndicator.ReadyColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row9b:AddWidget(readyPicker, 0.5)
-    manager:Register(readyPicker, "kickIndicator")
-
-    local notReadyPicker = GUIFrame:CreateColorPicker(row9b, "Kick Not Ready", {
-        color = db.KickIndicator.NotReadyColor or { 0.5, 0.5, 0.5, 1 },
-        callback = function(r, g, b, a)
-            db.KickIndicator.NotReadyColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row9b:AddWidget(notReadyPicker, 0.5)
-    manager:Register(notReadyPicker, "kickIndicator")
-    cardKick:AddRow(row9b, Theme.rowHeight)
-
-    local row9c = GUIFrame:CreateRow(cardKick.content, Theme.rowHeightLast)
-    local tickPicker = GUIFrame:CreateColorPicker(row9c, "Kick Ready Tick", {
-        color = db.KickIndicator.TickColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.KickIndicator.TickColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row9c:AddWidget(tickPicker, 0.5)
-    manager:Register(tickPicker, "kickIndicator")
-    cardKick:AddRow(row9c, Theme.rowHeightLast, 0)
-
-    yOffset = cardKick:GetNextOffset()
 
     RefreshStates()
     return yOffset
