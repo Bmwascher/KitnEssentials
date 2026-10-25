@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.20
+
+### Character Panel
+
+- New Inspect Talents panel beside the inspect window (on by default with
+  Character Panel): the player's class, hero and spec trees, spec and hero
+  icons, gear stat chips in the Secondary Stats colors, and a Copy Loadout
+  button; a small arrow under the window's close button opens and closes it
+- If you share their spec, a colored ring marks talents where your builds
+  differ, with a legend row; turn it off with Compare With My Talents
+- New Inspect Talents card on the Character Panel page: Show Talents Beside
+  Inspect, Open Automatically, Show Gear Stats, Compare With My Talents and
+  Node Size
+
+---
+
 ## v4.14.19
 
 ### Party Stops
