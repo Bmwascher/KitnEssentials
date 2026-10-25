@@ -1,9 +1,10 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  ReadyCheckConsumablesForever.lua                        ║
 -- ║  Purpose: The Forever client's consumables for Ready     ║
--- ║           Check Consumables, as printed by the derive    ║
--- ║           script dev/scripts/derive-forever-consumables  ║
--- ║           (.lua --check). Only the Forever list loads it ║
+-- ║           Check Consumables, printed by                  ║
+-- ║           dev/scripts/derive-forever-consumables.lua,    ║
+-- ║           whose --check verifies this file. Only the     ║
+-- ║           Forever load list loads it.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 local FOOD = {
