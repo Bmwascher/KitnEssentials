@@ -58,6 +58,21 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
+    -- Card 5: Enable per Specialization
+    ----------------------------------------------------------------
+    local specCard, specOffset = GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, {
+        db = db,
+        scope = "EnemyCounter",
+        note = "Untick a specialization to stop the counter there. It stops watching nameplates on that spec, not just hiding. Specs you never touch stay on.",
+        onChange = function()
+            local mod = KitnEssentials and KitnEssentials:GetModule("EnemyCounter", true)
+            if mod and mod:IsEnabled() then mod:ApplySpecGate() end
+        end,
+    })
+    manager:Register(specCard, "all")
+    yOffset = specOffset
+
+    ----------------------------------------------------------------
     -- Card 2: Display Settings
     ----------------------------------------------------------------
     local cardGen = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -155,21 +170,6 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
             { label = "Custom Color", key = "Color", default = { 1, 1, 1, 1 }, group = "customColor" },
         },
     })
-
-    ----------------------------------------------------------------
-    -- Card 5: Enable per Specialization
-    ----------------------------------------------------------------
-    local specCard, specOffset = GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, {
-        db = db,
-        scope = "EnemyCounter",
-        note = "Untick a specialization to stop the counter there. It stops watching nameplates on that spec, not just hiding. Specs you never touch stay on.",
-        onChange = function()
-            local mod = KitnEssentials and KitnEssentials:GetModule("EnemyCounter", true)
-            if mod and mod:IsEnabled() then mod:ApplySpecGate() end
-        end,
-    })
-    manager:Register(specCard, "all")
-    yOffset = specOffset
 
     RefreshStates()
     return yOffset

@@ -87,33 +87,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     yOffset = cardContext:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Position Settings
-    ----------------------------------------------------------------
-    local cardPos, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        positionTable = db.Position,
-        -- The container's own point follows Grow Direction, so Anchor From
-        -- would set nothing.
-        showSelfPoint = false,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-
-    if cardPos.positionWidgets then
-        manager:RegisterGroup(cardPos.positionWidgets, "all")
-    end
-    manager:Register(cardPos, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Card 4: Party / Raid Death
     ----------------------------------------------------------------
     local cardPD = GUIFrame:CreateCard(scrollChild, "Party / Raid Death", yOffset)
@@ -217,25 +190,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     yOffset = cardFD:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 12, 64 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
     -- Card 7: Display
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -277,6 +231,52 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     cardDisplay:AddRow(dRow2, Theme.rowHeightLast, 0)
 
     yOffset = cardDisplay:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings
+    ----------------------------------------------------------------
+    local cardPos, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        positionTable = db.Position,
+        -- The container's own point follows Grow Direction, so Anchor From
+        -- would set nothing.
+        showSelfPoint = false,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+
+    if cardPos.positionWidgets then
+        manager:RegisterGroup(cardPos.positionWidgets, "all")
+    end
+    manager:Register(cardPos, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 12, 64 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
 
     RefreshStates()
     return yOffset

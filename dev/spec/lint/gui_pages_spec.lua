@@ -83,10 +83,6 @@ local ALLOWED = {
     },
     L3 = {
         -- Phase 17 reorders these.
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-DeathNotifications.lua"] = { phase = "17" }, -- content after Position
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-EnemyCounter.lua"] = { phase = "17" }, -- content after Colors
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-TargetedSpells.lua"] = { phase = "17" }, -- content after Font
-        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-DungeonCasts.lua"] = { phase = "17" }, -- content after Position
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-AlertFrames.lua"] = { phase = "17" }, -- content after Position
         ["KitnEssentials_Options/Skinning/DarkTheme/GUI-UIWidgets.lua"] = { phase = "17" }, -- content after Font
         ["KitnEssentials_Options/Skinning/GUI-Chat.lua"] = { phase = "17" }, -- content after Colors

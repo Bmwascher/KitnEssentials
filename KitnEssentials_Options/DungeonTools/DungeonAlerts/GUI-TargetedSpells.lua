@@ -65,53 +65,30 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
+    -- Card 7: Show In (content gating)
     ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint  = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset    = "XOffset",
-            yOffset    = "YOffset",
-            strata     = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata          = true,
-        onChangeCallback    = function()
-            local mod = GetModule()
-            if mod and mod.ApplyPosition then mod:ApplyPosition() end
-        end,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+    local cardC = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
+    manager:Register(cardC, "all")
 
-    ----------------------------------------------------------------
-    -- Card 3: Font Settings (structural: countdown font -> rebuild)
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        extraSlider = {
-            label = "Decimals", min = 0, max = 2, step = 1,
-            dbKey = "Decimals", default = 1,
-        },
-        onChangeCallback = Rebuild,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+    local function contentPick(label, key, defaultOn)
+        return {
+            label = label,
+            config = {
+                value = defaultOn and (db[key] ~= false) or (db[key] == true),
+                callback = function(checked) db[key] = checked; ApplySettings() end,
+            },
+        }
     end
-    yOffset = fontOffset
+
+    manager:RegisterGroup(cardC:AddCheckboxGrid({
+        contentPick("Dungeons", "ShowInDungeons", true),
+        contentPick("Delves", "ShowInDelves", true),
+        contentPick("Raids", "ShowInRaids", false),
+        contentPick("Open World", "ShowInOpenWorld", false),
+        contentPick("Arenas / Battlegrounds", "ShowInPvP", false),
+    }, { isLast = true }), "all")
+
+    yOffset = cardC:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 4: Layout
@@ -168,18 +145,6 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     yOffset = cardL:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Colors
-    ----------------------------------------------------------------
-    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
-        db = db,
-        manager = manager,
-        onChange = Rebuild,
-        colors = {
-            { label = "Countdown Text", key = "FontColor", default = { 1, 1, 1, 1 } },
-        },
-    })
-
-    ----------------------------------------------------------------
     -- Card 6: Features
     ----------------------------------------------------------------
     local cardF = GUIFrame:CreateCard(scrollChild, "Features", yOffset)
@@ -204,30 +169,65 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     yOffset = cardF:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Show In (content gating)
+    -- Card 2: Position Settings
     ----------------------------------------------------------------
-    local cardC = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
-    manager:Register(cardC, "all")
-
-    local function contentPick(label, key, defaultOn)
-        return {
-            label = label,
-            config = {
-                value = defaultOn and (db[key] ~= false) or (db[key] == true),
-                callback = function(checked) db[key] = checked; ApplySettings() end,
-            },
-        }
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint  = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset    = "XOffset",
+            yOffset    = "YOffset",
+            strata     = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata          = true,
+        onChangeCallback    = function()
+            local mod = GetModule()
+            if mod and mod.ApplyPosition then mod:ApplyPosition() end
+        end,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    manager:RegisterGroup(cardC:AddCheckboxGrid({
-        contentPick("Dungeons", "ShowInDungeons", true),
-        contentPick("Delves", "ShowInDelves", true),
-        contentPick("Raids", "ShowInRaids", false),
-        contentPick("Open World", "ShowInOpenWorld", false),
-        contentPick("Arenas / Battlegrounds", "ShowInPvP", false),
-    }, { isLast = true }), "all")
+    ----------------------------------------------------------------
+    -- Card 3: Font Settings (structural: countdown font -> rebuild)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        extraSlider = {
+            label = "Decimals", min = 0, max = 2, step = 1,
+            dbKey = "Decimals", default = 1,
+        },
+        onChangeCallback = Rebuild,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
 
-    yOffset = cardC:GetNextOffset()
+    ----------------------------------------------------------------
+    -- Card 5: Colors
+    ----------------------------------------------------------------
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = Rebuild,
+        colors = {
+            { label = "Countdown Text", key = "FontColor", default = { 1, 1, 1, 1 } },
+        },
+    })
 
     RefreshStates()
     return yOffset

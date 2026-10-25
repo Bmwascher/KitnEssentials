@@ -87,33 +87,6 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db.Frame,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            -- Anchor From sets horizontal alignment (left/center/right); its
-            -- vertical component is overridden by GrowthDirection so the bar
-            -- stack and edit-mode overlay stay aligned on a growth flip.
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplyPosition,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
     -- Card 3: Frame Settings
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Frame Settings", yOffset)
@@ -234,107 +207,6 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 5: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db.BarDisplay,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 24 },
-        onChangeCallback = ApplyVisuals,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
-    -- Card 6: Colors
-    ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card6, "all")
-
-    card6:AddLabel("|cff888888Cast bar status colors|r")
-
-    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local castingColorPicker = GUIFrame:CreateColorPicker(row6a, "Casting", {
-        color = db.CastingColor,
-        callback = function(r, g, b, a)
-            db.CastingColor = { r, g, b, a }
-            ApplyVisuals()
-        end,
-    })
-    row6a:AddWidget(castingColorPicker, 0.33)
-    manager:Register(castingColorPicker, "all")
-
-    local channelingColorPicker = GUIFrame:CreateColorPicker(row6a, "Channeling", {
-        color = db.ChannelingColor,
-        callback = function(r, g, b, a)
-            db.ChannelingColor = { r, g, b, a }
-            ApplyVisuals()
-        end,
-    })
-    row6a:AddWidget(channelingColorPicker, 0.33)
-    manager:Register(channelingColorPicker, "all")
-
-    local shieldedColorPicker = GUIFrame:CreateColorPicker(row6a, "Shielded", {
-        color = db.NotInterruptibleColor,
-        callback = function(r, g, b, a)
-            db.NotInterruptibleColor = { r, g, b, a }
-            ApplyVisuals()
-        end,
-    })
-    row6a:AddWidget(shieldedColorPicker, 0.34)
-    manager:Register(shieldedColorPicker, "all")
-    card6:AddRow(row6a, Theme.rowHeight)
-
-    local rowSep = GUIFrame:CreateRow(card6.content, Theme.rowHeightSeparator)
-    local sep = GUIFrame:CreateSeparator(rowSep)
-    rowSep:AddWidget(sep, 1)
-    manager:Register(sep, "all")
-    card6:AddRow(rowSep, Theme.rowHeightSeparator)
-
-    card6:AddLabel("|cff888888Frame colors|r")
-
-    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
-    local bgColorPicker = GUIFrame:CreateColorPicker(row6b, "Background", {
-        color = db.BackgroundColor,
-        callback = function(r, g, b, a)
-            db.BackgroundColor = { r, g, b, a }
-            ApplyVisuals()
-        end,
-    })
-    row6b:AddWidget(bgColorPicker, 0.33)
-    manager:Register(bgColorPicker, "all")
-
-    local borderColorPicker = GUIFrame:CreateColorPicker(row6b, "Border", {
-        color = db.BorderColor,
-        callback = function(r, g, b, a)
-            db.BorderColor = { r, g, b, a }
-            ApplyVisuals()
-        end,
-    })
-    row6b:AddWidget(borderColorPicker, 0.33)
-    manager:Register(borderColorPicker, "all")
-
-    local textColorPicker = GUIFrame:CreateColorPicker(row6b, "Text", {
-        color = db.Text.TextColor,
-        callback = function(r, g, b, a)
-            db.Text.TextColor = { r, g, b, a }
-            ApplyVisuals()
-        end,
-    })
-    row6b:AddWidget(textColorPicker, 0.34)
-    manager:Register(textColorPicker, "all")
-    card6:AddRow(row6b, Theme.rowHeightLast, 0)
-
-    yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 7: Target Settings
@@ -543,6 +415,134 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     card9:AddRow(row9d, Theme.rowHeightLast, 0)
 
     yOffset = card9:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db.Frame,
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            -- Anchor From sets horizontal alignment (left/center/right); its
+            -- vertical component is overridden by GrowthDirection so the bar
+            -- stack and edit-mode overlay stay aligned on a growth flip.
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplyPosition,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 5: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db.BarDisplay,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 24 },
+        onChangeCallback = ApplyVisuals,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Colors
+    ----------------------------------------------------------------
+    local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(card6, "all")
+
+    card6:AddLabel("|cff888888Cast bar status colors|r")
+
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local castingColorPicker = GUIFrame:CreateColorPicker(row6a, "Casting", {
+        color = db.CastingColor,
+        callback = function(r, g, b, a)
+            db.CastingColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6a:AddWidget(castingColorPicker, 0.33)
+    manager:Register(castingColorPicker, "all")
+
+    local channelingColorPicker = GUIFrame:CreateColorPicker(row6a, "Channeling", {
+        color = db.ChannelingColor,
+        callback = function(r, g, b, a)
+            db.ChannelingColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6a:AddWidget(channelingColorPicker, 0.33)
+    manager:Register(channelingColorPicker, "all")
+
+    local shieldedColorPicker = GUIFrame:CreateColorPicker(row6a, "Shielded", {
+        color = db.NotInterruptibleColor,
+        callback = function(r, g, b, a)
+            db.NotInterruptibleColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6a:AddWidget(shieldedColorPicker, 0.34)
+    manager:Register(shieldedColorPicker, "all")
+    card6:AddRow(row6a, Theme.rowHeight)
+
+    local rowSep = GUIFrame:CreateRow(card6.content, Theme.rowHeightSeparator)
+    local sep = GUIFrame:CreateSeparator(rowSep)
+    rowSep:AddWidget(sep, 1)
+    manager:Register(sep, "all")
+    card6:AddRow(rowSep, Theme.rowHeightSeparator)
+
+    card6:AddLabel("|cff888888Frame colors|r")
+
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local bgColorPicker = GUIFrame:CreateColorPicker(row6b, "Background", {
+        color = db.BackgroundColor,
+        callback = function(r, g, b, a)
+            db.BackgroundColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6b:AddWidget(bgColorPicker, 0.33)
+    manager:Register(bgColorPicker, "all")
+
+    local borderColorPicker = GUIFrame:CreateColorPicker(row6b, "Border", {
+        color = db.BorderColor,
+        callback = function(r, g, b, a)
+            db.BorderColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6b:AddWidget(borderColorPicker, 0.33)
+    manager:Register(borderColorPicker, "all")
+
+    local textColorPicker = GUIFrame:CreateColorPicker(row6b, "Text", {
+        color = db.Text.TextColor,
+        callback = function(r, g, b, a)
+            db.Text.TextColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6b:AddWidget(textColorPicker, 0.34)
+    manager:Register(textColorPicker, "all")
+    card6:AddRow(row6b, Theme.rowHeightLast, 0)
+
+    yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 10: Targeting You (glow engine card; Pulse Border or Pixel)
