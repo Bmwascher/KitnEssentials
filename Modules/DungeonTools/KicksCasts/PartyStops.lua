@@ -106,8 +106,9 @@ PS.cells = {}
 PS.feeds = {}
 PS.sampleIcons = {}
 PS.style = { colors = { stop = BLACK } }
--- The last layout's grid, which the KE Edit Mode box is fitted to.
-PS.shape = {}
+-- The last layout's grid, and the insets that fit the KE Edit Mode box and
+-- the screen clamp to it.
+PS.shape = { left = 0, right = 0, top = 0, bottom = 0 }
 PS.live = false
 PS.previewing = false
 PS.editMode = false
@@ -283,8 +284,9 @@ end
 
 -- The first icon sits on the frame's AnchorFrom point and the grid grows away
 -- from it, so that icon stays put as the count changes. A direction against
--- that point grows the grid past the frame; OverlayInset moves the KE Edit
--- Mode box onto the grid.
+-- that point grows the grid past the frame, so the KE Edit Mode box and the
+-- screen clamp, which would use the frame's rectangle, are inset onto the
+-- grid.
 local function Layout(count)
     local s, db, shape = PS.style, PS.db, PS.shape
     local perRow = Rules.PerRow(db.IconsPerRow)
@@ -303,6 +305,12 @@ local function Layout(count)
         or shape.size ~= s.size or shape.spacing ~= s.spacing then
         shape.cols, shape.rows, shape.pin, shape.grow = cols, rows, pin, db.Grow
         shape.size, shape.spacing = s.size, s.spacing
+        local growsLeft, growsUp = Rules.Grows(db.Grow)
+        local left, right, top, bottom = KE:GetGridOverlayInset(cols, rows, s.size, s.spacing, pin, growsLeft, growsUp)
+        shape.left, shape.right, shape.top, shape.bottom = left, right, top, bottom
+        -- Clamp insets move each edge from the frame's; the box's left and
+        -- bottom insets count outward, so they change sign.
+        PS.frame:SetClampRectInsets(-left, right, top, -bottom)
         -- The box reads its insets only when it refreshes.
         if KE.EditMode then KE.EditMode:RefreshLiveState() end
     end
@@ -310,9 +318,7 @@ end
 
 local function OverlayInset()
     local shape = PS.shape
-    if not shape.cols then return 0, 0, 0, 0 end
-    local left, up = Rules.Grows(shape.grow)
-    return KE:GetGridOverlayInset(shape.cols, shape.rows, shape.size, shape.spacing, shape.pin, left, up)
+    return shape.left, shape.right, shape.top, shape.bottom
 end
 
 local function ApplyPosition()
