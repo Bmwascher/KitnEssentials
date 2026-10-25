@@ -74,6 +74,7 @@ local SENSOR_GROUP = "stop"
 local NOT_MINE = "HARMFUL|!PLAYER"
 -- A lit sensor reaches across the screen from just off its left edge.
 local STRIDE = 16384
+local SENSOR_LAYOUT = { elementWidth = STRIDE, elementHeight = 1, elementSpacing = 0, lineSpacing = 0 }
 -- Up to 40 idle 1 px sensors chained from here never reach the screen.
 local HEAD_X = -(40 + 12)
 local READ_DELAY = 0.2
@@ -105,6 +106,8 @@ PS.cells = {}
 PS.feeds = {}
 PS.sampleIcons = {}
 PS.style = { colors = { stop = BLACK } }
+-- The last layout's grid, which the KE Edit Mode box is fitted to.
+PS.shape = {}
 PS.live = false
 PS.previewing = false
 PS.editMode = false
@@ -278,18 +281,38 @@ local function Name(c, m)
     who:Show()
 end
 
+-- The first icon sits on the frame's AnchorFrom point and the grid grows away
+-- from it, so that icon stays put as the count changes. A direction against
+-- that point grows the grid past the frame; OverlayInset moves the KE Edit
+-- Mode box onto the grid.
 local function Layout(count)
-    local s, db = PS.style, PS.db
+    local s, db, shape = PS.style, PS.db, PS.shape
     local perRow = Rules.PerRow(db.IconsPerRow)
     local step = s.size + s.spacing
+    local pin = db.Position and db.Position.AnchorFrom or "CENTER"
     for i = 1, count do
         local c = PS.cells[i]
-        local corner, x, y = Rules.GridPlace(i, perRow, db.Grow, step)
+        local x, y = Rules.GridPlace(i, perRow, db.Grow, step)
         c:ClearAllPoints()
-        c:SetPoint(corner, PS.frame, corner, x, y)
+        c:SetPoint(pin, PS.frame, pin, x, y)
         pcall(Cell.Seat, c)
     end
-    PS.frame:SetSize(Rules.GridSize(count, perRow, db.Grow, s.size, step))
+    local cols, rows = Rules.GridShape(count, perRow, db.Grow)
+    PS.frame:SetSize((cols - 1) * step + s.size, (rows - 1) * step + s.size)
+    if shape.cols ~= cols or shape.rows ~= rows or shape.pin ~= pin or shape.grow ~= db.Grow
+        or shape.size ~= s.size or shape.spacing ~= s.spacing then
+        shape.cols, shape.rows, shape.pin, shape.grow = cols, rows, pin, db.Grow
+        shape.size, shape.spacing = s.size, s.spacing
+        -- The box reads its insets only when it refreshes.
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end
+end
+
+local function OverlayInset()
+    local shape = PS.shape
+    if not shape.cols then return 0, 0, 0, 0 end
+    local left, up = Rules.Grows(shape.grow)
+    return KE:GetGridOverlayInset(shape.cols, shape.rows, shape.size, shape.spacing, shape.pin, left, up)
 end
 
 local function ApplyPosition()
@@ -375,13 +398,14 @@ end
 ---------------------------------------------------------------------------------
 -- The engine runs this inside the add and swallows its errors, so it records
 -- its own result; Settle tries a refused one again.
+local function QuietButton(button)
+    button:SetSize(1, 1)
+    button:SetMouseClickEnabled(false)
+    button:SetMouseMotionEnabled(false)
+end
+
 local function InitSensorButton(button)
-    local ok = pcall(function()
-        button:SetSize(1, 1)
-        button:SetMouseClickEnabled(false)
-        button:SetMouseMotionEnabled(false)
-    end)
-    buttonDebt[button] = (not ok) or nil
+    buttonDebt[button] = (not pcall(QuietButton, button)) or nil
 end
 
 -- A refused disable is owed and tried again by Settle. An owed sensor may
@@ -411,15 +435,17 @@ local function Owed(f)
     return false
 end
 
+local function Unprime(f)
+    for _, t in ipairs(f.trackers) do t.primed = false end
+end
+
 -- A feed that held an owed sensor is unprimed before the debt is retried, so
 -- the read armed after it only records, whether or not a read saw the debt.
 local function Settle()
     local owed = next(parkDebt) ~= nil
     if owed then
         for _, f in pairs(PS.feeds) do
-            if Owed(f) then
-                for _, t in ipairs(f.trackers) do t.primed = false end
-            end
+            if Owed(f) then Unprime(f) end
         end
     end
     for s in pairs(parkDebt) do Park(s) end
@@ -443,28 +469,33 @@ local function FeedOf(id)
     local span = CreateFrame("Frame", nil, sensHost, LAYOUT_TEMPLATE)
     span:SetPoint("TOPLEFT", head, "TOPLEFT", 0, 0)
     span:SetPoint("BOTTOMRIGHT", tail, "BOTTOMRIGHT", 0, 0)
+    -- The client copies a group's options at each add, so a feed's sensors
+    -- share one table.
     f = {
-        id = id, include = include, sensors = {}, trackers = EMPTY, on = false, fails = 0,
+        id = id, sensors = {}, trackers = EMPTY, on = false, fails = 0,
         head = head, tail = tail, span = span,
+        group = {
+            maxFrameCount = 1,
+            candidateFilters = { includeSpellIDs = include },
+            initializeFrame = InitSensorButton,
+            layout = SENSOR_LAYOUT,
+        },
     }
     PS.feeds[id] = f
     return f
+end
+
+local function GroupSensor(s, group)
+    s:SetSize(1, 1)
+    s:EnableMouse(false)
+    s:AddAuraGroup(SENSOR_GROUP, NOT_MINE, group)
 end
 
 -- The sensor, or nil when its container or group was refused.
 local function NewSensor(f)
     local ok, s = pcall(CreateFrame, "AuraContainer", nil, sensHost, SENSOR_TEMPLATE)
     if not ok or not s then return nil end
-    local grouped = pcall(function()
-        s:SetSize(1, 1)
-        s:EnableMouse(false)
-        s:AddAuraGroup(SENSOR_GROUP, NOT_MINE, {
-            maxFrameCount = 1,
-            candidateFilters = { includeSpellIDs = f.include },
-            initializeFrame = InitSensorButton,
-            layout = { elementWidth = STRIDE, elementHeight = 1, elementSpacing = 0, lineSpacing = 0 },
-        })
-    end)
+    local grouped = pcall(GroupSensor, s, f.group)
     pcall(s.SetEnabled, s, false)
     if not grouped then
         pcall(s.Hide, s)
@@ -473,23 +504,23 @@ local function NewSensor(f)
     return s
 end
 
+local function PlaceSensor(s, f, last)
+    if last then
+        s:SetPoint("TOPLEFT", last, "TOPRIGHT", 0, 0)
+    else
+        s:SetPoint("TOPLEFT", f.head, "TOPLEFT", 0, 0)
+    end
+    f.tail:ClearAllPoints()
+    f.tail:SetPoint("TOPLEFT", s, "TOPRIGHT", 0, 0)
+end
+
 -- Returns false when the build failed. A sensor bound at once on a held plate
--- restarts the Blind hold and asks for a read, so its first answer is a
--- baseline taken before the next use rather than the next use itself.
+-- asks for a read; a hold feed's also restarts the hold, so its first answer
+-- is a baseline taken before the next use rather than the next use itself.
 local function Grow(f)
     local s = NewSensor(f)
     if not s then return false end
-    local last = f.sensors[#f.sensors]
-    local placed = pcall(function()
-        if last then
-            s:SetPoint("TOPLEFT", last, "TOPRIGHT", 0, 0)
-        else
-            s:SetPoint("TOPLEFT", f.head, "TOPLEFT", 0, 0)
-        end
-        f.tail:ClearAllPoints()
-        f.tail:SetPoint("TOPLEFT", s, "TOPRIGHT", 0, 0)
-    end)
-    if not placed then
+    if not pcall(PlaceSensor, s, f, f.sensors[#f.sensors]) then
         pcall(s.Hide, s)
         return false
     end
@@ -498,7 +529,7 @@ local function Grow(f)
     local unit = f.on and PS.slots:UnitOf(j)
     if unit then
         Aim(s, unit)
-        takenAt = GetTime()
+        if Data.STOPS[f.id].hold then takenAt = GetTime() end
         Arm()
     end
     Debug("built sensor %d for %d", j, f.id)
@@ -538,15 +569,20 @@ end
 -- Reads
 ---------------------------------------------------------------------------------
 local function UnprimeAll()
+    for _, f in pairs(PS.feeds) do Unprime(f) end
+end
+
+local function HoldOn()
     for _, f in pairs(PS.feeds) do
-        for _, t in ipairs(f.trackers) do t.primed = false end
+        if f.on and Data.STOPS[f.id].hold then return true end
     end
+    return false
 end
 
 local function ReadFeed(f, n, now)
     local stop = Data.STOPS[f.id]
     if Owed(f) or (stop.hold and now < takenAt + HOLD_SETTLE) then
-        for _, t in ipairs(f.trackers) do t.primed = false end
+        Unprime(f)
         return
     end
     local ok, lit = pcall(f.span.IsMouseOver, f.span, 1e5, -1e5, 0, 0)
@@ -554,7 +590,7 @@ local function ReadFeed(f, n, now)
     -- Closed door: no use is seen here, and a count already running from
     -- plain reads goes on.
     if issecretvalue(lit) and not CDRules.DoorOpen(PS.door) then
-        for _, t in ipairs(f.trackers) do t.primed = false end
+        Unprime(f)
         return
     end
     local at, changedCount = n - (stop.lag or 0), 0
@@ -594,9 +630,10 @@ local function ReadAll()
         return
     end
     readsLeft = readsLeft - 1
-    -- A read skipped by the Blind hold sets no baseline, so the chain goes on
-    -- until one read lands after the hold: at most two more reads per take.
-    if now < takenAt + HOLD_SETTLE and readsLeft < 1 then readsLeft = 1 end
+    -- A read skipped by the hold sets no baseline, so while a hold feed is on
+    -- the chain goes on until one read lands after the hold: at most two more
+    -- reads per take.
+    if readsLeft < 1 and now < takenAt + HOLD_SETTLE and HoldOn() then readsLeft = 1 end
     if readsLeft > 0 then
         C_Timer.After(READ_DELAY, ReadAll)
     else
@@ -765,10 +802,13 @@ local function Roster()
     end
 end
 
+-- A teammate's talent their spec's tree lacks reads 0; the snapshot's absent
+-- set tells Fits it was not found.
 local function RanksOf(m)
-    if m.isPlayer then return PS.ownRanks end
+    if m.isPlayer then return PS.ownRanks, nil end
     local snap = handle and m.guid and handle:Get(m.guid)
-    return snap and snap.ranks or nil
+    if not snap then return nil, nil end
+    return snap.ranks, snap.absent
 end
 
 -- The base length while any length talent is unread.
@@ -823,7 +863,7 @@ local function SetFeeds(want)
         f.trackers, f.stalled = list, nil
         if not f.on then
             f.on = true
-            for _, t in ipairs(list) do t.primed = false end
+            Unprime(f)
             for j, s in ipairs(f.sensors) do
                 local unit = PS.slots:UnitOf(j)
                 if unit then Aim(s, unit) end
@@ -857,8 +897,8 @@ local function Refresh()
             if off[id] ~= true then
                 local stop = Data.STOPS[id]
                 for _, m in ipairs(PS.members) do
-                    local ranks = RanksOf(m)
-                    if Rules.Fits(stop, m, ranks) then
+                    local ranks, absent = RanksOf(m)
+                    if Rules.Fits(stop, m, ranks, absent) then
                         local t = TrackerFor(m, id, Length(stop, ranks), n)
                         PS.icons[#PS.icons + 1] = { t = t, m = m, id = id }
                         if m.isPlayer then
@@ -1177,10 +1217,13 @@ function PS:RegWithEditMode()
         frame = self.frame,
         module = self,
         getPosition = function() return self.db.Position end,
+        -- A revert can restore another AnchorFrom, which the icons are laid
+        -- out from.
         setPosition = function(pos)
             self.db.Position = pos
-            ApplyPosition()
+            Draw()
         end,
+        getOverlayInset = OverlayInset,
         getParentFrame = function()
             return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
         end,

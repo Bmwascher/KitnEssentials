@@ -15,14 +15,13 @@ KE.PartyStopsRules = Rules
 
 local EMPTY = {}
 
--- Per grow direction: the corner the first icon sits in, and the step along
--- a row. A new row starts below for Right and Left, to the right for Down
--- and Up.
+-- Per grow direction: the step along a row from the first icon. A new row
+-- starts below for Right and Left, to the right for Down and Up.
 local GROW = {
-    RIGHT = { corner = "TOPLEFT",    dx = 1,  dy = 0 },
-    LEFT  = { corner = "TOPRIGHT",   dx = -1, dy = 0 },
-    DOWN  = { corner = "TOPLEFT",    dx = 0,  dy = -1 },
-    UP    = { corner = "BOTTOMLEFT", dx = 0,  dy = 1 },
+    RIGHT = { dx = 1,  dy = 0 },
+    LEFT  = { dx = -1, dy = 0 },
+    DOWN  = { dx = 0,  dy = -1 },
+    UP    = { dx = 0,  dy = 1 },
 }
 
 -- nil means the plate is watched. Only a plain false on the assist read
@@ -38,15 +37,17 @@ function Rules.Verdict(unit, api, strict)
     return nil
 end
 
--- An unread need talent counts as taken, so a member is dropped only when
--- every one reads untaken. A spec, then a role, limits a stop only once known.
-function Rules.Fits(stop, member, ranks)
+-- An unread need talent counts as taken, and so does one in absent: the
+-- member's tree lacks it, so its 0 means not found rather than not taken. A
+-- member is dropped only when every one reads untaken. A spec, then a role,
+-- limits a stop only once known.
+function Rules.Fits(stop, member, ranks, absent)
     if member.class ~= stop.class then return false end
     local need = stop.need
     if need and #need > 0 and ranks then
         local taken = false
         for _, id in ipairs(need) do
-            if ranks[id] ~= 0 then
+            if ranks[id] ~= 0 or (absent and absent[id]) then
                 taken = true
                 break
             end
@@ -114,22 +115,27 @@ function Rules.Watched(value) return Clamp(value, 4, 20, 10) end
 
 function Rules.PerRow(value) return Clamp(value, 1, 20, 8) end
 
--- Icon i's corner and its offset from it.
+-- Icon i's offset from the first icon.
 function Rules.GridPlace(i, perRow, grow, step)
     local g = GROW[grow] or GROW.RIGHT
     local along, line = (i - 1) % perRow, math_floor((i - 1) / perRow)
-    if g.dy == 0 then return g.corner, g.dx * along * step, -line * step end
-    return g.corner, line * step, g.dy * along * step
+    if g.dy == 0 then return g.dx * along * step, -line * step end
+    return line * step, g.dy * along * step
 end
 
--- Width and height of n icons; one icon's size with none.
-function Rules.GridSize(n, perRow, grow, size, step)
-    if n < 1 then return size, size end
-    local long = size + (math_min(n, perRow) - 1) * step
-    local wide = size + (math_ceil(n / perRow) - 1) * step
+-- Columns and rows of n icons; one of each with none.
+function Rules.GridShape(n, perRow, grow)
+    if n < 1 then return 1, 1 end
+    local long, wide = math_min(n, perRow), math_ceil(n / perRow)
     local g = GROW[grow] or GROW.RIGHT
     if g.dy == 0 then return long, wide end
     return wide, long
+end
+
+-- Whether the grid grows left of its first icon, and whether up.
+function Rules.Grows(grow)
+    local g = GROW[grow] or GROW.RIGHT
+    return g.dx < 0, g.dy > 0
 end
 
 -- The first length characters of a name, counted in UTF-8.

@@ -19,6 +19,7 @@ describe("party stops rules", function()
             { needy, { class = "WARRIOR" }, { [1] = 0, [2] = 0 }, false },
             { needy, { class = "WARRIOR" }, { [1] = 1, [2] = 0 }, true },
             { needy, { class = "WARRIOR" }, { [1] = 0 }, true },
+            { needy, { class = "WARRIOR" }, { [1] = 0, [2] = 0 }, true, { [2] = true } },
             { needy, { class = "WARRIOR" }, nil, true },
             { tank, { class = "DEATHKNIGHT", spec = 250 }, nil, true },
             { tank, { class = "DEATHKNIGHT", spec = 251, role = "TANK" }, nil, false },
@@ -27,7 +28,7 @@ describe("party stops rules", function()
             { tank, { class = "DEATHKNIGHT" }, nil, true },
         }
         for i, case in ipairs(cases) do
-            assert.equals(case[4], Rules.Fits(case[1], case[2], case[3]), "case " .. i)
+            assert.equals(case[4], Rules.Fits(case[1], case[2], case[3], case[5]), "case " .. i)
         end
     end)
 
