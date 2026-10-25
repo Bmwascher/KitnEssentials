@@ -879,7 +879,7 @@ function CHAT:FrameOverlapsPanel(frame)
     if not frame or not self.panel then return false end
 
     local frameLeft, frameBottom, frameWidth, frameHeight = KE.Skins.SafeRect(frame)
-    local panelLeft, panelBottom, panelWidth, panelHeight = self.panel:GetRect()
+    local panelLeft, panelBottom, panelWidth, panelHeight = KE.Skins.SafeRect(self.panel)
 
     if not frameLeft or not panelLeft then return false end
 
