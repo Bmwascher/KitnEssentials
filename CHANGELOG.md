@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.17
+
+### Dark Theme
+
+- Housing: the Homes dropdown is skinned on both the House Information and
+  Blueprints tabs, and the Blueprints page (list, group headers, details and
+  budgets) is skinned too
+- The Renown skin option is removed: its window no longer exists
+
+### Addon Skins
+
+- BetterFriendlist: the status stripe stays 2 screen pixels wide at any
+  window scale, the guild tab's scroll bar is skinned, and the old-style
+  portrait shows one icon
+- Mythic Dungeon Tools: the skin option is removed, since the addon now
+  ships its own dark look
+
+### Settings Window
+
+- The Close and Home Page buttons show a tooltip on hover
+
+---
+
 ## v4.14.16
 
 ### Interrupt Tracker
