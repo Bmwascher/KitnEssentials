@@ -9,6 +9,14 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+local POSITION_OPTIONS = {
+    { key = "TOP",    text = "Top" },
+    { key = "BOTTOM", text = "Bottom" },
+    { key = "LEFT",   text = "Left" },
+    { key = "RIGHT",  text = "Right" },
+    { key = "CENTER", text = "Center" },
+}
+
 ----------------------------------------------------------------
 -- Caster Name card
 --
@@ -105,7 +113,7 @@ function GUIFrame:CreateAuraCasterNameCard(scrollChild, yOffset, config)
 
     local row4 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local positionDropdown = GUIFrame:CreateDropdown(row4, "Name Position", {
-        options = GUIFrame.AnchorPointOptions,
+        options = POSITION_OPTIONS,
         value = pos.AnchorTo or "BOTTOM",
         callback = function(key)
             pos.AnchorTo = key
