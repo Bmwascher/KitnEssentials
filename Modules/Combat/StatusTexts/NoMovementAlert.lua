@@ -1127,6 +1127,7 @@ end
 local EDIT_MODE_ELEMENT = {
     key = "NoMovementAlert",
     displayName = "No Movement Alert",
+    ownScale = true,
     guiPath = "StatusTexts",
     guiTab = "NoMovementAlert",
 }

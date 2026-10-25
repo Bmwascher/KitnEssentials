@@ -1839,6 +1839,7 @@ function MPT:RegWithEditMode()
         key = "MythicPlusTimer",
         module = self,
         displayName = "Mythic+ Timer",
+        ownScale = true,
         frame = self.frames.root,
         getPosition = function()
             return {

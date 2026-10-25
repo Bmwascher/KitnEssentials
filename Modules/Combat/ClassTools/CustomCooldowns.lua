@@ -471,6 +471,7 @@ end
 local EDIT_MODE_ELEMENT = {
     key = "CustomCooldowns",
     displayName = "Custom Cooldowns",
+    ownScale = true,
     guiPath = "ClassTools",
     guiTab = "CustomCooldowns",
 }
