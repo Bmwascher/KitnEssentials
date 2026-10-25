@@ -62,6 +62,11 @@ local Defaults = {
         -- and the reasoning above applies unchanged.
         EUITickMarkersHiddenIn = {},
 
+        -- Teammates' announced focus markers for the Interrupt Tracker,
+        -- keyed by character GUID with the party instance they were learned
+        -- in, so a reload inside it keeps them. No profile switch touches it.
+        KickMarkers = {},
+
         -- Tool preferences, not module settings: they describe how edit mode
         -- behaves, so they sit beside the other account-wide entries here
         -- rather than in a profile. A per-profile grid would mean switching

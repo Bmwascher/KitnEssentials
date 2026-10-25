@@ -945,7 +945,12 @@ function KT:CheckActivation()
     end
 end
 
-function KT:OnZoneChange()
+-- The marker cache forgets at a zone-in, not at a reload or login.
+function KT:OnZoneChange(event, isInitialLogin, isReloadingUi)
+    if event == "PLAYER_ENTERING_WORLD" then
+        self._zoneReload = (isInitialLogin or isReloadingUi) and true or false
+        if self.markersOn and not self._zoneReload then self:ForgetMarkers() end
+    end
     C_Timer.After(1, function()
         self:CheckActivation()
     end)
@@ -1901,6 +1906,7 @@ function KT:OnDisable()
     self:StopOnUpdate()
 
     if self.platesOn then self:PlatesDeactivate() end
+    if self.markersOn then self:MarkersDeactivate() end
     self:PlatesPreviewEnd()
     self:ClearKickQueues()
     self:HideAllBars()

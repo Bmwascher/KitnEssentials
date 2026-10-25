@@ -70,6 +70,7 @@
     <Script file="DungeonTools\KicksCasts\KickTrackerRules.lua" />
     <Script file="DungeonTools\KicksCasts\KickTrackerMeter.lua" />
     <Script file="DungeonTools\KicksCasts\KickTrackerPlates.lua" />
+    <Script file="DungeonTools\KicksCasts\KickTrackerMarkers.lua" />
     <Script file="DungeonTools\KicksCasts\DungeonCasts.lua" />
     <Script file="DungeonTools\KicksCasts\CCTrackerRules.lua" />
     <Script file="DungeonTools\KicksCasts\CCTracker.lua" />

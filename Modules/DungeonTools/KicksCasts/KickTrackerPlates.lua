@@ -1617,13 +1617,20 @@ function KT:PlatesDeactivate()
     self:PlatesReset()
 end
 
--- Plates run while the tracker is active and Nameplate Icons is on.
+-- Plates run while the tracker is active and Nameplate Icons is on; the
+-- marker intake while Icons on Marked Mobs is on too.
 function KT:SyncPlates()
     local want = self.isActive and self.db.PlateIcons == true
     if want and not self.platesOn then
         self:PlatesActivate()
     elseif not want and self.platesOn then
         self:PlatesDeactivate()
+    end
+    local markers = want and self.db.PlatePremark ~= false
+    if markers and not self.markersOn then
+        self:MarkersActivate()
+    elseif not markers and self.markersOn then
+        self:MarkersDeactivate()
     end
 end
 
