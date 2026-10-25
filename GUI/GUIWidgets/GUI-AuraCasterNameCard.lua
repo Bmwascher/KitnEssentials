@@ -55,7 +55,7 @@ function GUIFrame:CreateAuraCasterNameCard(scrollChild, yOffset, config)
             Apply()
             RefreshInner()
         end,
-        tooltip = "Writes the name of the player who cast each buff under its icon.",
+        tooltip = "Writes the name of the player who cast each buff on its icon.",
     })
     row1:AddWidget(showCheck, 0.5)
     innerManager:Register(showCheck, "all")
@@ -114,13 +114,13 @@ function GUIFrame:CreateAuraCasterNameCard(scrollChild, yOffset, config)
     local row4 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local positionDropdown = GUIFrame:CreateDropdown(row4, "Name Position", {
         options = POSITION_OPTIONS,
-        value = pos.AnchorTo or "BOTTOM",
+        value = pos.AnchorTo or "CENTER",
         callback = function(key)
             pos.AnchorTo = key
-            pos.AnchorFrom = KE.AuraRules.CASTER_OPPOSITE_POINT[key] or "TOP"
+            pos.AnchorFrom = KE.AuraRules.CASTER_OPPOSITE_POINT[key] or "CENTER"
             Apply()
         end,
-        tooltip = "The side of the icon the name sits on.",
+        tooltip = "Where the name sits: on the icon, or against one of its sides.",
     })
     row4:AddWidget(positionDropdown, 1 / 3)
     innerManager:Register(positionDropdown, "casterOn")
@@ -135,7 +135,7 @@ function GUIFrame:CreateAuraCasterNameCard(scrollChild, yOffset, config)
 
     local ySlider = GUIFrame:CreateSlider(row4, "Name Y", {
         min = -50, max = 50, step = 1,
-        value = pos.YOffset or -1,
+        value = pos.YOffset or -14,
         callback = function(val) pos.YOffset = val; Apply() end,
     })
     row4:AddWidget(ySlider, 1 / 3)
