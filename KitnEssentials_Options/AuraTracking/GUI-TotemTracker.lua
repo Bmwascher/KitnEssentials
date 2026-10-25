@@ -59,11 +59,11 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
 
     -- Forever has no Evoker.
     if KE.IS_FOREVER then
-        card1:AddLabel("A bar of your active totems with a cooldown swipe and a timer. The Create Macro " ..
-            "button on the Destroy All Totems card makes a macro that destroys them all.")
+        card1:AddLabel("A bar of your active totems with a cooldown swipe and a timer. The " .. KE:Gold("Create Macro") .. " " ..
+            "button on the " .. KE:Gold("Destroy All Totems") .. " card makes a macro that destroys them all.")
     else
-        card1:AddLabel("A bar of your active totems with a cooldown swipe and a timer. The Create Macro " ..
-            "button on the Destroy All Totems card makes a macro that destroys them all. Not only for " ..
+        card1:AddLabel("A bar of your active totems with a cooldown swipe and a timer. The " .. KE:Gold("Create Macro") .. " " ..
+            "button on the " .. KE:Gold("Destroy All Totems") .. " card makes a macro that destroys them all. Not only for " ..
             "Shamans: an Augmentation Evoker's Future Self dupes take totem slots and show here too.")
     end
     yOffset = card1:GetNextOffset()

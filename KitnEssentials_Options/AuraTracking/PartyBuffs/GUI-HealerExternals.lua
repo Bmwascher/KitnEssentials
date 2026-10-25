@@ -113,7 +113,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     end
     cardMain:AddLabel("One icon per cooldown: your party's single-target spells first, then raid " ..
         "cooldowns. Your own come first in each group, whether or not " .. KE:Gold("Include Yourself") ..
-        " on the Cooldowns tab is on." ..
+        " on the " .. KE:Gold("Cooldowns") .. " tab is on." ..
         "\n\nAn icon is full color when ready. Once the buff appears it turns gray and counts down: " ..
         "on anyone in your party for a single-target spell, on the caster for a raid cooldown. " ..
         "Another player casting the same spell starts it too, such as a Retribution Paladin's " ..

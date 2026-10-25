@@ -200,7 +200,7 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
         getDefaults = function() return KE.PartyCooldownsPage.ShippedList("ListPotions") end,
         infoTitle = "Spell List Info",
         infoText = "A potion on this list starts a party member's potion bar here, and shows while active " ..
-            "on the Cooldowns tab when Potions is ticked there. Only potions that put a buff on the drinker " ..
+            "on the " .. KE:Gold("Cooldowns") .. " tab when " .. KE:Gold("Potions") .. " is ticked there. Only potions that put a buff on the drinker " ..
             "can be seen.",
         restoreActions = { { label = "Kitn Defaults" } },
         -- Every committed list change clears every potion bar, even one whose

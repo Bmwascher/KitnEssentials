@@ -96,7 +96,7 @@ function Page.ClassCooldownsCard(scrollChild, yOffset, ctx)
     local card = GUIFrame:CreateCard(scrollChild, "Spells and Cooldowns", yOffset)
     local Sensor = KE.PartyCooldownsSensor
     if not Sensor then
-        card:AddNote("This client cannot show cooldown timers, so a ticked spell shows only while its buff is up. Order does not apply, and every class buff uses the Offensive CDs border color on the General tab.")
+        card:AddNote("This client cannot show cooldown timers, so a ticked spell shows only while its buff is up. Order does not apply, and every class buff uses the " .. KE:Gold("Offensive CDs") .. " border color on the " .. KE:Gold("General") .. " tab.")
     elseif Sensor.door and not Sensor.DoorOpen() then
         card:AddNote("Cooldown timers for party members are unavailable on this client: their uses show while active but start no gray count.")
     end
