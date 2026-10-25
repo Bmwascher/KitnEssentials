@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.22
+
+### General
+
+- Select Frame: the frame picker now picks the chat panel and the Damage
+  Meter, and frames anchored to either land on it even when it appears later
+- Edit Mode: Custom Cooldowns, No Movement Alert and the Mythic+ Timer
+  follow the mouse when dragged at a Scale other than 1
+
+---
+
 ## v4.14.21
 
 ### Dark Theme
