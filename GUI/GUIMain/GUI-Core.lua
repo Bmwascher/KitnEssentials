@@ -1630,7 +1630,7 @@ end
 function GUIFrame:BuildElvUINote(scrollChild, yOffset, title, area)
     local T = Theme
     local card = self:CreateCard(scrollChild, title, yOffset)
-    card:AddNote("|cffffd100ElvUI is handling " .. area .. ",|r so these settings do not apply right now. Your settings are kept and apply again if you turn ElvUI off.")
+    card:AddNote(KE:Gold("ElvUI") .. " is handling " .. area .. ", so these settings do not apply right now. Your settings are kept and apply again if you turn ElvUI off.")
     card:AddSpacing(T.paddingSmall)
     return yOffset + card:GetContentHeight() + T.paddingMedium
 end

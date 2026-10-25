@@ -207,7 +207,7 @@ GUIFrame:RegisterContent("ProfilesMain", function(scrollChild, yOffset)
 
     card1:AddLabel("Active Profile: |cff4dff4d" .. currentProfile .. "|r"
         .. STATUS_SEP .. "Global Mode: " .. (useGlobal and "|cff4DCC66On|r" or "|cffE64D4DOff|r")
-        .. STATUS_SEP .. KE:ColorTextByTheme(tostring(#PM:GetProfiles())) .. " Profiles Saved")
+        .. STATUS_SEP .. tostring(#PM:GetProfiles()) .. " Profiles Saved")
 
     -- The status line is this control's label; the widget is lifted past its
     -- own empty label slot so the box sits directly under the line.
@@ -426,8 +426,8 @@ GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
     -- Card 3: Copy from Retail
     ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Copy from Retail", yOffset)
-    card3:AddLabel("On Retail, type /kes, open Profile Manager, then Sharing, " ..
-        "click Export Active Profile and copy the string. Then click below and paste it here.")
+    card3:AddLabel("On Retail, type " .. KE:Gold("/kes") .. ", open " .. KE:Gold("Profile Manager") .. ", then " .. KE:Gold("Sharing") .. ", " ..
+        "click " .. KE:Gold("Export Active Profile") .. " and copy the string. Then click below and paste it here.")
 
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local retailBtn = GUIFrame:CreateButton(row3, "Paste Retail string", {

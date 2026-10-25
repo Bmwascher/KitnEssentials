@@ -201,7 +201,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
         local card5 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
         manager:Register(card5, "all")
 
-        card5:AddLabel("|cffCC8800Friendly Player Nameplates must be |cff33ff33enabled|r|cffCC8800 for these to work.|r")
+        card5:AddLabel("Friendly Player Nameplates must be enabled for these to work.")
 
         local n = #nameplateDefs
         for i = 1, n, 2 do
@@ -274,7 +274,7 @@ GUIFrame:RegisterContent("CVarsDev", function(scrollChild, yOffset)
     local card = GUIFrame:CreateCard(scrollChild, "Dev CVars", yOffset)
     ctx.manager:Register(card, "all")
 
-    card:AddLabel("|cffCC8800These force addon restrictions |cff33ff33on|r|cffCC8800 for testing. Leave them off for normal play: with one on, addons behave as though you were in a restricted state.|r")
+    card:AddLabel("These force addon restrictions on for testing. Leave them off for normal play: with one on, addons behave as though you were in a restricted state.")
 
     -- One per row: at half width these labels truncate.
     local picks = {}

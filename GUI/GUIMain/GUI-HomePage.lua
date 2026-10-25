@@ -111,9 +111,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     -- withhold; the client's own /reload works everywhere.
     local reloadCommand = KE:IsFeatureAvailable("SlashCommands") and "/rl" or "/reload"
     local tipLabel = card2:AddLabel(
-        "Use " .. KE:ColorTextByTheme("/kes") .. " to open settings, " ..
-        KE:ColorTextByTheme("/kes edit") .. " to toggle Edit Mode, " ..
-        KE:ColorTextByTheme(reloadCommand) .. " to reload.")
+        "Use " .. KE:Gold("/kes") .. " to open settings, " ..
+        KE:Gold("/kes edit") .. " to toggle Edit Mode, " ..
+        KE:Gold(reloadCommand) .. " to reload.")
     tipLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
     local sepRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
@@ -259,10 +259,10 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         local elvCard = GUIFrame:CreateCard(scrollChild, "ElvUI Integration", yOffset)
         local useElvUI = KE.db and KE.db.profile and KE.db.profile.UseElvUI and KE.db.profile.UseElvUI.Enabled
         local statusText = useElvUI and "|cff4dff4dEnabled|r" or "|cffff4d4dDisabled|r"
-        elvCard:AddLabel("ElvUI Skinning: " .. statusText)
+        elvCard:AddLabel(KE:Gold("ElvUI") .. " Skinning: " .. statusText)
         elvCard:AddSpacing(4)
         local elvDesc = elvCard:AddLabel(
-            KE:ColorTextByTheme("- ") .. "Turns off every skinning module while ElvUI is loaded, so the rest of " ..
+            KE:ColorTextByTheme("- ") .. "Turns off every skinning module while " .. KE:Gold("ElvUI") .. " is loaded, so the rest of " ..
             "KitnEssentials works alongside it.")
         elvDesc:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
@@ -276,7 +276,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     card6:AddLabel("Found a bug or have a suggestion?")
     card6:AddSpacing(4)
-    local discordLabel = card6:AddLabel("Send a message for support directly on Discord: |cff20d00bglizzygordo|r or |cff20d00bdunnni|r")
+    local discordLabel = card6:AddLabel("Send a message for support directly on Discord: glizzygordo or dunnni")
     discordLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
     yOffset = card6:GetNextOffset()

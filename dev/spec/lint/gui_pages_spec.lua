@@ -96,9 +96,6 @@ local ALLOWED = {
     L6 = {
     },
     L7 = {
-        -- Phase 17 moves these onto KE:Gold.
-        ["GUI/GUIMain/GUI-Core.lua"] = { phase = "17", n = 1 },
-        ["GUI/GUIWidgets/GUI-TauntCursorCard.lua"] = { phase = "17", n = 3 },
     },
 }
 

@@ -35,9 +35,9 @@ function GUIFrame:CreateTauntCursorCard(scrollChild, yOffset, config)
     manager:Register(card, "all")
 
     card:AddNote("Shows the cooldown of your taunt at the cursor, or of " ..
-        "|cffffd100Flame Shock|r on Elemental and Restoration Shaman and " ..
-        "|cffffd100Garrote|r on Assassination Rogue. The spell is detected from " ..
-        "your spellbook, so |cffffd100any spec that has one|r gets it. Nothing " ..
+        "Flame Shock on Elemental and Restoration Shaman and " ..
+        "Garrote on Assassination Rogue. The spell is detected from " ..
+        "your spellbook, so any spec that has one gets it. Nothing " ..
         "is drawn on a spec that has none.")
 
     local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
