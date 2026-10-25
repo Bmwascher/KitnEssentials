@@ -308,8 +308,9 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card3:AddRow(row3c, Theme.rowHeight)
-    card3:AddNote("Up to " .. Rules.TRACKED_ENEMIES .. " enemies are tracked. This many show at once; " ..
-        "the rest come into view as shown CCs end. The stack stays on screen: lower it near a screen edge.")
+    card3:AddNote("Up to " .. Rules.TRACKED_ENEMIES .. " enemies are tracked. " .. KE:Gold("Enemy CCs Shown") ..
+        " sets how many show at once; the rest come into view as shown ones end. The stack stays on " ..
+        "screen, so lower Enemy CCs Shown near a screen edge.")
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -380,7 +381,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     rowColor:AddWidget(timerColor, 0.5)
     manager:Register(timerColor, "timer")
     fontCard:AddRow(rowColor, Theme.rowHeight)
-    fontCard:AddNote("The font and outline are also used for the enemy name.")
+    fontCard:AddNote(KE:Gold("Font") .. " and " .. KE:Gold("Outline") .. " also style the enemy name.")
     yOffset = fontCard:GetNextOffset()
 
     manager:UpdateAll(true)
