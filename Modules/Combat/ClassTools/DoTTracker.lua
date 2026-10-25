@@ -91,6 +91,7 @@ DT.gate = nil
 DT.requestGate = nil
 DT.gateEventsOn = false
 DT.buildTarget = 0
+DT.buildQueued = false
 DT.listKey = nil
 DT.active = false
 DT.applying = false
@@ -968,7 +969,22 @@ function DT:OnScanDone(total)
     if self.active and not self.applying then self:RaiseBuildTarget() end
 end
 
--- The target never shrinks until a reload or a list or cap change.
+local function StartBuild()
+    DT.buildQueued = false
+    if not DT.active then return end
+    DT.runner:Run(DT.buildTarget)
+end
+
+local function QueueBuild()
+    if DT.buildQueued then return end
+    DT.buildQueued = true
+    C_Timer.After(0, StartBuild)
+end
+
+-- The target never shrinks until a reload or a list or cap change. An idle
+-- runner builds as soon as it is run, possibly in the frame its last walk just
+-- built in, so it is started on the next frame; a walking one only takes the
+-- higher target. Either way no frame builds two rows.
 function DT:RaiseBuildTarget()
     local highest = 0
     for slot = self.slots:Cap(), 1, -1 do
@@ -978,19 +994,23 @@ function DT:RaiseBuildTarget()
         end
     end
     local want = Rules.BuildTarget(self.db.MaxEnemies or 20, highest)
-    if want > self.buildTarget then
-        self.buildTarget = want
+    if want <= self.buildTarget then return end
+    self.buildTarget = want
+    if self.runner:Running() then
         self.runner:Run(want)
+    else
+        QueueBuild()
     end
 end
 
 -- Clearing the flag alone builds nothing: the runner only walks past the steps
--- it has, so the walk starts again from slot 1, built steps passing in one frame.
+-- it has, so the walk starts again from slot 1 on the next frame, built steps
+-- passing in one frame.
 function DT:RetryBuild()
     if not self.active or not Rules.BuildRetryOwed(self.cells, #self.list) then return end
     for i = 1, #self.list do self.cells[i].failed = nil end
     self.runner:Cancel()
-    self.runner:Run(self.buildTarget)
+    QueueBuild()
 end
 
 -- The cap follows the sensors that exist, so no slot is taken before every
