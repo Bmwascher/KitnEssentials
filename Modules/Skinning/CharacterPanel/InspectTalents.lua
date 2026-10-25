@@ -606,8 +606,13 @@ local function Style(fs, size, color)
     fs:SetTextColor(color[1], color[2], color[3])
 end
 
+-- Every text gets a font at creation: SetText on a FontString with no font
+-- raises. The Character Panel font is applied over it at paint time.
+local TEXT_TEMPLATE = "GameFontHighlightSmall"
+IT._TEXT_TEMPLATE = TEXT_TEMPLATE
+
 local function NewText(parent, justify)
-    local fs = parent:CreateFontString(nil, "OVERLAY")
+    local fs = parent:CreateFontString(nil, "OVERLAY", TEXT_TEMPLATE)
     fs:SetJustifyH(justify or "LEFT")
     return fs
 end
@@ -652,32 +657,35 @@ local function EnsureArrow()
     if arrow then return arrow end
     local frame = _G.InspectFrame
     if not frame then return nil end
-    arrow = CreateFrame("Button", nil, frame)
-    arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
+    -- Built in a local, hidden from the start, and published last, so a
+    -- raise part way leaves no half-built arrow for later calls to trust.
+    local a = CreateFrame("Button", nil, frame)
+    a:Hide()
+    a:SetSize(ARROW_SIZE, ARROW_SIZE)
     local close = frame.CloseButton
     if close then
-        arrow:SetPoint("TOP", close, "BOTTOM", 0, -ARROW_GAP)
+        a:SetPoint("TOP", close, "BOTTOM", 0, -ARROW_GAP)
         -- Frame level is a secret aspect; on a secret answer the arrow
         -- keeps its default level, one above the window.
         local level = close:GetFrameLevel()
         if not issecretvalue(level) and type(level) == "number" then
-            arrow:SetFrameLevel(level + 1)
+            a:SetFrameLevel(level + 1)
         end
     else
-        arrow:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -28)
+        a:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -28)
     end
-    local glyph = arrow:CreateTexture(nil, "OVERLAY")
+    local glyph = a:CreateTexture(nil, "OVERLAY")
     glyph:SetPoint("CENTER")
     glyph:SetSize(ARROW_GLYPH, ARROW_GLYPH)
     glyph:SetTexture(ARROW_TEX)
-    arrow.glyph = glyph
-    arrow:SetScript("OnEnter", ArrowOnEnter)
-    arrow:SetScript("OnLeave", ArrowOnLeave)
-    arrow:SetScript("OnClick", ArrowOnClick)
-    ArrowColor(arrow)
-    arrow:Hide()
-    IT.arrow = arrow
-    return arrow
+    a.glyph = glyph
+    a:SetScript("OnEnter", ArrowOnEnter)
+    a:SetScript("OnLeave", ArrowOnLeave)
+    a:SetScript("OnClick", ArrowOnClick)
+    ArrowColor(a)
+    arrow = a
+    IT.arrow = a
+    return a
 end
 
 local function CopyBorder(btn)
@@ -714,78 +722,81 @@ local function EnsurePanel()
     if panel then return panel end
     local frame = _G.InspectFrame
     if not frame then return nil end
-    panel = CreateFrame("Frame", nil, frame)
-    panel:SetPoint("TOPLEFT", frame, "TOPRIGHT", 2, 0)
-    panel:SetClampedToScreen(true)
-    panel.bg = panel:CreateTexture(nil, "BACKGROUND")
-    panel.bg:SetAllPoints()
-    KE:AddBorders(panel, KE.Theme.border)
+    -- Built in a local, hidden from the start, and published last, so a
+    -- raise part way leaves no half-built panel for later calls to trust.
+    local p = CreateFrame("Frame", nil, frame)
+    p:Hide()
+    p:SetPoint("TOPLEFT", frame, "TOPRIGHT", 2, 0)
+    p:SetClampedToScreen(true)
+    p.bg = p:CreateTexture(nil, "BACKGROUND")
+    p.bg:SetAllPoints()
+    KE:AddBorders(p, KE.Theme.border)
 
-    panel.name = NewText(panel)
-    panel.name:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD, -5)
-    local specFrame = CreateFrame("Frame", nil, panel)
+    p.name = NewText(p)
+    p.name:SetPoint("TOPLEFT", p, "TOPLEFT", PAD, -5)
+    local specFrame = CreateFrame("Frame", nil, p)
     specFrame:SetSize(ICON_SIZE, ICON_SIZE)
     specFrame.icon = specFrame:CreateTexture(nil, "ARTWORK")
     specFrame.icon:SetAllPoints()
     KE:ApplyIconZoom(specFrame.icon, 0.3)
     KE:AddIconBorders(specFrame, KE.Theme.border)
-    panel.specFrame = specFrame
-    panel.specText = NewText(panel)
-    panel.dot = NewText(panel)
-    panel.dot:SetText(SEPARATOR)
-    panel.heroIcon = panel:CreateTexture(nil, "ARTWORK")
-    panel.heroIcon:SetSize(ICON_SIZE, ICON_SIZE)
-    panel.heroText = NewText(panel)
-    panel.note = NewText(panel, "CENTER")
-    panel.note:SetPoint("CENTER", panel, "CENTER", 0, -8)
-    panel.heroLabel = NewText(panel, "CENTER")
-    panel.legendNote = NewText(panel)
-    panel.legendNote:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD, -(HEADER_H + 2))
+    p.specFrame = specFrame
+    p.specText = NewText(p)
+    p.dot = NewText(p)
+    p.dot:SetText(SEPARATOR)
+    p.heroIcon = p:CreateTexture(nil, "ARTWORK")
+    p.heroIcon:SetSize(ICON_SIZE, ICON_SIZE)
+    p.heroText = NewText(p)
+    p.note = NewText(p, "CENTER")
+    p.note:SetPoint("CENTER", p, "CENTER", 0, -8)
+    p.heroLabel = NewText(p, "CENTER")
+    p.legendNote = NewText(p)
+    p.legendNote:SetPoint("TOPLEFT", p, "TOPLEFT", PAD, -(HEADER_H + 2))
 
-    panel.swatches = {}
+    p.swatches = {}
     local prev
     for i, entry in ipairs(LEGEND) do
-        local swatch = CreateFrame("Frame", nil, panel)
+        local swatch = CreateFrame("Frame", nil, p)
         swatch:SetSize(SWATCH, SWATCH)
         swatch.ring = swatch:CreateTexture(nil, "BACKGROUND")
         swatch.ring:SetAllPoints()
         swatch.fill = swatch:CreateTexture(nil, "ARTWORK")
-        swatch.label = NewText(panel)
+        swatch.label = NewText(p)
         swatch.label:SetPoint("LEFT", swatch, "RIGHT", 4, 0)
         if prev then
             swatch:SetPoint("LEFT", prev.label, "RIGHT", 12, 0)
         else
-            swatch:SetPoint("TOPLEFT", panel, "TOPLEFT", PAD, -(HEADER_H + 3))
+            swatch:SetPoint("TOPLEFT", p, "TOPLEFT", PAD, -(HEADER_H + 3))
         end
         swatch.key, swatch.text = entry.key, entry.text
-        panel.swatches[i] = swatch
+        p.swatches[i] = swatch
         prev = swatch
     end
 
-    local copy = NewBox(panel, "Button")
+    local copy = NewBox(p, "Button")
     copy:SetSize(COPY_W, COPY_H)
-    copy:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -PAD, -COPY_Y)
+    copy:SetPoint("TOPRIGHT", p, "TOPRIGHT", -PAD, -COPY_Y)
     copy.label = NewText(copy, "CENTER")
     copy.label:SetPoint("CENTER")
     copy:SetScript("OnEnter", CopyOnEnter)
     copy:SetScript("OnLeave", CopyOnLeave)
     copy:SetScript("OnClick", CopyLoadout)
-    panel.copy = copy
+    p.copy = copy
 
-    panel.chips = {}
+    p.chips = {}
     for i = 1, #STAT_ORDER do
-        local chip = NewBox(panel)
+        local chip = NewBox(p)
         chip:SetSize(CHIP_W, CHIP_H)
         chip.label = NewText(chip, "CENTER")
         chip.label:SetPoint("TOP", chip, "TOP", 0, -3)
         chip.value = NewText(chip, "CENTER")
         chip.value:SetPoint("BOTTOM", chip, "BOTTOM", 0, 3)
-        panel.chips[i] = chip
+        p.chips[i] = chip
     end
 
-    panel:Hide()
-    IT.panel = panel
-    return panel
+    panel = p
+    IT.panel = p
+    return p
 end
 
 ---------------------------------------------------------------------------------
@@ -863,11 +874,13 @@ local function AcquireNode(i)
     local btn = nodePool[i]
     if btn then return btn end
     btn = CreateFrame("Button", nil, panel)
+    -- Hidden until painted; the pool stores it only once built.
+    btn:Hide()
     btn.border = btn:CreateTexture(nil, "BACKGROUND")
     btn.border:SetAllPoints()
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     KE:ApplyIconZoom(btn.icon, 0.3)
-    btn.rank = btn:CreateFontString(nil, "OVERLAY")
+    btn.rank = btn:CreateFontString(nil, "OVERLAY", TEXT_TEMPLATE)
     btn.choice = btn:CreateTexture(nil, "OVERLAY")
     btn.choice:SetTexture(CHOICE_TEX)
     btn.choice:SetPoint("CENTER", btn, "RIGHT", 0, 0)
