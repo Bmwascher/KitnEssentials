@@ -41,7 +41,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, y
         UpdateAllWidgetStates()
     end)
 
-    card1:AddLabel("Replaces Blizzard's loot window with a compact one-row-per-item list at a fixed position. Item names are quality-colored. Turning this OFF requires a /reload to restore Blizzard's window.")
+    card1:AddLabel("Replaces Blizzard's loot window with a compact one-row-per-item list. Item names are quality-colored. Turning this off asks for a /reload to restore Blizzard's window.")
 
     -- A disabled module shows only this card: its switch and description.
     if db.Enabled == false then

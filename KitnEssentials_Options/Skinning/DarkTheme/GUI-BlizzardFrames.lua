@@ -834,9 +834,9 @@ end, {
         -- Picker stands down under ElvUI too and says so on its own card, so a
         -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-            card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
+            card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning,|r so KitnEssentials leaves those windows alone. Your settings are kept and apply again if you turn ElvUI off.")
         elseif KE.Skins and KE.Skins.PadStandDown and KE.Skins.PadStandDown() then
-            card:AddNote("|cffffd100The Gamepad interface style is on.|r KitnEssentials leaves Blizzard's windows, fonts and menus unskinned in that style so the controller's own navigation is not disturbed. Your settings are kept and take effect after a /reload in the mouse and keyboard style.")
+            card:AddNote("|cffffd100The Gamepad interface style is on.|r KitnEssentials leaves Blizzard's windows, fonts and menus unskinned in that style, so the controller's own navigation keeps working. Your settings are kept and apply after a /reload in the mouse and keyboard style.")
         elseif GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesElements"] then
             card:AddLabel("Skins Blizzard's windows to match the theme. The Frame Skins tab picks the " ..
                 "windows and drops out of the tab row while this is off. Fonts and Elements have " ..
