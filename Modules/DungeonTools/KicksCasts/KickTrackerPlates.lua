@@ -7,10 +7,11 @@
 -- Plain values drive every Lua decision. Meter totals and raid marker
 -- indexes only ever reach SetMinMaxValues and SetValue on hidden status bars
 -- (gates) whose fill edges move clips over the icons; nothing is read back
--- from a gate, clip, icon or plate, and no geometry is measured. Each element
--- of a row hangs from the end of the one before it: a pair of bars, a
--- standard and a reverse fill fed the same values, ends one slot on while the
--- element shows and where it starts once it is hidden, so the row closes up.
+-- from a gate, clip, icon or plate (outside the DEBUG_KTP traces), and no
+-- geometry is measured. Each element of a row hangs from the end of the one
+-- before it: a pair of bars, a standard and a reverse fill fed the same
+-- values, ends one slot on while the element shows and where it starts once
+-- it is hidden, so the row closes up.
 
 ---@class KE
 local KE = select(2, ...)
@@ -741,22 +742,25 @@ end
 
 local function DebugLanes(where, unit, rail)
     KE:Print("[KTP] " .. where .. " " .. tostring(unit) .. " lanes=" .. #rail.lanes .. " kickers=" .. #P.kickers ..
-        " railShown=" .. tostring(rail:IsShown()) .. " railVisible=" .. tostring(rail:IsVisible()) ..
-        " level=" .. rail:GetFrameStrata() .. "/" .. rail:GetFrameLevel())
+        " railShown=" .. dbgval(rail:IsShown()) .. " railVisible=" .. dbgval(rail:IsVisible()) ..
+        " level=" .. dbgval(rail:GetFrameStrata()) .. "/" .. dbgval(rail:GetFrameLevel()))
     for i = 1, #rail.lanes do
         local lane, k = rail.lanes[i], P.kickers[i]
         local lo, hi = lane.gate:GetMinMaxValues()
         local okPoint, _, rel = pcall(lane.icon.GetPoint, lane.icon, 1)
+        local onFill = not okPoint and "error" or issecretvalue(rel) and "<secret>" or tostring(rel == lane.fill)
+        local okAlpha, alpha = pcall(lane.icon.GetEffectiveAlpha, lane.icon)
         local live = lane.guid and P.live[lane.guid]
         KE:Print("[KTP]   lane " .. i .. " guid=" .. dbgguid(lane.guid) .. " kicker=" .. dbgguid(k and k.guid) ..
             " rank=" .. dbgval(lane.rank) .. " marker=" .. dbgval(k and k.marker) ..
             " range=" .. dbgval(lo) .. ".." .. dbgval(hi) .. " value=" .. dbgval(lane.gate:GetValue()) ..
-            " onFill=" .. tostring(okPoint and rel == lane.fill))
+            " onFill=" .. onFill)
         local start, duration = lane.icon.cd:GetCooldownTimes()
-        KE:Print("[KTP]   lane " .. i .. " clip=" .. tostring(lane.clip:IsShown()) .. "/" .. tostring(lane.clip:IsVisible()) ..
-            " icon=" .. tostring(lane.icon:IsShown()) .. "/" .. tostring(lane.icon:IsVisible()) ..
-            " alpha=" .. dbgval(lane.icon:GetEffectiveAlpha()) ..
-            " levels=" .. lane.clip:GetFrameLevel() .. "," .. lane.clipB:GetFrameLevel() .. "," .. lane.icon:GetFrameLevel() ..
+        KE:Print("[KTP]   lane " .. i .. " clip=" .. dbgval(lane.clip:IsShown()) .. "/" .. dbgval(lane.clip:IsVisible()) ..
+            " icon=" .. dbgval(lane.icon:IsShown()) .. "/" .. dbgval(lane.icon:IsVisible()) ..
+            " alpha=" .. (okAlpha and dbgval(alpha) or "error") ..
+            " levels=" .. dbgval(lane.clip:GetFrameLevel()) .. "," .. dbgval(lane.clipB:GetFrameLevel()) .. "," ..
+            dbgval(lane.icon:GetFrameLevel()) ..
             " art=" .. dbgval(lane.icon.art:GetTexture()) .. " cd=" .. dbgval(start) .. "+" .. dbgval(duration) ..
             " count=" .. tostring(lane.cCur ~= nil) .. "/" .. tostring(lane.cBase ~= nil) ..
             " live=" .. tostring(live ~= nil) .. "/" .. tostring(live and live.unit))
@@ -952,7 +956,7 @@ local function LayoutRow(unit)
         local kinds = ""
         for i = 1, #list do kinds = kinds .. list[i].kind .. " " end
         KE:Print("[KTP] LayoutRow " .. unit .. " list=" .. kinds .. "anchor=" ..
-            (anchor and tostring(anchor:GetDebugName()) or "none") .. " gap=" .. KT.db.PlateBarGap)
+            (anchor and dbgval(anchor:GetDebugName()) or "none") .. " gap=" .. KT.db.PlateBarGap)
     end
     if not anchor then return end
     PlaceHead(row.head, anchor)
