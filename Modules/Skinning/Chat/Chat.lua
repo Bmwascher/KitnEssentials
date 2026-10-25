@@ -527,9 +527,9 @@ end
 -- Edit mode
 ------------------------------------------------------------------------
 
--- Every chat window and its tab, the dock and the chat alert stack can be
--- moved onto the panel after it is placed, and which window sits in the panel
--- can change later, so all of them are declared (KE:IsUnsafeAnchor).
+-- Every chat window and its tab, the dock, the chat alert stack and the link
+-- popup can be moved onto the panel after it is placed, and which window sits
+-- in the panel can change later, so all of them are declared (KE:IsUnsafeAnchor).
 ---@type Frame[]
 local panelFollowers = {}
 
@@ -548,6 +548,8 @@ local function PanelFollowers()
     if docker then panelFollowers[#panelFollowers + 1] = docker end
     local alerts = _G.ChatAlertFrame
     if alerts then panelFollowers[#panelFollowers + 1] = alerts end
+    local urlPopup = _G.KE_ChatURLPopup
+    if urlPopup then panelFollowers[#panelFollowers + 1] = urlPopup end
     return panelFollowers
 end
 
