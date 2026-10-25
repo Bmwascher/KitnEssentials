@@ -339,3 +339,17 @@ describe("KE:SnapCenter element threshold boundary", function()
         assert.is_nil(atDistance(13))
     end)
 end)
+
+describe("KE:SnapCenter converted cap", function()
+    local KE
+    setup(function() KE = L.loadGlobals() end)
+
+    -- An own-scale drag snaps in units twice as fine, so its cap of 12 screen
+    -- units is 24 here. Without the field, 20 stays unsnapped at spacing 64.
+    it("scales the cap by the context's thresholdScale", function()
+        local c = ctx(64)
+        c.thresholdScale = 2
+        assert.equals(0, KE:SnapCenter(20, 0, c))
+        assert.equals(25, KE:SnapCenter(25, 0, c))
+    end)
+end)

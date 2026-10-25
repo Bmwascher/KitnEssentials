@@ -1601,7 +1601,7 @@ end
 ---@param y number
 ---@param context table? { enabled, spacing, originX, originY, candidatesX,
 ---       candidatesY, edgeLeft, edgeCenterX, edgeRight, edgeBottom,
----       edgeCenterY, edgeTop }
+---       edgeCenterY, edgeTop, thresholdScale }
 ---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY
@@ -1617,7 +1617,8 @@ function KE:SnapCenter(x, y, context, suppressed)
     local spacing = tonumber(context.spacing)
     if not spacing or spacing <= 0 then return x, y, false, false, nil, nil end
 
-    local threshold = math_min(spacing / 2, SNAP_THRESHOLD_CAP)
+    -- An own-scale drag snaps in the frame's units; its cap is converted with it.
+    local threshold = math_min(spacing / 2, SNAP_THRESHOLD_CAP * (tonumber(context.thresholdScale) or 1))
 
     local snappedX, onCenterX, guideX = SnapAxis(
         x, tonumber(context.originX) or 0, spacing, threshold,
@@ -2235,6 +2236,7 @@ local function NoteAnchorWait(frame, rootMissing, posConfig, Config, SetParent, 
     wait.posConfig, wait.config = posConfig, Config
     wait.setParent, wait.followers = SetParent, followers
     wait.name = Config.ParentFrame
+    wait.fromPoint, wait.toPoint = posConfig.AnchorFrom or "CENTER", posConfig.AnchorTo or "CENTER"
 end
 
 function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
@@ -2270,23 +2272,23 @@ local function NamesUnder(name, root)
 end
 
 -- Whether the frame still sits where its missed placement left it: one point,
--- on UIParent, with the saved pair. Offsets are not compared, because the pixel
--- snap shifts them. Any other answer means another path placed it since, such
--- as Combat Texts seating an attached display, and that placement wins.
-local function StillOnFallback(frame, posConfig)
+-- on UIParent, with the pair that placement used, not the saved one, which can
+-- change with no placement. Offsets are not compared, because the pixel snap
+-- shifts them. Any other answer means another path placed it since, such as
+-- Combat Texts seating an attached display, and that placement wins.
+local function StillOnFallback(frame, wait)
     if frame:GetNumPoints() ~= 1 then return false end
     local point, relativeTo, relativePoint = frame:GetPoint(1)
     if issecretvalue(point) or issecretvalue(relativeTo) or issecretvalue(relativePoint) then
         return false
     end
-    return relativeTo == UIParent and point == (posConfig.AnchorFrom or "CENTER")
-        and relativePoint == (posConfig.AnchorTo or "CENTER")
+    return relativeTo == UIParent and point == wait.fromPoint and relativePoint == wait.toPoint
 end
 
 local function ReplaceWaiting(frame, root)
     local wait = anchorWaits[frame]
     if not (wait and wait.waiting and NamesUnder(wait.name, root)) then return end
-    if not StillOnFallback(frame, wait.posConfig) then
+    if not StillOnFallback(frame, wait) then
         wait.waiting = false
         return
     end

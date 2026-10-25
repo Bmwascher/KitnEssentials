@@ -45,6 +45,7 @@ describe("edit mode own-scale drag", function()
         assert.same({
             spacing = 16, originX = 480, originY = 270,
             candidatesX = { 5, 10 }, candidatesY = { 2.5 },
+            thresholdScale = 0.5,
         }, context)
     end)
 

@@ -47,30 +47,33 @@ describe("late anchor targets", function()
         local other, seat = region(), region()
         _G.KE_SpecOtherTarget = other
         local rows = {
-            { name = "waiting", frame = placed() },
+            { name = "waiting", frame = placed(), onTarget = true },
             { name = "moved to another anchor type", frame = placed(),
               thenPlace = { anchorFrameType = "UIPARENT" }, want = _G.UIParent },
             { name = "moved onto a frame that exists", frame = placed(),
               thenPlace = { anchorFrameType = "SELECTFRAME", ParentFrame = "KE_SpecOtherTarget" }, want = other },
             { name = "seated by another path", frame = placed(), thenSeat = seat, want = seat },
+            { name = "saved pair edited with no placement", frame = placed(), onTarget = true,
+              pos = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 }, thenEdit = "TOP" },
         }
         for _, row in ipairs(rows) do
-            KE:ApplyFramePosition(row.frame, pos, onLate)
+            local rowPos = row.pos or pos
+            KE:ApplyFramePosition(row.frame, rowPos, onLate)
             assert.equal(_G.UIParent, row.frame.anchor, row.name .. ": a missing root falls back to the screen")
-            if row.thenPlace then KE:ApplyFramePosition(row.frame, pos, row.thenPlace) end
+            if row.thenPlace then KE:ApplyFramePosition(row.frame, rowPos, row.thenPlace) end
             if row.thenSeat then
                 row.frame:ClearAllPoints()
                 row.frame:SetPoint("TOP", row.thenSeat, "BOTTOM", 0, 0)
             end
+            if row.thenEdit then rowPos.AnchorFrom, rowPos.AnchorTo = row.thenEdit, row.thenEdit end
         end
 
         local target = region()
         _G.KE_SpecLateTarget = target
         KE:AnnounceAnchorTarget("KE_SpecLateTarget")
 
-        rows[1].want = target
         for _, row in ipairs(rows) do
-            assert.equal(row.want, row.frame.anchor, row.name)
+            assert.equal(row.onTarget and target or row.want, row.frame.anchor, row.name)
         end
     end)
 end)

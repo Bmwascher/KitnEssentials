@@ -750,7 +750,7 @@ function KE:GetSideDecorationInset(size, gap, hostSize) end
 ---@param y number
 ---@param context table? { enabled, spacing, originX, originY, candidatesX,
 ---       candidatesY, edgeLeft, edgeCenterX, edgeRight, edgeBottom,
----       edgeCenterY, edgeTop }
+---       edgeCenterY, edgeTop, thresholdScale }
 ---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY

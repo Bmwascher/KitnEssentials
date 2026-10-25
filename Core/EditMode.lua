@@ -53,6 +53,7 @@ local TOOL_HEIGHT = 330
 local RESTORE_ROW = 28
 
 local PROTECTED_DRAG = "Cannot drag this element: its position is protected. Use the nudge arrows instead."
+local UNREADABLE_SCALE_DRAG = "Cannot drag this element: its scale cannot be read. Use the nudge arrows instead."
 
 -- Center-guide diagnosis. Set true, /reload, drag through the center, read the
 -- log. It prints only inside a band around the origin and only when the center
@@ -187,8 +188,10 @@ local function DragUnitRatios(ownScale, uiParent, target, parent)
 end
 EditMode._DragUnitRatios = DragUnitRatios
 
--- Moves a drag's snap lattice and magnets from UIParent units into the frame's.
+-- Moves a drag's snap lattice, magnets and capture cap from UIParent units into
+-- the frame's.
 local function ScaleSnapContext(context, unitRatio)
+    context.thresholdScale = unitRatio
     context.spacing = context.spacing * unitRatio
     context.originX = context.originX * unitRatio
     context.originY = context.originY * unitRatio
@@ -203,10 +206,10 @@ end
 EditMode._ScaleSnapContext = ScaleSnapContext
 
 -- The cursor in the dragged frame's own units; UIParent units at ratio 1.
-local function DragCursor(unitRatio)
-    local scale = UIParent:GetEffectiveScale()
+-- uiScale is UIParent's effective scale, read and checked at drag start.
+local function DragCursor(uiScale, unitRatio)
     local x, y = GetCursorPosition()
-    return x / scale * unitRatio, y / scale * unitRatio
+    return x / uiScale * unitRatio, y / uiScale * unitRatio
 end
 
 local function AddCoordinate(list, seen, value)
@@ -701,8 +704,8 @@ end
 -- Alt, trigger a refresh, hold it again and still get a snap on release.
 --
 -- Bookkeeping goes on the overlay and NOT on the returned table. That table is
--- handed to the module's setter, a setter may keep it, and anything extra on it
--- would end up in saved variables and travel with exported profiles.
+-- the overlay's own and is rewritten on every update; the commit hands the
+-- setter a copy of its four fields, because a setter may keep what it is given.
 function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
                                       context, anchorFrom, anchorTo, dragParent)
     -- The version check lives HERE rather than in the callers, and that is what
@@ -764,8 +767,12 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
         local beforeX, beforeY = targetFrame:GetLeft(), targetFrame:GetBottom()
         KE:SnapFrameToPixels(targetFrame)
         local afterX, afterY = targetFrame:GetLeft(), targetFrame:GetBottom()
-        if guideX and beforeX and afterX then guideX = guideX + afterX - beforeX end
-        if guideY and beforeY and afterY then guideY = guideY + afterY - beforeY end
+        -- SecretWhenAnchoringSecret, like the rect reads above.
+        if not (issecretvalue(beforeX) or issecretvalue(beforeY)
+            or issecretvalue(afterX) or issecretvalue(afterY)) then
+            if guideX and beforeX and afterX then guideX = guideX + afterX - beforeX end
+            if guideY and beforeY and afterY then guideY = guideY + afterY - beforeY end
+        end
     end
 
     if DEBUG_GUIDES then
@@ -782,12 +789,12 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
     overlay.snapVersion = context.version
     overlay.snapUsedElement = (guideX ~= nil) or (guideY ~= nil)
 
-    local pos = {
-        AnchorFrom = anchorFrom,
-        AnchorTo = anchorTo,
-        XOffset = offsetX,
-        YOffset = offsetY,
-    }
+    local pos = overlay.dragScratch
+    if not pos then
+        pos = {}
+        overlay.dragScratch = pos
+    end
+    pos.AnchorFrom, pos.AnchorTo, pos.XOffset, pos.YOffset = anchorFrom, anchorTo, offsetX, offsetY
     overlay.draggedPos = pos
 
     self:SetCenterGuides(onCenterX, onCenterY)
@@ -838,6 +845,11 @@ function EditMode:SetupDragHandlers(overlay)
     ---@type string
     local dragAnchorTo = nil
     local dragParent = nil
+    local dragUIScale = 1
+
+    -- Assigned below. Attached at drag start and detached wherever a drag ends
+    -- (OnDragStop, EditMode:CancelDrag), so an idle box runs no OnUpdate.
+    local DragUpdate
 
     overlay:SetScript("OnDragStart", function(self)
         if InCombatLockdown() then return end
@@ -877,10 +889,13 @@ function EditMode:SetupDragHandlers(overlay)
             (element.getParentFrame and element.getParentFrame()) or UIParent)
         local unitRatio, parentRatio = DragUnitRatios(element.ownScale, UIParent,
             targetFrame, dragParent)
-        if not unitRatio then
-            KE:Print(PROTECTED_DRAG)
+        -- Read once: a UI scale change cancels the drag (Core/EditModeGuides.lua).
+        local uiScale = UIParent:GetEffectiveScale()
+        if not unitRatio or not UsableScale(uiScale) then
+            KE:Print(UNREADABLE_SCALE_DRAG)
             return
         end
+        dragUIScale = uiScale
         self.dragAnchor = dragParent
         -- Overlays are pooled and outlive the drag, and the retire path does
         -- not touch these, so they are cleared next to the position they
@@ -889,7 +904,7 @@ function EditMode:SetupDragHandlers(overlay)
         self.draggedPos = nil
         self.snapVersion, self.snapUsedElement = nil, nil
 
-        startX, startY = DragCursor(unitRatio)
+        startX, startY = DragCursor(dragUIScale, unitRatio)
 
         frameStartX = left + width / 2
         frameStartY = bottom + height / 2
@@ -920,6 +935,7 @@ function EditMode:SetupDragHandlers(overlay)
         if unitRatio ~= 1 then ScaleSnapContext(snapContext, unitRatio) end
 
         self.isDragging = true
+        self:SetScript("OnUpdate", DragUpdate)
         didDrag = true
 
         -- The drag owns the read-out from here. Selecting makes the boxes
@@ -935,6 +951,7 @@ function EditMode:SetupDragHandlers(overlay)
     overlay:SetScript("OnDragStop", function(self)
         if not self.isDragging then return end
         self.isDragging = false
+        self:SetScript("OnUpdate", nil)
         self:SetAlpha(1)
         EditMode:HideCenterGuides()
         EditMode:HideElementSnapGuides()
@@ -970,7 +987,7 @@ function EditMode:SetupDragHandlers(overlay)
             -- The one place the commit reads the cursor. Nothing has
             -- re-anchored the frame, so the drag-start refusal is still what
             -- proves this geometry readable.
-            local curX, curY = DragCursor(snapContext.unitRatio)
+            local curX, curY = DragCursor(dragUIScale, snapContext.unitRatio)
 
             newPos = EditMode:ResolveDragPosition(self, targetFrame,
                 frameStartX + (curX - startX), frameStartY + (curY - startY),
@@ -983,7 +1000,14 @@ function EditMode:SetupDragHandlers(overlay)
             self.draggedPos = nil
         end
 
-        element.setPosition(newPos)
+        -- A copy: newPos is the overlay's own table, which the next drag
+        -- rewrites, and setters keep the table they are handed.
+        element.setPosition({
+            AnchorFrom = newPos.AnchorFrom,
+            AnchorTo = newPos.AnchorTo,
+            XOffset = newPos.XOffset,
+            YOffset = newPos.YOffset,
+        })
         -- The boxes and the tooltip showed the proposal. Reread what the setter
         -- stored, which a setter may have adjusted.
         EditMode:UpdateNudgeFrameInfo()
@@ -1004,7 +1028,7 @@ function EditMode:SetupDragHandlers(overlay)
     end)
 
     -- Update position while dragging
-    overlay:SetScript("OnUpdate", function(self)
+    DragUpdate = function(self)
         if not self.isDragging then return end
 
         local element = self.element
@@ -1013,14 +1037,14 @@ function EditMode:SetupDragHandlers(overlay)
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
-        local curX, curY = DragCursor(snapContext.unitRatio)
+        local curX, curY = DragCursor(dragUIScale, snapContext.unitRatio)
 
         EditMode:ResolveDragPosition(self, targetFrame,
             frameStartX + (curX - startX), frameStartY + (curY - startY),
             snapContext, dragAnchorFrom, dragAnchorTo, dragParent)
 
         EditMode:UpdateOverlayPosition(self)
-    end)
+    end
 
     -- Mouseover stuff
     overlay:SetScript("OnEnter", function(self)
@@ -1136,6 +1160,7 @@ end
 function EditMode:CancelDrag(overlay)
     if not overlay or not overlay.isDragging then return end
     overlay.isDragging = false
+    overlay:SetScript("OnUpdate", nil)
     overlay:SetAlpha(1)
     self:HideCenterGuides()
     self:HideElementSnapGuides()
