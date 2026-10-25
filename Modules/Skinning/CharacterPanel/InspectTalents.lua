@@ -1274,6 +1274,10 @@ local function ResetWindowState()
     CancelStatsRetry()
     wipe(stats)
     statsShown, statTries = false, 0
+    -- The header reads these; the reopened window's waiting panel must not
+    -- show the last player.
+    playerName, specName, specIcon, theirSpecRaw = nil, nil, nil, nil
+    heroSub, heroName, heroIcon = nil, nil, nil
 end
 
 -- Reads run only on the window's own data (its show and its own inspect
@@ -1356,6 +1360,8 @@ function IT:OnInspectShow()
     local db = DB()
     wanted = db ~= nil and db.InspectTalentsAutoOpen ~= false
     foreign = false
+    -- The name comes from the window's own unit, not the inspect data.
+    ReadIdentity(_G.InspectFrame and _G.InspectFrame.unit)
     -- The arrow, and the waiting state when requested, show at once.
     Apply()
     ScheduleRead()
@@ -1412,4 +1418,14 @@ function IT:RequestStats()
         ReadStats(frame and frame.unit)
     end
     Apply()
+end
+
+-- The profile refresh calls this on a switch, copy, reset or import, with
+-- no new inspect reply: re-derive what the settings change from the stored
+-- read. Open Automatically applies at the next window opening.
+function IT:ApplySettings()
+    if not self:IsEnabled() then return end
+    local db = DB()
+    ReadYours(db ~= nil and db.InspectTalentsCompare ~= false)
+    self:RequestStats()
 end
