@@ -763,6 +763,19 @@ local function DebugLanes(where, unit, rail)
     end
 end
 
+-- A gate fed before the game has drawn its lane at the new layout keeps a
+-- stale fill, so each layout feeds the rail again a frame later.
+local function RefeedAfterLayout(rail)
+    rail.seq = rail.seq + 1
+    local seq, gen, activation, unit = rail.seq, P.gen, KT.activationID, rail.plate
+    C_Timer.After(0, function()
+        if KT.activationID ~= activation or P.gen ~= gen or rail.seq ~= seq or rail.plate ~= unit then return end
+        local index, marked = KT.RaidMarkOf(unit)
+        if marked then FeedRail(rail, index) end
+        if DEBUG_KTP then DebugLanes("RefeedAfterLayout marked=" .. tostring(marked), unit, rail) end
+    end)
+end
+
 -- Lanes at the slot plus their rank; nothing follows the rail.
 local function AnchorRail(rail, from, fromPoint, offset, leftward)
     local point = leftward and "RIGHT" or "LEFT"
@@ -783,6 +796,7 @@ local function AnchorRail(rail, from, fromPoint, offset, leftward)
         end
     end
     if DEBUG_KTP then DebugLanes("AnchorRail", rail.plate, rail) end
+    RefeedAfterLayout(rail)
     return from, fromPoint, offset
 end
 
@@ -1476,14 +1490,6 @@ function KT:RailsPlate(unit)
     FeedRail(rail, index)
     if DEBUG_KTP then DebugLanes(made and "RailsPlate new" or "RailsPlate again", unit, rail) end
     self:LayoutPlate(unit)
-    rail.seq = rail.seq + 1
-    local seq, gen, activation = rail.seq, P.gen, self.activationID
-    C_Timer.After(0, function()
-        if self.activationID ~= activation or P.gen ~= gen or rail.seq ~= seq or rail.plate ~= unit then return end
-        local again, stillMarked = KT.RaidMarkOf(unit)
-        if stillMarked then FeedRail(rail, again) end
-        if DEBUG_KTP then DebugLanes("RailsPlate refeed marked=" .. tostring(stillMarked), unit, rail) end
-    end)
 end
 
 -- Every lane repainted: a live icon placed or gone, a cooldown changed.
