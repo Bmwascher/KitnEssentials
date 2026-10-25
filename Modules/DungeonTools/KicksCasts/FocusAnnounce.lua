@@ -33,7 +33,7 @@ FA.MARKER_CHANGED = "KitnEssentials_FocusMarkerChanged"
 local MDT_HEAD = "!~MDT2~"
 local MESSAGE_MAX = 255  -- one addon message; a longer text would need a multi-part send
 
--- The eight markers' English names, as Focus Marker sends them.
+-- The eight markers' English names, which older announce lines carry.
 local NAME_INDEX = {
     star = 1, circle = 2, diamond = 3, triangle = 4,
     moon = 5, square = 6, cross = 7, skull = 8,
@@ -108,7 +108,7 @@ function FA.MDTMarker(value)
     return value
 end
 
--- The fields MDT's own sender builds. A request carries no marker.
+-- The fields an MDTFocusMark receiver reads. A request carries no marker.
 function FA.MDTPayload(kind, fullName, name, class, marker)
     local payload = { kind = kind, senderFullName = fullName, senderName = name, senderClass = class }
     if kind ~= "stateRequest" then payload.marker = marker end
