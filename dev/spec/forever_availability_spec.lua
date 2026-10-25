@@ -41,6 +41,23 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "CopyAnything",     want = true },
             { load = "baseline",            seed = BASELINE,             id = "SlashCommands",    want = true },
             { load = "baseline",            seed = BASELINE,             id = "SecondaryStats",   want = true },
+            -- Combat: eight modules, the Status Texts row and the Cursor tabs
+            -- but Dispel are admitted; Combat Res and the other Status Texts
+            -- are not.
+            { load = "baseline",            seed = BASELINE,             id = "CombatTimer",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CombatTexts",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "Cursor",           want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CursorGeneral",    want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CursorTaunt",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CombatCross",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "RangeChecker",     want = true },
+            { load = "baseline",            seed = BASELINE,             id = "FocusCastbar",     want = true },
+            { load = "baseline",            seed = BASELINE,             id = "StatusTexts",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "PlayerAbsorbs",    want = true },
+            { load = "baseline",            seed = BASELINE,             id = "PetStatusText",    want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CursorDispel",     want = false },
+            { load = "baseline",            seed = BASELINE,             id = "CombatRes",        want = false },
+            { load = "baseline",            seed = BASELINE,             id = "HealerMana",       want = false },
             { load = "baseline",            seed = BASELINE,             id = "GreatVaultAlert",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "PIMacroBuilder",   want = false },
             { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
@@ -98,14 +115,14 @@ describe("Forever availability: refresh and previews", function()
                 HidePreview = function() end,
             }
             _G.KitnEssentials = {
-                IterateModules = function() return pairs({ CombatTimer = module }) end,
-                GetModule = function(_, name) return name == "CombatTimer" and module or nil end,
+                IterateModules = function() return pairs({ CombatRes = module }) end,
+                GetModule = function(_, name) return name == "CombatRes" and module or nil end,
                 EnableModule = function(_, name) calls[#calls + 1] = "enable " .. name end,
                 DisableModule = function(_, name) calls[#calls + 1] = "disable " .. name end,
             }
             helpers.loadModule("Core/ProfileManager.lua", KE)
             KE.ProfileManager:RefreshAllModules()
-            KE.PreviewManager:ShowModules({ "CombatTimer" })
+            KE.PreviewManager:ShowModules({ "CombatRes" })
             KE.PreviewManager:ShowSectionPreviews("combat_section")
             assert.same({ "rebind" }, calls, row.name)
         end

@@ -111,6 +111,21 @@ local FOREVER_ALLOWED = {
     CopyAnything = true,
     SlashCommands = true,
     SecondaryStats = true,
+    -- Combat: Combat Timer, Combat Texts, Cursor Effects with its Cursor and
+    -- Taunt tabs, Player Crosshair, Range Display, Focus Castbar, and the
+    -- Status Texts row with Pet Status and Player Absorbs. The Dispel tab,
+    -- Class Tools, Combat Res and the other Status Texts stay withheld.
+    CombatTimer = true,
+    CombatTexts = true,
+    Cursor = true,
+    CursorGeneral = true,
+    CursorTaunt = true,
+    CombatCross = true,
+    RangeChecker = true,
+    FocusCastbar = true,
+    StatusTexts = true,
+    PlayerAbsorbs = true,
+    PetStatusText = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
