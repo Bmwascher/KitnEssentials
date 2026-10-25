@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.23
+
+### Aura Tracking
+
+- External Tracker and Movement Buffs: a new Caster Name card with Class
+  Color, Name Color, Show Realm, Name Size, Name Position, X and Y offsets
+  and Name Width; names now show by default, centered on each icon
+- Hide My Own Name puts buffs you, your pet or your totems cast in their own
+  block with no name; on by default
+- Hide Buffs You Cast Yourself hides only your own casts again, so
+  teammates' externals show
+
+---
+
 ## v4.14.22
 
 ### General
