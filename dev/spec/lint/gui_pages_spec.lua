@@ -122,16 +122,6 @@ local ALLOWED = {
     },
     L5 = {
         -- Phase 16 moves the description above the module-off return.
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-HealerMana.lua"] = { phase = "16" }, -- description behind an enable test
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-PetStatusText.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-PlayerAbsorbs.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-PotionReady.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-DeathNotifications.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersCfg.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersNameplates.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-GroupFinderPanel.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-LFGQuickCreate.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/DungeonTools/KeystoneHelper/GUI-LFGReminder.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/QoL/Automation/GUI-Automation.lua"] = { phase = "16" }, -- description behind an enable test
         ["KitnEssentials_Options/QoL/Automation/GUI-CombatLogger.lua"] = { phase = "16" }, -- return before description
         ["KitnEssentials_Options/QoL/GroupTools/GUI-RaidNotifications.lua"] = { phase = "16" }, -- return before description

@@ -58,13 +58,13 @@ GUIFrame:RegisterContent("PotionReady", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("Shows a Potion Ready text while a combat potion is in your bags and off cooldown. " ..
         "Can be limited to instances or to combat, and hidden on a healing spec.")
+
+    yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     local ticked = db.AttachToCombatTexts == true
     -- The real attachment, not the saved box: with Combat Texts off the text

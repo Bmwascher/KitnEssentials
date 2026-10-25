@@ -53,15 +53,13 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("Announces on screen when a party or raid member dies, and when your focus target " ..
         "dies, with a spoken reminder in combat if you want one. On in dungeons by default; raids " ..
         "are opt-in on the Show In card.")
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Activation Context

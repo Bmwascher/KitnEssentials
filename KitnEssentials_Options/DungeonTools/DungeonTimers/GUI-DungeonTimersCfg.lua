@@ -407,8 +407,8 @@ local function RebuildIfWidthChanges(scrollChild)
 end
 
 -- Header card shared by every tab of the host page: module toggle +
--- reload prompt. collapse=true (module off) makes the host render the
--- lone header bar and skip the tab strip entirely.
+-- reload prompt. collapse=true (module off) makes the host show this card
+-- alone and skip the tab strip entirely.
 function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
     for _, block in pairs(providerRows) do block:Hide() end
     if providerSummaryRow then providerSummaryRow:Hide() end
@@ -436,16 +436,16 @@ function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
         ApplyModuleState(checked)
         KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
     end)
+    card:AddLabel("Hand-tuned timers and reminder sounds for each season's dungeon bosses. Set how they look " ..
+        "on the Bars, Texts and Nameplates tabs.\n\n" ..
+        "Needs |cffffd100BigWigs|r and |cffffd100LittleWigs|r. In BigWigs Timeline settings, show BigWigs " ..
+        "enhanced timers as BigWigs bars. Blizzard's timeline display can stay off.")
     if db.Enabled == false then
         -- Also covers arriving here already-disabled (e.g. a profile
         -- switch landing on a profile with the module off).
         HideAllPreviews()
         return card:GetNextOffset(), true
     end
-    card:AddLabel("Hand-tuned timers and reminder sounds for each season's dungeon bosses. Set how they look " ..
-        "on the Bars, Texts and Nameplates tabs.\n\n" ..
-        "Needs |cffffd100BigWigs|r and |cffffd100LittleWigs|r. In BigWigs Timeline settings, show BigWigs " ..
-        "enhanced timers as BigWigs bars. Blizzard's timeline display can stay off.")
     if DT and DT._GetProviderSetupNotice and DT._ProviderSetupCueKeys then
         AddProviderSection(card, DT)
         DT._providerSetupHeaderNotice = NotifyProviderSetupRow

@@ -55,13 +55,13 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return card1:GetNextOffset() end
-
     card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat. Also prompts the group leader once their own listing fills. With Show Role on, the popup also shows the role you were accepted as, in the Role Icon Style set on the Group Finder card under Skinning > Blizzard Frames.\n\n" ..
         "With Party Teleports on, it also pops up when a party member uses a dungeon teleport, if their " ..
         "addons share it (KitnEssentials with this on, or |cffffd100Mythic+ Tweaks|r). Your own dungeon " ..
         "teleports are shared with your party the same way.")
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return card1:GetNextOffset() end
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local scale = GUIFrame:CreateSlider(row1, "Scale", {

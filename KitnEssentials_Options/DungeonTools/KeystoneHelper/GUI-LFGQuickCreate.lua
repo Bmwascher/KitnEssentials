@@ -52,10 +52,10 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return card1:GetNextOffset() end
-
     card1:AddLabel("Adds a row of season-dungeon buttons to the Group Finder's create form. One click lists a group for that dungeon using the Default Playstyle below. Your own keystone's dungeon glows gold with its key level; party members' keys glow blue.")
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled ~= true then return card1:GetNextOffset() end
 
     -- Both switches share one row; they are short labels and the card read
     -- sparse with a line each.

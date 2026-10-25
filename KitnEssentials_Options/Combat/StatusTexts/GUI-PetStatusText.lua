@@ -55,14 +55,14 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("|cffffd100For Hunters, Warlocks, Death Knights and Mages.|r Shows a warning text " ..
         "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
         "its own text and color below.")
+
+    yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     -- The real attachment, not the saved box: with Combat Texts off the text
     -- stands alone and needs its own position and font.

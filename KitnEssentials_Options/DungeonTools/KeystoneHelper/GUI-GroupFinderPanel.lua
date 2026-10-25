@@ -41,9 +41,6 @@ GUIFrame:RegisterContent("GroupFinderPanel", function(scrollChild, yOffset)
         if GFP and GFP.Refresh then GFP:Refresh() end
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return card1:GetNextOffset() end
-
     -- Measured AFTER the label, not before: the label grows the card, so an
     -- offset read ahead of it puts the next card on top of this one.
     card1:AddLabel("Adds a panel beside the Group Finder while you browse Mythic+ groups: dungeon toggles, role filters and a minimum leader score, with this week's affixes and your weekly run count. It appears with the Mythic+ search and hides the rest of the time. The filters are Blizzard's own, so turning this module off clears them. Steps aside automatically if Premade Groups Filter is installed.")

@@ -113,10 +113,11 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
         end
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
+    card1:AddLabel("Watches enemy nameplates in 5-player dungeons and predicts when trash mobs will re-cast key abilities, shown as countdown alerts and on-plate cooldown icons.")
+
+    -- A disabled module shows only this card: its switch and description.
     if db.Enabled == false then return card1:GetNextOffset() end
 
-    card1:AddLabel("Watches enemy nameplates in 5-player dungeons and predicts when trash mobs will re-cast key abilities, shown as countdown alerts and on-plate cooldown icons.")
     yOffset = card1:GetNextOffset()
 
     local manager = GUIFrame:CreateWidgetStateManager()

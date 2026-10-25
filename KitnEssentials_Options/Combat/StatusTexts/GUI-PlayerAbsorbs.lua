@@ -69,17 +69,15 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("Shows the shield on you and any heal absorb as numbers by your player frame, " ..
         "with an optional icon." ..
         "\n\nThe game keeps absorb amounts secret from addons, so abbreviated numbers fade on a " ..
         "timer after the last change instead of clearing the instant a shield drops; full numbers " ..
         "clear at once. The Abbreviate setting below picks which.")
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings
