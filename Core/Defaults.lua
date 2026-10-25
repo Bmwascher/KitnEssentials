@@ -864,7 +864,6 @@ local Defaults = {
             FontSize = 12,
             FontOutline = "OUTLINE",
             Swipe = false,
-            ShowTooltips = false,
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 0, YOffset = 59 },

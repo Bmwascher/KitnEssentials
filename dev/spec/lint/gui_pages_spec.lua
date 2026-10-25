@@ -66,7 +66,6 @@ local PHASES = { ["16"] = true, ["17"] = true, ["18"] = true, ["none until appro
 local ALLOWED = {
     L1 = {
         -- Phase 18 handles these special pages.
-        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-CCTracker.lua|Display"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Affixes & Key — Colors"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Deaths — Colors"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Forces — Colors"] = { phase = "18" },
@@ -80,7 +79,6 @@ local ALLOWED = {
     L3 = {
         -- Phase 18 handles these special pages.
         ["KitnEssentials_Options/Combat/ClassTools/GUI-DoTTracker.lua"] = { phase = "18" }, -- content after Font
-        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-CCTracker.lua"] = { phase = "18" }, -- content after Font
         ["KitnEssentials_Options/Skinning/GUI-CharacterPanel.lua"] = { phase = "18" }, -- content after Font
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua"] = { phase = "18" }, -- content after Position
         -- Interrupt Tracker page: edited only with an approval that names the item.

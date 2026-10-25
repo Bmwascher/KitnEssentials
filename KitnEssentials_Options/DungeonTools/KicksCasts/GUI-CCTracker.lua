@@ -51,6 +51,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     end
 
     manager:SetCondition("name", function() return db.NameEnabled ~= false end)
+    manager:SetCondition("timer", function() return db.ShowTimer ~= false end)
 
     ----------------------------------------------------------------
     -- Card 1: Enable
@@ -67,7 +68,6 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
         "Freezing Trap and more): the spell's icon, the time left on it, and the enemy's name.")
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
@@ -201,85 +201,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Display
-    ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
-    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    row3a:AddWidget(GUIFrame:CreateSlider(row3a, "Icon Size", {
-        min = 16, max = 80, step = 1,
-        value = db.IconSize or 40,
-        callback = function(value)
-            db.IconSize = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    row3a:AddWidget(GUIFrame:CreateSlider(row3a, "Row Spacing", {
-        min = 0, max = 20, step = 1,
-        value = db.RowSpacing or 2,
-        callback = function(value)
-            db.RowSpacing = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    card3:AddRow(row3a, Theme.rowHeight)
-
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemy CCs Shown", {
-        min = 1, max = Rules.TRACKED_ENEMIES, step = 1,
-        value = Rules.NormalizeShown(db.ShownRows),
-        callback = function(value)
-            db.ShownRows = value
-            if CC then CC:ApplyShown() end
-        end,
-    }), 0.5)
-    row3b:AddWidget(GUIFrame:CreateDropdown(row3b, "Grow Direction", {
-        options = GROW_OPTIONS,
-        value = db.GrowDirection or "DOWN",
-        callback = function(key)
-            db.GrowDirection = key
-            ApplySettings()
-        end,
-    }), 0.5)
-    card3:AddRow(row3b, Theme.rowHeight)
-    card3:AddNote("Up to " .. Rules.TRACKED_ENEMIES .. " enemies are tracked. This many show at once; " ..
-        "the rest come into view as shown CCs end. The stack stays on screen: lower it near a screen edge.")
-    yOffset = card3:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 4: Time Left
-    ----------------------------------------------------------------
-    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Time Left",
-        db = db,
-        dbKeys = {
-            fontFace    = "TimerFontFace",
-            fontOutline = "TimerFontOutline",
-        },
-        fontSizes = {
-            { label = "Font Size", dbKey = "TimerFontSize", default = 20 },
-        },
-        extraSlider = {
-            label = "Show Decimals Below (sec)",
-            dbKey = "DecimalThreshold",
-            min = 0, max = 10, step = 1,
-            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
-        },
-        fontSizeRange = { 8, 40 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-
-    -- The card's own last row is added with no trailing gap, so re-open the
-    -- spacing before appending to it.
-    fontCard:AddSpacing(Theme.paddingSmall)
-    fontCard:AddNote("The font and outline are also used for the enemy name.")
-    yOffset = fontCard:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 5: Enemy Name
+    -- Card 3: Enemy Name
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Enemy Name", yOffset)
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
@@ -327,7 +249,71 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Position
+    -- Card 4: Display Settings
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    row3a:AddWidget(GUIFrame:CreateSlider(row3a, "Icon Size", {
+        min = 16, max = 80, step = 1,
+        value = db.IconSize or 40,
+        callback = function(value)
+            db.IconSize = value
+            ApplySettings()
+        end,
+    }), 0.5)
+    row3a:AddWidget(GUIFrame:CreateSlider(row3a, "Row Spacing", {
+        min = 0, max = 20, step = 1,
+        value = db.RowSpacing or 2,
+        callback = function(value)
+            db.RowSpacing = value
+            ApplySettings()
+        end,
+    }), 0.5)
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemy CCs Shown", {
+        min = 1, max = Rules.TRACKED_ENEMIES, step = 1,
+        value = Rules.NormalizeShown(db.ShownRows),
+        callback = function(value)
+            db.ShownRows = value
+            if CC then CC:ApplyShown() end
+        end,
+    }), 0.5)
+    row3b:AddWidget(GUIFrame:CreateDropdown(row3b, "Grow Direction", {
+        options = GROW_OPTIONS,
+        value = db.GrowDirection or "DOWN",
+        callback = function(key)
+            db.GrowDirection = key
+            ApplySettings()
+        end,
+    }), 0.5)
+    card3:AddRow(row3b, Theme.rowHeight)
+
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    row3c:AddWidget(GUIFrame:CreateCheckbox(row3c, "Show Time Left", {
+        value = db.ShowTimer ~= false,
+        callback = function(checked)
+            db.ShowTimer = checked
+            manager:UpdateAll(true)
+            ApplySettings()
+        end,
+    }), 0.5)
+    row3c:AddWidget(GUIFrame:CreateCheckbox(row3c, "Swipe", {
+        value = db.Swipe ~= false,
+        tooltip = "Sweeps the icon as the crowd control runs out. Shows on live rows only, not on the preview.",
+        callback = function(checked)
+            db.Swipe = checked
+            ApplySettings()
+        end,
+    }), 0.5)
+    card3:AddRow(row3c, Theme.rowHeight)
+    card3:AddNote("Up to " .. Rules.TRACKED_ENEMIES .. " enemies are tracked. This many show at once; " ..
+        "the rest come into view as shown CCs end. The stack stays on screen: lower it near a screen edge.")
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Position Settings
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
@@ -349,6 +335,53 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     end
     manager:Register(posCard, "all")
     yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Time Left Font
+    ----------------------------------------------------------------
+    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Time Left Font",
+        db = db,
+        dbKeys = {
+            fontFace    = "TimerFontFace",
+            fontOutline = "TimerFontOutline",
+        },
+        fontSizes = {
+            { label = "Font Size", dbKey = "TimerFontSize", default = 20 },
+        },
+        extraSlider = {
+            label = "Show Decimals Below (sec)",
+            dbKey = "DecimalThreshold",
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        },
+        fontSizeRange = { 8, 40 },
+        onChangeCallback = ApplySettings,
+    })
+    -- Font and Outline also style the enemy name, so only the timer's own
+    -- size, decimals and color follow Show Time Left. The legacy font card
+    -- returns face, outline, the size slider, then the extra slider.
+    if fontWidgets then
+        manager:Register(fontWidgets[3], "timer")
+        manager:Register(fontWidgets[4], "timer")
+    end
+
+    -- The card's own last row is added with no trailing gap, so re-open the
+    -- spacing before appending to it.
+    fontCard:AddSpacing(Theme.paddingSmall)
+    local rowColor = GUIFrame:CreateRow(fontCard.content, Theme.rowHeight)
+    local timerColor = GUIFrame:CreateColorPicker(rowColor, "Time Left Color", {
+        color = db.TimerTextColor,
+        callback = function(r, g, b, a)
+            db.TimerTextColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    rowColor:AddWidget(timerColor, 0.5)
+    manager:Register(timerColor, "timer")
+    fontCard:AddRow(rowColor, Theme.rowHeight)
+    fontCard:AddNote("The font and outline are also used for the enemy name.")
+    yOffset = fontCard:GetNextOffset()
 
     manager:UpdateAll(true)
     return yOffset
