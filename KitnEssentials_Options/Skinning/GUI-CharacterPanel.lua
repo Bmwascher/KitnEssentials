@@ -76,7 +76,8 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             "can be drawn on the inspect window."
         or "Adds to the character panel a decimal item level, your Mythic+ score, a faction " ..
             "indicator, upgrade track letters on each slot, warnings for missing enchants and gems, and " ..
-            "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window.")
+            "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window, " ..
+            "with an optional talent tree beside it.")
 
     local row1Insp = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local inspectCheck = GUIFrame:CreateCheckbox(row1Insp, "Show on Inspect Frame", {
@@ -444,6 +445,88 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     card5:AddRow(row5c, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
+    end
+
+    if Admitted("InspectTalents") then
+    ----------------------------------------------------------------
+    -- Card: Inspect Talents (its own module, cascaded from this one)
+    ----------------------------------------------------------------
+    local function TalentsModule()
+        return KitnEssentials and KitnEssentials:GetModule("InspectTalents", true)
+    end
+
+    manager:SetCondition("talentsOn", function() return db.InspectTalentsEnabled ~= false end)
+
+    local cardIT = GUIFrame:CreateCard(scrollChild, "Inspect Talents", yOffset)
+    manager:Register(cardIT, "all")
+
+    local rowIT1 = GUIFrame:CreateRow(cardIT.content, Theme.rowHeight)
+    local talentsCheck = GUIFrame:CreateCheckbox(rowIT1, "Show Talents Beside Inspect", {
+        value = db.InspectTalentsEnabled ~= false,
+        callback = function(checked)
+            db.InspectTalentsEnabled = checked
+            if CP then CP:ApplyInspectTalentsState() end
+            RefreshStates()
+        end,
+        tooltip = "Adds a panel beside the inspect window with the player's class, hero and spec talents.",
+    })
+    rowIT1:AddWidget(talentsCheck, 1)
+    manager:Register(talentsCheck, "all")
+    cardIT:AddRow(rowIT1, Theme.rowHeight)
+
+    local rowIT2 = GUIFrame:CreateRow(cardIT.content, Theme.rowHeight)
+    local autoCheck = GUIFrame:CreateCheckbox(rowIT2, "Open Automatically", {
+        value = db.InspectTalentsAutoOpen ~= false,
+        callback = function(checked)
+            db.InspectTalentsAutoOpen = checked
+            local IT = TalentsModule()
+            if IT then IT:Refresh() end
+        end,
+        tooltip = "Opens the talent panel on every inspect. Off: click the arrow under the inspect window's close button.",
+    })
+    rowIT2:AddWidget(autoCheck, 1 / 3)
+    manager:Register(autoCheck, "talentsOn")
+
+    local statsCheck = GUIFrame:CreateCheckbox(rowIT2, "Show Gear Stats", {
+        value = db.InspectTalentsShowStats ~= false,
+        callback = function(checked)
+            db.InspectTalentsShowStats = checked
+            local IT = TalentsModule()
+            if IT then IT:RequestStats() end
+        end,
+        tooltip = "Shows the player's haste, mastery, crit and versatility rating, summed from their gear.",
+    })
+    rowIT2:AddWidget(statsCheck, 1 / 3)
+    manager:Register(statsCheck, "talentsOn")
+
+    local compareCheck = GUIFrame:CreateCheckbox(rowIT2, "Compare With My Talents", {
+        value = db.InspectTalentsCompare ~= false,
+        callback = function(checked)
+            db.InspectTalentsCompare = checked
+            local IT = TalentsModule()
+            if IT then IT:RequestCompare() end
+        end,
+        tooltip = "Marks talents where their build differs from yours. Only when you share their spec.",
+    })
+    rowIT2:AddWidget(compareCheck, 1 / 3)
+    manager:Register(compareCheck, "talentsOn")
+    cardIT:AddRow(rowIT2, Theme.rowHeight)
+
+    local rowIT3 = GUIFrame:CreateRow(cardIT.content, Theme.rowHeightLast)
+    local nodeSizeSlider = GUIFrame:CreateSlider(rowIT3, "Node Size", {
+        min = 16, max = 32, step = 1,
+        value = db.InspectTalentsNodeSize,
+        callback = function(val)
+            db.InspectTalentsNodeSize = val
+            local IT = TalentsModule()
+            if IT then IT:Refresh() end
+        end,
+    })
+    rowIT3:AddWidget(nodeSizeSlider, 1)
+    manager:Register(nodeSizeSlider, "talentsOn")
+    cardIT:AddRow(rowIT3, Theme.rowHeightLast, 0)
+
+    yOffset = cardIT:GetNextOffset()
     end
 
     ----------------------------------------------------------------
