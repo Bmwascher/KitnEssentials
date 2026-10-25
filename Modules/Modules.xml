@@ -102,6 +102,7 @@
     <Script file="QoL\Automation\VantusRune.lua" />
     <Script file="Skinning\CharacterPanel\CharacterPanel.lua" />
     <Script file="Skinning\CharacterPanel\InspectPanel.lua" />
+    <Script file="Skinning\CharacterPanel\InspectTalents.lua" />
     <Script file="Core\CVars\PanelScaleRegistry.lua" />
     <Script file="Core\CVars\PanelScale.lua" />
     <Script file="Core\CVars\MapScale.lua" />
