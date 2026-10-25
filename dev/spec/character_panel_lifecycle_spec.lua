@@ -171,11 +171,12 @@ describe("Character panel: refusals while the module is disabled", function()
         }) do
             CP[name] = function() end
         end
-        -- OnDisable ends by cascading a Disable to InspectPanel. The addon shim
-        -- hands back a bare table for ANY module name, so this is not optional:
-        -- without it the call errors before the assertion, whether or not the
-        -- latch line is present.
+        -- OnDisable ends by cascading a Disable to InspectPanel and to
+        -- InspectTalents. The addon shim hands back a bare table for ANY module
+        -- name, so these are not optional: without them the call errors before
+        -- the assertion, whether or not the latch line is present.
         _G.KitnEssentials:GetModule("InspectPanel").Disable = function() end
+        _G.KitnEssentials:GetModule("InspectTalents").Disable = function() end
         CP:OnDisable()
         assert.is_nil(CP._decimalIlvlHooked)
     end)

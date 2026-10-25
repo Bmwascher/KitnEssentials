@@ -1251,6 +1251,7 @@ function CP:ApplySettings()
     -- rather than in OnEnable because the profile manager re-applies settings
     -- without re-enabling, and this key can differ between profiles.
     self:ApplyInspectPanelState()
+    self:ApplyInspectTalentsState()
 
     -- Live apply/restore of the character-panel background hide. Idempotent;
     -- lets the GUI toggle take effect immediately instead of only on the next
@@ -4233,6 +4234,20 @@ function CP:ApplyInspectPanelState()
     end
 end
 
+local INSPECT_TALENTS = Admitted("InspectTalents")
+
+-- The talent panel is its own AceModule and loads on retail only, so it is
+-- absent on Forever.
+function CP:ApplyInspectTalentsState()
+    local talents = KitnEssentials:GetModule("InspectTalents", true)
+    if not talents then return end
+    if self:IsEnabled() and INSPECT_TALENTS and self.db.InspectTalentsEnabled ~= false then
+        talents:Enable()
+    else
+        talents:Disable()
+    end
+end
+
 function CP:OnEnable()
     if not self.db.Enabled then return end
 
@@ -4295,4 +4310,6 @@ function CP:OnDisable()
     -- event frame, ilvl FontString) and teardown.
     local insp = KitnEssentials:GetModule("InspectPanel", true)
     if insp then insp:Disable() end
+    local talents = KitnEssentials:GetModule("InspectTalents", true)
+    if talents then talents:Disable() end
 end

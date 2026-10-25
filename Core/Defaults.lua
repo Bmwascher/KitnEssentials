@@ -1426,6 +1426,12 @@ local Defaults = {
             -- Per-slot detail overlays (no ElvUI conflict)
             -- Inspect-side overlays (own toggle; the module is a separate AceModule)
             InspectPanelEnabled  = true,
+            -- Talent panel beside the inspect window (retail, own module)
+            InspectTalentsEnabled    = true,
+            InspectTalentsAutoOpen   = true,
+            InspectTalentsShowStats  = true,
+            InspectTalentsCompare    = true,
+            InspectTalentsNodeSize   = 22,
             ShowSlotItemLevel    = true,
             ShowEnchantNames     = true,
             -- short = abbreviated stats, verbose = stats spelled out, full = the tooltip's own text
