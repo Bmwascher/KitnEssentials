@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.24
+
+### Settings
+
+- Card titles follow one standard across about 30 pages (for example Focus
+  Castbar's "Display Settings" and "Sound"; Home's "Preferences")
+- A switched-off module keeps its top card and description instead of a
+  bare title bar
+- Switches and checkboxes inside a page no longer print a chat line; the
+  title-bar switch still prints On/Off
+- The UI Widgets Edit Mode box reads "Top Center Container"
+
+---
+
 ## v4.14.23
 
 ### Aura Tracking
