@@ -746,7 +746,7 @@ function KE:GetSideDecorationInset(size, gap, hostSize) end
 
 --- One snap decision shared by the live drag and the commit, so the two can
 --- only ever agree. Pure: the caller supplies the grid in `context`.
----@param x number desired center, absolute UIParent coordinates
+---@param x number desired center, in the caller's units (UIParent's, or the frame's own for an own-scale drag)
 ---@param y number
 ---@param context table? { enabled, spacing, originX, originY, candidatesX,
 ---       candidatesY, edgeLeft, edgeCenterX, edgeRight, edgeBottom,

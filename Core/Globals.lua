@@ -1597,7 +1597,7 @@ end
 -- no-update fallback and the stop reconciliation can only stay in step by
 -- sharing this, and a version that read the database or a frame could not be
 -- shared at all.
----@param x number desired center, absolute UIParent coordinates
+---@param x number desired center, in the caller's units (UIParent's, or the frame's own for an own-scale drag)
 ---@param y number
 ---@param context table? { enabled, spacing, originX, originY, candidatesX,
 ---       candidatesY, edgeLeft, edgeCenterX, edgeRight, edgeBottom,
@@ -1743,7 +1743,7 @@ end
 -- position setter routes through that helper, which nothing enforces and at
 -- least one setter does not do. So the residual this bounds is 0.5 UI unit,
 -- and the pipeline as a whole has no bound this function can promise.
----@param centerX number desired center, absolute UIParent coordinates
+---@param centerX number desired center, in the same units as the parent rect
 ---@param centerY number
 ---@param anchorFrom string
 ---@param anchorTo string
