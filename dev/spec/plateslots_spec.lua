@@ -310,4 +310,31 @@ describe("plate build runner", function()
         assert.same({ 1, 1, 2 }, built)
         assert.equals(2, runner:Built())
     end)
+
+    it("reports a walk as running while it waits for the next frame, not once done or stopped by a raise", function()
+        -- How the runner is left, then what Running answers. The raised row
+        -- is the one a step count below the target reads as still walking.
+        local states = {
+            { "waiting for the next frame", function()
+                local runner = newRunner({ [1] = true })
+                runner:Run(2)
+                return runner
+            end, true },
+            { "walked to its target", function()
+                local runner = newRunner({})
+                runner:Run(2)
+                return runner
+            end, false },
+            { "stopped by a step that raised", function()
+                local runner = NewBuildRunner({ buildSlot = function() error("refused") end })
+                pcall(runner.Run, runner, 2)
+                return runner
+            end, false },
+        }
+        for _, row in ipairs(states) do
+            local runner = row[2]()
+            assert.equals(row[3], runner:Running(), row[1])
+            queue = {}
+        end
+    end)
 end)

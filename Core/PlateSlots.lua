@@ -349,3 +349,9 @@ end
 function Runner:Built()
     return self.step
 end
+
+-- True from Run until the walk reaches its target, a step raises or Cancel,
+-- the frames it waits between included.
+function Runner:Running()
+    return self.running
+end
