@@ -259,14 +259,16 @@ end
 function CL:CheckArenaLogging()
     local db = self.db
     local shouldLog, label = false, nil
+    -- Not every client has the war game check; a missing one reads as none.
+    local wargame = IsWargame and IsWargame()
 
-    if C_PvP.IsRatedArena() and not IsArenaSkirmish() and not C_PvP.IsSoloShuffle() and not IsWargame() then
+    if C_PvP.IsRatedArena() and not IsArenaSkirmish() and not C_PvP.IsSoloShuffle() and not wargame then
         shouldLog, label = db.PvPRatedArena, "a rated arena"
     elseif IsArenaSkirmish() then
         shouldLog, label = db.PvPArenaSkirmish, "an arena skirmish"
     elseif C_PvP.IsSoloShuffle() then
         shouldLog, label = db.PvPSoloShuffle, "Solo Shuffle"
-    elseif IsWargame() then
+    elseif wargame then
         shouldLog, label = db.PvPWarGame, "a war game"
     end
 
