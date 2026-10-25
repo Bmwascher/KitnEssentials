@@ -376,6 +376,12 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 
+-- Features a client can withhold, asked at each Setup. A headless load
+-- without the availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+
 -- Skip Cinematics --
 
 local cinematicFrame
@@ -1198,6 +1204,7 @@ local function OnRoleCheckShow()
 end
 
 local function SetupAutoRoleCheck()
+    if not Admitted("AutomationGroupFinder") then return end
     if not AU.db.AutoRoleCheck then return end
     if AU._lfdHooked then return end
     if not LFDRoleCheckPopup then return end
@@ -1251,6 +1258,7 @@ local function ShouldQuickSignUp(masterOn, dependentOn, inLockdown, isSelected,
 end
 
 local function SetupAutoQueueConfirm()
+    if not Admitted("AutomationGroupFinder") then return end
     if AU._lfgHooked then return end
     AU._lfgHooked = true
 
@@ -1382,6 +1390,7 @@ local function PlantActivityID(resultID)
 end
 
 local function SetupPersistSignupNote()
+    if not Admitted("AutomationGroupFinder") then return end
     if not AU._noteHooked then
         AU._noteHooked = true
         hooksecurefunc("LFGListSearchPanel_SelectResult", function(_, resultID)
@@ -1409,6 +1418,7 @@ end
 -- Auto Slot Keystone --
 
 local function SetupAutoSlotKeystone()
+    if not Admitted("AutomationSlotKeystone") then return end
     if AU._keystoneHooked then return end
     AU._keystoneHooked = true
 
@@ -1730,6 +1740,7 @@ local AUTO_ROLL_MAP = { PASS = 0, NEED = 1 }
 
 local lootRollFrame
 local function SetupAutoPassHousing()
+    if not Admitted("AutomationHousingRoll") then return end
     if lootRollFrame then return end
     lootRollFrame = CreateFrame("Frame")
     lootRollFrame:RegisterEvent("START_LOOT_ROLL")
@@ -1832,7 +1843,7 @@ local function SetupAutoQuests()
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
         if IsQuestModifierHeld() then return end
-        local voidcoresOn = AU.db.AutoVoidcoresGold == true
+        local voidcoresOn = AU.db.AutoVoidcoresGold == true and Admitted("AutomationVoidcores")
 
         if event == "QUEST_DETAIL" or event == "QUEST_PROGRESS"
             or event == "QUEST_COMPLETE" then
@@ -1903,6 +1914,7 @@ end
 -- all three quests: renaming the key would reset saved settings.
 local voidcoresFrame
 local function SetupAutoVoidcores()
+    if not Admitted("AutomationVoidcores") then return end
     if not AU.db.AutoVoidcoresGold then return end
     if voidcoresFrame then return end
     voidcoresFrame = CreateFrame("Frame")
@@ -2010,6 +2022,7 @@ end
 
 local petDuelFrame
 local function SetupAutoDeclinePetBattles()
+    if not Admitted("AutomationPetBattleDuels") then return end
     if petDuelFrame then return end
     petDuelFrame = CreateFrame("Frame")
     petDuelFrame:RegisterEvent("PET_BATTLE_PVP_DUEL_REQUESTED")
@@ -2554,6 +2567,7 @@ local function LandingPageButtonAllowed(mm)
 end
 
 local function SetupOmniumButton()
+    if not Admitted("CharacterPanelWindowButtons") then return end
     local mm = _G.ExpansionLandingPageMinimapButton
     -- Lifecycle, not the key: this function is reached from OnDisable through
     -- TeardownPorts, and creating the button there can re-register

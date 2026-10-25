@@ -24,6 +24,7 @@
 --     one state a preference key cannot reach.
 --   * The Voidcore quest guard on the general quest handler.
 --   * Hide Zone Text's event bookkeeping, which gives back only what it took.
+--   * The retail-only features, refused where their ids are withheld.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -48,7 +49,7 @@ end
 -- creators) touch. Every field returned is per-fixture -- nothing is shared
 -- across fixtures, so busted's per-file _G reuse never leaks state between
 -- cases.
-local function newFixture()
+local function newFixture(opts)
     local ledger = {}
     local timers = {}
     local hookedGlobals = {}
@@ -236,6 +237,13 @@ local function newFixture()
             return self:AreAuraIdentitiesHidden()
         end,
     }
+    -- opts.withheld: the ids this load refuses, as a baseline load refuses
+    -- the options its client lacks.
+    opts = opts or {}
+    if opts.withheld then
+        local withheld = opts.withheld
+        KE.IsFeatureAvailable = function(_, id) return not withheld[id] end
+    end
     -- The module indexes C_SpecializationInfo at file scope.
     mock.installSpecInfo()
     helpers.loadModule("Modules/QoL/Automation/Automation.lua", KE)
@@ -1926,6 +1934,100 @@ describe("Automation Hide Zone Text event bookkeeping", function()
             assert.same(case.unregister, unregister, case.name)
             assert.same(case.register, register, case.name)
             assert.same(case.after, after, case.name)
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Retail-only features. Each refuses at the top of its Setup function when its
+-- id is withheld, so a saved or imported flag starts nothing; every caller of
+-- those functions is driven. The admitting load runs too, so a gate that never
+-- opens fails here as well.
+---------------------------------------------------------------------------------
+describe("Automation retail-only features", function()
+    local function registered(fx, event)
+        for _, entry in ipairs(fx.ledger) do
+            if entry.method == "RegisterEvent" and entry[1] == event then return true end
+        end
+        return false
+    end
+
+    local function upvalueOf(fx, setupName, name)
+        return findUpvalue(findUpvalue(fx.AU.ApplySettings, setupName), name)
+    end
+
+    local rows = {
+        {
+            id = "AutomationGroupFinder",
+            flags = { AutoRoleCheck = true, AutoQueueConfirm = true, PersistSignupNote = true },
+            seen = function(fx)
+                return {
+                    entryHook = fx.hookedGlobals.LFGListSearchEntry_OnClick ~= nil,
+                    selectHook = fx.hookedGlobals.LFGListSearchPanel_SelectResult ~= nil,
+                    roleCheck = _G.LFDRoleCheckPopup:GetScript("OnShow") ~= nil,
+                    dialog = _G.LFGListApplicationDialog:GetScript("OnShow") ~= nil,
+                }
+            end,
+        },
+        {
+            id = "AutomationSlotKeystone",
+            flags = { AutoSlotKeystone = true },
+            seen = function(fx) return { watcher = registered(fx, "ADDON_LOADED") } end,
+        },
+        {
+            id = "AutomationHousingRoll",
+            flags = { AutoPassHousing = true },
+            seen = function(fx) return { rollFrame = registered(fx, "START_LOOT_ROLL") } end,
+        },
+        {
+            id = "AutomationVoidcores",
+            flags = { AutoVoidcoresGold = true, AutoAcceptQuests = true, QuestModifier = "NONE" },
+            seen = function(fx)
+                local accepts = 0
+                _G.GetQuestID = function() return 98016 end
+                _G.AcceptQuest = function() accepts = accepts + 1 end
+                upvalueOf(fx, "SetupAutoQuests", "questFrame"):Fire("QUEST_DETAIL")
+                return {
+                    frame = upvalueOf(fx, "SetupAutoVoidcores", "voidcoresFrame") ~= nil,
+                    questHeld = accepts == 0,
+                }
+            end,
+        },
+        {
+            id = "AutomationPetBattleDuels",
+            flags = { AutoDeclinePetBattles = true },
+            seen = function(fx) return { duelFrame = registered(fx, "PET_BATTLE_PVP_DUEL_REQUESTED") } end,
+        },
+        {
+            id = "CharacterPanelWindowButtons",
+            flags = { OmniumCharButton = true, VaultCharButton = true },
+            seen = function(fx)
+                return {
+                    omnium = fx.named["KE_OmniumFoilButton"] ~= nil,
+                    vault = fx.named["KE_GreatVaultButton"] ~= nil,
+                    minimapHook = fx.hookedMethods[_G.ExpansionLandingPageMinimapButton] ~= nil,
+                }
+            end,
+        },
+    }
+
+    it("installs each feature where its id is admitted and nothing where it is withheld", function()
+        for _, row in ipairs(rows) do
+            for _, load in ipairs({
+                { name = "admitted", withheld = {},                  want = true },
+                { name = "withheld", withheld = { [row.id] = true }, want = false },
+            }) do
+                local fx = newFixture({ withheld = load.withheld })
+                local AU = fx.AU
+                AU.db = { Enabled = true }
+                for key, value in pairs(row.flags) do AU.db[key] = value end
+                AU:ApplySettings()
+                AU:TeardownPorts()
+                AU:RetrySpawnDeferredButtons()
+                for what, got in pairs(row.seen(fx)) do
+                    assert.equals(load.want, got, row.id .. " " .. load.name .. ": " .. what)
+                end
+            end
         end
     end)
 end)
