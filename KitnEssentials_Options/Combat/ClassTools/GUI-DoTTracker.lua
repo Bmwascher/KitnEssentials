@@ -95,7 +95,7 @@ local function BuildHeader(scrollChild, yOffset)
     local DT = GetModule()
 
     ----------------------------------------------------------------
-    -- Card 1: Enable
+    -- Card: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "DoT Tracker", yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
@@ -158,7 +158,7 @@ GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
     yOffset = cardShow:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Your DoTs
+    -- Card: Your DoTs
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Your DoTs", yOffset)
     card2:AddLabel("Every specialization of the selected class, with the DoTs it applies. " ..
@@ -356,7 +356,7 @@ GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Who Counts
+    -- Card: Who Counts
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Who Counts", yOffset)
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
@@ -402,7 +402,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     manager:SetCondition("attach", function() return db.AttachToCDM == true end)
 
     ----------------------------------------------------------------
-    -- Card 5: Count Text
+    -- Card: Count Text
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Count Text", yOffset)
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
@@ -456,7 +456,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Target Timer
+    -- Card: Target Timer
     ----------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Target Timer", yOffset)
     card6:AddHeaderToggle(db.TimerEnabled ~= false, function(checked)
@@ -503,7 +503,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Display Settings
+    -- Card: Display Settings
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
@@ -626,7 +626,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 8: Position
+    -- Card: Position Settings
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
@@ -670,7 +670,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
     yOffset = fontOffset
 
     ----------------------------------------------------------------
-    -- Card 7: Glow (engine styles)
+    -- Card: Glow (engine styles)
     ----------------------------------------------------------------
     local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow",
@@ -688,7 +688,7 @@ GUIFrame:RegisterContent("DoTTrackerDisplay", function(scrollChild, yOffset)
         speedMax = 1,
         onChangeCallback = ApplySettings,
         -- Pixel and Pulse Border show a row of controls and the sheet styles
-        -- none; the cards below sit at fixed offsets, so the page is rebuilt.
+        -- none, so the page is rebuilt to fit the card's new height.
         onHeightChange = function() C_Timer.After(0, RefreshPage) end,
     })
     manager:Register(glowCard, "all")

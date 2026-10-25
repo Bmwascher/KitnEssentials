@@ -596,7 +596,7 @@ GUIFrame:RegisterContent("CharacterPanelExtras", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 8: Window Buttons (Automation keys, own cascade)
+    -- Card: Window Buttons (Automation keys, own cascade)
     ----------------------------------------------------------------
     local auDB = KE.db and KE.db.profile.Automation
     if auDB and WINDOW_BUTTONS then
@@ -643,7 +643,7 @@ GUIFrame:RegisterContent("CharacterPanelExtras", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 9: Character Skin (Skinning module keys -- own cascade)
+    -- Card: Character Skin (Skinning module keys, own cascade)
     ----------------------------------------------------------------
     local cardCS = GUIFrame:CreateCard(scrollChild, "Character Skin", yOffset)
 
@@ -669,7 +669,7 @@ GUIFrame:RegisterContent("CharacterPanelExtras", function(scrollChild, yOffset)
     yOffset = cardCS:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 10: Compare Header (independent module — own cascade)
+    -- Card: Compare Header (independent module, own cascade)
     ----------------------------------------------------------------
     local chDB = KE.db and KE.db.profile.CompareHeader
     if chDB then
