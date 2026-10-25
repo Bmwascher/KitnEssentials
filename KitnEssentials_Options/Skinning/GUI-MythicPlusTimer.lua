@@ -2,10 +2,9 @@
 -- ║  GUI-MythicPlusTimer.lua                                 ║
 -- ║  GUI: Mythic+ Timer                                      ║
 -- ║  Purpose: Configuration panel for the MythicPlusTimer    ║
--- ║           module. Four tabs: General (the HUD frame),    ║
--- ║           Features (per-element toggles + behavior),     ║
--- ║           Display (all colors, then all fonts),          ║
--- ║           Enemy Overlay (nameplate/tooltip subsystem).   ║
+-- ║           module. Five tabs, one per HUD part: General,  ║
+-- ║           Timer, Forces, Objectives & Deaths and Enemy   ║
+-- ║           Overlay (nameplate/tooltip subsystem).         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -14,8 +13,6 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local pairs = pairs
-
-local activeTab = "General"
 
 local function GetMPT()
     return KitnEssentials and KitnEssentials:GetModule("MythicPlusTimer", true)
@@ -170,74 +167,94 @@ local BOSS_TIME_POSITION_OPTIONS = {
     { key = "START", text = "Left Edge" },
 }
 
--- Forward declarations — one builder per tab.
-local BuildGeneralTab, BuildFeaturesTab, BuildDisplayTab, BuildOverlayTab
+-- Forward declarations, one builder per tab.
+local BuildGeneralTab, BuildTimerTab, BuildForcesTab, BuildObjectivesTab, BuildOverlayTab
 
 ---------------------------------------------------------------------------------
--- Tab 1: General — the HUD frame itself (enable, position, layout, thresholds,
--- timer format, backdrop, QoL).
+-- Tab 1: General: the HUD frame, with the affixes and key line, QoL, size,
+-- position, the default font, backdrop and reset.
 ---------------------------------------------------------------------------------
 
 BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("backdrop", function()
         return db.Enabled ~= false and db.BackdropEnabled == true
     end)
-    manager:SetCondition("threshLabels", function()
-        return db.Enabled ~= false and db.ShowThresholdLabels ~= false
-    end)
-    -- Timer-bar-dependent controls (fill, ticks, state fill): the bar and
-    -- its ticks are hidden while the LINES threshold mode owns the display —
-    -- mirrors the HUD's LinesModeActive predicate.
-    manager:SetCondition("timerBar", function()
-        return db.Enabled ~= false
-            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
-    end)
 
-    local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("MythicPlusTimer", true)
-        if not mod then return end
-        mod.db.Enabled = enabled
-        if enabled then KitnEssentials:EnableModule("MythicPlusTimer")
-        else KitnEssentials:DisableModule("MythicPlusTimer") end
-    end
-
-    -- Card 1: Enable
-    local card1 = GUIFrame:CreateCard(scrollChild, "Mythic+ Timer", yOffset)
-    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
-        db.Enabled = checked
-        ApplyModuleState(checked)
-    end)
-
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
-    card1:AddLabel("A keystone timer laid out as a HUD you style card by card below: the run timer " ..
-        "with its +3, +2 and +1 thresholds, forces, objectives and splits against your best time, " ..
-        "deaths with the time they cost, and the affixes and key level. An overlay can show each " ..
-        "enemy's forces on its nameplate and tooltip.")
-    yOffset = card1:GetNextOffset()
-
-    -- Card 2: Position Settings
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
-        db = db,
-        dbKeys = {
-            selfPoint = "SelfPoint", anchorPoint = "AnchorPoint",
-            xOffset = "XOffset", yOffset = "YOffset", strata = "Strata",
+    -- Affixes & Key (display toggles)
+    local affixCard = GUIFrame:CreateCard(scrollChild, "Affixes & Key", yOffset)
+    manager:Register(affixCard, "all")
+    manager:RegisterGroup(affixCard:AddCheckboxGrid({
+        {
+            label = "Show Affixes",
+            config = {
+                value = db.ShowAffixes ~= false,
+                callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
+            },
         },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then manager:RegisterGroup(posCard.positionWidgets, "all") end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+        {
+            label = "Show Key Level",
+            config = {
+                value = db.ShowKeyLevel ~= false,
+                callback = function(checked) db.ShowKeyLevel = checked; ApplySettings() end,
+            },
+        },
+        {
+            label = "Show Dungeon Name",
+            config = {
+                value = db.ShowDungeonName == true,
+                callback = function(checked) db.ShowDungeonName = checked; ApplySettings() end,
+            },
+        },
+    }), "all")
 
-    -- Card 3: Layout (bar geometry + texture + scale)
-    local layoutCard = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
+    local rowASep = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightSeparator)
+    local sepA = GUIFrame:CreateSeparator(rowASep)
+    rowASep:AddWidget(sepA, 1)
+    manager:Register(sepA, "all")
+    affixCard:AddRow(rowASep, Theme.rowHeightSeparator)
+
+    local rowA2 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
+    local affixModeDrop = GUIFrame:CreateDropdown(rowA2, "Affix Display", {
+        options = { { key = "TEXT", text = "Text" }, { key = "ICON", text = "Icons" } },
+        value = db.AffixMode or "TEXT",
+        callback = function(key) db.AffixMode = key; ApplySettings() end,
+    })
+    rowA2:AddWidget(affixModeDrop, 1 / 3)
+    manager:Register(affixModeDrop, "all")
+    affixCard:AddRow(rowA2, Theme.rowHeightLast, 0)
+    yOffset = affixCard:GetNextOffset()
+
+    -- Quality of Life
+    local qolCard = GUIFrame:CreateCard(scrollChild, "Quality of Life", yOffset)
+    manager:Register(qolCard, "all")
+    local rowQ = GUIFrame:CreateRow(qolCard.content, Theme.rowHeightLast)
+    local keyCheck = GUIFrame:CreateCheckbox(rowQ, "Auto-Insert Keystone", {
+        value = db.AutoInsertKeystone ~= false,
+        callback = function(checked) db.AutoInsertKeystone = checked end,
+    })
+    rowQ:AddWidget(keyCheck, 1 / 3)
+    manager:Register(keyCheck, "all")
+    local trackerCheck = GUIFrame:CreateCheckbox(rowQ, "Hide Blizzard Tracker", {
+        value = db.HideBlizzardTracker ~= false,
+        callback = function(checked)
+            db.HideBlizzardTracker = checked
+            local M = GetMPT()
+            if M and M.ApplyTrackerVisibility then M:ApplyTrackerVisibility() end
+        end,
+    })
+    rowQ:AddWidget(trackerCheck, 1 / 3)
+    manager:Register(trackerCheck, "all")
+    local chatCheck = GUIFrame:CreateCheckbox(rowQ, "Post Boss Splits to Chat", {
+        value = db.ChatOutputSplits == true,
+        callback = function(checked) db.ChatOutputSplits = checked end,
+    })
+    rowQ:AddWidget(chatCheck, 1 / 3)
+    manager:Register(chatCheck, "all")
+    qolCard:AddRow(rowQ, Theme.rowHeightLast, 0)
+    yOffset = qolCard:GetNextOffset()
+
+    -- Display Settings (bar geometry, texture and scale)
+    local layoutCard = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(layoutCard, "all")
     local rowL = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeight)
     local texDrop = GUIFrame:CreateDropdown(rowL, "Bar Texture", {
@@ -282,8 +299,159 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     layoutCard:AddRow(rowL3, Theme.rowHeightLast, 0)
     yOffset = layoutCard:GetNextOffset()
 
-    -- Card 4: Thresholds (+3 / +2 / +1 chest timers — split out of Layout)
-    local threshCard = GUIFrame:CreateCard(scrollChild, "Thresholds (+3 / +2 / +1 Timers)", yOffset)
+    -- Position Settings
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = db,
+        dbKeys = {
+            selfPoint = "SelfPoint", anchorPoint = "AnchorPoint",
+            xOffset = "XOffset", yOffset = "YOffset", strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then manager:RegisterGroup(posCard.positionWidgets, "all") end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "", {
+        title = "Font Settings",
+        note = "Applies to the affix line, key level, and PB text — and any per-section font left unset.",
+    })
+
+    -- Affixes & Key Colors
+    local affixColors = GUIFrame:CreateCard(scrollChild, "Affixes & Key Colors", yOffset)
+    manager:Register(affixColors, "all")
+    AddColorRow(affixColors, db, manager, ApplySettings, {
+        { "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 } },
+        { "Key Level",  "KeyColor",   { 1, 1, 1 } },
+    }, true)
+    yOffset = affixColors:GetNextOffset()
+
+    -- Backdrop
+    local bgCard = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
+    manager:Register(bgCard, "all")
+    local rowB = GUIFrame:CreateRow(bgCard.content, Theme.rowHeight)
+    local bgCheck = GUIFrame:CreateCheckbox(rowB, "Enable Backdrop", {
+        value = db.BackdropEnabled == true,
+        callback = function(checked)
+            db.BackdropEnabled = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowB:AddWidget(bgCheck, 1)
+    manager:Register(bgCheck, "all")
+    bgCard:AddRow(rowB, Theme.rowHeight)
+
+    local rowB2 = GUIFrame:CreateRow(bgCard.content, Theme.rowHeightLast)
+    local bgColor = GUIFrame:CreateColorPicker(rowB2, "Color", {
+        color = db.BackdropColor or { 0, 0, 0 },
+        callback = function(r, g, b) db.BackdropColor = { r, g, b }; ApplySettings() end,
+    })
+    rowB2:AddWidget(bgColor, 0.5)
+    manager:Register(bgColor, "backdrop")
+    local bgOpacity = GUIFrame:CreateSlider(rowB2, "Opacity", {
+        min = 0, max = 1, step = 0.05, value = db.BackdropOpacity or 0.6,
+        callback = function(val) db.BackdropOpacity = val; ApplySettings() end,
+    })
+    rowB2:AddWidget(bgOpacity, 0.5)
+    manager:Register(bgOpacity, "backdrop")
+    bgCard:AddRow(rowB2, Theme.rowHeightLast, 0)
+    yOffset = bgCard:GetNextOffset()
+
+    -- Reset to Defaults (destructive: a full module settings reset).
+    -- The house pattern for a bulk destructive action: red button +
+    -- confirmation prompt + RefreshContent to rebuild the page with the
+    -- regenerated values.
+    local resetCard = GUIFrame:CreateCard(scrollChild, "Reset", yOffset)
+    manager:Register(resetCard, "all")
+    local resetNoteRow = GUIFrame:CreateRow(resetCard.content, 30)
+    local resetNote = GUIFrame:CreateText(resetNoteRow,
+        KE:ColorTextByTheme("Reset to Defaults"),
+        "Restore every Mythic+ Timer setting to its default. Saved PB splits are kept; this cannot be undone.",
+        30, "hide")
+    resetNoteRow:AddWidget(resetNote, 1)
+    manager:Register(resetNote, "all")
+    resetCard:AddRow(resetNoteRow, 30)
+
+    local resetRow = GUIFrame:CreateRow(resetCard.content, Theme.rowHeightLast)
+    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset to Defaults", {
+        height = 26,
+        callback = function()
+            KE:CreatePrompt(
+                "Reset Mythic+ Timer",
+                "Reset every Mythic+ Timer setting (colors, fonts, position, layout, toggles) to default?\n\nSaved PB splits are kept. This cannot be undone.",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    local M = GetMPT()
+                    if M and M.ResetToDefaults then M:ResetToDefaults() end
+                    KE:Print("Mythic+ Timer settings reset to defaults.")
+                    GUIFrame:RefreshContent()
+                end,
+                nil, "Reset", "Cancel")
+        end,
+    })
+    -- Destructive-action red, the house color for a bulk clear.
+    if resetBtn.text then
+        resetBtn.text:SetTextColor(0.9, 0.2, 0.2, 1)
+    end
+    resetRow:AddWidget(resetBtn, 1)
+    manager:Register(resetBtn, "all")
+    resetCard:AddRow(resetRow, Theme.rowHeightLast, 0)
+    yOffset = resetCard:GetNextOffset()
+
+    return yOffset
+end
+
+---------------------------------------------------------------------------------
+-- Tab 2: Timer: the run timer's format, thresholds, fonts and colors.
+---------------------------------------------------------------------------------
+
+BuildTimerTab = function(scrollChild, yOffset, db, manager)
+    manager:SetCondition("threshLabels", function()
+        return db.Enabled ~= false and db.ShowThresholdLabels ~= false
+    end)
+    -- Timer-bar-dependent controls (fill, ticks, state fill): the bar and
+    -- its ticks are hidden while the LINES threshold mode owns the display,
+    -- as the HUD's LinesModeActive predicate has it.
+    manager:SetCondition("timerBar", function()
+        return db.Enabled ~= false
+            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
+    end)
+
+    -- Timer Format
+    local fmtCard = GUIFrame:CreateCard(scrollChild, "Timer Format", yOffset)
+    manager:Register(fmtCard, "all")
+    local rowF = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeightLast)
+    local fmtDrop = GUIFrame:CreateDropdown(rowF, "Timer Format", {
+        options = {
+            { key = "ELAPSED_TOTAL",   text = "Elapsed / Total  (15:00 / 35:00)" },
+            { key = "REMAINING",       text = "Remaining  (20:00)" },
+            { key = "REMAINING_TOTAL", text = "Remaining / Total  (20:00 / 35:00)" },
+            { key = "ELAPSED",         text = "Elapsed  (15:00)" },
+            { key = "ELAPSED_DETAIL",  text = "Elapsed (Remaining/Total)  (21:23 (11:37/33:00))" },
+        },
+        value = db.TimerFormat or "ELAPSED_TOTAL",
+        callback = function(key) db.TimerFormat = key; ApplySettings() end,
+    })
+    rowF:AddWidget(fmtDrop, 0.5)
+    manager:Register(fmtDrop, "all")
+    -- The final completion time ALWAYS shows milliseconds; this toggle adds a
+    -- tenths digit to the live running timer (default off). The db key keeps
+    -- its historical ShowMilliseconds name — no profile migrations.
+    local msCheck = GUIFrame:CreateCheckbox(rowF, "Live Sub-Seconds", {
+        value = db.ShowMilliseconds == true,
+        callback = function(checked) db.ShowMilliseconds = checked; ApplySettings() end,
+    })
+    rowF:AddWidget(msCheck, 0.5)
+    manager:Register(msCheck, "all")
+    fmtCard:AddRow(rowF, Theme.rowHeightLast, 0)
+    yOffset = fmtCard:GetNextOffset()
+
+    -- Thresholds (+3 / +2 / +1 chest timers)
+    local threshCard = GUIFrame:CreateCard(scrollChild, "Thresholds", yOffset)
     manager:Register(threshCard, "all")
     local rowT = GUIFrame:CreateRow(threshCard.content, Theme.rowHeight)
     local threshCheck = GUIFrame:CreateCheckbox(rowT, "Show Threshold Labels", {
@@ -340,146 +508,41 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     threshCard:AddRow(rowTNote, 48, 0)
     yOffset = threshCard:GetNextOffset()
 
-    -- Card 5: Timer Format
-    local fmtCard = GUIFrame:CreateCard(scrollChild, "Timer Format", yOffset)
-    manager:Register(fmtCard, "all")
-    local rowF = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeightLast)
-    local fmtDrop = GUIFrame:CreateDropdown(rowF, "Timer Format", {
-        options = {
-            { key = "ELAPSED_TOTAL",   text = "Elapsed / Total  (15:00 / 35:00)" },
-            { key = "REMAINING",       text = "Remaining  (20:00)" },
-            { key = "REMAINING_TOTAL", text = "Remaining / Total  (20:00 / 35:00)" },
-            { key = "ELAPSED",         text = "Elapsed  (15:00)" },
-            { key = "ELAPSED_DETAIL",  text = "Elapsed (Remaining/Total)  (21:23 (11:37/33:00))" },
-        },
-        value = db.TimerFormat or "ELAPSED_TOTAL",
-        callback = function(key) db.TimerFormat = key; ApplySettings() end,
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Timer", {
+        title = "Timer Font", maxSize = 48,
     })
-    rowF:AddWidget(fmtDrop, 0.5)
-    manager:Register(fmtDrop, "all")
-    -- The final completion time ALWAYS shows milliseconds; this toggle adds a
-    -- tenths digit to the live running timer (default off). The db key keeps
-    -- its historical ShowMilliseconds name — no profile migrations.
-    local msCheck = GUIFrame:CreateCheckbox(rowF, "Live Sub-Seconds", {
-        value = db.ShowMilliseconds == true,
-        callback = function(checked) db.ShowMilliseconds = checked; ApplySettings() end,
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Threshold", {
+        title = "Thresholds Font",
+        group = "threshLabels",
+        note = "The +3/+2/+1 labels and the Text Line race readout.",
     })
-    rowF:AddWidget(msCheck, 0.5)
-    manager:Register(msCheck, "all")
-    fmtCard:AddRow(rowF, Theme.rowHeightLast, 0)
-    yOffset = fmtCard:GetNextOffset()
 
-    -- Card 6: Backdrop
-    local bgCard = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
-    manager:Register(bgCard, "all")
-    local rowB = GUIFrame:CreateRow(bgCard.content, Theme.rowHeight)
-    local bgCheck = GUIFrame:CreateCheckbox(rowB, "Enable Backdrop", {
-        value = db.BackdropEnabled == true,
-        callback = function(checked)
-            db.BackdropEnabled = checked
-            ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
+    -- Timer Colors
+    local timerColors = GUIFrame:CreateCard(scrollChild, "Timer Colors", yOffset)
+    manager:Register(timerColors, "all")
+    AddColorRow(timerColors, db, manager, ApplySettings, {
+        { "Timer (running)",  "TimerColor",        { 1, 1, 1 } },
+        { "Timer (timed)",    "TimerSuccessColor", { 0, 1, 0.14 } },
+        { "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 } },
     })
-    rowB:AddWidget(bgCheck, 1)
-    manager:Register(bgCheck, "all")
-    bgCard:AddRow(rowB, Theme.rowHeight)
-
-    local rowB2 = GUIFrame:CreateRow(bgCard.content, Theme.rowHeightLast)
-    local bgColor = GUIFrame:CreateColorPicker(rowB2, "Color", {
-        color = db.BackdropColor or { 0, 0, 0 },
-        callback = function(r, g, b) db.BackdropColor = { r, g, b }; ApplySettings() end,
-    })
-    rowB2:AddWidget(bgColor, 0.5)
-    manager:Register(bgColor, "backdrop")
-    local bgOpacity = GUIFrame:CreateSlider(rowB2, "Opacity", {
-        min = 0, max = 1, step = 0.05, value = db.BackdropOpacity or 0.6,
-        callback = function(val) db.BackdropOpacity = val; ApplySettings() end,
-    })
-    rowB2:AddWidget(bgOpacity, 0.5)
-    manager:Register(bgOpacity, "backdrop")
-    bgCard:AddRow(rowB2, Theme.rowHeightLast, 0)
-    yOffset = bgCard:GetNextOffset()
-
-    -- Card 7: Quality of Life
-    local qolCard = GUIFrame:CreateCard(scrollChild, "Quality of Life", yOffset)
-    manager:Register(qolCard, "all")
-    local rowQ = GUIFrame:CreateRow(qolCard.content, Theme.rowHeightLast)
-    local keyCheck = GUIFrame:CreateCheckbox(rowQ, "Auto-Insert Keystone", {
-        value = db.AutoInsertKeystone ~= false,
-        callback = function(checked) db.AutoInsertKeystone = checked end,
-    })
-    rowQ:AddWidget(keyCheck, 1 / 3)
-    manager:Register(keyCheck, "all")
-    local trackerCheck = GUIFrame:CreateCheckbox(rowQ, "Hide Blizzard Tracker", {
-        value = db.HideBlizzardTracker ~= false,
-        callback = function(checked)
-            db.HideBlizzardTracker = checked
-            local M = GetMPT()
-            if M and M.ApplyTrackerVisibility then M:ApplyTrackerVisibility() end
-        end,
-    })
-    rowQ:AddWidget(trackerCheck, 1 / 3)
-    manager:Register(trackerCheck, "all")
-    local chatCheck = GUIFrame:CreateCheckbox(rowQ, "Post Boss Splits to Chat", {
-        value = db.ChatOutputSplits == true,
-        callback = function(checked) db.ChatOutputSplits = checked end,
-    })
-    rowQ:AddWidget(chatCheck, 1 / 3)
-    manager:Register(chatCheck, "all")
-    qolCard:AddRow(rowQ, Theme.rowHeightLast, 0)
-    yOffset = qolCard:GetNextOffset()
-
-    -- Card 8: Reset to Defaults (destructive — full module settings reset).
-    -- The house pattern for a bulk destructive action: red button +
-    -- confirmation prompt + RefreshContent to rebuild the page with the
-    -- regenerated values.
-    local resetCard = GUIFrame:CreateCard(scrollChild, "Reset", yOffset)
-    manager:Register(resetCard, "all")
-    local resetNoteRow = GUIFrame:CreateRow(resetCard.content, 30)
-    local resetNote = GUIFrame:CreateText(resetNoteRow,
-        KE:ColorTextByTheme("Reset to Defaults"),
-        "Restore every Mythic+ Timer setting to its default. Saved PB splits are kept; this cannot be undone.",
-        30, "hide")
-    resetNoteRow:AddWidget(resetNote, 1)
-    manager:Register(resetNote, "all")
-    resetCard:AddRow(resetNoteRow, 30)
-
-    local resetRow = GUIFrame:CreateRow(resetCard.content, Theme.rowHeightLast)
-    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset to Defaults", {
-        height = 26,
-        callback = function()
-            KE:CreatePrompt(
-                "Reset Mythic+ Timer",
-                "Reset every Mythic+ Timer setting (colors, fonts, position, layout, toggles) to default?\n\nSaved PB splits are kept. This cannot be undone.",
-                false, nil, false, nil, nil, nil, nil,
-                function()
-                    local M = GetMPT()
-                    if M and M.ResetToDefaults then M:ResetToDefaults() end
-                    KE:Print("Mythic+ Timer settings reset to defaults.")
-                    GUIFrame:RefreshContent()
-                end,
-                nil, "Reset", "Cancel")
-        end,
-    })
-    -- Destructive-action red, the house color for a bulk clear.
-    if resetBtn.text then
-        resetBtn.text:SetTextColor(0.9, 0.2, 0.2, 1)
-    end
-    resetRow:AddWidget(resetBtn, 1)
-    manager:Register(resetBtn, "all")
-    resetCard:AddRow(resetRow, Theme.rowHeightLast, 0)
-    yOffset = resetCard:GetNextOffset()
+    AddColorRow(timerColors, db, manager, ApplySettings, {
+        -- Bar Background stays ungated: it tints BOTH bars' empty tracks
+        -- (ApplySettings re-tints timerBg AND forcesBg), so it stays usable
+        -- while only the timer bar is hidden.
+        { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 },   "timerBar" },
+        { "Bar Background",  "BarBackgroundColor", { 0.031, 0.031, 0.031 } },
+        { "Threshold Ticks", "TickColor",          { 1, 1, 1 },            "timerBar" },
+    }, true)
+    yOffset = timerColors:GetNextOffset()
 
     return yOffset
 end
 
 ---------------------------------------------------------------------------------
--- Tab 2: Features — per-element toggles + behavior (forces, objectives/splits,
--- deaths, affixes & key). Colors/fonts for these live on the Display tab.
+-- Tab 3: Forces: the forces bar and text, with its font and colors.
 ---------------------------------------------------------------------------------
 
-BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
+BuildForcesTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesCustom", function()
         return db.Enabled ~= false and db.ShowForces ~= false and (db.ForcesFormat == "CUSTOM")
     end)
@@ -496,11 +559,16 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesOn", function()
         return db.Enabled ~= false and db.ShowForces ~= false
     end)
-    manager:SetCondition("deathTooltip", function()
-        return db.Enabled ~= false and db.ShowDeathTooltip ~= false
+    manager:SetCondition("forcesBanded", function()
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and db.ShowForcesBar ~= false and db.ForcesBandedColors == true
+    end)
+    manager:SetCondition("pullBar", function()
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and db.ShowForcesBar ~= false and db.ShowPullOverlay ~= false
     end)
 
-    -- Card 1: Forces (toggle + text format + placement + custom tokens)
+    -- Forces (toggle, text format, placement, custom tokens)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
     manager:Register(forcesCard, "all")
     local rowFo1 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
@@ -593,7 +661,80 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     forcesCard:AddRow(fNoteRow, 78, 0)
     yOffset = forcesCard:GetNextOffset()
 
-    -- Card 2: Objectives & Splits (boss list + clear times + PB toggles + fallback)
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Forces", {
+        title = "Forces Font",
+    })
+
+    -- Forces Colors
+    local forcesColors = GUIFrame:CreateCard(scrollChild, "Forces Colors", yOffset)
+    manager:Register(forcesColors, "all")
+    AddColorRow(forcesColors, db, manager, ApplySettings, {
+        -- Bar fill gates on the bar being visible; the text colors survive
+        -- Show Forces Bar off (the % text becomes a stacked row).
+        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 }, "forcesBar" },
+        { "Forces Complete", "ForcesCompleteColor", { 0, 1, 0.14 } },
+        { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
+        { "Pull Estimate",   "PullOverlayColor",    { 0.6, 0.6, 0.6 },    "pullBar" },
+    })
+
+    local rowFcSep = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeightSeparator)
+    local fcSep = GUIFrame:CreateSeparator(rowFcSep)
+    rowFcSep:AddWidget(fcSep, 1)
+    manager:Register(fcSep, "all")
+    forcesColors:AddRow(rowFcSep, Theme.rowHeightSeparator)
+
+    local bandedRow = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeight)
+    local bandedCheck = GUIFrame:CreateCheckbox(bandedRow, "Banded Colors (by % bracket)", {
+        value = db.ForcesBandedColors == true,
+        callback = function(checked)
+            db.ForcesBandedColors = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    bandedRow:AddWidget(bandedCheck, 1)
+    manager:Register(bandedCheck, "forcesBar")
+    forcesColors:AddRow(bandedRow, Theme.rowHeight)
+
+    local BAND_LABELS = { "0-20%", "20-40%", "40-60%", "60-80%", "80-100%" }
+    local function AddBandPicker(row, i, frac)
+        local picker = GUIFrame:CreateColorPicker(row, "Band " .. BAND_LABELS[i], {
+            color = (db.ForcesBandPalette and db.ForcesBandPalette[i]) or { 1, 1, 1 },
+            callback = function(r, g, b)
+                db.ForcesBandPalette = db.ForcesBandPalette or {}
+                db.ForcesBandPalette[i] = { r, g, b }
+                ApplySettings()
+            end,
+        })
+        row:AddWidget(picker, frac)
+        manager:Register(picker, "forcesBanded")
+    end
+
+    local bandRowA = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeight)
+    AddBandPicker(bandRowA, 1, 1 / 3)
+    AddBandPicker(bandRowA, 2, 1 / 3)
+    AddBandPicker(bandRowA, 3, 1 / 3)
+    forcesColors:AddRow(bandRowA, Theme.rowHeight)
+
+    local bandRowB = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeightLast)
+    AddBandPicker(bandRowB, 4, 0.5)
+    AddBandPicker(bandRowB, 5, 0.5)
+    forcesColors:AddRow(bandRowB, Theme.rowHeightLast, 0)
+    yOffset = forcesColors:GetNextOffset()
+
+    return yOffset
+end
+
+---------------------------------------------------------------------------------
+-- Tab 4: Objectives & Deaths: the boss list and splits, the deaths line, and
+-- their fonts and colors.
+---------------------------------------------------------------------------------
+
+BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
+    manager:SetCondition("deathTooltip", function()
+        return db.Enabled ~= false and db.ShowDeathTooltip ~= false
+    end)
+
+    -- Objectives & Splits (boss list, clear times, PB toggles, fallback)
     local objCard = GUIFrame:CreateCard(scrollChild, "Objectives & Splits", yOffset)
     manager:Register(objCard, "all")
     local rowO1 = GUIFrame:CreateRow(objCard.content, Theme.rowHeight)
@@ -663,7 +804,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     objCard:AddRow(rowO3, Theme.rowHeightLast, 0)
     yOffset = objCard:GetNextOffset()
 
-    -- Card 3: Deaths (line + hover log)
+    -- Deaths (line and hover log)
     local deathsCard = GUIFrame:CreateCard(scrollChild, "Deaths", yOffset)
     manager:Register(deathsCard, "all")
     local rowD1 = GUIFrame:CreateRow(deathsCard.content, Theme.rowHeight)
@@ -708,156 +849,15 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     deathsCard:AddRow(dNoteRow, Theme.rowHeightNote, 0)
     yOffset = deathsCard:GetNextOffset()
 
-    -- Card 4: Affixes & Key (display toggles; colors live on the Display tab)
-    local affixCard = GUIFrame:CreateCard(scrollChild, "Affixes & Key", yOffset)
-    manager:Register(affixCard, "all")
-    manager:RegisterGroup(affixCard:AddCheckboxGrid({
-        {
-            label = "Show Affixes",
-            config = {
-                value = db.ShowAffixes ~= false,
-                callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
-            },
-        },
-        {
-            label = "Show Key Level",
-            config = {
-                value = db.ShowKeyLevel ~= false,
-                callback = function(checked) db.ShowKeyLevel = checked; ApplySettings() end,
-            },
-        },
-        {
-            label = "Show Dungeon Name",
-            config = {
-                value = db.ShowDungeonName == true,
-                callback = function(checked) db.ShowDungeonName = checked; ApplySettings() end,
-            },
-        },
-    }), "all")
-
-    local rowASep = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightSeparator)
-    local sepA = GUIFrame:CreateSeparator(rowASep)
-    rowASep:AddWidget(sepA, 1)
-    manager:Register(sepA, "all")
-    affixCard:AddRow(rowASep, Theme.rowHeightSeparator)
-
-    local rowA2 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
-    local affixModeDrop = GUIFrame:CreateDropdown(rowA2, "Affix Display", {
-        options = { { key = "TEXT", text = "Text" }, { key = "ICON", text = "Icons" } },
-        value = db.AffixMode or "TEXT",
-        callback = function(key) db.AffixMode = key; ApplySettings() end,
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Objective", {
+        title = "Objectives Font",
     })
-    rowA2:AddWidget(affixModeDrop, 1 / 3)
-    manager:Register(affixModeDrop, "all")
-    affixCard:AddRow(rowA2, Theme.rowHeightLast, 0)
-    yOffset = affixCard:GetNextOffset()
-
-    return yOffset
-end
-
----------------------------------------------------------------------------------
--- Tab 3: Display — every color picker (per-section cards), then every font
--- card (Default + Timer/Forces/Objectives/Deaths).
----------------------------------------------------------------------------------
-
-BuildDisplayTab = function(scrollChild, yOffset, db, manager)
-    manager:SetCondition("forcesBanded", function()
-        return db.Enabled ~= false and db.ShowForces ~= false
-            and db.ShowForcesBar ~= false and db.ForcesBandedColors == true
-    end)
-    -- Per-tab manager: these groups also exist in BuildGeneralTab /
-    -- BuildFeaturesTab; each tab defines every condition its own widgets use.
-    manager:SetCondition("timerBar", function()
-        return db.Enabled ~= false
-            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
-    end)
-    manager:SetCondition("forcesBar", function()
-        return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
-    end)
-    manager:SetCondition("threshLabels", function()
-        return db.Enabled ~= false and db.ShowThresholdLabels ~= false
-    end)
-    manager:SetCondition("pullBar", function()
-        return db.Enabled ~= false and db.ShowForces ~= false
-            and db.ShowForcesBar ~= false and db.ShowPullOverlay ~= false
-    end)
-
-    -- Card 1: Timer — Colors
-    local timerColors = GUIFrame:CreateCard(scrollChild, "Timer — Colors", yOffset)
-    manager:Register(timerColors, "all")
-    AddColorRow(timerColors, db, manager, ApplySettings, {
-        { "Timer (running)",  "TimerColor",        { 1, 1, 1 } },
-        { "Timer (timed)",    "TimerSuccessColor", { 0, 1, 0.14 } },
-        { "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 } },
-    })
-    AddColorRow(timerColors, db, manager, ApplySettings, {
-        -- Bar Background stays ungated: it tints BOTH bars' empty tracks
-        -- (ApplySettings re-tints timerBg AND forcesBg), so it stays usable
-        -- while only the timer bar is hidden.
-        { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 },   "timerBar" },
-        { "Bar Background",  "BarBackgroundColor", { 0.031, 0.031, 0.031 } },
-        { "Threshold Ticks", "TickColor",          { 1, 1, 1 },            "timerBar" },
-    }, true)
-    yOffset = timerColors:GetNextOffset()
-
-    -- Card 2: Forces — Colors
-    local forcesColors = GUIFrame:CreateCard(scrollChild, "Forces — Colors", yOffset)
-    manager:Register(forcesColors, "all")
-    AddColorRow(forcesColors, db, manager, ApplySettings, {
-        -- Bar fill gates on the bar being visible; the text colors survive
-        -- Show Forces Bar off (the % text becomes a stacked row).
-        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 }, "forcesBar" },
-        { "Forces Complete", "ForcesCompleteColor", { 0, 1, 0.14 } },
-        { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
-        { "Pull Estimate",   "PullOverlayColor",    { 0.6, 0.6, 0.6 },    "pullBar" },
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Deaths", {
+        title = "Deaths Font",
     })
 
-    local rowFcSep = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeightSeparator)
-    local fcSep = GUIFrame:CreateSeparator(rowFcSep)
-    rowFcSep:AddWidget(fcSep, 1)
-    manager:Register(fcSep, "all")
-    forcesColors:AddRow(rowFcSep, Theme.rowHeightSeparator)
-
-    local bandedRow = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeight)
-    local bandedCheck = GUIFrame:CreateCheckbox(bandedRow, "Banded Colors (by % bracket)", {
-        value = db.ForcesBandedColors == true,
-        callback = function(checked)
-            db.ForcesBandedColors = checked; ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-    })
-    bandedRow:AddWidget(bandedCheck, 1)
-    manager:Register(bandedCheck, "forcesBar")
-    forcesColors:AddRow(bandedRow, Theme.rowHeight)
-
-    local BAND_LABELS = { "0-20%", "20-40%", "40-60%", "60-80%", "80-100%" }
-    local function AddBandPicker(row, i, frac)
-        local picker = GUIFrame:CreateColorPicker(row, "Band " .. BAND_LABELS[i], {
-            color = (db.ForcesBandPalette and db.ForcesBandPalette[i]) or { 1, 1, 1 },
-            callback = function(r, g, b)
-                db.ForcesBandPalette = db.ForcesBandPalette or {}
-                db.ForcesBandPalette[i] = { r, g, b }
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(picker, frac)
-        manager:Register(picker, "forcesBanded")
-    end
-
-    local bandRowA = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeight)
-    AddBandPicker(bandRowA, 1, 1 / 3)
-    AddBandPicker(bandRowA, 2, 1 / 3)
-    AddBandPicker(bandRowA, 3, 1 / 3)
-    forcesColors:AddRow(bandRowA, Theme.rowHeight)
-
-    local bandRowB = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeightLast)
-    AddBandPicker(bandRowB, 4, 0.5)
-    AddBandPicker(bandRowB, 5, 0.5)
-    forcesColors:AddRow(bandRowB, Theme.rowHeightLast, 0)
-    yOffset = forcesColors:GetNextOffset()
-
-    -- Card 3: Objectives & Splits — Colors
-    local objColors = GUIFrame:CreateCard(scrollChild, "Objectives & Splits — Colors", yOffset)
+    -- Objectives & Splits Colors
+    local objColors = GUIFrame:CreateCard(scrollChild, "Objectives & Splits Colors", yOffset)
     manager:Register(objColors, "all")
     AddColorRow(objColors, db, manager, ApplySettings, {
         { "Objective (pending)", "ObjectiveColor",     { 0.85, 0.85, 0.85 } },
@@ -879,8 +879,8 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     objColors:AddRow(rowOp, Theme.rowHeightLast, 0)
     yOffset = objColors:GetNextOffset()
 
-    -- Card 4: Deaths — Colors
-    local deathsColors = GUIFrame:CreateCard(scrollChild, "Deaths — Colors", yOffset)
+    -- Deaths Colors
+    local deathsColors = GUIFrame:CreateCard(scrollChild, "Deaths Colors", yOffset)
     manager:Register(deathsColors, "all")
     AddColorRow(deathsColors, db, manager, ApplySettings, {
         { "Deaths Text",  "DeathsColor",       { 0.85, 0.85, 0.85 } },
@@ -888,45 +888,12 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     }, true)
     yOffset = deathsColors:GetNextOffset()
 
-    -- Card 5: Affixes & Key — Colors
-    local affixColors = GUIFrame:CreateCard(scrollChild, "Affixes & Key — Colors", yOffset)
-    manager:Register(affixColors, "all")
-    AddColorRow(affixColors, db, manager, ApplySettings, {
-        { "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 } },
-        { "Key Level",  "KeyColor",   { 1, 1, 1 } },
-    }, true)
-    yOffset = affixColors:GetNextOffset()
-
-    -- Font cards: global default first, then one per HUD section.
-    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "", {
-        title = "Default Font",
-        note = "Applies to the affix line, key level, and PB text — and any per-section font left unset.",
-    })
-    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Timer", {
-        title = "Timer — Font", maxSize = 48,
-    })
-    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Threshold", {
-        title = "Thresholds — Font",
-        group = "threshLabels",
-        note = "The +3/+2/+1 labels and the Text Line race readout.",
-    })
-    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Forces", {
-        title = "Forces — Font",
-    })
-    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Objective", {
-        title = "Objectives — Font",
-    })
-    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Deaths", {
-        title = "Deaths — Font",
-    })
-
     return yOffset
 end
 
 ---------------------------------------------------------------------------------
--- Tab 4: Enemy Overlay — nameplate % / tooltip count subsystem (own position,
--- font, and colors; deliberately NOT merged into Display — it styles nameplate
--- text, not the HUD).
+-- Tab 5: Enemy Overlay: the nameplate % and tooltip count subsystem, with its
+-- own position, font and colors; it styles nameplate text, not the HUD.
 ---------------------------------------------------------------------------------
 
 BuildOverlayTab = function(scrollChild, yOffset, db, manager)
@@ -979,8 +946,8 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     card1:AddRow(noteRow, 64, 0)
     yOffset = card1:GetNextOffset()
 
-    -- Card 2: Nameplate % — Position
-    local card2 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Position", yOffset)
+    -- Card 2: Nameplate % Position
+    local card2 = GUIFrame:CreateCard(scrollChild, "Nameplate % Position", yOffset)
     manager:Register(card2, "overlayNP")
 
     local anchorOptions = GUIFrame.AnchorPointOptions
@@ -1010,9 +977,9 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     card2:AddRow(row2a, Theme.rowHeightLast, 0)
     yOffset = card2:GetNextOffset()
 
-    -- Card 3: Nameplate % — Font Settings (OverlayFont* keys)
+    -- Card 3: Nameplate % Font (OverlayFont* keys)
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Overlay", {
-        title = "Nameplate % — Font Settings",
+        title = "Nameplate % Font",
         group = "overlayNP",
         maxSize = 20,
         includeMono = true,
@@ -1020,8 +987,8 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
         applyFn = ApplyOverlaySettings,
     })
 
-    -- Card 4: Nameplate % — Colors
-    local card4 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Colors", yOffset)
+    -- Card 4: Nameplate % Colors
+    local card4 = GUIFrame:CreateCard(scrollChild, "Nameplate % Colors", yOffset)
     manager:Register(card4, "overlayNP")
     local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local colorModeDropdown = GUIFrame:CreateDropdown(row4, "Color Mode", {
@@ -1046,39 +1013,60 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     return yOffset
 end
 
-GUIFrame:RegisterContent("MythicPlusTimer", function(scrollChild, yOffset)
+---------------------------------------------------------------------------------
+-- Header: the module switch and the description, above the tab strip
+---------------------------------------------------------------------------------
+
+local function Unavailable(scrollChild, yOffset)
+    local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+    errorCard:AddLabel("Database not available")
+    return errorCard:GetNextOffset()
+end
+
+local function BuildHeader(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.MythicPlusTimer
-    if not db then
-        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
-        errorCard:AddLabel("Database not available")
-        return errorCard:GetNextOffset()
+    if not db then return Unavailable(scrollChild, yOffset), true end
+
+    local card1 = GUIFrame:CreateCard(scrollChild, "Mythic+ Timer", yOffset)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        if not GetMPT() then return end
+        if checked then KitnEssentials:EnableModule("MythicPlusTimer")
+        else KitnEssentials:DisableModule("MythicPlusTimer") end
+    end)
+    card1:AddLabel("A keystone timer laid out as a HUD you style card by card below: the run timer " ..
+        "with its +3, +2 and +1 thresholds, forces, objectives and splits against your best time, " ..
+        "deaths with the time they cost, and the affixes and key level. An overlay can show each " ..
+        "enemy's forces on its nameplate and tooltip.")
+
+    return card1:GetNextOffset(), db.Enabled == false
+end
+
+-- One widget state manager per tab: each builder defines the conditions its
+-- own widgets use.
+local function TabPage(builder)
+    return function(scrollChild, yOffset)
+        local db = KE.db and KE.db.profile.MythicPlusTimer
+        if not db then return yOffset end
+        local manager = GUIFrame:CreateWidgetStateManager()
+        yOffset = builder(scrollChild, yOffset, db, manager)
+        manager:UpdateAll(db.Enabled ~= false)
+        return yOffset
     end
+end
 
-    local _, newOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
-        tabs = {
-            { id = "General",  label = "General" },
-            { id = "Features", label = "Features" },
-            { id = "Display",  label = "Display" },
-            { id = "Overlay",  label = "Enemy Overlay" },
-        },
-        activeId = activeTab,
-        onSwitch = function(newId) activeTab = newId end,
-        fill = true,
-    })
-    yOffset = newOffset
+GUIFrame:RegisterContent("MythicPlusTimerGeneral", TabPage(BuildGeneralTab))
+GUIFrame:RegisterContent("MythicPlusTimerTimer", TabPage(BuildTimerTab))
+GUIFrame:RegisterContent("MythicPlusTimerForces", TabPage(BuildForcesTab))
+GUIFrame:RegisterContent("MythicPlusTimerObjectives", TabPage(BuildObjectivesTab))
+GUIFrame:RegisterContent("MythicPlusTimerOverlay", TabPage(BuildOverlayTab))
 
-    local manager = GUIFrame:CreateWidgetStateManager()
-
-    if activeTab == "General" then
-        yOffset = BuildGeneralTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "Features" then
-        yOffset = BuildFeaturesTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "Display" then
-        yOffset = BuildDisplayTab(scrollChild, yOffset, db, manager)
-    elseif activeTab == "Overlay" then
-        yOffset = BuildOverlayTab(scrollChild, yOffset, db, manager)
-    end
-
-    manager:UpdateAll(db.Enabled ~= false)
-    return yOffset
-end)
+GUIFrame:RegisterTabbedContent("MythicPlusTimer", {
+    { id = "MythicPlusTimerGeneral",    label = "General" },
+    { id = "MythicPlusTimerTimer",      label = "Timer" },
+    { id = "MythicPlusTimerForces",     label = "Forces" },
+    { id = "MythicPlusTimerObjectives", label = "Objectives & Deaths" },
+    { id = "MythicPlusTimerOverlay",    label = "Enemy Overlay" },
+}, {
+    headerBuilder = BuildHeader,
+})

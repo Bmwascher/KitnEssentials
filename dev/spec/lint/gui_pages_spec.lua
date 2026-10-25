@@ -65,28 +65,16 @@ local PHASES = { ["16"] = true, ["17"] = true, ["18"] = true, ["none until appro
 -- An L3, L4 or L5 entry ends with the failure's detail as a comment.
 local ALLOWED = {
     L1 = {
-        -- Phase 18 handles these special pages.
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Affixes & Key — Colors"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Deaths — Colors"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Forces — Colors"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Nameplate % — Colors"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Nameplate % — Position"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Objectives & Splits — Colors"] = { phase = "18" },
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua|Timer — Colors"] = { phase = "18" },
     },
     L2 = {
     },
     L3 = {
-        -- Phase 18 handles these special pages.
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua"] = { phase = "18" }, -- content after Position
         -- Interrupt Tracker page: edited only with an approval that names the item.
         ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-KickTracker.lua"] = { phase = "none until approved" }, -- content after Position
     },
     L4 = {
     },
     L5 = {
-        -- Phase 18 handles these special pages.
-        ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua"] = { phase = "18" }, -- return before description
     },
     L6 = {
     },
