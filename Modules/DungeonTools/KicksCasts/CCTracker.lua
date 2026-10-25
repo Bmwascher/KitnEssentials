@@ -76,7 +76,6 @@ CC.previewing = false
 CC.applyQueued = false
 CC.editModeRegistered = false
 CC.buildTarget = 0
-CC.runTarget = 0
 CC.buildQueued = false
 
 ---------------------------------------------------------------------------------
@@ -499,7 +498,6 @@ end
 local function StartBuild()
     CC.buildQueued = false
     if not CC.active then return end
-    CC.runTarget = CC.buildTarget
     CC.runner:Run(CC.buildTarget)
 end
 
@@ -519,8 +517,7 @@ function CC:RaiseBuildTarget()
     local want = Rules.BuildTarget(highest)
     if want <= self.buildTarget then return end
     self.buildTarget = want
-    if self.runner:Built() < self.runTarget then
-        self.runTarget = want
+    if self.runner:Running() then
         self.runner:Run(want)
     elseif not self.buildQueued then
         self.buildQueued = true
@@ -582,7 +579,6 @@ function CC:Deactivate()
     self.active = false
     if self.runner then self.runner:Cancel() end
     self.buildTarget = 0
-    self.runTarget = 0
     -- A refused build blocks every later row; the next activation retries.
     self.failed = nil
     if self.slots then self.slots:Stop() end
