@@ -114,6 +114,7 @@ local KT_COOLING_LOG_EVERY = 60  -- cooling per-bar at ~60fps -> ~once/sec
 KT.containerFrame = nil
 KT.isPreview = false
 KT.editModeRegistered = false
+KT._barsShown = true      -- the Show Bars state KT:ApplyShowBars last applied
 KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview override)
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
@@ -891,6 +892,8 @@ end
 ---------------------------------------------------------------------------------
 function KT:ShouldBeActive()
     if not self.db or not self.db.Enabled then return false end
+    -- With neither bars nor plate icons there is nothing to show.
+    if self.db.ShowBars == false and self.db.PlateIcons == false then return false end
     local inInstance, instanceType = IsInInstance()
     if not inInstance or instanceType ~= "party" then return false end
     if not IsInGroup() then return false end
@@ -911,7 +914,7 @@ function KT:CheckActivation()
         self:EnsureInspect()
         if self.containerFrame then
             self:ApplyContainerPosition()
-            self.containerFrame:Show()
+            self.containerFrame:SetShown(self.db.ShowBars ~= false)
         end
         self:RefreshPartyRoster()
         -- The first read is the baseline: kicks before the activation are
@@ -1339,6 +1342,11 @@ end
 
 function KT:UpdateBars()
     if self.isPreview then return end
+    -- No row is made; the engine needs none.
+    if self.db.ShowBars == false then
+        self:HideAllBars()
+        return
+    end
 
     -- Every member with a kick has a row (KT.RowShown).
     local needsBars = {}
@@ -1654,6 +1662,11 @@ function KT:ShowPreview()
     -- row while the preview holds the bars.
     self:ClearKickQueues()
 
+    if self.db.ShowBars == false then
+        self.containerFrame:Hide()
+        return
+    end
+
     self:ApplyContainerPosition()
 
     -- Create 5 mock bars: 3 ready + 2 cooling
@@ -1796,6 +1809,7 @@ function KT:HidePreview()
 end
 
 function KT:RegWithEditMode()
+    if self.db.ShowBars == false then return end
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "KickTracker",
@@ -1882,6 +1896,19 @@ function KT:OnDisable()
     if self.containerFrame then self.containerFrame:Hide() end
 end
 
+-- Show Bars off: no rows, no container and no Edit Mode box; the engine and
+-- the plate icons run on.
+function KT:ApplyShowBars()
+    local on = self.db.ShowBars ~= false
+    if on ~= self._barsShown then
+        self._barsShown = on
+        if not on then self:HideAllBars() end
+        self:RefreshEditMode()
+        if on and self.isActive and not self.isPreview then self:UpdateBars() end
+    end
+    self.containerFrame:SetShown(on and (self.isActive or self.isPreview))
+end
+
 function KT:ApplySettings()
     self:UpdateDB()
     -- A layer copies the bar's settings when it is made.
@@ -1889,6 +1916,7 @@ function KT:ApplySettings()
     if not self.containerFrame then return end
 
     self:ApplyContainerPosition()
+    self:ApplyShowBars()
 
     -- Re-apply visuals to all active bars
     for guid, bar in pairs(self.activeBars) do
