@@ -187,6 +187,17 @@ end
 ---------------------------------------------------------------------------------
 -- FC-only: cast-sound alert with kick-CD muting
 ---------------------------------------------------------------------------------
+-- The Interrupt Tracker's own-clock length for the kick just cast, from the
+-- player's talents. No interrupt is confirmed at the cast, so a reduction that
+-- needs one is not taken. A kick without a definition keeps the castbar's.
+function FC:KickMuteSeconds(spellID)
+    local fallback = self.interruptCD or 15
+    ---@type KickTracker?
+    local kt = KitnEssentials:GetModule("KickTracker", true)
+    if not (kt and kt.OwnKickCooldown) then return fallback end
+    return kt:OwnKickCooldown({ id = spellID, cd = fallback }, false)
+end
+
 -- Tracks interrupt cooldown via UNIT_SPELLCAST_SUCCEEDED because
 -- C_Spell.GetSpellCooldownDuration can return secret values during combat.
 function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
@@ -198,7 +209,7 @@ function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
     if not self.interruptSpellSet or not self.interruptSpellSet[spellID] then return end
     self.kickOnCD = true
     if self.kickCDTimer then self.kickCDTimer:Cancel() end
-    self.kickCDTimer = C_Timer.NewTimer(self.interruptCD or 15, function()
+    self.kickCDTimer = C_Timer.NewTimer(self:KickMuteSeconds(spellID), function()
         self.kickOnCD = false
         self.kickCDTimer = nil
     end)
