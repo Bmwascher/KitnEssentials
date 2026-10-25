@@ -944,13 +944,11 @@ function KT:CheckActivation()
     end
 end
 
--- The marker cache forgets at a zone change, not at a reload or login, also
--- while the intake is off, so a later visit never reads this one's record.
-function KT:OnZoneChange(event, isInitialLogin, isReloadingUi)
-    if event == "PLAYER_ENTERING_WORLD" and not (isInitialLogin or isReloadingUi) then
-        self:ForgetMarkers()
-    end
+-- The marker cache forgets once the player is outside the instance it was
+-- saved in, also while the intake is off; read with activation's own timing.
+function KT:OnZoneChange()
     C_Timer.After(1, function()
+        self:ForgetMarkers()
         self:CheckActivation()
     end)
 end

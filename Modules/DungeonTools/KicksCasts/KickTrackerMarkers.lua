@@ -8,7 +8,7 @@
 -- ╚══════════════════════════════════════════════════════════╝
 -- The cache is saved per character with the party instance it was learned
 -- in, for one visit: any activation inside that instance reads it back, and
--- only a zone change empties it.
+-- only a zone change that leaves it empties it.
 
 ---@class KE
 local KE = select(2, ...)
@@ -30,6 +30,12 @@ local function CurrentInstance()
     local _, instanceType, _, _, _, _, _, instanceID = GetInstanceInfo()
     if instanceType ~= "party" then return nil end
     return instanceID
+end
+
+-- A map ID names the dungeon, not one run of it: a visit ends at the first
+-- zone change outside it (KT:ForgetMarkers).
+function KT.SameInstance(recInst, inst)
+    return inst ~= nil and recInst == inst
 end
 
 local function SavedRecord(create)
@@ -69,7 +75,7 @@ end
 function KT:RestoreMarkers()
     wipe(self.markerOf)
     local inst, rec = CurrentInstance(), SavedRecord(false)
-    if inst and rec and rec.inst == inst and type(rec.m) == "table" then
+    if rec and KT.SameInstance(rec.inst, inst) and type(rec.m) == "table" then
         for guid, marker in pairs(rec.m) do
             if type(guid) == "string" and type(marker) == "number" and marker >= 1 and marker <= 8 then
                 self.markerOf[guid] = marker
@@ -80,12 +86,14 @@ function KT:RestoreMarkers()
     end
 end
 
--- A zone change: the last visit's markers are gone. A player with no record
--- gets none.
+-- Outside the record's instance the last visit's markers are gone; inside
+-- it (a reload, a login, a loading screen there) they stay. A player with no
+-- record gets none.
 function KT:ForgetMarkers()
-    wipe(self.markerOf)
     local rec = SavedRecord(false)
-    if rec then rec.inst, rec.m = nil, nil end
+    if not rec or rec.inst == nil or KT.SameInstance(rec.inst, CurrentInstance()) then return end
+    wipe(self.markerOf)
+    rec.inst, rec.m = nil, nil
     self:RailsResync()
 end
 
