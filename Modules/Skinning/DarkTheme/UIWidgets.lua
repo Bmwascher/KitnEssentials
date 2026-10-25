@@ -562,7 +562,7 @@ function UIW:RegisterEditMode()
             return self.db and self.db.TopCenter
                 and self.db.TopCenter.Enabled == true or false
         end,
-        displayName = "Top-Center Container",
+        displayName = "Top Center Container",
         frame = self.topCenterHolder,
         getPosition = function() return self.db.TopCenter.Position end,
         setPosition = function(pos)

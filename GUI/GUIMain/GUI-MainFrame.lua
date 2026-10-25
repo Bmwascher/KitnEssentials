@@ -123,7 +123,7 @@ GUIFrame.sidebarConfig = {
                 "frame skins", "loot roll", "loot window", "ui widgets", "alert frames",
                 "skinned windows", "blizzard text everywhere", "category sizes",
                 "on-screen messages", "error messages", "action status", "zone names", "zone text", "chat bubbles",
-                "status bars", "text widgets", "spell icons", "top-center container", "top-center position",
+                "status bars", "text widgets", "spell icons", "top center container", "top center position",
                 "alert stack position", "event toasts", "event toast position", },
                 gatedKeywords = {
                     RaidControl = { "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "raid manager", "raid tools", "shared notes", "group" },
