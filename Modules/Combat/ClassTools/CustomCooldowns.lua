@@ -25,6 +25,10 @@ local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
 local ipairs, pcall, tostring, type, wipe = ipairs, pcall, tostring, type, wipe
 local string_format = string.format
 local math_max, math_min = math.max, math.min
+-- Absent only if that file failed to load; every line, the preview's
+-- included, then goes unescaped.
+local EscapePipes = NMA and NMA.EscapePipes or tostring
+local EscapeFormat = NMA and NMA.EscapeFormat or tostring
 
 local ATTACH_KEY = "customCooldowns"
 local TICK_SECONDS = 0.1
@@ -201,10 +205,6 @@ local function Code(c)
     return KE:ColorCode(c[1], c[2], c[3])
 end
 
-local function Esc(s)
-    return (tostring(s):gsub("%%", "%%%%"))
-end
-
 function CCD:Separator()
     local sep = self.db.Separator
     if sep == nil or sep == "" then sep = "-" end
@@ -214,20 +214,21 @@ end
 -- A line with a printf slot for the time, so a secret number is drawn by
 -- SetFormattedText without being read. Built by concatenation, not
 -- string.format: the result is itself a format string, so its slot must
--- survive and a literal % in the name or separator is escaped.
+-- survive and a literal % or pipe in the name or separator is escaped.
 function CCD:ComposeFormat(name)
-    return Code(self:RoleColor("TextColor")) .. Esc(name) .. "|r "
-        .. Code(self:RoleColor("SeparatorColor")) .. Esc(self:Separator()) .. "|r "
+    return Code(self:RoleColor("TextColor")) .. EscapeFormat(name) .. "|r "
+        .. Code(self:RoleColor("SeparatorColor")) .. EscapeFormat(self:Separator()) .. "|r "
         .. Code(self:RoleColor("TimerColor")) .. "%.0f|r"
 end
 
 function CCD:ComposeLine(name, timeText)
     local nameCode = Code(self:RoleColor("TextColor"))
+    name = EscapePipes(name)
     if not timeText then
         return string_format("%s%s|r", nameCode, name)
     end
     return string_format("%s%s|r %s%s|r %s%s|r", nameCode, name,
-        Code(self:RoleColor("SeparatorColor")), self:Separator(),
+        Code(self:RoleColor("SeparatorColor")), EscapePipes(self:Separator()),
         Code(self:RoleColor("TimerColor")), timeText)
 end
 
