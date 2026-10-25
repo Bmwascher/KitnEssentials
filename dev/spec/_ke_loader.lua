@@ -3310,8 +3310,11 @@ end
 -- RCC.buttons themselves. KE.RunAfterCombat appends closures to seams.queue
 -- and the spec drains it -- the combat-exit queue is the only thing that
 -- can deliver the deferred hide, which is why it is the one stateful fake.
+-- opts.forever loads it as the Forever client, with opts.foreverData as the
+-- table the Forever data file would publish and the two enums it reads.
 -- Returns RCC, KE, seams.
-function L.loadReadyCheckConsumables(overrides)
+function L.loadReadyCheckConsumables(overrides, opts)
+    opts = opts or {}
     -- auras is walked by the AuraUtil.ForEachAura fake below, slot by slot;
     -- auraPageSize nil hands every slot back in one page, a number pages by
     -- it with a continuation token, as the live slot API can. enchants is
@@ -3367,6 +3370,10 @@ function L.loadReadyCheckConsumables(overrides)
             NewTimer = function() return { Cancel = function() end } end,
         },
         InCombatLockdown = function() return seams.combat.inCombat end,
+        Enum = (opts.forever or opts.foreverData) and {
+            ItemEnchantType = { None = 0, Permanent = 1, Temporary = 2, Imbue = 3 },
+            WeaponSlot = { MainHand = 0, OffHand = 1, Ranged = 2 },
+        } or nil,
     })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
@@ -3514,6 +3521,8 @@ function L.loadReadyCheckConsumables(overrides)
             return saved[1] or default[1], saved[2] or default[2], saved[3] or default[3], saved[4] or default[4] or 1
         end,
         GetPlayerSpecId = specIdFromMocks,
+        IS_FOREVER = opts.forever == true,
+        ReadyCheckConsumablesForever = opts.foreverData,
     }
     helpers.loadModule("Modules/QoL/GroupTools/ReadyCheckConsumables.lua", KE)
     local RCC = modules["ReadyCheckConsumables"]

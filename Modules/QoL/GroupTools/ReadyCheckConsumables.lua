@@ -3,8 +3,9 @@
 -- ║  Module: Ready Check Consumables                         ║
 -- ║  Purpose: On ready check, attaches a row of clickable    ║
 -- ║           consumable icons (food, flask, weapon          ║
--- ║           enhancement MH/OH, augment rune, healthstone,  ║
--- ║           Warlock Soulstone) to the ready check popup.   ║
+-- ║           enhancement MH/OH, augment rune (an elixir on  ║
+-- ║           Forever), healthstone, Warlock Soulstone) to   ║
+-- ║           the ready check popup.                         ║
 -- ║           Icons show ready/missing status and remaining  ║
 -- ║           buff duration. Click uses the item via         ║
 -- ║           SecureActionButton.                            ║
@@ -391,6 +392,73 @@ local CLASS_SLOT = {
         update  = function(rcc, btn) rcc:_UpdateShieldSlot(btn) end,
     },
 }
+
+---------------------------------------------------------------------------------
+-- Forever Data
+---------------------------------------------------------------------------------
+-- The Forever tables come from ReadyCheckConsumablesForever.lua, which only
+-- the Forever load list loads. A retail load leaves FV nil and every table
+-- above in place.
+local FV = KE.ReadyCheckConsumablesForever
+
+-- The settings page reads this, so the page and the row follow one choice.
+RCC.usesForeverData = FV ~= nil
+
+if FV then
+    FOOD_BUFFS = FV.food
+    HEARTY_FOOD_BUFFS = {}
+    DEFAULT_ICONS[SLOT_FOOD]  = FV.icons.food
+    DEFAULT_ICONS[SLOT_FLASK] = FV.icons.flask
+    DEFAULT_ICONS[SLOT_OIL]   = FV.icons.oil
+    DEFAULT_ICONS[SLOT_OILOH] = FV.icons.oiloh
+    DEFAULT_ICONS[SLOT_RUNE]  = FV.icons.elixir
+    DEFAULT_ICONS[SLOT_HS]    = FV.icons.healthstone
+    DEFAULT_ICONS[SLOT_CLASS] = FV.icons.class
+    -- No Forever spec has a class-check row or a shield to keep up.
+    CLASS_CHECKS = {}
+    CLASS_SLOT.SHAMAN = nil
+end
+
+local function BagCount(itemID)
+    return GetItemCount(itemID, false, true) or 0
+end
+
+--- HighestKnown
+--- The highest rank `isKnown` accepts; ranks run low to high.
+local function HighestKnown(ranks, isKnown)
+    for i = #ranks, 1, -1 do
+        if isKnown(ranks[i]) then return ranks[i] end
+    end
+    return nil
+end
+RCC._HighestKnown = HighestKnown
+
+--- _UpdateHealthstoneForever
+--- UpdateHealthstone on Forever: every listed rank counts, and a Warlock's
+--- click creates one at the highest Create Healthstone rank known.
+function RCC:_UpdateHealthstoneForever()
+    local btn = self.buttons.hs
+    if not btn then return end
+    local count, stocked = 0, nil
+    for _, row in ipairs(FV.healthstones) do
+        local n = BagCount(row.item)
+        if n > 0 then
+            count = count + n
+            stocked = stocked or row.item
+        end
+    end
+    btn.nominatedItem = stocked or FV.healthstones[1].item
+    btn.nominatedSpell = nil
+    self:_PaintReady(btn, count > 0, nil)
+    btn.countText:SetText(count > 0 and tostring(count) or "")
+
+    local _, playerClass = UnitClass("player")
+    if playerClass == "WARLOCK" then
+        self:_ArmSpellClick(btn.click, HighestKnown(FV.createHealthstone, IsSpellKnown), nil)
+    elseif btn.click and not InCombatLockdown() then
+        btn.click:Hide()
+    end
+end
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -1290,6 +1358,21 @@ function RCC:_PaintUnavailable(btn)
     if btn.click and not InCombatLockdown() then btn.click:Hide() end
 end
 
+--- _PaintReady
+--- The status mark, icon tint, timer and low-duration glow of a Forever slot
+--- that is either up (with `remain` seconds, nil for no timer) or missing.
+function RCC:_PaintReady(btn, ready, remain)
+    btn.statusTexture:SetTexture(ready and READY_TEXTURE or NOT_READY_TEXTURE)
+    btn.statusTexture:Show()
+    btn.texture:SetDesaturated(not ready)
+    if ready then
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, remain))
+    else
+        btn.timeLeft:SetText("")
+        StopGlow(btn)
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Per-Slot Updates
 ---------------------------------------------------------------------------------
@@ -1679,6 +1762,7 @@ end
 --- to drop a fresh well — the source healthstones come from. Mirrors
 --- Healthstone reminder click (castSpellID).
 function RCC:UpdateHealthstone()
+    if FV then return self:_UpdateHealthstoneForever() end
     local btn = self.buttons.hs
     if not btn then return end
     local click = btn.click
@@ -1817,6 +1901,10 @@ function RCC:PLAYER_REGEN_ENABLED()
     self:RequestRefresh()
 end
 
+-- The fifth slot's toggle: the augment rune on retail, the elixir on Forever.
+-- ShowPreview below reads it too.
+local SLOT5_KEY = FV and "ShowElixir" or "ShowAugmentRune"
+
 --- _ComputeVisibility
 --- The real row's visible set, each contextual predicate asked once per
 --- repaint. The class check is resolved here, once, for every slot updater
@@ -1835,7 +1923,7 @@ function RCC:_ComputeVisibility()
     visibility[SLOT_OIL]   = db.ShowWeaponOil   ~= false
     visibility[SLOT_OILOH] = (db.ShowOffHandOil  ~= false)
         and (self:OffhandIsWeapon() or (check ~= nil and check.hands[17] ~= nil))
-    visibility[SLOT_RUNE]  = db.ShowAugmentRune ~= false
+    visibility[SLOT_RUNE]  = db[SLOT5_KEY] ~= false
     visibility[SLOT_HS]    = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup()
     visibility[SLOT_CLASS] = (db.ShowClassItem   ~= false) and classSlot ~= nil and classSlot.applies(self)
     return visibility
@@ -2321,6 +2409,10 @@ local CHECK_EVENTS = {
     "UNIT_AURA", "UNIT_INVENTORY_CHANGED", "BAG_UPDATE_DELAYED",
     "GROUP_ROSTER_UPDATE", "PLAYER_SPECIALIZATION_CHANGED",
 }
+-- Forever has no spec flask priority, so the spec event repaints nothing.
+if FV then
+    CHECK_EVENTS = { "UNIT_AURA", "UNIT_INVENTORY_CHANGED", "BAG_UPDATE_DELAYED", "GROUP_ROSTER_UPDATE" }
+end
 
 --- _SetCheckEvents
 --- Registers or drops the per-check subscriptions. SPELL_UPDATE_COOLDOWN
@@ -2542,7 +2634,7 @@ function RCC:ShowPreview()
         [SLOT_FLASK]  = db.ShowFlask       ~= false,
         [SLOT_OIL]    = db.ShowWeaponOil   ~= false,
         [SLOT_OILOH]  = db.ShowOffHandOil  ~= false,
-        [SLOT_RUNE]   = db.ShowAugmentRune ~= false,
+        [SLOT_RUNE]   = db[SLOT5_KEY] ~= false,
         [SLOT_HS]     = db.ShowHealthstone ~= false,
         [SLOT_CLASS]  = db.ShowClassItem   ~= false,
     }
