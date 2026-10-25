@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.13
+
+### Dungeon Timers
+
+- Kings' Rest, Dazar: a "NEW BOSS" alert with a new "New Boss" voice each
+  time an add joins the fight
+- Den of Nalorakk, Nalorakk: Defensive Stance on you plays "Safe"
+- Altar of Fangs, Zul'jan: the two channel alerts carry "Move" and
+  "Soaking" sounds; both stay off until you turn them on
+- The BigWigs Messages list on the General tab includes the Storm Blessed
+  WRONG TARGET warning (Temple of Sethraliss), following its "Show WRONG
+  TARGET" checkbox
+
+---
+
 ## v4.14.12
 
 ### General
