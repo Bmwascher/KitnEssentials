@@ -521,6 +521,12 @@ local anchorRecords = setmetatable({}, { __mode = "k" })
 local anchorRepairs = setmetatable({}, { __mode = "k" })
 local anchorPending = setmetatable({}, { __mode = "k" })
 
+-- Frames placed on a Select Frame name whose first part was not a global yet,
+-- flagged `waiting` until KE:AnnounceAnchorTarget names it. Apart from
+-- anchorRecords, which the login window wipes: a target can appear at any time
+-- in the session.
+local anchorWaits = setmetatable({}, { __mode = "k" })
+
 -- Select Frame can name the frame being placed, a region inside or anchored to
 -- it at any depth, or a global that is not a region; SetPoint and SetParent
 -- raise a Lua error on each, and SetParent also needs a frame. A link that
@@ -679,27 +685,34 @@ function KE:ResolveSelectFrame(name, frame, asParent, followers)
     return candidate, false
 end
 
-function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent, followers)
+-- The anchor, and whether a Select Frame name's first part was not a global
+-- yet. KE:ResolveAnchorFrame returns only the anchor: its callers hand the
+-- result straight back from getParentFrame, where a second value would leak.
+local function ResolveAnchor(anchorFrameType, parentFrameName, frame, asParent, followers)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
-        return UIParent
+        return UIParent, false
     elseif anchorFrameType == "PLAYERFRAME" then
         -- Auto-detect the active unit-frame addon's player frame.
         local playerFrame = _G.ElvUF_Player or _G.UUF_Player
             or _G.EllesmereUIUnitFrames_Player or _G.PlayerFrame or UIParent
         if lastPlayerFrame == nil then lastPlayerFrame = playerFrame end
-        return playerFrame
+        return playerFrame, false
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
-        local candidate, rootMissing = self:ResolveSelectFrame(parentFrameName, frame, asParent, followers)
-        if candidate ~= nil then return candidate end
+        local candidate, rootMissing = KE:ResolveSelectFrame(parentFrameName, frame, asParent, followers)
+        if candidate ~= nil then return candidate, false end
         if not rootMissing and not warnedAnchorNames[parentFrameName] then
             warnedAnchorNames[parentFrameName] = true
-            self:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
+            KE:Print(tostring(parentFrameName) .. " cannot anchor this display: it is not a frame, "
                 .. "is an Edit Mode box, is the display itself, depends on it or is moved onto it, "
                 .. "or its anchors could not all be checked. Placed on the screen instead.")
         end
-        return UIParent
+        return UIParent, rootMissing
     end
-    return UIParent
+    return UIParent, false
+end
+
+function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName, frame, asParent, followers)
+    return (ResolveAnchor(anchorFrameType, parentFrameName, frame, asParent, followers))
 end
 
 ---------------------------------------------------------------------------------
@@ -2184,9 +2197,12 @@ function KE:ApplyActivePosition(frame, db, setParent)
     self:ApplyFramePosition(frame, posConfig, config, setParent)
 end
 
-function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
-    if not frame or not posConfig then return end
-    local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame, frame, SetParent, followers)
+-- The anchor half of a placement. The late re-place repeats only this half:
+-- some modules set their own strata after placing, and a re-place that set it
+-- again would undo theirs.
+local function PlaceOnAnchor(frame, posConfig, Config, SetParent, followers)
+    local parent, rootMissing = ResolveAnchor(Config.anchorFrameType, Config.ParentFrame,
+        frame, SetParent, followers)
     if SetParent then
         frame:SetParent(parent)
     end
@@ -2198,8 +2214,35 @@ function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
         posConfig.XOffset or 0,
         posConfig.YOffset or 0
     )
+    return rootMissing
+end
+
+-- A frame whose Select Frame root was missing waits; any other placement ends
+-- the wait. One record per frame, kept and reused, so a miss allocates only
+-- the first time; a placement that resolves writes only when it ends a wait,
+-- because the dock places on every layout pass.
+local function NoteAnchorWait(frame, rootMissing, posConfig, Config, SetParent, followers)
+    local wait = anchorWaits[frame]
+    if not rootMissing then
+        if wait and wait.waiting then wait.waiting = false end
+        return
+    end
+    if not wait then
+        wait = {}
+        anchorWaits[frame] = wait
+    end
+    wait.waiting = true
+    wait.posConfig, wait.config = posConfig, Config
+    wait.setParent, wait.followers = SetParent, followers
+    wait.name = Config.ParentFrame
+end
+
+function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
+    if not frame or not posConfig then return end
+    local rootMissing = PlaceOnAnchor(frame, posConfig, Config, SetParent, followers)
     frame:SetFrameStrata(Config.Strata or "MEDIUM")
     self:SnapFrameToPixels(frame)
+    NoteAnchorWait(frame, rootMissing, posConfig, Config, SetParent, followers)
 
     if anchorWindowOpen then
         if Config.anchorFrameType == "PLAYERFRAME" then
@@ -2211,6 +2254,41 @@ function KE:ApplyFramePosition(frame, posConfig, Config, SetParent, followers)
             -- repair pass keeps dragging it back to a player frame the user
             -- no longer wants.
             anchorRecords[frame] = nil
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Late anchor targets
+---------------------------------------------------------------------------------
+
+-- True for root itself and for a dotted name under it.
+local function NamesUnder(name, root)
+    if type(name) ~= "string" then return false end
+    if name == root then return true end
+    return string_find(name, root, 1, true) == 1 and name:sub(#root + 1, #root + 1) == "."
+end
+
+local function ReplaceWaiting(frame, root)
+    local wait = anchorWaits[frame]
+    if not (wait and wait.waiting and NamesUnder(wait.name, root)) then return end
+    local rootMissing = PlaceOnAnchor(frame, wait.posConfig, wait.config, wait.setParent, wait.followers)
+    KE:SnapFrameToPixels(frame)
+    NoteAnchorWait(frame, rootMissing, wait.posConfig, wait.config, wait.setParent, wait.followers)
+end
+
+-- The owner of a Select Frame target calls this once it has built the frame,
+-- so frames placed on that name before it existed move onto it. The walk
+-- changes record fields only, never the table's keys, so pairs stays valid.
+function KE:AnnounceAnchorTarget(name)
+    if type(name) ~= "string" then return end
+    for frame, wait in pairs(anchorWaits) do
+        if wait.waiting and NamesUnder(wait.name, name) then
+            if self:CanReanchorNow(frame) then
+                ReplaceWaiting(frame, name)
+            else
+                self:RunAfterCombat(function() ReplaceWaiting(frame, name) end)
+            end
         end
     end
 end

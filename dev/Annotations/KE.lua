@@ -685,6 +685,12 @@ function KE:CanReanchorNow(frame) end
 ---@param fn fun() # replays the module's own placement
 function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn) end
 
+--- Re-places every frame KE:ApplyFramePosition placed on a Select Frame name
+--- under `name` while that name was not a global yet. The target's owner calls
+--- it once it has built the frame (Core/Globals.lua, late anchor targets).
+---@param name string
+function KE:AnnounceAnchorTarget(name) end
+
 ---@param anchorFrom string
 ---@return string
 function KE:GetTextPointFromAnchor(anchorFrom) end
