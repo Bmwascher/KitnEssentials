@@ -173,6 +173,9 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
 
     local mark
     local DrawClass
+    -- The Spec pick per class, kept across the redraws Add, Remove and a color
+    -- Reset make while the page stays drawn.
+    local picked = {}
 
     local function Redraw(classToken)
         local oldHeight = card2:GetContentHeight()
@@ -321,13 +324,17 @@ GUIFrame:RegisterContent("DoTTracker", function(scrollChild, yOffset)
         end
         local chosenSpec = specIds[1]
         if classToken == playerClass and currentSpecId then chosenSpec = currentSpecId end
+        if picked[classToken] then chosenSpec = picked[classToken] end
 
         local addRow = GUIFrame:CreateSpellAddRow(card2.content, {
             picker = {
                 label = "Spec",
                 options = specOptions,
                 value = chosenSpec,
-                callback = function(key) chosenSpec = key end,
+                callback = function(key)
+                    chosenSpec = key
+                    picked[classToken] = key
+                end,
             },
             idLabel = "Debuff Spell ID",
             onAdd = function(text)

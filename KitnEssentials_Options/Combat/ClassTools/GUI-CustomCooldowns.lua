@@ -79,6 +79,9 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
 
     local mark
     local DrawClass
+    -- The Spec pick per class, kept across the redraws Add and Remove make
+    -- while the page stays drawn.
+    local picked = {}
 
     local function Redraw(classToken)
         local oldHeight = card2:GetContentHeight()
@@ -133,7 +136,7 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
             local specName, specIcon = SpecInfo(specId)
             specOptions[#specOptions + 1] = { key = specId, text = GUIFrame.IconText(specIcon) .. specName }
         end
-        local chosen = ALL_SPECS
+        local chosen = picked[classToken] or ALL_SPECS
         local function ChosenSpec()
             if chosen == ALL_SPECS then return nil end
             return chosen
@@ -144,7 +147,10 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
                 label = "Spec",
                 options = specOptions,
                 value = chosen,
-                callback = function(key) chosen = key end,
+                callback = function(key)
+                    chosen = key
+                    picked[classToken] = key
+                end,
             },
             idLabel = "Spell ID",
             onAdd = function(text)
