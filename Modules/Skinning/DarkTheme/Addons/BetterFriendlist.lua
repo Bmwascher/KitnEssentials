@@ -1378,6 +1378,7 @@ local function Skin()
             or (frame.WhoFrame.ScrollBox and frame.WhoFrame.ScrollBox.ScrollBar))
     end
     if frame.RaidFrame then S.ScrollBar(frame.RaidFrame.ScrollBar) end
+    if frame.GuildFrame then S.ScrollBar(frame.GuildFrame.ScrollBar) end
     if frame.QuickJoinFrame then
         S.ScrollBar(frame.QuickJoinFrame.ScrollBar
             or (frame.QuickJoinFrame.ScrollBoxContainer and frame.QuickJoinFrame.ScrollBoxContainer.ScrollBar))
