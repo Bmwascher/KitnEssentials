@@ -45,6 +45,9 @@ local LIFT_LEVEL = 10
 local PLATE_TOP = 1000    -- frame levels above the nameplate in the off position
 local GATE_SPAN = 100     -- counts up to this many move a gate's fill a whole span
 local SAMPLE_CD = 30
+local GHOST_CELLS = 4     -- a ghost's cells; the player is never one
+local CELL_LEVELS = 4     -- frame levels one ghost cell takes
+local BASE_SLACK = 0.1    -- a read this much before a kick still serves as its baseline
 local READY_SLACK = 0.05  -- a relayout this long after a cooldown's end finds it over
 local MAX_PLATES = 40
 
@@ -63,6 +66,11 @@ local P = {
     gen = 0,       -- moved by every reset; one-frame callbacks check it
 }
 KT.plateState = P
+P.ghosts = {}       -- live ghosts, oldest first
+P.free.ghost = {}
+P.packet = { units = {}, before = {}, after = {} }  -- the last update's gate totals, until the next read
+P.packetT = -1
+P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt is its plain time
 
 -- A plate's lifetime: a kick seen on it carries this, so a placement whose
 -- plate went (and whose token may now be another mob's) takes nothing.
@@ -267,6 +275,35 @@ local function ResetStep(pr, leftward)
     FeedStep(pr, 0, 1, 0, 0, leftward)
 end
 
+local function ShowStep(pr, shown)
+    pr.std:SetShown(shown)
+    pr.rev:SetShown(shown)
+end
+
+-- Open where the fill falls short: the fill's right edge to the gate's right
+-- end, so the clip opens only once the count rose.
+local function HangShort(clip, fill, gate)
+    clip:ClearAllPoints()
+    clip:SetPoint("TOPLEFT", fill, "TOPRIGHT", 0, 0)
+    clip:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT", 0, 0)
+    clip:SetPoint("TOPRIGHT", gate, "TOPRIGHT", 0, 0)
+    clip:SetPoint("BOTTOMRIGHT", gate, "BOTTOMRIGHT", 0, 0)
+end
+
+-- The count at placing as the value, the latest as the maximum: whole until
+-- the count rose.
+local function FeedWhole(gate, fill, clip, base, cur)
+    gate:SetMinMaxValues(0, cur)
+    gate:SetValue(base)
+    HangWhole(clip, fill, gate)
+end
+
+-- A baseline from an older fight counts as 0: the counts restarted since.
+local function Base(base, gen)
+    if gen == KT.meterFight then return base end
+    return 0
+end
+
 ---------------------------------------------------------------------------------
 -- Icons
 ---------------------------------------------------------------------------------
@@ -359,10 +396,18 @@ local function StyleLive(e)
     SizeStep(e.step, cw + db.PlateSpacing, cw)
 end
 
--- No count yet: the icon shows and keeps one slot.
+-- The count gate and step pair fed as they last were, or whole while never
+-- fed: then the icon shows and keeps one slot.
 local function RefeedLive(e)
-    ResetWhole(e.gate, e.fill, e.clip)
-    ResetStep(e.step, KT.db.PlateSide == "LEFT")
+    local leftward = KT.db.PlateSide == "LEFT"
+    if e.cCur ~= nil then
+        local base = Base(e.cBase, e.cGen)
+        FeedWhole(e.gate, e.fill, e.clip, base, e.cCur)
+        FeedStep(e.step, base, e.cCur, base, e.cCur, leftward)
+    else
+        ResetWhole(e.gate, e.fill, e.clip)
+        ResetStep(e.step, leftward)
+    end
 end
 
 local function LevelLive(e, strata, level)
@@ -413,6 +458,147 @@ local RELEASE = {
     live = function(e) KT:ReleaseLive(e.guid) end,
     sample = Park,
 }
+
+---------------------------------------------------------------------------------
+-- Ghosts: the reveal on a plate for a kick nobody was named for
+---------------------------------------------------------------------------------
+-- One slot, and inside it one cell per teammate who could have kicked: their
+-- icon inside two clips. The reveal clip hangs where its gate's fill (their
+-- total before the update, of their total after it as the maximum) falls
+-- short, so it opens only where the total rose. The count clip
+-- inside it closes once they interrupted again. Later cells draw
+-- over earlier ones.
+local function BuildGhost()
+    local g = CreateFrame("Frame", nil, P.lift)
+    g:EnableMouse(false)
+    g:Hide()
+    g.kind = "ghost"
+    g.cells = {}
+    g.used = 0
+    g.seq = 0
+    return g
+end
+
+local function BuildCell(g)
+    local cell = {}
+    cell.gate, cell.fill = NewGate(g, true)
+    cell.clip = NewClip(g)
+    cell.clip:Hide()
+    cell.gateB, cell.fillB = NewGate(g, true)
+    cell.clipB = NewClip(cell.clip)
+    cell.icon = BuildIcon(cell.clipB)
+    cell.icon:SetAllPoints(g)
+    cell.stepA, cell.stepB = NewStep(g), NewStep(g)
+    return cell
+end
+
+local function StyleGhost(g)
+    local db = KT.db
+    local cw = db.PlateIconSize
+    local pitch = cw + db.PlateSpacing
+    g:SetSize(cw, cw)
+    for k = 1, #g.cells do
+        local cell = g.cells[k]
+        StyleIcon(cell.icon)
+        SizeGate(cell.gate, g, cw)
+        SizeGate(cell.gateB, g, cw)
+        SizeStep(cell.stepA, pitch, cw)
+        SizeStep(cell.stepB, pitch, cw)
+    end
+end
+
+-- The reveal gate, the count gate and both step pairs. The first pair ends a
+-- pitch on, or two once the total rose past its value before the update; the
+-- second a pitch, or none once it rose past its value after it. Less two
+-- pitches a cell, the chain is one pitch per cell that shows.
+local function FeedCell(cell, leftward)
+    cell.gate:SetMinMaxValues(0, cell.after)
+    cell.gate:SetValue(cell.before)
+    HangShort(cell.clip, cell.fill, cell.gate)
+    local cur = (cell.cCur ~= nil) and cell.cCur or cell.after
+    local floorA = Base(cell.before, cell.gen)
+    FeedStep(cell.stepA, floorA, cur, cur, floorA, leftward)
+    if cell.cCur ~= nil then
+        local floorB = Base(cell.after, cell.gen)
+        FeedWhole(cell.gateB, cell.fillB, cell.clipB, floorB, cell.cCur)
+        FeedStep(cell.stepB, floorB, cell.cCur, floorB, cell.cCur, leftward)
+    else
+        ResetWhole(cell.gateB, cell.fillB, cell.clipB)
+        ResetStep(cell.stepB, leftward)
+    end
+end
+
+local function FeedGhost(g)
+    local leftward = KT.db.PlateSide == "LEFT"
+    for k = 1, g.used do FeedCell(g.cells[k], leftward) end
+end
+
+-- Each cell's art and border from its teammate as they are now: at placing,
+-- and again on a roster change or a settings change.
+local function PaintGhost(g)
+    for k = 1, g.used do
+        local cell = g.cells[k]
+        local member = KT.partyMembers[cell.guid]
+        if member then PaintIcon(cell.icon, member) end
+    end
+end
+
+-- Out of use: closed from plain values, its totals and member dropped.
+local function ParkCell(cell, leftward)
+    cell.icon.cd:Clear()
+    cell.gate:SetMinMaxValues(0, 1)
+    cell.gate:SetValue(1)
+    HangShort(cell.clip, cell.fill, cell.gate)
+    ResetWhole(cell.gateB, cell.fillB, cell.clipB)
+    ResetStep(cell.stepA, leftward)
+    ResetStep(cell.stepB, leftward)
+    ShowStep(cell.stepA, false)
+    ShowStep(cell.stepB, false)
+    cell.clip:Hide()
+    cell.guid, cell.before, cell.after, cell.cCur, cell.gen = nil, nil, nil, nil, nil
+end
+
+local function LevelGhost(g, strata, level)
+    Level(g, strata, level)
+    for k = 1, #g.cells do
+        local cell = g.cells[k]
+        local base = level + 1 + CELL_LEVELS * (k - 1)
+        Level(cell.gate, strata, level)
+        Level(cell.gateB, strata, level)
+        Level(cell.stepA.std, strata, level)
+        Level(cell.stepA.rev, strata, level)
+        Level(cell.stepB.std, strata, level)
+        Level(cell.stepB.rev, strata, level)
+        Level(cell.clip, strata, base)
+        Level(cell.clipB, strata, base)
+        Level(cell.icon, strata, base + 1)
+        Level(cell.icon.cd, strata, base + 2)
+    end
+end
+
+-- The cells' step pairs chained from the ghost's inner edge; a plain offset
+-- undoes their fixed length, so a ghost with no cell open takes no slot.
+local function AnchorGhost(g, from, fromPoint, offset, leftward)
+    g:ClearAllPoints()
+    g:SetPoint(leftward and "RIGHT" or "LEFT", from, fromPoint, offset, 0)
+    local endFrom, endPoint = g, leftward and "RIGHT" or "LEFT"
+    for k = 1, #g.cells do
+        local cell = g.cells[k]
+        local on = k <= g.used
+        if on then
+            endFrom, endPoint = AnchorStep(cell.stepA, endFrom, endPoint, 0, leftward)
+            endFrom, endPoint = AnchorStep(cell.stepB, endFrom, endPoint, 0, leftward)
+        end
+        ShowStep(cell.stepA, on)
+        ShowStep(cell.stepB, on)
+    end
+    local undo = 2 * (KT.db.PlateIconSize + KT.db.PlateSpacing) * g.used
+    return endFrom, endPoint, leftward and undo or -undo
+end
+
+LEVEL.ghost, ANCHOR.ghost, REFEED.ghost = LevelGhost, AnchorGhost, FeedGhost
+WAITS.ghost = true
+RELEASE.ghost = function(g) KT:ReleaseGhost(g) end
 
 ---------------------------------------------------------------------------------
 -- Rows
@@ -577,7 +763,7 @@ end
 -- the kick was seen (KT:PlateStamp), or nil for a plate read now; a plate that
 -- went since takes nothing. A later call for the same kicker replaces an
 -- earlier one still waiting.
-function KT:PlaceKickIcon(guid, unit, stamp)
+function KT:PlaceKickIcon(guid, unit, stamp, counted)
     if not guid or issecretvalue(unit) or type(unit) ~= "string" then return end
     local now = P.epoch[unit] or 0
     if stamp ~= nil and stamp ~= now then return end
@@ -588,6 +774,13 @@ function KT:PlaceKickIcon(guid, unit, stamp)
     end
     pend.seq, pend.open = pend.seq + 1, true
     pend.unit, pend.stamp, pend.at, pend.base, pend.gen = unit, now, GetTime(), nil, nil
+    -- counted: a meter-named kick is in the read that named it, so that read
+    -- is its baseline. Any other takes the first read at or after it, which
+    -- KT:PlatesCounts gives the waiting placement.
+    local member = self.partyMembers[guid]
+    if counted and member and member.unit ~= "player" then
+        pend.base, pend.gen = self.meterBase.a[self:GateSlotOf(member)], KT.meterFight
+    end
     local seq, activation, gen = pend.seq, self.activationID, P.gen
     C_Timer.After(0, function()
         if self.activationID ~= activation or P.gen ~= gen or not self.platesOn or pend.seq ~= seq then return end
@@ -626,6 +819,8 @@ function KT:PutKickIcon(guid, unit, pend)
     end
     e.mobGuid = KE:GetSafeUnitGUID(unit)
     e.start, e.kickAt = pend.at, pend.at
+    e.cGen, e.cBase, e.cCur = pend.gen, pend.base, nil
+    e.needBase = member.unit ~= "player" and pend.gen == nil
     StyleLive(e)
     RefeedLive(e)
     PaintIcon(e.icon, member)
@@ -657,9 +852,279 @@ function KT:ReleaseLive(guid)
     P.live[guid] = nil
     local old = self:Unplace(e)
     e.icon.cd:Clear()
-    e.guid, e.mobGuid = nil, nil
+    e.guid, e.mobGuid, e.cBase, e.cCur = nil, nil, nil, nil
     P.free.live[#P.free.live + 1] = e
     if old then self:LayoutPlate(old) end
+end
+
+---------------------------------------------------------------------------------
+-- Count gates and ghosts
+---------------------------------------------------------------------------------
+function KT:GateSlotOf(member)
+    return KT.GateSlot(member, member.unit, self.meterBase.n)
+end
+
+-- One timer serves every count gate a read skipped during a cooldown. It
+-- wakes at the earliest such end; KT:FeedReady then feeds every element from
+-- the latest read, and each one still cooling arms it again. An earlier arm
+-- takes over, and the timer it replaced finds its token gone.
+function KT:WakeAt(at)
+    if P.readyAt and P.readyAt <= at then return end
+    P.readySeq = P.readySeq + 1
+    P.readyAt = at
+    local seq, wait = P.readySeq, at - GetTime()
+    C_Timer.After((wait > 0) and wait or 0, function()
+        if P.readySeq ~= seq then return end
+        P.readyAt = nil
+        self:FeedReady()
+    end)
+end
+
+-- A live icon's baseline is the first read at or after its kick, so it holds
+-- that kick's own growth. It is fed only past its own cooldown, so a grip
+-- during a cooldown never cuts a running swipe; a read during the cooldown
+-- is skipped, and the wake at its end feeds the latest read, on a plate or off.
+local function FeedLiveCount(e, member, cur, T)
+    if e.needBase then
+        if T < e.kickAt - BASE_SLACK then return end
+        e.needBase, e.cBase, e.cGen = false, cur, KT.meterFight
+        return
+    end
+    if e.cGen == nil or cur == nil then return end
+    if e.cBase == nil and e.cGen == KT.meterFight then return end
+    if KT.MainCooling(member, T) then
+        KT:WakeAt(member.kickStart + member.kickDuration + READY_SLACK)
+        return
+    end
+    e.cCur = cur
+    RefeedLive(e)
+end
+
+-- A cell closes again once its teammate interrupted again, fed only past the
+-- cell's own cooldown; a read during it is skipped until the wake at its end.
+local function FeedCellCount(cell, cur, T, leftward)
+    if cur == nil then return end
+    local endAt = cell.cdStart + cell.cdDur
+    if T < endAt then
+        KT:WakeAt(endAt + READY_SLACK)
+        return
+    end
+    cell.cCur = cur
+    FeedCell(cell, leftward)
+end
+
+-- Each update's gate-slot totals as read (opaque). The cached packet lives
+-- only until this next read. A placement still waiting its frame takes this
+-- read as its baseline when it is the first at or after its kick.
+function KT:PlatesCounts(T, totals)
+    local pk = P.packet
+    P.packetT = -1
+    wipe(pk.units)
+    wipe(pk.before)
+    wipe(pk.after)
+    for guid, pend in pairs(P.pending) do
+        local member = pend.open and pend.gen == nil and self.partyMembers[guid]
+        if member and member.unit ~= "player" and T >= pend.at - BASE_SLACK then
+            pend.base, pend.gen = totals[self:GateSlotOf(member)], KT.meterFight
+        end
+    end
+    self:FeedCounts(T, totals, false)
+end
+
+-- Every live icon and ghost cell fed from totals, on a plate or off. ready:
+-- a wake, not a read, so an icon still waiting for its baseline is left to
+-- the next read, the first at or after its kick.
+function KT:FeedCounts(T, totals, ready)
+    for guid, e in pairs(P.live) do
+        local member = self.partyMembers[guid]
+        if member and member.unit ~= "player" and not (ready and e.needBase) then
+            FeedLiveCount(e, member, totals[self:GateSlotOf(member)], T)
+        end
+    end
+    local leftward = self.db.PlateSide == "LEFT"
+    for i = 1, #P.ghosts do
+        local g = P.ghosts[i]
+        for k = 1, g.used do
+            local cell = g.cells[k]
+            local member = self.partyMembers[cell.guid]
+            if member then FeedCellCount(cell, totals[self:GateSlotOf(member)], T, leftward) end
+        end
+    end
+end
+
+-- The wake, and any cooldown change: the latest read (opaque, the engine's
+-- own current totals, the same table every read gives KT:PlatesCounts).
+function KT:FeedReady()
+    local totals = self.meterBase and self.meterBase.a
+    if not self.platesOn or not totals then return end
+    self:FeedCounts(GetTime(), totals, true)
+end
+
+-- One update's packet: the teammates KT.AdmitGate took and their gate-slot
+-- totals before and after it. plates: the update's hidden plates when nobody
+-- was named; each gets a ghost.
+function KT:PlatesGate(T, admitted, before, after, plates)
+    local pk = P.packet
+    wipe(pk.units)
+    wipe(pk.before)
+    wipe(pk.after)
+    for i = 1, #admitted do
+        local unit = admitted[i]
+        local member = self.meterByUnit[unit]
+        if member then
+            local slot = self:GateSlotOf(member)
+            pk.units[#pk.units + 1] = unit
+            pk.before[unit], pk.after[unit] = before[slot], after[slot]
+        end
+    end
+    P.packetT = T
+    if not plates then return end
+    for i = 1, #plates do
+        local plate = plates[i]
+        if plate.unit then self:MakeGhost(T, plate.unit, plate.stamp) end
+    end
+end
+
+-- Plates that joined after their update take its cached packet.
+function KT:PlatesLatePlates(T0, plates)
+    if P.packetT ~= T0 then return end
+    for i = 1, #plates do
+        local plate = plates[i]
+        if plate.unit then self:MakeGhost(T0, plate.unit, plate.stamp) end
+    end
+end
+
+-- One ghost per update and plate, its cells from the packet, each cooling
+-- from the update's time for that teammate's longest duration. It goes when
+-- the longest cell's cooldown ends. stamp: the plate's lifetime when the kick
+-- was seen; a plate that went since gets none.
+function KT:MakeGhost(T, unit, stamp)
+    local now = P.epoch[unit] or 0
+    if stamp ~= nil and stamp ~= now then return end
+    for i = 1, #P.ghosts do
+        local g = P.ghosts[i]
+        if g.t == T and g.plate == unit then return end
+    end
+    local pk = P.packet
+    local g = table_remove(P.free.ghost) or BuildGhost()
+    local n, longest = 0, 0
+    for i = 1, #pk.units do
+        local u = pk.units[i]
+        local guid = self.meterGuidOf[u]
+        local member = guid and self.partyMembers[guid]
+        local duration = member and self:ClockDuration(member, false)
+        if duration and duration > 0 and n < GHOST_CELLS and pk.before[u] ~= nil and pk.after[u] ~= nil then
+            n = n + 1
+            local cell = g.cells[n] or BuildCell(g)
+            g.cells[n] = cell
+            cell.guid, cell.before, cell.after, cell.gen = guid, pk.before[u], pk.after[u], self.meterFight
+            cell.cdStart, cell.cdDur = T, duration
+            if duration > longest then longest = duration end
+        end
+    end
+    local left = T + longest - GetTime()
+    if n == 0 or left <= 0 then
+        local leftward = self.db.PlateSide == "LEFT"
+        for k = 1, n do ParkCell(g.cells[k], leftward) end
+        P.free.ghost[#P.free.ghost + 1] = g
+        return
+    end
+    -- Plain, fixed at making: a sure kick that takes the longest cell out
+    -- does not move the ghost's end.
+    g.endAt = T + longest
+    g.used, g.t, g.start, g.plate, g.stamp = n, T, T, unit, now
+    g.seq = g.seq + 1
+    P.ghosts[#P.ghosts + 1] = g
+    local seq, gen, activation = g.seq, P.gen, self.activationID
+    C_Timer.After(0, function()
+        if self.activationID ~= activation or P.gen ~= gen or g.seq ~= seq then return end
+        if g.stamp ~= (P.epoch[unit] or 0) then
+            self:ReleaseGhost(g)
+            return
+        end
+        self:PlaceGhost(g, unit)
+    end)
+    C_Timer.After(left, function()
+        if self.activationID ~= activation or P.gen ~= gen or g.seq ~= seq then return end
+        self:ReleaseGhost(g)
+    end)
+end
+
+-- A frame after its update, on its plate while that is still a hostile one;
+-- fed once more a frame after it shows.
+function KT:PlaceGhost(g, unit)
+    if not C_NamePlate.GetNamePlateForUnit(unit) or not IsHostile(unit) or not Attach(g, unit) then
+        self:ReleaseGhost(g)
+        return
+    end
+    g.mobGuid = KE:GetSafeUnitGUID(unit)
+    StyleGhost(g)
+    PaintGhost(g)
+    for k = 1, g.used do
+        local cell = g.cells[k]
+        PaintCooldown(cell.icon, cell.cdStart, cell.cdDur)
+        cell.clip:Show()
+    end
+    FeedGhost(g)
+    AddToRow(g, unit)
+    self:LayoutPlate(unit)
+    FlushLayouts()
+    local seq, gen, activation = g.seq, P.gen, self.activationID
+    C_Timer.After(0, function()
+        if self.activationID ~= activation or P.gen ~= gen or g.seq ~= seq or not g.unit then return end
+        FeedGhost(g)
+    end)
+end
+
+function KT:ReleaseGhost(g)
+    if not g.t then return end
+    local ghosts = P.ghosts
+    for i = #ghosts, 1, -1 do
+        if ghosts[i] == g then
+            table_remove(ghosts, i)
+            break
+        end
+    end
+    local old = self:Unplace(g)
+    local leftward = self.db.PlateSide == "LEFT"
+    for k = 1, g.used do ParkCell(g.cells[k], leftward) end
+    g.used, g.t, g.plate, g.mobGuid, g.stamp, g.endAt = 0, nil, nil, nil, nil, nil
+    g.seq = g.seq + 1
+    P.free.ghost[#P.free.ghost + 1] = g
+    if old then self:LayoutPlate(old) end
+end
+
+-- A sure kick of the member takes their cells out of every ghost that started
+-- at or before it; a ghost left with none goes. Returns whether any cell went.
+function KT:PlatesSupersede(guid, upto)
+    local leftward = self.db.PlateSide == "LEFT"
+    local changed = false
+    for i = #P.ghosts, 1, -1 do
+        local g = P.ghosts[i]
+        if g.t <= upto then
+            local kept = 0
+            for k = 1, g.used do
+                local cell = g.cells[k]
+                if cell.guid == guid then
+                    ParkCell(cell, leftward)
+                else
+                    kept = kept + 1
+                    g.cells[k], g.cells[kept] = g.cells[kept], cell
+                end
+            end
+            if kept ~= g.used then
+                changed = true
+                g.used = kept
+                if kept == 0 then
+                    self:ReleaseGhost(g)
+                elseif g.unit then
+                    LevelGhost(g, g:GetFrameStrata(), g:GetFrameLevel())
+                    self:LayoutPlate(g.unit)
+                end
+            end
+        end
+    end
+    return changed
 end
 
 ---------------------------------------------------------------------------------
@@ -744,6 +1209,7 @@ end
 ---------------------------------------------------------------------------------
 -- The member's kickStart or kickDuration changed.
 function KT:PlatesCooldown(guid)
+    self:FeedReady()
     local e, member = P.live[guid], self.partyMembers[guid]
     if not e or not member then return end
     PaintCooldown(e.icon, member.kickStart, member.kickDuration)
@@ -761,12 +1227,18 @@ function KT:PlatesRoster()
             PaintIcon(e.icon, member)
         end
     end
+    for i = 1, #P.ghosts do PaintGhost(P.ghosts[i]) end
 end
 
 function KT:PlatesReset()
     P.gen = P.gen + 1
     wipe(P.pending)
+    P.packetT = -1
+    wipe(P.packet.units)
+    wipe(P.packet.before)
+    wipe(P.packet.after)
     for guid in pairs(P.live) do self:ReleaseLive(guid) end
+    for i = #P.ghosts, 1, -1 do self:ReleaseGhost(P.ghosts[i]) end
     self:ReleaseSamples()
     for i = #P.waiting, 1, -1 do
         local e = P.waiting[i]
@@ -786,6 +1258,13 @@ function KT:PlatesRestyle()
         RefeedLive(e)
         local member = self.partyMembers[guid]
         if member then PaintIcon(e.icon, member) end
+    end
+    for i = 1, #P.ghosts do
+        local g = P.ghosts[i]
+        if g.unit then Attach(g, g.unit) else Scaled(g) end
+        StyleGhost(g)
+        PaintGhost(g)
+        FeedGhost(g)
     end
     if self.isPreview then self:PlaceSamples() end
     for unit in pairs(P.rows) do self:LayoutPlate(unit) end

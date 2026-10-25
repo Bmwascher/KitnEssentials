@@ -96,6 +96,7 @@ KT.plates = {}    -- the hidden-plate batch, oldest first
 KT.platesT = -1   -- the batch's start
 KT.layersOf = {}    -- [guid] = that teammate's live layers, oldest first
 KT.freeLayers = {}  -- released layers, ready for reuse
+KT.meterFight = 0   -- moves at each new fight and baseline, so an older baseline counts as 0
 
 local function ClearRead(read)
     wipe(read.rows)
@@ -530,6 +531,7 @@ local function GateSlot(member, unit, counts)
     if data and DEMON_KICKS[data.id] and pet and (counts[pet] or 0) >= 1 then return pet end
     return unit
 end
+KT.GateSlot = GateSlot
 
 -- One update's layers: each teammate KT.AdmitGate takes gets one over their
 -- bar, fed the gate slot's totals from before and after the update. plate is
