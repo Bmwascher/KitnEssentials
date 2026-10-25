@@ -613,9 +613,13 @@ IT._TEXT_TEMPLATE = TEXT_TEMPLATE
 
 local function NewText(parent, justify)
     local fs = parent:CreateFontString(nil, "OVERLAY", TEXT_TEMPLATE)
+    -- The template carries a drop shadow that the Character Panel font
+    -- does not reset; Character Panel texts draw without one.
+    fs:SetShadowColor(0, 0, 0, 0)
     fs:SetJustifyH(justify or "LEFT")
     return fs
 end
+IT._NewText = NewText
 
 local function NewBox(parent, frameType)
     local box = CreateFrame(frameType or "Frame", nil, parent)
@@ -880,7 +884,7 @@ local function AcquireNode(i)
     btn.border:SetAllPoints()
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     KE:ApplyIconZoom(btn.icon, 0.3)
-    btn.rank = btn:CreateFontString(nil, "OVERLAY", TEXT_TEMPLATE)
+    btn.rank = NewText(btn, "CENTER")
     btn.choice = btn:CreateTexture(nil, "OVERLAY")
     btn.choice:SetTexture(CHOICE_TEX)
     btn.choice:SetPoint("CENTER", btn, "RIGHT", 0, 0)
@@ -918,8 +922,20 @@ local function ReleaseAll()
     numNodes, numEdges = 0, 0
 end
 
+-- KE:AddIconBorders gives no recolor method; the border is repainted from
+-- the theme here so a theme change reaches it.
+local function IconBorderColor(frame, c)
+    local borders = frame.borders
+    if not borders then return end
+    for _, tex in pairs(borders) do
+        tex:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
+        tex:SetSnapToPixelGrid(false)
+    end
+end
+
 local function PaintHeader(tree)
     local T = KE.Theme
+    IconBorderColor(panel.specFrame, T.border)
     Style(panel.name, 12, T.textPrimary)
     panel.name:SetText(playerName or "Talents")
     panel.specFrame:Hide()
@@ -991,6 +1007,7 @@ local function PaintChips(show)
         if i <= count then
             local def = chipOrder[i]
             chip.bg:SetColorTexture(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 1)
+            chip:SetBorderColor(T.border[1], T.border[2], T.border[3], T.border[4] or 1)
             Style(chip.label, 8, MUTED)
             chip.label:SetText(def.label)
             Style(chip.value, 11, T.textPrimary)
@@ -1185,8 +1202,9 @@ local function DrawTree(db)
     local rankSize = max(8, floor(size * 0.42 + 0.5))
     for i = 1, numRecords do
         local rec = records[i]
+        -- Count only an acquired button, so ReleaseAll never meets a hole.
+        local btn = AcquireNode(numNodes + 1)
         numNodes = numNodes + 1
-        local btn = AcquireNode(numNodes)
         local bounds = BoundsOf(rec)
         local baseX = rec.sub and heroX or (rec.isLeft and leftX or rightX)
         local col = rec.ix - bounds.minX + (rec.sub and (heroShift[rec.iy] or 0) or 0)
@@ -1213,8 +1231,8 @@ local function DrawTree(db)
                     local dx, dy = target.px - rec.px, target.py - rec.py
                     local length = sqrt(dx * dx + dy * dy)
                     if length > 1 then
+                        local edge = AcquireEdge(numEdges + 1)
                         numEdges = numEdges + 1
-                        local edge = AcquireEdge(numEdges)
                         edge:SetSize(length, edgeW)
                         edge:ClearAllPoints()
                         edge:SetPoint("CENTER", panel, "TOPLEFT", (rec.px + target.px) * 0.5, (rec.py + target.py) * 0.5)

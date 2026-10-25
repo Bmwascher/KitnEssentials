@@ -1,8 +1,8 @@
 -- Tier: rules KE invented for the inspect talent panel (tiered test policy):
 -- the open gate with the shared shown predicate, the node keep rule, the hero
 -- subtree pick, the compare gate, the hero compare gate, the difference rule
--- and the chip order. C_Traits reads,
--- layout, tooltips and event timing are smoke-tested, not here.
+-- and the chip order. C_Traits reads, layout, tooltips and event timing are
+-- smoke-tested, not here.
 local helpers = require("dev.spec._helpers")
 
 -- A secret stand-in raises only when ordered against a number (< or >) or
