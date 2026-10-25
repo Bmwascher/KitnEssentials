@@ -433,6 +433,93 @@ local function HighestKnown(ranks, isKnown)
 end
 RCC._HighestKnown = HighestKnown
 
+local function AuraRemaining(aura)
+    return RCC:GetAuraRemaining(aura)
+end
+
+--- PickByBuff
+--- A Forever flask or elixir click's item: the first stocked row with the
+--- remembered buff, else the first stocked row. Returns the item and count.
+local function PickByBuff(rows, rememberedBuff, countOf)
+    if rememberedBuff then
+        for _, row in ipairs(rows) do
+            if row.buff == rememberedBuff then
+                local n = countOf(row.item)
+                if n > 0 then return row.item, n end
+            end
+        end
+    end
+    for _, row in ipairs(rows) do
+        local n = countOf(row.item)
+        if n > 0 then return row.item, n end
+    end
+    return nil, 0
+end
+RCC._PickByBuff = PickByBuff
+
+--- ForeverElixirState
+--- The active listed elixir that runs out first, whose timer the slot shows
+--- and whose buff it remembers (one with no readable expiry counts as last),
+--- then the click's item and count. The active buff replaces the stored one
+--- as the pick's memory: this repaint stores it, so falling back to the old
+--- memory would change the click on the next repaint. `auras` is
+--- ScanPlayerAuras's map.
+local function ForeverElixirState(elixirs, auras, rememberedBuff, countOf, remainOf)
+    local activeBuff, activeRemain
+    for _, row in ipairs(elixirs) do
+        local aura = auras[row.buff]
+        if aura then
+            local remain = remainOf(aura)
+            if activeBuff == nil or (remain and (activeRemain == nil or remain < activeRemain)) then
+                activeBuff, activeRemain = row.buff, remain
+            end
+        end
+    end
+    local pickItem, count = PickByBuff(elixirs, activeBuff or rememberedBuff, countOf)
+    return activeBuff, activeRemain, pickItem, count
+end
+RCC._ForeverElixirState = ForeverElixirState
+
+--- _UpdateFlaskForever
+--- UpdateFlask on Forever: ready on any listed flask buff, which is
+--- remembered for the click.
+function RCC:_UpdateFlaskForever(auras)
+    local btn = self.buttons.flask
+    if not btn then return end
+    local activeAura, activeBuff
+    for _, row in ipairs(FV.flasks) do
+        local aura = auras[row.buff]
+        if aura then
+            activeAura, activeBuff = aura, row.buff
+            break
+        end
+    end
+    self:_PaintReady(btn, activeAura ~= nil, activeAura and self:GetAuraRemaining(activeAura) or nil)
+    if activeBuff and self.db then self.db.LastFlaskBuff = activeBuff end
+end
+
+--- _UpdateFlaskClickForever
+--- UpdateFlaskClick on Forever. The cauldron toggle is a retail option and
+--- is not read here.
+function RCC:_UpdateFlaskClickForever()
+    local btn = self.buttons.flask
+    if not btn then return end
+    local pickItem, count = PickByBuff(FV.flasks, self.db and self.db.LastFlaskBuff, BagCount)
+    self:_ArmUseClick(btn, pickItem, count, SLOT_FLASK)
+end
+
+--- _UpdateElixir
+--- UpdateRune on Forever: the fifth slot tracks the listed elixirs.
+function RCC:_UpdateElixir(auras)
+    local btn = self.buttons.rune
+    if not btn then return end
+    local activeBuff, remain, pickItem, count = ForeverElixirState(FV.elixirs, auras,
+        self.db and self.db.LastElixirBuff, BagCount, AuraRemaining)
+    self:_PaintReady(btn, activeBuff ~= nil, remain)
+    if activeBuff and self.db then self.db.LastElixirBuff = activeBuff end
+    self:_ArmUseClick(btn, pickItem, count, SLOT_RUNE)
+end
+
 --- _UpdateHealthstoneForever
 --- UpdateHealthstone on Forever: every listed rank counts, and a Warlock's
 --- click creates one at the highest Create Healthstone rank known.
@@ -1427,6 +1514,7 @@ end
 --- buffed stat line. The click half lives in UpdateFlaskClick, which reads
 --- bags only and so runs whether or not the aura walk did.
 function RCC:UpdateFlask(auras)
+    if FV then return self:_UpdateFlaskForever(auras) end
     local btn = self.buttons.flask
     if not btn then return end
 
@@ -1467,9 +1555,9 @@ end
 --- restriction, which is why this runs outside the aura-identity gate and
 --- arms in a keystone.
 function RCC:UpdateFlaskClick()
+    if FV then return self:_UpdateFlaskClickForever() end
     local btn = self.buttons.flask
     if not btn then return end
-    local click = btn.click
     local cauldronOnly = self.db and self.db.CauldronFlasksOnly
 
     local available = {}
@@ -1510,12 +1598,21 @@ function RCC:UpdateFlaskClick()
         end
     end
 
+    self:_ArmUseClick(btn, pickItem, pickItem and available[pickItem], SLOT_FLASK)
+end
+
+--- _ArmUseClick
+--- A slot whose click uses a bag item: the item's icon and count and a
+--- `/use <name>` macro, or the slot's placeholder and no click when nothing
+--- was picked or its name is not cached yet.
+function RCC:_ArmUseClick(btn, pickItem, count, slot)
+    local click = btn.click
     btn.nominatedItem = pickItem
     if pickItem then
         self:SetIconFromItem(btn.texture, pickItem)
-        btn.countText:SetText(tostring(available[pickItem]))
+        btn.countText:SetText(tostring(count))
     else
-        btn.texture:SetTexture(DEFAULT_ICONS[SLOT_FLASK])
+        btn.texture:SetTexture(DEFAULT_ICONS[slot])
         btn.countText:SetText("")
     end
 
@@ -1673,6 +1770,7 @@ end
 --- Aura scan against AUGMENT_RUNES buff IDs. Click offers the highest-priority
 --- (lowest priority number) rune item currently in bags.
 function RCC:UpdateRune(auras)
+    if FV then return self:_UpdateElixir(auras) end
     local btn = self.buttons.rune
     if not btn then return end
     local click = btn.click
