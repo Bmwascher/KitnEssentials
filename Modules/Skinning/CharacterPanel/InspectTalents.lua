@@ -10,8 +10,8 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class InspectTalents: AceModule, AceEvent-3.0, AceHook-3.0
-local IT = KitnEssentials:NewModule("InspectTalents", "AceEvent-3.0", "AceHook-3.0")
+---@class InspectTalents: AceModule, AceEvent-3.0
+local IT = KitnEssentials:NewModule("InspectTalents", "AceEvent-3.0")
 
 -- Both load before this file. InspectPanel's inspect-window helpers hold no
 -- state, so they serve here while that module is disabled.
@@ -383,6 +383,8 @@ local function FillRecord(rec, nodeID, info)
     rec.rank, rec.active = rank, rank > 0
     local maxRanks = info.maxRanks
     rec.maxRank = type(maxRanks) == "number" and maxRanks or 1
+    -- Built once per read, not on every redraw.
+    rec.rankText = (rec.active and rec.maxRank > 1) and (rec.rank .. "/" .. rec.maxRank) or ""
     rec.isChoice = info.type == NODE_SELECTION
     local entryRaw = ActiveEntryID(info)
     rec.entryRaw = entryRaw
@@ -424,7 +426,8 @@ end
 local function ReadTree()
     numRecords = 0
     wipe(byID)
-    wipe(entryCache)
+    -- Entries keep across reads: one window session is one player, and
+    -- ResetWindowState clears them. A subtree's active flag can change.
     wipe(subInfoCache)
     wipe(heroList)
     wipe(heroByID)
@@ -1123,7 +1126,7 @@ local function PaintNode(btn, rec, size, rankSize, compareOn)
     else
         rank:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 2, -2)
     end
-    rank:SetText((rec.active and rec.maxRank > 1) and (rec.rank .. "/" .. rec.maxRank) or "")
+    rank:SetText(rec.rankText or "")
     if rec.isChoice then
         local mark = max(8, floor(size * 0.4 + 0.5))
         btn.choice:SetSize(mark, mark)
@@ -1339,6 +1342,13 @@ local function ResetWindowState()
     readValid, readResult, readGUID = false, nil, nil
     numRecords = 0
     wipe(byID)
+    -- The pooled records hold entry refs and Blizzard's edge tables; drop
+    -- them and the caches so a closed window keeps no player's data.
+    for i = 1, #records do wipe(records[i]) end
+    wipe(entryCache)
+    wipe(subInfoCache)
+    wipe(heroList)
+    wipe(heroByID)
     compareState, yourSpecName = "none", nil
     CancelStatsRetry()
     wipe(stats)
@@ -1393,9 +1403,7 @@ function IT:OnEnable()
     end
 end
 
--- AceHook removes the hooks on disable, so the latch goes with them.
 function IT:OnDisable()
-    self._hooked = nil
     ResetWindowState()
     if panel then
         ReleaseAll()
@@ -1404,13 +1412,17 @@ function IT:OnDisable()
     if arrow then arrow:Hide() end
 end
 
+-- A script hook cannot be removed, so the pair is installed once per session
+-- and each handler returns while the module is disabled.
+local windowHooked = false
+
 function IT:InstallWindow()
     local frame = _G.InspectFrame
     if not frame then return end
-    if not self._hooked then
-        self._hooked = true
-        self:SecureHookScript(frame, "OnShow", "OnInspectShow")
-        self:SecureHookScript(frame, "OnHide", "OnInspectHide")
+    if not windowHooked then
+        windowHooked = true
+        frame:HookScript("OnShow", function() IT:OnInspectShow() end)
+        frame:HookScript("OnHide", function() IT:OnInspectHide() end)
     end
     -- The module is on by default, so no frame is made until a window
     -- show: the arrow and panel come from the first apply after it.
@@ -1437,8 +1449,11 @@ end
 -- A child frame keeps its own shown flag, so the reopened window would
 -- show the last player's panel until the next apply.
 function IT:OnInspectHide()
+    if not self:IsEnabled() then return end
     self:UnregisterEvent("INSPECT_READY")
     ResetWindowState()
+    -- Released buttons drop their links to the last player's records.
+    ReleaseAll()
     if panel then
         panel:Hide()
         panel.shownState = nil

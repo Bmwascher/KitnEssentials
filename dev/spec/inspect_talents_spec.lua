@@ -1,8 +1,12 @@
 -- Tier: rules KE invented for the inspect talent panel (tiered test policy):
 -- the open gate with the shared shown predicate, the node keep rule, the hero
--- subtree pick, the compare gate, the hero compare gate, the difference rule
--- and the chip order. C_Traits reads, layout, tooltips and event timing are
--- smoke-tested, not here.
+-- subtree pick, the compare gate, the hero compare gate, the difference rule,
+-- the chip order and the window hooks installing once. C_Traits reads,
+-- layout, tooltips and event timing are smoke-tested, not here.
+--
+-- The window hook case uses a stub frame that counts HookScript calls: the
+-- rule is a call count across a disable and enable, and a predicate lifted
+-- out of the latch would restate its one line.
 local helpers = require("dev.spec._helpers")
 
 -- A secret stand-in raises only when ordered against a number (< or >) or
@@ -165,5 +169,21 @@ describe("Inspect talents: the hero compare gate", function()
         for _, c in ipairs(cases) do
             assert.equals(c.want, gate(c.active == true, c.other == true, c.info), c.name)
         end
+    end)
+end)
+
+describe("Inspect talents: the window hooks", function()
+    it("installs each window hook once across a disable and enable", function()
+        _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+        local IT = loadIT()
+        local count = {}
+        _G.InspectFrame = {
+            IsShown = function() return false end,
+            HookScript = function(_, script) count[script] = (count[script] or 0) + 1 end,
+        }
+        IT:InstallWindow()
+        IT:OnDisable()
+        IT:InstallWindow()
+        assert.same({ OnShow = 1, OnHide = 1 }, count)
     end)
 end)
