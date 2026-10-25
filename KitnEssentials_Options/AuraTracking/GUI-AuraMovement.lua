@@ -79,29 +79,30 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     yOffset = casterOffset
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
+    -- Card 4: Allowlist
     ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType  = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint        = "AnchorFrom",
-            anchorPoint      = "AnchorTo",
-            xOffset          = "XOffset",
-            yOffset          = "YOffset",
-            strata           = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata          = true,
-        onChangeCallback    = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
+    local function GetMovementDefaults()
+        if not KE.GetDefaultDB then return {} end
+        local root = KE:GetDefaultDB()
+        local section = root and root.profile and root.profile.AuraMovement
+        return (section and section.Allowlist) or {}
     end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+
+    db.Allowlist = db.Allowlist or {}
+
+    local allowlistCard, allowlistOffset = GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, {
+        title = "Allowlist",
+        allowlist = db.Allowlist,
+        getDefaults = GetMovementDefaults,
+        infoTitle = "Allowlist Info",
+        infoText = "This list decides which movement buffs the display shows. Personal and externally applied helpful buffs share this one list. A spell that is not on it, or whose row is switched off, will not appear.",
+        restoreActions = {
+            { label = "Kitn Defaults" },
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(allowlistCard, "all")
+    yOffset = allowlistOffset
 
     ----------------------------------------------------------------
     -- Card 3: Display
@@ -200,59 +201,29 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Allowlist
+    -- Card 2: Position Settings
     ----------------------------------------------------------------
-    local function GetMovementDefaults()
-        if not KE.GetDefaultDB then return {} end
-        local root = KE:GetDefaultDB()
-        local section = root and root.profile and root.profile.AuraMovement
-        return (section and section.Allowlist) or {}
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            anchorFrameType  = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint        = "AnchorFrom",
+            anchorPoint      = "AnchorTo",
+            xOffset          = "XOffset",
+            yOffset          = "YOffset",
+            strata           = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata          = true,
+        onChangeCallback    = ApplySettings,
+    })
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-
-    db.Allowlist = db.Allowlist or {}
-
-    local allowlistCard, allowlistOffset = GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, {
-        title = "Allowlist",
-        allowlist = db.Allowlist,
-        getDefaults = GetMovementDefaults,
-        infoTitle = "Allowlist Info",
-        infoText = "This list decides which movement buffs the display shows. Personal and externally applied helpful buffs share this one list. A spell that is not on it, or whose row is switched off, will not appear.",
-        restoreActions = {
-            { label = "Kitn Defaults" },
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(allowlistCard, "all")
-    yOffset = allowlistOffset
-
-    ----------------------------------------------------------------
-    -- Card 5: Glow
-    ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
-        title = "Glow",
-        db = db,
-        typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
-        onChangeCallback = ApplySettings,
-        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
-    })
-    manager:Register(glowCard, "all")
-    yOffset = glowOffset
-
-    ----------------------------------------------------------------
-    -- Card 6: Sound
-    ----------------------------------------------------------------
-    local soundCard, soundOffset = GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, {
-        title = "Sound",
-        db = db,
-        dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
-        notes = {
-            "Plays for any enabled spell on the Allowlist above, whether you cast it or another player does.",
-            "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(soundCard, "all")
-    yOffset = soundOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 7: Font Settings
@@ -282,6 +253,35 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     end
 
     yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 5: Glow
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
+        title = "Glow",
+        db = db,
+        typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
+        onChangeCallback = ApplySettings,
+        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
+    })
+    manager:Register(glowCard, "all")
+    yOffset = glowOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Sound
+    ----------------------------------------------------------------
+    local soundCard, soundOffset = GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, {
+        title = "Sound",
+        db = db,
+        dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
+        notes = {
+            "Plays for any enabled spell on the Allowlist above, whether you cast it or another player does.",
+            "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(soundCard, "all")
+    yOffset = soundOffset
 
     RefreshStates()
     return yOffset

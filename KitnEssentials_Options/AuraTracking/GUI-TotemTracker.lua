@@ -132,39 +132,6 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     yOffset = macroCard:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Position
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 4: Timer Font
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Timer Font",
-        db = db,
-        dbKeys = {
-            fontFace    = "FontFace",
-            fontSize    = "TimerFontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 32 },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
     -- Card 5: Display Settings (Layout)
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
@@ -246,6 +213,39 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     card5:AddRow(rowSwipe, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 4: Timer Font
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Timer Font",
+        db = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontSize    = "TimerFontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 32 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
+    yOffset = fontOffset
 
     UpdateAllWidgetStates()
     return yOffset

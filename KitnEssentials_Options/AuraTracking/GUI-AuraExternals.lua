@@ -118,30 +118,36 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     manager:Register(casterCard, "all")
     yOffset = casterOffset
 
-    ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType  = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint        = "AnchorFrom",
-            anchorPoint      = "AnchorTo",
-            xOffset          = "XOffset",
-            yOffset          = "YOffset",
-            strata           = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata          = true,
-        onChangeCallback    = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
+    local function GetShippedAllowlist()
+        if not KE.GetDefaultDB then return {} end
+        local root = KE:GetDefaultDB()
+        local section = root and root.profile and root.profile.AuraExternals
+        return (section and section.Allowlist) or {}
     end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+
+    db.Allowlist = db.Allowlist or {}
+
+    local allowlistCard, allowlistOffset = GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, {
+        title = "Allowlist",
+        allowlist = db.Allowlist,
+        getDefaults = GetShippedAllowlist,
+        infoTitle = "Allowlist Info",
+        infoText = "This list decides which buffs the display shows. A spell that is not on it, or whose row is switched off, will not appear. Only helpful auras on yourself can be filtered this way, which is every external defensive.",
+        restoreActions = {
+            { label = "Kitn Defaults" },
+            {
+                label = "Blizzard Flagged",
+                tooltip = "Enables only the spells this client flags as external defensives, and switches the rest off without deleting them. This reads the game's per-spell flag, which can differ from what Blizzard's own external defensives frame shows.",
+                resolveEnabled = function(spellID)
+                    local ok, flagged = pcall(C_Spell.IsExternalDefensive, spellID)
+                    return ok and flagged
+                end,
+            },
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(allowlistCard, "all")
+    yOffset = allowlistOffset
 
     ----------------------------------------------------------------
     -- Card 3: Display
@@ -240,112 +246,29 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Glow
+    -- Card 2: Position Settings
     ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
-        title = "Glow",
-        db = db,
-        -- Measured, not guessed. Ants and Proc Loop each play two animations
-        -- per icon, the main flipbook and its additive overlay; Alert plays
-        -- one; Pixel plays four, one per edge.
-        typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
-        onChangeCallback = ApplySettings,
-        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
-    })
-    manager:Register(glowCard, "all")
-    yOffset = glowOffset
-
-    local function GetShippedAllowlist()
-        if not KE.GetDefaultDB then return {} end
-        local root = KE:GetDefaultDB()
-        local section = root and root.profile and root.profile.AuraExternals
-        return (section and section.Allowlist) or {}
-    end
-
-    db.Allowlist = db.Allowlist or {}
-
-    local allowlistCard, allowlistOffset = GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, {
-        title = "Allowlist",
-        allowlist = db.Allowlist,
-        getDefaults = GetShippedAllowlist,
-        infoTitle = "Allowlist Info",
-        infoText = "This list decides which buffs the display shows. A spell that is not on it, or whose row is switched off, will not appear. Only helpful auras on yourself can be filtered this way, which is every external defensive.",
-        restoreActions = {
-            { label = "Kitn Defaults" },
-            {
-                label = "Blizzard Flagged",
-                tooltip = "Enables only the spells this client flags as external defensives, and switches the rest off without deleting them. This reads the game's per-spell flag, which can differ from what Blizzard's own external defensives frame shows.",
-                resolveEnabled = function(spellID)
-                    local ok, flagged = pcall(C_Spell.IsExternalDefensive, spellID)
-                    return ok and flagged
-                end,
-            },
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(allowlistCard, "all")
-    yOffset = allowlistOffset
-
-    local soundCard, soundOffset = GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, {
-        title = "Sound",
-        db = db,
-        dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
-        notes = {
-            -- Says "including your own" because the sound CANNOT honor
-            -- HideSelfCast. Blizzard's UnitAuraSoundInfo carries a unit and a
-            -- spell id and no caster field, so a registration fires for the
-            -- spell however it was applied. The display filters on the caster;
-            -- the sound cannot.
-            "Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.",
-            -- Not a caution about the GUI but about the sound registry:
-            -- removing a registration is always allowed, adding one is not
-            -- while aura identities are hidden, so an Allowlist edit made in
-            -- there retires the old set and cannot build the new one until the
-            -- restriction lifts.
-            "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(soundCard, "all")
-    yOffset = soundOffset
-
-    ----------------------------------------------------------------
-    -- Card 6: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font Settings",
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
-            fontFace    = "FontFace",
-            fontOutline = "FontOutline",
+            anchorFrameType  = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint        = "AnchorFrom",
+            anchorPoint      = "AnchorTo",
+            xOffset          = "XOffset",
+            yOffset          = "YOffset",
+            strata           = "Strata",
         },
-        fontSizes = {
-            { label = "Count Size",  dbKey = "FontSize",      default = 14 },
-            { label = "Timer Size",  dbKey = "TimerFontSize", default = 18 },
-        },
-        fontSizeRange = { 8, 48 },
-        onChangeCallback = ApplySettings,
+        showAnchorFrameType = true,
+        showStrata          = true,
+        onChangeCallback    = ApplySettings,
     })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-
-    -- The card's own last row is added with no trailing gap, so re-open the
-    -- spacing before appending to it.
-    fontCard:AddSpacing(Theme.paddingSmall)
-
-    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
-    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
-        min = 0, max = 10, step = 1,
-        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
-        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
-    })
-    decimalRow:AddWidget(decimalSlider, 0.5)
-    manager:Register(decimalSlider, "all")
-    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
-
-    yOffset = fontCard:GetNextOffset()
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 7: Overlay Position
@@ -435,6 +358,83 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
     yOffset = card7:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font Settings",
+        db = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontOutline = "FontOutline",
+        },
+        fontSizes = {
+            { label = "Count Size",  dbKey = "FontSize",      default = 14 },
+            { label = "Timer Size",  dbKey = "TimerFontSize", default = 18 },
+        },
+        fontSizeRange = { 8, 48 },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+
+    -- The card's own last row is added with no trailing gap, so re-open the
+    -- spacing before appending to it.
+    fontCard:AddSpacing(Theme.paddingSmall)
+
+    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
+    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
+        min = 0, max = 10, step = 1,
+        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
+    })
+    decimalRow:AddWidget(decimalSlider, 0.5)
+    manager:Register(decimalSlider, "all")
+    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
+
+    yOffset = fontCard:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Glow
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
+        title = "Glow",
+        db = db,
+        -- Measured, not guessed. Ants and Proc Loop each play two animations
+        -- per icon, the main flipbook and its additive overlay; Alert plays
+        -- one; Pixel plays four, one per edge.
+        typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
+        onChangeCallback = ApplySettings,
+        onHeightChange = function() C_Timer.After(0, RefreshPage) end,
+    })
+    manager:Register(glowCard, "all")
+    yOffset = glowOffset
+
+    local soundCard, soundOffset = GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, {
+        title = "Sound",
+        db = db,
+        dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
+        notes = {
+            -- Says "including your own" because the sound CANNOT honor
+            -- HideSelfCast. Blizzard's UnitAuraSoundInfo carries a unit and a
+            -- spell id and no caster field, so a registration fires for the
+            -- spell however it was applied. The display filters on the caster;
+            -- the sound cannot.
+            "Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.",
+            -- Not a caution about the GUI but about the sound registry:
+            -- removing a registration is always allowed, adding one is not
+            -- while aura identities are hidden, so an Allowlist edit made in
+            -- there retires the old set and cannot build the new one until the
+            -- restriction lifts.
+            "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(soundCard, "all")
+    yOffset = soundOffset
 
     RefreshStates()
     return yOffset

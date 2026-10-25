@@ -102,132 +102,6 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType  = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint        = "AnchorFrom",
-            anchorPoint      = "AnchorTo",
-            xOffset          = "XOffset",
-            yOffset          = "YOffset",
-            strata           = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata          = true,
-        onChangeCallback    = ApplySettings,
-    })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Display
-    -- (Visibility card removed — module is filter-driven now: it shows
-    -- whenever Enabled, and the Filters card decides which auras qualify.)
-    ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    manager:Register(card4, "all")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local iconSizeSlider = GUIFrame:CreateSlider(row4a, "Icon Size", {
-        min = 16, max = 128, step = 1,
-        value = db.IconSize or 32,
-        callback = function(val) db.IconSize = val; ApplySettings() end,
-    })
-    row4a:AddWidget(iconSizeSlider, 0.5)
-    manager:Register(iconSizeSlider, "all")
-
-    local spacingSlider = GUIFrame:CreateSlider(row4a, "Icon Spacing", {
-        min = -1, max = 10, step = 1,
-        value = db.IconSpacing or 1,
-        callback = function(val) db.IconSpacing = val; ApplySettings() end,
-    })
-    row4a:AddWidget(spacingSlider, 0.5)
-    manager:Register(spacingSlider, "all")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local iconsPerRowSlider = GUIFrame:CreateSlider(row4b, "Icons Per Row", {
-        min = 1, max = 12, step = 1,
-        value = db.IconsPerRow or 8,
-        callback = function(val) db.IconsPerRow = val; ApplySettings() end,
-    })
-    row4b:AddWidget(iconsPerRowSlider, 0.5)
-    manager:Register(iconsPerRowSlider, "all")
-
-    local maxRowsSlider = GUIFrame:CreateSlider(row4b, "Max Rows", {
-        min = 1, max = 3, step = 1,
-        value = db.MaxRows or 1,
-        callback = function(val) db.MaxRows = val; ApplySettings() end,
-    })
-    row4b:AddWidget(maxRowsSlider, 0.5)
-    manager:Register(maxRowsSlider, "all")
-    card4:AddRow(row4b, Theme.rowHeight)
-
-    -- Separator between sliders and grow-direction dropdowns
-    local row4sep1 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
-    local sep4a = GUIFrame:CreateSeparator(row4sep1)
-    row4sep1:AddWidget(sep4a, 1)
-    manager:Register(sep4a, "all")
-    card4:AddRow(row4sep1, Theme.rowHeightSeparator)
-
-    -- Icon Zoom removed: AuraDebuffs uses the KES standard icon crop via
-    -- KE:ApplyIconZoom (0.3 / 7.5%) for visual consistency across modules.
-
-    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local growHorizDropdown = GUIFrame:CreateDropdown(row4c, "Grow Horizontal", {
-        options = GUIFrame.GrowHorizontalOptions,
-        value = db.GrowHorizontal or "RIGHT",
-        callback = function(key) db.GrowHorizontal = key; ApplySettings() end,
-    })
-    row4c:AddWidget(growHorizDropdown, 0.5)
-    manager:Register(growHorizDropdown, "all")
-
-    local growVertDropdown = GUIFrame:CreateDropdown(row4c, "Grow Vertical", {
-        options = GUIFrame.GrowVerticalOptions,
-        value = db.GrowVertical or "DOWN",
-        callback = function(key) db.GrowVertical = key; ApplySettings() end,
-    })
-    row4c:AddWidget(growVertDropdown, 0.5)
-    manager:Register(growVertDropdown, "all")
-    card4:AddRow(row4c, Theme.rowHeight)
-
-    -- Separator between grow-direction dropdowns and swipe/reverse checkboxes
-    local row4sep2 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
-    local sep4b = GUIFrame:CreateSeparator(row4sep2)
-    row4sep2:AddWidget(sep4b, 1)
-    manager:Register(sep4b, "all")
-    card4:AddRow(row4sep2, Theme.rowHeightSeparator)
-
-    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local swipeCheck = GUIFrame:CreateCheckbox(row4d, "Swipe (Cooldown Spiral)", {
-        value = db.Swipe ~= false,
-        callback = function(checked)
-            db.Swipe = checked
-            ApplySettings()
-            RefreshStates()  -- re-evaluate swipeOn condition for reverseCheck
-        end,
-    })
-    row4d:AddWidget(swipeCheck, 0.5)
-    manager:Register(swipeCheck, "all")
-
-    local reverseCheck = GUIFrame:CreateCheckbox(row4d, "Reverse Cooldown Direction", {
-        value = db.Reverse ~= false,
-        callback = function(checked) db.Reverse = checked; ApplySettings() end,
-    })
-    row4d:AddWidget(reverseCheck, 0.5)
-    manager:Register(reverseCheck, "swipeOn")
-    card4:AddRow(row4d, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
-
-    ----------------------------------------------------------------
     -- Card 5: Visual Settings
     -- 1x2 grid: BorderColorMode (left) + Custom Border Color (right).
     -- The custom color picker is grayed out when mode = "dispel" via the
@@ -267,20 +141,6 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     card5:AddRow(row5a, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 6: Dispel Type Colors (shared builder)
-    --
-    -- The per-type palette (db.DispelColors) card lives in a shared builder
-    -- (GUI-DispelTypeColorsCard.lua); Aura Debuffs is its only consumer.
-    -- Registered to "all" here, so it grays out with the Aura Debuffs
-    -- master enable (unchanged behavior).
-    ----------------------------------------------------------------
-    yOffset = GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, {
-        db         = db,
-        manager    = manager,
-        stateGroup = "all",
-    })
 
     ----------------------------------------------------------------
     -- Card 7: Filtering Options
@@ -697,42 +557,130 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     yOffset = card8:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 9: Font Settings
+    -- Card 3: Display
+    -- (Visibility card removed — module is filter-driven now: it shows
+    -- whenever Enabled, and the Filters card decides which auras qualify.)
     ----------------------------------------------------------------
-    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font Settings",
-        db    = db,
+    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    manager:Register(card4, "all")
+
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local iconSizeSlider = GUIFrame:CreateSlider(row4a, "Icon Size", {
+        min = 16, max = 128, step = 1,
+        value = db.IconSize or 32,
+        callback = function(val) db.IconSize = val; ApplySettings() end,
+    })
+    row4a:AddWidget(iconSizeSlider, 0.5)
+    manager:Register(iconSizeSlider, "all")
+
+    local spacingSlider = GUIFrame:CreateSlider(row4a, "Icon Spacing", {
+        min = -1, max = 10, step = 1,
+        value = db.IconSpacing or 1,
+        callback = function(val) db.IconSpacing = val; ApplySettings() end,
+    })
+    row4a:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local iconsPerRowSlider = GUIFrame:CreateSlider(row4b, "Icons Per Row", {
+        min = 1, max = 12, step = 1,
+        value = db.IconsPerRow or 8,
+        callback = function(val) db.IconsPerRow = val; ApplySettings() end,
+    })
+    row4b:AddWidget(iconsPerRowSlider, 0.5)
+    manager:Register(iconsPerRowSlider, "all")
+
+    local maxRowsSlider = GUIFrame:CreateSlider(row4b, "Max Rows", {
+        min = 1, max = 3, step = 1,
+        value = db.MaxRows or 1,
+        callback = function(val) db.MaxRows = val; ApplySettings() end,
+    })
+    row4b:AddWidget(maxRowsSlider, 0.5)
+    manager:Register(maxRowsSlider, "all")
+    card4:AddRow(row4b, Theme.rowHeight)
+
+    -- Separator between sliders and grow-direction dropdowns
+    local row4sep1 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
+    local sep4a = GUIFrame:CreateSeparator(row4sep1)
+    row4sep1:AddWidget(sep4a, 1)
+    manager:Register(sep4a, "all")
+    card4:AddRow(row4sep1, Theme.rowHeightSeparator)
+
+    -- Icon Zoom removed: AuraDebuffs uses the KES standard icon crop via
+    -- KE:ApplyIconZoom (0.3 / 7.5%) for visual consistency across modules.
+
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local growHorizDropdown = GUIFrame:CreateDropdown(row4c, "Grow Horizontal", {
+        options = GUIFrame.GrowHorizontalOptions,
+        value = db.GrowHorizontal or "RIGHT",
+        callback = function(key) db.GrowHorizontal = key; ApplySettings() end,
+    })
+    row4c:AddWidget(growHorizDropdown, 0.5)
+    manager:Register(growHorizDropdown, "all")
+
+    local growVertDropdown = GUIFrame:CreateDropdown(row4c, "Grow Vertical", {
+        options = GUIFrame.GrowVerticalOptions,
+        value = db.GrowVertical or "DOWN",
+        callback = function(key) db.GrowVertical = key; ApplySettings() end,
+    })
+    row4c:AddWidget(growVertDropdown, 0.5)
+    manager:Register(growVertDropdown, "all")
+    card4:AddRow(row4c, Theme.rowHeight)
+
+    -- Separator between grow-direction dropdowns and swipe/reverse checkboxes
+    local row4sep2 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
+    local sep4b = GUIFrame:CreateSeparator(row4sep2)
+    row4sep2:AddWidget(sep4b, 1)
+    manager:Register(sep4b, "all")
+    card4:AddRow(row4sep2, Theme.rowHeightSeparator)
+
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local swipeCheck = GUIFrame:CreateCheckbox(row4d, "Swipe (Cooldown Spiral)", {
+        value = db.Swipe ~= false,
+        callback = function(checked)
+            db.Swipe = checked
+            ApplySettings()
+            RefreshStates()  -- re-evaluate swipeOn condition for reverseCheck
+        end,
+    })
+    row4d:AddWidget(swipeCheck, 0.5)
+    manager:Register(swipeCheck, "all")
+
+    local reverseCheck = GUIFrame:CreateCheckbox(row4d, "Reverse Cooldown Direction", {
+        value = db.Reverse ~= false,
+        callback = function(checked) db.Reverse = checked; ApplySettings() end,
+    })
+    row4d:AddWidget(reverseCheck, 0.5)
+    manager:Register(reverseCheck, "swipeOn")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
+
+    yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
         dbKeys = {
-            fontFace    = "FontFace",
-            fontOutline = "FontOutline",
+            anchorFrameType  = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint        = "AnchorFrom",
+            anchorPoint      = "AnchorTo",
+            xOffset          = "XOffset",
+            yOffset          = "YOffset",
+            strata           = "Strata",
         },
-        fontSizes = {
-            { label = "Count Size", dbKey = "FontSize",      default = 14 },
-            { label = "Timer Size", dbKey = "TimerFontSize", default = 16 },
-        },
-        fontSizeRange      = { 8, 48 },
-        onChangeCallback   = ApplySettings,
+        showAnchorFrameType = true,
+        showStrata          = true,
+        onChangeCallback    = ApplySettings,
     })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-
-    -- The card's own last row is added with no trailing gap, so re-open the
-    -- spacing before appending to it.
-    fontCard:AddSpacing(Theme.paddingSmall)
-
-    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
-    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
-        min = 0, max = 10, step = 1,
-        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
-        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
-    })
-    decimalRow:AddWidget(decimalSlider, 0.5)
-    manager:Register(decimalSlider, "all")
-    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
-
-    yOffset = fontCard:GetNextOffset()
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 10: Overlay Position
@@ -862,6 +810,58 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     card10:AddRow(row10c, Theme.rowHeightLast, 0)
 
     yOffset = card10:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 9: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font Settings",
+        db    = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontOutline = "FontOutline",
+        },
+        fontSizes = {
+            { label = "Count Size", dbKey = "FontSize",      default = 14 },
+            { label = "Timer Size", dbKey = "TimerFontSize", default = 16 },
+        },
+        fontSizeRange      = { 8, 48 },
+        onChangeCallback   = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+
+    -- The card's own last row is added with no trailing gap, so re-open the
+    -- spacing before appending to it.
+    fontCard:AddSpacing(Theme.paddingSmall)
+
+    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
+    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
+        min = 0, max = 10, step = 1,
+        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
+    })
+    decimalRow:AddWidget(decimalSlider, 0.5)
+    manager:Register(decimalSlider, "all")
+    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
+
+    yOffset = fontCard:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Dispel Type Colors (shared builder)
+    --
+    -- The per-type palette (db.DispelColors) card lives in a shared builder
+    -- (GUI-DispelTypeColorsCard.lua); Aura Debuffs is its only consumer.
+    -- Registered to "all" here, so it grays out with the Aura Debuffs
+    -- master enable (unchanged behavior).
+    ----------------------------------------------------------------
+    yOffset = GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        stateGroup = "all",
+    })
 
     RefreshStates()
     return yOffset

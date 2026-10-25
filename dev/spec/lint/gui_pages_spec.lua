@@ -84,10 +84,6 @@ local ALLOWED = {
     },
     L3 = {
         -- Phase 17 reorders these.
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraDebuffs.lua"] = { phase = "17" }, -- Display after Position
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua"] = { phase = "17" }, -- Display after Position
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraMovement.lua"] = { phase = "17" }, -- Display after Position
-        ["KitnEssentials_Options/AuraTracking/GUI-TotemTracker.lua"] = { phase = "17" }, -- Display after Font
         ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-DeathNotifications.lua"] = { phase = "17" }, -- content after Position
         ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-EnemyCounter.lua"] = { phase = "17" }, -- content after Colors
         ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-TargetedSpells.lua"] = { phase = "17" }, -- content after Font
