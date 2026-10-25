@@ -554,3 +554,13 @@ function KT.LayerExpired(layer, now)
     return now >= layer.endAt
 end
 
+---------------------------------------------------------------------------------
+-- Nameplate icons
+---------------------------------------------------------------------------------
+-- An element waiting for its mob's plate comes back to a new plate with the
+-- same plain GUID, or, when it waited on the target, to the target's plate.
+function KT.PlateReturns(waitGuid, plateGuid, waitTarget, isTarget)
+    if waitGuid ~= nil and plateGuid ~= nil and waitGuid == plateGuid then return true end
+    return waitTarget == true and isTarget == true
+end
+

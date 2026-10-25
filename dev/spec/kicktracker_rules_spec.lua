@@ -625,3 +625,20 @@ describe("KickTracker update session ID", function()
         end
     end)
 end)
+
+describe("KickTracker plate return", function()
+    it("brings an element back by its mob's plain GUID or as the target's plate, and otherwise not", function()
+        local KT = L.loadKickTrackerRules()
+        -- waitGuid, plateGuid, waitTarget, isTarget
+        local rows = {
+            { name = "same plain GUID", a = "Creature-1", b = "Creature-1", t = false, i = false, want = true },
+            { name = "different GUIDs", a = "Creature-1", b = "Creature-2", t = false, i = false, want = false },
+            { name = "no GUID, waited on the target, the new plate is the target", t = true, i = true, want = true },
+            { name = "no GUID, waited on the target, not the target", t = true, i = false, want = false },
+            { name = "neither", t = false, i = true, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.PlateReturns(row.a, row.b, row.t, row.i), row.name)
+        end
+    end)
+end)
