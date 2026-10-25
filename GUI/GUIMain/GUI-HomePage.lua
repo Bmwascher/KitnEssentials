@@ -72,13 +72,13 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 2: General
+    -- Card 2: Preferences
     ---------------------------------------------------------------------------------
     local db = KE.db and KE.db.profile
     local themeDb = KE.db and KE.db.global and KE.db.global.Theme
     local versionDb = KE.db and KE.db.global and KE.db.global.VersionCheck
     local themeMode = (themeDb and themeDb.Mode) or "preset"
-    local card2 = GUIFrame:CreateCard(scrollChild, "General", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Preferences", yOffset)
 
     local row1 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
 

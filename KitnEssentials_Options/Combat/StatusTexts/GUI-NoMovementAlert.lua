@@ -167,11 +167,11 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     end
 
     ------------------------------------------------------------------
-    -- Card 4: Font -- inherited from Combat Texts while attached.
+    -- Card 4: Font Settings -- inherited from Combat Texts while attached.
     ------------------------------------------------------------------
     if not attached then
         local _, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-            title = "Font",
+            title = "Font Settings",
             db = db,
             dbKeys = { fontFace = "FontFace", fontSize = "FontSize", fontOutline = "FontOutline" },
             fontSizeRange = { 8, 48 },

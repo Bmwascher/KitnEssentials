@@ -58,9 +58,9 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: General Settings
+    -- Card 2: Display Settings
     ----------------------------------------------------------------
-    local cardGen = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    local cardGen = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(cardGen, "all")
 
     local rowGen1 = GUIFrame:CreateRow(cardGen.content, Theme.rowHeight)

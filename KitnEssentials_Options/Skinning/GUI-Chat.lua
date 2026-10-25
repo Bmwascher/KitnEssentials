@@ -672,9 +672,9 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     yOffset = card9:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 10: Whisper Sounds
+    -- Card 10: Whisper Sound
     ----------------------------------------------------------------
-    local card10 = GUIFrame:CreateCard(scrollChild, "Whisper Sounds", yOffset)
+    local card10 = GUIFrame:CreateCard(scrollChild, "Whisper Sound", yOffset)
     manager:Register(card10, "all")
 
     local soundOptions = GUIFrame.BuildSoundOptions()

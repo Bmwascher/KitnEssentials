@@ -38,7 +38,7 @@ local DEFAULT_SPEED_ADAPTER = {
 
 function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     config = config or {}
-    local title = config.title or "Glow Settings"
+    local title = config.title or "Glow"
     local db = config.db
     local dbKeys = config.dbKeys or {}
     local onChange = config.onChangeCallback

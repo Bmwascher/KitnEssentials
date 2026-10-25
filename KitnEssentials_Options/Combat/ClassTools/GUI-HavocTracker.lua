@@ -91,9 +91,9 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Display
+    -- Card 2: Display Settings
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
 
     local textRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local textBox = GUIFrame:CreateEditBox(textRow, "Text", {

@@ -232,9 +232,9 @@ local function BuildPage(opts)
         yOffset = posOffset
 
         --------------------------------------------------------------
-        -- Card 4: Font
+        -- Card 4: Font Settings
         --------------------------------------------------------------
-        local card4 = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+        local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
         table_insert(subCards, card4)
 
         local fontList = {}

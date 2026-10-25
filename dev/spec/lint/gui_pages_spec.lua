@@ -65,37 +65,6 @@ local PHASES = { ["16"] = true, ["17"] = true, ["18"] = true, ["none until appro
 -- An L3, L4 or L5 entry ends with the failure's detail as a comment.
 local ALLOWED = {
     L1 = {
-        -- Phase 16 renames these to the standard form.
-        ["GUI/GUIMain/GUI-HomePage.lua|General"] = { phase = "16" },
-        ["GUI/GUIWidgets/GUI-GlowSettingsCard.lua|Glow Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraDebuffs.lua|Element Positions"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua|Element Positions"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua|Glow Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/GUI-AuraHeaders.lua|Font"] = { phase = "16" },
-        ["KitnEssentials_Options/AuraTracking/PartyBuffs/GUI-PartyPotions.lua|Position"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-CustomCooldowns.lua|Font"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua|Warning Font Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-DivineArbiter.lua|Display"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-HavocTracker.lua|Display"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-Recuperate.lua|General Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-ShamanProcCooldowns.lua|Font"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/ClassTools/GUI-TimeSpiral.lua|Display"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/GUI-CombatCross.lua|General Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/GUI-FocusCastbar.lua|General Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/GUI-FocusCastbar.lua|Sound Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/GUI-RangeChecker.lua|General Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-NoMovementAlert.lua|Font"] = { phase = "16" },
-        ["KitnEssentials_Options/Combat/StatusTexts/GUI-PotionReady.lua|Display & Visibility"] = { phase = "16" },
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-DeathNotifications.lua|Active In"] = { phase = "16" },
-        ["KitnEssentials_Options/DungeonTools/DungeonAlerts/GUI-EnemyCounter.lua|General Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersBars.lua|Bar Display Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersCfg.lua|Sounds"] = { phase = "16" },
-        ["KitnEssentials_Options/DungeonTools/DungeonTimers/GUI-DungeonTimersTexts.lua|Text Display Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/QoL/GroupTools/GUI-ReadyCheckConsumables.lua|General Settings"] = { phase = "16" },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-UIWidgets.lua|Font"] = { phase = "16" },
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-UIWidgets.lua|Top-Center Position"] = { phase = "16" },
-        ["KitnEssentials_Options/Skinning/GUI-Chat.lua|Whisper Sounds"] = { phase = "16" },
-        ["KitnEssentials_Options/Skinning/GUI-Tooltips.lua|General"] = { phase = "16" },
         -- Phase 18 handles these special pages.
         ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-CCTracker.lua|Display"] = { phase = "18" },
         ["KitnEssentials_Options/Skinning/GUI-DamageMeter.lua|Font"] = { phase = "18" },
@@ -115,7 +84,6 @@ local ALLOWED = {
     },
     L3 = {
         -- Phase 17 reorders these.
-        ["GUI/GUIMain/GUI-HomePage.lua"] = { phase = "17" }, -- content after Display
         ["KitnEssentials_Options/AuraTracking/GUI-AuraDebuffs.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/AuraTracking/GUI-AuraExternals.lua"] = { phase = "17" }, -- Display after Position
         ["KitnEssentials_Options/AuraTracking/GUI-AuraMovement.lua"] = { phase = "17" }, -- Display after Position

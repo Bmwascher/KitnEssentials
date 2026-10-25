@@ -110,7 +110,7 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
 
     ShowSettingsTextPreviews()
 
-    local displayCard = GUIFrame:CreateCard(scrollChild, "Text Display Settings", yOffset)
+    local displayCard = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(displayCard, "all")
 
     local row1 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)

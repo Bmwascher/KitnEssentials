@@ -60,9 +60,9 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: General Settings
+    -- Card 2: Display Settings
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card2, "all")
 
     manager:RegisterGroup(card2:AddCheckboxGrid({

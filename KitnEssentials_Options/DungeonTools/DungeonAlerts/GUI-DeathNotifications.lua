@@ -60,13 +60,13 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
 
     card1:AddLabel("Announces on screen when a party or raid member dies, and when your focus target " ..
         "dies, with a spoken reminder in combat if you want one. On in dungeons by default; raids " ..
-        "are opt-in on the Active In card.")
+        "are opt-in on the Show In card.")
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Activation Context
     ----------------------------------------------------------------
-    local cardContext = GUIFrame:CreateCard(scrollChild, "Active In", yOffset)
+    local cardContext = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
     manager:Register(cardContext, "all")
 
     manager:RegisterGroup(cardContext:AddCheckboxGrid({

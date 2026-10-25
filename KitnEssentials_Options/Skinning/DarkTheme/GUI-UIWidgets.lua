@@ -101,9 +101,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Font
+    -- Card 2: Font Settings
     ----------------------------------------------------------------
-    local cardFont = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    local cardFont = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(cardFont, "all")
 
     local rowFace = GUIFrame:CreateRow(cardFont.content, Theme.rowHeight)
@@ -334,14 +334,14 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     yOffset = cardIcons:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Top-Center Container
+    -- Card 6: Top Center Container
     ----------------------------------------------------------------
     local function ApplyTopCenter()
         local UIW = KitnEssentials:GetModule("UIWidgets", true)
         if UIW and UIW:IsEnabled() then UIW:ApplyTopCenter() end
     end
 
-    local cardTC = GUIFrame:CreateCard(scrollChild, "Top-Center Container", yOffset)
+    local cardTC = GUIFrame:CreateCard(scrollChild, "Top Center Container", yOffset)
     manager:Register(cardTC, "all")
     cardTC:AddHeaderToggle(tcDB.Enabled == true, function(checked)
         tcDB.Enabled = checked
@@ -379,12 +379,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     yOffset = cardTC:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Top-Center Position
+    -- Card 7: Top Center Position
     ----------------------------------------------------------------
     -- db is the TopCenter sub-table, so the card's root keys
     -- (anchorFrameType/ParentFrame/Strata) land there, not on the module root.
     local tcPosCard, tcPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Top-Center Position",
+        title = "Top Center Position",
         db = tcDB,
         dbKeys = {
             selfPoint = "AnchorFrom",

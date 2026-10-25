@@ -63,9 +63,9 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: General Settings (Size + Font Outline)
+    -- Card 2: Display Settings (Size + Font Outline)
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card2, "all")
 
     local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)

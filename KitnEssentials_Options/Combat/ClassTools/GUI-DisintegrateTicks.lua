@@ -226,10 +226,10 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card 5: Warning Font Settings
+    -- Card 5: Warning Font
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Warning Font Settings",
+        title = "Warning Font",
         db = db,
         dbKeys = {
             fontFace = "ClipWarning.FontFace",

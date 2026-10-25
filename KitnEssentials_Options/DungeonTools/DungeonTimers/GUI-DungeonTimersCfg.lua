@@ -571,9 +571,9 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ---------------------------------------------------------------------------
-    -- Card 3: Sounds — mute toggle + channel dropdown side by side
+    -- Card 3: Sound — mute toggle + channel dropdown side by side
     ---------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Sounds", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
 
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local muteCheck = GUIFrame:CreateCheckbox(row3, "Mute all preset sounds", {

@@ -737,14 +737,14 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     yOffset = fontCard:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 10: Element Positions
+    -- Card 10: Overlay Position
     --
     -- One anchor per element (Timer text / Stack text / Dispel icon)
     -- drives both AnchorFrom and AnchorTo — picking "CENTER" aligns the
     -- element's center with the button's center, picking "BOTTOMRIGHT"
     -- stacks them by bottom-right, etc.
     ----------------------------------------------------------------
-    local card10 = GUIFrame:CreateCard(scrollChild, "Element Positions", yOffset)
+    local card10 = GUIFrame:CreateCard(scrollChild, "Overlay Position", yOffset)
     manager:Register(card10, "all")
 
     local TEXT_ANCHOR_OPTIONS = GUIFrame.AnchorPointOptions

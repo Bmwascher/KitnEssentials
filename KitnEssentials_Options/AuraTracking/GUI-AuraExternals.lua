@@ -242,10 +242,10 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Glow Settings
+    -- Card 4: Glow
     ----------------------------------------------------------------
     local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
-        title = "Glow Settings",
+        title = "Glow",
         db = db,
         -- Measured, not guessed. Ants and Proc Loop each play two animations
         -- per icon, the main flipbook and its additive overlay; Alert plays
@@ -350,14 +350,14 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = fontCard:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Element Positions
+    -- Card 7: Overlay Position
     --
     -- One anchor per element (Timer text / Stack text) drives both
     -- AnchorFrom and AnchorTo — picking "CENTER" aligns the element's
     -- center with the button's center, picking "BOTTOMRIGHT" stacks them
-    -- by bottom-right, etc. Mirrors AuraDebuffs' Element Positions card.
+    -- by bottom-right, etc. Mirrors AuraDebuffs' Overlay Position card.
     ----------------------------------------------------------------
-    local card7 = GUIFrame:CreateCard(scrollChild, "Element Positions", yOffset)
+    local card7 = GUIFrame:CreateCard(scrollChild, "Overlay Position", yOffset)
     manager:Register(card7, "all")
 
     local TEXT_ANCHOR_OPTIONS = GUIFrame.AnchorPointOptions

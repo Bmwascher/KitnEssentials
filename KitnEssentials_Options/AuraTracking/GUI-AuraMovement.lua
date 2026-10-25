@@ -228,7 +228,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     yOffset = allowlistOffset
 
     ----------------------------------------------------------------
-    -- Card 5: Glow Settings
+    -- Card 5: Glow
     ----------------------------------------------------------------
     local glowCard, glowOffset = GUIFrame:CreateAuraGlowCard(scrollChild, yOffset, {
         title = "Glow",

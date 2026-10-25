@@ -132,9 +132,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card 3: General
+    -- Card 3: Display Settings
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "General", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card3, "all")
 
     local row3a = GUIFrame:CreateRow(card3.content, 40)

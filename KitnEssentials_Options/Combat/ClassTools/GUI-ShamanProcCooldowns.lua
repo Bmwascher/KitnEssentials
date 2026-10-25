@@ -207,7 +207,7 @@ GUIFrame:RegisterContent("ShamanProcCooldowns", function(scrollChild, yOffset)
         yOffset = posOffset
 
         local _, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-            title = "Font",
+            title = "Font Settings",
             db = db,
             dbKeys = {
                 fontFace    = "FontFace",

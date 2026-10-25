@@ -173,10 +173,10 @@ GUIFrame:RegisterContent("PartyBuffsPotions", function(scrollChild, yOffset)
     yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Position (the same saved position /kes edit moves)
+    -- Card: Position Settings (the same saved position /kes edit moves)
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position",
+        title = "Position Settings",
         db = db,
         positionKey = "PotionPosition",
         dbKeys = {

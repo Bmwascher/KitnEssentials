@@ -112,7 +112,7 @@ GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
 
     ShowSettingsBarPreviews()
 
-    local displayCard = GUIFrame:CreateCard(scrollChild, "Bar Display Settings", yOffset)
+    local displayCard = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(displayCard, "all")
 
     local row1 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)

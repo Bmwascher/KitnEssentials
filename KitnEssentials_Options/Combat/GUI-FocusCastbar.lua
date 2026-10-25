@@ -112,9 +112,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: General Settings (Width, Height, Bar Texture)
+    -- Card 2: Display Settings (Width, Height, Bar Texture)
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card2, "all")
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
@@ -509,9 +509,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = cardGlow:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 8: Sound Settings
+    -- Card 8: Sound
     ----------------------------------------------------------------
-    local cardSound = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
+    local cardSound = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
     manager:Register(cardSound, "all")
 
     local soundList = GUIFrame.BuildSoundOptions()

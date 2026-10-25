@@ -276,11 +276,11 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
     end
 
     ------------------------------------------------------------------
-    -- Card 5: Font -- from Combat Texts while attached.
+    -- Card 5: Font Settings -- from Combat Texts while attached.
     ------------------------------------------------------------------
     if not attached then
         local _, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-            title = "Font",
+            title = "Font Settings",
             db = db,
             dbKeys = { fontFace = "FontFace", fontSize = "FontSize", fontOutline = "FontOutline" },
             fontSizeRange = { 8, 48 },
