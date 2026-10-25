@@ -86,6 +86,12 @@ function FC:OnEnable()
     self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
     self:RegisterEvent("UNIT_TARGET", "OnUnitTarget")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
+    -- Forever kicks depend on the stance or form and, for Shield Bash, on
+    -- the off-hand, so a change of either re-picks the kick there.
+    if KE.IS_FOREVER then
+        self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "CacheInterruptId")
+        self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnEquipmentChanged")
+    end
 
     H.EnsureOnUpdate(self)
     self:CacheInterruptId()
@@ -149,6 +155,13 @@ end
 -- PLAYER_SPECIALIZATION_CHANGED fires for every group member's spec change.
 function FC:CacheInterruptId(_, unit)
     if unit and unit ~= "player" then return end
+    H.CacheInterruptId(self)
+end
+
+-- Its own handler: CacheInterruptId reads its second argument as a unit,
+-- and this event's is the slot.
+function FC:OnEquipmentChanged(_, slot)
+    if slot ~= INVSLOT_OFFHAND then return end
     H.CacheInterruptId(self)
 end
 
