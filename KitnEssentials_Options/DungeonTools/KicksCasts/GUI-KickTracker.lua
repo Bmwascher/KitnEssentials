@@ -122,7 +122,6 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local cardPlates = GUIFrame:CreateCard(scrollChild, "Nameplate Icons", yOffset)
     manager:Register(cardPlates, "plates")
 
-    -- Each is one standalone on/off setting, so each is a switch.
     local plateSwitches = {
         { key = "PlateAboveOverlap", label = "Show Above Overlapping Nameplates",
           tooltip = "The icons draw over every other nameplate, so an overlapping plate never hides " ..

@@ -125,7 +125,6 @@ local function HostOf(unit)
     return plate, plate:GetFrameStrata(), plate:GetFrameLevel() + PLATE_TOP
 end
 
--- One empty 1x1 frame with no script.
 local function EnsureLift()
     if P.lift then return end
     local lift = CreateFrame("Frame", nil, UIParent)
@@ -207,7 +206,6 @@ local function HangWhole(clip, fill, gate)
     clip:SetPoint("BOTTOMRIGHT", fill, "BOTTOMRIGHT", 0, 0)
 end
 
--- Whole from plain values: the element shows.
 local function ResetWhole(gate, fill, clip)
     gate:SetMinMaxValues(0, 1)
     gate:SetValue(1)
@@ -276,7 +274,6 @@ local function FeedStep(pr, lo, hi, v1, v2, leftward)
     second:SetValue(v2)
 end
 
--- One pitch from plain values.
 local function ResetStep(pr, leftward)
     FeedStep(pr, 0, 1, 0, 0, leftward)
 end
@@ -433,12 +430,10 @@ local function AnchorLive(e, from, fromPoint, offset, leftward)
     return endFill, endPoint, 0
 end
 
--- Per element kind: frame levels, row placement, feeding again after a move.
 local LEVEL = { live = LevelLive, sample = LevelLive }
 local ANCHOR = { live = AnchorLive, sample = AnchorLive }
 local REFEED = { live = RefeedLive, sample = RefeedLive }
 
--- On the unit's host, at its strata and level.
 local function Attach(e, unit)
     local host, strata, level = HostOf(unit)
     if not host then return false end
@@ -450,7 +445,6 @@ local function Attach(e, unit)
     return true
 end
 
--- Off any plate, under the lift.
 local function Park(e)
     e:Hide()
     e:ClearAllPoints()
@@ -918,9 +912,8 @@ local function LayoutPass()
     FlushLayouts()
 end
 
--- On each placement, removal, cooldown change and settings change, never per
--- frame. The row is marked and laid out by the next pass, so the anchor
--- finder only ever runs in a C_Timer callback, whatever stack asked.
+-- Marks the row for the next pass, so the anchor finder only ever runs in a
+-- C_Timer callback, whatever stack asked.
 function KT:LayoutPlate(unit)
     P.dirty[unit] = true
     if P.flushArmed then return end
@@ -1574,7 +1567,6 @@ function KT:PlatesReset()
     wipe(P.dirty)
 end
 
--- Every element is hosted, styled and laid out again.
 function KT:PlatesRestyle()
     if not P.lift then return end
     ReadScale()

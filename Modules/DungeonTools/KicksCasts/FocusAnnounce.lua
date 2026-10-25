@@ -33,7 +33,7 @@ FA.MARKER_CHANGED = "KitnEssentials_FocusMarkerChanged"
 local MDT_HEAD = "!~MDT2~"
 local MESSAGE_MAX = 255  -- one addon message; a longer text would need a multi-part send
 
--- The eight markers' English names, as Focus Marker has always sent them.
+-- The eight markers' English names, as Focus Marker sends them.
 local NAME_INDEX = {
     star = 1, circle = 2, diamond = 3, triangle = 4,
     moon = 5, square = 6, cross = 7, skull = 8,

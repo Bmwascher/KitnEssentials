@@ -905,7 +905,6 @@ end
 ---------------------------------------------------------------------------------
 function KT:ShouldBeActive()
     if not self.db or not self.db.Enabled then return false end
-    -- With neither bars nor plate icons there is nothing to show.
     if self.db.ShowBars == false and self.db.PlateIcons == false then return false end
     local inInstance, instanceType = IsInInstance()
     if not inInstance or instanceType ~= "party" then return false end
