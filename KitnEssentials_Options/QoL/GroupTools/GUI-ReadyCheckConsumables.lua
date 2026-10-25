@@ -28,6 +28,9 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
 
     local mod = GetModule()
     local _, playerClass = UnitClass("player")
+    -- The module's own choice, so a retail load on a Forever interface keeps
+    -- the retail page.
+    local foreverData = mod ~= nil and mod.usesForeverData == true
 
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("customPosition", function() return db.PositionMode == "custom" end)
@@ -61,8 +64,9 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel("Attaches a row of consumable icons to the ready check popup: food, flask, weapon " ..
-        "enhancements, augment rune, healthstone and, for Warlocks, Soulstone. Each shows whether it " ..
-        "is up and for how long; click one to use the matching item from your bags.")
+        "enhancements, " .. (foreverData and "elixir" or "augment rune") .. ", healthstone and, for " ..
+        "Warlocks, Soulstone. Each shows whether it is up and for how long; click one to use the matching " ..
+        "item from your bags.")
 
     yOffset = card1:GetNextOffset()
 
@@ -89,16 +93,17 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     local consumables = {
         ConsumablePick("Food", "ShowFood"),
         ConsumablePick("Flask", "ShowFlask"),
-        ConsumablePick("Augment Rune", "ShowAugmentRune"),
+        foreverData and ConsumablePick("Elixir", "ShowElixir") or ConsumablePick("Augment Rune", "ShowAugmentRune"),
         ConsumablePick("Weapon Enchant (MH)", "ShowWeaponOil"),
         ConsumablePick("Weapon Enchant (OH)", "ShowOffHandOil"),
         ConsumablePick("Healthstone", "ShowHealthstone", "Needs a Warlock in your group."),
     }
-    if playerClass == "WARLOCK" or playerClass == "SHAMAN" then
+    -- Forever has no Shaman shield and no class checks.
+    if playerClass == "WARLOCK" or (playerClass == "SHAMAN" and not foreverData) then
         consumables[#consumables + 1] = ConsumablePick(
             playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", "ShowClassItem")
     end
-    if playerClass == "SHAMAN" or playerClass == "PALADIN" then
+    if not foreverData and (playerClass == "SHAMAN" or playerClass == "PALADIN") then
         consumables[#consumables + 1] = ConsumablePick(
             playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", "ClassChecks")
     end
@@ -157,21 +162,24 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(lowMinutesSlider, "lowWarning")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Flasks: cauldron only", {
-        value = db.CauldronFlasksOnly,
-        callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
-    })
-    row2c:AddWidget(cauldronOnlyCheck, 0.5)
-    manager:Register(cauldronOnlyCheck, "all")
+    -- Cauldron flasks and augment runes do not exist on Forever.
+    if not foreverData then
+        local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+        local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Flasks: cauldron only", {
+            value = db.CauldronFlasksOnly,
+            callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
+        })
+        row2c:AddWidget(cauldronOnlyCheck, 0.5)
+        manager:Register(cauldronOnlyCheck, "all")
 
-    local unlimitedRuneCheck = GUIFrame:CreateCheckbox(row2c, "Runes: unlimited only", {
-        value = db.UnlimitedRunesOnly,
-        callback = function(checked) db.UnlimitedRunesOnly = checked; ApplySettings() end,
-    })
-    row2c:AddWidget(unlimitedRuneCheck, 0.5)
-    manager:Register(unlimitedRuneCheck, "all")
-    card2:AddRow(row2c, Theme.rowHeight)
+        local unlimitedRuneCheck = GUIFrame:CreateCheckbox(row2c, "Runes: unlimited only", {
+            value = db.UnlimitedRunesOnly,
+            callback = function(checked) db.UnlimitedRunesOnly = checked; ApplySettings() end,
+        })
+        row2c:AddWidget(unlimitedRuneCheck, 0.5)
+        manager:Register(unlimitedRuneCheck, "all")
+        card2:AddRow(row2c, Theme.rowHeight)
+    end
 
     local row2sep2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
     local sep2b = GUIFrame:CreateSeparator(row2sep2)
@@ -275,6 +283,22 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Colors
     ----------------------------------------------------------------
+    local colorNotes = {
+        KE:ColorTextByTheme("-") .. " " .. KE:Gold("Duration Text") .. " is the base color for the timer/count above each icon.",
+        KE:ColorTextByTheme("-") .. " " .. KE:Gold("Low Duration Text") .. " replaces the other two, and colors the glow, when a buff is under the warning threshold.",
+        KE:ColorTextByTheme("-") .. " " .. KE:Gold("Hearty Food Text") .. " replaces the base color on the food slot when your active food persists through death.",
+    }
+    local colorRows = {
+        { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
+        { label = "Low Duration Text", key = "LowDurationColor", default = { 1.0, 0.3, 0.3, 1.0 } },
+        { label = "Hearty Food Text", key = "HeartyFoodColor", default = { 0.2, 1.0, 0.2, 1.0 } },
+    }
+    -- No Forever food persists through death.
+    if foreverData then
+        colorNotes[2] = KE:ColorTextByTheme("-") .. " " .. KE:Gold("Low Duration Text") .. " replaces the base color, and colors the glow, when a buff is under the warning threshold."
+        colorNotes[3] = nil
+        colorRows[3] = nil
+    end
     yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
         db = db,
         manager = manager,
@@ -282,14 +306,8 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         isLast = true,
         perRow = 3,
         noteHeight = 74,
-        note = KE:ColorTextByTheme("-") .. " " .. KE:Gold("Duration Text") .. " is the base color for the timer/count above each icon.\n" ..
-            KE:ColorTextByTheme("-") .. " " .. KE:Gold("Low Duration Text") .. " replaces the other two, and colors the glow, when a buff is under the warning threshold.\n" ..
-            KE:ColorTextByTheme("-") .. " " .. KE:Gold("Hearty Food Text") .. " replaces the base color on the food slot when your active food persists through death.",
-        colors = {
-            { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
-            { label = "Low Duration Text", key = "LowDurationColor", default = { 1.0, 0.3, 0.3, 1.0 } },
-            { label = "Hearty Food Text", key = "HeartyFoodColor", default = { 0.2, 1.0, 0.2, 1.0 } },
-        },
+        note = table.concat(colorNotes, "\n"),
+        colors = colorRows,
     })
 
     RefreshStates()
