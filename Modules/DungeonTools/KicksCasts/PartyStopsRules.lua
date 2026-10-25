@@ -37,22 +37,26 @@ function Rules.Verdict(unit, api, strict)
     return nil
 end
 
--- An unread need talent counts as taken, and so does one in absent: the
--- member's tree lacks it, so its 0 means not found rather than not taken. A
--- member is dropped only when every one reads untaken. A spec, then a role,
--- limits a stop only once known.
+-- An unread need talent counts as taken. One in absent, which the member's
+-- tree lacks, reads 0 without meaning untaken, so it is left out; a stop
+-- whose every need talent is absent is no talent for that spec and fits. A
+-- member is dropped only when every need talent left reads 0. A spec, then a
+-- role, limits a stop only once known.
 function Rules.Fits(stop, member, ranks, absent)
     if member.class ~= stop.class then return false end
     local need = stop.need
     if need and #need > 0 and ranks then
-        local taken = false
+        local left, taken = false, false
         for _, id in ipairs(need) do
-            if ranks[id] ~= 0 or (absent and absent[id]) then
-                taken = true
-                break
+            if not (absent and absent[id]) then
+                left = true
+                if ranks[id] ~= 0 then
+                    taken = true
+                    break
+                end
             end
         end
-        if not taken then return false end
+        if left and not taken then return false end
     end
     if stop.spec then
         if member.spec ~= nil then return member.spec == stop.spec end
