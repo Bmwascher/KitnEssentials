@@ -108,10 +108,6 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else,
-    -- the label included.
-    if db.Enabled == false then return card1:GetNextOffset() end
-
     card1:AddLabel("Turns the game's combat log on for the content you tick below, and " ..
         "off again when you leave." ..
         "\n\nThat log file is what |cffffd100Warcraft Logs|r uploads and what " ..
@@ -119,6 +115,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         "and ends." ..
         "\n\nA log you started yourself with |cffffd100/combatlog|r is left alone - this " ..
         "only closes logs it opened.")
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return card1:GetNextOffset() end
 
     yOffset = card1:GetNextOffset()
 

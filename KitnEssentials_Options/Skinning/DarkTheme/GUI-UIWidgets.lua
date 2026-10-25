@@ -94,10 +94,11 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         RefreshStates()
     end)
 
-    -- Lone header bar: settings only render while the module is enabled.
+    card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners) and spell icons.")
+
+    -- A disabled module shows only this card: its switch and description.
     if db.Enabled == false then return card1:GetNextOffset() end
 
-    card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners) and spell icons.")
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------

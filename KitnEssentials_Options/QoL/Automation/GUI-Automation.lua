@@ -65,11 +65,9 @@ local function BuildHeader(scrollChild, yOffset)
         ApplyAutomationState(checked)
     end)
 
-    if db.Enabled ~= false then
-        card1:AddLabel("Small conveniences, each with its own switch on the tabs below: looting, " ..
-            "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
-            "and the vendor and auction house windows.")
-    end
+    card1:AddLabel("Small conveniences, each with its own switch on the tabs below: looting, " ..
+        "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
+        "and the vendor and auction house windows.")
 
     return card1:GetNextOffset(), false
 end

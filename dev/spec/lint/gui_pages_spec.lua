@@ -121,18 +121,6 @@ local ALLOWED = {
     L4 = {
     },
     L5 = {
-        -- Phase 16 moves the description above the module-off return.
-        ["KitnEssentials_Options/QoL/Automation/GUI-Automation.lua"] = { phase = "16" }, -- description behind an enable test
-        ["KitnEssentials_Options/QoL/Automation/GUI-CombatLogger.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/QoL/GroupTools/GUI-RaidNotifications.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/QoL/QualityOfLife/GUI-MoveFrames.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-BlizzardMessages.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-ColorPicker.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootFrame.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-LootRoll.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-RaidControl.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/DarkTheme/GUI-UIWidgets.lua"] = { phase = "16" }, -- return before description
-        ["KitnEssentials_Options/Skinning/GUI-DragonRiding.lua"] = { phase = "16" }, -- return before description
         -- Phase 18 handles these special pages.
         ["KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua"] = { phase = "18" }, -- return before description
     },

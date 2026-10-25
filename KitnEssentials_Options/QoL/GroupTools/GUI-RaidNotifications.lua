@@ -73,12 +73,12 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
+    card1:AddLabel("On-screen reminders for the moments a raid forgets. Hover an alert for what it watches.")
+
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
+    -- A disabled module shows only this card: its switch and description.
     if db.Enabled == false then return yOffset end
-
-    card1:AddLabel("On-screen reminders for the moments a raid forgets. Hover an alert for what it watches.")
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local iconToggle = GUIFrame:CreateCheckbox(row1, "Show Icons", {

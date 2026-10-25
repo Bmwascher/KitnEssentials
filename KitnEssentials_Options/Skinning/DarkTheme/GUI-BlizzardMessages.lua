@@ -197,10 +197,10 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         end
     end)
 
-    -- Lone header bar: a disabled module shows only its switch.
-    if db.Enabled == false then return card:GetNextOffset() end
-
     card:AddLabel("The red error line, the yellow action text, zone names and chat bubbles.")
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return card:GetNextOffset() end
 
     local rowFace = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {

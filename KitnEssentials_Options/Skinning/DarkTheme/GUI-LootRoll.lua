@@ -51,11 +51,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
         UpdateAllWidgetStates()
     end)
 
-    -- Disabled modules collapse to the header bar alone:
-    -- settings only render while the module is enabled.
-    if db.Enabled == false then
-        return yOffset + card1:GetContentHeight() + Theme.paddingSmall
-    end
     -- One static sentence is not enough here: the two modes drive controls on
     -- THREE different cards, so turning Replace off silently changes the meaning
     -- of settings the user cannot see. This names the active mode and points at
@@ -65,6 +60,11 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
         card1:AddLabel("Slim bars mode. KitnEssentials draws its own roll bars and hides Blizzard's roll windows. Bar size and color are on the Display Settings card. Turning this off asks for a /reload.")
     else
         card1:AddLabel("Blizzard mode. Blizzard draws the roll windows. Skin Roll Windows on the Display Settings card styles them, and Move Loot Rolls on the Position card moves them.")
+    end
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then
+        return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
 
     -- Sample roll bar (fake legendary, clicks inert).

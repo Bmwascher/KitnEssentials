@@ -59,15 +59,13 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
-
     card1:AddLabel("Replaces the skyriding vigor bar with one you can size, color and place, with " ..
         "the Whirling Surge cooldown as an icon beside it and a speed readout if you want one. It " ..
         "can hide itself on the ground or at full vigor.")
     yOffset = card1:GetNextOffset()
+
+    -- A disabled module shows only this card: its switch and description.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings

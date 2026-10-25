@@ -27,9 +27,6 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
         end
     end)
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return card:GetNextOffset() end
-
     card:AddLabel("A Raid Control button sits at the top of the screen whenever you are in a group. " ..
         "Click it for a panel with ready check, a 5, 10 or 20 second countdown, the dungeon " ..
         "difficulty, an everyone-assist switch, world markers and a role count. Right-click and " ..
