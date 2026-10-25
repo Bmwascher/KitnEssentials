@@ -32,7 +32,6 @@ local function CurrentInstance()
     return instanceID
 end
 
--- This character's saved record; made when create is set.
 local function SavedRecord(create)
     local me = UnitGUID("player")
     local all = KE.db.global.KickMarkers

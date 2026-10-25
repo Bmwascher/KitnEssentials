@@ -75,7 +75,6 @@ function FA.ReadLine(text, textSecret, chatLocked, fromTeammate)
     return FA.ParseLine(text)
 end
 
--- The channels each prefix is read on.
 local ADDON_CHANNELS = {
     [FA.EUIKT_PREFIX] = { PARTY = true },
     [FA.MDT_PREFIX] = { PARTY = true, INSTANCE_CHAT = true },
@@ -102,7 +101,6 @@ function FA.ParseEUIKT(text)
     return kind, tonumber(marker), guid
 end
 
--- An integer 0 to 8, else nil.
 function FA.MDTMarker(value)
     if type(value) ~= "number" or value ~= math_floor(value) or value < 0 or value > 8 then return nil end
     return value

@@ -867,7 +867,6 @@ local function RemoveFromRow(e)
     return unit
 end
 
--- One row laid out. An empty row goes.
 local function LayoutRow(unit)
     local row = P.rows[unit]
     if not row then return end
@@ -1565,6 +1564,7 @@ function KT:PlatesReset()
     end
     for unit in pairs(P.rows) do FreeRow(unit) end
     wipe(P.dirty)
+    P.readySeq, P.readyAt = P.readySeq + 1, nil
 end
 
 function KT:PlatesRestyle()
