@@ -308,8 +308,8 @@ local function Layout(count)
         local growsLeft, growsUp = Rules.Grows(db.Grow)
         local left, right, top, bottom = KE:GetGridOverlayInset(cols, rows, s.size, s.spacing, pin, growsLeft, growsUp)
         shape.left, shape.right, shape.top, shape.bottom = left, right, top, bottom
-        -- Clamp insets move each edge from the frame's; the box's left and
-        -- bottom insets count outward, so they change sign.
+        -- The box's insets all count outward; the clamp's left and bottom
+        -- insets count inward, so those two change sign.
         PS.frame:SetClampRectInsets(-left, right, top, -bottom)
         -- The box reads its insets only when it refreshes.
         if KE.EditMode then KE.EditMode:RefreshLiveState() end
