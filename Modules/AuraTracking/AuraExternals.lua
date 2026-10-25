@@ -24,14 +24,13 @@ local function BuildCandidates()
     return { excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil) }
 end
 
+-- Hide Self Cast works through the group's filter string (PLAYER), not here:
+-- the isFromPlayerOrPlayerPet flag is true for any player's cast, so it hid
+-- teammates' externals too.
 local function BuildExternalCandidates(settings)
     return {
         excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil),
         includeSpellIDs = KE.AuraRules.BuildIncludeSpellIDs(settings.Allowlist),
-        -- Evaluated outside the container's identity permission, unlike the
-        -- spell-id sets above, so it holds in combat and in a keystone where
-        -- reading the caster in Lua does not.
-        isFromPlayerOrPlayerPet = KE.AuraRules.SelfCastFilterValue(settings.HideSelfCast),
     }
 end
 
@@ -54,7 +53,7 @@ local DECLARATION = {
             -- keeping Blizzard's component would make the user's list an
             -- intersection with it rather than a replacement for it, and an
             -- added spell would never appear.
-            buildFilter  = function(settings) return KE.AuraRules.OthersFilterString(settings) end,
+            buildFilter  = function(settings) return KE.AuraRules.OthersFilterString(settings, true) end,
             buildCandidates = BuildExternalCandidates,
             capabilities = {
                 hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true,

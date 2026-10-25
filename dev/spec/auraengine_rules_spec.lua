@@ -424,18 +424,6 @@ describe("sound spell id array", function()
     end)
 end)
 
-describe("self-cast candidate filter value", function()
-    it("returns false when the setting is on, which is what drops your own casts", function()
-        local R = L.loadAuraRules()
-        assert.is_false(R.SelfCastFilterValue(true))
-    end)
-
-    it("returns nil when the setting is off, so the container filters nothing", function()
-        local R = L.loadAuraRules()
-        assert.is_nil(R.SelfCastFilterValue(false))
-    end)
-end)
-
 describe("sound spell id array placeholder handling", function()
     it("drops the negative id the Add New Entry button reserves", function()
         local R = L.loadAuraRules()
