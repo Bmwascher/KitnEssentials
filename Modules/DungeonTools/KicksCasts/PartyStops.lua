@@ -46,7 +46,7 @@ local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitName = UnitName
 local issecretvalue = issecretvalue
 local ipairs, next, pairs, pcall, type = ipairs, next, pairs, pcall, type
-local math_floor, math_max = math.floor, math.max
+local math_floor, math_max, math_min = math.floor, math.max, math.min
 local string_format = string.format
 local wipe = wipe
 
@@ -433,10 +433,10 @@ local function Aim(s, unit)
     end
 end
 
--- Sensors past a feed's reach stay parked.
+-- How many sensors a feed builds and aims.
 local function Reach(f)
     local db = PS.db
-    return Rules.Reach(Data.STOPS[f.id].aoe, db.EnemiesWatched, db.EnemiesWatchedArea)
+    return Rules.Reach(f.aoe, db.EnemiesWatched, db.EnemiesWatchedArea)
 end
 
 local function Owed(f)
@@ -486,6 +486,8 @@ local function FeedOf(id)
     f = {
         id = id, sensors = {}, trackers = EMPTY, on = false, fails = 0,
         head = head, tail = tail, span = span,
+        -- An area stop's sensors by unit: at[k] is sensor k's unit, by[unit] its k.
+        aoe = Data.STOPS[id].aoe, at = {}, by = {},
         group = {
             maxFrameCount = 1,
             candidateFilters = { includeSpellIDs = include },
@@ -495,6 +497,44 @@ local function FeedOf(id)
     }
     PS.feeds[id] = f
     return f
+end
+
+-- An area stop's sensors cover the first held slots in order, wherever they
+-- sit: a held enemy keeps its slot, so sensors tied to the low slots would go
+-- idle once those emptied. Returns whether any sensor was aimed or parked.
+local function Cover(f)
+    local list, at, by = f.sensors, f.at, f.by
+    local want = f.on and math_min(#list, Reach(f)) or 0
+    local moved = false
+    for k = 1, #list do
+        local unit = at[k]
+        if unit and (k > want or not PS.slots:SlotOf(unit)) then
+            at[k], by[unit] = nil, nil
+            Park(list[k])
+            moved = true
+        end
+    end
+    local k = 1
+    for slot = 1, Rules.Watched(PS.db.EnemiesWatched) do
+        local unit = PS.slots:UnitOf(slot)
+        if unit and not by[unit] then
+            while k <= want and at[k] do k = k + 1 end
+            if k > want then break end
+            local s = list[k]
+            Aim(s, unit)
+            if s.psUnit == unit then at[k], by[unit] = unit, k end
+            moved = true
+            k = k + 1
+        end
+    end
+    return moved
+end
+
+-- Every area sensor parked and its unit forgotten.
+local function Uncover(f)
+    for k = 1, #f.sensors do Park(f.sensors[k]) end
+    wipe(f.at)
+    wipe(f.by)
 end
 
 local function GroupSensor(s, group)
@@ -538,8 +578,10 @@ local function Grow(f)
     end
     local j = #f.sensors + 1
     f.sensors[j] = s
-    local unit = f.on and PS.slots:UnitOf(j)
-    if unit then
+    local unit = not f.aoe and f.on and PS.slots:UnitOf(j)
+    if f.aoe then
+        if Cover(f) then Arm() end
+    elseif unit then
         Aim(s, unit)
         if Data.STOPS[f.id].hold then takenAt = GetTime() end
         Arm()
@@ -678,19 +720,32 @@ local function OnTake(slot, unit)
     evt:RegisterUnitEvent("UNIT_AURA", unit)
     takenAt = GetTime()
     for _, f in pairs(PS.feeds) do
-        local s = f.on and slot <= Reach(f) and f.sensors[slot]
-        if s then Aim(s, unit) end
+        if f.aoe then
+            Cover(f)
+        else
+            local s = f.on and f.sensors[slot]
+            if s then Aim(s, unit) end
+        end
     end
     Debug("slot %d taken", slot)
     Arm()
 end
 
-local function OnRelease(slot)
+local function OnRelease(slot, unit)
     local evt = slotFrames[slot]
     if evt then evt:UnregisterAllEvents() end
     for _, f in pairs(PS.feeds) do
-        local s = f.sensors[slot]
-        if s then Park(s) end
+        if f.aoe then
+            local k = f.by[unit]
+            if k then
+                f.at[k], f.by[unit] = nil, nil
+                Park(f.sensors[k])
+            end
+            Cover(f)
+        else
+            local s = f.sensors[slot]
+            if s then Park(s) end
+        end
     end
     Debug("slot %d released", slot)
     Arm()
@@ -875,17 +930,20 @@ local function SetFeeds(want)
         if not f.on then
             f.on = true
             Unprime(f)
-            local reach = Reach(f)
-            for j, s in ipairs(f.sensors) do
-                local unit = j <= reach and PS.slots:UnitOf(j)
-                if unit then Aim(s, unit) end
+            if f.aoe then
+                Cover(f)
+            else
+                for j, s in ipairs(f.sensors) do
+                    local unit = PS.slots:UnitOf(j)
+                    if unit then Aim(s, unit) end
+                end
             end
         end
     end
     for id, f in pairs(PS.feeds) do
         if f.on and not want[id] then
             f.on, f.trackers = false, EMPTY
-            for _, s in ipairs(f.sensors) do Park(s) end
+            Uncover(f)
         end
     end
     if any then
@@ -1037,7 +1095,7 @@ local function GoIdle()
     PS.slots:Stop()
     for _, f in pairs(PS.feeds) do
         f.on, f.trackers = false, EMPTY
-        for _, s in ipairs(f.sensors) do Park(s) end
+        Uncover(f)
     end
     sensHost:Hide()
     for event in pairs(LIVE_EVENTS) do PS:UnregisterEvent(event) end
@@ -1092,22 +1150,11 @@ local function ApplyQueued()
     PS:UpdateDB()
     KE.Context:Evaluate(KEY)
     if PS.slots then PS.slots:SetCap(Rules.Watched(PS.db.EnemiesWatched)) end
-    -- A changed reach re-aims or parks sensors; a feed whose sensors moved
+    -- A changed reach re-covers the area stops; a feed whose sensors moved
     -- only records on its next read, as one turning on does.
     if PS.live then
         for _, f in pairs(PS.feeds) do
-            local reach, moved = Reach(f), false
-            for j, s in ipairs(f.sensors) do
-                local unit = f.on and j <= reach and PS.slots:UnitOf(j)
-                if unit and s.psUnit ~= unit then
-                    Aim(s, unit)
-                    moved = true
-                elseif not unit and s.psUnit then
-                    Park(s)
-                    moved = true
-                end
-            end
-            if moved then Unprime(f) end
+            if f.aoe and Cover(f) then Unprime(f) end
         end
         QueueBuild()
         Arm()
