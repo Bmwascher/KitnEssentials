@@ -862,9 +862,7 @@ function DTrash:ResolveMob(rt)
     if rt.matchedNPCID then
         local trait = KE.TrashTraits and KE.TrashTraits[rt.matchedNPCID]
         local id = trait and trait.identity
-        if id and ((rt.sawInterrupted and id.cannotInterrupt == true)
-            or (rt.sawCastStart and not (id.hasCastSpell or id.hasCastSkill))
-            or (rt.sawChannelStart and not (id.hasChannelSpell or rt.sawCastIntoChannel))) then
+        if id and TI.BehaviorContradicts(id, rt) then
             contradicted = true
         end
     end
