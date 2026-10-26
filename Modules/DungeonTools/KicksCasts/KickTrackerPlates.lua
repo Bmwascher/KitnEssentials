@@ -158,10 +158,14 @@ local function ReadScale()
     P.uiScale = UIParent:GetEffectiveScale()
 end
 
--- Sizes and gaps in UIParent units on any plate.
+-- Sizes and gaps in UIParent units on any plate. Set only when the scale
+-- read last differs from the one the frame took.
 local function Scaled(frame)
+    local scale = P.uiScale or 1
+    if frame.keScale == scale then return end
+    frame.keScale = scale
     frame:SetIgnoreParentScale(true)
-    frame:SetScale(P.uiScale or 1)
+    frame:SetScale(scale)
 end
 
 local function Level(frame, strata, level)
@@ -574,7 +578,9 @@ local function PaintGhost(g)
     end
 end
 
--- Out of use: closed from plain values, its totals and member dropped.
+-- Out of use: closed from plain values, its totals and member dropped. Its
+-- gates hide too, so the game stops laying out two span-wide bars per spare
+-- cell; KT:PlaceGhost shows them again.
 local function ParkCell(cell, leftward)
     cell.icon.cd:Clear()
     cell.gate:SetMinMaxValues(0, 1)
@@ -586,6 +592,8 @@ local function ParkCell(cell, leftward)
     ShowStep(cell.stepA, false)
     ShowStep(cell.stepB, false)
     cell.clip:Hide()
+    cell.gate:Hide()
+    cell.gateB:Hide()
     cell.guid, cell.before, cell.after, cell.cCur, cell.gen = nil, nil, nil, nil, nil
 end
 
@@ -1107,7 +1115,7 @@ function KT:PutKickIcon(guid, unit, pend)
     self:LayoutPlate(unit)
     FlushLayouts()
     self:WatchReady(e, member)
-    self:RailsRefresh()
+    self:RailsKicker(guid)
 end
 
 -- A cooling icon moves to the ready end of its row when the cooldown ends:
@@ -1133,7 +1141,7 @@ function KT:ReleaseLive(guid)
     e.guid, e.mobGuid, e.cBase, e.cCur = nil, nil, nil, nil
     P.free.live[#P.free.live + 1] = e
     if old then self:LayoutPlate(old) end
-    self:RailsRefresh()
+    self:RailsKicker(guid)
 end
 
 ---------------------------------------------------------------------------------
@@ -1346,6 +1354,8 @@ function KT:PlaceGhost(g, unit)
     for k = 1, g.used do
         local cell = g.cells[k]
         PaintCooldown(cell.icon, cell.cdStart, cell.cdDur)
+        cell.gate:Show()
+        cell.gateB:Show()
         cell.clip:Show()
     end
     FeedGhost(g)
@@ -1501,7 +1511,10 @@ function KT:RailsPlate(unit)
                 " lanesBefore=" .. #rail.lanes .. " rowLen=" .. #P.rows[unit].list)
         end
     end
-    StyleRail(rail)
+    -- A rail already styled with a lane per kicker is styled again by the
+    -- layout's RefeedAfterLayout a frame from now; settings changes release
+    -- every rail.
+    if made or #rail.lanes < #P.kickers then StyleRail(rail) end
     DressRail(rail)
     FeedRailCounts(rail, GetTime())
     FeedRail(rail, index)
@@ -1509,9 +1522,28 @@ function KT:RailsPlate(unit)
     self:LayoutPlate(unit)
 end
 
--- Every lane repainted: a live icon placed or gone, a cooldown changed.
+-- Every lane repainted: live icons back on a returning plate, or a plate gone.
 function KT:RailsRefresh()
     for _, rail in pairs(P.rails) do DressRail(rail) end
+end
+
+-- One kicker's lanes on every rail: their live icon placed or gone, or their
+-- cooldown changed. Art too: the player's own kick can change just before.
+function KT:RailsKicker(guid)
+    local member, live = self.partyMembers[guid], P.live[guid]
+    local shown = not (live and live.unit)
+    for _, rail in pairs(P.rails) do
+        for i = 1, #P.kickers do
+            local lane = rail.lanes[i]
+            if lane and lane.guid == guid then
+                if member then
+                    PaintIcon(lane.icon, member)
+                    PaintCooldown(lane.icon, member.kickStart, member.kickDuration)
+                end
+                lane.clip:SetShown(shown)
+            end
+        end
+    end
 end
 
 -- Every lane's count gate fed again: a read, or a ghost made, superseded or gone.
@@ -1628,7 +1660,7 @@ end
 function KT:PlatesCooldown(guid)
     self:FeedReady()
     local e, member = P.live[guid], self.partyMembers[guid]
-    self:RailsRefresh()
+    self:RailsKicker(guid)
     if not e or not member then return end
     PaintCooldown(e.icon, member.kickStart, member.kickDuration)
     if e.unit then self:LayoutPlate(e.unit) end
