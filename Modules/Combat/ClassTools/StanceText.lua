@@ -178,8 +178,6 @@ local function SpellIsKnown(spellID)
     return C_SpellBook.IsSpellKnown(spellID) == true
 end
 
--- The first real spell among the options that isKnown accepts, or any
--- real one when isKnown is nil.
 local function FirstKnownOption(options, isKnown)
     if not options then return nil end
     for _, option in ipairs(options) do

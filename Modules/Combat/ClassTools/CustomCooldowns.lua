@@ -55,7 +55,6 @@ local function SpellKnown(spellId)
     return ok and known == true
 end
 
--- Forever: a spell added at any rank counts while any rank of it is known.
 local function AnyRankKnown(spellId)
     return Ranks.HighestKnown(spellId, SpellKnown) ~= nil
 end
