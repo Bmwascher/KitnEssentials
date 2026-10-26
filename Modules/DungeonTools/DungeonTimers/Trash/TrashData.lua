@@ -1374,4 +1374,2171 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Kings' Rest (1762)                                      ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [1762] = {
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Kings' Rest",
+        mobs = {
+            -- ── Animated Guardian ────────────────────────────────────────
+            [133935] = {
+                npcID = 133935,
+                name = "Animated Guardian",
+                spells = {
+                    [270003] = {
+                        spellID = 270003,
+                        name = "Suppression Slam",
+                        castTime = 3.5,
+                        first = 6.8,
+                        cd = { 18.4 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Shadow-Borne Champion ────────────────────────────────────
+            [134158] = {
+                npcID = 134158,
+                name = "Shadow-Borne Champion",
+                spells = {
+                    [269928] = {
+                        spellID = 269928,
+                        name = "Vigilant Defense",
+                        channelTime = 6,
+                        first = 11.7,
+                        cd = { 18.3 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [269976] = {
+                        spellID = 269976,
+                        name = "Ancestral Fury",
+                        castTime = 1,
+                        first = 17.6,
+                        cd = { 23.3 },
+                        openingCastOrder = 3,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1305945] = {
+                        spellID = 1305945,
+                        name = "Shadow Whirlwind",
+                        castTime = 4,
+                        first = 7,
+                        cd = { 20.2 },
+                        openingCastOrder = 1,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Risen Hexer ──────────────────────────────────────────────
+            [134174] = {
+                npcID = 134174,
+                name = "Risen Hexer",
+                spells = {
+                    [269972] = {
+                        spellID = 269972,
+                        name = "Hex Volley",
+                        castTime = 3.5,
+                        first = 13.2,
+                        cd = { 20.8 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1294815] = {
+                        spellID = 1294815,
+                        name = "Shadowfrost Bolt",
+                        castTime = 2.5,
+                        first = 5.7,
+                        cd = { 4.8, 4.8, 7.2, 8.4 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Seneschal M'bara ─────────────────────────────────────────
+            [134251] = {
+                npcID = 134251,
+                name = "Seneschal M'bara",
+                spells = {
+                    [270901] = {
+                        spellID = 270901,
+                        name = "Unholy Mending",
+                        castTime = 2.5,
+                        first = 12.5,
+                        cd = { 15 },
+                        targetAPIExists = false,
+                        showNameplate = false,
+                        display = "text",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── King Rahu'ai ─────────────────────────────────────────────
+            [134331] = {
+                npcID = 134331,
+                name = "King Rahu'ai",
+                spells = {
+                    [270889] = {
+                        spellID = 270889,
+                        name = "Overload",
+                        castTime = 3,
+                        channelTime = 4,
+                        first = 17.8,
+                        cd = { 18.4 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1296719] = {
+                        spellID = 1296719,
+                        name = "Forked Lightning",
+                        castTime = 2.5,
+                        first = 1.1,
+                        cd = { 4.8, 4.8, 4.8, 4.8, 8.7, 4.5, 4.5, 4.8, 4.8, 8.6, 4.6, 4.5, 4.8 },
+                        targetAPIExists = true,
+                        showNameplate = false,
+                        display = "text",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Purification Construct ───────────────────────────────────
+            [134739] = {
+                npcID = 134739,
+                name = "Purification Construct",
+                spells = {
+                    [270293] = {
+                        spellID = 270293,
+                        name = "Purification Strike",
+                        castTime = 2,
+                        first = 3.4,
+                        cd = { 8.1 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Royal Berserker ──────────────────────────────────────────
+            [135167] = {
+                npcID = 135167,
+                name = "Royal Berserker",
+                spells = {
+                    [270482] = {
+                        spellID = 270482,
+                        name = "Violent Lunge",
+                        castTime = 3,
+                        first = 2.4,
+                        cd = { 16.4 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1301851] = {
+                        spellID = 1301851,
+                        name = "Bloodthirsty Axe",
+                        castTime = 2,
+                        first = 8.7,
+                        cd = { 16.2 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Honored Raptor ───────────────────────────────────────────
+            [135192] = {
+                npcID = 135192,
+                name = "Honored Raptor",
+                spells = {
+                    [270502] = {
+                        spellID = 270502,
+                        name = "Hunting Leap",
+                        channelTime = 5,
+                        first = 6.1,
+                        cd = { 10.8 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Ghostly Brute ────────────────────────────────────────────
+            [135231] = {
+                npcID = 135231,
+                name = "Ghostly Brute",
+                spells = {
+                    [270514] = {
+                        spellID = 270514,
+                        name = "Seismic Upheaval",
+                        castTime = 5,
+                        first = 16.2,
+                        cd = { 19.3 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1302028] = {
+                        spellID = 1302028,
+                        name = "Soul Crush",
+                        castTime = 2.5,
+                        first = 11,
+                        cd = { 21.8 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Guard Captain Atu ────────────────────────────────────────
+            [137473] = {
+                npcID = 137473,
+                name = "Guard Captain Atu",
+                spells = {
+                    [1296671] = {
+                        spellID = 1296671,
+                        name = "Captain's Bulwark",
+                        castTime = 2.5,
+                        first = 5,
+                        cd = { 23 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── King Timalji ─────────────────────────────────────────────
+            [137474] = {
+                npcID = 137474,
+                name = "King Timalji",
+                spells = {
+                    [270927] = {
+                        spellID = 270927,
+                        name = "Bladestorm",
+                        castTime = 2.5,
+                        channelTime = 6,
+                        first = 14,
+                        cd = { 14.5 },
+                        openingCastOrder = 2,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1306049] = {
+                        spellID = 1306049,
+                        name = "Erupting Slam",
+                        castTime = 3,
+                        first = 7,
+                        cd = { 17.6 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Queen Wasi ───────────────────────────────────────────────
+            [137478] = {
+                npcID = 137478,
+                name = "Queen Wasi",
+                spells = {
+                    [270920] = {
+                        spellID = 270920,
+                        name = "Bind Soul",
+                        castTime = 2.5,
+                        channelTime = 10,
+                        first = 14.5,
+                        cd = { 13 },
+                        showNameplate = false,
+                        display = "text",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1294972] = {
+                        spellID = 1294972,
+                        name = "Soul Bolt",
+                        castTime = 2.5,
+                        first = 1.2,
+                        cd = { 1.1 },
+                        showNameplate = false,
+                        display = "text",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── King A'akul ──────────────────────────────────────────────
+            [137484] = {
+                npcID = 137484,
+                name = "King A'akul",
+                spells = {
+                    [1297918] = {
+                        spellID = 1297918,
+                        name = "Mortal Bleed",
+                        castTime = 2.5,
+                        first = 8.4,
+                        cd = { 23 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1297970] = {
+                        spellID = 1297970,
+                        name = "Blood Drain",
+                        castTime = 2.5,
+                        first = 15.7,
+                        cd = { 23 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Queen Patlaa ─────────────────────────────────────────────
+            [137486] = {
+                npcID = 137486,
+                name = "Queen Patlaa",
+                spells = {
+                    [1305982] = {
+                        spellID = 1305982,
+                        name = "Shadow Volley",
+                        channelTime = 2,
+                        first = 3.5,
+                        cd = { 17.4 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Skeletal Hunting Raptor ──────────────────────────────────
+            [137487] = {
+                npcID = 137487,
+                name = "Skeletal Hunting Raptor",
+                spells = {
+                    [270502] = {
+                        spellID = 270502,
+                        name = "Hunting Leap",
+                        channelTime = 5,
+                        first = 7.1,
+                        cd = { 8.3 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Interment Construct ──────────────────────────────────────
+            [137969] = {
+                npcID = 137969,
+                name = "Interment Construct",
+                spells = {
+                    [271555] = {
+                        spellID = 271555,
+                        name = "Entomb",
+                        castTime = 3,
+                        first = 15.7,
+                        cd = { 20.1 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Shadow of Zul ────────────────────────────────────────────
+            [138489] = {
+                npcID = 138489,
+                name = "Shadow of Zul",
+                spells = {
+                    [272388] = {
+                        spellID = 272388,
+                        name = "Shadow Barrage",
+                        castTime = 1.5,
+                        first = 1,
+                        cd = { 2.1 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "text",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1298304] = {
+                        spellID = 1298304,
+                        name = "Dark Revelation",
+                        castTime = 1.5,
+                        first = 5.7,
+                        cd = { 25.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1309385] = {
+                        spellID = 1309385,
+                        name = "Pool of Darkness",
+                        channelTime = 4,
+                        first = 14,
+                        cd = { 28 },
+                        cdMode = "CAST_START",
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Temple of Sethraliss (1877)                             ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [1877] = {
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Temple of Sethraliss",
+        mobs = {
+            -- ── Storm Serpent ────────────────────────────────────────────
+            [134390] = {
+                npcID = 134390,
+                name = "Storm Serpent",
+                spells = {
+                    [1291622] = {
+                        spellID = 1291622,
+                        name = "Storm Catalyst",
+                        castTime = 2.5,
+                        first = 2.3,
+                        cd = { 6 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Sandswept Hunter ─────────────────────────────────────────
+            [134600] = {
+                npcID = 134600,
+                name = "Sandswept Hunter",
+                spells = {
+                    [1308113] = {
+                        spellID = 1308113,
+                        name = "Arrow Barrage",
+                        channelTime = 9,
+                        first = 9.5,
+                        cd = { 26 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Sand-Sworn Rider ─────────────────────────────────────────
+            [134629] = {
+                npcID = 134629,
+                name = "Sand-Sworn Rider",
+                spells = {
+                    [272655] = {
+                        spellID = 272655,
+                        name = "Scouring Sand",
+                        castTime = 4.5,
+                        first = 7.2,
+                        cd = { 17.4, 23.4 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1292990] = {
+                        spellID = 1292990,
+                        name = "Swarming Krolusks",
+                        castTime = 2.5,
+                        first = 20,
+                        cd = { 25.4 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Krolusk Matriarch ────────────────────────────────────────
+            [134686] = {
+                npcID = 134686,
+                name = "Krolusk Matriarch",
+                spells = {
+                    [272654] = {
+                        spellID = 272654,
+                        name = "Head Butt",
+                        castTime = 3,
+                        first = 9.7,
+                        cd = { 19.2 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [272655] = {
+                        spellID = 272655,
+                        name = "Scouring Sand",
+                        castTime = 4.5,
+                        first = 3.5,
+                        cd = { 14.1 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Sandfury Stonefist ───────────────────────────────────────
+            [134991] = {
+                npcID = 134991,
+                name = "Sandfury Stonefist",
+                spells = {
+                    [265966] = {
+                        spellID = 265966,
+                        name = "Ground Pound",
+                        castTime = 4,
+                        first = 16.5,
+                        cd = { 27.6 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1291468] = {
+                        spellID = 1291468,
+                        name = "Sunder Slam",
+                        castTime = 3,
+                        first = 5.8,
+                        cd = { 18.9, 23.7 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Orb Watcher ──────────────────────────────────────────────
+            [135007] = {
+                npcID = 135007,
+                name = "Orb Watcher",
+                spells = {
+                    [1303443] = {
+                        spellID = 1303443,
+                        name = "Venomous Slash",
+                        castTime = 2.5,
+                        first = 3,
+                        cd = { 20.6 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1303486] = {
+                        spellID = 1303486,
+                        name = "Caustic Stomp",
+                        castTime = 3.5,
+                        first = 10.2,
+                        cd = { 23.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Agitated Nimbus ──────────────────────────────────────────
+            [136076] = {
+                npcID = 136076,
+                name = "Agitated Nimbus",
+                spells = {
+                    [1293464] = {
+                        spellID = 1293464,
+                        name = "Accumulate Charge",
+                        castTime = 1.5,
+                        first = 20.3,
+                        cd = { 5.8, 9.4, 8.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1293475] = {
+                        spellID = 1293475,
+                        name = "Release Charge",
+                        castTime = 3,
+                        first = 5.7,
+                        cd = { 24.9 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1293650] = {
+                        spellID = 1293650,
+                        name = "Call Lightning",
+                        castTime = 1.5,
+                        first = 11.7,
+                        cd = { 11.8, 19.1 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Twisted Hexxer ───────────────────────────────────────────
+            [136250] = {
+                npcID = 136250,
+                name = "Twisted Hexxer",
+                spells = {
+                    [268013] = {
+                        spellID = 268013,
+                        name = "Flame Shock",
+                        castTime = 4,
+                        first = 4.2,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Corrupted Guardian ───────────────────────────────────────
+            [268344] = {
+                npcID = 268344,
+                name = "Corrupted Guardian",
+                spells = {
+                    [1300803] = {
+                        spellID = 1300803,
+                        name = "Tainted Strike",
+                        castTime = 2.5,
+                        first = 3.5,
+                        cd = { 8.4 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Twisted Hexxer ───────────────────────────────────────────
+            [268491] = {
+                npcID = 268491,
+                name = "Twisted Hexxer",
+                spells = {
+                    [1302153] = {
+                        spellID = 1302153,
+                        name = "Latent Hex",
+                        castTime = 2,
+                        first = 3.2,
+                        cd = { 16.2 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1302158] = {
+                        spellID = 1302158,
+                        name = "Flame Shock",
+                        castTime = 4,
+                        first = 9.3,
+                        cd = { 9.4 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Ruby Life Pools (2521)                                  ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [2521] = {
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Ruby Life Pools",
+        mobs = {
+            -- ── Defier Draghar ───────────────────────────────────────────
+            [187897] = {
+                npcID = 187897,
+                name = "Defier Draghar",
+                spells = {
+                    [372047] = {
+                        spellID = 372047,
+                        name = "Steel Barrage",
+                        castTime = 1,
+                        channelTime = 3,
+                        first = 6.4,
+                        cd = { 16.6 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [372087] = {
+                        spellID = 372087,
+                        name = "Blazing Rush",
+                        castTime = 4,
+                        first = 10.4,
+                        cd = { 16.6 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Flashfrost Chillweaver ───────────────────────────────────
+            [188067] = {
+                npcID = 188067,
+                name = "Flashfrost Chillweaver",
+                spells = {
+                    [372743] = {
+                        spellID = 372743,
+                        name = "Ice Shield",
+                        channelTime = 15,
+                        first = 7.8,
+                        cd = { 11.5 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Primal Juggernaut ────────────────────────────────────────
+            [188244] = {
+                npcID = 188244,
+                name = "Primal Juggernaut",
+                spells = {
+                    [372730] = {
+                        spellID = 372730,
+                        name = "Crushing Smash",
+                        castTime = 2.5,
+                        first = 6.8,
+                        cd = { 18.2 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1305201] = {
+                        spellID = 1305201,
+                        name = "Excavating Blast",
+                        castTime = 3.5,
+                        first = 9.8,
+                        cd = { 23.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Blazebound Firestorm ─────────────────────────────────────
+            [189886] = {
+                npcID = 189886,
+                name = "Blazebound Firestorm",
+                spells = {
+                    [373017] = {
+                        spellID = 373017,
+                        name = "Blaze Volley",
+                        castTime = 3.5,
+                        first = 6.2,
+                        cd = { 21 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [373087] = {
+                        spellID = 373087,
+                        name = "Burnout",
+                        castTime = 5,
+                        first = 23.8,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [384823] = {
+                        spellID = 384823,
+                        name = "Inferno",
+                        castTime = 3,
+                        first = 16,
+                        cd = { 10.8 },
+                        targetExists = true,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Blazebound Destroyer ─────────────────────────────────────
+            [190034] = {
+                npcID = 190034,
+                name = "Blazebound Destroyer",
+                spells = {
+                    [373614] = {
+                        spellID = 373614,
+                        name = "Burnout",
+                        castTime = 5,
+                        hidden = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [373692] = {
+                        spellID = 373692,
+                        name = "Inferno",
+                        castTime = 3.5,
+                        first = 7.1,
+                        cd = { 22 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [384139] = {
+                        spellID = 384139,
+                        name = "Summon Scorchlings",
+                        castTime = 1.5,
+                        first = 5.2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1305955] = {
+                        spellID = 1305955,
+                        name = "Fiery Blast",
+                        castTime = 4,
+                        first = 3.8,
+                        cd = { 14 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Ashseer Flamelasher ──────────────────────────────────────
+            [190206] = {
+                npcID = 190206,
+                name = "Ashseer Flamelasher",
+                spells = {
+                    [385536] = {
+                        spellID = 385536,
+                        name = "Flaming Barrage",
+                        channelTime = 10,
+                        first = 8.3,
+                        cd = { 26 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Ruinous Stormbringer ─────────────────────────────────────
+            [195119] = {
+                npcID = 195119,
+                name = "Ruinous Stormbringer",
+                spells = {
+                    [385310] = {
+                        spellID = 385310,
+                        name = "Storm Bolt",
+                        castTime = 2.5,
+                        hidden = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [385313] = {
+                        spellID = 385313,
+                        name = "Lightning Rod",
+                        castTime = 2,
+                        first = 4,
+                        cd = { 10.1 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── High Channeler Ryvati ────────────────────────────────────
+            [197535] = {
+                npcID = 197535,
+                name = "High Channeler Ryvati",
+                spells = {
+                    [1306366] = {
+                        spellID = 1306366,
+                        name = "Lightning Torrent",
+                        channelTime = 7,
+                        first = 20.4,
+                        cd = { 25.8 },
+                        openingCastOrder = 3,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1307511] = {
+                        spellID = 1307511,
+                        name = "Summon Primal Thunderclouds",
+                        castTime = 2,
+                        first = 4.7,
+                        cd = { 30.8 },
+                        openingCastOrder = 1,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1310355] = {
+                        spellID = 1310355,
+                        name = "Tempest Stormshield",
+                        first = 12.2,
+                        cd = { 32.8 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1310361] = {
+                        spellID = 1310361,
+                        name = "Tempest Stormshield",
+                        hidden = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1310363] = {
+                        spellID = 1310363,
+                        name = "Tempest Stormshield",
+                        hidden = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Flamegullet ──────────────────────────────────────────────
+            [197697] = {
+                npcID = 197697,
+                name = "Flamegullet",
+                spells = {
+                    [391723] = {
+                        spellID = 391723,
+                        name = "Flame Breath",
+                        castTime = 4,
+                        channelTime = 3,
+                        first = 3.5,
+                        cd = { 12.5 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [392394] = {
+                        spellID = 392394,
+                        name = "Fire Maw",
+                        castTime = 2.5,
+                        first = 14.4,
+                        cd = { 18.1 },
+                        openingCastOrder = 2,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Thunderhead ──────────────────────────────────────────────
+            [197698] = {
+                npcID = 197698,
+                name = "Thunderhead",
+                spells = {
+                    [391726] = {
+                        spellID = 391726,
+                        name = "Storm Breath",
+                        castTime = 4,
+                        channelTime = 3,
+                        first = 19.7,
+                        cd = { 17.3 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [392395] = {
+                        spellID = 392395,
+                        name = "Thunder Jaw",
+                        castTime = 2.5,
+                        first = 12.4,
+                        cd = { 18.1 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [392640] = {
+                        spellID = 392640,
+                        name = "Rolling Thunder",
+                        castTime = 1.5,
+                        first = 3.9,
+                        cd = { 33.7 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Tempest Channeler ────────────────────────────────────────
+            [198047] = {
+                npcID = 198047,
+                name = "Tempest Channeler",
+                spells = {
+                    [392576] = {
+                        spellID = 392576,
+                        name = "Thunder Blast",
+                        castTime = 4,
+                        first = 2.8,
+                        cd = { 19 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1306366] = {
+                        spellID = 1306366,
+                        name = "Lightning Torrent",
+                        channelTime = 7,
+                        first = 5.6,
+                        cd = { 17.3 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1307502] = {
+                        spellID = 1307502,
+                        name = "Summon Primal Thunderclouds",
+                        castTime = 2,
+                        first = 15.3,
+                        cd = { 6.5, 13.8 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Murder Row (2813)                                       ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [2813] = {
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Murder Row",
+        mobs = {
+            -- ── Corrupted Warlock ────────────────────────────────────────
+            [235265] = {
+                npcID = 235265,
+                name = "Corrupted Warlock",
+                spells = {
+                    [1217973] = {
+                        spellID = 1217973,
+                        name = "Curse of Doom",
+                        castTime = 1.5,
+                        first = 16.9,
+                        cd = { 21.8 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1297682] = {
+                        spellID = 1297682,
+                        name = "Drain Life",
+                        castTime = 2,
+                        channelTime = 7,
+                        first = 7.7,
+                        cd = { 11.7 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1297684] = {
+                        spellID = 1297684,
+                        name = "Dark Pact",
+                        castTime = 1.5,
+                        first = 25.4,
+                        cd = { 32.5 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Defiled Golem ────────────────────────────────────────────
+            [235322] = {
+                npcID = 235322,
+                name = "Defiled Golem",
+                spells = {
+                    [1215961] = {
+                        spellID = 1215961,
+                        name = "Fel Beam",
+                        castTime = 2,
+                        channelTime = 4,
+                        first = 22.9,
+                        cd = { 24.4 },
+                        openingCastOrder = 2,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1294824] = {
+                        spellID = 1294824,
+                        name = "Defiled Slam",
+                        castTime = 2,
+                        channelTime = 8,
+                        first = 6.2,
+                        cd = { 19.2 },
+                        openingCastOrder = 1,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Shivan Punisher ──────────────────────────────────────────
+            [235465] = {
+                npcID = 235465,
+                name = "Shivan Punisher",
+                spells = {
+                    [1294770] = {
+                        spellID = 1294770,
+                        name = "Demonic Frenzy",
+                        castTime = 1,
+                        first = 27.1,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1297691] = {
+                        spellID = 1297691,
+                        name = "Whirlwind",
+                        castTime = 4,
+                        first = 6.8,
+                        cd = { 19 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Bribed Guard ─────────────────────────────────────────────
+            [236071] = {
+                npcID = 236071,
+                name = "Bribed Guard",
+                spells = {
+                    [1216529] = {
+                        spellID = 1216529,
+                        name = "Shield Bash",
+                        castTime = 3,
+                        first = 13.5,
+                        cd = { 21.3 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1295035] = {
+                        spellID = 1295035,
+                        name = "Glaive Toss",
+                        castTime = 2,
+                        first = 8.6,
+                        cd = { 21 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Massive Felwyrm ──────────────────────────────────────────
+            [236902] = {
+                npcID = 236902,
+                name = "Massive Felwyrm",
+                spells = {
+                    [1217633] = {
+                        spellID = 1217633,
+                        name = "Corroding Spittle",
+                        castTime = 2,
+                        first = 4.3,
+                        cd = { 6.5 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1258537] = {
+                        spellID = 1258537,
+                        name = "Summon Wyrms",
+                        channelTime = 1,
+                        first = 7.6,
+                        cd = { 23.3 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Felmaster Lucsei ─────────────────────────────────────────
+            [236905] = {
+                npcID = 236905,
+                name = "Felmaster Lucsei",
+                spells = {
+                    [1216954] = {
+                        spellID = 1216954,
+                        name = "Eye Beam",
+                        castTime = 2.5,
+                        channelTime = 2.5,
+                        first = 10.4,
+                        cd = { 16.9 },
+                        openingCastOrder = 2,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1302007] = {
+                        spellID = 1302007,
+                        name = "Blade Dance",
+                        castTime = 2,
+                        channelTime = 1.2,
+                        first = 5.5,
+                        cd = { 19.9 },
+                        openingCastOrder = 1,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Den of Nalorakk (2825)                                  ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [2825] = {
+        mapID = 2825,
+        dungeonKey = "DenOfNalorakk",
+        name = "Den of Nalorakk",
+        mobs = {
+            -- ── Avatar of Determination ──────────────────────────────────
+            [241869] = {
+                npcID = 241869,
+                name = "Avatar of Determination",
+                spells = {
+                    [1240280] = {
+                        spellID = 1240280,
+                        name = "Pulverize",
+                        castTime = 4,
+                        first = 13.2,
+                        cd = { 25.1 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1241463] = {
+                        spellID = 1241463,
+                        name = "Glacial Tomb",
+                        castTime = 2,
+                        first = 8.6,
+                        cd = { 15 },
+                        openingCastOrder = 1,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Loa Speaker Nanea ────────────────────────────────────────
+            [244889] = {
+                npcID = 244889,
+                name = "Loa Speaker Nanea",
+                spells = {
+                    [1290205] = {
+                        spellID = 1290205,
+                        name = "Lightning Bolt",
+                        castTime = 2.5,
+                        first = 0,
+                        cd = { 4.8 },
+                        targetAPIExists = true,
+                        showNameplate = false,
+                        display = "text",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1296722] = {
+                        spellID = 1296722,
+                        name = "Earthquake",
+                        castTime = 4,
+                        first = 5.7,
+                        cd = { 11.8 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1309925] = {
+                        spellID = 1309925,
+                        name = "Volatile Totem",
+                        castTime = 3,
+                        first = 12.2,
+                        cd = { 27.3 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Grizzled Warbringer ──────────────────────────────────────
+            [245146] = {
+                npcID = 245146,
+                name = "Grizzled Warbringer",
+                spells = {
+                    [1246957] = {
+                        spellID = 1246957,
+                        name = "Primal Echo",
+                        castTime = 3,
+                        first = 5,
+                        cd = { 20 },
+                        openingCastOrder = 1,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1246986] = {
+                        spellID = 1246986,
+                        name = "Poison Spear Volley",
+                        castTime = 2,
+                        first = 11.5,
+                        cd = { 20 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Spirit of Hunger ─────────────────────────────────────────
+            [245855] = {
+                npcID = 245855,
+                name = "Spirit of Hunger",
+                spells = {
+                    [1238687] = {
+                        spellID = 1238687,
+                        name = "Feast of Misery",
+                        castTime = 1.5,
+                        channelTime = 5,
+                        first = 8.1,
+                        cd = { 20 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1238760] = {
+                        spellID = 1238760,
+                        name = "Starvation Effigy",
+                        castTime = 1.5,
+                        first = 4.5,
+                        cd = { 22.8 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  The Blinding Vale (2859)                                ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [2859] = {
+        mapID = 2859,
+        dungeonKey = "TheBlindingVale",
+        name = "The Blinding Vale",
+        mobs = {
+            -- ── Virid Grovekeeper ────────────────────────────────────────
+            [245346] = {
+                npcID = 245346,
+                name = "Virid Grovekeeper",
+                spells = {
+                    [1237855] = {
+                        spellID = 1237855,
+                        name = "Earthrupture Strike",
+                        castTime = 2.5,
+                        first = 5,
+                        cd = { 19.5 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1255205] = {
+                        spellID = 1255205,
+                        name = "Uproot",
+                        castTime = 3,
+                        first = 14.8,
+                        cd = { 31 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Overgrown Hydra ──────────────────────────────────────────
+            [245513] = {
+                npcID = 245513,
+                name = "Overgrown Hydra",
+                spells = {
+                    [1238368] = {
+                        spellID = 1238368,
+                        name = "Lightmaw Beams",
+                        castTime = 2,
+                        channelTime = 6,
+                        first = 5.8,
+                        cd = { 17 },
+                        openingCastOrder = 1,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1238642] = {
+                        spellID = 1238642,
+                        name = "Bullet Seeds",
+                        castTime = 3,
+                        first = 14.5,
+                        cd = { 22.5 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Luminous Thornmaw ────────────────────────────────────────
+            [246871] = {
+                npcID = 246871,
+                name = "Luminous Thornmaw",
+                spells = {
+                    [1242135] = {
+                        spellID = 1242135,
+                        name = "Grievous Gash",
+                        castTime = 2.5,
+                        first = 6.7,
+                        cd = { 15.3 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1242138] = {
+                        spellID = 1242138,
+                        name = "Solar Breath",
+                        castTime = 3,
+                        first = 13.1,
+                        cd = { 20 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Potatoad Matriarch ───────────────────────────────────────
+            [249756] = {
+                npcID = 249756,
+                name = "Potatoad Matriarch",
+                spells = {
+                    [1250100] = {
+                        spellID = 1250100,
+                        name = "Tongue Toss",
+                        castTime = 2,
+                        first = 6.4,
+                        cd = { 24.7 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1250199] = {
+                        spellID = 1250199,
+                        name = "Toadspawn",
+                        castTime = 3,
+                        first = 9.5,
+                        cd = { 25 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1250937] = {
+                        spellID = 1250937,
+                        name = "Toxic Spew",
+                        castTime = 2,
+                        first = 18.6,
+                        cd = { 24.7 },
+                        openingCastOrder = 3,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Sporeblight Belcher ──────────────────────────────────────
+            [254850] = {
+                npcID = 254850,
+                name = "Sporeblight Belcher",
+                spells = {
+                    [1263636] = {
+                        spellID = 1263636,
+                        name = "Belch Spores",
+                        castTime = 1.5,
+                        channelTime = 3,
+                        first = 16,
+                        cd = { 27 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1271385] = {
+                        spellID = 1271385,
+                        name = "Spouting Floret",
+                        castTime = 2,
+                        first = 5.5,
+                        cd = { 24.8 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Voidscar Arena (2923)                                   ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [2923] = {
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Voidscar Arena",
+        mobs = {
+            -- ── Chitigoth ────────────────────────────────────────────────
+            [244260] = {
+                npcID = 244260,
+                name = "Chitigoth",
+                spells = {
+                    [1234855] = {
+                        spellID = 1234855,
+                        name = "Insidious Aura",
+                        channelTime = 8,
+                        first = 20.4,
+                        cd = { 10.6 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Brutok ───────────────────────────────────────────────────
+            [244309] = {
+                npcID = 244309,
+                name = "Brutok",
+                spells = {
+                    [1234890] = {
+                        spellID = 1234890,
+                        name = "Smashing Charge",
+                        castTime = 3.5,
+                        first = 6,
+                        cd = { 19.6 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1245186] = {
+                        spellID = 1245186,
+                        name = "Head Bash",
+                        castTime = 2.5,
+                        first = 25.5,
+                        cd = { 20.6 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Watchful Harrower ────────────────────────────────────────
+            [245950] = {
+                npcID = 245950,
+                name = "Watchful Harrower",
+                spells = {
+                    [1239856] = {
+                        spellID = 1239856,
+                        name = "Sky Strike",
+                        castTime = 5,
+                        first = 7,
+                        cd = { 20.5 },
+                        openingCastOrder = 1,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1300138] = {
+                        spellID = 1300138,
+                        name = "Void Beam",
+                        castTime = 2,
+                        channelTime = 4,
+                        first = 14.3,
+                        cd = { 21.1 },
+                        openingCastOrder = 2,
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Brutal Overseer ──────────────────────────────────────────
+            [252053] = {
+                npcID = 252053,
+                name = "Brutal Overseer",
+                spells = {
+                    [1298900] = {
+                        spellID = 1298900,
+                        name = "Brutal Slams",
+                        castTime = 2,
+                        channelTime = 30,
+                        first = 7.6,
+                        cd = { 33 },
+                        cdMode = "CAST_START",
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1310309] = {
+                        spellID = 1310309,
+                        name = "Macestorm",
+                        channelTime = 6,
+                        first = 20,
+                        cd = { 26.7 },
+                        cdMode = "CAST_START",
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Voidtouched Magi ─────────────────────────────────────────
+            [252072] = {
+                npcID = 252072,
+                name = "Voidtouched Magi",
+                spells = {
+                    [1299913] = {
+                        spellID = 1299913,
+                        name = "Null Eruption",
+                        castTime = 4,
+                        first = 10.5,
+                        cd = { 18 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1299938] = {
+                        spellID = 1299938,
+                        name = "Shadowbolt Volley",
+                        castTime = 4,
+                        first = 1,
+                        cd = { 4 },
+                        cdMode = "CAST_START",
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Agitated Voidscythe ──────────────────────────────────────
+            [263228] = {
+                npcID = 263228,
+                name = "Agitated Voidscythe",
+                spells = {
+                    [1233472] = {
+                        spellID = 1233472,
+                        name = "Rip and Slice",
+                        channelTime = 6,
+                        first = 15.3,
+                        cd = { 20.2 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1289265] = {
+                        spellID = 1289265,
+                        name = "Corrosive Essence",
+                        castTime = 2.5,
+                        first = 5.5,
+                        cd = { 18.1 },
+                        openingCastOrder = 1,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1311778] = {
+                        spellID = 1311778,
+                        name = "Rip and Slice",
+                        first = 12.7,
+                        cd = { 20.2 },
+                        openingCastOrder = 2,
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Aegyra the Unyielding ────────────────────────────────────
+            [267545] = {
+                npcID = 267545,
+                name = "Aegyra the Unyielding",
+                spells = {
+                    [1298908] = {
+                        spellID = 1298908,
+                        name = "Champion's Spear",
+                        castTime = 2,
+                        first = 24,
+                        cd = { 33.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1298924] = {
+                        spellID = 1298924,
+                        name = "Savage Smash",
+                        castTime = 8,
+                        first = 27.5,
+                        cd = { 27.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1299125] = {
+                        spellID = 1299125,
+                        name = "Ferocious Leap",
+                        castTime = 2,
+                        first = 6.8,
+                        cd = { 33.4 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1299145] = {
+                        spellID = 1299145,
+                        name = "Earthsplitter",
+                        castTime = 3,
+                        first = 10.5,
+                        cd = { 32.2 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Raj'kess the Spellstorm ──────────────────────────────────
+            [267546] = {
+                npcID = 267546,
+                name = "Raj'kess the Spellstorm",
+                spells = {
+                    [1299270] = {
+                        spellID = 1299270,
+                        name = "Thundering Storm",
+                        castTime = 3,
+                        channelTime = 9,
+                        first = 21.3,
+                        cd = { 20.8 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1311747] = {
+                        spellID = 1311747,
+                        name = "Orb of Disruption",
+                        castTime = 2,
+                        first = 10.7,
+                        cd = { 30.8 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Devouring Brutalizer ─────────────────────────────────────
+            [268184] = {
+                npcID = 268184,
+                name = "Devouring Brutalizer",
+                spells = {
+                    [1252406] = {
+                        spellID = 1252406,
+                        name = "Dreadbellow",
+                        castTime = 4.5,
+                        first = 7.6,
+                        cd = { 23.4 },
+                        targetAPIExists = false,
+                        targetHostile = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1300243] = {
+                        spellID = 1300243,
+                        name = "Brutalize",
+                        castTime = 2,
+                        channelTime = 6,
+                        first = 15.2,
+                        cd = { 19.9 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1300249] = {
+                        spellID = 1300249,
+                        name = "Devour",
+                        castTime = 9,
+                        first = 23.1,
+                        cd = { 24 },
+                        cdMode = "CAST_START",
+                        targetAPIExists = false,
+                        targetHostile = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Altar of Fangs (2993)                                   ║
+    -- ╚══════════════════════════════════════════════════════════╝
+    [2993] = {
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Altar of Fangs",
+        mobs = {
+            -- ── Twinfang Harrower ────────────────────────────────────────
+            [261554] = {
+                npcID = 261554,
+                name = "Twinfang Harrower",
+                spells = {
+                    [1294567] = {
+                        spellID = 1294567,
+                        name = "Paralyzing Shots",
+                        castTime = 3,
+                        first = 6.5,
+                        cd = { 20 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1306668] = {
+                        spellID = 1306668,
+                        name = "Toxic Breath",
+                        castTime = 3,
+                        channelTime = 5,
+                        first = 15.3,
+                        cd = { 15 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── High Evolutionist ────────────────────────────────────────
+            [261557] = {
+                npcID = 261557,
+                name = "High Evolutionist",
+                spells = {
+                    [1306385] = {
+                        spellID = 1306385,
+                        name = "Evolve",
+                        channelTime = 6,
+                        first = 20,
+                        cd = { 24.5 },
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Ascendant Serpent ────────────────────────────────────────
+            [261573] = {
+                npcID = 261573,
+                name = "Ascendant Serpent",
+                spells = {
+                    [1294934] = {
+                        spellID = 1294934,
+                        name = "Noxious Spray",
+                        castTime = 3,
+                        channelTime = 5,
+                        first = 30,
+                        cd = { 28.5 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1295055] = {
+                        spellID = 1295055,
+                        name = "Virulent Whirl",
+                        castTime = 2,
+                        first = 21.5,
+                        cd = { 34.5 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1308864] = {
+                        spellID = 1308864,
+                        name = "Infest",
+                        castTime = 2,
+                        first = 4,
+                        cd = { 34.5 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Rattling Writhe ──────────────────────────────────────────
+            [262011] = {
+                npcID = 262011,
+                name = "Rattling Writhe",
+                spells = {
+                    [1294845] = {
+                        spellID = 1294845,
+                        name = "Corrosive Fangs",
+                        castTime = 3,
+                        first = 7,
+                        cd = { 25 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1294849] = {
+                        spellID = 1294849,
+                        name = "Rattle",
+                        castTime = 3,
+                        channelTime = 5,
+                        first = 12.7,
+                        cd = { 20 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Ula'tek's Chosen ─────────────────────────────────────────
+            [263109] = {
+                npcID = 263109,
+                name = "Ula'tek's Chosen",
+                spells = {
+                    [1306852] = {
+                        spellID = 1306852,
+                        name = "Toxic Surge",
+                        castTime = 2,
+                        channelTime = 9,
+                        first = 15.2,
+                        cd = { 16.5 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+
+            -- ── Ritual Chieftain ─────────────────────────────────────────
+            [270306] = {
+                npcID = 270306,
+                name = "Ritual Chieftain",
+                spells = {
+                    [1306517] = {
+                        spellID = 1306517,
+                        name = "Blood Sacrifice",
+                        castTime = 3,
+                        channelTime = 2,
+                        first = 12,
+                        cd = { 18 },
+                        targetAPIExists = false,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                    [1306911] = {
+                        spellID = 1306911,
+                        name = "Dismember",
+                        castTime = 3,
+                        first = 6,
+                        cd = { 20 },
+                        targetAPIExists = true,
+                        showNameplate = true,
+                        display = "bar",
+                        roles = { tank = true, healer = true, dps = true },
+                    },
+                },
+            },
+        },
+    },
 }
