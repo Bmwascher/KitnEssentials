@@ -669,43 +669,46 @@ end
 -- fingerprint-blind pick played the wrong spell's sound in the field.
 -- Kind rule: cast → any curated cast, including a two-phase spell's cast
 -- phase; channel → channel-ONLY (a two-phase channel start is the
--- transition, its cue fired at the cast). Ambiguity within the
--- 0.05s tie margin plays nothing — never a guess. Once per cast instance
--- (activeCastSeq). Called from BeginCast on every start.
-local CAST_START_CUE_TIE = 0.05    -- two candidates this close = no cue
+-- transition, its cue fired at the cast). The record's opening order selects
+-- rows within the mob first, and a row carrying targetHostile is selected
+-- strictly from the record's final target evidence (4.5). Ambiguity within
+-- the tie margin plays nothing — never a guess. Once per observation record,
+-- for that record only (4.4): scheduled from BeginCast for a normal START and
+-- bound to its generation owner.
+local CAST_START_CUE_TIE = TI.SELECTION_TIE_MARGIN  -- two candidates this close = no cue
 local CAST_START_CUE_DELAY = 0.12  -- one cue window, clears the +0.10s sampler
 
-function DTrash:PlayObservedCastStartCue(rt, kind)
-    if not (rt and rt.activeCastSeq) then return end
-    local seq = rt.activeCastSeq
+function DTrash:PlayObservedCastStartCue(rt, rec)
+    local owner = rt and rt.owner
+    if not (owner and rec) then return end
     C_Timer.After(CAST_START_CUE_DELAY, function()
-        self:FireObservedCastStartCue(rt, kind, seq)
+        if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "cue") then return end
+        self:FireObservedCastStartCue(owner.runtime, rec)
     end)
 end
 
-function DTrash:FireObservedCastStartCue(rt, kind, seq)
-    if self.tracked[rt.unit] ~= rt then return end
-    -- Still THIS cast: a kick/failure inside the window clears the active
-    -- kind, a new start bumps the seq — either way the cue died with it: the
-    -- delayed pick re-resolves and bails when the runtime moved on.
-    if rt.activeCastSeq ~= seq or rt.activeCastKind ~= kind then return end
-    if rt._castStartCuedSeq == seq then return end
+-- The deferred evaluation, run once by the record's target-evidence commit or
+-- close. A commit before the cue's own evaluation leaves nothing deferred, so
+-- that evaluation reads the final state itself.
+function DTrash:ResumeObservedCastStartCue(rt, rec)
+    if not rec.cueDeferred then return end
+    rec.cueDeferred = nil
+    if not TI.CastCallbackHolds(rt.owner, self.tracked, self.monitoring, rec, "cue") then return end
+    self:FireObservedCastStartCue(rt, rec)
+end
+
+function DTrash:FireObservedCastStartCue(rt, rec)
+    if rec.cued then return end
     local npcID = rt.matchedNPCID
     if not (npcID and rt.anchors) then return end
     if self:IsBossOutputSuppressed() then return end
     if not (self.db and self.db.Enabled) then return end
     local mob = self:MobData(npcID)
     if not (mob and mob.spells) then return end
-    local startAt = rt.activeCastStartAt or GetTime()
-    local fingerprints = {
-        targetExists = rt.fpTargetExists,
-        targetAPIExists = rt.fpTargetAPIExists,
-        castStartChangeTarget = rt.fpCastStartChangeTarget,
-        targetClearOnCastStart = rt.fpTargetClearOnCastStart,
-        targetIsTank = rt.fpTargetIsTank,
-    }
-    local candidates
-    for spellID, spellData in pairs(mob.spells) do
+    local kind = rec.kind
+    local fingerprints = rec.fingerprints or {}
+    local candidates, waitsForTarget
+    for spellID, spellData in pairs(TI.SelectOrderRows(mob.spells, kind, rec.order)) do
         local hasCast = (tonumber(spellData.castTime) or 0) > 0
         local hasChannel = (tonumber(spellData.channelTime) or 0) > 0
         local kindOK
@@ -713,9 +716,18 @@ function DTrash:FireObservedCastStartCue(rt, kind, seq)
         if kindOK and not TI.StartFingerprintsMatch(spellData, fingerprints) then kindOK = false end
         local anchor = kindOK and rt.anchors[spellID] or nil
         if anchor and anchor.nextStartAt then
-            candidates = candidates or {}
-            candidates[#candidates + 1] = { spellID = spellID, delta = math_abs(startAt - anchor.nextStartAt) }
+            -- A surviving row that needs target evidence makes a pending state
+            -- wait for its commit or close.
+            if spellData.targetHostile ~= nil and rec.targetState == "pending" then waitsForTarget = true end
+            if TI.TargetHostileMatches(spellData.targetHostile, rec.targetState, "select", TI.ABSENT_MATCHES_FALSE) then
+                candidates = candidates or {}
+                candidates[#candidates + 1] = { spellID = spellID, delta = math_abs(rec.startAt - anchor.nextStartAt) }
+            end
         end
+    end
+    if waitsForTarget then
+        rec.cueDeferred = true
+        return
     end
     if not candidates then return end
     local best = candidates[1]
@@ -732,7 +744,7 @@ function DTrash:FireObservedCastStartCue(rt, kind, seq)
     -- Effective resolver: user override > curated castSound default > silent.
     local sound = self:GetEffectiveSpellSoundOnCastStart(self.currentMapID, npcID, spellID)
     if not sound then return end
-    rt._castStartCuedSeq = seq
+    rec.cued = true
     playTrashSound(sound)
 end
 

@@ -76,14 +76,13 @@ local MAX_NAMEPLATES = 40
 -- of the INTERRUPTIBLE event (same cast seq, new castBarID) is a CONTINUATION
 -- of the running channel, not a new one.
 local CHANNEL_REFRESH_WINDOW = 1.00
--- Cast→channel transition proof: castbar IDs are monotonic per unit, so the
--- channel phase of a two-phase spell re-emits CHANNEL_START with the finished
--- cast's castBarID +1. The pairing is accepted only this soon after the cast
--- stop, and that bound is deliberate: leaving the pending lifetime unbounded
--- on unresolved mobs lets a stale pairing poison sawCastIntoChannel, which is
--- a Layer1 pruning input here. The same window holds an ambiguous one-phase
--- credit (see FinishCast).
-local TRANSITION_PAIR_WINDOW = 0.25
+-- Cast→channel pairing window, shared with TI.ProveCastIntoChannel: a proven
+-- channel phase starts this soon after its cast's own STOP, and an ambiguous
+-- one-phase credit is held this long for it (see FinishCast).
+local TRANSITION_PAIR_WINDOW = TI.TRANSITION_PAIR_WINDOW
+-- Target-evidence window (4.5): the delay requested for its close timer. The
+-- real boundary is when that callback runs; no time difference is compared.
+local TARGET_CHANGE_WINDOW = 0.75
 -- Scenario criteria flip `completed` slightly after the boss actually dies;
 -- coalesce the burst of BOSS_KILL/SCENARIO_* events into one re-read.
 local SCENARIO_REFRESH_DEBOUNCE = 1.0
@@ -1162,10 +1161,111 @@ function DTrash:CombatEdge(rt, inCombat)
     if TI.CombatWindowStep(cs, inCombat) ~= "closed" then return end
     local kept = {}
     for _, rec in ipairs(cs.records) do
-        if not rec.retired then kept[#kept + 1] = rec end
+        if rec.retired then
+            self:CloseTargetEvidence(rt, rec, "retirement")
+        else
+            kept[#kept + 1] = rec
+        end
     end
     cs.records = kept
+    if cs.latest and cs.latest.retired then self:CloseTargetEvidence(rt, cs.latest, "retirement") end
     self:SyncActiveCast(rt)
+end
+
+-- ── Target evidence (4.5) ──────────────────────────────────────────────────
+-- One pending-to-final state per collecting cast record. The first UNIT_TARGET
+-- handled after its START commits it; its close timer, its correlated end,
+-- interrupt or failure, its replacement, retirement or cancellation closes it
+-- unavailable. Unavailable is never written as absent.
+
+-- One read pair at event time, each under its own pcall with issecretvalue as
+-- first contact (guardedValue). UnitCanAttack runs only on a known-present
+-- target. Returns the normalized reading and, for unavailable, its cause.
+local function readTargetEvidence(unit)
+    local target = unit .. "target"
+    local existsOk, exists, existsSecret = guardedValue(pcall(UnitExists, target))
+    local attackOk, attack, attackSecret = false, nil, false
+    if existsOk and exists == true then
+        attackOk, attack, attackSecret = guardedValue(pcall(UnitCanAttack, "player", target))
+    end
+    local reading = TI.NormalizeTargetEvidence(existsOk, exists, existsSecret, attackOk, attack, attackSecret)
+    local cause
+    if reading == "unavailable" then cause = (existsSecret or attackSecret) and "secret" or "read" end
+    return reading, cause
+end
+
+local function castRowCarriesTarget(mob)
+    for _, sp in pairs(mob and mob.spells or {}) do
+        if sp.targetHostile ~= nil
+            and ((tonumber(sp.castTime) or 0) > 0 or type(sp.castTimeExtra) == "table") then
+            return true
+        end
+    end
+    return false
+end
+
+-- Whether a cast START on this runtime collects target evidence: the matched
+-- mob or a surviving candidate has a cast row carrying targetHostile.
+function DTrash:NeedsTargetEvidence(rt)
+    if rt.matchedNPCID and castRowCarriesTarget(self:MobData(rt.matchedNPCID)) then return true end
+    for _, c in ipairs(rt.candidates or {}) do
+        if castRowCarriesTarget(self:MobData(c.npcID)) then return true end
+    end
+    return false
+end
+
+-- Opens a normal START's state: pending when it collects, otherwise
+-- "not-collected". A collecting record and the advance it armed wait for the
+-- final state; one close timer, start-phase work bound to owner and record.
+function DTrash:OpenTargetEvidence(rt, rec, collect)
+    TI.TargetEvidenceStep(rec, { kind = "open", collect = collect })
+    local pending = rec.targetState == "pending"
+    rec.targetNeeded = pending or nil
+    local adv = rt.castState.pendingAdvance
+    if adv and adv.record == rec then
+        adv.targetNeeded, adv.targetState = rec.targetNeeded, rec.targetState
+    end
+    if not pending then return end
+    local owner = rt.owner
+    C_Timer.After(TARGET_CHANGE_WINDOW, function()
+        if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "start") then return end
+        self:CloseTargetEvidence(owner.runtime, rec, "timer")
+    end)
+end
+
+-- A final state's consumers, run once: the pending advance this record armed
+-- takes the state, a deferred cue evaluates, and the advance may apply.
+function DTrash:FinishTargetEvidence(rt, rec, commit, cause)
+    rec.targetCommit, rec.targetCause = commit, cause
+    local adv = rt.castState and rt.castState.pendingAdvance
+    if adv and adv.record == rec then adv.targetState = rec.targetState end
+    if self.ResumeObservedCastStartCue then self:ResumeObservedCastStartCue(rt, rec) end
+    self:ApplyPendingStartAdvance(rt)
+end
+
+-- Closes a pending window as unavailable; a final or uncollected one is left.
+function DTrash:CloseTargetEvidence(rt, rec, cause)
+    if rec and TI.TargetEvidenceStep(rec, { kind = "close" }) then
+        self:FinishTargetEvidence(rt, rec, "close", cause)
+    end
+end
+
+-- The UNIT_TARGET step: the first change handled while the latest record is
+-- pending commits it. At most one read pair, only then; a change reaching a
+-- final record is counted and changes nothing.
+function DTrash:TargetEvidenceChange(rt)
+    local cs = rt.castState
+    local rec = cs and cs.latest
+    if not rec then return end
+    if rec.targetState ~= "pending" then
+        if rec.targetCommit then rec.targetIgnored = (rec.targetIgnored or 0) + 1 end
+        return
+    end
+    if not TI.CastCallbackHolds(rt.owner, self.tracked, self.monitoring, rec, "start") then return end
+    local reading, cause = readTargetEvidence(rt.unit)
+    if TI.TargetEvidenceStep(rec, { kind = "change", reading = reading }) then
+        self:FinishTargetEvidence(rt, rec, "change", cause)
+    end
 end
 
 -- ── Layer2 fingerprint samplers (target rings + buff count) ────────────────
@@ -1223,6 +1323,8 @@ function DTrash:OnUnitTarget(_, unit)
     -- The edge decision comes before the early return, so a known false here
     -- closes a counting window too (4.6).
     self:CombatEdge(rt, inCombat)
+    -- Target evidence (4.5): after the edge decision, not gated on combat.
+    self:TargetEvidenceChange(rt)
     if inCombat ~= true then return end
     local now = GetTime()
     self:MarkEngaged(rt, now)  -- in-combat target churn is engagement evidence
@@ -1295,6 +1397,11 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
         self:SyncActiveCast(rt)
         dprint(tostring(unit) .. ": channel refresh (interruptible) — continuation, anchor kept")
         return
+    end
+    -- The replaced observation's target-evidence window closes before this
+    -- START arms anything (4.5).
+    if prior and prior ~= rec then
+        self:CloseTargetEvidence(rt, prior, prior.canceled and "cancellation" or "replacement")
     end
     if DEBUG_DTRASH then
         -- Secret-safe probe: never tostring/tonumber a possibly-secret castGUID
@@ -1370,6 +1477,8 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     self:SyncActiveCast(rt)
     if class ~= "normal" then return end
 
+    -- Only a normal cast START collects, and only when a remaining row needs it.
+    self:OpenTargetEvidence(rt, rec, kind == "cast" and self:NeedsTargetEvidence(rt))
     local owner = rt.owner
     C_Timer.After(TARGET_SAMPLE_DELAY, function()
         -- Start-phase work, bound to its owner and record (4.4): refused once a
@@ -1411,7 +1520,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     -- after the sampler so timer order matches delay order. Output-layer
     -- method, guarded like the other output seams (TrashOutput loads after
     -- this file).
-    if self.PlayObservedCastStartCue then self:PlayObservedCastStartCue(rt, kind) end
+    if self.PlayObservedCastStartCue then self:PlayObservedCastStartCue(rt, rec) end
 end
 
 function DTrash:OnCastStop(_, unit, _castGUID, _spellID, castBarID)
@@ -1465,8 +1574,13 @@ function DTrash:MarkCastInterrupted(unit, castBarID, castFailed)
     if not (rt and rt.castState) then return end
     -- The kind matters only for a STOP; an interrupt or failure correlates on
     -- the bar ID alone.
-    local _, latch = TI.ClassifyEnd(rt.castState, nil, safeCastBarID(castBarID),
+    local rec = rt.castState.latest
+    local outcome, latch = TI.ClassifyEnd(rt.castState, nil, safeCastBarID(castBarID),
         castFailed and "failed" or "interrupted", GetTime())
+    -- A correlated interrupt or failure closes its target-evidence window (4.5).
+    if outcome == "correlated" then
+        self:CloseTargetEvidence(rt, rec, castFailed and "failure" or "interrupt")
+    end
     if latch then rt.sawInterrupted = true end
     -- Interrupt evidence IS engagement evidence: engagedAt is stamped on the
     -- first sawInterrupted observation — before ResolveMob below
@@ -1824,6 +1938,9 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     local outcome = TI.ClassifyEnd(rt.castState, kind, safeCastBarID(castBarID), "stop", now)
     self:SyncActiveCast(rt)
     if outcome ~= "correlated" then return end
+    -- The record's correlated end closes a pending target-evidence window
+    -- before Layer 2 and credit read it (4.5).
+    self:CloseTargetEvidence(rt, rec, "end")
 
     local startAt = rec.startAt
     local duration = now - startAt

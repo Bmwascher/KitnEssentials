@@ -332,8 +332,6 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     local cast = rt.castState
     if cast then
         local base = math.max(oldCast and oldCast.seq or 0, cached.activeCastSeq or 0)
-        local cuedLatest = cast.latest ~= nil and rt._castStartCuedSeq ~= nil
-            and rt._castStartCuedSeq == cast.latest.seq
         local seen = {}
         local function renumber(rec)
             if seen[rec] then return end
@@ -353,7 +351,6 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
             cachedAdvance.provenance = "cached"
             cast.pendingAdvance = cachedAdvance
         end
-        cached._castStartCuedSeq = (cuedLatest and cast.latest.seq) or nil
     end
     cached.castState = cast
     cached.channelRefreshAt, cached.channelRefreshSeq = nil, nil
