@@ -379,6 +379,11 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID, site)
     end
     cached.castState = cast
     cached.channelRefreshAt, cached.channelRefreshSeq = nil, nil
+    -- The start sampler's target rings, and the presence baseline that feeds
+    -- the clear ring, belong to the generation that recorded them.
+    cached.targetSwitchEvents = rt.targetSwitchEvents
+    cached.targetClearEvents = rt.targetClearEvents
+    cached.targetStateExists = rt.targetStateExists
     -- The adoption site, for the dump: "start", "resolve" or "layer2".
     cached.restoreSite = site or "resolve"
     cached.restoreRefused = nil

@@ -113,7 +113,7 @@ DTrash.tracked = {}   -- [unit] = runtime table
 DTrash.monitoring = false
 -- Load marker: increment it in every later commit that touches a shipped
 -- .lua, .xml or .toc file.
-DTrash._trashStateRevision = 1
+DTrash._trashStateRevision = 2
 DTrash.currentMapID = nil
 DTrash.inBossEncounter = false
 DTrash.bossEncounterID = nil
