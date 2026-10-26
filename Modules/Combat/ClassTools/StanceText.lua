@@ -29,6 +29,8 @@ local MISSING_TEXT_DEFAULT = "MISSING"
 local WRONG_TEXT_DEFAULT = "WRONG"
 local ATTACH_KEY = "stanceText"
 local CAPTION_GAP = 4
+-- Required values that are not a spell: no requirement, or any option.
+local NO_REQUIREMENT, ANY_OPTION = 0, -1
 
 -- Per-spec expected form, keyed by specialization ID.
 --
@@ -98,6 +100,32 @@ local SPELL_NAMES = {
 }
 ST.SPELL_NAMES = SPELL_NAMES
 
+-- Forever: one spec per class. Warrior and Druid start with no
+-- requirement, Paladin with any aura; any rank of a stance, aura or form
+-- satisfies it.
+if KE.IS_FOREVER then
+    SPECS = {
+        [1491] = { spellID = NO_REQUIREMENT, check = "form", options = { NO_REQUIREMENT, 2457, 71, 2458 } },
+        [1486] = { spellID = ANY_OPTION, check = "form", options = { ANY_OPTION, 465, 7294, 19746, 19876, 19888, 19891, 20218 } },
+        [1484] = { spellID = NO_REQUIREMENT, check = "form", options = { NO_REQUIREMENT, 5487, 768, 24858 } },
+        [1487] = { spellID = 15473, check = "form" },
+    }
+    SPELL_NAMES = {
+        [NO_REQUIREMENT] = "None", [ANY_OPTION] = "Any Aura",
+        [2457] = "Battle Stance", [71] = "Defensive Stance", [2458] = "Berserker Stance",
+        [465] = "Devotion Aura", [7294] = "Retribution Aura", [19746] = "Concentration Aura",
+        [19876] = "Shadow Resistance Aura", [19888] = "Frost Resistance Aura",
+        [19891] = "Fire Resistance Aura", [20218] = "Sanctity Aura",
+        [5487] = "Bear Form", [768] = "Cat Form", [24858] = "Moonkin Form",
+        [15473] = "Shadowform",
+    }
+    ST.SPECS = SPECS
+    ST.SPELL_NAMES = SPELL_NAMES
+    ST.CLASS_ORDER = { "WARRIOR", "PALADIN", "DRUID", "PRIEST" }
+    ST.CLASS_SPECS = { WARRIOR = { 1491 }, PALADIN = { 1486 }, DRUID = { 1484 }, PRIEST = { 1487 } }
+    ST.SPEC_NAMES = { [1491] = "Warrior", [1486] = "Paladin", [1484] = "Druid", [1487] = "Priest" }
+end
+
 local function SpecEntry()
     local specID = KE:GetPlayerSpecId()
     return specID, specID and SPECS[specID] or nil
@@ -150,6 +178,16 @@ local function SpellIsKnown(spellID)
     return C_SpellBook.IsSpellKnown(spellID) == true
 end
 
+-- The first real spell among the options that isKnown accepts, or any
+-- real one when isKnown is nil.
+local function FirstKnownOption(options, isKnown)
+    if not options then return nil end
+    for _, option in ipairs(options) do
+        if option > 0 and (not isKnown or isKnown(option)) then return option end
+    end
+    return nil
+end
+
 -- Reused rather than rebuilt: UNIT_AURA for the player fires constantly in
 -- combat, so this path must allocate nothing.
 local evalContext = {
@@ -158,12 +196,21 @@ local evalContext = {
     auraIdentityVisible = AuraIdentityVisible,
 }
 
+-- Forever: any rank of the wanted spell counts as known and as held.
+local Ranks = KE.CombatDataForever
+if Ranks then
+    evalContext.isKnown = function(spellID)
+        return Ranks.HighestKnown(spellID, SpellIsKnown) ~= nil
+    end
+    evalContext.sameSpell = Ranks.SameFamily
+end
+
 -- The whole rule, with every world reading passed in. Returns the spell id to
 -- draw, or nil to hide. Kept free of API calls so the rules can be tested
 -- without faking the shapeshift and aura subsystems.
 --
 -- ctx fields: inCombat, currentFormSpell, hasAura(spellID, also),
--- isKnown(spellID), auraIdentityVisible()
+-- isKnown(spellID), auraIdentityVisible(), and the optional sameSpell(a, b)
 function ST:EvaluateSpec(db, specID, entry, ctx)
     if not entry then return nil end
 
@@ -176,6 +223,14 @@ function ST:EvaluateSpec(db, specID, entry, ctx)
 
     local wanted = tonumber(db[key .. "Spell"]) or entry.spellID
 
+    if wanted == NO_REQUIREMENT then return nil end
+    -- Any option will do: only no form at all is missing one, and the first
+    -- one the player knows is drawn.
+    if wanted == ANY_OPTION then
+        if ctx.currentFormSpell then return nil end
+        return FirstKnownOption(entry.options, ctx.isKnown)
+    end
+
     -- Not learned yet (low level, or the talent is not taken) -- nothing to
     -- remind about, and the icon would be a lie.
     if not ctx.isKnown(wanted) then return nil end
@@ -187,6 +242,7 @@ function ST:EvaluateSpec(db, specID, entry, ctx)
         if not satisfied and not ctx.auraIdentityVisible() then return nil end
     else
         satisfied = ctx.currentFormSpell == wanted
+            or (ctx.sameSpell ~= nil and ctx.sameSpell(ctx.currentFormSpell, wanted))
         -- A form can have stand-ins too, the way Voidform stands in for
         -- Shadowform, so the alternatives count here as much as on the aura path.
         if not satisfied and entry.also then
@@ -448,6 +504,8 @@ function ST:ShowPreview()
     self.previewing = true
     local _, entry = SpecEntry()
     local spellID = entry and entry.spellID or 24858
+    -- No requirement or any option: a texture of either is blank.
+    if spellID <= 0 then spellID = FirstKnownOption(entry.options) or 24858 end
     self.frame:SetSize(self.db.IconSize, self.db.IconSize)
     self.frame.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
     self.frame:SetAlpha(self.db.Alpha or 1)
