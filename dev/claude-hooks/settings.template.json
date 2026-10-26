@@ -69,6 +69,22 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/file-map-check.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 60,
+            "statusMessage": "file map refresh"
+          }
+        ]
+      },
+      {
         "matcher": "compact",
         "hooks": [
           {

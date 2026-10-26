@@ -2,7 +2,16 @@
 -- every row to its tabs and cards.
 --
 -- Run from the repo root with the local Lua interpreter:
---   lua dev/scripts/file-map.lua [--out <path>] [--retail <file>]
+--   lua dev/scripts/file-map.lua [--refresh] [--out <path>] [--retail <file>]
+--
+-- --refresh keeps a map current: it rebuilds only when the commit or the
+-- uncommitted content of the map's inputs (REFRESH_INPUTS) differs from the
+-- stamp file beside the map, publishes only a map whose self-checks pass
+-- (else it keeps the previous one and prints the failures), and prints one
+-- `[file-map]` line naming the map. Its default output is
+-- dev/docs/FILE-MAP.md in the primary checkout and FILE-MAP.md in the git
+-- dir of a linked worktree, whose dev/docs may be a junction to the
+-- primary's. The SessionStart hook file-map-check.ps1 runs it.
 --
 -- Rows come from GUIFrame.sidebarConfig in GUI/GUIMain/GUI-MainFrame.lua. A
 -- row's content ids are its own id plus, transitively, the children of each
@@ -92,22 +101,30 @@ local BUILDER_DEFAULTS = {
 }
 local EXPAND_DEPTH = 8
 local CARD_SEP = " \194\183 "
-local REFRESH = "lua dev/scripts/file-map.lua --out dev/docs/FILE-MAP.md"
+local REFRESH = "lua dev/scripts/file-map.lua --refresh"
+local REFRESH_INPUTS = "GUI Core Modules KitnEssentials_Options Libs KitnEssentials.toc "
+    .. "dev/scripts/file-map.lua dev/scripts/load-list.lua dev/scripts/retail-only.lua"
+-- A lock older than this is a run that died; a refresh takes about 10 s.
+local LOCK_SECONDS = 120
 
-local outPath
+local outPath, refresh
 local retailPath = "dev/scripts/retail-only.lua"
 local argi = 1
 while argi <= #arg do
     local flag, value = arg[argi], arg[argi + 1]
-    if flag == "--out" and value then
+    if flag == "--refresh" then
+        refresh = true
+        argi = argi + 1
+    elseif flag == "--out" and value then
         outPath = value
+        argi = argi + 2
     elseif flag == "--retail" and value then
         retailPath = value
+        argi = argi + 2
     else
-        io.stderr:write("usage: lua dev/scripts/file-map.lua [--out <path>] [--retail <file>]\n")
+        io.stderr:write("usage: lua dev/scripts/file-map.lua [--refresh] [--out <path>] [--retail <file>]\n")
         os.exit(2)
     end
-    argi = argi + 2
 end
 
 local function readFile(path)
@@ -135,6 +152,49 @@ local function commandLines(cmd)
         p:close()
     end
     return out
+end
+
+local function writeFile(path, text)
+    local f = io.open(path, "wb")
+    if not f then return false end
+    f:write(text)
+    f:close()
+    return true
+end
+
+-- --refresh: the output path, the stamp the inputs give now (nil when git
+-- cannot say, which never matches), and an exit when the map is current or
+-- another refresh holds the lock.
+local stamp, stampPath, lockPath
+if refresh then
+    if not outPath then
+        local gitDir = commandLines("git rev-parse --path-format=absolute --git-dir")[1]
+        local commonDir = commandLines("git rev-parse --path-format=absolute --git-common-dir")[1]
+        outPath = (gitDir and gitDir ~= commonDir) and (gitDir .. "/FILE-MAP.md") or "dev/docs/FILE-MAP.md"
+    end
+    -- The hashes cover content, so a second edit to an already modified file
+    -- still changes the stamp.
+    local head = commandLines("git rev-parse HEAD")[1]
+    local edits = commandLines("git diff HEAD --binary -- " .. REFRESH_INPUTS .. " | git hash-object --stdin")[1]
+    local new = commandLines("git ls-files --others --exclude-standard -- " .. REFRESH_INPUTS)
+    local newHashes = #new > 0
+        and commandLines("git ls-files --others --exclude-standard -- " .. REFRESH_INPUTS
+            .. " | git hash-object --stdin-paths")
+        or {}
+    if head and head:match("^%x+$") and edits and edits:match("^%x+$") and #newHashes == #new then
+        stamp = table.concat({ head, edits, table.concat(new, "\n"), table.concat(newHashes, "\n") }, "\n") .. "\n"
+    end
+    stampPath, lockPath = outPath .. ".stamp", outPath .. ".lock"
+    if stamp and fileExists(outPath) and readFile(stampPath) == stamp then
+        print("[file-map] current: " .. outPath)
+        os.exit(0)
+    end
+    local held = tonumber(readFile(lockPath) or "")
+    if held and os.time() - held < LOCK_SECONDS then
+        print("[file-map] busy: another refresh is writing " .. outPath)
+        os.exit(0)
+    end
+    writeFile(lockPath, tostring(os.time()))
 end
 
 local function underAny(path, roots)
@@ -1123,14 +1183,28 @@ end
 for _, line in ipairs(body) do doc[#doc + 1] = line end
 local docText = table.concat(doc, "\n") .. "\n"
 
-if outPath then
-    local f = io.open(outPath, "wb")
-    if not f then
+if refresh then
+    -- Written aside and moved into place, so a reader never sees half a map.
+    local published = false
+    if #failures == 0 and writeFile(outPath .. ".tmp", docText) then
+        os.remove(outPath)
+        published = os.rename(outPath .. ".tmp", outPath) ~= nil
+    end
+    if published then
+        if stamp then writeFile(stampPath, stamp) end
+        print("[file-map] regenerated at " .. sha .. ": " .. outPath)
+    else
+        os.remove(outPath .. ".tmp")
+        print("[file-map] kept the previous map at " .. outPath .. "; this run did not publish:")
+        for _, msg in ipairs(failures) do print("FAIL: " .. msg) end
+    end
+    os.remove(lockPath)
+    os.exit(published and 0 or 1)
+elseif outPath then
+    if not writeFile(outPath, docText) then
         io.stderr:write("cannot write ", outPath, "\n")
         os.exit(2)
     end
-    f:write(docText)
-    f:close()
 else
     io.write(docText)
 end

@@ -50,8 +50,8 @@ $primary = $root
 $wtList = @(git -C $root worktree list --porcelain 2>$null | Where-Object { $_ -like 'worktree *' })
 if ($LASTEXITCODE -eq 0 -and $wtList.Count) { $primary = [System.IO.Path]::GetFullPath($wtList[0].Substring(9)) }
 $liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $primary '.claude\hooks') }
-foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1', 'lib-update-check.ps1', 'program-recovery.ps1')) {
-    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1', 'lib-update-check.ps1', 'program-recovery.ps1')) { 'project' } else { 'user' }
+foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1', 'lib-update-check.ps1', 'file-map-check.ps1', 'program-recovery.ps1')) {
+    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1', 'lib-update-check.ps1', 'file-map-check.ps1', 'program-recovery.ps1')) { 'project' } else { 'user' }
     $other = if ($scope -eq 'user') { 'project' } else { 'user' }
     $live = Join-Path $liveDir[$scope] $n
     Check "$n has no stale copy in $other scope" (-not (Test-Path (Join-Path $liveDir[$other] $n))) 'run pwsh dev/scripts/install-claude-hooks.ps1'

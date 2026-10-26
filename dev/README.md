@@ -386,7 +386,9 @@ Project-scope hook (`.claude/hooks/`, from `settings.template.json`):
 `agents-mirror-sync.ps1` (PostToolUse, rebuilds the `.agents/skills` mirror
 through `dev/scripts/sync-agents-mirror.ps1` after any skill or command
 edit; `-Check` reports drift). `lib-update-check.ps1` (SessionStart) prints
-the library pins behind upstream.
+the library pins behind upstream. `file-map-check.ps1` (SessionStart) runs
+`lua dev/scripts/file-map.lua --refresh`, which rebuilds the file map when
+its inputs changed and prints the map's path.
 
 Run `pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
 exercises every documented deny and allow case against a throwaway main
