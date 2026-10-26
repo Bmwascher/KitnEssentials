@@ -1,164 +1,80 @@
--- extract-trash-data.lua — deterministic import of the dungeon-trash
--- cast-timer data into KitnEssentials.
+-- extract-trash-data.lua: generates the season-2 sections of the dungeon-trash
+-- data (TrashData.lua, TrashTraits.lua) from explicit, pinned inputs.
 --
--- Run from the repo ROOT with the local Lua 5.1 interpreter:
---   lua dev/scripts/extract-trash-data.lua
+-- Run from the repo root with the local Lua 5.1 interpreter:
+--   lua dev/scripts/extract-trash-data.lua --data-root <dir> --names-db <file>
+--       --spell-names dev/data/trash-spell-names-enUS.lua
+--       --base-data Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua
+--       --base-traits Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua
+--       --registry Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua
+--       --season 2 --out <existing candidate directory>
 --
--- Loads the pure-data source tables by dofile (so every spellID / timing is
--- copied by the interpreter, never retyped), decodes each mob's packed
--- identity bitfield with decodeIdentity below, then emits:
---   Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua    (KE.TrashData)
---   Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua  (KE.TrashTraits)
---   dev/docs/dungeon-trash-data-discrepancies.md (cross-build diff)
---
--- Sources: the local, gitignored data builds named in Paths below. The
--- PRIMARY build is the source of truth; the DIFF builds are compared against
--- it in precedence order, highest first. The primary always wins; nothing is
--- silently reconciled — every field that differs across builds is logged for
--- human review.
---
--- The Trash/ output directory must already exist (it does once these files
--- are committed). Re-running overwrites the three generated files in place.
+-- --data-root holds TrashCDData.lua, TrashMobTraits.lua and TrashCDPreset.lua.
+-- Every input is read as a data literal in an empty environment, and the whole
+-- input set is validated before anything is written. The only writes are four
+-- files in the --out directory: TrashData.lua, TrashTraits.lua,
+-- trash-s2-manifest.lua and trash-s2-report.md. The season-1 sections are the
+-- base files' own bytes. dev/scripts/promote-trash-data.lua checks a candidate
+-- and publishes it. Names are never translated: NPC names come from the name
+-- database's enUS column and spell names from the --spell-names projection.
 
----------------------------------------------------------------------------
--- Paths (relative to repo root — the documented CWD)
----------------------------------------------------------------------------
+local M = {}
 
-local REF        = "References/ExBoss/"
-local PRIMARY    = REF .. "EXBoss-v26.6.29.1618/EXBossData/"
-local OLD_664    = REF .. "EXBoss-v26.6.4.1821_old/EXBossData/"
-local OLD_6512   = REF .. "EXBoss-v26.5.12.2252_old/EXBossData/"
-local DA_DATA    = "References/DungeonAlerts/Dungeon Alerts v1/Data/"
-
-local OUT_DATA   = "Modules/DungeonTools/DungeonTimers/Trash/TrashData.lua"
-local OUT_TRAITS = "Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua"
-local OUT_DIFF   = "dev/docs/dungeon-trash-data-discrepancies.md"
-
--- mapID -> KE dungeon key + English display name. Keys match the existing
--- DungeonTimers sidebar ids; names are the live Blizzard dungeon names.
-local DUNGEONS = {
-    [658]  = { key = "PitOfSaron",       name = "Pit of Saron" },
-    [1209] = { key = "Skyreach",         name = "Skyreach" },
-    [1753] = { key = "SeatOfTriumvirate", name = "Seat of the Triumvirate" },
-    [2526] = { key = "AlgetharAcademy",  name = "Algeth'ar Academy" },
-    [2805] = { key = "WindrunnerSpire",  name = "Windrunner Spire" },
-    [2811] = { key = "MagistersTerrace", name = "Magisters' Terrace" },
-    [2874] = { key = "MaisaraCaverns",   name = "Maisara Caverns" },
-    [2915] = { key = "NexusPointXenas",  name = "Nexus-Point Xenas" },
+M.S2_PINS = {
+    challengeToInstance = {
+        [249] = 1762, [250] = 1877, [399] = 2521, [584] = 2859,
+        [585] = 2923, [586] = 2825, [587] = 2813, [588] = 2993,
+    },
+    excluded = {
+        { mapID = 2825, npcID = 250478, spellID = 1309947,
+          reason = "disabled untimed marker: no first cast and no cooldown" },
+    },
+    pinnedSpells = {
+        { mapID = 1877, npcID = 134600, spellID = 1308113, first = 9.5, channelTime = 9, cd = { 26 } },
+        { mapID = 2521, npcID = 190206, spellID = 385536, first = 8.3, channelTime = 10, cd = { 26 } },
+    },
+    waveRoomID = 94539,
 }
 
----------------------------------------------------------------------------
--- Source loader — dofile each pure-data file into an isolated environment
--- so the four TrashCDData builds don't clobber one another's globals.
----------------------------------------------------------------------------
-
-local function loadDataFile(path)
-    local chunk, err = loadfile(path)
-    if not chunk then
-        error("cannot load " .. path .. "\n  " .. tostring(err))
-    end
-    -- Fresh env; reads of math/type/tonumber fall through to the real _G,
-    -- writes (`_G.FOO = ...`) land in env because env._G == env.
-    local env = setmetatable({}, { __index = _G })
-    env._G = env
-    setfenv(chunk, env)
-    local ok, e = pcall(chunk)
-    if not ok then
-        error("error running " .. path .. "\n  " .. tostring(e))
-    end
-    return env
+local function fail(msg)
+    error("extract-trash-data: " .. msg, 0)
 end
 
 ---------------------------------------------------------------------------
--- Identity bitfield decoder: unpacks each mob's packed identity value.
+-- Formatting
 ---------------------------------------------------------------------------
 
-local function decodeIdentity(p)
-    p = tonumber(p) or 0
-    local function b(s, w) return math.floor(p / (2 ^ s)) % (2 ^ w) end
-    return {
-        buffCount        = b(0, 4),
-        classID          = b(4, 4),
-        sex              = b(8, 3),
-        power            = b(11, 3),
-        level            = b(14, 7),
-        hasCastSkill     = b(37, 1) == 1,
-        noCastSkill      = b(38, 1) == 1,
-        hasCastSpell     = b(39, 1) == 1,
-        hasChannelSpell  = b(40, 1) == 1,
-        hasInterruptFlag = b(41, 1) == 1,
-        cannotInterrupt  = b(42, 1) == 1,
-        nonElite         = b(43, 1) == 1,
-    }
+local function sortedKeys(t)
+    local keys = {}
+    for k in pairs(t) do keys[#keys + 1] = k end
+    table.sort(keys)
+    return keys
 end
-
--- Field order for the serialized identity table (matches _r's declaration).
-local IDENTITY_ORDER = {
-    "level", "sex", "power", "classID", "buffCount",
-    "hasCastSkill", "noCastSkill", "hasCastSpell", "hasChannelSpell",
-    "hasInterruptFlag", "cannotInterrupt", "nonElite",
-}
-
----------------------------------------------------------------------------
--- Formatting helpers
----------------------------------------------------------------------------
 
 local function fmtNum(n)
-    if type(n) ~= "number" then return tostring(n) end
     if math.floor(n) == n and math.abs(n) < 1e15 then
         return string.format("%d", n)
     end
     return string.format("%.14g", n)
 end
 
--- Manual hex so the 40+-bit packed identity round-trips exactly regardless
--- of the interpreter's lua_Integer width.
-local function fmtHex(n)
-    n = math.floor(n)
-    if n == 0 then return "0x0" end
-    local digits, s = "0123456789ABCDEF", ""
-    while n > 0 do
-        local d = n % 16
-        s = digits:sub(d + 1, d + 1) .. s
-        n = math.floor(n / 16)
-    end
-    return "0x" .. s
-end
-
 local function luaStr(s)
-    return '"' .. tostring(s):gsub("\\", "\\\\"):gsub('"', '\\"') .. '"'
+    return '"' .. (tostring(s):gsub("\\", "\\\\"):gsub('"', '\\"')) .. '"'
 end
 
--- Inline "{ a, b, c }" array of numbers.
-local function fmtNumArray(arr)
-    local parts = {}
-    for i = 1, #arr do parts[i] = fmtNum(arr[i]) end
-    return "{ " .. table.concat(parts, ", ") .. " }"
-end
-
--- Split "2.5/3.5" or "16574,16575" into a number array (non-numeric tokens
--- kept as-is, though none occur in the current data).
-local function parseNumList(s, sep)
-    if s == nil then return nil end
-    s = tostring(s)
-    if s == "" then return nil end
-    local out = {}
-    for token in s:gmatch("[^" .. sep .. "]+") do
-        out[#out + 1] = tonumber(token) or token
+local function fmtValue(v)
+    local kind = type(v)
+    if kind == "number" then return fmtNum(v) end
+    if kind == "string" then return luaStr(v) end
+    if kind == "table" then
+        local parts = {}
+        for i = 1, #v do parts[i] = fmtValue(v[i]) end
+        return "{ " .. table.concat(parts, ", ") .. " }"
     end
-    if #out == 0 then return nil end
-    return out
+    return tostring(v)
 end
 
-local function sortedKeys(t)
-    local keys = {}
-    for k in pairs(t) do keys[#keys + 1] = k end
-    table.sort(keys, function(a, b) return a < b end)
-    return keys
-end
-
--- Boxed section banner (the KE file-header style) for top-level groupings.
--- Labels are plain ASCII (dungeon names), so the padding math is byte-safe.
+-- Labels are ASCII dungeon names, so the padding math is byte-safe.
 local function boxHeader(w, indent, label)
     local width = 58
     local pad = width - 2 - #label
@@ -168,609 +84,1084 @@ local function boxHeader(w, indent, label)
     w(indent .. "-- ╚" .. string.rep("═", width) .. "╝")
 end
 
--- Section header comment: `-- ══ Label ══════` / `-- ── Label ──────` padded
--- to a fixed visual width. The box-drawing chars are 3 UTF-8 bytes each, so
--- visual length = byte length minus 2 per box char (the prefix carries two).
-local function headerLine(indent, label, ch)
-    ch = ch or "─"
-    local prefix = indent .. "-- " .. ch .. ch .. " " .. label .. " "
-    local visual = #prefix - 4
-    local fill = 76 - visual
+-- Box-drawing characters are 3 UTF-8 bytes each; the prefix carries two.
+local function headerLine(indent, label)
+    local prefix = indent .. "-- ── " .. label .. " "
+    local fill = 76 - (#prefix - 4)
     if fill < 4 then fill = 4 end
-    return prefix .. string.rep(ch, fill)
+    return prefix .. string.rep("─", fill)
 end
 
----------------------------------------------------------------------------
--- Load sources
----------------------------------------------------------------------------
-
-local primaryEnv = loadDataFile(PRIMARY .. "TrashCDData.lua")
-local localeEnv  = loadDataFile(PRIMARY .. "TrashCDLocale.lua")
-local presetEnv  = loadDataFile(PRIMARY .. "TrashCDPreset.lua")
-local traitsEnv  = loadDataFile(PRIMARY .. "TrashMobTraits.lua")
-
-local CD_DATA = primaryEnv.EXBOSS_TRASH_CD_DATA
-local LOCALE  = localeEnv.EXBOSS_TRASH_CD_LOCALE
-local PRESET  = presetEnv.EXBOSS_TRASH_CD_PRESET
-local TRAITS  = traitsEnv.EXBOSS_TRASH_MOB_TRAITS
-
-assert(CD_DATA, "missing EXBOSS_TRASH_CD_DATA")
-assert(LOCALE, "missing EXBOSS_TRASH_CD_LOCALE")
-assert(PRESET, "missing EXBOSS_TRASH_CD_PRESET")
-assert(TRAITS and TRAITS.rows, "missing EXBOSS_TRASH_MOB_TRAITS")
-
--- English mob name: locale enUS, else the mob's own English/zh name.
-local function mobEnUS(npcID, fallback)
-    local loc = LOCALE[npcID]
-    if loc and loc.enUS and loc.enUS ~= "" then return loc.enUS end
-    return fallback
+local function isWhole(v)
+    return type(v) == "number" and v % 1 == 0
 end
 
--- zh dungeon name -> mapID, built from the primary data's mapName fields
--- (used to resolve the trait rows, which carry only the Chinese name).
-local ZH_TO_MAP = {}
-for mapID, dungeon in pairs(CD_DATA) do
-    if dungeon.mapName then ZH_TO_MAP[dungeon.mapName] = mapID end
+-- A row's key. Every part must be a whole number, so a string ID never
+-- stands in for the numeric one it prints like.
+local function tupleKey(mapID, npcID, spellID)
+    if not (isWhole(mapID) and isWhole(npcID) and isWhole(spellID)) then
+        fail(string.format("row key %s:%s:%s is not three whole numbers",
+            tostring(mapID), tostring(npcID), tostring(spellID)))
+    end
+    return string.format("%d:%d:%d", mapID, npcID, spellID)
 end
 
----------------------------------------------------------------------------
--- DELIVERABLE 2 — TrashData.lua
----------------------------------------------------------------------------
+local function isNumberArray(v)
+    if type(v) ~= "table" or #v == 0 then return false end
+    for k, n in pairs(v) do
+        if type(k) ~= "number" or k < 1 or k > #v or k % 1 ~= 0 or type(n) ~= "number" then
+            return false
+        end
+    end
+    return true
+end
 
--- Verbatim timing / fingerprint fields, in serialization order. name/nameEN
--- are handled specially (name := nameEN); spellID is emitted first.
-local SPELL_ORDER = {
-    "castTime", "channelTime", "first", "cd", "cdMode",
-    "targetExists", "targetAPIExists", "castStartChangeTarget",
-    "targetClearOnCastStart", "castStartAuraDelta",
-    "selfBuffCountDeltaOnSuccess", "channelRefreshOnInterruptible",
-    "castTimeExtra", "hidden",
-}
-local SPELL_KNOWN = { spellID = true, name = true, nameEN = true }
-for _, k in ipairs(SPELL_ORDER) do SPELL_KNOWN[k] = true end
+-- Equal number arrays: same length, and each element the same number.
+local function sameNumbers(a, b)
+    if not (isNumberArray(a) and isNumberArray(b)) or #a ~= #b then return false end
+    for i = 1, #a do
+        if a[i] ~= b[i] then return false end
+    end
+    return true
+end
 
-local function emitScalar(out, indent, key, value)
-    if type(value) == "table" then
-        out[#out + 1] = string.format("%s%s = %s,", indent, key, fmtNumArray(value))
-    elseif type(value) == "boolean" then
-        out[#out + 1] = string.format("%s%s = %s,", indent, key, tostring(value))
-    elseif type(value) == "number" then
-        out[#out + 1] = string.format("%s%s = %s,", indent, key, fmtNum(value))
-    else
-        out[#out + 1] = string.format("%s%s = %s,", indent, key, luaStr(value))
+local function checkType(value, want, where)
+    if value == nil then return end
+    if want == "numbers" then
+        if not isNumberArray(value) then fail(where .. " must be a non-empty number array") end
+    elseif type(value) ~= want then
+        fail(where .. " must be a " .. want)
     end
 end
 
-local unknownFields = {}  -- future-proofing: report any source field we don't model
-
-local function serializeTrashData()
+-- A source set ({ [id] = true }) becomes a sorted ID list; empty becomes nil.
+local function setToList(v, where)
+    if v == nil then return nil end
+    if type(v) ~= "table" then fail(where .. " must be a set") end
     local out = {}
-    local function w(line) out[#out + 1] = line end
+    for k, flag in pairs(v) do
+        if type(k) ~= "number" or flag ~= true then fail(where .. " must be a set of IDs") end
+        out[#out + 1] = k
+    end
+    if #out == 0 then return nil end
+    table.sort(out)
+    return out
+end
 
-    w("-- ╔══════════════════════════════════════════════════════════╗")
-    w("-- ║  TrashData.lua                                           ║")
-    w("-- ║  Auto-generated by dev/scripts/extract-trash-data.lua.   ║")
-    w("-- ║  DO NOT EDIT BY HAND — re-run the extractor to refresh.  ║")
-    w("-- ║                                                          ║")
-    w("-- ║  Curated dungeon-trash cast-timer data.                  ║")
-    w("-- ║  Keyed by mapID, then npcID, then spellID.               ║")
-    w("-- ║                                                          ║")
-    w("-- ║  Schema:                                                 ║")
-    w("-- ║    KE.TrashData[mapID] = {                               ║")
-    w("-- ║        mapID, dungeonKey, name,   -- English dungeon name║")
-    w("-- ║        mobs = {                                          ║")
-    w("-- ║            [npcID] = {                                   ║")
-    w("-- ║                npcID, name,       -- enUS mob name       ║")
-    w("-- ║                spells = {                                ║")
-    w("-- ║                    [spellID] = {                         ║")
-    w("-- ║                        spellID, name,  -- enUS spell name║")
-    w("-- ║                        castTime, channelTime, first,     ║")
-    w("-- ║                        cd = { ... }, cdMode,             ║")
-    w("-- ║                       -- fingerprints (present when set):║")
-    w("-- ║                        targetExists, targetAPIExists,    ║")
-    w("-- ║                        castStartChangeTarget,            ║")
-    w("-- ║                        targetClearOnCastStart,           ║")
-    w("-- ║                        castStartAuraDelta,               ║")
-    w("-- ║                        selfBuffCountDeltaOnSuccess,      ║")
-    w("-- ║                        channelRefreshOnInterruptible,    ║")
-    w("-- ║                        castTimeExtra = { ... },          ║")
-    w("-- ║                        -- shipped display defaults:      ║")
-    w("-- ║                        showNameplate,  -- default true   ║")
-    w("-- ║                        display,        -- \"bar\"|\"text\"   ║")
-    w("-- ║                        roles = { tank, healer, dps },    ║")
-    w("-- ║                    },                                    ║")
-    w("-- ║                },                                        ║")
-    w("-- ║            },                                            ║")
-    w("-- ║        },                                                ║")
-    w("-- ║    }                                                     ║")
-    w("-- ╚══════════════════════════════════════════════════════════╝")
-    w("")
-    w("---@class KE")
-    w("local KE = select(2, ...)")
-    w("if not KitnEssentials then return end")
-    w("")
-    w("KE.TrashData = {")
+local function parseDurations(v, where)
+    if v == nil then return nil end
+    if type(v) ~= "string" then fail(where .. " must be a duration string") end
+    local out = {}
+    for token in v:gmatch("[^/]+") do
+        local n = tonumber(token)
+        if not n then fail(where .. " has a non-numeric duration " .. token) end
+        out[#out + 1] = n
+    end
+    if #out == 0 then return nil end
+    return out
+end
 
-    local mapCount, mobCount, spellCount = 0, 0, 0
+---------------------------------------------------------------------------
+-- Input loading
+---------------------------------------------------------------------------
 
-    local firstDungeon = true
-    for _, mapID in ipairs(sortedKeys(CD_DATA)) do
-        local dungeon = CD_DATA[mapID]
-        local meta = DUNGEONS[mapID] or { key = "Unknown", name = dungeon.mapName or "Unknown" }
-        mapCount = mapCount + 1
-        if not firstDungeon then w("") end
-        firstDungeon = false
-        boxHeader(w, "    ", string.format("%s (%d)", meta.name, mapID))
-        w(string.format("    [%d] = {", mapID))
-        w(string.format("        mapID = %d,", mapID))
-        w(string.format("        dungeonKey = %s,", luaStr(meta.key)))
-        w(string.format("        name = %s,", luaStr(meta.name)))
-        w("        mobs = {")
+-- Cuts the table literal opened by the first line matching headPattern and
+-- closed by the first following line that is exactly "}".
+function M.ExtractLiteral(text, headPattern, label)
+    local lines = {}
+    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+        lines[#lines + 1] = (line:gsub("\r$", ""))
+    end
+    local head
+    for i = 1, #lines do
+        if lines[i]:match(headPattern) then head = i; break end
+    end
+    if not head then fail(label .. ": no data literal found") end
+    for j = head + 1, #lines do
+        if lines[j] == "}" then
+            return "return {\n" .. table.concat(lines, "\n", head + 1, j - 1) .. "\n}"
+        end
+    end
+    fail(label .. ": data literal is not closed")
+end
 
-        local mobs = dungeon.mobs or {}
-        local firstMob = true
-        for _, npcID in ipairs(sortedKeys(mobs)) do
-            local mob = mobs[npcID]
-            mobCount = mobCount + 1
-            if not firstMob then w("") end
-            firstMob = false
-            w(headerLine("            ", mobEnUS(npcID, mob.name)))
-            w(string.format("            [%d] = {", npcID))
-            w(string.format("                npcID = %d,", npcID))
-            w(string.format("                name = %s,", luaStr(mobEnUS(npcID, mob.name))))
-            w("                spells = {")
+local function checkPureData(v, label, depth)
+    if depth > 12 then fail(label .. ": data literal nests too deeply") end
+    local kind = type(v)
+    if kind == "table" then
+        for k, child in pairs(v) do
+            checkPureData(k, label, depth + 1)
+            checkPureData(child, label, depth + 1)
+        end
+    elseif kind ~= "string" and kind ~= "number" and kind ~= "boolean" then
+        fail(label .. ": data literal holds a " .. kind)
+    end
+end
 
-            local spells = mob.spells or {}
-            for _, spellID in ipairs(sortedKeys(spells)) do
-                local spell = spells[spellID]
-                spellCount = spellCount + 1
-                w(string.format("                    [%d] = {", spellID))
-                local ind = "                        "
-                w(string.format("%sspellID = %d,", ind, spellID))
-                w(string.format("%sname = %s,", ind, luaStr(spell.nameEN or spell.name)))
-
-                for _, key in ipairs(SPELL_ORDER) do
-                    if spell[key] ~= nil then emitScalar(out, ind, key, spell[key]) end
+-- A table constructor keeps only the last of two equal keys, so a repeat is
+-- invisible once the literal runs. This reads the compiled literal's tokens
+-- and refuses, per table:
+--   * a key written twice: `name =`, `[123] =` or `["text"] =`, with any
+--     comment allowed before the `=`;
+--   * a table that mixes list items with keys, where an item's implicit index
+--     could repeat a key. The pinned inputs' tables are pure lists or pure
+--     records, so this refuses no real input.
+-- Strings and comments are skipped wherever they fall; any other bracketed
+-- key form is refused, since the data literals use none.
+local function checkDuplicateKeys(source, label)
+    local n = #source
+    -- The first index at or after i that is not whitespace or a comment.
+    local function skip(i)
+        while i <= n do
+            if source:sub(i, i):match("%s") then
+                i = i + 1
+            elseif source:sub(i, i + 1) == "--" then
+                local long = source:match("^%-%-%[(=*)%[", i)
+                if long then
+                    local close = source:find("]" .. long .. "]", i, true)
+                    if not close then fail(label .. ": unclosed comment") end
+                    i = close + #long + 2
+                else
+                    i = (source:find("\n", i, true) or n) + 1
                 end
-                -- Copy any source field we don't explicitly model (data guard).
-                for _, key in ipairs(sortedKeys(spell)) do
-                    if type(key) == "string" and not SPELL_KNOWN[key] then
-                        unknownFields[key] = (unknownFields[key] or 0) + 1
-                        emitScalar(out, ind, key, spell[key])
+            else
+                return i
+            end
+        end
+        return i
+    end
+    local stack = {}
+    -- One field of the innermost table: a key (recorded) or a list item.
+    local function field(kind, key)
+        local frame = stack[#stack]
+        if not frame then return end
+        frame.atStart = false
+        frame[kind] = true
+        if frame.key and frame.item then fail(label .. ": a table mixes list items with keys") end
+        if key then
+            if frame.seen[key] then fail(label .. ": key " .. key:sub(3) .. " is written twice in one table") end
+            frame.seen[key] = true
+        end
+    end
+    -- A value token: a list item when it opens a field.
+    local function value()
+        local frame = stack[#stack]
+        if frame and frame.atStart then field("item") end
+    end
+    local i = skip(1)
+    while i <= n do
+        local c = source:sub(i, i)
+        local long = c == "[" and source:match("^%[(=*)%[", i)
+        if long then
+            value()
+            local close = source:find("]" .. long .. "]", i, true)
+            if not close then fail(label .. ": unclosed long string") end
+            i = close + #long + 2
+        elseif c == '"' or c == "'" then
+            value()
+            local j = i + 1
+            while source:sub(j, j) ~= c do
+                if j > n then fail(label .. ": unclosed string") end
+                if source:sub(j, j) == "\\" then j = j + 1 end
+                j = j + 1
+            end
+            i = j + 1
+        elseif c == "{" then
+            value()
+            stack[#stack + 1] = { seen = {}, atStart = true }
+            i = i + 1
+        elseif c == "}" then
+            stack[#stack] = nil
+            i = i + 1
+        elseif c == "," or c == ";" then
+            if stack[#stack] then stack[#stack].atStart = true end
+            i = i + 1
+        elseif c == "[" then
+            local num, numEnd = source:match("^%[%s*(%-?[%d%.]+)%s*%]()", i)
+            local str, strEnd = source:match('^%[%s*"([^"\\]*)"%s*%]()', i)
+            local eq = (numEnd or strEnd) and skip(numEnd or strEnd)
+            if not eq or source:sub(eq, eq) ~= "=" then fail(label .. ": unsupported key form") end
+            if num and tonumber(num) then
+                field("key", "n:" .. tostring(tonumber(num)))
+            elseif str then
+                field("key", "s:" .. str)
+            else
+                fail(label .. ": unsupported key form")
+            end
+            i = eq + 1
+        elseif c:match("[%a_]") then
+            local word, after = source:match("^([%a_][%w_]*)()", i)
+            local eq = skip(after)
+            if source:sub(eq, eq) == "=" and source:sub(eq + 1, eq + 1) ~= "=" then
+                field("key", "s:" .. word)
+                i = eq + 1
+            else
+                value()
+                i = after
+            end
+        else
+            -- A number, its sign, or any other value character.
+            value()
+            i = c:match("[%w%.]") and source:match("^[%w%.]+()", i) or i + 1
+        end
+        i = skip(i)
+    end
+end
+
+-- Runs the literal in an empty environment: any call or global read fails,
+-- and any non-data value is refused. A repeated key is refused first, from
+-- the text, because running the literal would erase it.
+function M.LoadLiteral(source, label)
+    local chunk, err = loadstring(source, "=" .. label)
+    if not chunk then fail(label .. ": " .. tostring(err)) end
+    checkDuplicateKeys(source, label)
+    setfenv(chunk, {})
+    local ok, value = pcall(chunk)
+    if not ok then fail(label .. ": " .. tostring(value)) end
+    if type(value) ~= "table" then fail(label .. ": literal is not a table") end
+    checkPureData(value, label, 0)
+    return value
+end
+
+function M.ParseRegistry(text, season)
+    local out = {}
+    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+        if line:match("^%s*{ key = ") then
+            local key, name, instanceID, rowSeason = line:match(
+                'key = "(%w+)",%s*name = "([^"]+)",.-instanceID = (%d+),%s*season = (%d+)')
+            if not key then fail("registry: unreadable row: " .. line) end
+            if tonumber(rowSeason) == season then
+                out[#out + 1] = { key = key, name = name, instanceID = tonumber(instanceID) }
+            end
+        end
+    end
+    return out
+end
+
+---------------------------------------------------------------------------
+-- Field dispositions: every source field is shipped, joined, replaced or
+-- dropped on purpose. An unknown field stops the run.
+---------------------------------------------------------------------------
+
+local MAP_FIELDS = { mapID = true, mapName = true, mobs = true }
+local MOB_FIELDS = { npcID = true, name = true, spells = true }
+
+local SPELL_FIELDS = {
+    spellID = "key", name = "replaced", nameEN = "replaced", eventType = "dropped",
+    castTime = "ship", channelTime = "ship", first = "ship", cd = "ship", cdMode = "ship",
+    openingCastOrder = "ship", targetExists = "ship", targetAPIExists = "ship",
+    targetHostile = "ship",
+    allowPriorityPreviewCastStartVoice = "dropped", muteCastStartVoiceDuringCooldown = "dropped",
+}
+
+local SPELL_TYPES = {
+    castTime = "number", channelTime = "number", first = "number", cd = "numbers",
+    cdMode = "string", openingCastOrder = "number", targetExists = "boolean",
+    targetAPIExists = "boolean", targetHostile = "boolean",
+}
+
+local SHIPPED_SPELL_ORDER = {
+    "castTime", "channelTime", "first", "cd", "cdMode", "openingCastOrder",
+    "targetExists", "targetAPIExists", "targetHostile",
+}
+
+local TRAIT_FIELDS = {
+    dungeon = "join", npcID = "key", name = "replaced",
+    level = "identity", power = "identity", nonElite = "identity",
+    boss = "placement", minimapIDs = "refused when set",
+    wmoAreaIDs = "roomNames", mapIDs = "uiMapIDs",
+    preCombatChanneling = "identity", isLieutenant = "identity", hasCreatureFamily = "identity",
+    groupHasLevel90 = "identity", groupHasCreatureFamily = "identity",
+    groupHasLevel90Power0 = "identity", coPresenceNPCIDs = "coPresenceNPCIDs",
+    hasCastSkill = "identity", noCastSkill = "identity", hasCastSpell = "identity",
+    hasChannelSpell = "identity", hasInterruptFlag = "identity", cannotInterrupt = "identity",
+    castTimeSet = "durations", channelTimeSet = "durations",
+    spellCount = "dropped", castSpellCount = "dropped", interruptibleSpellCount = "dropped",
+    spellIDs = "spellIDs", secondarySignature = "dropped", bossEncounter = "identity",
+    priority = "dropped", bossPriorities = "dropped", bossCounts = "dropped",
+}
+
+local IDENTITY_TYPES = {
+    level = "number", power = "number", nonElite = "boolean",
+    hasCastSkill = "boolean", noCastSkill = "boolean", hasCastSpell = "boolean",
+    hasChannelSpell = "boolean", hasInterruptFlag = "boolean", cannotInterrupt = "boolean",
+    isLieutenant = "boolean", hasCreatureFamily = "boolean", preCombatChanneling = "boolean",
+    bossEncounter = "boolean", groupHasLevel90 = "boolean", groupHasCreatureFamily = "boolean",
+    groupHasLevel90Power0 = "boolean",
+}
+
+local IDENTITY_EMIT = {
+    "level", "power", "nonElite", "hasCastSkill", "noCastSkill", "hasCastSpell",
+    "hasChannelSpell", "hasInterruptFlag", "cannotInterrupt", "isLieutenant",
+    "hasCreatureFamily", "preCombatChanneling", "bossEncounter", "uiMapIDs", "roomNames",
+    "coPresenceNPCIDs", "groupHasLevel90", "groupHasCreatureFamily", "groupHasLevel90Power0",
+}
+
+---------------------------------------------------------------------------
+-- Candidate report
+---------------------------------------------------------------------------
+
+local REPORT_AXES = {
+    { label = "level", field = "level" },
+    { label = "power", field = "power" },
+    { label = "classification", field = "nonElite" },
+    { label = "lieutenant", field = "isLieutenant" },
+    { label = "family", field = "hasCreatureFamily" },
+}
+
+-- A declared axis separates two traits only when both declare it with
+-- different values: an undeclared axis never rejects a read (spec 4.2).
+local function declaredApart(va, vb)
+    return va ~= nil and vb ~= nil and va ~= vb
+end
+
+local UNCONSUMED = {
+    { label = "family presence with the family gate off", field = "hasCreatureFamily", apart = declaredApart },
+    -- Positive only: seeing the channel selects a true row; its absence
+    -- separates nothing, so true against anything else is the gap.
+    { label = "pre-combat channel absence", field = "preCombatChanneling",
+      apart = function(va, vb) return (va == true) ~= (vb == true) end },
+}
+
+-- No report axis other than `skip` separates the two traits.
+local function compatibleExcept(a, b, skip)
+    for _, axis in ipairs(REPORT_AXES) do
+        if axis.field ~= skip and declaredApart(a.identity[axis.field], b.identity[axis.field]) then
+            return false
+        end
+    end
+    return true
+end
+
+-- A trait with no room rows can appear anywhere; two room-scoped traits
+-- meet only in a shared room.
+local function roomsCompatible(a, b)
+    local ra, rb = a.identity.roomNames, b.identity.roomNames
+    if not ra or not rb then return true end
+    for _, x in ipairs(ra) do
+        for _, y in ipairs(rb) do
+            if x == y then return true end
+        end
+    end
+    return false
+end
+
+-- Pairs, in npcID order, that `field` alone separates: apart(field) holds,
+-- and no other report axis separates them.
+local function pairsSeparatedOnlyBy(list, field, apart)
+    local sorted = {}
+    for i, trait in ipairs(list) do sorted[i] = trait end
+    table.sort(sorted, function(a, b) return a.npcID < b.npcID end)
+    local out = {}
+    for i = 1, #sorted do
+        for j = i + 1, #sorted do
+            local a, b = sorted[i], sorted[j]
+            if apart(a.identity[field], b.identity[field]) and compatibleExcept(a, b, field) then
+                out[#out + 1] = { a, b }
+            end
+        end
+    end
+    return out
+end
+
+local function traitList(group)
+    local parts = {}
+    for i, trait in ipairs(group) do parts[i] = string.format("%s (%d)", trait.name, trait.npcID) end
+    return table.concat(parts, ", ")
+end
+
+local function rowList(group, rowsByNpc, nameBySpell)
+    local parts = {}
+    for _, trait in ipairs(group) do
+        for _, row in ipairs(rowsByNpc[trait.npcID] or {}) do
+            parts[#parts + 1] = string.format("%d:%d %s", trait.npcID, row.spellID, nameBySpell[row.spellID])
+        end
+    end
+    return parts
+end
+
+-- Layer 2's match tolerance (TI.CAST_TIME_TOLERANCE). One measurement can
+-- match two declared durations up to twice this apart.
+local DURATION_TOLERANCE = 0.20
+
+-- Whether other's row stays a Layer 1 candidate for trait's plate, as the
+-- runtime scores it (spec 4.5): no report axis but level separates them, and
+-- other's level is not below trait's. A plate that reads below a row's level
+-- keeps the row; one that reads above it rejects it.
+local function competesFor(trait, other)
+    if not compatibleExcept(trait, other, "level") then return false end
+    local mine, theirs = trait.identity.level, other.identity.level
+    return mine == nil or theirs == nil or theirs >= mine
+end
+
+-- The positive routes that separate a wave row from every trait that
+-- competes for its plate in its room, from declared values only (spec 4.1,
+-- 4.8): a declared duration that no competitor's declared duration can be
+-- confused with, an interrupt where every competitor declares it cannot be
+-- interrupted, and a named trusted companion. Family presence is a read axis
+-- under the family gate, so a family-separated trait never competes. The
+-- approved route table in spec 4.8 stays the authority; the report shows
+-- only what declared values prove, and may list fewer routes.
+local function positiveRoutes(trait, shares, nameOf)
+    if #shares == 0 then return "its read axes alone" end
+    local id, routes = trait.identity, {}
+    local function every(test)
+        for _, other in ipairs(shares) do
+            if not test(other) then return false end
+        end
+        return true
+    end
+    for _, set in ipairs({ { field = "castTimeSet", label = "cast" }, { field = "channelTimeSet", label = "channel" } }) do
+        for _, d in ipairs(trait[set.field] or {}) do
+            local unique = every(function(o)
+                for _, od in ipairs(o[set.field] or {}) do
+                    if math.abs(od - d) <= 2 * DURATION_TOLERANCE then return false end
+                end
+                return true
+            end)
+            if unique then routes[#routes + 1] = string.format("a %s s %s", fmtNum(d), set.label) end
+        end
+    end
+    if id.cannotInterrupt == false and every(function(o) return o.identity.cannotInterrupt == true end) then
+        routes[#routes + 1] = "an interrupt"
+    end
+    for _, npcID in ipairs(id.coPresenceNPCIDs or {}) do
+        routes[#routes + 1] = "a trusted companion " .. nameOf(npcID)
+    end
+    if #routes == 0 then return "none" end
+    return table.concat(routes, " or ")
+end
+
+local function emitReport(maps, traits, mobsByMap, nameBySpell)
+    local out = { "# Season-2 trash data candidate report", "" }
+    local function w(line) out[#out + 1] = line end
+    local rowsByNpc = {}
+    for _, m in ipairs(maps) do
+        for _, mob in ipairs(mobsByMap[m.mapID]) do rowsByNpc[mob.npcID] = mob.spells end
+    end
+    for _, m in ipairs(maps) do
+        local mapTraits = {}
+        for _, trait in ipairs(traits) do
+            if trait.mapID == m.mapID then mapTraits[#mapTraits + 1] = trait end
+        end
+        w(string.format("## %s (%d)", m.name, m.mapID))
+        w("")
+        w("### Indistinguishable when one required axis is unread")
+        w("")
+        local any = false
+        for _, axis in ipairs(REPORT_AXES) do
+            for _, group in ipairs(pairsSeparatedOnlyBy(mapTraits, axis.field, declaredApart)) do
+                any = true
+                w("- unread " .. axis.label .. ": " .. traitList(group))
+            end
+        end
+        if not any then w("- none") end
+        w("")
+        w("### Rows left ambiguous by an unconsumed discriminator")
+        w("")
+        any = false
+        for _, d in ipairs(UNCONSUMED) do
+            for _, group in ipairs(pairsSeparatedOnlyBy(mapTraits, d.field, d.apart)) do
+                local rows = rowList(group, rowsByNpc, nameBySpell)
+                if #rows > 0 then
+                    any = true
+                    w("- " .. d.label .. ": " .. traitList(group) .. "; rows " .. table.concat(rows, ", "))
+                end
+            end
+        end
+        if not any then w("- none") end
+        w("")
+        local waveTraits = {}
+        for _, trait in ipairs(mapTraits) do
+            if trait.identity.groupHasLevel90 ~= nil then waveTraits[#waveTraits + 1] = trait end
+        end
+        if #waveTraits > 0 then
+            w("### Wave rows and the room batch rule")
+            w("")
+            local byNpc = {}
+            for _, trait in ipairs(mapTraits) do byNpc[trait.npcID] = trait end
+            local function nameOf(npcID)
+                local t = byNpc[npcID]
+                return t and string.format("%s (%d)", t.name, npcID) or tostring(npcID)
+            end
+            for _, trait in ipairs(waveTraits) do
+                local shares = {}
+                for _, other in ipairs(mapTraits) do
+                    if other ~= trait and competesFor(trait, other) and roomsCompatible(trait, other) then
+                        shares[#shares + 1] = other
                     end
                 end
-
-                -- A source spell with no `first` cast time (and
-                -- thus no `cd`) can never schedule a predicted timer bar — mark
-                -- it hidden so consumers skip it by default. Deterministic
-                -- derivation from the source, not an invented timing value.
-                -- (A real source `hidden` field, if one ever appears, is copied
-                -- verbatim above via SPELL_ORDER, so don't double-emit here.)
-                if spell.first == nil and spell.hidden == nil then
-                    w(string.format("%shidden = true,", ind))
-                end
-
-                -- Display defaults from TrashCDPreset.
-                local preset = PRESET[mapID] and PRESET[mapID][npcID] and PRESET[mapID][npcID][spellID]
-                local showNameplate = true
-                local display = "bar"
-                local tank, healer, dps = true, true, true
-                if preset then
-                    if preset.showNameplate ~= nil then showNameplate = preset.showNameplate end
-                    display = (preset.showTimerBar == false) and "text" or "bar"
-                    tank   = preset.tankEnabled   ~= false
-                    healer = preset.healerEnabled ~= false
-                    dps    = preset.dpsEnabled    ~= false
-                end
-                w(string.format("%sshowNameplate = %s,", ind, tostring(showNameplate)))
-                w(string.format("%sdisplay = %s,", ind, luaStr(display)))
-                w(string.format("%sroles = { tank = %s, healer = %s, dps = %s },",
-                    ind, tostring(tank), tostring(healer), tostring(dps)))
-                w("                    },")
+                table.sort(shares, function(a, b) return a.npcID < b.npcID end)
+                local rows = rowList({ trait }, rowsByNpc, nameBySpell)
+                local rowText = (#rows > 0) and table.concat(rows, ", ") or "identity only"
+                local depends = (#shares > 0)
+                    and ("yes; competes in its room with " .. traitList(shares)) or "no"
+                w(string.format("- %s (%d): level90=%s family=%s level90power0=%s; rows %s; positive routes: %s; early identity depends on the batch rule: %s",
+                    trait.name, trait.npcID, tostring(trait.identity.groupHasLevel90),
+                    tostring(trait.identity.groupHasCreatureFamily),
+                    tostring(trait.identity.groupHasLevel90Power0), rowText,
+                    positiveRoutes(trait, shares, nameOf), depends))
             end
-
-            w("                },")
-            w("            },")
+            w("")
         end
-
-        w("        },")
-        w("    },")
+        w("### Mobs with several start-advance spells of one kind")
+        w("")
+        any = false
+        for _, mob in ipairs(mobsByMap[m.mapID]) do
+            local cast, channel = 0, 0
+            for _, row in ipairs(mob.spells) do
+                if row.spell.cdMode == "CAST_START" then
+                    if (row.spell.castTime or 0) > 0 then
+                        cast = cast + 1
+                    elseif (row.spell.channelTime or 0) > 0 then
+                        channel = channel + 1
+                    end
+                end
+            end
+            if cast > 1 or channel > 1 then
+                any = true
+                w(string.format("- %s (%d): %d cast, %d channel", mob.name, mob.npcID, cast, channel))
+            end
+        end
+        if not any then w("- none") end
+        w("")
     end
-
-    w("}")
-    w("")
-    return table.concat(out, "\n"), mapCount, mobCount, spellCount
+    return table.concat(out, "\n")
 end
 
 ---------------------------------------------------------------------------
--- DELIVERABLE 3 — TrashTraits.lua
+-- Build: validate everything, then render the candidate texts
 ---------------------------------------------------------------------------
 
-local function serializeTrashTraits()
-    local out = {}
-    local function w(line) out[#out + 1] = line end
-
-    w("-- ╔══════════════════════════════════════════════════════════╗")
-    w("-- ║  TrashTraits.lua                                         ║")
-    w("-- ║  Auto-generated by dev/scripts/extract-trash-data.lua.   ║")
-    w("-- ║  DO NOT EDIT BY HAND — re-run the extractor to refresh.  ║")
-    w("-- ║                                                          ║")
-    w("-- ║  Per-mob identity fingerprints; the packed hex identity  ║")
-    w("-- ║  is decoded by the bitfield decoder in                   ║")
-    w("-- ║  TrashInference.lua.                                     ║")
-    w("-- ║  Keyed by npcID, grouped by dungeon.                     ║")
-    w("-- ║                                                          ║")
-    w("-- ║  Schema:                                                 ║")
-    w("-- ║    KE.TrashTraits[npcID] = {                             ║")
-    w("-- ║        npcID, mapID, dungeonKey,                         ║")
-    w("-- ║        identity = { level, sex, power, classID,          ║")
-    w("-- ║            buffCount, hasCastSkill, noCastSkill,         ║")
-    w("-- ║            hasCastSpell, hasChannelSpell,                ║")
-    w("-- ║            hasInterruptFlag, cannotInterrupt, nonElite },║")
-    w("-- ║        placement,    -- verbatim CSV nameplate slot set  ║")
-    w("-- ║        castTimeSet,  -- parsed cast-time numbers         ║")
-    w("-- ║        channelTimeSet,                                   ║")
-    w("-- ║        spellIDs = { ... },                               ║")
-    w("-- ║        packedIdentity, -- raw hex, for runtime verify    ║")
-    w("-- ║    }                                                     ║")
-    w("-- ╚══════════════════════════════════════════════════════════╝")
-    w("")
-    w("---@class KE")
-    w("local KE = select(2, ...)")
-    w("if not KitnEssentials then return end")
-    w("")
-    w("KE.TrashTraits = {")
-
-    -- Index rows by npcID; emit grouped by dungeon (mapID asc, then npcID
-    -- asc) so the file mirrors TrashData's layout, with a name header per
-    -- mob — the raw trait rows carry no readable name at all.
-    local byNpc = {}
-    for _, row in ipairs(TRAITS.rows) do
-        local npcID = row[3]
-        byNpc[npcID] = row
+local function displayDefaults(preset, row)
+    local byNpc = preset[row.challenge] and preset[row.challenge][row.npcID]
+    local p = byNpc and byNpc[row.spellID]
+    local showNameplate, display, tank, healer, dps = true, "bar", true, true, true
+    if type(p) == "table" then
+        if p.showNameplate ~= nil then showNameplate = (p.showNameplate == true) end
+        if p.showTimerBar == false then display = "text" end
+        tank = p.tankEnabled ~= false
+        healer = p.healerEnabled ~= false
+        dps = p.dpsEnabled ~= false
     end
-    local entries = {}
-    for _, npcID in ipairs(sortedKeys(byNpc)) do
-        local row = byNpc[npcID]
-        local mapID = ZH_TO_MAP[row[2]]
-        local meta  = mapID and DUNGEONS[mapID]
-        if not meta then
-            error("trait row npc " .. tostring(npcID) ..
-                " has unmapped dungeon " .. tostring(row[2]))
+    return showNameplate, display, tank, healer, dps
+end
+
+local function splicePrefix(base, label)
+    if type(base) ~= "string" or not base:match("},\n}\n$") then
+        fail(label .. ": base file does not end with its closing brace")
+    end
+    return base:sub(1, #base - 2)
+end
+
+function M.Build(inputs, pins)
+    pins = pins or M.S2_PINS
+    if type(inputs) ~= "table" or type(inputs.data) ~= "table" then fail("data: malformed input") end
+    local preset = inputs.preset or {}
+
+    -- Maps: pinned challenge -> instance, checked against the name database
+    -- rows and the registry's season entries.
+    local instanceByChallenge = {}
+    for _, row in ipairs(inputs.instances or {}) do
+        local challenge = tonumber(row.challengeModeID)
+        if challenge then
+            if instanceByChallenge[challenge] then
+                fail("map collision: challenge " .. challenge .. " is listed twice")
+            end
+            instanceByChallenge[challenge] = row
         end
-        entries[#entries + 1] = { npcID = npcID, row = row, mapID = mapID, meta = meta }
     end
-    table.sort(entries, function(a, b)
+    local maps, seenInstance = {}, {}
+    for _, challenge in ipairs(sortedKeys(pins.challengeToInstance)) do
+        local want = pins.challengeToInstance[challenge]
+        local row = instanceByChallenge[challenge]
+        if not row then fail("challenge " .. challenge .. " has no instance row") end
+        if row.mapID ~= want then
+            fail("challenge " .. challenge .. " maps to " .. tostring(row.mapID) .. ", pinned " .. want)
+        end
+        if seenInstance[want] then fail("map collision: instance " .. want .. " is pinned twice") end
+        seenInstance[want] = true
+        if type(row.name) ~= "string" or row.name == "" then
+            fail("instance " .. want .. " has no dungeon name")
+        end
+        maps[#maps + 1] = { mapID = want, challenge = challenge, zhName = row.name }
+    end
+    local registryByInstance = {}
+    for _, entry in ipairs(inputs.registry or {}) do
+        if registryByInstance[entry.instanceID] then
+            fail("map collision: the registry lists instance " .. tostring(entry.instanceID) .. " twice")
+        end
+        registryByInstance[entry.instanceID] = entry
+    end
+    if #(inputs.registry or {}) ~= #maps then
+        fail("the registry's season entries do not match the pinned instances")
+    end
+    local mapByZh, mapInfo = {}, {}
+    for _, m in ipairs(maps) do
+        local entry = registryByInstance[m.mapID]
+        if not entry then fail("the registry has no season entry for instance " .. m.mapID) end
+        m.key, m.name = entry.key, entry.name
+        if mapByZh[m.zhName] then fail("map collision: two instances share one dungeon name") end
+        mapByZh[m.zhName] = m
+        mapInfo[m.mapID] = m
+    end
+    table.sort(maps, function(a, b) return a.mapID < b.mapID end)
+    for challenge in pairs(inputs.data) do
+        if not pins.challengeToInstance[challenge] then
+            fail("data has an unpinned challenge " .. tostring(challenge))
+        end
+    end
+
+    -- Spell names.
+    local names = inputs.spellNames
+    if type(names) ~= "table" or type(names.entries) ~= "table"
+        or type(names.includedRows) ~= "table" or type(names.excludedRows) ~= "table" then
+        fail("spell names: malformed input")
+    end
+    if type(names.sourceSha256) ~= "string" or names.sourceSha256 == "" then
+        fail("spell names: no source hash")
+    end
+    local nameBySpell = {}
+    for i, entry in ipairs(names.entries) do
+        local id, name = entry[1], entry[2]
+        if type(id) ~= "number" or id <= 0 or id % 1 ~= 0 then
+            fail("spell names: entry " .. i .. " has no spell ID")
+        end
+        if type(name) ~= "string" or name == "" then fail("spell names: spell " .. id .. " has an empty name") end
+        if nameBySpell[id] then fail("spell names: duplicate spell " .. id) end
+        nameBySpell[id] = name
+    end
+    local included, includedSpells = {}, {}
+    for _, t in ipairs(names.includedRows) do
+        local key = tupleKey(t[1], t[2], t[3])
+        if included[key] then fail("spell names: duplicate row " .. key) end
+        included[key] = true
+        includedSpells[t[3]] = true
+    end
+    local excludedByKey, recordedExcluded = {}, {}
+    for _, x in ipairs(pins.excluded) do excludedByKey[tupleKey(x.mapID, x.npcID, x.spellID)] = x end
+    for _, t in ipairs(names.excludedRows) do recordedExcluded[tupleKey(t[1], t[2], t[3])] = true end
+    for _, key in ipairs(sortedKeys(excludedByKey)) do
+        if not recordedExcluded[key] then fail("spell names: excluded row " .. key .. " is not recorded") end
+    end
+    for _, key in ipairs(sortedKeys(recordedExcluded)) do
+        if not excludedByKey[key] then fail("spell names: excluded row " .. key .. " is not pinned") end
+        if included[key] then fail("spell names: excluded row " .. key .. " is among the included rows") end
+    end
+
+    local npcNames = inputs.npcNames or {}
+    local function englishNpc(npcID)
+        local loc = npcNames[npcID]
+        local name = type(loc) == "table" and loc.enUS
+        if type(name) ~= "string" or name == "" then fail("npc " .. npcID .. " has no English name") end
+        return name
+    end
+
+    -- Timer rows.
+    local rows, rowByKey, mobsByMap, timerMap, seenExcluded = {}, {}, {}, {}, {}
+    for _, m in ipairs(maps) do
+        local source = inputs.data[m.challenge]
+        if type(source) ~= "table" then fail("data has no challenge " .. m.challenge) end
+        for field in pairs(source) do
+            if not MAP_FIELDS[field] then fail("map " .. m.mapID .. ": field " .. tostring(field) .. " has no disposition") end
+        end
+        if source.mapID ~= m.challenge then fail("map " .. m.mapID .. ": inner mapID mismatch") end
+        local mobs = {}
+        local sourceMobs = source.mobs or {}
+        for _, npcID in ipairs(sortedKeys(sourceMobs)) do
+            local mob = sourceMobs[npcID]
+            for field in pairs(mob) do
+                if not MOB_FIELDS[field] then fail("npc " .. npcID .. ": field " .. tostring(field) .. " has no disposition") end
+            end
+            if mob.npcID ~= npcID then fail("npc " .. npcID .. ": inner npcID mismatch") end
+            local spells = {}
+            local sourceSpells = mob.spells or {}
+            for _, spellID in ipairs(sortedKeys(sourceSpells)) do
+                local spell = sourceSpells[spellID]
+                local where = tupleKey(m.mapID, npcID, spellID)
+                for field in pairs(spell) do
+                    if not SPELL_FIELDS[field] then
+                        fail(where .. ": field " .. tostring(field) .. " has no disposition")
+                    end
+                end
+                if spell.spellID ~= spellID then fail(where .. ": inner spellID mismatch") end
+                if excludedByKey[where] then
+                    seenExcluded[where] = true
+                else
+                    for _, field in ipairs(SHIPPED_SPELL_ORDER) do
+                        checkType(spell[field], SPELL_TYPES[field], where .. "." .. field)
+                    end
+                    if spell.targetHostile ~= nil and (spell.channelTime or 0) > 0 then
+                        fail(where .. ": targetHostile on a row with a channel duration")
+                    end
+                    local row = { mapID = m.mapID, challenge = m.challenge, npcID = npcID,
+                        spellID = spellID, spell = spell, hidden = (spell.first == nil) }
+                    spells[#spells + 1] = row
+                    rows[#rows + 1] = row
+                    rowByKey[where] = row
+                end
+            end
+            if #spells > 0 then
+                if timerMap[npcID] then fail("npc " .. npcID .. " has timer rows in two maps") end
+                timerMap[npcID] = m.mapID
+                mobs[#mobs + 1] = { npcID = npcID, name = englishNpc(npcID), spells = spells }
+            end
+        end
+        mobsByMap[m.mapID] = mobs
+    end
+    for _, key in ipairs(sortedKeys(excludedByKey)) do
+        if not seenExcluded[key] then fail("excluded row " .. key .. " is not in the data") end
+    end
+    for _, p in ipairs(pins.pinnedSpells) do
+        local key = tupleKey(p.mapID, p.npcID, p.spellID)
+        local row = rowByKey[key]
+        if not row then fail("pinned row " .. key .. " is missing") end
+        local s = row.spell
+        if s.first ~= p.first or s.channelTime ~= p.channelTime or not sameNumbers(s.cd, p.cd) then
+            fail("pinned row " .. key .. " does not carry its pinned first cast, channel and cooldown")
+        end
+    end
+    for _, row in ipairs(rows) do
+        local key = tupleKey(row.mapID, row.npcID, row.spellID)
+        if not included[key] then fail("generated row " .. key .. " is not in the spell-name rows") end
+        if not nameBySpell[row.spellID] then fail("no English name for spell " .. row.spellID) end
+    end
+    for _, key in ipairs(sortedKeys(included)) do
+        if not rowByKey[key] then fail("spell-name row " .. key .. " is not generated") end
+    end
+    for _, id in ipairs(sortedKeys(nameBySpell)) do
+        if not includedSpells[id] then fail("spell-name entry " .. id .. " belongs to no included row") end
+    end
+
+    -- Traits.
+    local traitSource = inputs.traits
+    if type(traitSource) ~= "table" or type(traitSource.rows) ~= "table" then fail("traits: malformed input") end
+    for field in pairs(traitSource) do
+        if field ~= "rows" and field ~= "wmoAreaNamesByID" then
+            fail("traits: field " .. tostring(field) .. " has no disposition")
+        end
+    end
+    local roomNameByID = traitSource.wmoAreaNamesByID or {}
+    local traits, traitByNpc = {}, {}
+    for i, src in ipairs(traitSource.rows) do
+        for field in pairs(src) do
+            if not TRAIT_FIELDS[field] then
+                fail("trait row " .. i .. ": field " .. tostring(field) .. " has no disposition")
+            end
+        end
+        local npcID = src.npcID
+        if type(npcID) ~= "number" then fail("trait row " .. i .. " has no npcID") end
+        local where = "trait " .. npcID
+        if traitByNpc[npcID] then fail(where .. " is listed twice") end
+        local m = mapByZh[src.dungeon]
+        if not m then fail(where .. ": unmapped dungeon " .. tostring(src.dungeon)) end
+        if src.minimapIDs ~= nil then fail(where .. ": minimapIDs is set") end
+        if timerMap[npcID] and timerMap[npcID] ~= m.mapID then fail(where .. ": its timer rows are in another map") end
+        local identity = {}
+        for field, want in pairs(IDENTITY_TYPES) do
+            checkType(src[field], want, where .. "." .. field)
+            identity[field] = src[field]
+        end
+        identity.uiMapIDs = setToList(src.mapIDs, where .. ".mapIDs")
+        identity.coPresenceNPCIDs = setToList(src.coPresenceNPCIDs, where .. ".coPresenceNPCIDs")
+        local roomIDs = setToList(src.wmoAreaIDs, where .. ".wmoAreaIDs")
+        if roomIDs then
+            local roomNames = {}
+            for _, id in ipairs(roomIDs) do
+                local loc = roomNameByID[id]
+                local name = type(loc) == "table" and loc.enUS
+                if type(name) ~= "string" or name == "" then fail(where .. ": room " .. id .. " has no English name") end
+                roomNames[#roomNames + 1] = name
+            end
+            identity.roomNames = roomNames
+            if src.wmoAreaIDs[pins.waveRoomID] and (src.groupHasLevel90 == nil
+                or src.groupHasCreatureFamily == nil or src.groupHasLevel90Power0 == nil) then
+                fail(where .. ": a wave-room trait lacks the three wave fields")
+            end
+        end
+        local placement = src.boss or ""
+        if type(placement) ~= "string" then fail(where .. ".boss must be a string") end
+        -- A source trait may declare an empty spell list; it ships as declared.
+        if src.spellIDs ~= nil and not (type(src.spellIDs) == "table"
+            and (next(src.spellIDs) == nil or isNumberArray(src.spellIDs))) then
+            fail(where .. ".spellIDs must be a number array, possibly empty")
+        end
+        local trait = {
+            npcID = npcID, mapID = m.mapID, key = m.key, name = englishNpc(npcID),
+            identityOnly = (timerMap[npcID] == nil), identity = identity, placement = placement,
+            castTimeSet = parseDurations(src.castTimeSet, where .. ".castTimeSet"),
+            channelTimeSet = parseDurations(src.channelTimeSet, where .. ".channelTimeSet"),
+            spellIDs = src.spellIDs,
+        }
+        traits[#traits + 1] = trait
+        traitByNpc[npcID] = trait
+    end
+    for _, npcID in ipairs(sortedKeys(timerMap)) do
+        if not traitByNpc[npcID] then fail("timer npc " .. npcID .. " has no trait") end
+    end
+    table.sort(traits, function(a, b)
         if a.mapID ~= b.mapID then return a.mapID < b.mapID end
         return a.npcID < b.npcID
     end)
 
-    -- English mob name for the header: locale first, then the primary data's
-    -- mob table (trait-only mobs fall back to "?").
-    local function traitMobName(npcID, mapID)
-        local mob = CD_DATA[mapID] and CD_DATA[mapID].mobs and CD_DATA[mapID].mobs[npcID]
-        return mobEnUS(npcID, mob and mob.name or "?")
+    -- Render TrashData's season-2 sections.
+    local dataPrefix = splicePrefix(inputs.baseData, "TrashData")
+    local traitsPrefix = splicePrefix(inputs.baseTraits, "TrashTraits")
+    for _, m in ipairs(maps) do
+        if dataPrefix:find("\n    [" .. m.mapID .. "] = {", 1, true) then
+            fail("TrashData: base already holds map " .. m.mapID)
+        end
+    end
+    for _, trait in ipairs(traits) do
+        if traitsPrefix:find("\n    [" .. trait.npcID .. "] = {", 1, true) then
+            fail("TrashTraits: base already holds npc " .. trait.npcID)
+        end
     end
 
-    local traitCount = 0
-    local lastMap
-    for _, e in ipairs(entries) do
-        local npcID        = e.npcID
-        local row          = e.row
-        local packed       = row[1]
-        local placement    = row[5]
-        local castTimeCSV  = row[6]
-        local channelCSV   = row[7]
-        local spellIDs     = row[8] or {}
-        local mapID        = e.mapID
-        local meta         = e.meta
-
-        if mapID ~= lastMap then
-            if lastMap then w("") end
-            boxHeader(w, "    ", string.format("%s (%d)", meta.name, mapID))
-            lastMap = mapID
+    local dataLines = {}
+    local function wd(line) dataLines[#dataLines + 1] = line end
+    local ind = string.rep(" ", 24)
+    for i, m in ipairs(maps) do
+        if i > 1 then wd("") end
+        boxHeader(wd, "    ", string.format("%s (%d)", m.name, m.mapID))
+        wd(string.format("    [%d] = {", m.mapID))
+        wd(string.format("        mapID = %d,", m.mapID))
+        wd("        dungeonKey = " .. luaStr(m.key) .. ",")
+        wd("        name = " .. luaStr(m.name) .. ",")
+        wd("        mobs = {")
+        for j, mob in ipairs(mobsByMap[m.mapID]) do
+            if j > 1 then wd("") end
+            wd(headerLine("            ", mob.name))
+            wd(string.format("            [%d] = {", mob.npcID))
+            wd(string.format("                npcID = %d,", mob.npcID))
+            wd("                name = " .. luaStr(mob.name) .. ",")
+            wd("                spells = {")
+            for _, row in ipairs(mob.spells) do
+                wd(string.format("                    [%d] = {", row.spellID))
+                wd(ind .. "spellID = " .. fmtNum(row.spellID) .. ",")
+                wd(ind .. "name = " .. luaStr(nameBySpell[row.spellID]) .. ",")
+                for _, field in ipairs(SHIPPED_SPELL_ORDER) do
+                    if row.spell[field] ~= nil then wd(ind .. field .. " = " .. fmtValue(row.spell[field]) .. ",") end
+                end
+                if row.hidden then wd(ind .. "hidden = true,") end
+                local showNameplate, display, tank, healer, dps = displayDefaults(preset, row)
+                wd(ind .. "showNameplate = " .. tostring(showNameplate) .. ",")
+                wd(ind .. "display = " .. luaStr(display) .. ",")
+                wd(string.format("%sroles = { tank = %s, healer = %s, dps = %s },",
+                    ind, tostring(tank), tostring(healer), tostring(dps)))
+                wd("                    },")
+            end
+            wd("                },")
+            wd("            },")
         end
+        wd("        },")
+        wd("    },")
+    end
 
-        local id = decodeIdentity(packed)
-        traitCount = traitCount + 1
-
-        w("")
-        w("    -- ── " .. traitMobName(npcID, mapID) .. " ──")
-        w(string.format("    [%d] = {", npcID))
-        w(string.format("        npcID = %d,", npcID))
-        w(string.format("        mapID = %d,", mapID))
-        w(string.format("        dungeonKey = %s,", luaStr(meta.key)))
-
-        local idParts = {}
-        for _, k in ipairs(IDENTITY_ORDER) do
-            local v = id[k]
-            if type(v) == "boolean" then
-                idParts[#idParts + 1] = string.format("%s = %s", k, tostring(v))
-            else
-                idParts[#idParts + 1] = string.format("%s = %s", k, fmtNum(v))
+    -- Render TrashTraits' season-2 sections.
+    local traitLines = {}
+    local function wt(line) traitLines[#traitLines + 1] = line end
+    local lastMap
+    for _, trait in ipairs(traits) do
+        if trait.mapID ~= lastMap then
+            wt("")
+            local m = mapInfo[trait.mapID]
+            boxHeader(wt, "    ", string.format("%s (%d)", m.name, m.mapID))
+            lastMap = trait.mapID
+        end
+        wt("")
+        wt("    -- ── " .. trait.name .. " ──")
+        wt(string.format("    [%d] = {", trait.npcID))
+        wt(string.format("        npcID = %d,", trait.npcID))
+        wt(string.format("        mapID = %d,", trait.mapID))
+        wt("        dungeonKey = " .. luaStr(trait.key) .. ",")
+        wt("        name = " .. luaStr(trait.name) .. ",")
+        wt('        schema = "named",')
+        if trait.identityOnly then wt("        identityOnly = true,") end
+        local parts = {}
+        for _, field in ipairs(IDENTITY_EMIT) do
+            if trait.identity[field] ~= nil then
+                parts[#parts + 1] = field .. " = " .. fmtValue(trait.identity[field])
             end
         end
-        w(string.format("        identity = { %s },", table.concat(idParts, ", ")))
-
-        w(string.format("        placement = %s,", luaStr(placement or "")))
-
-        local castSet = parseNumList(castTimeCSV, "/")
-        if castSet then
-            w(string.format("        castTimeSet = %s,", fmtNumArray(castSet)))
+        if #parts > 0 then
+            wt("        identity = { " .. table.concat(parts, ", ") .. " },")
+        else
+            wt("        identity = {},")
         end
-        local chanSet = parseNumList(channelCSV, "/")
-        if chanSet then
-            w(string.format("        channelTimeSet = %s,", fmtNumArray(chanSet)))
-        end
-
-        local spParts = {}
-        for i = 1, #spellIDs do spParts[i] = fmtNum(spellIDs[i]) end
-        w(string.format("        spellIDs = { %s },", table.concat(spParts, ", ")))
-
-        w(string.format("        packedIdentity = %s,", fmtHex(packed)))
-        w("    },")
+        wt("        placement = " .. luaStr(trait.placement) .. ",")
+        if trait.castTimeSet then wt("        castTimeSet = " .. fmtValue(trait.castTimeSet) .. ",") end
+        if trait.channelTimeSet then wt("        channelTimeSet = " .. fmtValue(trait.channelTimeSet) .. ",") end
+        if trait.spellIDs then wt("        spellIDs = " .. fmtValue(trait.spellIDs) .. ",") end
+        wt("    },")
     end
 
-    w("}")
-    w("")
-    return table.concat(out, "\n"), traitCount
+    -- Counts and manifest.
+    local mapCounts = {}
+    local totals = { npcs = 0, rows = 0, visibleRows = 0, hiddenRows = 0, traits = 0, identityOnly = 0 }
+    for _, m in ipairs(maps) do
+        local c = { mapID = m.mapID, dungeonKey = m.key, npcs = #mobsByMap[m.mapID],
+            rows = 0, visibleRows = 0, hiddenRows = 0, traits = 0, identityOnly = 0 }
+        for _, mob in ipairs(mobsByMap[m.mapID]) do
+            for _, row in ipairs(mob.spells) do
+                c.rows = c.rows + 1
+                if row.hidden then c.hiddenRows = c.hiddenRows + 1 else c.visibleRows = c.visibleRows + 1 end
+            end
+        end
+        for _, trait in ipairs(traits) do
+            if trait.mapID == m.mapID then
+                c.traits = c.traits + 1
+                if trait.identityOnly then c.identityOnly = c.identityOnly + 1 end
+            end
+        end
+        for field in pairs(totals) do totals[field] = totals[field] + c[field] end
+        mapCounts[#mapCounts + 1] = c
+    end
+    local manifest = {
+        "-- Generated by dev/scripts/extract-trash-data.lua. Do not edit.",
+        "return {",
+        "    season = 2,",
+        "    spellNamesSha256 = " .. luaStr(names.sourceSha256) .. ",",
+        string.format("    totals = { npcs = %d, rows = %d, visibleRows = %d, hiddenRows = %d, traits = %d, identityOnly = %d },",
+            totals.npcs, totals.rows, totals.visibleRows, totals.hiddenRows, totals.traits, totals.identityOnly),
+        "    maps = {",
+    }
+    for _, c in ipairs(mapCounts) do
+        manifest[#manifest + 1] = string.format(
+            "        { mapID = %d, dungeonKey = %s, npcs = %d, rows = %d, visibleRows = %d, hiddenRows = %d, traits = %d, identityOnly = %d },",
+            c.mapID, luaStr(c.dungeonKey), c.npcs, c.rows, c.visibleRows, c.hiddenRows, c.traits, c.identityOnly)
+    end
+    manifest[#manifest + 1] = "    },"
+    manifest[#manifest + 1] = "    excluded = {"
+    for _, x in ipairs(pins.excluded) do
+        manifest[#manifest + 1] = string.format("        { mapID = %d, npcID = %d, spellID = %d, reason = %s },",
+            x.mapID, x.npcID, x.spellID, luaStr(x.reason))
+    end
+    manifest[#manifest + 1] = "    },"
+    manifest[#manifest + 1] = "}"
+
+    return {
+        data = dataPrefix .. "\n" .. table.concat(dataLines, "\n") .. "\n}\n",
+        traits = traitsPrefix .. table.concat(traitLines, "\n") .. "\n}\n",
+        manifest = table.concat(manifest, "\n") .. "\n",
+        report = emitReport(maps, traits, mobsByMap, nameBySpell) .. "\n",
+        maps = mapCounts,
+        totals = totals,
+    }
 end
 
 ---------------------------------------------------------------------------
--- DELIVERABLE 4 — discrepancy report
+-- Run: read, parse, build, then write the candidate
 ---------------------------------------------------------------------------
 
-local DIFF_FIELDS = {
-    "castTime", "channelTime", "first", "cd", "cdMode",
-    "targetExists", "targetAPIExists", "castStartChangeTarget",
-    "targetClearOnCastStart", "castStartAuraDelta",
-    "selfBuffCountDeltaOnSuccess", "targetBuffCountDeltaOnSuccess",
-    "channelRefreshOnInterruptible",
-    "castTimeExtra",
+M.realFS = {
+    read = function(path)
+        local f = io.open(path, "rb")
+        if not f then return nil end
+        local text = f:read("*a")
+        f:close()
+        return text
+    end,
+    write = function(path, text)
+        local f, err = io.open(path, "wb")
+        if not f then return nil, err end
+        f:write(text)
+        f:close()
+        return true
+    end,
 }
 
--- Source fields KE deliberately does not port
--- (targetBuffCountDeltaOnSuccess — its one historical row was superseded by
--- castStartAuraDelta, so there is no KE runtime
--- until a real row exists). A row in the PRIMARY build would flow into
--- TrashData verbatim with NO KE consumer — harmless but silent — so the
--- summary shouts when one appears: it must trigger a port decision.
-local UNPORTED_RUNTIME_FIELDS = { "targetBuffCountDeltaOnSuccess" }
+local REQUIRED_OPTIONS = {
+    "data-root", "names-db", "spell-names", "base-data", "base-traits", "registry", "season", "out",
+}
 
--- Canonical string form so absent-field / array / scalar all compare cleanly.
-local function canon(v)
-    if v == nil then return "\0nil" end
-    if type(v) == "table" then
-        local parts = {}
-        for i = 1, #v do parts[i] = fmtNum(v[i]) end
-        return "[" .. table.concat(parts, ",") .. "]"
-    end
-    if type(v) == "boolean" then return tostring(v) end
-    if type(v) == "number" then return fmtNum(v) end
-    return tostring(v)
+local INPUT_ORDER = { "data", "traits", "preset", "names", "spellNames", "baseData", "baseTraits", "registry" }
+
+function M.Run(opts, fs)
+    fs = fs or M.realFS
+    return pcall(function()
+        for _, option in ipairs(REQUIRED_OPTIONS) do
+            if type(opts[option]) ~= "string" or opts[option] == "" then fail("missing --" .. option) end
+        end
+        if opts.season ~= "2" then fail("--season must be 2") end
+        local root = opts["data-root"]:gsub("[/\\]+$", "")
+        local paths = {
+            data = root .. "/TrashCDData.lua",
+            traits = root .. "/TrashMobTraits.lua",
+            preset = root .. "/TrashCDPreset.lua",
+            names = opts["names-db"],
+            spellNames = opts["spell-names"],
+            baseData = opts["base-data"],
+            baseTraits = opts["base-traits"],
+            registry = opts.registry,
+        }
+        local text = {}
+        for _, key in ipairs(INPUT_ORDER) do
+            text[key] = fs.read(paths[key])
+            if not text[key] then fail("missing input " .. paths[key]) end
+        end
+        local inputs = {
+            data = M.LoadLiteral(M.ExtractLiteral(text.data,
+                "^_G%.[%w_]+_TRASH_CD_DATA = {%s*$", "data"), "data"),
+            traits = M.LoadLiteral(M.ExtractLiteral(text.traits,
+                "^_G%.[%w_]+_TRASH_MOB_TRAITS = {%s*$", "traits"), "traits"),
+            preset = M.LoadLiteral(M.ExtractLiteral(text.preset,
+                "^_G%.[%w_]+_TRASH_CD_PRESET = {%s*$", "preset"), "preset"),
+            npcNames = M.LoadLiteral(M.ExtractLiteral(text.names,
+                "^[%w_]+%.NPCNameSource = {%s*$", "npc names"), "npc names"),
+            instances = M.LoadLiteral(M.ExtractLiteral(text.names,
+                "^[%w_]+%.InstanceNoteInstanceSource = {%s*$", "instances"), "instances"),
+            spellNames = M.LoadLiteral(text.spellNames, "spell names"),
+            registry = M.ParseRegistry(text.registry, 2),
+            baseData = text.baseData,
+            baseTraits = text.baseTraits,
+        }
+        local built = M.Build(inputs)
+        local outDir = opts.out:gsub("[/\\]+$", "")
+        local files = {
+            { "TrashData.lua", built.data },
+            { "TrashTraits.lua", built.traits },
+            { "trash-s2-manifest.lua", built.manifest },
+            { "trash-s2-report.md", built.report },
+        }
+        for _, file in ipairs(files) do
+            local ok, err = fs.write(outDir .. "/" .. file[1], file[2])
+            if not ok then fail("cannot write " .. file[1] .. ": " .. tostring(err)) end
+        end
+        return built
+    end)
 end
 
--- Human display of a field value inside the report table.
-local function showVal(v)
-    if v == nil then return "nil" end
-    if type(v) == "table" then return fmtNumArray(v) end
-    if type(v) == "boolean" then return tostring(v) end
-    if type(v) == "number" then return fmtNum(v) end
-    return tostring(v)
+local function parseArgs(argv)
+    local opts = {}
+    local i = 1
+    while argv[i] ~= nil do
+        local option = argv[i]:match("^%-%-([%w%-]+)$")
+        if not option or argv[i + 1] == nil then return nil, "bad argument " .. tostring(argv[i]) end
+        opts[option] = argv[i + 1]
+        i = i + 2
+    end
+    return opts
 end
 
-local function generateDiff()
-    local sources = {
-        { label = "v26.6.29", env = CD_DATA },
-        { label = "v26.6.4",  env = loadDataFile(OLD_664 .. "TrashCDData.lua").EXBOSS_TRASH_CD_DATA },
-        { label = "v26.5.12", env = loadDataFile(OLD_6512 .. "TrashCDData.lua").EXBOSS_TRASH_CD_DATA },
-        { label = "DA v1",    env = loadDataFile(DA_DATA .. "TrashCDData.lua").DA_TRASH_CD_DATA },
-    }
-
-    -- spellLookup[mapID][npcID][spellID][sourceIndex] = spell table
-    -- mobPresence[mapID][npcID][sourceIndex] = true
-    local spellLookup, mobPresence, mapSet, npcNameZH = {}, {}, {}, {}
-    for si, src in ipairs(sources) do
-        for mapID, dungeon in pairs(src.env or {}) do
-            mapSet[mapID] = true
-            spellLookup[mapID] = spellLookup[mapID] or {}
-            mobPresence[mapID] = mobPresence[mapID] or {}
-            for npcID, mob in pairs(dungeon.mobs or {}) do
-                mobPresence[mapID][npcID] = mobPresence[mapID][npcID] or {}
-                mobPresence[mapID][npcID][si] = true
-                npcNameZH[npcID] = npcNameZH[npcID] or mob.name
-                spellLookup[mapID][npcID] = spellLookup[mapID][npcID] or {}
-                for spellID, spell in pairs(mob.spells or {}) do
-                    spellLookup[mapID][npcID][spellID] =
-                        spellLookup[mapID][npcID][spellID] or {}
-                    spellLookup[mapID][npcID][spellID][si] = spell
-                end
-            end
-        end
+if arg and type(arg[0]) == "string" and arg[0]:match("extract%-trash%-data%.lua$") then
+    local opts, argErr = parseArgs(arg)
+    if not opts then
+        io.stderr:write("extract-trash-data: " .. argErr .. "\n")
+        os.exit(2)
     end
-
-    local out, diffCount = {}, 0
-    local function w(line) out[#out + 1] = line end
-
-    w("# Dungeon-trash data discrepancies")
-    w("")
-    w("Auto-generated by `dev/scripts/extract-trash-data.lua`. Every field that")
-    w("differs across the four source builds is logged below for human review —")
-    w("nothing is silently reconciled.")
-    w("")
-    w("**Primary source of truth: ExBoss v26.6.29.1618** (newer than the")
-    w("v26.6.4 build originally requested). Precedence, highest first:")
-    w("**v26.6.29 > v26.6.4 > v26.5.12 > DungeonAlerts v1.** ExBoss always wins;")
-    w("the DungeonTimers Trash data ships the v26.6.29 values. This log exists so")
-    w("timing changes that affect prediction accuracy (`first`, `cd`, `castTime`,")
-    w("`channelTime`) are visible rather than buried.")
-    w("")
-    w("Legend: a cell shows the field's value in that build; `nil` = field absent")
-    w("on an otherwise-present spell; `—` = the spell does not exist in that build.")
-    w("")
-
-    for _, mapID in ipairs(sortedKeys(mapSet)) do
-        local meta = DUNGEONS[mapID] or { key = "?", name = "?" }
-        local dungeonLines, dungeonHasContent = {}, false
-        local function dw(line) dungeonLines[#dungeonLines + 1] = line end
-
-        -- 1) Field-value discrepancies.
-        for _, npcID in ipairs(sortedKeys(spellLookup[mapID] or {})) do
-            for _, spellID in ipairs(sortedKeys(spellLookup[mapID][npcID])) do
-                local perSrc = spellLookup[mapID][npcID][spellID]
-                local rows = {}
-                for _, field in ipairs(DIFF_FIELDS) do
-                    local seen, values, differ = {}, {}, false
-                    for si = 1, #sources do
-                        local spell = perSrc[si]
-                        if spell then
-                            local c = canon(spell[field])
-                            values[si] = spell[field]
-                            seen[#seen + 1] = c
-                        end
-                    end
-                    for i = 2, #seen do
-                        if seen[i] ~= seen[1] then differ = true break end
-                    end
-                    if differ then
-                        local cells = {}
-                        for si = 1, #sources do
-                            if perSrc[si] then
-                                cells[si] = "`" .. showVal(values[si]) .. "`"
-                            else
-                                cells[si] = "—"
-                            end
-                        end
-                        rows[#rows + 1] = { field = field, cells = cells }
-                    end
-                end
-
-                if #rows > 0 then
-                    diffCount = diffCount + #rows
-                    dungeonHasContent = true
-                    local enName = mobEnUS(npcID, npcNameZH[npcID] or "?")
-                    -- Pick the spell's English name from whichever build has it.
-                    local spName
-                    for si = 1, #sources do
-                        if perSrc[si] and perSrc[si].nameEN then spName = perSrc[si].nameEN break end
-                    end
-                    dw(string.format("#### %s (%d) — %s (%d)",
-                        enName, npcID, spName or "?", spellID))
-                    dw("")
-                    dw("| field | v26.6.29 | v26.6.4 | v26.5.12 | DA v1 |")
-                    dw("|---|---|---|---|---|")
-                    for _, r in ipairs(rows) do
-                        dw(string.format("| %s | %s | %s | %s | %s |",
-                            r.field, r.cells[1], r.cells[2], r.cells[3], r.cells[4]))
-                    end
-                    dw("")
-                end
-            end
-        end
-
-        -- 2) Presence differences (spell not in all four builds).
-        local presenceRows = {}
-        for _, npcID in ipairs(sortedKeys(spellLookup[mapID] or {})) do
-            for _, spellID in ipairs(sortedKeys(spellLookup[mapID][npcID])) do
-                local perSrc = spellLookup[mapID][npcID][spellID]
-                local marks, count = {}, 0
-                for si = 1, #sources do
-                    if perSrc[si] then marks[si] = "yes"; count = count + 1 else marks[si] = "—" end
-                end
-                if count < #sources then
-                    local enName = mobEnUS(npcID, npcNameZH[npcID] or "?")
-                    local spName
-                    for si = 1, #sources do
-                        if perSrc[si] and perSrc[si].nameEN then spName = perSrc[si].nameEN break end
-                    end
-                    presenceRows[#presenceRows + 1] = string.format(
-                        "| %s (%d) | %s (%d) | %s | %s | %s | %s |",
-                        enName, npcID, spName or "?", spellID,
-                        marks[1], marks[2], marks[3], marks[4])
-                end
-            end
-        end
-        if #presenceRows > 0 then
-            dungeonHasContent = true
-            diffCount = diffCount + #presenceRows
-            dw("**Presence differences (spell missing from one or more builds):**")
-            dw("")
-            dw("| mob | spell | v26.6.29 | v26.6.4 | v26.5.12 | DA v1 |")
-            dw("|---|---|---|---|---|---|")
-            for _, r in ipairs(presenceRows) do dw(r) end
-            dw("")
-        end
-
-        if dungeonHasContent then
-            w(string.format("## %s — %s (mapID %d)", meta.name, meta.key, mapID))
-            w("")
-            for _, l in ipairs(dungeonLines) do w(l) end
-        end
+    local ok, result = M.Run(opts)
+    if not ok then
+        io.stderr:write(tostring(result) .. "\n")
+        os.exit(1)
     end
-
-    if diffCount == 0 then
-        w("_No cross-build discrepancies found._")
-        w("")
+    for _, c in ipairs(result.maps) do
+        print(string.format("%-20s npcs %3d rows %3d visible %3d hidden %d traits %3d identity-only %3d",
+            c.dungeonKey, c.npcs, c.rows, c.visibleRows, c.hiddenRows, c.traits, c.identityOnly))
     end
-
-    return table.concat(out, "\n"), diffCount
+    local t = result.totals
+    print(string.format("total npcs %d rows %d visible %d hidden %d traits %d identity-only %d",
+        t.npcs, t.rows, t.visibleRows, t.hiddenRows, t.traits, t.identityOnly))
 end
 
----------------------------------------------------------------------------
--- Emit
----------------------------------------------------------------------------
-
-local function writeFile(path, content)
-    -- binary mode: keep LF endings on Windows so regeneration is byte-identical
-    -- to the committed files (repo stores these as eol=lf)
-    local f, err = io.open(path, "wb")
-    if not f then error("cannot write " .. path .. ": " .. tostring(err)) end
-    f:write(content)
-    f:close()
-end
-
-local dataStr, mapCount, mobCount, spellCount = serializeTrashData()
-writeFile(OUT_DATA, dataStr)
-
-local traitsStr, traitCount = serializeTrashTraits()
-writeFile(OUT_TRAITS, traitsStr)
-
-local diffStr, diffCount = generateDiff()
-writeFile(OUT_DIFF, diffStr)
-
----------------------------------------------------------------------------
--- Summary
----------------------------------------------------------------------------
-
-print("extract-trash-data.lua — done")
-print(string.format("  TrashData.lua    : %d dungeons, %d mobs, %d abilities",
-    mapCount, mobCount, spellCount))
-print(string.format("  TrashTraits.lua  : %d mob fingerprints", traitCount))
-print(string.format("  discrepancies    : %d logged in %s", diffCount, OUT_DIFF))
-if next(unknownFields) then
-    local names = {}
-    for k in pairs(unknownFields) do names[#names + 1] = k end
-    table.sort(names)
-    print("  NOTE unmodeled source fields copied verbatim: " .. table.concat(names, ", "))
-end
-
--- Loud check for deliberately-unported engine fields in the PRIMARY build
--- (see UNPORTED_RUNTIME_FIELDS above the diff section).
-for _, field in ipairs(UNPORTED_RUNTIME_FIELDS) do
-    local hits = {}
-    for mapID, dungeon in pairs(CD_DATA) do
-        for npcID, mob in pairs(dungeon.mobs or {}) do
-            for spellID, spell in pairs(mob.spells or {}) do
-                if spell[field] ~= nil then
-                    hits[#hits + 1] = string.format("%d/%d/%d", mapID, npcID, spellID)
-                end
-            end
-        end
-    end
-    if #hits > 0 then
-        print("  *** WARNING: PRIMARY data now ships '" .. field .. "' ("
-            .. table.concat(hits, ", ") .. ") — KE has NO runtime consumer "
-            .. "for it. Revisit the port decision "
-            .. "before shipping this data refresh. ***")
-    end
-end
+return M
