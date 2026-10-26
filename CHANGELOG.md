@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.27
+
+### Interrupt Tracker
+
+- A Balance Druid's Solar Beam that interrupts a cast shows 45 s with Light
+  of the Sun, on the Druid's own bar and on teammates' screens
+
+---
+
 ## v4.14.26
 
 ### Settings
