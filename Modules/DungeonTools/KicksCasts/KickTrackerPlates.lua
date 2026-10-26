@@ -158,10 +158,14 @@ local function ReadScale()
     P.uiScale = UIParent:GetEffectiveScale()
 end
 
--- Sizes and gaps in UIParent units on any plate.
+-- Sizes and gaps in UIParent units on any plate. Set only when the scale
+-- read last differs from the one the frame took.
 local function Scaled(frame)
+    local scale = P.uiScale or 1
+    if frame.keScale == scale then return end
+    frame.keScale = scale
     frame:SetIgnoreParentScale(true)
-    frame:SetScale(P.uiScale or 1)
+    frame:SetScale(scale)
 end
 
 local function Level(frame, strata, level)
