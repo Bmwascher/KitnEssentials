@@ -1150,11 +1150,14 @@ local function ApplyQueued()
     PS:UpdateDB()
     KE.Context:Evaluate(KEY)
     if PS.slots then PS.slots:SetCap(Rules.Watched(PS.db.EnemiesWatched)) end
-    -- A changed reach re-covers the area stops; a feed whose sensors moved
-    -- only records on its next read, as one turning on does.
+    -- Area sensors may have moved, here or in the releases SetCap just made,
+    -- so each area feed only records on its next read, as one turning on does.
     if PS.live then
         for _, f in pairs(PS.feeds) do
-            if f.aoe and Cover(f) then Unprime(f) end
+            if f.aoe and f.on then
+                Cover(f)
+                Unprime(f)
+            end
         end
         QueueBuild()
         Arm()
