@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.32
+
+### WoW Forever
+
+- Automation (General, Interface, Quests & Social, Vendors & Bags tabs),
+  Combat Logger and Merchant Pages, all off until switched on; Hide
+  Helptips is on by default, as on retail
+- Combat Logger logs dungeons, 40-, 20- and 10-player raids and
+  battlegrounds
+- Hide Transforms covers the Hallowed Wand costumes, Noggenfogger, Savory
+  Deviate Delight, Savory Whimsyfin Delight and Orb of Deception
+- The Group Finder, housing roll, Vantus Rune, Voidcore, keystone, Auction
+  House filter and pet battle duel options are left out there
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.31
 
 ### WoW Forever
