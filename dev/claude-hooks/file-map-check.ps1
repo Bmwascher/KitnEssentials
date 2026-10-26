@@ -5,9 +5,15 @@
 # without one. Never blocks. Exit 0 always.
 
 $root = $env:CLAUDE_PROJECT_DIR
-if (-not $root) { exit 0 }
+if (-not $root) {
+    Write-Output '[file-map] note: CLAUDE_PROJECT_DIR is not set, so the file map was not checked.'
+    exit 0
+}
 $script = Join-Path $root 'dev\scripts\file-map.lua'
-if (-not (Test-Path -LiteralPath $script)) { exit 0 }
+if (-not (Test-Path -LiteralPath $script)) {
+    Write-Output "[file-map] note: $script is missing, so the file map was not checked."
+    exit 0
+}
 if (-not (Get-Command lua -ErrorAction SilentlyContinue)) {
     Write-Output '[file-map] note: lua is not on PATH, so the file map was not checked (dev/README.md has the toolchain setup).'
     exit 0

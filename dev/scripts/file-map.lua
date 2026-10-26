@@ -4,12 +4,12 @@
 -- Run from the repo root with the local Lua interpreter:
 --   lua dev/scripts/file-map.lua [--refresh] [--out <path>] [--retail <file>]
 --
--- --refresh keeps a map current: it rebuilds when the map is missing, or the
--- commit, the uncommitted content of the map's inputs (REFRESH_INPUTS) or the
--- retail-only list path differs from the stamp file beside the map, or git
--- cannot give a stamp. It publishes only a map whose self-checks pass (else
--- it keeps the previous one and prints the failures), and prints one
--- `[file-map]` line naming the map. Its default output is
+-- --refresh keeps a map current: it rebuilds when the map is missing, git
+-- cannot give a stamp, or the commit or the uncommitted content of the map's
+-- inputs (REFRESH_INPUTS) differs from the stamp file beside the map. It
+-- publishes only a map whose self-checks pass (else it keeps the previous one
+-- and prints the failures), prints one `[file-map]` line naming the map, and
+-- refuses --retail. Its default output is
 -- dev/docs/FILE-MAP.md in the primary checkout and FILE-MAP.md in the git
 -- dir of a linked worktree, whose dev/docs may be a junction to the
 -- primary's. The SessionStart hook file-map-check.ps1 runs it.
@@ -128,6 +128,11 @@ while argi <= #arg do
         os.exit(2)
     end
 end
+-- The stamp covers the default retail-only list only.
+if refresh and retailPath ~= "dev/scripts/retail-only.lua" then
+    io.stderr:write("--refresh reads the default retail-only list; drop --retail\n")
+    os.exit(2)
+end
 
 local function readFile(path)
     local f = io.open(path, "rb")
@@ -159,59 +164,93 @@ end
 local function writeFile(path, text)
     local f, err = io.open(path, "wb")
     if not f then return false, err end
-    f:write(text)
-    f:close()
-    return true
+    local wrote, werr = f:write(text)
+    local closed, cerr = f:close()
+    if wrote and closed then return true end
+    os.remove(path)
+    return false, werr or cerr or ("cannot write " .. path)
 end
 
--- --refresh: the output path, the stamp the inputs give now (nil when git
--- cannot say, which never matches), and an exit when the map is current or
--- another refresh holds the lock.
-local stamp, stampPath, lockPath, runId
-if refresh then
-    if not outPath then
-        local gitDir = commandLines("git rev-parse --path-format=absolute --git-dir")[1]
-        local commonDir = commandLines("git rev-parse --path-format=absolute --git-common-dir")[1]
-        outPath = (gitDir and gitDir ~= commonDir) and (gitDir .. "/FILE-MAP.md") or "dev/docs/FILE-MAP.md"
+-- Lua 5.1's popen gives no exit status, so the command must print OK_MARK
+-- last for its lines to count; nil otherwise.
+local OK_MARK = "::file-map-ok"
+local function commandOk(cmd)
+    local lines = commandLines(cmd .. " && echo " .. OK_MARK)
+    if lines[#lines] ~= OK_MARK then return nil end
+    lines[#lines] = nil
+    return lines
+end
+
+local function refreshStop(msg)
+    print("[file-map] " .. msg)
+    os.exit(1)
+end
+
+-- --refresh: the output path, the stamp, and an exit when the map is current
+-- or another refresh holds the lock.
+local stampPath, lockPath, runId, mine, lockText
+-- The stamp the inputs give now: nil when git cannot say, which never
+-- matches. The hashes cover content, so a second edit to an already modified
+-- file still changes it.
+local function inputStamp()
+    local head = commandOk("git rev-parse HEAD")
+    local diffPath = stampPath .. ".diff" .. runId
+    local edits = commandOk("git diff HEAD --binary -- " .. REFRESH_INPUTS .. " > \"" .. diffPath
+        .. "\" && git hash-object \"" .. diffPath .. "\"")
+    os.remove(diffPath)
+    local new = commandOk("git ls-files --others --exclude-standard -- " .. REFRESH_INPUTS)
+    local newHashes = new and (#new == 0 and {} or commandOk("git ls-files --others --exclude-standard -- "
+        .. REFRESH_INPUTS .. " | git hash-object --stdin-paths"))
+    if not (head and head[1] and head[1]:match("^%x+$") and edits and edits[1] and edits[1]:match("^%x+$")
+        and newHashes and #newHashes == #new) then
+        return nil
     end
-    -- The hashes cover content, so a second edit to an already modified file
-    -- still changes the stamp.
-    local head = commandLines("git rev-parse HEAD")[1]
-    local edits = commandLines("git diff HEAD --binary -- " .. REFRESH_INPUTS .. " | git hash-object --stdin")[1]
-    local new = commandLines("git ls-files --others --exclude-standard -- " .. REFRESH_INPUTS)
-    local newHashes = #new > 0
-        and commandLines("git ls-files --others --exclude-standard -- " .. REFRESH_INPUTS
-            .. " | git hash-object --stdin-paths")
-        or {}
-    if head and head:match("^%x+$") and edits and edits:match("^%x+$") and #newHashes == #new then
-        stamp = table.concat({ head, edits, retailPath, table.concat(new, "\n"),
-            table.concat(newHashes, "\n") }, "\n") .. "\n"
+    return table.concat({ head[1], edits[1], table.concat(new, "\n"), table.concat(newHashes, "\n") }, "\n")
+        .. "\n"
+end
+local stamp
+if refresh then
+    runId = os.time() .. tostring({}):gsub("%W", "")
+    if not outPath then
+        local gitDir = commandOk("git rev-parse --path-format=absolute --git-dir")
+        local commonDir = commandOk("git rev-parse --path-format=absolute --git-common-dir")
+        if not (gitDir and gitDir[1] and commonDir and commonDir[1]) then
+            refreshStop("git could not name this checkout's git dir, so the map's place is unknown")
+        end
+        outPath = gitDir[1] ~= commonDir[1] and (gitDir[1] .. "/FILE-MAP.md") or "dev/docs/FILE-MAP.md"
+        -- dev/docs is gitignored, so a fresh clone lacks it.
+        if outPath == "dev/docs/FILE-MAP.md" and not fileExists(outPath) then
+            os.execute("mkdir \"dev\\docs\" 2>nul")
+        end
     end
     stampPath, lockPath = outPath .. ".stamp", outPath .. ".lock"
+    stamp = inputStamp()
     if stamp and fileExists(outPath) and readFile(stampPath) == stamp then
         print("[file-map] current: " .. outPath)
         os.exit(0)
     end
     -- The lock is taken by renaming a private file onto it: on Windows a
-    -- rename refuses an existing target, so only one run can win.
-    runId = os.time() .. tostring({}):gsub("%W", "")
-    local mine = lockPath .. "." .. runId
-    local wrote, err = writeFile(mine, tostring(os.time()))
+    -- rename refuses an existing target, so only one run can win. A held
+    -- lock is renamed away before its age is read, which also only one run
+    -- can do, and put back when it is live.
+    mine = lockPath .. "." .. runId
+    lockText = os.time() .. " " .. runId
+    local wrote, err = writeFile(mine, lockText)
     if not wrote then
-        print("[file-map] cannot write beside " .. outPath .. " (does its folder exist?): " .. tostring(err))
-        os.exit(1)
+        refreshStop("cannot write beside " .. outPath .. " (does its folder exist?): " .. tostring(err))
     end
     if not os.rename(mine, lockPath) then
-        local held = tonumber(readFile(lockPath) or "")
-        if held and os.time() - held < LOCK_SECONDS then
-            os.remove(mine)
-            print("[file-map] busy: a refresh started under " .. LOCK_SECONDS .. " s ago holds " .. lockPath)
-            os.exit(0)
+        local taken = mine .. ".held"
+        if os.rename(lockPath, taken) then
+            local held = tonumber((readFile(taken) or ""):match("^%d+") or "")
+            if held and os.time() - held < LOCK_SECONDS then
+                os.rename(taken, lockPath)
+            end
+            os.remove(taken)
         end
-        os.remove(lockPath)
         if not os.rename(mine, lockPath) then
             os.remove(mine)
-            print("[file-map] busy: another refresh took the lock at " .. lockPath)
+            print("[file-map] busy: a refresh started under " .. LOCK_SECONDS .. " s ago holds " .. lockPath)
             os.exit(0)
         end
     end
@@ -1205,29 +1244,47 @@ local docText = table.concat(doc, "\n") .. "\n"
 
 if refresh then
     -- Written aside and moved into place, so a reader never sees half a map.
-    local tmp = outPath .. ".tmp" .. runId
+    -- The old stamp goes first, so no map is ever paired with a stamp it was
+    -- not built from; the old map moves aside and comes back on failure.
+    local tmp, old = outPath .. ".tmp" .. runId, outPath .. ".old" .. runId
     local published, why = false, "self-check failed"
     if #failures == 0 then
+        os.remove(stampPath)
         local ok, err = writeFile(tmp, docText)
+        if fileExists(stampPath) then
+            ok, err = false, "cannot remove the old stamp " .. stampPath
+        end
         if ok then
             ok, err = os.rename(tmp, outPath)
             if not ok then
-                os.remove(outPath)
+                local movedOld = os.rename(outPath, old)
                 ok, err = os.rename(tmp, outPath)
+                if movedOld then
+                    if ok then os.remove(old) else os.rename(old, outPath) end
+                end
             end
         end
         published, why = ok and true or false, err
     end
+    local note = ""
     if published then
-        if stamp then writeFile(stampPath, stamp) else os.remove(stampPath) end
-        print("[file-map] regenerated at " .. sha .. ": " .. outPath)
+        -- An input that changed during the scan leaves no stamp, so the next
+        -- run rebuilds.
+        if not stamp then
+            note = "; git gave no stamp, so the next run rebuilds"
+        elseif inputStamp() ~= stamp then
+            note = "; inputs changed during the run, so the next run rebuilds"
+        elseif not writeFile(stampPath, stamp) then
+            note = "; no stamp written, so the next run rebuilds"
+        end
+        print("[file-map] regenerated at " .. sha .. ": " .. outPath .. note)
     else
         os.remove(tmp)
         local kept = fileExists(outPath) and "kept the previous map at " or "no map at "
         print("[file-map] " .. kept .. outPath .. "; this run did not publish: " .. tostring(why))
         for _, msg in ipairs(failures) do print("FAIL: " .. msg) end
     end
-    os.remove(lockPath)
+    if readFile(lockPath) == lockText then os.remove(lockPath) end
     os.exit(published and 0 or 1)
 elseif outPath then
     if not writeFile(outPath, docText) then
