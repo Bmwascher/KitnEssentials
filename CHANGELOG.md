@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.31
+
+### WoW Forever
+
+- Combat Timer, Combat Texts, Cursor Effects (Cursor and Taunt tabs),
+  Player Crosshair, Range Display, Focus Castbar and Status Texts (Pet
+  Status, Player Absorbs), all off until switched on
+- Focus Castbar skips Shield Bash without a shield and picks the kick again
+  on a stance or off-hand change
+- Player Crosshair picks its range spell from your talents, class and Druid
+  form
+- Taunt countdown tracks Taunt, Growl and Flame Shock
+- Combat Texts also warns on low ranged weapon durability
+- Not yet tested on the live Forever client
+
+---
+
 ## v4.14.30
 
 ### Interrupt Tracker
