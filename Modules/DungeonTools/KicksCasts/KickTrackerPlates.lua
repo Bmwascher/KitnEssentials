@@ -1511,7 +1511,10 @@ function KT:RailsPlate(unit)
                 " lanesBefore=" .. #rail.lanes .. " rowLen=" .. #P.rows[unit].list)
         end
     end
-    StyleRail(rail)
+    -- A rail already styled with a lane per kicker is styled again by the
+    -- layout's RefeedAfterLayout a frame from now; settings changes release
+    -- every rail.
+    if made or #rail.lanes < #P.kickers then StyleRail(rail) end
     DressRail(rail)
     FeedRailCounts(rail, GetTime())
     FeedRail(rail, index)
