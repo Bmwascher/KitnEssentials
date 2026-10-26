@@ -67,10 +67,9 @@
 -- bytes directly, since a PowerShell 5.1 redirect would write UTF-16.
 -- Exit 1 when a self-check fails: a row with no page file, a settings file
 -- no row reaches, a registered tab strip the rules above cannot read, a tab
--- function with a
--- `return` that is not a literal list, or a tab list with an element that
--- is not an inline or local table, an id that is not a string literal or
--- constant, or a label that is not a string literal (an in-page strip prints
+-- function with a `return` that is not a literal list, or a tab list with an
+-- element that is not an inline or local table, an id that is not a string
+-- literal or constant, or a label that is not a string literal (an in-page strip prints
 -- as dynamic instead), a Register call whose content id cannot be read, no
 -- FOREVER_ALLOWED table in Core/Availability.lua, a retail-only entry that is
 -- not a tracked file, a tracked .lua file that neither client loads, or a
