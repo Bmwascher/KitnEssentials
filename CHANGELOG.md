@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.28
+
+### Party Cooldowns and Party Stops
+
+- With Party Cooldowns, Party Stops and the Interrupt Tracker all on, one
+  failed inspect no longer leaves a teammate on fallback talents for longer
+- Party Stops asks again when its own talent read fails, even after another
+  module's read of the same teammate worked
+
+---
+
 ## v4.14.27
 
 ### Interrupt Tracker
