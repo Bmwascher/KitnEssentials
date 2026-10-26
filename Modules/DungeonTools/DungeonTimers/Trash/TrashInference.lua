@@ -37,6 +37,146 @@ TI.CAST_TIME_TOLERANCE = 0.20   -- measured vs curated cast/channel duration
 TI.LEVEL_SQUISH_OFFSET = 60     -- Layer1 accepts obs.level == template-60
 TI.MIN_LEAD = 0.20              -- a predicted cast nearer than this is dropped
 
+-- Family presence is read, required and compared only while this is on.
+TI.FAMILY_GATE = true
+-- Scheduled identity reads per plate generation: the initial delayed read and
+-- its two retries. Event reads never count against it.
+TI.RECOVERY_SCHEDULED_MAX = 3
+
+-- Snapshot fields the per-field reader can read, in read order.
+local IDENTITY_READ_FIELDS = {
+    "level", "sex", "power", "classID", "unitClassification", "buffCount", "isLieutenant",
+}
+
+local function copyList(list)
+    local out = {}
+    for i = 1, #list do out[i] = list[i] end
+    return out
+end
+
+-- Every readable field; family is included only while the family gate is on.
+function TI.IdentityReadFields()
+    local out = copyList(IDENTITY_READ_FIELDS)
+    if TI.FAMILY_GATE then out[#out + 1] = "hasCreatureFamily" end
+    return out
+end
+
+-- Normalizes one guarded read. `ok` is false for a failed call or an absent
+-- API, `isSecret` is the reader's issecretvalue result on the raw return (for
+-- family, on the derived presence predicate). nil means unknown and only
+-- that: false, 0 and a completed aura count of 0 are known values.
+function TI.NormalizeIdentityField(field, ok, value, isSecret)
+    if not ok or isSecret then return nil end
+    if field == "isLieutenant" or field == "hasCreatureFamily" then
+        if type(value) == "boolean" then return value end
+        return nil
+    end
+    if field == "unitClassification" then
+        if type(value) == "string" and value ~= "" then return value end
+        return nil
+    end
+    if type(value) ~= "number" then return nil end
+    if field == "level" and value <= 0 then return nil end
+    return value
+end
+
+-- Merges a fresh read into the snapshot. A known field is kept for the life
+-- of the plate generation; an unknown read never touches it.
+function TI.MergeIdentity(obs, fresh)
+    obs = obs or {}
+    if type(fresh) == "table" then
+        for field, value in pairs(fresh) do
+            if obs[field] == nil then obs[field] = value end
+        end
+    end
+    return obs
+end
+
+local LEGACY_AXES = { "level", "sex", "power", "classID", "buffCount" }
+local NAMED_AXES = { "level", "power" }
+
+-- The snapshot fields a row needs read before it can resolve, from its
+-- schema. An axis the row leaves unset never blocks it. Classification is
+-- always needed, because an unset nonElite is an elite row.
+function TI.RequiredAxes(trait)
+    local out = {}
+    local id = trait and trait.identity
+    if type(id) ~= "table" then return out end
+    local axes = (trait.schema == "named") and NAMED_AXES or LEGACY_AXES
+    for _, field in ipairs(axes) do
+        if id[field] ~= nil then out[#out + 1] = field end
+    end
+    out[#out + 1] = "unitClassification"
+    if id.isLieutenant ~= nil then out[#out + 1] = "isLieutenant" end
+    if TI.FAMILY_GATE and id.hasCreatureFamily ~= nil then out[#out + 1] = "hasCreatureFamily" end
+    return out
+end
+
+-- Recovery state: nil unjudged, an empty list settled, otherwise the fields
+-- still worth reading. Only settled ends recovery.
+function TI.RecoverySettled(pending)
+    return type(pending) == "table" and pending[1] == nil
+end
+
+-- One read opportunity. state = { obs, pending, scheduled }: the snapshot
+-- (nil before any read), the recovery state, and the generation's used
+-- scheduled opportunities. source is "scheduled" or "event". Returns the
+-- fields to read (nil reads nothing), the scheduled count after this
+-- opportunity, and whether it runs a read pass. A scheduled opportunity on a
+-- settled runtime, or past the budget, ends the chain; an event never
+-- changes the count, and reads nothing while settled or unjudged with a
+-- snapshot.
+function TI.RecoveryReadPlan(state, source)
+    local obs, pending = state.obs, state.pending
+    local scheduled = state.scheduled or 0
+    if source == "scheduled" then
+        if scheduled >= TI.RECOVERY_SCHEDULED_MAX or TI.RecoverySettled(pending) then
+            return nil, scheduled, false
+        end
+        local fields
+        if obs == nil then
+            fields = TI.IdentityReadFields()
+        elseif pending == nil then
+            fields = {}
+            for _, field in ipairs(TI.IdentityReadFields()) do
+                if obs[field] == nil then fields[#fields + 1] = field end
+            end
+        else
+            fields = copyList(pending)
+        end
+        return fields, scheduled + 1, true
+    end
+    if obs == nil then
+        return TI.IdentityReadFields(), scheduled, true
+    end
+    if type(pending) == "table" and pending[1] ~= nil then
+        return copyList(pending), scheduled, true
+    end
+    return nil, scheduled, false
+end
+
+-- A generation owner's callback acts only while monitoring is on, the owner
+-- is live, its current runtime is the tracked runtime for that runtime's
+-- unit, and that runtime's owner is this owner. Owner record:
+-- { live, runtime, scheduled }; a runtime carries .owner and .unit. A reused
+-- cached table fails the last check for every owner but the one that moved
+-- onto it.
+function TI.RecoveryOwnerHolds(owner, tracked, monitoring)
+    if monitoring ~= true or type(owner) ~= "table" or owner.live ~= true then return false end
+    local rt = owner.runtime
+    if type(rt) ~= "table" or rt.owner ~= owner or type(tracked) ~= "table" then return false end
+    return rt.unit ~= nil and tracked[rt.unit] == rt
+end
+
+-- A resolved runtime vouches for companions only when its identity was earned
+-- without the wave summary: a cast-confirmed lock, or a complete, level-agreed
+-- lone Layer 1 survivor (layer1Resolved). A flippable Layer 2 resolution or a
+-- wave-derived identity never vouches.
+function TI.CompanionTrusted(rt)
+    return type(rt) == "table" and rt.matchedNPCID ~= nil and rt.waveDerived ~= true
+        and (rt.castConfirmed == true or rt.layer1Resolved == true)
+end
+
 -- Algeth'ar Academy (map 2526) is the one dungeon whose several eagle/tamer
 -- mobs share an identical identity fingerprint; the engine disambiguates
 -- them by M+ enemy-forces %. These are the four npcIDs that share the
@@ -99,49 +239,60 @@ end
 -- Map 2526 is exempt. Missing/unparseable placement fails OPEN, and each tier
 -- fails OPEN when its own runtime datum is unknown (never over-filter on
 -- missing data).
-function TI.IsPlacementAllowed(placement, opts)
+function TI.IsPlacementAllowed(placement, opts, uiMapIDs)
     if opts and opts.mapID == ACADEMY_MAP_ID then return true end
-    if type(placement) ~= "string" or placement == "" then return true end
+    local hasCSV = type(placement) == "string" and placement ~= ""
+    local hasUiMaps = type(uiMapIDs) == "table" and uiMapIDs[1] ~= nil
+    if not hasCSV and not hasUiMaps then return true end
 
     local bossIndex = opts and opts.bossProgressIndex
     local subZone = opts and opts.currentSubZoneMapID
     local zoneText = opts and opts.currentZoneText
     if zoneText == "" then zoneText = nil end
     local resolveArea = opts and opts.resolveAreaName
-    local sawStage, sawMap = false, false
+    local sawStage, sawAreaMap = false, false
     local stageMatch, mapMatch = false, false
-    for token in placement:gmatch("[^,]+") do
-        local n = tonumber(token)
-        if n then
-            if n <= 20 then
-                sawStage = true
-                if bossIndex and n == bossIndex then stageMatch = true end
-            else
-                sawMap = true
-                if subZone and n == subZone then mapMatch = true end
-                if not mapMatch and zoneText and resolveArea then
-                    local areaName = resolveArea(n)
-                    if areaName and areaName ~= "" and areaName == zoneText then mapMatch = true end
+    if hasCSV then
+        for token in placement:gmatch("[^,]+") do
+            local n = tonumber(token)
+            if n then
+                if n <= 20 then
+                    sawStage = true
+                    if bossIndex and n == bossIndex then stageMatch = true end
+                else
+                    sawAreaMap = true
+                    if subZone and n == subZone then mapMatch = true end
+                    if not mapMatch and zoneText and resolveArea then
+                        local areaName = resolveArea(n)
+                        if areaName and areaName ~= "" and areaName == zoneText then mapMatch = true end
+                    end
                 end
             end
         end
     end
+    -- A named row's uiMapIDs join the map tier, compared with the sub-zone
+    -- map only.
+    if hasUiMaps then
+        for _, id in ipairs(uiMapIDs) do
+            if subZone and id == subZone then mapMatch = true end
+        end
+    end
     -- Per-tier verdicts: no tokens of that kind, or the runtime datum is
     -- unknown → the tier allows; otherwise it must have matched.
+    local mapKnown = (sawAreaMap and (subZone ~= nil or zoneText ~= nil))
+        or (hasUiMaps and subZone ~= nil)
     local stageAllowed = not sawStage or not bossIndex or stageMatch
-    local mapAllowed = not sawMap or not (subZone or zoneText) or mapMatch
+    local mapAllowed = mapMatch or not mapKnown
     return stageAllowed and mapAllowed
 end
 
--- Score one trait row against an identity snapshot.
--- obs fields (all optional; nil = "not observed", scored leniently):
---   level, sex, power, classID, buffCount, unitClassification,
---   sawCastStart, sawChannelStart, sawInterrupted.
--- Returns matched(bool), score(int), strength(int), reject(string|nil).
--- A present-in-row / present-in-obs exact-mismatch HARD-REJECTS (matched=false).
-function TI.ScoreTraitRow(obs, trait, opts)
-    local id = trait and trait.identity
-    if not id then return false, 0, 0, "no-identity" end
+local IDENTITY_EXACT_FIELDS = { "sex", "power", "classID" }
+
+-- Identity stage of Layer 1, shared by ScoreTraitRow and
+-- IdentityCompatibleRows. A known mismatch here is permanent for the plate
+-- generation: these are known facts in its fresh snapshot.
+-- Returns reject(string|nil), score, strength, levelAgreed.
+local function identityStage(obs, id)
     local score, strength = 0, 0
     -- Resolve-confidence flag (5th return). A lone Layer1 survivor is only trusted
     -- as a CONFIDENT single resolve if it agreed on the level — the one
@@ -177,20 +328,19 @@ function TI.ScoreTraitRow(obs, trait, opts)
             score = score + 1
             levelAgreed = true
         elseif obs.level > id.level then
-            return false, score, strength, "level-above"
+            return "level-above", score, strength, levelAgreed
         end
     end
 
     -- sex / power / classID: exact equality; mismatch HARD-REJECTS. These are
     -- stable, non-secret identity — they do not drift.
-    local exactFields = { "sex", "power", "classID" }
-    for _, f in ipairs(exactFields) do
+    for _, f in ipairs(IDENTITY_EXACT_FIELDS) do
         if id[f] ~= nil and obs[f] ~= nil then
             strength = strength + 1
             if tonumber(obs[f]) == tonumber(id[f]) then
                 score = score + 1
             else
-                return false, score, strength, f
+                return f, score, strength, levelAgreed
             end
         end
     end
@@ -217,42 +367,173 @@ function TI.ScoreTraitRow(obs, trait, opts)
         if obsCount == idCount then
             score = score + 1
         elseif obsCount ~= nil and idCount ~= nil and obsCount < idCount then
-            return false, score, strength, "buffcount-below"
+            return "buffcount-below", score, strength, levelAgreed
         end
     end
 
     -- classification: elite rows need obs "elite"; nonElite rows need not-"elite".
     if obs.unitClassification ~= nil then
         strength = strength + 1
-        if id.nonElite == true then
-            if obs.unitClassification == "elite" then return false, score, strength, "classification" end
-        else
-            if obs.unitClassification ~= "elite" then return false, score, strength, "classification" end
+        if (id.nonElite == true) == (obs.unitClassification == "elite") then
+            return "classification", score, strength, levelAgreed
         end
-    elseif id.nonElite ~= true then
-        -- elite row but classification unknown → reject.
-        return false, score, strength, "classification-missing"
     end
 
-    -- behavior capability: only gates once the plate was SEEN doing the thing.
-    if obs.sawCastStart and not (id.hasCastSpell or id.hasCastSkill) then
-        return false, score, strength, "saw-cast-no-cast-spell"
-    end
-    if obs.sawChannelStart and not (id.hasChannelSpell or obs.sawCastIntoChannel) then
-        return false, score, strength, "saw-channel-no-channel-spell"
-    end
-    if obs.sawInterrupted and id.cannotInterrupt == true then
-        return false, score, strength, "saw-interrupt-but-cannot"
-    elseif obs.sawInterrupted then
+    -- lieutenant and family presence: exact, only when the row declares the
+    -- axis and the read is known. Family is compared only while the gate is on.
+    if id.isLieutenant ~= nil and type(obs.isLieutenant) == "boolean" then
+        strength = strength + 1
+        if obs.isLieutenant ~= id.isLieutenant then return "lieutenant", score, strength, levelAgreed end
         score = score + 1
     end
-
-    -- placement.
-    if not TI.IsPlacementAllowed(trait.placement, opts) then
-        return false, score, strength, "placement"
+    if TI.FAMILY_GATE and id.hasCreatureFamily ~= nil and type(obs.hasCreatureFamily) == "boolean" then
+        strength = strength + 1
+        if obs.hasCreatureFamily ~= id.hasCreatureFamily then
+            return "family", score, strength, levelAgreed
+        end
+        score = score + 1
     end
+    return nil, score, strength, levelAgreed
+end
 
-    return true, score, strength, nil, levelAgreed
+-- Behavior gates: only once the plate was SEEN doing the thing, and only
+-- against a capability the row declares absent. An unset capability never
+-- rejects.
+local function behaviorReject(obs, id)
+    if obs.sawCastStart and id.hasCastSpell ~= true and id.hasCastSkill ~= true
+        and (id.hasCastSpell == false or id.hasCastSkill == false) then
+        return "saw-cast-no-cast-spell"
+    end
+    if obs.sawChannelStart and id.hasChannelSpell == false and not obs.sawCastIntoChannel then
+        return "saw-channel-no-channel-spell"
+    end
+    if obs.sawInterrupted and id.cannotInterrupt == true then
+        return "saw-interrupt-but-cannot"
+    end
+    return nil
+end
+
+-- The keep-locked contradiction check: the same behavior gates as Layer 1,
+-- read off a runtime's sawCastStart/sawChannelStart/sawInterrupted/
+-- sawCastIntoChannel flags.
+function TI.BehaviorContradicts(id, flags)
+    return type(id) == "table" and type(flags) == "table" and behaviorReject(flags, id) ~= nil
+end
+
+-- Context: encounter, placement (stage and map tiers, uiMapIDs included) and
+-- room. Every context rejection is temporary, and each tier allows the row
+-- while its runtime value is unknown.
+local function contextReject(trait, id, opts)
+    local inEncounter = opts ~= nil and opts.inBossEncounter == true
+    if id.bossEncounter == true and not inEncounter then return "encounter" end
+    if id.bossEncounter == false and inEncounter then return "encounter" end
+    if not TI.IsPlacementAllowed(trait.placement, opts, id.uiMapIDs) then return "placement" end
+    local rooms = id.roomNames
+    local roomText = opts and opts.roomText
+    if type(rooms) == "table" and type(roomText) == "string" and roomText ~= "" then
+        for _, name in ipairs(rooms) do
+            if name == roomText then return nil end
+        end
+        return "room"
+    end
+    return nil
+end
+
+local function missingAxes(obs, trait)
+    local missing
+    for _, field in ipairs(TI.RequiredAxes(trait)) do
+        if obs[field] == nil then
+            missing = missing or {}
+            missing[#missing + 1] = field
+        end
+    end
+    return missing
+end
+
+local REJECT_CLASS = {
+    ["no-identity"] = "permanent", ["level-above"] = "permanent",
+    sex = "permanent", power = "permanent", classID = "permanent",
+    ["buffcount-below"] = "permanent", classification = "permanent",
+    lieutenant = "permanent", family = "permanent",
+    ["classification-missing"] = "recoverable",
+}
+
+-- "permanent" for a known identity mismatch, "recoverable" for the
+-- unread-classification guard, "temporary" for behavior and context.
+function TI.RejectClass(reason)
+    if reason == nil then return nil end
+    return REJECT_CLASS[reason] or "temporary"
+end
+
+-- Score one trait row against an identity snapshot.
+-- obs fields (all optional; nil = "not observed", scored leniently):
+--   level, sex, power, classID, buffCount, unitClassification, isLieutenant,
+--   hasCreatureFamily, sawCastStart, sawChannelStart, sawInterrupted,
+--   sawCastIntoChannel.
+-- opts carries the runtime context: mapID, bossProgressIndex,
+-- currentSubZoneMapID, currentZoneText, resolveAreaName, inBossEncounter and
+-- roomText.
+-- Returns matched, score, strength, reject (string|nil), levelAgreed, and
+-- missing: the row's required axes still unread (nil when none), computed
+-- before the first exit and returned on every exit. The checks run identity
+-- stage, unread classification on an elite row, behavior, then context.
+function TI.ScoreTraitRow(obs, trait, opts)
+    local id = trait and trait.identity
+    if not id then return false, 0, 0, "no-identity", false, nil end
+    local missing = missingAxes(obs, trait)
+    local reject, score, strength, levelAgreed = identityStage(obs, id)
+    if not reject and obs.unitClassification == nil and id.nonElite ~= true then
+        -- elite row but classification unknown → reject (recoverable).
+        reject = "classification-missing"
+    end
+    if not reject then reject = behaviorReject(obs, id) end
+    if not reject and obs.sawInterrupted then score = score + 1 end
+    if not reject then reject = contextReject(trait, id, opts) end
+    if reject then return false, score, strength, reject, levelAgreed, missing end
+    return true, score, strength, nil, levelAgreed, missing
+end
+
+-- Per-dungeon trait index: dungeonKey -> rows { npcID, trait } sorted by
+-- npcID. The runtime builds it once at load and passes opts.traitIndex;
+-- without it the rows are grouped from opts.traits on each call.
+function TI.BuildTraitIndex(traits)
+    local index = {}
+    for npcID, trait in pairs(traits or {}) do
+        local key = trait.dungeonKey
+        if key ~= nil then
+            local rows = index[key]
+            if not rows then
+                rows = {}
+                index[key] = rows
+            end
+            rows[#rows + 1] = { npcID = npcID, trait = trait }
+        end
+    end
+    for _, rows in pairs(index) do
+        table_sort(rows, function(a, b) return a.npcID < b.npcID end)
+    end
+    return index
+end
+
+local function dungeonRows(opts)
+    local index = opts.traitIndex or TI.BuildTraitIndex(opts.traits or KE.TrashTraits)
+    return index[opts.dungeonKey] or {}
+end
+
+-- The npcIDs, as a set, whose rows the identity stage does not reject for
+-- this snapshot. Unread fields, the unread-classification guard, behavior and
+-- context never exclude a row here.
+function TI.IdentityCompatibleRows(obs, dungeonKey, opts)
+    local rows = dungeonRows({ traits = opts and opts.traits,
+        traitIndex = opts and opts.traitIndex, dungeonKey = dungeonKey })
+    local out = {}
+    for _, row in ipairs(rows) do
+        local id = row.trait.identity
+        if type(id) == "table" and identityStage(obs or {}, id) == nil then
+            out[row.npcID] = true
+        end
+    end
+    return out
 end
 
 -- Academy shared-signature test: the eagle/tamer mobs collapse to this.
@@ -277,25 +558,57 @@ function TI.ResolveAcademyForcesNPC(forcesPercent)
     return 196671
 end
 
+-- Fields a recovery set may hold, in read order.
+local PENDING_ORDER = {
+    "level", "sex", "power", "classID", "unitClassification", "buffCount",
+    "isLieutenant", "hasCreatureFamily",
+}
+
+local function pendingFields(wanted)
+    local out = {}
+    for _, field in ipairs(PENDING_ORDER) do
+        if wanted[field] then out[#out + 1] = field end
+    end
+    return out
+end
+
+-- Keeps the candidates `keep` accepts when that leaves a strict, non-empty
+-- subset; otherwise the list is unchanged. Positive evidence only.
+local function preferSubset(out, keep)
+    local kept = {}
+    for _, c in ipairs(out) do
+        if keep(c) then kept[#kept + 1] = c end
+    end
+    if #kept > 0 and #kept < #out then return kept end
+    return out
+end
+
 -- Build the sorted candidate list for a dungeon from an identity snapshot.
--- opts: { traits=KE.TrashTraits, dungeonKey, mapID, forcesPercent,
+-- opts: { traits=KE.TrashTraits, traitIndex, dungeonKey, mapID, forcesPercent,
 --         bossProgressIndex, currentSubZoneMapID, currentZoneText,
---         resolveAreaName }
--- Returns candidates (array of {npcID,name,score,strength}) and resolved
--- (single-survivor npcID or nil).
+--         resolveAreaName, inBossEncounter, roomText, sawPreCombatChannel,
+--         trustedCompanions = { [npcID] = true } }
+-- Returns candidates (array of {npcID,name,score,strength,levelAgreed,
+-- incomplete}), resolved (a lone survivor's npcID, only when it agreed on
+-- level and every one of its own required axes is read), and the recovery
+-- set: the union of every row's unread required axes, in read order, except
+-- rows rejected for a permanent reason. An empty set means settled. The
+-- prunes and the narrowing below act on candidates only, after the set is
+-- built, and never remove a field from it.
 function TI.BuildCandidates(obs, opts)
     opts = opts or {}
-    local traits = opts.traits or KE.TrashTraits or {}
-    local dungeonKey = opts.dungeonKey
-    local out = {}
+    local out, wanted, traitOf = {}, {}, {}
 
-    for npcID, trait in pairs(traits) do
-        if trait.dungeonKey == dungeonKey then
-            local matched, score, strength, _, levelAgreed = TI.ScoreTraitRow(obs, trait, opts)
-            if matched then
-                out[#out + 1] = { npcID = npcID, name = trait.name, score = score,
-                    strength = strength, levelAgreed = levelAgreed }
-            end
+    for _, row in ipairs(dungeonRows(opts)) do
+        local trait = row.trait
+        local matched, score, strength, reject, levelAgreed, missing = TI.ScoreTraitRow(obs, trait, opts)
+        if missing and TI.RejectClass(reject) ~= "permanent" then
+            for _, field in ipairs(missing) do wanted[field] = true end
+        end
+        if matched then
+            traitOf[row.npcID] = trait
+            out[#out + 1] = { npcID = row.npcID, name = trait.name, score = score,
+                strength = strength, levelAgreed = levelAgreed, incomplete = missing ~= nil }
         end
     end
 
@@ -340,14 +653,36 @@ function TI.BuildCandidates(obs, opts)
         return a.npcID < b.npcID
     end)
 
+    -- Positive narrowing: a channel seen before combat prefers rows that
+    -- channel out of combat, and a present trusted companion prefers rows
+    -- that name it. Absence never removes a candidate.
+    if opts.sawPreCombatChannel == true then
+        out = preferSubset(out, function(c)
+            local id = traitOf[c.npcID].identity
+            return id ~= nil and id.preCombatChanneling == true
+        end)
+    end
+    local trusted = opts.trustedCompanions
+    if type(trusted) == "table" and next(trusted) ~= nil then
+        out = preferSubset(out, function(c)
+            local id = traitOf[c.npcID].identity
+            for _, companion in ipairs(id and id.coPresenceNPCIDs or {}) do
+                if trusted[companion] then return true end
+            end
+            return false
+        end)
+    end
+
     -- Confident single resolve requires the lone survivor to have AGREED on level,
     -- not just the coarse sex/power/classID triple. A lone survivor that matched
     -- only that triple (level disagreed) stays unresolved and defers to Layer2 cast
     -- disambiguation — killing the Rokh'zal/Gnarldin rubber-stamp while Souleater
     -- (level agrees) still resolves. Multi-candidate sets are unaffected (they were
-    -- already nil → Layer2). See ScoreTraitRow's levelAgreed.
-    local resolved = (#out == 1 and out[1].levelAgreed) and out[1].npcID or nil
-    return out, resolved
+    -- already nil → Layer2). See ScoreTraitRow's levelAgreed. An incomplete
+    -- survivor stays a competitor and never resolves here.
+    local resolved = (#out == 1 and out[1].levelAgreed and not out[1].incomplete)
+        and out[1].npcID or nil
+    return out, resolved, pendingFields(wanted)
 end
 
 -- Reconcile each trait's capability fingerprint against its curated spells. The
@@ -726,14 +1061,14 @@ function TI.FilterCandidates(candidates, observed, dataByNpc, traitByNpc)
                 verified = anySpellMatches(c.npcID)
             end
         end
-        return candidates, (verified and c.npcID) or nil
+        return candidates, (verified and not c.incomplete and c.npcID) or nil
     end
     local kept = {}
     for _, c in ipairs(candidates) do
         if anySpellMatches(c.npcID) then kept[#kept + 1] = c end
     end
     if #kept > 0 and #kept < #candidates then
-        return kept, (#kept == 1) and kept[1].npcID or nil
+        return kept, (#kept == 1 and not kept[1].incomplete) and kept[1].npcID or nil
     end
     return candidates, nil
 end

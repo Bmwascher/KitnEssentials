@@ -395,7 +395,11 @@ describe("DungeonTrash inference — BuildCandidates", function()
         local ti = KE.TrashInference
         -- Dread Souleater (248686) is the ONLY sex=3/power=0 Maisara mob; live read
         -- level 91 matches its curated 91 → level agrees → confident lone resolve.
-        local obs = { level = 91, sex = 3, power = 0, unitClassification = "elite" }
+        -- Every axis its row sets is read: an unread classID or buffCount would
+        -- leave the lone survivor incomplete and unresolved.
+        local soul = KE.TrashTraits[248686].identity
+        local obs = { level = 91, sex = 3, power = 0, classID = soul.classID,
+            buffCount = soul.buffCount, unitClassification = "elite" }
         local cands, resolved = ti.BuildCandidates(
             obs, { dungeonKey = "MaisaraCaverns", traits = KE.TrashTraits })
         assert.equals(1, #cands)
@@ -1130,5 +1134,413 @@ describe("DungeonTrash inference — schedule signature", function()
         local a = TI.BuildScheduleSignature(1, 50.00, nil, 100.00, 0, nil)
         local b = TI.BuildScheduleSignature(1, 50.04, nil, 100.03, 0, nil)
         assert.equals(a, b)
+    end)
+end)
+
+local function named(npcID, identity, extra)
+    local t = { npcID = npcID, name = "N" .. npcID, dungeonKey = "S", schema = "named",
+        placement = "", identity = identity }
+    for k, v in pairs(extra or {}) do t[k] = v end
+    return t
+end
+
+local function contains(list, value)
+    for _, v in ipairs(list or {}) do
+        if v == value then return true end
+    end
+    return false
+end
+
+local function npcIDs(cands)
+    local out = {}
+    for _, c in ipairs(cands) do out[#out + 1] = c.npcID end
+    return out
+end
+
+describe("DungeonTrash inference — identity completeness", function()
+    local TI
+    setup(function() TI = loadInference() end)
+
+    it("a complete, level-agreed lone survivor resolves while another row's field stays pending", function()
+        local traits = {
+            [1] = named(1, { level = 91, power = 1, nonElite = false }),
+            [2] = named(2, { level = 91, power = 1, nonElite = false, isLieutenant = true,
+                uiMapIDs = { 500 } }),
+        }
+        local cands, resolved, pending = TI.BuildCandidates(
+            { level = 91, power = 1, unitClassification = "elite" },
+            { traits = traits, dungeonKey = "S", currentSubZoneMapID = 600 })
+        assert.same({ 1 }, npcIDs(cands))
+        assert.equals(1, resolved)
+        assert.same({ "isLieutenant" }, pending)
+    end)
+
+    it("a complete lone survivor that disagrees on level does not resolve at Layer 1", function()
+        local traits = { [1] = named(1, { level = 91, power = 1, nonElite = false }) }
+        local cands, resolved = TI.BuildCandidates(
+            { level = 90, power = 1, unitClassification = "elite" },
+            { traits = traits, dungeonKey = "S" })
+        assert.same({ 1 }, npcIDs(cands))
+        assert.is_false(cands[1].incomplete)
+        assert.is_nil(resolved)
+    end)
+
+    it("a survivor with a required axis unread resolves at neither Layer 1 nor Layer 2", function()
+        local traits = {
+            [1] = named(1, { level = 91, power = 1, nonElite = false, isLieutenant = false }),
+            [2] = named(2, { level = 91, power = 1, nonElite = false }),
+        }
+        local spells = {
+            [1] = { spells = { [10] = { castTime = 2 } } },
+            [2] = { spells = { [20] = { castTime = 5 } } },
+        }
+        local dataByNpc = function(npc) return spells[npc] end
+        local obs = { level = 91, power = 1, unitClassification = "elite" }
+        local lone, resolved = TI.BuildCandidates(obs, { traits = { [1] = traits[1] }, dungeonKey = "S" })
+        assert.same({ 1 }, npcIDs(lone))
+        assert.is_true(lone[1].incomplete)
+        assert.is_nil(resolved)
+        local _, verified = TI.FilterCandidates(lone, { kind = "cast", duration = 2 }, dataByNpc)
+        assert.is_nil(verified)
+        local pool = TI.BuildCandidates(obs, { traits = traits, dungeonKey = "S" })
+        local kept, narrowed = TI.FilterCandidates(pool, { kind = "cast", duration = 2 }, dataByNpc)
+        assert.same({ 1 }, npcIDs(kept))
+        assert.is_nil(narrowed)
+    end)
+
+    it("a late buffCount read resolves the survivor when equal and rejects it when below", function()
+        local traits = { [7] = { npcID = 7, dungeonKey = "L", placement = "",
+            identity = { level = 91, sex = 1, power = 1, classID = 1, buffCount = 2, nonElite = false } } }
+        local opts = { traits = traits, dungeonKey = "L" }
+        local cands, resolved, pending = TI.BuildCandidates(
+            { level = 91, sex = 1, power = 1, classID = 1, unitClassification = "elite" }, opts)
+        assert.same({ 7 }, npcIDs(cands))
+        assert.is_nil(resolved)
+        assert.same({ "buffCount" }, pending)
+        local cases = {
+            { read = 2, want = 7, count = 1 },
+            { read = 1, count = 0 },
+        }
+        for _, c in ipairs(cases) do
+            local obs = TI.MergeIdentity({ level = 91, sex = 1, power = 1, classID = 1,
+                unitClassification = "elite" }, { buffCount = c.read })
+            local late, lateResolved, latePending = TI.BuildCandidates(obs, opts)
+            assert.equals(c.count, #late)
+            assert.equals(c.want, lateResolved)
+            assert.same({}, latePending)
+        end
+    end)
+
+    it("an axis the row leaves unset never blocks it", function()
+        local traits = { [8] = { npcID = 8, dungeonKey = "L", placement = "",
+            identity = { level = 91, power = 1, nonElite = false } } }
+        local cands, resolved, pending = TI.BuildCandidates(
+            { level = 91, power = 1, unitClassification = "elite" },
+            { traits = traits, dungeonKey = "L" })
+        assert.same({ 8 }, npcIDs(cands))
+        assert.equals(8, resolved)
+        assert.same({}, pending)
+    end)
+
+    it("unread classification rejects elite rows and leaves a nonElite row incomplete", function()
+        local traits = {
+            [1] = named(1, { level = 91, power = 1, nonElite = false }),
+            [2] = named(2, { level = 91, power = 1, nonElite = true }),
+        }
+        local cands, resolved, pending = TI.BuildCandidates({ level = 91, power = 1 },
+            { traits = traits, dungeonKey = "S" })
+        assert.same({ 2 }, npcIDs(cands))
+        assert.is_true(cands[1].incomplete)
+        assert.is_nil(resolved)
+        assert.same({ "unitClassification" }, pending)
+    end)
+end)
+
+describe("DungeonTrash inference — identity recovery", function()
+    local TI, savedGate
+    setup(function() TI = loadInference() end)
+    before_each(function() savedGate = TI.FAMILY_GATE end)
+    after_each(function() TI.FAMILY_GATE = savedGate end)
+
+    it("zero survivors: classification decides whether reads continue, resolve or settle", function()
+        local traits = {
+            [11] = named(11, { level = 91, power = 1, nonElite = false, isLieutenant = true }),
+            [12] = named(12, { level = 91, power = 0, nonElite = false }),
+        }
+        local cases = {
+            { obs = { level = 91, power = 1 }, count = 0,
+              pending = { "unitClassification", "isLieutenant" } },
+            { obs = { level = 91, power = 1, unitClassification = "elite", isLieutenant = true },
+              count = 1, resolved = 11, pending = {} },
+            { obs = { level = 91, power = 1, unitClassification = "normal" }, count = 0, pending = {} },
+        }
+        for i, c in ipairs(cases) do
+            local cands, resolved, pending = TI.BuildCandidates(c.obs, { traits = traits, dungeonKey = "S" })
+            assert.equals(c.count, #cands, "row " .. i)
+            assert.equals(c.resolved, resolved, "row " .. i)
+            assert.same(c.pending, pending, "row " .. i)
+            assert.equals(#c.pending == 0, TI.RecoverySettled(pending), "row " .. i)
+        end
+    end)
+
+    it("a permanent identity mismatch adds no field, while temporary and recoverable rejections keep theirs", function()
+        local base = { level = 91, power = 1, nonElite = false, isLieutenant = true }
+        local function row(extra, traitExtra)
+            local id = {}
+            for k, v in pairs(base) do id[k] = v end
+            for k, v in pairs(extra or {}) do id[k] = v end
+            return { [5] = named(5, id, traitExtra) }
+        end
+        local ELITE = { level = 91, power = 1, unitClassification = "elite" }
+        local cases = {
+            { name = "known power mismatch", traits = row(),
+              obs = { level = 91, power = 0, unitClassification = "elite" },
+              pending = {}, compatible = false },
+            { name = "known lieutenant mismatch with classification unread", traits = row(),
+              obs = { level = 91, power = 1, isLieutenant = false },
+              pending = {}, compatible = false },
+            { name = "placement map tier only", traits = row({ uiMapIDs = { 500 } }), obs = ELITE,
+              opts = { currentSubZoneMapID = 600 }, pending = { "isLieutenant" }, compatible = true },
+            { name = "encounter only", traits = row({ bossEncounter = true }), obs = ELITE,
+              pending = { "isLieutenant" }, compatible = true },
+            { name = "channel gate only", traits = row({ hasChannelSpell = false }),
+              obs = { level = 91, power = 1, unitClassification = "elite", sawChannelStart = true },
+              pending = { "isLieutenant" }, compatible = true },
+            { name = "stage only", traits = row(nil, { placement = "2" }), obs = ELITE,
+              opts = { bossProgressIndex = 1 }, pending = { "isLieutenant" }, compatible = true },
+            { name = "room only", traits = row({ roomNames = { "Hall" } }), obs = ELITE,
+              opts = { roomText = "Crypt" }, pending = { "isLieutenant" }, compatible = true },
+            { name = "unread classification", traits = row(),
+              obs = { level = 91, power = 1, isLieutenant = true },
+              pending = { "unitClassification" }, compatible = true },
+            { name = "family mismatch with the gate off", gate = false,
+              traits = row({ hasCreatureFamily = true }),
+              obs = { level = 91, power = 1, unitClassification = "elite", hasCreatureFamily = false },
+              pending = { "isLieutenant" }, compatible = true, matched = true },
+            { name = "family mismatch with the gate on", gate = true,
+              traits = row({ hasCreatureFamily = true }),
+              obs = { level = 91, power = 1, unitClassification = "elite", hasCreatureFamily = false },
+              pending = {}, compatible = false },
+            { name = "unset channel capability", traits = row(),
+              obs = { level = 91, power = 1, unitClassification = "elite", isLieutenant = true,
+                  sawChannelStart = true },
+              pending = {}, compatible = true, matched = true },
+        }
+        for _, c in ipairs(cases) do
+            TI.FAMILY_GATE = (c.gate ~= false)
+            local opts = { traits = c.traits, dungeonKey = "S" }
+            for k, v in pairs(c.opts or {}) do opts[k] = v end
+            local cands, _, pending = TI.BuildCandidates(c.obs, opts)
+            assert.same(c.pending, pending, c.name)
+            assert.equals(c.matched == true, #cands == 1, c.name)
+            assert.equals(c.compatible,
+                TI.IdentityCompatibleRows(c.obs, "S", { traits = c.traits })[5] == true, c.name)
+        end
+    end)
+
+    it("the read plan reads by recovery state and source, and only scheduled reads use the budget", function()
+        local all = TI.IdentityReadFields()
+        local max = TI.RECOVERY_SCHEDULED_MAX
+        local unknown = {}
+        for _, f in ipairs(all) do
+            if f ~= "level" then unknown[#unknown + 1] = f end
+        end
+        local snap = { level = 91 }
+        local cases = {
+            { state = {}, source = "scheduled", fields = all, count = 1, runs = true },
+            { state = {}, source = "event", fields = all, count = 0, runs = true },
+            { state = { obs = snap }, source = "scheduled", fields = unknown, count = 1, runs = true },
+            { state = { obs = snap }, source = "event", count = 0, runs = false },
+            { state = { obs = snap, pending = { "isLieutenant" } }, source = "scheduled",
+              fields = { "isLieutenant" }, count = 1, runs = true },
+            { state = { obs = snap, pending = { "isLieutenant" } }, source = "event",
+              fields = { "isLieutenant" }, count = 0, runs = true },
+            { state = { obs = snap, pending = {} }, source = "scheduled", count = 0, runs = false },
+            { state = { obs = snap, pending = {} }, source = "event", count = 0, runs = false },
+            { state = { obs = snap, pending = { "isLieutenant" }, scheduled = max }, source = "scheduled",
+              count = max, runs = false },
+            { state = { obs = snap, pending = { "isLieutenant" }, scheduled = max }, source = "event",
+              fields = { "isLieutenant" }, count = max, runs = true },
+        }
+        for i, c in ipairs(cases) do
+            local fields, count, runs = TI.RecoveryReadPlan(c.state, c.source)
+            assert.same(c.fields, fields, "row " .. i)
+            assert.equals(c.count, count, "row " .. i)
+            assert.equals(c.runs, runs, "row " .. i)
+        end
+    end)
+
+    it("only a live owner whose runtime is tracked and owned by it passes the callback check", function()
+        local function generation(unit)
+            local owner = { live = true, scheduled = 0 }
+            local rt = { unit = unit, owner = owner }
+            owner.runtime = rt
+            return owner, rt
+        end
+        local owner, rt = generation("nameplate1")
+        assert.is_true(TI.RecoveryOwnerHolds(owner, { nameplate1 = rt }, true))
+        assert.is_false(TI.RecoveryOwnerHolds(owner, { nameplate1 = rt }, false))
+
+        local removed = generation("nameplate1")
+        local stopped = generation("nameplate1")
+        local replaced = generation("nameplate1")
+        local _, newer = generation("nameplate1")
+        removed.live, stopped.live, replaced.live = false, false, false
+        local dead = {
+            { owner = removed, tracked = {}, monitoring = true },
+            { owner = stopped, tracked = {}, monitoring = false },
+            { owner = replaced, tracked = { nameplate1 = newer }, monitoring = true },
+        }
+        for i, c in ipairs(dead) do
+            assert.is_false(TI.RecoveryOwnerHolds(c.owner, c.tracked, c.monitoring), "row " .. i)
+        end
+
+        local old, reused = generation("nameplate2")
+        old.live = false
+        local fresh = { live = true, scheduled = 2, runtime = reused }
+        reused.owner = fresh
+        local tracked = { nameplate2 = reused }
+        assert.is_false(TI.RecoveryOwnerHolds(old, tracked, true))
+        old.live = true
+        assert.is_false(TI.RecoveryOwnerHolds(old, tracked, true))
+        assert.is_true(TI.RecoveryOwnerHolds(fresh, tracked, true))
+    end)
+
+    it("normalizes each read on its own and merges without replacing a known field", function()
+        local cases = {
+            { "isLieutenant", true, false, false, false },
+            { "power", true, 0, false, 0 },
+            { "buffCount", true, 0, false, 0 },
+            { "unitClassification", true, "elite", false, "elite" },
+            { "level", true, 91, true, nil },
+            { "sex", false, nil, false, nil },
+            { "buffCount", false, nil, false, nil },
+            { "unitClassification", true, "", false, nil },
+            { "level", true, 0, false, nil },
+            { "level", true, -1, false, nil },
+            { "hasCreatureFamily", true, true, false, true },
+            { "hasCreatureFamily", true, false, false, false },
+            { "hasCreatureFamily", false, nil, false, nil },
+            { "hasCreatureFamily", true, true, true, nil },
+            { "hasCreatureFamily", true, nil, false, nil },
+            { "hasCreatureFamily", true, "Beast", false, nil },
+        }
+        for i, c in ipairs(cases) do
+            assert.equals(c[5], TI.NormalizeIdentityField(c[1], c[2], c[3], c[4]), "row " .. i)
+        end
+
+        local familyRow = named(9, { level = 91, power = 1, nonElite = false, hasCreatureFamily = true })
+        local absent = { level = 91, power = 1, unitClassification = "elite", hasCreatureFamily = false }
+        TI.FAMILY_GATE = false
+        assert.is_false(contains(TI.IdentityReadFields(), "hasCreatureFamily"))
+        assert.is_false(contains(TI.RequiredAxes(familyRow), "hasCreatureFamily"))
+        assert.is_true((TI.ScoreTraitRow(absent, familyRow)))
+        TI.FAMILY_GATE = true
+        assert.is_true(contains(TI.IdentityReadFields(), "hasCreatureFamily"))
+        assert.is_true(contains(TI.RequiredAxes(familyRow), "hasCreatureFamily"))
+        assert.is_false((TI.ScoreTraitRow(absent, familyRow)))
+
+        local merged = TI.MergeIdentity({ level = 91, power = 1 }, { level = 90, sex = 2, power = 0 })
+        assert.same({ level = 91, power = 1, sex = 2 }, merged)
+    end)
+end)
+
+describe("DungeonTrash inference — S2 Layer 1 predicates", function()
+    local TI
+    setup(function() TI = loadInference() end)
+    local OBS = { level = 91, power = 1, unitClassification = "elite" }
+
+    it("rejects a lieutenant mismatch", function()
+        local trait = named(1, { level = 91, power = 1, nonElite = false, isLieutenant = true })
+        for _, c in ipairs({ { read = false, ok = false }, { read = true, ok = true } }) do
+            local obs = { level = 91, power = 1, unitClassification = "elite", isLieutenant = c.read }
+            local ok, _, _, reason = TI.ScoreTraitRow(obs, trait)
+            assert.equals(c.ok, ok)
+            assert.equals(not c.ok and "lieutenant" or nil, reason)
+        end
+    end)
+
+    it("applies bossEncounter true, false and unset against the encounter state", function()
+        local cases = {
+            { row = true, inside = true, ok = true }, { row = true, inside = false, ok = false },
+            { row = false, inside = true, ok = false }, { row = false, inside = false, ok = true },
+            { inside = true, ok = true }, { inside = false, ok = true },
+        }
+        for i, c in ipairs(cases) do
+            local trait = named(1, { level = 91, power = 1, nonElite = false, bossEncounter = c.row })
+            assert.equals(c.ok, (TI.ScoreTraitRow(OBS, trait, { inBossEncounter = c.inside })), "row " .. i)
+        end
+    end)
+
+    it("allows a uiMapIDs or room row when the runtime value is unknown, and rejects a known miss", function()
+        local cases = {
+            { id = { uiMapIDs = { 500 } }, ok = true },
+            { id = { uiMapIDs = { 500 } }, opts = { currentZoneText = "Deck" }, ok = true },
+            { id = { uiMapIDs = { 500 } }, opts = { currentSubZoneMapID = 500 }, ok = true },
+            { id = { uiMapIDs = { 500 } }, opts = { currentSubZoneMapID = 600 }, ok = false, reason = "placement" },
+            { id = { roomNames = { "Hall" } }, ok = true },
+            { id = { roomNames = { "Hall" } }, opts = { roomText = "" }, ok = true },
+            { id = { roomNames = { "Hall" } }, opts = { roomText = "Hall" }, ok = true },
+            { id = { roomNames = { "Hall" } }, opts = { roomText = "Crypt" }, ok = false, reason = "room" },
+        }
+        for i, c in ipairs(cases) do
+            local id = { level = 91, power = 1, nonElite = false }
+            for k, v in pairs(c.id) do id[k] = v end
+            local ok, _, _, reason = TI.ScoreTraitRow(OBS, named(1, id), c.opts)
+            assert.equals(c.ok, ok, "row " .. i)
+            assert.equals(c.reason, reason, "row " .. i)
+        end
+    end)
+
+    it("prefers rows naming a present trusted companion, never on absence or an untrusted one", function()
+        local traits = {
+            [1] = named(1, { level = 91, power = 1, nonElite = false, coPresenceNPCIDs = { 900 } }),
+            [2] = named(2, { level = 91, power = 1, nonElite = false }),
+        }
+        local function trustedFrom(runtimes)
+            local set = {}
+            for _, rt in ipairs(runtimes) do
+                if TI.CompanionTrusted(rt) then set[rt.matchedNPCID] = true end
+            end
+            return set
+        end
+        local cases = {
+            { runtimes = {}, want = { 1, 2 } },
+            { runtimes = { { matchedNPCID = 900, castConfirmed = true } }, want = { 1 } },
+            { runtimes = { { matchedNPCID = 900, layer1Resolved = true } }, want = { 1 } },
+            { runtimes = { { matchedNPCID = 900 } }, want = { 1, 2 } },
+            { runtimes = { { matchedNPCID = 900, castConfirmed = true, waveDerived = true } }, want = { 1, 2 } },
+            { runtimes = { { castConfirmed = true }, { layer1Resolved = true } }, want = { 1, 2 } },
+            { runtimes = { { matchedNPCID = 901, castConfirmed = true } }, want = { 1, 2 } },
+        }
+        for i, c in ipairs(cases) do
+            local cands = TI.BuildCandidates(OBS, { traits = traits, dungeonKey = "S",
+                trustedCompanions = trustedFrom(c.runtimes) })
+            assert.same(c.want, npcIDs(cands), "row " .. i)
+        end
+        traits[2].identity.coPresenceNPCIDs = { 900 }
+        local both = TI.BuildCandidates(OBS, { traits = traits, dungeonKey = "S",
+            trustedCompanions = { [900] = true } })
+        assert.same({ 1, 2 }, npcIDs(both))
+    end)
+
+    it("narrows to pre-combat channelers only when a channel was seen before combat", function()
+        local traits = {
+            [1] = named(1, { level = 91, power = 1, nonElite = false, preCombatChanneling = true }),
+            [2] = named(2, { level = 91, power = 1, nonElite = false, preCombatChanneling = false }),
+            [3] = named(3, { level = 91, power = 1, nonElite = false }),
+        }
+        for i, c in ipairs({
+            { seen = true, want = { 1 } },
+            { seen = false, want = { 1, 2, 3 } },
+            { want = { 1, 2, 3 } },
+        }) do
+            local cands = TI.BuildCandidates(OBS, { traits = traits, dungeonKey = "S",
+                sawPreCombatChannel = c.seen })
+            assert.same(c.want, npcIDs(cands), "row " .. i)
+        end
+        traits[1].identity.preCombatChanneling = false
+        local all = TI.BuildCandidates(OBS, { traits = traits, dungeonKey = "S", sawPreCombatChannel = true })
+        assert.same({ 1, 2, 3 }, npcIDs(all))
     end)
 end)
