@@ -27,19 +27,23 @@
 -- its parent's. The cards of a content id are the CreateCard calls and the
 -- GUI/GUIWidgets card builders inside its RegisterContent or
 -- RegisterTabbedContent call, in source order, with every function of the
--- same file named there expanded in place, and every column-0
--- `function X.Name(` of a settings file called as `.Name(`. A Register call
--- whose id is a parameter of its function is read once per call of that
--- function; one whose id is a field of an ipairs loop variable, once per
--- entry of the looped local table. A title that is a string, a bound
--- parameter or `<param>.<field> or "<default>"` prints as text; any other
--- prints as dynamic. The "Error" placeholder card is left out.
+-- same file named there expanded where it is named, and every settings
+-- file's column-0 `function X.Name(` or `X:Name(` definition, or
+-- `X.Name = <local function>` alias, expanded where `.Name(` or `:Name(` is
+-- called. Cards on every run-time branch are listed. A Register call whose id
+-- is a parameter of its function is read once per call of that function; one
+-- whose id is a field of an ipairs loop variable, once per entry of the
+-- looped local table. A title that is a string, a file-level string constant,
+-- a bound parameter, `<param>.<field>` or `<param>.<field> or "<default>"`
+-- prints as text; any other prints as dynamic. The "Error" placeholder card is
+-- left out.
 --
 -- A tab marked retail only is absent on WoW Forever, for one of two reasons:
 -- its page file is not in `load-list.lua --client camelot`, or its id is not
 -- in FOREVER_ALLOWED in Core/Availability.lua. A page file only the camelot
--- list loads is marked Forever only. Code inside a page that hides a card on
--- Forever is not read (see foreverNote).
+-- list loads is marked Forever only, or on neither client when its id is
+-- withheld. Code inside a page that hides a card on either client is not read
+-- (see foreverNote).
 --
 -- Files no row reaches are listed by folder, then the manifests in load order
 -- (from load-list.lua, both clients), then the retail-only list
@@ -49,8 +53,9 @@
 -- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
 -- self-check fails: a row with no page file, a settings file no row reaches,
 -- a tab strip the rules above cannot read or whose labels are not strings, a
--- Register call whose content id cannot be read, a retail-only entry that is
--- not a tracked file, a tracked .lua file that neither client loads, or a
+-- Register call whose content id cannot be read, no FOREVER_ALLOWED table in
+-- Core/Availability.lua, a retail-only entry that is not a tracked file, a
+-- tracked .lua file that neither client loads, or a
 -- load-list.lua line that is not a toc header, an <inline> line or an
 -- existing file. The map is written either way, failures first.
 
@@ -402,11 +407,12 @@ for block in (config or "{}"):sub(2, -2):gmatch("%b{}") do
     end
 end
 
--- File-level string constants, by name; a name given two values is dropped.
+-- File-level (column-0) string constants, by name; a name given two values is
+-- dropped.
 local constsOf = {}
 for path, code in pairs(codeOf) do
     local consts = {}
-    for name, value in code:gmatch('local%s+([%a_][%w_]*)%s*=%s*"([^"]*)"') do
+    for name, value in ("\n" .. code):gmatch('\nlocal%s+([%a_][%w_]*)%s*=%s*"([^"]*)"') do
         if consts[name] == nil then
             consts[name] = value
         elseif consts[name] ~= value then
@@ -569,11 +575,13 @@ end
 -- `N = function(` and `local N = function(` for a declared local N. Exports
 -- are column-0 `function X.Name(` or `X:Name(` definitions and
 -- `X.Name = <local function>` aliases in settings files, by last name.
-local defsOf, exports = {}, {}
+local defsOf, exports, defAt = {}, {}, {}
 local function addDef(path, list, name, start, params)
     local def = { path = path, name = name, start = start, stop = blockEnd(codeOf[path], start), params = paramList(params) }
     list[name] = list[name] or {}
     table.insert(list[name], def)
+    defAt[path] = defAt[path] or {}
+    defAt[path][start] = def
     return def
 end
 
@@ -622,12 +630,10 @@ for _, path in ipairs(tracked) do
 end
 
 -- The definition a use at `at` refers to: the last one before it, else the
--- first after it (a forward-declared local). None when the span being walked
--- defines the name itself, since its body is already walked.
-local function pickDef(list, at, s, e)
+-- first after it (a forward-declared local).
+local function pickDef(list, at)
     local before, after
     for _, def in ipairs(list or {}) do
-        if def.start >= s and def.start <= e then return nil end
         if def.start < at then
             before = def
         elseif not after then
@@ -699,17 +705,25 @@ local function dynamic(expr)
 end
 
 -- Appends to `out` the card titles of code[s..e], expanding the functions it
--- names, in source order.
+-- names, in source order. A named function defined inside the span is
+-- skipped where it is defined and walked where it is called, with that
+-- call's arguments.
 local function walk(path, s, e, binding, depth, onPath, out)
     local code = codeOf[path]
+    local skipTo = 0
     eachToken(code, s, function(kind, ts, te)
         if ts > e then return true end
-        if kind ~= "name" then return end
+        if kind ~= "name" or ts <= skipTo then return end
+        local nested = ts > s and defAt[path] and defAt[path][ts]
+        if nested then
+            skipTo = nested.stop
+            return
+        end
         local word = code:sub(ts, te)
-        local prev = prevChar(code, ts)
+        local prev, prevAt = prevChar(code, ts)
         local nextAt = nextCharAt(code, te + 1)
         local nextC = code:sub(nextAt, nextAt)
-        local member = prev == "." or prev == ":"
+        local member = prev == ":" or (prev == "." and code:sub(prevAt - 1, prevAt - 1) ~= ".")
         if member and nextC == "(" and word == "CreateCard" then
             local args = callArgs(code, nextAt)
             local title = args[2] or ""
@@ -735,7 +749,7 @@ local function walk(path, s, e, binding, depth, onPath, out)
             local list = exports[word]
             if nextC == "(" and list and #list == 1 then def = list[1] end
         else
-            def = pickDef(defsOf[path] and defsOf[path][word], ts, s, e)
+            def = pickDef(defsOf[path] and defsOf[path][word], ts)
         end
         if not def or onPath[def] or depth >= EXPAND_DEPTH then return end
         local bound = {}
@@ -827,8 +841,11 @@ local function foreverNote(id)
         onForever = onForever or foreverLoaded[path] == true
     end
     if onRetail and not onForever then return "retail only: page not loaded on Forever" end
+    if not foreverAllowed[id] then
+        if onForever and not onRetail then return "on neither client: Forever-only page, id withheld on Forever" end
+        return "retail only: id withheld on Forever"
+    end
     if onForever and not onRetail then return "Forever only" end
-    if not foreverAllowed[id] then return "retail only: id withheld on Forever" end
     return nil
 end
 
@@ -979,11 +996,12 @@ local doc = {
     "",
     "Tabs and cards: each row's own cards (Header: shown above every tab; Page: a row with no tabs), " ..
         "then each tab and its cards in source order, nested tabs indented. Chained: a page drawn inside its parent's. " ..
-        "Dynamic: a title set at run time. Cards of a strip a page builds inside itself are listed with the page.",
+        "Dynamic: a title set at run time. Cards of a strip a page builds inside itself are listed with the page. " ..
+        "Cards on every run-time branch are listed, so a tab can show fewer cards than listed on either client.",
     "",
     "Forever: `retail only: page not loaded on Forever` means the camelot load list skips the page file; " ..
         "`retail only: id withheld on Forever` means Core/Availability.lua does not admit the id. " ..
-        "A card a page hides on Forever by its own check is not read, so a Forever tab can show fewer cards than listed.",
+        "A card a page hides or adds on one client by its own check is not marked.",
     "",
 }
 if #failures > 0 then
