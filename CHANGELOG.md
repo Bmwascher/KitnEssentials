@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.30
+
+### Interrupt Tracker
+
+- Nameplate Icons: each teammate's kick icon (spell art, class-colored
+  border, cooldown swipe and countdown) shows on the enemy nameplate they
+  kicked, left of the health bar, in the same order on every client; when
+  the game hides who kicked, only the right teammate's icon is revealed
+- Icons wait on the mob each teammate announced as their focus marker
+- New settings: Show Bars, Nameplate Icons, Show Above Overlapping
+  Nameplates, Use Nicknames (bars show NSRT nicknames) and a Nameplate
+  Icons card
+
+### Dungeon Tools
+
+- Focus Marker announces "My Focus Marker is {rtN}" with the marker icon
+  in chat, and tells EllesmereUI and MDT users' addons
+
+---
+
 ## v4.14.29
 
 ### Aura Tracking
