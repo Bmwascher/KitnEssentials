@@ -24,6 +24,9 @@
 --     one state a preference key cannot reach.
 --   * The Voidcore quest guard on the general quest handler.
 --   * Hide Zone Text's event bookkeeping, which gives back only what it took.
+--   * The retail-only features, refused where their ids are withheld.
+--   * The Group Finder hook guard, which waits for its target.
+--   * The Hide Transforms list each load picks, and the fishing watcher.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -48,10 +51,11 @@ end
 -- creators) touch. Every field returned is per-fixture -- nothing is shared
 -- across fixtures, so busted's per-file _G reuse never leaks state between
 -- cases.
-local function newFixture()
+local function newFixture(opts)
     local ledger = {}
     local timers = {}
     local hookedGlobals = {}
+    local hookCounts = {}
     local hookedMethods = {}
     local named = {}
     local cvarSets = {}
@@ -99,6 +103,7 @@ local function newFixture()
     _G.hooksecurefunc = function(a, b, c)
         if type(a) == "string" then
             hookedGlobals[a] = b
+            hookCounts[a] = (hookCounts[a] or 0) + 1
         else
             hookedMethods[a] = hookedMethods[a] or {}
             hookedMethods[a][b] = c
@@ -149,6 +154,11 @@ local function newFixture()
     _G.LFGListApplicationDialog.SignUpButton = newSpy("LFGListSignUpButton")
     _G.LFGListApplicationDialog.SignUpButton.IsEnabled = function() return true end
     _G.LFGListApplicationDialog.SignUpButton.Click = function() record("LFGListSignUpButton", "Click") end
+
+    -- The two Blizzard functions the Group Finder hooks target. Present by
+    -- default, as on retail; a case removes one to stand for a client without it.
+    _G.LFGListSearchEntry_OnClick = function() end
+    _G.LFGListSearchPanel_SelectResult = function() end
 
     -- The role check popup, its three role buttons and Accept. Each role
     -- button carries a checkButton spy because the handler indexes it.
@@ -236,6 +246,16 @@ local function newFixture()
             return self:AreAuraIdentitiesHidden()
         end,
     }
+    -- opts.withheld: the ids this load refuses, as a baseline load refuses
+    -- the options its client lacks.
+    opts = opts or {}
+    if opts.withheld then
+        local withheld = opts.withheld
+        KE.IsFeatureAvailable = function(_, id) return not withheld[id] end
+    end
+    if opts.baseline then
+        KE.IsBaselineLoad = function() return true end
+    end
     -- The module indexes C_SpecializationInfo at file scope.
     mock.installSpecInfo()
     helpers.loadModule("Modules/QoL/Automation/Automation.lua", KE)
@@ -262,7 +282,7 @@ local function newFixture()
     return {
         AU = AU, KE = KE,
         ledger = ledger, timers = timers,
-        hookedGlobals = hookedGlobals, hookedMethods = hookedMethods,
+        hookedGlobals = hookedGlobals, hookedMethods = hookedMethods, hookCounts = hookCounts,
         named = named, cvarSets = cvarSets,
         setSecrets = function(t) _G.C_Secrets = t end,
         setCombat = function(v) combat = v end,
@@ -1927,5 +1947,178 @@ describe("Automation Hide Zone Text event bookkeeping", function()
             assert.same(case.register, register, case.name)
             assert.same(case.after, after, case.name)
         end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Retail-only features. Each refuses at the top of its Setup function when its
+-- id is withheld, so a saved or imported flag starts nothing; every caller of
+-- those functions is driven. The admitting load runs too, so a gate that never
+-- opens fails here as well.
+---------------------------------------------------------------------------------
+describe("Automation retail-only features", function()
+    local function registered(fx, event)
+        for _, entry in ipairs(fx.ledger) do
+            if entry.method == "RegisterEvent" and entry[1] == event then return true end
+        end
+        return false
+    end
+
+    local function upvalueOf(fx, setupName, name)
+        return findUpvalue(findUpvalue(fx.AU.ApplySettings, setupName), name)
+    end
+
+    local rows = {
+        {
+            id = "AutomationGroupFinder",
+            flags = { AutoRoleCheck = true, AutoQueueConfirm = true, PersistSignupNote = true },
+            seen = function(fx)
+                return {
+                    entryHook = fx.hookedGlobals.LFGListSearchEntry_OnClick ~= nil,
+                    selectHook = fx.hookedGlobals.LFGListSearchPanel_SelectResult ~= nil,
+                    roleCheck = _G.LFDRoleCheckPopup:GetScript("OnShow") ~= nil,
+                    dialog = _G.LFGListApplicationDialog:GetScript("OnShow") ~= nil,
+                }
+            end,
+        },
+        {
+            id = "AutomationSlotKeystone",
+            flags = { AutoSlotKeystone = true },
+            seen = function(fx) return { watcher = registered(fx, "ADDON_LOADED") } end,
+        },
+        {
+            id = "AutomationHousingRoll",
+            flags = { AutoPassHousing = true },
+            seen = function(fx) return { rollFrame = registered(fx, "START_LOOT_ROLL") } end,
+        },
+        {
+            id = "AutomationVoidcores",
+            flags = { AutoVoidcoresGold = true, AutoAcceptQuests = true, QuestModifier = "NONE" },
+            seen = function(fx)
+                local accepts = 0
+                _G.GetQuestID = function() return 98016 end
+                _G.AcceptQuest = function() accepts = accepts + 1 end
+                upvalueOf(fx, "SetupAutoQuests", "questFrame"):Fire("QUEST_DETAIL")
+                return {
+                    frame = upvalueOf(fx, "SetupAutoVoidcores", "voidcoresFrame") ~= nil,
+                    questHeld = accepts == 0,
+                }
+            end,
+        },
+        {
+            id = "AutomationPetBattleDuels",
+            flags = { AutoDeclinePetBattles = true },
+            seen = function(fx) return { duelFrame = registered(fx, "PET_BATTLE_PVP_DUEL_REQUESTED") } end,
+        },
+        {
+            id = "CharacterPanelWindowButtons",
+            flags = { OmniumCharButton = true, VaultCharButton = true },
+            seen = function(fx)
+                return {
+                    omnium = fx.named["KE_OmniumFoilButton"] ~= nil,
+                    vault = fx.named["KE_GreatVaultButton"] ~= nil,
+                    minimapHook = fx.hookedMethods[_G.ExpansionLandingPageMinimapButton] ~= nil,
+                }
+            end,
+        },
+    }
+
+    it("installs each feature where its id is admitted and nothing where it is withheld", function()
+        for _, row in ipairs(rows) do
+            for _, load in ipairs({
+                { name = "admitted", withheld = {},                  want = true },
+                { name = "withheld", withheld = { [row.id] = true }, want = false },
+            }) do
+                local fx = newFixture({ withheld = load.withheld })
+                local AU = fx.AU
+                AU.db = { Enabled = true }
+                for key, value in pairs(row.flags) do AU.db[key] = value end
+                AU:ApplySettings()
+                AU:TeardownPorts()
+                AU:RetrySpawnDeferredButtons()
+                for what, got in pairs(row.seen(fx)) do
+                    assert.equals(load.want, got, row.id .. " " .. load.name .. ": " .. what)
+                end
+            end
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The Group Finder hooks. A missing target installs nothing and leaves the
+-- latch open, so a later apply hooks it once it exists, and never twice.
+---------------------------------------------------------------------------------
+describe("Automation Group Finder hook guard", function()
+    it("installs nothing while its target is absent, once when it appears, and never twice", function()
+        local function globalHook(name)
+            return {
+                remove = function() _G[name] = nil end,
+                restore = function() _G[name] = function() end end,
+                count = function(fx) return fx.hookCounts[name] or 0 end,
+            }
+        end
+        local dialogHook = {
+            remove = function(fx)
+                local dialog = _G.LFGListApplicationDialog
+                local hookScript = dialog.HookScript
+                fx.dialogHooks = 0
+                dialog.HookScript = function(frame, script, fn)
+                    if script == "OnShow" then fx.dialogHooks = fx.dialogHooks + 1 end
+                    return hookScript(frame, script, fn)
+                end
+                fx.heldDialog = dialog
+                _G.LFGListApplicationDialog = nil
+            end,
+            restore = function(fx) _G.LFGListApplicationDialog = fx.heldDialog end,
+            count = function(fx) return fx.dialogHooks end,
+        }
+        for _, row in ipairs({
+            { name = "search-entry hook",  flags = { AutoQueueConfirm = true },  hook = globalHook("LFGListSearchEntry_OnClick") },
+            { name = "select-result hook", flags = { PersistSignupNote = true }, hook = globalHook("LFGListSearchPanel_SelectResult") },
+            { name = "dialog OnShow hook", flags = { AutoQueueConfirm = true },  hook = dialogHook },
+        }) do
+            local fx = newFixture()
+            local AU = fx.AU
+            AU.db = { Enabled = true }
+            for key, value in pairs(row.flags) do AU.db[key] = value end
+            row.hook.remove(fx)
+            AU:ApplySettings()
+            assert.equals(0, row.hook.count(fx), row.name .. ": target absent")
+            row.hook.restore(fx)
+            AU:ApplySettings()
+            assert.equals(1, row.hook.count(fx), row.name .. ": target present")
+            AU:ApplySettings()
+            assert.equals(1, row.hook.count(fx), row.name .. ": a later apply")
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The Hide Transforms list by load. A baseline load cancels its own client's
+-- list and has no fishing outfit, so it never gets the fishing watcher.
+---------------------------------------------------------------------------------
+describe("Automation Hide Transforms list by load", function()
+    it("cancels a Forever transform without a fishing watcher on a baseline load, and leaves it with one on retail", function()
+        for _, row in ipairs({
+            { name = "baseline", baseline = true,  canceled = { 77 }, watcher = false },
+            { name = "retail",   baseline = false, canceled = {},     watcher = true },
+        }) do
+            local fx = newFixture({ baseline = row.baseline })
+            -- One buff on the player, 8219 (Flip Out): only the Forever list has it.
+            local canceled = {}
+            _G.C_UnitAuras = {
+                GetBuffDataByIndex = function(unit, index)
+                    if unit == "player" and index == 1 then return { spellId = 8219, auraInstanceID = 77 } end
+                end,
+                CancelAuraByInstanceID = function(_, instanceID) canceled[#canceled + 1] = instanceID end,
+            }
+            local AU = fx.AU
+            AU.db = { Enabled = true, HideTransforms = true, HideTransformItems = {} }
+            AU:ApplySettings()
+            assert.same(row.canceled, canceled, row.name .. " cancels")
+            local apply = findUpvalue(AU.ApplySettings, "ApplyHideTransforms")
+            assert.equals(row.watcher, findUpvalue(apply, "transformFishFrame") ~= nil, row.name .. " fishing watcher")
+        end
+        _G.C_UnitAuras = nil
     end)
 end)

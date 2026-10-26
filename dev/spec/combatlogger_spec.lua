@@ -291,6 +291,11 @@ describe("CombatLogger difficulty-first classification", function()
             { instanceType = "party", difficultyID = 16,  db = { RaidMythic = true },      should = true,  label = "a Mythic raid" },
             { instanceType = "raid",  difficultyID = 220, db = { RaidNormal = true, RaidMythic = true }, should = false },
             { instanceType = "raid",  difficultyID = 250, db = { RaidNormal = true, RaidMythic = true }, should = false },
+            { instanceType = "raid",  difficultyID = 242, db = { RaidNormal = true },  should = true,  label = "a Normal raid" },
+            { instanceType = "party", difficultyID = 242, db = { RaidNormal = true },  should = true,  label = "a Normal raid" },
+            { instanceType = "raid",  difficultyID = 243, db = { RaidNormal = true },  should = true,  label = "a Normal raid" },
+            { instanceType = "party", difficultyID = 243, db = { RaidNormal = true },  should = true,  label = "a Normal raid" },
+            { instanceType = "party", difficultyID = 242, db = { RaidNormal = false }, should = false, label = "a Normal raid" },
         }
         for _, c in ipairs(cases) do
             CL.db = c.db

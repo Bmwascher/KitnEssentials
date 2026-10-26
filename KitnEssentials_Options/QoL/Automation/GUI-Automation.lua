@@ -20,6 +20,22 @@ local Theme = KE.Theme
 
 local ipairs = ipairs
 
+-- Options a client can withhold, read once. A headless load without the
+-- availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local GROUP_FINDER = Admitted("AutomationGroupFinder")
+local SLOT_KEYSTONE = Admitted("AutomationSlotKeystone")
+local HOUSING_ROLL = Admitted("AutomationHousingRoll")
+local VOIDCORES = Admitted("AutomationVoidcores")
+local PET_DUELS = Admitted("AutomationPetBattleDuels")
+local VANTUS = Admitted("VantusRune")
+local AH_FILTER = Admitted("AuctionHouseFilter")
+-- Text that names features only a retail load has follows the same answer
+-- that picks the Hide Transforms list.
+local BASELINE = KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() == true
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("Automation", true)
@@ -65,9 +81,13 @@ local function BuildHeader(scrollChild, yOffset)
         ApplyAutomationState(checked)
     end)
 
-    card1:AddLabel("Small conveniences, each with its own switch on the tabs below: looting, " ..
-        "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
-        "and the vendor and auction house windows. With Automation off, the " .. KE:Gold("Interface") .. " and " ..
+    card1:AddLabel((BASELINE
+        and "Small conveniences, each with its own switch on the tabs below: looting, " ..
+            "confirmation dialogs, cinematics, quest turn-ins, repairs and selling, and the vendor window."
+        or "Small conveniences, each with its own switch on the tabs below: looting, " ..
+            "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
+            "and the vendor and auction house windows.") ..
+        " With Automation off, the " .. KE:Gold("Interface") .. " and " ..
         KE:Gold("Quests & Social") .. " tabs are hidden.")
 
     return card1:GetNextOffset(), false
@@ -140,7 +160,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     yOffset = card:GetNextOffset()
 
     -- Master-gated, like the Convenience card above it.
-    if db.Enabled ~= false then
+    if db.Enabled ~= false and HOUSING_ROLL then
         ----------------------------------------------------------------
         -- Housing Item Auto-Roll
         ----------------------------------------------------------------
@@ -178,7 +198,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     -- Vantus Rune Withdrawer (independent module — own cascade)
     ----------------------------------------------------------------
     local vrDB = KE.db and KE.db.profile.VantusRune
-    if vrDB then
+    if vrDB and VANTUS then
         local vrManager = GUIFrame:CreateWidgetStateManager()
 
         local function ApplyVRState(enabled)
@@ -339,7 +359,9 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     local row3 = GUIFrame:CreateRow(card3.content, showGrid and Theme.rowHeight or Theme.rowHeightLast)
     local hideTransformsCheck = GUIFrame:CreateCheckbox(row3, "Auto-Cancel Transforms", {
         value = db.HideTransforms == true,
-        tooltip = "Automatically cancels cosmetic transform effects, such as profession gear, holiday costumes and prank toys, picked below.",
+        tooltip = BASELINE
+            and "Automatically cancels cosmetic transform effects, such as holiday costumes and transforming foods, elixirs and trinkets, picked below."
+            or "Automatically cancels cosmetic transform effects, such as profession gear, holiday costumes and prank toys, picked below.",
         callback = function(checked)
             db.HideTransforms = checked
             ApplySettings()
@@ -434,7 +456,8 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Quest Automation", yOffset)
     manager:Register(card1, "all")
-    card1:AddLabel("Hold the key set in " .. KE:Gold("Hold to Pause Auto-Quest") .. " while talking to an NPC to pause auto-quest. A quest with several rewards always asks you to pick.\n\n" .. KE:Gold("Auto Complete Voidcores") .. " accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off. The Hold to Pause Auto-Quest key still applies.")
+    card1:AddLabel("Hold the key set in " .. KE:Gold("Hold to Pause Auto-Quest") .. " while talking to an NPC to pause auto-quest. A quest with several rewards always asks you to pick." ..
+        (VOIDCORES and ("\n\n" .. KE:Gold("Auto Complete Voidcores") .. " accepts and hands in the weekly Voidcore quest you pick, even when general auto-accept and turn-in are off. The Hold to Pause Auto-Quest key still applies.") or ""))
 
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local autoAcceptCheck = GUIFrame:CreateCheckbox(row1a, "Auto Accept Quests", {
@@ -452,7 +475,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     manager:Register(autoTurnInCheck, "all")
     card1:AddRow(row1a, Theme.rowHeight)
 
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local row1b = GUIFrame:CreateRow(card1.content, VOIDCORES and Theme.rowHeight or Theme.rowHeightLast)
     local modDropdown = GUIFrame:CreateDropdown(row1b, "Hold to Pause Auto-Quest", {
         options = {
             { key = "SHIFT", text = "Shift" },
@@ -472,105 +495,113 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     })
     row1b:AddWidget(unwatchHiddenCheck, 0.5)
     manager:Register(unwatchHiddenCheck, "all")
-    card1:AddRow(row1b, Theme.rowHeight)
+    if VOIDCORES then
+        card1:AddRow(row1b, Theme.rowHeight)
 
-    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
-    local sep = GUIFrame:CreateSeparator(sepRow)
-    sepRow:AddWidget(sep, 1)
-    manager:Register(sep, "all")
-    card1:AddRow(sepRow, Theme.rowHeightSeparator)
+        local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+        local sep = GUIFrame:CreateSeparator(sepRow)
+        sepRow:AddWidget(sep, 1)
+        manager:Register(sep, "all")
+        card1:AddRow(sepRow, Theme.rowHeightSeparator)
 
-    GUIFrame:CreatePairedRow(card1, {
-        height = Theme.rowHeightLast,
-        spacing = 0,
-        manager = manager,
-        master = {
-            label = "Auto Complete Voidcores",
-            get = function() return db.AutoVoidcoresGold == true end,
-            callback = function(checked) db.AutoVoidcoresGold = checked; ApplySettings() end,
-        },
-        dependent = {
-            kind = "dropdown",
-            label = "Quest",
-            options = {
-                { key = "Gold",      text = "Gold" },
-                { key = "Mistcrest", text = "Veteran Mistcrest" },
-                { key = "Marl",      text = "Voidlight Marl" },
+        GUIFrame:CreatePairedRow(card1, {
+            height = Theme.rowHeightLast,
+            spacing = 0,
+            manager = manager,
+            master = {
+                label = "Auto Complete Voidcores",
+                get = function() return db.AutoVoidcoresGold == true end,
+                callback = function(checked) db.AutoVoidcoresGold = checked; ApplySettings() end,
             },
-            value = db.AutoVoidcoresQuest or "Gold",
-            callback = function(val) db.AutoVoidcoresQuest = val end,
-        },
-    })
+            dependent = {
+                kind = "dropdown",
+                label = "Quest",
+                options = {
+                    { key = "Gold",      text = "Gold" },
+                    { key = "Mistcrest", text = "Veteran Mistcrest" },
+                    { key = "Marl",      text = "Voidlight Marl" },
+                },
+                value = db.AutoVoidcoresQuest or "Gold",
+                callback = function(val) db.AutoVoidcoresQuest = val end,
+            },
+        })
+    else
+        card1:AddRow(row1b, Theme.rowHeightLast, 0)
+    end
 
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Group Finder
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
-    manager:Register(card2, "all")
-    card2:AddLabel(KE:Gold("Quick Signup") .. ": hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.")
+    if GROUP_FINDER then
+        local card2 = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
+        manager:Register(card2, "all")
+        card2:AddLabel(KE:Gold("Quick Signup") .. ": hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.")
 
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local autoRoleCheck = GUIFrame:CreateCheckbox(row2a, "Auto Accept Role Check", {
-        value = db.AutoRoleCheck ~= false,
-        callback = function(checked) db.AutoRoleCheck = checked; ApplySettings() end,
-    })
-    row2a:AddWidget(autoRoleCheck, 0.5)
-    manager:Register(autoRoleCheck, "all")
+        local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+        local autoRoleCheck = GUIFrame:CreateCheckbox(row2a, "Auto Accept Role Check", {
+            value = db.AutoRoleCheck ~= false,
+            callback = function(checked) db.AutoRoleCheck = checked; ApplySettings() end,
+        })
+        row2a:AddWidget(autoRoleCheck, 0.5)
+        manager:Register(autoRoleCheck, "all")
 
-    card2:AddRow(row2a, Theme.rowHeight)
+        card2:AddRow(row2a, Theme.rowHeight)
 
-    GUIFrame:CreatePairedRow(card2, {
-        manager = manager,
-        master = {
-            label = "Quick Signup",
-            tooltip = "Signs you up as soon as the application window opens.\n\nHold the key set below to keep the window open instead, which is how you reach the note box.",
-            get = function() return db.AutoQueueConfirm ~= false end,
-            callback = function(checked) db.AutoQueueConfirm = checked; ApplySettings() end,
-        },
-        dependent = {
-            kind = "checkbox",
-            label = "Double-Click to Sign Up",
-            value = db.QuickSignupDoubleClick == true,
-            tooltip = "Double-click a group in the list to sign up, instead of selecting it and pressing Sign Up.",
-            callback = function(checked) db.QuickSignupDoubleClick = checked; ApplySettings() end,
-            clear = function() db.QuickSignupDoubleClick = false; ApplySettings() end,
-        },
-    })
+        GUIFrame:CreatePairedRow(card2, {
+            manager = manager,
+            master = {
+                label = "Quick Signup",
+                tooltip = "Signs you up as soon as the application window opens.\n\nHold the key set below to keep the window open instead, which is how you reach the note box.",
+                get = function() return db.AutoQueueConfirm ~= false end,
+                callback = function(checked) db.AutoQueueConfirm = checked; ApplySettings() end,
+            },
+            dependent = {
+                kind = "checkbox",
+                label = "Double-Click to Sign Up",
+                value = db.QuickSignupDoubleClick == true,
+                tooltip = "Double-click a group in the list to sign up, instead of selecting it and pressing Sign Up.",
+                callback = function(checked) db.QuickSignupDoubleClick = checked; ApplySettings() end,
+                clear = function() db.QuickSignupDoubleClick = false; ApplySettings() end,
+            },
+        })
 
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local autoKeystoneCheck = GUIFrame:CreateCheckbox(row2b, "Auto Slot Keystone", {
-        value = db.AutoSlotKeystone ~= false,
-        callback = function(checked) db.AutoSlotKeystone = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(autoKeystoneCheck, 0.5)
-    manager:Register(autoKeystoneCheck, "all")
+        local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+        if SLOT_KEYSTONE then
+            local autoKeystoneCheck = GUIFrame:CreateCheckbox(row2b, "Auto Slot Keystone", {
+                value = db.AutoSlotKeystone ~= false,
+                callback = function(checked) db.AutoSlotKeystone = checked; ApplySettings() end,
+            })
+            row2b:AddWidget(autoKeystoneCheck, 0.5)
+            manager:Register(autoKeystoneCheck, "all")
+        end
 
-    local persistNoteCheck = GUIFrame:CreateCheckbox(row2b, "Persistent Signup Note", {
-        value = db.PersistSignupNote == true,
-        tooltip = "Keeps your note to the leader when you move between groups.\n\nThe game already keeps it within one dungeon; this keeps it across all of them.",
-        callback = function(checked) db.PersistSignupNote = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(persistNoteCheck, 0.5)
-    manager:Register(persistNoteCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
+        local persistNoteCheck = GUIFrame:CreateCheckbox(row2b, "Persistent Signup Note", {
+            value = db.PersistSignupNote == true,
+            tooltip = "Keeps your note to the leader when you move between groups.\n\nThe game already keeps it within one dungeon; this keeps it across all of them.",
+            callback = function(checked) db.PersistSignupNote = checked; ApplySettings() end,
+        })
+        row2b:AddWidget(persistNoteCheck, 0.5)
+        manager:Register(persistNoteCheck, "all")
+        card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local signupModDropdown = GUIFrame:CreateDropdown(row2c, "Hold to Open Signup Note", {
-        options = {
-            { key = "SHIFT", text = "Shift" },
-            { key = "CTRL",  text = "Ctrl" },
-            { key = "ALT",   text = "Alt" },
-        },
-        value = db.SignupModifier or "SHIFT",
-        callback = function(val) db.SignupModifier = val end,
-    })
-    row2c:AddWidget(signupModDropdown, 1)
-    manager:Register(signupModDropdown, "all")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+        local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+        local signupModDropdown = GUIFrame:CreateDropdown(row2c, "Hold to Open Signup Note", {
+            options = {
+                { key = "SHIFT", text = "Shift" },
+                { key = "CTRL",  text = "Ctrl" },
+                { key = "ALT",   text = "Alt" },
+            },
+            value = db.SignupModifier or "SHIFT",
+            callback = function(val) db.SignupModifier = val end,
+        })
+        row2c:AddWidget(signupModDropdown, 1)
+        manager:Register(signupModDropdown, "all")
+        card2:AddRow(row2c, Theme.rowHeightLast, 0)
 
-    yOffset = card2:GetNextOffset()
+        yOffset = card2:GetNextOffset()
+    end
 
     ----------------------------------------------------------------
     -- Social
@@ -587,12 +618,15 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     row3a:AddWidget(autoDeclineDuelsCheck, 0.5)
     manager:Register(autoDeclineDuelsCheck, "all")
 
-    local autoDeclinePetCheck = GUIFrame:CreateCheckbox(row3a, "Auto Decline Pet Battle Duels", {
-        value = db.AutoDeclinePetBattles == true,
-        callback = function(checked) db.AutoDeclinePetBattles = checked; ApplySettings() end,
-    })
-    row3a:AddWidget(autoDeclinePetCheck, 0.5)
-    manager:Register(autoDeclinePetCheck, "all")
+    -- Without its neighbor, Auto Decline Duels keeps its half width.
+    if PET_DUELS then
+        local autoDeclinePetCheck = GUIFrame:CreateCheckbox(row3a, "Auto Decline Pet Battle Duels", {
+            value = db.AutoDeclinePetBattles == true,
+            callback = function(checked) db.AutoDeclinePetBattles = checked; ApplySettings() end,
+        })
+        row3a:AddWidget(autoDeclinePetCheck, 0.5)
+        manager:Register(autoDeclinePetCheck, "all")
+    end
     card3:AddRow(row3a, Theme.rowHeight)
 
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
@@ -762,7 +796,7 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
     -- Auction House Filter (independent module — own cascade)
     ----------------------------------------------------------------
     local ahfDB = KE.db and KE.db.profile.AuctionHouseFilter
-    if ahfDB then
+    if ahfDB and AH_FILTER then
         local ahfManager = GUIFrame:CreateWidgetStateManager()
 
         local function ApplyAHFState(enabled)

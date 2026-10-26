@@ -336,8 +336,8 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
--- The login apply and change tracking wait for Automation itself, which a
--- baseline load withholds; the page's own writes do not.
+-- The login apply and change tracking follow Automation itself, its
+-- admission and its switch; the page's own writes do not.
 local function AutomationAdmitted()
     return not KE.IsFeatureAvailable or KE:IsFeatureAvailable("Automation") == true
 end

@@ -263,3 +263,40 @@ describe("Forever availability: Character pages", function()
         end
     end)
 end)
+
+describe("Forever availability: Automation", function()
+    -- The page, its tabs and the two modules it hosts load on Forever; the
+    -- options for content Forever lacks stay withheld there and admitted on
+    -- retail.
+    it("admits Automation, its tabs, Combat Logger and Merchant Pages and withholds their retail-only options on a baseline load", function()
+        local rows = {
+            { id = "Automation", baseline = true },
+            { id = "AutomationGeneral", baseline = true },
+            { id = "AutomationInterface", baseline = true },
+            { id = "AutomationQuests", baseline = true },
+            { id = "AutomationVendors", baseline = true },
+            { id = "CombatLogger", baseline = true },
+            { id = "MerchantPages", baseline = true },
+            { id = "AutomationGroupFinder", baseline = false },
+            { id = "AutomationSlotKeystone", baseline = false },
+            { id = "AutomationHousingRoll", baseline = false },
+            { id = "AutomationVoidcores", baseline = false },
+            { id = "AutomationPetBattleDuels", baseline = false },
+            { id = "CombatLoggerAllContent", baseline = false },
+            { id = "AuctionHouseFilter", baseline = false },
+            { id = "VantusRune", baseline = false },
+            { id = "HousingDashboardFix", baseline = false },
+            { id = "BonusRoll", baseline = false },
+        }
+        for _, row in ipairs(rows) do
+            for _, load in ipairs({
+                { name = "baseline", baselineLoad = true, forever = true, want = row.baseline },
+                { name = "retail", baselineLoad = nil, forever = false, want = true },
+            }) do
+                local KE = helpers.loadModule("Core/Availability.lua",
+                    { BASELINE_LOAD = load.baselineLoad, IS_FOREVER = load.forever })
+                assert.equals(load.want, (KE:IsFeatureAvailable(row.id)), load.name .. " " .. row.id)
+            end
+        end
+    end)
+end)

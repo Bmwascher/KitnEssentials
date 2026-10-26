@@ -376,6 +376,12 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 
+-- Features a client can withhold, asked at each Setup. A headless load
+-- without the availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+
 -- Skip Cinematics --
 
 local cinematicFrame
@@ -1198,6 +1204,7 @@ local function OnRoleCheckShow()
 end
 
 local function SetupAutoRoleCheck()
+    if not Admitted("AutomationGroupFinder") then return end
     if not AU.db.AutoRoleCheck then return end
     if AU._lfdHooked then return end
     if not LFDRoleCheckPopup then return end
@@ -1251,12 +1258,9 @@ local function ShouldQuickSignUp(masterOn, dependentOn, inLockdown, isSelected,
 end
 
 local function SetupAutoQueueConfirm()
-    if AU._lfgHooked then return end
-    AU._lfgHooked = true
+    if not Admitted("AutomationGroupFinder") then return end
 
-    -- Installed above the dialog guard: the two hooks are independent, and a
-    -- missing dialog global must not take the double click down with it.
-    hooksecurefunc("LFGListSearchEntry_OnClick", function(entry, button)
+    local function OnSearchEntryClick(entry, button)
         if not AU.db or not AU.db.Enabled then return end
         if button == "RightButton" then return end
         if not entry then return end
@@ -1288,10 +1292,18 @@ local function SetupAutoQueueConfirm()
 
         LFGListSearchPanel_SignUp(panel)
         lastClickEntry, lastClickTime = nil, 0
-    end)
+    end
+
+    -- Each hook latches only once installed, and the two latch apart: hooking
+    -- a missing global throws, and a target missing now is hooked by a later
+    -- apply.
+    if not AU._lfgHooked and type(_G.LFGListSearchEntry_OnClick) == "function" then
+        hooksecurefunc("LFGListSearchEntry_OnClick", OnSearchEntryClick)
+        AU._lfgHooked = true
+    end
 
     local dialog = LFGListApplicationDialog
-    if not dialog then return end
+    if AU._lfgDialogHooked or not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.AutoQueueConfirm then return end
@@ -1301,6 +1313,7 @@ local function SetupAutoQueueConfirm()
             confirmBtn:Click()
         end
     end)
+    AU._lfgDialogHooked = true
 end
 
 -- Persistent Signup Note --
@@ -1382,13 +1395,14 @@ local function PlantActivityID(resultID)
 end
 
 local function SetupPersistSignupNote()
-    if not AU._noteHooked then
-        AU._noteHooked = true
+    if not Admitted("AutomationGroupFinder") then return end
+    if not AU._noteHooked and type(_G.LFGListSearchPanel_SelectResult) == "function" then
         hooksecurefunc("LFGListSearchPanel_SelectResult", function(_, resultID)
             if not AU.db or not AU.db.Enabled then return end
             if not AU.db.PersistSignupNote then return end
             PlantActivityID(resultID)
         end)
+        AU._noteHooked = true
     end
 
     local on = AU.db.Enabled and AU.db.PersistSignupNote
@@ -1409,6 +1423,7 @@ end
 -- Auto Slot Keystone --
 
 local function SetupAutoSlotKeystone()
+    if not Admitted("AutomationSlotKeystone") then return end
     if AU._keystoneHooked then return end
     AU._keystoneHooked = true
 
@@ -1730,6 +1745,7 @@ local AUTO_ROLL_MAP = { PASS = 0, NEED = 1 }
 
 local lootRollFrame
 local function SetupAutoPassHousing()
+    if not Admitted("AutomationHousingRoll") then return end
     if lootRollFrame then return end
     lootRollFrame = CreateFrame("Frame")
     lootRollFrame:RegisterEvent("START_LOOT_ROLL")
@@ -1832,7 +1848,7 @@ local function SetupAutoQuests()
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
         if IsQuestModifierHeld() then return end
-        local voidcoresOn = AU.db.AutoVoidcoresGold == true
+        local voidcoresOn = AU.db.AutoVoidcoresGold == true and Admitted("AutomationVoidcores")
 
         if event == "QUEST_DETAIL" or event == "QUEST_PROGRESS"
             or event == "QUEST_COMPLETE" then
@@ -1903,6 +1919,7 @@ end
 -- all three quests: renaming the key would reset saved settings.
 local voidcoresFrame
 local function SetupAutoVoidcores()
+    if not Admitted("AutomationVoidcores") then return end
     if not AU.db.AutoVoidcoresGold then return end
     if voidcoresFrame then return end
     voidcoresFrame = CreateFrame("Frame")
@@ -2010,6 +2027,7 @@ end
 
 local petDuelFrame
 local function SetupAutoDeclinePetBattles()
+    if not Admitted("AutomationPetBattleDuels") then return end
     if petDuelFrame then return end
     petDuelFrame = CreateFrame("Frame")
     petDuelFrame:RegisterEvent("PET_BATTLE_PVP_DUEL_REQUESTED")
@@ -2554,6 +2572,7 @@ local function LandingPageButtonAllowed(mm)
 end
 
 local function SetupOmniumButton()
+    if not Admitted("CharacterPanelWindowButtons") then return end
     local mm = _G.ExpansionLandingPageMinimapButton
     -- Lifecycle, not the key: this function is reached from OnDisable through
     -- TeardownPorts, and creating the button there can re-register
@@ -2797,6 +2816,21 @@ local transformFishFrame     -- lazy
 local FISHING_OUTFIT_AURA = 394009
 local FISHING_CHANNEL_ID  = 131476
 
+-- A baseline load cancels its own client's transforms, derived from that
+-- client's game data by dev/scripts/derive-forever-transforms.lua.
+do
+    local FOREVER_TRANSFORMS = {
+        { key = "hallowed", cat = "holiday", label = "Hallowed Wand", ids = { 24708, 24709, 24710, 24711, 24712, 24713, 24723, 24732, 24735, 24736, 24740 } },
+        { key = "noggenfogger", cat = "items", label = "Noggenfogger Elixir", ids = { 16593, 16595 } },
+        { key = "deviate", cat = "items", label = "Savory Deviate Delight", ids = { 8213, 8219, 8221 } },
+        { key = "whimsyfin", cat = "items", label = "Savory Whimsyfin Delight", ids = { 1252576 } },
+        { key = "deception", cat = "items", label = "Orb of Deception", ids = { 16739 } },
+    }
+    if KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() then
+        TRANSFORMS = FOREVER_TRANSFORMS
+    end
+end
+
 -- The outfit cancel is a restricted call: refused in combat, while aura
 -- identities are hidden (a key, an encounter, a PvP match) whatever the
 -- per-spell answer says, and when the outfit aura itself is secret.
@@ -2908,25 +2942,32 @@ local function ApplyHideTransforms()
             end
         end)
         -- Fishing outfit: aura 394009 sticks while the fishing channel
-        -- (131476) runs; clear it when the channel stops instead.
-        transformFishFrame = CreateFrame("Frame")
-        transformFishFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
-            -- The payload is secret while unit spellcasts are restricted.
-            if (issecretvalue and issecretvalue(spellID)) or spellID ~= FISHING_CHANNEL_ID then return end
-            if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-            C_Timer.After(0.3, function()
-                if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-                if AU.FishingCancelRefused(UnitAffectingCombat("player"), KE:AreAuraIdentitiesHidden(),
-                    KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA)) then return end
-                if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
-                local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
-                if aura and aura.auraInstanceID ~= nil
-                    and not (issecretvalue and issecretvalue(aura.auraInstanceID))
-                    and C_UnitAuras.CancelAuraByInstanceID then
-                    C_UnitAuras.CancelAuraByInstanceID("player", aura.auraInstanceID)
-                end
+        -- (131476) runs; clear it when the channel stops instead. Only a list
+        -- with the fishing row gets the watcher.
+        local fishingListed = false
+        for _, item in ipairs(TRANSFORMS) do
+            if item.key == "fishing" then fishingListed = true end
+        end
+        if fishingListed then
+            transformFishFrame = CreateFrame("Frame")
+            transformFishFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
+                -- The payload is secret while unit spellcasts are restricted.
+                if (issecretvalue and issecretvalue(spellID)) or spellID ~= FISHING_CHANNEL_ID then return end
+                if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
+                C_Timer.After(0.3, function()
+                    if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
+                    if AU.FishingCancelRefused(UnitAffectingCombat("player"), KE:AreAuraIdentitiesHidden(),
+                        KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA)) then return end
+                    if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
+                    local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
+                    if aura and aura.auraInstanceID ~= nil
+                        and not (issecretvalue and issecretvalue(aura.auraInstanceID))
+                        and C_UnitAuras.CancelAuraByInstanceID then
+                        C_UnitAuras.CancelAuraByInstanceID("player", aura.auraInstanceID)
+                    end
+                end)
             end)
-        end)
+        end
     end
 
     if on and next(transformCTable) ~= nil then
@@ -2940,10 +2981,12 @@ local function ApplyHideTransforms()
         transformAuraFrame:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     end
 
-    if on and TransformItemEnabled("fishing") then
-        transformFishFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
-    else
-        transformFishFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    if transformFishFrame then
+        if on and TransformItemEnabled("fishing") then
+            transformFishFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+        else
+            transformFishFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+        end
     end
 end
 

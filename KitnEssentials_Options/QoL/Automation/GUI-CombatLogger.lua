@@ -10,7 +10,14 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- The four lists live together so a change to one is made beside the others.
+-- The retail content cards, which a client can withhold. A headless load
+-- without the availability policy reads as retail.
+local function Admitted(id)
+    return not KE.IsFeatureAvailable or KE:IsFeatureAvailable(id) == true
+end
+local ALL_CONTENT = Admitted("CombatLoggerAllContent")
+
+-- The lists live together so a change to one is made beside the others.
 -- They are independent tables: nothing here stops the preset naming a key no
 -- card offers.
 local DUNGEONS = {
@@ -49,6 +56,15 @@ local RECORDER_PRESET = {
     "PvPRatedBG", "PvPRegularBG",
 }
 
+-- Without the retail content: one row per kind of content the client has,
+-- on the retail keys, so a retail profile carries over.
+local FOREVER_CONTENT = {
+    { key = "DungeonNormal", label = "Dungeons" },
+    { key = "RaidNormal",    label = "Raids (40, 20 and 10 players)" },
+    { key = "PvPRegularBG",  label = "Battlegrounds" },
+}
+local FOREVER_PRESET = { "DungeonNormal", "RaidNormal", "PvPRegularBG" }
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("CombatLogger", true)
@@ -79,7 +95,7 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     end
 
     -- Every content card is the same grid, so it is written once.
-    local function AddContentCard(title, defs)
+    local function AddContentCard(title, defs, columns)
         local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
         manager:Register(card, "all")
 
@@ -93,7 +109,7 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
                 },
             }
         end
-        manager:RegisterGroup(card:AddCheckboxGrid(picks, { isLast = true }), "all")
+        manager:RegisterGroup(card:AddCheckboxGrid(picks, { isLast = true, columns = columns }), "all")
 
         yOffset = card:GetNextOffset()
         return card
@@ -111,7 +127,8 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     card1:AddLabel("Turns the game's combat log on for the content types you choose, and " ..
         "off again when you leave." ..
         "\n\nThat log file is what " .. KE:Gold("Warcraft Logs") .. " uploads and what " ..
-        KE:Gold("Warcraft Recorder") .. " reads to know when a pull, a key or a match starts " ..
+        KE:Gold("Warcraft Recorder") .. " reads to know when " ..
+        (ALL_CONTENT and "a pull, a key or a match" or "a pull or a match") .. " starts " ..
         "and ends." ..
         "\n\nA log you started yourself with " .. KE:Gold("/combatlog") .. " is left alone - this " ..
         "only closes logs it opened.")
@@ -181,7 +198,7 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         height = 28,
         tooltip = "Tick every content type Warcraft Recorder can record, and turn on Advanced Combat Logging.",
         callback = function()
-            for _, key in ipairs(RECORDER_PRESET) do
+            for _, key in ipairs(ALL_CONTENT and RECORDER_PRESET or FOREVER_PRESET) do
                 db[key] = true
             end
             db.DelayStop = true
@@ -200,29 +217,32 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Cards 3-5: what to log
+    -- Cards 3-6: what to log. Without the retail content, one card
+    -- in one column: the raid label does not fit a third of the row.
     ----------------------------------------------------------------
-    AddContentCard("Dungeons", DUNGEONS)
-    AddContentCard("Raids", RAIDS)
-    AddContentCard("PvP", PVP)
+    if ALL_CONTENT then
+        AddContentCard("Dungeons", DUNGEONS)
+        AddContentCard("Raids", RAIDS)
+        AddContentCard("PvP", PVP)
 
-    ----------------------------------------------------------------
-    -- Card 6: Scenarios
-    ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Scenarios", yOffset)
-    manager:Register(card6, "all")
+        -- Card 6: Scenarios
+        local card6 = GUIFrame:CreateCard(scrollChild, "Scenarios", yOffset)
+        manager:Register(card6, "all")
 
-    local scenarioRow = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
-    local scenarioCheckbox = GUIFrame:CreateCheckbox(scenarioRow,
-        "Scenarios  |cff888888- Delves, Torghast and anything else the game counts as a scenario.|r", {
-        value = db.Scenario == true,
-        callback = function(val) db.Scenario = val; ApplySettings() end,
-    })
-    scenarioRow:AddWidget(scenarioCheckbox, 1)
-    manager:Register(scenarioCheckbox, "all")
-    card6:AddRow(scenarioRow, Theme.rowHeightLast, 0)
+        local scenarioRow = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+        local scenarioCheckbox = GUIFrame:CreateCheckbox(scenarioRow,
+            "Scenarios  |cff888888- Delves, Torghast and anything else the game counts as a scenario.|r", {
+            value = db.Scenario == true,
+            callback = function(val) db.Scenario = val; ApplySettings() end,
+        })
+        scenarioRow:AddWidget(scenarioCheckbox, 1)
+        manager:Register(scenarioCheckbox, "all")
+        card6:AddRow(scenarioRow, Theme.rowHeightLast, 0)
 
-    yOffset = card6:GetNextOffset()
+        yOffset = card6:GetNextOffset()
+    else
+        AddContentCard("Content", FOREVER_CONTENT, 1)
+    end
 
     RefreshStates()
     return yOffset
