@@ -136,6 +136,16 @@ end
 
 function Rules.Watched(value) return Clamp(value, 4, 20, 10) end
 
+-- How many watched enemies a stop's sensors cover: an area stop lands on
+-- several at once, so it reads fewer.
+function Rules.WatchedArea(value) return Clamp(value, 1, 20, 4) end
+
+function Rules.Reach(aoe, watched, area)
+    local cap = Rules.Watched(watched)
+    if not aoe then return cap end
+    return math_min(cap, Rules.WatchedArea(area))
+end
+
 function Rules.PerRow(value) return Clamp(value, 1, 20, 8) end
 
 -- Icon i's offset from the first icon.

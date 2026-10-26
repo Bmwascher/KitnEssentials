@@ -90,6 +90,9 @@ P.kickers = {}      -- members with a kick row and a marker: { guid, unit, marke
 P.free.rail = {}
 KT.markerOf = {}    -- [member GUID] = their announced marker, 1 to 8
 P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt is its plain time
+-- Icons on Marked Mobs stays off whatever its saved switch says; the switch
+-- keeps its value for when the hold is lifted.
+KT.PremarkHeld = true
 
 -- A plate's lifetime: a kick seen on it carries this, so a placement whose
 -- plate went (and whose token may now be another mob's) takes nothing.
@@ -1416,7 +1419,7 @@ end
 function KT:SyncKickers()
     local list = P.kickers
     wipe(list)
-    if self.db.PlatePremark == false then return end
+    if self.db.PlatePremark == false or KT.PremarkHeld then return end
     for guid, member in pairs(self.partyMembers) do
         local marker
         if member.unit == "player" then marker = OwnMarker() else marker = self.markerOf[guid] end
@@ -1723,7 +1726,7 @@ function KT:SyncPlates()
     elseif not want and self.platesOn then
         self:PlatesDeactivate()
     end
-    local markers = want and self.db.PlatePremark ~= false
+    local markers = want and self.db.PlatePremark ~= false and not KT.PremarkHeld
     if markers and not self.markersOn then
         self:MarkersActivate()
     elseif not markers and self.markersOn then
