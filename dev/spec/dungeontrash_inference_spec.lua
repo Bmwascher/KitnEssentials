@@ -1544,3 +1544,469 @@ describe("DungeonTrash inference — S2 Layer 1 predicates", function()
         assert.same({ 1, 2, 3 }, npcIDs(all))
     end)
 end)
+
+describe("DungeonTrash inference — cast ownership", function()
+    local TI
+    setup(function() TI = loadInference() end)
+
+    -- Applies events to a cast state. An event is { "start", kind, id,
+    -- refresh = bool }, { "end", kind, id, event } or { "combat", bool }.
+    -- Returns the state and, per event, its class (or "none") and the
+    -- recovery state after it.
+    local function play(events, capacity, cs)
+        cs = cs or TI.NewCastState({})
+        local out = {}
+        for i, e in ipairs(events) do
+            if e[1] == "start" then
+                local class, rec = TI.ClassifyStart(cs, e[2], e[3], i, e.refresh, capacity)
+                TI.AssignOrder(cs, rec)
+                out[i] = { class = class, rec = rec, state = cs.recovery }
+            elseif e[1] == "end" then
+                local outcome, latch = TI.ClassifyEnd(cs, e[2], e[3], e[4], i, capacity)
+                out[i] = { class = outcome, latch = latch, state = cs.recovery }
+            else
+                out[i] = { class = TI.CombatWindowStep(cs, e[2], capacity) or "none", state = cs.recovery }
+            end
+        end
+        return cs, out
+    end
+
+    local function column(out, field)
+        local list = {}
+        for i, r in ipairs(out) do list[i] = r[field] end
+        return list
+    end
+
+    local function generation(unit)
+        local owner = { live = true, scheduled = 0 }
+        local rt = { unit = unit, owner = owner }
+        owner.runtime = rt
+        rt.castState = TI.NewCastState(owner)
+        return owner, rt
+    end
+
+    it("never correlates distinct, half-missing or both-missing tokens", function()
+        local cases = {
+            { 7, 7, true }, { "a", "a", true },
+            { 7, 8, false }, { 7, "7", false }, { "a", "b", false },
+            { 7, nil, false }, { nil, 7, false }, { nil, nil, false },
+        }
+        for i, c in ipairs(cases) do
+            assert.equals(c[3], TI.TokensCorrelate(c[1], c[2]), "row " .. i)
+        end
+    end)
+
+    it("a refused end event after a newer START leaves that cast and its count untouched", function()
+        local cases = {
+            { refused = { "end", "cast", nil, "stop" }, latch = false },
+            { refused = { "end", "channel", 1, "stop" }, latch = false },
+            { refused = { "end", "cast", 1, "interrupted" }, latch = true },
+            { refused = { "end", "cast", 1, "failed" }, latch = false },
+        }
+        for i, c in ipairs(cases) do
+            local cs, out = play({
+                { "combat", false }, { "combat", true },
+                { "start", "cast", 1 }, { "start", "cast", 2 }, c.refused,
+            })
+            local newer = out[4].rec
+            assert.equals("refused", out[5].class, "row " .. i)
+            assert.equals(c.latch, out[5].latch, "row " .. i)
+            assert.equals(newer, cs.latest, "row " .. i)
+            assert.is_true(newer.open, "row " .. i)
+            assert.equals(2, newer.seq, "row " .. i)
+            assert.equals(2, newer.order, "row " .. i)
+            assert.equals(2, cs.window.count, "row " .. i)
+            assert.equals("normal", cs.recovery, "row " .. i)
+            assert.is_true(newer.impliedStopVoid, "row " .. i)
+            assert.equals("correlated", (TI.ClassifyEnd(cs, "cast", 2, "stop", 9)), "row " .. i)
+        end
+        local cs, out = play({ { "start", "channel", 3 } })
+        out[1].rec.transitionCastStartAt = 0.5
+        assert.equals("refused", (TI.ClassifyEnd(cs, "cast", nil, "stop", 2)))
+        assert.equals(0.5, out[1].rec.transitionCastStartAt)
+        assert.is_nil(out[1].rec.impliedStopVoid)
+    end)
+
+    it("A: classifies each START and moves the recovery state", function()
+        local S, E, C = "start", "end", "combat"
+        local cases = {
+            { name = "present ID", events = { { S, "cast", 1 } },
+              classes = { "normal" }, state = "normal" },
+            { name = "equal present ID", events = { { S, "cast", 1 }, { S, "cast", 1 } },
+              classes = { "normal", "duplicate" }, state = "normal" },
+            { name = "supported refresh", events = { { S, "channel", 1 }, { S, "channel", 2, refresh = true } },
+              classes = { "normal", "refresh" }, state = "normal" },
+            { name = "refresh without an ID", events = { { S, "channel", 1 }, { S, "channel", nil, refresh = true } },
+              classes = { "normal", "unowned" }, state = "uncertain" },
+            { name = "first START with no ID", events = { { S, "cast", nil } },
+              classes = { "unowned" }, state = "uncertain" },
+            { name = "present then nil", events = { { S, "cast", 1 }, { S, "cast", nil } },
+              classes = { "normal", "unowned" }, state = "uncertain" },
+            { name = "nil then nil", events = { { S, "cast", nil }, { S, "cast", nil } },
+              classes = { "unowned", "unowned" }, state = "uncertain" },
+            { name = "nil then present", events = { { S, "cast", nil }, { S, "cast", 5 } },
+              classes = { "unowned", "baseline" }, state = "baseline" },
+            { name = "baseline replaced by another present ID",
+              events = { { S, "cast", nil }, { S, "cast", 5 }, { S, "cast", 6 } },
+              classes = { "unowned", "baseline", "baseline" }, state = "baseline" },
+            { name = "baseline then nil", events = { { S, "cast", nil }, { S, "cast", 5 }, { S, "cast", nil } },
+              classes = { "unowned", "baseline", "unowned" }, state = "uncertain" },
+            { name = "closed baseline repeated, then a distinct ID",
+              events = { { S, "cast", nil }, { S, "cast", 5 }, { E, "cast", 5, "stop" },
+                  { S, "cast", 5 }, { S, "cast", 6 } },
+              classes = { "unowned", "baseline", "baseline-close", "duplicate", "normal" }, state = "normal" },
+            { name = "departed by correlated STOP", events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", 1 } },
+              classes = { "normal", "correlated", "duplicate" }, state = "normal" },
+            { name = "departed by INTERRUPTED",
+              events = { { S, "cast", 1 }, { E, "cast", 1, "interrupted" }, { S, "cast", 1 } },
+              classes = { "normal", "correlated", "duplicate" }, state = "normal" },
+            { name = "departed by FAILED",
+              events = { { S, "cast", 1 }, { E, "cast", 1, "failed" }, { S, "cast", 1 } },
+              classes = { "normal", "correlated", "duplicate" }, state = "normal" },
+            { name = "departed by same-kind replacement",
+              events = { { S, "cast", 1 }, { S, "cast", 2 }, { S, "cast", 1 } },
+              classes = { "normal", "normal", "duplicate" }, state = "normal" },
+            { name = "cast departed by a channel START",
+              events = { { S, "cast", 1 }, { S, "channel", 2 }, { S, "cast", 1 } },
+              classes = { "normal", "normal", "duplicate" }, state = "normal" },
+            { name = "departed by retirement at a window close",
+              events = { { C, false }, { C, true }, { S, "cast", 1 }, { C, false }, { S, "cast", 1 } },
+              classes = { "none", "opened", "normal", "closed", "duplicate" }, state = "normal" },
+            { name = "a refresh's old ID",
+              events = { { S, "channel", 1 }, { S, "channel", 2, refresh = true }, { S, "channel", 1 } },
+              classes = { "normal", "refresh", "duplicate" }, state = "normal" },
+            { name = "the other kind's departed ID",
+              events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "channel", 1 } },
+              classes = { "normal", "correlated", "normal" }, state = "normal" },
+            { name = "two departures back, normal",
+              events = { { S, "cast", 1 }, { S, "cast", 2 }, { S, "cast", 3 }, { S, "cast", 1 } },
+              classes = { "normal", "normal", "normal", "duplicate" }, state = "normal" },
+            { name = "two departures back, uncertain",
+              events = { { S, "cast", 1 }, { S, "cast", 2 }, { S, "cast", nil }, { S, "cast", 1 } },
+              classes = { "normal", "normal", "unowned", "duplicate" }, state = "uncertain" },
+            { name = "two departures back, baseline stays open",
+              events = { { S, "cast", 1 }, { S, "cast", 2 }, { S, "cast", nil }, { S, "cast", 3 }, { S, "cast", 1 } },
+              classes = { "normal", "normal", "unowned", "baseline", "duplicate" }, state = "baseline",
+              check = function(cs) assert.is_true(cs.latest.id == 3 and cs.latest.open) end },
+            { name = "replay after an ID-less START",
+              events = { { S, "cast", "a" }, { E, "cast", "a", "stop" }, { S, "cast", nil }, { S, "cast", "a" },
+                  { E, "cast", "a", "stop" }, { S, "cast", "b" }, { E, "cast", "b", "stop" }, { S, "cast", "c" } },
+              classes = { "normal", "correlated", "unowned", "duplicate", "refused", "baseline",
+                  "baseline-close", "normal" },
+              states = { "normal", "normal", "uncertain", "uncertain", "uncertain", "baseline", "closed", "normal" } },
+            { name = "replay after an ID-less START, an older ID",
+              events = { { S, "cast", "a" }, { E, "cast", "a", "stop" }, { S, "cast", "x" }, { E, "cast", "x", "stop" },
+                  { S, "cast", nil }, { S, "cast", "a" }, { E, "cast", "a", "stop" }, { S, "cast", "b" },
+                  { E, "cast", "b", "stop" }, { S, "cast", "c" } },
+              classes = { "normal", "correlated", "normal", "correlated", "unowned", "duplicate", "refused",
+                  "baseline", "baseline-close", "normal" }, state = "normal" },
+            { name = "capacity boundary", capacity = 2,
+              events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", 2 }, { E, "cast", 2, "stop" },
+                  { S, "cast", 3 }, { E, "cast", 3, "stop" }, { S, "cast", 1 }, { S, "cast", 4 },
+                  { S, "cast", nil }, { C, false }, { C, true } },
+              classes = { "normal", "correlated", "normal", "correlated", "normal", "correlated",
+                  "duplicate", "withheld", "unowned", "none", "opened" },
+              states = { "normal", "normal", "normal", "normal", "normal", "saturated",
+                  "saturated", "saturated", "saturated", "saturated", "saturated" },
+              check = function(cs, out)
+                  assert.is_false(out[8].rec.eligible)
+                  assert.is_nil(out[8].rec.seq)
+                  assert.is_false(cs.window.known)
+              end },
+            { name = "an ID-less START whose replacement saturates", capacity = 2,
+              events = { { S, "cast", 1 }, { S, "cast", 2 }, { S, "cast", 3 }, { S, "cast", nil } },
+              classes = { "normal", "normal", "normal", "unowned" }, state = "saturated" },
+            { name = "a baseline replaced by an ID-less START that saturates", capacity = 1,
+              events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", nil }, { S, "cast", 5 },
+                  { S, "cast", nil } },
+              classes = { "normal", "correlated", "unowned", "baseline", "unowned" }, state = "saturated" },
+            { name = "a baseline close that saturates", capacity = 1,
+              events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", nil }, { S, "cast", 5 },
+                  { E, "cast", 5, "stop" } },
+              classes = { "normal", "correlated", "unowned", "baseline", "baseline-close" }, state = "saturated" },
+            { name = "a correlated interrupt that saturates", capacity = 1,
+              events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", 2 }, { E, "cast", 2, "interrupted" } },
+              classes = { "normal", "correlated", "normal", "correlated" }, state = "saturated",
+              check = function(_, out) assert.is_true(out[4].latch) end },
+            { name = "a START whose replacement saturates", capacity = 1,
+              events = { { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", 2 }, { S, "cast", 3 } },
+              classes = { "normal", "correlated", "normal", "withheld" }, state = "saturated" },
+            { name = "a refresh whose old ID saturates, then the withheld ends", capacity = 1,
+              events = { { S, "channel", 1 }, { E, "channel", 1, "stop" }, { S, "channel", 2 },
+                  { S, "channel", 3, refresh = true }, { E, "channel", 3, "stop" },
+                  { S, "cast", 4 }, { E, "cast", 4, "interrupted" } },
+              classes = { "normal", "correlated", "normal", "withheld", "withheld-end", "withheld", "withheld-end" },
+              state = "saturated",
+              check = function(_, out)
+                  assert.is_false(out[3].rec.open)
+                  assert.is_true(out[7].latch)
+              end },
+        }
+        for _, c in ipairs(cases) do
+            local cs, out = play(c.events, c.capacity or 8)
+            assert.same(c.classes, column(out, "class"), c.name)
+            if c.states then assert.same(c.states, column(out, "state"), c.name) end
+            if c.state then assert.equals(c.state, cs.recovery, c.name) end
+            if c.check then c.check(cs, out) end
+        end
+
+        -- The Avatar openers: a stays order 1, its repeat gets nothing, b is order 2.
+        local cs, out = play({ { C, false }, { C, true }, { S, "cast", "a" }, { E, "cast", "a", "stop" },
+            { S, "cast", "a" }, { S, "cast", "b" } })
+        assert.equals(1, out[3].rec.order)
+        assert.is_nil(out[5].rec)
+        assert.equals(2, out[6].rec.order)
+        assert.equals(2, cs.window.count)
+
+        -- A withheld channel cancels a pending twin hold, and the record leaves
+        -- the work list; a withheld cast does neither.
+        for _, kind in ipairs({ "cast", "channel" }) do
+            local held = TI.NewCastState({})
+            play({ { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", 2 }, { E, "cast", 2, "stop" } }, 1, held)
+            local waiting = { twinHold = true }
+            held.records = { waiting }
+            assert.equals("withheld", (TI.ClassifyStart(held, kind, 9, 9, false, 1)))
+            assert.equals(kind == "channel" and "canceled" or true, waiting.twinHold)
+            assert.equals(kind == "channel" and 0 or 1, #held.records)
+        end
+
+        local fresh = TI.NewCastState({})
+        assert.equals("normal", fresh.recovery)
+        assert.same({ cast = {}, channel = {} }, fresh.history)
+    end)
+
+    it("B: an unowned START cancels only the work it can no longer attribute", function()
+        for _, kind in ipairs({ "cast", "channel" }) do
+            local owner, rt = generation("nameplate1")
+            local cs = rt.castState
+            local tracked = { nameplate1 = rt }
+            local _, replaced = TI.ClassifyStart(cs, "channel", 1, 1)
+            replaced.cueConsumed = true
+            local earlier = { owner = owner, postEnd = true, twinHold = true }
+            cs.records = { earlier }
+            cs.pendingAdvance = { record = replaced, provenance = "fresh" }
+            local class, unowned = TI.ClassifyStart(cs, kind, nil, 2)
+            assert.equals("unowned", class)
+            assert.is_true(replaced.canceled)
+            assert.is_true(replaced.impliedStopVoid)
+            assert.is_true(replaced.cueConsumed)
+            assert.is_nil(cs.pendingAdvance)
+            assert.equals("canceled", earlier.postEnd)
+            assert.equals(kind == "channel" and "canceled" or true, earlier.twinHold)
+            -- Only a record with work still pending stays on the work list.
+            assert.equals(kind == "channel" and 0 or 1, #cs.records)
+            assert.is_true(TI.CastCallbackHolds(owner, tracked, true, earlier, "credit"))
+            assert.equals(1, cs.seq)
+            assert.is_nil(unowned.seq)
+            assert.is_false(TI.CastCallbackHolds(owner, tracked, true, unowned, "start"))
+            assert.is_false(TI.CastCallbackHolds(owner, tracked, true, unowned, "cue"))
+            assert.equals("unowned", (TI.ClassifyStart(cs, kind, nil, 3)))
+            assert.equals(1, cs.seq)
+            assert.is_nil(cs.pendingAdvance)
+        end
+        local _, rt = generation("nameplate2")
+        local cs = rt.castState
+        local _, armed = TI.ClassifyStart(cs, "cast", 1, 1)
+        local cached = { provenance = "cached", at = 50, fingerprints = { targetExists = true },
+            fingerprintsReady = true }
+        cs.pendingAdvance = cached
+        TI.ClassifyStart(cs, "cast", nil, 2)
+        assert.equals(cached, cs.pendingAdvance)
+        assert.equals(50, cached.at)
+        assert.is_true(cached.fingerprints.targetExists)
+        assert.is_true(armed.canceled)
+    end)
+
+    it("C: a baseline closes only on its own correlated end, and never becomes eligible", function()
+        local S, E, C = "start", "end", "combat"
+        local cases = {
+            { ending = { E, "cast", 5, "stop" }, outcome = "baseline-close", state = "closed", latch = false },
+            { kind = "channel", ending = { E, "channel", 5, "stop" }, outcome = "baseline-close", state = "closed",
+              latch = false },
+            { ending = { E, "cast", 5, "interrupted" }, outcome = "baseline-close", state = "closed", latch = true },
+            { ending = { E, "cast", 5, "failed" }, outcome = "baseline-close", state = "closed", latch = false },
+            { ending = { E, "cast", nil, "stop" }, outcome = "refused", state = "baseline", latch = false },
+            { ending = { E, "cast", 6, "stop" }, outcome = "refused", state = "baseline", latch = false },
+        }
+        for i, c in ipairs(cases) do
+            local kind = c.kind or "cast"
+            local _, out = play({ { S, kind, nil }, { S, kind, 5 }, c.ending })
+            assert.equals(c.outcome, out[3].class, "row " .. i)
+            assert.equals(c.state, out[3].state, "row " .. i)
+            assert.equals(c.latch, out[3].latch, "row " .. i)
+            assert.is_false(out[2].rec.eligible, "row " .. i)
+        end
+
+        local retired = play({ { S, "cast", nil }, { C, true }, { S, "cast", 5 }, { C, false } })
+        assert.equals("uncertain", retired.recovery)
+        assert.equals("refused", (TI.ClassifyEnd(retired, "cast", 5, "stop", 9)))
+        assert.equals("uncertain", retired.recovery)
+
+        local cs, out = play({ { C, false }, { S, "cast", nil }, { C, true }, { S, "cast", 5 },
+            { E, "cast", 5, "stop" }, { S, "cast", 6 } })
+        assert.is_false(out[4].rec.eligible)
+        assert.equals("normal", out[6].class)
+        assert.is_true(out[6].rec.eligible)
+        assert.is_nil(out[6].rec.order)
+        assert.is_false(cs.window.known)
+    end)
+
+    it("D: the counting window opens known only after a confirmed exit with clean recovery", function()
+        local S, E, C = "start", "end", "combat"
+        local opens = {
+            { events = { { C, false }, { C, true } }, known = true },
+            { events = { { C, true } }, known = false },
+            { events = { { C, false }, { S, "cast", nil }, { C, true } }, known = false },
+            { events = { { C, false }, { S, "cast", nil }, { S, "cast", 5 }, { C, true } }, known = false },
+            { capacity = 1, events = { { S, "cast", 1 }, { S, "cast", 2 }, { S, "cast", 3 }, { C, false },
+                { C, true } }, known = false },
+        }
+        for i, c in ipairs(opens) do
+            local cs = play(c.events, c.capacity or 2)
+            assert.equals(c.known, cs.window.known, "row " .. i)
+        end
+
+        local quiet = TI.NewCastState({})
+        assert.is_nil(TI.CombatWindowStep(quiet, nil))
+        assert.is_nil(quiet.window)
+        assert.is_false(quiet.seenFalse)
+
+        local cs, out = play({ { C, false }, { C, true }, { S, "cast", 1 } })
+        local open = out[3].rec
+        local completed = { window = cs.window, postEnd = true }
+        cs.records = { completed }
+        cs.pendingAdvance = { record = open, provenance = "fresh" }
+        cs.pairing, cs.transition = { at = 1 }, { at = 1 }
+        assert.equals("closed", TI.CombatWindowStep(cs, false))
+        assert.is_true(open.retired)
+        assert.is_false(open.open)
+        assert.is_true(completed.retired)
+        assert.is_nil(cs.pendingAdvance)
+        assert.is_nil(cs.pairing)
+        assert.is_nil(cs.transition)
+
+        local _, early = play({ { C, false }, { S, "channel", 1 }, { C, true } })
+        assert.is_nil(early[2].rec.order)
+
+        local saturating = play({ { S, "cast", 1 }, { E, "cast", 1, "stop" }, { S, "cast", nil },
+            { C, true }, { S, "cast", 5 }, { C, false } }, 1)
+        assert.equals("saturated", saturating.recovery)
+        TI.CombatWindowStep(saturating, true)
+        assert.is_false(saturating.window.known)
+        assert.equals("saturated", saturating.recovery)
+
+        local engaging = select(2, play({ { C, false }, { C, true }, { S, "cast", 1 } }))
+        assert.equals(1, engaging[3].rec.order)
+        local pre = select(2, play({ { C, false }, { S, "cast", 1 }, { C, true }, { S, "cast", 2 } }))
+        assert.is_nil(pre[2].rec.order)
+        assert.equals(1, pre[4].rec.order)
+
+        local unknown, seq = play({ { C, false }, { C, true }, { S, "cast", 1 }, { S, "cast", nil },
+            { S, "cast", 2 }, { E, "cast", 2, "stop" }, { S, "cast", 3 }, { C, false }, { C, true },
+            { S, "cast", 4 } })
+        assert.equals(1, seq[3].rec.order)
+        assert.is_nil(seq[7].rec.order)
+        assert.is_true(seq[7].rec.eligible)
+        assert.equals(1, seq[10].rec.order)
+        assert.is_true(unknown.window.known)
+
+        local firstSeen = select(2, play({ { C, true }, { S, "cast", 1 } }))
+        assert.is_true(firstSeen[2].rec.eligible)
+        assert.is_nil(firstSeen[2].rec.order)
+    end)
+
+    it("E: delayed cast work runs only for its own live owner and a record still owning it", function()
+        local owner, rt = generation("nameplate1")
+        local cs = rt.castState
+        local tracked = { nameplate1 = rt }
+        local function holds(rec, work) return TI.CastCallbackHolds(owner, tracked, true, rec, work) end
+
+        local _, a = TI.ClassifyStart(cs, "cast", 1, 1)
+        assert.is_true(holds(a, "start"))
+        assert.is_true(holds(a, "cue"))
+        TI.ClassifyEnd(cs, "cast", 1, "stop", 2)
+        assert.is_true(holds(a, "start"))
+        assert.is_false(holds(a, "cue"))
+        a.postEnd, a.twinHold = true, true
+        cs.records = { a }
+        local _, b = TI.ClassifyStart(cs, "cast", 2, 3)
+        assert.is_false(holds(a, "start"))
+        assert.is_true(holds(a, "postEnd"))
+        assert.is_true(holds(b, "cue"))
+        TI.ClassifyStart(cs, "cast", nil, 4)
+        assert.is_false(holds(a, "postEnd"))
+        assert.is_true(holds(a, "credit"))
+        assert.is_false(holds(b, "start"))
+
+        local works = { "start", "cue", "postEnd", "twinHold", "credit" }
+        local _, liveRt = generation("nameplate3")
+        local liveCs = liveRt.castState
+        local _, c = TI.ClassifyStart(liveCs, "cast", 7, 1)
+        c.postEnd, c.twinHold = true, true
+        c.retired = true
+        local deadOwner, deadRt = generation("nameplate4")
+        local _, d = TI.ClassifyStart(deadRt.castState, "cast", 8, 1)
+        d.postEnd, d.twinHold = true, true
+        deadOwner.live = false
+        local reusedOld = { owner = deadOwner, eligible = true, open = true, postEnd = true, twinHold = true }
+        for _, work in ipairs(works) do
+            assert.is_false(TI.CastCallbackHolds(liveRt.owner, { nameplate3 = liveRt }, true, c, work), work)
+            assert.is_false(TI.CastCallbackHolds(deadOwner, { nameplate4 = deadRt }, true, d, work), work)
+            assert.is_false(holds(reusedOld, work), work)
+        end
+
+        assert.is_false(TI.PendingAdvanceReady({ provenance = "cached", fingerprintsReady = false }, true))
+        assert.is_true(TI.PendingAdvanceReady({ provenance = "cached", fingerprintsReady = false }, false))
+        assert.is_true(TI.PendingAdvanceReady({ provenance = "cached", fingerprintsReady = true }, true))
+        assert.is_false(TI.PendingAdvanceReady({ provenance = "cached", fingerprintsReady = true,
+            targetNeeded = true, targetState = "pending" }, true))
+        assert.is_false(TI.PendingAdvanceReady({ consumed = true }, false))
+
+        local fresh, adopted = generation("nameplate5")
+        local moved = adopted.castState
+        local held = { owner = fresh, eligible = true, open = false, twinHold = true, seq = 41 }
+        local _, open = TI.ClassifyStart(moved, "cast", 3, 1)
+        open.seq = 42
+        moved.records = { held, open }
+        local adoptedTracked = { nameplate5 = adopted }
+        assert.is_true(TI.CastCallbackHolds(fresh, adoptedTracked, true, held, "twinHold"))
+        assert.is_true(TI.CastCallbackHolds(fresh, adoptedTracked, true, open, "cue"))
+    end)
+
+    it("opening order: what counts, what inherits, and what the order selects", function()
+        local S, E, C = "start", "end", "combat"
+        local _, counted = play({ { C, false }, { C, true }, { S, "cast", 1 }, { E, "cast", 1, "interrupted" },
+            { S, "cast", 2 }, { S, "channel", 3 } })
+        assert.equals(1, counted[3].rec.order)
+        assert.equals(2, counted[5].rec.order)
+        assert.equals(3, counted[6].rec.order)
+
+        local cs, repeats = play({ { C, false }, { C, true }, { S, "channel", 1 }, { S, "channel", 1 },
+            { S, "channel", 2, refresh = true } })
+        assert.equals(1, repeats[3].rec.order)
+        assert.equals(1, cs.window.count)
+
+        local proof = play({ { C, false }, { C, true } })
+        local _, source = TI.ClassifyStart(proof, "cast", 1, 1)
+        TI.AssignOrder(proof, source)
+        local _, phase = TI.ClassifyStart(proof, "channel", 2, 2)
+        TI.AssignOrder(proof, phase, source)
+        assert.equals(1, phase.order)
+        assert.equals(1, proof.window.count)
+
+        local spells = {
+            [10] = { castTime = 2, openingCastOrder = 1 },
+            [20] = { castTime = 2, openingCastOrder = 2 },
+            [30] = { channelTime = 4, openingCastOrder = 1 },
+            [40] = { castTime = 3 },
+        }
+        assert.same({ [10] = spells[10] }, TI.SelectOrderRows(spells, "cast", 1))
+        assert.same({ [30] = spells[30] }, TI.SelectOrderRows(spells, "channel", 1))
+        assert.equals(spells, TI.SelectOrderRows(spells, "cast", 3))
+        assert.equals(spells, TI.SelectOrderRows(spells, "cast", nil))
+        local firstSeen = select(2, play({ { C, true }, { S, "cast", 1 } }))
+        assert.equals(spells, TI.SelectOrderRows(spells, "cast", firstSeen[2].rec.order))
+        local plain = { [50] = { castTime = 2 } }
+        assert.equals(plain, TI.SelectOrderRows(plain, "cast", 1))
+    end)
+end)
