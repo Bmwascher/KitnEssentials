@@ -53,6 +53,7 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         -- Trash.xml order: inference first, so the owner-bound read chain and
         -- the resolve path find TI.
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashKingsRest.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
@@ -491,6 +492,119 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             end
         end
     end)
+
+    -- Kings' Rest (4.8): the first check of the restore refuses a held or
+    -- granted owner, so neither site adopts for it; every other decision
+    -- adopts with ordinary selection, keeps the fresh owner's decision and
+    -- clears the cached identity's wave mark, since it resolved without one.
+    it("a held or granted owner never adopts at either site; other decisions adopt", function()
+        local TI = KE.TrashInference
+        KE.TrashData[1].dungeonKey = "D"
+        KE.TrashData[1].mobs[111].spells[10].castTime = 2
+        KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
+            identity = { level = 91, sex = 1, power = 1, classID = 2, buffCount = 0, nonElite = true } } }
+        local function snapshot(level)
+            return { level = level, sex = 1, power = 1, classID = 2, buffCount = 0, unitClassification = "normal" }
+        end
+        local decisions = {
+            { decision = "held", adopts = false, resolves = false },
+            { decision = "granted", adopts = false, resolves = true },
+            { decision = nil, adopts = true },
+            { decision = "released", adopts = true },
+            { decision = "excluded", reason = "non-wave", adopts = true },
+            { decision = "excluded", reason = "strictly-neutral", adopts = true },
+        }
+        local n = 0
+        for _, d in ipairs(decisions) do
+            for _, site in ipairs({ "resolve", "layer2" }) do
+                for _, same in ipairs({ true, false }) do
+                    n = n + 1
+                    local label = string.format("%s/%s/%s", tostring(d.decision), site, same and "same" or "other")
+                    local source = "nameplate" .. n
+                    local freshUnit = same and source or ("nameplate" .. (n + 30))
+                    local old = trackResolved(source)
+                    old.owner.krDecision = "granted"             -- the cached owner's decision never returns
+                    old.waveDerived = true                       -- its identity rested on the summary
+                    DTrash:OnNameplateRemoved(nil, source)
+
+                    DTrash:OnNameplateAdded(nil, freshUnit)
+                    local fresh = DTrash.tracked[freshUnit]
+                    local owner = fresh.owner
+                    owner.krDecision, owner.krReason = d.decision, d.reason
+                    if d.decision == "granted" then
+                        owner.krBatch = { summary = { groupHasLevel90 = false, groupHasLevel90Power0 = false } }
+                    end
+                    if site == "resolve" then
+                        fresh.obs = snapshot(91)                 -- a complete lone survivor resolves
+                        DTrash:ResolveMob(fresh)
+                    else
+                        fresh.obs = snapshot(90)                 -- level-disagreed: Layer 2 only
+                        DTrash:OnCastStart(nil, freshUnit, nil, nil, 4)
+                        clock.now = clock.now + 2
+                        DTrash:OnCastStop(nil, freshUnit, nil, nil, 4)
+                    end
+
+                    local now = DTrash.tracked[freshUnit]
+                    if d.adopts then
+                        assert.equals(old, now, label)
+                        assert.equals(owner, old.owner, label)
+                        assert.equals(d.decision, old.owner.krDecision, label)
+                        assert.is_nil(old.waveDerived, label)    -- the early site returns before its own update
+                        assert.is_true(TI.CompanionTrusted(old), label)
+                    else
+                        assert.equals(fresh, now, label)
+                        assert.is_true(old._cachePending, label)  -- the cached row stays
+                        assert.is_true(old.waveDerived, label)
+                        assert.equals(d.resolves and 111 or nil, fresh.matchedNPCID, label)
+                    end
+                    DTrash:ResetTrashCache()
+                end
+            end
+        end
+    end)
+
+    -- Kings' Rest (4.3, 4.8): a Layer 2 result that rests on the frozen
+    -- summary stays wave-derived, so it never vouches as a companion, even
+    -- after its cast confirms it; a later pass keeps the mark.
+    it("a Layer 2 resolve that rests on the wave summary stays wave-derived and untrusted", function()
+        local TI = KE.TrashInference
+        KE.TrashData[1].dungeonKey = "D"
+        KE.TrashData[1].mobs[111].spells[10].castTime = 2
+        KE.TrashData[1].mobs[112] = { npcID = 112, name = "Other",
+            spells = { [20] = { first = 5, cd = { 20 }, castTime = 3 } } }
+        KE.TrashData[1].mobs[113] = { npcID = 113, name = "Wave",
+            spells = { [30] = { first = 5, cd = { 20 }, castTime = 2 } } }
+        local function identity(wave)
+            local id = { level = 91, sex = 1, power = 1, classID = 2, buffCount = 0, nonElite = true }
+            if wave then id.groupHasLevel90, id.groupHasLevel90Power0 = true, false end
+            return id
+        end
+        KE.TrashTraits = {
+            [111] = { dungeonKey = "D", name = "Mob", identity = identity() },
+            [112] = { dungeonKey = "D", name = "Other", identity = identity() },
+            [113] = { dungeonKey = "D", name = "Wave", identity = identity(true) },
+        }
+        local cases = {
+            { name = "only the summary removed the other 2 s candidate", castTime = 2, want = 111, derived = true },
+            { name = "the unpruned list gives the same NPC", castTime = 3, want = 112, derived = nil },
+        }
+        for i, c in ipairs(cases) do
+            local unit = "nameplate" .. i
+            DTrash:OnNameplateAdded(nil, unit)
+            local rt = DTrash.tracked[unit]
+            rt.owner.krDecision = "granted"                     -- the summary removes room row 113
+            rt.owner.krBatch = { summary = { groupHasLevel90 = false, groupHasLevel90Power0 = false } }
+            rt.obs = { level = 91, sex = 1, power = 1, classID = 2, buffCount = 0, unitClassification = "normal" }
+            DTrash:OnCastStart(nil, unit, nil, nil, 4 + i)      -- Layer 1 stays ambiguous: 111 and 112
+            clock.now = clock.now + c.castTime
+            DTrash:OnCastStop(nil, unit, nil, nil, 4 + i)
+            assert.equals(c.want, rt.matchedNPCID, c.name)
+            assert.equals(c.derived, rt.waveDerived, c.name)
+            assert.equals(not c.derived, TI.CompanionTrusted(rt), c.name)
+            DTrash:ResolveMob(rt)                               -- a later pass keeps the mark
+            assert.equals(c.derived, rt.waveDerived, c.name)
+        end
+    end)
 end)
 
 describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleAlert)", function()
@@ -533,6 +647,7 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         -- Inference first (Trash.xml order): the cue's fingerprint filter
         -- and the sampler's pending-advance consult both dereference TI.
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashKingsRest.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
@@ -792,6 +907,7 @@ describe("DungeonTrash — RekeyUnitAlerts destination-key collision (real Trash
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
         -- Trash.xml order: DungeonTrash and TrashOutput read TI constants at load.
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashKingsRest.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         DTrash = modules["DungeonTrash"]
