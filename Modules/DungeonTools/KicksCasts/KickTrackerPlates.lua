@@ -1115,7 +1115,7 @@ function KT:PutKickIcon(guid, unit, pend)
     self:LayoutPlate(unit)
     FlushLayouts()
     self:WatchReady(e, member)
-    self:RailsRefresh()
+    self:RailsKicker(guid)
 end
 
 -- A cooling icon moves to the ready end of its row when the cooldown ends:
@@ -1141,7 +1141,7 @@ function KT:ReleaseLive(guid)
     e.guid, e.mobGuid, e.cBase, e.cCur = nil, nil, nil, nil
     P.free.live[#P.free.live + 1] = e
     if old then self:LayoutPlate(old) end
-    self:RailsRefresh()
+    self:RailsKicker(guid)
 end
 
 ---------------------------------------------------------------------------------
@@ -1519,9 +1519,25 @@ function KT:RailsPlate(unit)
     self:LayoutPlate(unit)
 end
 
--- Every lane repainted: a live icon placed or gone, a cooldown changed.
+-- Every lane repainted: live icons back on a returning plate, or a plate gone.
 function KT:RailsRefresh()
     for _, rail in pairs(P.rails) do DressRail(rail) end
+end
+
+-- One kicker's lanes on every rail: their live icon placed or gone, or their
+-- cooldown changed. Nothing else in a lane moves with those.
+function KT:RailsKicker(guid)
+    local member, live = self.partyMembers[guid], P.live[guid]
+    local shown = not (live and live.unit)
+    for _, rail in pairs(P.rails) do
+        for i = 1, #P.kickers do
+            local lane = rail.lanes[i]
+            if lane and lane.guid == guid then
+                if member then PaintCooldown(lane.icon, member.kickStart, member.kickDuration) end
+                lane.clip:SetShown(shown)
+            end
+        end
+    end
 end
 
 -- Every lane's count gate fed again: a read, or a ghost made, superseded or gone.
@@ -1638,7 +1654,7 @@ end
 function KT:PlatesCooldown(guid)
     self:FeedReady()
     local e, member = P.live[guid], self.partyMembers[guid]
-    self:RailsRefresh()
+    self:RailsKicker(guid)
     if not e or not member then return end
     PaintCooldown(e.icon, member.kickStart, member.kickDuration)
     if e.unit then self:LayoutPlate(e.unit) end
