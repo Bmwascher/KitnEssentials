@@ -322,13 +322,16 @@ GUIFrame:RegisterContent("HealerManaRaid", function(scrollChild, yOffset)
 
     -- Bench filter: hide healers parked in subgroups 7-8 (the conventional
     -- bench in a 20-player mythic roster). Mirrors the Bench Alert convention.
+    -- A Forever raid of forty uses all eight groups, so it has no bench.
     local rowRaid3 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local excludeBenchCheck = GUIFrame:CreateCheckbox(rowRaid3, "Ignore Bench Healers (Groups 7-8)", {
-        value = db.ExcludeBenchGroups ~= false,
-        callback = function(checked) db.ExcludeBenchGroups = checked; Refresh() end,
-    })
-    rowRaid3:AddWidget(excludeBenchCheck, 0.5)
-    manager:Register(excludeBenchCheck, "raidConfig")
+    if not KE.IS_FOREVER then
+        local excludeBenchCheck = GUIFrame:CreateCheckbox(rowRaid3, "Ignore Bench Healers (Groups 7-8)", {
+            value = db.ExcludeBenchGroups ~= false,
+            callback = function(checked) db.ExcludeBenchGroups = checked; Refresh() end,
+        })
+        rowRaid3:AddWidget(excludeBenchCheck, 0.5)
+        manager:Register(excludeBenchCheck, "raidConfig")
+    end
 
     -- Same label as Party's DisableOnHealer: both mean "do not show me". Party
     -- tracks one healer, so hiding the player's row empties the tracker; Raid
@@ -402,10 +405,17 @@ GUIFrame:RegisterTabbedContent("HealerMana", {
                 else KitnEssentials:DisableModule("HealerMana") end
             end
         end)
-        card:AddLabel("Shows your healers' mana as a percentage. In a party or keystone it " ..
-            "follows the one healer (Party mode); with " .. KE:Gold("Enable in Raid") .. " on the " .. KE:Gold("Raid") .. " tab, a raid " ..
-            "stacks every healer (Raid mode). The mode switches with the group type. With the " ..
-            "tracker on, the " .. KE:Gold("Party") .. " and Raid tabs set up each mode.")
+        card:AddLabel(KE.IS_FOREVER
+            and ("Shows your healers' mana as a percentage. In a party it follows the one healer (Party mode); " ..
+                "with " .. KE:Gold("Enable in Raid") .. " on the " .. KE:Gold("Raid") .. " tab, a raid stacks every " ..
+                "healer (Raid mode). The mode switches with the group type. Another member counts as a healer " ..
+                "when their talents say so (shared by addons that carry LibSpecialization), otherwise when " ..
+                "their group role is Healer. With the tracker on, the " .. KE:Gold("Party") .. " and Raid tabs " ..
+                "set up each mode.")
+            or ("Shows your healers' mana as a percentage. In a party or keystone it " ..
+                "follows the one healer (Party mode); with " .. KE:Gold("Enable in Raid") .. " on the " .. KE:Gold("Raid") .. " tab, a raid " ..
+                "stacks every healer (Raid mode). The mode switches with the group type. With the " ..
+                "tracker on, the " .. KE:Gold("Party") .. " and Raid tabs set up each mode."))
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled ~= true
     end,
