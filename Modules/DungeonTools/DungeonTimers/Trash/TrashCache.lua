@@ -134,6 +134,8 @@ function DTrash:OnUnitFlags(_, unit)
         self._plateMeta[unit] = meta
     end
     local inCombat = safeInCombat(unit)
+    -- The same read feeds the counting-window edge (4.6).
+    self:CombatEdge(rt, inCombat)
     if meta.firstCombatFlagAt == nil and inCombat == true then
         meta.firstCombatFlagAt = GetTime()
     end
@@ -305,12 +307,10 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
 
     -- Adopt the cached table as the unit's runtime (see header: this IS the
     -- timer rebind). The new plate contributes its unit token and its fresh
-    -- Layer1 candidate list; an active cast measurement survives — a cast
-    -- begun before the flicker can legitimately STOP after it, and the
-    -- castBarID correlation still pairs. The fresh generation moves onto the
-    -- table whole: its snapshot, its recovery state and its owner with the
-    -- scheduled reads it already used. Nothing of the cached generation's
-    -- reads or owner survives, and the read budget is not refilled.
+    -- Layer1 candidate list. The fresh generation moves onto the table whole:
+    -- its snapshot, its recovery state and its owner with the scheduled reads
+    -- it already used. Nothing of the cached generation's reads or owner
+    -- survives, and the read budget is not refilled.
     cached.unit = newUnit
     cached.obs = rt.obs
     cached.obsPending = rt.obsPending
@@ -319,6 +319,45 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     -- Layer 1 trust belongs to a pass on the fresh snapshot.
     cached.layer1Resolved = nil
     cached.candidates = rt.candidates or cached.candidates
+    -- Cast state belongs to the generation that observed it (4.7). The cached
+    -- generation's records, pairing, transition, samples, cue consumption,
+    -- recovery state, departed IDs and counting window are dropped (its
+    -- callbacks already die with its owner), and the fresh generation's cast
+    -- bundle moves as one unit. The moved records are renumbered after the
+    -- adopted counter in their original order, lose their order numbers, and
+    -- the window's order becomes unknown. A fresh eligible advance supersedes
+    -- the cached one; otherwise the cached advance stays as schedule data
+    -- with its own time and samples.
+    local oldCast = cached.castState
+    local cast = rt.castState
+    if cast then
+        local base = math.max(oldCast and oldCast.seq or 0, cached.activeCastSeq or 0)
+        local cuedLatest = cast.latest ~= nil and rt._castStartCuedSeq ~= nil
+            and rt._castStartCuedSeq == cast.latest.seq
+        local seen = {}
+        local function renumber(rec)
+            if seen[rec] then return end
+            seen[rec] = true
+            rec.order, rec.orderPending = nil, nil
+            if rec.seq then
+                base = base + 1
+                rec.seq = base
+            end
+        end
+        for _, rec in ipairs(cast.records) do renumber(rec) end
+        if cast.latest then renumber(cast.latest) end
+        cast.seq = base
+        if cast.window then cast.window.known = false end
+        local cachedAdvance = oldCast and oldCast.pendingAdvance
+        if cachedAdvance and not (cast.pendingAdvance and cast.pendingAdvance.provenance == "fresh") then
+            cachedAdvance.provenance = "cached"
+            cast.pendingAdvance = cachedAdvance
+        end
+        cached._castStartCuedSeq = (cuedLatest and cast.latest.seq) or nil
+    end
+    cached.castState = cast
+    cached.channelRefreshAt, cached.channelRefreshSeq = nil, nil
+    self:SyncActiveCast(cached)
     cached._cacheRestoredAt = now
     cached._cachePending = nil
     self.tracked[newUnit] = cached

@@ -50,6 +50,8 @@ describe("DungeonTrash — CAST_START start-advance", function()
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
         TI = KE.TrashInference
+        -- Owner-bound cast callbacks (4.4) act only while monitoring is on.
+        DTrash.monitoring = true
 
         DTrash.ScheduleAlert = function(_, rt, npcID, spellID, _, nextStart)
             scheduled[#scheduled + 1] = { unit = rt.unit, npcID = npcID,
@@ -189,67 +191,91 @@ describe("DungeonTrash — CAST_START start-advance", function()
         assert.equals(100, rt.pendingStartAdvanceAt)
     end)
 
-    it("a plate blink inside the sample window cannot poison the pending (flicker-gap)", function()
+    -- Removal kills the owner (4.4), so a removed plate's sampler does
+    -- nothing. Its pending advance stays on the cached table as schedule data
+    -- and is consumed after a restore with its own carried samples.
+    it("a removed plate's sampler does nothing; its pending advance survives as schedule data", function()
         local rt = trackResolved("nameplate1")
         rt.castConfirmed = true
         local base = #timers
         DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 7)
-        DTrash:OnNameplateRemoved(nil, "nameplate1")     -- cached mid-window
-        assert.is_true(rt._cachePending)
-        fireTimersAfter(base)                            -- sampler fires mid-gap
-        assert.equals("success", rt.anchors[10].mode)    -- consumed, not stranded
+        local sampler = #timers
+        DTrash:OnNameplateRemoved(nil, "nameplate1")     -- cached mid-window; owner dead
+        for i = base + 1, sampler do timers[i].fn() end  -- the sampler is refused
+        assert.is_nil(rt.startFingerprintsReady)
+        assert.equals(100, rt.pendingStartAdvanceAt)
+        assert.equals("enter", rt.anchors[10].mode)
+        DTrash:OnNameplateAdded(nil, "nameplate7")
+        local adopted = DTrash:TryRestoreCachedRuntime(DTrash.tracked.nameplate7, 111)
+        assert.equals(rt, adopted)
+        DTrash:ApplyPendingStartAdvance(adopted)
+        assert.equals("success", rt.anchors[10].mode)
+        assert.equals(131, rt.anchors[10].nextStartAt)
         assert.is_nil(rt.pendingStartAdvanceAt)
     end)
 
-    it("a paired cast->channel transition does not arm a fresh advance", function()
-        DTrash:OnNameplateAdded(nil, "nameplate1")               -- stays unresolved
-        local rt = DTrash.tracked.nameplate1
-        DTrash:OnCastStart(nil, "nameplate1", nil, nil, 5)
+    -- Transition proof (4.4) replaces the +1 rule: a channel is its cast's
+    -- channel phase only when a two-phase cast phase explains the measured
+    -- cast, after the cast's own STOP within the pairing window or while the
+    -- cast is still open. Bar IDs are opaque; any distinct ID works.
+    local function addTwoPhase()
+        KE.TrashData[1].mobs[111].spells[60] = { name = "Beam", castTime = 3, channelTime = 6,
+            first = 7, cd = { 15 } }
+    end
+
+    it("a proven channel phase after its cast's STOP clears the advance and arms none", function()
+        addTwoPhase()
+        local rt = trackResolved("nameplate1")
+        DTrash:OnCastStart(nil, "nameplate1", nil, nil, "a")
         assert.equals(100, rt.pendingStartAdvanceAt)
-        assert.equals("cast", rt.pendingStartAdvanceKind)
         clock.now = 103
-        DTrash:OnCastStop(nil, "nameplate1", nil, nil, 5)
+        DTrash:OnCastStop(nil, "nameplate1", nil, nil, "a")
         clock.now = 103.1
-        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 6)    -- +1 within window: paired
+        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, "b")
         assert.is_true(rt.sawCastIntoChannel)
-        assert.is_nil(rt.pendingStartAdvanceAt)                  -- cleared, NOT re-armed
-        -- an UNPAIRED start re-arms normally
+        assert.equals(100, rt.transitionCastStartAt)
+        assert.is_nil(rt.pendingStartAdvanceAt)
         clock.now = 110
-        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 9)
+        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, "c")   -- no cast before it: unproven
+        assert.is_nil(rt.transitionCastStartAt)
         assert.equals(110, rt.pendingStartAdvanceAt)
         assert.equals("channel", rt.pendingStartAdvanceKind)
     end)
 
-    -- The incoming channel pairs against the
-    -- STILL-ACTIVE cast, needing no processed STOP — a late,
-    -- reordered or dropped STOP must not break the transition proof. Each
-    -- miss fired the phantom one-phase twin credit AND anchored the
-    -- channel late by castTime.
-    it("an implied-stop +1 channel pairs against the STILL-ACTIVE cast", function()
-        DTrash:OnNameplateAdded(nil, "nameplate1")
-        local rt = DTrash.tracked.nameplate1
-        DTrash:OnCastStart(nil, "nameplate1", nil, nil, 5)
+    it("a channel starting while its cast is still open is proven through the implied stop", function()
+        addTwoPhase()
+        local rt = trackResolved("nameplate1")
+        DTrash:OnCastStart(nil, "nameplate1", nil, nil, "a")
         clock.now = 103
-        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 6)   -- STOP never processed
+        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, "b")   -- the cast's STOP never arrived
         assert.is_true(rt.sawCastIntoChannel)
-        assert.equals(100, rt.transitionCastStartAt)    -- anchors at the TRUE cast start
-        assert.is_nil(rt.pendingStartAdvanceAt)         -- paired: no fresh advance
-        -- the superseded cast's late STOP is now a stale event
+        assert.equals(100, rt.transitionCastStartAt)
+        assert.is_nil(rt.pendingStartAdvanceAt)
         clock.now = 103.05
-        DTrash:OnCastStop(nil, "nameplate1", nil, nil, 5)
-        assert.equals("channel", rt.activeCastKind)     -- channel untouched
-        assert.equals(100, rt.transitionCastStartAt)    -- pairing intact for the channel finish
+        DTrash:OnCastStop(nil, "nameplate1", nil, nil, "a")      -- the replaced cast's late STOP is refused
+        assert.equals("channel", rt.activeCastKind)
+        assert.equals(100, rt.transitionCastStartAt)
     end)
 
-    it("a non-adjacent channel while a cast is active does not pair (D2 control)", function()
-        DTrash:OnNameplateAdded(nil, "nameplate1")
-        local rt = DTrash.tracked.nameplate1
-        DTrash:OnCastStart(nil, "nameplate1", nil, nil, 5)
-        clock.now = 103
-        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 9)   -- +4: not the same castbar rolling over
-        assert.is_nil(rt.sawCastIntoChannel)
-        assert.is_nil(rt.transitionCastStartAt)
-        assert.equals(103, rt.pendingStartAdvanceAt)    -- unpaired start re-arms
+    it("a channel is not proven when no two-phase cast explains the cast, or its STOP is too old", function()
+        addTwoPhase()
+        local cases = {
+            { castFor = 1, gap = 0.1 },   -- 1 s: no two-phase cast phase fits
+            { castFor = 3, gap = 0.5 },   -- outside the 0.25 s pairing window
+        }
+        for i, c in ipairs(cases) do
+            local unit = "nameplate" .. i
+            local rt = trackResolved(unit)
+            local t0 = clock.now
+            DTrash:OnCastStart(nil, unit, nil, nil, "a")
+            clock.now = t0 + c.castFor
+            DTrash:OnCastStop(nil, unit, nil, nil, "a")
+            clock.now = clock.now + c.gap
+            DTrash:OnChannelStart(nil, unit, nil, nil, "b")
+            assert.is_nil(rt.sawCastIntoChannel, "row " .. i)
+            assert.is_nil(rt.transitionCastStartAt, "row " .. i)
+            assert.equals(clock.now, rt.pendingStartAdvanceAt, "row " .. i)
+        end
     end)
 
     -- WS9: a curated forced cast SEQUENCE (KE.TrashForcedCastSequences) names

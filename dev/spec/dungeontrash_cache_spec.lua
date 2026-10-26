@@ -410,6 +410,81 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             assert.is_true(TI.RecoveryOwnerHolds(owner, DTrash.tracked, true), s.name)
         end
     end)
+
+    it("a restore drops the old generation's cast state and moves the fresh cast bundle at both sites", function()
+        KE.TrashData[1].dungeonKey = "D"
+        KE.TrashData[1].mobs[111].spells[10].castTime = 2
+        KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
+            identity = { level = 91, sex = 1, power = 1, classID = 2, buffCount = 0, nonElite = true } } }
+        local function snapshot(level)
+            return { level = level, sex = 1, power = 1, classID = 2, buffCount = 0, unitClassification = "normal" }
+        end
+        local rows = {
+            { name = "early adoption, same token", site = "start", source = "nameplate1", fresh = "nameplate1",
+              id = 9, recovery = "normal", seq = 2, advance = 1, active = "cast" },
+            { name = "early adoption, different token, unowned START", site = "start", source = "nameplate2",
+              fresh = "nameplate7", recovery = "uncertain", advance = 0 },
+            { name = "late Layer 2 adoption, same token", site = "layer2", source = "nameplate3",
+              fresh = "nameplate3", id = 9, recovery = "normal", seq = 2, advance = 1 },
+            { name = "late Layer 2 adoption, different token", site = "layer2", source = "nameplate4",
+              fresh = "nameplate8", id = 9, recovery = "normal", seq = 2, advance = 1 },
+            { name = "another resolve caller with the sampler queued", site = "sweep", source = "nameplate5",
+              fresh = "nameplate9", id = 9, recovery = "normal", seq = 2, advance = 1, active = "cast" },
+        }
+        for _, s in ipairs(rows) do
+            local t0 = clock.now
+            local old = trackResolved(s.source)
+            DTrash:OnCastStart(nil, s.source, nil, nil, 4)       -- the old generation's open cast
+            local oldCs = old.castState
+            local oldRec = oldCs.latest
+            oldCs.recovery = "saturated"
+            DTrash:OnNameplateRemoved(nil, s.source)
+
+            clock.now = t0 + 1
+            DTrash:OnNameplateAdded(nil, s.fresh)
+            local fresh = DTrash.tracked[s.fresh]
+            local cs = fresh.castState
+            cs.window = { count = 0, known = true }
+            world.combat[s.fresh] = true
+            if s.site == "start" then fresh.obs = snapshot(91) end
+            if s.site == "layer2" then fresh.obs = snapshot(90) end
+            local base = #timers
+            DTrash:OnCastStart(nil, s.fresh, nil, nil, s.id)
+            local rec = cs.latest
+            if s.site == "layer2" then
+                clock.now = t0 + 3
+                DTrash:OnCastStop(nil, s.fresh, nil, nil, s.id)
+            elseif s.site == "sweep" then
+                fresh.obs, fresh.obsPending = snapshot(91), nil
+                DTrash:ResolveMob(fresh)
+            end
+
+            local adopted = DTrash.tracked[s.fresh]
+            assert.equals(old, adopted, s.name)
+            assert.equals(cs, adopted.castState, s.name)
+            assert.is_true(oldCs ~= adopted.castState, s.name)
+            assert.equals(rec, cs.latest, s.name)
+            assert.is_true(oldRec ~= cs.latest, s.name)
+            assert.equals(s.recovery, cs.recovery, s.name)
+            assert.is_nil(rec.order, s.name)
+            assert.is_false(cs.window.known, s.name)
+            assert.equals(s.seq, rec.seq, s.name)
+            assert.equals(t0 + s.advance, adopted.pendingStartAdvanceAt, s.name)
+            assert.equals(s.active, adopted.activeCastKind, s.name)
+            if s.site == "sweep" then
+                DTrash.monitoring = true
+                for i = base + 1, #timers do timers[i].fn() end
+                DTrash.monitoring = false
+                assert.is_true(rec.fingerprintsReady, s.name)
+                assert.is_true(adopted.startFingerprintsReady, s.name)
+                assert.is_nil(fresh.startFingerprintsReady, s.name)
+            end
+            if s.id then
+                DTrash:OnCastStart(nil, s.fresh, nil, nil, s.id)   -- the fresh open or departed ID repeats
+                assert.equals(rec, cs.latest, s.name)
+            end
+        end
+    end)
 end)
 
 describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleAlert)", function()
@@ -456,6 +531,8 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
+        -- The +0.10 s sampler is owner-bound (4.4) and acts only while monitoring is on.
+        DTrash.monitoring = true
 
         -- Config accessors (TrashConfig.lua not loaded) + display sink.
         DTrash.GetSpellDisabled = function() return false end
