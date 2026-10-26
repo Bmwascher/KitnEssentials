@@ -1,4 +1,5 @@
--- file-map.lua: map every shipped file to its sidebar section and row.
+-- file-map.lua: map every shipped file to its sidebar section and row, and
+-- every row to its tabs and cards.
 --
 -- Run from the repo root with the local Lua interpreter:
 --   lua dev/scripts/file-map.lua [--out <path>] [--retail <file>]
@@ -14,27 +15,73 @@
 --     each registeredContent["<id>"], and each string of a plain string list
 --     looped by `for _, <var> in ipairs({ ... })` when the builder reads
 --     registeredContent[<var>].
--- Page files register one of those ids. A settings file that registers
--- through a variable, or registers nothing, is a page for each id it quotes.
--- Module files name an id in guiPath or guiTab. Files no row reaches are
--- listed by folder, then the manifests in load order (from load-list.lua),
--- then the retail-only list (dev/scripts/retail-only.lua unless --retail
--- names another).
+-- A parent or tab id may be a string or a file-level string constant. Page
+-- files register one of those ids. A settings file that registers through a
+-- variable, or registers nothing, is a page for each id it quotes. Module
+-- files name an id in guiPath or guiTab.
+--
+-- Under each row, "Tabs and cards" lists the row's own cards (its header,
+-- above every tab, or the whole page when it has no tabs), then each tab with
+-- its label and cards, nested tabs indented. A child read from
+-- registeredContent has no label and prints as Chained: a page drawn inside
+-- its parent's. The cards of a content id are the CreateCard calls and the
+-- GUI/GUIWidgets card builders inside its RegisterContent or
+-- RegisterTabbedContent call, in source order, with every function of the
+-- same file named there expanded in place, and every column-0
+-- `function X.Name(` of a settings file called as `.Name(`. A Register call
+-- whose id is a parameter of its function is read once per call of that
+-- function; one whose id is a field of an ipairs loop variable, once per
+-- entry of the looped local table. A title that is a string, a bound
+-- parameter or `<param>.<field> or "<default>"` prints as text; any other
+-- prints as dynamic. The "Error" placeholder card is left out.
+--
+-- A tab marked retail only is absent on WoW Forever, for one of two reasons:
+-- its page file is not in `load-list.lua --client camelot`, or its id is not
+-- in FOREVER_ALLOWED in Core/Availability.lua. A page file only the camelot
+-- list loads is marked Forever only. Code inside a page that hides a card on
+-- Forever is not read (see foreverNote).
+--
+-- Files no row reaches are listed by folder, then the manifests in load order
+-- (from load-list.lua, both clients), then the retail-only list
+-- (dev/scripts/retail-only.lua unless --retail names another).
 --
 -- Without --out the map prints to stdout; --out writes the bytes directly,
 -- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
 -- self-check fails: a row with no page file, a settings file no row reaches,
--- a tab strip the rules above cannot read, a retail-only entry that is not a
--- tracked file, a tracked .lua file that neither toc loads, or a load-list.lua
--- line that is not a toc header, an <inline> line or an existing file. The
--- map is written either way, failures first.
+-- a tab strip the rules above cannot read or whose labels are not strings, a
+-- Register call whose content id cannot be read, a retail-only entry that is
+-- not a tracked file, a tracked .lua file that neither client loads, or a
+-- load-list.lua line that is not a toc header, an <inline> line or an
+-- existing file. The map is written either way, failures first.
 
 local SIDEBAR_FILE = "GUI/GUIMain/GUI-MainFrame.lua"
+local AVAILABILITY_FILE = "Core/Availability.lua"
 local PAGE_ROOTS = { "GUI/", "KitnEssentials_Options/" }
 local MODULE_ROOTS = { "Modules/", "Core/" }
 local OPTIONS_ROOT = "KitnEssentials_Options/"
 local TOCS = { "KitnEssentials.toc", "KitnEssentials_Options/KitnEssentials_Options.toc" }
 local STRIP_CALLS = { TabbedContent = true, NestedTabs = true }
+-- The files that define the Register methods: their calls take the id as a
+-- parameter of the method and register nothing themselves.
+local REGISTRY_FILES = { ["GUI/GUIMain/GUI-Core.lua"] = true, ["GUI/GUIMain/GUI-TabbedContent.lua"] = true }
+-- Card builders that take (scrollChild, yOffset, config), and the title each
+-- prints when config has none; false when it has no default.
+local BUILDER_DEFAULTS = {
+    CreatePositionCard = "Position Settings",
+    CreateFontSettingsCard = "Font Settings",
+    CreateColorsCard = "Colors",
+    CreateAuraGlowCard = "Glow",
+    CreateGlowSettingsCard = "Glow",
+    CreateAuraApplicationSoundCard = "Sound",
+    CreateSpecEnableCard = "Enable per Specialization",
+    CreateAuraCasterNameCard = "Caster Name",
+    CreateTauntCursorCard = "Taunt Countdown",
+    CreateDispelTypeColorsCard = "Dispel Type Colors",
+    CreateDispelCursorCard = "Dispel Countdown",
+    CreateAuraAllowlistCard = false,
+}
+local EXPAND_DEPTH = 8
+local CARD_SEP = " \194\183 "
 local REFRESH = "lua dev/scripts/file-map.lua --out dev/docs/FILE-MAP.md"
 
 local outPath
@@ -91,6 +138,161 @@ local function escapePattern(s)
     return (s:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1"))
 end
 
+local function trim(s)
+    return s:match("^%s*(.-)%s*$")
+end
+
+-- The token starting at i: "name", "string", "comment" or "other", and its
+-- last position.
+local function token(text, i)
+    local c = text:sub(i, i)
+    if c == "-" and text:sub(i + 1, i + 1) == "-" then
+        local eq = text:match("^%-%-%[(=*)%[", i)
+        if eq then
+            local _, e = text:find("]" .. eq .. "]", i, true)
+            return "comment", e or #text
+        end
+        local e = text:find("\n", i, true)
+        return "comment", e and e - 1 or #text
+    end
+    if c == "[" then
+        local eq = text:match("^%[(=*)%[", i)
+        if eq then
+            local _, e = text:find("]" .. eq .. "]", i, true)
+            return "string", e or #text
+        end
+    end
+    if c == '"' or c == "'" then
+        local j = i + 1
+        while j <= #text do
+            local d = text:sub(j, j)
+            if d == "\\" then
+                j = j + 2
+            elseif d == c or d == "\n" then
+                return "string", j
+            else
+                j = j + 1
+            end
+        end
+        return "string", #text
+    end
+    local _, e = text:find("^[%a_][%w_]*", i)
+    if e then return "name", e end
+    _, e = text:find("^%d[%w%.]*", i)
+    return "other", e or i
+end
+
+-- Calls fn(kind, first, last) for each token from `from` on until fn returns
+-- true. Punctuation other than "-" and "[" is skipped.
+local function eachToken(text, from, fn)
+    local i = from
+    while true do
+        i = text:find("[%-%[\"'%w_]", i)
+        if not i then return end
+        local kind, e = token(text, i)
+        if fn(kind, i, e) then return end
+        i = e + 1
+    end
+end
+
+-- Comments blanked to spaces, newlines and positions kept, so a pattern never
+-- matches inside one.
+local function stripComments(text)
+    local parts, last = {}, 1
+    eachToken(text, 1, function(kind, s, e)
+        if kind == "comment" then
+            parts[#parts + 1] = text:sub(last, s - 1)
+            parts[#parts + 1] = (text:sub(s, e):gsub("[^\n]", " "))
+            last = e + 1
+        end
+    end)
+    parts[#parts + 1] = text:sub(last)
+    return table.concat(parts)
+end
+
+local OPENS = { ["function"] = true, ["if"] = true, ["do"] = true, ["repeat"] = true }
+local CLOSES = { ["end"] = true, ["until"] = true }
+
+-- The last position of the function whose keyword starts at `start`.
+local function blockEnd(code, start)
+    local depth, stop = 0, #code
+    eachToken(code, start, function(kind, s, e)
+        if kind ~= "name" then return end
+        local word = code:sub(s, e)
+        if OPENS[word] then
+            depth = depth + 1
+        elseif CLOSES[word] then
+            depth = depth - 1
+            if depth == 0 then
+                stop = e
+                return true
+            end
+        end
+    end)
+    return stop
+end
+
+-- The bracket closing the one at `open`, skipping strings; the end of the
+-- text when it does not balance.
+local function matchClose(code, open)
+    local depth, i = 0, open
+    while true do
+        i = code:find("[(){}%[%]\"']", i)
+        if not i then return #code end
+        local c = code:sub(i, i)
+        if c == '"' or c == "'" or (c == "[" and code:find("^%[=*%[", i)) then
+            local _, e = token(code, i)
+            i = e
+        elseif c == "(" or c == "{" or c == "[" then
+            depth = depth + 1
+        else
+            depth = depth - 1
+            if depth == 0 then return i end
+        end
+        i = i + 1
+    end
+end
+
+-- The comma-separated pieces of an argument list or table body, trimmed.
+local function splitTop(inner)
+    local pieces, depth, last, i = {}, 0, 1, 1
+    while true do
+        i = inner:find("[(){}%[%],\"']", i)
+        if not i then break end
+        local c = inner:sub(i, i)
+        if c == '"' or c == "'" or (c == "[" and inner:find("^%[=*%[", i)) then
+            local _, e = token(inner, i)
+            i = e
+        elseif c == "(" or c == "{" or c == "[" then
+            depth = depth + 1
+        elseif c == ")" or c == "}" or c == "]" then
+            depth = depth - 1
+        elseif depth == 0 then
+            pieces[#pieces + 1] = trim(inner:sub(last, i - 1))
+            last = i + 1
+        end
+        i = i + 1
+    end
+    local tail = trim(inner:sub(last))
+    if tail ~= "" or #pieces > 0 then pieces[#pieces + 1] = tail end
+    return pieces
+end
+
+local function callArgs(code, open)
+    local close = matchClose(code, open)
+    return splitTop(code:sub(open + 1, close - 1)), close
+end
+
+local function prevChar(code, at)
+    local b = at - 1
+    while b > 0 and code:find("^%s", b) do b = b - 1 end
+    return code:sub(b, b), b
+end
+
+local function nextCharAt(code, at)
+    return code:match("^%s*()", at)
+end
+
 local failures = {}
 local function fail(msg) failures[#failures + 1] = msg end
 
@@ -100,51 +302,62 @@ for _, path in ipairs(commandLines("git ls-files -- Core GUI Modules KitnEssenti
     trackedSet[path] = true
 end
 
-local sources = {}
+local sources, codeOf = {}, {}
 for _, path in ipairs(tracked) do
-    if path:match("%.lua$") then sources[path] = readFile(path) or "" end
+    if path:match("%.lua$") then
+        sources[path] = readFile(path) or ""
+        codeOf[path] = stripComments(sources[path])
+    end
 end
 
--- Load list, through the same resolver the load-order proof uses. Lua 5.1's
+-- Load lists, through the same resolver the load-order proof uses. Lua 5.1's
 -- popen close returns no exit status, so the output is checked instead: every
 -- non-zero exit of load-list.lua prints a MISSING line or a Lua error.
 local interpreter = arg[-1] or "lua"
-local loadCmd = interpreter .. " dev/scripts/load-list.lua 2>&1"
-if interpreter:find(" ", 1, true) then
-    loadCmd = '"' .. interpreter .. '" dev/scripts/load-list.lua 2>&1'
-    if package.config:sub(1, 1) == "\\" then loadCmd = '"' .. loadCmd .. '"' end
+local function loadListCommand(client)
+    local script = " dev/scripts/load-list.lua --client " .. client .. " 2>&1"
+    if not interpreter:find(" ", 1, true) then return interpreter .. script end
+    local cmd = '"' .. interpreter .. '"' .. script
+    if package.config:sub(1, 1) == "\\" then cmd = '"' .. cmd .. '"' end
+    return cmd
 end
-local loadLines = commandLines(loadCmd)
 
 -- A missing file prints a MISSING line and its bare path; the MISSING line
 -- reports it.
-local missingSet = {}
-for _, line in ipairs(loadLines) do
-    local path = line:match("^MISSING: (.+)$")
-    if path then missingSet[path] = true end
-end
-
-local loaded, manifests, tocSeen = {}, {}, {}
-for _, line in ipairs(loadLines) do
-    local toc = line:match("^# (.+)$")
-    if toc then
-        tocSeen[toc] = true
-    elseif not (line:match("^<inline> ") or line:match("^%s*$") or missingSet[line]) then
-        if fileExists(line) then
-            loaded[line] = true
-            if line:match("%.xml$") then manifests[#manifests + 1] = line end
-        else
-            fail("load-list.lua: " .. line)
+local function readLoadList(client)
+    local lines = commandLines(loadListCommand(client))
+    local label = "load-list.lua --client " .. client
+    local missingSet = {}
+    for _, line in ipairs(lines) do
+        local path = line:match("^MISSING: (.+)$")
+        if path then missingSet[path] = true end
+    end
+    local loadedSet, manifestList, tocSeen = {}, {}, {}
+    for _, line in ipairs(lines) do
+        local toc = line:match("^# (.+)$")
+        if toc then
+            tocSeen[toc] = true
+        elseif not (line:match("^<inline> ") or line:match("^%s*$") or missingSet[line]) then
+            if fileExists(line) then
+                loadedSet[line] = true
+                if line:match("%.xml$") then manifestList[#manifestList + 1] = line end
+            else
+                fail(label .. ": " .. line)
+            end
         end
     end
+    for _, toc in ipairs(TOCS) do
+        if not tocSeen[toc] then fail(label .. " printed no header for " .. toc) end
+    end
+    if next(loadedSet) == nil then fail(label .. " printed no files") end
+    return loadedSet, manifestList
 end
-for _, toc in ipairs(TOCS) do
-    if not tocSeen[toc] then fail("load-list.lua printed no header for " .. toc) end
-end
-if next(loaded) == nil then fail("load-list.lua printed no files") end
+
+local loaded, manifests = readLoadList("standard")
+local foreverLoaded, foreverManifests = readLoadList("camelot")
 for _, path in ipairs(tracked) do
-    if path:match("%.lua$") and not loaded[path] then
-        fail("tracked but loaded by neither toc: " .. path)
+    if path:match("%.lua$") and not (loaded[path] or foreverLoaded[path]) then
+        fail("tracked but loaded by neither client: " .. path)
     end
 end
 
@@ -158,6 +371,14 @@ if okRetail and type(retailList) == "table" then
     end
 else
     fail("could not read the retail-only list " .. retailPath .. ": " .. tostring(retailList))
+end
+
+local foreverAllowed = {}
+local allowedTable = (codeOf[AVAILABILITY_FILE] or ""):match("local%s+FOREVER_ALLOWED%s*=%s*(%b{})")
+if allowedTable then
+    for id in allowedTable:gmatch("([%a_][%w_]*)%s*=%s*true") do foreverAllowed[id] = true end
+else
+    fail("FOREVER_ALLOWED not found in " .. AVAILABILITY_FILE)
 end
 
 -- Sidebar sections and rows, read as text.
@@ -181,56 +402,141 @@ for block in (config or "{}"):sub(2, -2):gmatch("%b{}") do
     end
 end
 
-local function tableIds(tableText, kids)
-    for child in tableText:gmatch('id%s*=%s*"([^"]+)"') do kids[#kids + 1] = child end
+-- File-level string constants, by name; a name given two values is dropped.
+local constsOf = {}
+for path, code in pairs(codeOf) do
+    local consts = {}
+    for name, value in code:gmatch('local%s+([%a_][%w_]*)%s*=%s*"([^"]*)"') do
+        if consts[name] == nil then
+            consts[name] = value
+        elseif consts[name] ~= value then
+            consts[name] = false
+        end
+    end
+    constsOf[path] = consts
+end
+
+local function constant(path, name)
+    local value = constsOf[path] and constsOf[path][name]
+    return value or nil
+end
+
+local function literal(expr)
+    return expr:match('^"([^"]*)"$') or expr:match("^'([^']*)'$")
+end
+
+local function idValue(path, expr)
+    return literal(expr) or (expr:match("^[%a_][%w_]*$") and constant(path, expr))
+end
+
+local function tableFieldsRaw(tableText)
+    local raw = {}
+    local inner = tableText:sub(2, -2)
+    for _, piece in ipairs(splitTop(inner)) do
+        local key, value = piece:match("^([%a_][%w_]*)%s*=%s*(.-)$")
+        if key and value:sub(1, 1) ~= "=" then raw[key] = value end
+    end
+    return raw
+end
+
+-- Each { id = ..., label = ... } entry, at any depth.
+local function tableIds(path, text, kids)
+    for group in text:gmatch("%b{}") do
+        local raw = tableFieldsRaw(group)
+        local id = raw.id and idValue(path, raw.id)
+        if id then
+            kids[#kids + 1] = { id = id, label = raw.label and literal(raw.label) or nil, labeled = true }
+        else
+            tableIds(path, group:sub(2, -2), kids)
+        end
+    end
 end
 
 -- A local tab table, plus every local table an ipairs loop copies into it.
-local function localTableIds(text, name, kids)
-    local own = text:match("local%s+" .. name .. "%s*=%s*(%b{})")
-    if own then tableIds(own, kids) end
-    for source in text:gmatch("ipairs%(%s*([%a_][%w_]*)%s*%)%s*do%s*" .. name .. "%[") do
-        local copied = text:match("local%s+" .. source .. "%s*=%s*(%b{})")
-        if copied then tableIds(copied, kids) end
+local function localTableIds(path, code, name, kids)
+    local own = code:match("local%s+" .. name .. "%s*=%s*(%b{})")
+    if own then tableIds(path, own, kids) end
+    for source in code:gmatch("ipairs%(%s*([%a_][%w_]*)%s*%)%s*do%s*" .. name .. "%[") do
+        local copied = code:match("local%s+" .. source .. "%s*=%s*(%b{})")
+        if copied then tableIds(path, copied, kids) end
     end
 end
 
 -- The whole Register*( ... ) call, or the rest of the file when its
 -- parentheses do not balance.
-local function callSpan(text, open)
-    return text:match("^%b()", open) or text:sub(open)
+local function callSpan(code, open)
+    return code:sub(open, matchClose(code, open))
 end
 
-local children = {}
-for path, text in pairs(sources) do
-    if underAny(path, PAGE_ROOTS) then
-        for kind, open, parent, argAt in text:gmatch('Register(%w*)()%(%s*"([^"]+)"%s*,%s*()') do
-            local kids = {}
-            local word = text:match("^([%a_][%w_]*)", argAt)
-            if text:sub(argAt, argAt) == "{" then
-                tableIds(text:match("^%b{}", argAt) or "", kids)
-            elseif STRIP_CALLS[kind] then
-                if word == "function" then
-                    tableIds(callSpan(text, open), kids)
-                elseif word then
-                    localTableIds(text, word, kids)
-                end
-                if #kids == 0 then fail("tab strip not followed: " .. path .. ": " .. parent) end
-            elseif kind == "Content" and word == "function" then
-                local span = callSpan(text, open)
-                if span:find("registeredContent%[") then
-                    for id in span:gmatch('registeredContent%[%s*"([^"]+)"%s*%]') do kids[#kids + 1] = id end
-                    for var, list in span:gmatch("for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(%s*(%b{})%s*%)") do
-                        if not list:find("[={]", 2) and span:find("registeredContent%[%s*" .. var .. "%s*%]") then
-                            for id in list:gmatch('"([^"]+)"') do kids[#kids + 1] = id end
+-- A function tab list shows its tabs in the order of its longest
+-- `return { ... }`, which may differ from where each entry is defined; an
+-- entry it never returns keeps its place after those.
+local function sortByReturn(path, span, kids)
+    local longest = {}
+    for list in span:gmatch("return%s*(%b{})") do
+        local pieces = splitTop(list:sub(2, -2))
+        if #pieces > #longest then longest = pieces end
+    end
+    local rank = {}
+    for i, piece in ipairs(longest) do
+        local entry = piece
+        if piece:match("^[%a_][%w_]*$") then entry = span:match("local%s+" .. piece .. "%s*=%s*(%b{})") or "" end
+        local raw = entry:sub(1, 1) == "{" and tableFieldsRaw(entry) or {}
+        local id = raw.id and idValue(path, raw.id)
+        if id and not rank[id] then rank[id] = i end
+    end
+    for i, kid in ipairs(kids) do kid.order = rank[kid.id] or (#longest + i) end
+    table.sort(kids, function(a, b) return a.order < b.order end)
+end
+
+local children, labels = {}, {}
+for _, path in ipairs(tracked) do
+    local code = codeOf[path]
+    if code and underAny(path, PAGE_ROOTS) then
+        for kind, open, first, argAt in code:gmatch('Register(%w*)()%(%s*("?[%w_]+"?)%s*,%s*()') do
+            local parent = idValue(path, first)
+            if parent then
+                local kids = {}
+                local word = code:match("^([%a_][%w_]*)", argAt)
+                if code:sub(argAt, argAt) == "{" then
+                    tableIds(path, code:match("^%b{}", argAt) or "", kids)
+                elseif STRIP_CALLS[kind] then
+                    if word == "function" then
+                        local span = callSpan(code, open)
+                        tableIds(path, span, kids)
+                        sortByReturn(path, span, kids)
+                    elseif word then
+                        localTableIds(path, code, word, kids)
+                    end
+                    if #kids == 0 then fail("tab strip not followed: " .. path .. ": " .. parent) end
+                elseif kind == "Content" and word == "function" then
+                    local span = callSpan(code, open)
+                    if span:find("registeredContent%[") then
+                        for id in span:gmatch('registeredContent%[%s*"([^"]+)"%s*%]') do kids[#kids + 1] = { id = id } end
+                        for var, list in span:gmatch("for%s+[%w_]+%s*,%s*([%a_][%w_]*)%s+in%s+ipairs%(%s*(%b{})%s*%)") do
+                            if not list:find("[={]", 2) and span:find("registeredContent%[%s*" .. var .. "%s*%]") then
+                                for id in list:gmatch('"([^"]+)"') do kids[#kids + 1] = { id = id } end
+                            end
                         end
                     end
                 end
-            end
-            if #kids > 0 then
                 local all = children[parent] or {}
-                for _, id in ipairs(kids) do all[#all + 1] = id end
-                children[parent] = all
+                local named = labels[parent] or {}
+                for _, kid in ipairs(kids) do
+                    if kid.labeled and not kid.label then
+                        fail("tab label not read: " .. path .. ": " .. parent .. ": " .. kid.id)
+                    end
+                    local known = false
+                    for _, id in ipairs(all) do
+                        if id == kid.id then known = true break end
+                    end
+                    if not known then all[#all + 1] = kid.id end
+                    named[kid.id] = named[kid.id] or kid.label
+                end
+                if #all > 0 then
+                    children[parent] = all
+                    labels[parent] = named
+                end
             end
         end
     end
@@ -249,6 +555,304 @@ local function contentIds(rowId)
         end
     end
     return ids
+end
+
+local function paramList(text)
+    local params = {}
+    for _, p in ipairs(splitTop(text)) do
+        if p:match("^[%a_][%w_]*$") then params[#params + 1] = p end
+    end
+    return params
+end
+
+-- Functions a page can reach by name: `local function N(`, `function N(`,
+-- `N = function(` and `local N = function(` for a declared local N. Exports
+-- are column-0 `function X.Name(` or `X:Name(` definitions and
+-- `X.Name = <local function>` aliases in settings files, by last name.
+local defsOf, exports = {}, {}
+local function addDef(path, list, name, start, params)
+    local def = { path = path, name = name, start = start, stop = blockEnd(codeOf[path], start), params = paramList(params) }
+    list[name] = list[name] or {}
+    table.insert(list[name], def)
+    return def
+end
+
+for _, path in ipairs(tracked) do
+    local code = codeOf[path]
+    if code and underAny(path, PAGE_ROOTS) then
+        local localNames = {}
+        for at in code:gmatch("%f[%w_]local%s+()") do
+            local i = at
+            while true do
+                local name, after = code:match("^([%a_][%w_]*)%s*()", i)
+                if not name or name == "function" then break end
+                localNames[name] = true
+                if code:sub(after, after) ~= "," then break end
+                i = nextCharAt(code, after + 1)
+            end
+        end
+        local defs, seenStart = {}, {}
+        for start, name, params in code:gmatch("%f[%w_]()function%s+([%a_][%w_]*)%s*%(([^)]*)%)") do
+            seenStart[start] = true
+            addDef(path, defs, name, start, params)
+        end
+        for nameAt, name, start, params in code:gmatch("%f[%w_]()([%a_][%w_]*)%s*=%s*()function%s*%(([^)]*)%)") do
+            local before = prevChar(code, nameAt)
+            if localNames[name] and not seenStart[start] and before ~= "." and before ~= ":" then
+                addDef(path, defs, name, start, params)
+            end
+        end
+        for _, list in pairs(defs) do
+            table.sort(list, function(a, b) return a.start < b.start end)
+        end
+        defsOf[path] = defs
+        if path:sub(1, #OPTIONS_ROOT) == OPTIONS_ROOT then
+            for lineAt, line in ("\n" .. code):gmatch("\n()([^\n]*)") do
+                local name, params = line:match("^function%s+[%a_][%w_]*[%.:][%w_%.:]-([%a_][%w_]*)%s*%(([^)]*)%)")
+                if name then addDef(path, exports, name, lineAt - 1, params) end
+                local alias, target = line:match("^[%a_][%w_%.]*%.([%a_][%w_]*)%s*=%s*([%a_][%w_]*)%s*$")
+                local def = alias and defs[target] and defs[target][#defs[target]]
+                if def then
+                    exports[alias] = exports[alias] or {}
+                    table.insert(exports[alias], def)
+                end
+            end
+        end
+    end
+end
+
+-- The definition a use at `at` refers to: the last one before it, else the
+-- first after it (a forward-declared local). None when the span being walked
+-- defines the name itself, since its body is already walked.
+local function pickDef(list, at, s, e)
+    local before, after
+    for _, def in ipairs(list or {}) do
+        if def.start >= s and def.start <= e then return nil end
+        if def.start < at then
+            before = def
+        elseif not after then
+            after = def
+        end
+    end
+    return before or after
+end
+
+local function enclosingDef(path, at)
+    local best
+    for _, list in pairs(defsOf[path] or {}) do
+        for _, def in ipairs(list) do
+            if def.start < at and def.stop > at and (not best or def.start > best.start) then best = def end
+        end
+    end
+    return best
+end
+
+-- A string from a literal, a bound parameter, `<param>.<field>` or
+-- `<param>.<field> or "<default>"`; nil when the value is only known at run
+-- time.
+local function resolveExpr(path, expr, binding)
+    local text = literal(expr)
+    if text then return text end
+    local var, field, default = expr:match('^([%a_][%w_]*)%.([%a_][%w_]*)%s+or%s+"([^"]*)"$')
+    if not var then var, field = expr:match("^([%a_][%w_]*)%.([%a_][%w_]*)$") end
+    if var then
+        local bound = binding and binding[var]
+        local value = type(bound) == "table" and bound[field] or nil
+        if type(value) == "string" then return value end
+        return default
+    end
+    if expr:match("^[%a_][%w_]*$") then
+        local bound = binding and binding[expr]
+        if type(bound) == "string" then return bound end
+        return constant(path, expr)
+    end
+    return nil
+end
+
+local function tableFields(path, tableText, binding)
+    local fields = {}
+    for key, value in pairs(tableFieldsRaw(tableText)) do
+        fields[key] = resolveExpr(path, value, binding)
+    end
+    return fields
+end
+
+local function bindArgs(path, params, args, binding)
+    local bound = {}
+    for i, param in ipairs(params) do
+        local arg = args[i]
+        if arg then
+            if arg:sub(1, 1) == "{" then
+                bound[param] = tableFields(path, arg, binding)
+            elseif arg:match("^[%a_][%w_]*$") and binding and type(binding[arg]) == "table" then
+                bound[param] = binding[arg]
+            else
+                bound[param] = resolveExpr(path, arg, binding)
+            end
+        end
+    end
+    return bound
+end
+
+local function dynamic(expr)
+    return "dynamic `" .. expr:gsub("%s+", " ") .. "`"
+end
+
+-- Appends to `out` the card titles of code[s..e], expanding the functions it
+-- names, in source order.
+local function walk(path, s, e, binding, depth, onPath, out)
+    local code = codeOf[path]
+    eachToken(code, s, function(kind, ts, te)
+        if ts > e then return true end
+        if kind ~= "name" then return end
+        local word = code:sub(ts, te)
+        local prev = prevChar(code, ts)
+        local nextAt = nextCharAt(code, te + 1)
+        local nextC = code:sub(nextAt, nextAt)
+        local member = prev == "." or prev == ":"
+        if member and nextC == "(" and word == "CreateCard" then
+            local args = callArgs(code, nextAt)
+            local title = args[2] or ""
+            if title ~= '"Error"' then
+                out[#out + 1] = resolveExpr(path, title, binding) or dynamic(title)
+            end
+            return
+        end
+        if member and nextC == "(" and BUILDER_DEFAULTS[word] ~= nil then
+            local args = callArgs(code, nextAt)
+            local configText = args[3] or ""
+            local raw = configText:sub(1, 1) == "{" and tableFieldsRaw(configText) or {}
+            if raw.title then
+                out[#out + 1] = resolveExpr(path, raw.title, binding) or dynamic(raw.title)
+            else
+                out[#out + 1] = BUILDER_DEFAULTS[word] or dynamic("config.title")
+            end
+            return
+        end
+        if nextC == "=" and code:sub(nextAt + 1, nextAt + 1) ~= "=" then return end
+        local def
+        if member then
+            local list = exports[word]
+            if nextC == "(" and list and #list == 1 then def = list[1] end
+        else
+            def = pickDef(defsOf[path] and defsOf[path][word], ts, s, e)
+        end
+        if not def or onPath[def] or depth >= EXPAND_DEPTH then return end
+        local bound = {}
+        if nextC == "(" then bound = bindArgs(path, def.params, callArgs(code, nextAt), binding) end
+        onPath[def] = true
+        walk(def.path, def.start, def.stop, bound, depth + 1, onPath, out)
+        onPath[def] = nil
+    end)
+end
+
+-- The ids a Register call at `at` registers, each with the parameter values
+-- of its call: a string, a constant, a parameter of the enclosing function
+-- (once per call of it in the file), or a field of an ipairs loop variable
+-- (once per entry of the looped local table).
+local function registrations(path, at, first)
+    local id = idValue(path, first)
+    if id then return { { id = id } } end
+    local var, field = first:match("^([%a_][%w_]*)%.([%a_][%w_]*)$")
+    var = var or first:match("^([%a_][%w_]*)$")
+    if not var then return {} end
+    local code = codeOf[path]
+    local found = {}
+    local owner = enclosingDef(path, at)
+    local isParam = false
+    for _, p in ipairs(owner and owner.params or {}) do
+        if p == var then isParam = true end
+    end
+    if isParam then
+        eachToken(code, 1, function(kind, ts, te)
+            if kind ~= "name" or code:sub(ts, te) ~= owner.name then return end
+            local prev, b = prevChar(code, ts)
+            if prev == "." or prev == ":" or code:sub(b - 7, b) == "function" then return end
+            local nextAt = nextCharAt(code, te + 1)
+            if code:sub(nextAt, nextAt) ~= "(" then return end
+            local bound = bindArgs(path, owner.params, callArgs(code, nextAt), nil)
+            local value = bound[var]
+            if field then value = type(value) == "table" and value[field] or nil end
+            if type(value) == "string" then found[#found + 1] = { id = value, binding = bound } end
+        end)
+        return found
+    end
+    if not field then return found end
+    local listName
+    for loopAt, name in code:gmatch("()for%s+[%w_]+%s*,%s*" .. var .. "%s+in%s+ipairs%(%s*([%a_][%w_]*)%s*%)") do
+        if loopAt < at then listName = name end
+    end
+    local tableAt = listName and code:match("local%s+" .. listName .. "%s*=%s*(){")
+    if not tableAt then return found end
+    local entries = code:sub(tableAt + 1, matchClose(code, tableAt) - 1)
+    for _, entry in ipairs(splitTop(entries)) do
+        if entry:sub(1, 1) == "{" then
+            local fields = tableFields(path, entry, nil)
+            if fields[field] then found[#found + 1] = { id = fields[field], binding = { [var] = fields } } end
+        end
+    end
+    return found
+end
+
+local cardsOf, registeredIn = {}, {}
+for _, path in ipairs(tracked) do
+    local code = codeOf[path]
+    if code and underAny(path, PAGE_ROOTS) then
+        for kind, open in code:gmatch("[:.]Register(%w+)%s*()%(") do
+            if kind == "Content" or kind == "TabbedContent" then
+                local args, close = callArgs(code, open)
+                local regs = registrations(path, open, args[1] or "")
+                if #regs == 0 and not REGISTRY_FILES[path] then
+                    fail("content id not read: " .. path .. ": " .. (args[1] or ""))
+                end
+                for _, reg in ipairs(regs) do
+                    local cards = cardsOf[reg.id] or {}
+                    walk(path, open, close, reg.binding, 0, {}, cards)
+                    cardsOf[reg.id] = cards
+                    registeredIn[reg.id] = registeredIn[reg.id] or {}
+                    registeredIn[reg.id][path] = true
+                end
+            end
+        end
+    end
+end
+
+-- Whether a content id exists on WoW Forever, from the files that register
+-- it and the client policy. Card-level hiding inside a page is not read; a
+-- reader for it would mark the card titles walk() collects.
+local function foreverNote(id)
+    local onRetail, onForever = false, false
+    for path in pairs(registeredIn[id] or {}) do
+        onRetail = onRetail or loaded[path] == true
+        onForever = onForever or foreverLoaded[path] == true
+    end
+    if onRetail and not onForever then return "retail only: page not loaded on Forever" end
+    if onForever and not onRetail then return "Forever only" end
+    if not foreverAllowed[id] then return "retail only: id withheld on Forever" end
+    return nil
+end
+
+local function cardText(id)
+    local cards = cardsOf[id]
+    if not cards or #cards == 0 then return "no cards" end
+    return table.concat(cards, CARD_SEP)
+end
+
+local function idText(id)
+    local note = foreverNote(id)
+    return "(`" .. id .. "`" .. (note and "; " .. note or "") .. ")"
+end
+
+local function tabLines(add, parent, indent, seen)
+    for _, id in ipairs(children[parent] or {}) do
+        if not seen[id] then
+            seen[id] = true
+            local label = labels[parent] and labels[parent][id]
+            local head = label and ('Tab "' .. label .. '" ') or "Chained "
+            add(indent .. "- " .. head .. idText(id) .. ": " .. cardText(id))
+            tabLines(add, id, indent .. "  ", seen)
+        end
+    end
 end
 
 -- Settings files that register through a variable, or register no id, are
@@ -317,6 +921,10 @@ for _, section in ipairs(sections) do
             add(fileLine(path))
         end
         add("")
+        add("Tabs and cards:")
+        add("- " .. (children[row.id] and "Header " or "Page ") .. idText(row.id) .. ": " .. cardText(row.id))
+        tabLines(add, row.id, "", { [row.id] = true })
+        add("")
     end
 end
 
@@ -350,6 +958,12 @@ add("## Manifests in load order")
 add("")
 for _, path in ipairs(manifests) do add("- `" .. path .. "`") end
 add("")
+add("Forever (`--client camelot`) loads these in their place:")
+add("")
+for _, path in ipairs(foreverManifests) do
+    if not loaded[path] then add("- `" .. path .. "`") end
+end
+add("")
 
 add("## Retail-only files")
 add("")
@@ -362,6 +976,14 @@ local doc = {
     "# KitnEssentials file map",
     "",
     "Generated by `" .. REFRESH .. "` at `" .. sha .. "`. Regenerate after any move.",
+    "",
+    "Tabs and cards: each row's own cards (Header: shown above every tab; Page: a row with no tabs), " ..
+        "then each tab and its cards in source order, nested tabs indented. Chained: a page drawn inside its parent's. " ..
+        "Dynamic: a title set at run time. Cards of a strip a page builds inside itself are listed with the page.",
+    "",
+    "Forever: `retail only: page not loaded on Forever` means the camelot load list skips the page file; " ..
+        "`retail only: id withheld on Forever` means Core/Availability.lua does not admit the id. " ..
+        "A card a page hides on Forever by its own check is not read, so a Forever tab can show fewer cards than listed.",
     "",
 }
 if #failures > 0 then
