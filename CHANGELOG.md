@@ -1,288 +1,123 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.14.32
+## v4.15.0
 
-### WoW Forever
+KitnEssentials now runs on WoW Forever. Also new: kick icons on enemy
+nameplates, Party Stops, an Inspect Talents panel, caster names on External
+Tracker and Movement Buffs, and settings pages that all follow one layout.
 
-- Automation (General, Interface, Quests & Social, Vendors & Bags tabs),
-  Combat Logger and Merchant Pages, all off until switched on; Hide
-  Helptips is on by default, as on retail
-- Combat Logger logs dungeons, 40-, 20- and 10-player raids and
-  battlegrounds
-- Hide Transforms covers the Hallowed Wand costumes, Noggenfogger, Savory
-  Deviate Delight, Savory Whimsyfin Delight and Orb of Deception
-- The Group Finder, housing roll, Vantus Rune, Voidcore, keystone, Auction
-  House filter and pet battle duel options are left out there
-- Not yet tested on the live Forever client
+### WoW Forever (Beta)
 
----
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
 
-## v4.14.31
-
-### WoW Forever
-
-- Combat Timer, Combat Texts, Cursor Effects (Cursor and Taunt tabs),
-  Player Crosshair, Range Display, Focus Castbar and Status Texts (Pet
-  Status, Player Absorbs), all off until switched on
+- **NEW:** KitnEssentials loads on WoW Forever. Modules that work there
+  run, everything else stays hidden, settings pages included
+- Available: Home and Profiles, System Optimization, CVars, UI Scaling and
+  Version Check; Dark Theme (more than 50 Blizzard windows in their Forever
+  layouts, plus Progress Legacy, the Catalog Shop, the Talking Head and the
+  PvP Rank, Skills and Statistics pages), Color Picker, Tooltips, Chat (with
+  Chat History and Chat Links) and the Damage Meter; Addon Skins for Ace3,
+  Baganator, BetterFriendlist, BigWigs, BugSack and Simulationcraft
+- Also available: Character Panel, Inspect Panel and Compare Header (with
+  missing-enchant warnings at level 60 and ranged-slot text); Player Buffs,
+  Player Debuffs, Advanced Debuffs, External Tracker, Movement Buffs and
+  Totem Tracker, with Forever spell lists; Combat Timer, Combat Texts,
+  Cursor Effects, Player Crosshair, Range Display, Focus Castbar, Pet Status
+  and Player Absorbs; Automation, Combat Logger, Merchant Pages, Secondary
+  Stats, Spell Alert Opacity, Move Frames, Copy Anything and Slash Commands.
+  The combat and Automation modules start off until you switch them on
+- Copy from Retail: on the first Forever login of an account, a one-time
+  popup explains how to export your Retail profile and opens the import box;
+  the copy lands as a new profile, "KitnUI - Retail". Profiles, Sharing has
+  a "Copy from Retail" card that opens the same box any time
+- Retail profile strings import, and the chat line names any turned-on
+  features this client does not have
 - Focus Castbar skips Shield Bash without a shield and picks the kick again
-  on a stance or off-hand change
-- Player Crosshair picks its range spell from your talents, class and Druid
-  form
-- Taunt countdown tracks Taunt, Growl and Flame Shock
-- Combat Texts also warns on low ranged weapon durability
-- Not yet tested on the live Forever client
+  on a stance or off-hand change; Player Crosshair picks its range spell
+  from your talents, class and Druid form; the Taunt countdown tracks Taunt,
+  Growl and Flame Shock; Combat Texts also warns on low ranged weapon
+  durability
+- The Loot window glows quest items, as on retail
+- Chat treats a first name and surname as one name for role icons, mentions
+  and the keyword sound; a Role Icons card picks the role icons chat draws
+- Options that need realms, Mythic+, keystones, the Group Finder or
+  dual-spec profiles are left out there
+- With the Gamepad interface style on, the skins stay off until you /reload
+  in mouse and keyboard style; when the game won't let an addon reload the
+  UI, a reload button appears to click instead
 
----
+### Retail
 
-## v4.14.30
+Everything below is for Retail.
 
-### Interrupt Tracker
+#### Interrupt Tracker
 
-- Nameplate Icons: each teammate's kick icon (spell art, class-colored
-  border, cooldown swipe and countdown) shows on the enemy nameplate they
-  kicked, left of the health bar, in the same order on every client; when
-  the game hides who kicked, only the right teammate's icon is revealed
+- **NEW:** Nameplate Icons: each teammate's kick icon (spell art,
+  class-colored border, cooldown swipe and countdown) shows on the enemy
+  nameplate they kicked, left of the health bar, in the same order on every
+  client. When the game hides who kicked, only the right teammate's icon is
+  revealed
 - Icons wait on the mob each teammate announced as their focus marker
 - New settings: Show Bars, Nameplate Icons, Show Above Overlapping
-  Nameplates, Use Nicknames (bars show NSRT nicknames) and a Nameplate
-  Icons card
-
-### Dungeon Tools
-
-- Focus Marker announces "My Focus Marker is {rtN}" with the marker icon
-  in chat, and tells EllesmereUI and MDT users' addons
-
----
-
-## v4.14.29
-
-### Aura Tracking
-
-- Totem Tracker preview shows four icons
-- Party Cooldowns: the Raid Cooldowns Edit Mode box covers the whole row of
-  preview icons
-
----
-
-## v4.14.28
-
-### Party Cooldowns and Party Stops
-
-- With Party Cooldowns, Party Stops and the Interrupt Tracker all on, one
-  failed inspect no longer leaves a teammate on fallback talents for longer
-- Party Stops asks again when its own talent read fails, even after another
-  module's read of the same teammate worked
-
----
-
-## v4.14.27
-
-### Interrupt Tracker
-
-- A Balance Druid's Solar Beam that interrupts a cast shows 45 s with Light
-  of the Sun, on the Druid's own bar and on teammates' screens
-
----
-
-## v4.14.26
-
-### Settings
-
-- DoT Tracker, Character Panel and Mythic+ Timer settings open on inner
-  tabs (DoT: Tracking and Display; Character Panel: Character, Inspect and
-  Extras; Mythic+ Timer: General, Timer, Forces, Objectives & Deaths and
-  Enemy Overlay)
-- CC Tracker gains Show Time Left, Swipe and Time Left Color, and its cards
-  follow the standard order
-- Damage Meter shows its description while switched off
-
----
-
-## v4.14.25
-
-### Settings
-
-- About 26 pages list their cards in one order: the module's own cards
-  first, then Display, Position, Font, Colors, Glow and Sound
-- Loot Roll and Ready Check Consumables use the standard Position Settings
-  card, with Anchor From and To Screen added; the Loot Window card is now
-  "Loot Window Position"
-- Notes are reworded, with gold marking commands, other addons and the
-  names of controls, tabs and cards; the support Discord names on Home are
-  gold
-
----
-
-## v4.14.24
-
-### Settings
-
-- Card titles follow one standard across about 30 pages (for example Focus
-  Castbar's "Display Settings" and "Sound"; Home's "Preferences")
-- A switched-off module keeps its top card and description instead of a
-  bare title bar
-- Switches and checkboxes inside a page no longer print a chat line; the
-  title-bar switch still prints On/Off
-- The UI Widgets Edit Mode box reads "Top Center Container"
-
----
-
-## v4.14.23
-
-### Aura Tracking
-
-- External Tracker and Movement Buffs: a new Caster Name card with Class
-  Color, Name Color, Show Realm, Name Size, Name Position, X and Y offsets
-  and Name Width; names now show by default, centered on each icon
-- Hide My Own Name puts buffs you, your pet or your totems cast in their own
-  block with no name; on by default
-- Hide Buffs You Cast Yourself hides only your own casts again, so
-  teammates' externals show
-
----
-
-## v4.14.22
-
-### General
-
-- Select Frame: the frame picker now picks the chat panel and the Damage
-  Meter, and frames anchored to either land on it even when it appears later
-- Edit Mode: Custom Cooldowns, No Movement Alert and the Mythic+ Timer
-  follow the mouse when dragged at a Scale other than 1
-
----
-
-## v4.14.21
-
-### Dark Theme
-
-- Inspect: the player's name is centered over the window, with the level
-  and spec line just below it
-
----
-
-## v4.14.20
-
-### Character Panel
-
-- New Inspect Talents panel beside the inspect window (on by default with
-  Character Panel): the player's class, hero and spec trees, spec and hero
-  icons, gear stat chips in the Secondary Stats colors, and a Copy Loadout
-  button; a small arrow under the window's close button opens and closes it
-- If you share their spec, a colored ring marks talents where your builds
-  differ, with a legend row; turn it off with Compare With My Talents
-- New Inspect Talents card on the Character Panel page: Show Talents Beside
-  Inspect, Open Automatically, Show Gear Stats, Compare With My Talents and
-  Node Size
-
----
-
-## v4.14.19
-
-### Party Stops
-
-- New module, off by default, on its own Party Stops tab under Kicks & Casts:
-  one grid of icons for your party's crowd control (stuns, fears, knockbacks
-  and grips, 19 spells), each counting down its cooldown once used, with the
-  player's nickname in class color along the bottom
-- A teammate's stop starts when its debuff appears on an enemy nameplate; your
-  own starts from your cast. Talents are read inside dungeons, so a stop shows
-  only for players who can have it
-- Pick which spells show and their order, Icons Per Row, grow direction, icon
-  size, spacing, timer and name text; any party, never raids, with an Only in
-  Dungeons option; moves in KE Edit Mode
-
----
-
-## v4.14.18
-
-### Custom Cooldowns
-
-- A single pipe character in the separator or a spell name no longer breaks
-  the line's colors
-- The Spec pick on the settings page stays after Add or Remove
-
-### DoT Tracker
-
-- The Spec pick on the settings page stays after Add, Remove or a color Reset
-
-### Focus Castbar
-
-- Mute Sound On Kick CD keeps the cast sound muted for your kick's real
-  cooldown, talents included (for example Counterspell 25 s, Mind Freeze 15 s,
-  Solar Beam 60 s)
-
-### No Movement Alert
-
-- A single pipe character in the separator or a custom text no longer breaks
-  the line's colors
-
----
-
-## v4.14.17
-
-### Dark Theme
-
-- Housing: the Homes dropdown is skinned on both the House Information and
-  Blueprints tabs, and the Blueprints page (list, group headers, details and
-  budgets) is skinned too
-- The Renown skin option is removed: its window no longer exists
-
-### Addon Skins
-
-- BetterFriendlist: the status stripe stays 2 screen pixels wide at any
-  window scale, the guild tab's scroll bar is skinned, and the old-style
-  portrait shows one icon
-- Mythic Dungeon Tools: the skin option is removed, since the addon now
-  ships its own dark look
-
-### Settings Window
-
-- The Close and Home Page buttons show a tooltip on hover
-
----
-
-## v4.14.16
-
-### Interrupt Tracker
-
+  Nameplates, Use Nicknames (bars show NSRT nicknames) and a Nameplate Icons
+  card
 - Sends and reads no addon messages, so it works the same whether or not
   teammates run KitnEssentials; the Kick Sync card is removed and an old
   Kick Sync setting does nothing
 - A teammate's kick is named from the Damage Meter's Interrupts list, and
   their bar shows the kick as the meter counts it, even when the game hides
   who kicked
-- Corrected cooldowns: Counterspell 20 s with Quick Witted, Mind Freeze 12 s
-  after a qualifying kick, Pummel 13.5 s, Quell 18 s with Interwoven Threads
 - Teammates' kick talents are read by inspecting them; a teammate whose
   talents cannot be read shows their longest cooldown
+- Corrected cooldowns: Counterspell 20 s with Quick Witted, Mind Freeze 12 s
+  after a qualifying kick, Pummel 13.5 s, Quell 18 s with Interwoven
+  Threads, and a Balance Druid's Solar Beam 45 s with Light of the Sun when
+  it interrupts a cast
 
----
+#### Party Stops
 
-## v4.14.15
+- **NEW:** Module, off by default, on its own Party Stops tab under Kicks &
+  Casts: one grid of icons for your party's crowd control (stuns, fears,
+  knockbacks and grips, 19 spells), each counting down its cooldown once
+  used, with the player's nickname in class color along the bottom
+- A teammate's stop starts when its debuff appears on an enemy nameplate;
+  your own starts from your cast. Talents are read inside dungeons, so a
+  stop shows only for players who can have it
+- Pick which spells show and their order, Icons Per Row, grow direction,
+  icon size, spacing, timer and name text; any party, never raids, with an
+  Only in Dungeons option; moves in KE Edit Mode
 
-### Damage Meter
+#### Focus Marker
 
-- In combat, every death the meter sees happen reads as a clock time
-  (1:07); raw seconds (240s) show only for a death already listed after a
-  /reload or a long hitch
-- A death recap longer than its list shows the newest lines, ending on the
-  killing blow, in both the hover tip and the opened recap
-- Death logs show damage only: the game's death recap does not include
-  heals
-- Windows tab, Sizing card: Window Width is now Bar Width, beside Bar
-  Height, and the split sliders set exact pixel sizes
-- Appearance tab, Header card: Match Text Size (on by default) and a Header
-  Height slider for a taller or shorter header
-- While the settings are open, sample bars fill each window below its real
-  rows, so sizes can be judged on an empty meter
-- A UI scale change lays the meter out again without a /reload
+- Announces "My Focus Marker is {rtN}" with the marker icon in chat, and
+  tells EllesmereUI and MDT users' addons
 
----
+#### Character Panel
 
-## v4.14.14
+- **NEW:** Inspect Talents panel beside the inspect window (on by default
+  with Character Panel): the player's class, hero and spec trees, spec and
+  hero icons, gear stat chips in the Secondary Stats colors, and a Copy
+  Loadout button; a small arrow under the window's close button opens and
+  closes it
+- If you share their spec, a colored ring marks talents where your builds
+  differ, with a legend row; turn it off with Compare With My Talents
+- New Inspect Talents card: Show Talents Beside Inspect, Open Automatically,
+  Show Gear Stats, Compare With My Talents and Node Size
+- The settings open on inner tabs: Character, Inspect and Extras
 
-### Party Cooldowns
+#### External Tracker and Movement Buffs
+
+- **NEW:** Caster Name card with Class Color, Name Color, Show Realm, Name
+  Size, Name Position, X and Y offsets and Name Width; names now show by
+  default, centered on each icon
+- Hide My Own Name puts buffs you, your pet or your totems cast in their own
+  block with no name; on by default
+- Hide Buffs You Cast Yourself hides only your own casts again, so
+  teammates' externals show
+
+#### Party Cooldowns
 
 - A new General tab, first in the strip, holds Show In, the font face and
   outline, and the colors the party frame icons, Potion bars and Raid
@@ -295,205 +130,128 @@
   Settings card
 - Raid Cooldowns: an optional Healer position (Use Healer Position, off by
   default) moves the box to its own spot in a healer spec; its Edit Mode box
-  is labeled Healer or Default
+  is labeled Healer or Default and covers the whole row of preview icons
+- Trinket cooldowns no longer disappear for the rest of the session when
+  the game is slow to return a trinket's details
+- Talent-based cooldowns use each teammate's correct talent ranks,
+  including after they change spec; one failed inspect no longer leaves a
+  teammate on fallback talents for longer
 - The charge count no longer trusts its self-check when the game hides the
   answers, so a count it cannot confirm stays off
 
----
+#### Totem Tracker
 
-## v4.14.13
+- The preview shows four icons
 
-### Dungeon Timers
+#### Settings
+
+- Card titles follow one standard across about 30 pages (for example Focus
+  Castbar's "Display Settings" and "Sound"; Home's "Preferences")
+- About 26 pages list their cards in one order: the module's own cards
+  first, then Display, Position, Font, Colors, Glow and Sound
+- A switched-off module keeps its top card and description instead of a
+  bare title bar
+- Switches and checkboxes inside a page no longer print a chat line; the
+  title-bar switch still prints On/Off
+- DoT Tracker and Mythic+ Timer settings open on inner tabs (DoT: Tracking
+  and Display; Mythic+ Timer: General, Timer, Forces, Objectives & Deaths
+  and Enemy Overlay)
+- Loot Roll and Ready Check Consumables use the standard Position Settings
+  card, with Anchor From and To Screen added; the Loot Window card is now
+  "Loot Window Position"
+- Notes are reworded, with gold marking commands, other addons and the
+  names of controls, tabs and cards
+- The Close and Home Page buttons show a tooltip on hover
+
+#### CC Tracker
+
+- Gains Show Time Left, Swipe and Time Left Color
+
+#### Damage Meter
+
+- In combat, every death the meter sees happen reads as a clock time
+  (1:07); raw seconds (240s) show only for a death already listed after a
+  /reload or a long hitch
+- A death recap longer than its list shows the newest lines, ending on the
+  killing blow, in both the hover tip and the opened recap
+- Death logs show damage only: the game's death recap does not include
+  heals
+- Windows tab, Sizing card: Window Width is now Bar Width, beside Bar
+  Height, and the split sliders set exact pixel sizes
+- Appearance tab, Header card: Match Text Size (on by default) and a Header
+  Height slider
+- While the settings are open, sample bars fill each window below its real
+  rows, so sizes can be judged on an empty meter
+- A UI scale change lays the meter out again without a /reload
+- Shows its description while switched off
+
+#### Dungeon Timers
 
 - Kings' Rest, Dazar: a "NEW BOSS" alert with a new "New Boss" voice each
-  time an add joins the fight
+  time a new boss joins the fight
 - Den of Nalorakk, Nalorakk: Defensive Stance on you plays "Safe"
 - Altar of Fangs, Zul'jan: the two channel alerts carry "Move" and
   "Soaking" sounds; both stay off until you turn them on
-- The BigWigs Messages list on the General tab includes the Storm Blessed
-  WRONG TARGET warning (Temple of Sethraliss), following its "Show WRONG
-  TARGET" checkbox
-
----
-
-## v4.14.12
-
-### General
-
-- Reload Now, the Home page's Reload UI button, the minimap button's
-  middle-click and /kes resetgui reload right away, in combat too
-
-### WoW Forever
-
-- Quality of Life page: Spell Alert Opacity, Move Frames (now including the
-  Progress Legacy window), Copy Anything and Slash Commands
-- Secondary Stats: choose from the character pane's stats, grouped; each
-  class starts with its three core stats shown
-- Not yet tested on the live Forever client
-
----
-
-## v4.14.11
-
-### WoW Forever
-
-- Copy from Retail: on the first Forever login of an account, a one-time
-  popup explains how to export your Retail profile and opens the import box
-  to paste it; the copy lands as a new profile, "KitnUI - Retail"
-- Profiles, Sharing gains a "Copy from Retail" card that opens the same box
-  any time
-- Not yet tested on the live Forever client
-
----
-
-## v4.14.10
-
-### WoW Forever
-
-- Player Buffs, Player Debuffs, Advanced Debuffs, External Tracker,
-  Movement Buffs and Totem Tracker, with their settings pages; Party
-  Cooldowns stays retail-only
-- External Tracker and Movement Buffs start with Forever spell lists:
-  every rank of the external defensives, and the movement buffs from
-  trainer, talent and item spells
-- The External Tracker page names Forever spells, and the Totem Tracker
-  page no longer mentions Evokers
-- Not yet tested on the live Forever client
-
----
-
-## v4.14.9
-
-### WoW Forever
-
-- Character Panel, Inspect Panel and Compare Header, with their settings
-  page; Mythic+ score, upgrade tracks, gems and the socket helpers, enchant
-  rank, Widen Character Window and Window Buttons are hidden
-- Missing-enchant warnings on back, chest, wrist, hands, feet, main hand and
-  a shield, at level 60
-- Item level and enchant text on the ranged slot, and above the off hand
-- The inspect item level shows once the inspected gear has loaded
-- The header and stat fonts fit the two-pane Character window, including the
-  pet stats list
-- Dark Theme skins for the PvP Rank, Skills and Statistics pages
-- Retail profile strings keep their Character Panel and Compare Header
-  settings
-- Not yet tested on the live Forever client
-
----
-
-## v4.14.8
-
-### Dungeon Timers
-
 - The Writhing Coil: an interrupted KICK 1 or KICK 2 line clears at once,
   silently, and an interrupted KICK 3 turns into a green DONE with a "Done"
   voice
+- The BigWigs Messages list on the General tab includes the Storm Blessed
+  WRONG TARGET warning (Temple of Sethraliss), following its "Show WRONG
+  TARGET" checkbox
 - Boss timers read the game's cast IDs again, which now arrive as text, so
   timers that follow or match a boss cast can recognize it
 
----
+#### Focus Castbar
 
-## v4.14.7
+- Mute Sound On Kick CD keeps the cast sound muted for your kick's real
+  cooldown, talents included (for example Counterspell 25 s, Mind Freeze
+  15 s, Solar Beam 60 s)
 
-### Party Cooldowns
+#### Custom Cooldowns, DoT Tracker and No Movement Alert
 
-- Trinket cooldowns no longer disappear for the rest of the session when
-  the game is slow to return a trinket's details
-- Talent-based cooldowns use each teammate's correct talent ranks, including
-  after they change spec
+- A single pipe character in a separator, spell name or custom text no
+  longer breaks the line's colors
+- The Spec pick on the settings page stays after Add, Remove or a color
+  Reset
 
----
+#### Dark Theme
 
-## v4.14.6
+- Inspect: the player's name is centered over the window, with the level
+  and spec line just below it
+- Housing: the Homes dropdown is skinned on both the House Information and
+  Blueprints tabs, and the Blueprints page (list, group headers, details and
+  budgets) is skinned too
+- The Renown skin option is removed: its window no longer exists
 
-### WoW Forever
+#### Addon Skins
 
-- System Optimization, with Forever's graphics values; the Mythic+ card is
-  hidden and rows for settings the client lacks are left out
-- The CVars page (General and Dev) and UI Scaling (General, Core Panels,
-  Services), with Forever's windows, including Progress Legacy
-- Version Check
-- `/kes mt` says the Mythic+ Timer is not available
-- Retail profile strings import, and the chat line names any turned-on
-  features this client does not have
-- Not yet tested on the live Forever client
+- BetterFriendlist: the status stripe stays 2 screen pixels wide at any
+  window scale, the guild tab's scroll bar is skinned, and the old-style
+  portrait shows one icon
+- Mythic Dungeon Tools: the skin option is removed, since the addon now
+  ships its own dark look
 
-### General
-
-- System Optimization counts a graphics setting the game refuses as
-  "could not be applied"
-- A damaged block in an imported profile string is skipped instead of
-  breaking that setting
-
----
-
-## v4.14.5
-
-### WoW Forever
-
-- The Loot window glows quest items, as on retail
-- Groundwork for the combat modules still to come: a kick list with every
-  rank and the stance or form each kick needs, and your role read from
-  your talents
-- Not yet tested on the live Forever client
-
----
-
-## v4.14.4
-
-### WoW Forever
-
-- The Damage Meter settings page shows its Windows, Appearance, Behavior
-  and Spell History tabs
-- Dark Theme skins the Progress Legacy window, the Catalog Shop and the
-  Talking Head
-- Addon Skins: Ace3 windows, Baganator, BetterFriendlist, BigWigs, BugSack
-  and Simulationcraft
-- A Role Icons card picks the role icons chat draws
-- The ammo slot no longer shows a stray arrow in the Character window
-- Sidebar search no longer finds options that are hidden on Forever
-- Not yet tested on the live Forever client
-
----
-
-## v4.14.3
-
-### Libraries
-
-- Bundled libraries updated to their current versions: LibSpecialization,
-  LibSharedMedia, AceDB, LibDBIcon and LibKeystone
-
----
-
-## v4.14.2
-
-KitnEssentials now runs on WoW Forever.
-
-### WoW Forever
-
-- **NEW:** KitnEssentials loads on WoW Forever. Only the modules below run
-  there; everything else stays hidden, settings pages included
-- Available: Home and Profiles, Dark Theme, Color Picker, Tooltips, Chat
-  (with Chat History and Chat Links) and the Damage Meter
-- Dark Theme skins more than 50 Blizzard windows, including Character,
-  Professions, Collections and Stable in their Forever layouts, plus its
-  Elements, fonts and context menus
-- Chat treats a first name and surname as one name for role icons,
-  mentions and the keyword sound
-- Options that need realms, Mythic+ or keystones are hidden, as are
-  dual-spec profiles
-- With the Gamepad interface style on, the skins stay off until you
-  /reload in mouse and keyboard style
-- When the game won't let an addon reload the UI, a reload button appears
-  to click instead
-- Not on Forever yet: the Combat, Aura Tracking, QoL and Dungeon Tools
-  sections, the Character Panel and the Friends window skin
-- Not yet tested on the live Forever client
-
-### Tooltips
+#### Tooltips
 
 - Darker default backdrop. A color you picked yourself is kept
+
+#### General
+
+- Select Frame: the frame picker now picks the chat panel and the Damage
+  Meter, and frames anchored to either land on it even when it appears later
+- Edit Mode: Custom Cooldowns, No Movement Alert and the Mythic+ Timer
+  follow the mouse when dragged at a Scale other than 1
+- Reload Now, the Home page's Reload UI button, the minimap button's
+  middle-click and /kes resetgui reload right away, in combat too
+- System Optimization counts a graphics setting the game refuses as "could
+  not be applied"
+- A damaged block in an imported profile string is skipped instead of
+  breaking that setting
+- The UI Widgets Edit Mode box reads "Top Center Container"
+- Bundled libraries updated: LibSpecialization, LibSharedMedia, AceDB,
+  LibDBIcon and LibKeystone
+
+---
 
 ## v4.14.1
 
