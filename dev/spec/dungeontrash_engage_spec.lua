@@ -48,7 +48,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
-        -- Owner-bound cast callbacks (4.4) act only while monitoring is on.
+        -- Owner-bound cast callbacks act only while monitoring is on.
         DTrash.monitoring = true
 
         DTrash.ScheduleAlert = function(_, rt, npcID, spellID, _, nextStart)
@@ -530,7 +530,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
             DTrash:OnCastStart(nil, "nameplate1", nil, nil, 5)
             clock.now = 102
             DTrash:OnCastStop(nil, "nameplate1", nil, nil, 5)       -- cast phase ends
-            DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 6)   -- +1 in window: proven
+            DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 6)   -- cast phase explains the cast: proven
             rt.castConfirmed = nil       -- isolate the CHANNEL evidence's lock
             clock.now = 108
             DTrash:OnChannelStop(nil, "nameplate1", nil, nil, nil, 6)

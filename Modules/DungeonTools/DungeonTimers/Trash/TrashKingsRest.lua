@@ -212,6 +212,25 @@ function KR.MemberStatus(cap, rows)
     return "clear"
 end
 
+-- How many captured entries are possible returns against `rows`, by the
+-- MemberStatus rule: an unknown entry, or one sharing a row. For the dump.
+function KR.CountPossibleReturns(entries, rows)
+    local n = 0
+    for _, e in ipairs(entries) do
+        if e.unknown then
+            n = n + 1
+        else
+            for npcID in pairs(e.set) do
+                if rows and rows[npcID] then
+                    n = n + 1
+                    break
+                end
+            end
+        end
+    end
+    return n
+end
+
 -- A known level other than 90 and no family presence (or no family axis):
 -- the member sets no group flag, so leaving it out cannot change the summary.
 function KR.StrictlyNeutral(obs, familyGate)
@@ -287,6 +306,10 @@ function KR.ReadyCheck(st, gen, env)
     local neutral = {}
     for _, owner in ipairs(remaining) do
         local status = KR.MemberStatus(owner.krCapture, rowsOf[owner])
+        -- The dump's count, for a member whose entries this check judged.
+        if status ~= "unknown-history" then
+            owner.krPossibleReturns = KR.CountPossibleReturns(owner.krCapture.entries, rowsOf[owner])
+        end
         if status == "unknown-history" then
             release(b, "unknown-history", env)
             return b.phase

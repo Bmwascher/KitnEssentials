@@ -410,7 +410,7 @@ local REPORT_AXES = {
 }
 
 -- A declared axis separates two traits only when both declare it with
--- different values: an undeclared axis never rejects a read (spec 4.2).
+-- different values: an undeclared axis never rejects a read.
 local function declaredApart(va, vb)
     return va ~= nil and vb ~= nil and va ~= vb
 end
@@ -485,7 +485,7 @@ end
 local DURATION_TOLERANCE = 0.20
 
 -- Whether other's row stays a Layer 1 candidate for trait's plate, as the
--- runtime scores it (spec 4.5): no report axis but level separates them, and
+-- runtime scores it: no report axis but level separates them, and
 -- other's level is not below trait's. A plate that reads below a row's level
 -- keeps the row; one that reads above it rejects it.
 local function competesFor(trait, other)
@@ -495,13 +495,13 @@ local function competesFor(trait, other)
 end
 
 -- The positive routes that separate a wave row from every trait that
--- competes for its plate in its room, from declared values only (spec 4.1,
--- 4.8): a declared duration that no competitor's declared duration can be
--- confused with, an interrupt where every competitor declares it cannot be
--- interrupted, and a named trusted companion. Family presence is a read axis
--- under the family gate, so a family-separated trait never competes. The
--- approved route table in spec 4.8 stays the authority; the report shows
--- only what declared values prove, and may list fewer routes.
+-- competes for its plate in its room, from declared values only: a declared
+-- duration that no competitor's declared duration can be confused with, an
+-- interrupt where every competitor declares it cannot be interrupted, and a
+-- named trusted companion. Family presence is a read axis under the family
+-- gate, so a family-separated trait never competes. The report shows only
+-- what declared values prove; observed values at runtime can add routes it
+-- does not list.
 local function positiveRoutes(trait, shares, nameOf)
     if #shares == 0 then return "its read axes alone" end
     local id, routes = trait.identity, {}

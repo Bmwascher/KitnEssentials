@@ -421,7 +421,7 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             return { level = level, sex = 1, power = 1, classID = 2, buffCount = 0, unitClassification = "normal" }
         end
         -- A cast row carrying targetHostile makes every eligible cast START of
-        -- this mob collect target evidence (4.5).
+        -- this mob collect target evidence.
         KE.TrashData[1].mobs[111].spells[10].targetHostile = false
         local rows = {
             { name = "early adoption, same token", site = "start", source = "nameplate1", fresh = "nameplate1",
@@ -493,7 +493,7 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         end
     end)
 
-    -- Kings' Rest (4.8): the first check of the restore refuses a held or
+    -- Kings' Rest: the first check of the restore refuses a held or
     -- granted owner, so neither site adopts for it; every other decision
     -- adopts with ordinary selection, keeps the fresh owner's decision and
     -- clears the cached identity's wave mark, since it resolved without one.
@@ -563,7 +563,7 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         end
     end)
 
-    -- Kings' Rest (4.3, 4.8): a Layer 2 result that rests on the frozen
+    -- Kings' Rest: a Layer 2 result that rests on the frozen
     -- summary stays wave-derived, so it never vouches as a companion, even
     -- after its cast confirms it; a later pass keeps the mark.
     it("a Layer 2 resolve that rests on the wave summary stays wave-derived and untrusted", function()
@@ -652,7 +652,7 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
-        -- The +0.10 s sampler is owner-bound (4.4) and acts only while monitoring is on.
+        -- The +0.10 s sampler is owner-bound and acts only while monitoring is on.
         DTrash.monitoring = true
 
         -- Config accessors (TrashConfig.lua not loaded) + display sink.

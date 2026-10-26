@@ -677,9 +677,9 @@ end
 -- phase; channel → channel-ONLY (a two-phase channel start is the
 -- transition, its cue fired at the cast). The record's opening order selects
 -- rows within the mob first, and a row carrying targetHostile is selected
--- strictly from the record's final target evidence (4.5). Ambiguity within
+-- strictly from the record's final target evidence. Ambiguity within
 -- the tie margin plays nothing — never a guess. Once per observation record,
--- for that record only (4.4): scheduled from BeginCast for a normal START and
+-- for that record only: scheduled from BeginCast for a normal START and
 -- bound to its generation owner.
 local CAST_START_CUE_TIE = TI.SELECTION_TIE_MARGIN  -- two candidates this close = no cue
 local CAST_START_CUE_DELAY = 0.12  -- one cue window, clears the +0.10s sampler
