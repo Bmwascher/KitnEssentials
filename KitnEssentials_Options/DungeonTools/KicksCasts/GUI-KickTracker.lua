@@ -30,6 +30,10 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:SetCondition("plates", function()
         return db.PlateIcons ~= false
     end)
+    local premarkHeld = KT and KT.PremarkHeld
+    manager:SetCondition("premark", function()
+        return db.PlateIcons ~= false and not premarkHeld
+    end)
     manager:SetCondition("plateTimer", function()
         return db.PlateIcons ~= false and db.PlateShowTimer ~= false
     end)
@@ -140,9 +144,15 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     end
 
     local rowB = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
-    PlateSwitch(rowB, "PlatePremark", "Icons on Marked Mobs",
-        "Before any kick, a teammate's icon sits on the mob carrying the focus marker " ..
-        "they announced, until their own icon is on a nameplate.")
+    local premarkSwitch = GUIFrame:CreateCheckbox(rowB, "Icons on Marked Mobs", {
+        value = db.PlatePremark ~= false and not premarkHeld,
+        tooltip = premarkHeld and "Off in this version while a game freeze it can trigger is fixed."
+            or "Before any kick, a teammate's icon sits on the mob carrying the focus marker " ..
+            "they announced, until their own icon is on a nameplate.",
+        callback = function(checked) db.PlatePremark = checked; ApplySettings() end,
+    })
+    rowB:AddWidget(premarkSwitch, 0.5)
+    manager:Register(premarkSwitch, "premark")
     PlateSwitch(rowB, "PlateAboveOverlap", "Show Above Overlapping Nameplates",
         "The icons draw over every other nameplate, so an overlapping plate never hides " ..
         "one. When off, an icon stays inside its own nameplate, behind any plate that covers it.")
