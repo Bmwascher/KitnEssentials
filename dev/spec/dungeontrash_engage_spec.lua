@@ -47,6 +47,8 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
+        -- Owner-bound cast callbacks (4.4) act only while monitoring is on.
+        DTrash.monitoring = true
 
         DTrash.ScheduleAlert = function(_, rt, npcID, spellID, _, nextStart)
             scheduled[#scheduled + 1] = { unit = rt.unit, npcID = npcID,
