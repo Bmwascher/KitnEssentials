@@ -44,13 +44,15 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         })
         _G.UnitIsDead = function(u) return world.dead[u] == true end
         _G.UnitAffectingCombat = function(u) return world.combat[u] == true end
-        -- Captured as module locals at load; the SnapshotUnit timer path
-        -- reaches them when a test fast-forwards the clock.
+        -- Captured as module locals at load; the resolve path reads them.
         _G.GetInstanceInfo = function() return "Dungeon", "party", 8, nil, nil, nil, nil, 1 end
         _G.IsInInstance = function() return true, "party" end
 
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
+        -- Trash.xml order: inference first, so the owner-bound read chain and
+        -- the resolve path find TI.
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
@@ -347,6 +349,66 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         assert.is_nil(next(DTrash._plateMeta))
         assert.is_nil(next(DTrash._recentDeadByUnit))
         assert.is_nil(rt._cachePending)
+    end)
+
+    -- A tracked runtime vouches for a companion only while its generation
+    -- owner holds; a replaced plate stays tracked while its add runs.
+    it("a dead generation still in the tracked set vouches for no companion", function()
+        local a = trackResolved("nameplate1")                    -- cast-confirmed npc 111
+        DTrash:OnNameplateAdded(nil, "nameplate2")
+        local b = DTrash.tracked.nameplate2
+        DTrash.monitoring = true
+        assert.same({ [111] = true }, DTrash:TrustedCompanions(b))
+        a.owner.live = false                                     -- a replacement's first act
+        assert.same({}, DTrash:TrustedCompanions(b))
+        DTrash.monitoring = false
+    end)
+
+    it("a restore moves the fresh snapshot, recovery state and owner onto the cached table at both sites", function()
+        KE.TrashData[1].dungeonKey = "D"
+        KE.TrashData[1].mobs[111].spells[10].castTime = 2
+        KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
+            identity = { level = 91, sex = 1, power = 1, classID = 2, buffCount = 0, nonElite = true } } }
+        local TI = KE.TrashInference
+        local sites = {
+            { name = "ResolveMob", source = "nameplate1", fresh = "nameplate7", level = 91, scheduled = 2 },
+            { name = "FinishCast Layer 2", source = "nameplate2", fresh = "nameplate8", level = 90, scheduled = 1 },
+        }
+        for _, s in ipairs(sites) do
+            local old = trackResolved(s.source)
+            local oldOwner = old.owner
+            oldOwner.scheduled = 3
+            old.obs = { level = 80, isLieutenant = true }
+            old.obsPending = { "sex" }
+            DTrash:OnNameplateRemoved(nil, s.source)
+            assert.is_false(oldOwner.live, s.name)
+
+            DTrash:OnNameplateAdded(nil, s.fresh)
+            local fresh = DTrash.tracked[s.fresh]
+            local owner = fresh.owner
+            owner.scheduled = s.scheduled
+            local obs = { level = s.level, sex = 1, power = 1, classID = 2, buffCount = 0,
+                unitClassification = "normal" }
+            fresh.obs = obs
+            if s.level == 91 then
+                DTrash:ResolveMob(fresh)                     -- a complete lone survivor resolves
+            else
+                DTrash:OnCastStart(nil, s.fresh, nil, nil, 4)  -- level-disagreed: Layer 2 only
+                clock.now = clock.now + 2
+                DTrash:OnCastStop(nil, s.fresh, nil, nil, 4)
+            end
+
+            assert.equals(old, DTrash.tracked[s.fresh], s.name)
+            assert.equals(obs, old.obs, s.name)
+            assert.is_nil(old.obs.isLieutenant, s.name)
+            assert.same({}, old.obsPending, s.name)
+            assert.equals(fresh.obsPending, old.obsPending, s.name)
+            assert.equals(owner, old.owner, s.name)
+            assert.equals(old, owner.runtime, s.name)
+            assert.equals(s.scheduled, owner.scheduled, s.name)
+            assert.is_false(TI.RecoveryOwnerHolds(oldOwner, DTrash.tracked, true), s.name)
+            assert.is_true(TI.RecoveryOwnerHolds(owner, DTrash.tracked, true), s.name)
+        end
     end)
 end)
 
