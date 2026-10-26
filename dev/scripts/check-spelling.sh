@@ -55,10 +55,11 @@ fi
 
 # Allowed, scrubbed from the scanned lines (each is file:line:text):
 # Blizzard globals, game item names, the one American word that carries a
-# British substring, and the search alias on the Dark Theme page that lets a
-# player type the British word, scoped to that file alone.
+# British substring, the search alias on the Dark Theme page that lets a
+# player type the British word, scoped to that file alone, and the game's
+# own spell names in the derived Forever combat data file, scoped to it.
 scrub() {
-    sed -E 's/GameFontNormalLeftGrey|Draught of|[Gg]reyhound|GREYHOUND/ALLOWED/g; /^GUI\/GUIMain\/GUI-MainFrame\.lua:/ s/"colour"|"maximised"/ALLOWED/g'
+    sed -E 's/GameFontNormalLeftGrey|Draught of|[Gg]reyhound|GREYHOUND/ALLOWED/g; /^GUI\/GUIMain\/GUI-MainFrame\.lua:/ s/"colour"|"maximised"/ALLOWED/g; /^Modules\/Combat\/CombatDataForever\.lua:/ s/Judgement/ALLOWED/g'
 }
 
 # Third-party trees are not ours to spell; everything else tracked and
