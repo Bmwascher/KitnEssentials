@@ -98,7 +98,7 @@ describe("trash data promote step", function()
               mutate = function(_, e) e.s1.npcs = 2 end },
             { want = "missing candidate file cand/trash-s2-manifest.lua",
               mutate = function(f) f["cand/trash-s2-manifest.lua"] = nil end },
-            -- The structural diff against the source inventory (spec 6).
+            -- The structural diff against the source inventory.
             { want = "missing inventory " .. P.INVENTORY,
               mutate = function(f) f[P.INVENTORY] = nil end },
             { want = "missing spell-name record " .. P.SPELL_NAMES,
@@ -107,7 +107,7 @@ describe("trash data promote step", function()
               mutate = function(f)
                   f["cand/TrashData.lua"] = (f["cand/TrashData.lua"]:gsub("first = 2, ", "first = 2, cd = { 9 }, "))
               end },
-            -- Types count: a string that prints like the number is refused (Astra R2 F4).
+            -- Types count: a string that prints like the number is refused.
             { want = 'candidate row 20:2:200.first is "2", the inventory says 2',
               mutate = function(f)
                   f["cand/TrashData.lua"] = (f["cand/TrashData.lua"]:gsub("first = 2, ", 'first = "2", '))
@@ -116,7 +116,7 @@ describe("trash data promote step", function()
               mutate = function(f)
                   f["cand/TrashData.lua"] = (f["cand/TrashData.lua"]:gsub("%[200%] =", '["200"] ='))
               end },
-            -- A presentation default is a shipped field (Astra R2 K3).
+            -- A presentation default is a shipped field.
             { want = "candidate row 20:2:200.showNameplate is true, the inventory says false",
               mutate = function(f)
                   f["cand/TrashData.lua"] = (f["cand/TrashData.lua"]:gsub("showNameplate = false", "showNameplate = true"))

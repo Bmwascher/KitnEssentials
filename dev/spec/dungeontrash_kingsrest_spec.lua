@@ -272,6 +272,36 @@ describe("DungeonTrash Kings' Rest wave core", function()
         end
     end)
 
+    it("records the entries a judged member counts as possible returns", function()
+        local shared = { set = { [101] = true }, removedAt = 1 }
+        local apart = { set = { [102] = true }, removedAt = 1 }
+        local unknown = { unknown = true, removedAt = 1 }
+        assert.equals(2, KR.CountPossibleReturns({ shared, apart, unknown }, { [101] = true }))
+        assert.equals(0, KR.CountPossibleReturns({ apart }, { [101] = true }))
+
+        -- Both members are strictly neutral possible returns, so the check
+        -- judges both before it releases the batch.
+        local st, env = started(), newEnv()
+        KR.RecordRemoval(st, plate("gone"), -0.25, {}, nil, { [101] = true })
+        KR.RecordRemoval(st, plate("lost"), -0.2, nil, nil, nil)
+        local a = plate("a", { obs = { level = 91, power = 1, hasCreatureFamily = false, rows = { [102] = true } } })
+        local b = plate("b")
+        local _, gen = KR.OnAdd(st, a, 0, true, env)
+        KR.OnAdd(st, b, 0.1, true, env)
+        assert.equals("released", KR.ReadyCheck(st, gen, env))
+        assert.equals(1, a.krPossibleReturns)
+        assert.equals(2, b.krPossibleReturns)
+
+        -- A release at a pending member judges no history.
+        local st2 = started()
+        KR.RecordRemoval(st2, plate("gone"), -0.25, {}, nil, { [101] = true })
+        local c = plate("c", { pending = { "level" } })
+        local _, gen2 = KR.OnAdd(st2, c, 0, true, env)
+        KR.OnAdd(st2, plate("d"), 0.1, true, env)
+        assert.equals("released", KR.ReadyCheck(st2, gen2, env))
+        assert.is_nil(c.krPossibleReturns)
+    end)
+
     it("the ready check runs in order and leaves no member held", function()
         local apart = { level = 91, power = 1, hasCreatureFamily = false, rows = { [102] = true } }
         local nonWave = { level = 91, power = 1, hasCreatureFamily = false, rows = { [137989] = true } }

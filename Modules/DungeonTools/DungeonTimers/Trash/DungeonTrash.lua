@@ -80,7 +80,7 @@ local CHANNEL_REFRESH_WINDOW = 1.00
 -- channel phase starts this soon after its cast's own STOP, and an ambiguous
 -- one-phase credit is held this long for it (see FinishCast).
 local TRANSITION_PAIR_WINDOW = TI.TRANSITION_PAIR_WINDOW
--- Target-evidence window (4.5): the delay requested for its close timer. The
+-- Target-evidence window: the delay requested for its close timer. The
 -- real boundary is when that callback runs; no time difference is compared.
 local TARGET_CHANGE_WINDOW = 0.75
 -- Scenario criteria flip `completed` slightly after the boss actually dies;
@@ -111,6 +111,9 @@ local DISABLED_BOSS_ENCOUNTER_IDS = {
 
 DTrash.tracked = {}   -- [unit] = runtime table
 DTrash.monitoring = false
+-- Load marker: increment it in every later commit that touches a shipped
+-- .lua, .xml or .toc file.
+DTrash._trashStateRevision = 1
 DTrash.currentMapID = nil
 DTrash.inBossEncounter = false
 DTrash.bossEncounterID = nil
@@ -142,7 +145,7 @@ local function safeBool(fn, ...)
     return v and true or false
 end
 
--- Identity reads (4.2). Captured beside the reader that uses them.
+-- APIs only the identity reader uses.
 local UnitIsLieutenant = UnitIsLieutenant
 local UnitCreatureFamily = UnitCreatureFamily
 
@@ -211,7 +214,7 @@ local function readIdentity(unit, fields, inMythicPlus)
     return out
 end
 
--- Unit-token first contact (4.3): secrecy before type or find.
+-- Unit-token first contact: secrecy before type or find.
 local function normalizeNameplate(unit)
     if issecretvalue and issecretvalue(unit) then return nil end
     if type(unit) == "string" and unit:find("^nameplate%d") then return unit end
@@ -228,14 +231,14 @@ local function readInto(self, rt, fields)
     if fresh then rt.obs = TI.MergeIdentity(rt.obs, fresh) end
 end
 
--- One opportunity of a plate generation's scheduled read chain (4.2): the
+-- One opportunity of a plate generation's scheduled read chain: the
 -- initial delayed read and at most two more. It captures the owner, never the
 -- token or the runtime table, so a removed, replaced or stopped generation
 -- does nothing, even when cache reuse reinstalls its table.
 function DTrash:ScheduledIdentityRead(owner)
     if not TI.RecoveryOwnerHolds(owner, self.tracked, self.monitoring) then return end
     local rt = owner.runtime
-    -- Combat re-check (4.6): unconditional, feeding the counting-window edge.
+    -- Combat re-check: unconditional, feeding the counting-window edge.
     -- The plate-add read can land a frame too early on a mass pull, and
     -- losing that one edge must not lose engagement.
     local inCombat = safeBool(UnitAffectingCombat, rt.unit)
@@ -257,7 +260,7 @@ function DTrash:ScheduledIdentityRead(owner)
     end
 end
 
--- An event read opportunity (4.2): the read rule only. It never starts,
+-- An event read opportunity: the read rule only. It never starts,
 -- refills or counts against the scheduled chain; the caller runs its one
 -- resolve pass after it.
 function DTrash:EventIdentityRead(rt)
@@ -451,6 +454,111 @@ function DTrash:OnInitialize()
     self:SetEnabledState(false)  -- central KE system enables per self.db.Enabled
 end
 
+-- /kes trash detail: ordinary chat output, no debug gate. Reads only module
+-- runtime state; bar IDs and other raw tokens are never printed.
+local CAST_EFFECTS = {
+    normal = "normal",
+    uncertain = "withheld: unowned START (uncertain)",
+    baseline = "withheld: baseline waiting for its end",
+    closed = "withheld: closed, waiting for the next distinct identified START",
+    saturated = "withheld: saturated, every later START withheld",
+}
+local TARGET_CAUSE = { secret = "a secret read", read = "an error or missing read" }
+
+function DTrash:DumpPlateDetail(rt)
+    local o, pending = rt.obs, rt.obsPending
+    local parts = {}
+    if pending == nil then
+        parts[1] = "unjudged"
+    elseif pending[1] == nil then
+        parts[1] = "settled"
+    else
+        parts[1] = "pending " .. table.concat(pending, ",")
+    end
+    parts[2] = string_format("scheduled reads %d/%d", (rt.owner and rt.owner.scheduled) or 0,
+        TI.RECOVERY_SCHEDULED_MAX)
+    if o and o.isLieutenant ~= nil then parts[#parts + 1] = "lieutenant " .. tostring(o.isLieutenant) end
+    if o and o.hasCreatureFamily ~= nil then parts[#parts + 1] = "family " .. tostring(o.hasCreatureFamily) end
+    KE:Print("      identity: " .. table.concat(parts, ", "))
+
+    local cs = rt.castState
+    if cs then
+        local w = cs.window
+        local window
+        if not w then
+            window = "none"
+        elseif w.known then
+            window = string_format("known, count %d", w.count)
+        else
+            -- Saturation is the only unknown path that records no reason.
+            window = "unknown (" .. (w.unknownWhy or "saturated") .. ")"
+        end
+        local latest = cs.latest
+        local baseline = latest ~= nil and latest.class == "baseline" and latest.open == true
+        local ended = latest and ((latest.retired and ", latest record retired")
+            or (latest.canceled and ", latest record canceled")) or ""
+        KE:Print(string_format("      window: %s; cast effects: %s; baseline %s%s", window,
+            CAST_EFFECTS[cs.recovery] or tostring(cs.recovery), baseline and "present" or "absent", ended))
+        local repeats = cs.departedRepeats or {}
+        KE:Print(string_format("      departed IDs: cast %d/%d, channel %d/%d%s; departed repeats refused: cast %d, channel %d",
+            #cs.history.cast, TI.DEPARTED_ID_CAP, #cs.history.channel, TI.DEPARTED_ID_CAP,
+            cs.recovery == "saturated" and " (saturated)" or "", repeats.cast or 0, repeats.channel or 0))
+        if latest and latest.targetState ~= nil then
+            local detail = latest.targetState
+            if detail == "unavailable" then
+                detail = detail .. " (" .. (TARGET_CAUSE[latest.targetCause]
+                    or ("no change before the " .. tostring(latest.targetCause) .. " close")) .. ")"
+            end
+            if latest.targetCommit then detail = detail .. ", committed at a " .. latest.targetCommit end
+            detail = detail .. string_format(", %d later change(s) ignored", latest.targetIgnored or 0)
+            KE:Print("      target evidence: " .. detail)
+        end
+        if latest and latest.open and latest.restoredAt then
+            KE:Print("      open observation came through a restore at " .. latest.restoredAt)
+        end
+    end
+    if rt.restoreSite then KE:Print("      restored at " .. rt.restoreSite) end
+    if rt.restoreRefused then KE:Print("      restore refused by the admission decision") end
+
+    local owner = rt.owner
+    if self.kr and owner then
+        local decision = owner.krDecision or "not a member"
+        if owner.krReason then decision = decision .. " (" .. owner.krReason .. ")" end
+        local cap = owner.krCapture
+        local history = "none captured"
+        if cap then
+            history = cap.unknown and ("unknown (" .. tostring(owner.krCaptureCause) .. ")") or "complete"
+            if owner.krPossibleReturns then
+                history = history .. string_format(", %d possible return(s) at the ready check",
+                    owner.krPossibleReturns)
+            else
+                history = history .. ", not judged"
+            end
+        end
+        KE:Print(string_format("      kings' rest: %s; history %s; wave-derived %s",
+            decision, history, tostring(rt.waveDerived == true)))
+    end
+end
+
+-- The Sepulcher batch: phase, release reason and frozen summary.
+function DTrash:DumpKingsRestBatch()
+    local st = self.kr
+    if not (st and self.krInRoom) then return end
+    local b = st.batch
+    if not b then
+        KE:Print("  batch: none")
+        return
+    end
+    local line = "  batch: " .. b.phase
+    if b.reason then line = line .. " (" .. b.reason .. ")" end
+    local s = b.summary
+    if s then
+        line = line .. string_format(" summary level90=%s level90power0=%s family=%s",
+            tostring(s.groupHasLevel90), tostring(s.groupHasLevel90Power0), tostring(s.groupHasCreatureFamily))
+    end
+    KE:Print(line)
+end
+
 -- On-demand diagnostic dump (/kes trash). Snapshots what the tracker currently
 -- believes — dungeon resolution, each tracked plate's resolved mob (or candidate
 -- count), the behavior flags it has seen, and its live predictions — so an
@@ -505,6 +613,7 @@ function DTrash:DumpState()
             tostring(o.level), tostring(o.sex), tostring(o.power),
             tostring(o.classID), tostring(o.buffCount), tostring(o.unitClassification)) or "no-id"
         KE:Print(string_format("  %s: %s <%s> [%s]", tostring(unit), who, idstr, table.concat(flags, ",")))
+        self:DumpPlateDetail(rt)
         if rt.predictions and next(rt.predictions) then
             local mob = rt.matchedNPCID and self:MobData(rt.matchedNPCID)
             for spellID, pred in pairs(rt.predictions) do
@@ -515,6 +624,7 @@ function DTrash:DumpState()
         end
     end
     if n == 0 then KE:Print("  no tracked nameplates") end
+    self:DumpKingsRestBatch()
 
     -- Central alert stack: what's ACTUALLY on screen right now, in stack order,
     -- with each frame's real screen position — so a "bars jumping/overlapping"
@@ -829,7 +939,7 @@ function DTrash:OnRosterChanged()
     end
 end
 
--- ── Kings' Rest room waves (4.8) ───────────────────────────────────────────
+-- ── Kings' Rest room waves ─────────────────────────────────────────────────
 -- The pure core (TrashKingsRest.lua, loaded after the inference) keeps the
 -- removal history and the room batch; this wiring owns its scope, timers and
 -- providers. Off map 1762 no state exists and nothing here runs.
@@ -878,7 +988,8 @@ function DTrash:RefreshKingsRestScope()
     if not self.kr then
         self.kr = KR.New()
         self.krEnv = self:BuildKingsRestEnv()
-        KR.Start(self.kr, GetTime())
+        self.krStartedAt = GetTime()
+        KR.Start(self.kr, self.krStartedAt)
     elseif self.zoneText ~= self.krZoneText then
         KR.ResetBatch(self.kr, self.krEnv)
     end
@@ -919,6 +1030,11 @@ function DTrash:KingsRestEnroll(owner, now)
     local st = self.kr
     if not st then return end
     local result, gen = KR.OnAdd(st, owner, now, self.krInRoom == true, self.krEnv)
+    -- Why a capture's history is unknown, for the dump: within the
+    -- lookback of this observation start, or else past an overflow's endpoint.
+    if owner.krCapture and owner.krCapture.unknown then
+        owner.krCaptureCause = (now <= self.krStartedAt + KR.LOOKBACK) and "observation start" or "overflow"
+    end
     if result ~= "opened" then return end
     C_Timer.After(KR.JOIN_WINDOW, function()
         if self.kr == st then KR.JoinClose(st, gen, self.krEnv) end
@@ -937,7 +1053,7 @@ function DTrash:OnNameplateAdded(_, unit)
     if not unit then return end
     if not isHostilePlate(unit) then
         -- A friendly or dead occupant on a still-tracked token is that
-        -- generation's removal (4.2): it ends through the removal path.
+        -- generation's removal: it ends through the removal path.
         if self.tracked[unit] then self:OnNameplateRemoved(nil, unit) end
         return
     end
@@ -946,17 +1062,17 @@ function DTrash:OnNameplateAdded(_, unit)
     -- A fresh add on a token still tracked ends the old generation first.
     local old = self.tracked[unit]
     if old and old.owner then old.owner.live = false end
-    -- Kings' Rest (4.8): an overdue join close, then the replaced generation's
+    -- Kings' Rest: an overdue join close, then the replaced generation's
     -- release and removal entry, all before the fresh runtime exists.
     self:KingsRestBeforeAdd(old, now)
-    -- One owner per plate generation (4.2): the scheduled reads and every
+    -- One owner per plate generation: the scheduled reads and every
     -- owner-bound callback check it, and it moves with a cache adoption.
     local owner = { live = true, scheduled = 0 }
     local rt = {
         unit = unit,
         owner = owner,
         -- This generation's cast ownership: observation records, departed
-        -- IDs, recovery state and counting window (4.4, 4.6).
+        -- IDs, recovery state and counting window.
         castState = TI.NewCastState(owner),
         firstSeenAt = now,
         -- engagedAt = the FIRST moment the mob shows combat evidence — NOT
@@ -972,7 +1088,7 @@ function DTrash:OnNameplateAdded(_, unit)
     }
     owner.runtime = rt
     self.tracked[unit] = rt
-    -- The add's combat read feeds the counting-window edge (4.6).
+    -- The add's combat read feeds the counting-window edge.
     self:CombatEdge(rt, inCombat)
     self:NoteNameplateAddedForCache(unit)
     self:KingsRestEnroll(owner, now)
@@ -987,7 +1103,7 @@ function DTrash:OnNameplateRemoved(_, unit)
     -- The plate generation ends: its owner-bound callbacks are refused from
     -- here on, even if the cache later reinstalls this table.
     if rt and rt.owner then rt.owner.live = false end
-    -- Kings' Rest (4.8): batch release, then the removal entry, before the
+    -- Kings' Rest: batch release, then the removal entry, before the
     -- cache branch, so every ending is recorded whatever the cache does.
     if rt then self:KingsRestGenerationEnded(rt, GetTime()) end
     -- On-plate icons anchor to the physical plate — they always hide with it.
@@ -1109,10 +1225,10 @@ function DTrash:ResolveMob(rt)
         trustedCompanions = self:TrustedCompanions(rt),
     })
     rt.candidates = cands
-    -- Recovery state (4.2), written by every pass that scores the snapshot
+    -- Recovery state, written by every pass that scores the snapshot
     -- and before the cache consult, so an adoption in this pass carries it.
     rt.obsPending = pending
-    -- Kings' Rest (4.8): a held batch member keeps building candidates and
+    -- Kings' Rest: a held batch member keeps building candidates and
     -- its recovery state, but gets no identity and consults no cache.
     if KR.HoldsIdentity(rt.owner) then return end
     -- A granted contributor's candidates pass its batch's frozen summary (room
@@ -1144,7 +1260,7 @@ function DTrash:ResolveMob(rt)
         -- over (see TrashCache.lua). The cache is consulted at this exact
         -- point: post-resolve, pre-assignment, never at plate add.
         if rt.matchedNPCID == nil and not rt._cacheRestoredAt then
-            local adopted = self:TryRestoreCachedRuntime(rt, resolved)
+            local adopted = self:TryRestoreCachedRuntime(rt, resolved, rt._resolveSite or "resolve")
             if adopted then
                 adopted.layer1Resolved = true  -- this pass resolved it at Layer 1
                 return
@@ -1176,7 +1292,7 @@ function DTrash:ResolveMob(rt)
     -- Layer 1 trust for co-presence: only while this pass resolves the
     -- current identity as a complete, level-agreed lone survivor.
     rt.layer1Resolved = (resolved ~= nil and resolved == rt.matchedNPCID) or nil
-    -- Wave-derived (4.8): the identity rests on the summary's pruning until a
+    -- Wave-derived: the identity rests on the summary's pruning until a
     -- pass without the summary resolves the same NPC.
     rt.waveDerived = KR.WaveDerivedAfter(rt.waveDerived, rt.matchedNPCID, withoutSummary,
         summaryRemoved and resolved ~= nil and resolved == rt.matchedNPCID) or nil
@@ -1208,7 +1324,7 @@ end
 function DTrash:OnPlayerCombatChanged()
     for unit, rt in pairs(self.tracked) do
         -- One combat read per plate per edge, unconditional, feeding the
-        -- counting-window edge (4.6).
+        -- counting-window edge.
         local inCombat = safeBool(UnitAffectingCombat, unit)
         self:CombatEdge(rt, inCombat)
         if not rt.engagedAt and inCombat == true then
@@ -1243,7 +1359,7 @@ local function safeCastBarID(v)
     return v
 end
 
--- Mirrors the latest observation (4.4) into the runtime fields the start
+-- Mirrors the latest observation into the runtime fields the start
 -- cue, the forced sequence and the dump still read. Only an eligible, open,
 -- uncanceled and unretired observation shows as an active cast; samples and
 -- readiness follow the latest eligible record; the pending advance shows its
@@ -1270,8 +1386,8 @@ function DTrash:SyncActiveCast(rt)
     rt.pendingStartAdvanceKind = adv and adv.kind or nil
 end
 
--- Whether any trait row of the current dungeon carries preCombatChanneling
--- (4.2): pre-combat channel presence is read only then. One pass over that
+-- Whether any trait row of the current dungeon carries preCombatChanneling:
+-- pre-combat channel presence is read only then. One pass over that
 -- dungeon's rows, per out-of-combat channel START only.
 function DTrash:DungeonUsesPreCombatChannel()
     local key = self:CurrentDungeonKey()
@@ -1283,13 +1399,19 @@ function DTrash:DungeonUsesPreCombatChannel()
     return false
 end
 
--- One counting-window edge (4.6). Only a known non-secret boolean asserts
+-- One counting-window edge. Only a known non-secret boolean asserts
 -- anything. A close retires that window's unfinished cast work, so its
 -- records leave the work list and the mirror drops a retired cast.
 function DTrash:CombatEdge(rt, inCombat)
     local cs = rt and rt.castState
     if not cs or type(inCombat) ~= "boolean" then return end
-    if TI.CombatWindowStep(cs, inCombat) ~= "closed" then return end
+    local step = TI.CombatWindowStep(cs, inCombat)
+    if step == "opened" and not cs.window.known then
+        -- Why this window's order is unknown, for the dump.
+        cs.window.unknownWhy = (not cs.seenFalse and "first seen in combat")
+            or (cs.recovery == "saturated" and "saturated") or "lifecycle crossed in"
+    end
+    if step ~= "closed" then return end
     local kept = {}
     for _, rec in ipairs(cs.records) do
         if rec.retired then
@@ -1303,7 +1425,7 @@ function DTrash:CombatEdge(rt, inCombat)
     self:SyncActiveCast(rt)
 end
 
--- ── Target evidence (4.5) ──────────────────────────────────────────────────
+-- ── Target evidence ────────────────────────────────────────────────────────
 -- One pending-to-final state per collecting cast record. The first UNIT_TARGET
 -- handled after its START commits it; its close timer, its correlated end,
 -- interrupt or failure, its replacement, retirement or cancellation closes it
@@ -1452,9 +1574,9 @@ function DTrash:OnUnitTarget(_, unit)
     if not rt then return end
     local inCombat = safeBool(UnitAffectingCombat, unit)
     -- The edge decision comes before the early return, so a known false here
-    -- closes a counting window too (4.6).
+    -- closes a counting window too.
     self:CombatEdge(rt, inCombat)
-    -- Target evidence (4.5): after the edge decision, not gated on combat.
+    -- Target evidence: after the edge decision, not gated on combat.
     self:TargetEvidenceChange(rt)
     if inCombat ~= true then return end
     local now = GetTime()
@@ -1510,18 +1632,33 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     if not (rt and rt.castState) then return end
     castBarID = safeCastBarID(castBarID)
     local now = GetTime()
-    -- Combat read first (4.6): the START that engages a mob opens its counting
+    -- Combat read first: the START that engages a mob opens its counting
     -- window in this same call, before the START is classified.
     local inCombat = safeBool(UnitAffectingCombat, unit)
     self:CombatEdge(rt, inCombat)
     local cs = rt.castState
     local prior = cs.latest
-    -- Every START is classified before it has any cast effect (4.4): a
+    -- Every START is classified before it has any cast effect: a
     -- duplicate is ignored, a refresh continues its channel, and only a
     -- normal START creates an eligible observation.
     local class, rec = TI.ClassifyStart(cs, kind, castBarID, now,
         isChannelRefreshContinuation(rt, kind, castBarID))
-    if class == "duplicate" then return end
+    if class == "duplicate" then
+        -- A repeat of a departed ID, not of the open observation, is counted
+        -- per kind for the dump; the ID itself is never kept.
+        if not (prior and prior.open and prior.kind == kind and prior.id == castBarID) then
+            cs.departedRepeats = cs.departedRepeats or { cast = 0, channel = 0 }
+            cs.departedRepeats[kind] = cs.departedRepeats[kind] + 1
+        end
+        return
+    end
+    -- An unowned or baseline START makes the window's order unknown; the dump
+    -- names the first reason. Once saturated, saturation is the reason.
+    local w = cs.window
+    if w and not w.known and not w.unknownWhy and cs.recovery ~= "saturated" then
+        w.unknownWhy = (class == "unowned" and "unowned START")
+            or (class == "baseline" and "baseline START") or nil
+    end
     -- A refresh consumes its stamped window, and any other START invalidates it.
     rt.channelRefreshAt = nil
     if class == "refresh" then
@@ -1530,7 +1667,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
         return
     end
     -- The replaced observation's target-evidence window closes before this
-    -- START arms anything (4.5).
+    -- START arms anything.
     if prior and prior ~= rec then
         self:CloseTargetEvidence(rt, prior, prior.canceled and "cancellation" or "replacement")
     end
@@ -1552,7 +1689,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
         end
         dprint(string_format("%s: %s start castGUID=%s (%s)", tostring(unit), kind, guid, class))
     end
-    -- Transition proof (4.4): a normal channel is the channel phase of the
+    -- Transition proof: a normal channel is the channel phase of the
     -- cast it replaced, or of the cast whose own STOP just landed, only when
     -- TI.ProveCastIntoChannel finds an explanation. The proof marks that cast
     -- paired, so its held one-phase credit discards itself.
@@ -1571,7 +1708,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
             dprint(tostring(unit) .. ": cast->channel proven — channel anchors at cast start")
         end
     end
-    -- Opening order, decided once (4.6); a proven channel inherits its cast's.
+    -- Opening order, decided once; a proven channel inherits its cast's.
     TI.AssignOrder(cs, rec, proven)
     if class == "normal" then
         rec.fingerprints = {}
@@ -1580,18 +1717,18 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
             cs.pendingAdvance = nil
         else
             -- Only an eligible observation arms a start advance; it carries
-            -- this record's own samples (4.4).
+            -- this record's own samples.
             cs.pendingAdvance = { record = rec, provenance = "fresh", at = now, kind = kind,
                 fingerprints = rec.fingerprints }
         end
     end
-    -- Mob-level effects of every non-duplicate START (4.4).
+    -- Mob-level effects of every non-duplicate START.
     if kind == "cast" then
         rt.sawCastStart = true
     else
         rt.sawChannelStart = true
     end
-    -- Pre-combat channel presence (4.2): read only on this START's own
+    -- Pre-combat channel presence: read only on this START's own
     -- combat read being a known false, and only where a trait uses it.
     if kind == "channel" and inCombat == false and self:DungeonUsesPreCombatChannel() then
         rt.sawPreCombatChannel = true
@@ -1601,9 +1738,11 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     -- One event read opportunity, before this START's one resolve pass.
     self:EventIdentityRead(rt)
 
+    rt._resolveSite = "start"  -- an adoption in this pass is the early site
     self:ResolveMob(rt)  -- behavior flag may prune candidates
+    rt._resolveSite = nil
     -- An adoption in that pass moved this START's record with its owner; the
-    -- rest runs on the owner's current runtime (4.7).
+    -- rest runs on the owner's current runtime.
     rt = rt.owner.runtime
     self:SyncActiveCast(rt)
     if class ~= "normal" then return end
@@ -1612,7 +1751,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     self:OpenTargetEvidence(rt, rec, kind == "cast" and self:NeedsTargetEvidence(rt))
     local owner = rt.owner
     C_Timer.After(TARGET_SAMPLE_DELAY, function()
-        -- Start-phase work, bound to its owner and record (4.4): refused once a
+        -- Start-phase work, bound to its owner and record: refused once a
         -- later START replaced the record or the plate generation ended. It
         -- acts on the owner's current runtime, which follows an adoption.
         if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "start") then return end
@@ -1693,7 +1832,7 @@ end
 
 -- Shared interrupt-shaped lifecycle end (INTERRUPTED / FAILED /
 -- FAILED_QUIET). Only an event correlating with the latest observation ends
--- it (4.4): INTERRUPTED is known to double-fire, and a late event for a
+-- it: INTERRUPTED is known to double-fire, and a late event for a
 -- PREVIOUS castbar arriving after a new START must not kill the live cast.
 -- A refused event only voids an open cast's implied stop. Any INTERRUPTED,
 -- correlated or not, latches kick evidence (the flag prunes cannotInterrupt
@@ -1708,7 +1847,7 @@ function DTrash:MarkCastInterrupted(unit, castBarID, castFailed)
     local rec = rt.castState.latest
     local outcome, latch = TI.ClassifyEnd(rt.castState, nil, safeCastBarID(castBarID),
         castFailed and "failed" or "interrupted", GetTime())
-    -- A correlated interrupt or failure closes its target-evidence window (4.5).
+    -- A correlated interrupt or failure closes its target-evidence window.
     if outcome == "correlated" then
         self:CloseTargetEvidence(rt, rec, castFailed and "failure" or "interrupt")
     end
@@ -1876,7 +2015,7 @@ local function creditFinishedCast(self, rt, mob, observed, startAt, stopAt)
         -- channel-capable spells: a completed bare cast is never
         -- credited as a two-phase ability — that spell is credited exclusively
         -- from its channel phase, anchored at the true cast start via the
-        -- castBarID +1 pairing.
+        -- transition proof.
         spellID = TI.InferSucceededSpell(mob, observed, rt.anchors, now, true)
     end
     if not spellID then
@@ -2004,9 +2143,9 @@ end
 -- start-advance-owned spell its observed START matches, at that START.
 -- Interrupts EXPLICITLY cannot cancel it: success-mode inference returns nil
 -- for CAST_START, so start-advance is their only anchor path. It is gated on
--- resolution and on its own carried samples, only where the mob needs them
--- (4.4); a cached advance never borrows fresh samples. Exactly one match
--- anchors (4.5). None or several keep it until a later pass, the next
+-- resolution and on its own carried samples, only where the mob needs them;
+-- a cached advance never borrows fresh samples. Exactly one match
+-- anchors. None or several keep it until a later pass, the next
 -- eligible START, or an unowned START that cancels it.
 function DTrash:ApplyPendingStartAdvance(rt)
     local cs = rt.castState
@@ -2016,7 +2155,7 @@ function DTrash:ApplyPendingStartAdvance(rt)
     if not (mob and mob.spells) then return end
     if not TI.PendingAdvanceReady(adv, TI.NeedsStartFingerprints(mob)) then return end
     -- A fresh advance selects by its record's opening order; a cached one
-    -- carries none (4.7).
+    -- carries none.
     local order = (adv.provenance == "fresh" and adv.record and adv.record.order) or nil
     local spellID = TI.SelectStartAdvance(mob, adv.kind, adv.fingerprints or {}, order,
         adv.targetState, TI.ABSENT_MATCHES_FALSE)
@@ -2045,7 +2184,7 @@ local function resolveForcedCastSpell(rt, mob)
     return rt._forcedCastSpellID
 end
 
--- Records that still own delayed cast work (4.7): a record joins when a
+-- Records that still own delayed cast work: a record joins when a
 -- post-end read or a twin hold is queued for it, and leaves through
 -- TI.ReleaseIdleWork once that work lands or is canceled, or at retirement.
 local function trackWork(cs, rec)
@@ -2063,14 +2202,14 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     if not (rt and rt.castState) then return end
     local rec = rt.castState.latest
     local now = GetTime()
-    -- Only the latest observation's own correlated end ends anything (4.4):
+    -- Only the latest observation's own correlated end ends anything:
     -- a refused STOP voids only an open cast's implied stop, and a baseline
     -- close or a withheld end has no cast-level effect.
     local outcome = TI.ClassifyEnd(rt.castState, kind, safeCastBarID(castBarID), "stop", now)
     self:SyncActiveCast(rt)
     if outcome ~= "correlated" then return end
     -- The record's correlated end closes a pending target-evidence window
-    -- before Layer 2 and credit read it (4.5).
+    -- before Layer 2 and credit read it.
     self:CloseTargetEvidence(rt, rec, "end")
 
     local startAt = rec.startAt
@@ -2107,7 +2246,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         -- back to first-seen when no combat evidence was ever observed.
         engagedAt = rt.engagedAt or rt.firstSeenAt,
         castIntoChannel = castIntoChannel,
-        -- This record's opening order selects rows within the mob (4.6).
+        -- This record's opening order selects rows within the mob.
         order = rec.order,
         targetState = rec.targetState,
         fingerprints = {
@@ -2141,7 +2280,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         local wasLone = (#rt.candidates == 1)
         local kept, resolved = TI.FilterCandidates(rt.candidates, observed, dataByNpc, traitByNpc)
         rt.candidates = kept
-        -- Wave-derived (4.8): the same cast judged on the list before the
+        -- Wave-derived: the same cast judged on the list before the
         -- summary pruned it. A result that list does not give rests on the
         -- summary, so it stays untrusted however the cast confirms it.
         local withoutSummary, summaryPruned = resolved, rt.unsummarizedCandidates ~= nil
@@ -2149,7 +2288,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             rt.unsummarizedCandidates, withoutSummary = TI.FilterCandidates(rt.unsummarizedCandidates,
                 observed, dataByNpc, traitByNpc)
         end
-        -- A held Kings' Rest member (4.8) gets no identity, adoption or
+        -- A held Kings' Rest member gets no identity, adoption or
         -- credit from a cast that ends while it is held.
         if resolved and not KR.HoldsIdentity(rt.owner) then
             local levelAgreed = false
@@ -2160,12 +2299,12 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             -- level-disagreed mob's ONLY resolve path is this Layer2 confirm,
             -- so without a consult here flicker recovery was structurally
             -- unreachable for exactly those mobs. The transfer moves this
-            -- record, now completed, with the fresh cast bundle (4.7), so the
+            -- record, now completed, with the fresh cast bundle, so the
             -- credit below and its deferred work land on the adopted table.
             if rt.matchedNPCID == nil and not rt._cacheRestoredAt then
-                local adopted = self:TryRestoreCachedRuntime(rt, resolved)
+                local adopted = self:TryRestoreCachedRuntime(rt, resolved, "layer2")
                 if adopted then
-                    -- A restore makes the order unknown (4.6). Schedule
+                    -- A restore makes the order unknown. Schedule
                     -- proximity scores against the adopted runtime's real
                     -- engage history, not the post-flicker one.
                     observed.order = nil
@@ -2213,8 +2352,8 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     -- always applies ahead of pending-finish.
     self:ApplyPendingStartAdvance(rt)
 
-    -- Delayed work below is bound to the generation owner and this record
-    -- (4.4): a removed plate's held or deferred credit is lost, and each
+    -- Delayed work below is bound to the generation owner and this record:
+    -- a removed plate's held or deferred credit is lost, and each
     -- callback acts on the owner's current runtime.
     local owner = rt.owner
     if kind == "channel" then
@@ -2270,7 +2409,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     --   show this was the two-phase cast phase, and an immediate one-phase
     --   credit would be a phantom double-fire. Hold for one pairing window
     --   and discard if a proof marks this cast paired. An unowned channel
-    --   START cancels the hold (4.4).
+    --   START cancels the hold.
     local needsSelfDelta = TI.NeedsSelfBuffCountDelta(mob, "cast")
     local holdForTwin = TI.MatchesTwoPhaseCast(mob, observed)
     if not (needsSelfDelta or holdForTwin) then

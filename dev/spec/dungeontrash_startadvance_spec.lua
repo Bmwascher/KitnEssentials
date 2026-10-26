@@ -51,7 +51,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
         TI = KE.TrashInference
-        -- Owner-bound cast callbacks (4.4) act only while monitoring is on.
+        -- Owner-bound cast callbacks act only while monitoring is on.
         DTrash.monitoring = true
 
         DTrash.ScheduleAlert = function(_, rt, npcID, spellID, _, nextStart)
@@ -192,7 +192,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
         assert.equals(100, rt.pendingStartAdvanceAt)
     end)
 
-    -- Removal kills the owner (4.4), so a removed plate's sampler does
+    -- Removal kills the owner, so a removed plate's sampler does
     -- nothing. Its pending advance stays on the cached table as schedule data
     -- and is consumed after a restore with its own carried samples.
     it("a removed plate's sampler does nothing; its pending advance survives as schedule data", function()
@@ -215,7 +215,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
         assert.is_nil(rt.pendingStartAdvanceAt)
     end)
 
-    -- Transition proof (4.4) replaces the +1 rule: a channel is its cast's
+    -- Transition proof: a channel is its cast's
     -- channel phase only when a two-phase cast phase explains the measured
     -- cast, after the cast's own STOP within the pairing window or while the
     -- cast is still open. Bar IDs are opaque; any distinct ID works.
@@ -367,7 +367,8 @@ describe("DungeonTrash — CAST_START start-advance", function()
     end)
 
     -- Producer-side pin for the chains fix: KE can PROVE a cast→
-    -- channel transition (castBarID +1 in the pairing window) but can never
+    -- channel transition (a two-phase cast phase of the mob explains the
+    -- preceding cast, adjacent to the channel START) but can never
     -- affirm its ABSENCE — a missed pairing is indistinguishable from a bare
     -- channel — so an unpaired channel must stay LENIENT and still credit a
     -- two-phase spell (Chains of Subjugation went permanently uncreditable

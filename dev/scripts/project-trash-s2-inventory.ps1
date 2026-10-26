@@ -1,7 +1,7 @@
 # Projects the pinned source inventory (JSON: an independent pure-literal
 # parse of the source package) into dev/data/trash-s2-inventory.lua, which the
-# promote step compares with a candidate row by row and trait by trait. The
-# October 22 supplement's cooldown is applied to its two pinned rows; nothing
+# promote step compares with a candidate row by row and trait by trait. Two
+# pinned rows take a 26 s cooldown in place of the record's value; nothing
 # else is changed. Deterministic: rows by map, NPC and spell ID, traits by map
 # and NPC, LF line endings, UTF-8 without a byte-order mark. Writes only the
 # -Out path. It validates nothing itself: a malformed record stops it with
@@ -24,7 +24,7 @@ $identityFields = @('level', 'power', 'nonElite', 'hasCastSkill', 'noCastSkill',
     'hasChannelSpell', 'hasInterruptFlag', 'cannotInterrupt', 'isLieutenant', 'hasCreatureFamily',
     'preCombatChanneling', 'bossEncounter', 'groupHasLevel90', 'groupHasCreatureFamily',
     'groupHasLevel90Power0')
-# The October 22 supplement (spec 4.1): these two rows' cooldown is 26 s.
+# These two rows' cooldown is 26 s, in place of the record's value.
 $amended = @{ '1877:134600:1308113' = 26; '2521:190206:385536' = 26 }
 
 # A field the record leaves out reads as $null, like an explicit null.
