@@ -16,7 +16,7 @@ describe("FocusMarker ready-check announce gate", function()
         FM = modules["FocusMarker"]
     end)
 
-    -- args: specID, inGroup, inRaid, inCombat, chatLocked
+    -- args: specID, inGroup, inRaid, inCombat, chatLocked, knowsKick
     it("refuses when any one condition blocks", function()
         local rows = {
             { name = "no-kick spec", args = { NO_KICK_SPEC, true, false, false, false } },
@@ -24,6 +24,7 @@ describe("FocusMarker ready-check announce gate", function()
             { name = "raid", args = { KICKING_SPEC, true, true, false, false } },
             { name = "combat", args = { KICKING_SPEC, true, false, true, false } },
             { name = "chat locked", args = { KICKING_SPEC, true, false, false, true } },
+            { name = "no kick known", args = { KICKING_SPEC, true, false, false, false, false } },
         }
         for _, row in ipairs(rows) do
             assert.is_false(FM.AnnounceAllowed(unpack(row.args)), row.name)
@@ -34,9 +35,10 @@ describe("FocusMarker ready-check announce gate", function()
         local rows = {
             { name = "a kicking spec", specID = KICKING_SPEC },
             { name = "an unread spec", specID = nil },
+            { name = "a known kick", specID = KICKING_SPEC, knowsKick = true },
         }
         for _, row in ipairs(rows) do
-            assert.is_true(FM.AnnounceAllowed(row.specID, true, false, false, false), row.name)
+            assert.is_true(FM.AnnounceAllowed(row.specID, true, false, false, false, row.knowsKick), row.name)
         end
     end)
 end)
@@ -216,6 +218,18 @@ describe("FocusMarker marker and kick macro rules", function()
         }
         for _, row in ipairs(rows) do
             assert.are.equal(row.want, FM.KickRefreshAction(unpack(row.args)), row.name)
+        end
+    end)
+
+    it("counts the kick macro switch only where Focus Kick is admitted", function()
+        -- args: db, admitted
+        local rows = {
+            { name = "admitted, on", args = { { KickMacroEnabled = true }, true }, want = true },
+            { name = "withheld, on", args = { { KickMacroEnabled = true }, false }, want = false },
+            { name = "admitted, off", args = { { KickMacroEnabled = false }, true }, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.are.equal(row.want, FM.KickOn(unpack(row.args)), row.name)
         end
     end)
 
