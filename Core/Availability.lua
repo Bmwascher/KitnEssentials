@@ -132,9 +132,11 @@ local FOREVER_ALLOWED = {
     GroupTools = true,
     ReadyCheckConsumables = true,
     -- Combat: Combat Timer, Combat Texts, Cursor Effects with its Cursor and
-    -- Taunt tabs, Player Crosshair, Range Display, Focus Castbar, and the
-    -- Status Texts row with Pet Status and Player Absorbs. The Dispel tab,
-    -- Class Tools, Combat Res and the other Status Texts stay withheld.
+    -- Taunt tabs, Player Crosshair, Range Display, Focus Castbar, Combat Res,
+    -- the Class Tools row with its All Classes tab (Custom Cooldowns, DoT
+    -- Tracker with its two tabs, Missing Forms), and the Status Texts row with
+    -- all five tabs (Healer Mana with its two). The Dispel tab and the Class
+    -- Tools class tabs stay withheld.
     CombatTimer = true,
     CombatTexts = true,
     Cursor = true,
@@ -146,6 +148,19 @@ local FOREVER_ALLOWED = {
     StatusTexts = true,
     PlayerAbsorbs = true,
     PetStatusText = true,
+    ClassTools = true,
+    ClassToolsAllClasses = true,
+    CustomCooldowns = true,
+    DoTTracker = true,
+    DoTTrackerTracking = true,
+    DoTTrackerDisplay = true,
+    StanceText = true,
+    CombatRes = true,
+    PotionReady = true,
+    HealerMana = true,
+    HealerManaParty = true,
+    HealerManaRaid = true,
+    NoMovementAlert = true,
     -- Automation: the module and page with its General, Interface, Quests &
     -- Social and Vendors & Bags tabs, Combat Logger and Merchant Pages.
     -- Vantus Rune, the Auction House Filter, the housing dashboard fix, Bonus

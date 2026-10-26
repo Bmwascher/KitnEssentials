@@ -4,17 +4,26 @@
     <!-- Forever's module list: diagnostics and the admitted categories, in the
          retail list's relative order, because load order is behavior
          (Modules.xml). -->
+    <Script file="Combat\CombatDataForever.lua" />
+    <Script file="Combat\StatusTexts\NoMovementAlert.lua" />
+    <Script file="Combat\StatusTexts\PotionReady.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumablesForever.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumables.lua" />
     <Script file="Combat\StatusTexts\PlayerAbsorbsFormat.lua" />
     <Script file="Combat\StatusTexts\PlayerAbsorbs.lua" />
     <Include file="Core\Diagnostics\Diagnostics.xml" />
     <Script file="Combat\StatusTexts\PetStatusText.lua" />
+    <Script file="Combat\ClassTools\StanceText.lua" />
     <Script file="AuraTracking\TotemTracker.lua" />
+    <Script file="Combat\ClassTools\DoTTrackerRules.lua" />
+    <Script file="Combat\ClassTools\DoTTracker.lua" />
+    <Script file="Combat\ClassTools\CustomCooldownsRules.lua" />
+    <Script file="Combat\ClassTools\CustomCooldowns.lua" />
     <Script file="QoL\QualityOfLife\SpellAlerts.lua" />
     <Script file="Combat\CombatTimer.lua" />
     <Script file="Combat\CombatCrossForever.lua" />
     <Script file="Combat\CombatCross.lua" />
+    <Script file="Combat\CombatRes.lua" />
     <Script file="Combat\CombatTexts.lua" />
     <Script file="Combat\Cursor.lua" />
     <Script file="Combat\CastbarHelpers.lua" />
@@ -36,6 +45,7 @@
     <Script file="DungeonTools\DungeonAlerts\DeathNotifications.lua" />
     <Script file="DungeonTools\KicksCasts\FocusMarker.lua" />
     <Script file="DungeonTools\KeystoneHelper\KeystoneHelper.lua" />
+    <Script file="Combat\StatusTexts\HealerMana.lua" />
     <Script file="Core\CVars\CVars.lua" />
     <Script file="QoL\Automation\Automation.lua" />
     <Script file="Core\Optimize.lua" />

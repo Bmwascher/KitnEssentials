@@ -47,9 +47,9 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "ReadyCheckConsumables", want = true },
             { load = "baseline",            seed = BASELINE,             id = "RaidNotifications",     want = false },
             { load = "baseline",            seed = BASELINE,             id = "WorldMarkerCycler",     want = false },
-            -- Combat: eight modules, the Status Texts row and the Cursor tabs
-            -- but Dispel are admitted; Combat Res and the other Status Texts
-            -- are not.
+            -- Combat: every row, the Cursor tabs but Dispel, Class Tools with
+            -- its All Classes tab and tools, and Status Texts with all its tabs
+            -- are admitted; Dispel and the Class Tools class tabs are not.
             { load = "baseline",            seed = BASELINE,             id = "CombatTimer",      want = true },
             { load = "baseline",            seed = BASELINE,             id = "CombatTexts",      want = true },
             { load = "baseline",            seed = BASELINE,             id = "Cursor",           want = true },
@@ -62,8 +62,21 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "PlayerAbsorbs",    want = true },
             { load = "baseline",            seed = BASELINE,             id = "PetStatusText",    want = true },
             { load = "baseline",            seed = BASELINE,             id = "CursorDispel",     want = false },
-            { load = "baseline",            seed = BASELINE,             id = "CombatRes",        want = false },
-            { load = "baseline",            seed = BASELINE,             id = "HealerMana",       want = false },
+            { load = "baseline",            seed = BASELINE,             id = "CombatRes",        want = true },
+            { load = "baseline",            seed = BASELINE,             id = "HealerMana",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "HealerManaParty",  want = true },
+            { load = "baseline",            seed = BASELINE,             id = "HealerManaRaid",   want = true },
+            { load = "baseline",            seed = BASELINE,             id = "PotionReady",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "NoMovementAlert",  want = true },
+            { load = "baseline",            seed = BASELINE,             id = "ClassTools",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "ClassToolsAllClasses", want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CustomCooldowns",  want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DoTTracker",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DoTTrackerTracking", want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DoTTrackerDisplay", want = true },
+            { load = "baseline",            seed = BASELINE,             id = "StanceText",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "ClassToolsEvoker", want = false },
+            { load = "baseline",            seed = BASELINE,             id = "HuntersMark",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "GreatVaultAlert",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "PIMacroBuilder",   want = false },
             -- Dungeon Tools: seven modules, the Dungeon Alerts and Kicks &
@@ -141,14 +154,14 @@ describe("Forever availability: refresh and previews", function()
                 HidePreview = function() end,
             }
             _G.KitnEssentials = {
-                IterateModules = function() return pairs({ CombatRes = module }) end,
-                GetModule = function(_, name) return name == "CombatRes" and module or nil end,
+                IterateModules = function() return pairs({ HuntersMark = module }) end,
+                GetModule = function(_, name) return name == "HuntersMark" and module or nil end,
                 EnableModule = function(_, name) calls[#calls + 1] = "enable " .. name end,
                 DisableModule = function(_, name) calls[#calls + 1] = "disable " .. name end,
             }
             helpers.loadModule("Core/ProfileManager.lua", KE)
             KE.ProfileManager:RefreshAllModules()
-            KE.PreviewManager:ShowModules({ "CombatRes" })
+            KE.PreviewManager:ShowModules({ "HuntersMark" })
             KE.PreviewManager:ShowSectionPreviews("combat_section")
             assert.same({ "rebind" }, calls, row.name)
         end
