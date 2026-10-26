@@ -574,7 +574,9 @@ local function PaintGhost(g)
     end
 end
 
--- Out of use: closed from plain values, its totals and member dropped.
+-- Out of use: closed from plain values, its totals and member dropped. Its
+-- gates hide too, so the game stops laying out two span-wide bars per spare
+-- cell; KT:PlaceGhost shows them again.
 local function ParkCell(cell, leftward)
     cell.icon.cd:Clear()
     cell.gate:SetMinMaxValues(0, 1)
@@ -586,6 +588,8 @@ local function ParkCell(cell, leftward)
     ShowStep(cell.stepA, false)
     ShowStep(cell.stepB, false)
     cell.clip:Hide()
+    cell.gate:Hide()
+    cell.gateB:Hide()
     cell.guid, cell.before, cell.after, cell.cCur, cell.gen = nil, nil, nil, nil, nil
 end
 
@@ -1346,6 +1350,8 @@ function KT:PlaceGhost(g, unit)
     for k = 1, g.used do
         local cell = g.cells[k]
         PaintCooldown(cell.icon, cell.cdStart, cell.cdDur)
+        cell.gate:Show()
+        cell.gateB:Show()
         cell.clip:Show()
     end
     FeedGhost(g)
