@@ -774,6 +774,11 @@ local function fingerprintsMatch(spellData, observed)
         and spellData.selfBuffCountDeltaOnSuccess ~= observed.selfBuffCountDelta then
         return false
     end
+    -- target hostility narrows only on a known contradiction; selection
+    -- applies its strict rule separately.
+    if not TI.TargetHostileMatches(spellData.targetHostile, observed.targetState, "narrow") then
+        return false
+    end
     return true
 end
 
@@ -1079,9 +1084,11 @@ end
 -- anchors[spellID] = { anchorAt } (nil ok). Returns spellID or nil.
 function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase)
     if not (mobData and mobData.spells and observed) then return nil end
+    local spells = TI.SelectOrderRows(mobData.spells, observed.kind, observed.order)
     local tol = TI.CAST_TIME_TOLERANCE
-    local best, bestScore
-    for spellID, spell in pairs(mobData.spells) do
+    local best, bestScore, bestDuration, bestExpected
+    local secondScore, secondDuration, secondExpected
+    for spellID, spell in pairs(spells) do
         local first = spell.first
         -- excludeTwoPhase: skip cast→channel spells so a shared-castTime one-phase
         -- twin (e.g. Crowd Dispersal vs Arcane Beam) can be resolved on its own.
@@ -1096,7 +1103,9 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
             and tonumber(observed.selfBuffCountDelta) == nil then
             skip = true
         end
-        if first ~= nil and not skip and TI.SpellMatchesObserved(spell, observed) then
+        if first ~= nil and not skip and TI.SpellMatchesObserved(spell, observed)
+            and TI.TargetHostileMatches(spell.targetHostile, observed.targetState, "select",
+                TI.ABSENT_MATCHES_FALSE) then
             local dur = (observed.kind == "channel") and spell.channelTime or spell.castTime
             local durationDelta = durationWithin(observed.duration, dur, tol)
                 and abs(observed.duration - dur) or nil
@@ -1131,11 +1140,25 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
                     end
                 end
                 local s = durationDelta * 100 + expectedDelta
-                if not bestScore or s < bestScore then bestScore = s; best = spellID end
+                if not bestScore or s < bestScore then
+                    secondScore, secondDuration, secondExpected = bestScore, bestDuration, bestExpected
+                    bestScore, best, bestDuration, bestExpected = s, spellID, durationDelta, expectedDelta
+                elseif not secondScore or s < secondScore then
+                    secondScore, secondDuration, secondExpected = s, durationDelta, expectedDelta
+                end
             end
         end
     end
-    if best then return best end
+    -- Selection tie: when the measured duration cannot separate the two best
+    -- spells, schedule decides only outside the cue margin. A refused tie is
+    -- terminal, so Pass 2 never picks a channel Pass 1 excluded on duration.
+    if best then
+        if secondScore and abs(bestDuration - secondDuration) <= TI.DURATION_TIE_EPSILON
+            and abs(bestExpected - secondExpected) <= TI.SELECTION_TIE_MARGIN then
+            return nil
+        end
+        return best
+    end
 
     -- Pass 2 — channel fallback. A grab/beam channel's caster CHANNEL_STOP fires
     -- when the cast BAR closes, far short of the gameplay channelTime, so Pass 1's
@@ -1146,8 +1169,8 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
     -- untrustworthy measured duration) and only when an anchor already exists —
     -- else stay unresolved and let a later anchored cast decide.
     if observed.kind ~= "channel" then return nil end
-    local bestC, bestCScore, count = nil, nil, 0
-    for spellID, spell in pairs(mobData.spells) do
+    local bestC, bestCScore, secondCScore, count = nil, nil, nil, 0
+    for spellID, spell in pairs(spells) do
         local first = spell.first
         local skip = excludeTwoPhase and (spell.channelTime or 0) > 0
         -- Same strict success-side delta rule as Pass 1.
@@ -1177,12 +1200,20 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
                 end
             end
             if not bestCScore or expectedDelta < bestCScore then
+                secondCScore = bestCScore
                 bestCScore = expectedDelta; bestC = spellID
+            elseif not secondCScore or expectedDelta < secondCScore then
+                secondCScore = expectedDelta
             end
         end
     end
     if count == 1 then return bestC end
-    if count > 1 and bestCScore and bestCScore < 9999 then return bestC end
+    -- Several channels: only an anchored best whose runner-up is outside the
+    -- cue margin is credited; a tie, or no anchor at all, credits nothing.
+    if count > 1 and bestCScore and bestCScore < 9999
+        and secondCScore - bestCScore > TI.SELECTION_TIE_MARGIN then
+        return bestC
+    end
     return nil
 end
 
@@ -1479,6 +1510,174 @@ function TI.SelectOrderRows(spells, kind, order)
     end
     if any then return out end
     return spells
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Transition proof, start advance, target evidence        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+TI.TRANSITION_PAIR_WINDOW = 0.25  -- a channel this soon after its cast's STOP
+TI.SELECTION_TIE_MARGIN = 0.05    -- schedule distances this close are a tie
+TI.DURATION_TIE_EPSILON = 1e-6    -- duration deltas this close are equal
+-- Selection lets known absence match a row declaring targetHostile = false.
+TI.ABSENT_MATCHES_FALSE = true
+
+-- How one candidate explains a measured cast: the count of one-phase
+-- explanations (curated one-phase casts, and trait castTimeSet entries that
+-- are none of its own two-phase cast durations) and of two-phase cast phases.
+local function castExplanations(npcID, observed, dataByNpc, traitByNpc)
+    local one, two = 0, 0
+    local ownTwoPhase = {}
+    local mob = dataByNpc and dataByNpc(npcID)
+    for _, spell in pairs(mob and mob.spells or {}) do
+        if hasPositiveDuration(spell.castTime) or hasPositiveDuration(spell.castTimeExtra) then
+            local twoPhase = (tonumber(spell.channelTime) or 0) > 0
+            if twoPhase then
+                ownTwoPhase[#ownTwoPhase + 1] = spell.castTime
+                for _, alt in ipairs(type(spell.castTimeExtra) == "table" and spell.castTimeExtra or {}) do
+                    ownTwoPhase[#ownTwoPhase + 1] = alt
+                end
+            end
+            if spellShapeMatches(spell, observed) and fingerprintsMatch(spell, observed) then
+                if twoPhase then two = two + 1 else one = one + 1 end
+            end
+        end
+    end
+    local trait = traitByNpc and traitByNpc(npcID)
+    for _, dur in ipairs(trait and type(trait.castTimeSet) == "table" and trait.castTimeSet or {}) do
+        local own = false
+        for _, d in ipairs(ownTwoPhase) do
+            if d == dur then own = true end
+        end
+        if not own and durationWithin(observed.duration, dur, TI.CAST_TIME_TOLERANCE) then
+            one = one + 1
+        end
+    end
+    return one, two
+end
+
+-- Proves a channel START is the preceding cast's channel phase. `source` is
+-- the cast record the channel replaced or that ended by its own STOP, and
+-- state = { owner, matchedNPCID, candidates, fingerprints } is the runtime at
+-- channel start. Proof needs an eligible cast of the current plate generation
+-- that was neither canceled nor retired and that no correlated interrupt or
+-- failure ended; adjacency, either an implied stop with no refused end event
+-- since its START or its own correlated STOP within TRANSITION_PAIR_WINDOW;
+-- and an explanation: on a resolved runtime a two-phase cast phase of the
+-- matched mob explains the measured cast, and on an unresolved one every
+-- explanation over the surviving candidates is a two-phase cast phase.
+-- Returns { castStartAt, pairedStartAt } or nil, never false. No spell is
+-- carried; channel credit then considers two-phase spells only.
+function TI.ProveCastIntoChannel(source, state, dataByNpc, traitByNpc, now)
+    if type(source) ~= "table" or type(state) ~= "table" or now == nil then return nil end
+    if source.kind ~= "cast" or not source.eligible or source.canceled or source.retired then return nil end
+    if source.owner ~= state.owner or source.startAt == nil then return nil end
+    local endAt
+    if source.endedBy == "stop" then
+        if source.endAt == nil or now < source.endAt or now - source.endAt > TI.TRANSITION_PAIR_WINDOW then
+            return nil
+        end
+        endAt = source.endAt
+    elseif source.endedBy == nil then
+        if source.impliedStopVoid then return nil end
+        endAt = now
+    else
+        return nil
+    end
+    local observed = { kind = "cast", duration = endAt - source.startAt, fingerprints = state.fingerprints }
+    local npcs = {}
+    if state.matchedNPCID ~= nil then
+        npcs[1] = state.matchedNPCID
+    else
+        for _, c in ipairs(state.candidates or {}) do npcs[#npcs + 1] = c.npcID end
+    end
+    local one, two = 0, 0
+    for _, npcID in ipairs(npcs) do
+        local o, t = castExplanations(npcID, observed, dataByNpc, traitByNpc)
+        one, two = one + o, two + t
+    end
+    if two == 0 then return nil end
+    if state.matchedNPCID == nil and one > 0 then return nil end
+    return { castStartAt = source.startAt, pairedStartAt = now }
+end
+
+-- The start-advance pick: the start-advance-owned spells of `kind` that the
+-- observed START matches, after opening order and strict target-hostility
+-- selection. Exactly one match anchors; none or several anchor nothing and
+-- the caller keeps the pending advance. Returns the spellID or nil, and the
+-- match count.
+function TI.SelectStartAdvance(mobData, kind, fingerprints, order, targetState, absentMatchesFalse)
+    if not (mobData and mobData.spells) then return nil, 0 end
+    local pick, count = nil, 0
+    for spellID, spell in pairs(TI.SelectOrderRows(mobData.spells, kind, order)) do
+        if TI.MatchesObservedCastStart(spell, kind, fingerprints)
+            and TI.TargetHostileMatches(spell.targetHostile, targetState, "select", absentMatchesFalse) then
+            pick, count = spellID, count + 1
+        end
+    end
+    if count == 1 then return pick, 1 end
+    return nil, count
+end
+
+-- One target read pair, each taken in its own guarded call with
+-- issecretvalue as first contact: "absent" for a known false existence (the
+-- hostility read is unused), "hostile" or "not-hostile" for a known true
+-- existence with a known hostility, otherwise "unavailable". Unavailable is
+-- never absent or not hostile.
+function TI.NormalizeTargetEvidence(existsOk, exists, existsSecret, attackOk, attack, attackSecret)
+    if not existsOk or existsSecret or type(exists) ~= "boolean" then return "unavailable" end
+    if exists == false then return "absent" end
+    if not attackOk or attackSecret or type(attack) ~= "boolean" then return "unavailable" end
+    return attack and "hostile" or "not-hostile"
+end
+
+-- One event on a record's target evidence. event.kind:
+--   "open"   with event.collect (a candidate has a cast row carrying
+--            targetHostile at an eligible cast START): a pending window, else
+--            the record is not collected;
+--   "change" with event.reading from TI.NormalizeTargetEvidence: the first
+--            change handled while the window is open commits;
+--   "close"  (close timer, correlated end, interrupt or failure,
+--            replacement, retirement or cancellation): a pending window
+--            commits unavailable.
+-- A final state never changes. Returns true exactly once per record, when its
+-- consumers should run. Owner death is not an event here: a dead owner's
+-- record stays pending and nothing runs for it.
+function TI.TargetEvidenceStep(rec, event)
+    local kind = event and event.kind
+    if kind == "open" then
+        if rec.targetState ~= nil then return false end
+        if rec.eligible and event.collect then
+            rec.targetState, rec.targetOpen = "pending", true
+        else
+            rec.targetState = "not-collected"
+        end
+        return false
+    end
+    if not (rec.targetOpen and rec.targetState == "pending") then return false end
+    if kind == "change" then
+        rec.targetState = event.reading or "unavailable"
+    elseif kind == "close" then
+        rec.targetState = "unavailable"
+    else
+        return false
+    end
+    rec.targetOpen = false
+    return true
+end
+
+-- Target hostility against a row's declared `want`; a row without the field
+-- is never affected. "narrow" rejects only a known contradiction (hostile
+-- against false, not hostile against true). "select" is strict: true matches
+-- only hostile, false matches not hostile and, when absentMatchesFalse,
+-- absent; pending, unavailable and not collected match nothing.
+function TI.TargetHostileMatches(want, state, use, absentMatchesFalse)
+    if want == nil then return true end
+    if use == "narrow" then
+        return not ((want == false and state == "hostile") or (want == true and state == "not-hostile"))
+    end
+    if want == true then return state == "hostile" end
+    return state == "not-hostile" or (absentMatchesFalse == true and state == "absent")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
