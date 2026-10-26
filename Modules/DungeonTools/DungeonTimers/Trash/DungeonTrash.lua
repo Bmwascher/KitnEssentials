@@ -143,47 +143,125 @@ local function safeBool(fn, ...)
     return v and true or false
 end
 
--- Identity snapshot (the `_s` reader). The whole read is pcall-wrapped and any
--- secret field bails the entire snapshot to nil — a mob we can't fingerprint
--- is simply left unresolved rather than crashing on a later comparison.
-local function readIdentity(unit, inMythicPlus)
-    if not (unit and UnitExists(unit)) then return nil end
-    local ok, snap = pcall(function()
-        local _, _, classID = UnitClass(unit)
-        local level = UnitLevel(unit)
-        local sex = UnitSex(unit)
-        local power = UnitPowerType(unit)
-        local classif = UnitClassification(unit)
-        if issecretvalue and (issecretvalue(level) or issecretvalue(sex) or issecretvalue(power)
-            or issecretvalue(classID) or issecretvalue(classif)) then
-            return nil
-        end
-        -- aura COUNT only — the aura table is truthy even when its fields are
-        -- secret, and we never read a field, so counting stays secret-safe.
-        local n = 0
-        if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-            local i = 1
-            while C_UnitAuras.GetAuraDataByIndex(unit, i) do n = n + 1; i = i + 1 end
-        end
-        if inMythicPlus and n > 0 then n = n - 1 end  -- subtract the affix aura
-        level = tonumber(level)
-        if level and level <= 0 then level = nil end
-        return {
-            level = level,
-            sex = tonumber(sex),
-            power = tonumber(power),
-            classID = tonumber(classID),
-            buffCount = n,
-            unitClassification = classif,
-        }
-    end)
-    if ok then return snap end
-    return nil
+-- Identity reads (4.2). Captured beside the reader that uses them.
+local UnitIsLieutenant = UnitIsLieutenant
+local UnitCreatureFamily = UnitCreatureFamily
+
+-- One guarded call's outcome for normalization: whether it ran, its value,
+-- and whether that value is secret. issecretvalue is the first contact.
+local function guardedValue(ok, v)
+    if not ok then return false, nil, false end
+    if issecretvalue and issecretvalue(v) then return true, nil, true end
+    return true, v, false
 end
 
+-- Reads one identity field under its own guard and normalizes it; nil is
+-- unknown. An absent API or a failed aura count is unknown, never 0. Family
+-- is the presence predicate UnitCreatureFamily(unit) ~= nil, evaluated inside
+-- its own pcall; the raw family value never leaves that call.
+local function readField(unit, field, inMythicPlus)
+    local ok, v, secret = false, nil, false
+    if field == "level" then
+        if UnitLevel then ok, v, secret = guardedValue(pcall(UnitLevel, unit)) end
+    elseif field == "sex" then
+        if UnitSex then ok, v, secret = guardedValue(pcall(UnitSex, unit)) end
+    elseif field == "power" then
+        if UnitPowerType then ok, v, secret = guardedValue(pcall(UnitPowerType, unit)) end
+    elseif field == "classID" then
+        if UnitClass then
+            local called, _, _, classID = pcall(UnitClass, unit)
+            ok, v, secret = guardedValue(called, classID)
+        end
+    elseif field == "unitClassification" then
+        if UnitClassification then ok, v, secret = guardedValue(pcall(UnitClassification, unit)) end
+    elseif field == "buffCount" then
+        -- Aura COUNT only: the aura table is truthy even when its fields are
+        -- secret, and no field is read.
+        local getAura = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+        if getAura then
+            ok, v = pcall(function()
+                local n, i = 0, 1
+                while getAura(unit, i) do n = n + 1; i = i + 1 end
+                return n
+            end)
+            if ok and inMythicPlus and type(v) == "number" and v > 0 then v = v - 1 end  -- the affix aura
+        end
+    elseif field == "isLieutenant" then
+        if UnitIsLieutenant then
+            v = safeBool(UnitIsLieutenant, unit)
+            ok = v ~= nil
+        end
+    elseif field == "hasCreatureFamily" then
+        if TI.FAMILY_GATE and UnitCreatureFamily then
+            ok, v = pcall(function() return UnitCreatureFamily(unit) ~= nil end)
+            secret = (ok and issecretvalue ~= nil and issecretvalue(v)) or false
+        end
+    end
+    return TI.NormalizeIdentityField(field, ok, v, secret)
+end
+
+-- Reads the listed snapshot fields. Returns the known ones (an empty table
+-- when none is known), or nil when the unit does not exist. The reader holds
+-- no schema rules: callers pass the read plan's fields.
+local function readIdentity(unit, fields, inMythicPlus)
+    if not (unit and fields and safeBool(UnitExists, unit) == true) then return nil end
+    local out = {}
+    for _, field in ipairs(fields) do
+        out[field] = readField(unit, field, inMythicPlus)
+    end
+    return out
+end
+
+-- Unit-token first contact (4.3): secrecy before type or find.
 local function normalizeNameplate(unit)
+    if issecretvalue and issecretvalue(unit) then return nil end
     if type(unit) == "string" and unit:find("^nameplate%d") then return unit end
     return nil
+end
+-- Exported so TrashCache.lua's handlers use the same first contact.
+DTrash._normalizeNameplate = normalizeNameplate
+
+-- Merges a read of `fields` into the generation's fresh snapshot, which is
+-- stored even when partial. A known field is never overwritten.
+local function readInto(self, rt, fields)
+    if not (fields and fields[1] ~= nil) then return end
+    local fresh = readIdentity(rt.unit, fields, self:InMythicPlus())
+    if fresh then rt.obs = TI.MergeIdentity(rt.obs, fresh) end
+end
+
+-- One opportunity of a plate generation's scheduled read chain (4.2): the
+-- initial delayed read and at most two more. It captures the owner, never the
+-- token or the runtime table, so a removed, replaced or stopped generation
+-- does nothing, even when cache reuse reinstalls its table.
+function DTrash:ScheduledIdentityRead(owner)
+    if not TI.RecoveryOwnerHolds(owner, self.tracked, self.monitoring) then return end
+    local rt = owner.runtime
+    -- Combat re-check: the plate-add read can land a frame too early on a
+    -- mass pull, and losing that one edge must not lose engagement.
+    if not rt.engagedAt and safeBool(UnitAffectingCombat, rt.unit) == true then
+        self:MarkEngaged(rt)
+    end
+    local fields, scheduled, runs = TI.RecoveryReadPlan(
+        { obs = rt.obs, pending = rt.obsPending, scheduled = owner.scheduled }, "scheduled")
+    owner.scheduled = scheduled
+    if not runs then return end
+    readInto(self, rt, fields)
+    self:ResolveMob(rt)
+    -- An adoption in that pass moved the owner; the chain follows it.
+    rt = owner.runtime
+    local delay = SNAPSHOT_RETRIES[owner.scheduled]
+    if delay and not TI.RecoverySettled(rt.obsPending) then
+        C_Timer.After(delay, function() self:ScheduledIdentityRead(owner) end)
+    end
+end
+
+-- An event read opportunity (4.2): the read rule only. It never starts,
+-- refills or counts against the scheduled chain; the caller runs its one
+-- resolve pass after it.
+function DTrash:EventIdentityRead(rt)
+    local fields = TI.RecoveryReadPlan({ obs = rt.obs, pending = rt.obsPending,
+        scheduled = rt.owner and rt.owner.scheduled }, "event")
+    readInto(self, rt, fields)
 end
 
 -- Hostile-plate intake gate, checked on EVERY intake path: friendly players,
@@ -395,7 +473,7 @@ function DTrash:DumpState()
     -- identity (level/sex/power/classID/buffCount/classification) so it can be
     -- compared field-by-field against the curated trait fingerprint.
     if UnitExists("target") then
-        local to = readIdentity("target", self:InMythicPlus())
+        local to = readIdentity("target", TI.IdentityReadFields(), self:InMythicPlus())
         KE:Print(to and string_format("  TARGET id: L%s s%s p%s c%s b%s %s",
             tostring(to.level), tostring(to.sex), tostring(to.power),
             tostring(to.classID), tostring(to.buffCount), tostring(to.unitClassification))
@@ -591,6 +669,10 @@ function DTrash:StopMonitor()
     end
     if self.HideAllAlerts then self:HideAllAlerts() end
     if self.StopMarkers then self:StopMarkers() end
+    -- Every plate generation ends here: its owner-bound callbacks are refused.
+    for _, rt in pairs(self.tracked) do
+        if rt.owner then rt.owner.live = false end
+    end
     wipe(self.tracked)
     self:ResetTrashCache()
     self.inBossEncounter = false
@@ -749,10 +831,22 @@ function DTrash:OnNameplateAdded(_, unit)
     -- the validated string for everything below, editor type-checker included.
     unit = normalizeNameplate(unit)
     if not unit then return end
-    if not isHostilePlate(unit) then return end
+    if not isHostilePlate(unit) then
+        -- A friendly or dead occupant on a still-tracked token is that
+        -- generation's removal (4.2): it ends through the removal path.
+        if self.tracked[unit] then self:OnNameplateRemoved(nil, unit) end
+        return
+    end
     local now = GetTime()
-    self.tracked[unit] = {
+    -- A fresh add on a token still tracked ends the old generation first.
+    local old = self.tracked[unit]
+    if old and old.owner then old.owner.live = false end
+    -- One owner per plate generation (4.2): the scheduled reads and every
+    -- owner-bound callback check it, and it moves with a cache adoption.
+    local owner = { live = true, scheduled = 0 }
+    local rt = {
         unit = unit,
+        owner = owner,
         firstSeenAt = now,
         -- engagedAt = the FIRST moment the mob shows combat evidence — NOT
         -- plate-add: render range isn't engagement, and seeding first-cast
@@ -765,14 +859,20 @@ function DTrash:OnNameplateAdded(_, unit)
         -- exists→not-exists transition.
         targetStateExists = safeBool(UnitExists, unit .. "target"),
     }
+    owner.runtime = rt
+    self.tracked[unit] = rt
     self:NoteNameplateAddedForCache(unit)
-    C_Timer.After(SNAPSHOT_DELAY, function() self:SnapshotUnit(unit) end)
+    C_Timer.After(SNAPSHOT_DELAY, function() self:ScheduledIdentityRead(owner) end)
 end
 
 function DTrash:OnNameplateRemoved(_, unit)
+    unit = normalizeNameplate(unit)
     if not unit then return end
     local rt = self.tracked[unit]
     self.tracked[unit] = nil
+    -- The plate generation ends: its owner-bound callbacks are refused from
+    -- here on, even if the cache later reinstalls this table.
+    if rt and rt.owner then rt.owner.live = false end
     -- On-plate icons anchor to the physical plate — they always hide with it.
     if self.HideNameplateMarker then self:HideNameplateMarker(unit) end
     -- TrashCache flicker recovery: a resolved runtime is held for the restore
@@ -796,32 +896,6 @@ function DTrash:OnNameplateRemoved(_, unit)
     end
 end
 
-function DTrash:SnapshotUnit(unit, attempt)
-    local rt = self.tracked[unit]
-    if not rt then return end
-    -- Combat re-check on the snapshot timer(s): the plate-add read can land a
-    -- frame too early on a mass pull, and losing that one edge must not lose
-    -- engagement, so engagedAt is re-checked on every refresh.
-    if not rt.engagedAt and safeBool(UnitAffectingCombat, unit) == true then
-        self:MarkEngaged(rt)
-    end
-    if rt.obs then return end  -- a retry already landed
-    local obs = readIdentity(unit, self:InMythicPlus())
-    if not obs then
-        -- Transient unreadable identity (unit data can still be unstable at
-        -- +0.10s on a mass pull): retry a bounded couple of times instead of
-        -- leaving the plate permanently untrackable -- ResolveMob dead-ends on
-        -- rt.obs=nil and nothing else ever re-reads identity.
-        local delay = SNAPSHOT_RETRIES[attempt or 1]
-        if delay then
-            C_Timer.After(delay, function() self:SnapshotUnit(unit, (attempt or 1) + 1) end)
-        end
-        return
-    end
-    rt.obs = obs
-    self:ResolveMob(rt)
-end
-
 -- Cancel every output artifact keyed to the runtime's CURRENT identity —
 -- shared by ResolveMob's Layer1 identity flip (contradiction-driven or not)
 -- and FinishCast's Layer2 flip (both must kill armed bars, deferred reveals
@@ -834,6 +908,33 @@ local function resetResolvedOutput(self, rt)
     if self.HideNameplateMarker then self:HideNameplateMarker(rt.unit) end
     rt.anchors = nil
     rt.enterSeeded = nil
+end
+
+-- The per-dungeon trait index, built once per trait table.
+function DTrash:TrashTraitIndex()
+    local traits = KE.TrashTraits or {}
+    if self._traitIndexFor ~= traits then
+        self._traitIndex = TI.BuildTraitIndex(traits)
+        self._traitIndexFor = traits
+    end
+    return self._traitIndex
+end
+
+-- Co-presence evidence for one resolve pass: the npcIDs of the other tracked
+-- runtimes TI.CompanionTrusted accepts. Derived from the tracked set, so a
+-- removal, death, flip or stop drops an entry by itself. A generation whose
+-- owner no longer holds never vouches: a replaced plate is still tracked
+-- while its add processes an overdue join close. One pass over at most
+-- MAX_NAMEPLATES plates, per resolve pass, never per frame.
+function DTrash:TrustedCompanions(rt)
+    local out = {}
+    for _, other in pairs(self.tracked) do
+        if other ~= rt and TI.RecoveryOwnerHolds(other.owner, self.tracked, self.monitoring)
+            and TI.CompanionTrusted(other) then
+            out[other.matchedNPCID] = true
+        end
+    end
+    return out
 end
 
 -- Layer1: fingerprint the mob → candidates. Re-run whenever behavior flags
@@ -876,7 +977,8 @@ function DTrash:ResolveMob(rt)
     obs.sawInterrupted = rt.sawInterrupted
     obs.sawCastIntoChannel = rt.sawCastIntoChannel
 
-    local cands, resolved = TI.BuildCandidates(obs, {
+    local cands, resolved, pending = TI.BuildCandidates(obs, {
+        traitIndex = self:TrashTraitIndex(),
         dungeonKey = dungeonKey,
         mapID = self.currentMapID,                 -- instance map (data key + Academy exemption)
         bossProgressIndex = self.bossProgressIndex,
@@ -884,8 +986,15 @@ function DTrash:ResolveMob(rt)
         currentZoneText = self.zoneText,
         resolveAreaName = areaNameLookup,
         forcesPercent = self.forcesPercent,        -- nil when unknown, never 0 (nil skips the Academy prune)
+        inBossEncounter = self.inBossEncounter == true,
+        roomText = self.zoneText,                  -- the normalized minimap text
+        sawPreCombatChannel = rt.sawPreCombatChannel,
+        trustedCompanions = self:TrustedCompanions(rt),
     })
     rt.candidates = cands
+    -- Recovery state (4.2), written by every pass that scores the snapshot
+    -- and before the cache consult, so an adoption in this pass carries it.
+    rt.obsPending = pending
     -- Layer1 (fingerprint) must NOT downgrade a Layer2 (observed cast/channel
     -- DURATION) resolution to a different mob: duration is stable, non-secret
     -- evidence and outranks fingerprint uniqueness. Once a cast confirms the mob,
@@ -901,7 +1010,10 @@ function DTrash:ResolveMob(rt)
         -- point: post-resolve, pre-assignment, never at plate add.
         if rt.matchedNPCID == nil and not rt._cacheRestoredAt then
             local adopted = self:TryRestoreCachedRuntime(rt, resolved)
-            if adopted then return end
+            if adopted then
+                adopted.layer1Resolved = true  -- this pass resolved it at Layer 1
+                return
+            end
         end
         -- Identity FLIP (Layer1 re-resolving mob A → B): cancel A's armed
         -- output BEFORE adopting B. A full cancel and rebuild is required
@@ -926,6 +1038,9 @@ function DTrash:ResolveMob(rt)
         dprint(string_format("%s: behavior contradicts %s but no alternative resolves — identity kept",
             rt.unit, tostring(rt.matchedNPCID)))
     end
+    -- Layer 1 trust for co-presence: only while this pass resolves the
+    -- current identity as a complete, level-agreed lone survivor.
+    rt.layer1Resolved = (resolved ~= nil and resolved == rt.matchedNPCID) or nil
     -- The pass may have just named the mob (fresh resolve, or an interrupt's
     -- flag-prune re-resolve): consume any pending CAST_START start-advance.
     self:ApplyPendingStartAdvance(rt)
@@ -956,11 +1071,10 @@ function DTrash:OnPlayerCombatChanged()
         if not rt.engagedAt and safeBool(UnitAffectingCombat, unit) == true then
             self:MarkEngaged(rt)
         end
-        if rt.obs == nil then
-            self:SnapshotUnit(unit)  -- re-attempt a never-read identity
-        else
-            self:ResolveMob(rt)
-        end
+        -- One event read opportunity, then the one resolve pass; nothing
+        -- further runs on this runtime after it.
+        self:EventIdentityRead(rt)
+        self:ResolveMob(rt)
     end
 end
 
@@ -1209,6 +1323,8 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
         rt.sawChannelStart = true
     end
     self:MarkEngaged(rt)  -- a cast IS engagement proof (the old reactive model's whole premise)
+    -- One event read opportunity, before this START's one resolve pass.
+    self:EventIdentityRead(rt)
 
     self:ResolveMob(rt)  -- behavior flag may prune candidates
 
@@ -1843,6 +1959,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             if rt.matchedNPCID ~= nil and resolved ~= rt.matchedNPCID then
                 resetResolvedOutput(self, rt)
                 rt.castConfirmed = nil
+                rt.layer1Resolved = nil
                 dprint(string_format("%s: Layer2 identity flip %s -> %s — output rebuilt",
                     unit, tostring(rt.matchedNPCID), tostring(resolved)))
             end

@@ -125,6 +125,7 @@ end
 -- MarkEngaged so a resolved mob's first-cast timers seed the moment it is
 -- actually pulled.
 function DTrash:OnUnitFlags(_, unit)
+    unit = self._normalizeNameplate(unit)
     local rt = unit and self.tracked[unit]
     if not rt then return end
     local meta = self._plateMeta[unit]
@@ -156,6 +157,7 @@ end
 -- cache write is then skipped by the recent-dead mark, so the mob's alerts
 -- tear down NOW instead of counting on for a corpse.
 function DTrash:OnUnitHealth(_, unit)
+    unit = self._normalizeNameplate(unit)
     if not unit or not self.tracked[unit] then return end
     if safeIsDead(unit) ~= true then return end
     local now = GetTime()
@@ -257,9 +259,10 @@ end
 -- A virgin runtime (never resolved, never restored) that independently
 -- re-resolved to a cached npcID inside the window adopts the cached runtime
 -- wholesale: identity, castConfirmed seniority, anchors, predictions and the
--- live alerts all carry over; only the unit token, the fresh identity read
--- and the fresh Layer1 candidates come from the new plate. Returns the
--- adopted runtime (now installed in self.tracked) or nil.
+-- live alerts all carry over; the unit token, the fresh identity snapshot,
+-- its recovery state, its generation owner and the fresh Layer1 candidates
+-- come from the new plate. Returns the adopted runtime (now installed in
+-- self.tracked) or nil.
 function DTrash:TryRestoreCachedRuntime(rt, npcID)
     local pending = self._trashPending
     if #pending == 0 then return nil end
@@ -301,12 +304,20 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     local oldUnit = row.sourceUnit
 
     -- Adopt the cached table as the unit's runtime (see header: this IS the
-    -- timer rebind). The new plate contributes its unit token,
-    -- its fresh identity snapshot and its fresh Layer1 candidate list; an
-    -- active cast measurement survives — a cast begun before the flicker can
-    -- legitimately STOP after it, and the castBarID correlation still pairs.
+    -- timer rebind). The new plate contributes its unit token and its fresh
+    -- Layer1 candidate list; an active cast measurement survives — a cast
+    -- begun before the flicker can legitimately STOP after it, and the
+    -- castBarID correlation still pairs. The fresh generation moves onto the
+    -- table whole: its snapshot, its recovery state and its owner with the
+    -- scheduled reads it already used. Nothing of the cached generation's
+    -- reads or owner survives, and the read budget is not refilled.
     cached.unit = newUnit
-    cached.obs = rt.obs or cached.obs
+    cached.obs = rt.obs
+    cached.obsPending = rt.obsPending
+    cached.owner = rt.owner
+    if rt.owner then rt.owner.runtime = cached end
+    -- Layer 1 trust belongs to a pass on the fresh snapshot.
+    cached.layer1Resolved = nil
     cached.candidates = rt.candidates or cached.candidates
     cached._cacheRestoredAt = now
     cached._cachePending = nil

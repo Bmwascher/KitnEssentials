@@ -183,6 +183,7 @@ read_globals = {
     "CR_CRIT_MELEE", "CR_HASTE_MELEE", "CR_MASTERY", "CR_LIFESTEAL",
     "CR_AVOIDANCE", "CR_SPEED", "CR_VERSATILITY_DAMAGE_DONE",
     "UnitClassification", "UnitSex", "UnitPowerType",
+    "UnitIsLieutenant", "UnitCreatureFamily",
     "UnitPosition",
     "InCombatLockdown", "IsResting",
 
