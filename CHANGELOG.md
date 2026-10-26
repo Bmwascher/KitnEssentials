@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.14.29
+
+### Aura Tracking
+
+- Totem Tracker preview shows four icons
+- Party Cooldowns: the Raid Cooldowns Edit Mode box covers the whole row of
+  preview icons
+
+---
+
 ## v4.14.28
 
 ### Party Cooldowns and Party Stops
