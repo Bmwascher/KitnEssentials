@@ -379,6 +379,7 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             local old = trackResolved(s.source)
             local oldOwner = old.owner
             oldOwner.scheduled = 3
+            old.targetSwitchEvents, old.targetClearEvents, old.targetStateExists = { 1 }, { 1 }, true
             old.obs = { level = 80, isLieutenant = true }
             old.obsPending = { "sex" }
             DTrash:OnNameplateRemoved(nil, s.source)
@@ -391,10 +392,14 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             local obs = { level = s.level, sex = 1, power = 1, classID = 2, buffCount = 0,
                 unitClassification = "normal" }
             fresh.obs = obs
+            -- Set after the START, whose engagement reset clears a plate's rings.
+            local switches, clears = { clock.now }, { clock.now }
             if s.level == 91 then
+                fresh.targetSwitchEvents, fresh.targetClearEvents, fresh.targetStateExists = switches, clears, false
                 DTrash:ResolveMob(fresh)                     -- a complete lone survivor resolves
             else
                 DTrash:OnCastStart(nil, s.fresh, nil, nil, 4)  -- level-disagreed: Layer 2 only
+                fresh.targetSwitchEvents, fresh.targetClearEvents, fresh.targetStateExists = switches, clears, false
                 clock.now = clock.now + 2
                 DTrash:OnCastStop(nil, s.fresh, nil, nil, 4)
             end
@@ -407,6 +412,9 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             assert.equals(owner, old.owner, s.name)
             assert.equals(old, owner.runtime, s.name)
             assert.equals(s.scheduled, owner.scheduled, s.name)
+            assert.equals(switches, old.targetSwitchEvents, s.name)
+            assert.equals(clears, old.targetClearEvents, s.name)
+            assert.is_false(old.targetStateExists, s.name)
             assert.is_false(TI.RecoveryOwnerHolds(oldOwner, DTrash.tracked, true), s.name)
             assert.is_true(TI.RecoveryOwnerHolds(owner, DTrash.tracked, true), s.name)
         end

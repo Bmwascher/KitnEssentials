@@ -1960,7 +1960,6 @@ describe("DungeonTrash inference — cast ownership", function()
         assert.is_true(TI.PendingAdvanceReady({ provenance = "cached", fingerprintsReady = true }, true))
         assert.is_false(TI.PendingAdvanceReady({ provenance = "cached", fingerprintsReady = true,
             targetNeeded = true, targetState = "pending" }, true))
-        assert.is_false(TI.PendingAdvanceReady({ consumed = true }, false))
 
         local fresh, adopted = generation("nameplate5")
         local moved = adopted.castState

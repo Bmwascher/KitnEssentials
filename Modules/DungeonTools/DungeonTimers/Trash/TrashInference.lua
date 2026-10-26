@@ -1309,7 +1309,7 @@ local function cancelUnattributable(cs, kind, replaced)
     end
     if kind == "channel" then cancelTwinHolds(cs) else TI.ReleaseIdleWork(cs) end
     local adv = cs.pendingAdvance
-    if adv and adv.provenance == "fresh" and adv.record == replaced and not adv.consumed then
+    if adv and adv.provenance == "fresh" and adv.record == replaced then
         cs.pendingAdvance = nil
     end
 end
@@ -1483,7 +1483,7 @@ end
 -- carried samples: start fingerprints when the mob needs them, and a final
 -- target state when its START needed one.
 function TI.PendingAdvanceReady(adv, needsFingerprints)
-    if type(adv) ~= "table" or adv.consumed then return false end
+    if type(adv) ~= "table" then return false end
     if needsFingerprints and adv.fingerprintsReady ~= true then return false end
     if adv.targetNeeded and (adv.targetState == nil or adv.targetState == "pending") then
         return false
