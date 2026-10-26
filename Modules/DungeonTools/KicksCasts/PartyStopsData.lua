@@ -17,11 +17,11 @@ local Data = {}
 KE.PartyStopsData = Data
 
 Data.STOPS = {
-    [119381] = { class = "MONK", cd = 60, debuffs = { 119381 }, mods = { { 344359, add = -10 } } },
+    [119381] = { class = "MONK", cd = 60, debuffs = { 119381 }, mods = { { 344359, add = -5 } } },
     [179057] = { class = "DEMONHUNTER", cd = 45, debuffs = { 179057 }, need = { 179057 } },
     [30283] = { class = "WARLOCK", cd = 60, debuffs = { 30283 }, need = { 30283 }, mods = { { 1270255, add = -15 } } },
     [192058] = { class = "SHAMAN", cd = 60, debuffs = { 118905 }, lag = 2, need = { 192058 },
-        mods = { { 381867, add = -5 }, { 265046, add = -15 }, { 445027, add = -5 } } },
+        mods = { { 381867, add = -5 }, { 265046, add = -10 }, { 445027, add = -5 } } },
     [46968] = { class = "WARRIOR", cd = 40, debuffs = { 132168 }, need = { 46968 },
         mods = { { 275339, add = -15 }, { 440992, add = -5 } } },
     [109248] = { class = "HUNTER", cd = 45, debuffs = { 117405, 117526 }, need = { 109248 } },
