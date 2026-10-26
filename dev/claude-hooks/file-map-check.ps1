@@ -32,7 +32,7 @@ try {
 $out = $out.Trim()
 if ($code -ne 0 -and $out -notmatch '\[file-map\]') {
     Write-Output "[file-map] the refresh failed (exit $code); run lua dev/scripts/file-map.lua --refresh to see why:`n$out"
-} elseif ($out -and $out -notmatch '^\[file-map\] current:') {
+} elseif ($out -and $out -notmatch '\A\[file-map\] current: [^\r\n]*\z') {
     Write-Output $out
 }
 exit 0
