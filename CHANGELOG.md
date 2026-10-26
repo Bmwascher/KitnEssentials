@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.1
+
+A stopgap for a game freeze some players hit in Mythic+ keys, and less
+frame time from Party Stops in big pulls.
+
+### Interrupt Tracker
+
+- Icons on Marked Mobs is off for now while a game freeze in Mythic+ keys
+  is fixed. Your setting is kept for when it returns, and the settings page
+  says why it is off. Kick icons still show on the nameplates teammates
+  kicked
+
+### Party Stops
+
+- Area stops (Shockwave, Capacitor Totem, Chaos Nova and the like) watch at
+  most 4 enemies by default, which costs much less in big pulls. A new
+  slider, Enemies Watched, Area Stops, sets how many
+- Corrected the cooldown talent cuts for Leg Sweep and Capacitor Totem
+
+---
+
 ## v4.15.0
 
 KitnEssentials now runs on WoW Forever. Also new: kick icons on enemy

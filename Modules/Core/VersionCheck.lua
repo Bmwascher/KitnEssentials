@@ -28,7 +28,7 @@ local DEBUG_VC = false
 
 -- The version a checkout copy announces. Release commits set it, and the
 -- commit-msg hook refuses any value that is not a released version.
-local LAST_RELEASE = "4.15.0"
+local LAST_RELEASE = "4.15.1"
 
 local PREFIX = "KEVersion"
 local HELLO_DELAY = 10
