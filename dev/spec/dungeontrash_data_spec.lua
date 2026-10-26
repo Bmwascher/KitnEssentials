@@ -13,8 +13,8 @@
 
 local helpers = require("dev.spec._helpers")
 
--- The eight KE dungeon keys these files may reference, and the mapID each
--- must map to (mirrors DUNGEONS in the extraction script + the sidebar ids).
+-- The KE dungeon keys these files may reference, and the mapID each must map
+-- to: the sidebar ids of both seasons in DungeonRegistry.lua.
 local MAP_KEY = {
     [658]  = "PitOfSaron",
     [1209] = "Skyreach",
@@ -24,6 +24,14 @@ local MAP_KEY = {
     [2811] = "MagistersTerrace",
     [2874] = "MaisaraCaverns",
     [2915] = "NexusPointXenas",
+    [1762] = "KingsRest",
+    [1877] = "TempleOfSethraliss",
+    [2521] = "RubyLifePools",
+    [2813] = "MurderRow",
+    [2825] = "DenOfNalorakk",
+    [2859] = "TheBlindingVale",
+    [2923] = "VoidscarArena",
+    [2993] = "AltarOfFangs",
 }
 local VALID_KEYS = {}
 for _, key in pairs(MAP_KEY) do VALID_KEYS[key] = true end
@@ -165,9 +173,13 @@ describe("DungeonTimers TrashTraits (Modules/DungeonTools/DungeonTimers/Trash/Tr
         KE = loadTrash("Modules/DungeonTools/DungeonTimers/Trash/TrashTraits.lua")
     end)
 
-    it("shapes every trait: npcID/mapID/dungeonKey, decoded identity, spellIDs", function()
+    it("shapes every legacy trait: npcID/mapID/dungeonKey, decoded identity, spellIDs", function()
         local failures = {}
+        local legacy = {}
         for npcID, trait in pairs(KE.TrashTraits) do
+            if trait.schema ~= "named" then legacy[npcID] = trait end
+        end
+        for npcID, trait in pairs(legacy) do
             local ctx = "npc " .. tostring(npcID)
             if type(npcID) ~= "number" then
                 failures[#failures + 1] = ctx .. ": trait key is not a number"
@@ -207,6 +219,86 @@ describe("DungeonTimers TrashTraits (Modules/DungeonTools/DungeonTimers/Trash/Tr
             end
             if type(trait.packedIdentity) ~= "number" then
                 failures[#failures + 1] = ctx .. ": packedIdentity must be a number"
+            end
+        end
+        assert.same({}, failures)
+    end)
+
+    it("shapes every named trait: its own fields only, an absent value left absent", function()
+        local FORBIDDEN = { "sex", "classID", "buffCount" }
+        local NUMBERS = { "level", "power" }
+        local BOOLEANS = {
+            "nonElite", "hasCastSkill", "noCastSkill", "hasCastSpell", "hasChannelSpell",
+            "hasInterruptFlag", "cannotInterrupt", "isLieutenant", "hasCreatureFamily",
+            "preCombatChanneling", "bossEncounter", "groupHasLevel90",
+            "groupHasCreatureFamily", "groupHasLevel90Power0",
+        }
+        local failures = {}
+        for npcID, trait in pairs(KE.TrashTraits) do
+            if trait.schema == "named" then
+                local ctx = "npc " .. tostring(npcID)
+                if trait.npcID ~= npcID then
+                    failures[#failures + 1] = ctx .. ": inner npcID mismatch"
+                end
+                if not (MAP_KEY[trait.mapID] and MAP_KEY[trait.mapID] == trait.dungeonKey) then
+                    failures[#failures + 1] = ctx .. ": mapID/dungeonKey mismatch"
+                end
+                if type(trait.name) ~= "string" or trait.name == "" then
+                    failures[#failures + 1] = ctx .. ": missing English name"
+                end
+                if trait.packedIdentity ~= nil then
+                    failures[#failures + 1] = ctx .. ": a named trait carries no packedIdentity"
+                end
+                if trait.identityOnly ~= nil and trait.identityOnly ~= true then
+                    failures[#failures + 1] = ctx .. ": identityOnly is true or absent"
+                end
+                if type(trait.placement) ~= "string" then
+                    failures[#failures + 1] = ctx .. ": placement must be a string"
+                end
+                for _, f in ipairs({ "castTimeSet", "channelTimeSet" }) do
+                    if trait[f] ~= nil and not isNumberArray(trait[f]) then
+                        failures[#failures + 1] = ctx .. ": " .. f .. " must be a number array when present"
+                    end
+                end
+                -- A source trait may declare an empty spell list; it ships as declared.
+                local ids = trait.spellIDs
+                if ids ~= nil and not (type(ids) == "table" and (next(ids) == nil or isNumberArray(ids))) then
+                    failures[#failures + 1] = ctx .. ": spellIDs must be a number array, possibly empty, when present"
+                end
+                local id = trait.identity
+                if type(id) ~= "table" then
+                    failures[#failures + 1] = ctx .. ": missing identity table"
+                else
+                    for _, f in ipairs(FORBIDDEN) do
+                        if id[f] ~= nil then
+                            failures[#failures + 1] = ctx .. ": a named identity carries no " .. f
+                        end
+                    end
+                    for _, f in ipairs(NUMBERS) do
+                        if id[f] ~= nil and type(id[f]) ~= "number" then
+                            failures[#failures + 1] = ctx .. ": identity." .. f .. " must be a number when present"
+                        end
+                    end
+                    for _, f in ipairs(BOOLEANS) do
+                        if id[f] ~= nil and type(id[f]) ~= "boolean" then
+                            failures[#failures + 1] = ctx .. ": identity." .. f .. " must be a boolean when present"
+                        end
+                    end
+                    for _, f in ipairs({ "uiMapIDs", "coPresenceNPCIDs" }) do
+                        if id[f] ~= nil and not isNumberArray(id[f]) then
+                            failures[#failures + 1] = ctx .. ": identity." .. f .. " must be a number array when present"
+                        end
+                    end
+                    if id.roomNames ~= nil then
+                        local okRooms = type(id.roomNames) == "table" and #id.roomNames > 0
+                        for _, room in ipairs(okRooms and id.roomNames or {}) do
+                            if type(room) ~= "string" or room == "" then okRooms = false end
+                        end
+                        if not okRooms then
+                            failures[#failures + 1] = ctx .. ": identity.roomNames must be non-empty strings when present"
+                        end
+                    end
+                end
             end
         end
         assert.same({}, failures)

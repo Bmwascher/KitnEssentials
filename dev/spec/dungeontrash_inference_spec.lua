@@ -24,11 +24,12 @@ describe("DungeonTrash inference — _r decoder", function()
     local TI, KE
     setup(function() TI, KE = loadInference() end)
 
-    it("round-trips every shipped trait's packedIdentity to its stored identity", function()
+    it("round-trips every legacy trait's packedIdentity to its stored identity", function()
         local mismatches = {}
         for npcID, trait in pairs(KE.TrashTraits) do
-            local decoded = TI.DecodePackedIdentity(trait.packedIdentity)
-            for field, want in pairs(trait.identity) do
+            local legacy = trait.schema ~= "named"
+            local decoded = legacy and TI.DecodePackedIdentity(trait.packedIdentity) or {}
+            for field, want in pairs(legacy and trait.identity or {}) do
                 if decoded[field] ~= want then
                     mismatches[#mismatches + 1] = string.format(
                         "npc %s field %s: decoded %s != stored %s",
