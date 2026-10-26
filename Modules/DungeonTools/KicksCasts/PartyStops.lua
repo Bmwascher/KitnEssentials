@@ -433,6 +433,12 @@ local function Aim(s, unit)
     end
 end
 
+-- Sensors past a feed's reach stay parked.
+local function Reach(f)
+    local db = PS.db
+    return Rules.Reach(Data.STOPS[f.id].aoe, db.EnemiesWatched, db.EnemiesWatchedArea)
+end
+
 local function Owed(f)
     if next(parkDebt) == nil then return false end
     for _, s in ipairs(f.sensors) do
@@ -543,10 +549,9 @@ local function Grow(f)
 end
 
 local function NextMissing()
-    local cap = Rules.Watched(PS.db.EnemiesWatched)
     for _, id in ipairs(Data.ORDER) do
         local f = PS.feeds[id]
-        if f and f.on and not f.stalled and f.fails < MAX_SENSOR_FAILS and #f.sensors < cap then return f end
+        if f and f.on and not f.stalled and f.fails < MAX_SENSOR_FAILS and #f.sensors < Reach(f) then return f end
     end
     return nil
 end
@@ -673,7 +678,7 @@ local function OnTake(slot, unit)
     evt:RegisterUnitEvent("UNIT_AURA", unit)
     takenAt = GetTime()
     for _, f in pairs(PS.feeds) do
-        local s = f.on and f.sensors[slot]
+        local s = f.on and slot <= Reach(f) and f.sensors[slot]
         if s then Aim(s, unit) end
     end
     Debug("slot %d taken", slot)
@@ -870,8 +875,9 @@ local function SetFeeds(want)
         if not f.on then
             f.on = true
             Unprime(f)
+            local reach = Reach(f)
             for j, s in ipairs(f.sensors) do
-                local unit = PS.slots:UnitOf(j)
+                local unit = j <= reach and PS.slots:UnitOf(j)
                 if unit then Aim(s, unit) end
             end
         end
@@ -1086,6 +1092,26 @@ local function ApplyQueued()
     PS:UpdateDB()
     KE.Context:Evaluate(KEY)
     if PS.slots then PS.slots:SetCap(Rules.Watched(PS.db.EnemiesWatched)) end
+    -- A changed reach re-aims or parks sensors; a feed whose sensors moved
+    -- only records on its next read, as one turning on does.
+    if PS.live then
+        for _, f in pairs(PS.feeds) do
+            local reach, moved = Reach(f), false
+            for j, s in ipairs(f.sensors) do
+                local unit = f.on and j <= reach and PS.slots:UnitOf(j)
+                if unit and s.psUnit ~= unit then
+                    Aim(s, unit)
+                    moved = true
+                elseif not unit and s.psUnit then
+                    Park(s)
+                    moved = true
+                end
+            end
+            if moved then Unprime(f) end
+        end
+        QueueBuild()
+        Arm()
+    end
     QueueRefresh()
 end
 

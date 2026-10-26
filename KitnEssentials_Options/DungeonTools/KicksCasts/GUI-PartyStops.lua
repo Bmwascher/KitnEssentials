@@ -108,15 +108,30 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
             ApplySettings()
         end,
     }), 0.5)
-    row3:AddWidget(GUIFrame:CreateSlider(row3, "Enemies Watched", {
+    card3:AddRow(row3, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched", {
         min = 4, max = 20, step = 1,
         value = Rules.Watched(db.EnemiesWatched),
+        tooltip = "How many enemies in combat a single-target stop, like Blind or Hammer of Justice, is read on.",
         callback = function(value)
             db.EnemiesWatched = value
             ApplySettings()
         end,
     }), 0.5)
-    card3:AddRow(row3, Theme.rowHeight)
+    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched, Area Stops", {
+        min = 1, max = 20, step = 1,
+        value = Rules.Reach(true, db.EnemiesWatched, db.EnemiesWatchedArea),
+        tooltip = "How many enemies an area stop, like Shockwave or Chaos Nova, is read on. It lands on " ..
+            "several at once, so a few are enough, and each one watched costs frame time in big pulls. " ..
+            "Never more than Enemies Watched.",
+        callback = function(value)
+            db.EnemiesWatchedArea = value
+            ApplySettings()
+        end,
+    }), 0.5)
+    card3:AddRow(row3b, Theme.rowHeight)
     card3:AddSeparator()
 
     -- The spell rows are released by each redraw, so they have a manager of
