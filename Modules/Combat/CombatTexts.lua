@@ -37,6 +37,8 @@ local string_format = string.format
 local DEBUG_CT = false
 
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
+-- Forever characters also wear a ranged weapon, which loses durability.
+if KE.IS_FOREVER then EQUIP_SLOTS[#EQUIP_SLOTS + 1] = 18 end
 local INTERRUPT_ICON_GAP = 4
 local INTERRUPT_FONT_EMPHASIS = 2
 local REVERSE_EVENT_WINDOW = 0.05

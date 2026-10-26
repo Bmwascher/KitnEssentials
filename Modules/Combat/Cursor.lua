@@ -34,6 +34,9 @@ local pcall            = pcall
 -- 61304 does not exist on the Forever client; 29515 does.
 local GCD_SPELL_ID = KE.IS_FOREVER and 29515 or 61304
 
+-- Withheld with its tab, so a saved or imported Dispel flag cannot start it.
+local DISPEL_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("CursorDispel") == true
+
 local TEX_BASE = "Interface\\AddOns\\KitnEssentials\\Media\\Cursor\\"
 local CIRCLE_TEXTURES = {
     circle_thin   = TEX_BASE .. "circle_thin.tga",
@@ -105,6 +108,16 @@ local TRACKED_SPELLS = {
     -- not waiting on it.
     { ids = { 703 }, specs = { [SPEC_ASSASSINATION] = true } },
 }
+
+-- Forever has no Hand of Reckoning and one spec per class, so the spec
+-- gates above never match there: it tracks Taunt, Growl and every Flame
+-- Shock rank, highest first, for every Shaman.
+local FOREVER_TRACKED_SPELLS = {
+    { ids = { 355 } },    -- Taunt (Warrior)
+    { ids = { 6795 } },   -- Growl (Druid)
+    { ids = { 29228, 10448, 10447, 8053, 8052, 8050 } },  -- Flame Shock (Shaman)
+}
+if KE.IS_FOREVER then TRACKED_SPELLS = FOREVER_TRACKED_SPELLS end
 
 C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
 C.TEXTURE_ORDER   = { "circle_thin", "circle_light", "circle_normal", "circle_heavy", "circle_thick", "circle_backup" }
@@ -977,6 +990,7 @@ function C:_DetachDispelScripts()
 end
 
 function C:ApplyDispelSatellite()
+    if not DISPEL_ADMITTED then return end
     local db = self.db.Dispel
     if not db.Enabled then
         -- During an active test preview, keep the frame visible and refresh
@@ -1587,7 +1601,7 @@ function C:ShowPreview()
         if not self.trailFrame then self:CreateTrailSatellite() end
         self:ApplyTrailSatellite()
     end
-    if self.db.Dispel.Enabled then
+    if DISPEL_ADMITTED and self.db.Dispel.Enabled then
         if not self.dispelFrame then self:CreateDispelSatellite() end
         self:ApplyDispelSatellite()
         self.dispelFrame:SetAlpha(1)
@@ -1626,6 +1640,7 @@ end
 -- Sets _dispelPreviewActive so ApplyDispelSatellite re-applies visuals (instead
 -- of hiding) when the user tweaks sliders/pickers during the preview window.
 function C:DispelPreview()
+    if not DISPEL_ADMITTED then return end
     if not self.dispelFrame then self:CreateDispelSatellite() end
     if not self.dispelFrame or not self.dispelFrame.cooldown then return end
 

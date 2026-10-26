@@ -6,12 +6,13 @@
 --   lua dev/scripts/derive-forever-kicks.lua <dir> --check Core/Interrupts.lua
 --
 -- <dir> holds ChrSpecialization, SkillLineAbility, SpellName, SpellEffect,
--- SpellCooldowns, SpellShapeshift, SpellMisc and SpellLevels as <Table>.csv.
+-- SpellCooldowns, SpellShapeshift, SpellMisc, SpellLevels and
+-- SpellEquippedItems as <Table>.csv.
 -- The first form prints FOREVER_INTERRUPTS and FOREVER_KICK_ALIASES, to be
 -- pasted into Core/Interrupts.lua as printed. --check exits 0 when the file
 -- holds that text exactly; otherwise it prints the text and exits 1. A
 -- missing table or column, a kick with no cooldown row, or a kick whose form
--- data the castbar selector cannot express, exits 1 naming it.
+-- or item data the castbar selector cannot express, exits 1 naming it.
 --
 -- Rules:
 --   1. A class's spells are the SkillLineAbility rows whose ClassMask has the
@@ -37,6 +38,10 @@
 --      skips a spell the player has not learned. When the first kick has
 --      ranks, its rank 1 is the row's `tracked` id, so a cooldown tracker
 --      gets the canonical id the cooldown tables are keyed on.
+--   7. Items: a kick with a SpellEquippedItems row needs that item. Item
+--      class 4 with subclass mask exactly 64 (a shield) and no inventory
+--      types prints `shield = true`; any other row fails the run, because
+--      the selector models only the shield.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
 local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
@@ -149,6 +154,17 @@ for _, r in ipairs(loadTable("SpellLevels", { "SpellID", "DifficultyID", "BaseLe
     if num(r.DifficultyID) == 0 then levelOf[num(r.SpellID)] = num(r.BaseLevel) end
 end
 
+-- Rule 7.
+local shieldKick, unmodeledItems = {}, {}
+for _, r in ipairs(loadTable("SpellEquippedItems", { "SpellID", "EquippedItemClass", "EquippedItemInvTypes", "EquippedItemSubclass" })) do
+    local id = num(r.SpellID)
+    if num(r.EquippedItemClass) == 4 and num(r.EquippedItemSubclass) == 64 and num(r.EquippedItemInvTypes) == 0 then
+        shieldKick[id] = true
+    else
+        unmodeledItems[id] = true
+    end
+end
+
 -- Rules 1 and 2.
 local kicksOfClass = {}
 for _, r in ipairs(loadTable("SkillLineAbility", { "SkillLine", "Spell", "ClassMask", "SupercedesSpell", "RaceMasks_0" })) do
@@ -220,6 +236,9 @@ local function familiesOf(classID)
             if unmodeledForms[kick.id] then
                 fail(("SpellShapeshift row of %d %s has an exclude or high mask"):format(kick.id, nameOf[kick.id] or "?"))
             end
+            if unmodeledItems[kick.id] then
+                fail(("SpellEquippedItems row of %d %s needs an item other than a shield"):format(kick.id, nameOf[kick.id] or "?"))
+            end
         end
         table.sort(family.ranks, function(a, b)
             if a.depth ~= b.depth then return a.depth < b.depth end
@@ -257,8 +276,9 @@ for _, specID in ipairs(FOREVER_SPECS) do
         for _, family in ipairs(families) do
             for i = #family.ranks, 1, -1 do
                 local kick = family.ranks[i]
-                add(("            { id = %d, cd = %s%s },  -- %s"):format(
-                    kick.id, ("%g"):format(kick.cd), formsText(formsOf[kick.id]), nameOf[kick.id] or "?"))
+                add(("            { id = %d, cd = %s%s%s },  -- %s"):format(
+                    kick.id, ("%g"):format(kick.cd), formsText(formsOf[kick.id]),
+                    shieldKick[kick.id] and ", shield = true" or "", nameOf[kick.id] or "?"))
                 if kick.id ~= family.canon then
                     aliases[#aliases + 1] = { id = kick.id, canon = family.canon }
                 end

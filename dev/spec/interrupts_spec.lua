@@ -77,9 +77,9 @@ describe("Interrupts (Core/Interrupts.lua)", function()
 end)
 
 -- A fixture list, so no data cell is pinned: ids 3 and 2 are two ranks of one
--- form-gated kick, 5 needs one of three forms, 7 has no form condition. Form
--- 99 stands in for a secret value; 5's list holds it, so only the secret
--- guard keeps 5 from being picked.
+-- form-gated kick, 4 is a shield kick, 5 needs one of three forms, 7 has no
+-- form condition. Form 99 stands in for a secret value; 5's list holds it, so
+-- only the secret guard keeps 5 from being picked.
 describe("KE:SelectInterruptCandidate", function()
     local SECRET = 99
     local KE
@@ -93,21 +93,29 @@ describe("KE:SelectInterruptCandidate", function()
         local list = {
             { id = 3, cd = 10, forms = { 19 } },
             { id = 2, cd = 10, forms = { 19 } },
+            { id = 4, cd = 12, forms = { 18 }, shield = true },
             { id = 5, cd = 12, forms = { 17, 18, SECRET } },
             { id = 7, cd = 30 },
         }
-        local all = { [3] = true, [2] = true, [5] = true, [7] = true }
+        local all = { [3] = true, [2] = true, [4] = true, [5] = true, [7] = true }
+        local shieldOn = function() return true end
+        local shieldOff = function() return false end
+        local mustNotRead = function() error("the shield reader ran") end
         local rows = {
             { name = "first known in list order", known = all, form = 19, want = 3 },
             { name = "an unknown higher rank is skipped", known = { [2] = true }, form = 19, want = 2 },
             { name = "nothing known", known = {}, form = 19, want = nil },
-            { name = "a form outside a list moves on", known = all, form = 18, want = 5 },
+            { name = "a form outside a list moves on, past a shield kick with no reader", known = all, form = 18, want = 5 },
+            { name = "a shield kick is taken with a shield", known = all, form = 18, shield = shieldOn, want = 4 },
+            { name = "a shield kick is skipped without a shield", known = all, form = 18, shield = shieldOff, want = 5 },
+            { name = "the reader does not run before a shield kick is reached", known = all, form = 19, shield = mustNotRead, want = 3 },
+            { name = "the reader does not run for a shield kick its form refuses", known = all, form = 24, shield = mustNotRead, want = 7 },
             { name = "no forms takes any form", known = all, form = 24, want = 7 },
             { name = "a nil form meets no forms list", known = all, form = nil, want = 7 },
             { name = "a secret form meets no forms list", known = all, form = SECRET, want = 7 },
         }
         for _, row in ipairs(rows) do
-            local pick = KE:SelectInterruptCandidate(list, function(id) return row.known[id] == true end, row.form)
+            local pick = KE:SelectInterruptCandidate(list, function(id) return row.known[id] == true end, row.form, row.shield)
             assert.equals(row.want, pick and pick.id, row.name)
         end
     end)

@@ -3,13 +3,22 @@
 
     <!-- Forever's settings pages: the admitted categories', in Pages.xml
          order. Home and Profile Manager load with the main addon. -->
+    <Script file="Combat\GUI-CombatTimer.lua" />
+    <Script file="Combat\GUI-CombatCross.lua" />
+    <Script file="Combat\GUI-CombatTexts.lua" />
+    <Script file="Combat\GUI-Cursor.lua" />
+    <Script file="Combat\GUI-FocusCastbar.lua" />
+    <Script file="Combat\GUI-RangeChecker.lua" />
+    <Script file="Combat\StatusTexts\GUI-StatusTexts.lua" />
     <Script file="AuraTracking\GUI-AuraDebuffs.lua" />
     <Script file="AuraTracking\GUI-AuraHeaders.lua" />
     <Script file="AuraTracking\GUI-AuraExternals.lua" />
     <Script file="AuraTracking\GUI-AuraMovement.lua" />
     <Script file="Skinning\GUI-DamageMeter.lua" />
     <Script file="AuraTracking\GUI-TotemTracker.lua" />
+    <Script file="Combat\StatusTexts\GUI-PetStatusText.lua" />
     <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
+    <Script file="Combat\StatusTexts\GUI-PlayerAbsorbs.lua" />
     <Script file="Core\CVars\GUI-CVars.lua" />
     <Script file="Core\CVars\GUI-UIScaling.lua" />
     <Script file="QoL\QualityOfLife\GUI-SlashCommands.lua" />

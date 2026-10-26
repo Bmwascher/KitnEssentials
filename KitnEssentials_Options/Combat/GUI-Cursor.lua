@@ -828,8 +828,12 @@ GUIFrame:RegisterTabbedContent("Cursor", {
         end)
 
         card:AddLabel("Draws a ring at your cursor so it is never lost in a fight, with an " ..
-            "optional GCD ring, cast circle and trail. With it on, the " .. KE:Gold("Dispel") .. " and " .. KE:Gold("Taunt") .. " tabs " ..
-            "put those cooldowns at the cursor too.")
+            "optional GCD ring, cast circle and trail. " ..
+            (KE:IsFeatureAvailable("CursorDispel")
+                and ("With it on, the " .. KE:Gold("Dispel") .. " and " .. KE:Gold("Taunt") .. " tabs " ..
+                    "put those cooldowns at the cursor too.")
+                or ("With it on, the " .. KE:Gold("Taunt") .. " tab puts the Taunt, Growl or Flame Shock " ..
+                    "cooldown at the cursor too.")))
 
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled == false

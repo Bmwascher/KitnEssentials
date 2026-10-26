@@ -22,6 +22,12 @@ local UIParent = UIParent
 local IsInGroup = IsInGroup
 local C_Spell = C_Spell
 local UnitExists = UnitExists
+local UnitClass = UnitClass
+local C_Timer = C_Timer
+
+-- Set only where the camelot list loads CombatCrossForever.lua.
+local FV = KE.CombatCrossForever
+local LS = LibStub and LibStub("LibSpecialization", true)
 
 local FONT_SIZE_MULTIPLIER = 2
 
@@ -143,7 +149,30 @@ end
 ---------------------------------------------------------------------------------
 -- Range Detection
 ---------------------------------------------------------------------------------
+-- Forever spec ids miss the tables above, so the range spell comes from the
+-- talent position and role, the class and the form there.
+local function IsSpellKnown(spellID)
+    local book = C_SpellBook
+    if not (book and book.IsSpellKnownOrInSpellBook) then return false end
+    return book.IsSpellKnownOrInSpellBook(spellID) == true
+end
+
+local function ResolveForeverRange(self)
+    local classFile = select(2, UnitClass("player"))
+    local position
+    if LS and LS.MySpecialization then
+        local ok, _, _, libPosition = pcall(LS.MySpecialization)
+        if ok then position = libPosition end
+    end
+    local formID = GetShapeshiftFormID and GetShapeshiftFormID() or nil
+    self.rangeAbility, self.specType = FV.PickRange(classFile, KE:GetPlayerSpecRole(), position, formID, IsSpellKnown)
+end
+
 function CC:ResolveRangeAbility()
+    if FV then
+        ResolveForeverRange(self)
+        return
+    end
     local specID = KE:GetPlayerSpecId()
     if not specID then
         self.rangeAbility = nil
@@ -462,9 +491,25 @@ end
 -- The event fires for every group member; only the player's spec decides.
 function CC:OnSpecChanged(_, unit)
     if unit ~= "player" then return end
+    self:OnRangeInputChanged()
+end
+
+function CC:OnRangeInputChanged()
+    local oldAbility, oldType = self.rangeAbility, self.specType
     self:ResolveRangeAbility()
+    -- Forever only: the old spell's color or fade does not hold for a new
+    -- one, and a new spell whose range reads nil would never clear it.
+    local repicked = FV and (self.rangeAbility ~= oldAbility or self.specType ~= oldType)
+    if repicked then
+        if self.frame then self.frame:SetAlpha(1) end
+        if self.text then
+            local r, g, b, a = self:GetColor()
+            self.text:SetTextColor(r, g, b, a)
+        end
+    end
     self.lastInRange = nil
     self:UpdateOnUpdateState()
+    if repicked and self.onUpdateActive then self:UpdateRangeColor() end
 end
 
 -- One decision point for every reason the cross goes up or down. Combat entry,
@@ -537,6 +582,22 @@ function CC:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnContextChanged")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnContextChanged")
 
+    if FV then
+        self:RegisterEvent("SPELLS_CHANGED", "OnRangeInputChanged")
+        if select(2, UnitClass("player")) == "DRUID" then
+            self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "OnRangeInputChanged")
+        end
+        -- One frame later: Core drops its cached role in its own callback
+        -- of the same change, which may run after this one.
+        if LS and LS.RegisterPlayerSpecChange then
+            LS.RegisterPlayerSpecChange(self, function()
+                C_Timer.After(0, function()
+                    if self:IsEnabled() and self.db.Enabled then self:OnRangeInputChanged() end
+                end)
+            end)
+        end
+    end
+
     -- Nothing else would put the cross up until the next combat, so a login or
     -- reload that lands mid-fight, and any enable under a non-combat mode, both
     -- depend on this.
@@ -554,6 +615,7 @@ end
 
 function CC:OnDisable()
     self:UnregisterAllEvents()
+    if FV and LS and LS.UnregisterPlayerSpecChange then LS.UnregisterPlayerSpecChange(self) end
     if self.frame then
         self.frame:SetScript("OnUpdate", nil)
         self.frame:Hide()

@@ -4,9 +4,20 @@
     <!-- Forever's module list: diagnostics and the admitted categories, in the
          retail list's relative order, because load order is behavior
          (Modules.xml). -->
+    <Script file="Combat\StatusTexts\PlayerAbsorbsFormat.lua" />
+    <Script file="Combat\StatusTexts\PlayerAbsorbs.lua" />
     <Include file="Core\Diagnostics\Diagnostics.xml" />
+    <Script file="Combat\StatusTexts\PetStatusText.lua" />
     <Script file="AuraTracking\TotemTracker.lua" />
     <Script file="QoL\QualityOfLife\SpellAlerts.lua" />
+    <Script file="Combat\CombatTimer.lua" />
+    <Script file="Combat\CombatCrossForever.lua" />
+    <Script file="Combat\CombatCross.lua" />
+    <Script file="Combat\CombatTexts.lua" />
+    <Script file="Combat\Cursor.lua" />
+    <Script file="Combat\CastbarHelpers.lua" />
+    <Script file="Combat\FocusCastbar.lua" />
+    <Script file="Combat\RangeChecker.lua" />
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="AuraTracking\AuraExternals.lua" />
     <Script file="AuraTracking\AuraMovement.lua" />
