@@ -105,9 +105,13 @@ local function BuildHeader(scrollChild, yOffset)
             else KitnEssentials:DisableModule("DoTTracker") end
         end
     end)
-    card1:AddLabel("Counts how many of the enemies you are fighting carry each of your DoTs, " ..
-        "shown as \"3/6\" beside the DoT's icon. Works in combat and in keys. It cannot say " ..
-        "which enemy is missing it.")
+    card1:AddLabel(KE.IS_FOREVER
+        and ("Counts how many of the enemies you are fighting carry each of your DoTs, " ..
+            "shown as \"3/6\" beside the DoT's icon, at any rank. Works in combat and in dungeons. " ..
+            "It cannot say which enemy is missing it.")
+        or ("Counts how many of the enemies you are fighting carry each of your DoTs, " ..
+            "shown as \"3/6\" beside the DoT's icon. Works in combat and in keys. It cannot say " ..
+            "which enemy is missing it."))
 
     if db.Enabled == true then
         local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
@@ -148,21 +152,23 @@ GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
         }
     end
 
-    cardShow:AddCheckboxGrid({
-        ShowInPick("Dungeons", "ShowInDungeons"),
-        ShowInPick("Delves", "ShowInDelves"),
-        ShowInPick("Raids", "ShowInRaids"),
-        ShowInPick("Open World", "ShowInOpenWorld"),
-        ShowInPick("Arenas / Battlegrounds", "ShowInPvP"),
-    }, { isLast = true })
+    -- Forever has no delves; the saved key is left as it is.
+    local showIn = { ShowInPick("Dungeons", "ShowInDungeons") }
+    if not KE.IS_FOREVER then showIn[#showIn + 1] = ShowInPick("Delves", "ShowInDelves") end
+    showIn[#showIn + 1] = ShowInPick("Raids", "ShowInRaids")
+    showIn[#showIn + 1] = ShowInPick("Open World", "ShowInOpenWorld")
+    showIn[#showIn + 1] = ShowInPick("Arenas / Battlegrounds", "ShowInPvP")
+    cardShow:AddCheckboxGrid(showIn, { isLast = true })
     yOffset = cardShow:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card: Your DoTs
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Your DoTs", yOffset)
-    card2:AddLabel("Every specialization of the selected class, with the DoTs it applies. " ..
-        "Unticking a DoT stops counting it on that spec only.")
+    card2:AddLabel(KE.IS_FOREVER
+        and "The DoTs of the selected class. Unticking a DoT stops counting it for that class."
+        or ("Every specialization of the selected class, with the DoTs it applies. " ..
+            "Unticking a DoT stops counting it on that spec only."))
 
     db.Spells = db.Spells or {}
     local _, playerClass = UnitClass("player")
@@ -189,12 +195,22 @@ GUIFrame:RegisterContent("DoTTrackerTracking", function(scrollChild, yOffset)
     -- from an earlier one.
     local colorManager
 
+    -- A name already in the label is not repeated, so a row of ranks reads
+    -- as its spell once.
     local function RowLabel(entry)
         local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(entry.id)
-        local label = GUIFrame.IconText(texture) .. SpellLabel(entry.id)
+        local first = SpellLabel(entry.id)
+        local label = GUIFrame.IconText(texture) .. first
         local also = entry.row and entry.row.also
         if also then
-            for _, id in ipairs(also) do label = label .. " / " .. SpellLabel(id) end
+            local named = { [first] = true }
+            for _, id in ipairs(also) do
+                local name = SpellLabel(id)
+                if not named[name] then
+                    named[name] = true
+                    label = label .. " / " .. name
+                end
+            end
         end
         if entry.custom then label = label .. " (custom)" end
         return label

@@ -107,6 +107,72 @@ KE.DOT_TRACKER_SEEDS = {
     },
 }
 
+-- Forever: one spec per class. A DoT's debuff carries the id of the rank
+-- cast, so each row counts every rank of its spell. A talent DoT is listed
+-- once its first rank is learned.
+if KE.IS_FOREVER then
+    local FOREVER_DOT_SEEDS = {
+        DRUID = {
+            [1484] = {
+                { id = 8921, color = { 0.50, 0.65, 1.00 } },                 -- Moonfire
+                { id = 1822, color = { 1.00, 0.50, 0.15 } },                 -- Rake
+                { id = 1079, color = { 0.85, 0.15, 0.15 } },                 -- Rip
+                { id = 5570, talent = 5570, color = { 0.55, 0.85, 0.30 } },  -- Insect Swarm
+            },
+        },
+        PRIEST = {
+            [1487] = {
+                { id = 589, color = { 1.00, 0.85, 0.30 } },                    -- Shadow Word: Pain
+                { id = 2944, talent = 2944, color = { 1.00, 0.30, 0.60 } },    -- Devouring Plague
+                { id = 15286, talent = 15286, color = { 0.65, 0.35, 1.00 } },  -- Vampiric Embrace
+            },
+        },
+        ROGUE = {
+            [1488] = {
+                { id = 703, color = { 1.00, 0.55, 0.15 } },   -- Garrote
+                { id = 1943, color = { 0.85, 0.15, 0.15 } },  -- Rupture
+            },
+        },
+        SHAMAN = {
+            [1489] = { { id = 8050, color = { 1.00, 0.45, 0.10 } } },  -- Flame Shock
+        },
+        WARLOCK = {
+            [1490] = {
+                { id = 980, color = { 1.00, 0.82, 0.25 } },                    -- Curse of Agony
+                { id = 172, color = { 0.95, 0.40, 0.40 } },                    -- Corruption
+                { id = 348, color = { 1.00, 0.48, 0.10 } },                    -- Immolate
+                { id = 18265, talent = 18265, color = { 0.35, 0.82, 0.45 } },  -- Siphon Life
+            },
+        },
+        WARRIOR = {
+            [1491] = { { id = 772, color = { 0.85, 0.15, 0.15 } } },  -- Rend
+        },
+        HUNTER = {
+            [1485] = { { id = 1978, color = { 0.40, 0.80, 0.30 } } },  -- Serpent Sting
+        },
+    }
+    -- A family's key need not be the row's id (a level-0 id can sort
+    -- first), so the family is looked up from the row's id.
+    local Ranks = KE.CombatDataForever
+    if Ranks then
+        for _, specs in pairs(FOREVER_DOT_SEEDS) do
+            for _, rows in pairs(specs) do
+                for _, row in ipairs(rows) do
+                    local ranks = Ranks.FamilyOf(row.id)
+                    if ranks then
+                        local also = {}
+                        for i = 1, #ranks do
+                            if ranks[i] ~= row.id then also[#also + 1] = ranks[i] end
+                        end
+                        row.also = also
+                    end
+                end
+            end
+        end
+    end
+    KE.DOT_TRACKER_SEEDS = FOREVER_DOT_SEEDS
+end
+
 local MSG_NOT_ID = "Enter a debuff spell id (a whole number)."
 local MSG_DUPLICATE = "That DoT is already listed for this spec."
 
