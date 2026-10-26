@@ -54,7 +54,8 @@
 -- Without --out the map prints to stdout; --out writes the bytes directly,
 -- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
 -- self-check fails: a row with no page file, a settings file no row reaches,
--- a registered tab strip the rules above cannot read, or with an element that
+-- a registered tab strip the rules above cannot read, a tab function with a
+-- `return` that is not a literal list, or a tab list with an element that
 -- is not an inline or local table, an id that is not a string literal or
 -- constant, or a label that is not a string literal (an in-page strip prints
 -- as dynamic instead), a Register call whose content id cannot be read, no
@@ -433,16 +434,23 @@ for block in (config or "{}"):sub(2, -2):gmatch("%b{}") do
     end
 end
 
+-- Whether the code at `at` continues an expression: `or`, `and`, or any
+-- operator or bracket. A new statement starts with a name.
+local function continues(code, at)
+    local word = code:match("^%s*([%a_][%w_]*)", at)
+    if word then return word == "or" or word == "and" end
+    local mark = code:match("^%s*(%p)", at)
+    return mark ~= nil and mark ~= ";"
+end
+
 -- File-level (column-0) string constants, by name: a whole line that the next
--- code line does not continue. A name given two values is dropped.
-local CONTINUES = { [".."] = true, ["or"] = true, ["an"] = true }
+-- code does not continue. A name given two values is dropped.
 local constsOf = {}
 for path, code in pairs(codeOf) do
     local consts = {}
     for lineAt, line in ("\n" .. code):gmatch("\n()([^\n]*)") do
         local name, value = line:match('^local%s+([%a_][%w_]*)%s*=%s*"([^"\\]*)"%s*$')
-        local after = code:match("^%s*(%S?%S?)", lineAt + #line)
-        if name and (CONTINUES[after] or after:match("^[%(%[:]")) then name = nil end
+        if name and continues(code, lineAt + #line) then name = nil end
         if name and consts[name] == nil then
             consts[name] = value
         elseif name and consts[name] ~= value then
@@ -507,17 +515,33 @@ local function callSpan(code, open)
     return code:sub(open, matchClose(code, open))
 end
 
--- A function tab list: every `return { ... }` it holds, longest first, since
--- the longest shows the on-screen order and a shorter one is a subset.
+-- A function tab list: the lists its `return` statements give, outside nested
+-- functions, read longest first, since the longest shows the on-screen order
+-- and a shorter one is a subset. False when a return is not a literal list,
+-- which the map cannot follow.
 local function returnedIds(path, code, fnText, kids)
-    local lists = {}
-    for at in fnText:gmatch("%f[%w_]return%s*(){") do lists[#lists + 1] = tableAt(fnText, at) end
+    local lists, literalOnly, skipTo = {}, true, 0
+    eachToken(fnText, 1, function(kind, ts, te)
+        if kind ~= "name" or ts <= skipTo then return end
+        local word = fnText:sub(ts, te)
+        if word == "function" and ts > 1 then
+            skipTo = blockEnd(fnText, ts)
+        elseif word == "return" then
+            local at = nextCharAt(fnText, te + 1)
+            if fnText:sub(at, at) == "{" then
+                lists[#lists + 1] = tableAt(fnText, at)
+            else
+                literalOnly = false
+            end
+        end
+    end)
     for i, list in ipairs(lists) do lists[i] = { text = list, size = #splitTop(list:sub(2, -2)), order = i } end
     table.sort(lists, function(a, b)
         if a.size ~= b.size then return a.size > b.size end
         return a.order < b.order
     end)
     for _, list in ipairs(lists) do listIds(path, code, fnText, list.text, kids) end
+    return literalOnly
 end
 
 local children, labels = {}, {}
@@ -533,7 +557,9 @@ for _, path in ipairs(tracked) do
                     listIds(path, code, code, tableAt(code, argAt), kids)
                 elseif STRIP_CALLS[kind] then
                     if word == "function" then
-                        returnedIds(path, code, code:sub(argAt, blockEnd(code, argAt)), kids)
+                        if not returnedIds(path, code, code:sub(argAt, blockEnd(code, argAt)), kids) then
+                            fail("tab function returns a list that is not a literal: " .. path .. ": " .. parent)
+                        end
                     elseif word then
                         localTableIds(path, code, word, kids)
                     end
