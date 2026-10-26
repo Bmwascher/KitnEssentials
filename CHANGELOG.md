@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.2
+
+### Interrupt Tracker
+
+- Nameplate kick icons and the interrupt bars do less work in big pulls,
+  for smoother frame rates
+
+---
+
 ## v4.15.1
 
 A stopgap for a game freeze some players hit in Mythic+ keys, and less
