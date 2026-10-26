@@ -572,3 +572,50 @@ describe("NoMovementAlert line text escapes", function()
         end
     end)
 end)
+
+-- Forever: shipped and saved ids resolve to the highest rank known. The
+-- rank lookup is a stand-in holding one family, Charge's three ranks, so
+-- no game data is pinned.
+describe("movement alert on Forever: highest known rank", function()
+    local CHARGE = { 100, 6178, 11578 }
+    local ranks = {
+        HighestKnown = function(id, isKnown)
+            local family = (id == 100 or id == 6178 or id == 11578) and CHARGE or { id }
+            for i = #family, 1, -1 do
+                if isKnown(family[i]) == true then return family[i] end
+            end
+            return nil
+        end,
+    }
+
+    local function trackedIds(known, spells)
+        local M = L.loadMovementAlert({
+            UnitClass = function() return "Warrior", "WARRIOR", 1 end,
+            specId = 1491,
+            forever = true,
+            ranks = ranks,
+        })
+        _G.C_SpellBook.known = known
+        M.db = { Spells = spells }
+        -- Seeded by OnEnable, which never runs headlessly.
+        M.chargeMeta, M.chargeCount = {}, {}
+        local ids = {}
+        for _, entry in ipairs(M:BuildTracked()) do ids[#ids + 1] = entry.spellId end
+        table.sort(ids)
+        return ids
+    end
+
+    it("tracks each shipped spell once, at its highest known rank or its own id", function()
+        for _, row in ipairs({
+            { name = "a ranked spell at its top known rank, a single rank under its own id",
+                known = { [100] = true, [6178] = true, [20252] = true }, want = { 6178, 20252 } },
+            { name = "a second saved rank of a tracked spell adds no line",
+                known = { [100] = true, [6178] = true }, spells = { ["1491:11578"] = { enabled = true } }, want = { 6178 } },
+            { name = "a spell with no rank known is not tracked",
+                known = { [20252] = true }, want = { 20252 } },
+        }) do
+            assert.same(row.want, trackedIds(row.known, row.spells), row.name)
+        end
+    end)
+end)
+

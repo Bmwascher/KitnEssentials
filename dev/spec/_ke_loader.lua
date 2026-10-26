@@ -2502,6 +2502,10 @@ function L.loadMovementAlert(overrides)
 
     -- overrides.specId is what KE:GetPlayerSpecId answers.
     KE.GetPlayerSpecId = function() return overrides.specId end
+    -- overrides.forever and overrides.ranks stand for the Forever client and
+    -- its rank lookups; the module reads both at file scope.
+    KE.IS_FOREVER = overrides.forever == true
+    KE.CombatDataForever = overrides.ranks
     helpers.loadModule("Modules/Combat/StatusTexts/NoMovementAlert.lua", KE)
     return modules["NoMovementAlert"], KE, rec
 end
