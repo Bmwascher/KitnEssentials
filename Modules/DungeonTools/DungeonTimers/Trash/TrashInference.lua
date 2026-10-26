@@ -820,8 +820,8 @@ end
 -- Does an observed CAST's duration (and fingerprints) also fit one of the
 -- mob's TWO-PHASE (cast→channel) spells? When true, a finished bare cast is
 -- ambiguous between a one-phase twin and a two-phase spell's cast phase until
--- the castBarID pairing window closes — the caller holds the one-phase credit
--- and discards it if the +1 channel pairing claims this cast (4 curated mobs
+-- the pairing window closes — the caller holds the one-phase credit
+-- and discards it if a proven channel phase claims this cast (4 curated mobs
 -- carry a same-duration twin; e.g. Arcane Sentry's 3s Crowd Dispersal vs the
 -- 3s+5s Arcane Beam).
 function TI.MatchesTwoPhaseCast(mobData, observed)
@@ -1275,9 +1275,9 @@ local function depart(cs, rec, capacity)
     end
 end
 
--- The work list keeps only records whose delayed work is still pending
--- (4.7): a record leaves once its post-end read and twin hold have landed
--- or been canceled, or once it is retired.
+-- The work list keeps only records whose delayed work is still pending: a
+-- record leaves once its post-end read and twin hold have landed or been
+-- canceled, or once it is retired.
 function TI.ReleaseIdleWork(cs)
     local kept = {}
     for _, rec in ipairs(cs.records) do

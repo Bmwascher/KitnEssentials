@@ -31,7 +31,7 @@ M.INVENTORY = "dev/data/trash-s2-inventory.lua"
 M.SPELL_NAMES = "dev/data/trash-spell-names-enUS.lua"
 
 -- Season-1 counts stay as shipped; season-2 visible rows are the editor rows
--- each dungeon shows. D1-A leaves out exactly the Den marker.
+-- each dungeon shows. The only excluded row is the disabled Den marker.
 M.EXPECTED = {
     s1 = { npcs = 46, rows = 80, visibleRows = 79, traits = 46 },
     s2 = { npcs = 68, rows = 138, visibleRows = 134, hiddenRows = 4, traits = 109 },
@@ -163,7 +163,7 @@ local function rowKey(mapID, npcID, spellID, label)
     return string.format("%d:%d:%d", mapID, npcID, spellID)
 end
 
--- The structural diff (spec 6): the candidate's season-2 rows and traits equal
+-- The structural diff: the candidate's season-2 rows and traits equal
 -- the source inventory field by field, with types, and each row's name equals
 -- the spell-name record. The only inventory rows it leaves out are the pinned
 -- exclusions, which the manifest lists with their reasons.
@@ -252,7 +252,7 @@ local function checkInventory(data, traits, manifest, inventory, spellNames, exp
             differs(where .. " schema", trait.schema, "named", "the named schema")
             differs(where .. " dungeonKey", trait.dungeonKey, data[trait.mapID] and data[trait.mapID].dungeonKey,
                 "its map")
-            -- The inventory names only NPCs with timer rows (spec 6).
+            -- The inventory names only NPCs with timer rows.
             if t.name ~= nil then differs(where .. " name", trait.name, t.name) end
             differs(where .. " identityOnly", trait.identityOnly == true, not timedNpcs[npcID])
             local identity = trait.identity or {}

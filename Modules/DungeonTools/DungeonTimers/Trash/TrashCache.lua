@@ -134,7 +134,7 @@ function DTrash:OnUnitFlags(_, unit)
         self._plateMeta[unit] = meta
     end
     local inCombat = safeInCombat(unit)
-    -- The same read feeds the counting-window edge (4.6).
+    -- The same read feeds the counting-window edge.
     self:CombatEdge(rt, inCombat)
     if meta.firstCombatFlagAt == nil and inCombat == true then
         meta.firstCombatFlagAt = GetTime()
@@ -186,7 +186,7 @@ function DTrash:OnUnitHealth(_, unit)
     end
     dprint("dead " .. unit)
     -- The death belongs to the tracked generation: only its own removal
-    -- entry is skipped (4.8). The token-keyed mark above stays the cache's.
+    -- entry is skipped. The token-keyed mark above stays the cache's.
     local rt = self.tracked[unit]
     if rt and rt.owner then self._kingsRest.MarkDied(rt.owner) end
     self:OnNameplateRemoved(nil, unit)
@@ -269,10 +269,20 @@ end
 -- its recovery state, its generation owner and the fresh Layer1 candidates
 -- come from the new plate. Returns the adopted runtime (now installed in
 -- self.tracked) or nil.
-function DTrash:TryRestoreCachedRuntime(rt, npcID)
-    -- A held or granted Kings' Rest member never adopts (4.8): this one gate
-    -- covers early adoption, every other resolve caller and Layer 2.
-    if self._kingsRest.RefusesAdoption(rt.owner) then return nil end
+function DTrash:TryRestoreCachedRuntime(rt, npcID, site)
+    -- A held or granted Kings' Rest member never adopts: this one gate
+    -- covers early adoption, every other resolve caller and Layer 2. The dump
+    -- shows the refusal only when a matching cached row was withheld.
+    if self._kingsRest.RefusesAdoption(rt.owner) then
+        local rows = self._trashPending
+        for i = 1, #rows do
+            if rows[i].npcID == npcID then
+                rt.restoreRefused = true
+                break
+            end
+        end
+        return nil
+    end
     local pending = self._trashPending
     if #pending == 0 then return nil end
     local now = GetTime()
@@ -326,12 +336,12 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     -- Layer 1 trust belongs to a pass on the fresh snapshot.
     cached.layer1Resolved = nil
     cached.candidates = rt.candidates or cached.candidates
-    -- So does the summary dependence (4.8). The refusal above admits no
+    -- So does the summary dependence. The refusal above admits no
     -- granted owner, so the pass that named this NPC ran without a summary:
     -- its unpruned list is nil, and the cached generation's wave mark clears.
     cached.unsummarizedCandidates = rt.unsummarizedCandidates
     cached.waveDerived = nil
-    -- Cast state belongs to the generation that observed it (4.7). The cached
+    -- Cast state belongs to the generation that observed it. The cached
     -- generation's records, pairing, transition, samples, cue consumption,
     -- recovery state, departed IDs and counting window are dropped (its
     -- callbacks already die with its owner), and the fresh generation's cast
@@ -357,7 +367,10 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
         for _, rec in ipairs(cast.records) do renumber(rec) end
         if cast.latest then renumber(cast.latest) end
         cast.seq = base
-        if cast.window then cast.window.known = false end
+        if cast.window then
+            if cast.window.known then cast.window.unknownWhy = "restore" end
+            cast.window.known = false
+        end
         local cachedAdvance = oldCast and oldCast.pendingAdvance
         if cachedAdvance and not (cast.pendingAdvance and cast.pendingAdvance.provenance == "fresh") then
             cachedAdvance.provenance = "cached"
@@ -366,6 +379,10 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     end
     cached.castState = cast
     cached.channelRefreshAt, cached.channelRefreshSeq = nil, nil
+    -- The adoption site, for the dump: "start", "resolve" or "layer2".
+    cached.restoreSite = site or "resolve"
+    cached.restoreRefused = nil
+    if cast and cast.latest then cast.latest.restoredAt = cached.restoreSite end
     self:SyncActiveCast(cached)
     cached._cacheRestoredAt = now
     cached._cachePending = nil
