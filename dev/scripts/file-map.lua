@@ -30,10 +30,12 @@
 -- same file named there expanded where it is named, and every settings
 -- file's column-0 `function X.Name(` or `X:Name(` definition, or
 -- `X.Name = <local function>` alias, expanded where `.Name(` or `:Name(` is
--- called. Cards on every run-time branch are listed. A Register call whose id
--- is a parameter of its function is read once per call of that function; one
--- whose id is a field of an ipairs loop variable, once per entry of the
--- looped local table. A title that is a string, a file-level string constant,
+-- called. Cards on every run-time branch are listed. A strip a page draws with
+-- CreateSubTabs prints among its cards as `in-page tabs (A / B)`; the cards
+-- after it are not split by view. A Register call whose id is a parameter of
+-- its function is read once per call of that function; one whose id is a
+-- field of an ipairs loop variable, once per entry of the looped local table.
+-- A title that is a string, a file-level string constant,
 -- a bound parameter, `<param>.<field>` or `<param>.<field> or "<default>"`
 -- prints as text; any other prints as dynamic. The "Error" placeholder card is
 -- left out.
@@ -52,10 +54,10 @@
 -- Without --out the map prints to stdout; --out writes the bytes directly,
 -- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
 -- self-check fails: a row with no page file, a settings file no row reaches,
--- a tab strip the rules above cannot read or whose labels are not strings, a
--- Register call whose content id cannot be read, no FOREVER_ALLOWED table in
--- Core/Availability.lua, a retail-only entry that is not a tracked file, a
--- tracked .lua file that neither client loads, or a
+-- a tab strip the rules above cannot read or whose ids or labels are not
+-- strings or constants, a Register call whose content id cannot be read, no
+-- FOREVER_ALLOWED table in Core/Availability.lua, a retail-only entry that is
+-- not a tracked file, a tracked .lua file that neither client loads, or a
 -- load-list.lua line that is not a toc header, an <inline> line or an
 -- existing file. The map is written either way, failures first.
 
@@ -258,14 +260,19 @@ local function matchClose(code, open)
     end
 end
 
--- The comma-separated pieces of an argument list or table body, trimmed.
+-- The comma-separated pieces of an argument list or table body, trimmed. A
+-- function body inside is one unit, so its own commas do not split.
 local function splitTop(inner)
     local pieces, depth, last, i = {}, 0, 1, 1
+    local fn = 0
     while true do
+        if fn and fn < i then fn = inner:find("%f[%w_]function%f[^%w_]", i) end
         i = inner:find("[(){}%[%],\"']", i)
         if not i then break end
         local c = inner:sub(i, i)
-        if c == '"' or c == "'" or (c == "[" and inner:find("^%[=*%[", i)) then
+        if fn and fn < i then
+            i = blockEnd(inner, fn)
+        elseif c == '"' or c == "'" or (c == "[" and inner:find("^%[=*%[", i)) then
             local _, e = token(inner, i)
             i = e
         elseif c == "(" or c == "{" or c == "[" then
@@ -286,6 +293,35 @@ end
 local function callArgs(code, open)
     local close = matchClose(code, open)
     return splitTop(code:sub(open + 1, close - 1)), close
+end
+
+local function tableAt(text, at)
+    return text:sub(at, matchClose(text, at))
+end
+
+local function localTable(text, name)
+    local at = text:match("local%s+" .. name .. "%s*=%s*(){")
+    return at and tableAt(text, at) or nil
+end
+
+-- Calls fn with each outermost { ... } in text, skipping strings.
+local function eachTable(text, fn)
+    local i = 1
+    while true do
+        i = text:find("[{\"'%[]", i)
+        if not i then return end
+        local c = text:sub(i, i)
+        if c == "{" then
+            local close = matchClose(text, i)
+            fn(text:sub(i, close))
+            i = close + 1
+        elseif c == "[" and not text:find("^%[=*%[", i) then
+            i = i + 1
+        else
+            local _, e = token(text, i)
+            i = e + 1
+        end
+    end
 end
 
 local function prevChar(code, at)
@@ -412,10 +448,11 @@ end
 local constsOf = {}
 for path, code in pairs(codeOf) do
     local consts = {}
-    for name, value in ("\n" .. code):gmatch('\nlocal%s+([%a_][%w_]*)%s*=%s*"([^"]*)"') do
-        if consts[name] == nil then
+    for line in ("\n" .. code):gmatch("\n([^\n]*)") do
+        local name, value = line:match('^local%s+([%a_][%w_]*)%s*=%s*"([^"\\]*)"%s*$')
+        if name and consts[name] == nil then
             consts[name] = value
-        elseif consts[name] ~= value then
+        elseif name and consts[name] ~= value then
             consts[name] = false
         end
     end
@@ -427,8 +464,9 @@ local function constant(path, name)
     return value or nil
 end
 
+-- A string literal's text; nil for one with escapes, which is not decoded.
 local function literal(expr)
-    return expr:match('^"([^"]*)"$') or expr:match("^'([^']*)'$")
+    return expr:match('^"([^"\\]*)"$') or expr:match("^'([^'\\]*)'$")
 end
 
 local function idValue(path, expr)
@@ -445,25 +483,28 @@ local function tableFieldsRaw(tableText)
     return raw
 end
 
--- Each { id = ..., label = ... } entry, at any depth.
+-- Each { id = ..., label = ... } entry, at any depth. An id that is neither a
+-- string nor a constant comes back as `unread`.
 local function tableIds(path, text, kids)
-    for group in text:gmatch("%b{}") do
+    eachTable(text, function(group)
         local raw = tableFieldsRaw(group)
         local id = raw.id and idValue(path, raw.id)
         if id then
             kids[#kids + 1] = { id = id, label = raw.label and literal(raw.label) or nil, labeled = true }
+        elseif raw.id then
+            kids[#kids + 1] = { unread = raw.id }
         else
             tableIds(path, group:sub(2, -2), kids)
         end
-    end
+    end)
 end
 
 -- A local tab table, plus every local table an ipairs loop copies into it.
 local function localTableIds(path, code, name, kids)
-    local own = code:match("local%s+" .. name .. "%s*=%s*(%b{})")
+    local own = localTable(code, name)
     if own then tableIds(path, own, kids) end
     for source in code:gmatch("ipairs%(%s*([%a_][%w_]*)%s*%)%s*do%s*" .. name .. "%[") do
-        local copied = code:match("local%s+" .. source .. "%s*=%s*(%b{})")
+        local copied = localTable(code, source)
         if copied then tableIds(path, copied, kids) end
     end
 end
@@ -479,14 +520,14 @@ end
 -- entry it never returns keeps its place after those.
 local function sortByReturn(path, span, kids)
     local longest = {}
-    for list in span:gmatch("return%s*(%b{})") do
-        local pieces = splitTop(list:sub(2, -2))
+    for at in span:gmatch("%f[%w_]return%s*(){") do
+        local pieces = splitTop(tableAt(span, at):sub(2, -2))
         if #pieces > #longest then longest = pieces end
     end
     local rank = {}
     for i, piece in ipairs(longest) do
         local entry = piece
-        if piece:match("^[%a_][%w_]*$") then entry = span:match("local%s+" .. piece .. "%s*=%s*(%b{})") or "" end
+        if piece:match("^[%a_][%w_]*$") then entry = localTable(span, piece) or "" end
         local raw = entry:sub(1, 1) == "{" and tableFieldsRaw(entry) or {}
         local id = raw.id and idValue(path, raw.id)
         if id and not rank[id] then rank[id] = i end
@@ -505,7 +546,7 @@ for _, path in ipairs(tracked) do
                 local kids = {}
                 local word = code:match("^([%a_][%w_]*)", argAt)
                 if code:sub(argAt, argAt) == "{" then
-                    tableIds(path, code:match("^%b{}", argAt) or "", kids)
+                    tableIds(path, tableAt(code, argAt), kids)
                 elseif STRIP_CALLS[kind] then
                     if word == "function" then
                         local span = callSpan(code, open)
@@ -529,15 +570,19 @@ for _, path in ipairs(tracked) do
                 local all = children[parent] or {}
                 local named = labels[parent] or {}
                 for _, kid in ipairs(kids) do
-                    if kid.labeled and not kid.label then
-                        fail("tab label not read: " .. path .. ": " .. parent .. ": " .. kid.id)
+                    if kid.unread then
+                        fail("tab id not read: " .. path .. ": " .. parent .. ": " .. kid.unread)
+                    else
+                        if kid.labeled and not kid.label then
+                            fail("tab label not read: " .. path .. ": " .. parent .. ": " .. kid.id)
+                        end
+                        local known = false
+                        for _, id in ipairs(all) do
+                            if id == kid.id then known = true break end
+                        end
+                        if not known then all[#all + 1] = kid.id end
+                        named[kid.id] = named[kid.id] or kid.label
                     end
-                    local known = false
-                    for _, id in ipairs(all) do
-                        if id == kid.id then known = true break end
-                    end
-                    if not known then all[#all + 1] = kid.id end
-                    named[kid.id] = named[kid.id] or kid.label
                 end
                 if #all > 0 then
                     children[parent] = all
@@ -655,17 +700,21 @@ end
 
 -- A string from a literal, a bound parameter, `<param>.<field>` or
 -- `<param>.<field> or "<default>"`; nil when the value is only known at run
--- time.
+-- time. The default applies only when the bound table lacks the field; a
+-- field it holds but could not read is false there.
 local function resolveExpr(path, expr, binding)
     local text = literal(expr)
     if text then return text end
-    local var, field, default = expr:match('^([%a_][%w_]*)%.([%a_][%w_]*)%s+or%s+"([^"]*)"$')
+    local var, field, default = expr:match("^([%a_][%w_]*)%.([%a_][%w_]*)%s+or%s+(.+)$")
+    if var then default = literal(default) end
     if not var then var, field = expr:match("^([%a_][%w_]*)%.([%a_][%w_]*)$") end
     if var then
         local bound = binding and binding[var]
-        local value = type(bound) == "table" and bound[field] or nil
+        if type(bound) ~= "table" then return nil end
+        local value = bound[field]
         if type(value) == "string" then return value end
-        return default
+        if value == nil then return default end
+        return nil
     end
     if expr:match("^[%a_][%w_]*$") then
         local bound = binding and binding[expr]
@@ -678,7 +727,7 @@ end
 local function tableFields(path, tableText, binding)
     local fields = {}
     for key, value in pairs(tableFieldsRaw(tableText)) do
-        fields[key] = resolveExpr(path, value, binding)
+        fields[key] = resolveExpr(path, value, binding) or false
     end
     return fields
 end
@@ -698,6 +747,37 @@ local function bindArgs(path, params, args, binding)
         end
     end
     return bound
+end
+
+-- A strip a page draws with CreateSubTabs inside its own content; its views
+-- are code branches, not registered ids, so the cards after it are not split
+-- by view.
+local UNREAD_STRIP = "in-page tabs (dynamic)"
+
+-- The labels of a CreateSubTabs `tabs` value: a literal table, a local table
+-- of the same file, or a GUIFrame.NAME table a GUI file defines.
+local function stripLabels(path, expr)
+    local list
+    if expr:sub(1, 1) == "{" then
+        list = expr
+    elseif expr:match("^[%a_][%w_]*$") then
+        list = localTable(codeOf[path], expr)
+    else
+        local shared = expr:match("^GUIFrame%.([%a_][%w_]*)$")
+        for _, guiPath in ipairs(shared and tracked or {}) do
+            local code = guiPath:sub(1, 4) == "GUI/" and codeOf[guiPath]
+            local at = code and code:match("GUIFrame%." .. shared .. "%s*=%s*(){")
+            if at then list = tableAt(code, at) end
+        end
+    end
+    if not list then return nil end
+    local names, readable = {}, true
+    eachTable(list:sub(2, -2), function(entry)
+        local raw = tableFieldsRaw(entry)
+        local label = raw.label and literal(raw.label)
+        if label then names[#names + 1] = label else readable = false end
+    end)
+    return readable and #names > 0 and table.concat(names, " / ") or nil
 end
 
 local function dynamic(expr)
@@ -727,9 +807,8 @@ local function walk(path, s, e, binding, depth, onPath, out)
         if member and nextC == "(" and word == "CreateCard" then
             local args = callArgs(code, nextAt)
             local title = args[2] or ""
-            if title ~= '"Error"' then
-                out[#out + 1] = resolveExpr(path, title, binding) or dynamic(title)
-            end
+            local text = resolveExpr(path, title, binding)
+            if text ~= "Error" then out[#out + 1] = text or dynamic(title) end
             return
         end
         if member and nextC == "(" and BUILDER_DEFAULTS[word] ~= nil then
@@ -738,9 +817,18 @@ local function walk(path, s, e, binding, depth, onPath, out)
             local raw = configText:sub(1, 1) == "{" and tableFieldsRaw(configText) or {}
             if raw.title then
                 out[#out + 1] = resolveExpr(path, raw.title, binding) or dynamic(raw.title)
-            else
+            elseif configText:sub(1, 1) == "{" or configText == "" then
                 out[#out + 1] = BUILDER_DEFAULTS[word] or dynamic("config.title")
+            else
+                out[#out + 1] = dynamic(configText .. ".title")
             end
+            return
+        end
+        if member and nextC == "(" and word == "CreateSubTabs" then
+            local configText = callArgs(code, nextAt)[3] or ""
+            local raw = configText:sub(1, 1) == "{" and tableFieldsRaw(configText) or {}
+            local labelsText = raw.tabs and stripLabels(path, raw.tabs)
+            out[#out + 1] = labelsText and ("in-page tabs (" .. labelsText .. ")") or UNREAD_STRIP
             return
         end
         if nextC == "=" and code:sub(nextAt + 1, nextAt + 1) ~= "=" then return end
@@ -796,10 +884,9 @@ local function registrations(path, at, first)
     for loopAt, name in code:gmatch("()for%s+[%w_]+%s*,%s*" .. var .. "%s+in%s+ipairs%(%s*([%a_][%w_]*)%s*%)") do
         if loopAt < at then listName = name end
     end
-    local tableAt = listName and code:match("local%s+" .. listName .. "%s*=%s*(){")
-    if not tableAt then return found end
-    local entries = code:sub(tableAt + 1, matchClose(code, tableAt) - 1)
-    for _, entry in ipairs(splitTop(entries)) do
+    local list = listName and localTable(code, listName)
+    if not list then return found end
+    for _, entry in ipairs(splitTop(list:sub(2, -2))) do
         if entry:sub(1, 1) == "{" then
             local fields = tableFields(path, entry, nil)
             if fields[field] then found[#found + 1] = { id = fields[field], binding = { [var] = fields } } end
@@ -849,9 +936,14 @@ local function foreverNote(id)
     return nil
 end
 
+-- A strip whose labels cannot be read is left out on an id that registers
+-- its tabs as children, since those print as nested tabs.
 local function cardText(id)
-    local cards = cardsOf[id]
-    if not cards or #cards == 0 then return "no cards" end
+    local cards = {}
+    for _, card in ipairs(cardsOf[id] or {}) do
+        if card ~= UNREAD_STRIP or not children[id] then cards[#cards + 1] = card end
+    end
+    if #cards == 0 then return "no cards" end
     return table.concat(cards, CARD_SEP)
 end
 
@@ -996,7 +1088,8 @@ local doc = {
     "",
     "Tabs and cards: each row's own cards (Header: shown above every tab; Page: a row with no tabs), " ..
         "then each tab and its cards in source order, nested tabs indented. Chained: a page drawn inside its parent's. " ..
-        "Dynamic: a title set at run time. Cards of a strip a page builds inside itself are listed with the page. " ..
+        "Dynamic: a title set at run time. In-page tabs: a strip a page draws inside itself, " ..
+        "printed where it is drawn; the cards after it are not split by view. " ..
         "Cards on every run-time branch are listed, so a tab can show fewer cards than listed on either client.",
     "",
     "Forever: `retail only: page not loaded on Forever` means the camelot load list skips the page file; " ..
