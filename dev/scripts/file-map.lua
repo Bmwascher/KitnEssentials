@@ -515,6 +515,8 @@ local function callSpan(code, open)
     return code:sub(open, matchClose(code, open))
 end
 
+local BLOCK_ENDS = { ["end"] = true, ["else"] = true, ["elseif"] = true, ["until"] = true }
+
 -- A function tab list: the lists its `return` statements give, outside nested
 -- functions, read longest first, since the longest shows the on-screen order
 -- and a shorter one is a subset. False when a return is not a literal list,
@@ -527,9 +529,14 @@ local function returnedIds(path, code, fnText, kids)
         if word == "function" and ts > 1 then
             skipTo = blockEnd(fnText, ts)
         elseif word == "return" then
+            -- A return ends its block, so a literal list is followed by the
+            -- block's end; anything else extends the returned expression.
             local at = nextCharAt(fnText, te + 1)
-            if fnText:sub(at, at) == "{" then
-                lists[#lists + 1] = tableAt(fnText, at)
+            local close = fnText:sub(at, at) == "{" and matchClose(fnText, at)
+            local after = close and nextCharAt(fnText, close + 1)
+            local follows = after and (fnText:match("^([%a_][%w_]*)", after) or fnText:sub(after, after))
+            if follows and (BLOCK_ENDS[follows] or follows == "" or follows == ";") then
+                lists[#lists + 1] = fnText:sub(at, close)
             else
                 literalOnly = false
             end
