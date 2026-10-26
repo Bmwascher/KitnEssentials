@@ -25,6 +25,17 @@
     <Script file="AuraTracking\AuraMovement.lua" />
     <Script file="AuraTracking\AuraDebuffs.lua" />
     <Script file="AuraTracking\AuraHeaders.lua" />
+    <Script file="DungeonTools\DungeonAlerts\EnemyCounter.lua" />
+    <Script file="DungeonTools\KicksCasts\FocusAnnounce.lua" />
+    <Script file="DungeonTools\KicksCasts\DungeonCasts.lua" />
+    <Script file="DungeonTools\KicksCasts\CCTrackerRules.lua" />
+    <Script file="DungeonTools\KicksCasts\CCTrackerForever.lua" />
+    <Script file="DungeonTools\KicksCasts\CCTracker.lua" />
+    <Script file="DungeonTools\DungeonAlerts\TargetedSpellsGlow.lua" />
+    <Script file="DungeonTools\DungeonAlerts\TargetedSpells.lua" />
+    <Script file="DungeonTools\DungeonAlerts\DeathNotifications.lua" />
+    <Script file="DungeonTools\KicksCasts\FocusMarker.lua" />
+    <Script file="DungeonTools\KeystoneHelper\KeystoneHelper.lua" />
     <Script file="Core\CVars\CVars.lua" />
     <Script file="QoL\Automation\Automation.lua" />
     <Script file="Core\Optimize.lua" />

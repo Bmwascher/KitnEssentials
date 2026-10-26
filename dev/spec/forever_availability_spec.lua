@@ -66,6 +66,26 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "HealerMana",       want = false },
             { load = "baseline",            seed = BASELINE,             id = "GreatVaultAlert",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "PIMacroBuilder",   want = false },
+            -- Dungeon Tools: seven modules, the Dungeon Alerts and Kicks &
+            -- Casts rows and two tabs are admitted; Focus Kick, the keystone
+            -- reminders and group finder tab, the Interrupt Tracker and Party
+            -- Stops are not.
+            { load = "baseline",            seed = BASELINE,             id = "DeathNotifications",      want = true },
+            { load = "baseline",            seed = BASELINE,             id = "EnemyCounter",            want = true },
+            { load = "baseline",            seed = BASELINE,             id = "TargetedSpells",          want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DungeonCasts",            want = true },
+            { load = "baseline",            seed = BASELINE,             id = "CCTracker",               want = true },
+            { load = "baseline",            seed = BASELINE,             id = "FocusMarker",             want = true },
+            { load = "baseline",            seed = BASELINE,             id = "KeystoneHelper",          want = true },
+            { load = "baseline",            seed = BASELINE,             id = "DungeonAlerts",           want = true },
+            { load = "baseline",            seed = BASELINE,             id = "KicksCasts",              want = true },
+            { load = "baseline",            seed = BASELINE,             id = "FocusMarkerMarker",       want = true },
+            { load = "baseline",            seed = BASELINE,             id = "KeystoneHelperReset",     want = true },
+            { load = "baseline",            seed = BASELINE,             id = "FocusMarkerKick",         want = false },
+            { load = "baseline",            seed = BASELINE,             id = "KeystoneHelperGeneral",   want = false },
+            { load = "baseline",            seed = BASELINE,             id = "KeystoneHelperReminders", want = false },
+            { load = "baseline",            seed = BASELINE,             id = "KickTracker",             want = false },
+            { load = "baseline",            seed = BASELINE,             id = "PartyStops",              want = false },
             { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },
             { load = "baseline",            seed = BASELINE,             id = "NotAFeature",      want = false },

@@ -20,6 +20,15 @@
     <Script file="QoL\QualityOfLife\GUI-SpellAlerts.lua" />
     <Script file="Combat\StatusTexts\GUI-PlayerAbsorbs.lua" />
     <Script file="QoL\GroupTools\GUI-ReadyCheckConsumables.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-DungeonCasts.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-CCTracker.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-TargetedSpells.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-EnemyCounter.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-FocusMarker.lua" />
+    <Script file="DungeonTools\KeystoneHelper\GUI-KeystoneHelper.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-DeathNotifications.lua" />
+    <Script file="DungeonTools\DungeonAlerts\GUI-DungeonAlerts.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-KicksCasts.lua" />
     <Script file="QoL\Automation\GUI-Automation.lua" />
     <Script file="Core\CVars\GUI-CVars.lua" />
     <Script file="Core\CVars\GUI-UIScaling.lua" />
