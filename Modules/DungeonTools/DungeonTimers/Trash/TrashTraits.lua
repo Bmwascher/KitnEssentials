@@ -623,4 +623,1505 @@ KE.TrashTraits = {
         spellIDs = { 1252436, 1252622 },
         packedIdentity = 0x5A00016C910,
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Kings' Rest (1762)                                      ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Animated Guardian ──
+    [133935] = {
+        npcID = 133935,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Animated Guardian",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1",
+        castTimeSet = { 3.5 },
+        spellIDs = { 270003, 270016, 1310755 },
+    },
+
+    -- ── Minion of Zul ──
+    [133943] = {
+        npcID = 133943,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Minion of Zul",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = true, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1",
+        spellIDs = { 269935 },
+    },
+
+    -- ── Umbral Warrior ──
+    [134157] = {
+        npcID = 134157,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Umbral Warrior",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1",
+        spellIDs = { 1311942 },
+    },
+
+    -- ── Shadow-Borne Champion ──
+    [134158] = {
+        npcID = 134158,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Shadow-Borne Champion",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1",
+        castTimeSet = { 1, 4 },
+        channelTimeSet = { 6 },
+        spellIDs = { 269928, 269976, 1305945, 1310758 },
+    },
+
+    -- ── Risen Hexer ──
+    [134174] = {
+        npcID = 134174,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Risen Hexer",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1",
+        castTimeSet = { 2.5, 3.5 },
+        spellIDs = { 269972, 1294815 },
+    },
+
+    -- ── Seneschal M'bara ──
+    [134251] = {
+        npcID = 134251,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Seneschal M'bara",
+        schema = "named",
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, coPresenceNPCIDs = { 134331 }, groupHasLevel90 = true, groupHasCreatureFamily = false, groupHasLevel90Power0 = true },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 270901, 1296671 },
+    },
+
+    -- ── King Rahu'ai ──
+    [134331] = {
+        npcID = 134331,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "King Rahu'ai",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, coPresenceNPCIDs = { 134251 }, groupHasLevel90 = true, groupHasCreatureFamily = false, groupHasLevel90Power0 = true },
+        placement = "2",
+        castTimeSet = { 2.5, 3 },
+        channelTimeSet = { 4 },
+        spellIDs = { 270889, 270891, 1296671, 1296719 },
+    },
+
+    -- ── Purification Construct ──
+    [134739] = {
+        npcID = 134739,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Purification Construct",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Hall of Honored Dead" } },
+        placement = "2",
+        castTimeSet = { 2 },
+        spellIDs = { 270292, 270293, 1310755 },
+    },
+
+    -- ── Royal Berserker ──
+    [135167] = {
+        npcID = 135167,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Royal Berserker",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 2, 3 },
+        spellIDs = { 270482, 270485, 1301851 },
+    },
+
+    -- ── Honored Raptor ──
+    [135192] = {
+        npcID = 135192,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Honored Raptor",
+        schema = "named",
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        channelTimeSet = { 5 },
+        spellIDs = { 270500, 270502, 270503 },
+    },
+
+    -- ── Phantom Hex Priest ──
+    [135204] = {
+        npcID = 135204,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Phantom Hex Priest",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 2.5, 3.5 },
+        spellIDs = { 270492, 1295125 },
+    },
+
+    -- ── Ghostly Brute ──
+    [135231] = {
+        npcID = 135231,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Ghostly Brute",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 2.5, 5 },
+        spellIDs = { 270514, 1302028 },
+    },
+
+    -- ── Spectral Shaman ──
+    [135239] = {
+        npcID = 135239,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Spectral Shaman",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        spellIDs = { 270497, 270499 },
+    },
+
+    -- ── Animated Gold ──
+    [135406] = {
+        npcID = 135406,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Animated Gold",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "1",
+        spellIDs = { 265991, 1289063 },
+    },
+
+    -- ── Thundering Totem ──
+    [135761] = {
+        npcID = 135761,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Thundering Totem",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "3",
+        castTimeSet = { 8 },
+        spellIDs = { 267257, 1309499 },
+    },
+
+    -- ── Explosive Totem ──
+    [135764] = {
+        npcID = 135764,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Explosive Totem",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "3",
+        castTimeSet = { 9 },
+        spellIDs = { 267077, 1309499 },
+    },
+
+    -- ── Torrent Totem ──
+    [135765] = {
+        npcID = 135765,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Torrent Totem",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "3",
+        spellIDs = { 267105, 1309499 },
+    },
+
+    -- ── Guard Captain Atu ──
+    [137473] = {
+        npcID = 137473,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Guard Captain Atu",
+        schema = "named",
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, coPresenceNPCIDs = { 134251 }, groupHasLevel90 = true, groupHasCreatureFamily = false, groupHasLevel90Power0 = true },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1296671 },
+    },
+
+    -- ── King Timalji ──
+    [137474] = {
+        npcID = 137474,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "King Timalji",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, coPresenceNPCIDs = { 137478 }, groupHasLevel90 = false, groupHasCreatureFamily = false, groupHasLevel90Power0 = false },
+        placement = "2",
+        castTimeSet = { 2.5, 3 },
+        channelTimeSet = { 6 },
+        spellIDs = { 270927, 270928, 1297326, 1306049, 1306056 },
+    },
+
+    -- ── Queen Wasi ──
+    [137478] = {
+        npcID = 137478,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Queen Wasi",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, groupHasLevel90 = false, groupHasCreatureFamily = false, groupHasLevel90Power0 = false },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        channelTimeSet = { 10 },
+        spellIDs = { 270920, 1294972, 1297326 },
+    },
+
+    -- ── King A'akul ──
+    [137484] = {
+        npcID = 137484,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "King A'akul",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, groupHasLevel90 = true, groupHasCreatureFamily = false, groupHasLevel90Power0 = false },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1297918, 1297970 },
+    },
+
+    -- ── Bloodsworn Assassin ──
+    [137485] = {
+        npcID = 137485,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Bloodsworn Assassin",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, groupHasLevel90 = true, groupHasCreatureFamily = false, groupHasLevel90Power0 = false },
+        placement = "2",
+        spellIDs = { 1297781 },
+    },
+
+    -- ── Queen Patlaa ──
+    [137486] = {
+        npcID = 137486,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Queen Patlaa",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, roomNames = { "Sepulcher of the Dahazi" }, coPresenceNPCIDs = { 137487 }, groupHasLevel90 = false, groupHasCreatureFamily = true, groupHasLevel90Power0 = false },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        channelTimeSet = { 2 },
+        spellIDs = { 270931, 1294883, 1297763, 1305982, 1306761, 1306763 },
+    },
+
+    -- ── Skeletal Hunting Raptor ──
+    [137487] = {
+        npcID = 137487,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Skeletal Hunting Raptor",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = true, roomNames = { "Sepulcher of the Dahazi" }, groupHasLevel90 = false, groupHasCreatureFamily = true, groupHasLevel90Power0 = false },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        channelTimeSet = { 5 },
+        spellIDs = { 270500, 270502, 270503, 1297763 },
+    },
+
+    -- ── Interment Construct ──
+    [137969] = {
+        npcID = 137969,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Interment Construct",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false },
+        placement = "2",
+        castTimeSet = { 1, 3 },
+        channelTimeSet = { 30, 6 },
+        spellIDs = { 271555, 271561, 271562, 1310755, 1312569 },
+    },
+
+    -- ── Embalming Fluid ──
+    [137989] = {
+        npcID = 137989,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Embalming Fluid",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "2",
+        spellIDs = { 271563, 1298104 },
+    },
+
+    -- ── Shadow of Zul ──
+    [138489] = {
+        npcID = 138489,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Shadow of Zul",
+        schema = "named",
+        identity = { power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "4",
+        castTimeSet = { 1.5 },
+        channelTimeSet = { 4 },
+        spellIDs = { 272388, 1298304, 1309385 },
+    },
+
+    -- ── Minion of Zul ──
+    [138493] = {
+        npcID = 138493,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Minion of Zul",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "4",
+        spellIDs = { 269935 },
+    },
+
+    -- ── Half-Finished Mummy ──
+    [270502] = {
+        npcID = 270502,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Half-Finished Mummy",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, bossEncounter = false, roomNames = { "Chamber of Eternal Preservation" }, coPresenceNPCIDs = { 137969 } },
+        placement = "2",
+        castTimeSet = { 4 },
+        spellIDs = { 267763 },
+    },
+
+    -- ── Half-Finished Mummy ──
+    [273050] = {
+        npcID = 273050,
+        mapID = 1762,
+        dungeonKey = "KingsRest",
+        name = "Half-Finished Mummy",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true, roomNames = { "Chamber of Eternal Preservation" } },
+        placement = "2",
+        castTimeSet = { 4 },
+        spellIDs = { 267763 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Temple of Sethraliss (1877)                             ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Faithless Subjugator ──
+    [134364] = {
+        npcID = 134364,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Faithless Subjugator",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "2",
+        castTimeSet = { 5 },
+        spellIDs = { 269896, 1293307, 1314082 },
+    },
+
+    -- ── A Knot of Snakes ──
+    [134388] = {
+        npcID = 134388,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "A Knot of Snakes",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "2",
+        channelTimeSet = { 20 },
+        spellIDs = { 263958 },
+    },
+
+    -- ── Toxic Viper ──
+    [134389] = {
+        npcID = 134389,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Toxic Viper",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "",
+        castTimeSet = { 4 },
+        spellIDs = { 267027 },
+    },
+
+    -- ── Storm Serpent ──
+    [134390] = {
+        npcID = 134390,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Storm Serpent",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1289589, 1291622 },
+    },
+
+    -- ── Imbued Stormcaller ──
+    [134599] = {
+        npcID = 134599,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Imbued Stormcaller",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 2, 2.5 },
+        spellIDs = { 269116, 1291262, 1296045, 1296052, 1310739 },
+    },
+
+    -- ── Sandswept Hunter ──
+    [134600] = {
+        npcID = 134600,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Sandswept Hunter",
+        schema = "named",
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1,2",
+        channelTimeSet = { 9 },
+        spellIDs = { 1292585, 1292623, 1308113, 1308116 },
+    },
+
+    -- ── Shrouded Fang ──
+    [134602] = {
+        npcID = 134602,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Shrouded Fang",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 3, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1295610, 1295635, 1308100 },
+    },
+
+    -- ── Barbed Krolusk ──
+    [134616] = {
+        npcID = 134616,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Barbed Krolusk",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = true },
+        placement = "1,2",
+        spellIDs = { 1291399 },
+    },
+
+    -- ── Sand-Sworn Rider ──
+    [134629] = {
+        npcID = 134629,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Sand-Sworn Rider",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false },
+        placement = "2",
+        castTimeSet = { 2.5, 4.5 },
+        spellIDs = { 262046, 272655, 1291399, 1292990 },
+    },
+
+    -- ── Krolusk Matriarch ──
+    [134686] = {
+        npcID = 134686,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Krolusk Matriarch",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = true },
+        placement = "2",
+        castTimeSet = { 3, 4.5 },
+        spellIDs = { 272654, 272655 },
+    },
+
+    -- ── Static Anomaly ──
+    [134691] = {
+        npcID = 134691,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Static Anomaly",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3",
+        spellIDs = { 264763, 1310693 },
+    },
+
+    -- ── Storm Adept ──
+    [134990] = {
+        npcID = 134990,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Storm Adept",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1,2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1291262 },
+    },
+
+    -- ── Sandfury Stonefist ──
+    [134991] = {
+        npcID = 134991,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Sandfury Stonefist",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false },
+        placement = "1",
+        castTimeSet = { 3, 4 },
+        spellIDs = { 265966, 1291468 },
+    },
+
+    -- ── Orb Watcher ──
+    [135007] = {
+        npcID = 135007,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Orb Watcher",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false },
+        placement = "4",
+        castTimeSet = { 2.5, 3.5 },
+        spellIDs = { 1303443, 1303452, 1303486, 1308546 },
+    },
+
+    -- ── Poisonous Viper ──
+    [135562] = {
+        npcID = 135562,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Poisonous Viper",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "2",
+        spellIDs = { 1308148 },
+    },
+
+    -- ── Lightning Serpent ──
+    [135846] = {
+        npcID = 135846,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Lightning Serpent",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = true },
+        placement = "2",
+        spellIDs = { 1293133, 1310396, 1310402 },
+    },
+
+    -- ── Agitated Nimbus ──
+    [136076] = {
+        npcID = 136076,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Agitated Nimbus",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 1.5, 3 },
+        spellIDs = { 1293464, 1293475, 1293650, 1293652, 1310739 },
+    },
+
+    -- ── Twisted Hexxer ──
+    [136250] = {
+        npcID = 136250,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Twisted Hexxer",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = true, hasCreatureFamily = false },
+        placement = "4",
+        castTimeSet = { 2, 4 },
+        spellIDs = { 268013, 1300666, 1300684, 1311964, 1311980, 1311981 },
+    },
+
+    -- ── Spark Channeler ──
+    [139110] = {
+        npcID = 139110,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Spark Channeler",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false, preCombatChanneling = true },
+        placement = "4",
+        spellIDs = { 267483 },
+    },
+
+    -- ── Dutiful Tamer ──
+    [139422] = {
+        npcID = 139422,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Dutiful Tamer",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1291399, 1292990 },
+    },
+
+    -- ── Brood Tender ──
+    [139425] = {
+        npcID = 139425,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Brood Tender",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "2",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1310683 },
+    },
+
+    -- ── Faithless Tormentor ──
+    [268317] = {
+        npcID = 268317,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Faithless Tormentor",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false },
+        placement = "4",
+        channelTimeSet = { 604800 },
+        spellIDs = { 1300704, 1300714 },
+    },
+
+    -- ── Corrupted Guardian ──
+    [268344] = {
+        npcID = 268344,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Corrupted Guardian",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false, bossEncounter = true },
+        placement = "4",
+        castTimeSet = { 2.5 },
+        spellIDs = { 1300803, 1302616, 1302618, 1302761, 1303446 },
+    },
+
+    -- ── Essence Defiler ──
+    [268427] = {
+        npcID = 268427,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Essence Defiler",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false, bossEncounter = true },
+        placement = "4",
+        channelTimeSet = { 604800 },
+        spellIDs = { 1301199 },
+    },
+
+    -- ── Twisted Hexxer ──
+    [268491] = {
+        npcID = 268491,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Twisted Hexxer",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = true, hasCreatureFamily = false, bossEncounter = true },
+        placement = "4",
+        castTimeSet = { 2, 4 },
+        spellIDs = { 1300684, 1302153, 1302158, 1311964, 1311979 },
+    },
+
+    -- ── Faithless Tormentor ──
+    [268729] = {
+        npcID = 268729,
+        mapID = 1877,
+        dungeonKey = "TempleOfSethraliss",
+        name = "Faithless Tormentor",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false, hasCreatureFamily = false, bossEncounter = true },
+        placement = "4",
+        channelTimeSet = { 604800 },
+        spellIDs = { 1300704, 1300714 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Ruby Life Pools (2521)                                  ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Infused Whelp ──
+    [187894] = {
+        npcID = 187894,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Infused Whelp",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "",
+        spellIDs = { 1305234 },
+    },
+
+    -- ── Defier Draghar ──
+    [187897] = {
+        npcID = 187897,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Defier Draghar",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "1",
+        castTimeSet = { 1, 4 },
+        channelTimeSet = { 3 },
+        spellIDs = { 372047, 372087, 372794, 1309705 },
+    },
+
+    -- ── Deepstone Earthshaper ──
+    [187969] = {
+        npcID = 187969,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Deepstone Earthshaper",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false },
+        placement = "1",
+        channelTimeSet = { 604800 },
+        spellIDs = { 371471, 1305225 },
+    },
+
+    -- ── Earthbound Guardian ──
+    [188011] = {
+        npcID = 188011,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Earthbound Guardian",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = true, cannotInterrupt = false },
+        placement = "1",
+        channelTimeSet = { 604800 },
+        spellIDs = { 384933, 1307205 },
+    },
+
+    -- ── Flashfrost Chillweaver ──
+    [188067] = {
+        npcID = 188067,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Flashfrost Chillweaver",
+        schema = "named",
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = true, cannotInterrupt = false },
+        placement = "1",
+        castTimeSet = { 2.5 },
+        channelTimeSet = { 15, 604800 },
+        spellIDs = { 371489, 371984, 372743, 372749, 384933 },
+    },
+
+    -- ── Primal Juggernaut ──
+    [188244] = {
+        npcID = 188244,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Primal Juggernaut",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "1",
+        castTimeSet = { 2.5, 3.5 },
+        channelTimeSet = { 6 },
+        spellIDs = { 372730, 372793, 1305201, 1305213, 1310489 },
+    },
+
+    -- ── Blazebound Firestorm ──
+    [189886] = {
+        npcID = 189886,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Blazebound Firestorm",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, bossEncounter = true },
+        placement = "2",
+        castTimeSet = { 3, 3.5, 5 },
+        spellIDs = { 373017, 373087, 384823 },
+    },
+
+    -- ── Infused Whelp ──
+    [189893] = {
+        npcID = 189893,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Infused Whelp",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "",
+        spellIDs = { 1305234 },
+    },
+
+    -- ── Blazebound Destroyer ──
+    [190034] = {
+        npcID = 190034,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Blazebound Destroyer",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false },
+        placement = "2",
+        castTimeSet = { 1.5, 3.5, 4, 5 },
+        spellIDs = { 373614, 373692, 384139, 1305955 },
+    },
+
+    -- ── Scorchling ──
+    [190205] = {
+        npcID = 190205,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Scorchling",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "2",
+        spellIDs = { 1307372 },
+    },
+
+    -- ── Ashseer Flamelasher ──
+    [190206] = {
+        npcID = 190206,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Ashseer Flamelasher",
+        schema = "named",
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false },
+        placement = "2,3",
+        channelTimeSet = { 10, 15 },
+        spellIDs = { 373972, 373973, 373977, 385536, 385567, 1305865 },
+    },
+
+    -- ── Primalist Cinderweaver ──
+    [190207] = {
+        npcID = 190207,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Primalist Cinderweaver",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false },
+        placement = "2,3",
+        castTimeSet = { 2.5 },
+        spellIDs = { 373693, 384194 },
+    },
+
+    -- ── Scorchling ──
+    [194622] = {
+        npcID = 194622,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Scorchling",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "",
+        spellIDs = { 1307372 },
+    },
+
+    -- ── Ruinous Stormbringer ──
+    [195119] = {
+        npcID = 195119,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Ruinous Stormbringer",
+        schema = "named",
+        identity = { level = 91, power = 3, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false },
+        placement = "2",
+        castTimeSet = { 2, 2.5 },
+        spellIDs = { 385310, 385311, 385312, 385313, 385314, 385316 },
+    },
+
+    -- ── Primal Thundercloud ──
+    [197509] = {
+        npcID = 197509,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Primal Thundercloud",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 89, power = 0, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "3",
+        spellIDs = { 391031, 392399 },
+    },
+
+    -- ── High Channeler Ryvati ──
+    [197535] = {
+        npcID = 197535,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "High Channeler Ryvati",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "3",
+        castTimeSet = { 2 },
+        channelTimeSet = { 7 },
+        spellIDs = { 1306366, 1307488, 1307511, 1310355, 1310361, 1310363 },
+    },
+
+    -- ── Flamegullet ──
+    [197697] = {
+        npcID = 197697,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Flamegullet",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "2",
+        castTimeSet = { 2.5, 4 },
+        channelTimeSet = { 3 },
+        spellIDs = { 391723, 392394, 392569, 392570, 395292 },
+    },
+
+    -- ── Thunderhead ──
+    [197698] = {
+        npcID = 197698,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Thunderhead",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "2",
+        castTimeSet = { 1.5, 2.5, 4 },
+        channelTimeSet = { 3 },
+        spellIDs = { 391726, 391727, 392395, 392640, 392641, 395303, 1310599 },
+    },
+
+    -- ── Storm Warrior ──
+    [197982] = {
+        npcID = 197982,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Storm Warrior",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "3",
+        spellIDs = { 392406 },
+    },
+
+    -- ── Tempest Channeler ──
+    [198047] = {
+        npcID = 198047,
+        mapID = 2521,
+        dungeonKey = "RubyLifePools",
+        name = "Tempest Channeler",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = true, cannotInterrupt = false },
+        placement = "3",
+        castTimeSet = { 2, 4 },
+        channelTimeSet = { 7 },
+        spellIDs = { 392576, 1306366, 1307488, 1307502 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Murder Row (2813)                                       ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Corrupted Warlock ──
+    [235265] = {
+        npcID = 235265,
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Corrupted Warlock",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true },
+        placement = "3,4",
+        castTimeSet = { 1.5, 2 },
+        channelTimeSet = { 7 },
+        spellIDs = { 1217973, 1297682, 1297684 },
+    },
+
+    -- ── Defiled Golem ──
+    [235322] = {
+        npcID = 235322,
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Defiled Golem",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true },
+        placement = "4",
+        castTimeSet = { 2 },
+        channelTimeSet = { 4, 8 },
+        spellIDs = { 1215961, 1294824 },
+    },
+
+    -- ── Shivan Punisher ──
+    [235465] = {
+        npcID = 235465,
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Shivan Punisher",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false },
+        placement = "3,4",
+        castTimeSet = { 1, 4 },
+        spellIDs = { 1294770, 1297691 },
+    },
+
+    -- ── Bribed Guard ──
+    [236071] = {
+        npcID = 236071,
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Bribed Guard",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true },
+        placement = "1",
+        castTimeSet = { 2, 3 },
+        spellIDs = { 1216529, 1295035 },
+    },
+
+    -- ── Massive Felwyrm ──
+    [236902] = {
+        npcID = 236902,
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Massive Felwyrm",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true },
+        placement = "1",
+        castTimeSet = { 2 },
+        channelTimeSet = { 1 },
+        spellIDs = { 1217633, 1258537 },
+    },
+
+    -- ── Felmaster Lucsei ──
+    [236905] = {
+        npcID = 236905,
+        mapID = 2813,
+        dungeonKey = "MurderRow",
+        name = "Felmaster Lucsei",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true },
+        placement = "3",
+        castTimeSet = { 2, 2.5 },
+        channelTimeSet = { 1.2, 2.5 },
+        spellIDs = { 1216954, 1302007 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Den of Nalorakk (2825)                                  ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Avatar of Determination ──
+    [241869] = {
+        npcID = 241869,
+        mapID = 2825,
+        dungeonKey = "DenOfNalorakk",
+        name = "Avatar of Determination",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false },
+        placement = "2",
+        castTimeSet = { 2, 4 },
+        spellIDs = { 1240280, 1241463 },
+    },
+
+    -- ── Loa Speaker Nanea ──
+    [244889] = {
+        npcID = 244889,
+        mapID = 2825,
+        dungeonKey = "DenOfNalorakk",
+        name = "Loa Speaker Nanea",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true },
+        placement = "3",
+        castTimeSet = { 3, 4 },
+        spellIDs = { 1296722, 1309925 },
+    },
+
+    -- ── Grizzled Warbringer ──
+    [245146] = {
+        npcID = 245146,
+        mapID = 2825,
+        dungeonKey = "DenOfNalorakk",
+        name = "Grizzled Warbringer",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true },
+        placement = "3",
+        castTimeSet = { 2, 3 },
+        spellIDs = { 1246957, 1246986 },
+    },
+
+    -- ── Spirit of Hunger ──
+    [245855] = {
+        npcID = 245855,
+        mapID = 2825,
+        dungeonKey = "DenOfNalorakk",
+        name = "Spirit of Hunger",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false },
+        placement = "1",
+        castTimeSet = { 1.5 },
+        channelTimeSet = { 5 },
+        spellIDs = { 1238687, 1238760 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  The Blinding Vale (2859)                                ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Virid Grovekeeper ──
+    [245346] = {
+        npcID = 245346,
+        mapID = 2859,
+        dungeonKey = "TheBlindingVale",
+        name = "Virid Grovekeeper",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "1,2",
+        castTimeSet = { 2.5, 3 },
+        spellIDs = { 1237855, 1255205 },
+    },
+
+    -- ── Overgrown Hydra ──
+    [245513] = {
+        npcID = 245513,
+        mapID = 2859,
+        dungeonKey = "TheBlindingVale",
+        name = "Overgrown Hydra",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "4",
+        castTimeSet = { 2, 3 },
+        channelTimeSet = { 6 },
+        spellIDs = { 1238368, 1238642 },
+    },
+
+    -- ── Luminous Thornmaw ──
+    [246871] = {
+        npcID = 246871,
+        mapID = 2859,
+        dungeonKey = "TheBlindingVale",
+        name = "Luminous Thornmaw",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false },
+        placement = "3,4",
+        castTimeSet = { 2.5, 3 },
+        spellIDs = { 1242135, 1242138 },
+    },
+
+    -- ── Potatoad Matriarch ──
+    [249756] = {
+        npcID = 249756,
+        mapID = 2859,
+        dungeonKey = "TheBlindingVale",
+        name = "Potatoad Matriarch",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = true },
+        placement = "4",
+        castTimeSet = { 2, 3 },
+        spellIDs = { 1250100, 1250199, 1250937 },
+    },
+
+    -- ── Sporeblight Belcher ──
+    [254850] = {
+        npcID = 254850,
+        mapID = 2859,
+        dungeonKey = "TheBlindingVale",
+        name = "Sporeblight Belcher",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, hasCreatureFamily = false },
+        placement = "1,2,3,4",
+        castTimeSet = { 1.5, 2 },
+        channelTimeSet = { 3 },
+        spellIDs = { 1263636, 1271385 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Voidscar Arena (2923)                                   ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Chitigoth ──
+    [244260] = {
+        npcID = 244260,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Chitigoth",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, bossEncounter = false, uiMapIDs = { 2572 } },
+        placement = "1",
+        channelTimeSet = { 8 },
+        spellIDs = { 1234855 },
+    },
+
+    -- ── Brutok ──
+    [244309] = {
+        npcID = 244309,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Brutok",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = true, bossEncounter = false, uiMapIDs = { 2572 } },
+        placement = "1",
+        castTimeSet = { 2.5, 3.5 },
+        spellIDs = { 1234890, 1245186 },
+    },
+
+    -- ── Watchful Harrower ──
+    [245950] = {
+        npcID = 245950,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Watchful Harrower",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, bossEncounter = false },
+        placement = "2,3",
+        castTimeSet = { 2, 5 },
+        channelTimeSet = { 4 },
+        spellIDs = { 1239856, 1300138 },
+    },
+
+    -- ── Brutal Overseer ──
+    [252053] = {
+        npcID = 252053,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Brutal Overseer",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, bossEncounter = false, uiMapIDs = { 2572, 2574 } },
+        placement = "1,2,3",
+        castTimeSet = { 2 },
+        channelTimeSet = { 30, 6 },
+        spellIDs = { 1298900, 1310309 },
+    },
+
+    -- ── Voidtouched Magi ──
+    [252072] = {
+        npcID = 252072,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Voidtouched Magi",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false, bossEncounter = false, uiMapIDs = { 2572, 2574 } },
+        placement = "1,2,3",
+        castTimeSet = { 4 },
+        spellIDs = { 1299913, 1299938 },
+    },
+
+    -- ── Agitated Voidscythe ──
+    [263228] = {
+        npcID = 263228,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Agitated Voidscythe",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, bossEncounter = false },
+        placement = "2,3",
+        castTimeSet = { 2.5 },
+        channelTimeSet = { 6 },
+        spellIDs = { 1233472, 1289265 },
+    },
+
+    -- ── Aegyra the Unyielding ──
+    [267545] = {
+        npcID = 267545,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Aegyra the Unyielding",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, bossEncounter = false, uiMapIDs = { 2574 } },
+        placement = "1",
+        castTimeSet = { 2, 3, 8 },
+        spellIDs = { 1298908, 1298924, 1299125, 1299145 },
+    },
+
+    -- ── Raj'kess the Spellstorm ──
+    [267546] = {
+        npcID = 267546,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Raj'kess the Spellstorm",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, bossEncounter = false, uiMapIDs = { 2574 } },
+        placement = "1",
+        castTimeSet = { 3 },
+        channelTimeSet = { 9 },
+        spellIDs = { 1299240, 1299270 },
+    },
+
+    -- ── Devouring Brutalizer ──
+    [268184] = {
+        npcID = 268184,
+        mapID = 2923,
+        dungeonKey = "VoidscarArena",
+        name = "Devouring Brutalizer",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, bossEncounter = false },
+        placement = "3",
+        castTimeSet = { 2, 4.5, 9 },
+        channelTimeSet = { 6 },
+        spellIDs = { 1252406, 1300243, 1300249 },
+    },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Altar of Fangs (2993)                                   ║
+    -- ╚══════════════════════════════════════════════════════════╝
+
+    -- ── Venom Leech ──
+    [261550] = {
+        npcID = 261550,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Venom Leech",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = true, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false },
+        placement = "1",
+        spellIDs = {  },
+    },
+
+    -- ── Twinfang Harrower ──
+    [261554] = {
+        npcID = 261554,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Twinfang Harrower",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, hasCreatureFamily = true },
+        placement = "1,3",
+        castTimeSet = { 3 },
+        channelTimeSet = { 5 },
+        spellIDs = { 1294567, 1306668 },
+    },
+
+    -- ── High Evolutionist ──
+    [261557] = {
+        npcID = 261557,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "High Evolutionist",
+        schema = "named",
+        identity = { level = 90, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = false, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = false, isLieutenant = false },
+        placement = "2,3",
+        channelTimeSet = { 6 },
+        spellIDs = { 1306385 },
+    },
+
+    -- ── Primal Serpent ──
+    [261560] = {
+        npcID = 261560,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Primal Serpent",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = false, hasInterruptFlag = true, cannotInterrupt = false, isLieutenant = false },
+        placement = "1,3",
+        castTimeSet = { 4 },
+        spellIDs = { 1294557 },
+    },
+
+    -- ── Ascendant Serpent ──
+    [261573] = {
+        npcID = 261573,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Ascendant Serpent",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 2, 3 },
+        channelTimeSet = { 5 },
+        spellIDs = { 1294934, 1295055, 1308864 },
+    },
+
+    -- ── Rattling Writhe ──
+    [262011] = {
+        npcID = 262011,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Rattling Writhe",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, hasCreatureFamily = false },
+        placement = "2",
+        castTimeSet = { 3 },
+        channelTimeSet = { 5 },
+        spellIDs = { 1294845, 1294849 },
+    },
+
+    -- ── Ula'tek's Chosen ──
+    [263109] = {
+        npcID = 263109,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Ula'tek's Chosen",
+        schema = "named",
+        identity = { level = 91, power = 0, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, hasCreatureFamily = false },
+        placement = "3",
+        castTimeSet = { 2 },
+        channelTimeSet = { 9 },
+        spellIDs = { 1306852 },
+    },
+
+    -- ── Living Venom ──
+    [263112] = {
+        npcID = 263112,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Living Venom",
+        schema = "named",
+        identityOnly = true,
+        identity = { level = 90, power = 1, nonElite = true, hasCastSkill = false, noCastSkill = true, hasCastSpell = false, hasChannelSpell = false, hasInterruptFlag = false, cannotInterrupt = true, isLieutenant = false, hasCreatureFamily = false, coPresenceNPCIDs = { 263109 } },
+        placement = "3",
+        spellIDs = {  },
+    },
+
+    -- ── Ritual Chieftain ──
+    [270306] = {
+        npcID = 270306,
+        mapID = 2993,
+        dungeonKey = "AltarOfFangs",
+        name = "Ritual Chieftain",
+        schema = "named",
+        identity = { level = 91, power = 1, nonElite = false, hasCastSkill = true, noCastSkill = false, hasCastSpell = true, hasChannelSpell = true, hasInterruptFlag = false, cannotInterrupt = true, hasCreatureFamily = false },
+        placement = "1,3",
+        castTimeSet = { 3 },
+        channelTimeSet = { 2 },
+        spellIDs = { 1306517, 1306911 },
+    },
 }

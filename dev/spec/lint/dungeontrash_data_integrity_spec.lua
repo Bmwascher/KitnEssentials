@@ -30,11 +30,17 @@ describe("DungeonTrash data integrity — TrashTraits <-> TrashData", function()
         end
     end)
 
-    it("every fingerprinted mob has curated spell data (else it resolves but never alerts)", function()
+    it("every fingerprinted mob has curated spell data unless declared identity-only", function()
         local orphans = {}
         for npcID, t in pairs(traits) do
             local mob = mobByNpc[npcID]
-            if not (mob and mob.spells and next(mob.spells)) then
+            local hasSpells = mob ~= nil and mob.spells ~= nil and next(mob.spells) ~= nil
+            if t.identityOnly == true then
+                if hasSpells then
+                    orphans[#orphans + 1] = string.format("%d (%s / %s) is declared identity-only but has spells",
+                        npcID, t.dungeonKey, t.name or "?")
+                end
+            elseif not hasSpells then
                 orphans[#orphans + 1] = string.format("%d (%s / %s)", npcID, t.dungeonKey, t.name or "?")
             end
         end
@@ -51,12 +57,14 @@ describe("DungeonTrash data integrity — TrashTraits <-> TrashData", function()
         assert.same({}, unreachable)
     end)
 
-    it("every curated spell has a Layer2-matchable duration (castTime or channelTime > 0)", function()
+    it("every curated spell is matchable by duration, or a named row that is first-only or hidden", function()
         local unmatchable = {}
         for npcID, mob in pairs(mobByNpc) do
+            local named = traits[npcID] ~= nil and traits[npcID].schema == "named"
             for spellID, sp in pairs(mob.spells or {}) do
                 local hasDur = (tonumber(sp.castTime) or 0) > 0 or (tonumber(sp.channelTime) or 0) > 0
-                if not hasDur then
+                local namedTrigger = named and (type(sp.first) == "number" or sp.hidden == true)
+                if not (hasDur or namedTrigger) then
                     unmatchable[#unmatchable + 1] = string.format("%d/%s (%s)", npcID, tostring(spellID), sp.name or "?")
                 end
             end
@@ -90,6 +98,20 @@ describe("DungeonTrash data integrity — TrashTraits <-> TrashData", function()
             end
         end
         assert.same({}, conflicts)
+    end)
+
+    it("no npc carries both an opening order and a forced cast sequence", function()
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCurated.lua", KE)
+        local both = {}
+        for npcID in pairs(KE.TrashForcedCastSequences or {}) do
+            local mob = mobByNpc[npcID]
+            for spellID, sp in pairs(mob and mob.spells or {}) do
+                if sp.openingCastOrder ~= nil then
+                    both[#both + 1] = string.format("%d/%d", npcID, spellID)
+                end
+            end
+        end
+        assert.same({}, both)
     end)
 end)
 
