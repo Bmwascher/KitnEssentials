@@ -185,6 +185,10 @@ function DTrash:OnUnitHealth(_, unit)
         end
     end
     dprint("dead " .. unit)
+    -- The death belongs to the tracked generation: only its own removal
+    -- entry is skipped (4.8). The token-keyed mark above stays the cache's.
+    local rt = self.tracked[unit]
+    if rt and rt.owner then self._kingsRest.MarkDied(rt.owner) end
     self:OnNameplateRemoved(nil, unit)
 end
 
@@ -266,6 +270,9 @@ end
 -- come from the new plate. Returns the adopted runtime (now installed in
 -- self.tracked) or nil.
 function DTrash:TryRestoreCachedRuntime(rt, npcID)
+    -- A held or granted Kings' Rest member never adopts (4.8): this one gate
+    -- covers early adoption, every other resolve caller and Layer 2.
+    if self._kingsRest.RefusesAdoption(rt.owner) then return nil end
     local pending = self._trashPending
     if #pending == 0 then return nil end
     local now = GetTime()
@@ -319,6 +326,11 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     -- Layer 1 trust belongs to a pass on the fresh snapshot.
     cached.layer1Resolved = nil
     cached.candidates = rt.candidates or cached.candidates
+    -- So does the summary dependence (4.8). The refusal above admits no
+    -- granted owner, so the pass that named this NPC ran without a summary:
+    -- its unpruned list is nil, and the cached generation's wave mark clears.
+    cached.unsummarizedCandidates = rt.unsummarizedCandidates
+    cached.waveDerived = nil
     -- Cast state belongs to the generation that observed it (4.7). The cached
     -- generation's records, pairing, transition, samples, cue consumption,
     -- recovery state, departed IDs and counting window are dropped (its
