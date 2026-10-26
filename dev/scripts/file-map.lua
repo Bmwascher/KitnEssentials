@@ -65,8 +65,9 @@
 --
 -- Without --out or --refresh the map prints to stdout; --out writes the
 -- bytes directly, since a PowerShell 5.1 redirect would write UTF-16.
--- Exit 1 when a self-check fails: a row with no page file, a settings file no row reaches,
--- a registered tab strip the rules above cannot read, a tab function with a
+-- Exit 1 when a self-check fails: a row with no page file, a settings file
+-- no row reaches, a registered tab strip the rules above cannot read, a tab
+-- function with a
 -- `return` that is not a literal list, or a tab list with an element that
 -- is not an inline or local table, an id that is not a string literal or
 -- constant, or a label that is not a string literal (an in-page strip prints
@@ -198,7 +199,6 @@ local function refreshExit(code, msg)
     os.exit(code)
 end
 
--- --refresh: the output path, the stamp, and an exit when the map is current.
 -- The stamp the inputs give now: nil when git cannot say, which never
 -- matches. The hashes cover content, so a second edit to an already modified
 -- file still changes it.
