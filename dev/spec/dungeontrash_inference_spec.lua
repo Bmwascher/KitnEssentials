@@ -2010,3 +2010,274 @@ describe("DungeonTrash inference — cast ownership", function()
         assert.equals(plain, TI.SelectOrderRows(plain, "cast", 1))
     end)
 end)
+
+describe("DungeonTrash inference — transition proof", function()
+    local TI
+    setup(function() TI = loadInference() end)
+
+    local owner = { live = true }
+    local DATA = {
+        [1] = { spells = { [11] = { castTime = 3 }, [12] = { castTime = 3, channelTime = 5 } } },
+        [2] = { spells = { [21] = { castTime = 3, channelTime = 8 } } },
+        [3] = { spells = { [31] = { castTime = 3, channelTime = 4 } } },
+        [4] = { spells = { [41] = { castTime = 3 } } },
+        [5] = { spells = {} },
+    }
+    local TRAITS = { [2] = { castTimeSet = { 3 } }, [5] = { castTimeSet = { 3 } } }
+    local function dataByNpc(npc) return DATA[npc] end
+    local function traitByNpc(npc) return TRAITS[npc] end
+
+    local function cast(extra)
+        local rec = { kind = "cast", eligible = true, class = "normal", owner = owner, startAt = 10 }
+        for k, v in pairs(extra or {}) do rec[k] = v end
+        return rec
+    end
+    local function prove(source, state, now)
+        state.owner = state.owner or owner
+        return TI.ProveCastIntoChannel(source, state, dataByNpc, traitByNpc, now or 13)
+    end
+    local function candidates(...)
+        local out = {}
+        for i, npcID in ipairs({ ... }) do out[i] = { npcID = npcID } end
+        return out
+    end
+
+    it("proves on a resolved runtime with a two-phase explanation, twin included", function()
+        local proof = prove(cast(), { matchedNPCID = 1 })
+        assert.same({ castStartAt = 10, pairedStartAt = 13 }, proof)
+    end)
+
+    it("proves on an unresolved runtime when every explanation is a two-phase cast phase", function()
+        assert.is_table(prove(cast(), { candidates = candidates(2, 3) }))
+    end)
+
+    it("gives nil on an unresolved runtime with a one-phase or filler explanation", function()
+        assert.is_nil(prove(cast(), { candidates = candidates(2, 4) }))
+        assert.is_nil(prove(cast(), { candidates = candidates(2, 5) }))
+    end)
+
+    it("gives nil, never false, for a source that cannot be the channel's cast phase", function()
+        local cases = {
+            cast({ endedBy = "interrupted", endAt = 12.9 }),
+            cast({ endedBy = "failed", endAt = 12.9 }),
+            cast({ startAt = 9.5, endedBy = "stop", endAt = 12.5 }),
+            cast({ impliedStopVoid = true }),
+            cast({ canceled = true }),
+            cast({ owner = { live = true } }),
+            cast({ eligible = false, class = "baseline" }),
+            cast({ retired = true }),
+        }
+        for i, source in ipairs(cases) do
+            assert.is_nil(prove(source, { matchedNPCID = 1 }), "row " .. i)
+        end
+    end)
+
+    it("proves through the processed STOP after a refused end event", function()
+        local source = cast({ impliedStopVoid = true, endedBy = "stop", endAt = 13 })
+        assert.is_table(prove(source, { matchedNPCID = 1 }, 13.2))
+    end)
+end)
+
+describe("DungeonTrash inference — selection ties", function()
+    local TI
+    setup(function() TI = loadInference() end)
+
+    it("Pass 2 refuses two anchored channels inside the margin and picks the nearer outside it", function()
+        local mob = { spells = {
+            [1] = { first = 5, castTime = 0, channelTime = 3 },
+            [2] = { first = 5, castTime = 0, channelTime = 6 },
+        } }
+        local obs = { kind = "channel", duration = 0.5, startAt = 100 }
+        assert.is_nil(TI.InferSucceededSpell(mob, obs,
+            { [1] = { nextStartAt = 100 }, [2] = { nextStartAt = 100.01 } }, 100))
+        assert.equals(1, TI.InferSucceededSpell(mob, obs,
+            { [1] = { nextStartAt = 100 }, [2] = { nextStartAt = 101 } }, 100))
+    end)
+
+    it("Pass 1 refuses an inseparable duration tie without falling into Pass 2", function()
+        local channels = { spells = {
+            [1] = { first = 5, castTime = 0, channelTime = 6 },
+            [2] = { first = 5, castTime = 0, channelTime = 6 },
+            [3] = { first = 5, castTime = 0, channelTime = 12 },
+        } }
+        assert.is_nil(TI.InferSucceededSpell(channels, { kind = "channel", duration = 6.0, startAt = 100 },
+            { [1] = { nextStartAt = 100.5 }, [2] = { nextStartAt = 100.52 }, [3] = { nextStartAt = 100 } }, 100))
+        local casts = { spells = {
+            [1] = { first = 5, castTime = 3 },
+            [2] = { first = 5, castTime = 3.1 },
+        } }
+        assert.equals(1, TI.InferSucceededSpell(casts, { kind = "cast", duration = 3.0, startAt = 100 },
+            { [1] = { nextStartAt = 105 }, [2] = { nextStartAt = 100 } }, 100))
+    end)
+
+    it("the start advance anchors on exactly one match and keeps the advance on two", function()
+        local mob = { spells = {
+            [1] = { castTime = 2, cdMode = "CAST_START" },
+            [2] = { castTime = 4, cdMode = "CAST_START", targetExists = true },
+        } }
+        local pick, count = TI.SelectStartAdvance(mob, "cast", {}, nil)
+        assert.is_nil(pick)
+        assert.equals(2, count)
+        assert.equals(1, (TI.SelectStartAdvance(mob, "cast", { targetExists = false }, nil)))
+    end)
+
+    it("a pending advance on a target-hostility row anchors only once its state is final hostile", function()
+        local brutalizer = { spells = {
+            [1252406] = { castTime = 4.5, targetHostile = false },
+            [1300249] = { castTime = 9, cdMode = "CAST_START", targetHostile = true },
+            [1300243] = { castTime = 2, channelTime = 6, targetAPIExists = true },
+        } }
+        local waiting = { eligible = true }
+        TI.TargetEvidenceStep(waiting, { kind = "open", collect = true })
+        assert.is_false(TI.PendingAdvanceReady({ fingerprintsReady = true, targetNeeded = true,
+            targetState = waiting.targetState }, true))
+
+        local cases = {
+            { step = { kind = "change", reading = "hostile" }, want = 1300249 },
+            { step = { kind = "change", reading = "not-hostile" } },
+            { step = { kind = "change", reading = "absent" } },
+            { step = { kind = "close" } },
+        }
+        for i, c in ipairs(cases) do
+            local rec = { eligible = true }
+            TI.TargetEvidenceStep(rec, { kind = "open", collect = true })
+            assert.is_true(TI.TargetEvidenceStep(rec, c.step), "row " .. i)
+            assert.is_true(TI.PendingAdvanceReady({ fingerprintsReady = true, targetNeeded = true,
+                targetState = rec.targetState }, true), "row " .. i)
+            local pick = TI.SelectStartAdvance(brutalizer, "cast", {}, nil, rec.targetState, TI.ABSENT_MATCHES_FALSE)
+            assert.equals(c.want, pick, "row " .. i)
+            assert.is_false(TI.TargetEvidenceStep(rec, { kind = "change", reading = "hostile" }), "row " .. i)
+            assert.equals(c.want, (TI.SelectStartAdvance(brutalizer, "cast", {}, nil, rec.targetState,
+                TI.ABSENT_MATCHES_FALSE)), "row " .. i)
+        end
+
+        local live = { live = true, scheduled = 0 }
+        local rt = { unit = "nameplate1", owner = live }
+        live.runtime = rt
+        rt.castState = TI.NewCastState(live)
+        local tracked = { nameplate1 = rt }
+        local _, rec = TI.ClassifyStart(rt.castState, "cast", 7, 1)
+        rec.seq = 40
+        rt.unit = "nameplate2"
+        local moved = { nameplate2 = rt }
+        assert.is_true(TI.CastCallbackHolds(live, moved, true, rec, "start"))
+        assert.is_false(TI.CastCallbackHolds(live, tracked, true, rec, "start"))
+        TI.ClassifyStart(rt.castState, "cast", 8, 2)
+        assert.is_false(TI.CastCallbackHolds(live, moved, true, rec, "start"))
+    end)
+
+    it("an unknown order leaves the tie refusals and the exactly-one rule over all rows", function()
+        local casts = { spells = {
+            [1] = { first = 5, castTime = 3, openingCastOrder = 1 },
+            [2] = { first = 5, castTime = 3, openingCastOrder = 2 },
+        } }
+        local anchors = { [1] = { nextStartAt = 100 }, [2] = { nextStartAt = 100.01 } }
+        assert.equals(2, TI.InferSucceededSpell(casts,
+            { kind = "cast", duration = 3, startAt = 100, order = 2 }, anchors, 100))
+        assert.is_nil(TI.InferSucceededSpell(casts, { kind = "cast", duration = 3, startAt = 100 }, anchors, 100))
+
+        local channels = { spells = {
+            [1] = { first = 5, castTime = 0, channelTime = 3, openingCastOrder = 1 },
+            [2] = { first = 5, castTime = 0, channelTime = 6, openingCastOrder = 2 },
+        } }
+        assert.equals(1, TI.InferSucceededSpell(channels,
+            { kind = "channel", duration = 0.5, startAt = 100, order = 1 }, anchors, 100))
+        assert.is_nil(TI.InferSucceededSpell(channels, { kind = "channel", duration = 0.5, startAt = 100 }, anchors, 100))
+
+        local starts = { spells = {
+            [1] = { castTime = 2, cdMode = "CAST_START", openingCastOrder = 1 },
+            [2] = { castTime = 2, cdMode = "CAST_START", openingCastOrder = 2 },
+        } }
+        assert.equals(1, (TI.SelectStartAdvance(starts, "cast", {}, 1)))
+        assert.is_nil((TI.SelectStartAdvance(starts, "cast", {}, nil)))
+    end)
+end)
+
+describe("DungeonTrash inference — target evidence", function()
+    local TI
+    setup(function() TI = loadInference() end)
+
+    it("F: normalizes the two target reads, never turning unavailable into absent or not hostile", function()
+        local cases = {
+            { { true, false, false, false, nil, false }, "absent" },
+            { { true, true, false, true, true, false }, "hostile" },
+            { { true, true, false, true, false, false }, "not-hostile" },
+            { { true, false, true, true, true, false }, "unavailable" },
+            { { false, nil, false, true, true, false }, "unavailable" },
+            { { true, nil, false, true, true, false }, "unavailable" },
+            { { true, "yes", false, true, true, false }, "unavailable" },
+            { { true, true, false, true, true, true }, "unavailable" },
+            { { true, true, false, false, nil, false }, "unavailable" },
+            { { true, true, false, true, nil, false }, "unavailable" },
+            { { true, true, false, true, 1, false }, "unavailable" },
+        }
+        for i, c in ipairs(cases) do
+            local a = c[1]
+            assert.equals(c[2], TI.NormalizeTargetEvidence(a[1], a[2], a[3], a[4], a[5], a[6]), "row " .. i)
+        end
+    end)
+
+    it("F: commits the first change once, closes a pending window as unavailable, and reports once", function()
+        local closes = { "timer", "end", "interrupt", "failure", "replacement", "retirement", "cancellation" }
+        local rec = { eligible = true }
+        assert.is_false(TI.TargetEvidenceStep(rec, { kind = "open", collect = true }))
+        assert.equals("pending", rec.targetState)
+        assert.is_true(TI.TargetEvidenceStep(rec, { kind = "change", reading = "hostile" }))
+        assert.is_false(TI.TargetEvidenceStep(rec, { kind = "change", reading = "not-hostile" }))
+        assert.is_false(TI.TargetEvidenceStep(rec, { kind = "close", reason = "timer" }))
+        assert.equals("hostile", rec.targetState)
+
+        for _, reason in ipairs(closes) do
+            local pending = { eligible = true }
+            TI.TargetEvidenceStep(pending, { kind = "open", collect = true })
+            local reports = 0
+            if TI.TargetEvidenceStep(pending, { kind = "close", reason = reason }) then reports = reports + 1 end
+            if TI.TargetEvidenceStep(pending, { kind = "close", reason = "timer" }) then reports = reports + 1 end
+            if TI.TargetEvidenceStep(pending, { kind = "change", reading = "hostile" }) then reports = reports + 1 end
+            assert.equals(1, reports, reason)
+            assert.equals("unavailable", pending.targetState, reason)
+        end
+
+        local ineligible = { eligible = false }
+        TI.TargetEvidenceStep(ineligible, { kind = "open", collect = true })
+        assert.is_false(TI.TargetEvidenceStep(ineligible, { kind = "change", reading = "hostile" }))
+        assert.equals("not-collected", ineligible.targetState)
+        local unneeded = { eligible = true }
+        TI.TargetEvidenceStep(unneeded, { kind = "open", collect = false })
+        assert.is_false(TI.TargetEvidenceStep(unneeded, { kind = "change", reading = "hostile" }))
+        assert.equals("not-collected", unneeded.targetState)
+
+        local orphaned = { eligible = true }
+        TI.TargetEvidenceStep(orphaned, { kind = "open", collect = true })
+        assert.equals("pending", orphaned.targetState)
+    end)
+
+    it("F: narrows only on a known contradiction and selects strictly, absent per the policy", function()
+        local states = { "hostile", "not-hostile", "absent", "unavailable", "pending", "not-collected" }
+        local NARROW = {
+            [true] = { hostile = true, ["not-hostile"] = false, absent = true, unavailable = true,
+                pending = true, ["not-collected"] = true },
+            [false] = { hostile = false, ["not-hostile"] = true, absent = true, unavailable = true,
+                pending = true, ["not-collected"] = true },
+        }
+        local SELECT = {
+            [true] = { hostile = true, ["not-hostile"] = false, absent = false, unavailable = false,
+                pending = false, ["not-collected"] = false },
+            [false] = { hostile = false, ["not-hostile"] = true, absent = "policy", unavailable = false,
+                pending = false, ["not-collected"] = false },
+        }
+        for _, state in ipairs(states) do
+            for _, policy in ipairs({ true, false }) do
+                assert.is_true(TI.TargetHostileMatches(nil, state, "narrow", policy), state)
+                assert.is_true(TI.TargetHostileMatches(nil, state, "select", policy), state)
+                for _, want in ipairs({ true, false }) do
+                    local label = state .. " " .. tostring(want) .. " " .. tostring(policy)
+                    assert.equals(NARROW[want][state], TI.TargetHostileMatches(want, state, "narrow", policy), label)
+                    local selected = SELECT[want][state]
+                    if selected == "policy" then selected = policy end
+                    assert.equals(selected, TI.TargetHostileMatches(want, state, "select", policy), label)
+                end
+            end
+        end
+    end)
+end)
