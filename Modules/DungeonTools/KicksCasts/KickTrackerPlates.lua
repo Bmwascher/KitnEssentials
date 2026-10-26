@@ -1528,7 +1528,7 @@ function KT:RailsRefresh()
 end
 
 -- One kicker's lanes on every rail: their live icon placed or gone, or their
--- cooldown changed. Nothing else in a lane moves with those.
+-- cooldown changed. Art too: the player's own kick can change just before.
 function KT:RailsKicker(guid)
     local member, live = self.partyMembers[guid], P.live[guid]
     local shown = not (live and live.unit)
@@ -1536,7 +1536,10 @@ function KT:RailsKicker(guid)
         for i = 1, #P.kickers do
             local lane = rail.lanes[i]
             if lane and lane.guid == guid then
-                if member then PaintCooldown(lane.icon, member.kickStart, member.kickDuration) end
+                if member then
+                    PaintIcon(lane.icon, member)
+                    PaintCooldown(lane.icon, member.kickStart, member.kickDuration)
+                end
                 lane.clip:SetShown(shown)
             end
         end
