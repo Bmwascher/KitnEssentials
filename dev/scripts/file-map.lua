@@ -35,10 +35,10 @@
 -- after it are not split by view. A Register call whose id is a parameter of
 -- its function is read once per call of that function; one whose id is a
 -- field of an ipairs loop variable, once per entry of the looped local table.
--- A title that is a string, a file-level string constant,
--- a bound parameter, `<param>.<field>` or `<param>.<field> or "<default>"`
--- prints as text; any other prints as dynamic. The "Error" placeholder card is
--- left out.
+-- A title that is a string literal with no escapes, a file-level string
+-- constant, a bound parameter, `<param>.<field>` or `<param>.<field> or
+-- "<default>"` prints as text; any other prints as dynamic. The "Error"
+-- placeholder card is left out.
 --
 -- A tab marked retail only is absent on WoW Forever, for one of two reasons:
 -- its page file is not in `load-list.lua --client camelot`, or its id is not
@@ -54,8 +54,10 @@
 -- Without --out the map prints to stdout; --out writes the bytes directly,
 -- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
 -- self-check fails: a row with no page file, a settings file no row reaches,
--- a tab strip the rules above cannot read or whose ids or labels are not
--- strings or constants, a Register call whose content id cannot be read, no
+-- a registered tab strip the rules above cannot read, or with an element that
+-- is not an inline or local table, an id that is not a string literal or
+-- constant, or a label that is not a string literal (an in-page strip prints
+-- as dynamic instead), a Register call whose content id cannot be read, no
 -- FOREVER_ALLOWED table in Core/Availability.lua, a retail-only entry that is
 -- not a tracked file, a tracked .lua file that neither client loads, or a
 -- load-list.lua line that is not a toc header, an <inline> line or an
@@ -286,7 +288,7 @@ local function splitTop(inner)
         i = i + 1
     end
     local tail = trim(inner:sub(last))
-    if tail ~= "" or #pieces > 0 then pieces[#pieces + 1] = tail end
+    if tail ~= "" then pieces[#pieces + 1] = tail end
     return pieces
 end
 
@@ -304,24 +306,12 @@ local function localTable(text, name)
     return at and tableAt(text, at) or nil
 end
 
--- Calls fn with each outermost { ... } in text, skipping strings.
-local function eachTable(text, fn)
-    local i = 1
-    while true do
-        i = text:find("[{\"'%[]", i)
-        if not i then return end
-        local c = text:sub(i, i)
-        if c == "{" then
-            local close = matchClose(text, i)
-            fn(text:sub(i, close))
-            i = close + 1
-        elseif c == "[" and not text:find("^%[=*%[", i) then
-            i = i + 1
-        else
-            local _, e = token(text, i)
-            i = e + 1
-        end
-    end
+-- A list element as table text: an inline table, or a name for a local table
+-- in `scope` or else the file; nil when it is neither.
+local function entryText(code, scope, element)
+    if element:sub(1, 1) == "{" then return element end
+    if element:match("^[%a_][%w_]*$") then return localTable(scope, element) or localTable(code, element) end
+    return nil
 end
 
 local function prevChar(code, at)
@@ -443,13 +433,16 @@ for block in (config or "{}"):sub(2, -2):gmatch("%b{}") do
     end
 end
 
--- File-level (column-0) string constants, by name; a name given two values is
--- dropped.
+-- File-level (column-0) string constants, by name: a whole line that the next
+-- code line does not continue. A name given two values is dropped.
+local CONTINUES = { [".."] = true, ["or"] = true, ["an"] = true }
 local constsOf = {}
 for path, code in pairs(codeOf) do
     local consts = {}
-    for line in ("\n" .. code):gmatch("\n([^\n]*)") do
+    for lineAt, line in ("\n" .. code):gmatch("\n()([^\n]*)") do
         local name, value = line:match('^local%s+([%a_][%w_]*)%s*=%s*"([^"\\]*)"%s*$')
+        local after = code:match("^%s*(%S?%S?)", lineAt + #line)
+        if name and (CONTINUES[after] or after:match("^[%(%[:]")) then name = nil end
         if name and consts[name] == nil then
             consts[name] = value
         elseif name and consts[name] ~= value then
@@ -483,29 +476,28 @@ local function tableFieldsRaw(tableText)
     return raw
 end
 
--- Each { id = ..., label = ... } entry, at any depth. An id that is neither a
--- string nor a constant comes back as `unread`.
-local function tableIds(path, text, kids)
-    eachTable(text, function(group)
-        local raw = tableFieldsRaw(group)
+-- Each element of a tab list; one that is not a readable
+-- { id = ..., label = ... } entry comes back as `unread`.
+local function listIds(path, code, scope, listText, kids)
+    for _, element in ipairs(splitTop(listText:sub(2, -2))) do
+        local entry = entryText(code, scope, element)
+        local raw = entry and tableFieldsRaw(entry) or {}
         local id = raw.id and idValue(path, raw.id)
         if id then
             kids[#kids + 1] = { id = id, label = raw.label and literal(raw.label) or nil, labeled = true }
-        elseif raw.id then
-            kids[#kids + 1] = { unread = raw.id }
         else
-            tableIds(path, group:sub(2, -2), kids)
+            kids[#kids + 1] = { unread = (element:gsub("%s+", " ")) }
         end
-    end)
+    end
 end
 
 -- A local tab table, plus every local table an ipairs loop copies into it.
 local function localTableIds(path, code, name, kids)
     local own = localTable(code, name)
-    if own then tableIds(path, own, kids) end
+    if own then listIds(path, code, code, own, kids) end
     for source in code:gmatch("ipairs%(%s*([%a_][%w_]*)%s*%)%s*do%s*" .. name .. "%[") do
         local copied = localTable(code, source)
-        if copied then tableIds(path, copied, kids) end
+        if copied then listIds(path, code, code, copied, kids) end
     end
 end
 
@@ -515,25 +507,17 @@ local function callSpan(code, open)
     return code:sub(open, matchClose(code, open))
 end
 
--- A function tab list shows its tabs in the order of its longest
--- `return { ... }`, which may differ from where each entry is defined; an
--- entry it never returns keeps its place after those.
-local function sortByReturn(path, span, kids)
-    local longest = {}
-    for at in span:gmatch("%f[%w_]return%s*(){") do
-        local pieces = splitTop(tableAt(span, at):sub(2, -2))
-        if #pieces > #longest then longest = pieces end
-    end
-    local rank = {}
-    for i, piece in ipairs(longest) do
-        local entry = piece
-        if piece:match("^[%a_][%w_]*$") then entry = localTable(span, piece) or "" end
-        local raw = entry:sub(1, 1) == "{" and tableFieldsRaw(entry) or {}
-        local id = raw.id and idValue(path, raw.id)
-        if id and not rank[id] then rank[id] = i end
-    end
-    for i, kid in ipairs(kids) do kid.order = rank[kid.id] or (#longest + i) end
-    table.sort(kids, function(a, b) return a.order < b.order end)
+-- A function tab list: every `return { ... }` it holds, longest first, since
+-- the longest shows the on-screen order and a shorter one is a subset.
+local function returnedIds(path, code, fnText, kids)
+    local lists = {}
+    for at in fnText:gmatch("%f[%w_]return%s*(){") do lists[#lists + 1] = tableAt(fnText, at) end
+    for i, list in ipairs(lists) do lists[i] = { text = list, size = #splitTop(list:sub(2, -2)), order = i } end
+    table.sort(lists, function(a, b)
+        if a.size ~= b.size then return a.size > b.size end
+        return a.order < b.order
+    end)
+    for _, list in ipairs(lists) do listIds(path, code, fnText, list.text, kids) end
 end
 
 local children, labels = {}, {}
@@ -546,12 +530,10 @@ for _, path in ipairs(tracked) do
                 local kids = {}
                 local word = code:match("^([%a_][%w_]*)", argAt)
                 if code:sub(argAt, argAt) == "{" then
-                    tableIds(path, tableAt(code, argAt), kids)
+                    listIds(path, code, code, tableAt(code, argAt), kids)
                 elseif STRIP_CALLS[kind] then
                     if word == "function" then
-                        local span = callSpan(code, open)
-                        tableIds(path, span, kids)
-                        sortByReturn(path, span, kids)
+                        returnedIds(path, code, code:sub(argAt, blockEnd(code, argAt)), kids)
                     elseif word then
                         localTableIds(path, code, word, kids)
                     end
@@ -771,13 +753,15 @@ local function stripLabels(path, expr)
         end
     end
     if not list then return nil end
-    local names, readable = {}, true
-    eachTable(list:sub(2, -2), function(entry)
-        local raw = tableFieldsRaw(entry)
-        local label = raw.label and literal(raw.label)
-        if label then names[#names + 1] = label else readable = false end
-    end)
-    return readable and #names > 0 and table.concat(names, " / ") or nil
+    local names = {}
+    for _, element in ipairs(splitTop(list:sub(2, -2))) do
+        local entry = entryText(codeOf[path], codeOf[path], element)
+        local label = entry and tableFieldsRaw(entry).label
+        label = label and literal(label)
+        if not label then return nil end
+        names[#names + 1] = label
+    end
+    return #names > 0 and table.concat(names, " / ") or nil
 end
 
 local function dynamic(expr)
