@@ -64,8 +64,11 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
             else KitnEssentials:DisableModule("CCTracker") end
         end
     end)
-    card1:AddLabel("Shows each enemy held by a long crowd control (Polymorph, Hex, Repentance, " ..
-        "Freezing Trap and more): the spell's icon, the time left on it, and the enemy's name.")
+    card1:AddLabel(KE.IS_FOREVER
+        and ("Shows each enemy held by a long crowd control (Polymorph, Repentance, Freezing Trap, " ..
+            "Sap and more): the spell's icon, the time left on it, and the enemy's name.")
+        or ("Shows each enemy held by a long crowd control (Polymorph, Hex, Repentance, " ..
+            "Freezing Trap and more): the spell's icon, the time left on it, and the enemy's name."))
     yOffset = card1:GetNextOffset()
 
     if db.Enabled ~= true then return yOffset end

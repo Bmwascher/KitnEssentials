@@ -80,13 +80,13 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
         }
     end
 
-    manager:RegisterGroup(cardC:AddCheckboxGrid({
-        contentPick("Dungeons", "ShowInDungeons", true),
-        contentPick("Delves", "ShowInDelves", true),
-        contentPick("Raids", "ShowInRaids", false),
-        contentPick("Open World", "ShowInOpenWorld", false),
-        contentPick("Arenas / Battlegrounds", "ShowInPvP", false),
-    }, { isLast = true }), "all")
+    -- Forever has no delves.
+    local picks = { contentPick("Dungeons", "ShowInDungeons", true) }
+    if not KE.IS_FOREVER then picks[#picks + 1] = contentPick("Delves", "ShowInDelves", true) end
+    picks[#picks + 1] = contentPick("Raids", "ShowInRaids", false)
+    picks[#picks + 1] = contentPick("Open World", "ShowInOpenWorld", false)
+    picks[#picks + 1] = contentPick("Arenas / Battlegrounds", "ShowInPvP", false)
+    manager:RegisterGroup(cardC:AddCheckboxGrid(picks, { isLast = true }), "all")
 
     yOffset = cardC:GetNextOffset()
 
