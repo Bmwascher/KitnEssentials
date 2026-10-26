@@ -546,12 +546,10 @@ local function FeedCell(cell, leftward)
     cell.gate:SetValue(cell.before)
     HangShort(cell.clip, cell.fill, cell.gate)
     local cur = (cell.cCur ~= nil) and cell.cCur or cell.after
-    local floorA = Base(cell.before, cell.gen)
-    FeedStep(cell.stepA, floorA, cur, cur, floorA, leftward)
+    FeedStep(cell.stepA, cell.before, cur, cur, cell.before, leftward)
     if cell.cCur ~= nil then
-        local floorB = Base(cell.after, cell.gen)
-        FeedWhole(cell.gateB, cell.fillB, cell.clipB, floorB, cell.cCur)
-        FeedStep(cell.stepB, floorB, cell.cCur, floorB, cell.cCur, leftward)
+        FeedWhole(cell.gateB, cell.fillB, cell.clipB, cell.after, cell.cCur)
+        FeedStep(cell.stepB, cell.after, cell.cCur, cell.after, cell.cCur, leftward)
     else
         ResetWhole(cell.gateB, cell.fillB, cell.clipB)
         ResetStep(cell.stepB, leftward)
@@ -1180,8 +1178,10 @@ end
 
 -- A cell closes again once its teammate interrupted again, fed only past the
 -- cell's own cooldown; a read during it is skipped until the wake at its end.
+-- A cell from an older fight keeps its last feed until its ghost ends: its
+-- totals and the new fight's cannot be compared.
 local function FeedCellCount(cell, cur, T, leftward)
-    if cur == nil then return end
+    if cur == nil or cell.gen ~= KT.meterFight then return end
     local endAt = cell.cdStart + cell.cdDur
     if T < endAt then
         KT:WakeAt(endAt + READY_SLACK)
