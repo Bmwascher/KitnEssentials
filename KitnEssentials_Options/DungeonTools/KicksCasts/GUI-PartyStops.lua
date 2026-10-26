@@ -65,7 +65,8 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
         "icons that count down their cooldowns. A teammate's stop is seen from its debuff on an enemy " ..
         "nameplate, so two teammates of one class both start and a resisted stop shows nothing. Your own " ..
         "stops start from your cast. Works with Party Cooldowns off. Each watched enemy costs one sensor " ..
-        "per tracked stop a teammate can have.")
+        "per tracked stop a teammate can have; an area stop watches only as many as Enemies Watched, " ..
+        "Area Stops allows.")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.
@@ -122,7 +123,7 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     }), 0.5)
     row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched, Area Stops", {
         min = 1, max = 20, step = 1,
-        value = Rules.Reach(true, db.EnemiesWatched, db.EnemiesWatchedArea),
+        value = Rules.WatchedArea(db.EnemiesWatchedArea),
         tooltip = "How many enemies an area stop, like Shockwave or Chaos Nova, is read on. It lands on " ..
             "several at once, so a few are enough, and each one watched costs frame time in big pulls. " ..
             "Never more than Enemies Watched.",
