@@ -4,10 +4,11 @@
 -- Run from the repo root with the local Lua interpreter:
 --   lua dev/scripts/file-map.lua [--refresh] [--out <path>] [--retail <file>]
 --
--- --refresh keeps a map current: it rebuilds only when the commit or the
--- uncommitted content of the map's inputs (REFRESH_INPUTS) differs from the
--- stamp file beside the map, publishes only a map whose self-checks pass
--- (else it keeps the previous one and prints the failures), and prints one
+-- --refresh keeps a map current: it rebuilds when the map is missing, or the
+-- commit, the uncommitted content of the map's inputs (REFRESH_INPUTS) or the
+-- retail-only list path differs from the stamp file beside the map, or git
+-- cannot give a stamp. It publishes only a map whose self-checks pass (else
+-- it keeps the previous one and prints the failures), and prints one
 -- `[file-map]` line naming the map. Its default output is
 -- dev/docs/FILE-MAP.md in the primary checkout and FILE-MAP.md in the git
 -- dir of a linked worktree, whose dev/docs may be a junction to the
@@ -60,9 +61,9 @@
 -- (from load-list.lua, both clients), then the retail-only list
 -- (dev/scripts/retail-only.lua unless --retail names another).
 --
--- Without --out the map prints to stdout; --out writes the bytes directly,
--- since a PowerShell 5.1 redirect would write UTF-16. Exit 1 when a
--- self-check fails: a row with no page file, a settings file no row reaches,
+-- Without --out or --refresh the map prints to stdout; --out writes the
+-- bytes directly, since a PowerShell 5.1 redirect would write UTF-16.
+-- Exit 1 when a self-check fails: a row with no page file, a settings file no row reaches,
 -- a registered tab strip the rules above cannot read, a tab function with a
 -- `return` that is not a literal list, or a tab list with an element that
 -- is not an inline or local table, an id that is not a string literal or
@@ -71,7 +72,8 @@
 -- FOREVER_ALLOWED table in Core/Availability.lua, a retail-only entry that is
 -- not a tracked file, a tracked .lua file that neither client loads, or a
 -- load-list.lua line that is not a toc header, an <inline> line or an
--- existing file. The map is written either way, failures first.
+-- existing file. Without --refresh the map is written either way, failures
+-- first.
 
 local SIDEBAR_FILE = "GUI/GUIMain/GUI-MainFrame.lua"
 local AVAILABILITY_FILE = "Core/Availability.lua"
@@ -155,8 +157,8 @@ local function commandLines(cmd)
 end
 
 local function writeFile(path, text)
-    local f = io.open(path, "wb")
-    if not f then return false end
+    local f, err = io.open(path, "wb")
+    if not f then return false, err end
     f:write(text)
     f:close()
     return true
@@ -165,7 +167,7 @@ end
 -- --refresh: the output path, the stamp the inputs give now (nil when git
 -- cannot say, which never matches), and an exit when the map is current or
 -- another refresh holds the lock.
-local stamp, stampPath, lockPath
+local stamp, stampPath, lockPath, runId
 if refresh then
     if not outPath then
         local gitDir = commandLines("git rev-parse --path-format=absolute --git-dir")[1]
@@ -182,19 +184,37 @@ if refresh then
             .. " | git hash-object --stdin-paths")
         or {}
     if head and head:match("^%x+$") and edits and edits:match("^%x+$") and #newHashes == #new then
-        stamp = table.concat({ head, edits, table.concat(new, "\n"), table.concat(newHashes, "\n") }, "\n") .. "\n"
+        stamp = table.concat({ head, edits, retailPath, table.concat(new, "\n"),
+            table.concat(newHashes, "\n") }, "\n") .. "\n"
     end
     stampPath, lockPath = outPath .. ".stamp", outPath .. ".lock"
     if stamp and fileExists(outPath) and readFile(stampPath) == stamp then
         print("[file-map] current: " .. outPath)
         os.exit(0)
     end
-    local held = tonumber(readFile(lockPath) or "")
-    if held and os.time() - held < LOCK_SECONDS then
-        print("[file-map] busy: another refresh is writing " .. outPath)
-        os.exit(0)
+    -- The lock is taken by renaming a private file onto it: on Windows a
+    -- rename refuses an existing target, so only one run can win.
+    runId = os.time() .. tostring({}):gsub("%W", "")
+    local mine = lockPath .. "." .. runId
+    local wrote, err = writeFile(mine, tostring(os.time()))
+    if not wrote then
+        print("[file-map] cannot write beside " .. outPath .. " (does its folder exist?): " .. tostring(err))
+        os.exit(1)
     end
-    writeFile(lockPath, tostring(os.time()))
+    if not os.rename(mine, lockPath) then
+        local held = tonumber(readFile(lockPath) or "")
+        if held and os.time() - held < LOCK_SECONDS then
+            os.remove(mine)
+            print("[file-map] busy: a refresh started under " .. LOCK_SECONDS .. " s ago holds " .. lockPath)
+            os.exit(0)
+        end
+        os.remove(lockPath)
+        if not os.rename(mine, lockPath) then
+            os.remove(mine)
+            print("[file-map] busy: another refresh took the lock at " .. lockPath)
+            os.exit(0)
+        end
+    end
 end
 
 local function underAny(path, roots)
@@ -1185,17 +1205,26 @@ local docText = table.concat(doc, "\n") .. "\n"
 
 if refresh then
     -- Written aside and moved into place, so a reader never sees half a map.
-    local published = false
-    if #failures == 0 and writeFile(outPath .. ".tmp", docText) then
-        os.remove(outPath)
-        published = os.rename(outPath .. ".tmp", outPath) ~= nil
+    local tmp = outPath .. ".tmp" .. runId
+    local published, why = false, "self-check failed"
+    if #failures == 0 then
+        local ok, err = writeFile(tmp, docText)
+        if ok then
+            ok, err = os.rename(tmp, outPath)
+            if not ok then
+                os.remove(outPath)
+                ok, err = os.rename(tmp, outPath)
+            end
+        end
+        published, why = ok and true or false, err
     end
     if published then
-        if stamp then writeFile(stampPath, stamp) end
+        if stamp then writeFile(stampPath, stamp) else os.remove(stampPath) end
         print("[file-map] regenerated at " .. sha .. ": " .. outPath)
     else
-        os.remove(outPath .. ".tmp")
-        print("[file-map] kept the previous map at " .. outPath .. "; this run did not publish:")
+        os.remove(tmp)
+        local kept = fileExists(outPath) and "kept the previous map at " or "no map at "
+        print("[file-map] " .. kept .. outPath .. "; this run did not publish: " .. tostring(why))
         for _, msg in ipairs(failures) do print("FAIL: " .. msg) end
     end
     os.remove(lockPath)

@@ -1,8 +1,8 @@
 # SessionStart hook: bring the file map up to date with the checkout, so smoke
 # steps name GUI locations from a current map. The script rebuilds only when
 # its inputs changed since the map's stamp. Quiet when the map is current;
-# names the map when it rebuilt, kept the old one or found another run busy.
-# Never blocks. Exit 0 always.
+# otherwise prints the script's lines, or a note when it exits non-zero
+# without one. Never blocks. Exit 0 always.
 
 $root = $env:CLAUDE_PROJECT_DIR
 if (-not $root) { exit 0 }
@@ -16,12 +16,17 @@ if (-not (Get-Command lua -ErrorAction SilentlyContinue)) {
 try {
     Push-Location -LiteralPath $root
     $out = & lua dev/scripts/file-map.lua --refresh 2>&1 | Out-String
+    $code = $LASTEXITCODE
 } catch {
-    $out = ''
+    $out = $_.Exception.Message
+    $code = 1
 } finally {
     Pop-Location
 }
-if ($out -match '\[file-map\] (regenerated|kept|busy)') {
-    Write-Output $out.Trim()
+$out = $out.Trim()
+if ($code -ne 0 -and $out -notmatch '\[file-map\]') {
+    Write-Output "[file-map] the refresh failed (exit $code); run lua dev/scripts/file-map.lua --refresh to see why:`n$out"
+} elseif ($out -and $out -notmatch '^\[file-map\] current:') {
+    Write-Output $out
 }
 exit 0

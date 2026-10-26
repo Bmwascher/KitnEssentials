@@ -13,8 +13,8 @@
 # luacheck-postedit) find the repo from the edited path, so they install once
 # at user scope (~/.claude) and cover every project on the machine. The
 # agents-mirror, references-check, retention-check, lib-update-check,
-# file-map-check and program-recovery hooks depend on this repo's scripts, so they stay project
-# scope (.claude). A moved hook's stale copy and settings
+# file-map-check and program-recovery hooks depend on this repo's scripts, so
+# they stay project scope (.claude). A moved hook's stale copy and settings
 # entry in the other scope are removed, or it would fire twice.
 
 $ErrorActionPreference = 'Stop'
