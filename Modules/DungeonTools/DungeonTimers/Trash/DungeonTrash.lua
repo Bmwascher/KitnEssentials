@@ -336,6 +336,7 @@ function DTrash:RefreshZoneState()
         end
     end
     self.zoneText = zoneText
+    self:RefreshKingsRestScope()
 end
 
 -- Boss-progress index + M+ enemy-forces % from the scenario criteria list —
@@ -676,6 +677,8 @@ function DTrash:StopMonitor()
         if rt.owner then rt.owner.live = false end
     end
     wipe(self.tracked)
+    -- Every owner is dead, so no released member resolves; the history goes.
+    self:StopKingsRest()
     self:ResetTrashCache()
     self.inBossEncounter = false
     self.bossEncounterID = nil
@@ -826,6 +829,105 @@ function DTrash:OnRosterChanged()
     end
 end
 
+-- ── Kings' Rest room waves (4.8) ───────────────────────────────────────────
+-- The pure core (TrashKingsRest.lua, loaded after the inference) keeps the
+-- removal history and the room batch; this wiring owns its scope, timers and
+-- providers. Off map 1762 no state exists and nothing here runs.
+local KR = KE.TrashKingsRest
+-- Exported so TrashCache.lua's admission refusal and death mark use it too.
+DTrash._kingsRest = KR
+-- Removal history runs on this instance map, and room batches only in this
+-- room, compared with the normalized minimap text.
+local KINGS_REST_MAP_ID = 1762
+local KINGS_REST_DUNGEON_KEY = "KingsRest"
+local KINGS_REST_ROOM = "Sepulcher of the Dahazi"
+
+-- The core's providers, built once per observation start.
+function DTrash:BuildKingsRestEnv()
+    local waveRows = {}
+    for _, row in ipairs(self:TrashTraitIndex()[KINGS_REST_DUNGEON_KEY] or {}) do
+        local id = row.trait and row.trait.identity
+        if id and id.groupHasLevel90 ~= nil then waveRows[row.npcID] = true end
+    end
+    return {
+        holds = function(owner) return TI.RecoveryOwnerHolds(owner, self.tracked, self.monitoring) end,
+        resolve = function(owner) self:ResolveMob(owner.runtime) end,
+        -- The ready read: one event read opportunity, then the one resolve pass.
+        refresh = function(owner)
+            self:EventIdentityRead(owner.runtime)
+            self:ResolveMob(owner.runtime)
+        end,
+        state = function(owner) return owner.runtime.obs, owner.runtime.obsPending end,
+        compatible = function(obs)
+            return TI.IdentityCompatibleRows(obs, KINGS_REST_DUNGEON_KEY, { traitIndex = self:TrashTraitIndex() })
+        end,
+        waveRows = waveRows,
+        familyGate = TI.FAMILY_GATE,
+    }
+end
+
+-- Map and room scope, re-derived at every zone-state refresh. Entering map
+-- 1762 while monitoring starts observation; a zone-text change ends the batch
+-- generation and keeps the history.
+function DTrash:RefreshKingsRestScope()
+    self:CurrentDungeonKey()
+    if not (self.monitoring and self.currentMapID == KINGS_REST_MAP_ID) then
+        self:StopKingsRest()
+        return
+    end
+    if not self.kr then
+        self.kr = KR.New()
+        self.krEnv = self:BuildKingsRestEnv()
+        KR.Start(self.kr, GetTime())
+    elseif self.zoneText ~= self.krZoneText then
+        KR.ResetBatch(self.kr, self.krEnv)
+    end
+    self.krZoneText = self.zoneText
+    self.krInRoom = self.zoneText == KINGS_REST_ROOM
+end
+
+-- Monitor stop, disable or leaving the map: held members are released (a
+-- live owner resolves normally), grants stand, and the history is wiped.
+function DTrash:StopKingsRest()
+    if self.kr then KR.Stop(self.kr, self.krEnv) end
+    self.kr, self.krEnv, self.krZoneText, self.krInRoom = nil, nil, nil, nil
+end
+
+-- An ended plate generation, after its owner was marked dead: a held member
+-- releases its batch, then the generation's removal entry is written (none
+-- for its own confirmed death).
+function DTrash:KingsRestGenerationEnded(rt, now)
+    local st = self.kr
+    if not st then return end
+    KR.MemberGone(st, rt.owner, self.krEnv)
+    KR.RecordRemoval(st, rt.owner, now, rt.obs, rt.matchedNPCID,
+        rt.obs and self.krEnv.compatible(rt.obs))
+end
+
+-- Before a fresh runtime exists: an overdue join close at the add time, then
+-- the replaced generation's release and entry.
+function DTrash:KingsRestBeforeAdd(old, now)
+    local st = self.kr
+    if not st then return end
+    KR.ApplyOverdueClose(st, now, self.krEnv)
+    if old then self:KingsRestGenerationEnded(old, now) end
+end
+
+-- Enrolls a fresh generation by its add time. The first member requests the
+-- batch's two timers, each guarded by this core state and the generation.
+function DTrash:KingsRestEnroll(owner, now)
+    local st = self.kr
+    if not st then return end
+    local result, gen = KR.OnAdd(st, owner, now, self.krInRoom == true, self.krEnv)
+    if result ~= "opened" then return end
+    C_Timer.After(KR.JOIN_WINDOW, function()
+        if self.kr == st then KR.JoinClose(st, gen, self.krEnv) end
+    end)
+    C_Timer.After(KR.READY_DELAY, function()
+        if self.kr == st then KR.ReadyCheck(st, gen, self.krEnv) end
+    end)
+end
+
 -- ── Nameplate tracking ─────────────────────────────────────────────────────
 
 function DTrash:OnNameplateAdded(_, unit)
@@ -844,6 +946,9 @@ function DTrash:OnNameplateAdded(_, unit)
     -- A fresh add on a token still tracked ends the old generation first.
     local old = self.tracked[unit]
     if old and old.owner then old.owner.live = false end
+    -- Kings' Rest (4.8): an overdue join close, then the replaced generation's
+    -- release and removal entry, all before the fresh runtime exists.
+    self:KingsRestBeforeAdd(old, now)
     -- One owner per plate generation (4.2): the scheduled reads and every
     -- owner-bound callback check it, and it moves with a cache adoption.
     local owner = { live = true, scheduled = 0 }
@@ -870,6 +975,7 @@ function DTrash:OnNameplateAdded(_, unit)
     -- The add's combat read feeds the counting-window edge (4.6).
     self:CombatEdge(rt, inCombat)
     self:NoteNameplateAddedForCache(unit)
+    self:KingsRestEnroll(owner, now)
     C_Timer.After(SNAPSHOT_DELAY, function() self:ScheduledIdentityRead(owner) end)
 end
 
@@ -881,6 +987,9 @@ function DTrash:OnNameplateRemoved(_, unit)
     -- The plate generation ends: its owner-bound callbacks are refused from
     -- here on, even if the cache later reinstalls this table.
     if rt and rt.owner then rt.owner.live = false end
+    -- Kings' Rest (4.8): batch release, then the removal entry, before the
+    -- cache branch, so every ending is recorded whatever the cache does.
+    if rt then self:KingsRestGenerationEnded(rt, GetTime()) end
     -- On-plate icons anchor to the physical plate — they always hide with it.
     if self.HideNameplateMarker then self:HideNameplateMarker(unit) end
     -- TrashCache flicker recovery: a resolved runtime is held for the restore
@@ -1003,6 +1112,24 @@ function DTrash:ResolveMob(rt)
     -- Recovery state (4.2), written by every pass that scores the snapshot
     -- and before the cache consult, so an adoption in this pass carries it.
     rt.obsPending = pending
+    -- Kings' Rest (4.8): a held batch member keeps building candidates and
+    -- its recovery state, but gets no identity and consults no cache.
+    if KR.HoldsIdentity(rt.owner) then return end
+    -- A granted contributor's candidates pass its batch's frozen summary (room
+    -- rows only); the lone-survivor rule then resolves on what remains.
+    local withoutSummary, summaryRemoved, unpruned = resolved, false, nil
+    local summary = KR.SummaryFor(rt.owner)
+    if summary then
+        unpruned = cands
+        cands, summaryRemoved = KR.ApplySummary(cands, summary,
+            function(npcID) return KE.TrashTraits and KE.TrashTraits[npcID] end)
+        rt.candidates = cands
+        resolved = (#cands == 1 and cands[1].levelAgreed and not cands[1].incomplete)
+            and cands[1].npcID or nil
+    end
+    -- Layer 2 judges this pass's list; it keeps the list the summary pruned,
+    -- so a cast can tell whether its result rests on the summary.
+    rt.unsummarizedCandidates = summaryRemoved and unpruned or nil
     -- Layer1 (fingerprint) must NOT downgrade a Layer2 (observed cast/channel
     -- DURATION) resolution to a different mob: duration is stable, non-secret
     -- evidence and outranks fingerprint uniqueness. Once a cast confirms the mob,
@@ -1049,6 +1176,10 @@ function DTrash:ResolveMob(rt)
     -- Layer 1 trust for co-presence: only while this pass resolves the
     -- current identity as a complete, level-agreed lone survivor.
     rt.layer1Resolved = (resolved ~= nil and resolved == rt.matchedNPCID) or nil
+    -- Wave-derived (4.8): the identity rests on the summary's pruning until a
+    -- pass without the summary resolves the same NPC.
+    rt.waveDerived = KR.WaveDerivedAfter(rt.waveDerived, rt.matchedNPCID, withoutSummary,
+        summaryRemoved and resolved ~= nil and resolved == rt.matchedNPCID) or nil
     -- The pass may have just named the mob (fresh resolve, or an interrupt's
     -- flag-prune re-resolve): consume any pending CAST_START start-advance.
     self:ApplyPendingStartAdvance(rt)
@@ -2010,7 +2141,17 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         local wasLone = (#rt.candidates == 1)
         local kept, resolved = TI.FilterCandidates(rt.candidates, observed, dataByNpc, traitByNpc)
         rt.candidates = kept
-        if resolved then
+        -- Wave-derived (4.8): the same cast judged on the list before the
+        -- summary pruned it. A result that list does not give rests on the
+        -- summary, so it stays untrusted however the cast confirms it.
+        local withoutSummary, summaryPruned = resolved, rt.unsummarizedCandidates ~= nil
+        if summaryPruned then
+            rt.unsummarizedCandidates, withoutSummary = TI.FilterCandidates(rt.unsummarizedCandidates,
+                observed, dataByNpc, traitByNpc)
+        end
+        -- A held Kings' Rest member (4.8) gets no identity, adoption or
+        -- credit from a cast that ends while it is held.
+        if resolved and not KR.HoldsIdentity(rt.owner) then
             local levelAgreed = false
             for _, c in ipairs(kept) do
                 if c.npcID == resolved then levelAgreed = (c.levelAgreed == true); break end
@@ -2047,6 +2188,9 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
                     unit, tostring(rt.matchedNPCID), tostring(resolved)))
             end
             rt.matchedNPCID = resolved
+            -- A result without summary involvement, or one the unpruned list
+            -- also gives, clears the mark.
+            rt.waveDerived = KR.WaveDerivedAfter(rt.waveDerived, resolved, withoutSummary, summaryPruned) or nil
             -- Resolve-without-lock: an ambiguous bare channel (transition
             -- unprovable, no pure-channel affirmation on the resolved mob)
             -- never earns the lock. Resolve + output arm either way;
