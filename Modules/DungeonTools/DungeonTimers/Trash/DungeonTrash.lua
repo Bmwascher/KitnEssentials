@@ -236,9 +236,12 @@ end
 function DTrash:ScheduledIdentityRead(owner)
     if not TI.RecoveryOwnerHolds(owner, self.tracked, self.monitoring) then return end
     local rt = owner.runtime
-    -- Combat re-check: the plate-add read can land a frame too early on a
-    -- mass pull, and losing that one edge must not lose engagement.
-    if not rt.engagedAt and safeBool(UnitAffectingCombat, rt.unit) == true then
+    -- Combat re-check (4.6): unconditional, feeding the counting-window edge.
+    -- The plate-add read can land a frame too early on a mass pull, and
+    -- losing that one edge must not lose engagement.
+    local inCombat = safeBool(UnitAffectingCombat, rt.unit)
+    self:CombatEdge(rt, inCombat)
+    if not rt.engagedAt and inCombat == true then
         self:MarkEngaged(rt)
     end
     local fields, scheduled, runs = TI.RecoveryReadPlan(
@@ -838,6 +841,7 @@ function DTrash:OnNameplateAdded(_, unit)
         return
     end
     local now = GetTime()
+    local inCombat = safeBool(UnitAffectingCombat, unit)
     -- A fresh add on a token still tracked ends the old generation first.
     local old = self.tracked[unit]
     if old and old.owner then old.owner.live = false end
@@ -847,6 +851,9 @@ function DTrash:OnNameplateAdded(_, unit)
     local rt = {
         unit = unit,
         owner = owner,
+        -- This generation's cast ownership: observation records, departed
+        -- IDs, recovery state and counting window (4.4, 4.6).
+        castState = TI.NewCastState(owner),
         firstSeenAt = now,
         -- engagedAt = the FIRST moment the mob shows combat evidence — NOT
         -- plate-add: render range isn't engagement, and seeding first-cast
@@ -854,13 +861,15 @@ function DTrash:OnNameplateAdded(_, unit)
         -- design). Stamped once here (mid-pull render), or later by
         -- MarkEngaged's evidence sites (UNIT_FLAGS flip, in-combat
         -- UNIT_TARGET, cast start).
-        engagedAt = (safeBool(UnitAffectingCombat, unit) == true) and now or nil,
+        engagedAt = (inCombat == true) and now or nil,
         -- Seed the target-presence state so OnUnitTarget can detect the FIRST
         -- exists→not-exists transition.
         targetStateExists = safeBool(UnitExists, unit .. "target"),
     }
     owner.runtime = rt
     self.tracked[unit] = rt
+    -- The add's combat read feeds the counting-window edge (4.6).
+    self:CombatEdge(rt, inCombat)
     self:NoteNameplateAddedForCache(unit)
     C_Timer.After(SNAPSHOT_DELAY, function() self:ScheduledIdentityRead(owner) end)
 end
@@ -1068,7 +1077,11 @@ end
 -- sweep idempotent for already-settled runtimes.
 function DTrash:OnPlayerCombatChanged()
     for unit, rt in pairs(self.tracked) do
-        if not rt.engagedAt and safeBool(UnitAffectingCombat, unit) == true then
+        -- One combat read per plate per edge, unconditional, feeding the
+        -- counting-window edge (4.6).
+        local inCombat = safeBool(UnitAffectingCombat, unit)
+        self:CombatEdge(rt, inCombat)
+        if not rt.engagedAt and inCombat == true then
             self:MarkEngaged(rt)
         end
         -- One event read opportunity, then the one resolve pass; nothing
@@ -1090,31 +1103,69 @@ end
 -- castBarID (last event arg — 5th on START/STOP handlers, 6th on INTERRUPTED/
 -- CHANNEL_STOP after interruptedBy) is the one NON-secret cast-lifecycle token
 -- 12.0 leaves us (declared NeverSecret, and probe-confirmed in game).
--- It identifies a castbar INSTANCE, never the spell — the whole correlation
--- model runs on it: START↔STOP matching, duplicate-START rejection, the
--- cast→channel +1 transition proof, and the channel-refresh continuation.
--- Guarded anyway: first contact is issecretvalue, and an unreadable id just
--- degrades that correlation (see activeCastMatches). Non-negative numbers
--- only.
+-- It identifies a castbar INSTANCE, never the spell: START and end
+-- correlation, duplicate-START refusal and the departed-ID history run on it
+-- (TI.ClassifyStart, TI.ClassifyEnd). It is opaque: compared only with ==,
+-- never converted, ordered, used as a key or printed outside the debug flag.
+-- Guarded anyway: first contact is issecretvalue.
 local function safeCastBarID(v)
     if issecretvalue and issecretvalue(v) then return nil end
-    local id = tonumber(v)
-    if id and id >= 0 then return id end
-    return nil
+    return v
 end
 
--- Does an event's castBarID correlate with the runtime's ACTIVE castbar?
--- No active cast → never; both ids readable → strict equality; both nil →
--- correlated (degrades to the kind-only gates when the client omits the arg);
--- one nil → mismatch.
--- Callers pass an already-safeCastBarID-normalized event id.
-local function activeCastMatches(rt, castBarID)
-    if not rt.activeCastStartAt then return false end
-    local activeID = safeCastBarID(rt.activeCastBarID)
-    if activeID ~= nil and castBarID ~= nil then
-        return activeID == castBarID
+-- Mirrors the latest observation (4.4) into the runtime fields the start
+-- cue, the forced sequence and the dump still read. Only an eligible, open,
+-- uncanceled and unretired observation shows as an active cast; samples and
+-- readiness follow the latest eligible record; the pending advance shows its
+-- own time and kind. The records stay the only source of truth.
+function DTrash:SyncActiveCast(rt)
+    local cs = rt.castState
+    local rec = cs and cs.latest
+    local eligible = rec ~= nil and rec.eligible == true
+    local live = eligible and rec.open == true and not rec.canceled and not rec.retired
+    rt.activeCastKind = live and rec.kind or nil
+    rt.activeCastStartAt = live and rec.startAt or nil
+    rt.activeCastBarID = live and rec.id or nil
+    if eligible and rec.seq then rt.activeCastSeq = rec.seq end
+    rt.transitionCastStartAt = live and rec.transitionCastStartAt or nil
+    local fp = (eligible and rec.fingerprints) or nil
+    rt.fpTargetExists = fp and fp.targetExists
+    rt.fpTargetAPIExists = fp and fp.targetAPIExists
+    rt.fpCastStartChangeTarget = fp and fp.castStartChangeTarget
+    rt.fpTargetClearOnCastStart = fp and fp.targetClearOnCastStart
+    rt.fpTargetIsTank = fp and fp.targetIsTank
+    rt.startFingerprintsReady = (eligible and rec.fingerprintsReady) or nil
+    local adv = cs and cs.pendingAdvance
+    rt.pendingStartAdvanceAt = adv and adv.at or nil
+    rt.pendingStartAdvanceKind = adv and adv.kind or nil
+end
+
+-- Whether any trait row of the current dungeon carries preCombatChanneling
+-- (4.2): pre-combat channel presence is read only then. One pass over that
+-- dungeon's rows, per out-of-combat channel START only.
+function DTrash:DungeonUsesPreCombatChannel()
+    local key = self:CurrentDungeonKey()
+    local rows = key and self:TrashTraitIndex()[key]
+    for _, row in ipairs(rows or {}) do
+        local id = row.trait and row.trait.identity
+        if id and id.preCombatChanneling ~= nil then return true end
     end
-    return activeID == nil and castBarID == nil
+    return false
+end
+
+-- One counting-window edge (4.6). Only a known non-secret boolean asserts
+-- anything. A close retires that window's unfinished cast work, so its
+-- records leave the work list and the mirror drops a retired cast.
+function DTrash:CombatEdge(rt, inCombat)
+    local cs = rt and rt.castState
+    if not cs or type(inCombat) ~= "boolean" then return end
+    if TI.CombatWindowStep(cs, inCombat) ~= "closed" then return end
+    local kept = {}
+    for _, rec in ipairs(cs.records) do
+        if not rec.retired then kept[#kept + 1] = rec end
+    end
+    cs.records = kept
+    self:SyncActiveCast(rt)
 end
 
 -- ── Layer2 fingerprint samplers (target rings + buff count) ────────────────
@@ -1168,7 +1219,11 @@ function DTrash:OnUnitTarget(_, unit)
     unit = normalizeNameplate(unit)
     local rt = unit and self.tracked[unit]
     if not rt then return end
-    if safeBool(UnitAffectingCombat, unit) ~= true then return end
+    local inCombat = safeBool(UnitAffectingCombat, unit)
+    -- The edge decision comes before the early return, so a known false here
+    -- closes a counting window too (4.6).
+    self:CombatEdge(rt, inCombat)
+    if inCombat ~= true then return end
     local now = GetTime()
     self:MarkEngaged(rt, now)  -- in-combat target churn is engagement evidence
     appendTargetEvent(rt, "targetSwitchEvents", now)
@@ -1219,20 +1274,25 @@ end
 function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     unit = normalizeNameplate(unit)
     local rt = unit and self.tracked[unit]
-    if not rt then return end
+    if not (rt and rt.castState) then return end
     castBarID = safeCastBarID(castBarID)
-    -- Duplicate-START rejection — a START for the castbar instance already
-    -- active is ignored: a re-fired START must not
-    -- re-anchor activeCastStartAt — the shortened measured duration falls out
-    -- of Layer2 tolerance and the cast silently unmatches. Non-nil equality
-    -- only; a nil id can't prove sameness.
-    if rt.activeCastStartAt and rt.activeCastKind == kind
-        and castBarID ~= nil and castBarID == safeCastBarID(rt.activeCastBarID) then
-        return
-    end
-    if isChannelRefreshContinuation(rt, kind, castBarID) then
-        rt.activeCastBarID = castBarID
-        rt.channelRefreshAt = nil
+    local now = GetTime()
+    -- Combat read first (4.6): the START that engages a mob opens its counting
+    -- window in this same call, before the START is classified.
+    local inCombat = safeBool(UnitAffectingCombat, unit)
+    self:CombatEdge(rt, inCombat)
+    local cs = rt.castState
+    local prior = cs.latest
+    -- Every START is classified before it has any cast effect (4.4): a
+    -- duplicate is ignored, a refresh continues its channel, and only a
+    -- normal START creates an eligible observation.
+    local class, rec = TI.ClassifyStart(cs, kind, castBarID, now,
+        isChannelRefreshContinuation(rt, kind, castBarID))
+    if class == "duplicate" then return end
+    -- A refresh consumes its stamped window, and any other START invalidates it.
+    rt.channelRefreshAt = nil
+    if class == "refresh" then
+        self:SyncActiveCast(rt)
         dprint(tostring(unit) .. ": channel refresh (interruptible) — continuation, anchor kept")
         return
     end
@@ -1252,127 +1312,95 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
         else
             guid = tostring(castGUID) .. " num=" .. tostring(tonumber(castGUID))
         end
-        dprint(string_format("%s: %s start castGUID=%s", tostring(unit), kind, guid))
+        dprint(string_format("%s: %s start castGUID=%s (%s)", tostring(unit), kind, guid, class))
     end
-    -- Cast→channel transition proof: this channel's castBarID is EXACTLY the
-    -- just-finished cast's +1 within the pairing window → same castbar rolling
-    -- cast into channel phase. Arm the transition (the channel finish anchors
-    -- at the TRUE cast start), mark the pairing so a held one-phase credit for
-    -- that cast discards itself (phantom twin), and set the behavior bit that
-    -- keeps channel-capable candidates alive in Layer1. transitionCastStartAt
-    -- lifecycle: armed here; consumed-once at channel finish; cleared on a
-    -- correlated interrupt and on any UNPAIRED new start (below).
-    local paired = false
-    if kind == "channel" and castBarID ~= nil and rt.lastCastBarID ~= nil
-        and castBarID == rt.lastCastBarID + 1
-        and rt.lastCastEndAt and (GetTime() - rt.lastCastEndAt) <= TRANSITION_PAIR_WINDOW then
-        paired = true
-        rt.transitionCastStartAt = rt.lastCastStartAt
-        rt.transitionPairedStartAt = rt.lastCastStartAt
-        rt.sawCastIntoChannel = true
-        dprint(tostring(unit) .. ": cast->channel proven (castBarID +1) — channel anchors at cast start")
-    elseif kind == "channel" and castBarID ~= nil
-        and rt.activeCastKind == "cast" and rt.activeCastStartAt ~= nil then
-        -- Implied-stop pairing: the incoming channel pairs against the
-        -- STILL-ACTIVE cast — no processed STOP required, no wall-clock
-        -- window. A +1 channel start arriving while
-        -- the cast is still active means its STOP was late, reordered or
-        -- dropped. Requiring a processed STOP was a miss mode — each
-        -- miss fired the twin hold's phantom one-phase credit AND anchored
-        -- the channel late by castTime. The superseded cast's late STOP then
-        -- fails the kind gate in FinishCast (harmless stale event).
-        local activeID = safeCastBarID(rt.activeCastBarID)
-        if activeID ~= nil and castBarID == activeID + 1 then
-            paired = true
-            rt.transitionCastStartAt = rt.activeCastStartAt
-            rt.transitionPairedStartAt = rt.activeCastStartAt
+    -- Transition proof (4.4): a normal channel is the channel phase of the
+    -- cast it replaced, or of the cast whose own STOP just landed, only when
+    -- TI.ProveCastIntoChannel finds an explanation. The proof marks that cast
+    -- paired, so its held one-phase credit discards itself.
+    local proven
+    if class == "normal" and kind == "channel" and prior and prior.kind == "cast" then
+        local proof = TI.ProveCastIntoChannel(prior, {
+            owner = rt.owner, matchedNPCID = rt.matchedNPCID, candidates = rt.candidates,
+            fingerprints = prior.fingerprints,
+        }, function(npc) return self:MobData(npc) end,
+        function(npc) return KE.TrashTraits and KE.TrashTraits[npc] end, now)
+        if proof then
+            proven = prior
+            prior.paired = true
+            rec.transitionCastStartAt = proof.castStartAt
             rt.sawCastIntoChannel = true
-            dprint(tostring(unit) .. ": cast->channel proven (implied stop, castBarID +1) — channel anchors at cast start")
+            dprint(tostring(unit) .. ": cast->channel proven — channel anchors at cast start")
         end
     end
-    if not paired then rt.transitionCastStartAt = nil end
-    -- The pairing fields describe only the IMMEDIATELY preceding finished
-    -- cast; any new start consumes them, paired or not.
-    rt.lastCastBarID, rt.lastCastStartAt, rt.lastCastEndAt = nil, nil, nil
-    rt.activeCastKind = kind
-    rt.activeCastStartAt = GetTime()
-    rt.activeCastSeq = (rt.activeCastSeq or 0) + 1
-    rt.activeCastBarID = castBarID
-    rt.channelRefreshAt = nil  -- a genuine new cast invalidates any stamped refresh window
-    -- CAST_START pending start-advance, armed on every NON-transition start; a
-    -- paired transition channel keeps the cast phase's already-applied
-    -- advance. Consumed by ApplyPendingStartAdvance
-    -- once the mob is resolved AND the +0.10s fingerprints are sampled — the
-    -- cast's OUTCOME is irrelevant: CAST_START cds anchor at the observed
-    -- START, which is their ONLY anchor path.
-    if paired then
-        rt.pendingStartAdvanceAt, rt.pendingStartAdvanceKind = nil, nil
-    else
-        rt.pendingStartAdvanceAt = rt.activeCastStartAt
-        rt.pendingStartAdvanceKind = kind
+    -- Opening order, decided once (4.6); a proven channel inherits its cast's.
+    TI.AssignOrder(cs, rec, proven)
+    if class == "normal" then
+        rec.fingerprints = {}
+        if proven then
+            -- The cast phase owns this cycle's start anchor.
+            cs.pendingAdvance = nil
+        else
+            -- Only an eligible observation arms a start advance; it carries
+            -- this record's own samples (4.4).
+            cs.pendingAdvance = { record = rec, provenance = "fresh", at = now, kind = kind,
+                fingerprints = rec.fingerprints }
+        end
     end
-    rt.startFingerprintsReady = nil
-    rt.fpTargetExists = nil
-    rt.fpTargetAPIExists = nil
-    rt.fpCastStartChangeTarget = nil
-    rt.fpTargetClearOnCastStart = nil
-    rt.fpTargetIsTank = nil
+    -- Mob-level effects of every non-duplicate START (4.4).
     if kind == "cast" then
         rt.sawCastStart = true
     else
         rt.sawChannelStart = true
     end
+    -- Pre-combat channel presence (4.2): read only on this START's own
+    -- combat read being a known false, and only where a trait uses it.
+    if kind == "channel" and inCombat == false and self:DungeonUsesPreCombatChannel() then
+        rt.sawPreCombatChannel = true
+    end
+    self:SyncActiveCast(rt)
     self:MarkEngaged(rt)  -- a cast IS engagement proof (the old reactive model's whole premise)
     -- One event read opportunity, before this START's one resolve pass.
     self:EventIdentityRead(rt)
 
     self:ResolveMob(rt)  -- behavior flag may prune candidates
+    -- An adoption in that pass moved this START's record with its owner; the
+    -- rest runs on the owner's current runtime (4.7).
+    rt = rt.owner.runtime
+    self:SyncActiveCast(rt)
+    if class ~= "normal" then return end
 
-    local seq = rt.activeCastSeq
+    local owner = rt.owner
     C_Timer.After(TARGET_SAMPLE_DELAY, function()
-        -- Runtime-IDENTITY gate on rt.unit (not the captured token): a
-        -- TrashCache restore inside the sample window re-points rt.unit to
-        -- the new plate token, and the sampler must follow the mob. Samplers
-        -- ride the runtime object, never a captured token, for that reason.
-        local r = self.tracked[rt.unit]
-        if r ~= rt then
-            -- Flicker-gap exception — pending state rides the cache snapshot
-            -- and is consumed after restore, so a runtime pending
-            -- cache recovery stays consumable. The unit reads are SKIPPED —
-            -- the old token may be empty or already recycled to another mob,
-            -- and nil fingerprints are lenient — but the fingerprint wait
-            -- completes so the pending start-advance can't be permanently
-            -- poisoned by a 0.10s plate blink.
-            if rt._cachePending == true and rt.activeCastSeq == seq then
-                rt.startFingerprintsReady = true
-                self:ApplyPendingStartAdvance(rt)
-            end
-            return
-        end
-        if rt.activeCastSeq ~= seq then return end  -- stale-cast guard
-        r.fpTargetExists = safeBool(UnitExists, rt.unit .. "target")
+        -- Start-phase work, bound to its owner and record (4.4): refused once a
+        -- later START replaced the record or the plate generation ended. It
+        -- acts on the owner's current runtime, which follows an adoption.
+        if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "start") then return end
+        local r = owner.runtime
+        local fp = rec.fingerprints
+        fp.targetExists = safeBool(UnitExists, r.unit .. "target")
         if UnitShouldDisplaySpellTargetName then
-            r.fpTargetAPIExists = safeBool(UnitShouldDisplaySpellTargetName, rt.unit)
+            fp.targetAPIExists = safeBool(UnitShouldDisplaySpellTargetName, r.unit)
         end
         -- targetIsTank (dormant fingerprint, mapped for future data): the
         -- mob's target is a PLAYER unit, whose role is plain — still guarded.
-        local okRole, role = pcall(UnitGroupRolesAssigned, rt.unit .. "target")
+        local okRole, role = pcall(UnitGroupRolesAssigned, r.unit .. "target")
         if okRole and canaccessvalue(role) and type(role) == "string" then
-            r.fpTargetIsTank = (role == "TANK")
+            fp.targetIsTank = (role == "TANK")
         end
         -- Scan the target rings ± the window around the ANCHORED start — the
         -- switch and clear-transition lookups both run in this same +0.10s
         -- snapshot, window = startAt ± 0.10.
-        local startAt = r.activeCastStartAt
-        if startAt then
-            r.fpCastStartChangeTarget = hasEventInWindow(r.targetSwitchEvents,
-                startAt - TARGET_SAMPLE_DELAY, startAt + TARGET_SAMPLE_DELAY)
-            r.fpTargetClearOnCastStart = hasEventInWindow(r.targetClearEvents,
-                startAt - TARGET_SAMPLE_DELAY, startAt + TARGET_SAMPLE_DELAY)
-        end
-        -- Start fingerprints are now as sampled as they will get: the pending
-        -- CAST_START start-advance may consume them (no-op until resolved).
-        r.startFingerprintsReady = true
+        fp.castStartChangeTarget = hasEventInWindow(r.targetSwitchEvents,
+            rec.startAt - TARGET_SAMPLE_DELAY, rec.startAt + TARGET_SAMPLE_DELAY)
+        fp.targetClearOnCastStart = hasEventInWindow(r.targetClearEvents,
+            rec.startAt - TARGET_SAMPLE_DELAY, rec.startAt + TARGET_SAMPLE_DELAY)
+        -- Start fingerprints are now as sampled as they will get; the advance
+        -- this record armed carries the same samples.
+        rec.fingerprintsReady = true
+        local adv = r.castState.pendingAdvance
+        if adv and adv.record == rec then adv.fingerprintsReady = true end
+        self:SyncActiveCast(r)
         self:ApplyPendingStartAdvance(r)
     end)
 
@@ -1423,32 +1451,28 @@ function DTrash:OnCastFailed(_, unit, _castGUID, _spellID, castBarID)
     self:MarkCastInterrupted(unit, castBarID, true)
 end
 
--- Shared interrupt-shaped lifecycle teardown (INTERRUPTED / FAILED /
--- FAILED_QUIET). The teardown only applies when the event CORRELATES with the
--- active castbar: INTERRUPTED is known to
--- double-fire, and a late event for a PREVIOUS castbar arriving after a new
--- START would otherwise kill the live cast — its FinishCast then early-returns
--- and that cast's alert is silently lost. A mismatched INTERRUPTED still
--- counts as interrupt evidence (the flag prunes cannotInterrupt candidates
--- either way); castFailed events tear down without testifying (see
--- OnCastFailed for the documented deviation).
+-- Shared interrupt-shaped lifecycle end (INTERRUPTED / FAILED /
+-- FAILED_QUIET). Only an event correlating with the latest observation ends
+-- it (4.4): INTERRUPTED is known to double-fire, and a late event for a
+-- PREVIOUS castbar arriving after a new START must not kill the live cast.
+-- A refused event only voids an open cast's implied stop. Any INTERRUPTED,
+-- correlated or not, latches kick evidence (the flag prunes cannotInterrupt
+-- candidates either way); FAILED events latch nothing (see OnCastFailed for
+-- the documented deviation).
 function DTrash:MarkCastInterrupted(unit, castBarID, castFailed)
     unit = normalizeNameplate(unit)
     local rt = unit and self.tracked[unit]
-    if not rt then return end
-    if not castFailed then rt.sawInterrupted = true end
+    if not (rt and rt.castState) then return end
+    -- The kind matters only for a STOP; an interrupt or failure correlates on
+    -- the bar ID alone.
+    local _, latch = TI.ClassifyEnd(rt.castState, nil, safeCastBarID(castBarID),
+        castFailed and "failed" or "interrupted", GetTime())
+    if latch then rt.sawInterrupted = true end
     -- Interrupt evidence IS engagement evidence: engagedAt is stamped on the
     -- first sawInterrupted observation — before ResolveMob below
     -- so a resolution there can seed first-cast timers immediately.
     self:MarkEngaged(rt)
-    if activeCastMatches(rt, safeCastBarID(castBarID)) then
-        rt.activeCastKind = nil
-        -- A kick/failure ends the active cast lifecycle, so any armed cast→
-        -- channel pairing died with it: the interrupted cast/channel can no
-        -- longer be the armed cast's immediate follow-up. Transition state
-        -- clears on every resolution, interrupts included.
-        rt.transitionCastStartAt = nil
-    end
+    self:SyncActiveCast(rt)
     self:ResolveMob(rt)  -- interrupt flag prunes cannotInterrupt candidates now
 end
 
@@ -1731,61 +1755,30 @@ function DTrash:ReArmFromAnchors(rt, withPredictions, now)
     end
 end
 
--- Consume a pending CAST_START start-advance: anchor every start-advance-owned
--- spell matching the observed start's kind + sampled fingerprints at the
--- observed START. Interrupts EXPLICITLY cannot cancel it: success-mode
--- inference returns nil for CAST_START, so start-advance is their only
--- anchor path. Without this a KICKED CAST_START ability never re-armed its
--- next-cast countdown, and 5 of the 6 shipped CAST_START spells are exactly
--- the long interrupt-priority channels groups always kick (Pulsing Shriek,
--- Plungegrip, Fire Spit, Arcane Salvo, Shredding Talons). Gated on
--- resolution + the sampled fingerprints; consumed on the first MATCHING
--- resolution (retained otherwise — see the consume-on-match note below);
--- a new start re-arms.
--- (The interrupted-channel advance is deliberately absent: it is gated on
--- cdOnInterruptedChannel-family flags that ZERO data rows carry.)
+-- Consume the pending CAST_START start advance: anchor the one
+-- start-advance-owned spell its observed START matches, at that START.
+-- Interrupts EXPLICITLY cannot cancel it: success-mode inference returns nil
+-- for CAST_START, so start-advance is their only anchor path. It is gated on
+-- resolution and on its own carried samples, only where the mob needs them
+-- (4.4); a cached advance never borrows fresh samples. Exactly one match
+-- anchors (4.5). None or several keep it until a later pass, the next
+-- eligible START, or an unowned START that cancels it.
 function DTrash:ApplyPendingStartAdvance(rt)
-    local startAt = rt.pendingStartAdvanceAt
-    if not (startAt and rt.matchedNPCID) then return end
+    local cs = rt.castState
+    local adv = cs and cs.pendingAdvance
+    if not (adv and rt.matchedNPCID) then return end
     local mob = self:MobData(rt.matchedNPCID)
     if not (mob and mob.spells) then return end
-    -- The +0.10s fingerprint wait is NEEDS-BASED — a wait exists only for
-    -- spells that curate a fingerprint: the sampler is the sole
-    -- writer of startFingerprintsReady, so gating unconditionally let a plate
-    -- blink inside the sample window strand the pending forever — no cd bar
-    -- until a full cycle later, on mobs (e.g. Devoted Woebringer) whose
-    -- spells curate zero start fingerprints and never needed the wait.
-    if not rt.startFingerprintsReady then
-        if TI.NeedsStartFingerprints(mob) then return end
-    end
-    local kind = rt.pendingStartAdvanceKind
-    local fingerprints = {
-        targetExists = rt.fpTargetExists,
-        targetAPIExists = rt.fpTargetAPIExists,
-        castStartChangeTarget = rt.fpCastStartChangeTarget,
-        targetClearOnCastStart = rt.fpTargetClearOnCastStart,
-        targetIsTank = rt.fpTargetIsTank,
-    }
-    local now = GetTime()
-    -- Consume ON MATCH, not unconditionally: the pending start
-    -- is retained while its fingerprint needs are unresolved and re-applied
-    -- per resolution pass. Under a stale locked identity whose spells all
-    -- reject the observed start, the pending must survive to the Layer2 flip
-    -- that names the true consumer — FinishCast re-applies it right after
-    -- the flip. Retention is bounded: the next BeginCast re-arms
-    -- (overwrites) the pending and a paired transition clears it, so a
-    -- never-matching start can outlive its cast by at most one lifecycle —
-    -- the same window the kick-survival behavior already keeps it for.
-    local consumed = false
-    for spellID, spellData in pairs(mob.spells) do
-        if TI.MatchesObservedCastStart(spellData, kind, fingerprints) then
-            consumed = true
-            self:EmitCastResolution(rt, mob, spellID, startAt, startAt, now, kind, nil)
-        end
-    end
-    if consumed then
-        rt.pendingStartAdvanceAt, rt.pendingStartAdvanceKind = nil, nil
-    end
+    if not TI.PendingAdvanceReady(adv, TI.NeedsStartFingerprints(mob)) then return end
+    -- A fresh advance selects by its record's opening order; a cached one
+    -- carries none (4.7).
+    local order = (adv.provenance == "fresh" and adv.record and adv.record.order) or nil
+    local spellID = TI.SelectStartAdvance(mob, adv.kind, adv.fingerprints or {}, order,
+        adv.targetState, TI.ABSENT_MATCHES_FALSE)
+    if not spellID then return end
+    cs.pendingAdvance = nil
+    self:SyncActiveCast(rt)
+    self:EmitCastResolution(rt, mob, spellID, adv.at, adv.at, GetTime(), adv.kind, nil)
 end
 
 -- Forced cast-sequence pick, curated per mob in TrashCurated.lua's
@@ -1807,34 +1800,35 @@ local function resolveForcedCastSpell(rt, mob)
     return rt._forcedCastSpellID
 end
 
+-- Records that still own delayed cast work (4.7): a record joins when a
+-- post-end read or a twin hold is queued for it, and leaves through
+-- TI.ReleaseIdleWork once that work lands or is canceled, or at retirement.
+local function trackWork(cs, rec)
+    for _, r in ipairs(cs.records) do
+        if r == rec then return end
+    end
+    cs.records[#cs.records + 1] = rec
+end
+
 -- Cast completed successfully → Layer2 (narrow candidates + infer the spell)
 -- → calibrate the cd schedule → emit the alert.
 function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     unit = normalizeNameplate(unit)
     local rt = unit and self.tracked[unit]
-    if not rt or rt.activeCastKind ~= kind or not rt.activeCastStartAt then return end
-    -- Stale-stop rejection, applied at every stop sink: a stop whose
-    -- castBarID doesn't correlate with the
-    -- ACTIVE castbar is a late/duplicate event for a previous castbar.
-    -- Consuming it would mis-measure the live cast, and around the
-    -- interruptible channel refresh the OLD bar's stop would end the continued
-    -- channel mid-flight. Correlation rule lives in activeCastMatches.
-    if not activeCastMatches(rt, safeCastBarID(castBarID)) then return end
-
+    if not (rt and rt.castState) then return end
+    local rec = rt.castState.latest
     local now = GetTime()
-    local duration = now - rt.activeCastStartAt
-    local startAt = rt.activeCastStartAt
-    local activeBarID = safeCastBarID(rt.activeCastBarID)
-    rt.activeCastKind = nil
-    -- Consume the proven cast→channel transition exactly ONCE: it pairs only
-    -- with the channel BeginCast armed it for. Kicked, unmatched or absent,
-    -- the pairing is spent either way — left set, a LATER unrelated channel
-    -- would anchor tens of seconds in the past.
-    local transitionStartAt
-    if kind == "channel" then
-        transitionStartAt = rt.transitionCastStartAt
-        rt.transitionCastStartAt = nil
-    end
+    -- Only the latest observation's own correlated end ends anything (4.4):
+    -- a refused STOP voids only an open cast's implied stop, and a baseline
+    -- close or a withheld end has no cast-level effect.
+    local outcome = TI.ClassifyEnd(rt.castState, kind, safeCastBarID(castBarID), "stop", now)
+    self:SyncActiveCast(rt)
+    if outcome ~= "correlated" then return end
+
+    local startAt = rec.startAt
+    local duration = now - startAt
+    -- A proven transition belongs to its channel record and is spent with it.
+    local transitionStartAt = (kind == "channel" and rec.transitionCastStartAt) or nil
     if interrupted then
         -- interruptedBy presence ends the channel WITHOUT a success credit,
         -- but it is NOT Layer1 kick evidence: the channel-stop feeds only the
@@ -1846,31 +1840,16 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         -- reverted (see OnCastFailed).
         return
     end
-    if kind == "cast" then
-        -- Pairing bookkeeping for the castBarID +1 transition proof: these
-        -- fields describe the just-finished cast; BeginCast consumes them
-        -- (paired or not) on the next start for this unit.
-        rt.lastCastBarID = activeBarID
-        rt.lastCastStartAt = startAt
-        rt.lastCastEndAt = now
-    end
 
-    -- Channel-evidence discriminator input: TRUE
-    -- = this channel's cast→channel transition was PROVEN (two-phase spells
-    -- only). NEVER false. Affirming a transition's ABSENCE would need an
-    -- unbounded pairing window; the proof here rides a deliberate 0.25s pairing
-    -- window + strict castBarID+1 — a missed pairing (latency; hidden castbar
-    -- instances bumping the counter, e.g. per-player tether applications) is
-    -- indistinguishable from a genuine bare channel. A false "false" hard-
-    -- rejected Chains of Subjugation's channel every time the pairing missed
-    -- (field-verified: [cast,channel] runtimes without the cast>channel
-    -- bit, chains predictions overdue then grace-pruned). Unproven stays nil
-    -- → lenient.
+    -- Channel-evidence discriminator input: TRUE = this channel's
+    -- cast→channel transition was PROVEN (two-phase spells only). NEVER
+    -- false: a missed proof is indistinguishable from a genuine bare channel,
+    -- and a false "false" hard-rejected Chains of Subjugation's channel every
+    -- time the pairing missed. Unproven stays nil → lenient.
     local castIntoChannel
-    if kind == "channel" and transitionStartAt then
-        castIntoChannel = true
-    end
+    if transitionStartAt then castIntoChannel = true end
 
+    local fp = rec.fingerprints or {}
     local observed = {
         kind = kind,
         duration = duration,
@@ -1880,12 +1859,15 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         -- back to first-seen when no combat evidence was ever observed.
         engagedAt = rt.engagedAt or rt.firstSeenAt,
         castIntoChannel = castIntoChannel,
+        -- This record's opening order selects rows within the mob (4.6).
+        order = rec.order,
+        targetState = rec.targetState,
         fingerprints = {
-            targetExists = rt.fpTargetExists,
-            targetAPIExists = rt.fpTargetAPIExists,
-            castStartChangeTarget = rt.fpCastStartChangeTarget,
-            targetClearOnCastStart = rt.fpTargetClearOnCastStart,
-            targetIsTank = rt.fpTargetIsTank,
+            targetExists = fp.targetExists,
+            targetAPIExists = fp.targetAPIExists,
+            castStartChangeTarget = fp.castStartChangeTarget,
+            targetClearOnCastStart = fp.targetClearOnCastStart,
+            targetIsTank = fp.targetIsTank,
         },
     }
 
@@ -1919,32 +1901,16 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             -- TrashCache restore consult (mirrors ResolveMob's wiring): a
             -- level-disagreed mob's ONLY resolve path is this Layer2 confirm,
             -- so without a consult here flicker recovery was structurally
-            -- unreachable for exactly those mobs —
-            -- cached bars died at expiry and the fresh runtime enter-seeded
-            -- bogus first-cast countdowns mid-cycle. On adoption, THIS cast's
-            -- lifecycle moves onto the adopted table so the credit below (and
-            -- its deferred closures) ride the restored runtime exactly like a
-            -- pre-flicker cast would.
+            -- unreachable for exactly those mobs. The transfer moves this
+            -- record, now completed, with the fresh cast bundle (4.7), so the
+            -- credit below and its deferred work land on the adopted table.
             if rt.matchedNPCID == nil and not rt._cacheRestoredAt then
                 local adopted = self:TryRestoreCachedRuntime(rt, resolved)
                 if adopted then
-                    adopted.pendingStartAdvanceAt = rt.pendingStartAdvanceAt
-                    adopted.pendingStartAdvanceKind = rt.pendingStartAdvanceKind
-                    adopted.startFingerprintsReady = rt.startFingerprintsReady
-                    adopted.fpTargetExists = rt.fpTargetExists
-                    adopted.fpTargetAPIExists = rt.fpTargetAPIExists
-                    adopted.fpCastStartChangeTarget = rt.fpCastStartChangeTarget
-                    adopted.fpTargetClearOnCastStart = rt.fpTargetClearOnCastStart
-                    adopted.fpTargetIsTank = rt.fpTargetIsTank
-                    adopted.lastCastBarID = rt.lastCastBarID
-                    adopted.lastCastStartAt = rt.lastCastStartAt
-                    adopted.lastCastEndAt = rt.lastCastEndAt
-                    -- A fresh seq on the adopted timeline: the forced-sequence
-                    -- resolver advances per NEW cast seq, and the virgin
-                    -- runtime's counter could collide with the adopted one's.
-                    adopted.activeCastSeq = (adopted.activeCastSeq or 0) + 1
-                    -- Schedule proximity should score against the adopted
-                    -- runtime's real engage history, not the post-flicker one.
+                    -- A restore makes the order unknown (4.6). Schedule
+                    -- proximity scores against the adopted runtime's real
+                    -- engage history, not the post-flicker one.
+                    observed.order = nil
                     observed.engagedAt = adopted.engagedAt or adopted.firstSeenAt or observed.engagedAt
                     rt = adopted
                 end
@@ -1986,6 +1952,10 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     -- always applies ahead of pending-finish.
     self:ApplyPendingStartAdvance(rt)
 
+    -- Delayed work below is bound to the generation owner and this record
+    -- (4.4): a removed plate's held or deferred credit is lost, and each
+    -- callback acts on the owner's current runtime.
+    local owner = rt.owner
     if kind == "channel" then
         -- Success-side self-buff-count delta rides the CHANNEL stop too — it
         -- is sampled on both kinds; without this, the strict
@@ -1995,26 +1965,25 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             local beforeCount = safeBuffCount(unit)
             local creditNpcID = rt.matchedNPCID
             dprint(unit .. ": channel credit deferred for self buff-count delta")
+            rec.postEnd = true
+            trackWork(rt.castState, rec)
             C_Timer.After(TARGET_SAMPLE_DELAY, function()
-                -- Flicker-gap exception (mirrors the sampler): a runtime
-                -- pending cache recovery still consumes its earned credit —
-                -- but never samples the old token (it may host another mob);
-                -- the unsampled delta strictly rejects delta-curating spells.
-                local live = self.tracked[rt.unit] == rt
-                if not live and rt._cachePending ~= true then return end
+                if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "postEnd") then return end
+                rec.postEnd = nil
+                local r = owner.runtime
+                TI.ReleaseIdleWork(r.castState)
                 -- A deferred credit lands only under the identity that earned
-                -- it: a candidate change wipes pending success state before
-                -- consumption. A contradiction-drop or identity flip
-                -- inside the window otherwise re-arms the discredited npcID's
-                -- anchors and alerts right after resetResolvedOutput swept them.
-                if rt.matchedNPCID ~= creditNpcID then return end
-                if live and beforeCount ~= nil then
-                    local after = safeBuffCount(rt.unit)
+                -- it: a contradiction-drop or identity flip inside the window
+                -- otherwise re-arms the discredited npcID's anchors and alerts
+                -- right after resetResolvedOutput swept them.
+                if r.matchedNPCID ~= creditNpcID then return end
+                if beforeCount ~= nil then
+                    local after = safeBuffCount(r.unit)
                     if type(after) == "number" then
                         observed.selfBuffCountDelta = after - beforeCount
                     end
                 end
-                creditFinishedChannel(self, rt, mob, observed, startAt, transitionStartAt)
+                creditFinishedChannel(self, r, mob, observed, startAt, transitionStartAt)
             end)
             return
         end
@@ -2024,7 +1993,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
 
     -- Forced-sequence pick is resolved NOW, not inside the deferred credit:
     -- the hold/delta closures fire a window later, when a NEW start may
-    -- already have bumped activeCastSeq past this cast's.
+    -- already have moved the active cast sequence past this cast's.
     observed.forcedSpellID = resolveForcedCastSpell(rt, mob)
 
     -- Bare cast finished. Two reasons can defer the credit:
@@ -2036,34 +2005,27 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
     --   offset, so the raw count is safe.
     --
     -- • Two-phase ambiguity hold: when this duration ALSO fits one of the
-    --   mob's TWO-PHASE spells, a +1 channel start about to arrive would
-    --   prove this was the two-phase cast phase, and an immediate one-phase
-    --   credit would be a phantom double-fire (4 curated mobs carry such a
-    --   same-duration twin). Hold for one pairing window and discard if the
-    --   pairing claims this cast. Holding only for fingerprint sampling would
-    --   eagerly double-credit on mobs without fingerprint needs, so the hold
-    --   is gated on the actual ambiguity and the phantom twin alert never
-    --   fires. The discard itself is ordinary: a paired transition silently
-    --   drops the cast phase's pending success.
+    --   mob's TWO-PHASE spells, a proven channel phase about to arrive would
+    --   show this was the two-phase cast phase, and an immediate one-phase
+    --   credit would be a phantom double-fire. Hold for one pairing window
+    --   and discard if a proof marks this cast paired. An unowned channel
+    --   START cancels the hold (4.4).
     local needsSelfDelta = TI.NeedsSelfBuffCountDelta(mob, "cast")
     local holdForTwin = TI.MatchesTwoPhaseCast(mob, observed)
     if not (needsSelfDelta or holdForTwin) then
         creditFinishedCast(self, rt, mob, observed, startAt, now)
         return
     end
-    -- Deferred gates below key on RUNTIME IDENTITY at rt.unit (re-read at fire
-    -- time), not the captured token: a TrashCache restore inside the 0.10-0.25s
-    -- hold re-points rt.unit to the new plate, and the credit must follow the
-    -- mob through the flicker: the pending-cast state lives on the runtime
-    -- table and survives its rebind.
     local beforeCount = needsSelfDelta and safeBuffCount(unit) or nil
-    -- A deferred credit lands only under the identity that earned it: a
-    -- candidate change wipes pending success state before consumption.
-    -- Checked at fire time in both closures below.
+    -- A deferred credit lands only under the identity that earned it.
     local creditNpcID = rt.matchedNPCID
-    local function sampleSelfDelta()
+    rec.postEnd = needsSelfDelta or nil
+    rec.twinHold = holdForTwin or nil
+    trackWork(rt.castState, rec)
+    local function sampleSelfDelta(r)
+        rec.postEnd = nil
         if beforeCount == nil then return end
-        local after = safeBuffCount(rt.unit)
+        local after = safeBuffCount(r.unit)
         if type(after) == "number" then
             observed.selfBuffCountDelta = after - beforeCount
         end
@@ -2074,27 +2036,34 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             -- Sample at the same +0.10s as every other fingerprint even though
             -- the credit itself waits out the longer pairing window.
             C_Timer.After(TARGET_SAMPLE_DELAY, function()
-                if self.tracked[rt.unit] == rt then sampleSelfDelta() end
+                if TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "postEnd") then
+                    sampleSelfDelta(owner.runtime)
+                    -- A withheld channel may have canceled the hold already.
+                    TI.ReleaseIdleWork(owner.runtime.castState)
+                end
             end)
         end
         C_Timer.After(TRANSITION_PAIR_WINDOW, function()
-            -- Flicker-gap exception: a hold maturing while the plate is
-            -- cache-pending still consumes, because pending casts ride the
-            -- cache snapshot; the expiry sweep owns the cancel otherwise.
-            if self.tracked[rt.unit] ~= rt and rt._cachePending ~= true then return end
-            if rt.matchedNPCID ~= creditNpcID then return end
-            if rt.transitionPairedStartAt == startAt then return end  -- proven two-phase; phantom discarded
-            creditFinishedCast(self, rt, mob, observed, startAt, now)
+            if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "twinHold") then return end
+            rec.twinHold = nil
+            local r = owner.runtime
+            TI.ReleaseIdleWork(r.castState)
+            -- A credit waiting on a canceled post-end read is canceled too.
+            if rec.postEnd == "canceled" then return end
+            if r.matchedNPCID ~= creditNpcID then return end
+            if rec.paired then return end  -- proven two-phase; phantom discarded
+            creditFinishedCast(self, r, mob, observed, startAt, now)
         end)
         return
     end
     dprint(unit .. ": credit deferred for self buff-count delta")
     C_Timer.After(TARGET_SAMPLE_DELAY, function()
-        local live = self.tracked[rt.unit] == rt
-        if not live and rt._cachePending ~= true then return end
-        if rt.matchedNPCID ~= creditNpcID then return end
-        if live then sampleSelfDelta() end
-        creditFinishedCast(self, rt, mob, observed, startAt, now)
+        if not TI.CastCallbackHolds(owner, self.tracked, self.monitoring, rec, "postEnd") then return end
+        local r = owner.runtime
+        sampleSelfDelta(r)
+        TI.ReleaseIdleWork(r.castState)
+        if r.matchedNPCID ~= creditNpcID then return end
+        creditFinishedCast(self, r, mob, observed, startAt, now)
     end)
 end
 
