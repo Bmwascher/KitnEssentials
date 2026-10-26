@@ -1154,9 +1154,14 @@ end
 local zeroDuration
 
 -- The engine drains (dark) or fills (class color) the bar from a plain start
--- and duration; no Lua runs per frame for the fill.
+-- and duration; no Lua runs per frame for the fill. One duration object per
+-- bar, set again for each kick.
 function KT:StartBarTimer(bar, startTime, duration)
-    local d = C_DurationUtil.CreateDuration()
+    local d = bar.timerDuration
+    if not d then
+        d = C_DurationUtil.CreateDuration()
+        bar.timerDuration = d
+    end
     d:SetTimeFromStart(startTime, duration)
     local direction = (self.db.ColorMode == "dark") and Enum.StatusBarTimerDirection.RemainingTime
         or Enum.StatusBarTimerDirection.ElapsedTime
