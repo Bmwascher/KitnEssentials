@@ -182,18 +182,28 @@ local function commandOk(cmd)
     return lines
 end
 
-local function refreshStop(msg)
-    print("[file-map] " .. msg)
-    os.exit(1)
+local function winPath(path) return (path:gsub("/", "\\")) end
+
+-- A --refresh run keeps its scratch files in a folder of its own beside the
+-- map; it is removed on every exit after it exists.
+local runDir
+local function refreshExit(code, msg)
+    if msg then print("[file-map] " .. msg) end
+    if runDir then
+        commandLines("rmdir /s /q \"" .. winPath(runDir) .. "\" 2>nul")
+        if commandLines("if exist \"" .. winPath(runDir) .. "\" echo left")[1] == "left" then
+            print("[file-map] note: could not remove " .. runDir)
+        end
+    end
+    os.exit(code)
 end
 
 -- --refresh: the output path, the stamp, and an exit when the map is current.
-local runId
 -- The stamp the inputs give now: nil when git cannot say, which never
 -- matches. The hashes cover content, so a second edit to an already modified
--- file still changes it. Scratch files sit beside the map.
+-- file still changes it.
 local function inputStamp()
-    local scratch = outPath .. ".scratch" .. runId
+    local scratch = runDir .. "/scratch"
     local head = commandOk("git rev-parse HEAD")
     local edits = commandOk("git diff HEAD --binary -- " .. REFRESH_INPUTS .. " > \"" .. scratch
         .. "\" && git hash-object \"" .. scratch .. "\"")
@@ -212,30 +222,32 @@ local function inputStamp()
 end
 local stamp
 if refresh then
-    runId = os.time() .. tostring({}):gsub("%W", "")
     if not outPath then
         local gitDir = commandOk("git rev-parse --path-format=absolute --git-dir")
         local commonDir = commandOk("git rev-parse --path-format=absolute --git-common-dir")
         if not (gitDir and gitDir[1] and commonDir and commonDir[1]) then
-            refreshStop("git could not name this checkout's git dir, so the map's place is unknown")
+            refreshExit(1, "git could not name this checkout's git dir, so the map's place is unknown")
         end
         outPath = gitDir[1] ~= commonDir[1] and (gitDir[1] .. "/FILE-MAP.md") or "dev/docs/FILE-MAP.md"
-        -- dev/docs is gitignored, so a fresh clone lacks it.
-        if outPath == "dev/docs/FILE-MAP.md" and not fileExists(outPath) then
-            os.execute("mkdir \"dev\\docs\" 2>nul")
+    end
+    -- move /Y would put the map inside a folder named as the destination.
+    if commandLines("if exist \"" .. winPath(outPath) .. "\\*\" echo folder")[1] == "folder" then
+        refreshExit(1, outPath .. " is a folder; give --out a file path")
+    end
+    -- mkdir fails on an existing folder, so no two runs share one. It also
+    -- makes missing parents, such as the gitignored dev/docs of a fresh clone.
+    for n = 1, 20 do
+        local dir = outPath .. ".run" .. os.time() .. "-" .. n
+        if commandOk("mkdir \"" .. winPath(dir) .. "\" 2>nul") then
+            runDir = dir
+            break
         end
     end
-    local probe = outPath .. ".probe" .. runId
-    local wrote, err = writeFile(probe, "")
-    if not wrote then
-        refreshStop("cannot write beside " .. outPath .. " (does its folder exist?): " .. tostring(err))
-    end
-    os.remove(probe)
+    if not runDir then refreshExit(1, "cannot make a folder beside " .. outPath) end
     stamp = inputStamp()
     local current, tail = readFile(outPath), stamp and (STAMP_OPEN .. stamp .. STAMP_CLOSE)
     if tail and current and current:sub(-#tail) == tail then
-        print("[file-map] current: " .. outPath)
-        os.exit(0)
+        refreshExit(0, "current: " .. outPath)
     end
 end
 
@@ -1228,7 +1240,7 @@ local docText = table.concat(doc, "\n") .. "\n"
 if refresh then
     -- An input that changed during the scan leaves the map unstamped, so the
     -- next run rebuilds.
-    local tmp = outPath .. ".tmp" .. runId
+    local tmp = runDir .. "/map"
     local published, why, note = false, "self-check failed", ""
     if #failures == 0 then
         local text = docText
@@ -1243,8 +1255,8 @@ if refresh then
         if ok then
             -- move /Y replaces the map in one step and leaves it in place when
             -- the move fails; os.rename refuses an existing target on Windows.
-            local moved = commandLines("move /Y \"" .. tmp:gsub("/", "\\") .. "\" \""
-                .. outPath:gsub("/", "\\") .. "\" 2>&1 && echo " .. OK_MARK)
+            local moved = commandLines("move /Y \"" .. winPath(tmp) .. "\" \"" .. winPath(outPath)
+                .. "\" 2>&1 && echo " .. OK_MARK)
             ok = moved[#moved] == OK_MARK
             err = moved[1]
         end
@@ -1253,12 +1265,11 @@ if refresh then
     if published then
         print("[file-map] regenerated at " .. sha .. ": " .. outPath .. note)
     else
-        os.remove(tmp)
         local kept = fileExists(outPath) and "kept the previous map at " or "no map at "
         print("[file-map] " .. kept .. outPath .. "; this run did not publish: " .. tostring(why))
         for _, msg in ipairs(failures) do print("FAIL: " .. msg) end
     end
-    os.exit(published and 0 or 1)
+    refreshExit(published and 0 or 1)
 elseif outPath then
     if not writeFile(outPath, docText) then
         io.stderr:write("cannot write ", outPath, "\n")
