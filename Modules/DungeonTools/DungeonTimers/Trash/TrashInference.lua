@@ -1187,6 +1187,301 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
+-- ║  Cast ownership — START/end classes, counting window     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- Recorded departures per kind before a plate generation saturates. A design
+-- constant, not a client limit.
+TI.DEPARTED_ID_CAP = 128
+
+-- One cast state per plate generation (the runtime keeps it as
+-- rt.castState). recovery is "normal", "uncertain", "baseline", "closed" or
+-- "saturated"; history holds the departed bar IDs per kind; latest is the
+-- latest observation record; records lists the records that still own work.
+-- Bar IDs are compared only with ==, never used as keys or concatenated.
+function TI.NewCastState(owner)
+    return {
+        owner = owner,
+        recovery = "normal",
+        history = { cast = {}, channel = {} },
+        seq = 0,
+        seenFalse = false,
+        records = {},
+    }
+end
+
+-- Two bar tokens correlate only when both are present and equal.
+function TI.TokensCorrelate(a, b)
+    return a ~= nil and b ~= nil and a == b
+end
+
+-- Appends a departed bar ID to its kind's list. Returns "recorded", "none"
+-- for an absent ID, or "saturated" when the list already holds `capacity`
+-- IDs; a saturating departure is not recorded and nothing is evicted.
+function TI.RecordDeparture(history, kind, id, capacity)
+    if id == nil then return "none" end
+    local list = history[kind]
+    if #list >= (capacity or TI.DEPARTED_ID_CAP) then return "saturated" end
+    list[#list + 1] = id
+    return "recorded"
+end
+
+-- Saturation is terminal for the plate generation and keeps every window's
+-- order unknown.
+local function markSaturated(cs)
+    cs.recovery = "saturated"
+    if cs.window then cs.window.known = false end
+end
+
+-- An open observation stops being open. A present ID is a departure of its
+-- own kind; once saturated, nothing more is recorded.
+local function depart(cs, rec, capacity)
+    if not (rec and rec.open) then return end
+    rec.open = false
+    if rec.id == nil or cs.recovery == "saturated" then return end
+    if TI.RecordDeparture(cs.history, rec.kind, rec.id, capacity) == "saturated" then
+        markSaturated(cs)
+    end
+end
+
+-- The work list keeps only records whose delayed work is still pending
+-- (4.7): a record leaves once its post-end read and twin hold have landed
+-- or been canceled, or once it is retired.
+function TI.ReleaseIdleWork(cs)
+    local kept = {}
+    for _, rec in ipairs(cs.records) do
+        if (rec.postEnd == true or rec.twinHold == true) and not rec.retired then kept[#kept + 1] = rec end
+    end
+    cs.records = kept
+end
+
+local function cancelTwinHolds(cs)
+    for _, rec in ipairs(cs.records) do
+        if rec.twinHold == true then rec.twinHold = "canceled" end
+    end
+    TI.ReleaseIdleWork(cs)
+end
+
+-- An ID-less START cancels what it makes unattributable: the replaced
+-- observation's unfinished work and implied stop, earlier records' pending
+-- post-end reads (and the credit waiting on them), the fresh start advance
+-- the replaced observation armed, and, for a channel, pending twin holds.
+-- Played cues, applied anchors, immutable credit and a cached-provenance
+-- advance stay.
+local function cancelUnattributable(cs, kind, replaced)
+    if replaced and replaced.eligible then
+        replaced.canceled = true
+        replaced.impliedStopVoid = true
+    end
+    for _, rec in ipairs(cs.records) do
+        if rec.postEnd == true then rec.postEnd = "canceled" end
+    end
+    if kind == "channel" then cancelTwinHolds(cs) else TI.ReleaseIdleWork(cs) end
+    local adv = cs.pendingAdvance
+    if adv and adv.provenance == "fresh" and adv.record == replaced and not adv.consumed then
+        cs.pendingAdvance = nil
+    end
+end
+
+-- Classifies one START and applies it before any cast effect. Classes, in
+-- check order: "duplicate" (a present ID equal to the open observation's or
+-- to a departed ID of the same kind, in every state), "withheld" (saturated),
+-- "refresh" (`refreshOpen`: the latest observation is an open eligible
+-- channel inside its refresh window), "unowned" (no usable ID), "baseline"
+-- (uncertain or baseline state) and "normal". Every class but a duplicate
+-- departs the open observation first, so that departure can saturate before
+-- the class is final. Returns the class and the new or continued record (nil
+-- for a duplicate).
+function TI.ClassifyStart(cs, kind, id, now, refreshOpen, capacity)
+    capacity = capacity or TI.DEPARTED_ID_CAP
+    local latest = cs.latest
+    if id ~= nil then
+        if latest and latest.open and latest.kind == kind and latest.id == id then
+            return "duplicate", nil
+        end
+        for _, departed in ipairs(cs.history[kind]) do
+            if departed == id then return "duplicate", nil end
+        end
+    end
+
+    local wasOpen = latest ~= nil and latest.open
+    depart(cs, latest, capacity)
+    local saturated = cs.recovery == "saturated"
+    if id ~= nil and not saturated and refreshOpen and wasOpen and latest.eligible
+        and latest.kind == "channel" and kind == "channel" then
+        latest.open = true
+        latest.id = id
+        return "refresh", latest
+    end
+
+    local rec = { kind = kind, id = id, startAt = now, open = true, owner = cs.owner, window = cs.window }
+    cs.latest = rec
+    if id == nil then
+        rec.class, rec.eligible = "unowned", false
+        cancelUnattributable(cs, kind, latest)
+        if not saturated then cs.recovery = "uncertain" end
+        if cs.window then cs.window.known = false end
+        return "unowned", rec
+    end
+    if saturated then
+        rec.class, rec.eligible = "withheld", false
+        if kind == "channel" then cancelTwinHolds(cs) end
+        return "withheld", rec
+    end
+    if cs.recovery == "uncertain" or cs.recovery == "baseline" then
+        rec.class, rec.eligible = "baseline", false
+        cs.recovery = "baseline"
+        if cs.window then cs.window.known = false end
+        return "baseline", rec
+    end
+    rec.class, rec.eligible = "normal", true
+    rec.orderPending = true
+    cs.recovery = "normal"
+    cs.seq = cs.seq + 1
+    rec.seq = cs.seq
+    return "normal", rec
+end
+
+-- Opening order for the record a normal START just created, decided once. A
+-- proven channel phase inherits its source's number without counting; any
+-- other normal START counts inside a window whose order is known. Refresh
+-- continuations and every other class get no new number.
+function TI.AssignOrder(cs, rec, provenSource)
+    if not (rec and rec.orderPending) then return rec and rec.order end
+    rec.orderPending = nil
+    if provenSource then
+        rec.order = provenSource.order
+        return rec.order
+    end
+    local w = cs.window
+    if w and w.known then
+        w.count = w.count + 1
+        rec.order = w.count
+    end
+    return rec.order
+end
+
+-- Decides one end event: `event` is "stop" (a STOP or CHANNEL_STOP of
+-- `kind`), "interrupted" or "failed" (FAILED and FAILED_QUIET). It correlates
+-- only with the open latest observation on an equal present ID, and a stop
+-- also needs the same kind. Returns the outcome and whether the event latches
+-- interrupt evidence, which only INTERRUPTED does, correlated or not:
+--   "correlated"     the open eligible observation ended (a stop credits);
+--   "baseline-close" recovery closes, or stays saturated if the departure
+--                    saturates; no cast-level effect;
+--   "withheld-end"   no cast-level effect;
+--   "refused"        nothing ends; an open cast loses only its implied stop,
+--                    and an open channel keeps a proven transition.
+function TI.ClassifyEnd(cs, kind, id, event, now, capacity)
+    local latch = event == "interrupted"
+    local rec = cs.latest
+    local correlated = rec ~= nil and rec.open and TI.TokensCorrelate(rec.id, id)
+        and (event ~= "stop" or rec.kind == kind)
+    if not correlated then
+        if rec and rec.open and rec.kind == "cast" then rec.impliedStopVoid = true end
+        return "refused", latch
+    end
+    rec.endedBy, rec.endAt = event, now
+    local class = rec.class
+    depart(cs, rec, capacity)
+    if class == "baseline" then
+        if cs.recovery ~= "saturated" then cs.recovery = "closed" end
+        return "baseline-close", latch
+    end
+    if class == "withheld" then return "withheld-end", latch end
+    return "correlated", latch
+end
+
+-- One counting-window edge from a known combat read; nil asserts nothing.
+-- true with no window open opens one, its order known only after a confirmed
+-- false read in this plate generation with recovery normal or closed. false
+-- records the exit and closes the window: its open observation (or an open
+-- baseline from before it) is retired as a departure, its records with work
+-- are retired, the pending advance armed in it is dropped, and the pairing
+-- state and armed transition clear. A retired baseline returns recovery to
+-- uncertain unless its departure saturates. Returns "opened", "closed" or nil.
+function TI.CombatWindowStep(cs, inCombat, capacity)
+    if inCombat == true then
+        if cs.window then return nil end
+        cs.window = { count = 0, known = cs.seenFalse == true
+            and (cs.recovery == "normal" or cs.recovery == "closed") }
+        return "opened"
+    end
+    if inCombat ~= false then return nil end
+    cs.seenFalse = true
+    local w = cs.window
+    if not w then return nil end
+    cs.window = nil
+    local latest = cs.latest
+    if latest and latest.open and (latest.window == w or latest.class == "baseline") then
+        local wasBaseline = latest.class == "baseline"
+        latest.retired = true
+        depart(cs, latest, capacity)
+        if wasBaseline and cs.recovery ~= "saturated" then cs.recovery = "uncertain" end
+    end
+    for _, rec in ipairs(cs.records) do
+        if rec.window == w then rec.retired = true end
+    end
+    local adv = cs.pendingAdvance
+    if adv and adv.record and adv.record.window == w then cs.pendingAdvance = nil end
+    cs.pairing, cs.transition = nil, nil
+    return "closed"
+end
+
+-- Delayed cast work for `rec`: "start" (sampler, target-evidence window),
+-- "cue", "postEnd", "twinHold" or "credit". Every kind needs the generation
+-- owner check, a record of that owner, and a record not retired. Start-phase
+-- work also needs an eligible, uncanceled record that is still the latest
+-- observation of the owner's current runtime, and the cue needs it open. A
+-- post-end read or a twin hold stops once canceled; immutable credit needs
+-- nothing more.
+function TI.CastCallbackHolds(owner, tracked, monitoring, rec, work)
+    if not TI.RecoveryOwnerHolds(owner, tracked, monitoring) then return false end
+    if type(rec) ~= "table" or rec.owner ~= owner or rec.retired then return false end
+    if work == "start" or work == "cue" then
+        local cs = owner.runtime.castState
+        if not (rec.eligible and not rec.canceled and cs and cs.latest == rec) then return false end
+        return work == "start" or rec.open == true
+    end
+    if work == "postEnd" then return rec.postEnd == true end
+    if work == "twinHold" then return rec.twinHold == true end
+    return work == "credit"
+end
+
+-- Whether a pending start advance may be consumed now, using only its own
+-- carried samples: start fingerprints when the mob needs them, and a final
+-- target state when its START needed one.
+function TI.PendingAdvanceReady(adv, needsFingerprints)
+    if type(adv) ~= "table" or adv.consumed then return false end
+    if needsFingerprints and adv.fingerprintsReady ~= true then return false end
+    if adv.targetNeeded and (adv.targetState == nil or adv.targetState == "pending") then
+        return false
+    end
+    return true
+end
+
+local function spellOfKind(spell, kind)
+    if kind == "channel" then return (tonumber(spell.channelTime) or 0) > 0 end
+    return (tonumber(spell.castTime) or 0) > 0 or type(spell.castTimeExtra) == "table"
+end
+
+-- Opening-order selection within one mob: the matching-kind rows carrying
+-- `order`; with a nil order, or no such row, the spells table unchanged.
+-- Order never narrows across NPCs.
+function TI.SelectOrderRows(spells, kind, order)
+    if type(spells) ~= "table" or order == nil then return spells end
+    local out, any = {}, false
+    for spellID, spell in pairs(spells) do
+        if spell.openingCastOrder == order and spellOfKind(spell, kind) then
+            out[spellID] = spell
+            any = true
+        end
+    end
+    if any then return out end
+    return spells
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
 -- ║  cd walk — next-cast prediction                          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
