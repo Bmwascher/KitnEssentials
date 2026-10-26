@@ -419,15 +419,18 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         local function snapshot(level)
             return { level = level, sex = 1, power = 1, classID = 2, buffCount = 0, unitClassification = "normal" }
         end
+        -- A cast row carrying targetHostile makes every eligible cast START of
+        -- this mob collect target evidence (4.5).
+        KE.TrashData[1].mobs[111].spells[10].targetHostile = false
         local rows = {
             { name = "early adoption, same token", site = "start", source = "nameplate1", fresh = "nameplate1",
-              id = 9, recovery = "normal", seq = 2, advance = 1, active = "cast" },
+              id = 9, recovery = "normal", seq = 2, advance = 1, active = "cast", target = "pending" },
             { name = "early adoption, different token, unowned START", site = "start", source = "nameplate2",
               fresh = "nameplate7", recovery = "uncertain", advance = 0 },
             { name = "late Layer 2 adoption, same token", site = "layer2", source = "nameplate3",
-              fresh = "nameplate3", id = 9, recovery = "normal", seq = 2, advance = 1 },
+              fresh = "nameplate3", id = 9, recovery = "normal", seq = 2, advance = 1, target = "unavailable" },
             { name = "late Layer 2 adoption, different token", site = "layer2", source = "nameplate4",
-              fresh = "nameplate8", id = 9, recovery = "normal", seq = 2, advance = 1 },
+              fresh = "nameplate8", id = 9, recovery = "normal", seq = 2, advance = 1, target = "unavailable" },
             { name = "another resolve caller with the sampler queued", site = "sweep", source = "nameplate5",
               fresh = "nameplate9", id = 9, recovery = "normal", seq = 2, advance = 1, active = "cast" },
         }
@@ -471,6 +474,9 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
             assert.equals(s.seq, rec.seq, s.name)
             assert.equals(t0 + s.advance, adopted.pendingStartAdvanceAt, s.name)
             assert.equals(s.active, adopted.activeCastKind, s.name)
+            -- A pending state stays pending with its moved record; one closed by
+            -- the record's correlated end is final and unchanged.
+            if s.target then assert.equals(s.target, rec.targetState, s.name) end
             if s.site == "sweep" then
                 DTrash.monitoring = true
                 for i = base + 1, #timers do timers[i].fn() end
@@ -666,7 +672,7 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         fireDue()
     end
 
-    it("the cast-start cue plays once per cast instance, one window after the start", function()
+    it("the cast-start cue plays once per observation record, one window after the start", function()
         local played = installCue()
         KE.TrashData[1].mobs[111].spells[10].castTime = 3
 
@@ -678,28 +684,38 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         assert.same({}, played)                              -- deferred: not yet
         fireCueWindow()
         assert.same({ "sound/Ding10" }, played)
-        DTrash:PlayObservedCastStartCue(rt, "cast")          -- re-entry, same instance
+        DTrash:PlayObservedCastStartCue(rt, rt.castState.latest)  -- re-entry, same record
         fireCueWindow()
-        assert.same({ "sound/Ding10" }, played)              -- once per activeCastSeq
+        assert.same({ "sound/Ding10" }, played)              -- once per record
         _G.PlaySoundFile = nil
     end)
 
-    it("the cast-start cue stays silent when two predictions tie within 0.05s", function()
-        local played = installCue()
+    -- Opening order selects rows within the mob before the tie test; a nil
+    -- order leaves the tie, and the cue stays silent.
+    it("the cast-start cue stays silent on a 0.05s tie unless the opening order separates it", function()
         local spells = KE.TrashData[1].mobs[111].spells
         spells[10].castTime = 3
-        spells[11] = { name = "Twin", castTime = 2, first = 5, cd = { 20 } }
-
-        DTrash:OnNameplateAdded(nil, "nameplate1")
-        local rt = DTrash.tracked.nameplate1
-        rt.matchedNPCID = 111
-        rt.anchors = {
-            [10] = { nextStartAt = clock.now },
-            [11] = { nextStartAt = clock.now + 0.03 },       -- inside the tie window
+        spells[10].openingCastOrder = 1
+        spells[11] = { name = "Twin", castTime = 2, first = 5, cd = { 20 }, openingCastOrder = 2 }
+        local rows = {
+            { order = nil, want = {} },                      -- ambiguous: no cue
+            { order = 1, want = { "sound/Ding10" } },        -- the ordered row plays
         }
-        DTrash:OnCastStart(nil, "nameplate1", nil, nil, 4)
-        fireCueWindow()
-        assert.same({}, played)                              -- ambiguous: no cue
+        for i, row in ipairs(rows) do
+            local played = installCue()
+            local unit = "nameplate" .. i
+            DTrash:OnNameplateAdded(nil, unit)
+            local rt = DTrash.tracked[unit]
+            rt.matchedNPCID = 111
+            rt.anchors = {
+                [10] = { nextStartAt = clock.now },
+                [11] = { nextStartAt = clock.now + 0.03 },   -- inside the tie window
+            }
+            DTrash:OnCastStart(nil, unit, nil, nil, 4)
+            rt.castState.latest.order = row.order            -- the record's opening order
+            fireCueWindow()
+            assert.same(row.want, played, "order " .. tostring(row.order))
+        end
         _G.PlaySoundFile = nil
     end)
 
@@ -774,6 +790,8 @@ describe("DungeonTrash — RekeyUnitAlerts destination-key collision (real Trash
         mock.install({ GetTime = function() return 100 end })
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
+        -- Trash.xml order: DungeonTrash and TrashOutput read TI constants at load.
+        helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashInference.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         DTrash = modules["DungeonTrash"]
