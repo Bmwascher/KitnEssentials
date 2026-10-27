@@ -847,7 +847,7 @@ local function RefeedLane(lane)
     end
 end
 
-local FeedRailCounts
+local FeedLaneCount
 
 -- Whether the lane's kicker is on cooldown now, by the engine's own clock.
 local function LaneCooling(lane, now)
@@ -863,14 +863,26 @@ local function MarkIndex(unit)
     return false, nil
 end
 
+-- A member's count in the engine's latest read (opaque), or nil.
+local function CountOf(member)
+    local totals = KT.meterBase and KT.meterBase.a
+    if not (member and totals) then return nil end
+    return totals[KT:GateSlotOf(member)]
+end
+
 -- Each lane for its kicker: picture, cooldown, the gate's range about their
--- marker, and the count gate fed the engine's latest read. Spare lanes hide.
--- Which lanes show is PlaceRail's.
+-- marker, and one count feed from the engine's latest read. A lane whose
+-- kicker changed starts whole, never showing the last kicker's count. Spare
+-- lanes hide. Which lanes show is PlaceRail's.
 local function DressRail(rail)
+    local now = GetTime()
     for i = 1, #P.kickers do
         local k, lane = P.kickers[i], rail.lanes[i]
         local member = KT.partyMembers[k.guid]
-        if lane.guid ~= k.guid then lane.cBase, lane.cCur = nil, nil end
+        if lane.guid ~= k.guid then
+            lane.cBase, lane.cCur = nil, nil
+            ResetWhole(lane.gateB, lane.fillB, lane.clipB)
+        end
         lane.guid = k.guid
         if member then
             PaintIcon(lane.icon, member)
@@ -878,7 +890,7 @@ local function DressRail(rail)
         end
         lane.floor = k.marker - RAIL_SPAN
         lane.gate:SetMinMaxValues(lane.floor, k.marker + RAIL_SPAN)
-        RefeedLane(lane)
+        if member then FeedLaneCount(lane, member, CountOf(member), now) end
         lane.icon:Show()
         lane.gate:Show()
     end
@@ -888,7 +900,6 @@ local function DressRail(rail)
         lane.clip:Hide()
         lane.gate:Hide()
     end
-    FeedRailCounts(rail, GetTime())
 end
 
 -- The plate's marker index into every lane's gate and both chains, each icon
@@ -1102,7 +1113,7 @@ end
 -- Fed past the member's current cooldown: against the oldest ghost still
 -- holding their cell, else whole at the count now. A read during the
 -- cooldown is skipped until KT:WakeAt's wake at its end.
-local function FeedLaneCount(lane, member, cur, T)
+FeedLaneCount = function(lane, member, cur, T)
     if cur == nil then
         lane.cBase, lane.cCur = nil, nil
         RefeedLane(lane)
@@ -1119,9 +1130,8 @@ local function FeedLaneCount(lane, member, cur, T)
 end
 
 -- A rail's lanes fed from the latest read (opaque, the engine's own current
--- totals): at each read, when the rail is made, and when a ghost comes or
--- goes, since the oldest ghost holding a member's cell gives their baseline.
-FeedRailCounts = function(rail, T)
+-- totals), at each read and at the wake.
+local function FeedRailCounts(rail, T)
     local totals = KT.meterBase and KT.meterBase.a
     if not totals then return end
     for i = 1, #P.kickers do
@@ -1685,7 +1695,10 @@ function KT:MakeGhost(T, unit, stamp)
     g.used, g.t, g.start, g.plate, g.stamp = n, T, T, unit, now
     g.seq = g.seq + 1
     P.ghosts[#P.ghosts + 1] = g
-    self:FeedLanes(T)
+    for k = 1, n do
+        local cell = g.cells[k]
+        if cell.after ~= nil then self:RailsCounts(cell.guid, cell.after, T) end
+    end
     local seq, gen, activation = g.seq, P.gen, self.activationID
     C_Timer.After(0, function()
         if self.activationID ~= activation or P.gen ~= gen or g.seq ~= seq then return end
@@ -1729,6 +1742,18 @@ function KT:PlaceGhost(g, unit)
     end)
 end
 
+-- A ghost leaving, out of P.ghosts by now: its members' lanes take their
+-- baselines from the ghosts left, with the counts of the latest read.
+local function LanesAfter(g)
+    if P.railCount == 0 then return end
+    local now = GetTime()
+    for k = 1, g.used do
+        local guid = g.cells[k].guid
+        local cur = CountOf(KT.partyMembers[guid])
+        if cur ~= nil then KT:RailsCounts(guid, cur, now) end
+    end
+end
+
 function KT:ReleaseGhost(g)
     if not g.t then return end
     local ghosts = P.ghosts
@@ -1739,13 +1764,13 @@ function KT:ReleaseGhost(g)
         end
     end
     local old = self:Unplace(g)
+    LanesAfter(g)
     local leftward = self.db.PlateSide == "LEFT"
     for k = 1, g.used do ParkCell(g.cells[k], leftward) end
     g.used, g.t, g.plate, g.mobGuid, g.stamp, g.endAt = 0, nil, nil, nil, nil, nil
     g.seq = g.seq + 1
     P.free.ghost[#P.free.ghost + 1] = g
     if old then self:LayoutPlate(old) end
-    self:FeedLanes(GetTime())
 end
 
 -- A sure kick of the member takes their cells out of every ghost that started
@@ -1778,7 +1803,10 @@ function KT:PlatesSupersede(guid, upto)
             end
         end
     end
-    if changed then self:FeedLanes(GetTime()) end
+    if changed then
+        local cur = CountOf(self.partyMembers[guid])
+        if cur ~= nil then self:RailsCounts(guid, cur, GetTime()) end
+    end
     return changed
 end
 
@@ -1893,7 +1921,8 @@ end
 
 -- A kicker's live icon came onto a plate (hidden) or left every plate: their
 -- lane on every rail follows, and each rail's plate is laid out again. A lane
--- back is fed against the ghosts that may hold their kick meanwhile.
+-- back is fed their count against the ghosts that may hold their kick
+-- meanwhile.
 function KT:RailsLiveHidden(guid, hidden)
     hidden = hidden == true
     if (P.liveHidden[guid] == true) == hidden then return end
@@ -1902,7 +1931,10 @@ function KT:RailsLiveHidden(guid, hidden)
     for unit, rail in pairs(P.rails) do
         if rail.placedHost then self:LayoutPlate(unit) end
     end
-    if not hidden then self:FeedLanes(GetTime()) end
+    if not hidden then
+        local cur = CountOf(self.partyMembers[guid])
+        if cur ~= nil then self:RailsCounts(guid, cur, GetTime()) end
+    end
 end
 
 -- One kicker's lane on every rail: their cooldown changed or their kick was
@@ -1921,7 +1953,18 @@ function KT:RailsKicker(guid)
     end
 end
 
--- Every lane's count gate fed again: a read, or a ghost made, superseded or gone.
+-- One member's lane on every rail fed their count as read at T: their live
+-- icon left every plate, or a ghost holding their cell came, went or lost it.
+function KT:RailsCounts(guid, cur, T)
+    local i, member = P.laneOf[guid], self.partyMembers[guid]
+    if not i or not member then return end
+    for _, rail in pairs(P.rails) do
+        local lane = rail.lanes[i]
+        if lane and lane.guid == guid then FeedLaneCount(lane, member, cur, T) end
+    end
+end
+
+-- Every lane's count gate fed again: a read, or the wake.
 function KT:FeedLanes(T)
     for _, rail in pairs(P.rails) do FeedRailCounts(rail, T) end
 end
