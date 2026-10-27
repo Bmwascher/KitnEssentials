@@ -691,6 +691,17 @@ local function LevelGhost(g, strata, level)
     end
 end
 
+-- A cell moved to index k takes that index's levels, so a later cell still
+-- draws over an earlier one. Its gates and step pairs keep the ghost's own
+-- level, which no index changes.
+local function LevelCell(g, cell, k)
+    local base = g:GetFrameLevel() + 1 + CELL_LEVELS * (k - 1)
+    cell.clip:SetFrameLevel(base)
+    cell.clipB:SetFrameLevel(base)
+    cell.icon:SetFrameLevel(base + 1)
+    cell.icon.cd:SetFrameLevel(base + 2)
+end
+
 -- The ghost alone: its chain rides it (ChainGhost).
 local function AnchorGhost(g, from, fromPoint, offset, leftward)
     g:ClearAllPoints()
@@ -1905,7 +1916,10 @@ function KT:PlatesSupersede(guid, upto)
                     ParkCell(cell, leftward)
                 else
                     kept = kept + 1
-                    g.cells[k], g.cells[kept] = g.cells[kept], cell
+                    if kept ~= k then
+                        g.cells[k], g.cells[kept] = g.cells[kept], cell
+                        LevelCell(g, cell, kept)
+                    end
                 end
             end
             if kept ~= g.used then
@@ -1915,10 +1929,7 @@ function KT:PlatesSupersede(guid, upto)
                     self:ReleaseGhost(g)
                 else
                     ChainGhost(g)
-                    if g.unit then
-                        LevelGhost(g, g:GetFrameStrata(), g:GetFrameLevel())
-                        self:LayoutPlate(g.unit)
-                    end
+                    if g.unit then self:LayoutPlate(g.unit) end
                 end
             end
         end
