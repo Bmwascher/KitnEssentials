@@ -111,7 +111,8 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local showBarsCheck = GUIFrame:CreateCheckbox(row1a, "Show Bars", {
         value = db.ShowBars ~= false,
-        tooltip = "The cooldown bars, and their box in Edit Mode. With this off the nameplate icons still show.",
+        tooltip = "The cooldown bars, and their box in Edit Mode." ..
+            (platesHeld and "" or " With this off the nameplate icons still show."),
         callback = function(checked) db.ShowBars = checked; ApplySettings(); RefreshStates() end,
     })
     row1a:AddWidget(showBarsCheck, 0.5)
