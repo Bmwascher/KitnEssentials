@@ -458,6 +458,7 @@ local function StyleLive(e)
     e.rowEnd:SetSize(1, cw)
     e.rowEnd:ClearAllPoints()
     e.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", e.endFill, e.endPoint, 0, 0)
+    e.styleGen = P.styleGen
 end
 
 -- The count gate and step pair fed as they last were, or whole while never
@@ -495,12 +496,15 @@ local ANCHOR = { live = AnchorLive, sample = AnchorLive }
 local REFEED = { live = RefeedLive, sample = RefeedLive }
 
 -- A kicker's live icon on a plate stands in for their lane on every rail.
+-- Stamped with its host and the style: a move that changes neither attaches
+-- nothing (KT:PutKickIcon).
 local function Attach(e, unit)
     local host, strata, level = HostOf(unit)
     if not host then return false end
     e:SetParent(host)
     Scaled(e)
     LEVEL[e.kind](e, strata, level)
+    e.placedHost, e.placedGen = host, P.styleGen
     e.unit = unit
     e:Show()
     if e.kind == "live" then KT:RailsLiveHidden(e.guid, true) end
@@ -520,6 +524,7 @@ local function Park(e)
     e:ClearAllPoints()
     e:SetParent(P.lift)
     e.unit = nil
+    e.placedHost, e.placedGen = nil, nil
     DropLink(e)
 end
 
@@ -552,6 +557,14 @@ local function BuildGhost()
     return g
 end
 
+local function SizeCell(g, cell, cw)
+    local pitch = cw + KT.db.PlateSpacing
+    SizeGate(cell.gate, g, cw)
+    SizeGate(cell.gateB, g, cw)
+    SizeStep(cell.stepA, pitch, cw)
+    SizeStep(cell.stepB, pitch, cw)
+end
+
 local function BuildCell(g)
     local cell = {}
     cell.gate, cell.fill = NewGate(g, true)
@@ -562,6 +575,8 @@ local function BuildCell(g)
     cell.icon = BuildIcon(cell.clipB)
     cell.icon:SetAllPoints(g)
     cell.stepA, cell.stepB = NewStep(g), NewStep(g)
+    -- Sized now: a ghost styled before this cell was built is not styled again.
+    SizeCell(g, cell, KT.db.PlateIconSize)
     return cell
 end
 
@@ -593,18 +608,16 @@ end
 local function StyleGhost(g)
     local db = KT.db
     local cw = db.PlateIconSize
-    local pitch = cw + db.PlateSpacing
     g:SetSize(cw, cw)
     g.rowEnd:SetSize(1, cw)
     for k = 1, #g.cells do
         local cell = g.cells[k]
         StyleIcon(cell.icon)
-        SizeGate(cell.gate, g, cw)
-        SizeGate(cell.gateB, g, cw)
-        SizeStep(cell.stepA, pitch, cw)
-        SizeStep(cell.stepB, pitch, cw)
+        cell.icon.styleGen = P.styleGen
+        SizeCell(g, cell, cw)
     end
     ChainGhost(g)
+    g.styleGen = P.styleGen
 end
 
 -- The reveal gate, the count gate and both step pairs. The first pair ends a
@@ -1471,8 +1484,10 @@ function KT:LayoutNow(unit, full)
     LayoutRow(unit)
 end
 
--- Out of its row or the waiting list, parked; returns the unit it left.
-function KT:Unplace(e)
+-- Out of its row or the waiting list, its link dropped; returns the unit it
+-- left. The frame keeps its parent and stays shown, so a move to another
+-- plate attaches it again only when its host or the style moved.
+local function TakeOff(e)
     local old
     if e.waiting then
         local waiting = P.waiting
@@ -1486,6 +1501,15 @@ function KT:Unplace(e)
     else
         old = RemoveFromRow(e)
     end
+    e:ClearAllPoints()
+    e.unit = nil
+    DropLink(e)
+    return old
+end
+
+-- Out of its row or the waiting list, parked; returns the unit it left.
+function KT:Unplace(e)
+    local old = TakeOff(e)
     Park(e)
     return old
 end
@@ -1533,34 +1557,43 @@ function KT:PlaceOwnCast(guid)
 end
 
 -- The kicker's single icon moves to the plate, or is made there; pend is the
--- placement that waited its frame.
+-- placement that waited its frame. A kick again on the same mob leaves the
+-- icon in its row; a move takes it off the old row and attaches it again only
+-- when its host or the style moved.
 function KT:PutKickIcon(guid, unit, pend)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
     if not C_NamePlate.GetNamePlateForUnit(unit) or not IsHostile(unit) then return end
     local e = P.live[guid]
-    local old
-    if e then
-        old = self:Unplace(e)
-    else
+    if not e then
         e = table_remove(P.free.live) or BuildLive()
         e.kind, e.guid = "live", guid
         P.live[guid] = e
     end
-    if not Attach(e, unit) then
-        self:ReleaseLive(guid)
-        if old then self:LayoutPlate(old) end
-        return
+    local old
+    local joins = e.unit ~= unit
+    if joins then
+        old = TakeOff(e)
+        if e.placedHost ~= HostOf(unit) or e.placedGen ~= P.styleGen then
+            if not Attach(e, unit) then
+                self:ReleaseLive(guid)
+                if old then self:LayoutPlate(old) end
+                return
+            end
+        else
+            e.unit = unit
+            self:RailsLiveHidden(guid, true)
+        end
     end
     e.mobGuid = KE:GetSafeUnitGUID(unit)
     e.start, e.kickAt = pend.at, pend.at
     e.cGen, e.cBase, e.cCur = pend.gen, pend.base, nil
     e.needBase = member.unit ~= "player" and pend.gen == nil
-    StyleLive(e)
+    if e.styleGen ~= P.styleGen then StyleLive(e) end
     RefeedLive(e)
     PaintIcon(e.icon, member)
     PaintCooldown(e.icon, member.kickStart, member.kickDuration)
-    AddToRow(e, unit)
+    if joins then AddToRow(e, unit) end
     if old and old ~= unit then self:LayoutPlate(old) end
     self:LayoutPlate(unit)
     FlushLayouts()
@@ -1802,10 +1835,14 @@ function KT:PlaceGhost(g, unit)
         return
     end
     g.mobGuid = KE:GetSafeUnitGUID(unit)
-    StyleGhost(g)
+    if g.styleGen ~= P.styleGen then StyleGhost(g) else ChainGhost(g) end
     PaintGhost(g)
     for k = 1, g.used do
         local cell = g.cells[k]
+        if cell.icon.styleGen ~= P.styleGen then
+            StyleIcon(cell.icon)
+            cell.icon.styleGen = P.styleGen
+        end
         PaintCooldown(cell.icon, cell.cdStart, cell.cdDur)
         cell.gate:Show()
         cell.gateB:Show()
@@ -1990,7 +2027,6 @@ function KT:RailsPlate(unit)
             self:ReleaseRail(rail)
             return
         end
-        rail.placedHost, rail.placedGen = host, P.styleGen
         if made then rail:Hide() end
     end
     rail.syncPending = true
@@ -2219,6 +2255,7 @@ function KT:PlatesRestyle()
     if not P.lift then return end
     if DEBUG_KTP then KE:Print("[KTP] PlatesRestyle preview=" .. tostring(self.isPreview)) end
     ReadScale()
+    P.styleGen = P.styleGen + 1
     for guid, e in pairs(P.live) do
         if e.unit then Attach(e, e.unit) else Scaled(e) end
         StyleLive(e)
@@ -2233,7 +2270,6 @@ function KT:PlatesRestyle()
         PaintGhost(g)
         FeedGhost(g)
     end
-    P.styleGen = P.styleGen + 1
     if self.isPreview then self:PlaceSamples() end
     for unit in pairs(P.rows) do self:LayoutPlate(unit) end
     self:RailsResync()
