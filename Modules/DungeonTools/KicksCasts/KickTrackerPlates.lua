@@ -440,6 +440,10 @@ local function BuildLive()
     return e
 end
 
+-- The step pair hangs from the icon's own inner edge, so it rides the icon
+-- wherever the row puts it. Its end is where the next element hangs and,
+-- for the target arrows, the row's end past this icon; endGen moves each
+-- time it is laid, so the element after it is anchored again.
 local function StyleLive(e)
     local db = KT.db
     local cw = db.PlateIconSize
@@ -447,13 +451,13 @@ local function StyleLive(e)
     StyleIcon(e.icon)
     SizeGate(e.gate, e, cw)
     SizeStep(e.step, cw + db.PlateSpacing, cw)
-    -- The row's end past this icon, for the target arrows: the step pair's
-    -- end, so it closes up with the icon.
     local leftward = db.PlateSide == "LEFT"
+    e.endFill, e.endPoint = AnchorStep(e.step, e, leftward and "RIGHT" or "LEFT", 0, leftward)
+    e.endOffset = 0
+    e.endGen = (e.endGen or 0) + 1
     e.rowEnd:SetSize(1, cw)
     e.rowEnd:ClearAllPoints()
-    e.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", leftward and e.step.stdFill or e.step.revFill,
-        leftward and "RIGHT" or "LEFT", 0, 0)
+    e.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", e.endFill, e.endPoint, 0, 0)
 end
 
 -- The count gate and step pair fed as they last were, or whole while never
@@ -480,11 +484,10 @@ local function LevelLive(e, strata, level)
     Level(e.icon.cd, strata, level + 3)
 end
 
+-- The icon alone: its step pair rides it (StyleLive).
 local function AnchorLive(e, from, fromPoint, offset, leftward)
     e:ClearAllPoints()
     e:SetPoint(leftward and "RIGHT" or "LEFT", from, fromPoint, offset, 0)
-    local endFill, endPoint = AnchorStep(e.step, from, fromPoint, offset, leftward)
-    return endFill, endPoint, 0
 end
 
 local LEVEL = { live = LevelLive, sample = LevelLive }
@@ -553,6 +556,31 @@ local function BuildCell(g)
     return cell
 end
 
+-- The cells' step pairs chained from the ghost's own inner edge, so the chain
+-- rides the ghost wherever the row puts it; a plain offset undoes their fixed
+-- length, so a ghost with no cell open takes no slot. Laid when the ghost is
+-- styled, placed or loses cells, never by a row layout; endGen moves each
+-- time, so the element after the ghost is anchored again.
+local function ChainGhost(g)
+    local leftward = KT.db.PlateSide == "LEFT"
+    local endFrom, endPoint = g, leftward and "RIGHT" or "LEFT"
+    for k = 1, #g.cells do
+        local cell = g.cells[k]
+        local on = k <= g.used
+        if on then
+            endFrom, endPoint = AnchorStep(cell.stepA, endFrom, endPoint, 0, leftward)
+            endFrom, endPoint = AnchorStep(cell.stepB, endFrom, endPoint, 0, leftward)
+        end
+        ShowStep(cell.stepA, on)
+        ShowStep(cell.stepB, on)
+    end
+    local undo = 2 * (KT.db.PlateIconSize + KT.db.PlateSpacing) * g.used
+    g.endFill, g.endPoint, g.endOffset = endFrom, endPoint, leftward and undo or -undo
+    g.rowEnd:ClearAllPoints()
+    g.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", endFrom, endPoint, g.endOffset, 0)
+    g.endGen = (g.endGen or 0) + 1
+end
+
 local function StyleGhost(g)
     local db = KT.db
     local cw = db.PlateIconSize
@@ -567,6 +595,7 @@ local function StyleGhost(g)
         SizeStep(cell.stepA, pitch, cw)
         SizeStep(cell.stepB, pitch, cw)
     end
+    ChainGhost(g)
 end
 
 -- The reveal gate, the count gate and both step pairs. The first pair ends a
@@ -640,27 +669,10 @@ local function LevelGhost(g, strata, level)
     end
 end
 
--- The cells' step pairs chained from the ghost's inner edge; a plain offset
--- undoes their fixed length, so a ghost with no cell open takes no slot.
+-- The ghost alone: its chain rides it (ChainGhost).
 local function AnchorGhost(g, from, fromPoint, offset, leftward)
     g:ClearAllPoints()
     g:SetPoint(leftward and "RIGHT" or "LEFT", from, fromPoint, offset, 0)
-    local endFrom, endPoint = g, leftward and "RIGHT" or "LEFT"
-    for k = 1, #g.cells do
-        local cell = g.cells[k]
-        local on = k <= g.used
-        if on then
-            endFrom, endPoint = AnchorStep(cell.stepA, endFrom, endPoint, 0, leftward)
-            endFrom, endPoint = AnchorStep(cell.stepB, endFrom, endPoint, 0, leftward)
-        end
-        ShowStep(cell.stepA, on)
-        ShowStep(cell.stepB, on)
-    end
-    local undo = 2 * (KT.db.PlateIconSize + KT.db.PlateSpacing) * g.used
-    local endOffset = leftward and undo or -undo
-    g.rowEnd:ClearAllPoints()
-    g.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", endFrom, endPoint, endOffset, 0)
-    return endFrom, endPoint, endOffset
 end
 
 LEVEL.ghost, ANCHOR.ghost, REFEED.ghost = LevelGhost, AnchorGhost, FeedGhost
@@ -1349,8 +1361,8 @@ local function LayoutRow(unit)
             from, fromPoint = rail.shift, "CENTER"
             offset = leftward and rail.shiftConst or -rail.shiftConst
         end
-        from, fromPoint, offset = ANCHOR[e.kind](e, from, fromPoint, offset, leftward)
-        e.endFill, e.endPoint, e.endOffset = from, fromPoint, offset
+        ANCHOR[e.kind](e, from, fromPoint, offset, leftward)
+        from, fromPoint, offset = e.endFill, e.endPoint, e.endOffset
     end
     if rail then
         PlaceRail(rail, R, L, list)
@@ -1796,9 +1808,12 @@ function KT:PlatesSupersede(guid, upto)
                 g.used = kept
                 if kept == 0 then
                     self:ReleaseGhost(g)
-                elseif g.unit then
-                    LevelGhost(g, g:GetFrameStrata(), g:GetFrameLevel())
-                    self:LayoutPlate(g.unit)
+                else
+                    ChainGhost(g)
+                    if g.unit then
+                        LevelGhost(g, g:GetFrameStrata(), g:GetFrameLevel())
+                        self:LayoutPlate(g.unit)
+                    end
                 end
             end
         end
