@@ -34,9 +34,8 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:SetCondition("platesSwitch", function()
         return not platesHeld
     end)
-    local premarkHeld = KT and KT.PremarkHeld
     manager:SetCondition("premark", function()
-        return db.PlateIcons ~= false and not platesHeld and not premarkHeld
+        return db.PlateIcons ~= false and not platesHeld
     end)
     manager:SetCondition("plateTimer", function()
         return db.PlateIcons ~= false and not platesHeld and db.PlateShowTimer ~= false
@@ -98,9 +97,8 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         "as icons on enemy nameplates. Only active in 5-player dungeons.\n\n" ..
         "A kick goes on the kicker's bar, and the bar reads " .. KE:ColorTextByTheme("Ready") ..
         " when the tracker's timing says the kick is back. The kicker's icon goes on the nameplate of " ..
-        "the mob they stopped; yours goes on your target's nameplate as you cast." ..
-        (premarkHeld and "" or " Before a key starts, the focus markers teammates announce are read, " ..
-        "so their icon can wait on their marked mob.") .. "\n\n" ..
+        "the mob they stopped; yours goes on your target's nameplate as you cast. Before a key starts, " ..
+        "the focus markers teammates announce are read, so their icon can wait on their marked mob.\n\n" ..
         "In a dungeon the game often hides who kicked. The Damage Meter then names the kicker when it " ..
         "can. When it cannot, each teammate who could have kicked gets a copy of their bar on cooldown, " ..
         "and the mob a hidden icon of theirs, that the game shows only for the teammate who really kicked.")
@@ -153,13 +151,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         manager:Register(switch, "plates")
     end
 
-    if premarkHeld then
-        cardPlates:AddLabel("Icons on Marked Mobs is off in this version while a game freeze it can " ..
-            "trigger is fixed. Your setting is kept for when it returns.")
-    end
     local rowB = GUIFrame:CreateRow(cardPlates.content, Theme.rowHeight)
     local premarkSwitch = GUIFrame:CreateCheckbox(rowB, "Icons on Marked Mobs", {
-        value = db.PlatePremark ~= false and not premarkHeld,
+        value = db.PlatePremark ~= false,
         tooltip = "Before any kick, a teammate's icon sits on the mob carrying the focus marker " ..
             "they announced, until their own icon is on a nameplate.",
         callback = function(checked) db.PlatePremark = checked; ApplySettings() end,

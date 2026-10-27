@@ -101,10 +101,8 @@ P.kickGen = 0       -- moved by every kicker list rebuild
 P.railAcc = 0       -- the rail driver's elapsed accumulator
 KT.markerOf = {}    -- [member GUID] = their announced marker, 1 to 8
 P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt is its plain time
--- Icons on Marked Mobs stays off whatever its saved switch says; the switch
--- keeps its value for when the hold is lifted.
-KT.PremarkHeld = true
--- Nameplate Icons as a whole stays off the same way, its saved switch kept.
+-- Nameplate Icons stays off whatever its saved switch says; the switch keeps
+-- its value for when the hold is lifted.
 KT.PlateIconsHeld = true
 
 -- A plate's lifetime: a kick seen on it carries this, so a placement whose
@@ -1793,7 +1791,7 @@ function KT:SyncKickers()
     wipe(list)
     wipe(P.laneOf)
     P.kickGen = P.kickGen + 1
-    if self.db.PlatePremark == false or KT.PremarkHeld then return end
+    if self.db.PlatePremark == false then return end
     for guid, member in pairs(self.partyMembers) do
         local marker
         if member.unit == "player" then marker = OwnMarker() else marker = self.markerOf[guid] end
@@ -2148,7 +2146,7 @@ function KT:SyncPlates()
     elseif not want and self.platesOn then
         self:PlatesDeactivate()
     end
-    local markers = want and self.db.PlatePremark ~= false and not KT.PremarkHeld
+    local markers = want and self.db.PlatePremark ~= false
     if markers and not self.markersOn then
         self:MarkersActivate()
     elseif not markers and self.markersOn then
