@@ -507,11 +507,20 @@ local function Attach(e, unit)
     return true
 end
 
+-- An element out of a row keeps no link: it is anchored again wherever it
+-- joins next. A rail's place at its row's head goes with it.
+local function DropLink(e)
+    e.slotAt, e.hang, e.prevEl, e.prevGen = nil, nil, nil, nil
+    e.linkGen, e.hangConst, e.relink = nil, nil, nil
+    e.headAt, e.headGen = nil, nil
+end
+
 local function Park(e)
     e:Hide()
     e:ClearAllPoints()
     e:SetParent(P.lift)
     e.unit = nil
+    DropLink(e)
 end
 
 -- Kinds that wait for their mob's plate to come back, and how each is released.
@@ -1244,7 +1253,7 @@ local function RowOf(unit)
 end
 
 local function DropRow(row)
-    row.euiPlate = nil
+    row.euiPlate, row.headAt, row.headGen = nil, nil, nil
     row.head:Hide()
     row.head:ClearAllPoints()
     wipe(row.list)
@@ -1259,8 +1268,9 @@ local function FreeRow(unit)
 end
 
 -- The row's start: PlateBarGap off the anchor's edge on PlateSide, moved by
--- the offsets. TOP and BOTTOM grow right from the bar's left edge. Scaled at
--- every layout, so a UI scale change reaches the gap and offsets too.
+-- the offsets. TOP and BOTTOM grow right from the bar's left edge. Placed
+-- again only when the anchor or the style moved (LayoutRow); a UI scale
+-- change moves the style, so it reaches the gap and offsets too.
 local function PlaceHead(head, anchor)
     local db = KT.db
     local gap, ox, oy, side = db.PlateBarGap, db.PlateOffsetX, db.PlateOffsetY, db.PlateSide
@@ -1307,12 +1317,14 @@ local function RemoveFromRow(e)
     return unit
 end
 
--- Ready elements from the head, the rest on from them or, with a rail, from
--- its shift edge less the chain's own length; the rail's chains and lanes
--- last. The shift edge is cleared first: an element it held from the last
--- layout may be the one the chain now starts from, and the engine refuses
--- that loop. A rail its sync left waiting is fed, shown and handed to the
--- driver here.
+-- Ready elements from the head, the rest each from the end of the one before
+-- or, with a rail, the first past the ready ones from its shift edge less the
+-- chain's own length. An element is anchored again only when its link moved:
+-- its slot, what it hangs from, the element before it, that element's end, or
+-- the style. Each moved link is unhooked before the rail's chains are laid:
+-- an element the shift edge held last time may be the one the chain now
+-- starts from, and the engine refuses that loop. A rail its sync left waiting
+-- is fed, shown and handed to the driver here.
 local function LayoutRow(unit)
     local row = P.rows[unit]
     if not row then return end
@@ -1333,7 +1345,10 @@ local function LayoutRow(unit)
             " anchor=" .. (anchor and dbgval(anchor:GetDebugName()) or "none") .. " gap=" .. KT.db.PlateBarGap)
     end
     if not anchor then return end
-    PlaceHead(row.head, anchor)
+    if row.headAt ~= anchor or row.headGen ~= P.styleGen then
+        PlaceHead(row.head, anchor)
+        row.headAt, row.headGen = anchor, P.styleGen
+    end
     row.euiPlate = euiPlate
     local now = GetTime()
     for i = 1, #list do
@@ -1343,29 +1358,59 @@ local function LayoutRow(unit)
             e.ready = not (member and KT.MainCooling(member, now))
         end
     end
-    table_sort(list, RowOrder)
-    local L, R = #list, 0
+    local L = #list
+    for i = 2, L do
+        if RowOrder(list[i], list[i - 1]) then
+            table_sort(list, RowOrder)
+            break
+        end
+    end
+    local R = 0
     while R < L and list[R + 1].ready == true do R = R + 1 end
     local leftward = KT.db.PlateSide == "LEFT"
     local inner = leftward and "RIGHT" or "LEFT"
-    if rail then
-        rail.shift:ClearAllPoints()
+    if rail and (rail.headAt ~= row.head or rail.headGen ~= P.styleGen) then
         rail:ClearAllPoints()
         rail:SetPoint(inner, row.head, inner, 0, 0)
-        RailSlots(rail, R, L)
+        rail.headAt, rail.headGen = row.head, P.styleGen
     end
-    local from, fromPoint, offset = row.head, inner, 0
+    local shift = rail and rail.shift or false
     for i = 1, L do
         local e = list[i]
-        if rail and i == R + 1 then
-            from, fromPoint = rail.shift, "CENTER"
-            offset = leftward and rail.shiftConst or -rail.shiftConst
+        local hang, prev = false, false
+        if shift and i == R + 1 then
+            hang = shift
+        elseif i > 1 then
+            prev = list[i - 1]
         end
-        ANCHOR[e.kind](e, from, fromPoint, offset, leftward)
-        from, fromPoint, offset = e.endFill, e.endPoint, e.endOffset
+        local prevGen = prev and prev.endGen or 0
+        if e.slotAt ~= i or e.hang ~= hang or e.prevEl ~= prev or e.prevGen ~= prevGen
+            or e.linkGen ~= P.styleGen then
+            e.slotAt, e.hang, e.prevEl, e.prevGen, e.linkGen = i, hang, prev, prevGen, P.styleGen
+            e.relink = true
+            e:ClearAllPoints()
+        end
     end
     if rail then
+        RailSlots(rail, R, L)
         PlaceRail(rail, R, L, list)
+    end
+    for i = 1, L do
+        local e = list[i]
+        local hang, p = e.hang, e.prevEl
+        local const = (hang and rail) and rail.shiftConst or 0
+        if e.relink or e.hangConst ~= const then
+            e.relink, e.hangConst = nil, const
+            if hang then
+                ANCHOR[e.kind](e, hang, "CENTER", leftward and const or -const, leftward)
+            elseif p then
+                ANCHOR[e.kind](e, p.endFill, p.endPoint, p.endOffset, leftward)
+            else
+                ANCHOR[e.kind](e, row.head, inner, 0, leftward)
+            end
+        end
+    end
+    if rail then
         if rail.syncPending then
             rail.syncPending = nil
             local marked, index = MarkIndex(unit)
@@ -1401,6 +1446,29 @@ function KT:LayoutPlate(unit)
     if P.flushArmed then return end
     P.flushArmed = true
     C_Timer.After(0, LayoutPass)
+end
+
+-- One row laid out now, or every marked row without a unit. full: that row's
+-- anchor graph rebuilt first, as a restyle would: every chain and step pair
+-- laid again, and the head and every element anchored again. Like the pass
+-- itself, only from a C_Timer callback: the anchor finder must not run on an
+-- event's own stack.
+function KT:LayoutNow(unit, full)
+    if not unit then
+        FlushLayouts()
+        return
+    end
+    local row = P.rows[unit]
+    if full and row then
+        row.headAt = nil
+        for i = 1, #row.list do
+            local e = row.list[i]
+            if e.kind == "ghost" then ChainGhost(e) else StyleLive(e) end
+            DropLink(e)
+        end
+    end
+    P.dirty[unit] = nil
+    LayoutRow(unit)
 end
 
 -- Out of its row or the waiting list, parked; returns the unit it left.
@@ -2218,6 +2286,8 @@ function KT:PlatesPreview()
     end
     EnsureLift()
     ReadScale()
+    -- With the nameplate icons off, a settings write reaches no restyle.
+    P.styleGen = P.styleGen + 1
     RegisterGuest()
     if not P.previewFrame then
         local frame = CreateFrame("Frame")
