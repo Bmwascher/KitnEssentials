@@ -1803,10 +1803,6 @@ function KT:PlatesSupersede(guid, upto)
             end
         end
     end
-    if changed then
-        local cur = CountOf(self.partyMembers[guid])
-        if cur ~= nil then self:RailsCounts(guid, cur, GetTime()) end
-    end
     return changed
 end
 
@@ -1954,7 +1950,7 @@ function KT:RailsKicker(guid)
 end
 
 -- One member's lane on every rail fed their count as read at T: their live
--- icon left every plate, or a ghost holding their cell came, went or lost it.
+-- icon left every plate, or a ghost holding their cell came or went.
 function KT:RailsCounts(guid, cur, T)
     local i, member = P.laneOf[guid], self.partyMembers[guid]
     if not i or not member then return end
