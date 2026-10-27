@@ -32,6 +32,7 @@ local UnitIsUnit = UnitIsUnit
 local UnitCanAttack = UnitCanAttack
 local UnitClass = UnitClass
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
+local GetRaidTargetIndex = GetRaidTargetIndex
 local issecretvalue = issecretvalue
 local pcall = pcall
 local pairs = pairs
@@ -53,6 +54,7 @@ local BASE_SLACK = 0.1    -- a read this much before a kick still serves as its 
 local RAIL_SPAN = 8       -- marker indexes of fill travel on either side of a lane's marker
 local READY_SLACK = 0.05  -- a relayout this long after a cooldown's end finds it over
 local MAX_PLATES = 40
+local TICK = 0.2          -- seconds between the rail driver's passes
 
 local PLATE_UNITS = {}
 for i = 1, MAX_PLATES do PLATE_UNITS[i] = "nameplate" .. i end
@@ -86,8 +88,14 @@ P.free.ghost = {}
 P.packet = { units = {}, before = {}, after = {} }  -- the last update's gate totals, until the next read
 P.packetT = -1
 P.rails = {}        -- [nameplate token] = rail
-P.kickers = {}      -- members with a kick row and a marker: { guid, unit, marker, rank }
+P.kickers = {}      -- members with a kick row and a marker: { guid, unit, marker }
 P.free.rail = {}
+P.railCount = 0
+P.laneOf = {}       -- [member GUID] = their index in P.kickers
+P.liveHidden = {}   -- [member GUID] = true while their live icon sits on a plate
+P.styleGen = 0      -- moved by every restyle; a rail or lane icon stamped older restyles
+P.kickGen = 0       -- moved by every kicker list rebuild
+P.railAcc = 0       -- the rail driver's elapsed accumulator
 KT.markerOf = {}    -- [member GUID] = their announced marker, 1 to 8
 P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt is its plain time
 -- Icons on Marked Mobs stays off whatever its saved switch says; the switch
@@ -473,6 +481,7 @@ local LEVEL = { live = LevelLive, sample = LevelLive }
 local ANCHOR = { live = AnchorLive, sample = AnchorLive }
 local REFEED = { live = RefeedLive, sample = RefeedLive }
 
+-- A kicker's live icon on a plate stands in for their lane on every rail.
 local function Attach(e, unit)
     local host, strata, level = HostOf(unit)
     if not host then return false end
@@ -481,6 +490,7 @@ local function Attach(e, unit)
     LEVEL[e.kind](e, strata, level)
     e.unit = unit
     e:Show()
+    if e.kind == "live" then KT:RailsLiveHidden(e.guid, true) end
     return true
 end
 
@@ -644,24 +654,35 @@ RELEASE.ghost = function(g) KT:ReleaseGhost(g) end
 ---------------------------------------------------------------------------------
 -- Rails: icons on the mobs teammates' announced markers sit on
 ---------------------------------------------------------------------------------
--- One slot at the row's end. A lane per member with a marker, one icon wide,
--- at that slot plus the member's rank among members on the same marker: a
--- mob carries one marker, so only one marker's lanes can open. In each lane's
--- clip a marker gate, 2 * RAIL_SPAN icons wide over the marker plus or minus
--- RAIL_SPAN, takes the plate's marker index; the icon hangs from its fill
--- edge and lands inside the clip only when the index is the lane's marker.
--- A count gate closes it once the member interrupted again.
+-- A marked hostile plate's rail holds a lane per kicker, one icon wide. In
+-- each lane's clip a marker gate, 2 * RAIL_SPAN icons wide over the kicker's
+-- marker plus or minus RAIL_SPAN, takes the plate's marker index; the icon
+-- hangs from its fill edge and lands inside the clip only when the index is
+-- the lane's marker. A count gate closes it once the member interrupted
+-- again. The rail sits at the row's first slot and each lane takes a slot by
+-- its kicker's readiness among the row's elements (RailSlots, PlaceRail).
 local function BuildRail()
     local rail = CreateFrame("Frame", nil, P.lift)
     rail:EnableMouse(false)
     rail:Hide()
     rail.kind = "rail"
     rail.lanes = {}
-    rail.seq = 0
+    -- The shift chain, and the edge at its end that the elements past the
+    -- ready ones hang from.
+    rail.chain, rail.chainUsed, rail.shiftConst = {}, 0, 0
+    rail.shift = CreateFrame("Frame", nil, rail)
+    rail.shift:SetSize(1, 1)
+    -- The hug chain, and the frame at the row's end as the mob draws it.
+    rail.hugChain, rail.hugUsed = {}, 0
+    rail.hug = CreateFrame("Frame", nil, rail)
+    rail.hug:SetSize(1, 1)
+    rail.shownCount, rail.maxSlot = 0, 1
+    rail.readyBy, rail.cdBy = {}, {}
     return rail
 end
 
--- The marker gate draws nothing at full alpha: the icon descends from it.
+-- The marker gate draws nothing at full alpha: the icon descends from it. A
+-- cooldown running out moves the lane to its ready slot.
 local function BuildLane(rail)
     local lane = {}
     lane.clip = NewClip(rail)
@@ -669,7 +690,82 @@ local function BuildLane(rail)
     lane.gateB, lane.fillB = NewGate(lane.gate, true)
     lane.clipB = NewClip(lane.gate)
     lane.icon = BuildIcon(lane.clipB)
+    lane.icon.cd:SetScript("OnCooldownDone", function()
+        if rail.plate then KT:LayoutPlate(rail.plate) end
+    end)
     return lane
+end
+
+-- A bar of a chain, a pitch wide; the hug chain's widths are PlaceRail's.
+local function ChainBar(rail, reverse)
+    local bar, fill = NewBar(rail, reverse)
+    local cw = KT.db.PlateIconSize
+    bar:SetSize(cw + KT.db.PlateSpacing, cw)
+    Level(bar, rail:GetFrameStrata(), rail:GetFrameLevel())
+    return bar, fill
+end
+
+local function BuildPair(rail, n, chain)
+    local std, stdFill = ChainBar(rail, false)
+    local rev, revFill = ChainBar(rail, true)
+    local pr = { std = std, stdFill = stdFill, rev = rev, revFill = revFill }
+    chain[n] = pr
+    return pr
+end
+
+-- Both chains' bars take the plate's marker index like the gates.
+local function FeedChain(rail, index)
+    for p = 1, rail.chainUsed do
+        rail.chain[p].std:SetValue(index)
+        rail.chain[p].rev:SetValue(index)
+    end
+    for p = 1, rail.hugUsed do
+        rail.hugChain[p].std:SetValue(index)
+        rail.hugChain[p].rev:SetValue(index)
+    end
+end
+
+-- The first `used` pairs of a chain edge to edge from (from, fromPoint,
+-- offset), each over its marker's range: a pair reaches its bars' width, and
+-- that width once more exactly on its marker. Returns the chain's end.
+local function AnchorChain(chain, used, leftward, from, fromPoint, offset)
+    for p = 1, #chain do
+        local pr = chain[p]
+        if p <= used then
+            local first, firstFill, second, secondFill
+            if leftward then
+                first, firstFill, second, secondFill = pr.rev, pr.revFill, pr.std, pr.stdFill
+            else
+                first, firstFill, second, secondFill = pr.std, pr.stdFill, pr.rev, pr.revFill
+            end
+            first:SetMinMaxValues(pr.marker - 1, pr.marker)
+            second:SetMinMaxValues(pr.marker, pr.marker + 1)
+            first:ClearAllPoints()
+            second:ClearAllPoints()
+            if leftward then
+                first:SetPoint("RIGHT", from, fromPoint, offset, 0)
+                second:SetPoint("RIGHT", firstFill, "LEFT", 0, 0)
+                from, fromPoint, offset = secondFill, "RIGHT", 0
+            else
+                first:SetPoint("LEFT", from, fromPoint, offset, 0)
+                second:SetPoint("LEFT", firstFill, "RIGHT", 0, 0)
+                from, fromPoint, offset = secondFill, "LEFT", 0
+            end
+            first:Show()
+            second:Show()
+        else
+            pr.std:Hide()
+            pr.rev:Hide()
+        end
+    end
+    return from, fromPoint, offset
+end
+
+local function LevelChain(chain, strata, level)
+    for p = 1, #chain do
+        Level(chain[p].std, strata, level)
+        Level(chain[p].rev, strata, level)
+    end
 end
 
 local function LevelRail(rail, strata, level)
@@ -683,28 +779,48 @@ local function LevelRail(rail, strata, level)
         Level(lane.icon, strata, level + 3)
         Level(lane.icon.cd, strata, level + 4)
     end
+    LevelChain(rail.chain, strata, level)
+    LevelChain(rail.hugChain, strata, level)
 end
 
--- One lane per kicker; lanes built here take the rail's levels.
+-- Sizes for the style and the kicker list, run only when either moved since
+-- the rail's stamps: one lane per kicker, each gate wide enough for every
+-- index to land inside it, each chain bar a pitch wide. Lanes built on a
+-- placed rail take its levels.
 local function StyleRail(rail)
     local cw = KT.db.PlateIconSize
-    rail:SetSize(cw, cw)
+    local pitch = cw + KT.db.PlateSpacing
+    local built = false
     for i = 1, #P.kickers do
         local lane = rail.lanes[i]
         if not lane then
             lane = BuildLane(rail)
             rail.lanes[i] = lane
+            built = true
         end
         lane.clip:SetSize(cw, cw)
         lane.gate:SetSize(2 * RAIL_SPAN * cw, cw)
         lane.gate:ClearAllPoints()
         lane.gate:SetPoint("LEFT", lane.clip, "LEFT", -RAIL_SPAN * cw, 0)
         lane.icon:SetSize(cw, cw)
-        StyleIcon(lane.icon)
+        if lane.icon.styleGen ~= P.styleGen then
+            StyleIcon(lane.icon)
+            lane.icon.styleGen = P.styleGen
+        end
         SizeGate(lane.gateB, lane.icon, cw)
         HangWhole(lane.clipB, lane.fillB, lane.gateB)
     end
-    LevelRail(rail, rail:GetFrameStrata(), rail:GetFrameLevel())
+    for p = 1, #rail.chain do
+        rail.chain[p].std:SetSize(pitch, cw)
+        rail.chain[p].rev:SetSize(pitch, cw)
+    end
+    for p = 1, #rail.hugChain do
+        rail.hugChain[p].std:SetHeight(cw)
+        rail.hugChain[p].rev:SetHeight(cw)
+    end
+    rail.hug:SetSize(1, cw)
+    if built and rail.placedHost then LevelRail(rail, rail:GetFrameStrata(), rail:GetFrameLevel()) end
+    rail.styleGen, rail.kickGen = P.styleGen, P.kickGen
 end
 
 local function RefeedLane(lane)
@@ -715,33 +831,53 @@ local function RefeedLane(lane)
     end
 end
 
--- Each lane for its kicker: picture, current cooldown, the gate's range
--- about their marker. A lane hides plainly while its kicker's live icon is on
--- a plate.
+local FeedRailCounts
+
+-- Whether the lane's kicker is on cooldown now, by the engine's own clock.
+local function LaneCooling(lane, now)
+    local member = lane.guid and KT.partyMembers[lane.guid]
+    if not member then return false end
+    return KT.MainCooling(member, now)
+end
+
+-- The plate's marker index while it reads as a number, plain or secret.
+local function MarkIndex(unit)
+    local ok, index = pcall(GetRaidTargetIndex, unit)
+    if ok and type(index) == "number" then return true, index end
+    return false, nil
+end
+
+-- Each lane for its kicker: picture, cooldown, the gate's range about their
+-- marker, and the count gate fed the engine's latest read. Spare lanes hide.
+-- Which lanes show is PlaceRail's.
 local function DressRail(rail)
     for i = 1, #P.kickers do
         local k, lane = P.kickers[i], rail.lanes[i]
         local member = KT.partyMembers[k.guid]
         if lane.guid ~= k.guid then lane.cBase, lane.cCur = nil, nil end
-        lane.guid, lane.rank = k.guid, k.rank
+        lane.guid = k.guid
         if member then
             PaintIcon(lane.icon, member)
             PaintCooldown(lane.icon, member.kickStart, member.kickDuration)
         end
-        lane.gate:SetMinMaxValues(k.marker - RAIL_SPAN, k.marker + RAIL_SPAN)
-        local live = P.live[k.guid]
-        lane.clip:SetShown(not (live and live.unit))
+        lane.floor = k.marker - RAIL_SPAN
+        lane.gate:SetMinMaxValues(lane.floor, k.marker + RAIL_SPAN)
         RefeedLane(lane)
+        lane.icon:Show()
+        lane.gate:Show()
     end
     for i = #P.kickers + 1, #rail.lanes do
         local lane = rail.lanes[i]
         lane.guid, lane.cBase, lane.cCur = nil, nil, nil
         lane.clip:Hide()
+        lane.gate:Hide()
     end
+    FeedRailCounts(rail, GetTime())
 end
 
--- The plate's marker index into every lane's gate, the icon hung from the
--- fill again, and the count gate that rides the icon fed again with it.
+-- The plate's marker index into every lane's gate and both chains, each icon
+-- hung from its fill again, and the count gate that rides the icon fed again
+-- with it.
 local function FeedRail(rail, index)
     for i = 1, #P.kickers do
         local lane = rail.lanes[i]
@@ -750,6 +886,7 @@ local function FeedRail(rail, index)
         lane.icon:SetPoint("LEFT", lane.fill, "RIGHT", 0, 0)
         RefeedLane(lane)
     end
+    FeedChain(rail, index)
 end
 
 local function DebugLanes(where, unit, rail)
@@ -764,7 +901,7 @@ local function DebugLanes(where, unit, rail)
         local okAlpha, alpha = pcall(lane.icon.GetEffectiveAlpha, lane.icon)
         local live = lane.guid and P.live[lane.guid]
         KE:Print("[KTP]   lane " .. i .. " guid=" .. dbgguid(lane.guid) .. " kicker=" .. dbgguid(k and k.guid) ..
-            " rank=" .. dbgval(lane.rank) .. " marker=" .. dbgval(k and k.marker) ..
+            " slot=" .. dbgval(lane.slotNo) .. " marker=" .. dbgval(k and k.marker) ..
             " range=" .. dbgval(lo) .. ".." .. dbgval(hi) .. " value=" .. dbgval(lane.gate:GetValue()) ..
             " onFill=" .. onFill)
         local start, duration = lane.icon.cd:GetCooldownTimes()
@@ -779,52 +916,160 @@ local function DebugLanes(where, unit, rail)
     end
 end
 
--- A lane fed before its clip moved keeps its icon at the old fill, and
--- feeding the same index again does not move it; sizing and dressing the
--- rail again does. So a frame after each layout the rail is styled, dressed
--- and fed again.
-local function RefeedAfterLayout(rail)
-    rail.seq = rail.seq + 1
-    local seq, gen, activation, unit = rail.seq, P.gen, KT.activationID, rail.plate
-    C_Timer.After(0, function()
-        if KT.activationID ~= activation or P.gen ~= gen or rail.seq ~= seq or rail.plate ~= unit then return end
-        local index, marked = KT.RaidMarkOf(unit)
-        if marked then
-            StyleRail(rail)
-            DressRail(rail)
-            FeedRail(rail, index)
-            rail.restyled = true
-        end
-        if DEBUG_KTP then DebugLanes("RefeedAfterLayout marked=" .. tostring(marked), unit, rail) end
-    end)
-end
-
--- Lanes at the slot plus their rank; nothing follows the rail.
-local function AnchorRail(rail, from, fromPoint, offset, leftward)
-    local point = leftward and "RIGHT" or "LEFT"
-    local pitch = KT.db.PlateIconSize + KT.db.PlateSpacing
-    local dir = leftward and -1 or 1
-    rail:ClearAllPoints()
-    rail:SetPoint(point, from, fromPoint, offset, 0)
+-- The first half of a rail's layout, before any anchor moves: each lane's
+-- slot by its kicker's readiness among the row's R ready elements of L. A
+-- shown ready lane sits right after the ready elements, one on cooldown after
+-- every element and its marker's ready lanes, same-marker lanes side by
+-- side; a hidden lane parks at the first slot. The shift chain gets a pair
+-- per ready lane, and its length is what the first element past the ready
+-- ones undoes.
+local function RailSlots(rail, R, L)
+    local readyBy, cdBy = rail.readyBy, rail.cdBy
+    wipe(readyBy)
+    wipe(cdBy)
+    local now = GetTime()
+    local used, shown = 0, 0
     for i = 1, #P.kickers do
-        local lane = rail.lanes[i]
-        if lane and lane.rank then
-            lane.clip:ClearAllPoints()
-            lane.clip:SetPoint(point, from, fromPoint, offset + dir * lane.rank * pitch, 0)
-        end
-        if DEBUG_KTP then
-            KE:Print("[KTP] AnchorRail lane " .. i .. " rank=" .. dbgval(lane and lane.rank) .. " x=" ..
-                dbgval(lane and lane.rank and (offset + dir * lane.rank * pitch)) .. " from=" ..
-                tostring(from and from.kind or from == nil and "nil" or "frame") .. ":" .. fromPoint)
+        local k, lane = P.kickers[i], rail.lanes[i]
+        lane.shown = lane.guid ~= nil and not P.liveHidden[k.guid]
+        lane.cooling = lane.shown and LaneCooling(lane, now)
+        if lane.shown and not lane.cooling then
+            local n = readyBy[k.marker] or 0
+            lane.slotNo = R + 1 + n
+            readyBy[k.marker] = n + 1
+            used = used + 1
+            local pr = rail.chain[used] or BuildPair(rail, used, rail.chain)
+            pr.marker = k.marker
         end
     end
-    if DEBUG_KTP then DebugLanes("AnchorRail", rail.plate, rail) end
-    RefeedAfterLayout(rail)
-    return from, fromPoint, offset
+    local most = 0
+    for _, n in pairs(readyBy) do
+        if n > most then most = n end
+    end
+    local maxSlot = L + most
+    for i = 1, #P.kickers do
+        local k, lane = P.kickers[i], rail.lanes[i]
+        if lane.shown then
+            if lane.cooling then
+                local n = cdBy[k.marker] or 0
+                lane.slotNo = L + 1 + (readyBy[k.marker] or 0) + n
+                cdBy[k.marker] = n + 1
+            end
+            shown = shown + 1
+            if lane.slotNo > maxSlot then maxSlot = lane.slotNo end
+        else
+            lane.slotNo = 1
+        end
+    end
+    if maxSlot < 1 then maxSlot = 1 end
+    rail.shownCount, rail.maxSlot = shown, maxSlot
+    rail.chainUsed = used
+    rail.shiftConst = used * (KT.db.PlateIconSize + KT.db.PlateSpacing)
 end
 
-LEVEL.rail, ANCHOR.rail = LevelRail, AnchorRail
-RELEASE.rail = function(rail) KT:ReleaseRail(rail) end
+-- The second half: the rail's size, the shift chain from the end of the
+-- ready elements (each pair a pitch long, one more exactly on its marker, so
+-- the elements past them step out one slot per ready lane the mob shows),
+-- each lane's place, and the hug chain from the row's end, one pair per
+-- marker with cooling lanes, so the hug frame sits where the mob's row ends.
+local function PlaceRail(rail, R, L, list)
+    local cw = KT.db.PlateIconSize
+    local pitch = cw + KT.db.PlateSpacing
+    local leftward = KT.db.PlateSide == "LEFT"
+    local out = leftward and -1 or 1
+    local inner = leftward and "RIGHT" or "LEFT"
+    local readyBy, cdBy = rail.readyBy, rail.cdBy
+    rail:SetSize(cw + (rail.maxSlot - 1) * pitch, cw)
+    local sf, sp, so = rail, inner, 0
+    if R > 0 then
+        local e = list[R]
+        sf, sp, so = e.endFill, e.endPoint, e.endOffset
+    end
+    local from, fromPoint, offset = AnchorChain(rail.chain, rail.chainUsed, leftward, sf, sp, so)
+    rail.shift:ClearAllPoints()
+    rail.shift:SetPoint("CENTER", from, fromPoint, offset, 0)
+    local ef, ep, eo
+    if L > R then
+        local e = list[L]
+        ef, ep, eo = e.endFill, e.endPoint, e.endOffset
+    else
+        ef, ep, eo = rail.shift, "CENTER", -out * rail.shiftConst
+    end
+    for i = 1, #P.kickers do
+        local k, lane = P.kickers[i], rail.lanes[i]
+        lane.clip:ClearAllPoints()
+        if not lane.shown then
+            lane.clip:SetPoint(inner, rail, inner, 0, 0)
+        elseif lane.cooling then
+            local n = lane.slotNo - L - 1 - (readyBy[k.marker] or 0)
+            lane.clip:SetPoint(inner, ef, ep, eo + out * n * pitch, 0)
+        else
+            lane.clip:SetPoint(inner, sf, sp, so + out * (lane.slotNo - R - 1) * pitch, 0)
+        end
+        lane.clip:SetShown(lane.shown)
+    end
+    local usedHug, wsum = 0, 0
+    for marker = 1, 8 do
+        local n = cdBy[marker] or 0
+        if n > 0 then
+            local w = n * pitch
+            usedHug = usedHug + 1
+            local pr = rail.hugChain[usedHug] or BuildPair(rail, usedHug, rail.hugChain)
+            pr.marker = marker
+            pr.std:SetWidth(w)
+            pr.rev:SetWidth(w)
+            wsum = wsum + w
+        end
+    end
+    from, fromPoint, offset = AnchorChain(rail.hugChain, usedHug, leftward, ef, ep, eo)
+    rail.hugUsed = usedHug
+    rail.hug:ClearAllPoints()
+    rail.hug:SetPoint(leftward and "LEFT" or "RIGHT", from, fromPoint, offset - out * wsum, 0)
+    if rail.chainUsed > 0 or usedHug > 0 then
+        local marked, index = MarkIndex(rail.plate)
+        if marked then FeedChain(rail, index) end
+    end
+end
+
+-- The one deferred feed of each rail a layout showed, once it is visible: a
+-- rail back from the pool must not keep the fill its last plate gave it. The
+-- driver runs only while some rail waits for that feed.
+local function RailDriverUpdate(driver, elapsed)
+    P.railAcc = P.railAcc + elapsed
+    if P.railAcc < TICK then return end
+    P.railAcc = 0
+    local waiting = false
+    for unit, rail in pairs(P.rails) do
+        if rail.feed then
+            local visible = rail:IsVisible()
+            if not issecretvalue(visible) and visible then
+                rail.feed = nil
+                local marked, index = MarkIndex(unit)
+                if marked then FeedRail(rail, index) end
+                if DEBUG_KTP then DebugLanes("deferred feed", unit, rail) end
+            else
+                waiting = true
+            end
+        end
+    end
+    if not waiting then driver:Hide() end
+end
+
+local function WakeDriver()
+    local driver = P.railDriver
+    if not driver then
+        driver = CreateFrame("Frame")
+        driver:Hide()
+        driver:SetScript("OnUpdate", RailDriverUpdate)
+        P.railDriver = driver
+    end
+    if not driver:IsShown() then
+        P.railAcc = 0
+        driver:Show()
+    end
+end
+
+LEVEL.rail = LevelRail
 
 -- The baseline the oldest ghost still holding the member's cell gives.
 local function LaneBase(guid)
@@ -860,7 +1105,7 @@ end
 -- A rail's lanes fed from the latest read (opaque, the engine's own current
 -- totals): at each read, when the rail is made, and when a ghost comes or
 -- goes, since the oldest ghost holding a member's cell gives their baseline.
-local function FeedRailCounts(rail, T)
+FeedRailCounts = function(rail, T)
     local totals = KT.meterBase and KT.meterBase.a
     if not totals then return end
     for i = 1, #P.kickers do
@@ -935,10 +1180,8 @@ local function PlaceHead(head, anchor)
 end
 
 -- Ready live icons nearest the plate, then cooling icons and ghosts by start
--- time, the Rails slot last.
+-- time.
 local function RowOrder(a, b)
-    local ar, br = a.kind == "rail", b.kind == "rail"
-    if ar ~= br then return br end
     local ra, rb = a.ready == true, b.ready == true
     if ra ~= rb then return ra end
     return (a.start or 0) < (b.start or 0)
@@ -964,11 +1207,19 @@ local function RemoveFromRow(e)
     return unit
 end
 
+-- Ready elements from the head, the rest on from them or, with a rail, from
+-- its shift edge less the chain's own length; the rail's chains and lanes
+-- last. The shift edge is cleared first: an element it held from the last
+-- layout may be the one the chain now starts from, and the engine refuses
+-- that loop. A rail its sync left waiting is fed, shown and handed to the
+-- driver here.
 local function LayoutRow(unit)
     local row = P.rows[unit]
     if not row then return end
     local list = row.list
-    if #list == 0 then
+    local rail = P.rails[unit]
+    if rail and not rail.placedHost then rail = nil end
+    if #list == 0 and not rail then
         FreeRow(unit)
         return
     end
@@ -976,8 +1227,8 @@ local function LayoutRow(unit)
     if DEBUG_KTP then
         local kinds = ""
         for i = 1, #list do kinds = kinds .. list[i].kind .. " " end
-        KE:Print("[KTP] LayoutRow " .. unit .. " list=" .. kinds .. "anchor=" ..
-            (anchor and dbgval(anchor:GetDebugName()) or "none") .. " gap=" .. KT.db.PlateBarGap)
+        KE:Print("[KTP] LayoutRow " .. unit .. " list=" .. kinds .. "rail=" .. tostring(rail ~= nil) ..
+            " anchor=" .. (anchor and dbgval(anchor:GetDebugName()) or "none") .. " gap=" .. KT.db.PlateBarGap)
     end
     if not anchor then return end
     PlaceHead(row.head, anchor)
@@ -990,11 +1241,36 @@ local function LayoutRow(unit)
         end
     end
     table_sort(list, RowOrder)
+    local L, R = #list, 0
+    while R < L and list[R + 1].ready == true do R = R + 1 end
     local leftward = KT.db.PlateSide == "LEFT"
-    local from, fromPoint, offset = row.head, leftward and "RIGHT" or "LEFT", 0
-    for i = 1, #list do
+    local inner = leftward and "RIGHT" or "LEFT"
+    if rail then
+        rail.shift:ClearAllPoints()
+        rail:ClearAllPoints()
+        rail:SetPoint(inner, row.head, inner, 0, 0)
+        RailSlots(rail, R, L)
+    end
+    local from, fromPoint, offset = row.head, inner, 0
+    for i = 1, L do
         local e = list[i]
+        if rail and i == R + 1 then
+            from, fromPoint = rail.shift, "CENTER"
+            offset = leftward and rail.shiftConst or -rail.shiftConst
+        end
         from, fromPoint, offset = ANCHOR[e.kind](e, from, fromPoint, offset, leftward)
+        e.endFill, e.endPoint, e.endOffset = from, fromPoint, offset
+    end
+    if rail then
+        PlaceRail(rail, R, L, list)
+        if rail.syncPending then
+            rail.syncPending = nil
+            local marked, index = MarkIndex(unit)
+            if marked then FeedRail(rail, index) end
+            rail.feed = true
+            rail:Show()
+            WakeDriver()
+        end
     end
 end
 
@@ -1143,7 +1419,7 @@ function KT:ReleaseLive(guid)
     e.guid, e.mobGuid, e.cBase, e.cCur = nil, nil, nil, nil
     P.free.live[#P.free.live + 1] = e
     if old then self:LayoutPlate(old) end
-    self:RailsKicker(guid)
+    self:RailsLiveHidden(guid, false)
 end
 
 ---------------------------------------------------------------------------------
@@ -1427,10 +1703,12 @@ end
 ---------------------------------------------------------------------------------
 -- Rails: engine calls
 ---------------------------------------------------------------------------------
--- Members with a kick row and a marker, in GUID order, ranked per marker.
+-- Members with a kick row and a marker, in GUID order.
 function KT:SyncKickers()
     local list = P.kickers
     wipe(list)
+    wipe(P.laneOf)
+    P.kickGen = P.kickGen + 1
     if self.db.PlatePremark == false or KT.PremarkHeld then return end
     for guid, member in pairs(self.partyMembers) do
         local marker
@@ -1440,14 +1718,12 @@ function KT:SyncKickers()
         end
     end
     table_sort(list, KickerOrder)
-    local rank = {}
     for i = 1, #list do
         local k = list[i]
-        k.rank = rank[k.marker] or 0
-        rank[k.marker] = k.rank + 1
+        P.laneOf[k.guid] = i
         if DEBUG_KTP then
             KE:Print("[KTP] SyncKickers " .. i .. " guid=" .. dbgguid(k.guid) .. " unit=" .. k.unit ..
-                " marker=" .. k.marker .. " rank=" .. k.rank)
+                " marker=" .. k.marker)
         end
     end
 end
@@ -1475,75 +1751,90 @@ function KT:RailsResync()
     self:RailsAll()
 end
 
+-- Every plate on screen: a marker moved, the kicker list or the settings
+-- changed.
 function KT:RailsAll()
-    if not P.railsOn then
+    if not P.railsOn or #P.kickers == 0 then
         for _, rail in pairs(P.rails) do self:ReleaseRail(rail) end
         return
     end
-    for i = 1, MAX_PLATES do self:RailsPlate(PLATE_UNITS[i]) end
+    for i = 1, MAX_PLATES do
+        local unit = PLATE_UNITS[i]
+        if UnitExists(unit) then
+            self:RailsPlate(unit)
+        elseif P.rails[unit] then
+            self:ReleaseRail(P.rails[unit])
+        end
+    end
 end
 
--- A rail on each hostile plate whose marker index is not plain nil, styled
--- and fed again a frame after each layout.
+-- A plate's rail: up while its marker index reads as a number on a hostile
+-- plate and some kicker has a marker. Styled only when its stamps are old,
+-- placed only when its host or style moved; the plate's next layout pass
+-- lays it out, feeds it, shows it and hands it to the driver.
 function KT:RailsPlate(unit)
     local rail = P.rails[unit]
-    local index, marked
-    if P.railsOn and C_NamePlate.GetNamePlateForUnit(unit) and IsHostile(unit) then
-        index, marked = KT.RaidMarkOf(unit)
+    local ok, index, refused = false, nil, false
+    if P.railsOn and C_NamePlate.GetNamePlateForUnit(unit) then
+        ok, index = pcall(GetRaidTargetIndex, unit)
+        refused = not IsHostile(unit)
     end
-    if not marked then
-        if DEBUG_KTP and rail then KE:Print("[KTP] RailsPlate " .. unit .. " unmarked: release") end
+    if not KT.RailAdmits(#P.kickers, ok, type(index), refused) then
+        if DEBUG_KTP and rail then KE:Print("[KTP] RailsPlate " .. unit .. " refused: release") end
         if rail then self:ReleaseRail(rail) end
         return
     end
     local made = not rail
-    if not rail then
-        local pooled = #P.free.rail > 0
+    if made then
         rail = table_remove(P.free.rail) or BuildRail()
-        if not Attach(rail, unit) then
-            if DEBUG_KTP then KE:Print("[KTP] RailsPlate " .. unit .. " attach FAILED") end
-            P.free.rail[#P.free.rail + 1] = rail
-            return
-        end
         rail.plate = unit
         P.rails[unit] = rail
-        AddToRow(rail, unit)
-        if DEBUG_KTP then
-            KE:Print("[KTP] RailsPlate " .. unit .. " attach " .. (pooled and "pooled" or "built") ..
-                " lanesBefore=" .. #rail.lanes .. " rowLen=" .. #P.rows[unit].list)
-        end
+        P.railCount = P.railCount + 1
+        RowOf(unit)
     end
-    -- A rail already styled with a lane per kicker is styled again by the
-    -- layout's RefeedAfterLayout a frame from now; settings changes release
-    -- every rail.
-    if made or #rail.lanes < #P.kickers then StyleRail(rail) end
+    if rail.styleGen ~= P.styleGen or rail.kickGen ~= P.kickGen then StyleRail(rail) end
     DressRail(rail)
-    FeedRailCounts(rail, GetTime())
-    FeedRail(rail, index)
+    local host = HostOf(unit)
+    if rail.placedHost ~= host or rail.placedGen ~= P.styleGen then
+        if not Attach(rail, unit) then
+            if DEBUG_KTP then KE:Print("[KTP] RailsPlate " .. unit .. " attach FAILED") end
+            self:ReleaseRail(rail)
+            return
+        end
+        rail.placedHost, rail.placedGen = host, P.styleGen
+        if made then rail:Hide() end
+    end
+    rail.syncPending = true
     if DEBUG_KTP then DebugLanes(made and "RailsPlate new" or "RailsPlate again", unit, rail) end
     self:LayoutPlate(unit)
 end
 
--- Every lane repainted: live icons back on a returning plate, or a plate gone.
-function KT:RailsRefresh()
-    for _, rail in pairs(P.rails) do DressRail(rail) end
+-- A kicker's live icon came onto a plate (hidden) or left every plate: their
+-- lane on every rail follows, and each rail's plate is laid out again. A lane
+-- back is fed against the ghosts that may hold their kick meanwhile.
+function KT:RailsLiveHidden(guid, hidden)
+    hidden = hidden == true
+    if (P.liveHidden[guid] == true) == hidden then return end
+    P.liveHidden[guid] = hidden or nil
+    if not P.laneOf[guid] then return end
+    for unit, rail in pairs(P.rails) do
+        if rail.placedHost then self:LayoutPlate(unit) end
+    end
+    if not hidden then self:FeedLanes(GetTime()) end
 end
 
--- One kicker's lanes on every rail: their live icon placed or gone, or their
--- cooldown changed. Art too: the player's own kick can change just before.
+-- One kicker's lane on every rail: their cooldown changed or their kick was
+-- placed. Art too: the player's own kick can change just before. The lane may
+-- change slot, so each rail's plate is laid out again.
 function KT:RailsKicker(guid)
-    local member, live = self.partyMembers[guid], P.live[guid]
-    local shown = not (live and live.unit)
-    for _, rail in pairs(P.rails) do
-        for i = 1, #P.kickers do
-            local lane = rail.lanes[i]
-            if lane and lane.guid == guid then
-                if member then
-                    PaintIcon(lane.icon, member)
-                    PaintCooldown(lane.icon, member.kickStart, member.kickDuration)
-                end
-                lane.clip:SetShown(shown)
-            end
+    local i, member = P.laneOf[guid], self.partyMembers[guid]
+    if not i or not member then return end
+    for unit, rail in pairs(P.rails) do
+        local lane = rail.lanes[i]
+        if lane and lane.guid == guid then
+            PaintIcon(lane.icon, member)
+            PaintCooldown(lane.icon, member.kickStart, member.kickDuration)
+            if rail.placedHost then self:LayoutPlate(unit) end
         end
     end
 end
@@ -1553,24 +1844,29 @@ function KT:FeedLanes(T)
     for _, rail in pairs(P.rails) do FeedRailCounts(rail, T) end
 end
 
+-- Each dressed lane's gate drops to its floor, a plain value, so the rail
+-- draws no lane until its next plate's index is fed; its count gates are
+-- whole again. The plate's row is laid out again without it, and the driver
+-- stops with the last rail.
 function KT:ReleaseRail(rail)
     local unit = rail.plate
     if not unit then return end
     if DEBUG_KTP then KE:Print("[KTP] ReleaseRail " .. unit .. " lanes=" .. #rail.lanes) end
     P.rails[unit] = nil
-    local old = self:Unplace(rail)
+    P.railCount = P.railCount - 1
+    if P.railCount == 0 and P.railDriver then P.railDriver:Hide() end
+    rail.plate, rail.feed, rail.syncPending = nil, nil, nil
+    rail.placedHost, rail.placedGen, rail.shownCount = nil, nil, 0
     for i = 1, #rail.lanes do
         local lane = rail.lanes[i]
+        if lane.floor then lane.gate:SetValue(lane.floor) end
         lane.icon.cd:Clear()
-        lane.gate:SetMinMaxValues(0, 1)
-        lane.gate:SetValue(0)
-        lane.guid, lane.rank, lane.cBase, lane.cCur = nil, nil, nil, nil
+        lane.guid, lane.cBase, lane.cCur = nil, nil, nil
         ResetWhole(lane.gateB, lane.fillB, lane.clipB)
     end
-    rail.plate, rail.restyled = nil, nil
-    rail.seq = rail.seq + 1
+    Park(rail)
     P.free.rail[#P.free.rail + 1] = rail
-    if old then self:LayoutPlate(old) end
+    if P.rows[unit] then self:LayoutPlate(unit) end
 end
 
 ---------------------------------------------------------------------------------
@@ -1605,10 +1901,7 @@ function KT:PlateArrived(unit)
             end
         end
     end
-    if back then
-        self:LayoutPlate(unit)
-        self:RailsRefresh()
-    end
+    if back then self:LayoutPlate(unit) end
     if P.railsOn then self:RailsPlate(unit) end
     FlushLayouts()
 end
@@ -1620,23 +1913,26 @@ function KT:OnPlateRemoved(_, unit)
     if issecretvalue(unit) or type(unit) ~= "string" then return end
     P.epoch[unit] = (P.epoch[unit] or 0) + 1
     local row = P.rows[unit]
-    if not row then return end
-    P.rows[unit] = nil
-    local isTarget = IsTarget(unit)
-    local list = row.list
-    for i = #list, 1, -1 do
-        local e = list[i]
-        list[i] = nil
-        if WAITS[e.kind] and (e.mobGuid or isTarget) then
-            Park(e)
-            e.waiting, e.waitTarget = true, isTarget
-            P.waiting[#P.waiting + 1] = e
-        else
-            RELEASE[e.kind](e)
+    if row then
+        P.rows[unit] = nil
+        local isTarget = IsTarget(unit)
+        local list = row.list
+        for i = #list, 1, -1 do
+            local e = list[i]
+            list[i] = nil
+            if WAITS[e.kind] and (e.mobGuid or isTarget) then
+                Park(e)
+                e.waiting, e.waitTarget = true, isTarget
+                P.waiting[#P.waiting + 1] = e
+                if e.kind == "live" then self:RailsLiveHidden(e.guid, false) end
+            else
+                RELEASE[e.kind](e)
+            end
         end
+        DropRow(row)
     end
-    DropRow(row)
-    self:RailsRefresh()
+    local rail = P.rails[unit]
+    if rail then self:ReleaseRail(rail) end
 end
 
 -- A new target ends every wait that counted on the old one.
@@ -1706,6 +2002,8 @@ function KT:PlatesReset()
     for unit in pairs(P.rows) do FreeRow(unit) end
     wipe(P.dirty)
     P.readySeq, P.readyAt = P.readySeq + 1, nil
+    wipe(P.liveHidden)
+    if P.railDriver then P.railDriver:Hide() end
 end
 
 function KT:PlatesRestyle()
@@ -1726,7 +2024,7 @@ function KT:PlatesRestyle()
         PaintGhost(g)
         FeedGhost(g)
     end
-    for _, rail in pairs(P.rails) do self:ReleaseRail(rail) end
+    P.styleGen = P.styleGen + 1
     if self.isPreview then self:PlaceSamples() end
     for unit in pairs(P.rows) do self:LayoutPlate(unit) end
     self:RailsResync()
