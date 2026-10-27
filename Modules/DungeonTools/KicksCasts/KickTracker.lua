@@ -905,7 +905,7 @@ end
 ---------------------------------------------------------------------------------
 function KT:ShouldBeActive()
     if not self.db or not self.db.Enabled then return false end
-    if self.db.ShowBars == false and self.db.PlateIcons == false then return false end
+    if self.db.ShowBars == false and (self.db.PlateIcons == false or KT.PlateIconsHeld) then return false end
     local inInstance, instanceType = IsInInstance()
     if not inInstance or instanceType ~= "party" then return false end
     if not IsInGroup() then return false end

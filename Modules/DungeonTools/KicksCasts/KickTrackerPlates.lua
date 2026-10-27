@@ -93,6 +93,8 @@ P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt i
 -- Icons on Marked Mobs stays off whatever its saved switch says; the switch
 -- keeps its value for when the hold is lifted.
 KT.PremarkHeld = true
+-- Nameplate Icons as a whole stays off the same way, its saved switch kept.
+KT.PlateIconsHeld = true
 
 -- A plate's lifetime: a kick seen on it carries this, so a placement whose
 -- plate went (and whose token may now be another mob's) takes nothing.
@@ -1752,7 +1754,7 @@ end
 -- Plates run while the tracker is active and Nameplate Icons is on; the
 -- marker intake while Icons on Marked Mobs is on too.
 function KT:SyncPlates()
-    local want = self.isActive and self.db.PlateIcons == true
+    local want = self.isActive and self.db.PlateIcons == true and not KT.PlateIconsHeld
     if want and not self.platesOn then
         self:PlatesActivate()
     elseif not want and self.platesOn then
@@ -1770,7 +1772,7 @@ end
 -- Preview: two samples on the hostile target's plate
 ---------------------------------------------------------------------------------
 function KT:PlatesPreview()
-    if self.db.PlateIcons ~= true then
+    if self.db.PlateIcons ~= true or KT.PlateIconsHeld then
         self:PlatesPreviewEnd()
         return
     end
@@ -1816,7 +1818,7 @@ end
 -- The player's own kick, ready, and a Mage's on a 30-second swipe.
 function KT:PlaceSamples()
     self:ReleaseSamples()
-    if not self.isPreview or self.db.PlateIcons ~= true then return end
+    if not self.isPreview or self.db.PlateIcons ~= true or KT.PlateIconsHeld then return end
     local unit = TargetPlate()
     if not unit or not IsHostile(unit) then return end
     local _, classToken = UnitClass("player")

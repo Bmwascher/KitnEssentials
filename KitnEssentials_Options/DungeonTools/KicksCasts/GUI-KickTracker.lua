@@ -27,15 +27,19 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:SetCondition("all", function()
         return db.ShowBars ~= false
     end)
+    local platesHeld = KT and KT.PlateIconsHeld
     manager:SetCondition("plates", function()
-        return db.PlateIcons ~= false
+        return db.PlateIcons ~= false and not platesHeld
+    end)
+    manager:SetCondition("platesSwitch", function()
+        return not platesHeld
     end)
     local premarkHeld = KT and KT.PremarkHeld
     manager:SetCondition("premark", function()
-        return db.PlateIcons ~= false and not premarkHeld
+        return db.PlateIcons ~= false and not platesHeld and not premarkHeld
     end)
     manager:SetCondition("plateTimer", function()
-        return db.PlateIcons ~= false and db.PlateShowTimer ~= false
+        return db.PlateIcons ~= false and not platesHeld and db.PlateShowTimer ~= false
     end)
     -- "classOnly": widgets only meaningful when ColorMode is "class"
     manager:SetCondition("classOnly", function()
@@ -114,13 +118,17 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:Register(showBarsCheck, "module")
 
     local plateIconsCheck = GUIFrame:CreateCheckbox(row1a, "Nameplate Icons", {
-        value = db.PlateIcons ~= false,
+        value = db.PlateIcons ~= false and not platesHeld,
         tooltip = "Each kicker's icon, with their kick's cooldown, on the nameplate of the mob they stopped.",
         callback = function(checked) db.PlateIcons = checked; ApplySettings(); RefreshStates() end,
     })
     row1a:AddWidget(plateIconsCheck, 0.5)
-    manager:Register(plateIconsCheck, "module")
+    manager:Register(plateIconsCheck, platesHeld and "platesSwitch" or "module")
     card1:AddRow(row1a, Theme.rowHeight)
+    if platesHeld then
+        card1:AddLabel("Nameplate Icons is off in this version while a game freeze it can trigger is " ..
+            "fixed. Your setting is kept for when it returns; the bars work as before.")
+    end
 
     yOffset = card1:GetNextOffset()
 
