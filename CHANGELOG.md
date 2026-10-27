@@ -2,24 +2,15 @@
 
 ## v4.15.2
 
-### Interrupt Tracker
-
-- Nameplate kick icons and the interrupt bars do less work in big pulls,
-  for smoother frame rates
-
----
-
-## v4.15.1
-
-A stopgap for a game freeze some players hit in Mythic+ keys, and less
-frame time from Party Stops in big pulls.
+Temporarily disabling nameplate interrupt icons, and less frame time from
+Party Stops and the interrupt bars in big pulls.
 
 ### Interrupt Tracker
 
-- Icons on Marked Mobs is off for now while a game freeze in Mythic+ keys
-  is fixed. Your setting is kept for when it returns, and the settings page
-  says why it is off. Kick icons still show on the nameplates teammates
-  kicked
+- We're temporarily disabling Nameplate Icons. Your setting is kept for when
+  it returns, and the settings page says why it is off. The interrupt bars
+  work as before
+- The interrupt bars do less work in big pulls, for smoother frame rates
 
 ### Party Stops
 
