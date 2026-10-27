@@ -26,6 +26,9 @@ local C_NamePlate = C_NamePlate
 local C_Timer = C_Timer
 local C_Spell = C_Spell
 local C_ClassColor = C_ClassColor
+local C_CVar = C_CVar
+local C_AddOns = C_AddOns
+local tonumber = tonumber
 local GetTime = GetTime
 local UnitExists = UnitExists
 local UnitIsUnit = UnitIsUnit
@@ -434,6 +437,8 @@ local function BuildLive()
     e.icon = BuildIcon(e.clip)
     e.icon:SetAllPoints(e)
     e.step = NewStep(e)
+    e.rowEnd = CreateFrame("Frame", nil, e)
+    e.rowEnd:SetSize(1, 1)
     return e
 end
 
@@ -444,6 +449,13 @@ local function StyleLive(e)
     StyleIcon(e.icon)
     SizeGate(e.gate, e, cw)
     SizeStep(e.step, cw + db.PlateSpacing, cw)
+    -- The row's end past this icon, for the target arrows: the step pair's
+    -- end, so it closes up with the icon.
+    local leftward = db.PlateSide == "LEFT"
+    e.rowEnd:SetSize(1, cw)
+    e.rowEnd:ClearAllPoints()
+    e.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", leftward and e.step.stdFill or e.step.revFill,
+        leftward and "RIGHT" or "LEFT", 0, 0)
 end
 
 -- The count gate and step pair fed as they last were, or whole while never
@@ -525,6 +537,8 @@ local function BuildGhost()
     g.cells = {}
     g.used = 0
     g.seq = 0
+    g.rowEnd = CreateFrame("Frame", nil, g)
+    g.rowEnd:SetSize(1, 1)
     return g
 end
 
@@ -546,6 +560,7 @@ local function StyleGhost(g)
     local cw = db.PlateIconSize
     local pitch = cw + db.PlateSpacing
     g:SetSize(cw, cw)
+    g.rowEnd:SetSize(1, cw)
     for k = 1, #g.cells do
         local cell = g.cells[k]
         StyleIcon(cell.icon)
@@ -644,7 +659,10 @@ local function AnchorGhost(g, from, fromPoint, offset, leftward)
         ShowStep(cell.stepB, on)
     end
     local undo = 2 * (KT.db.PlateIconSize + KT.db.PlateSpacing) * g.used
-    return endFrom, endPoint, leftward and undo or -undo
+    local endOffset = leftward and undo or -undo
+    g.rowEnd:ClearAllPoints()
+    g.rowEnd:SetPoint(leftward and "LEFT" or "RIGHT", endFrom, endPoint, endOffset, 0)
+    return endFrom, endPoint, endOffset
 end
 
 LEVEL.ghost, ANCHOR.ghost, REFEED.ghost = LevelGhost, AnchorGhost, FeedGhost
@@ -1128,6 +1146,67 @@ local function OwnMarker()
     return FA.NameIndex(FM:GetEffectiveMarker())
 end
 
+-- EllesmereUI Nameplates' target arrows hug a side guest: the outermost frame
+-- another addon keeps beside its bars, asked of each provider in turn. KE
+-- answers with its row's last element's end, or the rail's hug frame while
+-- the rail shows a lane. Nothing here runs unless that addon is loaded.
+local function NameplatesNS()
+    local root = _G.EllesmereUI
+    local registry = type(root) == "table" and root._ModuleNS
+    return type(registry) == "table" and registry.EllesmereUINameplates or nil
+end
+
+-- Plate units per icon unit: the icons render at UIParent's scale, the plate
+-- at the nameplate scale times its own eased scale.
+local function PlateRatio(plate)
+    local global = tonumber(C_CVar.GetCVar("nameplateGlobalScale")) or 1
+    if global <= 0 then global = 1 end
+    return (P.uiScale or 1) / (global * (plate._curScale or 1))
+end
+
+-- For one of that addon's plates and a side ("left" or "right"): the frame the
+-- arrow hugs and its center's height over the bar's center in plate units,
+-- or nil. Live rows answer, and the preview's samples. A plate the addon has
+-- since handed to another unit is not this row's.
+local function SideGuest(plate, side, a0, a1)
+    if not KT.GuestSide(side, KT.db.PlateSide) then return nil end
+    if not (KT.platesOn or KT.isPreview) then return nil end
+    local unit, row
+    for u, r in pairs(P.rows) do
+        if r.euiPlate == plate then
+            unit, row = u, r
+            break
+        end
+    end
+    if not row then return nil end
+    local ns = NameplatesNS()
+    if not (ns and type(ns.plates) == "table" and ns.plates[unit] == plate) then return nil end
+    local list = row.list
+    local outer = list[#list] and list[#list].rowEnd
+    local rail = P.rails[unit]
+    if rail and rail.placedHost and rail.shownCount > 0 then outer = rail.hug end
+    if not outer then return nil end
+    local ratio = PlateRatio(plate)
+    local gy = KT.db.PlateOffsetY * ratio
+    if not KT.GuestHugs(side, KT.db.PlateSide, gy, KT.db.PlateIconSize * ratio, a0, a1) then return nil end
+    return outer, gy
+end
+
+local function RegisterGuest()
+    if P.guestOn or not C_AddOns.IsAddOnLoaded("EllesmereUINameplates") then return end
+    local ns = NameplatesNS()
+    if not (ns and ns.NP_AddSideGuest) then return end
+    P.guestOn = pcall(ns.NP_AddSideGuest, SideGuest)
+end
+
+-- The arrows placed again once the row on that plate changed; nothing unless
+-- the plate shows them.
+local function ArrowsFollow(plate)
+    if not (plate and plate.leftArrow) then return end
+    local ns = NameplatesNS()
+    if ns and ns.PositionArrowsOutsideAuras then pcall(ns.PositionArrowsOutsideAuras, plate) end
+end
+
 ---------------------------------------------------------------------------------
 -- Rows
 ---------------------------------------------------------------------------------
@@ -1145,6 +1224,7 @@ local function RowOf(unit)
 end
 
 local function DropRow(row)
+    row.euiPlate = nil
     row.head:Hide()
     row.head:ClearAllPoints()
     wipe(row.list)
@@ -1220,10 +1300,12 @@ local function LayoutRow(unit)
     local rail = P.rails[unit]
     if rail and not rail.placedHost then rail = nil end
     if #list == 0 and not rail then
+        local plate = row.euiPlate
         FreeRow(unit)
+        ArrowsFollow(plate)
         return
     end
-    local anchor = AnchorOf(unit)
+    local anchor, euiPlate = AnchorOf(unit)
     if DEBUG_KTP then
         local kinds = ""
         for i = 1, #list do kinds = kinds .. list[i].kind .. " " end
@@ -1232,6 +1314,7 @@ local function LayoutRow(unit)
     end
     if not anchor then return end
     PlaceHead(row.head, anchor)
+    row.euiPlate = euiPlate
     local now = GetTime()
     for i = 1, #list do
         local e = list[i]
@@ -1272,6 +1355,7 @@ local function LayoutRow(unit)
             WakeDriver()
         end
     end
+    ArrowsFollow(row.euiPlate)
 end
 
 -- Every row marked so far, laid out now. A caller already in a C_Timer
@@ -1929,6 +2013,7 @@ function KT:OnPlateRemoved(_, unit)
                 RELEASE[e.kind](e)
             end
         end
+        ArrowsFollow(row.euiPlate)
         DropRow(row)
     end
     local rail = P.rails[unit]
@@ -1999,7 +2084,11 @@ function KT:PlatesReset()
         local e = P.waiting[i]
         RELEASE[e.kind](e)
     end
-    for unit in pairs(P.rows) do FreeRow(unit) end
+    for unit, row in pairs(P.rows) do
+        local plate = row.euiPlate
+        FreeRow(unit)
+        ArrowsFollow(plate)
+    end
     wipe(P.dirty)
     P.readySeq, P.readyAt = P.readySeq + 1, nil
     wipe(P.liveHidden)
@@ -2033,6 +2122,7 @@ end
 function KT:PlatesActivate()
     EnsureLift()
     ReadScale()
+    RegisterGuest()
     self.platesOn = true
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnPlateAdded")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnPlateRemoved")
@@ -2076,6 +2166,7 @@ function KT:PlatesPreview()
     end
     EnsureLift()
     ReadScale()
+    RegisterGuest()
     if not P.previewFrame then
         local frame = CreateFrame("Frame")
         P.placeSamples = function() KT:PlaceSamples() end
