@@ -1572,9 +1572,11 @@ function KE:GetKickTalentDemand(specID) end
 
 -- Modules/DungeonTools/PlateAnchor.lua
 --- The health bar a nameplate addon draws for this plate, to anchor icons
---- beside; the plate itself when none is usable, nil without a plate.
+--- beside; the plate itself when none is usable, nil without a plate. On
+--- EllesmereUI Nameplates, also that addon's own plate frame.
 ---@param plate table?
----@return table?
+---@return table? anchor
+---@return table? euiPlate
 function KE:ResolvePlateAnchor(plate) end
 
 -- Core/Main.lua

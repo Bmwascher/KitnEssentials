@@ -93,14 +93,18 @@ function KE:ResolvePlateAnchor(plate)
             local child = children[i]
             if isUsable(child) and child.health and child.cast
                 and type(child.health.GetObjectType) == "function" and isUsable(child.health) then
-                return child.health
+                return child.health, child
             end
         end
         return nil
     end
 
-    local anchor = findPlatynatorAnchor() or findEUIAnchor()
+    local anchor = findPlatynatorAnchor()
     if anchor then return anchor end
+    -- On EllesmereUI Nameplates the second value is that addon's own plate
+    -- frame, the one its target arrows ask side guests about.
+    local health, euiPlate = findEUIAnchor()
+    if health then return health, euiPlate end
 
     -- HealthBarsContainer is a Blizzard field; Plater detaches/hides it, so only
     -- trust it when Plater isn't driving plates (PlateColor keeps it valid).
