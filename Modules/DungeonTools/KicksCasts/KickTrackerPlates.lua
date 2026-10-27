@@ -100,7 +100,6 @@ P.styleGen = 0      -- moved by every restyle; a rail or lane icon stamped older
 P.kickGen = 0       -- moved by every kicker list rebuild
 P.railAcc = 0       -- the rail driver's elapsed accumulator
 KT.markerOf = {}    -- [member GUID] = their announced marker, 1 to 8
-P.readySeq = 0      -- the token of the one ready timer (KT:WakeAt); P.readyAt is its plain time
 -- Nameplate Icons stays off whatever its saved switch says; the switch keeps
 -- its value for when the hold is lifted.
 KT.PlateIconsHeld = true
@@ -620,23 +619,32 @@ local function StyleGhost(g)
     g.styleGen = P.styleGen
 end
 
--- The reveal gate, the count gate and both step pairs. The first pair ends a
--- pitch on, or two once the total rose past its value before the update; the
--- second a pitch, or none once it rose past its value after it. Less two
--- pitches a cell, the chain is one pitch per cell that shows.
+-- The count gate and both step pairs: all a later read can move. The first
+-- pair ends a pitch on, or two once the total rose past its value before the
+-- update; the second a pitch, or none once it rose past its value after it.
+-- Less two pitches a cell, the chain is one pitch per cell that shows.
+local function FeedCellB(cell, leftward)
+    local cur = (cell.cCur ~= nil) and cell.cCur or cell.after
+    if cell.cCur ~= nil then
+        FeedWhole(cell.gateB, cell.fillB, cell.clipB, cell.after, cell.cCur)
+    else
+        ResetWhole(cell.gateB, cell.fillB, cell.clipB)
+    end
+    FeedStep(cell.stepA, cell.before, cur, cur, cell.before, leftward)
+    if cell.cCur ~= nil then
+        FeedStep(cell.stepB, cell.after, cell.cCur, cell.after, cell.cCur, leftward)
+    else
+        ResetStep(cell.stepB, leftward)
+    end
+end
+
+-- The reveal gate too, whose values never change once the cell is made: at
+-- placing, a frame after it, on the plate's return and at a restyle.
 local function FeedCell(cell, leftward)
     cell.gate:SetMinMaxValues(-1, cell.after)
     cell.gate:SetValue(cell.before)
     HangShort(cell.clip, cell.fill, cell.gate)
-    local cur = (cell.cCur ~= nil) and cell.cCur or cell.after
-    FeedStep(cell.stepA, cell.before, cur, cur, cell.before, leftward)
-    if cell.cCur ~= nil then
-        FeedWhole(cell.gateB, cell.fillB, cell.clipB, cell.after, cell.cCur)
-        FeedStep(cell.stepB, cell.after, cell.cCur, cell.after, cell.cCur, leftward)
-    else
-        ResetWhole(cell.gateB, cell.fillB, cell.clipB)
-        ResetStep(cell.stepB, leftward)
-    end
+    FeedCellB(cell, leftward)
 end
 
 local function FeedGhost(g)
@@ -1157,17 +1165,14 @@ end
 
 -- Fed past the member's current cooldown: against the oldest ghost still
 -- holding their cell, else whole at the count now. A read during the
--- cooldown is skipped until KT:WakeAt's wake at its end.
+-- cooldown is skipped; the first read after it feeds.
 FeedLaneCount = function(lane, member, cur, T)
     if cur == nil then
         lane.cBase, lane.cCur = nil, nil
         RefeedLane(lane)
         return
     end
-    if KT.MainCooling(member, T) then
-        KT:WakeAt(member.kickStart + member.kickDuration + READY_SLACK)
-        return
-    end
+    if KT.MainCooling(member, T) then return end
     local base = LaneBase(lane.guid)
     if base == nil then base = cur end
     lane.cBase, lane.cCur = base, cur
@@ -1175,7 +1180,7 @@ FeedLaneCount = function(lane, member, cur, T)
 end
 
 -- A rail's lanes fed from the latest read (opaque, the engine's own current
--- totals), at each read and at the wake.
+-- totals), at each read.
 local function FeedRailCounts(rail, T)
     local totals = KT.meterBase and KT.meterBase.a
     if not totals then return end
@@ -1645,26 +1650,10 @@ function KT:GateSlotOf(member)
     return KT.GateSlot(member, member.unit, self.meterBase.n)
 end
 
--- One timer serves every count gate a read skipped during a cooldown. It
--- wakes at the earliest such end; KT:FeedReady then feeds every element from
--- the latest read, and each one still cooling arms it again. An earlier arm
--- takes over, and the timer it replaced finds its token gone.
-function KT:WakeAt(at)
-    if P.readyAt and P.readyAt <= at then return end
-    P.readySeq = P.readySeq + 1
-    P.readyAt = at
-    local seq, wait = P.readySeq, at - GetTime()
-    C_Timer.After((wait > 0) and wait or 0, function()
-        if P.readySeq ~= seq then return end
-        P.readyAt = nil
-        self:FeedReady()
-    end)
-end
-
 -- A live icon's baseline is the first read at or after its kick, so it holds
 -- that kick's own growth. It is fed only past its own cooldown, so a grip
 -- during a cooldown never cuts a running swipe; a read during the cooldown
--- is skipped, and the wake at its end feeds the latest read, on a plate or off.
+-- is skipped, and the first read after it feeds, on a plate or off.
 local function FeedLiveCount(e, member, cur, T)
     if e.needBase then
         if T < e.kickAt - BASE_SLACK then return end
@@ -1673,27 +1662,20 @@ local function FeedLiveCount(e, member, cur, T)
     end
     if e.cGen == nil or cur == nil then return end
     if e.cBase == nil and e.cGen == KT.meterFight then return end
-    if KT.MainCooling(member, T) then
-        KT:WakeAt(member.kickStart + member.kickDuration + READY_SLACK)
-        return
-    end
+    if KT.MainCooling(member, T) then return end
     e.cCur = cur
     RefeedLive(e)
 end
 
 -- A cell closes again once its teammate interrupted again, fed only past the
--- cell's own cooldown; a read during it is skipped until the wake at its end.
--- A cell from an older fight keeps its last feed until its ghost ends: its
--- totals and the new fight's cannot be compared.
+-- cell's own cooldown; a read during it is skipped, and the first read after
+-- it feeds. A cell from an older fight keeps its last feed until its ghost
+-- ends: its totals and the new fight's cannot be compared.
 local function FeedCellCount(cell, cur, T, leftward)
     if cur == nil or cell.gen ~= KT.meterFight then return end
-    local endAt = cell.cdStart + cell.cdDur
-    if T < endAt then
-        KT:WakeAt(endAt + READY_SLACK)
-        return
-    end
+    if T < cell.cdStart + cell.cdDur then return end
     cell.cCur = cur
-    FeedCell(cell, leftward)
+    FeedCellB(cell, leftward)
 end
 
 -- Each update's gate-slot totals as read (opaque). The cached packet lives
@@ -1711,16 +1693,15 @@ function KT:PlatesCounts(T, totals)
             pend.base, pend.gen = totals[self:GateSlotOf(member)], KT.meterFight
         end
     end
-    self:FeedCounts(T, totals, false)
+    self:FeedCounts(T, totals)
 end
 
--- Every live icon and ghost cell fed from totals, on a plate or off. ready:
--- a wake, not a read, so an icon still waiting for its baseline is left to
--- the next read, the first at or after its kick.
-function KT:FeedCounts(T, totals, ready)
+-- Every live icon, ghost cell and lane fed once from a read's totals, on a
+-- plate or off; a cell only its count gate and step pairs.
+function KT:FeedCounts(T, totals)
     for guid, e in pairs(P.live) do
         local member = self.partyMembers[guid]
-        if member and member.unit ~= "player" and not (ready and e.needBase) then
+        if member and member.unit ~= "player" then
             FeedLiveCount(e, member, totals[self:GateSlotOf(member)], T)
         end
     end
@@ -1734,14 +1715,6 @@ function KT:FeedCounts(T, totals, ready)
         end
     end
     self:FeedLanes(T)
-end
-
--- The wake, and any cooldown change: the latest read (opaque, the engine's
--- own current totals, the same table every read gives KT:PlatesCounts).
-function KT:FeedReady()
-    local totals = self.meterBase and self.meterBase.a
-    if not self.platesOn or not totals then return end
-    self:FeedCounts(GetTime(), totals, true)
 end
 
 -- One update's packet: the teammates KT.AdmitGate took and their gate-slot
@@ -2090,7 +2063,7 @@ function KT:RailsCounts(guid, cur, T)
     end
 end
 
--- Every lane's count gate fed again: a read, or the wake.
+-- Every lane's count gate fed again: a read.
 function KT:FeedLanes(T)
     for _, rail in pairs(P.rails) do FeedRailCounts(rail, T) end
 end
@@ -2208,7 +2181,6 @@ end
 ---------------------------------------------------------------------------------
 -- The member's kickStart or kickDuration changed.
 function KT:PlatesCooldown(guid)
-    self:FeedReady()
     local e, member = P.live[guid], self.partyMembers[guid]
     self:RailsKicker(guid)
     if not e or not member then return end
@@ -2257,7 +2229,6 @@ function KT:PlatesReset()
         ArrowsFollow(plate)
     end
     wipe(P.dirty)
-    P.readySeq, P.readyAt = P.readySeq + 1, nil
     wipe(P.liveHidden)
     if P.railDriver then P.railDriver:Hide() end
 end
