@@ -100,9 +100,6 @@ P.styleGen = 0      -- moved by every restyle; a rail or lane icon stamped older
 P.kickGen = 0       -- moved by every kicker list rebuild
 P.railAcc = 0       -- the rail driver's elapsed accumulator
 KT.markerOf = {}    -- [member GUID] = their announced marker, 1 to 8
--- Nameplate Icons stays off whatever its saved switch says; the switch keeps
--- its value for when the hold is lifted.
-KT.PlateIconsHeld = true
 
 -- A plate's lifetime: a kick seen on it carries this, so a placement whose
 -- plate went (and whose token may now be another mob's) takes nothing.
@@ -2295,7 +2292,7 @@ end
 -- Plates run while the tracker is active and Nameplate Icons is on; the
 -- marker intake while Icons on Marked Mobs is on too.
 function KT:SyncPlates()
-    local want = self.isActive and self.db.PlateIcons == true and not KT.PlateIconsHeld
+    local want = self.isActive and self.db.PlateIcons == true
     if want and not self.platesOn then
         self:PlatesActivate()
     elseif not want and self.platesOn then
@@ -2313,7 +2310,7 @@ end
 -- Preview: two samples on the hostile target's plate
 ---------------------------------------------------------------------------------
 function KT:PlatesPreview()
-    if self.db.PlateIcons ~= true or KT.PlateIconsHeld then
+    if self.db.PlateIcons ~= true then
         self:PlatesPreviewEnd()
         return
     end
@@ -2362,7 +2359,7 @@ end
 -- The player's own kick, ready, and a Mage's on a 30-second swipe.
 function KT:PlaceSamples()
     self:ReleaseSamples()
-    if not self.isPreview or self.db.PlateIcons ~= true or KT.PlateIconsHeld then return end
+    if not self.isPreview or self.db.PlateIcons ~= true then return end
     local unit = TargetPlate()
     if not unit or not IsHostile(unit) then return end
     local _, classToken = UnitClass("player")
