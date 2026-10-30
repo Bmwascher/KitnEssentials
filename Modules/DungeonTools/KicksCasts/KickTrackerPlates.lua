@@ -1495,7 +1495,7 @@ function KT:LayoutNow(unit, full)
     end
     local row = P.rows[unit]
     if full and row then
-        row.headAt = nil
+        row.headGen = nil
         for i = 1, #row.list do
             local e = row.list[i]
             if e.kind == "ghost" then ChainGhost(e) else StyleLive(e) end
