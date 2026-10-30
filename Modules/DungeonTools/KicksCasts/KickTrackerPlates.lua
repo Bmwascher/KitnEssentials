@@ -1353,8 +1353,9 @@ end
 -- the style. Each moved link is unhooked before the rail's chains are laid:
 -- an element the shift edge held last time may be the one the chain now
 -- starts from, and the engine refuses that loop. A rail its sync left waiting
--- is fed, shown and handed to the driver here.
-local function LayoutRow(unit)
+-- is fed, shown and handed to the driver here. keepHead: the head stays where
+-- the last pass placed it and the plate is not read (KT:RelinkPlate).
+local function LayoutRow(unit, keepHead)
     local row = P.rows[unit]
     if not row then return end
     local list = row.list
@@ -1366,7 +1367,12 @@ local function LayoutRow(unit)
         ArrowsFollow(plate)
         return
     end
-    local anchor, euiPlate = AnchorOf(unit)
+    local anchor, euiPlate
+    if keepHead then
+        anchor, euiPlate = row.headAt, row.euiPlate
+    else
+        anchor, euiPlate = AnchorOf(unit)
+    end
     if DEBUG_KTP then
         local kinds = ""
         for i = 1, #list do kinds = kinds .. list[i].kind .. " " end
@@ -1500,6 +1506,16 @@ function KT:LayoutNow(unit, full)
     LayoutRow(unit)
 end
 
+-- A row an element just left, laid out now with its placed head, from any
+-- stack: no shown element may hang from a frame whose points went. The head
+-- alone reads the plate, so the armed pass still checks it; a row never
+-- placed has nothing anchored and only waits.
+function KT:RelinkPlate(unit)
+    local row = P.rows[unit]
+    if row and row.headAt and row.headGen == P.styleGen then LayoutRow(unit, true) end
+    self:LayoutPlate(unit)
+end
+
 -- Out of its row or the waiting list, its link dropped; returns the unit it
 -- left. The frame keeps its parent and stays shown, so a move to another
 -- plate attaches it again only when its host or the style moved.
@@ -1590,10 +1606,10 @@ function KT:PutKickIcon(guid, unit, pend)
     local joins = e.unit ~= unit
     if joins then
         old = TakeOff(e)
+        if old then self:RelinkPlate(old) end
         if e.placedHost ~= HostOf(unit) or e.placedGen ~= P.styleGen then
             if not Attach(e, unit) then
                 self:ReleaseLive(guid)
-                if old then self:LayoutPlate(old) end
                 return
             end
         else
@@ -1610,7 +1626,6 @@ function KT:PutKickIcon(guid, unit, pend)
     PaintIcon(e.icon, member)
     PaintCooldown(e.icon, member.kickStart, member.kickDuration)
     if joins then AddToRow(e, unit) end
-    if old and old ~= unit then self:LayoutPlate(old) end
     self:LayoutPlate(unit)
     FlushLayouts()
     self:WatchReady(e, member)
@@ -1636,10 +1651,10 @@ function KT:ReleaseLive(guid)
     if not e then return end
     P.live[guid] = nil
     local old = self:Unplace(e)
+    if old then self:RelinkPlate(old) end
     e.icon.cd:Clear()
     e.guid, e.mobGuid, e.cBase, e.cCur = nil, nil, nil, nil
     P.free.live[#P.free.live + 1] = e
-    if old then self:LayoutPlate(old) end
     self:RailsLiveHidden(guid, false)
 end
 
@@ -1865,13 +1880,13 @@ function KT:ReleaseGhost(g)
         end
     end
     local old = self:Unplace(g)
+    if old then self:RelinkPlate(old) end
     LanesAfter(g)
     local leftward = self.db.PlateSide == "LEFT"
     for k = 1, g.used do ParkCell(g.cells[k], leftward) end
     g.used, g.t, g.plate, g.mobGuid, g.stamp, g.endAt = 0, nil, nil, nil, nil, nil
     g.seq = g.seq + 1
     P.free.ghost[#P.free.ghost + 1] = g
-    if old then self:LayoutPlate(old) end
 end
 
 -- A sure kick of the member takes their cells out of every ghost that started
@@ -1902,7 +1917,7 @@ function KT:PlatesSupersede(guid, upto)
                     self:ReleaseGhost(g)
                 else
                     ChainGhost(g)
-                    if g.unit then self:LayoutPlate(g.unit) end
+                    if g.unit then self:RelinkPlate(g.unit) end
                 end
             end
         end
@@ -2081,6 +2096,7 @@ function KT:ReleaseRail(rail)
     if P.railCount == 0 and P.railDriver then P.railDriver:Hide() end
     rail.plate, rail.feed, rail.syncPending = nil, nil, nil
     rail.placedHost, rail.placedGen, rail.shownCount = nil, nil, 0
+    if P.rows[unit] then self:RelinkPlate(unit) end
     for i = 1, #rail.lanes do
         local lane = rail.lanes[i]
         if lane.floor then lane.gate:SetValue(lane.floor) end
@@ -2090,7 +2106,6 @@ function KT:ReleaseRail(rail)
     end
     Park(rail)
     P.free.rail[#P.free.rail + 1] = rail
-    if P.rows[unit] then self:LayoutPlate(unit) end
 end
 
 ---------------------------------------------------------------------------------
@@ -2369,7 +2384,7 @@ function KT:ReleaseSamples()
         Park(e)
         e.icon.cd:Clear()
     end
-    if unit then self:LayoutPlate(unit) end
+    if unit then self:RelinkPlate(unit) end
 end
 
 -- The Rails held off for the preview come back with it gone.
