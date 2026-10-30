@@ -1353,8 +1353,8 @@ end
 -- the style. Each moved link is unhooked before the rail's chains are laid:
 -- an element the shift edge held last time may be the one the chain now
 -- starts from, and the engine refuses that loop. A rail its sync left waiting
--- is fed, shown and handed to the driver here. keepHead: the head stays where
--- the last pass placed it and the plate is not read (KT:RelinkPlate).
+-- is fed, shown and handed to the driver here. keepHead: the head hangs from
+-- the anchor the last pass found, and the plate is not read (KT:RelinkPlate).
 local function LayoutRow(unit, keepHead)
     local row = P.rows[unit]
     if not row then return end
@@ -1506,13 +1506,13 @@ function KT:LayoutNow(unit, full)
     LayoutRow(unit)
 end
 
--- A row an element just left, laid out now with its placed head, from any
--- stack: no shown element may hang from a frame whose points went. The head
--- alone reads the plate, so the armed pass still checks it; a row never
--- placed has nothing anchored and only waits.
+-- A row an element just left, laid out now against the anchor the last pass
+-- found, from any stack: no shown element may hang from a frame whose points
+-- went. Only finding the anchor reads the plate, so the armed pass still
+-- does that; a row never placed has nothing anchored and only waits.
 function KT:RelinkPlate(unit)
     local row = P.rows[unit]
-    if row and row.headAt and row.headGen == P.styleGen then LayoutRow(unit, true) end
+    if row and row.headAt then LayoutRow(unit, true) end
     self:LayoutPlate(unit)
 end
 
