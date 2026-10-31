@@ -2,17 +2,6 @@
 
 ## v4.15.4
 
-Icons on Marked Mobs no longer leaves empty slots.
-
-### Interrupt Tracker
-
-- Fixed empty icon-sized gaps that could appear beside a marked mob's
-  health bar after a kick the game did not name
-
----
-
-## v4.15.3
-
 Nameplate interrupt icons are back, with the freeze fixed.
 
 ### Interrupt Tracker
@@ -22,7 +11,8 @@ Nameplate interrupt icons are back, with the freeze fixed.
   icon left a mob
 - Icons on Marked Mobs works again: a teammate's ready kick shows on the mob
   carrying their focus marker before anyone kicks it
-- With EllesmereUI Nameplates, the target arrows stay outside the kick icons
+- Fixed empty icon-sized gaps that could appear beside a marked mob's
+  health bar after a kick the game did not name
 - Nameplate icons do less work as kicks come and go
 
 ---
