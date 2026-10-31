@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.3
+
+Nameplate interrupt icons are back, with the freeze fixed.
+
+### Interrupt Tracker
+
+- Nameplate Icons is back on: your saved setting applies again
+- Fixed a game freeze the nameplate icons could cause in keys when a kick
+  icon left a mob
+- Icons on Marked Mobs works again: a teammate's ready kick shows on the mob
+  carrying their focus marker before anyone kicks it
+- With EllesmereUI Nameplates, the target arrows stay outside the kick icons
+- Nameplate icons do less work as kicks come and go
+
+---
+
 ## v4.15.2
 
 Temporarily disabling nameplate interrupt icons, and less frame time from
