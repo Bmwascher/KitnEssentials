@@ -750,7 +750,7 @@ end
 -- The marker gate draws nothing at full alpha: the icon descends from it. A
 -- cooldown running out moves the lane to its ready slot.
 local function BuildLane(rail)
-    local lane = {}
+    local lane = { rail = rail }
     lane.clip = NewClip(rail)
     lane.gate, lane.fill = NewGate(lane.clip, false)
     lane.gateB, lane.fillB = NewGate(lane.gate, true)
@@ -930,7 +930,7 @@ local function DressRail(rail)
         local k, lane = P.kickers[i], rail.lanes[i]
         local member = KT.partyMembers[k.guid]
         if lane.guid ~= k.guid then
-            lane.cBase, lane.cCur = nil, nil
+            lane.cBase, lane.cCur, lane.ghostFed = nil, nil, nil
             ResetWhole(lane.gateB, lane.fillB, lane.clipB)
         end
         lane.guid = k.guid
@@ -946,7 +946,7 @@ local function DressRail(rail)
     end
     for i = #P.kickers + 1, #rail.lanes do
         local lane = rail.lanes[i]
-        lane.guid, lane.cBase, lane.cCur = nil, nil, nil
+        lane.guid, lane.cBase, lane.cCur, lane.ghostFed = nil, nil, nil, nil
         lane.clip:Hide()
         lane.gate:Hide()
     end
@@ -997,9 +997,10 @@ end
 -- slot by its kicker's readiness among the row's R ready elements of L. A
 -- shown ready lane sits right after the ready elements, one on cooldown after
 -- every element and its marker's ready lanes, same-marker lanes side by
--- side; a hidden lane parks at the first slot. The shift chain gets a pair
--- per ready lane, and its length is what the first element past the ready
--- ones undoes.
+-- side; a hidden lane parks at the first slot. A lane whose count gate was
+-- last fed against a ghost's baseline hides: that gate may hide the icon, and
+-- the shift chain cannot see it. The shift chain gets a pair per ready lane,
+-- and its length is what the first element past the ready ones undoes.
 local function RailSlots(rail, R, L)
     local readyBy, cdBy = rail.readyBy, rail.cdBy
     wipe(readyBy)
@@ -1008,7 +1009,7 @@ local function RailSlots(rail, R, L)
     local used, shown = 0, 0
     for i = 1, #P.kickers do
         local k, lane = P.kickers[i], rail.lanes[i]
-        lane.shown = lane.guid ~= nil and not P.liveHidden[k.guid]
+        lane.shown = lane.guid ~= nil and not P.liveHidden[k.guid] and not lane.ghostFed
         lane.cooling = lane.shown and LaneCooling(lane, now)
         if lane.shown and not lane.cooling then
             local n = readyBy[k.marker] or 0
@@ -1160,6 +1161,16 @@ local function LaneBase(guid)
     return nil
 end
 
+-- A lane fed against a ghost's baseline, or no longer: its plate's row takes
+-- or gives back the lane's slot.
+local function MarkGhostFed(lane, fed)
+    fed = fed or nil
+    if lane.ghostFed == fed then return end
+    lane.ghostFed = fed
+    local rail = lane.rail
+    if rail.placedHost then KT:LayoutPlate(rail.plate) end
+end
+
 -- Fed past the member's current cooldown: against the oldest ghost still
 -- holding their cell, else whole at the count now. A read during the
 -- cooldown is skipped; the first read after it feeds.
@@ -1167,10 +1178,12 @@ FeedLaneCount = function(lane, member, cur, T)
     if cur == nil then
         lane.cBase, lane.cCur = nil, nil
         RefeedLane(lane)
+        MarkGhostFed(lane, false)
         return
     end
     if KT.MainCooling(member, T) then return end
     local base = LaneBase(lane.guid)
+    MarkGhostFed(lane, base ~= nil)
     if base == nil then base = cur end
     lane.cBase, lane.cCur = base, cur
     RefeedLane(lane)
@@ -2098,7 +2111,7 @@ function KT:ReleaseRail(rail)
         local lane = rail.lanes[i]
         if lane.floor then lane.gate:SetValue(lane.floor) end
         lane.icon.cd:Clear()
-        lane.guid, lane.cBase, lane.cCur = nil, nil, nil
+        lane.guid, lane.cBase, lane.cCur, lane.ghostFed = nil, nil, nil, nil
         ResetWhole(lane.gateB, lane.fillB, lane.clipB)
     end
     Park(rail)
