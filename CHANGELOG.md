@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.4
+
+Icons on Marked Mobs no longer leaves empty slots.
+
+### Interrupt Tracker
+
+- Fixed empty icon-sized gaps that could appear beside a marked mob's
+  health bar after a kick the game did not name
+
+---
+
 ## v4.15.3
 
 Nameplate interrupt icons are back, with the freeze fixed.
