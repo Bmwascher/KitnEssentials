@@ -897,7 +897,7 @@ local function RefeedLane(lane)
     end
 end
 
-local FeedLaneCount
+local FeedLaneCount, LaneBase
 
 -- Whether the lane's kicker is on cooldown now, by the engine's own clock.
 local function LaneCooling(lane, now)
@@ -997,9 +997,10 @@ end
 -- slot by its kicker's readiness among the row's R ready elements of L. A
 -- shown ready lane sits right after the ready elements, one on cooldown after
 -- every element and its marker's ready lanes, same-marker lanes side by
--- side; a hidden lane parks at the first slot. The shift chain gets a pair
--- per ready lane, and its length is what the first element past the ready
--- ones undoes.
+-- side; a hidden lane parks at the first slot. A lane whose kicker a ghost
+-- holds hides: its count gate may hide the icon, and the shift chain cannot
+-- see that gate. The shift chain gets a pair per ready lane, and its length
+-- is what the first element past the ready ones undoes.
 local function RailSlots(rail, R, L)
     local readyBy, cdBy = rail.readyBy, rail.cdBy
     wipe(readyBy)
@@ -1008,7 +1009,7 @@ local function RailSlots(rail, R, L)
     local used, shown = 0, 0
     for i = 1, #P.kickers do
         local k, lane = P.kickers[i], rail.lanes[i]
-        lane.shown = lane.guid ~= nil and not P.liveHidden[k.guid]
+        lane.shown = lane.guid ~= nil and not P.liveHidden[k.guid] and LaneBase(k.guid) == nil
         lane.cooling = lane.shown and LaneCooling(lane, now)
         if lane.shown and not lane.cooling then
             local n = readyBy[k.marker] or 0
@@ -1149,7 +1150,7 @@ end
 LEVEL.rail = LevelRail
 
 -- The baseline the oldest ghost still holding the member's cell gives.
-local function LaneBase(guid)
+LaneBase = function(guid)
     for i = 1, #P.ghosts do
         local g = P.ghosts[i]
         for k = 1, g.used do
@@ -1763,6 +1764,13 @@ function KT:PlatesLatePlates(T0, plates)
     end
 end
 
+-- Every placed rail laid out again: a lane's shown state moved.
+local function LayRails()
+    for unit, rail in pairs(P.rails) do
+        if rail.placedHost then KT:LayoutPlate(unit) end
+    end
+end
+
 -- One ghost per update and plate, its cells from the packet, each cooling
 -- from the update's time for that teammate's longest duration. It goes when
 -- the longest cell's cooldown ends. stamp: the plate's lifetime when the kick
@@ -1804,10 +1812,13 @@ function KT:MakeGhost(T, unit, stamp)
     g.used, g.t, g.start, g.plate, g.stamp = n, T, T, unit, now
     g.seq = g.seq + 1
     P.ghosts[#P.ghosts + 1] = g
+    local held = false
     for k = 1, n do
         local cell = g.cells[k]
         if cell.after ~= nil then self:RailsCounts(cell.guid, cell.after, T) end
+        if P.laneOf[cell.guid] then held = true end
     end
+    if held then LayRails() end
     local seq, gen, activation = g.seq, P.gen, self.activationID
     C_Timer.After(0, function()
         if self.activationID ~= activation or P.gen ~= gen or g.seq ~= seq then return end
@@ -1856,15 +1867,18 @@ function KT:PlaceGhost(g, unit)
 end
 
 -- A ghost leaving, out of P.ghosts by now: its members' lanes take their
--- baselines from the ghosts left, with the counts of the latest read.
+-- baselines from the ghosts left, with the counts of the latest read, and
+-- may show again.
 local function LanesAfter(g)
     if P.railCount == 0 then return end
-    local now = GetTime()
+    local now, held = GetTime(), false
     for k = 1, g.used do
         local guid = g.cells[k].guid
         local cur = CountOf(KT.partyMembers[guid])
         if cur ~= nil then KT:RailsCounts(guid, cur, now) end
+        if P.laneOf[guid] then held = true end
     end
+    if held then LayRails() end
 end
 
 function KT:ReleaseGhost(g)
@@ -1919,6 +1933,7 @@ function KT:PlatesSupersede(guid, upto)
             end
         end
     end
+    if changed and P.laneOf[guid] then LayRails() end
     return changed
 end
 
@@ -2039,9 +2054,7 @@ function KT:RailsLiveHidden(guid, hidden)
     if (P.liveHidden[guid] == true) == hidden then return end
     P.liveHidden[guid] = hidden or nil
     if not P.laneOf[guid] then return end
-    for unit, rail in pairs(P.rails) do
-        if rail.placedHost then self:LayoutPlate(unit) end
-    end
+    LayRails()
     if not hidden then
         local cur = CountOf(self.partyMembers[guid])
         if cur ~= nil then self:RailsCounts(guid, cur, GetTime()) end
