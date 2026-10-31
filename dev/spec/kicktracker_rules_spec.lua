@@ -660,3 +660,39 @@ describe("KickTracker dungeon visit", function()
         end
     end)
 end)
+
+describe("KickTracker rail admission", function()
+    it("admits a rail only with a kicker, a successful read typed number, and no plain-friendly refusal", function()
+        local KT = L.loadKickTrackerRules()
+        -- k: kickers with a marker; ok: the read succeeded; t: the index's type; r: read plainly as friendly
+        local rows = {
+            { name = "a number index on a hostile plate", k = 2, ok = true, t = "number", r = false, want = true },
+            { name = "no kicker has a marker", k = 0, ok = true, t = "number", r = false, want = false },
+            { name = "the read failed", k = 2, ok = false, t = "string", r = false, want = false },
+            { name = "an unmarked plate reads nil", k = 2, ok = true, t = "nil", r = false, want = false },
+            { name = "an index of another type", k = 2, ok = true, t = "boolean", r = false, want = false },
+            { name = "a plate read plainly as friendly", k = 2, ok = true, t = "number", r = true, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.RailAdmits(row.k, row.ok, row.t, row.r), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker arrow hug", function()
+    it("hugs the row only on the row's own side and while the icons' span meets the arrows'", function()
+        local KT = L.loadKickTrackerRules()
+        -- s: the arrows' side; p: PlateSide; gy: the icons' center over the bar's; span 30, arrows 0..10
+        local rows = {
+            { name = "left arrows, left row, level with the bar", s = "left", p = "LEFT", gy = 0, want = true },
+            { name = "right arrows, right row, a small offset", s = "right", p = "RIGHT", gy = 5, want = true },
+            { name = "the other side", s = "left", p = "RIGHT", gy = 0, want = false },
+            { name = "a row above the bar", s = "left", p = "TOP", gy = 0, want = false },
+            { name = "an offset clear above the arrows", s = "left", p = "LEFT", gy = 30, want = false },
+            { name = "an offset clear below the arrows", s = "left", p = "LEFT", gy = -30, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.GuestHugs(row.s, row.p, row.gy, 30, 0, 10), row.name)
+        end
+    end)
+end)

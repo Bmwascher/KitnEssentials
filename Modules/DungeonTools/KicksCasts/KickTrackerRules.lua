@@ -572,3 +572,24 @@ function KT.VisitAfter(fromInst, fromAt, inst, now)
     return inst, now
 end
 
+-- A marked-mob rail goes only on a plate whose marker index reads as a
+-- number, plain or secret, while some kicker has a marker; a plate read
+-- plainly as friendly never takes one.
+function KT.RailAdmits(kickers, callOk, markType, refused)
+    return kickers > 0 and callOk == true and markType == "number" and not refused
+end
+
+-- The target arrows on one side ("left" or "right") can hug only a row that
+-- grows on that side.
+function KT.GuestSide(side, plateSide)
+    return plateSide == ((side == "left") and "LEFT" or "RIGHT")
+end
+
+-- The arrows hug the row only on their own side, and only while the icons
+-- (span tall, centered gy over the bar's center) meet the arrows' span a0..a1.
+function KT.GuestHugs(side, plateSide, gy, span, a0, a1)
+    if not KT.GuestSide(side, plateSide) then return false end
+    local half = (span + (a1 - a0)) / 2
+    return gy < half and -gy < half
+end
+
