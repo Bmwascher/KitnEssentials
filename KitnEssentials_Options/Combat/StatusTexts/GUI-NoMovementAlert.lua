@@ -43,7 +43,11 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
         db.Enabled = checked
         ApplySettings()
     end)
-    card1:AddLabel("Shows your specialization's mobility cooldowns on screen until your gap-closer or escape is ready. Spells with no cooldown are tracked by their buff instead.")
+    card1:AddLabel(KE.IS_FOREVER
+        and ("Shows your class's movement cooldowns on screen until your gap-closer or escape is ready, at the highest rank you know: " ..
+            KE:Gold("Charge") .. " and " .. KE:Gold("Intercept") .. ", " .. KE:Gold("Blink") .. ", " ..
+            KE:Gold("Sprint") .. ", " .. KE:Gold("Dash") .. " and " .. KE:Gold("Feral Charge") .. ".")
+        or "Shows your specialization's mobility cooldowns on screen until your gap-closer or escape is ready. Spells with no cooldown are tracked by their buff instead.")
 
     if db.Enabled ~= true then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
@@ -62,7 +66,9 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     -- are keyed per spec ("specID:spellID"), so a spell shared across specs
     -- (Roll on all three Monk specs) has its own setting in each; an older
     -- bare spellID key is still read as the fallback.
-    card7:AddLabel("All specializations for the selected class. Unticking a spell stops tracking it on that spec only; other specs keep their own setting.")
+    card7:AddLabel(KE.IS_FOREVER
+        and "The movement spells of the selected class. Unticking one stops tracking it for that class."
+        or "All specializations for the selected class. Unticking a spell stops tracking it on that spec only; other specs keep their own setting.")
 
     db.Spells = db.Spells or {}
     local _, playerClass = UnitClass("player")

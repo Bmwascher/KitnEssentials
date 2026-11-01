@@ -36,6 +36,72 @@ local CHARGE_REF = "8"
 -- 10x oversampled for a seconds clock).
 local UPDATE_INTERVAL = 0.5
 
+-- Forever has no group res pool: a class with a res of its own sees that.
+-- Every Soulstone shares one cooldown, so one stone's read answers for all.
+local OWN_RES = {
+    DRUID = { spell = 20484 },                                   -- Rebirth
+    SHAMAN = { spell = 20608 },                                  -- Reincarnation
+    WARLOCK = { items = { 5232, 16892, 16893, 16895, 16896 } },  -- Soulstones
+}
+local READY_TEXT = "Ready"
+local OWN_RES_REFS = { READY_TEXT, TIMER_REF }
+-- Set only where the camelot list loads CombatDataForever.lua.
+local Ranks = KE.CombatDataForever
+-- The cooldown reader is No Movement Alert's; its file loads first.
+local NMA = KitnEssentials:GetModule("NoMovementAlert", true)
+
+local function OwnSpellKnown(spellId)
+    if not (C_SpellBook and C_SpellBook.IsSpellKnownOrInSpellBook) then return false end
+    local ok, known = pcall(C_SpellBook.IsSpellKnownOrInSpellBook, spellId,
+        Enum.SpellBookSpellBank.Player, true)
+    return ok and known == true
+end
+
+local function OwnSpellCooldown(spellId)
+    if not NMA then return nil end
+    return NMA:ReadCooldown(spellId)
+end
+
+local function HoldsAny(items)
+    if not (C_Item and C_Item.GetItemCount) then return false end
+    for _, id in ipairs(items) do
+        local count = C_Item.GetItemCount(id, false, false, true)
+        if count and count > 0 then return true end
+    end
+    return false
+end
+
+-- Seconds left, nil when no cooldown runs, false when the read is not
+-- readable.
+local function ItemCooldown(items)
+    if not (C_Container and C_Container.GetItemCooldown) then return false end
+    local start, duration = C_Container.GetItemCooldown(items[1])
+    if not (KE:IsSafeValue(start) and KE:IsSafeValue(duration)) then return false end
+    if start <= 0 or duration <= 0 then return nil end
+    local remaining = start + duration - GetTime()
+    if remaining > 0 then return remaining end
+    return nil
+end
+
+-- Reused on every update; `spell` is set before each read.
+local OWN_READS = {
+    spellCooldown = OwnSpellCooldown,
+    holdsAny = HoldsAny,
+    itemCooldown = ItemCooldown,
+}
+
+local function FormatRemaining(seconds)
+    if seconds >= 3600 then
+        return string_format("%d:%02d", math_floor(seconds / 3600), math_floor((seconds % 3600) / 60))
+    end
+    return string_format("%02d:%02d", math_floor(seconds / 60), math_floor(seconds % 60))
+end
+
+local function PrefixShown(frame)
+    local text = frame.CRText:GetText()
+    return text ~= nil and text ~= ""
+end
+
 CR.frame = nil
 CR.lastUpdate = 0
 CR.lastTimerText = ""
@@ -46,6 +112,9 @@ CR._onUpdateActive = false
 CR.inCombat = false
 CR.inEncounter = false
 CR._chargeListening = false
+-- Forever: the class's OWN_RES entry, and the rank of its spell the player knows.
+CR.ownEntry = nil
+CR.ownSpell = nil
 
 local DEFAULT_CHARGE_AVAILABLE = { 0.3, 1, 0.3, 1 }
 local DEFAULT_CHARGE_UNAVAILABLE = { 1, 0.3, 0.3, 1 }
@@ -80,6 +149,11 @@ function CR:UpdateAnchors()
     if self.frame.CRText then self.frame.CRText:ClearAllPoints() end
     if self.frame.bracketOpen then self.frame.bracketOpen:ClearAllPoints() end
     if self.frame.bracketClose then self.frame.bracketClose:ClearAllPoints() end
+
+    if KE.IS_FOREVER then
+        self:AnchorOwnRes(growRight, textSpacing, padding)
+        return
+    end
 
     if growRight then
         -- Left-to-right: [CR: 2 | 02:00]
@@ -206,8 +280,8 @@ function CR:ApplyTextSettings()
     local sr, sg, sb, sa = KE:ResolveColor(db.SeparatorColor, { 1, 1, 1, 1 })
     local tr, tg, tb, ta = KE:ResolveColor(db.TimerColor, { 1, 1, 1, 1 })
 
-    -- Set separator text and color
-    self.frame.separator:SetText(db.Separator or "|")
+    -- Set separator text and color. Forever draws no separator or timer.
+    self.frame.separator:SetText(KE.IS_FOREVER and "" or (db.Separator or "|"))
     self.frame.separator:SetTextColor(sr, sg, sb, sa)
 
     -- Set charge prefix text and color (uses separator color)
@@ -231,6 +305,7 @@ function CR:ApplyTextSettings()
 
     -- Timer text color
     self.frame.timerText:SetTextColor(tr, tg, tb, ta)
+    if KE.IS_FOREVER then self.frame.timerText:SetText("") end
 
     self:UpdateAnchors()
     self:ApplyBackdropSettings()
@@ -244,6 +319,10 @@ end
 -- that edge, so the text walks with it.
 function CR:ResizeToContent()
     if not self.frame then return end
+    if KE.IS_FOREVER then
+        self:ResizeOwnRes()
+        return
+    end
 
     local timerLive = self.frame.timerText:GetText()
     local chargeLive = self.frame.charge:GetText()
@@ -345,6 +424,10 @@ end
 
 function CR:Update()
     if not self.frame then return end
+    if KE.IS_FOREVER then
+        self:UpdateOwnRes()
+        return
+    end
 
     local chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
 
@@ -468,9 +551,190 @@ function CR:OnUpdate(elapsed)
 end
 
 ---------------------------------------------------------------------------------
+-- Forever: the player's own res
+---------------------------------------------------------------------------------
+-- Pure: the caller supplies the reads. Returns state, remaining, secret;
+-- a nil state hides the text, "unknown" leaves it as it is. A stone's
+-- cooldown counts whether or not one is held; "ready" needs a stone.
+function CR.OwnResState(entry, reads)
+    if not entry then return nil end
+    if entry.spell then
+        if not reads.spell then return nil end
+        local remaining, _, secret = reads.spellCooldown(reads.spell)
+        if remaining then return "cooldown", remaining, secret == true end
+        return "ready"
+    end
+    local remaining = reads.itemCooldown(entry.items)
+    if remaining == false then return "unknown" end
+    if remaining then return "cooldown", remaining, false end
+    if reads.holdsAny(entry.items) then return "ready" end
+    return nil
+end
+
+-- Pure: "preview", "live", or nil when the display must read nothing and
+-- make no frame (switched off, or a class with no res of its own).
+function CR.OwnResDisplay(isPreview, moduleOn, entry)
+    if isPreview then return "preview" end
+    if not moduleOn or not entry then return nil end
+    return "live"
+end
+
+-- "[CR: Ready]": the count slot only, no separator or timer.
+function CR:AnchorOwnRes(growRight, textSpacing, padding)
+    local f = self.frame
+    local gap = PrefixShown(f) and textSpacing or 0
+    f.separator:Hide()
+    f.timerText:Hide()
+    if growRight then
+        f.content:SetPoint("LEFT", f, "LEFT", padding, 0)
+        f.bracketOpen:SetPoint("LEFT", f.content, "LEFT", 0, 0)
+        f.CRText:SetPoint("LEFT", f.bracketOpen, "RIGHT", -2, 0)
+        f.charge:SetPoint("LEFT", f.CRText, "RIGHT", gap, 0)
+        f.bracketClose:SetPoint("LEFT", f.charge, "RIGHT", 0, 0)
+    else
+        f.content:SetPoint("RIGHT", f, "RIGHT", -padding, 0)
+        f.bracketClose:SetPoint("RIGHT", f.content, "RIGHT", 0, 0)
+        f.charge:SetPoint("RIGHT", f.bracketClose, "LEFT", 0, 0)
+        f.CRText:SetPoint("RIGHT", f.charge, "LEFT", -gap, 0)
+        f.bracketOpen:SetPoint("RIGHT", f.CRText, "LEFT", 2, 0)
+    end
+end
+
+-- The count slot holds "Ready" or a time, so it is sized for the wider of
+-- the two; one joint, prefix to count, when the prefix shows.
+function CR:ResizeOwnRes()
+    local f = self.frame
+    local live = f.charge:GetText()
+    local slot, secret = 0, false
+    for _, ref in ipairs(OWN_RES_REFS) do
+        f.charge:SetText(ref)
+        local w = f.charge:GetStringWidth()
+        if KE:IsSafeValue(w) then slot = math.max(slot, w) else secret = true end
+    end
+    self.lastChargeText = ""
+    local totalWidth = 8 + slot
+    for _, fs in ipairs({ f.bracketOpen, f.CRText, f.bracketClose }) do
+        local text = fs:GetText()
+        if text and text ~= "" then
+            local w = fs:GetStringWidth()
+            if KE:IsSafeValue(w) then totalWidth = totalWidth + w else secret = true end
+        end
+    end
+    if PrefixShown(f) then totalWidth = totalWidth + (self.db.TextSpacing or 4) end
+    if live then f.charge:SetText(live) end
+    if not secret then
+        local h = (self.db.FontSize or 16) + 10
+        f:SetSize(math.max(KE:PixelSnap(totalWidth), KE:PixelSnap(80)), h)
+    end
+end
+
+-- text nil leaves the slot's text as it is.
+function CR:PaintOwnRes(text, colorKey)
+    if text and text ~= self.lastChargeText then
+        self.lastChargeText = text
+        self.frame.charge:SetText(text)
+    end
+    if colorKey ~= self.lastChargeColor then
+        self.lastChargeColor = colorKey
+        local r, g, b, a
+        if colorKey == "available" then
+            r, g, b, a = KE:ResolveColor(self.db.ChargeAvailableColor, DEFAULT_CHARGE_AVAILABLE)
+        else
+            r, g, b, a = KE:ResolveColor(self.db.ChargeUnavailableColor, DEFAULT_CHARGE_UNAVAILABLE)
+        end
+        self.frame.charge:SetTextColor(r, g, b, a)
+    end
+end
+
+function CR:UpdateOwnRes()
+    local display = CR.OwnResDisplay(self.isPreview, self.db.Enabled and self:IsEnabled(), self.ownEntry)
+    if display == "preview" then
+        self.frame:Show()
+        self:PaintOwnRes(READY_TEXT, "available")
+        self:_SetOnUpdateActive(false)
+        return
+    end
+    -- Off, nothing shows: a preview closing on a switched-off module, or a
+    -- stray OnUpdate, ends here rather than reading the res.
+    local state, remaining, secret
+    if display == "live" then
+        OWN_READS.spell = self.ownSpell
+        state, remaining, secret = CR.OwnResState(self.ownEntry, OWN_READS)
+    end
+    if state == "unknown" then return end
+    if not state then
+        self.frame:Hide()
+        self.lastChargeText = ""
+        self.lastChargeColor = nil
+        self:_SetOnUpdateActive(false)
+        return
+    end
+    self.frame:Show()
+    if state == "ready" then
+        self:PaintOwnRes(READY_TEXT, "available")
+        self:_SetOnUpdateActive(false)
+        return
+    end
+    if secret then
+        -- A secret time can be drawn but not compared, so it is never cached.
+        self.lastChargeText = ""
+        self.frame.charge:SetFormattedText("%.0f", remaining)
+        self:PaintOwnRes(nil, "unavailable")
+    else
+        self:PaintOwnRes(FormatRemaining(remaining), "unavailable")
+    end
+    self:_SetOnUpdateActive(true)
+end
+
+function CR:ResolveOwnSpell()
+    local entry = self.ownEntry
+    self.ownSpell = entry and entry.spell and Ranks and Ranks.HighestKnown(entry.spell, OwnSpellKnown) or nil
+end
+
+function CR:OnOwnSpellsChanged()
+    self:ResolveOwnSpell()
+    self:OnCombatEvent("SPELLS_CHANGED")
+end
+
+-- No pool to wait for, so no combat, instance or encounter listening: the
+-- res is followed wherever the player is. A class with none stays idle.
+function CR:EnableOwnRes()
+    local _, class = UnitClass("player")
+    self.ownEntry = class and OWN_RES[class] or nil
+    if not self.ownEntry then return end
+    self:CreateFrame()
+    self:RegWithEditMode()
+    self.isPreview = false
+    self:ResolveOwnSpell()
+    C_Timer.After(0.5, function()
+        self:ApplySettings()
+    end)
+    -- The spellbook may not be readable yet at enable, so the rank is
+    -- resolved again on entering the world as well as on a spell change.
+    self:RegisterEvent("SPELLS_CHANGED", "OnOwnSpellsChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnOwnSpellsChanged")
+    if self.ownEntry.spell then
+        self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "OnCombatEvent")
+    else
+        self:RegisterEvent("BAG_UPDATE_COOLDOWN", "OnCombatEvent")
+        self:RegisterEvent("BAG_UPDATE_DELAYED", "OnCombatEvent")
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Apply Settings
 ---------------------------------------------------------------------------------
 function CR:ApplySettings()
+    -- Forever: switched off, or a class with no res of its own, makes no
+    -- frame outside a preview, however often its settings are applied.
+    if KE.IS_FOREVER
+        and not CR.OwnResDisplay(self.isPreview, self.db.Enabled and self:IsEnabled(), self.ownEntry) then
+        if self.frame then
+            self:_SetOnUpdateActive(false)
+            self.frame:Hide()
+        end
+        return
+    end
     if not self.frame then
         self:CreateFrame()
     end
@@ -591,6 +855,10 @@ local CONTEXT_OPTIONS = {
 ---------------------------------------------------------------------------------
 function CR:OnEnable()
     if not self.db.Enabled then return end
+    if KE.IS_FOREVER then
+        self:EnableOwnRes()
+        return
+    end
     self:CreateFrame()
     self:RegWithEditMode()
 

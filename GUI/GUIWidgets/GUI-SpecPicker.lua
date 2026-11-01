@@ -82,6 +82,12 @@ end
 ---------------------------------------------------------------------------------
 local classSpecs
 
+-- Forever: one spec per class, and no class count to walk.
+local FOREVER_CLASS_SPECS = {
+    MAGE = { 1482 }, DRUID = { 1484 }, HUNTER = { 1485 }, PALADIN = { 1486 }, PRIEST = { 1487 },
+    ROGUE = { 1488 }, SHAMAN = { 1489 }, WARLOCK = { 1490 }, WARRIOR = { 1491 },
+}
+
 -- Class token -> spec ids, for every playable class. Built on first use and
 -- cached for the session: the data is static, and every build of a page with a
 -- spec card reads it. An empty read is never cached, so a call that lands
@@ -90,6 +96,7 @@ local classSpecs
 -- Counted with GetNumSpecializationsForClassID rather than a fixed 1-4 loop,
 -- which silently truncates a class that gains a fifth spec.
 function GUIFrame.GetClassSpecs()
+    if KE.IS_FOREVER then return FOREVER_CLASS_SPECS end
     if classSpecs then return classSpecs end
 
     local out = {}

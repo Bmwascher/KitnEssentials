@@ -40,7 +40,17 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat",
         defaultExpanded = false,
         items = {
-            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "all classes", "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "stasis", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "warlock", "destruction", "destro", "destruction warlock", "warlock havoc", "hunter", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura", "utilities", "general", "priest: pi macro", "pi macro", "priest: pi assist", "pi assist", "power infusion", "power infusion assist", "pi", "assist", "burst", "glow", "raid frame", "macro", "builder", "trinket", "racial", "recuperate", "heal", "button", "time spiral", "tracker", "dot tracker", "dot", "dots", "multidot", "mage", "alter time", "shaman", "nature's guardian", "natures guardian", "thunderous paws", "ghost wolf" } },
+            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "all classes", "warlock", "hunter", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura", "utilities", "general", "glow", "tracker", "dot tracker", "dot", "dots", "multidot", "mage", "shaman" },
+                gatedKeywords = {
+                    ClassToolsEvoker = { "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "stasis" },
+                    HavocTracker = { "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "destruction", "destro", "destruction warlock", "warlock havoc" },
+                    HuntersMark = { "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival" },
+                    ClassToolsPriest = { "priest: pi macro", "pi macro", "priest: pi assist", "pi assist", "power infusion", "power infusion assist", "pi", "assist", "burst", "raid frame", "macro", "builder", "trinket", "racial" },
+                    Recuperate = { "recuperate", "heal", "button" },
+                    TimeSpiral = { "time spiral" },
+                    AlterTime = { "alter time" },
+                    ShamanProcCooldowns = { "nature's guardian", "natures guardian", "thunderous paws", "ghost wolf" },
+                } },
             { id = "CombatRes",     text = "Combat Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },

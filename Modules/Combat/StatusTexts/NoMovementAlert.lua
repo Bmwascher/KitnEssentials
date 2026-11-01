@@ -26,6 +26,8 @@ local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 local C_Spell = C_Spell
 local C_Timer = C_Timer
 local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
+-- Set only where the camelot list loads CombatDataForever.lua.
+local Ranks = KE.CombatDataForever
 
 ------------------------------------------------------------------------
 -- Data tables
@@ -45,6 +47,17 @@ local MOVEMENT_ABILITIES = {
     WARLOCK     = { [265] = { 48020, 111400 }, [266] = { 48020, 111400 }, [267] = { 48020, 111400 } },
     WARRIOR     = { [71] = { 6544 }, [72] = { 6544 }, [73] = { 6544 } },
 }
+
+-- Forever: one spec per class, each spell by its rank 1; the highest rank
+-- known is tracked. Both Feral Charge ids ship, as a talented Druid knows
+-- one of them.
+local FOREVER_MOVEMENT_ABILITIES = {
+    WARRIOR = { [1491] = { 100, 20252 } },            -- Charge, Intercept
+    MAGE    = { [1482] = { 1953 } },                  -- Blink
+    ROGUE   = { [1488] = { 2983 } },                  -- Sprint
+    DRUID   = { [1484] = { 1850, 16979, 1238122 } },  -- Dash, Feral Charge (Bear), Feral Charge
+}
+if KE.IS_FOREVER then MOVEMENT_ABILITIES = FOREVER_MOVEMENT_ABILITIES end
 
 -- Aura-tracked: no cooldown to count down, so the aura being up IS the
 -- state. Membership decides HOW a spell is tracked, never whether it is
@@ -559,6 +572,15 @@ function NMA:BuildTracked()
     local function add(spellId)
         if seen[spellId] then return end
         if not SpellEnabled(db, spellId, specId) then return end
+        -- Forever: the saved id keys the settings, and the highest rank of
+        -- it the player knows is tracked, named and read.
+        local savedId = spellId
+        if Ranks then
+            local rank = Ranks.HighestKnown(savedId, SpellKnown)
+            if not rank or seen[rank] then return end
+            seen[savedId] = true
+            spellId = rank
+        end
         if not SpellKnown(spellId) then return end
         if ReplacedByKnownChoice(spellId) then return end
         local info = SpellInfo(spellId)
@@ -582,7 +604,7 @@ function NMA:BuildTracked()
             spellId = spellId,
             name = info.name,
             icon = info.iconID,
-            customText = SpellCustomText(db, spellId, specId),
+            customText = SpellCustomText(db, savedId, specId),
             isBuffActive = BUFF_ACTIVE_SPELLS[spellId] ~= nil,
             baseDuration = CategoryDuration(spellId),
         }
@@ -1187,6 +1209,8 @@ function NMA:OnEnable()
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnSpecChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+    -- A rank trained at a trainer is tracked without a reload.
+    if Ranks then self:RegisterEvent("SPELLS_CHANGED", "OnSpecChanged") end
     -- Combat transitions change what Hide Out of Combat shows.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Refresh")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "Refresh")

@@ -178,7 +178,9 @@ GUIFrame:RegisterContent("CustomCooldowns", function(scrollChild, yOffset)
         card2:AddRow(addRow, Theme.rowHeight)
 
         card2:AddNote(KE:Gold("All Specs") .. " adds to every spec of the class; a spec adds to that spec only. " ..
-            "A spell shows only where it is known.")
+            (KE.IS_FOREVER
+                and "A spell shows only where it is known, and adding any rank of it tracks the highest rank you know."
+                or "A spell shows only where it is known."))
     end
 
     local classRow, shownClass = GUIFrame:CreateClassPickerRow(card2.content, {

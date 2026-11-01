@@ -18,6 +18,8 @@ local CCD = KitnEssentials:NewModule("CustomCooldowns", "AceEvent-3.0")
 ---@type NoMovementAlert
 local NMA = KitnEssentials:GetModule("NoMovementAlert", true)
 local Rules = KE.CustomCooldownsRules
+-- Set only where the camelot list loads CombatDataForever.lua.
+local Ranks = KE.CombatDataForever
 
 local C_Spell = C_Spell
 local C_Timer = C_Timer
@@ -51,6 +53,10 @@ local function SpellKnown(spellId)
     local ok, known = pcall(C_SpellBook.IsSpellKnownOrInSpellBook, spellId,
         Enum.SpellBookSpellBank.Player, true)
     return ok and known == true
+end
+
+local function AnyRankKnown(spellId)
+    return Ranks.HighestKnown(spellId, SpellKnown) ~= nil
 end
 
 local function SpellInfo(spellId)
@@ -244,7 +250,13 @@ end
 ------------------------------------------------------------------------
 function CCD:BuildTracked()
     local _, class = UnitClass("player")
-    local ids = Rules.ResolveList(self.db.Spells, class, KE:GetPlayerSpecId(), SpellKnown)
+    local ids
+    if Ranks then
+        -- Two ranks of one spell show once, as the highest rank known.
+        ids = Ranks.Collapse(Rules.ResolveList(self.db.Spells, class, KE:GetPlayerSpecId(), AnyRankKnown), SpellKnown)
+    else
+        ids = Rules.ResolveList(self.db.Spells, class, KE:GetPlayerSpecId(), SpellKnown)
+    end
     local out = {}
     for i = 1, #ids do
         local id = ids[i]
@@ -526,6 +538,8 @@ function CCD:OnEnable()
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnSpecChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+    -- A rank trained at a trainer is tracked without a reload.
+    if Ranks then self:RegisterEvent("SPELLS_CHANGED", "OnSpecChanged") end
     -- Combat transitions change what Hide Out of Combat shows.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Refresh")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "Refresh")

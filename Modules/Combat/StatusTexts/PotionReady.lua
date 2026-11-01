@@ -42,6 +42,12 @@ local POTION_IDS = {
     245904, 245905,                 -- Fleeting Potion of Devoured Dreams (Gold, Silver)
 }
 
+-- Every Forever combat potion shares one cooldown, so one held potion
+-- answers for all of them.
+if KE.IS_FOREVER then
+    POTION_IDS = KE.CombatDataForever and KE.CombatDataForever.POTION_IDS or {}
+end
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
@@ -52,6 +58,10 @@ PR.editModeRegistered = false
 PR.inCombat           = false
 PR.inInstance         = false
 PR._listening         = false
+-- Forever: the first listed potion in the bags, looked up again only after
+-- a bag change.
+PR.heldPotion         = nil
+PR.heldDirty          = true
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -101,6 +111,8 @@ function PR:SyncListening(onlyOn)
     if onlyOn and not want then return end
     self._listening = want
     if want then
+        -- Bag changes were not heard while off.
+        self.heldDirty = true
         self:RegisterEvent("BAG_UPDATE_DELAYED", "BAG_UPDATE_DELAYED")
         self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN")
     else
@@ -127,6 +139,21 @@ function PR:CheckPotions()
     if self.isPreview then return end
     if not self:PassesVisibility() then
         self:SetTextShown(false)
+        return
+    end
+
+    if KE.IS_FOREVER then
+        if self.heldDirty then
+            self.heldPotion = nil
+            for _, id in ipairs(POTION_IDS) do
+                if HasPotion(id) then
+                    self.heldPotion = id
+                    break
+                end
+            end
+            self.heldDirty = false
+        end
+        self:SetTextShown(self.heldPotion ~= nil and IsPotionReady(self.heldPotion))
         return
     end
 
@@ -290,6 +317,7 @@ function PR:ZONE_CHANGED_NEW_AREA()
 end
 
 function PR:BAG_UPDATE_DELAYED()
+    self.heldDirty = true
     self:CheckPotions()
 end
 

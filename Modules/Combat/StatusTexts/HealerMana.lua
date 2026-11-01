@@ -66,6 +66,11 @@ local HEALER_SPEC_ICONS = {
     EVOKER  = 4622476, -- Preservation
 }
 
+-- Forever's preview: one spec per class, so the class icons stand in.
+local FOREVER_CANNED = {
+    { class = "PRIEST" }, { class = "DRUID" }, { class = "PALADIN" }, { class = "SHAMAN" },
+}
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
@@ -78,6 +83,7 @@ HM.mode = "DUNGEON"     -- held mode; only RefreshMode writes it
 HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
 HM.isPreview = false
 HM.libSpecCache = {}  -- [name, or name-realm for another realm] = specID, fed by LibSpec.RegisterGroup callback
+HM.libRoleCache = {}  -- Forever: [name] = the role the library last reported, any role
 
 ---------------------------------------------------------------------------------
 -- Helpers
@@ -88,8 +94,61 @@ local function GetSpecIcon(specID)
     return icon
 end
 
+-- Forever: the key the library files a member under, "First Surname".
+local function ForeverLibKey(unit)
+    local ok, name, surname = pcall(UnitNameUnmodified, unit)
+    if not ok then return nil end
+    return KE:JoinCharacterName(name, surname)
+end
+
+-- Forever: the library's talent role when it has one, else the set role.
+function HM.ForeverIsHealer(libraryRole, assignedRole)
+    if libraryRole then return libraryRole == "HEALER" end
+    return assignedRole == "HEALER"
+end
+
+-- Raid mode walks raid1..n, so the player can arrive as a raid unit.
+local function IsSelf(unit)
+    if unit == "player" then return true end
+    local guid = UnitGUID(unit)
+    return guid ~= nil and guid == UnitGUID("player")
+end
+
+-- Forever: the player's own role follows the shared helper; another
+-- member's follows the library, else the role they set.
+local function ForeverRoleIsHealer(unit)
+    if IsSelf(unit) then return KE:IsPlayerHealerSpec() == true end
+    local key = ForeverLibKey(unit)
+    return HM.ForeverIsHealer(key and HM.libRoleCache[key], UnitGroupRolesAssigned(unit))
+end
+
+-- Forever: whether a library report should rebuild the list: a role that
+-- changed, while the tracker is on and not previewing.
+function HM.ForeverRoleRefreshes(oldRole, newRole, moduleOn, previewing)
+    return oldRole ~= newRole and moduleOn == true and not previewing
+end
+
+-- Forever: the library reports a member's role only when a group forms, at
+-- login and on a talent change, and never replays one, so this watcher
+-- outlives the module: switching the tracker on mid-group still knows the
+-- roles reported before.
+if KE.IS_FOREVER and LibSpec then
+    -- The library keys callbacks by owner table; this one is the watcher's own.
+    LibSpec.RegisterGroup({}, function(_, role, _, playerName)
+        if not playerName then return end
+        local old = HM.libRoleCache[playerName]
+        HM.libRoleCache[playerName] = role
+        local on = HM:IsEnabled() and HM.db ~= nil and HM.db.Enabled == true
+        if HM.ForeverRoleRefreshes(old, role, on, HM.isPreview) then HM:FindHealers() end
+    end)
+end
+
 local function IsHealer(unit)
-    if UnitGroupRolesAssigned(unit) ~= "HEALER" then return false end
+    if KE.IS_FOREVER then
+        if not ForeverRoleIsHealer(unit) then return false end
+    elseif UnitGroupRolesAssigned(unit) ~= "HEALER" then
+        return false
+    end
     -- Filter delve companion NPCs that don't have a real mana pool. Valeera
     -- Sanguinar in Midnight delves returns max=1 (sentinel placeholder)
     -- rather than true 0. Threshold 100 is well below any real healer
@@ -496,8 +555,13 @@ function HM:BuildHealerSnapshot(unit)
     local _, class = UnitClass(unit)
     local displayName = KE:GetNicknameOrName(unit)
     local connected = UnitIsConnected(unit)
-    local spec = KE.PartyCooldownsSpec
-    local key = spec and spec.LibKey(unit)
+    local key
+    if KE.IS_FOREVER then
+        key = ForeverLibKey(unit)
+    else
+        local spec = KE.PartyCooldownsSpec
+        key = spec and spec.LibKey(unit)
+    end
     return {
         unit = unit,
         name = displayName,
@@ -575,7 +639,8 @@ function HM:FindHealers()
 
     if mode == "RAID" then
         local maxHealers = self.db.MaxHealers or 6
-        local excludeBench = self.db.ExcludeBenchGroups
+        -- A Forever raid of forty uses all eight groups.
+        local excludeBench = self.db.ExcludeBenchGroups and not KE.IS_FOREVER
         -- UnitGUID stays plain for units in the raid, so the compare is safe.
         local selfGUID = self:ExcludesSelf() and UnitGUID("player") or nil
         local count = 0
@@ -876,7 +941,7 @@ function HM:ShowPreview()
     local previewCount = raidPreview and (self.db.MaxHealers or 6) or 1
     -- Sample healer specs (drive only the icon/class color in the preview).
     -- Names are generic "Healer N"; only the spec/class is read here.
-    local CANNED = {
+    local CANNED = KE.IS_FOREVER and FOREVER_CANNED or {
         { specID = 257,  class = "PRIEST" },   -- Holy Priest
         { specID = 105,  class = "DRUID" },    -- Restoration
         { specID = 270,  class = "MONK" },     -- Mistweaver

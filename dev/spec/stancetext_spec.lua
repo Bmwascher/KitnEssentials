@@ -83,4 +83,34 @@ describe("StanceText:EvaluateSpec", function()
         ctx.auraIdentityVisible = function() return false end
         assert.equals(386164, ST:EvaluateSpec(db, 71, entryForm, ctx))
     end)
+
+    -- Forever's Required dropdown: 0 is no requirement, -1 any of the options.
+    it("hides with no requirement, whatever the form", function()
+        local entryNone = { spellID = 0, check = "form", options = { 0, 386164 } }
+        assert.is_nil(ST:EvaluateSpec(db, 71, entryNone, ctx))
+        ctx.currentFormSpell = 386164
+        assert.is_nil(ST:EvaluateSpec(db, 71, entryNone, ctx))
+    end)
+
+    it("under any, hides while a form is up and otherwise draws the first known option", function()
+        local entryAny = { spellID = -1, check = "form", options = { -1, 0, 101, 102 } }
+        ctx.isKnown = function(id) return id ~= 101 end
+        assert.equals(102, ST:EvaluateSpec(db, 65, entryAny, ctx))
+        ctx.currentFormSpell = 999
+        assert.is_nil(ST:EvaluateSpec(db, 65, entryAny, ctx))
+    end)
+
+    it("under any, hides when no option is known", function()
+        local entryAny = { spellID = -1, check = "form", options = { -1, 0, 101, 102 } }
+        ctx.isKnown = function(id) return id <= 0 end
+        assert.is_nil(ST:EvaluateSpec(db, 65, entryAny, ctx))
+    end)
+
+    -- A higher rank of the wanted form is the wanted form.
+    it("counts a form the context matches to the wanted spell as satisfied", function()
+        local entryBear = { spellID = 5487, check = "form" }
+        ctx.currentFormSpell = 9634
+        ctx.sameSpell = function(a, b) return a == 9634 and b == 5487 end
+        assert.is_nil(ST:EvaluateSpec(db, 1484, entryBear, ctx))
+    end)
 end)

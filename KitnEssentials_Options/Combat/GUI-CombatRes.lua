@@ -56,8 +56,13 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    card1:AddLabel("Shows your group's battle resurrection charges and the countdown to the next one, " ..
-        "as a text you can place and format.")
+    card1:AddLabel(KE.IS_FOREVER
+        and ("Shows when your own battle resurrection is ready, or the time until it is: " ..
+            KE:Gold("Rebirth") .. " for a Druid, " .. KE:Gold("Reincarnation") .. " for a Shaman, a " ..
+            KE:Gold("Soulstone") .. " in your bags for a Warlock. Other classes see nothing, and " ..
+            "reagents are not counted.")
+        or ("Shows your group's battle resurrection charges and the countdown to the next one, " ..
+            "as a text you can place and format."))
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.
@@ -70,18 +75,21 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     manager:Register(cardFormat, "all")
 
     local rowF1 = GUIFrame:CreateRow(cardFormat.content, Theme.rowHeight)
-    local sepInput = GUIFrame:CreateEditBox(rowF1, "Separator Character", {
-        value = db.Separator or "|",
-        callback = function(val) db.Separator = val; ApplySettings() end,
-    })
-    rowF1:AddWidget(sepInput, 0.5)
-    manager:Register(sepInput, "all")
+    -- Forever shows one value, so there is nothing to separate.
+    if not KE.IS_FOREVER then
+        local sepInput = GUIFrame:CreateEditBox(rowF1, "Separator Character", {
+            value = db.Separator or "|",
+            callback = function(val) db.Separator = val; ApplySettings() end,
+        })
+        rowF1:AddWidget(sepInput, 0.5)
+        manager:Register(sepInput, "all")
+    end
 
     local sepChargeInput = GUIFrame:CreateEditBox(rowF1, "Charge Prefix", {
         value = db.SeparatorCharges or "CR:",
         callback = function(val) db.SeparatorCharges = val; ApplySettings() end,
     })
-    rowF1:AddWidget(sepChargeInput, 0.5)
+    rowF1:AddWidget(sepChargeInput, KE.IS_FOREVER and 1 or 0.5)
     manager:Register(sepChargeInput, "all")
     cardFormat:AddRow(rowF1, Theme.rowHeight)
 
@@ -178,7 +186,12 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
         db = db,
         manager = manager,
         onChange = ApplySettings,
-        colors = {
+        -- Forever: the same keys under the names of what they color there.
+        colors = KE.IS_FOREVER and {
+            { label = "Prefix Color", key = "SeparatorColor", default = { 1, 1, 1, 1 } },
+            { label = "Ready Color", key = "ChargeAvailableColor", default = { 0.3, 1, 0.3, 1 } },
+            { label = "Cooldown Color", key = "ChargeUnavailableColor", default = { 1, 0.3, 0.3, 1 } },
+        } or {
             { label = "Separator Color", key = "SeparatorColor", default = { 1, 1, 1, 1 } },
             { label = "Timer Text Color", key = "TimerColor", default = { 1, 1, 1, 1 } },
             { label = "Charges Available", key = "ChargeAvailableColor", default = { 0.3, 1, 0.3, 1 } },

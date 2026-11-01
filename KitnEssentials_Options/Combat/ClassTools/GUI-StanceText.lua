@@ -67,7 +67,10 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
             end
         end
     end)
-    card1:AddLabel("Shows an icon when your spec is not in the form, stance or aura it should be in.")
+    card1:AddLabel(KE.IS_FOREVER
+        and ("Shows an icon when you are not in the stance, aura or form picked for your class below. " ..
+            "A Priest is warned when " .. KE:Gold("Shadowform") .. " is learned and not up.")
+        or "Shows an icon when your spec is not in the form, stance or aura it should be in.")
 
     if db.Enabled ~= true then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
@@ -220,7 +223,8 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
                 local entry = mod.SPECS[specID]
                 local key = tostring(specID)
                 local specName = mod.SPEC_NAMES[specID] or key
-                local wantedName = mod.SPELL_NAMES[entry.spellID] or ""
+                -- No requirement or any option: the switch takes the spec's name.
+                local wantedName = entry.spellID > 0 and mod.SPELL_NAMES[entry.spellID] or ""
 
                 local specIcon
                 if GetSpecializationInfoForSpecID then
