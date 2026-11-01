@@ -428,11 +428,11 @@ describe("Profiler CPU report", function()
         state.profiler.RunCommand("cpu 1")
 
         local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("30.0 sec", 1, true))
-        assert.is_truthy(output:find("8.51 ms/sec", 1, true))
-        assert.is_truthy(output:find("0.85% of one CPU-second", 1, true))
-        assert.is_truthy(output:find("recent avg 0.1250 ms/tick", 1, true))
-        assert.is_truthy(output:find("peak since launch 2.5000 ms", 1, true))
+        assert.is_truthy(output:find("30.0 s since", 1, true))
+        assert.is_truthy(output:find("8.51 ms per second", 1, true))
+        assert.is_truthy(output:find("0.85% of one CPU core", 1, true))
+        assert.is_truthy(output:find("0.1250 ms per rendered frame on average", 1, true))
+        assert.is_truthy(output:find("since launch 2.5000 ms", 1, true))
     end)
 
     it("does not invent a rate before KE establishes a reset window", function()
@@ -443,7 +443,7 @@ describe("Profiler CPU report", function()
 
         local output = table.concat(state.printed, "\n")
         assert.is_truthy(output:find("sampling duration unknown", 1, true))
-        assert.is_nil(output:find("ms/sec", 1, true))
+        assert.is_nil(output:find("ms per second", 1, true))
     end)
 
     it("distinguishes an immediate reset from an unknown window", function()
@@ -455,7 +455,7 @@ describe("Profiler CPU report", function()
         state.profiler.RunCommand("cpu 1")
 
         local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("0.0 sec", 1, true))
+        assert.is_truthy(output:find("0.0 s since", 1, true))
         assert.is_truthy(output:find("exercise the UI", 1, true))
         assert.is_nil(output:find("sampling duration unknown", 1, true))
     end)
@@ -498,7 +498,7 @@ describe("Profiler CPU report", function()
         state.profiler.RunCommand("cpu 3")
 
         local output = table.concat(state.printed, "\n")
-        local directStart = assert(output:find("by direct CPU:", 1, true))
+        local directStart = assert(output:find("KE frames by CPU", 1, true))
         local directOutput = output:sub(directStart)
 
         local directGamma = assert(directOutput:find("KE_Gamma", 1, true))
@@ -529,10 +529,10 @@ describe("Profiler CPU report", function()
         state.profiler.RunCommand("cpu 3")
 
         local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("(calls=?, ? ms/call)", 1, true))
-        assert.is_truthy(output:find("(calls=0, ? ms/call)", 1, true))
-        assert.is_truthy(output:find("(calls=6, 0.5000 ms/call)", 1, true))
-        assert.is_nil(output:find("0.0000 ms/call", 1, true))
+        assert.is_truthy(output:find("5.00 ms, calls unknown, no per-call rate:", 1, true))
+        assert.is_truthy(output:find("4.00 ms, 0 calls, no per-call rate:", 1, true))
+        assert.is_truthy(output:find("3.00 ms, 6 calls, 0.5000 ms each:", 1, true))
+        assert.is_nil(output:find("0.0000 ms each", 1, true))
     end)
 end)
 
@@ -657,7 +657,7 @@ describe("Profiler shared-counter grouping", function()
 
         local output = table.concat(state.printed, "\n")
         assert.is_truthy(output:find("KE_Delta", 1, true))
-        assert.is_truthy(output:find("identical counters x3", 1, true))
+        assert.is_truthy(output:find("(3 frames, identical counters)", 1, true))
 
         -- Asking for one row is what makes the limit itself load-bearing: with
         -- two groups and a limit of two, a build that ignores the limit prints
@@ -665,14 +665,14 @@ describe("Profiler shared-counter grouping", function()
         local before = #state.printed
         state.profiler.RunCommand("cpu 1")
         local limited = table.concat(state.printed, "\n", before + 1, #state.printed)
-        assert.is_truthy(limited:find("identical counters x3", 1, true))
+        assert.is_truthy(limited:find("(3 frames, identical counters)", 1, true))
         assert.is_nil(limited:find("KE_Delta", 1, true))
     end)
 end)
 
 describe("Profiler shared Blizzard handlers", function()
-    local BLIZZARD_HEADER = "Shared Blizzard handlers ("
-    local MIXED_SUFFIX = "includes a Blizzard handler's whole-client total"
+    local BLIZZARD_HEADER = "Frames running a shared Blizzard handler ("
+    local MIXED_NOTE = "also runs a KE handler"
 
     local function scriptedFrame(scripts)
         local subject = frame()
@@ -696,7 +696,7 @@ describe("Profiler shared Blizzard handlers", function()
         local state = loadProfiler({ frameCPU = frameCPU, secureGlobals = secureGlobals })
         state.profiler.RunCommand("cpu 5")
         local output = table.concat(state.printed, "\n")
-        local ownStart = assert(output:find("by direct CPU:", 1, true))
+        local ownStart = assert(output:find("KE frames by CPU", 1, true))
         local blizzardStart = output:find(BLIZZARD_HEADER, 1, true)
         return output:sub(ownStart, (blizzardStart or 0) - 1),
             blizzardStart and output:sub(blizzardStart) or nil
@@ -728,7 +728,7 @@ describe("Profiler shared Blizzard handlers", function()
         assert.is_truthy(blizzard and blizzard:find("KE_Alpha", 1, true))
     end)
 
-    it("keeps a frame that adds a KE handler to a Blizzard one in KE's ranking, marked", function()
+    it("lists a frame that adds a KE handler to a Blizzard one with the shared handlers, marked", function()
         local own, blizzard = report({
             KE_Alpha = scriptedFrame({
                 OnClick = _G.KESpecSecureHandler,
@@ -736,8 +736,8 @@ describe("Profiler shared Blizzard handlers", function()
             }),
         }, { KESpecSecureHandler = true })
 
-        assert.is_nil(blizzard)
-        assert.is_truthy(own:find("KE_Alpha (" .. MIXED_SUFFIX .. ")", 1, true))
+        assert.is_nil(own:find("KE_Alpha", 1, true))
+        assert.is_truthy(blizzard and blizzard:find("KE_Alpha (" .. MIXED_NOTE .. ")", 1, true))
     end)
 
     it("counts a hooked handler or a global that is not secure as KE code", function()
@@ -749,7 +749,7 @@ describe("Profiler shared Blizzard handlers", function()
 
             assert.is_nil(blizzard)
             assert.is_truthy(own:find("KE_Alpha", 1, true))
-            assert.is_nil(own:find(MIXED_SUFFIX, 1, true))
+            assert.is_nil(own:find(MIXED_NOTE, 1, true))
         end
     end)
 end)
@@ -857,7 +857,7 @@ describe("Profiler snapshots", function()
         state.profiler.DiffSnapshots("before", "after")
 
         local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("identical counters x2: KE_Alpha, KE_Beta", 1, true))
+        assert.is_truthy(output:find("KE_Alpha, KE_Beta (2 frames, identical counters)", 1, true))
         assert.is_truthy(output:find("+4.00 ms (3.00 -> 7.00) KE_Gamma", 1, true))
         assert.is_truthy(output:find("+4.00 ms (1.00 -> 5.00) KE_Delta", 1, true))
     end)
