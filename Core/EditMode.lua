@@ -283,6 +283,7 @@ function EditMode:RegisterElement(config)
         isEligible = config.isEligible,
         getOverlayInset = config.getOverlayInset,
         guiPath = config.guiPath,
+        alsoGuiPath = config.alsoGuiPath,
         guiTab = config.guiTab,
         guiContext = config.guiContext,
     }
@@ -352,11 +353,18 @@ local function SafeInset(value)
 end
 EditMode._SafeInset = SafeInset
 
+-- An element belongs to its page's section and, with alsoGuiPath, to a second
+-- page's: a mover two modules share has to be reachable from both categories.
+local function InSection(element, sectionId)
+    if KE:GetSectionForItem(element.guiPath) == sectionId then return true end
+    return element.alsoGuiPath ~= nil and KE:GetSectionForItem(element.alsoGuiPath) == sectionId
+end
+
 -- An element with no resolvable section shows only when unfiltered, so a module
 -- whose sidebar page is missing still reaches the tool instead of disappearing.
 function EditMode:ElementMatchesCategory(element)
     if not self.activeCategory then return true end
-    return KE:GetSectionForItem(element.guiPath) == self.activeCategory
+    return InSection(element, self.activeCategory)
 end
 
 -- Three reasons a registered element is not live, so Edit Mode draws no box for it.
@@ -445,7 +453,7 @@ end
 function EditMode:CountElementsInCategory(sectionId)
     local count = 0
     for _, element in pairs(self.registeredElements) do
-        if (not sectionId or KE:GetSectionForItem(element.guiPath) == sectionId)
+        if (not sectionId or InSection(element, sectionId))
             and self:ElementIsLive(element) then
             count = count + 1
         end

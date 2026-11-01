@@ -71,6 +71,9 @@ local FOREVER_CANNED = {
     { class = "PRIEST" }, { class = "DRUID" }, { class = "PALADIN" }, { class = "SHAMAN" },
 }
 
+-- The empty frame the Raid Cooldowns box stands on while the two stack.
+local SPOT_NAME = "KitnEssentialsHealerManaSpot"
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
@@ -208,7 +211,16 @@ end
 ---------------------------------------------------------------------------------
 function HM:UpdateDB()
     if KE.db and KE.db.profile then
-        self.db = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
+        local db = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
+        local changed = db ~= self.db
+        self.db = db
+        -- Edit Mode's Revert snapshot holds the position read from the old
+        -- profile, and the setter would write it into this one.
+        local EM = KE.EditMode
+        if changed and EM and EM.SnapshotElementPosition then
+            EM:SnapshotElementPosition("HealerMana")
+            EM:SnapshotElementPosition("HealerManaStack")
+        end
     end
 end
 
@@ -510,17 +522,133 @@ function HM:GetActiveAnchorFrom()
     return pos.AnchorFrom
 end
 
-function HM:ApplyContainerPosition()
-    if not self.containerFrame then return end
+-- The container's place by its own saved position, with the grow-adjusted
+-- anchor edge.
+function HM:ContainerPlacement()
     local pos = self:GetActivePosition()
-    local anchorFrom = self:GetActiveAnchorFrom()
-    local adjusted = {
-        AnchorFrom = anchorFrom,
+    return {
+        AnchorFrom = self:GetActiveAnchorFrom(),
         AnchorTo = pos.AnchorTo,
         XOffset = pos.XOffset,
         YOffset = pos.YOffset,
     }
-    KE:ApplyFramePosition(self.containerFrame, adjusted, self:GetActiveAnchorConfig())
+end
+
+-- The Raid Cooldowns box owns the gate for the frames that stack; without it
+-- (Forever) the container answers alone.
+local function ChainCanMove(frame)
+    local HX = KE.HealerExternals
+    if HX and HX.ChainCanMove then return HX.ChainCanMove() end
+    return KE:CanReanchorNow(frame)
+end
+
+local hang = { AnchorFrom = "TOPLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -1 }
+local hangConfig = { anchorFrameType = "SELECTFRAME" }
+
+-- The one place the container and the spot are anchored. A refusal moves
+-- neither, nor the box, until combat ends. The spot sits at the Party
+-- position, the only one the stack forms at, whatever mode was last drawn.
+function HM:PlaceContainer()
+    local frame, db = self.containerFrame, self.db
+    if not (frame and db) then return false end
+    if not ChainCanMove(frame) then
+        self:DeferContainerPlacement()
+        return false
+    end
+    local spot = self.spot
+    if spot then
+        spot:SetSize(db.FrameWidth, db.IconSize)
+        KE:ApplyFramePosition(spot, db.Position, db)
+        self.spotPlaced = true
+    end
+    if self.stackBox then
+        -- Under the box, on the edge the box shares with the spot.
+        local side = self.stackRight and "RIGHT" or "LEFT"
+        hang.AnchorFrom, hang.AnchorTo, hang.YOffset = "TOP" .. side, "BOTTOM" .. side, -self.stackGap
+        hangConfig.ParentFrame, hangConfig.Strata = self.stackBox:GetName(), db.Strata or "HIGH"
+        KE:ApplyFramePosition(frame, hang, hangConfig)
+    else
+        KE:ApplyFramePosition(frame, self:ContainerPlacement(), self:GetActiveAnchorConfig())
+    end
+    return true
+end
+
+function HM:ApplyContainerPosition()
+    if self:PlaceContainer() then self:SyncStackSpot() end
+end
+
+-- One replay after combat, however many placements combat refused.
+function HM:DeferContainerPlacement()
+    if self.placePending then return end
+    self.placePending = true
+    KE:RunAfterCombat(function()
+        HM.placePending = false
+        HM:ApplyContainerPosition()
+    end)
+end
+
+---------------------------------------------------------------------------------
+-- Raid Cooldowns stack
+---------------------------------------------------------------------------------
+-- Whether Healer Mana can be the stack's place: on, with one Party row.
+-- Raid mode shares the Party position while Split Positioning is off, so the
+-- mode and a Raid preview are refused on their own.
+function HM.JoinsStack(moduleOn, mode, previewContext)
+    return moduleOn == true and mode ~= "RAID" and previewContext ~= "RAID"
+end
+
+-- Read live by the box each time it places itself.
+function HM:StackReady()
+    local db = self.db
+    if not (db and self.containerFrame) then return false end
+    local preview = self.isPreview and self:PreviewContext() or nil
+    return HM.JoinsStack(db.Enabled == true, self:GetMode(), preview)
+end
+
+-- A change in readiness that comes with no placement of the box is told to
+-- it here, once per change.
+function HM:SyncStackSpot()
+    local ready = self:StackReady()
+    if ready == (self.stackTold == true) then return end
+    self.stackTold = ready
+    local HX = KE.HealerExternals
+    if HX and HX.ApplyPosition then HX.ApplyPosition() end
+end
+
+-- Whether a spot at the Party position would depend on frame. A parent that
+-- does not resolve is no such dependency: the spot then sits on the screen
+-- like the container, and the late-anchor pass moves both once it is built.
+function HM:SpotRefuses(frame)
+    local db = self.db
+    if not (db and db.anchorFrameType == "SELECTFRAME" and db.ParentFrame) then return false end
+    local parent = KE:ResolveSelectFrame(db.ParentFrame)
+    return parent ~= nil and KE:IsUnsafeAnchor(frame, parent)
+end
+
+-- An empty frame at Healer Mana's Party position: the Raid Cooldowns box
+-- stands on it and Edit Mode moves the stack by it. Shown, so Edit Mode can
+-- measure it; it has nothing to draw. Made only for a box it would not
+-- depend on, so a refused stack makes nothing.
+function HM:StackSpot(box)
+    if not self:StackReady() or self:SpotRefuses(box) then return nil end
+    if not self.spot then
+        self.spot = CreateFrame("Frame", SPOT_NAME, UIParent)
+        self:RegStackWithEditMode()
+    end
+    -- Placed on every call, so each placement of the box resolves the
+    -- spot's parent again, with or without a Healer Mana row drawn.
+    if not self:PlaceContainer() and not self.spotPlaced then return nil end
+    return self.spot
+end
+
+-- The Raid Cooldowns box hands over its frame while Healer Mana hangs under
+-- it, and nil to send Healer Mana back to its own position. The box has just
+-- read readiness, so nothing is told back to it.
+function HM:FollowBox(box, rightAligned, gap)
+    self.stackBox, self.stackRight, self.stackGap = box, rightAligned == true, gap or 1
+    self.stackTold = self:StackReady()
+    self:PlaceContainer()
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 -- Centralized "no live healers" state. Idempotent. Does NOT wipe healerFrames
@@ -530,6 +658,7 @@ function HM:HideFrames()
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
     if self.containerFrame then self.containerFrame:Hide() end
     self:SyncUpdates()
+    self:SyncStackSpot()
 end
 
 -- LibSpec group callback: fires per-member when their spec/role is reported
@@ -781,6 +910,7 @@ function HM:ApplySettings()
     self:RefreshMode()
     if not self.db.Enabled and not self.isPreview then
         if self.containerFrame then self.containerFrame:Hide() end
+        self:SyncStackSpot()
         return
     end
 
@@ -877,11 +1007,55 @@ function HM:RegWithEditMode()
                 local cfg = self:GetActiveAnchorConfig()
                 return KE:ResolveAnchorFrame(cfg.anchorFrameType, cfg.ParentFrame)
             end,
+            -- Under the Raid Cooldowns box the stack's own box moves it.
+            isEligible = function() return self.stackBox == nil end,
             guiPath = "StatusTexts",
             guiTab = "HealerMana",
         })
         self.editModeRegistered = true
     end
+end
+
+-- The stack's box reads and writes the Party position, the only one the
+-- stack forms at, whatever mode was last drawn.
+local function StackPosition() return HM.db.Position end
+
+local function StackSetPosition(pos)
+    HM.db.Position = pos
+    HM:ApplyContainerPosition()
+end
+
+local function StackAnchorFrom() return HM.db.Position.AnchorFrom end
+
+local function StackParentFrame()
+    return KE:ResolveAnchorFrame(HM.db.anchorFrameType, HM.db.ParentFrame)
+end
+
+local function StackInset()
+    local HX = KE.HealerExternals
+    if not (HX and HX.StackInset) then return 0, 0, 0, 0 end
+    return HX.StackInset(HM.db.FrameWidth)
+end
+
+-- One box over the spot, the Raid Cooldowns box and Healer Mana while they
+-- stack. A drag moves the spot and writes Healer Mana's Party position.
+function HM:RegStackWithEditMode()
+    if not KE.EditMode or self.stackRegistered then return end
+    KE.EditMode:RegisterElement({
+        key = "HealerManaStack", displayName = "Healer Mana + Raid Cooldowns", frame = self.spot,
+        module = self,
+        getPosition = StackPosition,
+        setPosition = StackSetPosition,
+        getAnchorFrom = StackAnchorFrom,
+        getParentFrame = StackParentFrame,
+        getOverlayInset = StackInset,
+        isEligible = function() return HM.stackBox ~= nil end,
+        guiPath = "StatusTexts",
+        -- The Auras category previews Raid Cooldowns and forms the stack too.
+        alsoGuiPath = "PartyBuffs",
+        guiTab = "HealerMana",
+    })
+    self.stackRegistered = true
 end
 
 -- Point the overlay label at the mode the stack was last drawn in. Called on
@@ -980,6 +1154,7 @@ function HM:HidePreview()
         self:HideFrames()
     end
     self:RefreshEditMode()
+    self:SyncStackSpot()
 end
 
 ---------------------------------------------------------------------------------
@@ -998,6 +1173,7 @@ function HM:OnGroupChanged()
     -- the new mode's anchor with the old mode's row count, which is the mixed
     -- frame this change exists to remove.
     self:FindHealers()
+    self:SyncStackSpot()
 end
 
 function HM:OnEnable()
@@ -1029,4 +1205,5 @@ function HM:OnDisable()
     self.isPreview = false
     if self.containerFrame then self.containerFrame:Hide() end
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
+    self:SyncStackSpot()
 end

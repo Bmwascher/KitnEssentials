@@ -74,6 +74,33 @@ describe("EditMode eligibility", function()
             EditMode.activeCategory = "combat_section"
             assert.is_false(EditMode:ElementMatchesCategory(orphan))
         end)
+
+        -- The Healer Mana and Raid Cooldowns stack belongs to both pages, and
+        -- in either category it is the only box that moves them.
+        it("matches an element in its second page's category too", function()
+            local both = element({ alsoGuiPath = "GreatVaultAlert" })
+            EditMode.activeCategory = "qol_section"
+            assert.is_true(EditMode:ElementMatchesCategory(both))
+            EditMode.activeCategory = "combat_section"
+            assert.is_true(EditMode:ElementMatchesCategory(both))
+        end)
+    end)
+
+    describe("CountElementsInCategory", function()
+        it("counts an element in its own section, and one with alsoGuiPath in both", function()
+            EditMode.registeredElements = {
+                Own = element({ key = "Own" }),
+                Both = element({ key = "Both", alsoGuiPath = "GreatVaultAlert" }),
+            }
+            local cases = {
+                { section = "combat_section", want = 2 },
+                { section = "qol_section", want = 1 },
+                { section = nil, want = 2 },
+            }
+            for _, c in ipairs(cases) do
+                assert.are.equal(c.want, EditMode:CountElementsInCategory(c.section), tostring(c.section))
+            end
+        end)
     end)
 
     describe("ElementShouldShow", function()
