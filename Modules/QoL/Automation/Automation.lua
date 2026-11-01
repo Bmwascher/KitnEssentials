@@ -2280,12 +2280,10 @@ end
 -- Swallows red UIErrorsFrame spam while keeping a whitelist of genuinely
 -- useful errors. The OnEvent override is only installed while on, so this
 -- costs nothing when off and is fully reversible.
--- Ping errors never reach that OnEvent on retail: GameEvent's own dispatcher
--- sends PING_SYSTEM_ERROR straight to UIErrorsFrame:AddMessage, so that route
--- is removed while on. A baseline load routes the event through UIParent. The
--- router cannot say whether a route existed, so the untick always installs
--- an equivalent closure; after it a ping error runs tainted until the next
--- reload, and AddMessage is not protected.
+-- Retail sends PING_SYSTEM_ERROR through GameEvent's dispatcher straight to
+-- AddMessage, past that OnEvent, so the route is removed while on. The untick
+-- restores an equivalent closure, tainted until reload (AddMessage is not
+-- protected). A baseline load routes the event through UIParent.
 
 -- Block-scoped: this file is near Lua 5.1's 200 main-chunk local ceiling.
 local ApplyHideErrorMessages
@@ -2329,8 +2327,7 @@ local function ErrFilteredOnEvent(self, event, id, err, ...)
     return errOrigOnEvent(self, event, id, err, ...)
 end
 
--- The router, only when every function the remove and the restore need exists;
--- a missing one makes the retail half a no-op instead of an error.
+-- Nil unless every router function the remove and the restore call exists.
 local function PingRouter()
     local GE = _G.GameEvent
     if GE and GE.RegisterInternalEvent and GE.UnregisterInternalEvent
