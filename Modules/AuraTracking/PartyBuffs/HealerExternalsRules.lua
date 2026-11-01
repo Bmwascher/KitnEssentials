@@ -7,8 +7,12 @@
 local KE = select(2, ...)
 
 local ipairs = ipairs
+local math_ceil = math.ceil
+local math_floor = math.floor
+local math_max = math.max
 local math_min = math.min
 local pairs = pairs
+local string_find = string.find
 local type = type
 
 local Rules = {}
@@ -225,4 +229,98 @@ function Rules.KeepOnRoster(old, new, isSecret)
         if not keep(old[i], new[i], isSecret) then return false end
     end
     return true
+end
+
+-- The grow directions: the step from one icon to the next, and the corner
+-- icon 1 sits in.
+local GRID = {
+    RIGHT = { dx = 1,  dy = 0,  corner = "TOPLEFT" },
+    LEFT  = { dx = -1, dy = 0,  corner = "TOPRIGHT" },
+    DOWN  = { dx = 0,  dy = -1, corner = "TOPLEFT" },
+    UP    = { dx = 0,  dy = 1,  corner = "BOTTOMLEFT" },
+}
+-- The Icons Per Row slider's top; a value that is not a number keeps the one
+-- row the box had before it could wrap.
+local PER_ROW_MAX = 12
+local ATTACH_KEYS = { "HealerExtAnchorFrameType", "HealerExtParentFrame" }
+local POSITION_FIELDS = { "AnchorFrom", "AnchorTo", "XOffset", "YOffset" }
+
+local function Grid(grow) return GRID[grow] or GRID.RIGHT end
+
+function Rules.PerRow(value)
+    if type(value) ~= "number" or value ~= value then return PER_ROW_MAX end
+    return math_max(1, math_min(PER_ROW_MAX, math_floor(value)))
+end
+
+function Rules.Corner(grow) return Grid(grow).corner end
+
+-- Whether new rows start upward and new columns leftward. A stacked box wraps
+-- down and right, away from the party frames above it; a free box starts new
+-- lines on the side away from its anchor point.
+function Rules.WrapSide(stacked, anchorFrom, grow)
+    if stacked == true then return false, false end
+    local pin = type(anchorFrom) == "string" and anchorFrom or "CENTER"
+    if Grid(grow).dy == 0 then return string_find(pin, "BOTTOM", 1, true) ~= nil, false end
+    return false, string_find(pin, "RIGHT", 1, true) ~= nil
+end
+
+-- Icon i's offset from icon 1.
+function Rules.GridPlace(i, perRow, grow, step, wrapUp, wrapLeft)
+    local g = Grid(grow)
+    local along, line = (i - 1) % perRow, math_floor((i - 1) / perRow)
+    if g.dy == 0 then return g.dx * along * step, (wrapUp and 1 or -1) * line * step end
+    return (wrapLeft and -1 or 1) * line * step, g.dy * along * step
+end
+
+-- Columns and rows of n icons; one of each with none.
+function Rules.GridShape(n, perRow, grow)
+    if n < 1 then return 1, 1 end
+    local long, wide = math_min(n, perRow), math_ceil(n / perRow)
+    if Grid(grow).dy == 0 then return long, wide end
+    return wide, long
+end
+
+-- Whether the grid reaches left of icon 1, and whether up.
+function Rules.Extends(grow, wrapUp, wrapLeft)
+    local g = Grid(grow)
+    return g.dx < 0 or wrapLeft == true, g.dy > 0 or wrapUp == true
+end
+
+-- Edit Mode insets from a free box, which is icon 1 alone, onto the grid
+-- that grows past it.
+function Rules.GridInset(cols, rows, step, extendsLeft, extendsUp)
+    local wide, tall = (cols - 1) * step, (rows - 1) * step
+    local left, right = extendsLeft and wide or 0, extendsLeft and 0 or wide
+    local top, bottom = extendsUp and tall or 0, extendsUp and 0 or tall
+    return left, right, top, bottom
+end
+
+-- Whether the box's Default position is still its default attachment. AceDB
+-- saves only values that differ from the defaults, so an equal value was
+-- never changed or was changed back.
+function Rules.DefaultAttachment(db, defaults)
+    if type(db) ~= "table" or type(defaults) ~= "table" then return false end
+    for _, key in ipairs(ATTACH_KEYS) do
+        if defaults[key] == nil or db[key] ~= defaults[key] then return false end
+    end
+    local pos, want = db.HealerExtPosition, defaults.HealerExtPosition
+    if type(pos) ~= "table" or type(want) ~= "table" then return false end
+    for _, field in ipairs(POSITION_FIELDS) do
+        if want[field] == nil or pos[field] ~= want[field] then return false end
+    end
+    return true
+end
+
+function Rules.Stacks(below, untouched, context, shown)
+    return below == true and untouched == true and context == "DEFAULT" and shown == true
+end
+
+-- Edit Mode insets that grow the spot's box over the Raid Cooldowns box under
+-- it and Healer Mana under that. Healer Mana has the spot's size, so its
+-- height cancels.
+function Rules.StackInset(boxW, boxH, spotW, gap, rightAligned)
+    local wider = math_max(boxW, spotW) - spotW
+    local bottom = boxH + gap
+    if rightAligned == true then return wider, 0, 0, bottom end
+    return 0, wider, 0, bottom
 end

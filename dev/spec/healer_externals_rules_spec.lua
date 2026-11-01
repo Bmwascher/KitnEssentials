@@ -257,3 +257,160 @@ describe("HealerExternalsRules.KeepOnRoster", function()
         end
     end)
 end)
+
+describe("HealerExternalsRules.PerRow", function()
+    it("floors and holds a count to 1 to 12, and gives one row of 12 for anything else", function()
+        local R = loadRules()
+        local cases = {
+            { name = "in range", value = 4, want = 4 },
+            { name = "fraction", value = 4.7, want = 4 },
+            { name = "below", value = 0, want = 1 },
+            { name = "above", value = 20, want = 12 },
+            { name = "a string", value = "4", want = 12 },
+            { name = "missing", want = 12 },
+            { name = "not a number", value = 0 / 0, want = 12 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.PerRow(case.value), case.name)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.WrapSide", function()
+    it("starts a free box's new lines on the side away from its anchor point", function()
+        local R = loadRules()
+        -- anchor point, grow, then the wanted wrapUp and wrapLeft.
+        local cases = {
+            { "BOTTOMLEFT", "RIGHT", true, false },
+            { "TOPLEFT", "RIGHT", false, false },
+            { "BOTTOM", "LEFT", true, false },
+            { "CENTER", "LEFT", false, false },
+            { "TOPRIGHT", "DOWN", false, true },
+            { "BOTTOMLEFT", "UP", false, false },
+            { "RIGHT", "UP", false, true },
+            { nil, "RIGHT", false, false },
+        }
+        for _, c in ipairs(cases) do
+            assert.are.same({ c[3], c[4] }, { R.WrapSide(false, c[1], c[2]) }, tostring(c[1]) .. " " .. c[2])
+        end
+    end)
+
+    it("wraps a stacked box down and right, whatever its saved point", function()
+        local R = loadRules()
+        for _, grow in ipairs({ "RIGHT", "LEFT", "DOWN", "UP" }) do
+            assert.are.same({ false, false }, { R.WrapSide(true, "BOTTOMRIGHT", grow) }, grow)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.GridPlace", function()
+    it("steps along the grow direction and starts each new line on the wrap side", function()
+        local R = loadRules()
+        -- grow, wrapUp, wrapLeft, icon, then the wanted x and y; four per line, step 10.
+        local cases = {
+            { "RIGHT", false, false, 1, 0, 0 },
+            { "RIGHT", false, false, 4, 30, 0 },
+            { "RIGHT", false, false, 6, 10, -10 },
+            { "RIGHT", true, false, 6, 10, 10 },
+            { "LEFT", false, false, 2, -10, 0 },
+            { "LEFT", false, false, 5, 0, -10 },
+            { "DOWN", false, false, 2, 0, -10 },
+            { "DOWN", false, false, 5, 10, 0 },
+            { "DOWN", false, true, 5, -10, 0 },
+            { "UP", false, false, 6, 10, 10 },
+        }
+        for _, c in ipairs(cases) do
+            local x, y = R.GridPlace(c[4], 4, c[1], 10, c[2], c[3])
+            assert.are.same({ c[5], c[6] }, { x, y }, c[1] .. " icon " .. c[4])
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.GridInset", function()
+    it("reaches from the one-icon box over the grid on the sides the grid extends to", function()
+        local R = loadRules()
+        -- columns, rows, extends left, extends up, then left, right, top, bottom; step 39.
+        local cases = {
+            { 4, 2, false, false, 0, 117, 0, 39 },
+            { 4, 2, true, true, 117, 0, 39, 0 },
+            { 2, 4, true, false, 39, 0, 0, 117 },
+            { 1, 1, false, false, 0, 0, 0, 0 },
+        }
+        for i, c in ipairs(cases) do
+            assert.are.same({ c[5], c[6], c[7], c[8] }, { R.GridInset(c[1], c[2], 39, c[3], c[4]) }, "case " .. i)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.DefaultAttachment", function()
+    local function defaults()
+        return {
+            HealerExtAnchorFrameType = "SELECTFRAME", HealerExtParentFrame = "KitnEssentialsHealerMana",
+            HealerExtPosition = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 1 },
+        }
+    end
+
+    it("reads a box whose six values equal the defaults as untouched", function()
+        local R = loadRules()
+        assert.is_true(R.DefaultAttachment(defaults(), defaults()))
+    end)
+
+    it("reads any changed value, a position that is not a table, or missing defaults as touched", function()
+        local R = loadRules()
+        local cases = {
+            { name = "detached", key = "HealerExtAnchorFrameType", value = "UIPARENT" },
+            { name = "another frame", key = "HealerExtParentFrame", value = "PlayerFrame" },
+            { name = "parent cleared", key = "HealerExtParentFrame" },
+            { name = "side bottom", field = "AnchorFrom", value = "TOPLEFT" },
+            { name = "point moved", field = "AnchorTo", value = "BOTTOMLEFT" },
+            { name = "x moved", field = "XOffset", value = 5 },
+            { name = "y moved", field = "YOffset", value = -1 },
+            { name = "position not a table", key = "HealerExtPosition", value = "TOPLEFT" },
+        }
+        for _, case in ipairs(cases) do
+            local db = defaults()
+            if case.field then
+                db.HealerExtPosition[case.field] = case.value
+            else
+                db[case.key] = case.value
+            end
+            assert.is_false(R.DefaultAttachment(db, defaults()), case.name)
+        end
+        assert.is_false(R.DefaultAttachment(defaults(), nil), "defaults missing")
+        local noPosition = defaults()
+        noPosition.HealerExtPosition = nil
+        assert.is_false(R.DefaultAttachment(defaults(), noPosition), "default position missing")
+    end)
+end)
+
+describe("HealerExternalsRules.Stacks", function()
+    it("stacks only with the setting on, the attachment untouched, the Default view and the box shown", function()
+        local R = loadRules()
+        local cases = {
+            { name = "all met", below = true, untouched = true, context = "DEFAULT", shown = true, want = true },
+            { name = "setting off", below = false, untouched = true, context = "DEFAULT", shown = true },
+            { name = "box moved", below = true, untouched = false, context = "DEFAULT", shown = true },
+            { name = "Healer view", below = true, untouched = true, context = "HEALER", shown = true },
+            { name = "box hidden", below = true, untouched = true, context = "DEFAULT", shown = false },
+        }
+        for _, case in ipairs(cases) do
+            local got = R.Stacks(case.below, case.untouched, case.context, case.shown)
+            assert.are.equal(case.want == true, got, case.name)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.StackInset", function()
+    it("covers the box and Healer Mana under the spot, the extra width on the box's grow side", function()
+        local R = loadRules()
+        -- box width, box height, spot width, right-aligned, then left, right, top, bottom; gap 1.
+        local cases = {
+            { 155, 38, 120, false, 0, 35, 0, 39 },
+            { 155, 77, 120, true, 35, 0, 0, 78 },
+            { 77, 77, 120, false, 0, 0, 0, 78 },
+        }
+        for i, c in ipairs(cases) do
+            assert.are.same({ c[5], c[6], c[7], c[8] }, { R.StackInset(c[1], c[2], c[3], 1, c[4]) }, "case " .. i)
+        end
+    end)
+end)
