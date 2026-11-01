@@ -259,12 +259,14 @@ local function CheckFailed(n, why)
 end
 
 local checkTry, checkPass, checkWant = 0, 0, nil
+-- Set by a miss with no secret answer, which the restrictions do not explain.
+local checkOpenMiss = false
 
 -- One step a second until it decides: the probe bar set to 0.3, then 0.7,
 -- must read at least its value minus 0.05 and not its value plus 0.05, twice
 -- in a row (Rules.SelfCheckStep). A secret answer cannot be checked, so it is
--- a miss toward the same cap, and a check that fails on one fails as
--- "hidden".
+-- a miss toward the same cap, and a check whose every miss had a secret
+-- answer fails as "hidden".
 local function CheckStep(n)
     local probe = Track.checkProbe
     if checkWant then
@@ -274,14 +276,15 @@ local function CheckStep(n)
             CheckFailed(n, tostring(okA and knownB or knownA))
             return
         end
-        local verdict
-        checkPass, verdict = Rules.SelfCheckStep(checkTry, checkPass, knownA, knownB, a, b, issecretvalue)
+        local verdict, open
+        checkPass, verdict, open = Rules.SelfCheckStep(checkTry, checkPass, knownA, knownB, a, b, issecretvalue)
+        if open then checkOpenMiss = true end
         if verdict == "passed" then
             Track.chargeCheck = true
             return
         elseif verdict == "failed" then
             if issecretvalue(a) or issecretvalue(b) then
-                CheckFailed(n, "hidden")
+                CheckFailed(n, checkOpenMiss and "missed without a secret answer" or "hidden")
             else
                 CheckFailed(n, "a bar at " .. checkWant .. " read " .. tostring(a) .. " / " .. tostring(b))
             end
@@ -780,7 +783,7 @@ end
 -- step, once answers can be read; its probe pair is kept from the first run.
 function Track.RearmHiddenCheck()
     if Track.chargeCheck ~= false or Track.chargeWhy ~= "hidden" or not Track.checkProbe then return end
-    checkTry, checkPass, checkWant = 0, 0, nil
+    checkTry, checkPass, checkWant, checkOpenMiss = 0, 0, nil, false
     Track.chargeCheck, Track.chargeWhy = nil, nil
     Track.Wake()
 end

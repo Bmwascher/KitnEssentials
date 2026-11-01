@@ -1367,20 +1367,19 @@ end
 -- The read-back self-check's tries before a miss fails it.
 Rules.CHECK_TRIES = 6
 
--- One self-check step. a is whether the probe bar reads at least its value
--- minus the margin, b whether it reads its value plus it; a pass needs both
--- measures known, a true and b false. Returns the new pass count and
--- "passed" on the second pass in a row, "failed" on a miss once tries has
--- reached CHECK_TRIES, else nil. A secret answer cannot be checked, so it is
--- a miss; both are tested for secrecy before any comparison.
+-- One self-check step. A secret answer cannot be checked, so it is a miss;
+-- both are tested for secrecy before any comparison. The third return is true
+-- on a miss with neither answer secret, a wrong reading or a measure that
+-- could not be read: a miss the restrictions do not explain.
 function Rules.SelfCheckStep(tries, passes, knownA, knownB, a, b, isSecret)
-    if not (isSecret(a) or isSecret(b)) and knownA and knownB and a == true and b == false then
+    local secret = isSecret(a) or isSecret(b)
+    if not secret and knownA and knownB and a == true and b == false then
         passes = passes + 1
-        if passes >= 2 then return passes, "passed" end
-        return passes, nil
+        if passes >= 2 then return passes, "passed", false end
+        return passes, nil, false
     end
-    if tries >= Rules.CHECK_TRIES then return 0, "failed" end
-    return 0, nil
+    if tries >= Rules.CHECK_TRIES then return 0, "failed", not secret end
+    return 0, nil, not secret
 end
 
 -- A member's read from the unit answers: true dead, false alive, nil when it

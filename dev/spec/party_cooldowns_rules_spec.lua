@@ -1531,9 +1531,27 @@ describe("PartyCooldownsRules.SelfCheckStep", function()
               isSecret = plain, want = { 0 } },
         }
         for _, case in ipairs(cases) do
-            assert.are.same(case.want,
-                { R.SelfCheckStep(case.tries, case.passes, true, true, case.a, case.b, case.isSecret) },
-                case.name)
+            local passes, verdict = R.SelfCheckStep(case.tries, case.passes, true, true, case.a, case.b, case.isSecret)
+            assert.are.same(case.want, { passes, verdict }, case.name)
+        end
+    end)
+
+    it("reports a miss as open when neither answer is secret, a measure unknown included", function()
+        local R = loadRules()
+        local function plain() return false end
+        local function aHidden(v) return v == true end
+        local cases = {
+            { name = "a pass", knownA = true, knownB = true, a = true, b = false, isSecret = plain, want = false },
+            { name = "a miss with a secret answer", knownA = true, knownB = true, a = true, b = false,
+              isSecret = aHidden, want = false },
+            { name = "a miss with a measure unknown", knownA = false, knownB = true, b = false, isSecret = plain,
+              want = true },
+            { name = "a known, plain wrong reading", knownA = true, knownB = true, a = true, b = true,
+              isSecret = plain, want = true },
+        }
+        for _, case in ipairs(cases) do
+            local _, _, got = R.SelfCheckStep(1, 0, case.knownA, case.knownB, case.a, case.b, case.isSecret)
+            assert.are.equal(case.want, got, case.name)
         end
     end)
 end)
