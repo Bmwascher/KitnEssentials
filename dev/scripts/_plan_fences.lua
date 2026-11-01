@@ -5,18 +5,24 @@
 -- then the new text. An anchor fence is never linted. The fence right after
 -- one is linted, and only a failed load there reads as a fragment (a table
 -- field, an elseif arm) instead of a syntax error.
+--
+-- Anchor prose is the paragraph before a fence: it holds the word "anchor"
+-- and its last line ends in a colon. A full fence after prose worded that
+-- way is skipped too.
 
 local PF = {}
 
-local function is_anchor_prose(line)
-    return line ~= nil and line:lower():match("anchor:%s*$") ~= nil
+local function is_anchor_prose(para)
+    if not para then return false end
+    local text = table.concat(para, " "):lower()
+    return text:match("%f[%a]anchor%f[%A]") ~= nil and para[#para]:match(":%s*$") ~= nil
 end
 
 -- text -> array of { first, last, code, kind }, or nil and the
 -- unterminated-fence message. kind is "anchor", "new_text" or "full".
 function PF.collect(text)
     local blocks, current, start_line, kind = {}, nil, nil, nil
-    local prose, prev_anchor = nil, false
+    local para, blank, prev_anchor = nil, false, false
     local n = 0
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
         n = n + 1
@@ -30,12 +36,12 @@ function PF.collect(text)
                     first = start_line, last = n, code = table.concat(current, "\n"), kind = kind,
                 }
                 prev_anchor = (kind == "anchor")
-                current, prose = nil, nil
+                current, para = nil, nil
             else
                 current[#current + 1] = line
             end
         elseif line:match("^%s*```lua%s*$") then
-            if is_anchor_prose(prose) then
+            if is_anchor_prose(para) then
                 kind = "anchor"
             elseif prev_anchor then
                 kind = "new_text"
@@ -46,7 +52,14 @@ function PF.collect(text)
         elseif line:match("%S") then
             -- Any other fence between an anchor and this one breaks the pair.
             if line:match("^%s*```") then prev_anchor = false end
-            prose = line
+            if para and not blank then
+                para[#para + 1] = line
+            else
+                para = { line }
+            end
+            blank = false
+        else
+            blank = true
         end
     end
     if current then

@@ -14,7 +14,10 @@ end
 
 describe("plan fence triage (dev/scripts/_plan_fences.lua)", function()
     it("skips an anchor fence even when its code does not load", function()
-        for _, prose in ipairs({ "Replace this anchor:", "replace this anchor:", "insert after this anchor:" }) do
+        for _, prose in ipairs({
+            "Replace this anchor:", "replace this anchor:", "insert after this anchor:",
+            "Replace this anchor in dev/x.lua:", "Replace this anchor\nin dev/x.lua:",
+        }) do
             local block = assert(PF.collect(prose .. "\n\n" .. fence(BROKEN)))[1]
             assert.equals("anchor", PF.triage(block), prose)
         end
@@ -30,9 +33,16 @@ describe("plan fence triage (dev/scripts/_plan_fences.lua)", function()
         assert.equals("lint", PF.triage(block))
     end)
 
-    it("reports a syntax error in a fence after no anchor, whatever its prose", function()
-        local status, err = PF.triage(assert(PF.collect("with:\n\n" .. fence(BROKEN)))[1])
-        assert.equals("syntax", status)
-        assert.is_string(err)
+    it("reports a syntax error in a full fence, whatever its prose", function()
+        for _, prose in ipairs({
+            "with:",
+            "Replace this block\nin dev/x.lua:",
+            "This anchor is gone.\nSee the new text.",
+            "Replace this anchor in dev/x.lua:\n\nThen:",
+        }) do
+            local status, err = PF.triage(assert(PF.collect(prose .. "\n\n" .. fence(BROKEN)))[1])
+            assert.equals("syntax", status, prose)
+            assert.is_string(err)
+        end
     end)
 end)
