@@ -12,7 +12,7 @@
 -- _plan_fences.lua.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
-local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
+local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\"
 local PF = dofile(_dir .. "_plan_fences.lua")
 
 -- Table address gives per-process entropy os.time/os.clock cannot.
