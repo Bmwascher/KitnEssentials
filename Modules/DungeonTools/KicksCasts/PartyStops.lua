@@ -933,10 +933,17 @@ local function SetFeeds(want)
             if f.aoe then
                 Cover(f)
             else
+                local aimed = false
                 for j, s in ipairs(f.sensors) do
                     local unit = PS.slots:UnitOf(j)
-                    if unit then Aim(s, unit) end
+                    if unit then
+                        Aim(s, unit)
+                        aimed = true
+                    end
                 end
+                -- A hold stop's debuff may already be up on a held enemy, so
+                -- its first answer is a baseline, as after a take.
+                if aimed and Data.STOPS[id].hold then takenAt = GetTime() end
             end
         end
     end
