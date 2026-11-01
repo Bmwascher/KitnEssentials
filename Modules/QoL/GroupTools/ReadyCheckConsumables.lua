@@ -3,8 +3,9 @@
 -- ║  Module: Ready Check Consumables                         ║
 -- ║  Purpose: On ready check, attaches a row of clickable    ║
 -- ║           consumable icons (food, flask, weapon          ║
--- ║           enhancement MH/OH, augment rune, healthstone,  ║
--- ║           Warlock Soulstone) to the ready check popup.   ║
+-- ║           enhancement MH/OH, augment rune (an elixir on  ║
+-- ║           Forever), healthstone, Warlock Soulstone) to   ║
+-- ║           the ready check popup.                         ║
 -- ║           Icons show ready/missing status and remaining  ║
 -- ║           buff duration. Click uses the item via         ║
 -- ║           SecureActionButton.                            ║
@@ -391,6 +392,417 @@ local CLASS_SLOT = {
         update  = function(rcc, btn) rcc:_UpdateShieldSlot(btn) end,
     },
 }
+
+---------------------------------------------------------------------------------
+-- Forever Data
+---------------------------------------------------------------------------------
+-- The Forever tables come from ReadyCheckConsumablesForever.lua, which only
+-- the Forever load list loads. A retail load leaves FV nil and every table
+-- above in place.
+local FV = KE.ReadyCheckConsumablesForever
+
+-- The settings page reads this, so the page and the row follow one choice.
+RCC.usesForeverData = FV ~= nil
+
+if FV then
+    FOOD_BUFFS = FV.food
+    HEARTY_FOOD_BUFFS = {}
+    DEFAULT_ICONS[SLOT_FOOD]  = FV.icons.food
+    DEFAULT_ICONS[SLOT_FLASK] = FV.icons.flask
+    DEFAULT_ICONS[SLOT_OIL]   = FV.icons.oil
+    DEFAULT_ICONS[SLOT_OILOH] = FV.icons.oiloh
+    DEFAULT_ICONS[SLOT_RUNE]  = FV.icons.elixir
+    DEFAULT_ICONS[SLOT_HS]    = FV.icons.healthstone
+    DEFAULT_ICONS[SLOT_CLASS] = FV.icons.class
+    -- No Forever spec has a class-check row or a shield to keep up.
+    CLASS_CHECKS = {}
+    CLASS_SLOT.SHAMAN = nil
+end
+
+local function BagCount(itemID)
+    return GetItemCount(itemID, false, true) or 0
+end
+
+--- HighestKnown
+--- The highest rank `isKnown` accepts; ranks run low to high.
+local function HighestKnown(ranks, isKnown)
+    for i = #ranks, 1, -1 do
+        if isKnown(ranks[i]) then return ranks[i] end
+    end
+    return nil
+end
+RCC._HighestKnown = HighestKnown
+
+local function AuraRemaining(aura)
+    return RCC:GetAuraRemaining(aura)
+end
+
+--- PickByBuff
+--- A Forever flask or elixir click's item: the first stocked row with the
+--- remembered buff, else the first stocked row. Returns the item and count.
+local function PickByBuff(rows, rememberedBuff, countOf)
+    if rememberedBuff then
+        for _, row in ipairs(rows) do
+            if row.buff == rememberedBuff then
+                local n = countOf(row.item)
+                if n > 0 then return row.item, n end
+            end
+        end
+    end
+    for _, row in ipairs(rows) do
+        local n = countOf(row.item)
+        if n > 0 then return row.item, n end
+    end
+    return nil, 0
+end
+RCC._PickByBuff = PickByBuff
+
+--- ForeverElixirState
+--- The active listed elixir that runs out first, whose timer the slot shows
+--- and whose buff it remembers (one with no readable expiry counts as last),
+--- then the click's item and count. The active buff replaces the stored one
+--- as the pick's memory: this repaint stores it, so falling back to the old
+--- memory would change the click on the next repaint. `auras` is
+--- ScanPlayerAuras's map.
+local function ForeverElixirState(elixirs, auras, rememberedBuff, countOf, remainOf)
+    local activeBuff, activeRemain
+    for _, row in ipairs(elixirs) do
+        local aura = auras[row.buff]
+        if aura then
+            local remain = remainOf(aura)
+            if activeBuff == nil or (remain and (activeRemain == nil or remain < activeRemain)) then
+                activeBuff, activeRemain = row.buff, remain
+            end
+        end
+    end
+    local pickItem, count = PickByBuff(elixirs, activeBuff or rememberedBuff, countOf)
+    return activeBuff, activeRemain, pickItem, count
+end
+RCC._ForeverElixirState = ForeverElixirState
+
+local function IsSafe(value)
+    return KE:IsSafeValue(value)
+end
+
+-- C_Item.GetWeaponEnchantInfo's enchant types and hand indexes. Only the
+-- Forever client defines Enum.ItemEnchantType, so it is read through _G.
+local TEMP_TYPE, IMBUE_TYPE, WEAPON_SLOT
+if FV then
+    local enchantType = _G.Enum.ItemEnchantType
+    TEMP_TYPE, IMBUE_TYPE = enchantType.Temporary, enchantType.Imbue
+    WEAPON_SLOT = { [16] = Enum.WeaponSlot.MainHand, [17] = Enum.WeaponSlot.OffHand }
+end
+
+-- The stone or oil kinds each class tries first when nothing is remembered.
+local CLASS_FIRST_KINDS = {
+    WARRIOR = { "stone" },
+    ROGUE   = { "stone" },
+    HUNTER  = { "stone" },
+    MAGE    = { "wizard" },
+    WARLOCK = { "wizard" },
+    PRIEST  = { "wizard" },
+    DRUID   = { "wizard", "mana", "stone" },
+    PALADIN = { "wizard", "mana", "stone" },
+    SHAMAN  = { "wizard", "mana", "stone" },
+}
+local NO_KINDS = {}
+local POISON_HAND_DEFAULT = { [16] = "Instant Poison", [17] = "Deadly Poison" }
+
+-- The layers a hand needs, in click order.
+local BOTH_LAYERS = { "imbue", "temp" }
+local IMBUE_LAYER = { "imbue" }
+local TEMP_LAYER  = { "temp" }
+
+local IMBUE_MEMORY_KEY  = { [16] = "LastImbueMH" }
+local POISON_MEMORY_KEY = { [16] = "LastPoisonMH", [17] = "LastPoisonOH" }
+
+--- ClassifyHandLayers
+--- Splits C_Item.GetWeaponEnchantInfo's list into the stone or oil layer
+--- (`temp`) and the poison or imbue layer (`imbue`), each { enchantID,
+--- remain }. An entry whose presence or type is unreadable is left out; an
+--- unreadable enchant id or time left keeps the layer without that field.
+--- timeLeft is in milliseconds.
+local function ClassifyHandLayers(list, isSafe, tempType, imbueType)
+    local layers = {}
+    if type(list) ~= "table" then return layers end
+    for _, entry in ipairs(list) do
+        local has, kind = entry.hasEnchant, entry.enchantType
+        if isSafe(has) and has == true and isSafe(kind) then
+            local key = (kind == tempType and "temp") or (kind == imbueType and "imbue") or nil
+            if key and not layers[key] then
+                local id, left = entry.enchantID, entry.timeLeft
+                layers[key] = {
+                    enchantID = isSafe(id) and id or nil,
+                    remain = (isSafe(left) and left > 0) and left / 1000 or nil,
+                }
+            end
+        end
+    end
+    return layers
+end
+RCC._ClassifyHandLayers = ClassifyHandLayers
+
+--- HandRule
+--- The layers a hand needs: a Rogue or Shaman main hand both, a Rogue off
+--- hand its poison, every other hand its stone or oil.
+local function HandRule(classFile, invSlot)
+    if invSlot == 16 and (classFile == "ROGUE" or classFile == "SHAMAN") then return BOTH_LAYERS end
+    if invSlot == 17 and classFile == "ROGUE" then return IMBUE_LAYER end
+    return TEMP_LAYER
+end
+RCC._HandRule = HandRule
+
+--- HandPlan
+--- Ready when every needed layer is on; the timer is the one that runs out
+--- first. The click applies the first missing layer, else refreshes the one
+--- that runs out first, else (no timer read) the first needed.
+local function HandPlan(layers, needed)
+    local missing, soonest, soonestRemain
+    for _, key in ipairs(needed) do
+        local layer = layers[key]
+        if not layer then
+            missing = missing or key
+        elseif layer.remain and (soonestRemain == nil or layer.remain < soonestRemain) then
+            soonest, soonestRemain = key, layer.remain
+        end
+    end
+    if missing then return false, nil, missing end
+    return true, soonestRemain, soonest or needed[1]
+end
+RCC._HandPlan = HandPlan
+
+-- A poison serves the imbue layer and nothing else; a row with no
+-- `applies` takes any weapon.
+local function Eligible(row, wantPoison, subclass)
+    return (row.kind == "poison") == wantPoison and (row.applies == nil or row.applies[subclass] == true)
+end
+
+-- The highest-rank stocked eligible row whose `field` is `value`; ties go
+-- to print order.
+local function BestStocked(rows, wantPoison, subclass, field, value, countOf)
+    local pick, pickCount, pickRank
+    for _, row in ipairs(rows) do
+        if row[field] == value and Eligible(row, wantPoison, subclass) then
+            local n = countOf(row.item)
+            if n > 0 and (pickRank == nil or row.rank > pickRank) then
+                pick, pickCount, pickRank = row.item, n, row.rank
+            end
+        end
+    end
+    return pick, pickCount
+end
+
+--- PickForeverEnhancement
+--- The item a weapon click applies for `layer` ("imbue": a poison; "temp":
+--- a stone or oil). A remembered item the weapon takes: itself while
+--- stocked, else its family's highest stocked rank. Then the hand's poison
+--- or the class's kinds in turn, then the first stocked eligible row.
+--- Returns the item and count, or nil and 0.
+local function PickForeverEnhancement(rows, layer, classFile, invSlot, subclass, remembered, countOf)
+    local wantPoison = layer == "imbue"
+    if remembered then
+        for _, row in ipairs(rows) do
+            if row.item == remembered then
+                if Eligible(row, wantPoison, subclass) then
+                    local n = countOf(remembered)
+                    if n > 0 then return remembered, n end
+                    local item, count = BestStocked(rows, wantPoison, subclass, "family", row.family, countOf)
+                    if item then return item, count end
+                end
+                break
+            end
+        end
+    end
+    if wantPoison then
+        local item, count = BestStocked(rows, true, subclass, "family", POISON_HAND_DEFAULT[invSlot], countOf)
+        if item then return item, count end
+    else
+        for _, kind in ipairs(CLASS_FIRST_KINDS[classFile] or NO_KINDS) do
+            local item, count = BestStocked(rows, false, subclass, "kind", kind, countOf)
+            if item then return item, count end
+        end
+    end
+    for _, row in ipairs(rows) do
+        if Eligible(row, wantPoison, subclass) then
+            local n = countOf(row.item)
+            if n > 0 then return row.item, n end
+        end
+    end
+    return nil, 0
+end
+RCC._PickForeverEnhancement = PickForeverEnhancement
+
+--- PickImbue
+--- The remembered imbue family while one of its ranks is known, else the
+--- first family with a known rank. Returns the family's first rank and the
+--- highest known rank, or nil.
+local function PickImbue(imbues, rememberedFamily, isKnown)
+    if rememberedFamily then
+        for _, family in ipairs(imbues) do
+            if family.ranks[1] == rememberedFamily then
+                local rank = HighestKnown(family.ranks, isKnown)
+                if rank then return family.ranks[1], rank end
+            end
+        end
+    end
+    for _, family in ipairs(imbues) do
+        local rank = HighestKnown(family.ranks, isKnown)
+        if rank then return family.ranks[1], rank end
+    end
+    return nil
+end
+RCC._PickImbue = PickImbue
+
+--- ImbueClickMacro
+--- The Shaman main-hand click: the cast, then `/use 16`, which lands a
+--- pending enchant on the hand when the cast asks for a weapon.
+local function ImbueClickMacro(name)
+    if not name then return nil end
+    return "/stopmacro [combat]\n/cast " .. name .. "\n/use 16"
+end
+RCC._ImbueClickMacro = ImbueClickMacro
+
+--- _UpdateWeaponEnchantForever
+--- UpdateWeaponEnchant on Forever. The hand's enchant list splits into its
+--- stone or oil layer and its poison or imbue layer; HandRule says which the
+--- hand needs, and the click applies the first one missing, else refreshes
+--- the one that runs out first.
+function RCC:_UpdateWeaponEnchantForever(slotKey, invSlot)
+    local btn = self.buttons[slotKey]
+    if not btn then return end
+    local db = self.db
+    local _, classFile = UnitClass("player")
+    ---@diagnostic disable-next-line: wrong-flavor-api
+    local layers = ClassifyHandLayers(C_Item.GetWeaponEnchantInfo(WEAPON_SLOT[invSlot]), IsSafe, TEMP_TYPE, IMBUE_TYPE)
+    local ready, remain, clickLayer = HandPlan(layers, HandRule(classFile, invSlot))
+    self:_PaintReady(btn, ready, remain)
+
+    if db then
+        for _, layer in pairs(layers) do
+            local row = layer.enchantID and FV.byEnchant[layer.enchantID]
+            if row and row.kind == "imbue" then
+                if IMBUE_MEMORY_KEY[invSlot] then db[IMBUE_MEMORY_KEY[invSlot]] = row.family end
+            elseif row and row.kind == "poison" then
+                db[POISON_MEMORY_KEY[invSlot]] = row.item
+            elseif row then
+                db[HAND_MEMORY_KEY[invSlot]] = row.item
+            end
+        end
+    end
+
+    btn.nominatedSpell = nil
+    if clickLayer == "imbue" and classFile == "SHAMAN" then
+        self:_ArmImbueClick(btn, slotKey, db and db[IMBUE_MEMORY_KEY[invSlot]])
+        return
+    end
+
+    local pickItem, bagCount
+    local weaponID = GetInventoryItemID("player", invSlot)
+    if weaponID then
+        local _, _, _, _, _, classID, subClassID = GetItemInfoInstant(weaponID)
+        if classID == 2 and subClassID then
+            local memoryKey = clickLayer == "imbue" and POISON_MEMORY_KEY[invSlot] or HAND_MEMORY_KEY[invSlot]
+            pickItem, bagCount = PickForeverEnhancement(FV.enhancements, clickLayer, classFile, invSlot,
+                subClassID, db and db[memoryKey], BagCount)
+        end
+    end
+    self:_ArmWeaponItem(btn, slotKey, invSlot, pickItem, bagCount or 0)
+end
+
+--- _ArmImbueClick
+--- A Shaman main hand's imbue click: PickImbue's rank by name, then
+--- `/use 16`. With no imbue known the slot shows its placeholder and no
+--- click.
+function RCC:_ArmImbueClick(btn, slotKey, rememberedFamily)
+    local _, rank = PickImbue(FV.imbues, rememberedFamily, IsSpellKnown)
+    btn.nominatedItem = nil
+    btn.nominatedSpell = rank
+    btn.countText:SetText("")
+    if rank then
+        self:SetIconFromSpell(btn.texture, rank)
+    else
+        btn.texture:SetTexture(DEFAULT_ICONS[slotKey == "oil" and SLOT_OIL or SLOT_OILOH])
+    end
+
+    local click = btn.click
+    if not click or InCombatLockdown() then return end
+    local name = rank and C_Spell.GetSpellName(rank)
+    local macrotext = KE:IsSafeValue(name) and ImbueClickMacro(name) or nil
+    if macrotext then
+        click:SetAttribute("type", "macro")
+        click:SetAttribute("macrotext", macrotext)
+        click:Show()
+    else
+        click:Hide()
+    end
+end
+
+--- _UpdateFlaskForever
+--- UpdateFlask on Forever: ready on any listed flask buff, which is
+--- remembered for the click.
+function RCC:_UpdateFlaskForever(auras)
+    local btn = self.buttons.flask
+    if not btn then return end
+    local activeAura, activeBuff
+    for _, row in ipairs(FV.flasks) do
+        local aura = auras[row.buff]
+        if aura then
+            activeAura, activeBuff = aura, row.buff
+            break
+        end
+    end
+    self:_PaintReady(btn, activeAura ~= nil, activeAura and self:GetAuraRemaining(activeAura) or nil)
+    if activeBuff and self.db then self.db.LastFlaskBuff = activeBuff end
+end
+
+--- _UpdateFlaskClickForever
+--- UpdateFlaskClick on Forever. The cauldron toggle is a retail option and
+--- is not read here.
+function RCC:_UpdateFlaskClickForever()
+    local btn = self.buttons.flask
+    if not btn then return end
+    local pickItem, count = PickByBuff(FV.flasks, self.db and self.db.LastFlaskBuff, BagCount)
+    self:_ArmUseClick(btn, pickItem, count, SLOT_FLASK)
+end
+
+--- _UpdateElixir
+--- UpdateRune on Forever: the fifth slot tracks the listed elixirs.
+function RCC:_UpdateElixir(auras)
+    local btn = self.buttons.rune
+    if not btn then return end
+    local activeBuff, remain, pickItem, count = ForeverElixirState(FV.elixirs, auras,
+        self.db and self.db.LastElixirBuff, BagCount, AuraRemaining)
+    self:_PaintReady(btn, activeBuff ~= nil, remain)
+    if activeBuff and self.db then self.db.LastElixirBuff = activeBuff end
+    self:_ArmUseClick(btn, pickItem, count, SLOT_RUNE)
+end
+
+--- _UpdateHealthstoneForever
+--- UpdateHealthstone on Forever: every listed rank counts, and a Warlock's
+--- click creates one at the highest Create Healthstone rank known.
+function RCC:_UpdateHealthstoneForever()
+    local btn = self.buttons.hs
+    if not btn then return end
+    local count, stocked = 0, nil
+    for _, row in ipairs(FV.healthstones) do
+        local n = BagCount(row.item)
+        if n > 0 then
+            count = count + n
+            stocked = stocked or row.item
+        end
+    end
+    btn.nominatedItem = stocked or FV.healthstones[1].item
+    btn.nominatedSpell = nil
+    self:_PaintReady(btn, count > 0, nil)
+    btn.countText:SetText(count > 0 and tostring(count) or "")
+
+    local _, playerClass = UnitClass("player")
+    if playerClass == "WARLOCK" then
+        self:_ArmSpellClick(btn.click, HighestKnown(FV.createHealthstone, IsSpellKnown), nil)
+    elseif btn.click and not InCombatLockdown() then
+        btn.click:Hide()
+    end
+end
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -947,17 +1359,51 @@ function RCC:_IsNameInGroup(name)
     return false
 end
 
--- True when `unit` carries a Soulstone the player cast. A secret or missing
--- sourceUnit reads as "not from us"; the caller has already asked the
--- per-spell gate, so the query itself cannot hard-error.
-local function HasPlayerSoulstone(unit)
-    local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
+-- True when the aura was cast by the player. A secret or missing sourceUnit
+-- reads as "not from us".
+local function IsFromPlayer(auraData)
     if not auraData then return false end
     local source = auraData.sourceUnit
     if not KE:IsSafeValue(source) then return false end
     if source == "player" then return true end
     local same = UnitIsUnit(source, "player")
     return canaccessvalue(same) and same == true
+end
+
+--- SoulstoneFromPlayer
+--- The Forever stone check: any Soulstone Resurrection rank in `buffs`, read
+--- with `readAura(unit, buffID)`, that the player cast.
+local function SoulstoneFromPlayer(unit, buffs, readAura)
+    for _, row in ipairs(buffs) do
+        if IsFromPlayer(readAura(unit, row.buff)) then return true end
+    end
+    return false
+end
+RCC._SoulstoneFromPlayer = SoulstoneFromPlayer
+
+-- True when `unit` carries a Soulstone the player cast. The caller has
+-- already asked the per-spell gate, so the query itself cannot hard-error.
+local function HasPlayerSoulstone(unit)
+    return IsFromPlayer(C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL"))
+end
+
+-- The roster pass's aura gate, asked once per pass.
+local function IsSoulstoneHidden()
+    return KE:IsAuraHiddenForSpell("Soulstone")
+end
+
+-- Forever stones carry one aura id per rank, read by id.
+if FV then
+    local readUnitAura = C_UnitAuras.GetUnitAuraBySpellID
+    HasPlayerSoulstone = function(unit)
+        return SoulstoneFromPlayer(unit, FV.soulstones, readUnitAura)
+    end
+    IsSoulstoneHidden = function()
+        for _, row in ipairs(FV.soulstones) do
+            if KE:IsAuraHiddenForSpell(row.buff) then return true end
+        end
+        return false
+    end
 end
 
 --- _ScanSoulstoneRoster
@@ -971,7 +1417,7 @@ end
 --- Returns recipient, healer, selfStoned.
 function RCC:_ScanSoulstoneRoster()
     self._rosterScans = self._rosterScans + 1
-    local hidden = KE:IsAuraHiddenForSpell("Soulstone")
+    local hidden = IsSoulstoneHidden()
     local recipient, healer, selfStoned
 
     local function visit(unit)
@@ -1036,21 +1482,35 @@ function RCC:_GetSoulstonedTarget(live)
     return nil
 end
 
---- _BuildSoulstoneMacrotext
---- `@target` precedes the sticky name so targeting someone else overrides it
---- for one pull; the post-cast refresh then makes that person the sticky.
---- `@mouseover` is unreachable from the icon click and stays for macro
---- consistency. `,help,nodead` falls through past a dead name, so an
---- out-of-combat refresh is enough.
-function RCC:_BuildSoulstoneMacrotext(stoned, healer)
-    local cast = "/cast [@mouseover,help,nodead][@target,help,nodead]"
+--- SoulstoneTargets
+--- The click's target chain. `@target` precedes the sticky name so targeting
+--- someone else overrides it for one pull; the post-cast refresh then makes
+--- that person the sticky. `@mouseover` is unreachable from the icon click
+--- and stays for macro consistency. `,help,nodead` falls through past a dead
+--- name, so an out-of-combat refresh is enough.
+local function SoulstoneTargets(stoned, healer)
+    local targets = "[@mouseover,help,nodead][@target,help,nodead]"
     if stoned then
-        cast = cast .. "[@" .. stoned .. ",help,nodead]"
+        targets = targets .. "[@" .. stoned .. ",help,nodead]"
     end
     if healer and healer ~= stoned then
-        cast = cast .. "[@" .. healer .. ",help,nodead]"
+        targets = targets .. "[@" .. healer .. ",help,nodead]"
     end
-    cast = cast .. "[@player] Soulstone"
+    return targets .. "[@player]"
+end
+
+--- ForeverSoulstoneMacro
+--- A Forever stone is an item used on the target, so the chain leads a
+--- `/use` of the stone.
+local function ForeverSoulstoneMacro(itemName, stoned, healer)
+    return "/stopmacro [combat]\n/use " .. SoulstoneTargets(stoned, healer) .. " " .. itemName
+end
+RCC._ForeverSoulstoneMacro = ForeverSoulstoneMacro
+
+--- _BuildSoulstoneMacrotext
+--- The retail click: the target chain leading a Soulstone cast.
+function RCC:_BuildSoulstoneMacrotext(stoned, healer)
+    local cast = "/cast " .. SoulstoneTargets(stoned, healer) .. " Soulstone"
 
     if DEBUG_RCC then
         KE:Print(string_format("[RCC] BuildSoulstoneMacrotext: stoned=%s healer=%s",
@@ -1067,6 +1527,14 @@ function RCC:_ResolveSoulstone()
     local live, healer, selfStoned = self:_ScanSoulstoneRoster()
     local stoned = self:_GetSoulstonedTarget(live)
     return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
+end
+
+--- _ResolveSoulstoneForever
+--- The Forever slot's roster answers from the same pass: whether a stone is
+--- confirmed, who the click nominates first, and the healer fallback.
+function RCC:_ResolveSoulstoneForever()
+    local live, healer, selfStoned = self:_ScanSoulstoneRoster()
+    return (live ~= nil) or selfStoned, self:_GetSoulstonedTarget(live), healer
 end
 
 -- Pre-declared so a load request allocates no closure. RequestRefresh
@@ -1290,6 +1758,21 @@ function RCC:_PaintUnavailable(btn)
     if btn.click and not InCombatLockdown() then btn.click:Hide() end
 end
 
+--- _PaintReady
+--- The status mark, icon tint, timer and low-duration glow of a Forever slot
+--- that is either up (with `remain` seconds, nil for no timer) or missing.
+function RCC:_PaintReady(btn, ready, remain)
+    btn.statusTexture:SetTexture(ready and READY_TEXTURE or NOT_READY_TEXTURE)
+    btn.statusTexture:Show()
+    btn.texture:SetDesaturated(not ready)
+    if ready then
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, remain))
+    else
+        btn.timeLeft:SetText("")
+        StopGlow(btn)
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Per-Slot Updates
 ---------------------------------------------------------------------------------
@@ -1344,6 +1827,7 @@ end
 --- buffed stat line. The click half lives in UpdateFlaskClick, which reads
 --- bags only and so runs whether or not the aura walk did.
 function RCC:UpdateFlask(auras)
+    if FV then return self:_UpdateFlaskForever(auras) end
     local btn = self.buttons.flask
     if not btn then return end
 
@@ -1384,9 +1868,9 @@ end
 --- restriction, which is why this runs outside the aura-identity gate and
 --- arms in a keystone.
 function RCC:UpdateFlaskClick()
+    if FV then return self:_UpdateFlaskClickForever() end
     local btn = self.buttons.flask
     if not btn then return end
-    local click = btn.click
     local cauldronOnly = self.db and self.db.CauldronFlasksOnly
 
     local available = {}
@@ -1427,12 +1911,21 @@ function RCC:UpdateFlaskClick()
         end
     end
 
+    self:_ArmUseClick(btn, pickItem, pickItem and available[pickItem], SLOT_FLASK)
+end
+
+--- _ArmUseClick
+--- A slot whose click uses a bag item: the item's icon and count and a
+--- `/use <name>` macro, or the slot's placeholder and no click when nothing
+--- was picked or its name is not cached yet.
+function RCC:_ArmUseClick(btn, pickItem, count, slot)
+    local click = btn.click
     btn.nominatedItem = pickItem
     if pickItem then
         self:SetIconFromItem(btn.texture, pickItem)
-        btn.countText:SetText(tostring(available[pickItem]))
+        btn.countText:SetText(tostring(count))
     else
-        btn.texture:SetTexture(DEFAULT_ICONS[SLOT_FLASK])
+        btn.texture:SetTexture(DEFAULT_ICONS[slot])
         btn.countText:SetText("")
     end
 
@@ -1517,9 +2010,9 @@ end
 --- choice. The icon always shows the click target, never the active enchant.
 --- slotKey: "oil" (MH) or "oiloh" (OH). invSlot: 16 or 17.
 function RCC:UpdateWeaponEnchant(slotKey, invSlot)
+    if FV then return self:_UpdateWeaponEnchantForever(slotKey, invSlot) end
     local btn = self.buttons[slotKey]
     if not btn then return end
-    local click = btn.click
 
     local hand = self._classCheck and self._classCheck.hands[invSlot]
     if hand then
@@ -1564,6 +2057,15 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
     end
 
     local pickItem, bagCount = self:_PickWeaponEnhancement(invSlot)
+    self:_ArmWeaponItem(btn, slotKey, invSlot, pickItem, bagCount)
+end
+
+--- _ArmWeaponItem
+--- A weapon slot's item click: the item's icon and count and a secure item
+--- use on the hand, or the hand's placeholder and no click when nothing was
+--- picked or its name is not cached yet.
+function RCC:_ArmWeaponItem(btn, slotKey, invSlot, pickItem, bagCount)
+    local click = btn.click
     btn.nominatedItem = pickItem
     if pickItem then
         self:SetIconFromItem(btn.texture, pickItem)
@@ -1590,6 +2092,7 @@ end
 --- Aura scan against AUGMENT_RUNES buff IDs. Click offers the highest-priority
 --- (lowest priority number) rune item currently in bags.
 function RCC:UpdateRune(auras)
+    if FV then return self:_UpdateElixir(auras) end
     local btn = self.buttons.rune
     if not btn then return end
     local click = btn.click
@@ -1679,6 +2182,7 @@ end
 --- to drop a fresh well — the source healthstones come from. Mirrors
 --- Healthstone reminder click (castSpellID).
 function RCC:UpdateHealthstone()
+    if FV then return self:_UpdateHealthstoneForever() end
     local btn = self.buttons.hs
     if not btn then return end
     local click = btn.click
@@ -1742,6 +2246,20 @@ function RCC:_UpdateSoulstoneSlot(btn)
     btn.nominatedSpell = classData.spellID
     btn.nominatedItem = nil
 
+    self:_PaintSoulstoneState(btn, state, remain)
+    btn.countText:SetText("")
+
+    if click and not InCombatLockdown() then
+        click:SetAttribute("type", "macro")
+        click:SetAttribute("macrotext", macrotext)
+        click:Show()
+    end
+end
+
+--- _PaintSoulstoneState
+--- SoulstoneState's paint: green tick, yellow waiting mark, or red cross
+--- plus the cast glow; the timer is the remaining cooldown.
+function RCC:_PaintSoulstoneState(btn, state, remain)
     if state == "cast" then
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
         btn.texture:SetDesaturated(true)
@@ -1754,13 +2272,66 @@ function RCC:_UpdateSoulstoneSlot(btn)
         StopGlow(btn)
     end
     btn.statusTexture:Show()
-    btn.countText:SetText("")
+end
 
-    if click and not InCombatLockdown() then
-        click:SetAttribute("type", "macro")
-        click:SetAttribute("macrotext", macrotext)
-        click:Show()
+-- Reused per repaint; SoulstoneState reads only startTime and duration.
+local soulstoneCooldown = {}
+
+--- _UpdateSoulstoneSlotForever
+--- The Warlock class slot on Forever, where the stone is an item: its
+--- cooldown is the timer, the best stocked stone is used on the target
+--- chain, and with none stocked the click creates one at the highest known
+--- rank.
+function RCC:_UpdateSoulstoneSlotForever(btn)
+    local stone, stoneCount
+    for _, row in ipairs(FV.soulstones) do
+        local n = BagCount(row.item)
+        if n > 0 then
+            stone, stoneCount = row, n
+            break
+        end
     end
+    local start, duration = C_Item.GetItemCooldown((stone or FV.soulstones[1]).item)
+    soulstoneCooldown.startTime, soulstoneCooldown.duration = start, duration
+    local confirmed, stoned, healer = self:_ResolveSoulstoneForever()
+    local state, remain = SoulstoneState(soulstoneCooldown, confirmed)
+    btn.soulstoneState = state
+    self:_PaintSoulstoneState(btn, state, remain)
+
+    local createRank = HighestKnown(FV.createSoulstone, IsSpellKnown)
+    if stone then
+        btn.nominatedItem, btn.nominatedSpell = stone.item, nil
+        self:SetIconFromItem(btn.texture, stone.item)
+        btn.countText:SetText(tostring(stoneCount))
+    else
+        btn.nominatedItem, btn.nominatedSpell = nil, createRank
+        btn.texture:SetTexture(DEFAULT_ICONS[SLOT_CLASS])
+        btn.countText:SetText("")
+    end
+
+    local click = btn.click
+    if not stone then
+        self:_ArmSpellClick(click, createRank, nil)
+    elseif click and not InCombatLockdown() then
+        local name = self:SafeItemName(stone.item)
+        if name then
+            click:SetAttribute("type", "macro")
+            click:SetAttribute("macrotext", ForeverSoulstoneMacro(name, stoned, healer))
+            click:Show()
+        else
+            click:Hide()
+        end
+    end
+end
+
+-- The Forever stone's cooldown belongs to the item, so the slot listens to
+-- bag cooldowns instead of a spell's.
+if FV then
+    CLASS_SLOT.WARLOCK = {
+        itemCooldown = true,
+        applies = function() return true end,
+        update  = function(rcc, btn) rcc:_UpdateSoulstoneSlotForever(btn) end,
+    }
 end
 
 --- _UpdateShieldSlot
@@ -1817,6 +2388,10 @@ function RCC:PLAYER_REGEN_ENABLED()
     self:RequestRefresh()
 end
 
+-- The fifth slot's toggle: the augment rune on retail, the elixir on Forever.
+-- ShowPreview below reads it too.
+local SLOT5_KEY = FV and "ShowElixir" or "ShowAugmentRune"
+
 --- _ComputeVisibility
 --- The real row's visible set, each contextual predicate asked once per
 --- repaint. The class check is resolved here, once, for every slot updater
@@ -1835,7 +2410,7 @@ function RCC:_ComputeVisibility()
     visibility[SLOT_OIL]   = db.ShowWeaponOil   ~= false
     visibility[SLOT_OILOH] = (db.ShowOffHandOil  ~= false)
         and (self:OffhandIsWeapon() or (check ~= nil and check.hands[17] ~= nil))
-    visibility[SLOT_RUNE]  = db.ShowAugmentRune ~= false
+    visibility[SLOT_RUNE]  = db[SLOT5_KEY] ~= false
     visibility[SLOT_HS]    = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup()
     visibility[SLOT_CLASS] = (db.ShowClassItem   ~= false) and classSlot ~= nil and classSlot.applies(self)
     return visibility
@@ -2321,6 +2896,10 @@ local CHECK_EVENTS = {
     "UNIT_AURA", "UNIT_INVENTORY_CHANGED", "BAG_UPDATE_DELAYED",
     "GROUP_ROSTER_UPDATE", "PLAYER_SPECIALIZATION_CHANGED",
 }
+-- Forever has no spec flask priority, so the spec event repaints nothing.
+if FV then
+    CHECK_EVENTS = { "UNIT_AURA", "UNIT_INVENTORY_CHANGED", "BAG_UPDATE_DELAYED", "GROUP_ROSTER_UPDATE" }
+end
 
 --- _SetCheckEvents
 --- Registers or drops the per-check subscriptions. SPELL_UPDATE_COOLDOWN
@@ -2330,12 +2909,14 @@ function RCC:_SetCheckEvents(on)
     if not on then
         for _, event in ipairs(CHECK_EVENTS) do self:UnregisterEvent(event) end
         self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+        if FV then self:UnregisterEvent("BAG_UPDATE_COOLDOWN") end
         return
     end
     for _, event in ipairs(CHECK_EVENTS) do self:RegisterEvent(event) end
     local _, playerClass = UnitClass("player")
     local classSlot = CLASS_SLOT[playerClass]
     if classSlot and classSlot.spellID then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
+    if classSlot and classSlot.itemCooldown then self:RegisterEvent("BAG_UPDATE_COOLDOWN") end
 end
 
 --- UNIT_AURA fires for every unit whose aura set changes. The player's
@@ -2400,6 +2981,12 @@ function RCC:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
     else
         self._cooldownAll = self._cooldownAll + 1
     end
+    self:RequestRefresh()
+end
+
+--- BAG_UPDATE_COOLDOWN drives the Forever Soulstone slot, whose cooldown
+--- belongs to the stone item.
+function RCC:BAG_UPDATE_COOLDOWN()
     self:RequestRefresh()
 end
 
@@ -2542,7 +3129,7 @@ function RCC:ShowPreview()
         [SLOT_FLASK]  = db.ShowFlask       ~= false,
         [SLOT_OIL]    = db.ShowWeaponOil   ~= false,
         [SLOT_OILOH]  = db.ShowOffHandOil  ~= false,
-        [SLOT_RUNE]   = db.ShowAugmentRune ~= false,
+        [SLOT_RUNE]   = db[SLOT5_KEY] ~= false,
         [SLOT_HS]     = db.ShowHealthstone ~= false,
         [SLOT_CLASS]  = db.ShowClassItem   ~= false,
     }

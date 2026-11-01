@@ -102,14 +102,18 @@ local FOREVER_ALLOWED = {
     AuraMovement = true,
     TotemTracker = true,
     -- QoL: the Quality of Life page with its Spell Alerts, Move Frames, Copy
-    -- Anything and Slash Commands tabs, and Secondary Stats. Great Vault
-    -- Alert, the other QoL rows and the PI Macro Builder line stay withheld.
+    -- Anything and Slash Commands tabs, Secondary Stats, and the Group Tools
+    -- row with its Ready Check tab. Great Vault Alert, Raid Notifications,
+    -- World Markers, the other QoL rows and the PI Macro Builder line stay
+    -- withheld.
     QualityOfLife = true,
     SpellAlerts = true,
     MoveFrames = true,
     CopyAnything = true,
     SlashCommands = true,
     SecondaryStats = true,
+    GroupTools = true,
+    ReadyCheckConsumables = true,
     -- Combat: Combat Timer, Combat Texts, Cursor Effects with its Cursor and
     -- Taunt tabs, Player Crosshair, Range Display, Focus Castbar, and the
     -- Status Texts row with Pet Status and Player Absorbs. The Dispel tab,

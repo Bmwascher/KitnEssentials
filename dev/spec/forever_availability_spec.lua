@@ -41,6 +41,12 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "CopyAnything",     want = true },
             { load = "baseline",            seed = BASELINE,             id = "SlashCommands",    want = true },
             { load = "baseline",            seed = BASELINE,             id = "SecondaryStats",   want = true },
+            -- Group Tools: the row and its Ready Check tab; the other two
+            -- tabs stay withheld.
+            { load = "baseline",            seed = BASELINE,             id = "GroupTools",            want = true },
+            { load = "baseline",            seed = BASELINE,             id = "ReadyCheckConsumables", want = true },
+            { load = "baseline",            seed = BASELINE,             id = "RaidNotifications",     want = false },
+            { load = "baseline",            seed = BASELINE,             id = "WorldMarkerCycler",     want = false },
             -- Combat: eight modules, the Status Texts row and the Cursor tabs
             -- but Dispel are admitted; Combat Res and the other Status Texts
             -- are not.

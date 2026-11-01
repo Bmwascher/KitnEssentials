@@ -1532,6 +1532,7 @@ local Defaults = {
             ShowWeaponOil = true,    -- main-hand weapon enhancement (slot 16: oil/stone/ammo)
             ShowOffHandOil = true,   -- off-hand weapon enhancement (slot 17)
             ShowAugmentRune = true,
+            ShowElixir = true,       -- Forever: the Elixir icon in the rune's place
             ShowHealthstone = true,
             ShowClassItem = true,    -- Warlock: Soulstone; hidden for other classes
 
@@ -1544,6 +1545,15 @@ local Defaults = {
             -- ("mastery" / "haste" / "crit" / "vers"). UpdateFlask records it; the
             -- click prefers that stat when the bag holds flasks of several.
             LastFlaskStat = nil,
+
+            -- Forever memory (persisted): the last flask and elixir buff seen,
+            -- the Shaman main hand's last imbue (its first rank's spell id) and
+            -- each Rogue hand's last poison item. Retail never reads them.
+            LastFlaskBuff = nil,
+            LastElixirBuff = nil,
+            LastImbueMH = nil,
+            LastPoisonMH = nil,
+            LastPoisonOH = nil,
 
             -- Behavior
             HideForStarter      = false,  -- suppress if you initiated the ready check
