@@ -12,7 +12,8 @@
 --      has one switch and a description; a sidebar page or tab header
 --      that reads db.Enabled has that switch on its first card
 --   L5 that description comes before any return after the card, and not
---      inside an if whose own condition reads .Enabled
+--      inside an if whose own condition reads .Enabled of the table the
+--      header switch reads
 --   L6 no body control prints a chat line (msgPopup)
 --   L7 gold comes from KE:Gold, never a hand-written color code
 -- A new page must pass with no entry. A listed page breaks the standard
@@ -26,9 +27,12 @@
 -- list built from constants or by a function, page builders that are not
 -- inline functions, a module switch dropped from a tab page, from a page
 -- that never reads db.Enabled itself, or from a header builder defined in
--- another file (a known gap), a header builder named where the file has
--- two local functions of that name, a description hidden behind a local
--- that holds the enable state (local disabled = db.Enabled == false), hand-built
+-- another file (a known gap), a header builder that is not a local, a
+-- header builder named where the file has two local definitions of that
+-- name, a card assigned to a table field, a description hidden behind a
+-- local that holds the enable state (local disabled = db.Enabled == false),
+-- an enable test that reads the switch's table under another name
+-- (KE.db.profile.X.Enabled beside a db.Enabled switch), hand-built
 -- "<Element> Position" cards, gold built from numbers or hex pieces, files
 -- outside the walked folders, or control tooltips.
 -- It also over-reaches once: a tab feature switch keyed Enabled in its own
@@ -59,10 +63,13 @@ local FACTORY_FILES = {
 local CHECKS = { "L1", "L2", "L3", "L4", "L5", "L6", "L7" }
 -- Keyed by file with a count, so a listed page cannot gain another.
 local COUNTED = { L2 = true, L6 = true, L7 = true }
+-- Keyed by file with the text of every failure in it, joined, so a listed
+-- page cannot gain or change one.
+local DETAILED = { L3 = true, L4 = true, L5 = true }
 local PHASES = { ["16"] = true, ["17"] = true, ["18"] = true, ["none until approved"] = true }
 
--- check -> key -> { phase = <a PHASES key>, n = <the count, COUNTED checks only> }
--- An L3, L4 or L5 entry ends with the failure's detail as a comment.
+-- check -> key -> { phase = <a PHASES key>, n = <the count, COUNTED checks only>,
+--   detail = <the joined failure text, DETAILED checks only> }
 local ALLOWED = {
     L1 = {
     },
@@ -70,7 +77,10 @@ local ALLOWED = {
     },
     L3 = {
         -- Interrupt Tracker page: edited only with an approval that names the item.
-        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-KickTracker.lua"] = { phase = "none until approved" }, -- content after Position
+        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-KickTracker.lua"] = {
+            phase = "none until approved",
+            detail = "content after Position; content after Position; content after Colors",
+        },
     },
     L4 = {
     },
@@ -294,13 +304,23 @@ local function LiteralAt(code, masked, pos, limit)
     return code:sub(q + 1, e - 1)
 end
 
--- The first name assigned on the line where the call at pos starts.
-local function AssignedName(masked, pos)
+-- The offset where the line holding at starts.
+local function LineStart(masked, at)
     local start = 1
     while true do
         local nl = masked:find("\n", start, true)
-        if not nl or nl >= pos then break end
+        if not nl or nl >= at then return start end
         start = nl + 1
+    end
+end
+
+-- The first name assigned on the line where the call at pos starts, or, when
+-- the call opens its line, on the line of the last code before it.
+local function AssignedName(masked, pos)
+    local start = LineStart(masked, pos)
+    if not masked:sub(start, pos - 1):find("%S") then
+        local last = masked:sub(1, start - 1):match(".*()%S")
+        if last then start = LineStart(masked, last) end
     end
     local prefix = masked:sub(start, pos - 1)
     return prefix:match("^%s*local%s+([%a_][%w_]*)[%s,%w_]*=%s*$")
@@ -396,8 +416,9 @@ local function IndexPages(code, masked, index)
 end
 
 -- The units passed as a tab host's headerBuilder: inline, or by name when
--- the file has exactly one local function of that name. With two or more,
--- which one is in scope is not resolved, and none is taken.
+-- the file has exactly one local definition of that name (local function X
+-- or local X = function). With two or more, which one is in scope is not
+-- resolved, and none is taken.
 local function HeaderUnits(masked, units)
     local starts, heads = {}, {}
     for _, unit in ipairs(units) do starts[unit.start] = unit end
@@ -406,6 +427,9 @@ local function HeaderUnits(masked, units)
         local at = name == "function" and value or nil
         if name and name ~= "function" then
             local defs = Positions(masked, "local%s+()function%s+" .. name .. "%s*%(")
+            for _, def in ipairs(Positions(masked, "local%s+" .. name .. "%s*=%s*()function%f[^%w_]")) do
+                defs[#defs + 1] = def
+            end
             if #defs == 1 then at = defs[1] end
         end
         if at and starts[at] then heads[starts[at]] = true end
@@ -424,11 +448,19 @@ local function BlockAt(blocks, pos)
     return best
 end
 
+-- The pattern for an enable test of the switch's table: <name>.Enabled with
+-- no name character or dot before it, or any .Enabled when the switch's
+-- table has no plain name.
+local function EnabledOf(switch)
+    if switch == "" then return ENABLED end
+    return "%f[%w_%.]" .. (switch:gsub("%.", "%%.")) .. "%.Enabled%f[^%w_]"
+end
+
 -- Whether the if block's own conditions before pos, its if and each of its
--- elseifs, read .Enabled directly. Conditions of nested ifs and code in
--- nested functions belong to other blocks and are not read. A local that
--- holds the enable state is not followed.
-local function TestsEnabled(masked, blocks, block, pos)
+-- elseifs, match the enabled pattern directly. Conditions of nested ifs and
+-- code in nested functions belong to other blocks and are not read. A local
+-- that holds the enable state is not followed.
+local function TestsEnabled(masked, blocks, block, pos, enabled)
     local open
     local text = masked:sub(block.start, pos)
     for rel, word in text:gmatch("()%f[%w_]([%a_][%w_]*)") do
@@ -436,7 +468,7 @@ local function TestsEnabled(masked, blocks, block, pos)
         if (word == "if" and at == block.start) or (word == "elseif" and BlockAt(blocks, at) == block) then
             open = at + #word
         elseif word == "then" and open and BlockAt(blocks, at) == block then
-            if masked:sub(open, at - 1):find(ENABLED) then return true end
+            if masked:sub(open, at - 1):find(enabled) then return true end
             open = nil
         end
     end
@@ -456,12 +488,22 @@ local function BuilderIds(code, masked, units)
     return ids
 end
 
--- Whether the header switch at pos takes its value from a key named Enabled.
-local function ReadsEnabled(masked, pos)
+-- The table the header switch at pos reads a key named Enabled from: its
+-- dotted name, "" when no plain name comes before .Enabled, or nil when the
+-- switch reads no Enabled key.
+local function SwitchTable(masked, pos)
     local open = masked:find("%(", pos)
     local close = CloseOf(masked, open)
     local stop = SecondArg(masked, open, close) or close
-    return masked:sub(open + 1, stop - 1):find(ENABLED) ~= nil
+    local value = masked:sub(open + 1, stop - 1)
+    local at = value:find(ENABLED)
+    if not at then return nil end
+    return value:sub(1, at - 1):match("%f[%w_%.]([%a_][%w_%.]*)$") or ""
+end
+
+-- Adds a DETAILED check's failure to the file's text, in the order found.
+local function Note(list, path, detail)
+    list[path] = list[path] and (list[path] .. "; " .. detail) or detail
 end
 
 -- L1-L6 for one page, then how many card calls and header switches it has.
@@ -502,7 +544,8 @@ local function PageChecks(path, code, masked, index)
                 units, unit, first.pos, limit)
         end
         local head = #toggles > 0
-        local module = head and ReadsEnabled(masked, toggles[1])
+        local switch = head and SwitchTable(masked, toggles[1]) or nil
+        local module = switch ~= nil
         local id = ids[unit]
         local sidebarPage = id ~= nil and index.sidebar[id] == true
         -- A later tab may depart from the order unless it is a module's own
@@ -520,7 +563,7 @@ local function PageChecks(path, code, masked, index)
                 local kind = isHead and "head" or card.kind
                 local rank = RANK[kind]
                 if rank < top then
-                    found.L3[path] = found.L3[path] or (kind .. " after " .. topKind)
+                    Note(found.L3, path, kind .. " after " .. topKind)
                 elseif rank > top then
                     top, topKind = rank, kind
                 end
@@ -532,28 +575,32 @@ local function PageChecks(path, code, masked, index)
         -- a nested callback belongs to that callback.
         if not head and (sidebarPage or headers[unit])
             and #InUnit(dbReads, units, unit, unit.start, unit.stop) > 0 then
-            found.L4[path] = "no switch"
+            Note(found.L4, path, "no switch")
         end
 
+        -- Each failure is tested on its own, so a second one on a listed card
+        -- changes the pinned text instead of hiding behind the first.
         if module then
             local label = labels[1]
             if not label then
-                found.L4[path] = "no description"
-            elseif #toggles > 1 then
-                found.L4[path] = #toggles .. " switches"
+                Note(found.L4, path, "no description")
+            end
+            if #toggles > 1 then
+                Note(found.L4, path, #toggles .. " switches")
             end
             if label then
                 if #InUnit(returns, units, unit, first.pos, label) > 0 then
-                    found.L5[path] = "return before description"
-                else
-                    -- Only an if that tests the enable state hides the
-                    -- description from a module that is off.
-                    for _, block in ipairs(blocks) do
-                        if block.word == "if" and block.start > first.pos and block.start < label
-                            and label < block.stop and UnitAt(units, block.start) == unit
-                            and TestsEnabled(masked, blocks, block, label) then
-                            found.L5[path] = "description behind an enable test"
-                        end
+                    Note(found.L5, path, "return before description")
+                end
+                -- Only an if that tests the switch's own enable state
+                -- hides the description from a module that is off.
+                local enabled = EnabledOf(switch)
+                for _, block in ipairs(blocks) do
+                    if block.word == "if" and block.start > first.pos and block.start < label
+                        and label < block.stop and UnitAt(units, block.start) == unit
+                        and TestsEnabled(masked, blocks, block, label, enabled) then
+                        Note(found.L5, path, "description behind an enable test")
+                        break
                     end
                 end
             end
@@ -633,8 +680,8 @@ local function CheckSource(path, text)
 end
 
 -- What differs between found and allowed for one check: an offender with no
--- entry, a count that moved, an entry with nothing left to excuse, or an
--- entry naming no known phase.
+-- entry, a count or failure text that moved, an entry with nothing left to
+-- excuse, or an entry naming no known phase.
 local function Diff(check, found, allowed)
     found = found or {}
     local out = {}
@@ -650,6 +697,9 @@ local function Diff(check, found, allowed)
             out[#out + 1] = check .. " unlisted " .. key .. detail
         elseif COUNTED[check] and entry.n ~= value then
             out[#out + 1] = check .. " count " .. key .. " n=" .. value .. ", listed n=" .. tostring(entry.n)
+        elseif DETAILED[check] and entry.detail ~= value then
+            out[#out + 1] = check .. " detail " .. key .. " (" .. value .. "), listed ("
+                .. tostring(entry.detail or "none") .. ")"
         end
     end
     for key, entry in pairs(allowed) do
@@ -918,6 +968,49 @@ local ROWS = {
           "    return card1:GetNextOffset()",
           "end)",
       }, "\n") },
+    { name = "L4: a wrapped module card assignment with no description", check = "L4", key = SAMPLE,
+      detail = "no description",
+      src = table.concat({
+          'GUIFrame:RegisterContent("Sample", function(scrollChild, yOffset)',
+          "    local db = KE.db.profile.Sample",
+          "    local card1 =",
+          '        GUIFrame:CreateCard(scrollChild, "Sample", yOffset)',
+          "    card1:AddHeaderToggle(db.Enabled ~= false, function(checked) db.Enabled = checked end)",
+          "    return card1:GetNextOffset()",
+          "end)",
+      }, "\n") },
+    { name = "L4: a header builder written local X = function that reads db.Enabled with no switch",
+      check = "L4", key = SAMPLE, detail = "no switch",
+      src = table.concat({
+          "local BuildHeader = function(scrollChild, yOffset)",
+          "    local db = KE.db.profile.Sample",
+          '    local card = GUIFrame:CreateCard(scrollChild, "Sample", yOffset)',
+          '    card:AddLabel("Does one thing.")',
+          "    return card:GetNextOffset(), db.Enabled == false",
+          "end",
+          HOST,
+      }, "\n") },
+    { name = "clean: a description behind an if that reads another table's .Enabled", clean = true,
+      src = table.concat({
+          'GUIFrame:RegisterContent("Sample", function(scrollChild, yOffset)',
+          "    local db = KE.db.profile.Sample",
+          '    local card1 = GUIFrame:CreateCard(scrollChild, "Sample", yOffset)',
+          "    card1:AddHeaderToggle(db.Enabled ~= false, function(checked) db.Enabled = checked end)",
+          '    if opts.Enabled or mydb.Enabled or self.db.Enabled then card1:AddLabel("Does one thing.") end',
+          "    if db.Enabled == false then return card1:GetNextOffset() end",
+          "    return card1:GetNextOffset()",
+          "end)",
+      }, "\n") },
+    { name = "L5: a switch with no plain table name falls back to any .Enabled test", check = "L5",
+      key = SAMPLE, detail = "description behind an enable test",
+      src = table.concat({
+          'GUIFrame:RegisterContent("Sample", function(scrollChild, yOffset)',
+          '    local card1 = GUIFrame:CreateCard(scrollChild, "Sample", yOffset)',
+          "    card1:AddHeaderToggle(GetDB().Enabled ~= false, function(checked) GetDB().Enabled = checked end)",
+          '    if opts.Enabled then card1:AddLabel("Does one thing.") end',
+          "    return card1:GetNextOffset()",
+          "end)",
+      }, "\n") },
 }
 
 describe("settings page standard", function()
@@ -939,13 +1032,52 @@ describe("settings page standard", function()
                 local suffix = row.n and (" n=" .. row.n) or row.detail and (" (" .. row.detail .. ")") or ""
                 local unlisted = row.check .. " unlisted " .. row.key .. suffix
                 assert.same({ unlisted }, Diff(row.check, found[row.check], {}), row.name)
-                local listed = { [row.key] = { phase = "16", n = row.n } }
+                local listed = { [row.key] = { phase = "16", n = row.n, detail = row.detail } }
                 assert.same({}, Diff(row.check, found[row.check], listed), row.name)
             end
         end
 
         local found = CheckSource(SAMPLE, STANDARD_PAGE)
         assert.same({ "L4 stale " .. SAMPLE }, Diff("L4", found.L4, { [SAMPLE] = { phase = "16" } }))
+
+        -- A second failure in a listed file changes its pinned text: the old
+        -- pin reports a detail line, and the joined text passes.
+        for _, case in ipairs({
+            { check = "L3", old = "Position after Font", both = "Position after Font; Glow after Sound",
+              src = Page({
+                  "    GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {})",
+                  "    GUIFrame:CreatePositionCard(scrollChild, yOffset, {})",
+                  '    local sound = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)',
+                  '    local glow = GUIFrame:CreateCard(scrollChild, "Glow", yOffset)',
+              }) },
+            { check = "L4", old = "no description", both = "no description; 2 switches",
+              src = table.concat({
+                  'GUIFrame:RegisterContent("Sample", function(scrollChild, yOffset)',
+                  "    local db = KE.db.profile.Sample",
+                  '    local card1 = GUIFrame:CreateCard(scrollChild, "Sample", yOffset)',
+                  "    card1:AddHeaderToggle(db.Enabled ~= false, function(checked) db.Enabled = checked end)",
+                  "    card1:AddHeaderToggle(db.Enabled ~= false, function(checked) db.Enabled = checked end)",
+                  "    return card1:GetNextOffset()",
+                  "end)",
+              }, "\n") },
+            { check = "L5", old = "return before description",
+              both = "return before description; description behind an enable test",
+              src = table.concat({
+                  'GUIFrame:RegisterContent("Sample", function(scrollChild, yOffset)',
+                  "    local db = KE.db.profile.Sample",
+                  '    local card1 = GUIFrame:CreateCard(scrollChild, "Sample", yOffset)',
+                  "    card1:AddHeaderToggle(db.Enabled ~= false, function(checked) db.Enabled = checked end)",
+                  "    if db.Enabled == false then return card1:GetNextOffset() end",
+                  '    if db.Enabled ~= false then card1:AddLabel("Does one thing.") end',
+                  "    return card1:GetNextOffset()",
+                  "end)",
+              }, "\n") },
+        }) do
+            local pinned = CheckSource(SAMPLE, case.src)[case.check]
+            assert.same({ case.check .. " detail " .. SAMPLE .. " (" .. case.both .. "), listed (" .. case.old .. ")" },
+                Diff(case.check, pinned, { [SAMPLE] = { phase = "16", detail = case.old } }), case.check)
+            assert.same({}, Diff(case.check, pinned, { [SAMPLE] = { phase = "16", detail = case.both } }), case.check)
+        end
     end)
 
     it("holds every settings page to the standard, apart from the listed ones", function()
