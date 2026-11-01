@@ -25,6 +25,8 @@ return {
     "Modules/Combat/ClassTools/DisintegrateTicks.lua",
     "Modules/Combat/ClassTools/DivineArbiter.lua",
     "Modules/Combat/ClassTools/HavocTracker.lua",
+    "Modules/Combat/ClassTools/SpellReflect.lua",
+    "Modules/Combat/ClassTools/SpellReflectRules.lua",
     "Modules/Combat/ClassTools/StasisTracker.lua",
     "Modules/Combat/ClassTools/TimeSpiral.lua",
     "Modules/DungeonTools/DungeonTimers/DebugTrace.lua",

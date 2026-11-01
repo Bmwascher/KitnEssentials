@@ -1021,6 +1021,29 @@ local Defaults = {
             Position = DefaultPosition(0, -220),
         },
 
+        SpellReflect = {
+            Enabled = false,
+            DisplayMode = "ICON", -- ICON | TEXT
+            Lead = 5, -- seconds before the cast start the cue appears
+            IconSize = 56,
+            FontSize = 26, -- icon mode count
+            TextSize = 30, -- text mode big line; the small line is half
+            FontOutline = "OUTLINE",
+            ShowSpellName = true,
+            NameFontSize = 14,
+            ShowNameIcons = true,
+            TextColor = { 1, 1, 1, 1 },
+            GoColor = { 0.25, 1, 0.35, 1 },
+            Glow = true,
+            GlowColor = { 0.25, 1, 0.35, 1 },
+            ReadySound = "Spell Reflect",
+            NotReadySound = "Not Safe",
+            Modes = {}, -- spell id -> ALWAYS | READY | OFF, only where it differs
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 160),
+        },
+
         DoTTracker = {
             Enabled = false,
             OnlyInCombat = true,

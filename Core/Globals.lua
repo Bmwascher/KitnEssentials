@@ -1157,6 +1157,7 @@ local PREVIEW_MODULES = {
     "DoTTracker",
     "AlterTime",
     "ShamanProcCooldowns",
+    "SpellReflect",
     "CustomCooldowns",
     "DivineArbiter",
 }
@@ -1173,7 +1174,7 @@ local SECTION_PREVIEW_MODULES = {
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
         "DisintegrateTicks", "StasisTracker",
         "Recuperate", "TimeSpiral", "PIAssist", "DoTTracker", "AlterTime",
-        "ShamanProcCooldowns", "CustomCooldowns", "DivineArbiter",
+        "ShamanProcCooldowns", "CustomCooldowns", "DivineArbiter", "SpellReflect",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",

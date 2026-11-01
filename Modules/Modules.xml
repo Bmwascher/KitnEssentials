@@ -35,6 +35,8 @@
     <Script file="QoL\QualityOfLife\SpellAlerts.lua" />
     <Script file="Combat\ClassTools\PIMacroBuilder.lua" />
     <Script file="Combat\ClassTools\PIAssist.lua" />
+    <Script file="Combat\ClassTools\SpellReflectRules.lua" />
+    <Script file="Combat\ClassTools\SpellReflect.lua" />
     <Script file="Combat\CombatTimer.lua" />
     <Script file="Combat\CombatCross.lua" />
     <Script file="Combat\CombatRes.lua" />
