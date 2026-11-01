@@ -105,7 +105,6 @@ local function NewStrip(parent, shape)
             slot.label = label
         else
             icon:SetPoint("CENTER", slot, "CENTER", 0, 0)
-            -- Without a label, only the icon's own height takes the mouse.
             local inset = (shape.height - shape.icon) / 2
             slot:SetHitRectInsets(0, 0, inset, inset)
         end
