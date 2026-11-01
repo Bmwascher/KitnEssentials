@@ -277,7 +277,7 @@ end
 -- everything they call. A row with any Blizzard global handler is listed apart
 -- from KE's ranking, even when that handler is rarely called; its total can
 -- still hold addon work the handler ran, KE's included. A row that also runs
--- one of KE's own handlers is marked.
+-- a handler not recognized as Blizzard's is marked.
 
 -- A script type missing here is never inspected, so a KE handler of that type
 -- would go unseen: keep every type KE sets on a frame listed.
@@ -353,7 +353,7 @@ end
 -- collision groups too, and partial sharing does not group at all. The label
 -- claims only what was measured.
 local NAMES_SHOWN = 3
-local FRAME_CAVEAT = "Note: frames on one row reported identical counters. Each figure is the full total of the frame's handlers, so a handler several frames share is counted for each of them and the rows do not add up. C_Timer callbacks are in no row; work an unlisted frame runs (such as Ace event callbacks) reaches a row only through a handler it shares with a listed frame."
+local FRAME_CAVEAT = "Note: frames that report identical counters share one row. Each figure is the full total of the frame's handler functions, so a handler several frames share is counted for each of them and the rows do not add up. C_Timer callbacks are in no row; work an unlisted frame runs (such as Ace event callbacks) is in a row only when it runs inside a handler function a listed frame has."
 
 local function DescribeGroup(names, count, note)
     local notes = {}
@@ -547,11 +547,14 @@ profilerWarningFrame:RegisterEvent("PLAYER_LOGIN")
 local function PrintGroups(groups, n)
     for index = 1, math_min(n, #groups) do
         local group = groups[index]
+        local note
+        if group.sharedHandler == "mixed" then
+            note = (group.count > 1 and "each " or "") .. "also runs a handler not recognized as Blizzard's"
+        end
         pf("  %2d. %.2f ms, %s, %s: %s",
             index, group.selfMs, FormatCalls(group.selfCalls),
             FormatPerCall(group.selfMs, group.selfCalls),
-            DescribeGroup(group.names, group.count,
-                group.sharedHandler == "mixed" and "also runs a handler not recognized as Blizzard's" or nil))
+            DescribeGroup(group.names, group.count, note))
     end
 end
 
