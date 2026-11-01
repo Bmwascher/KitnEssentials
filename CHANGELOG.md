@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.12
+
+Party Stops fixes for nicknames, Blind and Devourer Demon Hunters.
+
+### Party Stops
+
+- Names update as soon as you change a nickname
+- Turning Blind tracking on while an enemy is already Blinded no longer starts
+  a cooldown
+- A rogue's Blind on an enemy not yet in combat now starts their cooldown. The
+  Enemies Watched tooltip says so
+- A Devourer Demon Hunter shows Void Nova in place of Chaos Nova once their
+  spec is known
+
+---
+
 ## v4.15.11
 
 Dungeon Timers fixes for The Hoardmonger, trash sounds and missed boss ends.
