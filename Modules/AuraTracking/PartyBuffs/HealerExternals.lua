@@ -360,7 +360,9 @@ end
 local function Bind()
     local st = HX.st
     HX.sensorHost:Show()
-    if not Track.ApplyGroup(st, HX.units, HX.entries, HX.style) then Debug("a sensor call was refused") end
+    if not Track.ApplyGroup(st, HX.units, HX.entries, HX.style) then
+        Debug("a sensor call was refused or an icon was not drawn")
+    end
     if Track.Missing(st) then HX.pb:Enqueue(HX.QUEUE_KEY) end
     Layout(st.cells, #HX.entries, HX.live)
     HX.bound = true

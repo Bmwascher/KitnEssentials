@@ -936,7 +936,10 @@ function PB:BindCooldowns(k, binding)
     local entries = self:CooldownEntries(m)
     local clean, restyle = Track.Apply(slot.track, binding.token, entries, self.cellStyle, self.styleSettings)
     slot.cellSize = self.cellStyle.size
-    if not clean then self.buildPending = true end
+    if not clean then
+        self.buildPending = true
+        Debug("slot %d: a sensor call was refused or an icon was not drawn", k)
+    end
     if restyle then self:Restyle() end
     if Track.Missing(slot.track) then self:Enqueue(k) end
     self:LayoutCells(slot, #entries)
@@ -1068,8 +1071,16 @@ function PB:PlaceCells(slot, layout, perRow, size)
     -- A row kept through a roster settle is laid out again with no bind, so a
     -- new size reaches its cells here. An unbound track has no cells to dress.
     if KE.PartyBuffsRules.NeedsResize(slot.cellSize, size) then
-        for i = 1, track.count do track.view.Dress(track.cells[i], self.cellStyle, track.entries[i]) end
-        slot.cellSize = size
+        local drawn = true
+        for i = 1, track.count do
+            if not track.view.Dress(track.cells[i], self.cellStyle, track.entries[i]) then drawn = false end
+        end
+        -- Left at the old size after a failed draw, so the next layout draws again.
+        if drawn then
+            slot.cellSize = size
+        else
+            Debug("an icon was not drawn at the new size")
+        end
     end
     local count = slot.cellCount or 0
     local g = KE.PartyBuffsRules.SlotGeometry(self.db, layout, count, perRow, size)

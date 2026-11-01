@@ -303,7 +303,9 @@ local function Bind(row)
         texture = Pot.icon, name = name, color = color,
     }
     Debug("bind %s", row.token)
-    Track.Apply(row.st, row.token, { e }, Pot.style)
+    if not Track.Apply(row.st, row.token, { e }, Pot.style) then
+        Debug("%s: a sensor call was refused or a bar was not drawn", row.token)
+    end
     if row.token == "player" then
         Pot.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     end

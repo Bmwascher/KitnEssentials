@@ -20,6 +20,7 @@ local UIParent = UIParent
 local issecretvalue = issecretvalue
 local math_floor = math.floor
 local math_max = math.max
+local pcall = pcall
 local table_concat = table.concat
 local tostring = tostring
 local type = type
@@ -206,18 +207,25 @@ local function PlayGlow(c)
 end
 
 -- A summon's glow, made on first need: per slot a third bar whose edge carries
--- a clipping window, so the glow shows only during the active seconds.
+-- a clipping window, so the glow shows only during the active seconds. Each
+-- part is kept as soon as it exists and the set is published only once all
+-- six do, so a refused part is made by a later dress and no reader meets a
+-- partial set.
 local function GlowParts(c)
-    c.glowBar, c.glowWin, c.glowHost = {}, {}, {}
+    local part = c.glowPart or { bar = {}, win = {}, host = {} }
+    c.glowPart = part
     for k = 1, 2 do
-        local win = CreateFrame("Frame", nil, c)
+        local win = part.win[k] or CreateFrame("Frame", nil, c)
+        part.win[k] = win
         win:SetClipsChildren(true)
         win:SetAlpha(0)
-        local host = KE.AuraGlow.CreateHost(win, GLOW_OFF)
+        local host = part.host[k] or KE.AuraGlow.CreateHost(win, GLOW_OFF)
+        part.host[k] = host
         host:ClearAllPoints()
         host:SetAllPoints(c)
-        c.glowBar[k], c.glowWin[k], c.glowHost[k] = NewBar(c), win, host
+        part.bar[k] = part.bar[k] or NewBar(c)
     end
+    c.glowBar, c.glowWin, c.glowHost, c.glowPart = part.bar, part.win, part.host, nil
     c:SetScript("OnShow", PlayGlow)
     c:SetScript("OnHide", PlayGlow)
 end
@@ -286,7 +294,7 @@ end
 
 -- Colors, icon and text are applied every time; the bars move only when the
 -- font, size or length changed.
-function Cell.Dress(c, style, e)
+local function DressCell(c, style, e)
     local size = style.size
     -- A login scale change can land after the shared pixel size was cached.
     KE:UpdatePixelCache()
@@ -370,6 +378,14 @@ function Cell.Dress(c, style, e)
         win:SetPoint("TOP", glowEdge, "TOP", 0, high)
         win:SetWidth(width)
     end
+end
+
+-- A throw partway leaves the cell half drawn under a signature that would
+-- skip the next draw, so the signature is cleared. Returns whether it drew.
+function Cell.Dress(c, style, e)
+    local ok = pcall(DressCell, c, style, e)
+    if not ok then c.sig = nil end
+    return ok
 end
 
 -- The range is opened to 0..1 first, so the stamp is stored whole before the

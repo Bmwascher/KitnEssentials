@@ -20,6 +20,7 @@ local GetPhysicalScreenSize = GetPhysicalScreenSize
 local issecretvalue = issecretvalue
 local math_max = math.max
 local math_min = math.min
+local pcall = pcall
 local table_concat = table.concat
 local tostring = tostring
 
@@ -228,7 +229,7 @@ end
 -- size, length or the window's opening below changed. The cover is the
 -- drained part, in the drained color Rules.Colors gives. The fill ends at its
 -- edge, so nothing but the cover sits behind the drained part.
-function Bar.Dress(c, style, e)
+local function DressBar(c, style, e)
     local px = KE:GetPixelSize()
     local fill, fillScale, bg, bgScale, nameColor, bgAlpha, readyFill, readyScale, readyName, readyBack =
         Rules.Colors(style, e.color)
@@ -291,6 +292,15 @@ function Bar.Dress(c, style, e)
         f.strip:SetSpacing(spacing)
         f.strip:SetText(text)
     end
+end
+
+-- A throw partway leaves the bar half drawn under a signature that would
+-- skip the next draw, so the signature is cleared, and so is the seat lift:
+-- Bar.Seat then waits for a draw that finished. Returns whether it drew.
+function Bar.Dress(c, style, e)
+    local ok = pcall(DressBar, c, style, e)
+    if not ok then c.sig, c.nameLift = nil, nil end
+    return ok
 end
 
 -- The time window's bottom, the names' tops and the clip frames' edges sit a

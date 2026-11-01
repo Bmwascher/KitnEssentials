@@ -711,9 +711,9 @@ local function ReadSlot(st)
 end
 
 -- view draws the slot's cells: Cell unless given. A view has Cell's New,
--- Dress, Write, Range and Clear; Write and Range get values that may be secret,
--- for setters that accept them. sensorHost parents the slot's sensors: the
--- shared host unless given.
+-- Dress, Write, Range and Clear; Dress returns whether it drew, and Write and
+-- Range get values that may be secret, for setters that accept them.
+-- sensorHost parents the slot's sensors: the shared host unless given.
 function Track.NewSlot(holder, view, sensorHost)
     local st = {
         holder = holder, view = view or Cell, sensorHost = sensorHost,
@@ -935,7 +935,7 @@ function Track.Apply(st, unit, entries, style, settings)
             c = st.view.New(st.holder)
             st.cells[i] = c
         end
-        st.view.Dress(c, style, e)
+        if not st.view.Dress(c, style, e) then clean = false end
         local sig = Sig(e)
         local at = match[i]
         local t = at and old[at]
@@ -1046,7 +1046,7 @@ function Track.ApplyGroup(st, units, entries, style)
             c = st.view.New(st.holder)
             st.cells[i] = c
         end
-        st.view.Dress(c, style, e)
+        if not st.view.Dress(c, style, e) then clean = false end
         local sig = Sig(e)
         local at = match[i]
         local t = at and old[at]
