@@ -171,7 +171,6 @@ describe("GroupInspectRules foreign cap", function()
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.ForeignRun(case.now, case.foreignAt, case.since), case.name)
         end
-        -- The new run is short of the cap although the old one began long before.
         local now = 50 + R.FOREIGN_CAP - 1
         local state = { now = now, foreignAt = now - 1, foreignSince = R.ForeignRun(50, 50 - R.FOREIGN_GAP, 30) }
         assert.is_nil(R.NextInspect(state, { entry("a") }), "new run, short of the cap")
@@ -210,7 +209,6 @@ describe("GroupInspectRules foreign cap", function()
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.MayClear(10, case.foreignAt), case.name)
         end
-        -- Past the cap an ask may go out, and the clear is still refused.
         local now = 100
         assert.is_false(R.ForeignBusy(now, now - 1, now - R.FOREIGN_CAP), "past the cap, asking")
         assert.is_false(R.MayClear(now, now - 1), "past the cap, clearing")

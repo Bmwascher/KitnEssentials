@@ -207,7 +207,6 @@ describe("Widen character window: the guard runs before any write", function()
         assert.equals(0, writes())
     end)
 
-    -- A secret answer takes the same path: the widen reads it as not shown.
     it("writes NOTHING when the paper doll tab is not up or its shown state is secret", function()
         local saved = _G.issecretvalue
         finally(function() _G.issecretvalue = saved end)

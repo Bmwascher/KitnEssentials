@@ -190,8 +190,6 @@ describe("Character panel: item level text", function()
             { name = "decimal, below the minimum", equipped = 590.4, decimal = true, want = "590.40" },
             { name = "unreadable average" },
         }
-        -- Restored even when an assertion fails, so later cases in this file
-        -- see these globals as they were.
         local names = { "GetAverageItemLevel", "C_PaperDollInfo", "C_AddOns", "CharacterStatsPane" }
         local saved = {}
         for _, name in ipairs(names) do saved[name] = _G[name] end
