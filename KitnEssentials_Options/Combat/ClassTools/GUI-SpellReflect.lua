@@ -39,14 +39,17 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local SR = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
     local function ApplySettings()
         if SR then SR:ApplySettings() end
     end
-    -- For controls that add or remove rows.
+    -- The Display Mode switch rebuilds the page: the Font card edits another
+    -- size in each mode.
     local function ApplyAndRedraw()
         ApplySettings()
         GUIFrame:RefreshContent()
     end
+    manager:SetCondition("iconMode", function() return db.DisplayMode ~= "TEXT" end)
 
     ----------------------------------------------------------------
     -- Card 1: Enable
@@ -113,8 +116,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     local textMode = db.DisplayMode == "TEXT"
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
 
-    local modeHeight = textMode and Theme.rowHeightLast or Theme.rowHeight
-    local modeRow = GUIFrame:CreateRow(card3.content, modeHeight)
+    local modeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     modeRow:AddWidget(GUIFrame:CreateDropdown(modeRow, "Display Mode", {
         options = DISPLAY_MODES,
         value = textMode and "TEXT" or "ICON",
@@ -124,31 +126,38 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
         min = 5, max = 15, step = 1, value = db.Lead or 5,
         callback = function(v) db.Lead = v; ApplySettings() end,
     }), 0.5)
-    card3:AddRow(modeRow, modeHeight, textMode and 0 or nil)
+    card3:AddRow(modeRow, Theme.rowHeight)
 
-    if not textMode then
-        local sizeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-        sizeRow:AddWidget(GUIFrame:CreateSlider(sizeRow, "Icon Size", {
-            min = 24, max = 120, step = 1, value = db.IconSize or 56,
-            callback = function(v) db.IconSize = v; ApplySettings() end,
-        }), 0.5)
-        sizeRow:AddWidget(GUIFrame:CreateSlider(sizeRow, "Spell Name Size", {
-            min = 8, max = 32, step = 1, value = db.NameFontSize or 14,
-            callback = function(v) db.NameFontSize = v; ApplySettings() end,
-        }), 0.5)
-        card3:AddRow(sizeRow, Theme.rowHeight)
+    -- Icon mode only: grayed out in text mode.
+    local sizeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local iconSize = GUIFrame:CreateSlider(sizeRow, "Icon Size", {
+        min = 24, max = 120, step = 1, value = db.IconSize or 56,
+        callback = function(v) db.IconSize = v; ApplySettings() end,
+    })
+    sizeRow:AddWidget(iconSize, 0.5)
+    manager:Register(iconSize, "iconMode")
+    local nameSize = GUIFrame:CreateSlider(sizeRow, "Spell Name Size", {
+        min = 8, max = 32, step = 1, value = db.NameFontSize or 14,
+        callback = function(v) db.NameFontSize = v; ApplySettings() end,
+    })
+    sizeRow:AddWidget(nameSize, 0.5)
+    manager:Register(nameSize, "iconMode")
+    card3:AddRow(sizeRow, Theme.rowHeight)
 
-        local nameRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-        nameRow:AddWidget(GUIFrame:CreateCheckbox(nameRow, "Show Spell Name", {
-            value = db.ShowSpellName ~= false,
-            callback = function(v) db.ShowSpellName = v; ApplySettings() end,
-        }), 0.5)
-        nameRow:AddWidget(GUIFrame:CreateCheckbox(nameRow, "Spell Icons Beside Name", {
-            value = db.ShowNameIcons ~= false,
-            callback = function(v) db.ShowNameIcons = v; ApplySettings() end,
-        }), 0.5)
-        card3:AddRow(nameRow, Theme.rowHeightLast, 0)
-    end
+    local nameRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local showName = GUIFrame:CreateCheckbox(nameRow, "Show Spell Name", {
+        value = db.ShowSpellName ~= false,
+        callback = function(v) db.ShowSpellName = v; ApplySettings() end,
+    })
+    nameRow:AddWidget(showName, 0.5)
+    manager:Register(showName, "iconMode")
+    local nameIcons = GUIFrame:CreateCheckbox(nameRow, "Spell Icons Beside Name", {
+        value = db.ShowNameIcons ~= false,
+        callback = function(v) db.ShowNameIcons = v; ApplySettings() end,
+    })
+    nameRow:AddWidget(nameIcons, 0.5)
+    manager:Register(nameIcons, "iconMode")
+    card3:AddRow(nameRow, Theme.rowHeightLast, 0)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -198,22 +207,24 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Glow (icon mode; text mode draws no glow)
+    -- Card 7: Glow (grayed out in text mode, which draws no glow)
     ----------------------------------------------------------------
-    if not textMode then
-        local card7 = GUIFrame:CreateCard(scrollChild, "Glow", yOffset)
-        local glowRow = GUIFrame:CreateRow(card7.content, 46)
-        glowRow:AddWidget(GUIFrame:CreateCheckbox(glowRow, "Glow In Window", {
-            value = db.Glow ~= false,
-            callback = function(v) db.Glow = v; ApplySettings() end,
-        }), 0.5)
-        glowRow:AddWidget(GUIFrame:CreateColorPicker(glowRow, "Glow Color", {
-            color = db.GlowColor,
-            callback = function(r, g, b, a) db.GlowColor = { r, g, b, a }; ApplySettings() end,
-        }), 0.5)
-        card7:AddRow(glowRow, 46, 0)
-        yOffset = card7:GetNextOffset()
-    end
+    local card7 = GUIFrame:CreateCard(scrollChild, "Glow", yOffset)
+    local glowRow = GUIFrame:CreateRow(card7.content, 46)
+    local glowCheck = GUIFrame:CreateCheckbox(glowRow, "Glow In Window", {
+        value = db.Glow ~= false,
+        callback = function(v) db.Glow = v; ApplySettings() end,
+    })
+    glowRow:AddWidget(glowCheck, 0.5)
+    manager:Register(glowCheck, "iconMode")
+    local glowColor = GUIFrame:CreateColorPicker(glowRow, "Glow Color", {
+        color = db.GlowColor,
+        callback = function(r, g, b, a) db.GlowColor = { r, g, b, a }; ApplySettings() end,
+    })
+    glowRow:AddWidget(glowColor, 0.5)
+    manager:Register(glowColor, "iconMode")
+    card7:AddRow(glowRow, 46, 0)
+    yOffset = card7:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 8: Sound
@@ -235,5 +246,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     card8:AddRow(soundRow, Theme.rowHeightLast, 0)
     yOffset = card8:GetNextOffset()
 
+    -- Past the off-state return, so the module is on.
+    manager:UpdateAll(true)
     return yOffset
 end)
