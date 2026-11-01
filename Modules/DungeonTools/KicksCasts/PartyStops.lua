@@ -439,6 +439,12 @@ local function Reach(f)
     return Rules.Reach(f.aoe, db.EnemiesWatched, db.EnemiesWatchedArea)
 end
 
+-- Whether a single-target feed's sensor reads the enemy in slot: one held out
+-- of combat is read by the hold stops alone.
+local function Reads(f, slot)
+    return Data.STOPS[f.id].hold == true or not PS.slots:IsCalm(slot)
+end
+
 local function Owed(f)
     if next(parkDebt) == nil then return false end
     for _, s in ipairs(f.sensors) do
@@ -501,14 +507,16 @@ end
 
 -- An area stop's sensors cover the first held slots in order, wherever they
 -- sit: a held enemy keeps its slot, so sensors tied to the low slots would go
--- idle once those emptied. Returns whether any sensor was aimed or parked.
+-- idle once those emptied. An enemy held out of combat is skipped. Returns
+-- whether any sensor was aimed or parked.
 local function Cover(f)
     local list, at, by = f.sensors, f.at, f.by
     local want = f.on and math_min(#list, Reach(f)) or 0
     local moved = false
     for k = 1, #list do
         local unit = at[k]
-        if unit and (k > want or not PS.slots:SlotOf(unit)) then
+        local slot = unit and PS.slots:SlotOf(unit)
+        if unit and (k > want or not slot or PS.slots:IsCalm(slot)) then
             at[k], by[unit] = nil, nil
             Park(list[k])
             moved = true
@@ -517,7 +525,7 @@ local function Cover(f)
     local k = 1
     for slot = 1, Rules.Watched(PS.db.EnemiesWatched) do
         local unit = PS.slots:UnitOf(slot)
-        if unit and not by[unit] then
+        if unit and not by[unit] and not PS.slots:IsCalm(slot) then
             while k <= want and at[k] do k = k + 1 end
             if k > want then break end
             local s = list[k]
@@ -578,7 +586,7 @@ local function Grow(f)
     end
     local j = #f.sensors + 1
     f.sensors[j] = s
-    local unit = not f.aoe and f.on and PS.slots:UnitOf(j)
+    local unit = not f.aoe and f.on and Reads(f, j) and PS.slots:UnitOf(j)
     if f.aoe then
         if Cover(f) then Arm() end
     elseif unit then
@@ -723,7 +731,7 @@ local function OnTake(slot, unit)
         if f.aoe then
             Cover(f)
         else
-            local s = f.on and f.sensors[slot]
+            local s = f.on and Reads(f, slot) and f.sensors[slot]
             if s then Aim(s, unit) end
         end
     end
@@ -748,6 +756,23 @@ local function OnRelease(slot, unit)
         end
     end
     Debug("slot %d released", slot)
+    Arm()
+end
+
+-- A held enemy entering or leaving combat keeps its slot; only the stops that
+-- skip enemies out of combat move. A stun that pulled it is read as on a take.
+local function OnCalm(slot, unit, calm)
+    for _, f in pairs(PS.feeds) do
+        if f.aoe then
+            Cover(f)
+        elseif f.on and not Data.STOPS[f.id].hold then
+            local s = f.sensors[slot]
+            if s then
+                if calm then Park(s) else Aim(s, unit) end
+            end
+        end
+    end
+    Debug("slot %d %s", slot, calm and "calm" or "counted")
     Arm()
 end
 
@@ -936,7 +961,7 @@ local function SetFeeds(want)
                 local aimed = false
                 for j, s in ipairs(f.sensors) do
                     local unit = PS.slots:UnitOf(j)
-                    if unit then
+                    if unit and Reads(f, j) then
                         Aim(s, unit)
                         aimed = true
                     end
@@ -953,6 +978,9 @@ local function SetFeeds(want)
             Uncover(f)
         end
     end
+    -- Enemies out of combat are held only while a hold stop can read them.
+    -- Without aura containers the module runs with no slots.
+    if PS.slots then PS.slots:SetCalm(HoldOn()) end
     if any then
         QueueBuild()
         Arm()
@@ -1140,6 +1168,7 @@ local function MakeFrames()
         relax = Relax,
         onTake = OnTake,
         onRelease = OnRelease,
+        onCalm = OnCalm,
         tickSeconds = 2,
         unitEvents = { "UNIT_FLAGS", "UNIT_FACTION" },
         onUnitEvent = OnPlateUnitEvent,
