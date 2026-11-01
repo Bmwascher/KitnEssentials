@@ -51,13 +51,16 @@ local ORDER_CELL = 96
 local ORDER_HEIGHT = ORDER_ICON + 22
 local ORDER_SLOTS = #KE.PartyBuffsRules.CELL_CATEGORIES
 local QUESTION_MARK = "Interface\\Icons\\INV_Misc_QuestionMark"
+-- The Trinkets slot's on-use trinket, the same whatever is equipped.
+local TRINKET_ORDER_SPELL = 1293316
+local TRINKET_ORDER_ITEM = 273796
 -- Labeled as their Party Frame Icons picks.
 local ORDER_LABELS = { spells = "Class Cooldowns", racial = "Racials", trinket = "Trinkets" }
 
 -- Each category's picture, read when drawn: your class icon, the first
--- tracked racial's spell icon, the empty trinket slot. One that cannot be
--- read shows a question mark. A slot changes category on a reorder, so the
--- atlas's texture coordinates are reset first.
+-- tracked racial's spell icon, a fixed on-use trinket's picture. One that
+-- cannot be read shows a question mark. A slot changes category on a
+-- reorder, so the atlas's texture coordinates are reset first.
 local function SetOrderIcon(tex, key)
     tex:SetTexCoord(0, 1, 0, 1)
     if key == "spells" then
@@ -75,7 +78,7 @@ local function SetOrderIcon(tex, key)
             return
         end
     else
-        local _, icon = C_PaperDollInfo.GetInventorySlotInfo("Trinket0Slot")
+        local icon = C_Spell.GetSpellTexture(TRINKET_ORDER_SPELL) or C_Item.GetItemIconByID(TRINKET_ORDER_ITEM)
         if icon then
             tex:SetTexture(icon)
             return
