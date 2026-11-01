@@ -290,16 +290,14 @@ local SCRIPT_TYPES = {
     "OnEnable", "OnDisable", "OnColorSelect",
 }
 
--- HookScript adds to the Precall or Postcall binding, which a plain GetScript
--- does not return.
-local function CollectHandlers(frameObject, bindings, handlers)
+-- HookScript replaces the script with a combined function that is no global,
+-- so a hooked Blizzard handler reads back as KE code.
+local function CollectHandlers(frameObject, handlers)
     for _, scriptType in ipairs(SCRIPT_TYPES) do
         if frameObject:HasScript(scriptType) then
-            for _, binding in ipairs(bindings) do
-                local handler = frameObject:GetScript(scriptType, binding)
-                if handler ~= nil then
-                    handlers[#handlers + 1] = handler
-                end
+            local handler = frameObject:GetScript(scriptType)
+            if handler ~= nil then
+                handlers[#handlers + 1] = handler
             end
         end
     end
@@ -307,16 +305,14 @@ end
 
 -- A row whose handlers cannot be read keeps no mark and stays in KE's ranking.
 local function MarkSharedHandlerRows(rows)
-    local bindingType = Enum and Enum.ScriptBindingType
-    if not (bindingType and issecurevariable) then return end
-    local bindings = { bindingType.Precall, bindingType.Extrinsic, bindingType.Postcall }
+    if not issecurevariable then return end
 
     local handlersByRow = {}
     local wanted = {}
     local anyWanted = false
     for index, row in ipairs(rows) do
         local handlers = {}
-        if pcall(CollectHandlers, row.frame, bindings, handlers) then
+        if pcall(CollectHandlers, row.frame, handlers) then
             handlersByRow[index] = handlers
             for _, handler in ipairs(handlers) do
                 wanted[handler] = true
