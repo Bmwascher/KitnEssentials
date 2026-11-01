@@ -132,6 +132,7 @@ KT.activationID = 0       -- bumped on each activation; deferred callbacks check
 KT.combatEventsRegistered = false
 KT.ownClaim = {}  -- at: the player's last kick cast; see KT:ClaimOwnKick
 KT.lastEventAt = {}  -- [nameplate token] = its last accepted interrupt time
+KT.libSpecRoles = {}  -- Forever: [sender name] = the role LibSpecialization reported
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -322,6 +323,38 @@ local function ShownName(db, member)
     return member.name
 end
 
+-- A member's sort role on Forever: the player's from their talents; a
+-- teammate's from a library report under any of the three forms its
+-- sender name can take, else the set role (KT.TeammateRole).
+function KT:ForeverRole(member)
+    local unit = member.unit
+    if unit == "player" then return KE:GetPlayerSpecRole() or "DAMAGER" end
+    local roles, libraryRole = self.libSpecRoles, nil
+    local first, surname = UnitName(unit)
+    if KE:IsSafeValue(first) then
+        if KE:IsSafeValue(surname) and surname ~= "" then
+            libraryRole = roles[first .. "-" .. surname] or roles[KE:JoinCharacterName(first, surname)]
+        end
+        libraryRole = libraryRole or roles[first]
+    end
+    local setRole = UnitGroupRolesAssigned(unit)
+    return KT.TeammateRole(libraryRole, setRole, KE:IsSafeValue(setRole))
+end
+
+-- Sets a member's Forever role; returns whether it changed. A change of the
+-- player's own moves the container with Use Healer Position on, since
+-- KT:GetActiveContext reads the same role, and relabels the mover.
+function KT:ApplyForeverRole(member)
+    local role = self:ForeverRole(member)
+    if role == member.role then return false end
+    member.role = role
+    if member.unit == "player" and self.db.UseHealerPosition then
+        self:ApplyContainerPosition()
+        self:RefreshEditMode()
+    end
+    return true
+end
+
 function KT:RefreshPartyRoster()
     if not self.db or not self.db.Enabled then return end
 
@@ -347,6 +380,7 @@ function KT:RefreshPartyRoster()
                 member.name = name
                 member.displayName = DisplayName(unit)
                 SetMemberClass(member, classToken)
+                if KE.IS_FOREVER then self:ApplyForeverRole(member) end
 
                 if unit == "player" then
                     local specID = GetPlayerSpecID() or 0
@@ -1081,6 +1115,29 @@ function KT:OnOwnKickInputChanged(event, slot)
     self:OnOwnKicksChanged()
 end
 
+-- A library report: the role is kept by the sender's name, and every row's
+-- role is read again one frame later, once the player's own role has
+-- settled.
+function KT:OnLibSpecRole(role, name)
+    if KE:IsSecretValue(name) or KE:IsSecretValue(role) or type(name) ~= "string" then return end
+    self.libSpecRoles[name] = role
+    if not self.isActive or self._roleCheckPending then return end
+    self._roleCheckPending = true
+    local activation = self.activationID
+    C_Timer.After(0, function()
+        self._roleCheckPending = false
+        if self.activationID == activation and self.isActive then self:RefreshRoles() end
+    end)
+end
+
+function KT:RefreshRoles()
+    local changed = false
+    for _, member in pairs(self.partyMembers) do
+        if member.unit and self:ApplyForeverRole(member) then changed = true end
+    end
+    if changed then self:LayoutBars() end
+end
+
 ---------------------------------------------------------------------------------
 -- Bar Creation & Pool
 ---------------------------------------------------------------------------------
@@ -1445,7 +1502,7 @@ end
 ---------------------------------------------------------------------------------
 function KT:GetRolePriority(member)
     if not member or not member.interruptData then return 999 end
-    local role = member.interruptData.role
+    local role = (KE.IS_FOREVER and member.role) or member.interruptData.role
     local db = self.db
     if role == "TANK" then return db.SortTankPriority or 1 end
     if role == "HEALER" then return db.SortHealerPriority or 2 end
@@ -1967,8 +2024,16 @@ function KT:OnInitialize()
     self:SetEnabledState(false)
 end
 
+-- Forever sorts teammates by the role LibSpecialization reports
+-- (KT:OnLibSpecRole); nil on retail.
+local LibSpec = KE.IS_FOREVER and LibStub and LibStub("LibSpecialization", true) or nil
+
 function KT:OnEnable()
     if not self.db.Enabled then return end
+
+    if LibSpec then
+        LibSpec.RegisterGroup(self, function(_, role, _, name) KT:OnLibSpecRole(role, name) end)
+    end
 
     self:CreateFrames()
     self:CreateCastFrame()
@@ -1991,6 +2056,10 @@ end
 
 function KT:OnDisable()
     self:UnregisterAllEvents()
+    if LibSpec then
+        LibSpec.UnregisterGroup(self)
+        wipe(self.libSpecRoles)
+    end
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self.combatEventsRegistered = false
     self:CancelAllTimers()
