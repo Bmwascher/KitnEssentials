@@ -15,7 +15,7 @@ describe("party stops rules", function()
         local needy = { class = "WARRIOR", need = { 1, 2 } }
         local tank = { class = "DEATHKNIGHT", spec = 250, role = "TANK" }
         local notThree = { class = "MAGE", nospec = 3 }
-        local onlyThree = { class = "MAGE", spec = 3, specOnly = true }
+        local onlyThree = { class = "MAGE", spec = 3, specOnly = true, role = "DAMAGER" }
         local cases = {
             { plain, { class = "PRIEST" }, nil, false },
             { needy, { class = "WARRIOR" }, { [1] = 0, [2] = 0 }, false },

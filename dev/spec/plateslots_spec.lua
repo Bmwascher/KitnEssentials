@@ -343,13 +343,16 @@ describe("plate slots with a calm tier", function()
     local KE, frames, up, reasons, log
 
     -- A "calm" unit fails only the combat test: strict gives a reason and the
-    -- calm flag, relaxed counts. Any other reason fails both ways; nil counts.
+    -- calm flag, relaxed counts. A "flagged" unit carries the calm flag either
+    -- way, which only the scan's strictness keeps out of the tier. Any other
+    -- reason fails both ways; nil counts.
     local function verdict(unit, strict)
         local reason = reasons[unit]
         if reason == "calm" then
             if strict then return "not in combat", true end
             return nil
         end
+        if reason == "flagged" then return "flagged", true end
         return reason
     end
 
@@ -486,20 +489,21 @@ describe("plate slots with a calm tier", function()
         assert.same({ "release 2=nameplate2" }, log)
     end)
 
-    it("holds no calm slot under a relaxed scan: held calm units count there", function()
-        up.nameplate1, up.nameplate2 = true, true
-        reasons.nameplate1, reasons.nameplate2 = "calm", "calm"
+    it("holds no calm slot under a relaxed scan: held calm units count there, a flagged one is let go", function()
+        up.nameplate1, up.nameplate2, up.nameplate3 = true, true, true
+        reasons.nameplate1, reasons.nameplate2, reasons.nameplate3 = "calm", "calm", "flagged"
         local relaxed = false
-        local slots = start(2, { relax = function() return relaxed end })
+        local slots = start(3, { relax = function() return relaxed end })
         slots:SetCalm(true)
         slots:ScanNow()
         relaxed = true
         slots:ScanNow()
         assert.is_false(slots:IsCalm(1))
         assert.is_false(slots:IsCalm(2))
+        assert.is_nil(slots:SlotOf("nameplate3"))
         assert.same({
-            "take 1=nameplate1 calm", "take 2=nameplate2 calm",
-            "tier 1=nameplate1 counted", "tier 2=nameplate2 counted",
+            "take 1=nameplate1 calm", "take 2=nameplate2 calm", "take 3=nameplate3 calm",
+            "tier 1=nameplate1 counted", "tier 2=nameplate2 counted", "release 3=nameplate3",
         }, log)
     end)
 
