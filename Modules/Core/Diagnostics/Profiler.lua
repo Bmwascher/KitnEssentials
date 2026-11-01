@@ -247,6 +247,7 @@ local function GatherCpuRows()
                 and type(selfMs) == "number" and type(treeMs) == "number"
                 and (selfMs > 0 or treeMs > 0) then
                 insert(rows, {
+                    frame = frameObject,
                     frameId = ResolveFrameId(frameObject),
                     name = candidate.name,
                     selfMs = selfMs,
@@ -269,22 +270,112 @@ local function GatherCpuRows()
     return rows
 end
 
+---------------------------------------------------------------------------------
+-- Shared Blizzard handlers
+---------------------------------------------------------------------------------
+-- GetFrameCPUUsage charges a frame its handlers' whole-client totals, including
+-- everything they call. A row with any Blizzard global handler is listed apart
+-- from KE's ranking, even when that handler is rarely called; its total can
+-- still hold addon work the handler ran, KE's included. A row that also runs
+-- a handler not recognized as Blizzard's is marked.
+
+-- A script type missing here is never inspected, so a KE handler of that type
+-- would go unseen: keep every type KE sets on a frame listed.
+local SCRIPT_TYPES = {
+    "OnLoad", "OnAttributeChanged", "OnEvent", "OnUpdate", "OnShow", "OnHide",
+    "OnEnter", "OnLeave", "OnClick", "PreClick", "PostClick", "OnDoubleClick",
+    "OnMouseDown", "OnMouseUp", "OnMouseWheel", "OnDragStart", "OnDragStop",
+    "OnReceiveDrag", "OnSizeChanged", "OnKeyDown", "OnKeyUp", "OnTabPressed",
+    "OnEnterPressed", "OnEscapePressed", "OnTextChanged", "OnEditFocusGained",
+    "OnEditFocusLost", "OnValueChanged", "OnCooldownDone", "OnScrollRangeChanged",
+    "OnEnable", "OnDisable", "OnColorSelect", "OnHyperlinkEnter", "OnHyperlinkLeave",
+}
+
+-- HookScript replaces the script with a combined function that is no global,
+-- so a hooked Blizzard handler reads back as KE code.
+local function CollectHandlers(frameObject, handlers)
+    for _, scriptType in ipairs(SCRIPT_TYPES) do
+        if frameObject:HasScript(scriptType) then
+            local handler = frameObject:GetScript(scriptType)
+            if handler ~= nil then
+                handlers[#handlers + 1] = handler
+            end
+        end
+    end
+end
+
+-- A row whose handlers cannot be read keeps no mark and stays in KE's ranking.
+local function MarkSharedHandlerRows(rows)
+    if not issecurevariable then return end
+
+    local handlersByRow = {}
+    local wanted = {}
+    local anyWanted = false
+    for index, row in ipairs(rows) do
+        local handlers = {}
+        if pcall(CollectHandlers, row.frame, handlers) then
+            handlersByRow[index] = handlers
+            for _, handler in ipairs(handlers) do
+                wanted[handler] = true
+                anyWanted = true
+            end
+        end
+    end
+    if not anyWanted then return end
+
+    -- A Blizzard handler is a global function no addon has replaced or tainted.
+    -- A secret global cannot be used as a table key, so it is passed over.
+    local blizzard = {}
+    for key, value in pairs(_G) do
+        if not (KE:IsSecretValue(key) or KE:IsSecretValue(value))
+            and type(key) == "string" and type(value) == "function"
+            and wanted[value] and issecurevariable(_G, key) then
+            blizzard[value] = true
+        end
+    end
+
+    for index, handlers in pairs(handlersByRow) do
+        local shared, own = 0, 0
+        for _, handler in ipairs(handlers) do
+            if blizzard[handler] then
+                shared = shared + 1
+            else
+                own = own + 1
+            end
+        end
+        if shared > 0 then
+            rows[index].sharedHandler = own == 0 and "only" or "mixed"
+        end
+    end
+end
+
 -- Equal counters are evidence of a shared handler, not proof: an accidental
 -- collision groups too, and partial sharing does not group at all. The label
 -- claims only what was measured.
 local NAMES_SHOWN = 3
-local FRAME_CAVEAT = "Frames with identical CPU counters are grouped: frames built from one template have been observed to report one shared cost each. These costs do not sum to a total: a handler shared by frames that differ elsewhere is charged in full to each of them. Timer and plain Lua callback work is not attributed to frames."
+local FRAME_CAVEAT = "Note: frames that report identical counters share one row. Each figure is the full total of the frame's handler functions, so a handler several frames share is counted for each of them and the rows do not add up. C_Timer callbacks are in no row; work an unlisted frame runs (such as Ace event callbacks) is in a row only when it runs inside a handler function a listed frame has."
 
-local function DescribeGroup(names, count)
-    if count < 2 then
-        return names[1]
+local function DescribeGroup(names, count, note)
+    local notes = {}
+    if count > 1 then
+        notes[1] = format("%d frames, identical counters", count)
     end
+    if note then
+        notes[#notes + 1] = note
+    end
+
     local shown = {}
     for index = 1, math_min(NAMES_SHOWN, count) do
         shown[index] = names[index]
     end
-    local suffix = count > NAMES_SHOWN and " ..." or ""
-    return format("identical counters x%d: %s%s", count, concat(shown, ", "), suffix)
+    local text = concat(shown, ", ")
+    if count > NAMES_SHOWN then
+        text = format("%s and %d more", text, count - NAMES_SHOWN)
+    end
+    if #notes > 0 then
+        text = format("%s (%s)", text, concat(notes, "; "))
+    end
+    return text
 end
 
 local function CollectGroups(entries, keyOf)
@@ -335,16 +426,16 @@ local function CounterKey(value)
 end
 
 local function FormatCalls(selfCalls)
-    return selfCalls and format("%d", selfCalls) or "?"
+    return selfCalls and format("%d calls", selfCalls) or "calls unknown"
 end
 
 -- A cost with no calls behind it has no rate: the division would print a zero
 -- the sample never contained.
 local function FormatPerCall(selfMs, selfCalls)
     if selfCalls and selfCalls > 0 then
-        return format("%.4f ms/call", selfMs / selfCalls)
+        return format("%.4f ms each", selfMs / selfCalls)
     end
-    return "? ms/call"
+    return "no per-call rate"
 end
 
 local function GroupSharedRows(rows)
@@ -358,12 +449,14 @@ local function GroupSharedRows(rows)
                 name = row.name,
                 selfMs = row.selfMs,
                 selfCalls = row.selfCalls,
+                sharedHandler = row.sharedHandler,
             }
         end
     end
 
     local groups = CollectGroups(scored, function(entry)
-        return format("%.17g|%s", entry.selfMs, CounterKey(entry.selfCalls))
+        return format("%.17g|%s|%s", entry.selfMs, CounterKey(entry.selfCalls),
+            entry.sharedHandler or "")
     end)
 
     sort(groups, function(a, b)
@@ -451,6 +544,20 @@ profilerWarningFrame:SetScript("OnEvent", function(_, event)
 end)
 profilerWarningFrame:RegisterEvent("PLAYER_LOGIN")
 
+local function PrintGroups(groups, n)
+    for index = 1, math_min(n, #groups) do
+        local group = groups[index]
+        local note
+        if group.sharedHandler == "mixed" then
+            note = (group.count > 1 and "each " or "") .. "also runs a handler not recognized as Blizzard's"
+        end
+        pf("  %2d. %.2f ms, %s, %s: %s",
+            index, group.selfMs, FormatCalls(group.selfCalls),
+            FormatPerCall(group.selfMs, group.selfCalls),
+            DescribeGroup(group.names, group.count, note))
+    end
+end
+
 local function PrintCpuTop(arg)
     if not ProfilingEnabled() then
         p("Profiling is OFF. /kes profiler on then /reload to enable CPU profiling.")
@@ -462,20 +569,18 @@ local function PrintCpuTop(arg)
     local rows = GatherCpuRows()
 
     if summary.rate then
-        pf("CPU window: %.1f sec since /kes profiler reset.", summary.elapsed)
-        pf("KitnEssentials: %.2f ms total | %.2f ms/sec | %.2f%% of one CPU-second.",
-            summary.addonMs, summary.rate, summary.percent)
+        pf("KitnEssentials used %.2f ms of CPU in the %.1f s since /kes profiler reset: %.2f ms per second, %.2f%% of one CPU core.",
+            summary.addonMs, summary.elapsed, summary.rate, summary.percent)
     elseif summary.elapsed ~= nil then
-        pf("CPU window: %.1f sec since /kes profiler reset; exercise the UI before calculating a rate.",
-            summary.elapsed)
-        pf("KitnEssentials total: %.2f ms.", summary.addonMs)
+        pf("KitnEssentials used %.2f ms of CPU in the %.1f s since /kes profiler reset; exercise the UI, then type /kes profiler cpu again for a rate.",
+            summary.addonMs, summary.elapsed)
     else
-        pf("KitnEssentials total: %.2f ms (sampling duration unknown; use /kes profiler reset for a normalized rate).",
+        pf("KitnEssentials used %.2f ms of CPU (sampling duration unknown; /kes profiler reset starts a timed window).",
             summary.addonMs)
     end
 
     if summary.recentMs ~= nil and summary.peakMs ~= nil then
-        pf("Live profiler: recent avg %.4f ms/tick | peak since launch %.4f ms.",
+        pf("Live, KE only: %.4f ms per game tick (average of the last 60 ticks); KE's highest tick since launch %.4f ms.",
             summary.recentMs, summary.peakMs)
     end
 
@@ -485,20 +590,30 @@ local function PrintCpuTop(arg)
         return
     end
 
-    local groups, dropped = GroupSharedRows(rows)
+    MarkSharedHandlerRows(rows)
+    local ownRows, blizzardRows = {}, {}
+    for _, row in ipairs(rows) do
+        if row.sharedHandler then
+            blizzardRows[#blizzardRows + 1] = row
+        else
+            ownRows[#ownRows + 1] = row
+        end
+    end
+
+    local groups, dropped = GroupSharedRows(ownRows)
+    local blizzardGroups, blizzardDropped = GroupSharedRows(blizzardRows)
+    dropped = dropped + blizzardDropped
     if dropped > 0 then
         pf("%d frame(s) omitted: a counter was not a finite number.", dropped)
     end
-    pf("Top %d named KE frames by direct CPU:", n)
-    for index = 1, math_min(n, #groups) do
-        local group = groups[index]
-        pf("  %2d. %.2f ms (calls=%s, %s) %s",
-            index, group.selfMs, FormatCalls(group.selfCalls),
-            FormatPerCall(group.selfMs, group.selfCalls),
-            DescribeGroup(group.names, group.count))
-    end
+    pf("KE frames by CPU, highest first (top %d; a frame's children not included):", n)
+    PrintGroups(groups, n)
     if #groups == 0 then
-        p("  No direct frame work recorded.")
+        p(#blizzardGroups > 0 and "  None outside the shared-handler list below." or "  No frame work recorded.")
+    end
+    if #blizzardGroups > 0 then
+        p("Frames running a shared Blizzard handler (game-wide totals; any addon's work may be inside, KE's too):")
+        PrintGroups(blizzardGroups, n)
     end
     p(FRAME_CAVEAT)
 end
