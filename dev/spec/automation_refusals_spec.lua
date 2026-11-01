@@ -1608,7 +1608,8 @@ describe("Quick Signup double-click decision", function()
     local function predicate()
         local fx = newFixture()
         local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoQueueConfirm")
-        return findUpvalue(setup, "ShouldQuickSignUp")
+        local click = findUpvalue(setup, "OnSearchEntryClick")
+        return findUpvalue(click, "ShouldQuickSignUp")
     end
 
     -- Defaults every case starts from: a genuine second click on the selected

@@ -1264,42 +1264,42 @@ local function ShouldQuickSignUp(masterOn, dependentOn, inLockdown, isSelected,
     return (now - lastTime) < threshold
 end
 
+local function OnSearchEntryClick(entry, button)
+    if not AU.db or not AU.db.Enabled then return end
+    if button == "RightButton" then return end
+    if not entry then return end
+
+    local panel = LFGListFrame and LFGListFrame.SearchPanel
+    if not panel then return end
+
+    local now = assert(GetTime(), "GetTime returned nil")
+    local resultID = entry.resultID
+
+    if not ShouldQuickSignUp(AU.db.AutoQueueConfirm ~= false,
+                             AU.db.QuickSignupDoubleClick == true,
+                             InLockdown(),
+                             panel.selectedResult == resultID,
+                             lastClickEntry, lastClickTime,
+                             resultID, now, DOUBLE_CLICK_THRESHOLD) then
+        lastClickEntry, lastClickTime = resultID, now
+        return
+    end
+
+    -- Only past the refusal, because both of these reach
+    -- GetSearchResultInfo. Blizzard's own OnClick already selected the row
+    -- on the first click, so KE never calls LFGListSearchPanel_SelectResult,
+    -- which reaches UpdateResults and poisons the result provider for the
+    -- session when it runs from addon execution.
+    if not LFGListSearchPanelUtil_CanSelectResult(resultID) then return end
+    local signUp = panel.SignUpButton
+    if not signUp or not signUp:IsEnabled() then return end
+
+    LFGListSearchPanel_SignUp(panel)
+    lastClickEntry, lastClickTime = nil, 0
+end
+
 local function SetupAutoQueueConfirm()
     if not Admitted("AutomationGroupFinder") then return end
-
-    local function OnSearchEntryClick(entry, button)
-        if not AU.db or not AU.db.Enabled then return end
-        if button == "RightButton" then return end
-        if not entry then return end
-
-        local panel = LFGListFrame and LFGListFrame.SearchPanel
-        if not panel then return end
-
-        local now = assert(GetTime(), "GetTime returned nil")
-        local resultID = entry.resultID
-
-        if not ShouldQuickSignUp(AU.db.AutoQueueConfirm ~= false,
-                                 AU.db.QuickSignupDoubleClick == true,
-                                 InLockdown(),
-                                 panel.selectedResult == resultID,
-                                 lastClickEntry, lastClickTime,
-                                 resultID, now, DOUBLE_CLICK_THRESHOLD) then
-            lastClickEntry, lastClickTime = resultID, now
-            return
-        end
-
-        -- Only past the refusal, because both of these reach
-        -- GetSearchResultInfo. Blizzard's own OnClick already selected the row
-        -- on the first click, so KE never calls LFGListSearchPanel_SelectResult,
-        -- which reaches UpdateResults and poisons the result provider for the
-        -- session when it runs from addon execution.
-        if not LFGListSearchPanelUtil_CanSelectResult(resultID) then return end
-        local signUp = panel.SignUpButton
-        if not signUp or not signUp:IsEnabled() then return end
-
-        LFGListSearchPanel_SignUp(panel)
-        lastClickEntry, lastClickTime = nil, 0
-    end
 
     -- Each hook latches only once installed, and the two latch apart: hooking
     -- a missing global throws, and a target missing now is hooked by a later
