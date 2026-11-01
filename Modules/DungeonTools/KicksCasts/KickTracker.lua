@@ -223,6 +223,14 @@ end
 -- follows the demon. With neither there is no own row.
 function KT:GetOwnInterruptData(specID, castKick)
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    -- Forever: the kick the stance, form and shield allow, else the first one
+    -- known in any, so the row stays through a shift to caster form.
+    if KE.IS_FOREVER and candidates then
+        local kick = KT.OwnKickFallback(KE:ResolvePlayerInterrupt(specID) or KT.PickOwnKick(candidates, isOwnKickKnown),
+            castKick)
+        if not kick then return nil end
+        return KickRow(KE:GetCanonicalKickSpell(kick.id), kick.cd, specID)
+    end
     if not candidates or #candidates < 2 then return self:GetInterruptDataForSpec(specID) end
     local kick = KT.OwnKickFallback(KT.PickOwnKick(candidates, isOwnKickKnown), castKick)
     if not kick then return nil end
@@ -244,6 +252,7 @@ function KT:ApplyOwnKicks(member, specID)
     if specChanged then
         member.ownKickSpec = specID
         member.castKick = nil
+        if KE.IS_FOREVER then member.ownClocks = nil end
     end
     local data = self:GetOwnInterruptData(specID, member.castKick)
     local oldID = member.interruptData and member.interruptData.id
@@ -251,7 +260,14 @@ function KT:ApplyOwnKicks(member, specID)
     local extrasChanged
     member.extraKicks, extrasChanged = KT.SyncExtraKicks(member.extraKicks, self:GetOwnExtraKicks(specID))
     local mainChanged = oldID ~= (data and data.id)
-    if mainChanged then
+    if mainChanged and KE.IS_FOREVER then
+        -- Forever kicks cool apart: a kick re-picked while its clock runs
+        -- resumes it (KT.SwapOwnClock). A new spec keeps no clock.
+        member.ownClocks = member.ownClocks or {}
+        local outgoing = (not specChanged) and oldID or nil
+        member.kickStart, member.kickDuration = KT.SwapOwnClock(member.ownClocks, outgoing,
+            member.kickStart, member.kickDuration, data and data.id, GetTime())
+    elseif mainChanged then
         member.kickStart, member.kickDuration = nil, nil
     end
     return mainChanged, mainChanged or specChanged or extrasChanged
@@ -877,6 +893,12 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         -- spellbook check missed: the kick just cast is the kick, and a
         -- missing row appears.
         if not data or data.id ~= kickID then
+            -- Forever: the outgoing kick keeps its clock; ConfirmKick below
+            -- starts the cast kick's.
+            if KE.IS_FOREVER then
+                member.ownClocks = member.ownClocks or {}
+                KT.SwapOwnClock(member.ownClocks, data and data.id, member.kickStart, member.kickDuration, kickID, now)
+            end
             data = KickRow(kickID, kickCd, member.specID, data and data.role)
             member.interruptData = data
             self:UpdateBars()
@@ -921,7 +943,15 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
     self.castFrame:RegisterUnitEvent("UNIT_PET", "player")
-    self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
+    -- Forever kicks follow the spellbook, the stance or form and, for Shield
+    -- Bash, the off-hand; each change ends the cast kick's hold on the row.
+    if KE.IS_FOREVER then
+        self:RegisterEvent("SPELLS_CHANGED", "OnOwnKickInputChanged")
+        self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "OnOwnKickInputChanged")
+        self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnOwnKickInputChanged")
+    else
+        self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
+    end
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnMeterUpdate")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
     self.combatEventsRegistered = true
@@ -933,6 +963,10 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("SPELLS_CHANGED")
+    if KE.IS_FOREVER then
+        self:UnregisterEvent("UPDATE_SHAPESHIFT_FORM")
+        self:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    end
     self:UnregisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
     self:UnregisterEvent("DAMAGE_METER_RESET")
     self.combatEventsRegistered = false
@@ -1035,6 +1069,16 @@ function KT:OnOwnKicksChanged()
         self._ownKickCheckPending = false
         if self.isActive then self:RefreshOwnKicks() end
     end)
+end
+
+-- Forever: a spellbook, stance, form or off-hand change can change the
+-- player's kick, so the kick cast before it no longer holds the row.
+function KT:OnOwnKickInputChanged(event, slot)
+    if event == "PLAYER_EQUIPMENT_CHANGED" and slot ~= (INVSLOT_OFFHAND or 17) then return end
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    if member then member.castKick = nil end
+    self:OnOwnKicksChanged()
 end
 
 ---------------------------------------------------------------------------------
