@@ -181,3 +181,36 @@ describe("Character panel: refusals while the module is disabled", function()
         assert.is_nil(CP._decimalIlvlHooked)
     end)
 end)
+
+describe("Character panel: item level text", function()
+    it("writes Blizzard's whole number floored at the client minimum, keeps the decimal raw, and writes nothing while the average is unreadable", function()
+        local cases = {
+            { name = "whole, below the minimum", equipped = 590.4, want = "600" },
+            { name = "whole, above the minimum", equipped = 612.7, want = "612" },
+            { name = "decimal, below the minimum", equipped = 590.4, decimal = true, want = "590.40" },
+            { name = "unreadable average" },
+        }
+        -- Restored even when an assertion fails, so later cases in this file
+        -- see these globals as they were.
+        local names = { "GetAverageItemLevel", "C_PaperDollInfo", "C_AddOns", "CharacterStatsPane" }
+        local saved = {}
+        for _, name in ipairs(names) do saved[name] = _G[name] end
+        finally(function()
+            for _, name in ipairs(names) do _G[name] = saved[name] end
+        end)
+        for _, case in ipairs(cases) do
+            local CP = loadCP()
+            CP.IsEnabled = function() return true end
+            CP.db.DecimalItemLevel = case.decimal == true
+            _G.GetAverageItemLevel = function() return case.equipped, case.equipped end
+            _G.C_PaperDollInfo = { GetMinItemLevel = function() return 600 end }
+            _G.C_AddOns = { IsAddOnLoaded = function() return false end }
+            local written
+            _G.CharacterStatsPane = {
+                ItemLevelFrame = { Value = { SetText = function(_, text) written = text end } },
+            }
+            CP:UpdateItemLevelText()
+            assert.are.equal(case.want, written, case.name)
+        end
+    end)
+end)

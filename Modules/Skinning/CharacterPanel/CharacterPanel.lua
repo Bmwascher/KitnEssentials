@@ -1426,12 +1426,8 @@ function CP:UpdateItemLevelText(statFrame)
     local itemLevelFrame = statFrame or (CharacterStatsPane and CharacterStatsPane.ItemLevelFrame)
     if not itemLevelFrame or not itemLevelFrame.Value then return end
 
-    local _, avgItemLevelEquipped = GetAverageItemLevel()
-    if self.db.Enabled and self.db.DecimalItemLevel and not ElvUILoaded() then
-        itemLevelFrame.Value:SetText(string.format("%.2f", avgItemLevelEquipped))
-    else
-        itemLevelFrame.Value:SetText(string.format("%d", math.floor(avgItemLevelEquipped)))
-    end
+    local text = ItemLevelText(self.db.Enabled and self.db.DecimalItemLevel and not ElvUILoaded())
+    if text then itemLevelFrame.Value:SetText(text) end
     if not statFrame then RestyleStatsScrollRows() end
 end
 
