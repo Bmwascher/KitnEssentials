@@ -119,9 +119,8 @@ end
 -- for a tainted caller -- not a secret return. So ask before scanning;
 -- sampling an aura to find out IS the error being avoided.
 --
--- Two independent sources, combined fail-closed. ShouldAurasBeSecret is the
--- gate KE already proved in dungeons (DungeonTimers' Guidance check), but it
--- only predicts whether queries GENERALLY return secrets, and the hard error
+-- Two independent sources, combined fail-closed. ShouldAurasBeSecret only
+-- predicts whether queries GENERALLY return secrets, and the hard error
 -- comes from a separate access precondition -- so its "no" is not permission,
 -- and an active restriction type still hides auras on its own documented
 -- authority. Hidden when either says so; visible only when neither does.
