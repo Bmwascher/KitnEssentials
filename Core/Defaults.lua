@@ -1771,10 +1771,14 @@ local Defaults = {
             -- Raid Cooldowns box (Raid Cooldowns tab), attached to the top of
             -- Healer Mana. While Healer Mana's frame does not exist (off
             -- since login) the box takes HX.DEFAULT_POSITION on the screen.
+            -- While this attachment is unchanged and HealerExtHealerManaBelow
+            -- is on, a Default-position box stands at Healer Mana's Party
+            -- position instead, with Healer Mana on and hanging under it.
             HealerExternals   = true,
             HealerExtIconSize = 38,
             HealerExtSpacing  = 1,
             HealerExtGrowth   = "RIGHT",
+            HealerExtIconsPerRow = 4,
             HealerExtShowText = true,
             HealerExtTextSize = 14,
             HealerExtPosition = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 1 },
@@ -1782,6 +1786,7 @@ local Defaults = {
             HealerExtParentFrame = "KitnEssentialsHealerMana",
             HealerExtStrata   = "MEDIUM",
             HealerExtAttachSide = "TOP",
+            HealerExtHealerManaBelow = true,
             -- The position used in a healer spec while UseHealerExtPosition is
             -- on. It starts on the screen at HX.DEFAULT_POSITION, clear of the
             -- Healer Mana display a healer often has off.

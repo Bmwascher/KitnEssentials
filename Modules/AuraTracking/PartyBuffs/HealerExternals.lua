@@ -39,6 +39,11 @@ local DEBUG_HX = false
 
 HX.QUEUE_KEY = "healerExternals"
 HX.DEFAULT_POSITION = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -420, YOffset = 150 }
+-- The gap between the box and Healer Mana in the stack: both draw their
+-- borders inside, so 1 leaves one empty pixel between the border lines.
+HX.STACK_GAP = 1
+-- Whether the box stands on Healer Mana's spot with Healer Mana under it.
+HX.stacked = false
 -- Each position context's saved keys; the Raid Cooldowns page reads them too.
 HX.POSITION_KEYS = {
     DEFAULT = { pos = "HealerExtPosition", kind = "HealerExtAnchorFrameType", parent = "HealerExtParentFrame",
@@ -68,17 +73,23 @@ local ROSTER_HOLD = 1
 local BLACK = { 0, 0, 0, 1 }
 local screen = { anchorFrameType = "UIPARENT" }
 local EDIT_MODE_KEY = "HealerExternals"
--- Per grow direction: the box corner the first icon sits in, and the step.
-local GROW = {
-    RIGHT = { corner = "TOPLEFT",    dx = 1,  dy = 0 },
-    LEFT  = { corner = "TOPRIGHT",   dx = -1, dy = 0 },
-    DOWN  = { corner = "TOPLEFT",    dx = 0,  dy = -1 },
-    UP    = { corner = "BOTTOMLEFT", dx = 0,  dy = 1 },
-}
 -- Preview icons: left is a sample's seconds to go; one without is ready.
-local SAMPLES = { { id = 33206, left = 122 }, { id = 102342 }, { id = 97462 } }
+-- Six, so a row of four or five shows its wrap.
+local SAMPLES = {
+    { id = 33206, left = 122 }, { id = 102342 }, { id = 97462 },
+    { id = 6940 }, { id = 1022 }, { id = 51052 },
+}
 
 local placement = {}
+-- The grid as the box was last placed: the corner icon 1 sits in, the side a
+-- new row or column starts on, and the style it was laid out with. Layout
+-- reads only these, so icons drawn between placements match the box. Step 0
+-- until the first placement lays the icons out.
+local layout = { corner = "TOPLEFT", grow = "RIGHT", perRow = 1, step = 0, wrapUp = false, wrapLeft = false }
+-- The box's size and Edit Mode insets, as last applied.
+local shape = { w = 0, h = 0, left = 0, right = 0, top = 0, bottom = 0 }
+-- Defined further down; placing the box runs them.
+local Relayout, Measure, ChainCanMove
 
 local function Debug(fmt, ...)
     if DEBUG_HX then KE:Print("Raid Cooldowns: " .. string_format(fmt, ...)) end
@@ -146,10 +157,48 @@ local function Relabel()
     if HX.registered then KE.EditMode:SetElementLabel(EDIT_MODE_KEY, HX.EditModeLabel()) end
 end
 
+local stackPos = { AnchorFrom = "TOPLEFT", AnchorTo = "TOPLEFT", XOffset = 0, YOffset = 0 }
+local stackConfig = { anchorFrameType = "SELECTFRAME" }
+
+-- In the stack the box's top corner sits on Healer Mana's spot: the left one,
+-- or the right one when the icons grow left.
+local function StackPlacement(db)
+    local corner = db.HealerExtGrowth == "LEFT" and "TOPRIGHT" or "TOPLEFT"
+    stackPos.AnchorFrom, stackPos.AnchorTo = corner, corner
+    stackConfig.ParentFrame, stackConfig.Strata = HX.stackSpot:GetName(), db.HealerExtStrata
+    return stackPos, stackConfig
+end
+
+-- The one place the box is sized, placed and its icons laid out, behind the
+-- gate for the whole stack, so a refusal leaves all of it as it was. The size
+-- is set before the placement, so the pixel snap measures the new size.
 local function PlaceBox()
-    if not HX.box or not KE:CanReanchorNow(HX.box) then return end
-    local pos, config = Placement(HX.pb.db)
+    local s = HX.style
+    if not (HX.box and s.size) or not ChainCanMove() then return end
+    local db, stacked = HX.pb.db, HX.stacked
+    local pos, config
+    if stacked then
+        pos, config = StackPlacement(db)
+    else
+        pos, config = Placement(db)
+    end
+    local grow, perRow, step = s.grow, s.perRow, s.size + s.spacing
+    local from = type(pos) == "table" and pos.AnchorFrom or nil
+    local wrapUp, wrapLeft = Rules.WrapSide(stacked, from, grow)
+    local w, h, left, right, top, bottom = Measure(stacked, grow, perRow, step, wrapUp, wrapLeft)
+    HX.box:SetSize(w, h)
     KE:ApplyFramePosition(HX.box, pos, config)
+    if grow ~= layout.grow or perRow ~= layout.perRow or step ~= layout.step
+        or wrapUp ~= layout.wrapUp or wrapLeft ~= layout.wrapLeft then
+        layout.corner, layout.grow, layout.perRow, layout.step = Rules.Corner(grow), grow, perRow, step
+        layout.wrapUp, layout.wrapLeft = wrapUp, wrapLeft
+        Relayout()
+    end
+    if w == shape.w and h == shape.h and left == shape.left and right == shape.right
+        and top == shape.top and bottom == shape.bottom then return end
+    shape.w, shape.h, shape.left, shape.right, shape.top, shape.bottom = w, h, left, right, top, bottom
+    -- The Edit Mode boxes read their size and insets only when they refresh.
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 -- Edit Mode keeps a Revert snapshot per element, and Revert hands it to the
@@ -160,6 +209,76 @@ local function ContextMoved()
     if not (HX.registered and EM) then return end
     EM:SnapshotElementPosition(EDIT_MODE_KEY)
     if EM.selectedElementKey == EDIT_MODE_KEY then EM:UpdateNudgeFrameInfo() end
+end
+
+---------------------------------------------------------------------------------
+-- The stack with Healer Mana
+---------------------------------------------------------------------------------
+local function HealerMana() return KitnEssentials:GetModule("HealerMana", true) end
+
+-- Whether the box's Default position is still its default attachment, read
+-- against the defaults table so that no saved value is ever rewritten.
+function HX.Untouched(db)
+    local defaults = KE.db and KE.db.defaults and KE.db.defaults.profile
+    return Rules.DefaultAttachment(db, defaults and defaults.PartyBuffs)
+end
+
+local function Free(frame) return frame == nil or KE:CanReanchorNow(frame) end
+
+-- The box, Healer Mana and its spot anchor to one another while they stack,
+-- so a placement of any of them waits until all three may move: one moved
+-- alone would anchor to a frame anchored to it.
+ChainCanMove = function()
+    local HM = HealerMana()
+    return Free(HX.box) and (HM == nil or (Free(HM.containerFrame) and Free(HM.spot)))
+end
+HX.ChainCanMove = ChainCanMove
+
+-- Whether the box should stand on Healer Mana's spot. It moves and makes
+-- nothing. A spot that depends on the box, Healer Mana anchored to it by
+-- hand, is refused.
+local function StackWanted(db, context)
+    local shown = HX.on == true and (HX.bound == true or HX.previewing == true)
+    if not Rules.Stacks(db.HealerExtHealerManaBelow, HX.Untouched(db), context, shown) then return false end
+    local HM = HealerMana()
+    if not (HM and HM.StackReady and HM:StackReady()) then return false end
+    local spot = HM.spot
+    return spot == nil or KE:ResolveSelectFrame(spot:GetName(), HX.box) ~= nil
+end
+
+-- Makes and places the spot, so it runs only after the gate. Nil when the
+-- spot would depend on the box, which Healer Mana checks before making it,
+-- or when one made earlier has come to depend on it.
+local function StackSpot()
+    local HM = HealerMana()
+    local spot = HM and HM.StackSpot and HM:StackSpot(HX.box)
+    if not spot or KE:ResolveSelectFrame(spot:GetName(), HX.box) == nil then return nil end
+    return spot
+end
+
+-- Healer Mana goes back to its own position before the box is placed
+-- against it again.
+local function Unstack()
+    if not HX.stacked then return end
+    HX.stacked, HX.stackSpot, HX.stackRight = false, nil, nil
+    local HM = HealerMana()
+    if HM and HM.FollowBox then HM:FollowBox(nil) end
+end
+
+local releasePending = false
+
+-- Off, the box no longer places itself, so the stack ends here. Refused in
+-- combat it stays stacked until combat ends; turned on again by then, the
+-- box's own placement ends it.
+local function ReleaseStack()
+    if not HX.stacked or HX.on then return end
+    if ChainCanMove() then return Unstack() end
+    if releasePending then return end
+    releasePending = true
+    KE:RunAfterCombat(function()
+        releasePending = false
+        ReleaseStack()
+    end)
 end
 
 local placePending, placeGen = false, 0
@@ -201,16 +320,27 @@ end
 -- with, so a placement during one would have the drop write the wrong offsets.
 function HX.ApplyPosition()
     if not (HX.on and HX.box) then return end
-    if not KE:CanReanchorNow(HX.box) then return DeferPlacement(true) end
+    if not ChainCanMove() then return DeferPlacement(true) end
     local EM = KE.EditMode
     if EM and EM:IsAnyDragInFlight() then return DeferPlacement(false) end
     CancelPlacement()
     local db = HX.pb.db
     local context = ResolveContext(db)
+    local spot = StackWanted(db, context) and StackSpot() or nil
     local moved = context ~= placedContext or db ~= placedDB
     placedContext, placedSplit, placedDB = context, db.UseHealerExtPosition == true, db
     Relabel()
-    PlaceBox()
+    if spot then
+        local right = db.HealerExtGrowth == "LEFT"
+        local follow = not HX.stacked or HX.stackRight ~= right
+        HX.stacked, HX.stackSpot, HX.stackRight = true, spot, right
+        PlaceBox()
+        local HM = HealerMana()
+        if follow and HM and HM.FollowBox then HM:FollowBox(HX.box, right, HX.STACK_GAP) end
+    else
+        Unstack()
+        PlaceBox()
+    end
     if moved then ContextMoved() end
 end
 
@@ -238,61 +368,63 @@ end
 local function Restyle(db)
     local s = HX.style
     s.size, s.spacing = db.HealerExtIconSize, db.HealerExtSpacing
-    s.grow = GROW[db.HealerExtGrowth] or GROW.RIGHT
+    s.grow, s.perRow = db.HealerExtGrowth, Rules.PerRow(db.HealerExtIconsPerRow)
     s.fontName, s.outline, s.fontSize = db.FontFace, db.FontOutline, db.HealerExtTextSize
     s.showText = db.HealerExtShowText == true
     s.colors.external = db.CategoryColors == true and db.ColorExternal or BLACK
-    HX.box:SetSize(s.size, s.size)
 end
 
--- Icon i sits i - 1 steps from the grow direction's corner.
+-- Icon i sits at its grid place from icon 1, which fills the layout's corner.
 local function Layout(cells, count, parent)
-    local s = HX.style
-    local g, step = s.grow, s.size + s.spacing
+    local corner = layout.corner
     for i = 1, count do
         local c = cells[i]
+        local x, y = Rules.GridPlace(i, layout.perRow, layout.grow, layout.step, layout.wrapUp, layout.wrapLeft)
         c:ClearAllPoints()
-        c:SetPoint(g.corner, parent, g.corner, g.dx * (i - 1) * step, g.dy * (i - 1) * step)
+        c:SetPoint(corner, parent, corner, x, y)
         pcall(Cell.Seat, c)
     end
 end
 
--- The box is one icon wide and the rest of the row grows past it. The KE
--- Edit Mode box takes the whole row through these insets; the drag still
--- measures the box itself.
-local overhang = { left = 0, right = 0, top = 0, bottom = 0 }
+Relayout = function()
+    if HX.bound and HX.st then Layout(HX.st.cells, #HX.entries, HX.live) end
+    if HX.previewing and HX.sampleLayer then Layout(HX.sampleCells, #SAMPLES, HX.sampleLayer) end
+end
 
 local function OverlayInset()
-    return overhang.left, overhang.right, overhang.top, overhang.bottom
+    return shape.left, shape.right, shape.top, shape.bottom
 end
 
--- The Edit Mode box reads its insets only when it refreshes.
-local function SyncOverhang()
-    local s = HX.style
-    local g = s.grow
-    if not g then return end
-    local count = 0
-    if HX.previewing then
-        count = #SAMPLES
-    elseif HX.bound and HX.entries then
-        count = #HX.entries
-    end
-    local extra = math.max(count - 1, 0) * (s.size + s.spacing)
-    local left, right = g.dx < 0 and extra or 0, g.dx > 0 and extra or 0
-    local top, bottom = g.dy > 0 and extra or 0, g.dy < 0 and extra or 0
-    if left == overhang.left and right == overhang.right
-        and top == overhang.top and bottom == overhang.bottom then return end
-    overhang.left, overhang.right, overhang.top, overhang.bottom = left, right, top, bottom
-    if HX.registered and KE.EditMode then KE.EditMode:RefreshLiveState() end
+local function Count()
+    if HX.previewing then return #SAMPLES end
+    if HX.bound and HX.entries then return #HX.entries end
+    return 0
 end
 
+-- A free box is icon 1 alone, sized as a one-icon box always was, so a wrap
+-- never moves icon 1; the KE Edit Mode box is inset onto the grid and the
+-- drag still measures the box itself. A stacked box is the grid, so Healer
+-- Mana can hang under its bottom edge; its corner pin keeps its edges whole.
+Measure = function(stacked, grow, perRow, step, wrapUp, wrapLeft)
+    local size = HX.style.size
+    local cols, rows = Rules.GridShape(Count(), perRow, grow)
+    if stacked then return (cols - 1) * step + size, (rows - 1) * step + size, 0, 0, 0, 0 end
+    return size, size, Rules.GridInset(cols, rows, step, Rules.Extends(grow, wrapUp, wrapLeft))
+end
+
+-- The box's own size and insets back Healer Mana's Edit Mode box over the
+-- stack.
+function HX.StackInset(spotW)
+    return Rules.StackInset(shape.w, shape.h, spotW, HX.STACK_GAP, HX.stackRight == true)
+end
+
+-- Shows and hides only: whoever changes what the box holds places it first.
 local function Show()
     local box = HX.box
     if not box then return end
     HX.live:SetShown(not HX.previewing)
     if HX.sampleLayer then HX.sampleLayer:SetShown(HX.previewing == true) end
     box:SetShown(HX.on == true and (HX.bound == true or HX.previewing == true))
-    SyncOverhang()
 end
 
 -- Registering again would cancel a drag in progress.
@@ -312,6 +444,8 @@ local function Register()
         end,
         guiPath = "PartyBuffs",
         guiTab = "PartyBuffsHealerExternals",
+        -- In the stack the box moves with Healer Mana's position.
+        isEligible = function() return not HX.stacked end,
     })
     HX.registered = true
 end
@@ -396,6 +530,7 @@ end
 function HX.Resolve()
     if not On() then
         Forget()
+        HX.ApplyPosition()
         Show()
         return
     end
@@ -560,6 +695,7 @@ end
 local function TurnOff()
     HX.on = false
     CancelPlacement()
+    ReleaseStack()
     Forget()
     ForgetSamples()
     HX.previewing = false
@@ -600,5 +736,6 @@ end
 function HX.Deactivate()
     HX.active = false
     Forget()
+    HX.ApplyPosition()
     Show()
 end
