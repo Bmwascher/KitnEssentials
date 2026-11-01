@@ -2156,6 +2156,30 @@ describe("Automation Hide Transforms list by load", function()
         end
         _G.C_UnitAuras = nil
     end)
+
+    it("gives Fishing alone its watcher and no aura frame, and an empty list neither", function()
+        for _, row in ipairs({
+            { name = "Fishing alone",    keep = "fishing", fish = true },
+            { name = "nothing included", keep = nil,       fish = false },
+        }) do
+            local fx = newFixture()
+            local AU = fx.AU
+            local excluded = {}
+            for _, item in ipairs(AU.HideTransformsData.items) do
+                if item.key ~= row.keep then excluded[item.key] = false end
+            end
+            AU.db = { Enabled = true, HideTransforms = true, HideTransformItems = excluded }
+            AU:ApplySettings()
+            local apply = findUpvalue(AU.ApplySettings, "ApplyHideTransforms")
+            assert.is_nil(findUpvalue(apply, "transformAuraFrame"), row.name .. " aura frame")
+            local fishFrame = findUpvalue(apply, "transformFishFrame")
+            if row.fish then
+                assert.is_true(fishFrame ~= nil and fishFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_STOP"), row.name)
+            else
+                assert.is_nil(fishFrame, row.name)
+            end
+        end
+    end)
 end)
 
 ---------------------------------------------------------------------------------

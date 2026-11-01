@@ -2959,8 +2959,7 @@ local function ApplyHideTransforms()
     RebuildTransformList()
     local on = AU.db.Enabled and AU.db.HideTransforms
 
-    if not transformAuraFrame then
-        if not (on and next(transformCTable) ~= nil) then return end
+    if not transformAuraFrame and on and next(transformCTable) ~= nil then
         transformAuraFrame = CreateFrame("Frame")
         transformAuraFrame:SetScript("OnEvent", function(_, event, _, updateInfo)
             -- Restriction transitions and combat end both arrive here with
@@ -2989,9 +2988,13 @@ local function ApplyHideTransforms()
                 end
             end
         end)
-        -- Fishing outfit: aura 394009 sticks while the fishing channel
-        -- (131476) runs; clear it when the channel stops instead. Only a list
-        -- with the fishing row gets the watcher.
+    end
+
+    -- Fishing outfit: aura 394009 sticks while the fishing channel
+    -- (131476) runs; clear it when the channel stops instead. Only a list
+    -- with the fishing row gets the watcher, made once Fishing is included;
+    -- its row lists no aura ids, so it cannot wait on the aura frame.
+    if not transformFishFrame and on and TransformItemEnabled("fishing") then
         local fishingListed = false
         for _, item in ipairs(TRANSFORMS) do
             if item.key == "fishing" then fishingListed = true end
@@ -3018,15 +3021,17 @@ local function ApplyHideTransforms()
         end
     end
 
-    if on and next(transformCTable) ~= nil then
-        transformAuraFrame:RegisterUnitEvent("UNIT_AURA", "player")
-        transformAuraFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-        transformAuraFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
-        CancelMatchingTransforms(false)  -- immediate sweep
-    else
-        transformAuraFrame:UnregisterEvent("UNIT_AURA")
-        transformAuraFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        transformAuraFrame:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    if transformAuraFrame then
+        if on and next(transformCTable) ~= nil then
+            transformAuraFrame:RegisterUnitEvent("UNIT_AURA", "player")
+            transformAuraFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+            transformAuraFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+            CancelMatchingTransforms(false)  -- immediate sweep
+        else
+            transformAuraFrame:UnregisterEvent("UNIT_AURA")
+            transformAuraFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            transformAuraFrame:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+        end
     end
 
     if transformFishFrame then
