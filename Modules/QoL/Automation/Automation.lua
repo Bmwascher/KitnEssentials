@@ -2273,9 +2273,20 @@ end
 -- Swallows red UIErrorsFrame spam while keeping a whitelist of genuinely
 -- useful errors. The OnEvent override is only installed while on, so this
 -- costs nothing when off and is fully reversible.
+-- Ping errors never reach that OnEvent on retail: GameEvent's own dispatcher
+-- sends PING_SYSTEM_ERROR straight to UIErrorsFrame:AddMessage, so that route
+-- is removed while on. A baseline load routes the event through UIParent. The
+-- router cannot say whether a route existed, so the untick always installs
+-- an equivalent closure; after it a ping error runs tainted until the next
+-- reload, and AddMessage is not protected.
+
+-- Block-scoped: this file is near Lua 5.1's 200 main-chunk local ceiling.
+local ApplyHideErrorMessages
+do
 
 local errOrigOnEvent
 local errInstalled = false
+local pingRouteRemoved = false
 local errKeep
 local function BuildErrKeepList()
     if errKeep then return end
@@ -2311,20 +2322,50 @@ local function ErrFilteredOnEvent(self, event, id, err, ...)
     return errOrigOnEvent(self, event, id, err, ...)
 end
 
-local function ApplyHideErrorMessages()
+-- The router, only when every function the remove and the restore need exists;
+-- a missing one makes the retail half a no-op instead of an error.
+local function PingRouter()
+    local GE = _G.GameEvent
+    if GE and GE.RegisterInternalEvent and GE.UnregisterInternalEvent
+            and GE.HandlePingSystemError then
+        return GE
+    end
+    return nil
+end
+
+function ApplyHideErrorMessages()
     local on = AU.db.Enabled and AU.db.HideErrorMessages
+    local baseline = KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad()
     if on and not errInstalled then
         BuildErrKeepList()
         errOrigOnEvent = UIErrorsFrame:GetScript("OnEvent")
         UIErrorsFrame:SetScript("OnEvent", ErrFilteredOnEvent)
-        UIParent:UnregisterEvent("PING_SYSTEM_ERROR")
+        if baseline then
+            UIParent:UnregisterEvent("PING_SYSTEM_ERROR")
+        else
+            local GE = PingRouter()
+            if GE then
+                GE.UnregisterInternalEvent("PING_SYSTEM_ERROR")
+                pingRouteRemoved = true
+            end
+        end
         errInstalled = true
     elseif not on and errInstalled then
         UIErrorsFrame:SetScript("OnEvent", errOrigOnEvent)
         errOrigOnEvent = nil
-        UIParent:RegisterEvent("PING_SYSTEM_ERROR")
+        if baseline then
+            UIParent:RegisterEvent("PING_SYSTEM_ERROR")
+        elseif pingRouteRemoved then
+            local GE = PingRouter()
+            if GE then
+                GE.RegisterInternalEvent("PING_SYSTEM_ERROR", function(...) GE.HandlePingSystemError(...) end)
+            end
+            pingRouteRemoved = false
+        end
         errInstalled = false
     end
+end
+
 end
 
 -- Omnium Foil character-window button --

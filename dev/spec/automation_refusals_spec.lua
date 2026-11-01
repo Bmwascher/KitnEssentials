@@ -27,6 +27,8 @@
 --   * The retail-only features, refused where their ids are withheld.
 --   * The Group Finder hook guard, which waits for its target.
 --   * The Hide Transforms list each load picks, and the fishing watcher.
+--   * Hide Error Messages' ping-error route, which each load removes and
+--     restores on its own route only.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -256,6 +258,24 @@ local function newFixture(opts)
     if opts.baseline then
         KE.IsBaselineLoad = function() return true end
     end
+    -- Records what Hide Error Messages asks of Blizzard's event router; no
+    -- dispatcher stands behind it. opts.noGameEvent is a client without one.
+    local gameEvent = { unregistered = {}, registered = {}, handled = {} }
+    if opts.noGameEvent then
+        _G.GameEvent = nil
+    else
+        _G.GameEvent = {
+            UnregisterInternalEvent = function(event)
+                gameEvent.unregistered[#gameEvent.unregistered + 1] = event
+            end,
+            RegisterInternalEvent = function(event, handler)
+                gameEvent.registered[#gameEvent.registered + 1] = { event = event, handler = handler }
+            end,
+            HandlePingSystemError = function(...)
+                gameEvent.handled[#gameEvent.handled + 1] = { n = select("#", ...), ... }
+            end,
+        }
+    end
     -- The module indexes C_SpecializationInfo at file scope.
     mock.installSpecInfo()
     helpers.loadModule("Modules/QoL/Automation/Automation.lua", KE)
@@ -280,7 +300,7 @@ local function newFixture(opts)
     AU._talkingHeadHooked = true
 
     return {
-        AU = AU, KE = KE,
+        AU = AU, KE = KE, gameEvent = gameEvent,
         ledger = ledger, timers = timers,
         hookedGlobals = hookedGlobals, hookedMethods = hookedMethods, hookCounts = hookCounts,
         named = named, cvarSets = cvarSets,
@@ -398,7 +418,7 @@ describe("Automation master teardown and return trip (Task 3 Step 10b)", functio
         -- Messages replaces UIErrorsFrame's script, and Omnium/Train All
         -- prove themselves through visibility.
         assert.is_false(_G.BossBanner:IsEventRegistered("ENCOUNTER_LOOT_RECEIVED"))
-        assert.is_false(_G.UIParent:IsEventRegistered("PING_SYSTEM_ERROR"))
+        assert.same({ "PING_SYSTEM_ERROR" }, fx.gameEvent.unregistered)
         local filteredHandler = _G.UIErrorsFrame:GetScript("OnEvent")
         assert.is_not_nil(filteredHandler)
         assert.is_not.equal(fx.originalErrHandler, filteredHandler)
@@ -436,7 +456,8 @@ describe("Automation master teardown and return trip (Task 3 Step 10b)", functio
         assert.is_true(unwrapFrame:IsEventRegistered("NEW_MOUNT_ADDED") == false)
         assert.is_true(screenshotFrame:IsEventRegistered("SCREENSHOT_SUCCEEDED") == false)
         assert.equals(fx.originalErrHandler, _G.UIErrorsFrame:GetScript("OnEvent"))
-        assert.is_true(_G.UIParent:IsEventRegistered("PING_SYSTEM_ERROR"))
+        assert.equals(1, #fx.gameEvent.registered)
+        assert.equals("PING_SYSTEM_ERROR", fx.gameEvent.registered[1].event)
         assert.is_true(transformAuraFrame:IsEventRegistered("UNIT_AURA") == false)
         assert.is_true(transformAuraFrame:IsEventRegistered("PLAYER_REGEN_ENABLED") == false)
         assert.is_true(transformFishFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_STOP") == false)
@@ -466,7 +487,7 @@ describe("Automation master teardown and return trip (Task 3 Step 10b)", functio
         assert.is_true(screenshotFrame:IsEventRegistered("SCREENSHOT_SUCCEEDED"))
         assert.is_true(screenshotFrame:IsEventRegistered("SCREENSHOT_FAILED"))
         assert.equals(filteredHandler, _G.UIErrorsFrame:GetScript("OnEvent"))
-        assert.is_false(_G.UIParent:IsEventRegistered("PING_SYSTEM_ERROR"))
+        assert.same({ "PING_SYSTEM_ERROR", "PING_SYSTEM_ERROR" }, fx.gameEvent.unregistered)
         assert.is_true(transformAuraFrame:IsEventRegistered("UNIT_AURA"))
         assert.is_true(transformAuraFrame:IsEventRegistered("PLAYER_REGEN_ENABLED"))
         assert.is_true(transformFishFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_STOP"))
@@ -779,7 +800,8 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
             fx.AU.db.HideErrorMessages = false
             fx.AU:ApplySettings()
             assert.is_not.equal(filteredHandler, _G.UIErrorsFrame:GetScript("OnEvent"))
-            assert.is_true(_G.UIParent:IsEventRegistered("PING_SYSTEM_ERROR"))
+            assert.equals(1, #fx.gameEvent.registered)
+            assert.equals("PING_SYSTEM_ERROR", fx.gameEvent.registered[1].event)
         end)
 
     end)
@@ -2120,5 +2142,41 @@ describe("Automation Hide Transforms list by load", function()
             assert.equals(row.watcher, findUpvalue(apply, "transformFishFrame") ~= nil, row.name .. " fishing watcher")
         end
         _G.C_UnitAuras = nil
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Hide Error Messages' ping-error route. Retail routes PING_SYSTEM_ERROR
+-- through GameEvent's dispatcher and a baseline load through UIParent, so each
+-- load touches only its own route, and a client without the router touches
+-- nothing.
+---------------------------------------------------------------------------------
+describe("Automation Hide Error Messages ping route by load", function()
+    it("removes and restores only the route each load uses, once per on and off", function()
+        for _, row in ipairs({
+            { name = "retail",                opts = {},                     unregistered = 1, registered = 1, uiParent = 0 },
+            { name = "baseline",              opts = { baseline = true },    unregistered = 0, registered = 0, uiParent = 2 },
+            { name = "retail without router", opts = { noGameEvent = true }, unregistered = 0, registered = 0, uiParent = 0 },
+        }) do
+            local fx = newFixture(row.opts)
+            local AU = fx.AU
+            AU.db = { Enabled = true, HideErrorMessages = true }
+            AU:ApplySettings()
+            AU:ApplySettings()
+            AU.db.HideErrorMessages = false
+            AU:ApplySettings()
+            assert.equals(row.unregistered, #fx.gameEvent.unregistered, row.name .. " unregister")
+            assert.equals(row.registered, #fx.gameEvent.registered, row.name .. " register")
+            assert.equals(row.uiParent,
+                fx.findFrameCalls("UIParent", "UnregisterEvent") + fx.findFrameCalls("UIParent", "RegisterEvent"),
+                row.name .. " UIParent")
+            if row.registered == 1 then
+                assert.equals("PING_SYSTEM_ERROR", fx.gameEvent.unregistered[1], row.name)
+                local entry = fx.gameEvent.registered[1]
+                assert.equals("PING_SYSTEM_ERROR", entry.event, row.name)
+                entry.handler("dispatcher", "PING_SYSTEM_ERROR", "Ping failed")
+                assert.same({ { n = 3, "dispatcher", "PING_SYSTEM_ERROR", "Ping failed" } }, fx.gameEvent.handled, row.name)
+            end
+        end
     end)
 end)
