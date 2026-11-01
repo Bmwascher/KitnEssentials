@@ -260,7 +260,6 @@ try {
         & $lr 'empty LAST_RELEASE on a normal commit'     "fix a thing`n"          ''       $null   'pass'
         & $lr 'LAST_RELEASE line in another shape'        "fix a thing`n"          ''       $null   'block' "local LAST_RELEASE = '$lastTag'`n" 'cannot read LAST_RELEASE'
         & $lr 'empty LAST_RELEASE on a release commit'    "v9.8.7: fix a thing`n"  ''       '9.8.7' 'block' $null 'LAST_RELEASE is .empty.'
-        # A VersionCheck.lua missing from the index blocks instead of passing.
         git -C $feature rm -q --cached -- $vcRel 2>&1 | Out-Null
         [System.IO.File]::WriteAllText($msgFile, "fix a thing`n")
         Push-Location $feature
