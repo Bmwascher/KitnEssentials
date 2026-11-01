@@ -387,6 +387,7 @@ function FM:ComputeKick()
     if not specID or specID == 0 then
         return "nospec"
     end
+    if KE.IS_FOREVER then return self:ComputeForeverKick(specID, specName) end
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
     local trackerKick = not candidates and KE:GetTrackedKickForSpec(specID) or nil
     local spellID = FM.PickKickSpell(candidates, trackerKick, IsKickKnown)
@@ -402,6 +403,64 @@ function FM:ComputeKick()
         return "toolong", spellID, nil, specName, spellName
     end
     return "ready", spellID, body, specName, spellName
+end
+
+local GetNumShapeshiftForms = GetNumShapeshiftForms
+local GetShapeshiftFormInfo = GetShapeshiftFormInfo
+local C_Item = C_Item
+
+-- The stance bar: each form's bar index, the bar's size, and whether every
+-- form on it cannot be left. A bar spell with no form row counts as one
+-- that can be left.
+local function ReadStanceBar()
+    local indexOfForm, allFixed = {}, true
+    if not (GetNumShapeshiftForms and GetShapeshiftFormInfo) then return indexOfForm, 0, allFixed end
+    local size = GetNumShapeshiftForms() or 0
+    for i = 1, size do
+        local form, fixed = KE:GetShapeshiftFormOfSpell(select(4, GetShapeshiftFormInfo(i)))
+        if form and not indexOfForm[form] then indexOfForm[form] = i end
+        if not fixed then allFixed = false end
+    end
+    return indexOfForm, size, allFixed
+end
+
+local function CanonicalKick(id)
+    return KE:GetCanonicalKickSpell(id)
+end
+
+-- Forever: one clause per kick the player knows, each held to the stance or
+-- form it needs and, for a shield kick, a shield (FM.ForeverKickClauses).
+-- The clauses are kept for the page preview. Returns ComputeKick's values,
+-- with the clause names joined as the spell name.
+function FM:ComputeForeverKick(specID, specName)
+    self.foreverClauses, self.foreverNames, self.foreverShield = nil, nil, nil
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return "nokick", nil, nil, specName end
+    local indexOfForm, barSize, allFixed = ReadStanceBar()
+    local shieldName = C_Item and C_Item.GetItemSubClassInfo and C_Item.GetItemSubClassInfo(4, 6) or nil
+    if type(shieldName) ~= "string" or shieldName == "" then shieldName = nil end
+    local clauses = FM.ForeverKickClauses(candidates, IsKickKnown, CanonicalKick, indexOfForm, barSize, allFixed,
+        shieldName ~= nil)
+    if #clauses == 0 then return "nokick", nil, nil, specName end
+    local names = {}
+    for i = 1, #clauses do
+        local name = C_Spell.GetSpellName(clauses[i].id)
+        if not name then return "loading", clauses[i].id, nil, specName end
+        names[i] = name
+    end
+    self.foreverClauses, self.foreverNames, self.foreverShield = clauses, names, shieldName
+    local label = table_concat(names, " / ")
+    local body = FM.BuildForeverKickBody(clauses, names, shieldName, self.db, NAME_TO_INDEX[self:GetEffectiveMarker()] or 0)
+    if not body then return "toolong", clauses[1].id, nil, specName, label end
+    return "ready", clauses[1].id, body, specName, label
+end
+
+-- The page preview's body for db: retail's one-kick body, or on Forever the
+-- clauses the last ComputeKick kept.
+function FM:PreviewKickBody(db, markerIdx, spellName)
+    if not KE.IS_FOREVER then return FM.BuildKickBody(spellName, db, markerIdx) end
+    if not self.foreverClauses then return nil end
+    return FM.BuildForeverKickBody(self.foreverClauses, self.foreverNames, self.foreverShield, db, markerIdx)
 end
 
 -- The macro's current body, so a player's hand edit is seen and written over.
@@ -532,6 +591,19 @@ function FM:OnKickSpellsChanged()
     self:QueueKickRefresh()
 end
 
+-- On Forever a spec whose kicks need a stance or form rewrites when the
+-- stance bar changes; a spec not read yet is heard too, since nothing asks
+-- again once it loads.
+local function SpecNeedsForms(specID)
+    if not specID or specID == 0 then return true end
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return false end
+    for i = 1, #candidates do
+        if candidates[i].forms then return true end
+    end
+    return false
+end
+
 -- The enabled check matters: the settings page calls ApplySettings on a
 -- disabled module too, and AceEvent would register on it.
 function FM:UpdateKickEvents()
@@ -542,11 +614,15 @@ function FM:UpdateKickEvents()
         if self:GetPlayerClass() == "WARLOCK" then
             self:RegisterEvent("UNIT_PET", "OnKickUnitEvent")
         end
+        if KE.IS_FOREVER and SpecNeedsForms(KE:GetPlayerSpecId()) then
+            self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "OnKickSpellsChanged")
+        end
         self:QueueKickRefresh()
     else
         self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
         self:UnregisterEvent("SPELLS_CHANGED")
         self:UnregisterEvent("UNIT_PET")
+        self:UnregisterEvent("UPDATE_SHAPESHIFT_FORMS")
         self:UnregisterEvent("SPELL_DATA_LOAD_RESULT")
         self.pendingKick = false
         self.pendingSpellID = nil

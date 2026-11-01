@@ -459,9 +459,16 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
         db.KickMacroEnabled = checked
         ApplyKickNow()
     end)
-    cardKick:AddLabel("One per-character macro, " .. kickName .. ", that casts your interrupt at your focus. " ..
-        "Rewritten when you change spec or pet; left as it was on a spec with no interrupt. It never " ..
-        "touches your other macros.")
+    if KE.IS_FOREVER then
+        cardKick:AddLabel("One per-character macro, " .. kickName .. ", that casts your interrupt at your focus. " ..
+            "It holds a line for each kick you know, so one press casts the kick your stance, form or shield " ..
+            "allows. Rewritten when you learn a spell, stance or form, or change pet; left as it was when you " ..
+            "know no interrupt. It never touches your other macros.")
+    else
+        cardKick:AddLabel("One per-character macro, " .. kickName .. ", that casts your interrupt at your focus. " ..
+            "Rewritten when you change spec or pet; left as it was on a spec with no interrupt. It never " ..
+            "touches your other macros.")
+    end
     yOffset = cardKick:GetNextOffset()
 
     if db.KickMacroEnabled ~= true then return yOffset end
@@ -566,7 +573,7 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     if body then
         AddPreviewSection(cardPreview, "What KE writes to ", body, bodyMax, kickName,
             CharacterTabName(), "for this character only")
-        local fullBody = spellName and FM.BuildKickBody(spellName, KICK_ALL_ON, markerIdx)
+        local fullBody = spellName and FM:PreviewKickBody(KICK_ALL_ON, markerIdx, spellName)
         if fullBody then
             local sepRow = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightSeparator)
             sepRow:AddWidget(GUIFrame:CreateSeparator(sepRow), 1)
