@@ -61,8 +61,17 @@ end
 local Slots = {}
 Slots.__index = Slots
 
+-- One verdict call answers both: whether the unit counts, and, while the
+-- consumer has the calm tier on and the scan is strict, whether it fails only
+-- the combat test (a true second value from the verdict).
+local function Judge(self, unit, strict)
+    local reason, still = self.verdict(unit, strict)
+    if reason == nil then return true, false end
+    return false, self.calmOn and strict and still == true
+end
+
 local function Counts(self, unit, strict)
-    return self.verdict(unit, strict) == nil
+    return (Judge(self, unit, strict))
 end
 
 local function FirstFree(self, from)
@@ -77,6 +86,7 @@ local function Release(self, slot)
     if not unit then return false end
     self.unitOf[slot] = nil
     self.slotOf[unit] = nil
+    self.calmAt[slot] = nil
     self.total = self.total - 1
     if self.onRelease then self.onRelease(slot, unit) end
     return true
@@ -85,17 +95,40 @@ end
 -- An onTake that answers false could not bind the plate: the slot is let go at
 -- once and skipped for the rest of this scan, and the plate is tried on the next.
 -- It stays marked until it binds or its plate goes, so a consumer can keep the
--- plate's frequent events from rescanning on every one.
-local function Take(self, slot, unit)
+-- plate's frequent events from rescanning on every one. A calm take is marked
+-- before onTake runs, which gets the mark as its third argument. Returns
+-- whether the plate bound.
+local function Take(self, slot, unit, calm)
     self.unitOf[slot] = unit
     self.slotOf[unit] = slot
+    self.calmAt[slot] = calm
     self.total = self.total + 1
-    if self.onTake and self.onTake(slot, unit) == false then
+    if self.onTake and self.onTake(slot, unit, calm) == false then
         self.refused[unit] = true
         Release(self, slot)
-    else
-        self.refused[unit] = nil
+        return false
     end
+    self.refused[unit] = nil
+    return true
+end
+
+-- A held unit stays while it counts or is calm, its tier changed in place;
+-- any other is let go. Returns whether it was let go.
+local function Keep(self, slot, unit, strict)
+    local counts, calm = Judge(self, unit, strict)
+    if not (counts or calm) then return Release(self, slot) end
+    if (self.calmAt[slot] == true) ~= calm then
+        self.calmAt[slot] = calm or nil
+        if self.onCalm then self.onCalm(slot, unit, calm) end
+    end
+    return false
+end
+
+local function LowestCalm(self)
+    for slot = 1, self.cap do
+        if self.calmAt[slot] then return slot end
+    end
+    return nil
 end
 
 local function ScanDone(self)
@@ -133,6 +166,7 @@ function PlateSlots.New(opts)
         relax = opts.relax,
         onTake = opts.onTake,
         onRelease = opts.onRelease,
+        onCalm = opts.onCalm,
         onScanDone = opts.onScanDone,
         tickSeconds = opts.tickSeconds,
         unitEvents = opts.unitEvents,
@@ -142,8 +176,11 @@ function PlateSlots.New(opts)
         slotOf = {},
         refused = {},
         up = {},
+        calmAt = {},
+        later = {},
         total = 0,
         strict = true,
+        calmOn = false,
         started = false,
         queued = false,
     }, Slots)
@@ -222,22 +259,53 @@ function Slots:ScanNow()
 
     for slot = 1, MAX_PLATES do
         local unit = unitOf[slot]
-        if unit and (slot > self.cap or not Counts(self, unit, strict)) then Release(self, slot) end
-    end
-    -- A unit keeps its slot while it counts, so a pull bigger than the cap drops
-    -- the latecomers instead of reshuffling. Every slot below the one just handed
-    -- out is held, so the search resumes past it: a slot that refused a plate is
-    -- not offered to every later plate, which would stop the count below it.
-    local from = 1
-    for i = 1, MAX_PLATES do
-        local unit = plateTokens[i]
-        if up[i] and not slotOf[unit] and Counts(self, unit, strict) then
-            local free = FirstFree(self, from)
-            if not free then break end
-            Take(self, free, unit)
-            from = free + 1
+        if unit then
+            if slot > self.cap then
+                Release(self, slot)
+            else
+                Keep(self, slot, unit, strict)
+            end
         end
     end
+    -- A unit keeps its slot while it counts, so a pull bigger than the cap drops
+    -- the latecomers instead of reshuffling; only a calm slot gives way to a
+    -- counted unit. Every slot below the one just handed out is held, so the
+    -- search resumes past it: a slot that refused a plate is not offered to
+    -- every later plate, which would stop the count below it. Calm units get
+    -- what is left, in plate order.
+    local from, later, waiting = 1, self.later, 0
+    for i = 1, MAX_PLATES do
+        local unit = plateTokens[i]
+        if up[i] and not slotOf[unit] then
+            local counts, calm = Judge(self, unit, strict)
+            if counts then
+                local free = FirstFree(self, from)
+                if free then
+                    Take(self, free, unit)
+                    from = free + 1
+                else
+                    local evict = self.calmOn and LowestCalm(self)
+                    if not evict then break end
+                    Release(self, evict)
+                    -- A refused evicted slot is offered to no later plate.
+                    if not Take(self, evict, unit) then
+                        from = self.cap + 1
+                        break
+                    end
+                end
+            elseif calm then
+                waiting = waiting + 1
+                later[waiting] = unit
+            end
+        end
+    end
+    for k = 1, waiting do
+        local free = FirstFree(self, from)
+        if not free then break end
+        Take(self, free, later[k], true)
+        from = free + 1
+    end
+    for k = waiting, 1, -1 do later[k] = nil end
     ScanDone(self)
 end
 
@@ -245,13 +313,21 @@ function Slots:Recheck(unit)
     local index = plateIndex[unit]
     if not self.started or not index or not self.up[index] then return end
     local slot = self.slotOf[unit]
-    local counts = Counts(self, unit, self.strict)
     local released = false
-    if slot and not counts then
-        released = Release(self, slot)
-    elseif not slot and counts then
-        local free = FirstFree(self)
-        if free then Take(self, free, unit) end
+    if slot then
+        released = Keep(self, slot, unit, self.strict)
+    else
+        local counts, calm = Judge(self, unit, self.strict)
+        local free = (counts or calm) and FirstFree(self)
+        if free then
+            Take(self, free, unit, calm or nil)
+        elseif counts then
+            local evict = self.calmOn and LowestCalm(self)
+            if evict then
+                released = Release(self, evict)
+                Take(self, evict, unit)
+            end
+        end
     end
     ScanDone(self)
     -- A freed slot belongs to the next plate waiting past the cap. With a
@@ -283,6 +359,17 @@ function Slots:WouldCount(unit) return Counts(self, unit, self.strict) end
 function Slots:Total() return self.total end
 function Slots:Cap() return self.cap end
 function Slots:IsStarted() return self.started end
+
+function Slots:IsCalm(slot) return self.calmAt[slot] == true end
+
+-- The calm tier holds units that fail only the combat test, in slots no
+-- counted unit needs. Off, the next scan lets every calm slot go.
+function Slots:SetCalm(on)
+    on = on == true
+    if on == self.calmOn then return end
+    self.calmOn = on
+    self:QueueScan()
+end
 
 ---------------------------------------------------------------------------------
 -- Build runner

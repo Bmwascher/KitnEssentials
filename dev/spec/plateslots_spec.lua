@@ -338,3 +338,188 @@ describe("plate build runner", function()
         end
     end)
 end)
+
+describe("plate slots with a calm tier", function()
+    local KE, frames, up, reasons, log
+
+    -- A "calm" unit fails only the combat test: strict gives a reason and the
+    -- calm flag, relaxed counts. Any other reason fails both ways; nil counts.
+    local function verdict(unit, strict)
+        local reason = reasons[unit]
+        if reason == "calm" then
+            if strict then return "not in combat", true end
+            return nil
+        end
+        return reason
+    end
+
+    local function start(cap, extra)
+        log = {}
+        local opts = {
+            verdict = verdict,
+            cap = cap,
+            onTake = function(slot, unit, calm)
+                log[#log + 1] = "take " .. slot .. "=" .. unit .. (calm and " calm" or "")
+            end,
+            onRelease = function(slot, unit) log[#log + 1] = "release " .. slot .. "=" .. unit end,
+            onCalm = function(slot, unit, calm)
+                log[#log + 1] = "tier " .. slot .. "=" .. unit .. (calm and " calm" or " counted")
+            end,
+        }
+        for key, value in pairs(extra or {}) do opts[key] = value end
+        local slots = KE.PlateSlots.New(opts)
+        slots:Start()
+        return slots
+    end
+
+    local function show(unit)
+        up[unit] = true
+        frames[#frames]:Fire("NAME_PLATE_UNIT_ADDED", unit)
+    end
+
+    before_each(function()
+        up, reasons = {}, {}
+        KE, frames = L.loadPlateSlots({
+            UnitExists = function(unit) return up[unit] == true end,
+        })
+    end)
+
+    it("holds no calm unit and calls no tier change until the consumer turns the tier on", function()
+        up.nameplate1, up.nameplate2 = true, true
+        reasons.nameplate1 = "calm"
+        local slots = start(2)
+        slots:ScanNow()
+        assert.is_nil(slots:SlotOf("nameplate1"))
+        assert.equals(1, slots:SlotOf("nameplate2"))
+        assert.same({ "take 1=nameplate2" }, log)
+    end)
+
+    it("gives calm units only the slots left after the counted ones, marked calm", function()
+        up.nameplate1, up.nameplate2, up.nameplate3 = true, true, true
+        reasons.nameplate1, reasons.nameplate3 = "calm", "calm"
+        local slots = start(2)
+        slots:SetCalm(true)
+        slots:ScanNow()
+        assert.equals(1, slots:SlotOf("nameplate2"))
+        assert.equals(2, slots:SlotOf("nameplate1"))
+        assert.is_nil(slots:SlotOf("nameplate3"))
+        assert.is_false(slots:IsCalm(1))
+        assert.is_true(slots:IsCalm(2))
+        assert.same({ "take 1=nameplate2", "take 2=nameplate1 calm" }, log)
+    end)
+
+    it("lets a counted unit with no free slot take the lowest calm slot, released before it is taken", function()
+        up.nameplate1, up.nameplate2 = true, true
+        reasons.nameplate1, reasons.nameplate2 = "calm", "calm"
+        local slots = start(2)
+        slots:SetCalm(true)
+        slots:ScanNow()
+        show("nameplate3")
+        log = {}
+        slots:ScanNow()
+        assert.equals("nameplate3", slots:UnitOf(1))
+        assert.equals("nameplate2", slots:UnitOf(2))
+        assert.is_false(slots:IsCalm(1))
+        assert.same({ "release 1=nameplate1", "take 1=nameplate3" }, log)
+    end)
+
+    it("changes a held unit's tier in place, without a release, by scan or by recheck", function()
+        -- How the change is noticed. nameplate1 is held calm, then counts, then
+        -- is calm again.
+        local ways = {
+            { "scan", function(slots) slots:ScanNow() end },
+            { "recheck", function(slots) slots:Recheck("nameplate1") end },
+        }
+        for _, way in ipairs(ways) do
+            up.nameplate1 = true
+            reasons.nameplate1 = "calm"
+            local slots = start(1)
+            slots:SetCalm(true)
+            slots:ScanNow()
+            reasons.nameplate1 = nil
+            way[2](slots)
+            assert.is_false(slots:IsCalm(1), way[1])
+            reasons.nameplate1 = "calm"
+            way[2](slots)
+            assert.is_true(slots:IsCalm(1), way[1])
+            assert.same({ "take 1=nameplate1 calm", "tier 1=nameplate1 counted", "tier 1=nameplate1 calm" },
+                log, way[1])
+        end
+    end)
+
+    it("rechecks an unheld plate: a calm one takes only a free slot, a counted one takes a calm slot", function()
+        up.nameplate1 = true
+        reasons.nameplate1 = "calm"
+        local slots = start(2)
+        slots:SetCalm(true)
+        slots:ScanNow()
+        reasons.nameplate2 = "calm"
+        show("nameplate2")
+        slots:Recheck("nameplate2")
+        assert.equals(2, slots:SlotOf("nameplate2"))
+        assert.is_true(slots:IsCalm(2))
+        reasons.nameplate3 = "calm"
+        show("nameplate3")
+        slots:Recheck("nameplate3")
+        assert.is_nil(slots:SlotOf("nameplate3"))
+        reasons.nameplate3 = nil
+        slots:Recheck("nameplate3")
+        assert.equals(1, slots:SlotOf("nameplate3"))
+        assert.is_false(slots:IsCalm(1))
+        assert.same({
+            "take 1=nameplate1 calm", "take 2=nameplate2 calm",
+            "release 1=nameplate1", "take 1=nameplate3",
+        }, log)
+    end)
+
+    it("lets every calm slot go on the scan after the tier is turned off and keeps the counted ones", function()
+        up.nameplate1, up.nameplate2 = true, true
+        reasons.nameplate2 = "calm"
+        local slots = start(2)
+        slots:SetCalm(true)
+        slots:ScanNow()
+        slots:SetCalm(false)
+        log = {}
+        slots:ScanNow()
+        assert.equals(1, slots:SlotOf("nameplate1"))
+        assert.is_nil(slots:SlotOf("nameplate2"))
+        assert.same({ "release 2=nameplate2" }, log)
+    end)
+
+    it("holds no calm slot under a relaxed scan: held calm units count there", function()
+        up.nameplate1, up.nameplate2 = true, true
+        reasons.nameplate1, reasons.nameplate2 = "calm", "calm"
+        local relaxed = false
+        local slots = start(2, { relax = function() return relaxed end })
+        slots:SetCalm(true)
+        slots:ScanNow()
+        relaxed = true
+        slots:ScanNow()
+        assert.is_false(slots:IsCalm(1))
+        assert.is_false(slots:IsCalm(2))
+        assert.same({
+            "take 1=nameplate1 calm", "take 2=nameplate2 calm",
+            "tier 1=nameplate1 counted", "tier 2=nameplate2 counted",
+        }, log)
+    end)
+
+    it("leaves an evicted slot empty for the rest of the scan when its take is refused", function()
+        up.nameplate3 = true
+        reasons.nameplate3 = "calm"
+        local slots = start(1, {
+            onTake = function(_, unit)
+                if unit == "nameplate2" then return false end
+            end,
+        })
+        slots:SetCalm(true)
+        slots:ScanNow()
+        reasons.nameplate1 = "calm"
+        show("nameplate1")
+        show("nameplate2")
+        slots:ScanNow()
+        assert.is_nil(slots:UnitOf(1))
+        assert.is_nil(slots:SlotOf("nameplate1"))
+        assert.is_true(slots:Refused("nameplate2"))
+        assert.same({ "release 1=nameplate3", "release 1=nameplate2" }, log)
+    end)
+end)
