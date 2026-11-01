@@ -1,5 +1,32 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.9
+
+Class Tools, Combat Res and the rest of the Status Texts now run on WoW
+Forever.
+
+### WoW Forever (Beta)
+
+- Available on WoW Forever, each off until you turn it on: Custom Cooldowns,
+  DoT Tracker and Missing Forms (Class Tools), Combat Res, and the Status
+  Texts Combat Potion, Healer Mana and No Movement Alert
+- Custom Cooldowns tracks the highest rank you know of any spell you add, at
+  any rank
+- DoT Tracker counts every rank of each class DoT; Mage and Paladin have none
+- Missing Forms lets a Warrior pick a stance, a Paladin an aura (any aura to
+  start) and a Druid a form, and warns a Priest when Shadowform is learned and
+  not up
+- Combat Res shows your own battle res: Rebirth for a Druid, Reincarnation for
+  a Shaman, a Soulstone in your bags for a Warlock, as Ready or the time left
+- Combat Potion reminds you when a combat potion in your bags is ready
+- Healer Mana finds healers by their talents when they run an addon that
+  shares them, otherwise by the role they picked, and counts every raid group
+- No Movement Alert covers Charge, Intercept, Blink, Sprint, Dash and Feral
+  Charge at the highest rank you know
+- The class lists in these settings show the nine Forever classes
+
+---
+
 ## v4.15.8
 
 System Optimization shows the game's own setting names, and Revert All keeps
