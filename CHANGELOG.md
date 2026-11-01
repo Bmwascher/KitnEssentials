@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.5
+
+Ready Check Consumables now runs on WoW Forever.
+
+### WoW Forever (Beta)
+
+- Ready Check Consumables is available on WoW Forever: the ready check row
+  shows Food, Flask, Elixir, both weapon hands, Healthstone and, for
+  Warlocks, Soulstone, filled with Forever consumables
+- A click uses the item or casts the spell: Rogues apply poisons, Shamans
+  their main-hand imbue, other classes a stone or oil, and Warlocks create
+  a Healthstone or use or create a Soulstone
+- The settings page shows only the options that apply on Forever
+
+---
+
 ## v4.15.4
 
 Nameplate interrupt icons are back, with the freeze fixed.
