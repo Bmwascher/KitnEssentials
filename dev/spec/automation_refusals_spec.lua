@@ -29,6 +29,8 @@
 --   * The Hide Transforms list each load picks, and the fishing watcher.
 --   * Hide Error Messages' ping-error route, which each load removes and
 --     restores on its own route only.
+--   * Hide Helptips' tutorial restore, which never undoes a write that did
+--     not land.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -226,7 +228,16 @@ local function newFixture(opts)
         CancelAuraByInstanceID = function() end,
     }
     _G.CancelUnitBuff = function() end
-    _G.C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end }
+    -- Unseeded CVars read "0"; a case seeds one through fx.cvarSeed.
+    local cvarSeed = {}
+    _G.C_CVar = {
+        GetCVar = function(name)
+            local v = cvarSeed[name]
+            if v == nil then return "0" end
+            return v
+        end,
+        SetCVar = function() end,
+    }
     _G.C_Secrets = nil
 
     -- The file caches StaticPopupDialogs in a local at load, so the table
@@ -300,7 +311,7 @@ local function newFixture(opts)
     AU._talkingHeadHooked = true
 
     return {
-        AU = AU, KE = KE, gameEvent = gameEvent,
+        AU = AU, KE = KE, gameEvent = gameEvent, cvarSeed = cvarSeed,
         ledger = ledger, timers = timers,
         hookedGlobals = hookedGlobals, hookedMethods = hookedMethods, hookCounts = hookCounts,
         named = named, cvarSets = cvarSets,
@@ -515,6 +526,7 @@ describe("Automation Hide Helptips master-off startup (Task 3 Step 10b)", functi
     it("applies suppression from OnInitialize with the master off, HideHelptips on", function()
         local fx = newFixture()
         local AU = fx.AU
+        fx.cvarSeed.showTutorials = "1"
         fx.KE.db = { profile = { Automation = { Enabled = false, HideHelptips = true } } }
         AU:OnInitialize()
         assert.equals("0", fx.cvarSets.showTutorials)
@@ -2177,6 +2189,40 @@ describe("Automation Hide Error Messages ping route by load", function()
                 entry.handler("dispatcher", "PING_SYSTEM_ERROR", "Ping failed")
                 assert.same({ { n = 3, "dispatcher", "PING_SYSTEM_ERROR", "Ping failed" } }, fx.gameEvent.handled, row.name)
             end
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Hide Helptips' tutorial restore. The untick turns tutorials back on only
+-- when they were off at the apply or KE's own write landed; a refused write is
+-- never undone.
+---------------------------------------------------------------------------------
+describe("Automation Hide Helptips tutorial restore", function()
+    it("turns tutorials back on at the untick unless the apply's write was refused", function()
+        for _, row in ipairs({
+            { name = "already off, no write", seed = "0", refuse = nil,     writes = { "1" } },
+            { name = "write lands",           seed = "1", refuse = nil,     writes = { "0", "1" } },
+            { name = "write raises",          seed = "1", refuse = "throw", writes = {} },
+            { name = "write returns false",   seed = "1", refuse = "false", writes = {} },
+        }) do
+            local fx = newFixture()
+            local AU = fx.AU
+            fx.cvarSeed.showTutorials = row.seed
+            local refuse = row.refuse
+            local writes = {}
+            _G.SetCVar = function(name, val)
+                if refuse == "throw" then error("refused: " .. name) end
+                if refuse == "false" then return false end
+                if name == "showTutorials" then writes[#writes + 1] = val end
+                return true
+            end
+            AU.db = { Enabled = false, HideHelptips = true }
+            AU:ApplySettings()
+            refuse = nil   -- the untick's own write lands
+            AU.db.HideHelptips = false
+            AU:ApplySettings()
+            assert.same(row.writes, writes, row.name)
         end
     end)
 end)

@@ -334,8 +334,15 @@ local function ApplyHideHelptips()
     if TutorialsEnabled() then
         InstallTutorialCoreHooks()
         InstallTutorialTooltipHook()
-        pcall(SetCVar, "showTutorials", "0")
-        tutorialsWeSetCVar = true
+        -- Already "0" is what every apply after the first finds, so it counts
+        -- as set. A refused write does not, so the untick never turns
+        -- tutorials on after it.
+        if C_CVar.GetCVar("showTutorials") == "0" then
+            tutorialsWeSetCVar = true
+        else
+            local ok, set = pcall(SetCVar, "showTutorials", "0")
+            tutorialsWeSetCVar = ok and set ~= false
+        end
         TutorialSweepAll()
         HideOpenTips()
     else
