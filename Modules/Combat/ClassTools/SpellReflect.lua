@@ -105,12 +105,6 @@ local function SpellIcon(spellID)
     return FALLBACK_ICON
 end
 
-local function FormatCount(seconds)
-    local format = KE.FormatSplitTimer
-    if format then return format(seconds) end
-    return KE:FormatCountdown(seconds)
-end
-
 local function ColorFor(db, key)
     if key == "GO" then return db.GoColor end
     if key == "GRAY" then return GRAY end
@@ -281,9 +275,8 @@ end
 ---------------------------------------------------------------------------------
 -- Style
 ---------------------------------------------------------------------------------
--- Text mode needs Dungeon Timers' split layout; without it the icon is drawn.
 function SR:TextMode()
-    return self.db.DisplayMode == "TEXT" and KE.ApplySplitTextLayout ~= nil
+    return self.db.DisplayMode == "TEXT"
 end
 
 function SR:ApplyStyle()
@@ -432,7 +425,7 @@ function SR:Paint(rec, now, ready, silent)
     local db, frame = self.db, self.frame
     local phase = Rules.Phase(rec, now)
     local word, colorKey, notReady, glow = Rules.Look(phase, ready)
-    local count = word and Rules.NOW_WORD or FormatCount((Rules.Countdown(rec, now)))
+    local count = word and Rules.NOW_WORD or KE.FormatSplitTimer((Rules.Countdown(rec, now)))
     local changed = rec ~= self.shownRec or phase ~= self.shownPhase or ready ~= self.shownReady
     if changed then
         self.shownRec, self.shownPhase, self.shownReady = rec, phase, ready
