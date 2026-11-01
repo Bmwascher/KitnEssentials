@@ -168,10 +168,30 @@ function KT:GetInterruptDataForSpec(specID)
     return KickRow(kick.id, kick.cd, specID)
 end
 
+-- Forever: a spec with talent kicks shows the kick the teammate's talents
+-- give (KT.PickTeammateKick); a talent the walk did not find in the spec's
+-- tree counts as unread.
+function KT:ForeverTeammateRow(specID, snap)
+    if not next(KE:GetKickTalentDemand(specID)) then return self:GetInterruptDataForSpec(specID) end
+    local kick = KT.PickTeammateKick(KE:GetInterruptCandidatesForSpec(specID), KE:GetTrackedKickForSpec(specID),
+        function(talent)
+            if snap and snap.absent and snap.absent[talent] then return nil end
+            return KT.SnapshotRank(snap, talent)
+        end)
+    if not kick then return nil end
+    return KickRow(KE:GetCanonicalKickSpell(kick.id), kick.cd, specID)
+end
+
 -- The spec's kick, and the inspect snapshot its talents come from
 -- (KT.LearnFacts).
 function KT:ApplySpecKick(member, specID, snap)
-    KT.LearnFacts(member, snap, self:GetInterruptDataForSpec(specID))
+    local row
+    if KE.IS_FOREVER then
+        row = self:ForeverTeammateRow(specID, snap)
+    else
+        row = self:GetInterruptDataForSpec(specID)
+    end
+    KT.LearnFacts(member, snap, row)
     member.specID = specID
 end
 
@@ -325,6 +345,12 @@ function KT:RefreshPartyRoster()
                         if member.inspect ~= snap or member.specID ~= spec then
                             self:ApplySpecKick(member, spec, snap)
                         end
+                    elseif KE.IS_FOREVER then
+                        -- One spec per class, so the class gives the spec.
+                        local classSpec = KT.FOREVER_CLASS_SPEC[member.matchClass]
+                        if classSpec and classSpec ~= member.specID then
+                            self:ApplySpecKick(member, classSpec, nil)
+                        end
                     elseif not member.interruptData then
                         -- Not inspected yet: the class kick, so the bar exists.
                         member.interruptData = self:GuessClassInterrupt(unit, classToken)
@@ -424,6 +450,12 @@ function KT:WantsInspect(guid)
     if not member or member.unit == "player" or not self.inspectHandle then return false end
     local snap = self.inspectHandle:Get(guid)
     local spec = snap and snap.spec
+    -- Forever: only a spec whose kick a talent decides is inspected; every
+    -- other teammate's spec is their class's.
+    if KE.IS_FOREVER then
+        local known = (type(spec) == "number" and spec > 0) and spec or member.specID
+        if not next(KE:GetKickTalentDemand(known)) then return false end
+    end
     local demand = (type(spec) == "number" and spec > 0) and KE:GetKickTalentDemand(spec) or nil
     return KT.InspectWanted(snap, demand, member.inspectRespec, member.inspectMisses)
 end
@@ -474,6 +506,14 @@ function KT:RefreshInspectedSpec(unit)
     if not member then return end
     member.inspectRespec, member.inspectMisses = true, nil
     handle:Refresh(guid, "spec")
+    -- Forever: the talents chose the row, so it returns to the unread
+    -- default until the re-read answers.
+    if KE.IS_FOREVER and member.specID then
+        self:ApplySpecKick(member, member.specID, handle:Get(guid))
+        self:UpdateBars()
+        self:LayoutBars()
+        if self.platesOn then self:PlatesRoster() end
+    end
     handle:Wake()
 end
 

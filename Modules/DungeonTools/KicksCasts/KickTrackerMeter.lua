@@ -71,7 +71,12 @@ local GATE_SPAN, GATE_PAD, GATE_EDGE, GATE_TALL = 100, 4, 2, 24
 local LAYER_STEP = 4    -- frame levels a bar copy takes: the bar, its fill, its icon two above
 local LAYER_DEPTH = 29  -- the deepest stack drawn in order; deeper layers share the top level
 -- Main kicks a Warlock's demon casts: the demon's own list moves for them.
-local DEMON_KICKS = { [19647] = true, [89766] = true }
+-- Keyed by canonical id, as rows are, so a client whose Spell Lock ranks
+-- alias to another id still matches.
+local DEMON_KICKS = {
+    [KE:GetCanonicalKickSpell(19647)] = true,
+    [KE:GetCanonicalKickSpell(89766)] = true,
+}
 local PET_SLOT = { party1 = "partypet1", party2 = "partypet2", party3 = "partypet3", party4 = "partypet4" }
 
 local function NewRead()
