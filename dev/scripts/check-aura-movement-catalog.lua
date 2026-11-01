@@ -1,3 +1,5 @@
+-- Usage: lua dev/scripts/check-aura-movement-catalog.lua [preset-file]
+--
 -- The movement preset is the authority on WHICH spells exist. Which of them
 -- ship switched on is a KitnEssentials product decision, so the shipped-off
 -- set lives here and is asserted exactly. A source row marked disabled must
@@ -30,27 +32,18 @@ local function ReadFile(path)
     return content
 end
 
--- References/ is gitignored, so CI has the local catalog but not the preset it
--- was flattened from. Rather than fail there or pass silently, the source
--- cross-check is skipped and the skip is printed: the local-only assertions
--- below still run, and they are the half that catches an edit to Defaults.lua.
-local function ReadOptionalFile(path)
-    local file = io.open(path, "rb")
-    if not file then return nil end
-    local content = file:read("*a")
-    file:close()
-    return content
-end
-
 local function ExtractBlock(content, pattern, label)
     local block = content:match(pattern)
     assert(block, "could not locate " .. label)
     return block
 end
 
-local sourcePath =
-    "References/EllesmereUI/EllesmereUI-v9.0.7/EllesmereUI/EllesmereUI_BuffPresets.lua"
-local source = ReadOptionalFile(sourcePath)
+-- CI has no preset file, so with none given the source cross-check is skipped
+-- and the skip is printed: the local-only assertions below still run, and
+-- they are the half that catches an edit to Defaults.lua. A preset file that
+-- is named but cannot be read is an error, not a skip.
+local sourcePath = arg and arg[1]
+local source = sourcePath and ReadFile(sourcePath)
 local defaults = ReadFile("Core/Defaults.lua")
 
 local function Count(map)
@@ -127,14 +120,14 @@ assert(enabledCount == 85 - disabledCount,
     "expected " .. (85 - disabledCount) .. " enabled ids, got " .. enabledCount)
 
 ---------------------------------------------------------------------------------
--- Source cross-check -- only when the gitignored reference is present.
+-- Source cross-check -- only when a preset file is given.
 ---------------------------------------------------------------------------------
 
 if not source then
     print(string.format(
-        "Movement catalog OK (local only, source cross-check SKIPPED -- %s absent): "
+        "Movement catalog OK (local only, source cross-check SKIPPED -- no preset file given): "
         .. "85 unique IDs, %d enabled, %d disabled",
-        sourcePath, enabledCount, disabledCount))
+        enabledCount, disabledCount))
     return
 end
 
