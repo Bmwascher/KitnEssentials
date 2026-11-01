@@ -145,7 +145,12 @@ local function loadProfiler(options)
             CountTimeOver10Ms = 7,
             CountTimeOver50Ms = 8,
         },
+        ScriptBindingType = { Precall = 0, Extrinsic = 1, Postcall = 2 },
     }
+    local secureGlobals = options.secureGlobals or {}
+    _G.issecurevariable = function(_, key)
+        return secureGlobals[key] == true
+    end
     _G.C_AddOnProfiler = {
         IsEnabled = function()
             return true
@@ -663,6 +668,91 @@ describe("Profiler shared-counter grouping", function()
         local limited = table.concat(state.printed, "\n", before + 1, #state.printed)
         assert.is_truthy(limited:find("identical counters x3", 1, true))
         assert.is_nil(limited:find("KE_Delta", 1, true))
+    end)
+end)
+
+describe("Profiler shared Blizzard handlers", function()
+    local BLIZZARD_HEADER = "Blizzard template handlers only"
+    local MIXED_SUFFIX = "includes a Blizzard handler's whole-client total"
+    local Precall, Extrinsic, Postcall = 0, 1, 2
+
+    -- bindings: { [scriptType] = { [bindingType] = handler } }
+    local function scriptedFrame(bindings)
+        local subject = frame()
+        function subject:HasScript(scriptType)
+            return scriptType == "OnClick" or scriptType == "OnAttributeChanged"
+        end
+        function subject:GetScript(scriptType, binding)
+            local byBinding = bindings[scriptType]
+            return byBinding and byBinding[binding]
+        end
+        return subject
+    end
+
+    local function report(frames, secureGlobals)
+        local frameCPU = {}
+        local cost = 10
+        for name, subject in pairs(frames) do
+            _G[name] = subject
+            cost = cost + 1
+            frameCPU[subject] = { selfMs = cost, selfCalls = cost, treeMs = cost, treeCalls = cost }
+        end
+        local state = loadProfiler({ frameCPU = frameCPU, secureGlobals = secureGlobals })
+        state.profiler.RunCommand("cpu 5")
+        local output = table.concat(state.printed, "\n")
+        local ownStart = assert(output:find("by direct CPU:", 1, true))
+        local blizzardStart = output:find(BLIZZARD_HEADER, 1, true)
+        return output:sub(ownStart, (blizzardStart or 0) - 1),
+            blizzardStart and output:sub(blizzardStart) or nil
+    end
+
+    before_each(function()
+        _G.KE_Alpha = nil
+        _G.KE_Beta = nil
+        _G.KESpecSecureHandler = function() end
+        _G.KESpecOtherHandler = function() end
+    end)
+
+    after_each(function()
+        _G.KESpecSecureHandler = nil
+        _G.KESpecOtherHandler = nil
+    end)
+
+    it("lists a frame running only secure global handlers apart from KE's ranking", function()
+        local own, blizzard = report({
+            KE_Alpha = scriptedFrame({
+                OnClick = { [Extrinsic] = _G.KESpecSecureHandler },
+                OnAttributeChanged = { [Extrinsic] = _G.KESpecOtherHandler },
+            }),
+            KE_Beta = scriptedFrame({ OnClick = { [Extrinsic] = function() end } }),
+        }, { KESpecSecureHandler = true, KESpecOtherHandler = true })
+
+        assert.is_truthy(own:find("KE_Beta", 1, true))
+        assert.is_nil(own:find("KE_Alpha", 1, true))
+        assert.is_truthy(blizzard and blizzard:find("KE_Alpha", 1, true))
+    end)
+
+    it("keeps a Blizzard handler with a KE hook in either binding in KE's ranking, marked", function()
+        for _, binding in ipairs({ Precall, Postcall }) do
+            local own, blizzard = report({
+                KE_Alpha = scriptedFrame({
+                    OnClick = { [Extrinsic] = _G.KESpecSecureHandler, [binding] = function() end },
+                }),
+            }, { KESpecSecureHandler = true })
+
+            assert.is_nil(blizzard)
+            assert.is_truthy(own:find("KE_Alpha (" .. MIXED_SUFFIX .. ")", 1, true))
+        end
+    end)
+
+    it("counts a global that is not secure as KE code", function()
+        local own, blizzard = report({
+            KE_Alpha = scriptedFrame({ OnClick = { [Extrinsic] = _G.KESpecOtherHandler } }),
+        }, { KESpecSecureHandler = true })
+
+        assert.is_nil(blizzard)
+        assert.is_truthy(own:find("KE_Alpha", 1, true))
+        assert.is_nil(own:find(MIXED_SUFFIX, 1, true))
     end)
 end)
 

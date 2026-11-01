@@ -120,7 +120,7 @@ read_globals = {
     "BackdropTemplateMixin", "Mixin", "CreateFromMixins", "CreateAndInitFromMixin",
     "ImportDataStreamMixin",
     "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
-    "hooksecurefunc",
+    "hooksecurefunc", "issecurevariable",
     "AnchorUtil",
     "ShowUIPanel", "HideUIPanel",
     "WorldFrame",

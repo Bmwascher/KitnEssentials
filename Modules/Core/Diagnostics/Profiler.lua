@@ -247,6 +247,7 @@ local function GatherCpuRows()
                 and type(selfMs) == "number" and type(treeMs) == "number"
                 and (selfMs > 0 or treeMs > 0) then
                 insert(rows, {
+                    frame = frameObject,
                     frameId = ResolveFrameId(frameObject),
                     name = candidate.name,
                     selfMs = selfMs,
@@ -267,6 +268,85 @@ local function GatherCpuRows()
         return a.name < b.name
     end)
     return rows
+end
+
+---------------------------------------------------------------------------------
+-- Shared Blizzard handlers
+---------------------------------------------------------------------------------
+-- GetFrameCPUUsage charges a frame its handler functions' totals for the whole
+-- client, so a frame running a Blizzard template handler reports every call any
+-- frame or caller made to it. A row whose every handler is Blizzard code is
+-- listed apart from KE's ranking; a row that also runs one of KE's is marked.
+
+-- A script type missing here is never inspected, so a KE handler of that type
+-- would go unseen: keep every type KE sets on a frame listed.
+local SCRIPT_TYPES = {
+    "OnLoad", "OnAttributeChanged", "OnEvent", "OnUpdate", "OnShow", "OnHide",
+    "OnEnter", "OnLeave", "OnClick", "PreClick", "PostClick", "OnDoubleClick",
+    "OnMouseDown", "OnMouseUp", "OnMouseWheel", "OnDragStart", "OnDragStop",
+    "OnReceiveDrag", "OnSizeChanged", "OnKeyDown", "OnKeyUp", "OnTabPressed",
+    "OnEnterPressed", "OnEscapePressed", "OnTextChanged", "OnEditFocusGained",
+    "OnEditFocusLost", "OnValueChanged", "OnCooldownDone", "OnScrollRangeChanged",
+    "OnEnable", "OnDisable", "OnColorSelect",
+}
+
+-- HookScript adds to the Precall or Postcall binding, which a plain GetScript
+-- does not return.
+local function CollectHandlers(frameObject, bindings, handlers)
+    for _, scriptType in ipairs(SCRIPT_TYPES) do
+        if frameObject:HasScript(scriptType) then
+            for _, binding in ipairs(bindings) do
+                local handler = frameObject:GetScript(scriptType, binding)
+                if handler ~= nil then
+                    handlers[#handlers + 1] = handler
+                end
+            end
+        end
+    end
+end
+
+-- A row whose handlers cannot be read keeps no mark and stays in KE's ranking.
+local function MarkSharedHandlerRows(rows)
+    local bindingType = Enum and Enum.ScriptBindingType
+    if not (bindingType and issecurevariable) then return end
+    local bindings = { bindingType.Precall, bindingType.Extrinsic, bindingType.Postcall }
+
+    local handlersByRow = {}
+    local wanted = {}
+    local anyWanted = false
+    for index, row in ipairs(rows) do
+        local handlers = {}
+        if pcall(CollectHandlers, row.frame, bindings, handlers) then
+            handlersByRow[index] = handlers
+            for _, handler in ipairs(handlers) do
+                wanted[handler] = true
+                anyWanted = true
+            end
+        end
+    end
+    if not anyWanted then return end
+
+    -- A Blizzard handler is a global function no addon has replaced or tainted.
+    local blizzard = {}
+    for key, value in pairs(_G) do
+        if wanted[value] and type(key) == "string" and issecurevariable(_G, key) then
+            blizzard[value] = true
+        end
+    end
+
+    for index, handlers in pairs(handlersByRow) do
+        local shared, own = 0, 0
+        for _, handler in ipairs(handlers) do
+            if blizzard[handler] then
+                shared = shared + 1
+            else
+                own = own + 1
+            end
+        end
+        if shared > 0 then
+            rows[index].sharedHandler = own == 0 and "only" or "mixed"
+        end
+    end
 end
 
 -- Equal counters are evidence of a shared handler, not proof: an accidental
@@ -358,12 +438,14 @@ local function GroupSharedRows(rows)
                 name = row.name,
                 selfMs = row.selfMs,
                 selfCalls = row.selfCalls,
+                sharedHandler = row.sharedHandler,
             }
         end
     end
 
     local groups = CollectGroups(scored, function(entry)
-        return format("%.17g|%s", entry.selfMs, CounterKey(entry.selfCalls))
+        return format("%.17g|%s|%s", entry.selfMs, CounterKey(entry.selfCalls),
+            entry.sharedHandler or "")
     end)
 
     sort(groups, function(a, b)
@@ -451,6 +533,17 @@ profilerWarningFrame:SetScript("OnEvent", function(_, event)
 end)
 profilerWarningFrame:RegisterEvent("PLAYER_LOGIN")
 
+local function PrintGroups(groups, n)
+    for index = 1, math_min(n, #groups) do
+        local group = groups[index]
+        pf("  %2d. %.2f ms (calls=%s, %s) %s%s",
+            index, group.selfMs, FormatCalls(group.selfCalls),
+            FormatPerCall(group.selfMs, group.selfCalls),
+            DescribeGroup(group.names, group.count),
+            group.sharedHandler == "mixed" and " (includes a Blizzard handler's whole-client total)" or "")
+    end
+end
+
 local function PrintCpuTop(arg)
     if not ProfilingEnabled() then
         p("Profiling is OFF. /kes profiler on then /reload to enable CPU profiling.")
@@ -485,20 +578,30 @@ local function PrintCpuTop(arg)
         return
     end
 
-    local groups, dropped = GroupSharedRows(rows)
+    MarkSharedHandlerRows(rows)
+    local ownRows, blizzardRows = {}, {}
+    for _, row in ipairs(rows) do
+        if row.sharedHandler == "only" then
+            blizzardRows[#blizzardRows + 1] = row
+        else
+            ownRows[#ownRows + 1] = row
+        end
+    end
+
+    local groups, dropped = GroupSharedRows(ownRows)
+    local blizzardGroups, blizzardDropped = GroupSharedRows(blizzardRows)
+    dropped = dropped + blizzardDropped
     if dropped > 0 then
         pf("%d frame(s) omitted: a counter was not a finite number.", dropped)
     end
     pf("Top %d named KE frames by direct CPU:", n)
-    for index = 1, math_min(n, #groups) do
-        local group = groups[index]
-        pf("  %2d. %.2f ms (calls=%s, %s) %s",
-            index, group.selfMs, FormatCalls(group.selfCalls),
-            FormatPerCall(group.selfMs, group.selfCalls),
-            DescribeGroup(group.names, group.count))
-    end
+    PrintGroups(groups, n)
     if #groups == 0 then
         p("  No direct frame work recorded.")
+    end
+    if #blizzardGroups > 0 then
+        p("Blizzard template handlers only (whole-client totals, not KE code):")
+        PrintGroups(blizzardGroups, n)
     end
     p(FRAME_CAVEAT)
 end
