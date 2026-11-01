@@ -3,7 +3,7 @@
 -- pinned in dungeontimers_compat_spec, so the boss module here is a recorder
 -- on the module shim. Only the cast-start cue is driven: the reveal and
 -- countdown-end callers use the same function. With no helper on the shim,
--- the cue tests in dungeontrash_cache_spec pin the Master fallback.
+-- the cue tests in dungeontrash_cache_spec pin the direct PlaySoundFile fallback.
 
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
