@@ -1113,6 +1113,12 @@ KE.EncounterData[3207] = {
         [1235118] = { name = "Ravenous Bellow", castType = "begincast", castDuration = 3, role = "mechanic", displayText = "AOE", sound = "AoE",
             timerSource = { kind = "Timer", isCooldown = true, policy = "estimated-impact", spanMode = "remaining-only", stopTolerance = 0.15, collisionPolicy = "refuse-unresolved-label", anchor = "timeline-finished" } },
     },
+    -- HP-threshold phase bars are visual-only — see Crawth note above for why.
+    phases = {
+        { unit = "boss1", threshold = 90, lead = 5 },
+        { unit = "boss1", threshold = 70, lead = 5 },
+        { unit = "boss1", threshold = 40, lead = 5 },
+    },
     auraSounds = {
         { spellID = 1235405, trigger = "added", unit = "player", name = "Bonespiked under you", sound = "Move" },
         { spellID = 1234846, trigger = "added", unit = "player", name = "Toxic Spores on you",  sound = "Gun1", disabled = true },
