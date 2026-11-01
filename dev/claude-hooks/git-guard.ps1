@@ -183,7 +183,11 @@ if (-not $reason) {
             if (-not $info) { continue }
             if ($info.rel -match '^(dev|\.claude|References)\\') { continue }
             if ($info.branch -ne 'main') { continue }
-            $reason = "Checkout is on 'main' and this command writes addon code ('$($info.rel)'). Project rule: never do feature work on main - switch to a feature branch first (git switch -c <branch>). Shell writes are guarded here because the Edit/Write branch guard cannot see them."
+            $where = "'$full' (repo path '$($info.rel)', branch '$($info.branch)')"
+            if (-not [System.IO.Path]::IsPathRooted($t)) {
+                $where += ". The relative path '$t' resolved against '$cwd'; git -C does not change that directory"
+            }
+            $reason = "Checkout is on 'main' and this command writes addon code: $where. Project rule: never do feature work on main - switch to a feature branch first (git switch -c <branch>). Shell writes are guarded here because the Edit/Write branch guard cannot see them."
             break
         }
         if ($reason) { break }

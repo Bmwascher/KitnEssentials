@@ -36,6 +36,13 @@ function Expect-Allow([string]$hook, [string]$name, [hashtable]$payload) {
     $r = Invoke-Hook (Join-Path $templates $hook) $payload
     Check "$hook allow: $name" ($r.out.Trim() -eq '' -and $r.code -eq 0) $r.out.Trim()
 }
+function Expect-DenyText([string]$hook, [string]$name, [hashtable]$payload, [string[]]$want) {
+    $r = Invoke-Hook (Join-Path $templates $hook) $payload
+    $reason = ''
+    try { $reason = "$(($r.out | ConvertFrom-Json).hookSpecificOutput.permissionDecisionReason)" } catch { }
+    $missing = @($want | Where-Object { -not $reason.Contains($_) })
+    Check "$hook deny text: $name" ($r.out -match '"permissionDecision":"deny"' -and $missing.Count -eq 0) "missing: $($missing -join ' | ')  got: $($r.out.Trim())"
+}
 
 # Live copies must exist and match the templates (the installer refreshes them). Line
 # endings are ignored: git renormalizes the tracked templates to CRLF.
@@ -160,6 +167,10 @@ try {
     # Shell writes are only denied while the target's checkout is on main.
     Expect-Allow $gg 'sed -i on a feature branch' (& $sh 'sed -i s/a/b/ Core/Globals.lua' $feature)
     Expect-Allow $gg 'absolute write into a feature checkout, cwd on main' (& $sh "sed -i s/a/b/ $feature\Core\Globals.lua" $wt)
+    # Worktree trip shapes: a cd moves the shell, git -C does not.
+    Expect-Allow $gg 'cd into a feature checkout, then a relative write, cwd on main' (& $sh "cd $feature && sed -i s/a/b/ Core/Globals.lua" $wt)
+    Expect-DenyText $gg 'git -C a feature checkout, then a relative write, cwd on main' (& $sh "git -C $feature status; echo x > Core/Globals.lua" $wt) @("'$wt\Core\Globals.lua'", "branch 'main'", "resolved against '$wt'")
+    Expect-DenyText $gg 'absolute write names its path and branch' (& $sh "sed -i s/a/b/ $wt\Core\Globals.lua" $wt) @("'$wt\Core\Globals.lua'", "branch 'main'")
 
     # --- luacheck-postedit ----------------------------------------------------
     $lc = 'luacheck-postedit.ps1'
