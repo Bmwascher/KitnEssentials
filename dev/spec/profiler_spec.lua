@@ -671,7 +671,7 @@ describe("Profiler shared-counter grouping", function()
 end)
 
 describe("Profiler shared Blizzard handlers", function()
-    local BLIZZARD_HEADER = "Blizzard handlers only"
+    local BLIZZARD_HEADER = "Shared Blizzard handlers ("
     local MIXED_SUFFIX = "includes a Blizzard handler's whole-client total"
 
     local function scriptedFrame(scripts)

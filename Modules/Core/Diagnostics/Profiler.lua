@@ -273,10 +273,10 @@ end
 ---------------------------------------------------------------------------------
 -- Shared Blizzard handlers
 ---------------------------------------------------------------------------------
--- GetFrameCPUUsage charges a frame its handler functions' totals for the whole
--- client, so a frame running a Blizzard template handler reports every call any
--- frame or caller made to it. A row whose every handler is Blizzard code is
--- listed apart from KE's ranking; a row that also runs one of KE's is marked.
+-- GetFrameCPUUsage charges a frame its handlers' whole-client totals, including
+-- everything they call. Rows whose every handler is a Blizzard global are listed
+-- apart from KE's ranking; those totals can still hold addon work the handler
+-- ran, KE's included. A row that also runs one of KE's own handlers is marked.
 
 -- A script type missing here is never inspected, so a KE handler of that type
 -- would go unseen: keep every type KE sets on a frame listed.
@@ -599,7 +599,7 @@ local function PrintCpuTop(arg)
         p("  No direct frame work recorded.")
     end
     if #blizzardGroups > 0 then
-        p("Blizzard handlers only (whole-client totals, not KE code):")
+        p("Shared Blizzard handlers (whole-client totals; may include any addon's work, KE's too):")
         PrintGroups(blizzardGroups, n)
     end
     p(FRAME_CAVEAT)
