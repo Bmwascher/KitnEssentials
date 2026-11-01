@@ -314,6 +314,57 @@ describe("Optimize presets", function()
             assert.equals("6", rec.cvars["graphicsViewDistance"])
         end)
 
+        it("keeps a refused restore held with its events, then releases on the next event that lands", function()
+            for _, row in ipairs({
+                { name = "leaving the key, toggle on", toggleOff = false, how = "false" },
+                { name = "toggle turned off",          toggleOff = true,  how = "throw" },
+            }) do
+                local OPT, rec = L.loadOptimize()
+                rec.cvars["graphicsViewDistance"] = "6"
+                OPT:SetMythicViewDistanceEnabled(true)
+                rec.difficultyID = MPLUS
+                OPT:UpdateMythicViewDistance()
+                rec.refused["graphicsViewDistance"] = row.how
+                if row.toggleOff then
+                    OPT:SetMythicViewDistanceEnabled(false)
+                else
+                    rec.difficultyID = 0
+                    OPT:UpdateMythicViewDistance()
+                end
+                assert.equals("0", rec.cvars["graphicsViewDistance"], row.name)
+                assert.is_true(OPT:IsMythicOverrideActive(), row.name)
+                assert.is_true(rec.events["PLAYER_ENTERING_WORLD"], row.name)
+
+                rec.refused["graphicsViewDistance"] = nil
+                rec.difficultyID = 0
+                OPT:UpdateMythicViewDistance()   -- the next of the four events
+                assert.equals("6", rec.cvars["graphicsViewDistance"], row.name)
+                assert.is_false(OPT:IsMythicOverrideActive(), row.name)
+                if row.toggleOff then
+                    assert.is_nil(rec.events["PLAYER_ENTERING_WORLD"], row.name)
+                else
+                    assert.is_true(rec.events["PLAYER_ENTERING_WORLD"], row.name)
+                end
+            end
+        end)
+
+        it("registers its events for a hold saved with the toggle off, and drops them once the restore lands", function()
+            local OPT, rec = L.loadOptimize()
+            _G.KitnEssentialsOptimizeDB = {
+                SavedSettings = {},
+                MythicViewDistanceEnabled = false,
+                MythicVD = { active = true, saved = "6" },
+            }
+            rec.cvars["graphicsViewDistance"] = "0"
+            OPT:OnInitialize()
+            assert.is_true(rec.events["PLAYER_ENTERING_WORLD"])
+            assert.equals("0", rec.cvars["graphicsViewDistance"])
+            OPT:UpdateMythicViewDistance()   -- the login's PLAYER_ENTERING_WORLD
+            assert.equals("6", rec.cvars["graphicsViewDistance"])
+            assert.is_false(OPT:IsMythicOverrideActive())
+            assert.is_nil(rec.events["PLAYER_ENTERING_WORLD"])
+        end)
+
         it("does nothing at all while the toggle is off", function()
             local OPT, rec = L.loadOptimize()
             rec.cvars["graphicsViewDistance"] = "6"

@@ -598,9 +598,10 @@ end
 -- Inside an active Mythic Keystone dungeon, force View Distance to its lowest
 -- setting for extra frames, then put it back on the way out. Opt-in. Purely
 -- event-driven, so the feature costs nothing per frame and nothing at all while
--- it is off -- the events are registered only while the toggle is on. The saved
--- value and the active flag live in the optimization SavedVariables, so the
--- override survives a reload and recovers itself after a disconnect in a key.
+-- it is off -- the events are registered only while the toggle is on, or while
+-- a restore the game refused still holds View Distance down. The saved value
+-- and the active flag live in the optimization SavedVariables, so the override
+-- survives a reload and recovers itself after a disconnect in a key.
 ---------------------------------------------------------------------------------
 local MPLUS_DIFFICULTY_ID = 8     -- Mythic Keystone
 local MPLUS_VIEW_DISTANCE = "0"   -- reads as "1" on the in-game slider
@@ -612,13 +613,15 @@ function OPT:IsMythicViewDistanceEnabled()
     return GetBackupDB().MythicViewDistanceEnabled == true
 end
 
---- Events follow the setting, so the off state registers nothing.
+--- Events follow the setting, so the off state registers nothing. A held
+--- override whose restore was refused keeps them, so the next event retries.
 function OPT:UpdateMVDEventRegistration()
     local events = { "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
         "CHALLENGE_MODE_START", "CHALLENGE_MODE_COMPLETED" }
-    if self:IsMythicViewDistanceEnabled() then
+    local enabled = self:IsMythicViewDistanceEnabled()
+    if enabled or self:IsMythicOverrideActive() then
         for _, e in ipairs(events) do self:RegisterEvent(e, "UpdateMythicViewDistance") end
-        self:UpdateMythicViewDistance()
+        if enabled then self:UpdateMythicViewDistance() end
     else
         for _, e in ipairs(events) do self:UnregisterEvent(e) end
     end
@@ -626,8 +629,12 @@ end
 
 function OPT:SetMythicViewDistanceEnabled(enabled)
     GetBackupDB().MythicViewDistanceEnabled = enabled and true or false
-    self:UpdateMVDEventRegistration()
-    self:UpdateMythicViewDistance()
+    if enabled then
+        self:UpdateMVDEventRegistration()
+    else
+        -- The restore runs first: one the game refuses keeps the events.
+        self:UpdateMythicViewDistance()
+    end
 end
 
 --- True while inside a Mythic Keystone dungeon instance.
@@ -636,15 +643,17 @@ function OPT:IsInMythicPlus()
     return difficultyID == MPLUS_DIFFICULTY_ID
 end
 
---- Put back the View Distance we lowered, if we are holding one down.
+--- Put back the View Distance we lowered, if we are holding one down. A write
+--- the game refuses keeps the hold, since View Distance is still at the floor.
+---@return boolean released
 function OPT:RestoreMythicViewDistance()
     local state = GetBackupDB().MythicVD
-    if state and state.active then
-        if state.saved ~= nil then
-            pcall(_SetCVar, "graphicsViewDistance", tostring(state.saved))
-        end
-        state.active = false
+    if not (state and state.active) then return true end
+    if state.saved ~= nil and not TrySetCVar("graphicsViewDistance", tostring(state.saved)) then
+        return false
     end
+    state.active = false
+    return true
 end
 
 --- Re-evaluate the override against the current zone and toggle. Safe to call
@@ -654,7 +663,9 @@ end
 function OPT:UpdateMythicViewDistance()
     if MythicPlusWithheld() then return end
     if not self:IsMythicViewDistanceEnabled() then
-        self:RestoreMythicViewDistance()
+        if self:RestoreMythicViewDistance() then
+            self:UpdateMVDEventRegistration()
+        end
         return
     end
 
