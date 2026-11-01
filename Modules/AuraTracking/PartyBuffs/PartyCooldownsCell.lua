@@ -17,6 +17,7 @@ local KE = select(2, ...)
 local CreateFrame = CreateFrame
 local GetPhysicalScreenSize = GetPhysicalScreenSize
 local UIParent = UIParent
+local geterrorhandler = geterrorhandler
 local issecretvalue = issecretvalue
 local math_floor = math.floor
 local math_max = math.max
@@ -380,11 +381,31 @@ local function DressCell(c, style, e)
     end
 end
 
+-- A caught draw error goes to the error handler once, then not again until
+-- the frame draws, so a frame that fails on every redraw is one entry. The
+-- error can be secret, and a throwing handler must not break the draw.
+function Cell.ReportDrawError(c, label, err)
+    if c.drawFailed then return end
+    c.drawFailed = true
+    local message
+    if not issecretvalue(err) and type(err) == "string" then
+        message = label .. ": " .. err
+    else
+        message = label .. ": failed with an unreadable error"
+    end
+    pcall(geterrorhandler(), message)
+end
+
 -- A throw partway leaves the cell half drawn under a signature that would
 -- skip the next draw, so the signature is cleared. Returns whether it drew.
 function Cell.Dress(c, style, e)
-    local ok = pcall(DressCell, c, style, e)
-    if not ok then c.sig = nil end
+    local ok, err = pcall(DressCell, c, style, e)
+    if ok then
+        c.drawFailed = nil
+    else
+        c.sig = nil
+        Cell.ReportDrawError(c, "Party Cooldowns icon draw", err)
+    end
     return ok
 end
 

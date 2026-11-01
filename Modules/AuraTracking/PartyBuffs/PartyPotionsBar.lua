@@ -298,8 +298,13 @@ end
 -- skip the next draw, so the signature is cleared, and so is the seat lift:
 -- Bar.Seat then waits for a draw that finished. Returns whether it drew.
 function Bar.Dress(c, style, e)
-    local ok = pcall(DressBar, c, style, e)
-    if not ok then c.sig, c.nameLift = nil, nil end
+    local ok, err = pcall(DressBar, c, style, e)
+    if ok then
+        c.drawFailed = nil
+    else
+        c.sig, c.nameLift = nil, nil
+        Cell.ReportDrawError(c, "Party Cooldowns potion bar draw", err)
+    end
     return ok
 end
 
