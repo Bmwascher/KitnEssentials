@@ -1,5 +1,33 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.8
+
+System Optimization shows the game's own setting names, and Revert All keeps
+any setting the game refuses to restore.
+
+### Retail
+
+#### System Optimization
+
+- The Current column uses the same words as the game's Graphics menu (Outline
+  Mode "Good", Spell Density "Reduced" or "Everything") instead of numbers or
+  mismatched names
+- Revert All keeps any setting the game refuses to restore, warns you, and
+  tries it again next time
+- Apply All warns when it could not put your window mode back
+- Mythic+ Lower View Distance keeps trying to restore your view distance when
+  the game refuses it once
+
+#### Automation
+
+- Hide Error Messages now also hides the red ping error text
+- Unticking Hide Helptips no longer turns tutorials on when the tick never
+  managed to turn them off
+- Auto-Cancel Transforms removes the fishing outfit when Fishing is the only
+  item picked
+
+---
+
 ## v4.15.7
 
 Dungeon Tools now runs on WoW Forever.
