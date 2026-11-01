@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.6
+
+Teammate talents read even beside an addon that keeps inspecting, and the
+Character Panel item level matches Blizzard's.
+
+### Retail
+
+- Interrupt Tracker and Party Cooldowns: when another addon keeps inspecting
+  your group, teammates' talented kicks and cooldowns now show after about
+  10 seconds instead of never
+- Character Panel: the whole-number item level now matches Blizzard's when
+  your equipped level is below the game's minimum
+
+---
+
 ## v4.15.5
 
 Ready Check Consumables now runs on WoW Forever.
