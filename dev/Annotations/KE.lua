@@ -456,6 +456,13 @@ function KE.ResolveTrashPresetColor(text) end
 ---@param align string?
 function KE.ApplySplitTextLayout(anchor, label, timerText, iconFrame, showIcon, align) end
 
+--- Countdown string of the split-layout timers (defined in DungeonTimers.lua):
+--- tenths below the threshold, whole seconds rounded up at or above it.
+---@param seconds number
+---@param threshold number? 30 when nil
+---@return string
+function KE.FormatSplitTimer(seconds, threshold) end
+
 function KE:ValidateProfileFonts() end
 
 function KE:FillProfileDefaults() end
