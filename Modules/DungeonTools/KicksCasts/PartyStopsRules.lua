@@ -26,14 +26,15 @@ local GROW = {
 
 -- nil means the plate is watched. Only a plain false on the assist read
 -- passes: on an assistable unit the game skips the spell-ID filter. strict
--- adds the combat test; any other unreadable read lets the plate through.
+-- adds the combat test; any other unreadable read lets the plate through. A
+-- plate failing only the combat test returns true after the reason.
 function Rules.Verdict(unit, api, strict)
     if api.exists(unit) ~= true then return "no unit" end
     if api.canAttack(unit) == false then return "not attackable" end
     if api.canAssist(unit) ~= false then return "assistable, or unreadable" end
     if api.isDead(unit) == true then return "dead" end
     if api.isBoss(unit) == true then return "boss" end
-    if strict and api.inCombat(unit) == false then return "not in combat" end
+    if strict and api.inCombat(unit) == false then return "not in combat", true end
     return nil
 end
 

@@ -34,7 +34,7 @@ describe("party stops rules", function()
         end
     end)
 
-    it("watches an attackable, unassistable, living non-boss, and only one in combat when strict", function()
+    it("watches an attackable, unassistable, living non-boss, and only one in combat when strict, flagging a plate that fails only that", function()
         local NIL = {}
         local KEYS = { "exists", "canAttack", "canAssist", "isDead", "isBoss", "inCombat" }
         local function api(changes)
@@ -58,12 +58,14 @@ describe("party stops rules", function()
             { { canAssist = NIL }, false, "assistable, or unreadable" },
             { { isDead = true }, false, "dead" },
             { { isBoss = true }, false, "boss" },
-            { { inCombat = false }, true, "not in combat" },
+            { { inCombat = false }, true, "not in combat", true },
             { { inCombat = false }, false, nil },
             { { inCombat = NIL }, true, nil },
         }
         for i, case in ipairs(cases) do
-            assert.equals(case[3], Rules.Verdict("nameplate1", api(case[1]), case[2]), "case " .. i)
+            local reason, calm = Rules.Verdict("nameplate1", api(case[1]), case[2])
+            assert.equals(case[3], reason, "case " .. i)
+            assert.equals(case[4], calm, "calm, case " .. i)
         end
     end)
 
