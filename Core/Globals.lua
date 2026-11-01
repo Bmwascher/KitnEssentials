@@ -105,7 +105,7 @@ if KE.LSM then
         "Fixate Incoming", "Fixated", "Frontal", "Frontals", "GGEZ", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Kick 1", "Kick 2", "Kick 3", "Kick Add", "Kicks Inc",
         "Knockback", "Leap", "Move", "Move In", "Move Out", "New Boss", "Not Safe", "Phase Ending", "Phasing", "Pools",
-        "Protect", "Pull", "Rescue", "Rooted", "Safe", "Soak", "Soaking", "Soaks", "Spawn Add", "Split",
+        "Protect", "Pull", "Rescue", "Rooted", "Safe", "Soak", "Soaking", "Soaks", "Spawn Add", "Spell Reflect", "Split",
         "Spread", "Stack", "Stop Casting", "Take Gateway", "Time Spiral", "Totem", "Totems", "Under Boss",
         "Waiter", "Whisper", "Wrong Target",
     }
