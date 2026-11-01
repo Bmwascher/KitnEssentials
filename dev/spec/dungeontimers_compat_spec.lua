@@ -2370,6 +2370,38 @@ describe("DungeonTimers compatibility", function()
         end
     end)
 
+    -- A missed end leaves the old pull's id active, so receipts published
+    -- before the start land under it; the clock stands in for the frame.
+    it("a start without an end retires the previous encounter's work, unless a receipt for that same encounter was handled in the start's frame", function()
+        local cases = {
+            { name = "another encounter starts", start = 99, retired = true },
+            { name = "another encounter starts in a receipt's frame", start = 99, sameFrame = true, retired = true },
+            { name = "the same encounter starts later", start = 2, retired = true },
+            { name = "the same encounter starts in a receipt's frame", start = 2, sameFrame = true, retired = false },
+        }
+        for _, case in ipairs(cases) do
+            local m = loadTimelineModule()
+            m.clock.now = 10
+            local old = m.publish(701, "Old (1)", 30, 991, 6)
+            assert.is_not_nil(m.DT._presentations[old] and m.DT._presentations[old].primary, case.name)
+            m.clock.now = 20
+            local new
+            if case.sameFrame then new = m.publish(701, "New (1)", 30, 992, 6) end
+            m.DT:OnEncounterStart(nil, case.start)
+            if case.retired then
+                assert.equal("retired", old.state, case.name)
+                assert.is_nil(m.DT._presentations[old], case.name)
+                assert.is_nil((m.find("Old (1)")), case.name)
+            else
+                assert.is_true(old.state ~= "retired", case.name)
+                assert.equal(old, (m.find("Old (1)")), case.name)
+                assert.is_not_nil(m.DT._presentations[old], case.name)
+                assert.equal(new, (m.find("New (1)")), case.name)
+                assert.is_not_nil(m.DT._presentations[new] and m.DT._presentations[new].primary, case.name)
+            end
+        end
+    end)
+
     local CUE_WINDOW, CUE_PHASE = "cue:3:window", "cue:3:phase"
 
     local function cueOwner()

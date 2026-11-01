@@ -5375,7 +5375,45 @@ function DT:_ShowBossAppearCue(cueKey, now)
     self:_ScheduleCueWindow(owner, cueKey, display, revealAt, endAt, now)
 end
 
+-- Everything an encounter end retires except the pull hold and the active id,
+-- so a start that follows a missed end can run it first.
+local function RetireEncounterWork(self)
+    local id = self._activeEncounterId
+    if id then
+        self:_CloseAllCastWork("encounter-end")
+        local retired = State.RetireEncounter(self._state, id)
+        for i = 1, #retired do
+            self:ReleaseInstancePresentations(retired[i], false)
+        end
+        for owner, scope in pairs(self._state.scopes) do
+            if scope.encounterId == id then
+                ReleaseOwnerWork(self, owner)
+            end
+        end
+    end
+    self._ownerMeta = {}
+    self:StopPhaseTracking()
+    self:_UnregisterAbsorbEvent()
+    self:_HideAllShieldBars()
+    self._activeShieldSpellIds = {}
+    self:_ReleaseAllUnitCastEvents()
+    self:_WindMapTeardown()
+    self:_StopBossAppearWatch()
+end
+
 function DT:OnEncounterStart(_, encounterID)
+    local staleId = self._activeEncounterId
+    if staleId then
+        -- A start without an end leaves the previous pull's work showing.
+        -- Receipts already handled this frame for the same encounter id share
+        -- its scope, so retiring it would also drop the new pull's opening timers.
+        if staleId == tonumber(encounterID) and self._lastActiveReceiptAt == GetTime() then
+            dprint("encounter start kept previous encounter=" .. tostring(staleId) .. " reason=same-frame")
+        else
+            RetireEncounterWork(self)
+            dprint("encounter start retired previous encounter=" .. tostring(staleId))
+        end
+    end
     EndInterruptCues(self)
     CloseCueInterrupts(self)
     self._activeEncounterId = tonumber(encounterID)
@@ -5406,29 +5444,10 @@ end
 
 -- Retires this encounter's work now instead of waiting for the publisher's delayed disable.
 function DT:OnEncounterEnd()
-    local id = self._activeEncounterId
-    if id then
-        self:_CloseAllCastWork("encounter-end")
-        local retired = State.RetireEncounter(self._state, id)
-        for i = 1, #retired do
-            self:ReleaseInstancePresentations(retired[i], false)
-        end
-        for owner, scope in pairs(self._state.scopes) do
-            if scope.encounterId == id then
-                ReleaseOwnerWork(self, owner)
-            end
-        end
-    end
-    self._ownerMeta = {}
+    RetireEncounterWork(self)
     self._pullHold = {}
     self._activeEncounterId = nil
-    self:StopPhaseTracking()
-    self:_UnregisterAbsorbEvent()
-    self:_HideAllShieldBars()
-    self._activeShieldSpellIds = {}
-    self:_ReleaseAllUnitCastEvents()
-    self:_WindMapTeardown()
-    self:_StopBossAppearWatch()
+    self._lastActiveReceiptAt = nil
 end
 
 -- Settings preview bars/texts: looping fake bars for live feedback while editing GUI panels.
@@ -6065,6 +6084,7 @@ function DT:OnEnable()
         UNIT_SPELLCAST_FAILED = {}, UNIT_SPELLCAST_FAILED_QUIET = {},
     }
     self._activeEncounterId = nil
+    self._lastActiveReceiptAt = nil
     self._pullHold = {}
 
     -- Tables first: a refused enable is still followed by OnDisable, which walks them.
@@ -6269,7 +6289,11 @@ function DT:_ReplayTimerReplacement(receipt)
 end
 
 function DT:_HandleProviderEvent(event, receipt, ...)
-    if not self._activeEncounterId then self:_HoldPullReceipt(event, ...) end
+    if not self._activeEncounterId then
+        self:_HoldPullReceipt(event, ...)
+    else
+        self._lastActiveReceiptAt = GetTime()
+    end
     if event == "BigWigs_Timer" then
         local owner, key, time, maxTime, text, counter, icon, isCooldown, isBarEnabled = ...
         -- Consumed before any refusal, so no earlier StartBar can reach a later receipt.
