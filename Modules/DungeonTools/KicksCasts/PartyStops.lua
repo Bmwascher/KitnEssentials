@@ -1365,3 +1365,13 @@ function PS:HidePreview()
     wipe(self.sampleIcons)
     Refresh()
 end
+
+-- A nickname change rewrites the names alone; the counts and the grid stay.
+function PS:RefreshNames()
+    if not (self:IsEnabled() and self.frame) then return end
+    local list = self.previewing and self.sampleIcons or self.icons
+    for i, icon in ipairs(list) do
+        local c = self.cells[i]
+        if c and icon.m then Name(c, icon.m) end
+    end
+end

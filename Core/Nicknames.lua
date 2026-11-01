@@ -145,6 +145,9 @@ function KE:RefreshNicknameTags()
     if Pot and Pot.RefreshNames then Pot.RefreshNames() end
     local KT = KEAddon:GetModule("KickTracker", true)
     if KT and KT.isActive then KT:RefreshNames() end
+    -- Party Stops writes a name only when it draws.
+    local PSM = KEAddon:GetModule("PartyStops", true)
+    if PSM and PSM.RefreshNames then PSM:RefreshNames() end
 end
 
 ---------------------------------------------------------------------------------

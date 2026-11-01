@@ -154,22 +154,26 @@ describe("Nicknames.lua RefreshNicknameTags", function()
     local KE
     before_each(function() KE = L.loadNicknames() end)
 
-    -- Both arms counted: one dropped by a later edit would otherwise fail
+    -- Every arm counted: one dropped by a later edit would otherwise fail
     -- nothing. Healer Mana refreshes only with a container, since its finder
-    -- faults on a nil frame.
-    it("notifies both readers, and no-ops when they are absent", function()
+    -- faults on a nil frame. The first call runs with no reader methods at all.
+    it("notifies each reader, and no-ops when they are absent", function()
         assert.has_no.errors(function() KE:RefreshNicknameTags() end)
-        local dmCalls, hmCalls = 0, 0
+        local dmCalls, hmCalls, psCalls = 0, 0, 0
         local DM = _G.KitnEssentials:GetModule("DamageMeter", true)
         DM.OnNicknamesChanged = function() dmCalls = dmCalls + 1 end
         local HM = _G.KitnEssentials:GetModule("HealerMana", true)
         HM.FindHealers = function() hmCalls = hmCalls + 1 end
+        local PSM = _G.KitnEssentials:GetModule("PartyStops", true)
+        PSM.RefreshNames = function() psCalls = psCalls + 1 end
         KE:RefreshNicknameTags()
         assert.equals(1, dmCalls)
         assert.equals(0, hmCalls)
+        assert.equals(1, psCalls)
         HM.containerFrame = {}
         KE:RefreshNicknameTags()
         assert.equals(2, dmCalls)
         assert.equals(1, hmCalls)
+        assert.equals(2, psCalls)
     end)
 end)
