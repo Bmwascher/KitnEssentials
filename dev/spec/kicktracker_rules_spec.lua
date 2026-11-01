@@ -760,3 +760,71 @@ describe("KickTracker activation", function()
         end
     end)
 end)
+
+describe("KickTracker forever teammate kick", function()
+    it("takes the tracked kick until every talent kick reads, then the first taken, else the first without a talent", function()
+        local KT = L.loadKickTrackerRules()
+        local skullBash = { id = 410176, cd = 10 }
+        local bearCharge = { id = 16979, cd = 15, talent = true }
+        local catCharge = { id = 1238122, cd = 15, talent = true }
+        local druid = { skullBash, bearCharge, catCharge }
+        local silence = { id = 15487, cd = 45, talent = true }
+        local rows = {
+            { name = "a talent kick unread", list = druid, ranks = { [16979] = 0 }, want = bearCharge },
+            { name = "both talent kicks taken: the first", list = druid, ranks = { [16979] = 1, [1238122] = 1 },
+              want = bearCharge },
+            { name = "only the second talent kick taken", list = druid, ranks = { [16979] = 0, [1238122] = 1 },
+              want = catCharge },
+            { name = "no talent kick taken", list = druid, ranks = { [16979] = 0, [1238122] = 0 }, want = skullBash },
+            { name = "every kick needs a talent, none taken", list = { silence }, ranks = { [15487] = 0 }, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            local got = KT.PickTeammateKick(row.list, row.list[2] or row.list[1], function(id) return row.ranks[id] end)
+            assert.equals(row.want, got, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker forever own kick clocks", function()
+    it("resumes a re-picked kick whose clock still runs, after a swap away and back", function()
+        local KT = L.loadKickTrackerRules()
+        local clocks = {}
+        -- Pummel cast at 100 for 10; Shield Bash picked at 102, Pummel again at 105.
+        local s, d = KT.SwapOwnClock(clocks, 6552, 100, 10, 72, 102)
+        assert.is_nil(s)
+        s, d = KT.SwapOwnClock(clocks, 72, s, d, 6552, 105)
+        assert.equals(100, s)
+        assert.equals(10, d)
+    end)
+
+    it("starts a re-picked kick clear when its clock ran out or never ran", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "ran out", start = 100, duration = 10, backAt = 111 },
+            { name = "never ran", backAt = 105 },
+        }
+        for _, row in ipairs(rows) do
+            local clocks = {}
+            local s, d = KT.SwapOwnClock(clocks, 6552, row.start, row.duration, 72, 102)
+            s, d = KT.SwapOwnClock(clocks, 72, s, d, 6552, row.backAt)
+            assert.is_nil(s, row.name)
+            assert.is_nil(d, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker forever teammate role", function()
+    it("takes the library role, else a readable set role, else damage", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the library role wins", lib = "HEALER", set = "TANK", readable = true, want = "HEALER" },
+            { name = "no library role: the set role", set = "TANK", readable = true, want = "TANK" },
+            { name = "a library answer that is no role", lib = "NONE", set = "HEALER", readable = true, want = "HEALER" },
+            { name = "set role NONE", set = "NONE", readable = true, want = "DAMAGER" },
+            { name = "set role unreadable", set = "TANK", readable = false, want = "DAMAGER" },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.TeammateRole(row.lib, row.set, row.readable), row.name)
+        end
+    end)
+end)

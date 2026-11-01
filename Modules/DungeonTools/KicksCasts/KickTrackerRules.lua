@@ -609,3 +609,61 @@ function KT.ActiveFor(db, facts)
     return not facts.inRaid
 end
 
+---------------------------------------------------------------------------------
+-- Forever
+---------------------------------------------------------------------------------
+-- Every Forever class has one spec.
+KT.FOREVER_CLASS_SPEC = {
+    MAGE = 1482, DRUID = 1484, HUNTER = 1485, PALADIN = 1486, PRIEST = 1487,
+    ROGUE = 1488, SHAMAN = 1489, WARLOCK = 1490, WARRIOR = 1491,
+}
+
+-- A teammate's kick for a spec with talent kicks. rankOf(id) gives a talent
+-- kick's rank, or nil while it is unread. Until every talent kick reads, the
+-- tracked kick: a read of one talent tree alone could show a kick the
+-- teammate does not have. Then the first talent kick taken, else the first
+-- kick no talent grants, else nil.
+function KT.PickTeammateKick(candidates, tracked, rankOf)
+    for i = 1, #candidates do
+        local c = candidates[i]
+        if c.talent and rankOf(c.id) == nil then return tracked end
+    end
+    for i = 1, #candidates do
+        local c = candidates[i]
+        if c.talent and rankOf(c.id) > 0 then return c end
+    end
+    for i = 1, #candidates do
+        if not candidates[i].talent then return candidates[i] end
+    end
+    return nil
+end
+
+-- The player's kicks cool apart on Forever. clocks[id] keeps a kick's last
+-- clock: the outgoing kick's is stored while it runs and cleared once run
+-- out. Returns the incoming kick's start and duration while its clock still
+-- runs, else nil.
+function KT.SwapOwnClock(clocks, oldID, oldStart, oldDuration, newID, now)
+    if oldID ~= nil then
+        if oldStart and oldDuration and now - oldStart < oldDuration then
+            clocks[oldID] = { start = oldStart, duration = oldDuration }
+        else
+            clocks[oldID] = nil
+        end
+    end
+    if newID == nil then return nil, nil end
+    local kept = clocks[newID]
+    if kept and now - kept.start < kept.duration then return kept.start, kept.duration end
+    clocks[newID] = nil
+    return nil, nil
+end
+
+local ROLES = { TANK = true, HEALER = true, DAMAGER = true }
+
+-- A teammate's sort role: the library's report when it is a role, else the
+-- role set in the group when it reads plainly and is one, else damage.
+function KT.TeammateRole(libraryRole, setRole, setRoleReadable)
+    if ROLES[libraryRole] then return libraryRole end
+    if setRoleReadable and ROLES[setRole] then return setRole end
+    return "DAMAGER"
+end
+
