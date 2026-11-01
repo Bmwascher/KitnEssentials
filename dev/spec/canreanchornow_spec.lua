@@ -60,4 +60,19 @@ describe("KE:CanReanchorNow", function()
         inCombat = true
         assert.is_false(KE:CanReanchorNow(frame({ noAnchoringMethod = true })))
     end)
+
+    it("lets a pass move a frame alone by the gate it names, else by its own check", function()
+        inCombat = true
+        local cases = {
+            { name = "no gate, free", fields = {}, want = true },
+            { name = "no gate, protected", fields = { protected = true }, want = false },
+            { name = "gate allows", fields = {}, gate = function() return true end, want = true },
+            { name = "gate refuses a free frame", fields = {}, gate = function() return false end, want = false },
+        }
+        for _, case in ipairs(cases) do
+            local f = frame(case.fields)
+            if case.gate then KE:SetAnchorGate(f, case.gate) end
+            assert.are.equal(case.want, KE:MayReanchorAlone(f), case.name)
+        end
+    end)
 end)

@@ -1224,7 +1224,7 @@ function EditMode:CancelDrag(overlay)
         -- the frame sitting in the screen corner for the rest of the fight.
         -- Anything restricted has to wait for the queue.
         local targetFrame = self:GetElementFrame(element)
-        if targetFrame and KE:CanReanchorNow(targetFrame) then
+        if targetFrame and KE:MayReanchorAlone(targetFrame) then
             Reanchor()
         else
             KE:RunAfterCombat(Reanchor)

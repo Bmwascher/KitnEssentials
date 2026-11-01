@@ -696,12 +696,19 @@ function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn) end
 ---@param name string
 function KE:AnnounceAnchorTarget(name) end
 
---- Names the gate Core/Globals.lua's late re-place and PLAYERFRAME repair ask,
---- in place of KE:CanReanchorNow(frame), before they move `frame` alone: for a
---- frame that moves only together with others. nil removes it.
+--- Names the gate that Core/Globals.lua's late re-place and PLAYERFRAME repair,
+--- and KE:MayReanchorAlone, ask in place of KE:CanReanchorNow(frame) before
+--- `frame` moves alone: for a frame that moves only together with others. nil
+--- removes it.
 ---@param frame Frame
 ---@param gate (fun(): boolean)?
 function KE:SetAnchorGate(frame, gate) end
+
+--- Whether a pass that moves `frame` alone may move it now: the gate
+--- KE:SetAnchorGate named for it, or else KE:CanReanchorNow(frame).
+---@param frame Frame
+---@return boolean
+function KE:MayReanchorAlone(frame) end
 
 ---@param anchorFrom string
 ---@return string

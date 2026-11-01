@@ -2314,6 +2314,11 @@ local function MayReplace(frame)
     return KE:CanReanchorNow(frame)
 end
 
+-- MayReplace for a pass outside this file that moves one frame alone.
+function KE:MayReanchorAlone(frame)
+    return MayReplace(frame)
+end
+
 -- The owner of a Select Frame target calls this once it has built the frame,
 -- so frames placed on that name before it existed move onto it. The walk
 -- changes record fields only, never the table's keys, so pairs stays valid.
