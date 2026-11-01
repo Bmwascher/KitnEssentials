@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.13
+
+Party Cooldowns fixes and three new cooldowns.
+
+### Party Cooldowns
+
+- Call of the Righteous now shortens Avenging Wrath by 15 sec per rank
+- Elemental Shamans show Stormkeeper after Ascendance
+- A Holy Paladin who picks Avenging Crusader sees it, with its own cooldown,
+  in place of Avenging Wrath
+- The Raid Cooldowns box shows a Shadow Priest's Vampiric Embrace
+- Stack counts and charge counts now use the Timer Size. In the Raid
+  Cooldowns box, charge counts use that box's Text Size
+- The Icon Order card's Trinkets slot shows a trinket picture, and the card no
+  longer has a Kitn Defaults button
+- An icon that fails to draw no longer stops its timers; the error is reported
+  once
+- A broken saved position for the Raid Cooldowns or Potions box no longer
+  causes an error
+
+---
+
 ## v4.15.12
 
 Party Stops fixes for nicknames, Blind and Devourer Demon Hunters.
