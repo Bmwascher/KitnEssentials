@@ -164,6 +164,7 @@ Data.SPELLS = {
                   needs = { talents = { [64843] = true }, likely = true } },
     [62618]   = { kind = "external", cd = 180, buffs = { 81782 },
                   needs = { talents = { [62618] = true }, likely = true } },
+    [15286]   = { kind = "external", cd = 120 },
     -- The game reports no base cooldown for it.
     [98008]   = { kind = "external", cd = 180, buffs = { 325174 },
                   needs = { talents = { [98008] = true }, likely = true } },
@@ -352,6 +353,7 @@ Data.BOX_ROWS = {
     { id = 363534, class = "EVOKER",      specs = { [1468] = true }, roles = { HEALER = true }, watch = "owner" },
     { id = 64843,  class = "PRIEST",      specs = { [257] = true },  roles = { HEALER = true }, watch = "owner" },
     { id = 62618,  class = "PRIEST",      specs = { [256] = true },  roles = { HEALER = true }, watch = "owner" },
+    { id = 15286,  class = "PRIEST",      specs = { [258] = true },  roles = { DAMAGER = true }, watch = "owner" },
     { id = 98008,  class = "SHAMAN",      specs = { [264] = true },  roles = { HEALER = true }, watch = "owner" },
     { id = 359816, class = "EVOKER",      specs = { [1468] = true }, roles = { HEALER = true }, watch = "owner" },
 }
