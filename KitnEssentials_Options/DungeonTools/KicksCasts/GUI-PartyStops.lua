@@ -115,7 +115,8 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched", {
         min = 4, max = 20, step = 1,
         value = Rules.Watched(db.EnemiesWatched),
-        tooltip = "How many enemies in combat a single-target stop, like Blind or Hammer of Justice, is read on.",
+        tooltip = "How many enemies a single-target stop, like Blind or Hammer of Justice, is read on: enemies in " ..
+            "combat, and for Blind also enemies not yet in combat while a slot is free.",
         callback = function(value)
             db.EnemiesWatched = value
             ApplySettings()
