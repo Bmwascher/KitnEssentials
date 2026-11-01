@@ -577,7 +577,7 @@ local function PrintCpuTop(arg)
     end
 
     if summary.recentMs ~= nil and summary.peakMs ~= nil then
-        pf("Live: %.4f ms per rendered frame on average; slowest rendered frame since launch %.4f ms.",
+        pf("Live: %.4f ms per game tick (average of the last 60 ticks); highest tick since launch %.4f ms.",
             summary.recentMs, summary.peakMs)
     end
 
