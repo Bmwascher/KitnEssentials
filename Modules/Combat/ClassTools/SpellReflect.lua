@@ -502,8 +502,8 @@ function SR:ScheduleWake(delay)
 end
 
 -- One pass: drop finished records and those of spells set to Off, show the
--- one that wins, keep the cooldown watch while a record is near, and step
--- every frame only while a near record's bar is running.
+-- one that wins, and keep the cooldown watch, the per-frame step and the
+-- wake as Rules.Schedule asks for each record.
 function SR:Step()
     if not self.frame then return end
     local now, db, records = GetTime(), self.db, self.records
@@ -514,18 +514,13 @@ function SR:Step()
             if DEBUG_SR then KE:Print("[SR] dropped " .. tostring(rec.name)) end
             records[text] = nil
         else
-            local toStart = Rules.Countdown(rec, now)
             local lead = rec.test and Rules.TEST_LEAD or db.Lead
-            local isNear = phase ~= "WAIT" or toStart <= lead
+            local isNear, ticks, due = Rules.Schedule(rec, phase, now, lead)
             if isNear then near = true end
-            if isNear and not rec.left then
+            if ticks then
                 ticking = true
-            else
-                -- A paused countdown is frozen, so it needs no per-frame step,
-                -- but the record still ages out.
-                local due = rec.born + Rules.MAX_AGE - now
-                if not rec.left and toStart - lead < due then due = toStart - lead end
-                if not wake or due < wake then wake = due end
+            elseif not wake or due < wake then
+                wake = due
             end
         end
     end

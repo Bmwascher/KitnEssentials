@@ -206,6 +206,19 @@ function Rules.Phase(rec, now)
     return "WAIT"
 end
 
+-- How a step treats a record still in play: near (the cooldown watch), ticks
+-- (needs the per-frame step), and otherwise the seconds until the next step it
+-- needs. A paused countdown is frozen, so it waits for its age limit; a
+-- canceled record ticks until its short grace ends, paused or not.
+function Rules.Schedule(rec, phase, now, lead)
+    local toStart = Rules.Countdown(rec, now)
+    local near = phase ~= "WAIT" or toStart <= lead
+    if near and (not rec.left or rec.stopAt) then return near, true, nil end
+    local due = rec.born + Rules.MAX_AGE - now
+    if not rec.left and toStart - lead < due then due = toStart - lead end
+    return near, false, due
+end
+
 function Rules.Allowed(mode, ready)
     if mode == "OFF" then return false end
     if mode == "READY" then return ready == true end
