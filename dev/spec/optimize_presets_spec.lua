@@ -355,15 +355,23 @@ describe("Optimize on a client without every CVar or without Mythic+", function(
         end
     end)
 
-    it("counts a revert the client refuses as not done: the row keeps its backup and Revert All leaves it out of its count", function()
+    it("counts a revert the client refuses as not done: the row keeps its backup, and Revert All keeps it and says so", function()
         for _, row in ipairs({ { name = "error", how = "throw" }, { name = "false return", how = "false" } }) do
             local OPT, rec = L.loadOptimize()
-            _G.KitnEssentialsOptimizeDB = { SavedSettings = { cameraFov = "70", maxFPS = "144" } }
+            _G.KitnEssentialsOptimizeDB = {
+                SavedSettings = { cameraFov = "70", maxFPS = "144" },
+                ActivePreset = "balanced",
+            }
             rec.refused["cameraFov"] = row.how
             assert.is_false(OPT:RevertCVar("cameraFov"), row.name)
             assert.equals("70", _G.KitnEssentialsOptimizeDB.SavedSettings.cameraFov, row.name)
             OPT:RevertAll()
-            assert.same({ "|cff00ff001 settings reverted.|r" }, rec.prints, row.name)
+            assert.same({
+                "|cff00ff001 settings reverted.|r",
+                "|cffFF008CWarning:|r 1 settings could not be reverted; Revert All will try them again.",
+            }, rec.prints, row.name)
+            assert.same({ cameraFov = "70" }, _G.KitnEssentialsOptimizeDB.SavedSettings, row.name)
+            assert.is_nil(_G.KitnEssentialsOptimizeDB.ActivePreset, row.name)
         end
     end)
 

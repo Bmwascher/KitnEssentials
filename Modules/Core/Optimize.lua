@@ -25,6 +25,7 @@ local pcall = pcall
 local tostring = tostring
 local tonumber = tonumber
 local string_format = string.format
+local KE_ACCENT = "|cffFF008C"
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -351,6 +352,12 @@ local function GetRawValue(cvar)
     return nil
 end
 
+-- SetCVar refuses a write by raising or by returning false.
+local function TrySetCVar(cvar, value)
+    local ok, set = pcall(_SetCVar, cvar, value)
+    return ok and set ~= false
+end
+
 local function ReadStackMask()
     local types = Enum.NamePlateStackType
     local okE, enemy = pcall(C_CVar.GetCVarBitfield, STACKING_CVAR, types.Enemy)
@@ -412,17 +419,14 @@ function OPT:ApplyCVar(cvar, value)
         local mask = tonumber(value)
         return mask ~= nil and WriteStackMask(mask)
     end
-    -- SetCVar refuses a write by raising or by returning false.
-    local ok, set = pcall(_SetCVar, cvar, tostring(value))
-    return ok and set ~= false
+    return TrySetCVar(cvar, tostring(value))
 end
 
 function OPT:RevertCVar(cvar)
     local backup = GetBackupDB()
     local saved = backup.SavedSettings[cvar]
     if not saved then return false end
-    local ok, set = pcall(_SetCVar, cvar, tostring(saved))
-    ok = ok and set ~= false
+    local ok = TrySetCVar(cvar, tostring(saved))
     if ok then
         backup.SavedSettings[cvar] = nil
     end
@@ -511,7 +515,6 @@ function OPT:ApplyPreset(presetName, overrides)
 
     GetBackupDB().ActivePreset = presetName
 
-    local KE_ACCENT = "|cffFF008C"
     local KE_GREEN  = "|cff00ff00"
     local KE_RESET  = "|r"
     local label = presetName == "maxfps" and "Max FPS" or "Balanced"
@@ -700,16 +703,25 @@ function OPT:RevertAll()
         return
     end
 
-    local count = 0
+    -- A refused write keeps its backup, so the player's own value is never
+    -- lost and the next Revert All tries it again.
+    local kept, count, refused = {}, 0, 0
     for cvar, val in pairs(backup.SavedSettings) do
-        local ok, set = pcall(_SetCVar, cvar, tostring(val))
-        if ok and set ~= false then count = count + 1 end
+        if TrySetCVar(cvar, tostring(val)) then
+            count = count + 1
+        else
+            kept[cvar] = val
+            refused = refused + 1
+        end
     end
-    backup.SavedSettings = {}
-    -- Everything is back at the user's own values, so no preset describes them.
+    backup.SavedSettings = kept
+    -- The reverted values are the user's own, so no preset describes them.
     backup.ActivePreset = nil
 
     KE:Print("|cff00ff00" .. count .. " settings reverted.|r")
+    if refused > 0 then
+        KE:Print(KE_ACCENT .. "Warning:|r " .. refused .. " settings could not be reverted; Revert All will try them again.")
+    end
 end
 
 function OPT:HasAnySavedSettings()
