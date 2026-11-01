@@ -32,6 +32,7 @@
     <Script file="Combat\ClassTools\GUI-HavocTracker.lua" />
     <Script file="Combat\ClassTools\GUI-DivineArbiter.lua" />
     <Script file="Combat\ClassTools\GUI-ShamanProcCooldowns.lua" />
+    <Script file="Combat\ClassTools\GUI-SpellReflect.lua" />
     <Script file="Combat\ClassTools\GUI-DoTTracker.lua" />
     <Script file="Combat\ClassTools\GUI-CustomCooldowns.lua" />
     <Script file="Combat\ClassTools\GUI-AlterTime.lua" />

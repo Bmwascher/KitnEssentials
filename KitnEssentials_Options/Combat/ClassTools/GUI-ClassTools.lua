@@ -23,6 +23,7 @@ local CLASS_TAB = {
     PRIEST  = "ClassToolsPriest",
     SHAMAN  = "ShamanProcCooldowns",
     WARLOCK = "HavocTracker",
+    WARRIOR = "ClassToolsWarrior",
 }
 
 function GUIFrame.ClassToolsTabForClass(classToken)
@@ -56,6 +57,10 @@ RegisterClassPage("ClassToolsPriest", {
     { id = "PIAssist",       label = "PI Assist" },
 })
 
+RegisterClassPage("ClassToolsWarrior", {
+    { id = "SpellReflect", label = "Spell Reflect" },
+})
+
 GUIFrame:RegisterTabbedContent("ClassTools", {
     { id = "ClassToolsAllClasses", label = "All Classes" },
     { id = "ClassToolsEvoker",     label = "Evoker" },
@@ -65,6 +70,7 @@ GUIFrame:RegisterTabbedContent("ClassTools", {
     { id = "ClassToolsPriest",     label = "Priest" },
     { id = "ShamanProcCooldowns",  label = "Shaman" },
     { id = "HavocTracker",         label = "Warlock" },
+    { id = "ClassToolsWarrior",    label = "Warrior" },
 }, {
     defaultTab = function()
         return GUIFrame.ClassToolsTabForClass(select(2, UnitClass("player")))
