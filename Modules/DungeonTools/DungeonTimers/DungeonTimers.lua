@@ -427,6 +427,8 @@ local function PlayPresetSound(soundKey)
         PlaySoundFile(file, channel)
     end
 end
+-- Exported so sibling files (ShieldWarning.lua, TrashOutput.lua) share the mute and channel rules.
+DT.PlayPresetSound = PlayPresetSound
 
 -- Preview bars loop endlessly so they're gated out to prevent sound spam.
 local function PlayBarSound(self, key)

@@ -258,11 +258,17 @@ local function formatRemaining(remaining, decimalUnder)
     return string_format("%d", math_ceil(remaining))
 end
 
--- Play an LSM sound by name (nil = no-op). Alerts fire onShow when they reveal
--- and onHide when the countdown reaches 0 (the predicted cast moment) — never on
--- a plate-removal hide, so a despawn doesn't fake a cast cue.
+-- Play an LSM sound by name (nil = no-op) under Dungeon Timers' mute and
+-- channel settings. Alerts fire onShow when they reveal and onHide when the
+-- countdown reaches 0 (the predicted cast moment) — never on a plate-removal
+-- hide, so a despawn doesn't fake a cast cue.
 local function playTrashSound(name)
     if not name then return end
+    local dt = KitnEssentials:GetModule("DungeonTimers", true)
+    if dt and dt.PlayPresetSound then
+        dt.PlayPresetSound(name)
+        return
+    end
     local file = KE.LSM and KE.LSM:Fetch("sound", name)
     if file then PlaySoundFile(file, "Master") end
 end

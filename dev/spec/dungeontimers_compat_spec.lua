@@ -2226,6 +2226,28 @@ describe("DungeonTimers compatibility", function()
         assert.equal(before, #soundCalls)
     end)
 
+    -- Its own load: the module captures PlaySoundFile at load, and this
+    -- spy records the channel argument the shared one drops.
+    it("the shared preset sound helper plays on the chosen channel and stays silent when muted or given no key", function()
+        local cases = {
+            { name = "channel", key = "Alert", plays = { { "path/Alert.ogg", "SFX" } } },
+            { name = "muted", key = "Alert", muted = true, plays = {} },
+            { name = "no key", key = nil, plays = {} },
+        }
+        for _, case in ipairs(cases) do
+            local plays = {}
+            _G.PlaySoundFile = function(file, channel) plays[#plays + 1] = { file, channel } end
+            local DT2, KE2 = loader.loadDungeonTimers({ withEncounterData = false }, {
+                CreateFrame = function() return newPlainStubFrame() end,
+                GetTime = function() return 0 end,
+            })
+            KE2.LSM = { Fetch = function(_, _, key) return "path/" .. key .. ".ogg" end }
+            DT2.db = { MutePresetSounds = case.muted == true, SoundChannel = "SFX" }
+            DT2.PlayPresetSound(case.key)
+            assert.same(case.plays, plays, case.name)
+        end
+    end)
+
     it("an ordinal cue refuses a secret, unmatched or unreadable payload before any change and leaves the shown ordinal", function()
         local cases = {
             { name = "secret message", message = { __secret = true } },
