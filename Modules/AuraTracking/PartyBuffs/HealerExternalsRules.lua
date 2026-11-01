@@ -239,8 +239,8 @@ local GRID = {
     DOWN  = { dx = 0,  dy = -1, corner = "TOPLEFT" },
     UP    = { dx = 0,  dy = 1,  corner = "BOTTOMLEFT" },
 }
--- The Icons Per Row slider's top; a value that is not a number keeps the one
--- row the box had before it could wrap.
+-- The Icons Per Row slider's top; a value that is not a number gives one row
+-- of 12.
 local PER_ROW_MAX = 12
 local ATTACH_KEYS = { "HealerExtAnchorFrameType", "HealerExtParentFrame" }
 local POSITION_FIELDS = { "AnchorFrom", "AnchorTo", "XOffset", "YOffset" }

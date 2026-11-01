@@ -72,7 +72,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     local healerView = activePosition == "HEALER"
     -- While the box stacks on Healer Mana it stands at Healer Mana's position,
     -- so the controls that set its Default position are grayed. The settings
-    -- decide it; with Healer Mana off the box is placed as before.
+    -- decide it; with Healer Mana off the box does not stack.
     local function StackOn()
         local hm = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
         return db.HealerExtHealerManaBelow == true and KE.HealerExternals.Untouched(db)

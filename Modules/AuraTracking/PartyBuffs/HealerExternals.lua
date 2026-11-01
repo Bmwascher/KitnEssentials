@@ -401,7 +401,7 @@ local function Count()
     return 0
 end
 
--- A free box is icon 1 alone, sized as a one-icon box always was, so a wrap
+-- A free box is icon 1 alone, sized as one icon, so a wrap
 -- never moves icon 1; the KE Edit Mode box is inset onto the grid and the
 -- drag still measures the box itself. A stacked box is the grid, so Healer
 -- Mana can hang under its bottom edge; its corner pin keeps its edges whole.
