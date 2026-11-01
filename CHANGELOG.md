@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.5-beta1
+
+> **Beta:** Season 2 Dungeon Trash is ready for in-game testing. Expect bugs,
+> and please report incorrect or missing alerts.
+
+### Dungeon Trash
+
+- **NEW:** Trash timers and cast alerts for all eight Season 2 dungeons
+- Existing Season 1 coverage and custom settings are preserved
+- Dungeon extras such as Den of Nalorakk's Harsh Winds timer are not included
+
+### Interrupt Tracker
+
+- Includes v4.15.4's fix for the nameplate interrupt-icon freeze
+
+---
+
 ## v4.15.4
 
 Nameplate interrupt icons are back, with the freeze fixed.
