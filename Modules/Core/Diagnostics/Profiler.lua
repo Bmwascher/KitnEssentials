@@ -274,10 +274,10 @@ end
 -- Shared Blizzard handlers
 ---------------------------------------------------------------------------------
 -- GetFrameCPUUsage charges a frame its handlers' whole-client totals, including
--- everything they call. Rows running any Blizzard global handler are listed
--- apart from KE's ranking, because that total swamps whatever else the frame
--- runs; it can still hold addon work the handler ran, KE's included. A row that
--- also runs one of KE's own handlers is marked.
+-- everything they call. A row with any Blizzard global handler is listed apart
+-- from KE's ranking, even when that handler is rarely called; its total can
+-- still hold addon work the handler ran, KE's included. A row that also runs
+-- one of KE's own handlers is marked.
 
 -- A script type missing here is never inspected, so a KE handler of that type
 -- would go unseen: keep every type KE sets on a frame listed.
@@ -353,7 +353,7 @@ end
 -- collision groups too, and partial sharing does not group at all. The label
 -- claims only what was measured.
 local NAMES_SHOWN = 3
-local FRAME_CAVEAT = "Note: frames on one row reported identical counters. A handler several frames share is charged in full to each of them, so the rows do not add up. Timer and callback work is not charged to any frame."
+local FRAME_CAVEAT = "Note: frames on one row reported identical counters. A handler several frames share is charged in full to each of them, so the rows do not add up. Not in these rows: C_Timer callbacks, and work run from a frame not listed here, such as Ace event callbacks."
 
 local function DescribeGroup(names, count, note)
     local notes = {}
@@ -569,7 +569,7 @@ local function PrintCpuTop(arg)
         pf("KitnEssentials used %.2f ms of CPU in the %.1f s since /kes profiler reset: %.2f ms per second, %.2f%% of one CPU core.",
             summary.addonMs, summary.elapsed, summary.rate, summary.percent)
     elseif summary.elapsed ~= nil then
-        pf("KitnEssentials used %.2f ms of CPU in the %.1f s since /kes profiler reset; exercise the UI, then run cpu again for a rate.",
+        pf("KitnEssentials used %.2f ms of CPU in the %.1f s since /kes profiler reset; exercise the UI, then type /kes profiler cpu again for a rate.",
             summary.addonMs, summary.elapsed)
     else
         pf("KitnEssentials used %.2f ms of CPU (sampling duration unknown; /kes profiler reset starts a timed window).",
@@ -577,7 +577,7 @@ local function PrintCpuTop(arg)
     end
 
     if summary.recentMs ~= nil and summary.peakMs ~= nil then
-        pf("Live: %.4f ms per game tick (average of the last 60 ticks); highest tick since launch %.4f ms.",
+        pf("Live, KE only: %.4f ms per game tick (average of the last 60 ticks); KE's highest tick since launch %.4f ms.",
             summary.recentMs, summary.peakMs)
     end
 
@@ -606,7 +606,7 @@ local function PrintCpuTop(arg)
     pf("KE frames by CPU, highest first (top %d; a frame's children not included):", n)
     PrintGroups(groups, n)
     if #groups == 0 then
-        p("  No frame work recorded.")
+        p(#blizzardGroups > 0 and "  None outside the shared-handler list below." or "  No frame work recorded.")
     end
     if #blizzardGroups > 0 then
         p("Frames running a shared Blizzard handler (game-wide totals; any addon's work may be inside, KE's too):")

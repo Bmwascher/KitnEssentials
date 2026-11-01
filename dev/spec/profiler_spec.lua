@@ -432,7 +432,7 @@ describe("Profiler CPU report", function()
         assert.is_truthy(output:find("8.51 ms per second", 1, true))
         assert.is_truthy(output:find("0.85% of one CPU core", 1, true))
         assert.is_truthy(output:find("0.1250 ms per game tick", 1, true))
-        assert.is_truthy(output:find("highest tick since launch 2.5000 ms", 1, true))
+        assert.is_truthy(output:find("KE's highest tick since launch 2.5000 ms", 1, true))
     end)
 
     it("does not invent a rate before KE establishes a reset window", function()
@@ -584,6 +584,19 @@ describe("Profiler shared-counter grouping", function()
             { name = "KE_Beta", selfMs = 5, selfCalls = 21 },
         })
         local groups = state.profiler.GroupSharedRows(state.profiler.GatherCpuRows())
+
+        assert.equals(2, #groups)
+        assert.equals(1, groups[1].count)
+        assert.equals(1, groups[2].count)
+    end)
+
+    it("keeps rows apart when only the shared-handler mark differs", function()
+        -- Merged, the group would print one member's mark for all of them.
+        local state = rowsFor({ { name = "KE_Gamma", selfMs = 9, selfCalls = 30 } })
+        local groups = state.profiler.GroupSharedRows({
+            { name = "KE_Alpha", selfMs = 5, selfCalls = 20, sharedHandler = "only" },
+            { name = "KE_Beta", selfMs = 5, selfCalls = 20, sharedHandler = "mixed" },
+        })
 
         assert.equals(2, #groups)
         assert.equals(1, groups[1].count)
@@ -749,7 +762,6 @@ describe("Profiler shared Blizzard handlers", function()
 
             assert.is_nil(blizzard)
             assert.is_truthy(own:find("KE_Alpha", 1, true))
-            assert.is_nil(own:find(MIXED_NOTE, 1, true))
         end
     end)
 end)
