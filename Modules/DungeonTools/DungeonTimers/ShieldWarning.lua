@@ -22,7 +22,6 @@ local CreateFrame = CreateFrame
 local C_Spell = C_Spell
 local GetInstanceInfo = GetInstanceInfo
 local GetTime = GetTime
-local PlaySoundFile = PlaySoundFile
 local UIParent = UIParent
 local UnitExists = UnitExists
 local UnitIsDead = UnitIsDead
@@ -115,12 +114,7 @@ function DT:SetShieldWarningSound(key)
 end
 
 local function PlayWarningSound()
-    local dtdb = DT.db
-    if dtdb and dtdb.MutePresetSounds then return end
-    local key = DT:GetShieldWarningSound()
-    local LSM = KE.LSM
-    local file = key and LSM and LSM:Fetch("sound", key)
-    if file then PlaySoundFile(file, (dtdb and dtdb.SoundChannel) or "Master") end
+    DT.PlayPresetSound(DT:GetShieldWarningSound())
 end
 
 -- Runs after the encounter's swap state exists; the frame is made on the first
