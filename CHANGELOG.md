@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.11
+
+Dungeon Timers fixes for The Hoardmonger, trash sounds and missed boss ends.
+
+### Dungeon Timers
+
+- The Hoardmonger (Den of Nalorakk) shows Phase Transition bars before 90%,
+  70% and 40% boss health
+- Trash sounds follow "Mute all preset sounds" and "Sound channel", like boss
+  sounds
+- When the game misses a boss's end, the next pull clears the old fight's
+  leftover timers
+
+---
+
 ## v4.15.10
 
 An easier-to-read `/kes profiler cpu` report.
