@@ -263,6 +263,17 @@ function FM.PickKickSpell(candidates, trackerKick, isKnown)
     return nil
 end
 
+-- The mark line and the length check every kick body ends with.
+local function FinishKickBody(lines, db, markerIdx)
+    -- Always ~: a kick press must never toggle an existing marker off.
+    if db.KickMarkFocus and markerIdx and markerIdx > 0 then
+        lines[#lines + 1] = "/tm [@focus] ~" .. tostring(markerIdx)
+    end
+    local body = table_concat(lines, "\n")
+    if #body > MACRO_BODY_MAX then return nil end
+    return body
+end
+
 function FM.BuildKickBody(spellName, db, markerIdx)
     if not spellName or spellName == "" then return nil end
     local lines = { "#showtooltip " .. spellName }
@@ -277,13 +288,93 @@ function FM.BuildKickBody(spellName, db, markerIdx)
         cond = cond .. "[]"
     end
     lines[#lines + 1] = "/cast " .. cond .. " " .. spellName
-    -- Always ~: a kick press must never toggle an existing marker off.
-    if db.KickMarkFocus and markerIdx and markerIdx > 0 then
-        lines[#lines + 1] = "/tm [@focus] ~" .. tostring(markerIdx)
+    return FinishKickBody(lines, db, markerIdx)
+end
+
+-- Forever's kick clauses, in candidate order: { id, indices, shield }.
+-- indexOfForm maps a form id to its stance-bar index. "No form" is one more
+-- state unless every bar form cannot be left (allFixed). A kick is left out
+-- when unknown, a later rank of a kick taken, without a form on the bar, a
+-- shield kick with no shield name, or when earlier clauses cover every
+-- index it casts in. Only a clause with no shield covers states, since a
+-- shield clause skips a missing shield. indices nil: no stance condition.
+function FM.ForeverKickClauses(candidates, isKnown, canonOf, indexOfForm, barSize, allFixed, hasShieldName)
+    local clauses, seen, covered = {}, {}, {}
+    local coveredAll = false
+    for i = 1, #candidates do
+        local c = candidates[i]
+        local canon = canonOf(c.id)
+        if not coveredAll and not seen[canon] and isKnown(c.id) and (hasShieldName or not c.shield) then
+            seen[canon] = true
+            local keep, indices = true, nil
+            if c.forms then
+                local own, uncovered = {}, {}
+                for j = 1, #c.forms do
+                    local index = indexOfForm[c.forms[j]]
+                    if index and not own[index] then
+                        own[index] = true
+                        if not covered[index] then uncovered[#uncovered + 1] = index end
+                    end
+                end
+                if #uncovered == 0 then
+                    keep = false
+                else
+                    table.sort(uncovered)
+                    indices = uncovered
+                    if allFixed then
+                        local all = true
+                        for k = 1, barSize do
+                            if not (own[k] or covered[k]) then
+                                all = false
+                                break
+                            end
+                        end
+                        if all then indices = nil end
+                    end
+                    if not c.shield then
+                        for index in pairs(own) do covered[index] = true end
+                    end
+                end
+            elseif not c.shield then
+                coveredAll = true
+            end
+            if keep then
+                clauses[#clauses + 1] = { id = c.id, indices = indices, shield = c.shield == true }
+            end
+        end
     end
-    local body = table_concat(lines, "\n")
-    if #body > MACRO_BODY_MAX then return nil end
-    return body
+    return clauses
+end
+
+-- One /cast line of the clauses, joined with "; ". Each clause's condition
+-- joins its stance indices and, for a shield clause, the client's shield
+-- subclass name.
+function FM.BuildForeverKickBody(clauses, names, shieldName, db, markerIdx)
+    if not clauses or #clauses == 0 then return nil end
+    local lines = { "#showtooltip" }
+    if db.KickStopCasting then
+        lines[#lines + 1] = "/stopcasting"
+    end
+    local parts = {}
+    for i = 1, #clauses do
+        local clause, name = clauses[i], names[i]
+        if not name or name == "" then return nil end
+        local cond = {}
+        if clause.indices then cond[#cond + 1] = "stance:" .. table_concat(clause.indices, "/") end
+        if clause.shield then cond[#cond + 1] = "equipped:" .. shieldName end
+        local bare = table_concat(cond, ",")
+        local tail = bare ~= "" and ("," .. bare) or ""
+        local text = "[@focus,harm,nodead" .. tail .. "]"
+        if db.KickMouseover then
+            text = text .. "[@mouseover,harm,nodead" .. tail .. "]"
+        end
+        if db.KickTargetFallback then
+            text = text .. "[" .. bare .. "]"
+        end
+        parts[i] = text .. " " .. name
+    end
+    lines[#lines + 1] = "/cast " .. table_concat(parts, "; ")
+    return FinishKickBody(lines, db, markerIdx)
 end
 
 -- Returns state, spellID, body, specName, spellName. Only "ready" carries a body.

@@ -249,3 +249,129 @@ describe("FocusMarker marker and kick macro rules", function()
     end)
 end)
 
+describe("FocusMarker forever kick clauses", function()
+    local FM
+
+    before_each(function()
+        mock.install()
+        local modules = helpers.installAddonShim()
+        helpers.loadModule("Modules/DungeonTools/KicksCasts/FocusMarker.lua", { Print = function() end })
+        FM = modules["FocusMarker"]
+    end)
+
+    -- Fixtures in the Forever rows' shape: Pummel needs Berserker Stance
+    -- (form 19), Shield Bash Battle or Defensive (17, 18) and a shield.
+    -- Skull Bash allows Cat, Bear and Dire Bear (1, 5, 8), Feral Charge
+    -- (Bear) Bear or Dire Bear, Feral Charge all three.
+    local WARRIOR = {
+        { id = 6554, forms = { 19 } }, { id = 6552, forms = { 19 } },
+        { id = 1672, forms = { 17, 18 }, shield = true }, { id = 72, forms = { 17, 18 }, shield = true },
+    }
+    local DRUID = {
+        { id = 410176, forms = { 1, 5, 8 } },
+        { id = 16979, forms = { 5, 8 } },
+        { id = 1238122, forms = { 1, 5, 8 } },
+    }
+    local CANON = { [6554] = 6552, [1672] = 72 }
+    local STANCES = { [17] = 1, [18] = 2, [19] = 3 }  -- Battle, Defensive, Berserker
+    local FORMS = { [5] = 1, [1] = 2 }  -- Bear Form on 1, Cat Form on 2
+
+    local function canonOf(id) return CANON[id] or id end
+
+    -- The row's clauses as "id:indices[:shield]", one string per row.
+    local function clauseText(row)
+        local known = {}
+        for _, id in ipairs(row.known) do known[id] = true end
+        local clauses = FM.ForeverKickClauses(row.list, function(id) return known[id] == true end, canonOf,
+            row.forms, row.size, row.fixed, row.shield)
+        local parts = {}
+        for i, c in ipairs(clauses) do
+            parts[i] = c.id .. ":" .. (c.indices and table.concat(c.indices, "/") or "-") .. (c.shield and ":shield" or "")
+        end
+        return table.concat(parts, " ")
+    end
+
+    it("leaves out unknown kicks, later ranks of a kick taken and kicks with no form on the bar", function()
+        local rows = {
+            { name = "a later rank of a kick taken", list = WARRIOR, known = { 6554, 6552, 1672, 72 },
+              forms = STANCES, size = 3, fixed = true, shield = true, want = "6554:3 1672:-:shield" },
+            { name = "an unknown rank: the next one", list = WARRIOR, known = { 6552, 1672 },
+              forms = STANCES, size = 3, fixed = true, shield = true, want = "6552:3 1672:-:shield" },
+            { name = "no Berserker Stance on the bar", list = WARRIOR, known = { 6554, 1672 },
+              forms = { [17] = 1, [18] = 2 }, size = 2, fixed = true, shield = true, want = "1672:-:shield" },
+        }
+        for _, row in ipairs(rows) do
+            assert.are.equal(row.want, clauseText(row), row.name)
+        end
+    end)
+
+    it("drops a kick earlier unshielded clauses cover, keeps only uncovered indices, and lets no shield clause cover", function()
+        local rows = {
+            { name = "Skull Bash covers both forms", list = DRUID, known = { 410176, 16979, 1238122 },
+              forms = FORMS, size = 2, fixed = false, shield = true, want = "410176:1/2" },
+            { name = "each Feral Charge keeps its own form", list = DRUID, known = { 16979, 1238122 },
+              forms = FORMS, size = 2, fixed = false, shield = true, want = "16979:1 1238122:2" },
+            { name = "a shield clause covers nothing",
+              list = { { id = 72, forms = { 17, 18 }, shield = true }, { id = 6552, forms = { 17, 18 } } },
+              known = { 72, 6552 }, forms = STANCES, size = 3, fixed = true, shield = true,
+              want = "72:1/2:shield 6552:1/2" },
+            { name = "a kick with no form covers every state",
+              list = { { id = 1766 }, { id = 6552, forms = { 19 } } },
+              known = { 1766, 6552 }, forms = STANCES, size = 3, fixed = true, shield = true, want = "1766:-" },
+        }
+        for _, row in ipairs(rows) do
+            assert.are.equal(row.want, clauseText(row), row.name)
+        end
+    end)
+
+    it("omits the stance condition only when every bar index is covered and every bar form is fixed", function()
+        local rows = {
+            { name = "three fixed stances: omitted", size = 3, fixed = true, want = "6552:3 72:-:shield" },
+            { name = "a form that can be left: kept", size = 3, fixed = false, want = "6552:3 72:1/2:shield" },
+            { name = "a fourth index no kick names: kept", size = 4, fixed = true, want = "6552:3 72:1/2:shield" },
+        }
+        for _, row in ipairs(rows) do
+            row.list, row.known, row.forms, row.shield = WARRIOR, { 6552, 72 }, STANCES, true
+            assert.are.equal(row.want, clauseText(row), row.name)
+        end
+    end)
+
+    it("gives a shield kick no clause without a shield name", function()
+        local row = { list = WARRIOR, known = { 6552, 72 }, forms = STANCES, size = 3, fixed = true, shield = false }
+        assert.are.equal("6552:3", clauseText(row))
+    end)
+
+    it("writes exactly the lines each option asks for", function()
+        local allOn = { KickStopCasting = true, KickMouseover = true, KickTargetFallback = true, KickMarkFocus = true }
+        local rows = {
+            {
+                name = "a warrior, every option on",
+                clauses = { { id = 6552, indices = { 3 } }, { id = 72, shield = true } },
+                names = { "Pummel", "Shield Bash" }, db = allOn,
+                want = "#showtooltip\n/stopcasting\n/cast [@focus,harm,nodead,stance:3][@mouseover,harm,nodead,stance:3]"
+                    .. "[stance:3] Pummel; [@focus,harm,nodead,equipped:Shields][@mouseover,harm,nodead,equipped:Shields]"
+                    .. "[equipped:Shields] Shield Bash\n/tm [@focus] ~8",
+            },
+            {
+                name = "two stance indices, every option off",
+                clauses = { { id = 410176, indices = { 1, 2 } } },
+                names = { "Skull Bash" }, db = {},
+                want = "#showtooltip\n/cast [@focus,harm,nodead,stance:1/2] Skull Bash",
+            },
+            {
+                name = "one clause with no condition, every option off",
+                clauses = { { id = 1766 } },
+                names = { "Kick" }, db = {},
+                want = "#showtooltip\n/cast [@focus,harm,nodead] Kick",
+            },
+        }
+        for _, row in ipairs(rows) do
+            assert.are.equal(row.want, FM.BuildForeverKickBody(row.clauses, row.names, "Shields", row.db, 8), row.name)
+        end
+    end)
+
+    it("refuses a body over 255 characters", function()
+        assert.is_nil(FM.BuildForeverKickBody({ { id = 1766 } }, { string.rep("x", 240) }, "Shields", {}, 0))
+    end)
+end)
+
