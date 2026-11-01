@@ -1234,6 +1234,9 @@ end
 function PS:OnDisable()
     KE.Context:Unsubscribe(KEY)
     GoIdle()
+    -- The Refresh GoIdle queues returns at once on a disabled module, so its
+    -- SetFeeds never turns the out-of-combat tier off.
+    if self.slots then self.slots:SetCalm(false) end
     if handle then
         handle:Release()
         handle = nil
