@@ -18,8 +18,8 @@
 --
 -- Report groups (allowlist: dev/scripts/luacheckrc-drift-allow.lua):
 --   [A] rc entries not in the API reference — non-allowlisted = failure
---   [B] rc entries unused in KE code      — ALWAYS advisory, never gates
---   [C] duplicate rc entries              — failure
+--   [B] rc entries unused in KE code        — ALWAYS advisory, never gates
+--   [C] duplicate rc entries                — failure
 --   [D] Register*Event literals not in documented events — failure
 -- Exit 1 only on non-allowlisted [A] / [C] / [D]; --soft forces exit 0.
 --
