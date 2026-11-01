@@ -45,7 +45,6 @@ local UnitCanAttack = UnitCanAttack
 local UnitIsDead = UnitIsDead
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local C_UnitAuras = C_UnitAuras
-local C_Secrets = C_Secrets
 local C_Timer = C_Timer
 local C_Map = C_Map
 local C_Scenario = C_Scenario
@@ -113,7 +112,7 @@ DTrash.tracked = {}   -- [unit] = runtime table
 DTrash.monitoring = false
 -- Load marker: increment it in every later commit that touches a shipped
 -- .lua, .xml or .toc file.
-DTrash._trashStateRevision = 2
+DTrash._trashStateRevision = 3
 DTrash.currentMapID = nil
 DTrash.inBossEncounter = false
 DTrash.bossEncounterID = nil
@@ -663,15 +662,12 @@ function DTrash:OnEnable()
     TI = TI or KE.TrashInference
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "EvaluateGate")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "EvaluateGate")
-    -- Lindormi's Guidance detection rides roster and role churn too.
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
     self:RegisterEvent("PLAYER_ROLES_ASSIGNED", "OnRosterChanged")
     self:EvaluateGate()
 end
 
 function DTrash:OnDisable()
-    -- A guidance check already scheduled must not prompt for a disabled module.
-    self._guidanceToken = (self._guidanceToken or 0) + 1
     self:StopMonitor()
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:UnregisterEvent("ZONE_CHANGED_NEW_AREA")
@@ -682,8 +678,6 @@ end
 -- Only run inside 5-man party instances — the event stream is dormant
 -- elsewhere, so the whole engine detaches outside dungeons (CPU gate).
 function DTrash:EvaluateGate()
-    -- Guidance check rides every world-enter and zone edge, 5s after settle.
-    self:ScheduleGuidanceCheck()
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "party" then
         self:StartMonitor()
@@ -845,89 +839,7 @@ function DTrash:OnEncounterEnd(_, encounterID)
     self:OnScenarioCriteriaChanged()  -- a kill advances bossProgressIndex
 end
 
--- ── Lindormi's Guidance warning ─────────────────────────────────────────────
--- Lindormi's Guidance (the keystone-NPC assist, aura 1295927 on the TANK)
--- changes what the cast/cd machinery observes mid-dungeon and makes the trash
--- timers fire wrong or not at all, so scan the tanks and tell the player to
--- turn it off at the NPC. Detection needs readable auras
--- (C_Secrets.ShouldAurasBeSecret() == false). Warn once per detection; the
--- aura clearing re-arms the warning.
-
-local GUIDANCE_AURA_ID = 1295927
-local GUIDANCE_CHECK_DELAY = 5   -- world-enter settle
-local GUIDANCE_ROSTER_DELAY = 1  -- roster/role churn coalesce
-local GUIDANCE_WARNING_TEXT = "Dungeon Trash Tracker: a tank in your group has"
-    .. " Lindormi's Guidance active - it breaks the trash cast timers."
-    .. " Have them disable it at the keystone NPC."
-
--- The prompt's accept. It does nothing; it gives the warning an owner, so a
--- re-detection closes the copy on screen instead of queueing a second.
-local function acknowledgeGuidance() end
-
-local function showGuidanceWarning()
-    KE:ClosePromptIfOwner(acknowledgeGuidance)
-    KE:CreatePrompt("Dungeon Trash Tracker", GUIDANCE_WARNING_TEXT,
-        false, nil, false, nil, nil, nil, nil, acknowledgeGuidance, nil,
-        "Okay", nil, nil, nil, { acceptOnly = true, waitIfBusy = true })
-end
-
--- Existence-probed + pcall'd aura presence, read by spellID. The player unit
--- has its own API.
-local function hasGuidanceAura(unit)
-    if not (C_UnitAuras and UnitExists(unit)) then return false end
-    if unit == "player" then
-        if type(C_UnitAuras.GetPlayerAuraBySpellID) ~= "function" then return false end
-        local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, GUIDANCE_AURA_ID)
-        return ok and aura ~= nil
-    end
-    if type(C_UnitAuras.GetUnitAuraBySpellID) ~= "function" then return false end
-    local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, unit, GUIDANCE_AURA_ID)
-    return ok and aura ~= nil
-end
-
-local function isTankUnit(unit)
-    if not (UnitExists(unit) and UnitGroupRolesAssigned) then return false end
-    local ok, role = pcall(UnitGroupRolesAssigned, unit)
-    return ok and canaccessvalue(role) and role == "TANK"
-end
-
--- The tank carrying the assist aura, if any. Player first, then party1-4.
-local function findGuidanceTank()
-    if isTankUnit("player") and hasGuidanceAura("player") then return "player" end
-    for i = 1, 4 do
-        local unit = "party" .. i
-        if isTankUnit(unit) and hasGuidanceAura(unit) then return unit end
-    end
-    return nil
-end
-
-function DTrash:CheckGuidanceWarning()
-    if not (C_Secrets and type(C_Secrets.ShouldAurasBeSecret) == "function") then return end
-    local ok, shouldBeSecret = pcall(C_Secrets.ShouldAurasBeSecret)
-    if not ok or shouldBeSecret ~= false then return end
-    if not findGuidanceTank() then
-        self._guidanceWarned = false  -- cleared → a later re-detect warns again
-        return
-    end
-    if self._guidanceWarned then return end
-    self._guidanceWarned = true
-    showGuidanceWarning()
-end
-
--- Token-guarded deferred check: every schedule
--- invalidates the previous one, so a roster-event burst collapses into a
--- single read after the last edge.
-function DTrash:ScheduleGuidanceCheck(delay)
-    self._guidanceToken = (self._guidanceToken or 0) + 1
-    local token = self._guidanceToken
-    C_Timer.After(delay or GUIDANCE_CHECK_DELAY, function()
-        if self._guidanceToken ~= token then return end
-        self:CheckGuidanceWarning()
-    end)
-end
-
 function DTrash:OnRosterChanged()
-    self:ScheduleGuidanceCheck(GUIDANCE_ROSTER_DELAY)
     -- Role churn can flip PlayerSeesTrashSpell from blocked to visible, and
     -- KE's arms are one-shot (a reveal consumed at fire time never re-arms):
     -- re-arm every tracked runtime from its still-correct anchors. Idempotent
