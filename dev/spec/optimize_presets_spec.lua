@@ -119,6 +119,37 @@ describe("Optimize presets", function()
             assert.equals("1", rec.cvars["gxWindow"])
             assert.equals("0", rec.cvars["gxMaximize"])
         end)
+
+        it("warns once when a refused window-mode write-back left the mode changed, and only then", function()
+            local warning = "|cffFF008CWarning:|r Window mode could not be restored."
+            for _, row in ipairs({
+                { name = "write-back accepted",                 refuse = nil,     moves = true,  warnings = 0 },
+                { name = "refused, mode unchanged",             refuse = "false", moves = false, warnings = 0 },
+                { name = "both refused by an error, both moved", refuse = "throw", moves = true,  warnings = 1 },
+            }) do
+                local OPT, rec = L.loadOptimize()
+                rec.cvars["gxWindow"] = "1"
+                rec.cvars["gxMaximize"] = "0"
+                rec.cvars["cameraFov"] = "70"
+                rec.refused["gxWindow"] = row.refuse
+                rec.refused["gxMaximize"] = row.refuse
+                if row.moves then
+                    -- A preset write that drags the window mode with it.
+                    rec.onWrite = function(cvar)
+                        if cvar == "cameraFov" then
+                            rec.cvars["gxWindow"] = "0"
+                            rec.cvars["gxMaximize"] = "1"
+                        end
+                    end
+                end
+                OPT:ApplyPreset("balanced", nil)
+                local warnings = 0
+                for _, line in ipairs(rec.prints) do
+                    if line == warning then warnings = warnings + 1 end
+                end
+                assert.equals(row.warnings, warnings, row.name)
+            end
+        end)
     end)
 
     describe("validating the stored preset", function()

@@ -509,8 +509,13 @@ function OPT:ApplyPreset(presetName, overrides)
         end
     end
 
+    -- Warn only when a refused write-back left the mode changed, so a write of
+    -- an unchanged value never warns.
+    local windowLost = false
     for cv, val in pairs(displayBackup) do
-        pcall(_SetCVar, cv, val)
+        if not TrySetCVar(cv, val) and GetRawValue(cv) ~= val then
+            windowLost = true
+        end
     end
 
     GetBackupDB().ActivePreset = presetName
@@ -521,6 +526,9 @@ function OPT:ApplyPreset(presetName, overrides)
     KE:Print(KE_GREEN .. applied .. " settings optimized (" .. label .. ")." .. KE_RESET)
     if failed > 0 then
         KE:Print(KE_ACCENT .. "Warning:|r " .. failed .. " settings could not be applied.")
+    end
+    if windowLost then
+        KE:Print(KE_ACCENT .. "Warning:|r Window mode could not be restored.")
     end
 end
 
