@@ -124,7 +124,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
         db.HealerExtAnchorFrameType = "SELECTFRAME"
         db.HealerExtParentFrame = HEALER_MANA
-        local p = db.HealerExtPosition
+        local p = KE.HealerExternalsRules.PositionTable(db, "HealerExtPosition")
         p.AnchorFrom, p.AnchorTo = points.AnchorFrom, points.AnchorTo
         p.XOffset, p.YOffset = points.XOffset, points.YOffset
         -- The box shows only in a party, so Healer Mana's party size is the

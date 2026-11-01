@@ -196,6 +196,17 @@ function Rules.MoverDetaches(fallback, pos, start)
         and pos.XOffset == start.XOffset and pos.YOffset == start.YOffset)
 end
 
+-- The saved position table under key, for every reader and writer of it. A
+-- value that is not a table, from a bad import or a hand edit, is replaced
+-- by an empty one, so no reader indexes it and a drop still saves.
+function Rules.PositionTable(db, key)
+    local pos = db[key]
+    if type(pos) == "table" then return pos end
+    pos = {}
+    db[key] = pos
+    return pos
+end
+
 -- The box's position context, "HEALER" or "DEFAULT". With the healer
 -- position on, the view the settings page shows wins while the box previews;
 -- otherwise a healer spec takes the healer position.

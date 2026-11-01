@@ -191,7 +191,7 @@ local function Placement(db)
         return Pot.DEFAULT_POSITION, screen, true
     end
     placement.anchorFrameType, placement.ParentFrame = kind, name
-    return db.PotionPosition, placement, false
+    return KE.HealerExternalsRules.PositionTable(db, "PotionPosition"), placement, false
 end
 
 -- A move takes every bar off its seat: the live rows and, while the preview
@@ -255,7 +255,7 @@ local function Register()
         elseif fallback then
             return Place(db)
         end
-        local p = db.PotionPosition
+        local p = KE.HealerExternalsRules.PositionTable(db, "PotionPosition")
         p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
         p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
         Place(db)

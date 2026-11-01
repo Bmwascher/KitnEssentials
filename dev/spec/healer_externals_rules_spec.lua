@@ -2,8 +2,9 @@
 -- (Modules/AuraTracking/PartyBuffs/HealerExternalsRules.lua): a spec's
 -- externals and their lengths, the box rows a member owns and shows, the
 -- order of the box's cells, who is inspected for the box, when the box is
--- on, when a roster change keeps the counts, and when an Edit Mode move
--- detaches the box. The rules run on DATA, never the shipped table.
+-- on, when a roster change keeps the counts, when an Edit Mode move
+-- detaches the box, and the position table its readers and writers use. The
+-- rules run on DATA, never the shipped table.
 local L = require("dev.spec._ke_loader")
 
 -- Specs 10 and 11 are two healer specs of one class, spec 20 one of another,
@@ -204,6 +205,31 @@ describe("HealerExternalsRules.MoverDetaches", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.MoverDetaches(case.fallback, case.pos, start), case.name)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.PositionTable", function()
+    it("hands back a saved position table, and stores a new empty one in place of any other value", function()
+        local R = loadRules()
+        local saved = { AnchorFrom = "TOP", AnchorTo = "TOP", XOffset = 1, YOffset = 2 }
+        local cases = {
+            { name = "a table", value = saved, want = saved },
+            { name = "nil" },
+            { name = "false", value = false },
+            { name = "true", value = true },
+            { name = "a number", value = 5 },
+            { name = "a string", value = "CENTER" },
+        }
+        for _, case in ipairs(cases) do
+            local db = { HealerExtPosition = case.value }
+            local got = R.PositionTable(db, "HealerExtPosition")
+            assert.are.equal(db.HealerExtPosition, got, case.name .. ": stored")
+            if case.want then
+                assert.are.equal(case.want, got, case.name)
+            else
+                assert.are.same({}, got, case.name)
+            end
         end
     end)
 end)

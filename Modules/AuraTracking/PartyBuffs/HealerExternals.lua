@@ -132,7 +132,7 @@ local function Placement(db)
         return HX.DEFAULT_POSITION, screen, true
     end
     placement.anchorFrameType, placement.ParentFrame = kind, name
-    return db[keys.pos], placement, false
+    return Rules.PositionTable(db, keys.pos), placement, false
 end
 
 -- With Use Healer Position on, the label names the position a drag writes.
@@ -229,7 +229,7 @@ local function SetPosition(pos)
     elseif fallback then
         return PlaceBox()
     end
-    local p = db[keys.pos]
+    local p = Rules.PositionTable(db, keys.pos)
     p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
     p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
     PlaceBox()
