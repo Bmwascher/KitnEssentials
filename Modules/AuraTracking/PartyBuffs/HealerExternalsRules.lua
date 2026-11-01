@@ -207,9 +207,7 @@ function Rules.PositionTable(db, key)
     return pos
 end
 
--- The box's position context, "HEALER" or "DEFAULT". With the healer
--- position on, the view the settings page shows wins while the box previews;
--- otherwise a healer spec takes the healer position.
+-- The page's view wins while the box previews.
 function Rules.PositionContext(useHealer, healerSpec, previewing, previewContext)
     if useHealer ~= true then return "DEFAULT" end
     if previewing == true and previewContext ~= nil then
