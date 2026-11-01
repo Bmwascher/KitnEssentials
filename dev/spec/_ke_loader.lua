@@ -3306,9 +3306,12 @@ function L.loadCCTrackerRules()
     return KE.CCTrackerRules, KE.CC_TRACKER_SEEDS
 end
 
--- Modules/DungeonTools/KicksCasts/PartyStopsRules.lua. Pure logic: nothing to stub.
+-- Modules/DungeonTools/KicksCasts/PartyStopsRules.lua on the shared inspector's
+-- rules, whose coverage test it calls. Pure logic: nothing to stub.
 function L.loadPartyStopsRules()
-    local KE = helpers.loadModule("Modules/DungeonTools/KicksCasts/PartyStopsRules.lua", {})
+    local KE = {}
+    helpers.loadModule("Modules/Core/GroupInspect/GroupInspectRules.lua", KE)
+    helpers.loadModule("Modules/DungeonTools/KicksCasts/PartyStopsRules.lua", KE)
     return KE.PartyStopsRules
 end
 
