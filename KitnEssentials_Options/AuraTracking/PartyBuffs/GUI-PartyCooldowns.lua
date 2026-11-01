@@ -424,20 +424,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         ApplySettings()
     end)
     manager:Register(strip, "cellsOn")
-    cardOrder:AddRow(rowStrip, ORDER_HEIGHT)
-    local rowOrderReset = GUIFrame:CreateRow(cardOrder.content, Theme.rowHeightLast)
-    local orderReset = GUIFrame:CreateButton(rowOrderReset, "Kitn Defaults", {
-        height = 24,
-        tooltip = "Class cooldowns, then racials, then trinkets.",
-        callback = function()
-            db.CooldownCategoryOrder = nil
-            ApplySettings()
-            RebuildPage()
-        end,
-    })
-    rowOrderReset:AddWidget(orderReset, 0.5)
-    manager:Register(orderReset, "cellsOn")
-    cardOrder:AddRow(rowOrderReset, Theme.rowHeightLast, 0)
+    cardOrder:AddRow(rowStrip, ORDER_HEIGHT, 0)
     yOffset = cardOrder:GetNextOffset()
 
     ----------------------------------------------------------------
