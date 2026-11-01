@@ -238,6 +238,11 @@ GUIFrame:RegisterContent("HealerManaParty", function(scrollChild, yOffset)
 
     local card = GUIFrame:CreateCard(scrollChild, "Party Mode", yOffset)
     manager:Register(card, "all")
+    if KE.HealerExternals then
+        card:AddNote("While Raid Cooldowns' " .. KE:Gold("Healer Mana Below") .. " applies (the box at its " ..
+            "default place, in its Default view), the Raid Cooldowns box stands at this tab's position while " ..
+            "it shows icons, and Healer Mana sits under it.")
+    end
     local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local hideOnHealerCheck = GUIFrame:CreateCheckbox(row, "Hide when my spec is a healer", {
         value = db.DisableOnHealer == true,

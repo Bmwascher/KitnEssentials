@@ -70,8 +70,19 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         activePosition = (db.UseHealerExtPosition == true and KE:IsPlayerHealerSpec()) and "HEALER" or "DEFAULT"
     end
     local healerView = activePosition == "HEALER"
+    -- While the box stacks on Healer Mana it stands at Healer Mana's position,
+    -- so the controls that set its Default position are grayed. The settings
+    -- decide it; with Healer Mana off the box is placed as before.
+    local function StackOn()
+        local hm = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
+        return db.HealerExtHealerManaBelow == true and KE.HealerExternals.Untouched(db)
+            and hm ~= nil and hm.Enabled == true
+    end
     -- Attaching sets the Default position, so the Healer view grays it.
-    manager:SetCondition("attachOn", function() return db.HealerExternals == true and not healerView end)
+    manager:SetCondition("attachOn", function()
+        return db.HealerExternals == true and not healerView and not StackOn()
+    end)
+    manager:SetCondition("freeOn", function() return db.HealerExternals == true and not StackOn() end)
     manager:SetCondition("healerOn", function()
         return db.HealerExternals == true and db.UseHealerExtPosition == true
     end)
@@ -90,11 +101,12 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         manager:Register(check, state)
     end
 
-    local function AddSlider(row, label, key, low, high, state)
+    local function AddSlider(row, label, key, low, high, state, tooltip)
         local slider = GUIFrame:CreateSlider(row, label, {
             min = low, max = high, step = 1,
             value = db[key],
             callback = function(val) db[key] = val; ApplySettings() end,
+            tooltip = tooltip,
         })
         row:AddWidget(slider, 0.5)
         manager:Register(slider, state)
@@ -120,6 +132,13 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         "Blessing of Sacrifice." ..
         "\n\nShows in a party wherever the " .. KE:Gold("General") .. " tab's " .. KE:Gold("Show In") ..
         " card allows. Never in a raid or an arena.")
+    -- The Healer view never stacks, so the note shows on the Default view only.
+    if db.HealerExternals == true and not healerView and StackOn() then
+        cardMain:AddNote("While it shows icons in a party, the box stands at Healer Mana's Party position, " ..
+            "with Healer Mana under it. Move both from " .. KE:Gold("Status Texts") .. " > " ..
+            KE:Gold("Healer Mana") .. " > " .. KE:Gold("Party") .. ", or in Edit Mode. Healer Mana's Raid mode " ..
+            "and this box's Healer position never stack.")
+    end
     local function Attach()
         local points = ATTACHED[db.HealerExtAttachSide] or ATTACHED.TOP
         db.HealerExtAnchorFrameType = "SELECTFRAME"
@@ -136,7 +155,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         RebuildPage()
     end
 
-    local rowM1 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeightLast)
+    local rowM1 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeight)
     local attach = GUIFrame:CreateButton(rowM1, "Attach to Healer Mana", {
         height = 24,
         tooltip = "Sets the Default position: places the box against the chosen side of the Healer Mana " ..
@@ -152,7 +171,8 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         value = db.HealerExtAttachSide,
         tooltip = "The side of the Healer Mana display the box attaches to. Grow is not changed: with Top and " ..
             "Grow Down, or Bottom and Grow Up, the icons after the first cover Healer Mana. While attached, a change " ..
-            "here attaches again and copies Healer Mana's Icon Size again.",
+            "here attaches again and copies Healer Mana's Icon Size again. New rows start on the side away from " ..
+            "Healer Mana.",
         callback = function(choice)
             db.HealerExtAttachSide = choice
             if db.HealerExtAnchorFrameType == "SELECTFRAME" and db.HealerExtParentFrame == HEALER_MANA then
@@ -162,7 +182,24 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     })
     rowM1:AddWidget(side, 0.5)
     manager:Register(side, "attachOn")
-    cardMain:AddRow(rowM1, Theme.rowHeightLast, 0)
+    cardMain:AddRow(rowM1, Theme.rowHeight)
+    local rowM2 = GUIFrame:CreateRow(cardMain.content, Theme.rowHeightLast)
+    local below = GUIFrame:CreateCheckbox(rowM2, "Healer Mana Below", {
+        value = db.HealerExtHealerManaBelow == true,
+        callback = function(checked)
+            db.HealerExtHealerManaBelow = checked
+            ApplySettings()
+            RebuildPage()
+        end,
+        tooltip = "While the box keeps its default place on top of Healer Mana (Attach to Healer Mana, Side Top), " ..
+            "the box takes Healer Mana's place: its first row sits where Healer Mana was, and Healer Mana sits " ..
+            "under the box, moving down one row for each new row. Healer Mana returns to its own place whenever " ..
+            "the box is hidden or empty. A box you moved or attached elsewhere, the Healer position, and Healer " ..
+            "Mana off or in Raid mode are not affected.",
+    })
+    rowM2:AddWidget(below, 0.5)
+    manager:Register(below, "on")
+    cardMain:AddRow(rowM2, Theme.rowHeightLast, 0)
     yOffset = cardMain:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -187,6 +224,8 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     cardDisplay:AddRow(rowD2, Theme.rowHeight)
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
     AddSlider(rowD3, "Text Size", "HealerExtTextSize", 8, 30, "text")
+    AddSlider(rowD3, "Icons Per Row", "HealerExtIconsPerRow", 1, 12, "on",
+        "Icons in each row, or in each column with Grow Up or Down. Shared by the Default and Healer views.")
     cardDisplay:AddRow(rowD3, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
 
@@ -245,7 +284,7 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
         onChangeCallback = ApplySettings,
     })
     -- The card's own SetEnabled drives its widgets.
-    manager:Register(posCard, healerView and "healerOn" or "on")
+    manager:Register(posCard, healerView and "healerOn" or "freeOn")
     yOffset = posOffset
 
     ----------------------------------------------------------------
