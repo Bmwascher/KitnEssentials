@@ -1218,7 +1218,13 @@ function KE:AddBorders(frame, color, borderParent)
 
     function frame:SetBorderColor(r, g, b, a)
         if not self.borders then return end
-        self._borderColor = { r, g, b, a or 1 }
+        -- Every writer gives the frame its own table, so it is reused in place.
+        local c = self._borderColor
+        if c then
+            c[1], c[2], c[3], c[4] = r, g, b, a or 1
+        else
+            self._borderColor = { r, g, b, a or 1 }
+        end
         for _, tex in pairs(self.borders) do
             tex:SetColorTexture(r, g, b, a or 1)
             -- SetColorTexture re-enables Blizzard's pixel-grid snap on the
