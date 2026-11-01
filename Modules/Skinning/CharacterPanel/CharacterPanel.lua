@@ -49,7 +49,7 @@ local function ElvUILoaded()
 end
 
 -- A Blizzard window's shown state can be secret. A secret answer, or no
--- frame, reads as not shown: that only skips a repaint until the next OnShow.
+-- frame, reads as not shown: the path a hidden window already takes.
 local function Shown(frame)
     if not frame then return false end
     local shown = frame:IsShown()
