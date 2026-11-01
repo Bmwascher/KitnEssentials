@@ -501,24 +501,28 @@ function SR:ScheduleWake(delay)
     if delay then self.wakeTimer = C_Timer.NewTimer(math_max(delay, STEP), WakeStep) end
 end
 
--- One pass: drop finished records, show the one that wins, and keep the
--- driver and the cooldown watch running only while a record is near.
+-- One pass: drop finished records and those of spells set to Off, show the
+-- one that wins, keep the cooldown watch while a record is near, and step
+-- every frame only while a near record's bar is running.
 function SR:Step()
     if not self.frame then return end
     local now, db, records = GetTime(), self.db, self.records
-    local near, wake = false, nil
+    local near, ticking, wake = false, false, nil
     for text, rec in pairs(records) do
         local phase = Rules.Phase(rec, now)
-        if phase == "OVER" then
+        if phase == "OVER" or (not rec.test and ModeOf(rec.id) == "OFF") then
             if DEBUG_SR then KE:Print("[SR] dropped " .. tostring(rec.name)) end
             records[text] = nil
         else
             local toStart = Rules.Countdown(rec, now)
             local lead = rec.test and Rules.TEST_LEAD or db.Lead
-            if phase ~= "WAIT" or toStart <= lead then
-                near = true
+            local isNear = phase ~= "WAIT" or toStart <= lead
+            if isNear then near = true end
+            if isNear and not rec.left then
+                ticking = true
             else
-                -- A paused record has no Lead deadline but still ages out.
+                -- A paused countdown is frozen, so it needs no per-frame step,
+                -- but the record still ages out.
                 local due = rec.born + Rules.MAX_AGE - now
                 if not rec.left and toStart - lead < due then due = toStart - lead end
                 if not wake or due < wake then wake = due end
@@ -539,8 +543,8 @@ function SR:Step()
     else
         self:HideCue()
     end
-    self:SetDriving(near)
-    self:ScheduleWake((not near) and wake or nil)
+    self:SetDriving(ticking)
+    self:ScheduleWake((not ticking) and wake or nil)
 end
 
 ---------------------------------------------------------------------------------
@@ -552,7 +556,7 @@ function SR:StartBar(owner, key, duration, text)
         return
     end
     local entry = self.entries[key]
-    if not entry then return end
+    if not entry or ModeOf(key) == "OFF" then return end
     Rules.Start(self.records, entry, owner, text, duration, GetTime())
     if DEBUG_SR then
         KE:Print(("[SR] bar %d %s, text %q, %.1f s"):format(key, tostring(entry.name), text, duration))
