@@ -2352,9 +2352,10 @@ function L.loadOptimize(overrides)
 
     local rec = { cvars = {}, prints = {}, events = {}, difficultyID = 0 }
 
-    -- `refused[cvar]` makes the client refuse that write: "throw" raises, as an
-    -- unknown or protected CVar does; "false" returns false, SetCVar's own
-    -- failure result. Every other write is stored and returns true.
+    -- `refused[cvar]` makes the client refuse that write: "throw" raises;
+    -- "false" returns false, SetCVar's own failure result; "nil" returns
+    -- nothing, as the live client does for a CVar it does not have. Every other
+    -- write is stored and returns true.
     -- `onWrite(cvar, value)`, when set, runs after each stored write. It lets a
     -- case make one write move another CVar, the only way a live value can
     -- differ from one ApplyPreset read earlier in the same call.
@@ -2363,6 +2364,7 @@ function L.loadOptimize(overrides)
         local how = rec.refused[cvar]
         if how == "throw" then error("refused: " .. cvar) end
         if how == "false" then return false end
+        if how == "nil" then return nil end
         rec.cvars[cvar] = tostring(value)
         if rec.onWrite then rec.onWrite(cvar, value) end
         return true

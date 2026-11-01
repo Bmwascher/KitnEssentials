@@ -341,7 +341,7 @@ local function ApplyHideHelptips()
             tutorialsWeSetCVar = true
         else
             local ok, set = pcall(SetCVar, "showTutorials", "0")
-            tutorialsWeSetCVar = ok and set ~= false
+            tutorialsWeSetCVar = ok and set == true
         end
         TutorialSweepAll()
         HideOpenTips()

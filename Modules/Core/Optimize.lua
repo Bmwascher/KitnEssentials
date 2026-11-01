@@ -352,10 +352,11 @@ local function GetRawValue(cvar)
     return nil
 end
 
--- SetCVar refuses a write by raising or by returning false.
+-- Only a true return means the write landed: SetCVar refuses by raising, by
+-- returning false, or by returning nothing (a CVar this client does not have).
 local function TrySetCVar(cvar, value)
     local ok, set = pcall(_SetCVar, cvar, value)
-    return ok and set ~= false
+    return ok and set == true
 end
 
 local function ReadStackMask()

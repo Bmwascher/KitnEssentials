@@ -129,7 +129,7 @@ local function newFixture(opts)
     -- observable; the tooltip/tutorial-fingerprint sweep machinery is left
     -- unstubbed on purpose (MainHelpPlateButtonMixin absent), so
     -- TutorialSweepAll/HideOpenTips both no-op safely.
-    _G.SetCVar = function(name, val) cvarSets[name] = val end
+    _G.SetCVar = function(name, val) cvarSets[name] = val; return true end
     _G.HelpTip = { Show = function() end }
     _G.ShowUIPanel = function() end
     _G.MainHelpPlateButtonMixin = nil
@@ -2230,6 +2230,7 @@ describe("Automation Hide Helptips tutorial restore", function()
             { name = "write lands",           seed = "1", refuse = nil,     writes = { "0", "1" } },
             { name = "write raises",          seed = "1", refuse = "throw", writes = {} },
             { name = "write returns false",   seed = "1", refuse = "false", writes = {} },
+            { name = "write returns nothing", seed = "1", refuse = "nil",   writes = {} },
         }) do
             local fx = newFixture()
             local AU = fx.AU
@@ -2239,6 +2240,7 @@ describe("Automation Hide Helptips tutorial restore", function()
             _G.SetCVar = function(name, val)
                 if refuse == "throw" then error("refused: " .. name) end
                 if refuse == "false" then return false end
+                if refuse == "nil" then return nil end
                 if name == "showTutorials" then writes[#writes + 1] = val end
                 return true
             end

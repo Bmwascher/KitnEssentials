@@ -126,6 +126,7 @@ describe("Optimize presets", function()
                 { name = "write-back accepted",                 refuse = nil,     moves = true,  warnings = 0 },
                 { name = "refused, mode unchanged",             refuse = "false", moves = false, warnings = 0 },
                 { name = "both refused by an error, both moved", refuse = "throw", moves = true,  warnings = 1 },
+                { name = "both returned nothing, both moved",    refuse = "nil",   moves = true,  warnings = 1 },
             }) do
                 local OPT, rec = L.loadOptimize()
                 rec.cvars["gxWindow"] = "1"
@@ -349,6 +350,7 @@ describe("Optimize presets", function()
             for _, row in ipairs({
                 { name = "leaving the key, toggle on", toggleOff = false, how = "false" },
                 { name = "toggle turned off",          toggleOff = true,  how = "throw" },
+                { name = "leaving the key, no return", toggleOff = false, how = "nil" },
             }) do
                 local OPT, rec = L.loadOptimize()
                 rec.cvars["graphicsViewDistance"] = "6"
@@ -422,8 +424,10 @@ describe("Optimize on a client without every CVar or without Mythic+", function(
         assert.equals("maxfps", OPT:GetActivePreset())
     end)
 
-    it("counts a write the client refuses, by an error or by a false return, as could not be applied", function()
-        for _, row in ipairs({ { name = "error", how = "throw" }, { name = "false return", how = "false" } }) do
+    it("counts a write the client refuses, by an error, a false return or no return, as could not be applied", function()
+        for _, row in ipairs({
+            { name = "error", how = "throw" }, { name = "false return", how = "false" }, { name = "no return", how = "nil" },
+        }) do
             local OPT, rec = L.loadOptimize()
             seedPresent(OPT, rec)
             rec.refused["cameraFov"] = row.how
@@ -438,7 +442,9 @@ describe("Optimize on a client without every CVar or without Mythic+", function(
     end)
 
     it("counts a revert the client refuses as not done: the row keeps its backup, and Revert All keeps it and says so", function()
-        for _, row in ipairs({ { name = "error", how = "throw" }, { name = "false return", how = "false" } }) do
+        for _, row in ipairs({
+            { name = "error", how = "throw" }, { name = "false return", how = "false" }, { name = "no return", how = "nil" },
+        }) do
             local OPT, rec = L.loadOptimize()
             _G.KitnEssentialsOptimizeDB = {
                 SavedSettings = { cameraFov = "70", maxFPS = "144" },
