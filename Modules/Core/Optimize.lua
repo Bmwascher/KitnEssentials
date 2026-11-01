@@ -57,7 +57,7 @@ OPT.Categories = {
             { cvar = "VSync",               optimal = "0",    name = "VSync",              desc = "Disabled" },
             { cvar = "MSAAQuality",          optimal = "0",    name = "Multisampling",      desc = "None" },
             { cvar = "LowLatencyMode",       optimal = "3",    name = "Low Latency Mode",   desc = "Reflex + Boost", forever = { optimal = "4", desc = "Reflex + Boost" } },
-            { cvar = "ffxAntiAliasingMode",  optimal = "4",    name = "Anti-Aliasing",      desc = "CMAA2" },
+            { cvar = "ffxAntiAliasingMode",  optimal = "4",    name = "Anti-Aliasing",      desc = "CMAA 2" },
         },
     },
     {
@@ -171,6 +171,20 @@ OPT.Categories = {
     },
 }
 
+local function LevelLabel(levels)
+    return function(v) return levels[tonumber(v) or -1] or v end
+end
+
+-- The game's own level names. A base CVar and its raid twin share one table,
+-- so the two cannot drift apart.
+local SHADOW_LEVELS        = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra", [5] = "Ultra High" }
+local SSAO_LEVELS          = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High", [4] = "Ultra" }
+local DEPTH_LEVELS         = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High" }
+local COMPUTE_LEVELS       = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High", [4] = "Ultra" }
+local OUTLINE_LEVELS       = { [0] = "Disabled", [1] = "Good", [2] = "High" }
+local TEXTURE_LEVELS       = { [0] = "Low", [1] = "Fair", [2] = "High" }
+local SPELL_DENSITY_LEVELS = { [0] = "Essential", [1] = "Reduced", [2] = "Everything" }
+
 -- Friendly display labels for CVar values
 local VALUE_LABELS = {
     renderScale = function(v)
@@ -182,17 +196,11 @@ local VALUE_LABELS = {
         return t[tonumber(v) or -1] or v
     end,
     LowLatencyMode = function(v)
-        local t = { [0] = "None", [1] = "Built-In", [2] = "Reflex", [3] = "Reflex+Boost", [4] = "XeLL" }
+        local t = { [0] = "Disabled", [1] = "Built-In", [2] = "Reflex", [3] = "Reflex+Boost", [4] = "XeLL" }
         return t[tonumber(v) or -1] or v
     end,
-    ffxAntiAliasingMode = function(v)
-        local t = { [0] = "None", [1] = "Image-Based", [2] = "Multisample", [4] = "CMAA2" }
-        return t[tonumber(v) or -1] or v
-    end,
-    graphicsShadowQuality = function(v)
-        local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
+    ffxAntiAliasingMode = LevelLabel({ [0] = "None", [1] = "FXAA Low", [2] = "FXAA High", [3] = "CMAA", [4] = "CMAA 2" }),
+    graphicsShadowQuality = LevelLabel(SHADOW_LEVELS),
     graphicsLiquidDetail = function(v)
         local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High" }
         return t[tonumber(v) or -1] or v
@@ -201,30 +209,12 @@ local VALUE_LABELS = {
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
         return t[tonumber(v) or -1] or v
     end,
-    graphicsSSAO = function(v)
-        local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
-    graphicsDepthEffects = function(v)
-        local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High" }
-        return t[tonumber(v) or -1] or v
-    end,
-    graphicsComputeEffects = function(v)
-        local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High" }
-        return t[tonumber(v) or -1] or v
-    end,
-    graphicsOutlineMode = function(v)
-        local t = { [1] = "Low", [2] = "High", [3] = "Ultra High" }
-        return t[tonumber(v) or -1] or v
-    end,
-    graphicsTextureResolution = function(v)
-        local t = { [1] = "Low", [2] = "High", [3] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
-    graphicsSpellDensity = function(v)
-        local t = { [0] = "Essential", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
+    graphicsSSAO = LevelLabel(SSAO_LEVELS),
+    graphicsDepthEffects = LevelLabel(DEPTH_LEVELS),
+    graphicsComputeEffects = LevelLabel(COMPUTE_LEVELS),
+    graphicsOutlineMode = LevelLabel(OUTLINE_LEVELS),
+    graphicsTextureResolution = LevelLabel(TEXTURE_LEVELS),
+    graphicsSpellDensity = LevelLabel(SPELL_DENSITY_LEVELS),
     graphicsProjectedTextures = function(v) return v == "1" and "Enabled" or "Disabled" end,
     graphicsViewDistance = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
     graphicsEnvironmentDetail = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
@@ -234,10 +224,7 @@ local VALUE_LABELS = {
         local t = { [0] = "Bilinear", [1] = "Trilinear", [2] = "2x Aniso", [3] = "4x Aniso", [4] = "8x Aniso", [5] = "16x Aniso" }
         return t[tonumber(v) or -1] or v
     end,
-    shadowRt = function(v)
-        local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
+    shadowRt = LevelLabel({ [0] = "Disabled", [1] = "Fair", [2] = "Good", [3] = "High" }),
     ResampleQuality = function(v)
         local t = { [0] = "Point", [1] = "Bilinear", [2] = "Bicubic", [3] = "FidelityFX SR 1.0" }
         return t[tonumber(v) or -1] or v
@@ -270,10 +257,7 @@ local VALUE_LABELS = {
     ffxLingeringVenari = function(v) return v == "1" and "Enabled" or "Disabled" end,
     -- Raid & BG graphics
     RAIDsettingsEnabled = function(v) return v == "1" and "Enabled" or "Disabled" end,
-    raidGraphicsShadowQuality = function(v)
-        local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
+    raidGraphicsShadowQuality = LevelLabel(SHADOW_LEVELS),
     raidGraphicsLiquidDetail = function(v)
         local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High" }
         return t[tonumber(v) or -1] or v
@@ -282,21 +266,12 @@ local VALUE_LABELS = {
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
         return t[tonumber(v) or -1] or v
     end,
-    raidGraphicsSSAO = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
-    raidGraphicsDepthEffects = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
-    raidGraphicsComputeEffects = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
-    raidGraphicsOutlineMode = function(v)
-        local t = { [1] = "Low", [2] = "High", [3] = "Ultra High" }
-        return t[tonumber(v) or -1] or v
-    end,
-    raidGraphicsTextureResolution = function(v)
-        local t = { [1] = "Low", [2] = "High", [3] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
-    raidGraphicsSpellDensity = function(v)
-        local t = { [0] = "Essential", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
-        return t[tonumber(v) or -1] or v
-    end,
+    raidGraphicsSSAO = LevelLabel(SSAO_LEVELS),
+    raidGraphicsDepthEffects = LevelLabel(DEPTH_LEVELS),
+    raidGraphicsComputeEffects = LevelLabel(COMPUTE_LEVELS),
+    raidGraphicsOutlineMode = LevelLabel(OUTLINE_LEVELS),
+    raidGraphicsTextureResolution = LevelLabel(TEXTURE_LEVELS),
+    raidGraphicsSpellDensity = LevelLabel(SPELL_DENSITY_LEVELS),
     raidGraphicsProjectedTextures = function(v) return v == "1" and "Enabled" or "Disabled" end,
     raidGraphicsViewDistance = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
     raidGraphicsEnvironmentDetail = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
@@ -324,9 +299,6 @@ local VALUE_LABELS = {
 
 -- A baseline load's levels where they differ from retail's. The lit set
 -- applies only while the client reports secondary lighting.
-local function LevelLabel(levels)
-    return function(v) return levels[tonumber(v) or -1] or v end
-end
 local FOREVER_FIVE_LEVELS = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
 local FOREVER_VALUE_LABELS = {
     LowLatencyMode = LevelLabel({ [0] = "Auto-detect", [1] = "Disabled", [2] = "Built-In", [3] = "Reflex", [4] = "Reflex+Boost", [5] = "XeLL" }),
