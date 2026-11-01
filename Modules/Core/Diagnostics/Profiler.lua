@@ -353,7 +353,7 @@ end
 -- collision groups too, and partial sharing does not group at all. The label
 -- claims only what was measured.
 local NAMES_SHOWN = 3
-local FRAME_CAVEAT = "Note: frames on one row reported identical counters. A handler several frames share is charged in full to each of them, so the rows do not add up. Not in these rows: C_Timer callbacks, and work run from a frame not listed here, such as Ace event callbacks."
+local FRAME_CAVEAT = "Note: frames on one row reported identical counters. Each figure is the full total of the frame's handlers, so a handler several frames share is counted for each of them and the rows do not add up. C_Timer callbacks are in no row; work an unlisted frame runs (such as Ace event callbacks) reaches a row only through a handler it shares with a listed frame."
 
 local function DescribeGroup(names, count, note)
     local notes = {}
@@ -551,7 +551,7 @@ local function PrintGroups(groups, n)
             index, group.selfMs, FormatCalls(group.selfCalls),
             FormatPerCall(group.selfMs, group.selfCalls),
             DescribeGroup(group.names, group.count,
-                group.sharedHandler == "mixed" and "also runs a KE handler" or nil))
+                group.sharedHandler == "mixed" and "also runs a handler not recognized as Blizzard's" or nil))
     end
 end
 

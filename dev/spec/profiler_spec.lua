@@ -685,7 +685,7 @@ end)
 
 describe("Profiler shared Blizzard handlers", function()
     local BLIZZARD_HEADER = "Frames running a shared Blizzard handler ("
-    local MIXED_NOTE = "also runs a KE handler"
+    local MIXED_NOTE = "also runs a handler not recognized as Blizzard's"
 
     local function scriptedFrame(scripts)
         local subject = frame()
