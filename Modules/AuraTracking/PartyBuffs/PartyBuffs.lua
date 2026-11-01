@@ -1304,7 +1304,7 @@ local function FillStyle(db, size, settings, cell)
     settings.Reverse          = true
     settings.ShowTimer        = db.ShowTimer == true
     settings.FontFace         = db.FontFace
-    settings.FontSize         = db.FontSize
+    settings.FontSize         = db.TimerFontSize
     settings.TimerFontSize    = db.TimerFontSize
     settings.FontOutline      = db.FontOutline
     settings.DecimalThreshold = db.DecimalThreshold

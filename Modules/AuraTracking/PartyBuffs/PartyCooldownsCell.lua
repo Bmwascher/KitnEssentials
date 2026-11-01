@@ -20,7 +20,6 @@ local UIParent = UIParent
 local geterrorhandler = geterrorhandler
 local issecretvalue = issecretvalue
 local math_floor = math.floor
-local math_max = math.max
 local pcall = pcall
 local table_concat = table.concat
 local tostring = tostring
@@ -280,7 +279,7 @@ local function DressCharges(c, style, e, px, level)
         end
         c.cnt, c.cntPart = part, nil
     end
-    local size = math_max(8, math_floor(style.fontSize * 0.85 + 0.5))
+    local size = style.fontSize
     for i = 1, 3 do
         local f = c.cnt[i]
         f:SetFrameLevel(level + 6)
