@@ -52,6 +52,9 @@ local union = {}
 local active, hooked = false, false
 local ticker
 local pendingGUID, pendingEntry, lastRequest, foreignAt
+-- Start of the current run of another addon's requests (Rules.ForeignRun),
+-- and the time of KE's last ask, so the cap restarts after each ask.
+local foreignSince
 -- The GUID whose answer is being handed out; rank reads are valid only then.
 -- answer numbers each answer handed out.
 local readingGUID
@@ -77,12 +80,16 @@ end
 -- shows another player.
 local function InspectViews()
     local inspectFrame, spells = _G.InspectFrame, _G.PlayerSpellsFrame
-    local talentsInspecting = false
+    local inspectShown, talentsInspecting = false, false
+    if inspectFrame then
+        local shown = inspectFrame:IsShown()
+        inspectShown = Rules.ViewInUse(shown, KE:IsSecretValue(shown))
+    end
     if spells and type(spells.IsInspecting) == "function" then
         local ok, inspecting = pcall(spells.IsInspecting, spells)
-        talentsInspecting = ok and inspecting == true
+        talentsInspecting = ok and Rules.ViewInUse(inspecting, KE:IsSecretValue(inspecting))
     end
-    return inspectFrame ~= nil and inspectFrame:IsShown() == true, talentsInspecting
+    return inspectShown, talentsInspecting
 end
 
 local function HasTree(trees, tree)
@@ -235,7 +242,7 @@ local function OnInspectReady(guid)
         end)
         readingGUID = nil
     end
-    if not (Rules.InspectInUse(InspectViews()) or Rules.ForeignBusy(GetTime(), foreignAt)) then
+    if not Rules.InspectInUse(InspectViews()) and Rules.MayClear(GetTime(), foreignAt) then
         pcall(ClearInspectPlayer)
     end
     local record = queue[guid]
@@ -290,9 +297,13 @@ local function Tick()
         now = now,
         lastRequest = lastRequest,
         foreignAt = foreignAt,
+        foreignSince = foreignSince,
     }, union)
     if not chosen then return end
     lastRequest = now
+    -- The next capped ask waits a full FOREIGN_CAP. After an ask outside a
+    -- run this is harmless: the next foreign request starts a new run.
+    foreignSince = now
     local entry = chosen.entry
     if pcall(NotifyInspect, entry.unit) then
         pendingGUID, pendingEntry = entry.guid, entry
@@ -314,7 +325,10 @@ end
 -- Another addon's inspect request. KE's own never reach the hook: they call
 -- the local captured at load, and the hook wraps only the global.
 local function OnForeignInspect()
-    if active then foreignAt = GetTime() end
+    if not active then return end
+    local now = GetTime()
+    foreignSince = Rules.ForeignRun(now, foreignAt, foreignSince)
+    foreignAt = now
 end
 
 -- The frame and the hook wait for the first owner with demand; a hook cannot
