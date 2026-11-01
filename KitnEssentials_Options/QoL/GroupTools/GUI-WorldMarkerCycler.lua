@@ -174,8 +174,6 @@ end)
 ----------------------------------------------------------------
 local ICON_SIZE = 36
 local ICON_SPACING = 8
-local SLOT_STEP = ICON_SIZE + ICON_SPACING
-local STRIP_WIDTH = 8 * ICON_SIZE + 7 * ICON_SPACING
 local STRIP_HEIGHT = ICON_SIZE + 12
 local MARKER_TEX = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
 
@@ -188,157 +186,15 @@ local function MarkerTexture(worldId)
     return MARKER_TEX .. (WORLD_TO_ICON[worldId] or worldId)
 end
 
-local function LayoutSlots(strip)
-    for i, slot in ipairs(strip._slots) do
-        slot:ClearAllPoints()
-        slot:SetPoint("LEFT", strip, "LEFT", (i - 1) * SLOT_STEP, 0)
-        slot.icon:SetTexture(MarkerTexture(slot.markerId))
-        slot:SetAlpha(1)
-    end
-end
-
-local function GetDropIndex(strip, cursorX)
-    local left = strip:GetLeft()
-    if not left then return 1 end
-    local idx = math.floor((cursorX - left) / SLOT_STEP) + 1
-    return math.max(1, math.min(8, idx))
-end
-
-local function SaveOrder(strip)
-    local onOrderChanged = strip._onOrderChanged
-    if not onOrderChanged then return end
-    local list = {}
-    for i, slot in ipairs(strip._slots) do
-        list[i] = slot.markerId
-    end
-    onOrderChanged(list)
-end
-
--- Attached to the dragged slot for the length of the drag only.
-local function SlotDragUpdate(slot)
-    local strip = slot._strip
-    local cursorX, cursorY = GetCursorPosition()
-    local scale = strip:GetEffectiveScale()
-    cursorX = cursorX / scale
-    cursorY = cursorY / scale
-
-    local ghost = strip._ghost
-    ghost:ClearAllPoints()
-    ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cursorX, cursorY)
-
-    local dropLine = strip._dropLine
-    local dropIdx = GetDropIndex(strip, cursorX)
-    dropLine:ClearAllPoints()
-    dropLine:SetPoint("CENTER", strip, "LEFT", (dropIdx - 1) * SLOT_STEP - (ICON_SPACING / 2), 0)
-    dropLine:Show()
-end
-
-local function ConstructDragStrip(parent)
-    local strip = CreateFrame("Frame", nil, parent)
-
-    local ghost = strip:CreateTexture(nil, "OVERLAY", nil, 7)
-    ghost:SetSize(ICON_SIZE, ICON_SIZE)
-    ghost:SetAlpha(0.7)
-    ghost:Hide()
-    strip._ghost = ghost
-
-    local dropLine = strip:CreateTexture(nil, "OVERLAY", nil, 6)
-    dropLine:SetSize(2, ICON_SIZE + 4)
-    dropLine:Hide()
-    strip._dropLine = dropLine
-
-    local slots = {}
-    strip._slots = slots
-    local owned = { strip }
-
-    for i = 1, 8 do
-        local slot = CreateFrame("Button", nil, strip)
-        slot:SetSize(ICON_SIZE, ICON_SIZE)
-        slot.markerId = i
-        slot._strip = strip
-
-        local icon = slot:CreateTexture(nil, "ARTWORK")
-        icon:SetAllPoints()
-        slot.icon = icon
-
-        slot:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
-        slot:EnableMouse(true)
-        slot:RegisterForDrag("LeftButton")
-
-        local function EndDrag()
-            slot:SetScript("OnUpdate", nil)
-            slot:SetAlpha(1)
-            strip._dragSlot = nil
-            ghost:Hide()
-            dropLine:Hide()
-        end
-        slot._endDrag = EndDrag
-
-        slot:SetScript("OnDragStart", function(self)
-            local unfinished = strip._dragSlot
-            if unfinished and unfinished ~= self then unfinished._endDrag() end
-            strip._dragSlot = self
-            ghost:SetTexture(MarkerTexture(self.markerId))
-            ghost:Show()
-            self:SetAlpha(0.3)
-            slot:SetScript("OnUpdate", SlotDragUpdate)
-        end)
-
-        slot:SetScript("OnDragStop", function(self)
-            if strip._dragSlot ~= self then return end
-            EndDrag()
-
-            local cursorX = GetCursorPosition()
-            cursorX = cursorX / strip:GetEffectiveScale()
-            local dropIdx = GetDropIndex(strip, cursorX)
-
-            local fromIdx
-            for idx, s in ipairs(slots) do
-                if s == self then
-                    fromIdx = idx
-                    break
-                end
-            end
-            if fromIdx and dropIdx ~= fromIdx then
-                table.insert(slots, dropIdx, table.remove(slots, fromIdx))
-            end
-
-            LayoutSlots(strip)
-            SaveOrder(strip)
-        end)
-
-        slots[i] = slot
-        owned[#owned + 1] = slot
-    end
-
-    function strip:SetOrder(order)
-        for i, slot in ipairs(slots) do
-            slot.markerId = order[i] or i
-        end
-        LayoutSlots(self)
-    end
-
-    function strip:Configure(order, onOrderChanged)
-        self:SetSize(STRIP_WIDTH, STRIP_HEIGHT)
-        self._onOrderChanged = onOrderChanged
-        dropLine:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
-        for _, slot in ipairs(slots) do
-            local hl = slot:GetHighlightTexture()
-            if hl then
-                hl:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.3)
-            end
-        end
-        self:SetOrder(order)
-    end
-
-    strip._keOwned = owned
-    return strip
-end
-
-GUIFrame:NewWidgetPool("wmc:dragstrip", ConstructDragStrip, function(strip)
-    local dragging = strip._dragSlot
-    if dragging then dragging._endDrag() end
-end)
+-- A slot spans one marker and its spacing, so the markers sit where a plain
+-- row of icons would.
+GUIFrame:NewDragOrderStripPool("wmc:dragstrip", {
+    slots = 8,
+    cell = ICON_SIZE + ICON_SPACING,
+    icon = ICON_SIZE,
+    height = STRIP_HEIGHT,
+    setIcon = function(tex, id) tex:SetTexture(MarkerTexture(id)) end,
+})
 
 ----------------------------------------------------------------
 -- Page
@@ -461,7 +317,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         width = 140,
         callback = function()
             strip:SetOrder({ 1, 2, 3, 4, 5, 6, 7, 8 })
-            SaveOrder(strip)
+            strip:Save()
         end,
     })
     defaultBtn:ClearAllPoints()
