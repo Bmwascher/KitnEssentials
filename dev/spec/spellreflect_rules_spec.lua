@@ -211,4 +211,28 @@ describe("spell reflect rules", function()
             assert.same({ case[4], case[5], case[6] }, { near, ticks, due }, "case " .. i)
         end
     end)
+
+    it("keeps a re-timed bar's press only while it reaches the new hit, and a refresh revives a canceled bar", function()
+        -- The bar ends at 102 and the hit is 3 s later; at 100.5 its window is open.
+        -- A press then lasts to 105.5, so it covers a hit moved up to 0.5 s later.
+        -- shift of the bar's end (s), canceled instead of pressed, same record, done, still canceled
+        local cases = {
+            { 0.1, false, true, true, false },
+            { 0.4, false, false, true, false },
+            { 1.0, false, false, nil, false },
+            { 0.1, true, true, nil, false },
+        }
+        for i, case in ipairs(cases) do
+            local records = {}
+            local first = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 2, 100)
+            if case[2] then
+                Rules.Stop(records, "bar", 100.5)
+            else
+                Rules.MarkPressed(records, 100.5)
+            end
+            local second = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 1.5 + case[1], 100.5)
+            assert.same({ case[3], case[4], case[5] }, { first == second, second.done, second.stopAt ~= nil },
+                "case " .. i)
+        end
+    end)
 end)

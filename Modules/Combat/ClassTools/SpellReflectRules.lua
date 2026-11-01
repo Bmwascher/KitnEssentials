@@ -34,6 +34,7 @@ local MODES = { ALWAYS = true, READY = true, OFF = true }
 
 -- Spell Reflection lasts 5 s, so a press this long before the hit is still up
 -- when it lands.
+Rules.REFLECT_LASTS = 5
 Rules.WINDOW = 4.5
 
 -- Window offsets from the cast start in seconds, negative before it, for the
@@ -108,8 +109,9 @@ end
 function Rules.Start(records, entry, owner, text, duration, now)
     local ends = now + duration
     local old = records[text]
+    -- A refresh also undoes a cancel: the bar came back within the grace.
     if old and not old.start and math_abs(old.ends - ends) < Rules.REFRESH_SLACK then
-        old.ends, old.left = ends, nil
+        old.ends, old.left, old.stopAt = ends, nil, nil
         return old
     end
     local rec = {
@@ -117,9 +119,14 @@ function Rules.Start(records, entry, owner, text, duration, now)
         owner = owner, ends = ends, born = now,
     }
     -- A retimed bar for a cast neither started nor canceled is the same cast:
-    -- it keeps the sounds already played and a press already made.
+    -- it keeps the sounds already played, and a press only while Spell
+    -- Reflection, pressed then, still lasts to the new window's close.
     if old and not old.start and not old.stopAt then
-        rec.readySounded, rec.notReadySounded, rec.done = old.readySounded, old.notReadySounded, old.done
+        rec.readySounded, rec.notReadySounded = old.readySounded, old.notReadySounded
+        local pressedAt = old.done and old.pressedAt
+        if pressedAt and pressedAt + Rules.REFLECT_LASTS >= rec.ends + rec.close then
+            rec.done, rec.pressedAt = true, pressedAt
+        end
     end
     records[text] = rec
     return rec
@@ -291,7 +298,7 @@ function Rules.MarkPressed(records, now)
     for _, rec in pairs(records) do
         local phase = Rules.Phase(rec, now)
         if not rec.done and (phase == "GO" or phase == "NOW") then
-            rec.done = true
+            rec.done, rec.pressedAt = true, now
             count = count + 1
         end
     end
