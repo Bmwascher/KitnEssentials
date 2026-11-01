@@ -42,7 +42,8 @@ end
 -- tree lacks, reads 0 without meaning untaken, so it is left out; a stop
 -- whose every need talent is absent is no talent for that spec and fits. A
 -- member is dropped only when every need talent left reads 0. A spec, then a
--- role, limits a stop only once known.
+-- role, limits a stop only once known; a specOnly stop waits for the spec.
+-- nospec drops a stop for a member whose known spec is that one.
 function Rules.Fits(stop, member, ranks, absent)
     if member.class ~= stop.class then return false end
     local need = stop.need
@@ -59,8 +60,10 @@ function Rules.Fits(stop, member, ranks, absent)
         end
         if left and not taken then return false end
     end
+    if stop.nospec ~= nil and member.spec == stop.nospec then return false end
     if stop.spec then
         if member.spec ~= nil then return member.spec == stop.spec end
+        if stop.specOnly then return false end
         if member.role ~= nil then return member.role == stop.role end
     end
     return true

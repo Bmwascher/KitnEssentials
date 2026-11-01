@@ -7,7 +7,9 @@
 -- seconds after the cast they land, and a start is backdated by it; cast
 -- lists other spell IDs the player's own cast can carry. need and mods name
 -- talent spell IDs: a member whose every need talent reads untaken gets no
--- icon. spec limits a stop to one spec, or to role while the spec is unread.
+-- icon. spec limits a stop to one spec, or to role while the spec is unread;
+-- specOnly drops the role, so the stop waits for the spec. nospec drops a stop
+-- for a member whose known spec is that one.
 -- hold marks a stop long enough to be up already on a newly watched enemy.
 -- aoe marks an area stop, which watches fewer enemies (Rules.Reach).
 
@@ -19,7 +21,9 @@ KE.PartyStopsData = Data
 
 Data.STOPS = {
     [119381] = { class = "MONK", cd = 60, debuffs = { 119381 }, aoe = true, mods = { { 344359, add = -5 } } },
-    [179057] = { class = "DEMONHUNTER", cd = 45, debuffs = { 179057 }, aoe = true, need = { 179057 } },
+    [179057] = { class = "DEMONHUNTER", cd = 45, debuffs = { 179057 }, aoe = true, need = { 179057 }, nospec = 1480 },
+    [1234195] = { class = "DEMONHUNTER", cd = 45, debuffs = { 1234195 }, aoe = true, spec = 1480, specOnly = true,
+        need = { 1234195 } },
     [30283] = { class = "WARLOCK", cd = 60, debuffs = { 30283 }, aoe = true, need = { 30283 }, mods = { { 1270255, add = -15 } } },
     [192058] = { class = "SHAMAN", cd = 60, debuffs = { 118905 }, aoe = true, lag = 2, need = { 192058 },
         mods = { { 381867, add = -5 }, { 265046, add = -10 }, { 445027, add = -5 } } },
@@ -47,7 +51,7 @@ Data.STOPS = {
 
 -- The stuns first, then the fears, knockbacks and grips.
 Data.ORDER = {
-    119381, 179057, 30283, 192058, 46968, 109248, 853, 19577,
+    119381, 179057, 1234195, 30283, 192058, 46968, 109248, 853, 19577,
     207167, 115750, 8122, 99, 5246, 207684, 202138, 108199, 102793, 132469, 2094,
 }
 

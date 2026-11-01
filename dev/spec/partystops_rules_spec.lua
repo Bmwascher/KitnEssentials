@@ -10,10 +10,12 @@ describe("party stops rules", function()
         Rules = L.loadPartyStopsRules()
     end)
 
-    it("gives a member a stop's icon by class, then need talents, then a known spec or role", function()
+    it("gives a member a stop's icon by class, then need talents, then a known spec or role; nospec drops one known spec, and a spec-only stop waits for the spec", function()
         local plain = { class = "MONK" }
         local needy = { class = "WARRIOR", need = { 1, 2 } }
         local tank = { class = "DEATHKNIGHT", spec = 250, role = "TANK" }
+        local notThree = { class = "MAGE", nospec = 3 }
+        local onlyThree = { class = "MAGE", spec = 3, specOnly = true }
         local cases = {
             { plain, { class = "PRIEST" }, nil, false },
             { needy, { class = "WARRIOR" }, { [1] = 0, [2] = 0 }, false },
@@ -28,6 +30,13 @@ describe("party stops rules", function()
             { tank, { class = "DEATHKNIGHT", role = "TANK" }, nil, true },
             { tank, { class = "DEATHKNIGHT", role = "DAMAGER" }, nil, false },
             { tank, { class = "DEATHKNIGHT" }, nil, true },
+            { notThree, { class = "MAGE", spec = 3 }, nil, false },
+            { notThree, { class = "MAGE", spec = 4 }, nil, true },
+            { notThree, { class = "MAGE", role = "DAMAGER" }, nil, true },
+            { onlyThree, { class = "MAGE", spec = 3 }, nil, true },
+            { onlyThree, { class = "MAGE", spec = 4, role = "DAMAGER" }, nil, false },
+            { onlyThree, { class = "MAGE", role = "DAMAGER" }, nil, false },
+            { onlyThree, { class = "MAGE" }, nil, false },
         }
         for i, case in ipairs(cases) do
             assert.equals(case[4], Rules.Fits(case[1], case[2], case[3], case[5]), "case " .. i)
