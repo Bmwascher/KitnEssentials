@@ -287,7 +287,7 @@ local SCRIPT_TYPES = {
     "OnReceiveDrag", "OnSizeChanged", "OnKeyDown", "OnKeyUp", "OnTabPressed",
     "OnEnterPressed", "OnEscapePressed", "OnTextChanged", "OnEditFocusGained",
     "OnEditFocusLost", "OnValueChanged", "OnCooldownDone", "OnScrollRangeChanged",
-    "OnEnable", "OnDisable", "OnColorSelect",
+    "OnEnable", "OnDisable", "OnColorSelect", "OnHyperlinkEnter", "OnHyperlinkLeave",
 }
 
 -- HookScript replaces the script with a combined function that is no global,
@@ -323,9 +323,12 @@ local function MarkSharedHandlerRows(rows)
     if not anyWanted then return end
 
     -- A Blizzard handler is a global function no addon has replaced or tainted.
+    -- A secret global cannot be used as a table key, so it is passed over.
     local blizzard = {}
     for key, value in pairs(_G) do
-        if wanted[value] and type(key) == "string" and issecurevariable(_G, key) then
+        if not (KE:IsSecretValue(key) or KE:IsSecretValue(value))
+            and type(key) == "string" and type(value) == "function"
+            and wanted[value] and issecurevariable(_G, key) then
             blizzard[value] = true
         end
     end
@@ -596,7 +599,7 @@ local function PrintCpuTop(arg)
         p("  No direct frame work recorded.")
     end
     if #blizzardGroups > 0 then
-        p("Blizzard template handlers only (whole-client totals, not KE code):")
+        p("Blizzard handlers only (whole-client totals, not KE code):")
         PrintGroups(blizzardGroups, n)
     end
     p(FRAME_CAVEAT)
