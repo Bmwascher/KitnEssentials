@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.7
+
+Dungeon Tools now runs on WoW Forever.
+
+### WoW Forever (Beta)
+
+- Dungeon Tools is available on WoW Forever: Death Notifications, Enemy
+  Counter, Targeted Spells, Dungeon Casts, CC Tracker, Focus Macros (marker
+  macro) and Keystone Helper's Instance Reset announcer, each off until you
+  turn it on
+- CC Tracker tracks Forever's long crowd controls at every rank: Polymorph,
+  Repentance, Turn Undead, Freezing Trap, Scare Beast, Sap, Blind, Banish,
+  Fear, Seduction, Hibernate, Entangling Roots and Shackle Undead
+- Dungeon Casts follows your kick through stance, form and shield changes
+- Focus Macros lists the nine Forever classes and announces your marker on a
+  ready check only when you know a kick
+- Settings and search show only the Dungeon Tools options that apply on
+  Forever
+
+---
+
 ## v4.15.6
 
 Teammate talents read even beside an addon that keeps inspecting, and the
