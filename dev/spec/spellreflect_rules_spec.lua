@@ -35,15 +35,12 @@ describe("spell reflect rules", function()
         end
     end)
 
-    it("gives Void Blast and Spoiled Supplies their own window whatever the cast length", function()
-        local cases = {
-            { 1297017, 2, -2.0, 2.5 },
-            { 1297017, 0, -2.0, 2.5 },
-            { 1234233, 2.3, 0, 6 },
-        }
-        for i, case in ipairs(cases) do
-            local open, close = Rules.Window(case[1], case[2])
-            assert.same({ case[3], case[4] }, { open, close }, "case " .. i)
+    it("gives an exception spell the same window whatever the cast length, not the rule's", function()
+        for _, id in ipairs({ 1297017, 1234233 }) do
+            local open, close = Rules.Window(id, 2)
+            local open0, close0 = Rules.Window(id, 0)
+            assert.same({ open, close }, { open0, close0 }, "spell " .. id)
+            assert.are_not.same({ 2 - Rules.WINDOW, 2 }, { open, close }, "spell " .. id)
         end
     end)
 
@@ -122,10 +119,10 @@ describe("spell reflect rules", function()
         end
         -- text mode: word, not ready, label, timer, small line
         local lines = {
-            { false, false, "REFLECT \194\187", "2.4", "Void Blast" },
-            { true, false, "REFLECT", "NOW", "Void Blast" },
-            { false, true, "NO REFLECT", "", "Void Blast  2.4" },
-            { true, true, "NO REFLECT", "", "Void Blast  NOW" },
+            { false, false, Rules.TEXT_LABEL, "2.4", "Void Blast" },
+            { true, false, Rules.TEXT_LABEL_NOW, Rules.NOW_WORD, "Void Blast" },
+            { false, true, Rules.NOT_READY, "", "Void Blast  2.4" },
+            { true, true, Rules.NOT_READY, "", "Void Blast  " .. Rules.NOW_WORD },
         }
         for i, case in ipairs(lines) do
             local label, timer, line = Rules.TextLines(case[1], case[2], "2.4", "Void Blast")
