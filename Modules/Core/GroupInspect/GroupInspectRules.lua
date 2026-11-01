@@ -23,6 +23,10 @@ Rules.TRY_WAIT = 30
 -- Seconds after another addon's inspect request in which nobody is asked and
 -- no answer is cleared: that request may still be reading the data.
 Rules.FOREIGN_GAP = 3
+-- Seconds into an unbroken run of another addon's requests after which one
+-- ask goes out anyway; an addon inspecting in a loop would otherwise hold
+-- every ask back for as long as the loop lasts.
+Rules.FOREIGN_CAP = 10
 -- Failed walks of one spec's tree before walks stop until a refresh.
 Rules.MAX_MISSES = 3
 
@@ -32,11 +36,35 @@ function Rules.InspectInUse(inspectShown, talentsInspecting)
     return inspectShown == true or talentsInspecting == true
 end
 
--- Whether another addon's inspect request, made at foreignAt, may still be in
--- use.
-function Rules.ForeignBusy(now, foreignAt)
-    if type(foreignAt) ~= "number" then return false end
-    return now - foreignAt < Rules.FOREIGN_GAP
+-- One view state as InspectInUse reads it. A secret state counts as in use,
+-- and is tested first so a secret is never compared.
+function Rules.ViewInUse(value, secret)
+    if secret then return true end
+    return value == true
+end
+
+-- Whether the inspect target may be cleared. Never within FOREIGN_GAP of
+-- another addon's request, at any run length: the answer would blank that
+-- request's read.
+function Rules.MayClear(now, foreignAt)
+    if type(foreignAt) ~= "number" then return true end
+    return now - foreignAt >= Rules.FOREIGN_GAP
+end
+
+-- Whether another addon's inspect request may still be in use, so nobody is
+-- asked. foreignSince starts the current run of such requests; the wait ends
+-- once the run is FOREIGN_CAP old. Without a run start it is never cut.
+function Rules.ForeignBusy(now, foreignAt, foreignSince)
+    if Rules.MayClear(now, foreignAt) then return false end
+    if type(foreignSince) == "number" and now - foreignSince >= Rules.FOREIGN_CAP then return false end
+    return true
+end
+
+-- The run start to keep when another addon's request arrives at now: a run
+-- begins at the first request and after FOREIGN_GAP without one.
+function Rules.ForeignRun(now, foreignAt, foreignSince)
+    if type(foreignSince) ~= "number" or Rules.MayClear(now, foreignAt) then return now end
+    return foreignSince
 end
 
 -- Whether a request made at lastRequest has gone unanswered too long.
@@ -45,13 +73,13 @@ function Rules.TimedOut(now, lastRequest)
 end
 
 -- At most one queue record per call, and none while an inspect view is in
--- use, in combat, within INSPECT_GAP seconds of the last request or within
--- FOREIGN_GAP seconds of another addon's. An offline GUID never answers, and
--- asking it would hold back everyone behind it.
+-- use, in combat, within INSPECT_GAP seconds of the last request or while
+-- another addon's request is busy (ForeignBusy). An offline GUID never
+-- answers, and asking it would hold back everyone behind it.
 function Rules.NextInspect(state, entries)
     if Rules.InspectInUse(state.inspectShown, state.talentsInspecting) or state.inCombat then return nil end
     if state.lastRequest and state.now - state.lastRequest < Rules.INSPECT_GAP then return nil end
-    if Rules.ForeignBusy(state.now, state.foreignAt) then return nil end
+    if Rules.ForeignBusy(state.now, state.foreignAt, state.foreignSince) then return nil end
     for _, e in ipairs(entries) do
         if not e.done and e.canInspect and not e.offline and not (e.waitUntil and state.now < e.waitUntil) then
             return e

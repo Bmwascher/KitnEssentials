@@ -145,6 +145,94 @@ describe("GroupInspectRules.NextInspect", function()
     end)
 end)
 
+describe("GroupInspectRules foreign cap", function()
+    it("refuses through a foreign run shorter than FOREIGN_CAP and asks at FOREIGN_CAP although the last request is inside FOREIGN_GAP", function()
+        local R = loadRules()
+        local entries = { entry("a") }
+        local since = 100
+        local cases = {
+            { name = "short of the cap", now = since + R.FOREIGN_CAP - 0.1 },
+            { name = "at the cap", now = since + R.FOREIGN_CAP, want = "a" },
+        }
+        for _, case in ipairs(cases) do
+            local state = { now = case.now, foreignAt = case.now - 1, foreignSince = since }
+            local got = R.NextInspect(state, entries)
+            assert.are.equal(case.want, got and got.name, case.name)
+        end
+    end)
+
+    it("starts a run at the first foreign request and after a FOREIGN_GAP quiet stretch, and keeps the run start otherwise", function()
+        local R = loadRules()
+        local cases = {
+            { name = "first request", now = 50, want = 50 },
+            { name = "inside the gap", now = 50, foreignAt = 48, since = 30, want = 30 },
+            { name = "after a quiet stretch", now = 50, foreignAt = 50 - R.FOREIGN_GAP, since = 30, want = 50 },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.ForeignRun(case.now, case.foreignAt, case.since), case.name)
+        end
+        -- The new run is short of the cap although the old one began long before.
+        local now = 50 + R.FOREIGN_CAP - 1
+        local state = { now = now, foreignAt = now - 1, foreignSince = R.ForeignRun(50, 50 - R.FOREIGN_GAP, 30) }
+        assert.is_nil(R.NextInspect(state, { entry("a") }), "new run, short of the cap")
+    end)
+
+    it("asks once per FOREIGN_CAP through a steady foreign loop", function()
+        local R = loadRules()
+        local entries = { entry("a") }
+        local period = R.FOREIGN_GAP - 1
+        local foreignAt, since, lastRequest
+        local asks = {}
+        for now = 0, 3 * R.FOREIGN_CAP do
+            -- The loop's request lands before the tick of the same second.
+            if now % period == 0 then
+                since = R.ForeignRun(now, foreignAt, since)
+                foreignAt = now
+            end
+            local state = { now = now, foreignAt = foreignAt, foreignSince = since, lastRequest = lastRequest }
+            if R.NextInspect(state, entries) then
+                lastRequest = now
+                -- As Tick does after every ask.
+                since = now
+                asks[#asks + 1] = now
+            end
+        end
+        assert.are.same({ R.FOREIGN_CAP, 2 * R.FOREIGN_CAP, 3 * R.FOREIGN_CAP }, asks)
+    end)
+
+    it("never allows a clear within FOREIGN_GAP of a foreign request, at any run length", function()
+        local R = loadRules()
+        local cases = {
+            { name = "inside the gap", foreignAt = 10.5 - R.FOREIGN_GAP, want = false },
+            { name = "at the gap", foreignAt = 10 - R.FOREIGN_GAP, want = true },
+            { name = "no foreign request", want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.MayClear(10, case.foreignAt), case.name)
+        end
+        -- Past the cap an ask may go out, and the clear is still refused.
+        local now = 100
+        assert.is_false(R.ForeignBusy(now, now - 1, now - R.FOREIGN_CAP), "past the cap, asking")
+        assert.is_false(R.MayClear(now, now - 1), "past the cap, clearing")
+    end)
+end)
+
+describe("GroupInspectRules view state", function()
+    it("counts a secret view state as in use whatever its value, and a plain one only when true", function()
+        local R = loadRules()
+        local cases = {
+            { name = "secret", value = { __secret = true }, secret = true, want = true },
+            { name = "secret, reads false", value = false, secret = true, want = true },
+            { name = "plain true", value = true, secret = false, want = true },
+            { name = "plain false", value = false, secret = false, want = false },
+            { name = "no frame", secret = false, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.ViewInUse(case.value, case.secret), case.name)
+        end
+    end)
+end)
+
 describe("GroupInspectRules.TimedOut", function()
     it("gives up on a request at TIMEOUT seconds and not before", function()
         local R = loadRules()
