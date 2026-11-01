@@ -30,6 +30,19 @@ local CLASS_ORDER = {
     { token = "WARRIOR",     name = "Warrior" },
 }
 
+-- Forever has nine classes.
+if KE.IS_FOREVER then
+    local FOREVER_CLASSES = {
+        DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true,
+        ROGUE = true, SHAMAN = true, WARLOCK = true, WARRIOR = true,
+    }
+    local kept = {}
+    for _, info in ipairs(CLASS_ORDER) do
+        if FOREVER_CLASSES[info.token] then kept[#kept + 1] = info end
+    end
+    CLASS_ORDER = kept
+end
+
 local KICK_ALL_ON = {
     KickStopCasting = true,
     KickMouseover = true,
@@ -220,16 +233,26 @@ local function BuildHeader(scrollChild, yOffset)
 
     -- A disabled module shows only this card: its switch and description.
     local disabled = db.Enabled == false
-    local FM = GetModule()
-    local kickName = FM and (", " .. KE:Gold(FM.KICK_MACRO_NAME) .. ",") or ""
-    card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
-        "a kick target can be called and taken together. With it on, the " .. KE:Gold("Focus Kick") .. " tab can add a second macro" ..
-        kickName .. " that casts your interrupt at that focus. Drag either from " .. KE:Gold("/macro") .. " onto " ..
-        "a bar; both are kept up to date as you change the settings below." ..
-        "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
-        "target." ..
-        "\n\nTurning this off leaves both macros alone rather than deleting them, in case you have put " ..
-        "them on a bar.")
+    if KE:IsFeatureAvailable("FocusMarkerKick") then
+        local FM = GetModule()
+        local kickName = FM and (", " .. KE:Gold(FM.KICK_MACRO_NAME) .. ",") or ""
+        card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
+            "a kick target can be called and taken together. With it on, the " .. KE:Gold("Focus Kick") .. " tab can add a second macro" ..
+            kickName .. " that casts your interrupt at that focus. Drag either from " .. KE:Gold("/macro") .. " onto " ..
+            "a bar; both are kept up to date as you change the settings below." ..
+            "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
+            "target." ..
+            "\n\nTurning this off leaves both macros alone rather than deleting them, in case you have put " ..
+            "them on a bar.")
+    else
+        card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
+            "a kick target can be called and taken together. Drag it from " .. KE:Gold("/macro") .. " onto " ..
+            "a bar; it is kept up to date as you change the settings below." ..
+            "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
+            "target." ..
+            "\n\nTurning this off leaves the macro alone rather than deleting it, in case you have put " ..
+            "it on a bar.")
+    end
 
     return card:GetNextOffset(), disabled
 end

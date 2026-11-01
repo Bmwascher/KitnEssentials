@@ -91,10 +91,19 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Dungeon Tools",
         defaultExpanded = false,
         items = {
-            { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "reroll", "key", "announcer", "mythic", "m+", "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "quick create", "list group", "playstyle", "teleport", "dungeon teleport", "reminder", "popup", "portal" } },
+            { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "key", "announcer", "dungeon" },
+                gatedKeywords = {
+                    KeystoneHelperReminders = { "reroll", "mythic", "m+", "reminder" },
+                    KeystoneHelperGeneral = { "group finder", "lfg", "premade", "affix", "filter", "sort", "raider io", "quick create", "list group", "playstyle", "teleport", "dungeon teleport", "popup", "portal" },
+                } },
             { id = "DungeonAlerts",               text = "Dungeon Alerts", keywords = { "death notifications", "death", "notification", "died", "dead", "party", "m+", "mythic", "enemy counter", "enemy", "counter", "count", "mobs", "pull", "nameplate", "targeted spells", "targeted", "spells", "cast", "incoming", "self", "target", "warning" } },
             { id = "DTimers_Main", text = "Dungeon Timers", keywords = { "dungeon timers", "timer", "timers", "bigwigs", "boss", "season", "enable", "general", "bar", "bars", "color", "texture", "size", "text", "font", "label", "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon", "algethar", "aa", "mgt", "pos", "sott" } },
-            { id = "KicksCasts",                  text = "Kicks & Casts", keywords = { "focus", "marker", "focus marker", "focus macros", "macro", "builder", "raid marker", "kick", "interrupt", "focus kick", "interrupt tracker", "tracker", "cc", "stop", "party", "m+", "dungeon casts", "dungeon cast", "cast", "mob", "enemy", "castbar", "cc tracker", "crowd control", "polymorph", "ring of frost", "hex", "repentance", "turn evil", "freezing trap", "scare beast", "sap", "blind", "banish", "fear", "seduction", "mesmerize", "hibernate", "entangling roots", "imprison", "sleep walk", "paralysis", "shackle horror" } },
+            { id = "KicksCasts",                  text = "Kicks & Casts", keywords = { "focus", "marker", "focus marker", "focus macros", "macro", "builder", "raid marker", "kick", "interrupt", "tracker", "cc", "m+", "dungeon casts", "dungeon cast", "cast", "mob", "enemy", "castbar", "cc tracker", "crowd control", "polymorph", "ring of frost", "hex", "repentance", "turn evil", "freezing trap", "scare beast", "sap", "blind", "banish", "fear", "seduction", "mesmerize", "hibernate", "entangling roots", "imprison", "sleep walk", "paralysis", "shackle horror" },
+                gatedKeywords = {
+                    FocusMarkerKick = { "focus kick" },
+                    KickTracker = { "interrupt tracker" },
+                    PartyStops = { "stop", "party" },
+                } },
         },
     },
     {

@@ -3,10 +3,14 @@
 -- availability policy, loaded as a baseline or a retail load: a block the
 -- client does not run is dropped and named when it was on, retail drops
 -- nothing, and a malformed block is refused on both. The payload and the
--- defaults are synthetic; the ids are real (DamageMeter and the CVars owner of
--- the Automation block admitted, PartyBuffs and EnemyCounter withheld).
+-- defaults are synthetic; the ids are real (DamageMeter, KeystoneHelper, the
+-- CVars owner of the Automation block and the Dungeons sub-blocks
+-- EnemyCounter and DungeonCasts admitted; PartyBuffs and HuntersMark, the
+-- top-level block that was on by default, withheld).
 -- VantusRune is the withheld block that was off: its runes are retail items,
--- so Forever never admits it.
+-- so Forever never admits it. Dungeons.DungeonTimers is a made-up sub-block
+-- under a real id that Forever never admits, so the nested drop holds
+-- whatever other Dungeons modules are admitted.
 local helpers = require("dev.spec._helpers")
 
 local function load(baseline)
@@ -22,13 +26,13 @@ local DEFAULTS = {
     GlobalFont = "Expressway",
     DamageMeter = { Enabled = false },
     PartyBuffs = { Enabled = false },
-    CustomCooldowns = { Enabled = true },
+    HuntersMark = { Enabled = true },
     VantusRune = { Enabled = false },
     -- A container: Enabled ships true, the feature switches are the real ones.
     KeystoneHelper = { Enabled = true, ResetEnabled = false, RerollEnabled = false, YourKeyEnabled = false },
     Skinning = { Chat = { Enabled = true } },
     Automation = { Enabled = false, CVarsEnabled = true },
-    Dungeons = { EnemyCounter = { Enabled = false }, DungeonCasts = { Enabled = false } },
+    Dungeons = { EnemyCounter = { Enabled = false }, DungeonCasts = { Enabled = false }, DungeonTimers = { Enabled = false } },
 }
 
 local function payload()
@@ -37,13 +41,13 @@ local function payload()
         DamageMeter = { Enabled = true },
         PartyBuffs = { Enabled = true },
         -- Enabled absent: the default, which is on.
-        CustomCooldowns = { Spells = {} },
+        HuntersMark = { Scale = 1 },
         VantusRune = { Enabled = false },
         -- Container on, every feature off: not on.
         KeystoneHelper = { Enabled = true },
         Skinning = { Chat = { Enabled = true } },
         Automation = { Enabled = true, alwaysCompareItems = true },
-        Dungeons = { EnemyCounter = { Enabled = true }, DungeonCasts = { Enabled = false } },
+        Dungeons = { EnemyCounter = { Enabled = true }, DungeonCasts = { Enabled = false }, DungeonTimers = { Enabled = true } },
     }
 end
 
@@ -56,15 +60,13 @@ describe("ProfileManager.FilterForClient", function()
         assert.is_table(profile.DamageMeter)
         assert.is_table(profile.Skinning)
         assert.is_table(profile.Automation)
+        assert.same({ Enabled = true }, profile.KeystoneHelper)
         assert.is_nil(profile.PartyBuffs)
-        assert.is_nil(profile.CustomCooldowns)
+        assert.is_nil(profile.HuntersMark)
         assert.is_nil(profile.VantusRune)
-        -- The container stays, emptied; AceDB refills its sub-blocks.
-        assert.same({}, profile.Dungeons)
-        assert.is_nil(profile.KeystoneHelper)
-        assert.same({ "Custom Cooldowns", "Enemy Counter", "Party Buffs" }, dropped)
-        -- The same container with one feature switch on is named.
-        assert.same({ "Keystone Helper" }, PM.FilterForClient({ KeystoneHelper = { YourKeyEnabled = true } }, DEFAULTS))
+        -- The container keeps its admitted sub-blocks; AceDB refills a dropped one.
+        assert.same({ EnemyCounter = { Enabled = true }, DungeonCasts = { Enabled = false } }, profile.Dungeons)
+        assert.same({ "Dungeon Timers", "Hunters Mark", "Party Buffs" }, dropped)
     end)
 
     it("drops nothing on a retail load", function()
@@ -106,7 +108,8 @@ describe("ProfileManager:ExportProfile on a baseline load", function()
         assert.equals("forever", sent._c)
         assert.is_table(sent.d.DamageMeter)
         assert.is_nil(sent.d.PartyBuffs)
-        assert.is_nil(sent.d.Dungeons.EnemyCounter)
+        assert.is_table(sent.d.Dungeons.EnemyCounter)
+        assert.is_nil(sent.d.Dungeons.DungeonTimers)
         assert.same(payload(), live)
     end)
 end)

@@ -101,6 +101,23 @@ local FOREVER_ALLOWED = {
     AuraExternals = true,
     AuraMovement = true,
     TotemTracker = true,
+    -- Dungeon Tools: Death Notifications, Enemy Counter and Targeted Spells
+    -- on the Dungeon Alerts row; Dungeon Casts, CC Tracker and Focus Macros'
+    -- Focus Marker tab on the Kicks & Casts row; Keystone Helper with its
+    -- Instance Reset tab. The Interrupt Tracker, Party Stops, Focus Kick,
+    -- the keystone reminders, the group finder pages and Dungeon Timers stay
+    -- withheld.
+    DeathNotifications = true,
+    EnemyCounter = true,
+    TargetedSpells = true,
+    DungeonCasts = true,
+    CCTracker = true,
+    FocusMarker = true,
+    KeystoneHelper = true,
+    DungeonAlerts = true,
+    KicksCasts = true,
+    FocusMarkerMarker = true,
+    KeystoneHelperReset = true,
     -- QoL: the Quality of Life page with its Spell Alerts, Move Frames, Copy
     -- Anything and Slash Commands tabs, Secondary Stats, and the Group Tools
     -- row with its Ready Check tab. Great Vault Alert, Raid Notifications,

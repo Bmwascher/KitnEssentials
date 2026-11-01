@@ -93,14 +93,17 @@ end
 
 -- The name lookup answers the common case in one call. Only a hit in the other
 -- range means a same-named macro may still sit in ours, and only that pays for
--- a scan, bounded by the range's macro count.
+-- a scan, bounded by the range's macro count. A client without the lookup
+-- always scans.
 local function FindMacroInRange(name, characterRange)
     local first = characterRange and MAX_ACCOUNT_MACROS + 1 or 1
     local capacity = characterRange and MAX_CHARACTER_MACROS or MAX_ACCOUNT_MACROS
-    local hit = GetMacroIndexByName(name)
-    local where = FM.ClassifyMacroHit(hit, first, first + capacity - 1)
-    if where == "own" then return hit end
-    if where == "miss" then return nil end
+    if GetMacroIndexByName then
+        local hit = GetMacroIndexByName(name)
+        local where = FM.ClassifyMacroHit(hit, first, first + capacity - 1)
+        if where == "own" then return hit end
+        if where == "miss" then return nil end
+    end
     local numAccount, numCharacter = GetNumMacros()
     local count = (characterRange and numCharacter or numAccount) or 0
     for i = first, first + count - 1 do
@@ -381,6 +384,14 @@ function FM:OnKickSpellDataLoaded(_, spellID, success)
     end
 end
 
+-- Withheld with its tab, so a saved or imported Focus Kick switch cannot
+-- register events or write the macro.
+local KICK_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("FocusMarkerKick") == true
+
+function FM.KickOn(db, admitted)
+    return (admitted and db and db.KickMacroEnabled) and true or false
+end
+
 -- Macro writes are refused in combat, so a combat refresh only marks itself
 -- pending; the drain recomputes from live state, never a body built before it.
 function FM.KickRefreshAction(enabled, kickOn, inCombat)
@@ -390,7 +401,7 @@ function FM.KickRefreshAction(enabled, kickOn, inCombat)
 end
 
 function FM:RefreshKickMacro()
-    local action = FM.KickRefreshAction(self:IsEnabled(), self.db.KickMacroEnabled, InCombatLockdown())
+    local action = FM.KickRefreshAction(self:IsEnabled(), FM.KickOn(self.db, KICK_ADMITTED), InCombatLockdown())
     if action == "skip" then return end
     if action == "defer" then
         self.pendingKick = true
@@ -433,7 +444,7 @@ end
 -- The enabled check matters: the settings page calls ApplySettings on a
 -- disabled module too, and AceEvent would register on it.
 function FM:UpdateKickEvents()
-    if self:IsEnabled() and self.db.KickMacroEnabled then
+    if self:IsEnabled() and FM.KickOn(self.db, KICK_ADMITTED) then
         self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnKickUnitEvent")
         self:RegisterEvent("SPELLS_CHANGED", "OnKickSpellsChanged")
         -- Only warlock interrupts come from a pet.
@@ -474,10 +485,18 @@ end
 -- SendChatMessage is refused while chat messaging is locked, which a running
 -- keystone does between pulls with no combat lockdown. The caller checks the
 -- lock and sends in the same tick, so nothing can change between the two.
-function FM.AnnounceAllowed(specID, inGroup, inRaid, inCombat, chatLocked)
+function FM.AnnounceAllowed(specID, inGroup, inRaid, inCombat, chatLocked, knowsKick)
     if specID and NO_KICK_SPECS[specID] then return false end
+    if knowsKick == false then return false end
     if not inGroup or inRaid or inCombat or chatLocked then return false end
     return true
+end
+
+-- Forever's spec ids never match NO_KICK_SPECS, so a known kick stands in;
+-- nil elsewhere, which AnnounceAllowed ignores.
+local function ForeverKnowsKick(specID)
+    if not (KE.IS_FOREVER and specID) then return nil end
+    return FM.PickKickSpell(KE:GetInterruptCandidatesForSpec(specID), nil, IsKickKnown) ~= nil
 end
 
 -- The effective marker as its index, 1 to 8; nil for None.
@@ -492,7 +511,7 @@ function FM:_AnnounceFocusMarkerOnReadyCheck()
     if not db.AnnounceReadyCheck then return end
     local specID = KE:GetPlayerSpecId()
     if not FM.AnnounceAllowed(specID, IsInGroup(), IsInRaid(), InCombatLockdown(),
-        KE:IsChatMessagingLocked()) then
+        KE:IsChatMessagingLocked(), ForeverKnowsKick(specID)) then
         return
     end
     local index = self:MarkerIndex()
@@ -519,8 +538,9 @@ end
 -- instance, with a marker to tell. A nil kind skips that message.
 function FM:SendMarkerMessages(euiKind, mdtKind)
     if not self.db.AnnounceReadyCheck or not InPartyInstance() then return end
-    if not FM.AnnounceAllowed(KE:GetPlayerSpecId(), IsInGroup(), IsInRaid(), InCombatLockdown(),
-        KE:IsChatMessagingLocked()) then
+    local specID = KE:GetPlayerSpecId()
+    if not FM.AnnounceAllowed(specID, IsInGroup(), IsInRaid(), InCombatLockdown(),
+        KE:IsChatMessagingLocked(), ForeverKnowsKick(specID)) then
         return
     end
     local index = self:MarkerIndex()

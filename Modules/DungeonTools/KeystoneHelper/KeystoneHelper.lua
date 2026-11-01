@@ -445,7 +445,12 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
--- One setup for all three features, taken while any of them is on.
+-- Withheld with their tab, so a saved or imported reminder switch cannot
+-- start a reminder, its events, its mover or its preview.
+local REMINDERS_ADMITTED = not KE.IsFeatureAvailable or KE:IsFeatureAvailable("KeystoneHelperReminders") == true
+
+-- One setup for all three features, taken while any of them is on. Every
+-- event here serves a reminder.
 local FEATURE_EVENTS = {
     { "CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted" },
     { "CHALLENGE_MODE_START", "OnChallengeModeStart" },
@@ -456,14 +461,18 @@ local FEATURE_EVENTS = {
     { "PLAYER_LEAVING_WORLD", "OnPlayerLeavingWorld" },
 }
 
--- Truthiness, the way each handler reads its own flag.
-function KH.AnyFeatureOn(db)
+-- Truthiness, the way each handler reads its own flag. Withheld reminders
+-- count as off.
+function KH.AnyFeatureOn(db, remindersWithheld)
     if not db then return false end
-    return (db.ResetEnabled or db.RerollEnabled or db.YourKeyEnabled) and true or false
+    if db.ResetEnabled then return true end
+    if remindersWithheld then return false end
+    return (db.RerollEnabled or db.YourKeyEnabled) and true or false
 end
 
 function KH:SetupFeatures()
     self:ApplyResetHook()
+    if not REMINDERS_ADMITTED then return end
     for _, entry in ipairs(FEATURE_EVENTS) do
         self:RegisterEvent(entry[1], entry[2])
     end
@@ -480,7 +489,7 @@ function KH:TeardownFeatures()
 end
 
 function KH:ApplySettings()
-    if self:IsEnabled() and KH.AnyFeatureOn(self.db) then
+    if self:IsEnabled() and KH.AnyFeatureOn(self.db, not REMINDERS_ADMITTED) then
         self:SetupFeatures()
     else
         self:TeardownFeatures()
@@ -515,6 +524,7 @@ end
 -- which the preview shows first.
 ---------------------------------------------------------------------------------
 function KH:RegisterEditModeElement()
+    if not REMINDERS_ADMITTED then return end
     if not KE.EditMode then return end
 
     -- By name until the frame exists: frames are built on first show, and Edit
@@ -552,6 +562,7 @@ function KH:PreviewFrame()
 end
 
 function KH:ShowPreview()
+    if not REMINDERS_ADMITTED then return end
     self:CreateRerollFrame()
     self:CreateYourKeyFrame()
     self:RegisterEditModeElement()
@@ -617,7 +628,7 @@ function KH:OnEnable()
     -- the module reaches here and not ApplySettings.
     self:ApplyReminders()
     self:RegisterEditModeElement()
-    if KH.AnyFeatureOn(self.db) then self:SetupFeatures() end
+    if KH.AnyFeatureOn(self.db, not REMINDERS_ADMITTED) then self:SetupFeatures() end
 end
 
 function KH:OnDisable()

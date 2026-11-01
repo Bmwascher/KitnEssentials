@@ -668,6 +668,11 @@ function DC:CacheKickSpell()
     end
 end
 
+function DC:OnEquipmentChanged(_, slot)
+    if slot ~= (INVSLOT_OFFHAND or 17) then return end
+    self:CacheKickSpell()
+end
+
 -- Interrupts are off the global cooldown, so the GCD is ignored.
 function DC:ReadKickCooldown()
     return H.ReadKickCooldown(self.interruptId, true)
@@ -1472,6 +1477,12 @@ function DC:OnEnable()
     KE.Context:SubscribeSpec("DungeonCasts", OnPlayerSpecChanged)
     self:RegisterEvent("SPELLS_CHANGED", "CacheKickSpell")
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheKickSpell")
+    -- Forever kicks also depend on the stance or form and, for Shield Bash,
+    -- on the off-hand.
+    if KE.IS_FOREVER then
+        self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "CacheKickSpell")
+        self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnEquipmentChanged")
+    end
     self:CacheKickSpell()
 
     KE.Context:Subscribe("DungeonCasts", CONTEXT_SUBSCRIPTION)
