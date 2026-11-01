@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.15.10
+
+An easier-to-read `/kes profiler cpu` report.
+
+### Profiler
+
+- `/kes profiler cpu` lists frames that run one of Blizzard's shared
+  handlers under their own heading. Those totals cover every addon using the
+  handler, so they no longer top KitnEssentials' own ranking
+- Every line of the report is reworded to read plainly: time used, calls,
+  time per call, and which frames share a row
+
+---
+
 ## v4.15.9
 
 Class Tools, Combat Res and the rest of the Status Texts now run on WoW
