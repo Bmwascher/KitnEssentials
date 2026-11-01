@@ -207,12 +207,19 @@ describe("Widen character window: the guard runs before any write", function()
         assert.equals(0, writes())
     end)
 
-    it("writes NOTHING when the paper doll tab is not up", function()
-        local CP = loadCP()
-        local writes = fakeSheet(false)
-        CP.db = { Enabled = true, WiderFrame = true }
-        CP._ApplyWiden()
-        assert.equals(0, writes())
+    -- A secret answer takes the same path: the widen reads it as not shown.
+    it("writes NOTHING when the paper doll tab is not up or its shown state is secret", function()
+        local saved = _G.issecretvalue
+        finally(function() _G.issecretvalue = saved end)
+        local SECRET = {}
+        for _, case in ipairs({ { name = "not up", shown = false }, { name = "secret", shown = SECRET } }) do
+            local CP = loadCP()
+            _G.issecretvalue = function(v) return v == SECRET end
+            local writes = fakeSheet(case.shown)
+            CP.db = { Enabled = true, WiderFrame = true }
+            CP._ApplyWiden()
+            assert.equals(0, writes(), case.name)
+        end
     end)
 
     -- The control. Without it the two cases above would also pass against an
@@ -238,5 +245,25 @@ describe("Widen character window: the guard runs before any write", function()
         CP.db.WiderFrame = false
         CP._ApplyWiden()
         for _, name in ipairs(BORDER_PIECES) do assert.is_true(_G[name].shown, name) end
+    end)
+end)
+
+describe("Widen character window: the shown test", function()
+    it("reads a nil frame and a secret answer as not shown, and only a plain true as shown", function()
+        local CP = loadCP()
+        local saved = _G.issecretvalue
+        finally(function() _G.issecretvalue = saved end)
+        local SECRET = {}
+        _G.issecretvalue = function(v) return v == SECRET end
+        local function frame(answer) return { IsShown = function() return answer end } end
+        local cases = {
+            { name = "no frame", want = false },
+            { name = "secret answer", frame = frame(SECRET), want = false },
+            { name = "plain true", frame = frame(true), want = true },
+            { name = "plain false", frame = frame(false), want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, CP._Shown(case.frame), case.name)
+        end
     end)
 end)

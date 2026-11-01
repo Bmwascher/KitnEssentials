@@ -48,6 +48,16 @@ local function ElvUILoaded()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
 end
 
+-- A Blizzard window's shown state can be secret. A secret answer, or no
+-- frame, reads as not shown: that only skips a repaint until the next OnShow.
+local function Shown(frame)
+    if not frame then return false end
+    local shown = frame:IsShown()
+    if issecretvalue and issecretvalue(shown) then return false end
+    return shown == true
+end
+CP._Shown = Shown
+
 -- Features a client can withhold, read once: the answers cannot change during
 -- a session. A headless load without the availability policy reads as retail.
 local function Admitted(id)
@@ -755,13 +765,13 @@ end
 local function QueueUpdate()
     if updatePending then return end
     if not CP:IsEnabled() then return end
-    if not (CharacterFrame and CharacterFrame:IsShown()) then return end
+    if not Shown(CharacterFrame) then return end
     updatePending = true
     C_Timer.After(UPDATE_DEBOUNCE, function()
         updatePending = false
         -- Re-checked rather than captured: this fires later and the module may
         -- have been torn down in between.
-        if CP:IsEnabled() and CharacterFrame and CharacterFrame:IsShown() then
+        if CP:IsEnabled() and Shown(CharacterFrame) then
             UpdateDisplay()
         end
     end)
@@ -776,12 +786,12 @@ local function QueueSocketRefresh()
     if not SOCKETS then return end
     if socketRefreshPending then return end
     if not CP:IsEnabled() then return end
-    if not (PaperDollFrame and PaperDollFrame:IsShown()) then return end
+    if not Shown(PaperDollFrame) then return end
     socketRefreshPending = true
     C_Timer.After(UPDATE_DEBOUNCE, function()
         socketRefreshPending = false
         if CP:IsEnabled() and CP.db and CP.db.SocketHelperEnabled
-            and PaperDollFrame and PaperDollFrame:IsShown() then
+            and Shown(PaperDollFrame) then
             CP:RefreshSocketButtons()
         end
     end)
@@ -965,7 +975,7 @@ local function ApplyWiden()
     local pdf = _G.PaperDollFrame
     if not (cf and inset and insetR and hands and mh and model and items and pdf) then return end
 
-    local add = WidenAmount(ExtraWidth(), pdf:IsShown() and true or false, widenApplied)
+    local add = WidenAmount(ExtraWidth(), Shown(pdf), widenApplied)
     if not add then return end
     widenApplied = add > 0
 
@@ -1045,7 +1055,7 @@ function CP:ApplyHeaderCentering()
     -- Paperdoll tab only. Reputation and Currency reuse this same title string
     -- for their own headers, where a name centered over the model column reads
     -- wrong above a list.
-    if not (own and pdf and pdf:IsShown() and model) then
+    if not (own and Shown(pdf) and model) then
         RestoreAnchors(titleText)
         RestoreAnchors(levelText)
         return
@@ -1234,7 +1244,7 @@ function CP:Refresh()
     ApplyFontToAll()                                      -- warning fonts
     if self.db.Enabled then
         self:ApplySettings()
-        if CharacterFrame and CharacterFrame:IsShown() then UpdateDisplay() end
+        if Shown(CharacterFrame) then UpdateDisplay() end
     end
 end
 
@@ -1277,7 +1287,7 @@ function CP:ApplySettings()
         self:HideRaceText()
     end
 
-    if self.db.SocketHelperEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
+    if self.db.SocketHelperEnabled and Shown(PaperDollFrame) then
         self:RefreshSocketButtons()
     end
     -- EITHER frame: the inspect overlays follow the same settings, and the
@@ -1285,7 +1295,7 @@ function CP:ApplySettings()
     local insp = KitnEssentials:GetModule("InspectPanel", true)
     local inspectShown = insp and insp.InspectFrameShown
         and insp.InspectFrameShown(_G.InspectFrame)
-    if (PaperDollFrame and PaperDollFrame:IsShown()) or inspectShown then
+    if Shown(PaperDollFrame) or inspectShown then
         self:RefreshSlotDisplays()
     end
 end
@@ -4272,7 +4282,7 @@ function CP:OnEnable()
     -- enables (e.g. toggled on with the pane open), the PaperDollFrame
     -- OnShow hook installed above won't fire on this path. Register events +
     -- force one refresh inline.
-    if PaperDollFrame and PaperDollFrame:IsShown() then
+    if Shown(PaperDollFrame) then
         if self.eventFrame then
             self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
             self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
