@@ -52,9 +52,19 @@ fi
 # announces to other players, so it may only hold a released version: a
 # release commit sets it to its own version, and every other commit must hold
 # the latest release tag reachable from HEAD, so an untagged value cannot
-# outlive its release commit. An empty value announces nothing.
+# outlive its release commit. An empty value announces nothing. A file or line
+# the hook cannot read blocks, so moving either cannot switch the guard off.
 lr_file='Modules/Core/VersionCheck.lua'
-staged_lr="$(git show ":$lr_file" 2>/dev/null | grep -m1 -E '^local LAST_RELEASE = "[^"]*"' | sed -E 's/^local LAST_RELEASE = "([^"]*)".*/\1/')"
+if ! git cat-file -e ":$lr_file" 2>/dev/null; then
+    echo "[commit-msg] BLOCKED: cannot read LAST_RELEASE: $lr_file is not in the index. If the file moved, update lr_file in dev/githooks/commit-msg, or override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
+fi
+lr_line="$(git show ":$lr_file" 2>/dev/null | grep -m1 -E '^local LAST_RELEASE = "[^"]*"')"
+if [ -z "$lr_line" ]; then
+    echo "[commit-msg] BLOCKED: cannot read LAST_RELEASE: the staged $lr_file has no line of the form local LAST_RELEASE = \"<version>\". If the line moved or changed shape, update dev/githooks/commit-msg, or override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
+fi
+staged_lr="$(printf '%s\n' "$lr_line" | sed -E 's/^local LAST_RELEASE = "([^"]*)".*/\1/')"
 
 # Release commits ("vX.Y.Z: ..."): the staged .toc must carry the same
 # version (blocking: a mismatch ships the wrong fallback version), and the
@@ -69,7 +79,7 @@ if [ -n "$rel" ]; then
         exit 1
     fi
     if [ "$staged_lr" != "$rel" ]; then
-        echo "[commit-msg] BLOCKED: release subject is v$rel but the staged $lr_file LAST_RELEASE is '${staged_lr:-missing}'. Set it to \"$rel\" and stage it, or override with: git commit --no-verify" >&2
+        echo "[commit-msg] BLOCKED: release subject is v$rel but the staged $lr_file LAST_RELEASE is '${staged_lr:-empty}'. Set it to \"$rel\" and stage it, or override with: git commit --no-verify" >&2
         exit 1
     fi
     prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | tr -d v)"

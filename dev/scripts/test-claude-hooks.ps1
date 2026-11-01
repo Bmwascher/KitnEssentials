@@ -225,8 +225,9 @@ try {
         [System.IO.File]::WriteAllText($vcAbs, "local LAST_RELEASE = `"0.0.1`"`n")
         git -C $feature add -- $vcRel 2>&1 | Out-Null
         git -C $feature commit -q --no-verify -m 'hooktest stand-in' 2>&1 | Out-Null
-        $lr = { param($name, $msg, $value, $tocVer, $expect)
-            [System.IO.File]::WriteAllText($vcAbs, "local LAST_RELEASE = `"$value`"`n")
+        $lr = { param($name, $msg, $value, $tocVer, $expect, $text = $null, $want = $null)
+            $body = if ($null -ne $text) { $text } else { "local LAST_RELEASE = `"$value`"`n" }
+            [System.IO.File]::WriteAllText($vcAbs, $body)
             git -C $feature add -- $vcRel 2>&1 | Out-Null
             if ($tocVer) {
                 [System.IO.File]::WriteAllText($tocAbs, ($tocText -replace '(?m)^## X-Manual-Version: [^\r\n]*', "## X-Manual-Version: $tocVer"))
@@ -234,8 +235,10 @@ try {
             }
             [System.IO.File]::WriteAllText($msgFile, $msg)
             Push-Location $feature
-            try { & $bash $hook $msgFile 2>&1 | Out-Null; $code_ = $LASTEXITCODE } finally { Pop-Location }
-            Check "commit-msg $expect`: $name" ($code_ -eq $(if ($expect -eq 'block') { 1 } else { 0 }))
+            try { $out_ = & $bash $hook $msgFile 2>&1 | Out-String; $code_ = $LASTEXITCODE } finally { Pop-Location }
+            $ok = $code_ -eq $(if ($expect -eq 'block') { 1 } else { 0 })
+            if ($want) { $ok = $ok -and ($out_ -match $want) }
+            Check "commit-msg $expect`: $name" $ok $out_.Trim()
             git -C $feature reset -q -- $vcRel KitnEssentials.toc 2>&1 | Out-Null
             git -C $feature checkout -q -- $vcRel KitnEssentials.toc 2>&1 | Out-Null
         }
@@ -243,6 +246,16 @@ try {
         & $lr 'LAST_RELEASE set to the latest tag'        "fix a thing`n"          $lastTag $null   'pass'
         & $lr 'release commit with matching LAST_RELEASE' "v9.8.7: fix a thing`n"  '9.8.7'  '9.8.7' 'pass'
         & $lr 'release commit with stale LAST_RELEASE'    "v9.8.7: fix a thing`n"  '0.0.1'  '9.8.7' 'block'
+        & $lr 'empty LAST_RELEASE on a normal commit'     "fix a thing`n"          ''       $null   'pass'
+        & $lr 'LAST_RELEASE line in another shape'        "fix a thing`n"          ''       $null   'block' "local LAST_RELEASE = '$lastTag'`n" 'cannot read LAST_RELEASE'
+        & $lr 'empty LAST_RELEASE on a release commit'    "v9.8.7: fix a thing`n"  ''       '9.8.7' 'block' $null 'LAST_RELEASE is .empty.'
+        # A VersionCheck.lua missing from the index blocks instead of passing.
+        git -C $feature rm -q --cached -- $vcRel 2>&1 | Out-Null
+        [System.IO.File]::WriteAllText($msgFile, "fix a thing`n")
+        Push-Location $feature
+        try { $out_ = & $bash $hook $msgFile 2>&1 | Out-String; $code_ = $LASTEXITCODE } finally { Pop-Location }
+        Check 'commit-msg block: LAST_RELEASE file missing from the index' ($code_ -eq 1 -and $out_ -match 'cannot read LAST_RELEASE') $out_.Trim()
+        git -C $feature reset -q -- $vcRel 2>&1 | Out-Null
         Remove-Item $msgFile -Force -ErrorAction SilentlyContinue
 
         # --- pre-commit (bash), staged in the feature worktree -----------------
