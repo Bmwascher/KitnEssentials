@@ -77,3 +77,53 @@ describe("late anchor targets", function()
         end
     end)
 end)
+
+-- The late re-place moves one frame alone. A frame that moves only with
+-- others names a gate, which the re-place asks in place of the frame's own
+-- combat check.
+describe("late anchor targets in combat", function()
+    local KE
+    local inCombat = false
+
+    setup(function()
+        KE = L.loadGlobals({ InCombatLockdown = function() return inCombat end })
+        KE.SnapFrameToPixels = function() end
+    end)
+
+    after_each(function()
+        inCombat = false
+        _G.KE_SpecGatedTarget = nil
+    end)
+
+    -- Neither protected nor anchoring-restricted, so its own check allows it.
+    local function free()
+        local f = placed()
+        f.IsProtected = function() return false end
+        f.IsAnchoringRestricted = function() return false end
+        return f
+    end
+
+    it("moves a frame its own check allows, unless the gate it names refuses", function()
+        local pos = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 }
+        local onLate = { anchorFrameType = "SELECTFRAME", ParentFrame = "KE_SpecGatedTarget" }
+        local rows = {
+            { name = "no gate", frame = free(), moves = true },
+            { name = "gate allows", frame = free(), gate = function() return true end, moves = true },
+            { name = "gate refuses", frame = free(), gate = function() return false end, moves = false },
+        }
+        for _, row in ipairs(rows) do
+            KE:ApplyFramePosition(row.frame, pos, onLate)
+            if row.gate then KE:SetAnchorGate(row.frame, row.gate) end
+        end
+
+        local target = region()
+        _G.KE_SpecGatedTarget = target
+        inCombat = true
+        KE:AnnounceAnchorTarget("KE_SpecGatedTarget")
+
+        for _, row in ipairs(rows) do
+            assert.equal(row.moves and target or _G.UIParent, row.frame.anchor, row.name)
+        end
+    end)
+end)
+

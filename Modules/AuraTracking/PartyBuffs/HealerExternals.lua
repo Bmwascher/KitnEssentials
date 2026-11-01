@@ -108,6 +108,8 @@ local function MakeBox()
     if HX.box then return end
     HX.box = CreateFrame("Frame", "KitnEssentialsHealerExternals", UIParent)
     HX.box:Hide()
+    -- The shared repair pass moves the box only when the whole stack may.
+    KE:SetAnchorGate(HX.box, ChainCanMove)
     HX.live = NewLayer(HX.box)
 end
 

@@ -696,6 +696,13 @@ function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn) end
 ---@param name string
 function KE:AnnounceAnchorTarget(name) end
 
+--- Names the gate Core/Globals.lua's late re-place and PLAYERFRAME repair ask,
+--- in place of KE:CanReanchorNow(frame), before they move `frame` alone: for a
+--- frame that moves only together with others. nil removes it.
+---@param frame Frame
+---@param gate (fun(): boolean)?
+function KE:SetAnchorGate(frame, gate) end
+
 ---@param anchorFrom string
 ---@return string
 function KE:GetTextPointFromAnchor(anchorFrom) end

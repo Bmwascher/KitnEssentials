@@ -73,6 +73,8 @@ local FOREVER_CANNED = {
 
 -- The empty frame the Raid Cooldowns box stands on while the two stack.
 local SPOT_NAME = "KitnEssentialsHealerManaSpot"
+-- The container's and the spot's anchor gate; defined with the placement code.
+local MovesWithStack
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -470,6 +472,7 @@ function HM:CreateContainer()
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
     self.containerFrame = frame
+    KE:SetAnchorGate(frame, MovesWithStack)
     self:ApplyContainerPosition()
     return frame
 end
@@ -542,6 +545,13 @@ local function ChainCanMove(frame)
     return KE:CanReanchorNow(frame)
 end
 
+-- Core/Globals.lua's late re-place and PLAYERFRAME repair move one frame
+-- alone; the container and the spot move only when the whole stack may.
+MovesWithStack = function()
+    local frame = HM.containerFrame
+    return frame ~= nil and ChainCanMove(frame)
+end
+
 local hang = { AnchorFrom = "TOPLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -1 }
 local hangConfig = { anchorFrameType = "SELECTFRAME" }
 
@@ -559,7 +569,6 @@ function HM:PlaceContainer()
     if spot then
         spot:SetSize(db.FrameWidth, db.IconSize)
         KE:ApplyFramePosition(spot, db.Position, db)
-        self.spotPlaced = true
     end
     if self.stackBox then
         -- Under the box, on the edge the box shares with the spot.
@@ -633,11 +642,12 @@ function HM:StackSpot(box)
     if not self:StackReady() or self:SpotRefuses(box) then return nil end
     if not self.spot then
         self.spot = CreateFrame("Frame", SPOT_NAME, UIParent)
+        KE:SetAnchorGate(self.spot, MovesWithStack)
         self:RegStackWithEditMode()
     end
     -- Placed on every call, so each placement of the box resolves the
     -- spot's parent again, with or without a Healer Mana row drawn.
-    if not self:PlaceContainer() and not self.spotPlaced then return nil end
+    if not self:PlaceContainer() then return nil end
     return self.spot
 end
 

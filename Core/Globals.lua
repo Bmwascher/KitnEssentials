@@ -527,6 +527,12 @@ local anchorPending = setmetatable({}, { __mode = "k" })
 -- in the session.
 local anchorWaits = setmetatable({}, { __mode = "k" })
 
+-- A frame that moves only together with others names a gate that asks about
+-- all of them. The two passes below that move one frame alone, the late
+-- re-place and the PLAYERFRAME repair, ask it in place of the frame's own
+-- combat check.
+local anchorGates = setmetatable({}, { __mode = "k" })
+
 -- Select Frame can name the frame being placed, a region inside or anchored to
 -- it at any depth, or a global that is not a region; SetPoint and SetParent
 -- raise a Lua error on each, and SetParent also needs a frame. A link that
@@ -2297,6 +2303,17 @@ local function ReplaceWaiting(frame, root)
     NoteAnchorWait(frame, rootMissing, wait.posConfig, wait.config, wait.setParent, wait.followers)
 end
 
+-- nil removes the gate.
+function KE:SetAnchorGate(frame, gate)
+    if frame then anchorGates[frame] = gate end
+end
+
+local function MayReplace(frame)
+    local gate = anchorGates[frame]
+    if gate then return gate() == true end
+    return KE:CanReanchorNow(frame)
+end
+
 -- The owner of a Select Frame target calls this once it has built the frame,
 -- so frames placed on that name before it existed move onto it. The walk
 -- changes record fields only, never the table's keys, so pairs stays valid.
@@ -2304,7 +2321,7 @@ function KE:AnnounceAnchorTarget(name)
     if type(name) ~= "string" then return end
     for frame, wait in pairs(anchorWaits) do
         if wait.waiting and NamesUnder(wait.name, name) then
-            if self:CanReanchorNow(frame) then
+            if MayReplace(frame) then
                 ReplaceWaiting(frame, name)
             else
                 self:RunAfterCombat(function() ReplaceWaiting(frame, name) end)
@@ -2359,7 +2376,7 @@ function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn)
 end
 
 local function RepairAnchor(frame)
-    if not KE:CanReanchorNow(frame) then return false end
+    if not MayReplace(frame) then return false end
 
     local record = anchorRecords[frame]
     if record then
