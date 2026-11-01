@@ -86,7 +86,12 @@ Data.SPELLS = {
 
     [31884]   = { kind = "offensive", cd = 120, buffs = { 31884, 231895, 454351, 216331, 389539 },
                   swap = { id = 389539, talents = { [389539] = true }, likely = true, specs = { [66] = true } },
-                  hide = { talents = { [458359] = true }, likely = false, specs = { [70] = true } } },
+                  hide = { talents = { [458359] = true, [216331] = true }, likely = false,
+                           specs = { [65] = true, [70] = true } } },
+    -- Holy's choice node with Avenging Wrath: while it is taken this row
+    -- shows and Avenging Wrath's hides.
+    [216331]  = { kind = "offensive", cd = 60,
+                  needs = { talents = { [216331] = true }, likely = false } },
     [642]     = { kind = "defensive", cd = 300 },
     [498]     = { kind = "defensive", cd = 60, buffs = { 498, 403876 } },
     [31850]   = { kind = "defensive", cd = 90 },
@@ -220,6 +225,7 @@ local MODS = {
     [115203]  = { { spec = 269, add = -240 }, { spec = 270, add = -240 }, { 388813, add = -30 } },
     [116849]  = { { 202424, add = -45 } },
     [31884]   = { { spec = 70, add = -60 }, { 1241511, add = -15 }, { 204074, pct = -50 } },
+    [216331]  = { { 1241511, add = -7.5 } },
     [642]     = { { 114154, pct = -30 }, { 378425, pct = -15 } },
     [498]     = { { spec = 70, add = 30 }, { 114154, pct = -30 } },
     [31850]   = { { 114154, pct = -30 } },
@@ -286,7 +292,7 @@ Data.SPECS = {
     [268]  = { 132578 },
     [269]  = { { 123904, 90 }, 122470, { 115203, 90 } },
     [270]  = { { 115203, 90 }, 122783 },
-    [65]   = { { 31884, 90 }, { 642, 210 }, { 498, 42 } },
+    [65]   = { { 31884, 90 }, 216331, { 642, 210 }, { 498, 42 } },
     [66]   = { { 31884, 60 }, { 642, 210 }, { 31850, 63 } },
     [70]   = { { 31884, 60 }, { 642, 210 }, { 498, 63 } },
     [256]  = { 10060, { 19236, 70 } },
