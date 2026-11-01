@@ -1849,6 +1849,12 @@ function KT:ShowPreview()
         { name = "Shaman", classToken = "SHAMAN", spellID = 57994, ready = false, remaining = 3.7, cd = 12 },
     }
 
+    -- Forever has no Counter Shot or Wind Shear.
+    if KE.IS_FOREVER then
+        previewData[4] = { name = "Priest", classToken = "PRIEST", spellID = 15487, ready = false, remaining = 8.2, cd = 45 }
+        previewData[5] = { name = "Shaman", classToken = "SHAMAN", spellID = 8042, ready = false, remaining = 3.7, cd = 6 }
+    end
+
     local db = self.db
     local growUp = db.GrowthDirection == "UP"
     local spacing = db.BarSpacing or 2

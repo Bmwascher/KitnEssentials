@@ -38,13 +38,16 @@ local function BuildHeader(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
+    -- Forever has no keys.
+    local markerSentence = KE.IS_FOREVER
+        and "The focus markers teammates announce in the dungeon are read, so their icon can wait on their marked mob.\n\n"
+        or "Before a key starts, the focus markers teammates announce are read, so their icon can wait on their marked mob.\n\n"
     card1:AddLabel("Tracks your party's interrupts as cooldown bars, one per teammate with a kick, and " ..
         "as icons on enemy nameplates. By default it runs only in 5-player dungeons; with " ..
         KE:Gold("Only in Dungeons") .. " off it runs in any party outside a raid.\n\n" ..
         "A kick goes on the kicker's bar, and the bar reads " .. KE:ColorTextByTheme("Ready") ..
         " when the tracker's timing says the kick is back. The kicker's icon goes on the nameplate of " ..
-        "the mob they stopped; yours goes on your target's nameplate as you cast. Before a key starts, " ..
-        "the focus markers teammates announce are read, so their icon can wait on their marked mob.\n\n" ..
+        "the mob they stopped; yours goes on your target's nameplate as you cast. " .. markerSentence ..
         "In a dungeon the game often hides who kicked. The Damage Meter then names the kicker when it " ..
         "can. When it cannot, each teammate who could have kicked gets a copy of their bar on cooldown, " ..
         "and the mob a hidden icon of theirs, that the game shows only for the teammate who really kicked.")
