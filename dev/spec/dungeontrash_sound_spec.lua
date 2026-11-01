@@ -1,10 +1,8 @@
--- Tier 2: trash sounds are handed to the Dungeon Timers preset sound
--- helper (TrashOutput.lua playTrashSound), so its mute and channel rules
--- govern them. The real trash files load in Trash.xml order. The boss module
--- is a recorder on the module shim because the helper's own rules are
--- pinned in dungeontimers_compat_spec; only the hand-off is in question
--- here. The cast-start cue is the path driven: the reveal and countdown-end
--- callers hand their key to the same function. With no helper on the shim,
+-- Tier 2: trash sounds are handed to the Dungeon Timers preset sound helper
+-- (TrashOutput.lua playTrashSound). The helper's mute and channel rules are
+-- pinned in dungeontimers_compat_spec, so the boss module here is a recorder
+-- on the module shim. Only the cast-start cue is driven: the reveal and
+-- countdown-end callers use the same function. With no helper on the shim,
 -- the cue tests in dungeontrash_cache_spec pin the Master fallback.
 
 local helpers = require("dev.spec._helpers")
