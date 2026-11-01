@@ -16,6 +16,8 @@
 --                    (GetShapeshiftFormID) it needs; without it any form
 --                    will do.
 --                    A candidate with `shield` needs a shield equipped.
+--                    A candidate with `talent` is granted by a talent; the
+--                    Kick Tracker reads its rank for a teammate's kick.
 --   announceExtras - optional array of additional spell IDs that count as
 --                    interrupts for announce purposes but not CD tracking.
 --   tracked        - optional candidate id a cooldown tracker shows for a
@@ -42,6 +44,9 @@
 --                                   canonical kick, or nil.
 --   KE:GetKickTalentDemand(specID) -> { [talentID]=true, ... } the tracker
 --                                     inspects for the spec's kicks.
+--   KE:GetShapeshiftFormOfSpell(spellID) -> the form id a Forever stance or
+--                                           form spell gives and whether
+--                                           it cannot be left, or nil.
 --
 -- `cd` is the value castbars use; the Kick Tracker times kicks from the
 -- definitions at the end of this file.
@@ -156,7 +161,9 @@ local EXTRA_KICKS_BY_SPEC = {
 
 -- Forever rows, as printed by dev/scripts/derive-forever-kicks.lua. Ranks are
 -- listed highest first, so the first known one is the rank the trained spell
--- casts; `forms` lists the shapeshift form ids a kick needs.
+-- casts; `forms` lists the shapeshift form ids a kick needs. FOREVER_FORMS
+-- maps each stance or form spell to the form id it gives; `fixed` marks a
+-- form that cannot be left, only swapped.
 local FOREVER_INTERRUPTS = {
     [1482] = {  -- Mage
         candidates = {
@@ -166,9 +173,10 @@ local FOREVER_INTERRUPTS = {
     [1484] = {  -- Druid
         candidates = {
             { id = 410176, cd = 10, forms = { 1, 5, 8 } },  -- Skull Bash
-            { id = 16979, cd = 15, forms = { 5, 8 } },  -- Feral Charge (Bear)
-            { id = 1238122, cd = 15, forms = { 1, 5, 8 } },  -- Feral Charge
+            { id = 16979, cd = 15, forms = { 5, 8 }, talent = true },  -- Feral Charge (Bear)
+            { id = 1238122, cd = 15, forms = { 1, 5, 8 }, talent = true },  -- Feral Charge
         },
+        tracked = 16979,
         announceExtras = { 19675, 414621 },
     },
     [1486] = {  -- Paladin
@@ -178,7 +186,7 @@ local FOREVER_INTERRUPTS = {
     },
     [1487] = {  -- Priest
         candidates = {
-            { id = 15487, cd = 45 },  -- Silence
+            { id = 15487, cd = 45, talent = true },  -- Silence
         },
     },
     [1488] = {  -- Rogue
@@ -234,6 +242,24 @@ local FOREVER_KICK_ALIASES = {
     [10413] = 8042,  -- Earth Shock
     [10414] = 8042,  -- Earth Shock
     [19647] = 19244,  -- Spell Lock
+}
+local FOREVER_FORMS = {
+    [71] = { form = 18, fixed = true },  -- Defensive Stance
+    [768] = { form = 1 },  -- Cat Form
+    [783] = { form = 3 },  -- Travel Form
+    [1066] = { form = 4 },  -- Aquatic Form
+    [1784] = { form = 30 },  -- Stealth
+    [1785] = { form = 30 },  -- Stealth
+    [1786] = { form = 30 },  -- Stealth
+    [1787] = { form = 30 },  -- Stealth
+    [2457] = { form = 17, fixed = true },  -- Battle Stance
+    [2458] = { form = 19, fixed = true },  -- Berserker Stance
+    [2645] = { form = 16 },  -- Ghost Wolf
+    [5487] = { form = 5 },  -- Bear Form
+    [9634] = { form = 8 },  -- Dire Bear Form
+    [15473] = { form = 28 },  -- Shadowform
+    [24858] = { form = 31 },  -- Moonkin Form
+    [403789] = { form = 22 },  -- Metamorphosis
 }
 
 -- Each client sees only its own rows: Forever shares spell ids with retail
@@ -491,7 +517,14 @@ local EMPTY_DEMAND = {}
 local TALENT_DEMAND = {}
 for specID, entry in pairs(INTERRUPTS) do
     local set
-    for _, c in ipairs(entry.candidateList) do set = AddKickTalents(set, c.id) end
+    for _, c in ipairs(entry.candidateList) do
+        set = AddKickTalents(set, c.id)
+        -- A Forever talent kick is itself the talent its rank is read for.
+        if c.talent then
+            set = set or {}
+            set[c.id] = true
+        end
+    end
     if entry.trackerKick then set = AddKickTalents(set, entry.trackerKick.id) end
     TALENT_DEMAND[specID] = set
 end
@@ -503,4 +536,15 @@ end
 -- Callers treat the returned set as read-only.
 function KE:GetKickTalentDemand(specID)
     return TALENT_DEMAND[specID] or EMPTY_DEMAND
+end
+
+local SHAPESHIFT_FORMS = KE.IS_FOREVER and FOREVER_FORMS or {}
+
+-- The form a Forever stance or form spell gives, and whether that form
+-- cannot be left; nil for any other spell and on retail.
+function KE:GetShapeshiftFormOfSpell(spellID)
+    if self:IsSecretValue(spellID) then return nil end
+    local row = SHAPESHIFT_FORMS[spellID]
+    if not row then return nil end
+    return row.form, row.fixed == true
 end

@@ -1597,6 +1597,13 @@ function KE:GetKickDefinition(kickID) end
 ---@return table<number, true>
 function KE:GetKickTalentDemand(specID) end
 
+--- The form a Forever stance or form spell gives, and whether that form
+--- cannot be left; nil for any other spell, a nil id and on retail.
+---@param spellID number?
+---@return number? formID
+---@return boolean? fixed
+function KE:GetShapeshiftFormOfSpell(spellID) end
+
 -- Modules/DungeonTools/PlateAnchor.lua
 --- The health bar a nameplate addon draws for this plate, to anchor icons
 --- beside; the plate itself when none is usable, nil without a plate. On
