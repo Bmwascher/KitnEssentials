@@ -306,7 +306,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         nil, 1 / 3), "cellsOn")
     manager:Register(AddCheck(rowD3, "Time-Left Swipe", "Swipe", nil, nil, 1 / 3), "iconsOn")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
-    -- The timer, the cooldown text and the stack count share this size.
+    -- The timer, the cooldown text, the stack count and the charge digits share this size.
     local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
     manager:Register(AddSlider(rowD4, "Timer Size", "TimerFontSize", 8, 48), "iconsOn")
     manager:Register(AddSlider(rowD4, "Show Decimals Below (sec)", "DecimalThreshold", 0, 10,
