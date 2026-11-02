@@ -119,7 +119,7 @@ describe("spell reflect rules", function()
         end
         -- text mode: word, not ready, show name, label, timer, small line, small
         -- line timer. Not ready, the name shows even with Show Spell Name off.
-        local marked = "Void Blast 9487"
+        local marked = "Void Blast " .. Rules.TEXT_LABEL:sub(-2)
         local lines = {
             { false, false, true, Rules.TEXT_LABEL, "2.4", "Void Blast", "" },
             { true, false, true, Rules.TEXT_LABEL, Rules.NOW_WORD, "Void Blast", "" },

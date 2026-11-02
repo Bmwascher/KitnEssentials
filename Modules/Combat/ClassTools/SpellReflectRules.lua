@@ -283,7 +283,7 @@ end
 -- false.
 function Rules.TextLines(word, notReady, count, name, showName)
     local timer = word and Rules.NOW_WORD or count
-    if notReady then return Rules.NOT_READY, "", name .. " 9487", timer end
+    if notReady then return Rules.NOT_READY, "", name .. " \194\187", timer end
     return Rules.TEXT_LABEL, timer, showName and name or "", ""
 end
 
