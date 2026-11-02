@@ -42,6 +42,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
 
     local EX = GetModule()
     local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("glow", function() return cue.GlowEnabled == true end)
+    manager:SetCondition("cueText", function() return cue.ShowText == true end)
 
     local function ApplySettings()
         if EX then EX:ApplySettings() end
@@ -52,12 +54,14 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         GUIFrame:RefreshContent()
     end
 
-    local function AddCheckbox(row, label, target, key, width, redraw)
+    -- `regray` is for a box that other controls gray out with.
+    local function AddCheckbox(row, label, target, key, width, regray)
         local box = GUIFrame:CreateCheckbox(row, label, {
             value = target[key] == true,
             callback = function(v)
                 target[key] = v
-                if redraw then ApplyAndRedraw() else ApplySettings() end
+                ApplySettings()
+                if regray then manager:UpdateAll(cue.Enabled == true) end
             end,
         })
         row:AddWidget(box, width)
@@ -84,9 +88,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
             else KitnEssentials:DisableModule("Executioner") end
         end
     end)
-    card1:AddLabel(KE:Gold("Warriors with Slayer's Dominance only.") .. " Shows your Executioner stacks with "
-        .. "one bar per timer, and the hidden timers that procs at 5 stacks start, so you see when each stack "
-        .. "drops.\n\n"
+    card1:AddLabel(KE:Gold("Warriors with Slayer's Dominance only.") .. " Shows your Executioner stacks and "
+        .. "the hidden timers that procs at 5 stacks start, so you see when each stack drops.\n\n"
         .. "The game hides the buff's timers in combat, so KitnEssentials counts them from your "
         .. "Slayer's Strike procs and checks the count against the real buff whenever the game shows it, "
         .. "usually out of combat.\n\n"
@@ -99,9 +102,11 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     if EX then known, length = EX:TalentStatus() end
     if known then
         local focus = length > Rules.BASE and " (Deadly Focus)" or ""
-        card1:AddLabel("|cff9a9a9aSlayer's Dominance known" .. DOT .. "timers " .. length .. " s" .. focus .. "|r")
+        card1:AddNote("Slayer's Dominance known" .. DOT .. "timers " .. length .. " s" .. focus)
     else
-        card1:AddLabel("|cffff6b6bSlayer's Dominance not known on this character: nothing will show.|r")
+        local red = Theme.error
+        card1:AddNote(KE:WrapColor("Slayer's Dominance not known on this character: nothing will show.",
+            red[1], red[2], red[3]))
     end
 
     local testRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
@@ -147,9 +152,10 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     -- while the icon is off: the macro works without it.
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Cancel Icon", yOffset)
+    -- The header widget rebuilds the page after this callback.
     card3:AddHeaderToggle(cue.Enabled == true, function(checked)
         cue.Enabled = checked
-        ApplyAndRedraw()
+        ApplySettings()
     end)
     card3:AddLabel("Canceling the buff wipes your stacks and every hidden timer, so your next procs build real "
         .. "stacks again. The icon shows when that gains damage: at least one hidden timer, and hidden timers at "
@@ -182,8 +188,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     card3:AddRow(textRow, Theme.rowHeight)
 
     local cueSizeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    manager:Register(AddSlider(cueSizeRow, "Icon Size", cue, "Size", { 16, 120 }, 0.5), "cue")
-    manager:Register(AddCheckbox(cueSizeRow, "Show \"Cancel\" Text", cue, "ShowText", 0.5), "cue")
+    manager:Register(AddSlider(cueSizeRow, "Cancel Icon Size", cue, "Size", { 16, 120 }, 0.5), "cue")
+    manager:Register(AddCheckbox(cueSizeRow, "Show \"Cancel\" Text", cue, "ShowText", 0.5, true), "cue")
     card3:AddRow(cueSizeRow, Theme.rowHeightLast, 0)
     yOffset = card3:GetNextOffset()
 
@@ -309,10 +315,12 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         color = db.HiddenColor,
         callback = function(r, g, b, a) db.HiddenColor = { r, g, b, a }; ApplyAndRedraw() end,
     }), 0.33)
-    colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Cancel Text Color", {
+    local cueTextColor = GUIFrame:CreateColorPicker(colorRow, "Cancel Text Color", {
         color = cue.TextColor,
         callback = function(r, g, b, a) cue.TextColor = { r, g, b, a }; ApplySettings() end,
-    }), 0.33)
+    })
+    colorRow:AddWidget(cueTextColor, 0.33)
+    manager:Register(cueTextColor, "cueText")
     card8:AddRow(colorRow, 46, 0)
     yOffset = card8:GetNextOffset()
 
@@ -321,21 +329,21 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card9 = GUIFrame:CreateCard(scrollChild, "Glow", yOffset)
     local g1 = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
-    manager:Register(AddCheckbox(g1, "Enable Glow", cue, "GlowEnabled", 0.5), "cue")
+    manager:Register(AddCheckbox(g1, "Enable Glow", cue, "GlowEnabled", 0.5, true), "cue")
     local glowColor = GUIFrame:CreateColorPicker(g1, "Glow Color", {
         color = cue.GlowColor,
         callback = function(r, g, b, a) cue.GlowColor = { r, g, b, a }; ApplySettings() end,
     })
     g1:AddWidget(glowColor, 0.5)
-    manager:Register(glowColor, "cue")
+    manager:Register(glowColor, "glow")
     card9:AddRow(g1, Theme.rowHeight)
     local g2 = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
-    manager:Register(AddSlider(g2, "Lines", cue, "GlowLines", { 1, 16 }, 0.5), "cue")
-    manager:Register(AddSlider(g2, "Length", cue, "GlowLength", { 1, 20 }, 0.5), "cue")
+    manager:Register(AddSlider(g2, "Lines", cue, "GlowLines", { 1, 16 }, 0.5), "glow")
+    manager:Register(AddSlider(g2, "Length", cue, "GlowLength", { 1, 20 }, 0.5), "glow")
     card9:AddRow(g2, Theme.rowHeight)
     local g3 = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
-    manager:Register(AddSlider(g3, "Speed", cue, "GlowFrequency", { 0.05, 1, 0.05 }, 0.5), "cue")
-    manager:Register(AddSlider(g3, "Thickness", cue, "GlowThickness", { 1, 5 }, 0.5), "cue")
+    manager:Register(AddSlider(g3, "Speed", cue, "GlowFrequency", { 0.05, 1, 0.05 }, 0.5), "glow")
+    manager:Register(AddSlider(g3, "Thickness", cue, "GlowThickness", { 1, 5 }, 0.5), "glow")
     card9:AddRow(g3, Theme.rowHeightLast, 0)
     yOffset = card9:GetNextOffset()
 

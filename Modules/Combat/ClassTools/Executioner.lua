@@ -81,7 +81,20 @@ local function BuffIcon()
 end
 
 local function DeferredEvaluate()
+    EX.evalTimer = nil
     if EX:IsEnabled() then EX:Evaluate() end
+end
+
+local function RunQueuedCheck()
+    EX:RunCheck()
+end
+
+local function RunExpiry()
+    EX.expiryTimer = nil
+    if not EX:IsEnabled() then return end
+    Rules.Expire(EX.state, GetTime())
+    EX:ArmExpiry()
+    EX:Refresh()
 end
 
 ---------------------------------------------------------------------------------
@@ -165,7 +178,7 @@ end
 function EX:OnInitialize()
     self:UpdateDB()
     self.state = Rules.New()
-    self.live, self.isPreview = false, false
+    self.live, self.isPreview, self.resumePreview = false, false, false
     self.combatEvents, self.glowEvents, self.fighting = false, false, false
     self.driving, self.cueShown, self.cueGlow, self.cueHeld = false, false, false, false
     self.bars, self.textEls, self.testTimers = {}, {}, {}
@@ -794,13 +807,7 @@ function EX:ArmExpiry()
     if not first then return end
     local wait = first.ends + Rules.LAG - GetTime()
     if wait < 0 then wait = 0 end
-    self.expiryTimer = C_Timer.NewTimer(wait, function()
-        self.expiryTimer = nil
-        if not self:IsEnabled() then return end
-        Rules.Expire(self.state, GetTime())
-        self:ArmExpiry()
-        self:Refresh()
-    end)
+    self.expiryTimer = C_Timer.NewTimer(wait, RunExpiry)
 end
 
 function EX:OnSignal(event, spellID)
@@ -828,7 +835,7 @@ end
 function EX:OnAura()
     if self.checkQueued or KE:IsAuraHiddenForSpell(Rules.BUFF) then return end
     self.checkQueued = true
-    C_Timer.After(Rules.CHECK_DELAY, function() self:RunCheck() end)
+    C_Timer.After(Rules.CHECK_DELAY, RunQueuedCheck)
 end
 
 function EX:RunCheck()
@@ -996,8 +1003,10 @@ function EX:Evaluate()
     self:Refresh()
 end
 
+-- One talent change fires several events; Evaluate runs once, after the last.
 function EX:OnTalentChanged()
-    C_Timer.After(TALENT_EVAL_DELAY, DeferredEvaluate)
+    if self.evalTimer then self.evalTimer:Cancel() end
+    self.evalTimer = C_Timer.NewTimer(TALENT_EVAL_DELAY, DeferredEvaluate)
 end
 
 function EX:OnSpecChanged(_, unit)
@@ -1060,11 +1069,15 @@ function EX:OnDisable()
         self.expiryTimer:Cancel()
         self.expiryTimer = nil
     end
+    if self.evalTimer then
+        self.evalTimer:Cancel()
+        self.evalTimer = nil
+    end
     for _, timer in ipairs(self.testTimers) do timer:Cancel() end
     wipe(self.testTimers)
     self.testUntil = nil
     Rules.Wipe(self.state)
-    self.isPreview = false
+    self.isPreview, self.resumePreview = false, false
     if self.frame then
         self:StopDriver()
         self.frame:Hide()
@@ -1110,7 +1123,7 @@ end
 -- Also called on a disabled module during section changes, so every path is
 -- safe without a live display.
 function EX:HidePreview()
-    self.isPreview = false
+    self.isPreview, self.resumePreview = false, false
     if self:IsEnabled() then
         self:Evaluate()
         return
@@ -1128,6 +1141,9 @@ end
 function EX:Test()
     self:UpdateDB()
     self:CreateFrames()
+    -- The preview manager still counts the page's preview as shown and
+    -- will not call ShowPreview again, so the test brings it back.
+    if self.isPreview then self.resumePreview = true end
     self.isPreview = false
     for _, timer in ipairs(self.testTimers) do timer:Cancel() end
     wipe(self.testTimers)
@@ -1145,7 +1161,12 @@ function EX:Test()
     self.testTimers[#self.testTimers + 1] = C_Timer.NewTimer(self.testUntil - now + 0.05, function()
         self.testUntil = nil
         wipe(self.testTimers)
-        self:Refresh()
+        if self.resumePreview then
+            self.resumePreview = false
+            self:ShowPreview()
+        else
+            self:Refresh()
+        end
     end)
     self:ApplyLayout()
     self:Refresh()
