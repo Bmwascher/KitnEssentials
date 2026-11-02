@@ -27,3 +27,44 @@ describe("PotionReady gates", function()
         end
     end)
 end)
+
+describe("PotionReady display", function()
+    it("shows the display and wants the stat only under its mode's rule", function()
+        local PR = L.loadPotionReady()
+        local base = {
+            mode = "text", gates = true, held = true, ready = true, reckHeld = true,
+            reckLeft = 0, onlyReady = false, statOn = true, specOn = true,
+        }
+        local cases = {
+            { name = "text, ready, stat wanted", want = { true, true } },
+            { name = "text, not ready", ready = false, reckLeft = 30, want = { false, false } },
+            { name = "a failed gate hides the text", gates = false, want = { false, false } },
+            { name = "a failed gate hides the icon", mode = "icon", gates = false, want = { false, false } },
+            { name = "icon shows while held on cooldown", mode = "icon", ready = false, reckLeft = 30,
+              want = { true, false } },
+            { name = "only while ready hides the icon on cooldown", mode = "icon", ready = false,
+              reckLeft = 5, onlyReady = true, want = { false, false } },
+            { name = "icon stat from 10 s before ready", mode = "icon", ready = false, reckLeft = 10,
+              want = { true, true } },
+            { name = "no icon stat at 11 s", mode = "icon", ready = false, reckLeft = 11,
+              want = { true, false } },
+            { name = "nothing held", mode = "icon", held = false, ready = false, reckHeld = false,
+              want = { false, false } },
+            { name = "stat off", statOn = false, want = { true, false } },
+            { name = "spec unticked", specOn = false, want = { true, false } },
+            { name = "no Recklessness held", reckHeld = false, want = { true, false } },
+            { name = "text needs Recklessness ready", reckLeft = 4, want = { true, false } },
+        }
+        for _, c in ipairs(cases) do
+            local function pick(key)
+                if c[key] ~= nil then return c[key] end
+                return base[key]
+            end
+            local shown, stat = PR.ResolveDisplay(pick("mode"), pick("gates"), pick("held"),
+                pick("ready"), pick("reckHeld"), pick("reckLeft"), pick("onlyReady"),
+                pick("statOn"), pick("specOn"))
+            assert.are.equal(c.want[1], shown, c.name .. ": shown")
+            assert.are.equal(c.want[2], stat, c.name .. ": stat")
+        end
+    end)
+end)

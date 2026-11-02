@@ -1107,6 +1107,23 @@ local Defaults = {
             anchorFrameType = "SELECTFRAME",
             ParentFrame = "UtilityCooldownViewer",
             Position = { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 0, YOffset = 5 },
+            DisplayMode = "text",
+            IconWidth = 40,
+            IconHeight = 40,
+            ShowCount = true,
+            CountSize = 12,
+            ShowCooldown = true,
+            OnlyWhileReady = false,
+            ReckStat = {
+                Enabled = false,
+                ShowPrefix = true,
+                Prefix = "Reck:",
+                PrefixColor = { 1, 1, 1, 1 },
+                Colors = {},  -- nil per stat = the Secondary Stats hue
+                Position = "ABOVE",
+                FontSize = 14,
+                EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per global spec ID)
+            },
         },
 
         WorldMarkerCycler = {
