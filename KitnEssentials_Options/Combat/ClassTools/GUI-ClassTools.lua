@@ -59,6 +59,7 @@ RegisterClassPage("ClassToolsPriest", {
 
 RegisterClassPage("ClassToolsWarrior", {
     { id = "SpellReflect", label = "Spell Reflect" },
+    { id = "Executioner",  label = "Executioner Stacks" },
 })
 
 GUIFrame:RegisterTabbedContent("ClassTools", {

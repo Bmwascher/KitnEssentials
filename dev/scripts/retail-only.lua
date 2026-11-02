@@ -5,6 +5,7 @@
 return {
     "KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-DivineArbiter.lua",
+    "KitnEssentials_Options/Combat/ClassTools/GUI-Executioner.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-HavocTracker.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-SpellReflect.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-StasisTracker.lua",
