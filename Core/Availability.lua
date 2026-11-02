@@ -117,9 +117,11 @@ local FOREVER_ALLOWED = {
     KicksCasts = true,
     FocusMarkerMarker = true,
     KeystoneHelperReset = true,
-    -- Interrupt Tracker: the module, its Kicks & Casts tab and Focus Macros'
-    -- Focus Kick tab.
+    -- Interrupt Tracker: the module, its Kicks & Casts tab, its Bars and
+    -- Nameplate Icons tabs, and Focus Macros' Focus Kick tab.
     KickTracker = true,
+    KickTrackerBars = true,
+    KickTrackerPlates = true,
     FocusMarkerKick = true,
     -- QoL: the Quality of Life page with its Spell Alerts, Move Frames, Copy
     -- Anything and Slash Commands tabs, Secondary Stats, and the Group Tools

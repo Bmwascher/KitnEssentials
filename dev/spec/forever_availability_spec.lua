@@ -80,7 +80,7 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "GreatVaultAlert",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "PIMacroBuilder",   want = false },
             -- Dungeon Tools: eight modules, the Dungeon Alerts and Kicks &
-            -- Casts rows and three tabs are admitted; the keystone reminders
+            -- Casts rows and five tabs are admitted; the keystone reminders
             -- and group finder tab and Party Stops are not.
             { load = "baseline",            seed = BASELINE,             id = "DeathNotifications",      want = true },
             { load = "baseline",            seed = BASELINE,             id = "EnemyCounter",            want = true },
@@ -97,6 +97,8 @@ describe("Forever availability: admission", function()
             { load = "baseline",            seed = BASELINE,             id = "KeystoneHelperGeneral",   want = false },
             { load = "baseline",            seed = BASELINE,             id = "KeystoneHelperReminders", want = false },
             { load = "baseline",            seed = BASELINE,             id = "KickTracker",             want = true },
+            { load = "baseline",            seed = BASELINE,             id = "KickTrackerBars",         want = true },
+            { load = "baseline",            seed = BASELINE,             id = "KickTrackerPlates",       want = true },
             { load = "baseline",            seed = BASELINE,             id = "PartyStops",              want = false },
             { load = "baseline",            seed = BASELINE,             id = "MythicPlusTimer",  want = false },
             { load = "baseline",            seed = BASELINE,             id = "LibDualSpec",      want = false },

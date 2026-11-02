@@ -17,6 +17,8 @@
     <Script file="AuraTracking\GUI-AuraExternals.lua" />
     <Script file="AuraTracking\GUI-AuraMovement.lua" />
     <Script file="Skinning\GUI-DamageMeter.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-KickTrackerBars.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-KickTrackerPlates.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-KickTracker.lua" />
     <Script file="Combat\ClassTools\GUI-ClassTools.lua" />
     <Script file="AuraTracking\GUI-TotemTracker.lua" />
