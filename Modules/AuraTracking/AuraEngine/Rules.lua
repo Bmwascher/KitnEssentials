@@ -35,7 +35,10 @@ local NEGATABLE_FILTERS = {
 function Rules.BuildDebuffFilter(filters)
     filters = filters or {}
 
+    -- Retail never shows debuffs you or your pet cast. Forever keeps its
+    -- filter until the token is checked on that client.
     local parts = { "HARMFUL" }
+    if not KE.IS_FOREVER then table_insert(parts, "!PLAYER") end
 
     for i = 1, #NEGATABLE_FILTERS do
         local key = NEGATABLE_FILTERS[i]
