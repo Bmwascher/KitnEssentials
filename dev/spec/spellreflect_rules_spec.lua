@@ -130,7 +130,7 @@ describe("spell reflect rules", function()
         end
     end)
 
-    it("plays Spell Reflect once, Not Safe once when not ready, Spell Reflect when Reflect returns, and never again for a retimed bar", function()
+    it("plays Spell Reflect once, the not-ready sound once when not ready, Spell Reflect when Reflect returns, and never again for a retimed bar", function()
         local rec = {}
         assert.is_nil(Rules.SoundFor(rec, "WAIT", true))
         assert.equals("READY", Rules.SoundFor(rec, "GO", true))
