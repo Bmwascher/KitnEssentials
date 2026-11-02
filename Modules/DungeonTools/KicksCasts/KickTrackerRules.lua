@@ -593,3 +593,19 @@ function KT.GuestHugs(side, plateSide, gy, span, a0, a1)
     return gy < half and -gy < half
 end
 
+---------------------------------------------------------------------------------
+-- Activation
+---------------------------------------------------------------------------------
+-- Only in Dungeons on, or never saved: a 5-player instance while in a group.
+-- Off: any group but a raid, because the roster reads party units only.
+function KT.ActiveFor(db, facts)
+    if not db.Enabled then return false end
+    if db.ShowBars == false and db.PlateIcons == false then return false end
+    if db.OnlyInDungeons ~= false then
+        if not facts.inInstance or facts.instanceType ~= "party" then return false end
+        return facts.inGroup and true or false
+    end
+    if not facts.inGroup then return false end
+    return not facts.inRaid
+end
+
