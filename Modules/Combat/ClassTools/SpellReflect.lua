@@ -541,6 +541,8 @@ function SR:Paint(rec, now, ready, silent)
         if Rules.CameBack(self.shownRec, self.shownReady, rec, ready) then
             frame.fade:Stop()
             frame.fade:Play()
+        elseif rec ~= self.shownRec then
+            frame.fade:Stop()
         end
         self.shownRec, self.shownPhase, self.shownReady = rec, phase, ready
         self.lastCount, self.lastLine, self.lastLineTimer = nil, nil, nil
