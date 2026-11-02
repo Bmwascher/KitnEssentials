@@ -93,33 +93,29 @@ describe("Combat Texts aggro hold", function()
         end
     end)
 
-    it("shows the line only once aggro has lasted the hold", function()
-        local CM, s = loadHoldCase(nil)
+    it("shows the line only once aggro has lasted the hold, on both clients", function()
+        for _, forever in ipairs({ false, true }) do
+            local CM, s = loadHoldCase(forever)
+            local client = forever and "Forever: " or "retail: "
 
-        CM:CheckAggro()
-        assert.are.equal(0, s.shown, "nothing shows at the start of the hold")
-        assert.are.equal(1, #s.timers, "the hold arms one timer")
-        CM:CheckAggro()
-        assert.are.equal(1, #s.timers, "a second passing event arms no second timer")
+            CM:CheckAggro()
+            assert.are.equal(0, s.shown, client .. "nothing shows at the start of the hold")
+            assert.are.equal(1, #s.timers, client .. "the hold arms one timer")
+            CM:CheckAggro()
+            assert.are.equal(1, #s.timers, client .. "a second passing event arms no second timer")
 
-        s.threat, s.now = 1, 10.2
-        CM:CheckAggro()
-        s.now = 10.5
-        s.timers[1]()
-        assert.are.equal(0, s.shown, "a blip shorter than the hold never shows")
+            s.threat, s.now = 1, 10.2
+            CM:CheckAggro()
+            s.now = 10.5
+            s.timers[1]()
+            assert.are.equal(0, s.shown, client .. "a blip shorter than the hold never shows")
 
-        s.threat, s.now = 2, 11
-        CM:CheckAggro()
-        assert.are.equal(2, #s.timers, "a new hold arms a new timer")
-        s.now = 11.5
-        s.timers[2]()
-        assert.are.equal(1, s.shown, "aggro held for the hold shows the line")
-    end)
-
-    it("shows the line at once on Forever, where the hold does not apply", function()
-        local CM, s = loadHoldCase(true)
-        CM:CheckAggro()
-        assert.are.equal(1, s.shown, "the line shows on the first passing reading")
-        assert.are.equal(0, #s.timers, "no hold timer is armed")
+            s.threat, s.now = 2, 11
+            CM:CheckAggro()
+            assert.are.equal(2, #s.timers, client .. "a new hold arms a new timer")
+            s.now = 11.5
+            s.timers[2]()
+            assert.are.equal(1, s.shown, client .. "aggro held for the hold shows the line")
+        end
     end)
 end)

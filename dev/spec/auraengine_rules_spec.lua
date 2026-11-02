@@ -1,21 +1,17 @@
 local L = require("dev.spec._ke_loader")
 
 describe("Advanced Debuffs filter-string construction", function()
-    it("always hides your own debuffs once, ignoring the legacy PLAYER setting", function()
-        local R = L.loadAuraRules()
-        local s = R.BuildDebuffFilter({ PLAYER = true, RAID = true })
-        local _, count = s:gsub("PLAYER", "")
-        assert.equals(1, count)
-        assert.truthy(s:find("|!PLAYER|", 1, true))
-        assert.truthy(s:find("!RAID", 1, true))
-    end)
-
-    it("keeps the Forever filter without the PLAYER token", function()
-        local R, KE = L.loadAuraRules()
-        KE.IS_FOREVER = true
-        local s = R.BuildDebuffFilter({ PLAYER = true, RAID = true })
-        assert.is_nil(s:find("PLAYER", 1, true))
-        assert.truthy(s:find("!RAID", 1, true))
+    it("always hides your own debuffs once on both clients, ignoring the legacy PLAYER setting", function()
+        for _, forever in ipairs({ false, true }) do
+            local R, KE = L.loadAuraRules()
+            KE.IS_FOREVER = forever
+            local client = forever and "Forever" or "retail"
+            local s = R.BuildDebuffFilter({ PLAYER = true, RAID = true })
+            local _, count = s:gsub("PLAYER", "")
+            assert.equals(1, count, client)
+            assert.truthy(s:find("|!PLAYER|", 1, true), client)
+            assert.truthy(s:find("!RAID", 1, true), client)
+        end
     end)
 
     -- The whole point of this file. INCLUDE_NAME_PLATE_ONLY is documented

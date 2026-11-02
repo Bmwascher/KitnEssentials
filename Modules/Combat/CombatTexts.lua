@@ -764,9 +764,7 @@ function CM:CheckAggro()
     if CM.ShouldShowAggro(self.db, self.inCombat, KE:IsPlayerTankSpec(), inInstance, threat, threatSecret) then
         if not (frame and IsShownOr(frame, false)) then
             if self.aggroSince == nil then self.aggroSince = GetTime() end
-            -- Retail only: Forever keeps the instant line.
-            local hold = not KE.IS_FOREVER and self.db.AggroHoldTime or 0
-            local remaining = CM.AggroHoldRemaining(self.aggroSince, GetTime(), hold)
+            local remaining = CM.AggroHoldRemaining(self.aggroSince, GetTime(), self.db.AggroHoldTime)
             if remaining > 0 then
                 if not self.aggroHoldArmed then
                     self.aggroHoldArmed = true

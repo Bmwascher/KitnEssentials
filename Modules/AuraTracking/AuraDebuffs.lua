@@ -194,12 +194,9 @@ local DECLARATION = {
                 return KE.AuraRules.BuildDebuffFilter(settings.Filters)
             end,
             buildCandidates = function(settings)
-                local candidates = {
+                return {
                     excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(settings.Blocklist),
                 }
-                -- Forever keeps its filter: every player's debuffs stay hidden there.
-                if KE.IS_FOREVER then candidates.isFromPlayerOrPlayerPet = false end
-                return candidates
             end,
             capabilities = { hasBorder = true, hasDispelBadge = true, hasDispelRing = true, hasGlow = false },
 
