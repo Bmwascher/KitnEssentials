@@ -25,6 +25,8 @@ return {
     "KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua",
     "Modules/Combat/ClassTools/DisintegrateTicks.lua",
     "Modules/Combat/ClassTools/DivineArbiter.lua",
+    "Modules/Combat/ClassTools/Executioner.lua",
+    "Modules/Combat/ClassTools/ExecutionerRules.lua",
     "Modules/Combat/ClassTools/HavocTracker.lua",
     "Modules/Combat/ClassTools/SpellReflect.lua",
     "Modules/Combat/ClassTools/SpellReflectRules.lua",

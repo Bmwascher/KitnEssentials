@@ -217,7 +217,7 @@ read_globals = {
     -- Spell
     "C_Spell", "C_SpellBook",
     "IsPlayerSpell", "IsSpellKnown", "IsSpellKnownOrOverridesKnown",
-    "C_SpellActivationOverlay",
+    "C_SpellActivationOverlay", "CancelSpellByName",
 
     -- Secret Values (12.0)
     "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
@@ -365,7 +365,7 @@ read_globals = {
     "C_PetBattles",
 
     -- Macro
-    "CreateMacro", "EditMacro", "GetMacroIndexByName",
+    "CreateMacro", "EditMacro", "GetMacroIndexByName", "PickupMacro",
     "GetMacroSpell", "GetNumMacros",
     "GetMacroInfo",
 
