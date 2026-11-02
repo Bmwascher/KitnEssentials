@@ -54,7 +54,7 @@ local PlaySoundFile = PlaySoundFile
 local UnitClass = UnitClass
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local ipairs, pairs, pcall, tostring, type = ipairs, pairs, pcall, tostring, type
-local math_floor, math_max = math.floor, math.max
+local math_max = math.max
 local wipe = wipe
 
 -- Flip to true, /reload, repro, read the log.
@@ -185,11 +185,6 @@ local function SlotWidth(measure, face, size, outline)
         widest = math_max(widest, measure:GetUnboundedStringWidth())
     end
     return widest
-end
-
-local function Snap(x)
-    local px = KE:GetPixelSize()
-    return math_floor(x / px + 0.5) * px
 end
 
 local function PaintSides(sides, left, right, spellId)
@@ -349,14 +344,15 @@ function SR:ApplyStyle()
     local nameSize = db.NameFontSize or 16
     if self:TextMode() then
         local size = db.TextSize or 30
-        frame:SetSize(size * 8, size + 4)
+        local width = size * 8
+        frame:SetSize(width, size + 4)
         KE:ApplyFontToText(textBox.label, face, size, outline)
         KE:ApplyFontToText(textBox.timer, face, size, outline)
         KE:ApplyFontToText(textBox.line, face, nameSize, outline)
         KE:ApplyFontToText(textBox.lineTimer, face, nameSize, outline)
         for i = 1, 2 do textBox.sides[i]:SetSize(nameSize, nameSize) end
         textBox.iconFrame:SetSize(size, size)
-        textBox.width, textBox.iconSize, textBox.nameSize = size * 8, size, nameSize
+        textBox.width, textBox.iconSize, textBox.nameSize = width, size, nameSize
         textBox.bigSlot = SlotWidth(textBox.measure, face, size, outline)
         textBox.smallSlot = SlotWidth(textBox.measure, face, nameSize, outline)
         iconBox:Hide()
@@ -485,14 +481,15 @@ function SR:PaintTextState(rec, label, colorKey, notReady)
     PaintSides(box.sides, named or (icons and notReady), named, rec.id)
 end
 
--- Runs when a line's text or icons change, never while only a count runs:
--- the count's slot is sized for its widest string, so nothing moves.
+-- Runs when a line's text or icons change, never while only a count runs.
+-- The count hangs right of its text and the slot keeps room for its widest
+-- string, so the group stays centered while the count changes.
 function SR:LayoutText(notReady)
     local box = self.frame.textBox
     local tail = notReady and 0 or COUNT_GAP + box.bigSlot
     local x = Rules.LineStart(box.iconSize + ICON_GAP, box.label:GetUnboundedStringWidth(), tail)
     box.label:ClearAllPoints()
-    box.label:SetPoint("LEFT", box, "LEFT", Snap(box.width / 2 + x), 0)
+    box.label:SetPoint("LEFT", box, "LEFT", KE:PixelSnap(box.width / 2 + x), 0)
 
     local side = box.nameSize + NAME_GAP
     local lead = box.sides[1]:IsShown() and side or 0
@@ -503,7 +500,7 @@ function SR:LayoutText(notReady)
     end
     x = Rules.LineStart(lead, box.line:GetUnboundedStringWidth(), tail)
     box.line:ClearAllPoints()
-    box.line:SetPoint("TOPLEFT", box, "BOTTOMLEFT", Snap(box.width / 2 + x), -2)
+    box.line:SetPoint("TOPLEFT", box, "BOTTOMLEFT", KE:PixelSnap(box.width / 2 + x), -2)
 end
 
 -- State parts are set only when the record, its phase or the ready state
@@ -773,8 +770,9 @@ function SR:Evaluate()
         self:BuildEntries()
         self:CreateFrame_()
         self:SetLive(true)
-        self:ApplyPosition()
+        -- Style sets the size, so the position snap sees the final edges.
         self:ApplyStyle()
+        self:ApplyPosition()
         self:RegisterAnchor()
         self:Step()
     else
@@ -877,8 +875,8 @@ function SR:ShowPreview()
     self:UpdateDB()
     self:CreateFrame_()
     self.isPreview = true
-    self:ApplyPosition()
     self:ApplyStyle()
+    self:ApplyPosition()
     if self.records[TEST_KEY] then self:Step() else self:PaintSample() end
     self:RegisterAnchor()
 end
