@@ -731,7 +731,10 @@ function SR:Evaluate()
         self:Step()
     else
         self:SetLive(false)
-        if self.frame and not self.isPreview then
+        if self.isPreview then
+            -- Losing the spell drops a test run, so the sample it held off returns.
+            self:PaintSample()
+        elseif self.frame then
             self:HideCue()
             self:UnregisterAnchor()
         end
@@ -761,7 +764,7 @@ function SR:ApplySettings()
         if not self:IsEnabled() then
             KitnEssentials:EnableModule("SpellReflect")
         elseif self.isPreview then
-            -- The step paints only the sample while previewing, so repaint it.
+            -- Restyle and repaint the preview, or the test run it is holding off.
             self:ShowPreview()
         else
             self:Evaluate()
