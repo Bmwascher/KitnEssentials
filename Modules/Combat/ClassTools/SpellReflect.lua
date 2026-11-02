@@ -219,10 +219,11 @@ function SR:CreateFrame_()
     iconBox.cooldown:SetDrawBling(false)
     iconBox.cooldown:SetHideCountdownNumbers(true)
     iconBox.cooldown:Hide()
-    -- Above the sweep, so the count stays readable.
+    -- Above the sweep and the glow, which LibCustomGlow puts 8 levels over
+    -- its frame, so the count stays readable.
     local textLayer = CreateFrame("Frame", nil, iconBox)
     textLayer:SetAllPoints(iconBox)
-    textLayer:SetFrameLevel(iconBox.cooldown:GetFrameLevel() + 1)
+    textLayer:SetFrameLevel(iconBox:GetFrameLevel() + 9)
     iconBox.count = textLayer:CreateFontString(nil, "OVERLAY")
     iconBox.count:SetPoint("CENTER")
     iconBox.name = textLayer:CreateFontString(nil, "OVERLAY")
