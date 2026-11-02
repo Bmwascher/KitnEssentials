@@ -904,12 +904,14 @@ end
 -- Environment Detection
 ---------------------------------------------------------------------------------
 function KT:ShouldBeActive()
-    if not self.db or not self.db.Enabled then return false end
-    if self.db.ShowBars == false and self.db.PlateIcons == false then return false end
+    if not self.db then return false end
     local inInstance, instanceType = IsInInstance()
-    if not inInstance or instanceType ~= "party" then return false end
-    if not IsInGroup() then return false end
-    return true
+    return KT.ActiveFor(self.db, {
+        inInstance = inInstance,
+        instanceType = instanceType,
+        inGroup = IsInGroup(),
+        inRaid = IsInRaid(),
+    })
 end
 
 function KT:CheckActivation()
@@ -953,9 +955,12 @@ function KT:OnZoneChange(event)
     end)
 end
 
+-- With Only in Dungeons off, the group can end or become a raid anywhere, so
+-- a roster change re-checks activation before it refreshes the roster.
 function KT:OnRosterUpdate()
     if self.isActive then
-        self:RefreshPartyRoster()
+        if self.db.OnlyInDungeons == false then self:CheckActivation() end
+        if self.isActive then self:RefreshPartyRoster() end
     else
         self:CheckActivation()
     end
@@ -1959,7 +1964,10 @@ function KT:ApplySettings()
         self:ShowPreview()
     end
     -- Show Bars and Nameplate Icons both off deactivates the tracker.
+    local wasActive = self.isActive
     self:CheckActivation()
     self:SyncPlates()
+    -- A stop releases every bar and plate icon, the preview's samples too.
+    if self.isPreview and wasActive and not self.isActive then self:ShowPreview() end
     if self.platesOn then self:PlatesRestyle() end
 end

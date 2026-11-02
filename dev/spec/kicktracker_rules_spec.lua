@@ -696,3 +696,67 @@ describe("KickTracker arrow hug", function()
         end
     end)
 end)
+
+describe("KickTracker activation", function()
+    local DUNGEON = { inInstance = true, instanceType = "party", inGroup = true, inRaid = false }
+    local DUNGEON_SOLO = { inInstance = true, instanceType = "party", inGroup = false, inRaid = false }
+    local WORLD = { inInstance = false, instanceType = "none", inGroup = true, inRaid = false }
+    local DELVE = { inInstance = true, instanceType = "scenario", inGroup = true, inRaid = false }
+    local RAID = { inInstance = true, instanceType = "raid", inGroup = true, inRaid = true }
+    local WORLD_RAID = { inInstance = false, instanceType = "none", inGroup = true, inRaid = true }
+    local SOLO = { inInstance = false, instanceType = "none", inGroup = false, inRaid = false }
+
+    local function DB(only, extra)
+        local db = { Enabled = true, ShowBars = true, PlateIcons = true, OnlyInDungeons = only }
+        for key, value in pairs(extra or {}) do db[key] = value end
+        return db
+    end
+
+    it("never runs while the module or both displays are off", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "module off, ticked, dungeon group", db = DB(true, { Enabled = false }), facts = DUNGEON },
+            { name = "module off, unticked, world party", db = DB(false, { Enabled = false }), facts = WORLD },
+            { name = "both displays off, ticked, dungeon group",
+              db = DB(true, { ShowBars = false, PlateIcons = false }), facts = DUNGEON },
+            { name = "both displays off, unticked, world party",
+              db = DB(false, { ShowBars = false, PlateIcons = false }), facts = WORLD },
+        }
+        for _, row in ipairs(rows) do
+            assert.is_false(KT.ActiveFor(row.db, row.facts), row.name)
+        end
+    end)
+
+    it("ticked or unsaved, runs only in a 5-player instance while in a group", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "dungeon group", facts = DUNGEON, want = true },
+            { name = "dungeon solo", facts = DUNGEON_SOLO, want = false },
+            { name = "world party", facts = WORLD, want = false },
+            { name = "group delve", facts = DELVE, want = false },
+            { name = "raid instance", facts = RAID, want = false },
+            { name = "solo in the world", facts = SOLO, want = false },
+        }
+        for _, mode in ipairs({ { label = "ticked", value = true }, { label = "unsaved", value = nil } }) do
+            for _, row in ipairs(rows) do
+                assert.equals(row.want, KT.ActiveFor(DB(mode.value), row.facts), mode.label .. ", " .. row.name)
+            end
+        end
+    end)
+
+    it("unticked, runs in any group that is not a raid", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "world party", facts = WORLD, want = true },
+            { name = "group delve", facts = DELVE, want = true },
+            { name = "dungeon group", facts = DUNGEON, want = true },
+            { name = "solo in the world", facts = SOLO, want = false },
+            { name = "dungeon solo", facts = DUNGEON_SOLO, want = false },
+            { name = "raid group in the world", facts = WORLD_RAID, want = false },
+            { name = "raid instance", facts = RAID, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.ActiveFor(DB(false), row.facts), row.name)
+        end
+    end)
+end)

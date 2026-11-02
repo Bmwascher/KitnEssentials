@@ -76,11 +76,6 @@ local ALLOWED = {
     L2 = {
     },
     L3 = {
-        -- Interrupt Tracker page: edited only with an approval that names the item.
-        ["KitnEssentials_Options/DungeonTools/KicksCasts/GUI-KickTracker.lua"] = {
-            phase = "none until approved",
-            detail = "content after Position; content after Position; content after Colors",
-        },
     },
     L4 = {
     },

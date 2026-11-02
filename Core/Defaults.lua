@@ -860,6 +860,8 @@ local Defaults = {
             PlateFontFace = nil,            -- nil: the global font
             PlateFontOutline = "OUTLINE",
             PlateSwipe = true,
+            -- Show In
+            OnlyInDungeons = true,
         },
 
         CCTracker = {
