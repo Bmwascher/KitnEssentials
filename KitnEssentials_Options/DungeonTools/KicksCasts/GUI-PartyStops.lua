@@ -12,8 +12,9 @@ local Theme = KE.Theme
 
 local C_Spell = C_Spell
 local C_Timer = C_Timer
-local math_pi = math.pi
-local pcall, type = pcall, type
+local CreateFrame = CreateFrame
+local GameTooltip = GameTooltip
+local ipairs, pcall, type = ipairs, pcall, type
 
 local function GetModule()
     if KitnEssentials then
@@ -22,18 +23,105 @@ local function GetModule()
     return nil
 end
 
--- The compact checkbox is a 22px cell; the arrows sit level with it.
-local ROW_HEIGHT = 26
 local FOOTER_HEIGHT = 28
--- Unrotated, the arrow points down.
-local ARROW_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
+-- A 24 px icon, its pick ring 1 px outside it and 2 px thick, then 3 px clear
+-- of the next icon: 20 icons take 600 px.
+local STRIP_ICON = 24
+local STRIP_PITCH = 30
+local STRIP_INSET = 3
+local STRIP_ROW_HEIGHT = 30
+local NO_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+local EDGE = "Interface\\Buttons\\WHITE8X8"
 
-local function SpellLabel(id, className)
+local function SpellName(id)
     local ok, name = pcall(C_Spell.GetSpellName, id)
-    if not (ok and type(name) == "string") then name = "Spell " .. id end
-    local okIcon, icon = pcall(C_Spell.GetSpellTexture, id)
-    return GUIFrame.IconText(okIcon and icon or nil) .. name .. " (" .. className .. ")"
+    if ok and type(name) == "string" then return name end
+    return "Spell " .. id
 end
+
+local function SpellIcon(id)
+    local ok, icon = pcall(C_Spell.GetSpellTexture, id)
+    if ok then return icon end
+    return nil
+end
+
+-- One slot per shipped stop, all made here: a pooled object that grows parts
+-- after it is built fails its release check.
+local function ConstructOrderStrip(parent)
+    local strip = CreateFrame("Frame", nil, parent)
+    local count = #KE.PartyStopsData.ORDER
+    strip:SetSize(2 * STRIP_INSET + count * STRIP_PITCH - (STRIP_PITCH - STRIP_ICON), STRIP_ROW_HEIGHT)
+    local slots, owned = {}, { strip }
+
+    for i = 1, count do
+        local slot = CreateFrame("Button", nil, strip)
+        slot:SetSize(STRIP_ICON, STRIP_ICON)
+        slot:SetPoint("TOPLEFT", strip, "TOPLEFT", STRIP_INSET + (i - 1) * STRIP_PITCH, -STRIP_INSET)
+
+        local edge = slot:CreateTexture(nil, "BACKGROUND")
+        edge:SetAllPoints(slot)
+        edge:SetColorTexture(0, 0, 0, 1)
+
+        local icon = slot:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        slot.icon = icon
+
+        local highlight = slot:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints(icon)
+        slot.highlight = highlight
+
+        local ring = CreateFrame("Frame", nil, slot, "BackdropTemplate")
+        ring:SetPoint("TOPLEFT", slot, "TOPLEFT", -STRIP_INSET, STRIP_INSET)
+        ring:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", STRIP_INSET, -STRIP_INSET)
+        ring:SetBackdrop({ edgeFile = EDGE, edgeSize = 2 })
+        ring:EnableMouse(false)
+        ring:Hide()
+        slot.ring = ring
+
+        slot:SetScript("OnClick", function(self)
+            local onPick = strip._onPick
+            if onPick and self.id then onPick(self.id) end
+        end)
+        slot:SetScript("OnEnter", function(self)
+            if not self.id then return end
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(SpellName(self.id), 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        slots[i] = slot
+        owned[#owned + 1] = slot
+    end
+
+    -- ids in on-screen order; picked gets the ring; onPick(id) on a click.
+    function strip:Configure(ids, picked, onPick)
+        self._onPick = onPick
+        local accent = Theme.accent
+        for i, slot in ipairs(slots) do
+            local id = ids[i]
+            slot.id = id
+            if id then
+                slot.icon:SetTexture(SpellIcon(id) or NO_ICON)
+                slot.highlight:SetColorTexture(accent[1], accent[2], accent[3], 0.3)
+                slot.ring:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
+                slot.ring:SetShown(id == picked)
+                slot:Show()
+            else
+                slot:Hide()
+            end
+        end
+    end
+
+    strip._keOwned = owned
+    return strip
+end
+
+GUIFrame:NewWidgetPool("partystops:orderstrip", ConstructOrderStrip, function(strip)
+    strip._onPick = nil
+end)
 
 GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.PartyStops
@@ -64,9 +152,9 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     card1:AddLabel("Shows each party member's crowd-control stops (stuns, fears, knockbacks and grips) as " ..
         "icons that count down their cooldowns. A teammate's stop is seen from its debuff on an enemy " ..
         "nameplate, so two teammates of one class both start and a resisted stop shows nothing. Your own " ..
-        "stops start from your cast. Works with Party Cooldowns off. Each watched enemy costs one sensor " ..
-        "per tracked stop a teammate can have; an area stop watches only as many as Enemies Watched, " ..
-        "Area Stops allows.")
+        "stops start from your cast. Works with Party Cooldowns off. A single-target stop, like Blind, " ..
+        "watches up to " .. Rules.Reach(false) .. " enemies; an area stop, like Shockwave, lands on several " ..
+        "at once and watches up to " .. Rules.Reach(true) .. ".")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.
@@ -77,9 +165,9 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
     local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    row2:AddWidget(GUIFrame:CreateCheckbox(row2, "Only in a Party", {
+    row2:AddWidget(GUIFrame:CreateCheckbox(row2, "Hide While Solo", {
         value = db.OnlyInParty ~= false,
-        tooltip = "Hides the icons while you are solo. They never show in a raid.",
+        tooltip = "Solo, only your own stops can show, and only with Include Yourself ticked. Never shows in a raid.",
         callback = function(checked)
             db.OnlyInParty = checked
             ApplySettings()
@@ -110,104 +198,138 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card3:AddRow(row3, Theme.rowHeight)
-
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched", {
-        min = 4, max = 20, step = 1,
-        value = Rules.Watched(db.EnemiesWatched),
-        tooltip = "How many enemies a single-target stop, like Blind or Hammer of Justice, is read on: enemies in " ..
-            "combat, and for Blind also enemies not yet in combat while a slot is free.",
-        callback = function(value)
-            db.EnemiesWatched = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched, Area Stops", {
-        min = 1, max = 20, step = 1,
-        value = Rules.WatchedArea(db.EnemiesWatchedArea),
-        tooltip = "How many enemies an area stop, like Shockwave or Chaos Nova, is read on. It lands on " ..
-            "several at once, so a few are enough, and each one watched costs frame time in big pulls. " ..
-            "Never more than Enemies Watched.",
-        callback = function(value)
-            db.EnemiesWatchedArea = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    card3:AddRow(row3b, Theme.rowHeight)
     card3:AddSeparator()
 
-    -- The spell rows are released by each redraw, so they have a manager of
-    -- their own, cleared with them.
-    local rowManager = GUIFrame:CreateWidgetStateManager()
-    local mark, DrawSpells
+    -- The pick lives for this build of the page and is never saved.
+    local picked
+    local classMark, stripMark, DrawRows, DrawStrip
 
-    local function Redraw()
+    local function Ticked()
+        local off, ids = db.SpellOff, {}
+        for _, id in ipairs(Rules.SpellList(db, Data)) do
+            if off[id] ~= true then ids[#ids + 1] = id end
+        end
+        return ids
+    end
+
+    local function RedrawStrip()
         local oldHeight = card3:GetContentHeight()
-        card3:TruncateBody(mark)
-        rowManager:Clear()
-        DrawSpells()
+        card3:TruncateBody(stripMark)
+        DrawStrip()
         GUIFrame:ResizeCardInPlace(card3, oldHeight)
     end
 
-    -- The pressed button is released by the redraw, so the redraw waits a
-    -- frame.
-    local function Move(list, i, delta)
-        list[i], list[i + delta] = list[i + delta], list[i]
-        db.Spells = list
-        ApplySettings()
-        C_Timer.After(0, Redraw)
+    local function RedrawAll()
+        local oldHeight = card3:GetContentHeight()
+        card3:TruncateBody(classMark)
+        DrawRows()
+        GUIFrame:ResizeCardInPlace(card3, oldHeight)
     end
 
-    local function AddSpellRow(list, i)
-        local id = list[i]
-        local row = GUIFrame:CreateRow(card3.content, ROW_HEIGHT)
-        local check = GUIFrame:CreateCompactCheckbox(row, SpellLabel(id, Data.CLASS_NAMES[Data.STOPS[id].class]), {
-            value = db.SpellOff[id] ~= true,
-            callback = function(checked)
-                db.SpellOff[id] = (not checked) or nil
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(check, 0.76)
-        local up = GUIFrame:CreateButton(row, "", {
-            image = ARROW_TEXTURE, imageRotation = math_pi,
-            height = 24,
-            callback = function() Move(list, i, -1) end,
-        })
-        row:AddWidget(up, 0.12)
-        local down = GUIFrame:CreateButton(row, "", {
-            image = ARROW_TEXTURE,
-            height = 24,
-            callback = function() Move(list, i, 1) end,
-        })
-        row:AddWidget(down, 0.12)
-        rowManager:Register(check, "all")
-        if i > 1 then rowManager:Register(up, "all") else up:SetEnabled(false) end
-        if i < #list then rowManager:Register(down, "all") else down:SetEnabled(false) end
-        card3:AddRow(row, ROW_HEIGHT)
+    -- A clicked icon or a pressed button is released by the redraw, so the
+    -- redraw waits a frame.
+    local function Pick(id)
+        picked = id
+        C_Timer.After(0, RedrawStrip)
     end
 
-    DrawSpells = function()
+    local function Move(step)
+        local list = Rules.MoveStop(Rules.SpellList(db, Data), db.SpellOff, picked, step)
+        if list then
+            db.Spells = list
+            ApplySettings()
+        end
+        C_Timer.After(0, RedrawStrip)
+    end
+
+    local function StatusLabel(row)
+        local label = row:GetLabel("normal")
+        label:SetJustifyH("LEFT")
+        label:SetWordWrap(false)
+        label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        return label
+    end
+
+    -- Every row here has a fixed height, so a strip redraw never moves the
+    -- cards below.
+    DrawStrip = function()
+        local ids = Ticked()
+        local stripRow = GUIFrame:CreateRow(card3.content, STRIP_ROW_HEIGHT)
+        if #ids > 0 then
+            local strip = GUIFrame:AcquirePooled("partystops:orderstrip", stripRow)
+            strip:ClearAllPoints()
+            strip:SetPoint("LEFT", stripRow, "LEFT", 0, 0)
+            strip:Configure(ids, picked, Pick)
+        else
+            local note = StatusLabel(stripRow)
+            note:SetPoint("LEFT", stripRow, "LEFT", 0, 0)
+            note:SetPoint("RIGHT", stripRow, "RIGHT", 0, 0)
+            note:SetText("Nothing is ticked, so Party Stops shows no icons. Tick a stop, or press Kitn Defaults.")
+        end
+        card3:AddRow(stripRow, STRIP_ROW_HEIGHT)
+
+        local moveRow = GUIFrame:CreateRow(card3.content, FOOTER_HEIGHT)
+        local left = GUIFrame:CreateButton(moveRow, "Move Left", { callback = function() Move(-1) end })
+        moveRow:AddWidget(left, 0.2)
+        local right = GUIFrame:CreateButton(moveRow, "Move Right", { callback = function() Move(1) end })
+        moveRow:AddWidget(right, 0.2)
         local list = Rules.SpellList(db, Data)
-        for i = 1, #list do AddSpellRow(list, i) end
+        left:SetEnabled(Rules.MoveStop(list, db.SpellOff, picked, -1) ~= nil)
+        right:SetEnabled(Rules.MoveStop(list, db.SpellOff, picked, 1) ~= nil)
+        local status = StatusLabel(moveRow)
+        status:SetPoint("LEFT", right, "RIGHT", 8, 0)
+        status:SetPoint("RIGHT", moveRow, "RIGHT", 0, 0)
+        local place = 0
+        for i, id in ipairs(ids) do
+            if id == picked then place = i end
+        end
+        if place > 0 then
+            status:SetText("Picked: " .. SpellName(picked) .. " (" .. place .. " of " .. #ids .. ")")
+        elseif #ids > 0 then
+            status:SetText("No icon picked.")
+        end
+        card3:AddRow(moveRow, FOOTER_HEIGHT)
+
         local footer = GUIFrame:CreateRow(card3.content, FOOTER_HEIGHT)
-        local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
+        footer:AddWidget(GUIFrame:CreateButton(footer, "Kitn Defaults", {
             tooltip = "Tracks every stop again, in the shipped order.",
             callback = function()
                 db.Spells = nil
                 db.SpellOff = {}
+                picked = nil
                 ApplySettings()
-                C_Timer.After(0, Redraw)
+                C_Timer.After(0, RedrawAll)
             end,
-        })
-        footer:AddWidget(defaults, 0.3)
-        rowManager:Register(defaults, "all")
+        }), 0.3)
         card3:AddRow(footer, FOOTER_HEIGHT, 0)
-        rowManager:UpdateAll(true)
     end
 
-    mark = card3:MarkBody()
-    DrawSpells()
+    -- A class lists its stops in shipped order, so the rows stay put when the
+    -- icon order moves.
+    DrawRows = function()
+        local picks = {}
+        for _, id in ipairs(Data.ORDER) do
+            picks[#picks + 1] = {
+                class = Data.STOPS[id].class,
+                label = GUIFrame.IconText(SpellIcon(id)) .. SpellName(id),
+                value = db.SpellOff[id] ~= true,
+                onChange = function(checked)
+                    db.SpellOff[id] = (not checked) or nil
+                    if not checked and picked == id then picked = nil end
+                    ApplySettings()
+                    RedrawStrip()
+                end,
+            }
+        end
+        KE.ClassSpellRows.Add(card3, picks)
+        card3:AddSeparator()
+        card3:AddLabel("Icon order, left to right as the icons show. Click an icon, then move it.")
+        stripMark = card3:MarkBody()
+        DrawStrip()
+    end
+
+    classMark = card3:MarkBody()
+    DrawRows()
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------

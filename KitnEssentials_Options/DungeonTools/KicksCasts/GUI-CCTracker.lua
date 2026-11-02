@@ -27,9 +27,7 @@ local SOURCE_OPTIONS = {
 
 local GROW_OPTIONS = GUIFrame.GrowVerticalOptions
 
-local SEEDS_PER_ROW = 3
-local SEED_CELL_H = 24
-local SEED_CELL_SPACING = 2
+local FOOTER_HEIGHT = 28
 
 local function SpellName(id)
     local ok, name = pcall(C_Spell.GetSpellName, id)
@@ -80,9 +78,17 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
     db.CustomIDs = db.CustomIDs or {}
 
     local card2 = GUIFrame:CreateCard(scrollChild, "Tracked Crowd Control", yOffset)
-    -- A class pick releases the seed checkboxes, so they have a manager of
-    -- their own, cleared with them; the page's manager never drives a released one.
+    -- A redraw releases the class rows, so they have a manager of their own,
+    -- cleared with them; the page's manager never drives a released one.
     local seedManager = GUIFrame:CreateWidgetStateManager()
+    local mark, DrawRows
+
+    local function Redraw()
+        local oldHeight = card2:GetContentHeight()
+        card2:TruncateBody(mark)
+        DrawRows()
+        GUIFrame:ResizeCardInPlace(card2, oldHeight)
+    end
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     row2a:AddWidget(GUIFrame:CreateDropdown(row2a, "Count Crowd Control From", {
@@ -99,59 +105,37 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
             "and ignores the list below.",
         callback = function(checked)
             db.EveryCC = checked
-            seedManager:UpdateAll(true)
             ApplySettings()
+            -- The note under the list comes and goes with it.
+            Redraw()
         end,
     }), 0.5)
     card2:AddRow(row2a, Theme.rowHeight)
     card2:AddSeparator()
 
-    local classTokens, listed = {}, {}
-    for _, seed in ipairs(seeds) do
-        if not listed[seed.group] then
-            listed[seed.group] = true
-            classTokens[#classTokens + 1] = seed.group
-        end
-    end
-
-    local mark
-    local DrawClass
-
-    local function Redraw(classToken)
-        local oldHeight = card2:GetContentHeight()
-        card2:TruncateBody(mark)
-        DrawClass(classToken)
-        GUIFrame:ResizeCardInPlace(card2, oldHeight)
-    end
-
-    DrawClass = function(classToken)
+    DrawRows = function()
         seedManager:Clear()
         seedManager:SetCondition("seeds", function() return db.EveryCC ~= true end)
-        local classSeeds = {}
+        local picks = {}
         for _, seed in ipairs(seeds) do
-            if seed.group == classToken then classSeeds[#classSeeds + 1] = seed end
-        end
-        local seedRow
-        for index, seed in ipairs(classSeeds) do
             local key = seed.key
             local texture = C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(seed.ids[1])
-            if not seedRow then seedRow = GUIFrame:CreateRow(card2.content, SEED_CELL_H) end
-            local cell = GUIFrame:CreateCompactCheckbox(seedRow, GUIFrame.IconText(texture) .. seed.label, {
+            picks[#picks + 1] = {
+                class = seed.group,
+                label = GUIFrame.IconText(texture) .. seed.label,
                 value = Rules.SeedEnabled(seed, db.Groups),
-                callback = function(checked)
+                onChange = function(checked)
                     db.Groups[key] = { enabled = checked }
                     ApplySettings()
                 end,
-            })
-            seedRow:AddWidget(cell, 1 / SEEDS_PER_ROW)
-            seedManager:Register(cell, "seeds")
-            if index % SEEDS_PER_ROW == 0 or index == #classSeeds then
-                card2:AddRow(seedRow, SEED_CELL_H,
-                    index == #classSeeds and Theme.paddingSmall or SEED_CELL_SPACING)
-                seedRow = nil
-            end
+            }
         end
+        local rows = KE.ClassSpellRows.Add(card2, picks)
+        seedManager:RegisterGroup(rows.widgets, "seeds")
         seedManager:UpdateAll(true)
+        if db.EveryCC == true then
+            card2:AddNote("Every Crowd Control is on, so the list is ignored.")
+        end
         card2:AddSeparator()
 
         local addRow = GUIFrame:CreateSpellAddRow(card2.content, {
@@ -164,7 +148,9 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
                 end
                 db.CustomIDs[id] = true
                 ApplySettings()
-                GUIFrame:RefreshContent()
+                -- The rebuild releases the pressed button, so it waits a
+                -- frame.
+                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
             end,
             onRemove = function(text)
                 local id, reason = Rules.CanRemove(text, seeds, db.CustomIDs)
@@ -174,7 +160,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
                 end
                 db.CustomIDs[id] = nil
                 ApplySettings()
-                GUIFrame:RefreshContent()
+                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
             end,
         })
         card2:AddRow(addRow, Theme.rowHeight)
@@ -191,16 +177,23 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
             entries[i] = GUIFrame.IconText(texture) .. (name and (name .. " (" .. id .. ")") or ("Spell " .. id))
         end
         card2:AddNote(#entries == 0 and "Added: none." or ("Added: " .. table.concat(entries, ", ") .. "."))
+
+        local footer = GUIFrame:CreateRow(card2.content, FOOTER_HEIGHT)
+        footer:AddWidget(GUIFrame:CreateButton(footer, "Kitn Defaults", {
+            tooltip = "Sets every listed crowd control back to how it ships. Spells added by ID stay.",
+            -- The pressed button is released by the redraw, so the redraw
+            -- waits a frame.
+            callback = function()
+                db.Groups = {}
+                ApplySettings()
+                C_Timer.After(0, Redraw)
+            end,
+        }), 0.3)
+        card2:AddRow(footer, FOOTER_HEIGHT, 0)
     end
 
-    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card2.content, {
-        scope = "CCTracker",
-        classTokens = classTokens,
-        onPick = function(key) Redraw(key) end,
-    })
-    card2:AddRow(classRow, 36)
     mark = card2:MarkBody()
-    DrawClass(shownClass)
+    DrawRows()
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------

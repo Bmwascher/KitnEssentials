@@ -47,6 +47,7 @@
     <Script file="Combat\StatusTexts\GUI-PotionReady.lua" />
     <Script file="QoL\GroupTools\GUI-ReadyCheckConsumables.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-DungeonCasts.lua" />
+    <Script file="DungeonTools\KicksCasts\GUI-ClassSpellRows.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-CCTracker.lua" />
     <Script file="DungeonTools\KicksCasts\GUI-PartyStops.lua" />
     <Script file="DungeonTools\DungeonAlerts\GUI-TargetedSpells.lua" />

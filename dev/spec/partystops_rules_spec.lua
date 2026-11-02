@@ -116,4 +116,23 @@ describe("party stops rules", function()
             assert.equals(case[4], Rules.OnlyStale(case[1], want, case[2]), case[5])
         end
     end)
+
+    it("moves a ticked stop to the nearest ticked one that way, past unticked ones, and refuses at an edge or for an unticked or unknown stop", function()
+        local list = { 1, 2, 3, 4, 5 }
+        local off = { [2] = true, [5] = true }
+        local cases = {
+            { 3, -1, { 3, 2, 1, 4, 5 }, "left, past an unticked stop" },
+            { 3, 1, { 1, 2, 4, 3, 5 }, "right, to the next ticked stop" },
+            { 1, 1, { 3, 2, 1, 4, 5 }, "right, past an unticked stop" },
+            { 1, -1, nil, "left end" },
+            { 4, 1, nil, "only an unticked stop to the right" },
+            { 2, 1, nil, "the picked stop is unticked" },
+            { 9, -1, nil, "the picked stop is not in the list" },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case[3], Rules.MoveStop(list, off, case[1], case[2]), case[4])
+            assert.are.same({ 1, 2, 3, 4, 5 }, list, "input unchanged, " .. case[4])
+        end
+        assert.are.same({ 2, 1 }, Rules.MoveStop({ 1, 2 }, nil, 2, -1), "no SpellOff table")
+    end)
 end)

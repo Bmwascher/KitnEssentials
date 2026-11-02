@@ -435,8 +435,7 @@ end
 
 -- How many sensors a feed builds and aims.
 local function Reach(f)
-    local db = PS.db
-    return Rules.Reach(f.aoe, db.EnemiesWatched, db.EnemiesWatchedArea)
+    return Rules.Reach(f.aoe)
 end
 
 -- Whether a single-target feed's sensor reads the enemy in slot: one held out
@@ -523,7 +522,7 @@ local function Cover(f)
         end
     end
     local k = 1
-    for slot = 1, Rules.Watched(PS.db.EnemiesWatched) do
+    for slot = 1, Rules.Watched() do
         local unit = PS.slots:UnitOf(slot)
         if unit and not by[unit] and not PS.slots:IsCalm(slot) then
             while k <= want and at[k] do k = k + 1 end
@@ -606,8 +605,8 @@ local function NextMissing()
     return nil
 end
 
--- One container per frame: each costs the client an aura pass. 200 at the
--- cap take about 3.3 s at 60 fps, once per session and cap.
+-- One container per frame: each costs the client an aura pass. The most
+-- there can be, 98, take about 1.6 s at 60 fps, once per session.
 local function BuildStep()
     PS.buildQueued = false
     if not PS.live then return end
@@ -1111,7 +1110,6 @@ local function GoLive()
     PS.door = PS.door or CDRules.DoorVerdict(EvalBool, issecretvalue)
     handle = handle or KE.GroupInspect:Subscribe(KEY, callbacks)
     sensHost:Show()
-    PS.slots:SetCap(Rules.Watched(PS.db.EnemiesWatched))
     PS.slots:Start()
     for event, method in pairs(LIVE_EVENTS) do PS:RegisterEvent(event, method) end
     local manager = _G.EditModeManagerFrame
@@ -1172,7 +1170,7 @@ local function MakeFrames()
         tickSeconds = 2,
         unitEvents = { "UNIT_FLAGS", "UNIT_FACTION" },
         onUnitEvent = OnPlateUnitEvent,
-        cap = Rules.Watched(PS.db.EnemiesWatched),
+        cap = Rules.Watched(),
     })
 end
 
@@ -1185,19 +1183,6 @@ local function ApplyQueued()
     if not PS:IsEnabled() then return end
     PS:UpdateDB()
     KE.Context:Evaluate(KEY)
-    if PS.slots then PS.slots:SetCap(Rules.Watched(PS.db.EnemiesWatched)) end
-    -- Area sensors may have moved, here or in the releases SetCap just made,
-    -- so each area feed only records on its next read, as one turning on does.
-    if PS.live then
-        for _, f in pairs(PS.feeds) do
-            if f.aoe and f.on then
-                Cover(f)
-                Unprime(f)
-            end
-        end
-        QueueBuild()
-        Arm()
-    end
     QueueRefresh()
 end
 
