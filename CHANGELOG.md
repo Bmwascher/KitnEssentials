@@ -1,5 +1,31 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.7
+
+The Interrupt Tracker and Focus Macros' Focus Kick come to WoW Forever.
+
+### WoW Forever only
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+#### Interrupt Tracker
+
+- **NEW:** The Interrupt Tracker, with its Bars and Nameplate Icons tabs,
+  can now be turned on (it starts off)
+- Teammates show their class kick, and Priest and Druid talent kicks once
+  they have been inspected
+- Your own row follows your stance, form and shield
+- Rows sort by the role each player reports
+
+#### Focus Macros
+
+- **NEW:** The Focus Kick tab can now be turned on (it starts off), and its
+  macro casts the kick that matches your stance or form
+
+---
+
 ## v4.16.6
 
 The Focus Castbar's kick mark lands where your kick really comes back after
