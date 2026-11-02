@@ -3156,6 +3156,15 @@ function L.loadCombatTexts(overrides)
     return modules["CombatTexts"], KE
 end
 
+-- Modules/Combat/StatusTexts/RatingCompare.lua, for its plain pick and its
+-- alpha fold. Nothing creates a frame at load. Returns KE.RatingCompare, KE.
+function L.loadRatingCompare(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local KE = {}
+    helpers.loadModule("Modules/Combat/StatusTexts/RatingCompare.lua", KE)
+    return KE.RatingCompare, KE
+end
+
 -- Modules/Combat/CombatRes.lua, for its pure listening rule. Nothing creates a
 -- frame, registers an event or subscribes at load. Returns CR, KE.
 function L.loadCombatRes(overrides)
