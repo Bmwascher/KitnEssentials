@@ -1021,6 +1021,33 @@ local Defaults = {
             Position = DefaultPosition(0, -220),
         },
 
+        SpellReflect = {
+            Enabled = false,
+            DisplayMode = "TEXT", -- ICON | TEXT
+            Lead = 5, -- seconds before the cast start the cue appears
+            IconSize = 56,
+            FontSize = 26, -- icon mode count
+            TextSize = 30, -- text mode big line
+            FontOutline = "OUTLINE",
+            ShowSpellName = true,
+            NameFontSize = 16,
+            ShowNameIcons = true,
+            TextColor = { 1, 1, 1, 1 },
+            GoColor = { 0.25, 1, 0.35, 1 },
+            Glow = true,
+            GlowColor = { 0.25, 1, 0.35, 1 },
+            ReadySound = "Spell Reflect",
+            NotReadySound = "No Reflect",
+            PressSoundEnabled = true,
+            -- A BigWigs sound, not one this addon ships: without BigWigs it
+            -- never plays.
+            PressSoundName = "BigWigs: Info",
+            Modes = {}, -- spell id -> ALWAYS | READY | OFF, only where it differs
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 160),
+        },
+
         DoTTracker = {
             Enabled = false,
             OnlyInCombat = true,

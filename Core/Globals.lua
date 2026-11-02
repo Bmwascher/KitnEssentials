@@ -104,8 +104,8 @@ if KE.LSM then
         "Dispel", "Dmg Amp", "Dmg Amp Over", "Dodge", "Done", "Drop", "Drops", "Entertainer", "Feet",
         "Fixate Incoming", "Fixated", "Frontal", "Frontals", "GGEZ", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Kick 1", "Kick 2", "Kick 3", "Kick Add", "Kicks Inc",
-        "Knockback", "Leap", "Move", "Move In", "Move Out", "New Boss", "Not Safe", "Phase Ending", "Phasing", "Pools",
-        "Protect", "Pull", "Rescue", "Rooted", "Safe", "Soak", "Soaking", "Soaks", "Spawn Add", "Split",
+        "Knockback", "Leap", "Move", "Move In", "Move Out", "New Boss", "No Reflect", "Not Safe", "Phase Ending", "Phasing", "Pools",
+        "Protect", "Pull", "Rescue", "Rooted", "Safe", "Soak", "Soaking", "Soaks", "Spawn Add", "Spell Reflect", "Split",
         "Spread", "Stack", "Stop Casting", "Take Gateway", "Time Spiral", "Totem", "Totems", "Under Boss",
         "Waiter", "Whisper", "Wrong Target",
     }
@@ -1078,6 +1078,16 @@ local function KeystoneShortName(mapID)
     return entry[2]
 end
 
+-- Dungeon key (the first column, also KE.EncounterData's `dungeon`) -> one of
+-- its map IDs. Keys listed under two map IDs share one short name.
+local KEYSTONE_MAP_BY_KEY = {}
+for mapID, entry in pairs(KEYSTONE_SHORT) do KEYSTONE_MAP_BY_KEY[entry[1]] = mapID end
+
+-- Short name for a dungeon key, or nil when the key is not listed.
+function KE:GetDungeonShortName(dungeonKey)
+    return KeystoneShortName(dungeonKey and KEYSTONE_MAP_BY_KEY[dungeonKey])
+end
+
 -- Name -> challenge-mode map ID, built from the client's own map table so a
 -- caller that only has the name reaches the same row. Keys are lowercased to
 -- match the teleport table's folding. An index that found no names is not
@@ -1157,6 +1167,7 @@ local PREVIEW_MODULES = {
     "DoTTracker",
     "AlterTime",
     "ShamanProcCooldowns",
+    "SpellReflect",
     "CustomCooldowns",
     "DivineArbiter",
 }
@@ -1173,7 +1184,7 @@ local SECTION_PREVIEW_MODULES = {
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
         "DisintegrateTicks", "StasisTracker",
         "Recuperate", "TimeSpiral", "PIAssist", "DoTTracker", "AlterTime",
-        "ShamanProcCooldowns", "CustomCooldowns", "DivineArbiter",
+        "ShamanProcCooldowns", "CustomCooldowns", "DivineArbiter", "SpellReflect",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",

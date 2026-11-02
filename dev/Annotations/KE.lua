@@ -219,6 +219,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
 ---@field ShamanProcRules table
+---@field SpellReflectRules table
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table
 ---@field CombatState KE.CombatState
@@ -455,6 +456,13 @@ function KE.ResolveTrashPresetColor(text) end
 ---@param showIcon boolean?
 ---@param align string?
 function KE.ApplySplitTextLayout(anchor, label, timerText, iconFrame, showIcon, align) end
+
+--- Countdown string of the split-layout timers (defined in DungeonTimers.lua):
+--- tenths below the threshold, whole seconds rounded up at or above it.
+---@param seconds number
+---@param threshold number? 30 when nil
+---@return string
+function KE.FormatSplitTimer(seconds, threshold) end
 
 function KE:ValidateProfileFonts() end
 
@@ -1348,6 +1356,10 @@ function KE:AbbreviateDungeonName(name, mapID) end
 ---@param name string?
 ---@return number?
 function KE:GetChallengeMapIDByName(name) end
+
+---@param dungeonKey string?
+---@return string?
+function KE:GetDungeonShortName(dungeonKey) end
 
 ---@param itemId string?
 ---@return string? sectionId

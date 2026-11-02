@@ -393,6 +393,16 @@ function KE.ApplySplitTextLayout(anchor, label, timerText, iconFrame, showIcon, 
     end
 end
 
+-- The countdown string of every split-layout timer: tenths below the
+-- threshold, whole seconds rounded up at or above it. Lives on KE so another
+-- module's timer shows the same numbers.
+function KE.FormatSplitTimer(seconds, threshold)
+    if seconds < (threshold or DECIMAL_THRESHOLD_DEFAULT) then
+        return string_format("%.1f", seconds)
+    end
+    return string_format("%d", math.ceil(seconds))
+end
+
 DT.bars = {}
 DT.barGroup = nil
 DT.textGroup = nil
@@ -1491,17 +1501,9 @@ local function SetCountdownText(self, timerStr)
     end
 end
 
--- Below threshold = "%.1f" decimals; at/above = ceil whole seconds ("5" means "5+ left").
 local function UpdateTimeString(self, displayedTime)
     if self.staticLabel then return end
-    local threshold = self.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
-    local timerStr
-    if displayedTime < threshold then
-        timerStr = string_format("%.1f", displayedTime)
-    else
-        timerStr = string_format("%d", math.ceil(displayedTime))
-    end
-    SetCountdownText(self, timerStr)
+    SetCountdownText(self, KE.FormatSplitTimer(displayedTime, self.decimalThreshold))
 end
 
 -- Free-lists of retired CreateBar kits, keyed by displayMode ("bar" and
@@ -1564,6 +1566,7 @@ local function BarOnUpdateInstance(self, record)
         DT:ReleaseInstancePresentations(inst, false)
         return
     end
+    ---@cast phaseRemaining number
     local outcome = State.ClassifyExpiry(inst, now)
     if outcome == "hold-eligible" then
         -- Resolved once per instance; the owned hold job, not this update,
@@ -1645,6 +1648,7 @@ local function BarOnUpdateSynthetic(self, record)
         DT:LayoutBars()
         return
     end
+    ---@cast remaining number
     GatedSetValue(self, remaining)
     UpdateTimeString(self, remaining)
 end
@@ -2078,13 +2082,7 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- BOTH bar and text mode — BarOnUpdate's UpdateTimeString writes only
     -- to timerText (the `elseif self.label and self.baseText` fallback is
     -- now dead code for spell bars, retained for safety).
-    local initialThreshold = frame.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
-    local initialStr
-    if total < initialThreshold then
-        initialStr = string_format("%.1f", total)
-    else
-        initialStr = string_format("%d", math.ceil(total))
-    end
+    local initialStr = KE.FormatSplitTimer(total, frame.decimalThreshold)
     if frame.timerText then frame.timerText:SetText(initialStr) end
 
     frame:SetScript("OnUpdate", BarOnUpdate)
