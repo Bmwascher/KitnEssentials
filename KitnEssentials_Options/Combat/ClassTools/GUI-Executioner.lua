@@ -144,7 +144,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         if mode == "PIPS" then
             card2:AddLabel("|cff" .. stack .. "[ 12 ]|r  A stack segment, with that stack's seconds inside. "
                 .. "The leftmost drops next; up to five.")
-            card2:AddLabel("|cff" .. hidden .. "hidden [17]|r  A hidden timer: a mark in the row under the "
+            local sample = db.ShowHiddenLabel ~= false and "hidden [17]" or "[17]"
+            card2:AddLabel("|cff" .. hidden .. sample .. "|r  A hidden timer: a mark in the row under the "
                 .. "segments, with its seconds inside. When it runs out it takes away a stack.")
         elseif mode == "ICON" then
             card2:AddLabel("3 |cff" .. hidden .. "+2|r  The count is your stacks; the center seconds and the "
@@ -253,6 +254,15 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         display:Register(AddSlider(r4, "Hidden Mark Width", db, "HiddenMarkWidth", { 16, 80 }, 0.5), "hiddenMarks")
         display:Register(AddSlider(r4, "Hidden Mark Height", db, "HiddenMarkHeight", { 8, 40 }, 0.5), "hiddenMarks")
         card4:AddRow(r4, Theme.rowHeight)
+        local r5 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        -- Redraws: the legend's sample follows the switch.
+        local labelBox = GUIFrame:CreateCheckbox(r5, "Show \"hidden\" Label", {
+            value = db.ShowHiddenLabel == true,
+            callback = function(v) db.ShowHiddenLabel = v; ApplyAndRedraw() end,
+        })
+        r5:AddWidget(labelBox, 0.5)
+        display:Register(labelBox, "hiddenMarks")
+        card4:AddRow(r5, Theme.rowHeight)
         card4:AddNote("Hidden timers sit in a row under the segments, one mark each (up to seven), "
             .. "oldest first, each with its seconds inside.")
     elseif mode == "ICON" then

@@ -37,7 +37,7 @@ local EditMacro = EditMacro
 local PickupMacro = PickupMacro
 local PlaySoundFile = PlaySoundFile
 local ipairs, pcall, tostring, type = ipairs, pcall, tostring, type
-local math_max, math_min = math.max, math.min
+local math_ceil, math_max, math_min = math.ceil, math.max, math.min
 local string_lower = string.lower
 local wipe = wipe
 
@@ -50,7 +50,6 @@ local STEP = 0.05
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local MARK_GAP = 3
 local ROW_GAP = 4
-local HIDDEN_LABEL_WIDTH = 34
 local CUE_TEXT_SIZE = 13
 local STACK_COLOR = { 0.94, 0.62, 0.15, 1 }
 local HIDDEN_COLOR = { 0.89, 0.29, 0.29, 1 }
@@ -78,6 +77,14 @@ local function BuffIcon()
         if ok and not KE:IsSecretValue(icon) and icon then return icon end
     end
     return Rules.CANCEL_ICON
+end
+
+-- A string's drawn width needs only its font and text, not a laid-out
+-- frame. Nil when unreadable: secret while the frame's anchoring is.
+local function TextWidth(fontString)
+    local width = fontString:GetUnboundedStringWidth()
+    if KE:IsSecretValue(width) or not width or width < 1 then return nil end
+    return math_ceil(width)
 end
 
 local function DeferredEvaluate()
@@ -437,10 +444,19 @@ function EX:LayoutPips()
     local size = db.FontSize or 11
     local markSize = math_max(6, size - 1)
     local showHidden = db.ShowHidden ~= false
+    -- The column fits the word as drawn, so the first mark never covers it.
+    local label = pips.hiddenLabel
+    KE:ApplyFontToText(label, db.FontFace, markSize, db.FontOutline)
+    label:SetText("hidden")
+    local labelW = 0
+    if db.ShowHiddenLabel ~= false then
+        labelW = (TextWidth(label) or markSize * 4) + MARK_GAP
+    end
+    pips.labelW = labelW
     local countW = db.ShowStackCount ~= false and countSize or 0
     local segX = countW > 0 and countW + 6 or 0
     local segRow = segX + Rules.CAP * pw + (Rules.CAP - 1) * gap
-    local hiddenRow = segX + HIDDEN_LABEL_WIDTH + Rules.MAX_MARKS * mw + (Rules.MAX_MARKS - 1) * MARK_GAP
+    local hiddenRow = segX + labelW + Rules.MAX_MARKS * mw + (Rules.MAX_MARKS - 1) * MARK_GAP
     local width = showHidden and math_max(segRow, hiddenRow) or segRow
     local height = showHidden and (ph + ROW_GAP + mh) or ph
     self.frame:SetSize(width, height)
@@ -461,17 +477,15 @@ function EX:LayoutPips()
         el:Show()
     end
 
-    KE:ApplyFontToText(pips.hiddenLabel, db.FontFace, markSize, db.FontOutline)
-    pips.hiddenLabel:ClearAllPoints()
-    pips.hiddenLabel:SetPoint("LEFT", root, "TOPLEFT", segX, -(ph + ROW_GAP + mh / 2))
-    pips.hiddenLabel:SetText("hidden")
-    pips.hiddenLabel:Hide()
+    label:ClearAllPoints()
+    label:SetPoint("LEFT", root, "TOPLEFT", segX, -(ph + ROW_GAP + mh / 2))
+    label:Hide()
     local hr, hg, hb, ha = KE:ResolveColor(db.HiddenColor, HIDDEN_COLOR)
     for j, el in ipairs(pips.marks) do
         el:SetSize(mw, mh)
         el:ClearAllPoints()
         el:SetPoint("TOPLEFT", root, "TOPLEFT",
-            segX + HIDDEN_LABEL_WIDTH + (j - 1) * (mw + MARK_GAP), -(ph + ROW_GAP))
+            segX + labelW + (j - 1) * (mw + MARK_GAP), -(ph + ROW_GAP))
         self:StyleCentered(el, markSize)
         el.sb:SetStatusBarColor(hr, hg, hb, ha)
         el:Hide()
@@ -523,6 +537,7 @@ function EX:LayoutIcon()
     local hr, hg, hb = KE:ResolveColor(db.HiddenColor, HIDDEN_COLOR)
     ic.badge.bg:SetColorTexture(hr, hg, hb, 1)
     ic.badge:SetSize(font + 12, font + 5)
+    ic.badgeMin = font + 12
     ic.timer, ic.lastCount, ic.lastHidden = nil, nil, nil
     self.iconRoot:Show()
 end
@@ -643,7 +658,7 @@ function EX:DrawPips(state, now)
             el:Hide()
         end
     end
-    pips.hiddenLabel:SetShown(marks > 0)
+    pips.hiddenLabel:SetShown(marks > 0 and pips.labelW > 0)
     if pips.lastCount ~= stacks then
         pips.lastCount = stacks
         pips.count:SetText(tostring(stacks))
@@ -668,6 +683,9 @@ function EX:DrawIcon(state)
         if ic.lastHidden ~= hidden then
             ic.lastHidden = hidden
             ic.badgeText:SetText("+" .. hidden)
+            -- A two-digit count outgrows the default badge.
+            local w = TextWidth(ic.badgeText)
+            ic.badge:SetWidth(math_max(ic.badgeMin, w and w + 6 or 0))
         end
         ic.badge:Show()
     else

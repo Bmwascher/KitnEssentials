@@ -1070,6 +1070,7 @@ local Defaults = {
             HiddenMarkWidth = 26,
             HiddenMarkHeight = 13,
             StackCountSize = 26,
+            ShowHiddenLabel = true,
 
             IconSize = 46,
 
