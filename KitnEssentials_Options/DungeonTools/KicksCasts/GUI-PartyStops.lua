@@ -25,7 +25,7 @@ end
 
 local FOOTER_HEIGHT = 28
 -- A 24 px icon, its pick ring 1 px outside it and 2 px thick, then 3 px clear
--- of the next icon's ring: 20 icons take 600 px.
+-- of the next icon: 20 icons take 600 px.
 local STRIP_ICON = 24
 local STRIP_PITCH = 30
 local STRIP_INSET = 3
