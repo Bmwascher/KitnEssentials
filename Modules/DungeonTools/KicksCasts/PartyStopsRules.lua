@@ -102,6 +102,30 @@ function Rules.SpellList(db, data)
     return out
 end
 
+-- A copy of list with id swapped for the nearest ticked stop that way (step
+-- -1 left, 1 right); unticked stops between keep their places. nil when id is
+-- unticked or absent, or no ticked stop lies that way. The settings page also
+-- asks it whether a move is possible, so list itself is never changed.
+function Rules.MoveStop(list, off, id, step)
+    off = off or EMPTY
+    if off[id] == true then return nil end
+    local from
+    for i, v in ipairs(list) do
+        if v == id then
+            from = i
+            break
+        end
+    end
+    if not from then return nil end
+    local to = from + step
+    while list[to] ~= nil and off[list[to]] == true do to = to + step end
+    if list[to] == nil then return nil end
+    local out = {}
+    for i, v in ipairs(list) do out[i] = v end
+    out[from], out[to] = out[to], out[from]
+    return out
+end
+
 -- Per class, the talents its stops' need and mods name.
 function Rules.WantByClass(data)
     local out = {}
