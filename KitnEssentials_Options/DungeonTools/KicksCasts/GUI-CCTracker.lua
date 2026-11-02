@@ -148,7 +148,9 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
                 end
                 db.CustomIDs[id] = true
                 ApplySettings()
-                GUIFrame:RefreshContent()
+                -- The rebuild releases the pressed button, so it waits a
+                -- frame.
+                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
             end,
             onRemove = function(text)
                 local id, reason = Rules.CanRemove(text, seeds, db.CustomIDs)
@@ -158,7 +160,7 @@ GUIFrame:RegisterContent("CCTracker", function(scrollChild, yOffset)
                 end
                 db.CustomIDs[id] = nil
                 ApplySettings()
-                GUIFrame:RefreshContent()
+                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
             end,
         })
         card2:AddRow(addRow, Theme.rowHeight)
