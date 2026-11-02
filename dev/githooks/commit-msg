@@ -34,7 +34,7 @@ fi
 # Signed-off-by naming an agent are attribution too. The robot emoji is given
 # as bytes so the script stays ASCII.
 robot=$'\xF0\x9F\xA4\x96'
-if printf '%s\n' "$msg" | grep -qiE "^[[:space:]]*(co-authored-by:|claude-session|generated with claude|signed-off-by:.*\b(claude|codex)\b)|$robot"; then
+if grep -qiE "^[[:space:]]*(co-authored-by:|claude-session|generated with claude|signed-off-by:.*\b(claude|codex)\b)|$robot" <<<"$msg"; then
     echo "[commit-msg] BLOCKED: AI-attribution trailer in commit message (family rule: never append them). Remove it, or override with: git commit --no-verify" >&2
     exit 1
 fi
@@ -43,7 +43,7 @@ fi
 # commits start with a lowercase v and pass; git's default "Merge branch" and
 # "Revert" subjects do not, so merges and reverts take -m with a real subject.
 subject="$(printf '%s\n' "$msg" | grep -v '^#' | grep -m1 .)"
-if printf '%s' "$subject" | grep -qE '^[A-Z]'; then
+if grep -qE '^[A-Z]' <<<"$subject"; then
     echo "[commit-msg] BLOCKED: subject starts uppercase ('$subject'). Family rule: lowercase, imperative mood. Reword (git commit --amend -m ...), or override a deliberate exception with: git commit --no-verify" >&2
     exit 1
 fi
@@ -83,16 +83,14 @@ if [ -n "$rel" ]; then
         exit 1
     fi
     prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | tr -d v)"
-    if printf '%s' "$prev" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$prev"; then
         set -- $(printf '%s' "$prev" | tr . ' '); pM=$1; pm=$2
         set -- $(printf '%s' "$rel" | tr . ' '); rM=$1; rm_=$2
         if [ "$rM" != "$pM" ]; then tier=major; elif [ "$rm_" != "$pm" ]; then tier=minor; else tier=patch; fi
         entry="$(git show :CHANGELOG.md 2>/dev/null | awk '/^## v/{n++} n==1' )"
-        if ! printf '%s
-' "$entry" | grep -q "^## v$rel\$"; then
+        if ! grep -q "^## v$rel\$" <<<"$entry"; then
             echo "[commit-msg] note (non-blocking): the top CHANGELOG.md entry is not '## v$rel' - collapse the per-merge entries under the release version." >&2
-        elif printf '%s
-' "$entry" | grep -q '\*\*NEW:\*\*'; then
+        elif grep -q '\*\*NEW:\*\*' <<<"$entry"; then
             [ "$tier" = patch ] && echo "[commit-msg] note (non-blocking): v$prev -> v$rel is a patch bump but the entry has **NEW:** bullets - a new module/page/control is a minor (family AGENTS.md, release-version tiers)." >&2
         else
             [ "$tier" != patch ] && echo "[commit-msg] note (non-blocking): v$prev -> v$rel is a $tier bump but the entry has no **NEW:** bullet - fixes and polish alone stay a patch (family AGENTS.md, release-version tiers)." >&2
