@@ -3364,6 +3364,40 @@ function S.StaticPopup(popup)
     if close then S.CloseButton(close) end
 end
 
+-- The portrait-mode title box starts past the portrait, so with the portrait
+-- faded the title sits right of center. Symmetric insets center it, and the
+-- right one keeps a long title clear of the close button.
+local TITLE_INSET = 24
+
+-- Nothing is written to a title in combat: the window can be protected.
+local function TitleStep(isForever, canOffset, state, inCombat)
+    if isForever or not canOffset or state == "done" or state == "queued" then return "skip" end
+    if inCombat then return "queue" end
+    return "center"
+end
+S._TitleStep = TitleStep
+
+local function CenterTitle(frame)
+    local d = S.data(frame)
+    local canOffset = frame.TitleContainer ~= nil and type(frame.SetTitleOffsets) == "function"
+    local step = TitleStep(KE.IS_FOREVER, canOffset, d.titleState, InCombatLockdown())
+    if step == "center" then
+        frame:SetTitleOffsets(TITLE_INSET, -TITLE_INSET)
+        d.titleState = "done"
+    elseif step == "queue" then
+        d.titleState = "queued"
+        KE:RunAfterCombat(function()
+            d.titleState = nil
+            CenterTitle(frame)
+        end)
+    end
+end
+
+-- For a window whose own code lays out its title; call before S.Frame.
+function S.KeepTitle(frame)
+    if frame then S.data(frame).titleState = "done" end
+end
+
 function S.Frame(frame, keepChildArt)
     if not frame or S.data(frame).skinned then return end
 
@@ -3371,6 +3405,7 @@ function S.Frame(frame, keepChildArt)
     if frame.portrait then frame.portrait:SetAlpha(0) end
 
     S.Portrait(frame)
+    CenterTitle(frame)
     S.StripTextures(frame)
 
     for _, key in ipairs(FRAME_ART_KEYS) do

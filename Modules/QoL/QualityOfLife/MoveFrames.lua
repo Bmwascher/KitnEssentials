@@ -350,9 +350,6 @@ local BlizzardFramesOnDemand = {
     ["Blizzard_MacroUI"] = {
         "MacroFrame",
     },
-    ["Blizzard_MajorFactions"] = {
-        "MajorFactionRenownFrame",
-    },
     ["Blizzard_ObliterumUI"] = {
         "ObliterumForgeFrame",
     },

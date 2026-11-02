@@ -2,6 +2,7 @@ local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
 local ipairs = ipairs
+local pairs = pairs
 local type = type
 local pcall = pcall
 local hooksecurefunc = hooksecurefunc
@@ -723,36 +724,32 @@ local function PaintClassIcon(icon, classFile)
     icon:Show()
 end
 
-local function SameColor(r, g, b, a, c)
-    return math.abs(r - c[1]) < 0.01 and math.abs(g - c[2]) < 0.01
-        and math.abs(b - c[3]) < 0.01 and math.abs(a - c[4]) < 0.01
-end
+-- The zone dot sits just after the zone text. A line too long for its box puts
+-- the dot at the box's right edge, over the end of the text.
+local ZONE_DOT_SIZE, ZONE_DOT_GAP = 6, 3
+-- An accent whose channels spread less than this is gray, and a gray dot does
+-- not stand out from the gray zone text.
+local GRAY_CHROMA = 0.1
+local DOT_WHITE = { 1, 1, 1 }
 
--- The addon recolors the zone line only when its font settings change. KE
--- puts back the color it covered; a color that is not KE's own tint, alpha
--- included, is the addon's new one, which becomes the color to put back and is
--- never overwritten. d is KE's record for one line, r, g, b, a its current
--- color; returns the color to write, or nil.
-local function ZoneColor(d, inZone, r, g, b, a, brand)
-    local ink = d.zoneInk
-    local mine = d.zoneTinted and ink ~= nil and SameColor(r, g, b, a, ink)
-    if inZone then
-        if not mine then
-            local rest = d.zoneRest or {}
-            rest[1], rest[2], rest[3], rest[4] = r, g, b, a
-            d.zoneRest = rest
-        end
-        ink = ink or {}
-        ink[1], ink[2], ink[3], ink[4] = brand[1], brand[2], brand[3], 1
-        d.zoneInk, d.zoneTinted = ink, true
-        return ink
-    end
-    if not d.zoneTinted then return nil end
-    d.zoneTinted = nil
-    if mine then return d.zoneRest end
-    return nil
+-- The dot's x offset inside the zone line's box, or nil for no dot. A string
+-- width can read 0 before its text is laid out. Secret first: a secret width
+-- is a number and cannot be compared.
+local function ZoneDotOffset(textWidth, boxWidth)
+    if KE:IsSecretValue(textWidth) or KE:IsSecretValue(boxWidth) then return nil end
+    if not textWidth or not boxWidth or textWidth <= 0 or boxWidth <= 0 then return nil end
+    return math.min(textWidth + ZONE_DOT_GAP, boxWidth - ZONE_DOT_SIZE)
 end
-S._BFLZoneColor = ZoneColor
+S._BFLZoneDotOffset = ZoneDotOffset
+
+local function ZoneDot(inZone, lineShown, brand)
+    if not (inZone and lineShown) then return nil end
+    local hi = math.max(brand[1], brand[2], brand[3])
+    local lo = math.min(brand[1], brand[2], brand[3])
+    if hi - lo < GRAY_CHROMA then return DOT_WHITE end
+    return brand
+end
+S._BFLZoneDot = ZoneDot
 
 -- The addon's own selection test, for rows built before the selection hook
 -- existed. A secret ID matches nothing.
@@ -772,26 +769,81 @@ local function RowSelected(list, friend)
 end
 S._BFLRowSelected = RowSelected
 
-local function TintZoneLine(card, friend)
+local function FriendArea(friend)
+    local kind = friend.type
+    if KE:IsSecretValue(kind) then return nil end
+    if kind == "bnet" then return friend.areaName end
+    return friend.area
+end
+
+-- One row's dot: its x offset in the zone line, nil for no dot, and its color
+-- whenever the row qualifies, so a row whose width cannot be read yet is still
+-- placed again on the next frame. Offline friends get none. Exported so the
+-- smoke check can compare every row's dot against its own rule.
+local function RowDot(card)
     local info = card.Info
-    if not info then return end
-    local area
-    if friend then
-        local kind = friend.type
-        if KE:IsSecretValue(kind) then
-            area = nil
-        elseif kind == "bnet" then
-            area = friend.areaName
-        else
-            area = friend.area
-        end
+    if not info then return nil end
+    local friend = card.friendData
+    local inZone = StatusEdge(friend) ~= nil and SameZone(FriendArea(friend), playerZone)
+    local c = ZoneDot(inZone, info:IsShown(), S.palette.brand)
+    if not c then return nil end
+    return ZoneDotOffset(info:GetStringWidth(), info:GetWidth()), c
+end
+S._BFLRowDot = RowDot
+
+-- Colored per paint from the live accent, so a theme swap shows on the next
+-- row pass. Returns the row's color when it qualifies.
+local function PlaceZoneDot(d, card)
+    local dot = d.cueZone
+    local x, c = RowDot(card)
+    if not x then
+        dot:Hide()
+        return c
     end
-    local d = S.data(info)
-    local inZone = SameZone(area, playerZone)
-    if not (inZone or d.zoneTinted) then return end
-    local r, g, b, a = info:GetTextColor()
-    local c = ZoneColor(d, inZone, r, g, b, a, S.palette.brand)
-    if c then info:SetTextColor(c[1], c[2], c[3], c[4]) end
+    if x ~= d.cueZoneX then
+        dot:SetPoint("LEFT", card.Info, "LEFT", x, 0)
+        d.cueZoneX = x
+    end
+    dot:SetVertexColor(c[1], c[2], c[3])
+    dot:Show()
+    return c
+end
+
+-- A string width reads 0 or stale in the frame its text or font changes, so
+-- such a row is placed again on the next frame. One shared callback and one
+-- entry per row: nothing is allocated for a row whose text and font held.
+local remeasure = {}
+local remeasureQueued = false
+
+local function RemeasureDots()
+    remeasureQueued = false
+    for card, friend in pairs(remeasure) do
+        remeasure[card] = nil
+        local d = S.data(card)
+        -- The pooled card may show another friend by now.
+        if d.cueZone and card.friendData == friend then PlaceZoneDot(d, card) end
+    end
+end
+
+local function PaintZoneDot(d, card)
+    if not d.cueZone then return end
+    local qualifies = PlaceZoneDot(d, card)
+    local info = card.Info
+    local text = info:GetText()
+    if KE:IsSecretValue(text) then return end
+    local font, height, flags = info:GetFont()
+    if text == d.cueZoneText and font == d.cueZoneFont and height == d.cueZoneHeight
+        and flags == d.cueZoneFlags then
+        return
+    end
+    -- Kept on every row: a pooled row can show a new friend with the same text.
+    d.cueZoneText, d.cueZoneFont, d.cueZoneHeight, d.cueZoneFlags = text, font, height, flags
+    if not qualifies then return end
+    remeasure[card] = card.friendData
+    if not remeasureQueued then
+        remeasureQueued = true
+        _G.C_Timer.After(0, RemeasureDots)
+    end
 end
 
 -- The first number of a count in the accent. d keeps the plain text and KE's
@@ -839,6 +891,15 @@ local function CardCues(card)
     local icon = bd:CreateTexture(nil, "OVERLAY")
     icon:SetPoint("LEFT", card.status, "LEFT", 0, 0)
     icon:Hide()
+    if card.Info then
+        -- Never registered with S.PaintBrand: a palette refresh would repaint
+        -- the white that stands in for a gray accent.
+        local dot = bd:CreateTexture(nil, "OVERLAY")
+        dot:SetTexture(WHITE)
+        dot:SetSize(ZONE_DOT_SIZE, ZONE_DOT_SIZE)
+        dot:Hide()
+        d.cueZone = dot
+    end
     d.cueFill, d.cueEdge, d.cueIcon, d.cueBd = fill, edge, icon, bd
     return d
 end
@@ -871,7 +932,7 @@ local function PaintCardCues(card, d)
     else
         d.cueIcon:Hide()
     end
-    TintZoneLine(card, state and friend or nil)
+    PaintZoneDot(d, card)
     d.cueFill:SetShown(d.cueSelected == true)
 end
 
@@ -1185,6 +1246,8 @@ local function Skin()
     S.data(frame).bflSkinned = true
 
     S.CloseButton(frame.CloseButton, BFL_CLOSE_SIZE)
+    -- The addon anchors this title itself and hangs its BattleTag bar off it.
+    S.KeepTitle(frame)
     S.Frame(frame)
     StripPanelShell(frame)
 

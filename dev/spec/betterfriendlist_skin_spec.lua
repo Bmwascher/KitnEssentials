@@ -104,29 +104,45 @@ describe("Better Friendlist skin: header count", function()
     end)
 end)
 
-describe("Better Friendlist skin: zone line color", function()
-    it("puts back only the color KE covered, and yields to the addon's new one", function()
+describe("Better Friendlist skin: zone dot", function()
+    it("shows only on a shown in-zone line, in the accent, or white for a gray accent", function()
         local S = loadSkin()
-        local brand = { 1, 0.5, 0 }
-        local ink = { 1, 0.5, 0, 1 }
-        local gray, red = { 0.5, 0.5, 0.5, 1 }, { 0.8, 0.1, 0.1, 1 }
-        local function tinted()
-            return { zoneTinted = true, zoneInk = { 1, 0.5, 0, 1 }, zoneRest = { 0.5, 0.5, 0.5, 1 } }
-        end
-        -- name, record, in zone, current color, color written, color recorded after
+        local icecrown, twilight = { 0, 0.749, 1 }, { 0.608, 0.349, 0.714 }
+        local white = { 1, 1, 1 }
+        -- name, in zone, line shown, accent, dot color
         local cases = {
-            { "first tint records the line's color", {}, true, gray, ink, gray },
-            { "its own tint keeps the record", tinted(), true, ink, ink, gray },
-            { "a new addon color while tinted replaces the record", tinted(), true, red, ink, red },
-            { "leaving puts the record back", tinted(), false, ink, gray, gray },
-            { "leaving after an addon recolor writes nothing", tinted(), false, red, nil, gray },
-            { "the accent at another alpha is the addon's", tinted(), false, { 1, 0.5, 0, 0.6 }, nil, gray },
-            { "never tinted and not in the zone", {}, false, gray, nil, nil },
+            { "not in zone", false, true, icecrown, nil },
+            { "line hidden", true, false, icecrown, nil },
+            { "colored accent", true, true, icecrown, icecrown },
+            { "least saturated preset", true, true, twilight, twilight },
+            { "Torghast gray", true, true, { 0.627, 0.627, 0.627 }, white },
+            { "skin tint off", true, true, { 0.651, 0.651, 0.651 }, white },
+            { "near-gray custom", true, true, { 0.5, 0.55, 0.5 }, white },
         }
         for _, c in ipairs(cases) do
-            local d, now = c[2], c[4]
-            assert.are.same(c[5], S._BFLZoneColor(d, c[3], now[1], now[2], now[3], now[4], brand), c[1])
-            assert.are.same(c[6], d.zoneRest, c[1])
+            assert.are.same(c[5], S._BFLZoneDot(c[2], c[3], c[4]), c[1])
+        end
+    end)
+end)
+
+describe("Better Friendlist skin: zone dot offset", function()
+    it("sits the gap after the text, stops at the box edge, or draws nothing", function()
+        local S = loadSkin()
+        local secret = { __secret = true }
+        -- name, text width, box width, dot x offset
+        local cases = {
+            { "short text: its width plus the gap", 40, 200, 43 },
+            { "text near the box edge clamps", 195, 200, 194 },
+            { "text wider than the box clamps", 260, 200, 194 },
+            { "zero text width", 0, 200, nil },
+            { "no text width", nil, 200, nil },
+            { "secret text width", secret, 200, nil },
+            { "zero box width", 40, 0, nil },
+            { "no box width", 40, nil, nil },
+            { "secret box width", 40, secret, nil },
+        }
+        for _, c in ipairs(cases) do
+            assert.are.equal(c[4], S._BFLZoneDotOffset(c[2], c[3]), c[1])
         end
     end)
 end)
