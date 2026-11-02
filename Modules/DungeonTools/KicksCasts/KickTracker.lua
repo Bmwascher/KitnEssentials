@@ -132,6 +132,7 @@ KT.activationID = 0       -- bumped on each activation; deferred callbacks check
 KT.combatEventsRegistered = false
 KT.ownClaim = {}  -- at: the player's last kick cast; see KT:ClaimOwnKick
 KT.lastEventAt = {}  -- [nameplate token] = its last accepted interrupt time
+KT.libSpecRoles = {}  -- Forever: [sender name] = the role LibSpecialization reported
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -168,10 +169,30 @@ function KT:GetInterruptDataForSpec(specID)
     return KickRow(kick.id, kick.cd, specID)
 end
 
+-- Forever: a spec with talent kicks shows the kick the teammate's talents
+-- give (KT.PickTeammateKick); a talent the walk did not find in the spec's
+-- tree counts as unread.
+function KT:ForeverTeammateRow(specID, snap)
+    if not next(KE:GetKickTalentDemand(specID)) then return self:GetInterruptDataForSpec(specID) end
+    local kick = KT.PickTeammateKick(KE:GetInterruptCandidatesForSpec(specID), KE:GetTrackedKickForSpec(specID),
+        function(talent)
+            if snap and snap.absent and snap.absent[talent] then return nil end
+            return KT.SnapshotRank(snap, talent)
+        end)
+    if not kick then return nil end
+    return KickRow(KE:GetCanonicalKickSpell(kick.id), kick.cd, specID)
+end
+
 -- The spec's kick, and the inspect snapshot its talents come from
 -- (KT.LearnFacts).
 function KT:ApplySpecKick(member, specID, snap)
-    KT.LearnFacts(member, snap, self:GetInterruptDataForSpec(specID))
+    local row
+    if KE.IS_FOREVER then
+        row = self:ForeverTeammateRow(specID, snap)
+    else
+        row = self:GetInterruptDataForSpec(specID)
+    end
+    KT.LearnFacts(member, snap, row)
     member.specID = specID
 end
 
@@ -203,6 +224,14 @@ end
 -- follows the demon. With neither there is no own row.
 function KT:GetOwnInterruptData(specID, castKick)
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    -- Forever: the kick the stance, form and shield allow, else the first one
+    -- known in any, so the row stays through a shift to caster form.
+    if KE.IS_FOREVER and candidates then
+        local kick = KT.OwnKickFallback(KE:ResolvePlayerInterrupt(specID) or KT.PickOwnKick(candidates, isOwnKickKnown),
+            castKick)
+        if not kick then return nil end
+        return KickRow(KE:GetCanonicalKickSpell(kick.id), kick.cd, specID)
+    end
     if not candidates or #candidates < 2 then return self:GetInterruptDataForSpec(specID) end
     local kick = KT.OwnKickFallback(KT.PickOwnKick(candidates, isOwnKickKnown), castKick)
     if not kick then return nil end
@@ -224,6 +253,7 @@ function KT:ApplyOwnKicks(member, specID)
     if specChanged then
         member.ownKickSpec = specID
         member.castKick = nil
+        if KE.IS_FOREVER then member.ownClocks = nil end
     end
     local data = self:GetOwnInterruptData(specID, member.castKick)
     local oldID = member.interruptData and member.interruptData.id
@@ -231,7 +261,14 @@ function KT:ApplyOwnKicks(member, specID)
     local extrasChanged
     member.extraKicks, extrasChanged = KT.SyncExtraKicks(member.extraKicks, self:GetOwnExtraKicks(specID))
     local mainChanged = oldID ~= (data and data.id)
-    if mainChanged then
+    if mainChanged and KE.IS_FOREVER then
+        -- Forever kicks cool apart: a kick re-picked while its clock runs
+        -- resumes it (KT.SwapOwnClock). A new spec keeps no clock.
+        member.ownClocks = member.ownClocks or {}
+        local outgoing = (not specChanged) and oldID or nil
+        member.kickStart, member.kickDuration = KT.SwapOwnClock(member.ownClocks, outgoing,
+            member.kickStart, member.kickDuration, data and data.id, GetTime())
+    elseif mainChanged then
         member.kickStart, member.kickDuration = nil, nil
     end
     return mainChanged, mainChanged or specChanged or extrasChanged
@@ -286,6 +323,38 @@ local function ShownName(db, member)
     return member.name
 end
 
+-- A member's sort role on Forever: the player's from their talents; a
+-- teammate's from a library report under any of the three forms its
+-- sender name can take, else the set role (KT.TeammateRole).
+function KT:ForeverRole(member)
+    local unit = member.unit
+    if unit == "player" then return KE:GetPlayerSpecRole() or "DAMAGER" end
+    local roles, libraryRole = self.libSpecRoles, nil
+    local first, surname = UnitName(unit)
+    if KE:IsSafeValue(first) then
+        if KE:IsSafeValue(surname) and surname ~= "" then
+            libraryRole = roles[first .. "-" .. surname] or roles[KE:JoinCharacterName(first, surname)]
+        end
+        libraryRole = libraryRole or roles[first]
+    end
+    local setRole = UnitGroupRolesAssigned(unit)
+    return KT.TeammateRole(libraryRole, setRole, KE:IsSafeValue(setRole))
+end
+
+-- Sets a member's Forever role; returns whether it changed. A change of the
+-- player's own moves the container with Use Healer Position on, since
+-- KT:GetActiveContext reads the same role, and relabels the mover.
+function KT:ApplyForeverRole(member)
+    local role = self:ForeverRole(member)
+    if role == member.role then return false end
+    member.role = role
+    if member.unit == "player" and self.db.UseHealerPosition then
+        self:ApplyContainerPosition()
+        self:RefreshEditMode()
+    end
+    return true
+end
+
 function KT:RefreshPartyRoster()
     if not self.db or not self.db.Enabled then return end
 
@@ -311,6 +380,7 @@ function KT:RefreshPartyRoster()
                 member.name = name
                 member.displayName = DisplayName(unit)
                 SetMemberClass(member, classToken)
+                if KE.IS_FOREVER then self:ApplyForeverRole(member) end
 
                 if unit == "player" then
                     local specID = GetPlayerSpecID() or 0
@@ -324,6 +394,12 @@ function KT:RefreshPartyRoster()
                     if type(spec) == "number" and spec > 0 then
                         if member.inspect ~= snap or member.specID ~= spec then
                             self:ApplySpecKick(member, spec, snap)
+                        end
+                    elseif KE.IS_FOREVER then
+                        -- One spec per class, so the class gives the spec.
+                        local classSpec = KT.FOREVER_CLASS_SPEC[member.matchClass]
+                        if classSpec and classSpec ~= member.specID then
+                            self:ApplySpecKick(member, classSpec, nil)
                         end
                     elseif not member.interruptData then
                         -- Not inspected yet: the class kick, so the bar exists.
@@ -424,6 +500,12 @@ function KT:WantsInspect(guid)
     if not member or member.unit == "player" or not self.inspectHandle then return false end
     local snap = self.inspectHandle:Get(guid)
     local spec = snap and snap.spec
+    -- Forever: only a spec whose kick a talent decides is inspected; every
+    -- other teammate's spec is their class's.
+    if KE.IS_FOREVER then
+        local known = (type(spec) == "number" and spec > 0) and spec or member.specID
+        if not next(KE:GetKickTalentDemand(known)) then return false end
+    end
     local demand = (type(spec) == "number" and spec > 0) and KE:GetKickTalentDemand(spec) or nil
     return KT.InspectWanted(snap, demand, member.inspectRespec, member.inspectMisses)
 end
@@ -474,6 +556,14 @@ function KT:RefreshInspectedSpec(unit)
     if not member then return end
     member.inspectRespec, member.inspectMisses = true, nil
     handle:Refresh(guid, "spec")
+    -- Forever: the talents chose the row, so it returns to the unread
+    -- default until the re-read answers.
+    if KE.IS_FOREVER and member.specID then
+        self:ApplySpecKick(member, member.specID, handle:Get(guid))
+        self:UpdateBars()
+        self:LayoutBars()
+        if self.platesOn then self:PlatesRoster() end
+    end
     handle:Wake()
 end
 
@@ -837,6 +927,12 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         -- spellbook check missed: the kick just cast is the kick, and a
         -- missing row appears.
         if not data or data.id ~= kickID then
+            -- Forever: the outgoing kick keeps its clock; ConfirmKick below
+            -- starts the cast kick's.
+            if KE.IS_FOREVER then
+                member.ownClocks = member.ownClocks or {}
+                KT.SwapOwnClock(member.ownClocks, data and data.id, member.kickStart, member.kickDuration, kickID, now)
+            end
             data = KickRow(kickID, kickCd, member.specID, data and data.role)
             member.interruptData = data
             self:UpdateBars()
@@ -881,7 +977,15 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
     self.castFrame:RegisterUnitEvent("UNIT_PET", "player")
-    self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
+    -- Forever kicks follow the spellbook, the stance or form and, for Shield
+    -- Bash, the off-hand; each change ends the cast kick's hold on the row.
+    if KE.IS_FOREVER then
+        self:RegisterEvent("SPELLS_CHANGED", "OnOwnKickInputChanged")
+        self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "OnOwnKickInputChanged")
+        self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnOwnKickInputChanged")
+    else
+        self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
+    end
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnMeterUpdate")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
     self.combatEventsRegistered = true
@@ -893,6 +997,10 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("SPELLS_CHANGED")
+    if KE.IS_FOREVER then
+        self:UnregisterEvent("UPDATE_SHAPESHIFT_FORM")
+        self:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    end
     self:UnregisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED")
     self:UnregisterEvent("DAMAGE_METER_RESET")
     self.combatEventsRegistered = false
@@ -995,6 +1103,39 @@ function KT:OnOwnKicksChanged()
         self._ownKickCheckPending = false
         if self.isActive then self:RefreshOwnKicks() end
     end)
+end
+
+-- Forever: a spellbook, stance, form or off-hand change can change the
+-- player's kick, so the kick cast before it no longer holds the row.
+function KT:OnOwnKickInputChanged(event, slot)
+    if event == "PLAYER_EQUIPMENT_CHANGED" and slot ~= (INVSLOT_OFFHAND or 17) then return end
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    if member then member.castKick = nil end
+    self:OnOwnKicksChanged()
+end
+
+-- A library report: the role is kept by the sender's name, and every row's
+-- role is read again one frame later, once the player's own role has
+-- settled.
+function KT:OnLibSpecRole(role, name)
+    if KE:IsSecretValue(name) or KE:IsSecretValue(role) or type(name) ~= "string" then return end
+    self.libSpecRoles[name] = role
+    if not self.isActive or self._roleCheckPending then return end
+    self._roleCheckPending = true
+    local activation = self.activationID
+    C_Timer.After(0, function()
+        self._roleCheckPending = false
+        if self.activationID == activation and self.isActive then self:RefreshRoles() end
+    end)
+end
+
+function KT:RefreshRoles()
+    local changed = false
+    for _, member in pairs(self.partyMembers) do
+        if member.unit and self:ApplyForeverRole(member) then changed = true end
+    end
+    if changed then self:LayoutBars() end
 end
 
 ---------------------------------------------------------------------------------
@@ -1361,7 +1502,7 @@ end
 ---------------------------------------------------------------------------------
 function KT:GetRolePriority(member)
     if not member or not member.interruptData then return 999 end
-    local role = member.interruptData.role
+    local role = (KE.IS_FOREVER and member.role) or member.interruptData.role
     local db = self.db
     if role == "TANK" then return db.SortTankPriority or 1 end
     if role == "HEALER" then return db.SortHealerPriority or 2 end
@@ -1708,6 +1849,12 @@ function KT:ShowPreview()
         { name = "Shaman", classToken = "SHAMAN", spellID = 57994, ready = false, remaining = 3.7, cd = 12 },
     }
 
+    -- Forever has no Counter Shot or Wind Shear.
+    if KE.IS_FOREVER then
+        previewData[4] = { name = "Priest", classToken = "PRIEST", spellID = 15487, ready = false, remaining = 8.2, cd = 45 }
+        previewData[5] = { name = "Shaman", classToken = "SHAMAN", spellID = 8042, ready = false, remaining = 3.7, cd = 6 }
+    end
+
     local db = self.db
     local growUp = db.GrowthDirection == "UP"
     local spacing = db.BarSpacing or 2
@@ -1883,8 +2030,16 @@ function KT:OnInitialize()
     self:SetEnabledState(false)
 end
 
+-- Forever sorts teammates by the role LibSpecialization reports
+-- (KT:OnLibSpecRole); nil on retail.
+local LibSpec = KE.IS_FOREVER and LibStub and LibStub("LibSpecialization", true) or nil
+
 function KT:OnEnable()
     if not self.db.Enabled then return end
+
+    if LibSpec then
+        LibSpec.RegisterGroup(self, function(_, role, _, name) KT:OnLibSpecRole(role, name) end)
+    end
 
     self:CreateFrames()
     self:CreateCastFrame()
@@ -1907,6 +2062,10 @@ end
 
 function KT:OnDisable()
     self:UnregisterAllEvents()
+    if LibSpec then
+        LibSpec.UnregisterGroup(self)
+        wipe(self.libSpecRoles)
+    end
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self.combatEventsRegistered = false
     self:CancelAllTimers()

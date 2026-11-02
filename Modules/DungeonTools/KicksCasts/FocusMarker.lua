@@ -263,6 +263,17 @@ function FM.PickKickSpell(candidates, trackerKick, isKnown)
     return nil
 end
 
+-- The mark line and the length check every kick body ends with.
+local function FinishKickBody(lines, db, markerIdx)
+    -- Always ~: a kick press must never toggle an existing marker off.
+    if db.KickMarkFocus and markerIdx and markerIdx > 0 then
+        lines[#lines + 1] = "/tm [@focus] ~" .. tostring(markerIdx)
+    end
+    local body = table_concat(lines, "\n")
+    if #body > MACRO_BODY_MAX then return nil end
+    return body
+end
+
 function FM.BuildKickBody(spellName, db, markerIdx)
     if not spellName or spellName == "" then return nil end
     local lines = { "#showtooltip " .. spellName }
@@ -277,13 +288,93 @@ function FM.BuildKickBody(spellName, db, markerIdx)
         cond = cond .. "[]"
     end
     lines[#lines + 1] = "/cast " .. cond .. " " .. spellName
-    -- Always ~: a kick press must never toggle an existing marker off.
-    if db.KickMarkFocus and markerIdx and markerIdx > 0 then
-        lines[#lines + 1] = "/tm [@focus] ~" .. tostring(markerIdx)
+    return FinishKickBody(lines, db, markerIdx)
+end
+
+-- Forever's kick clauses, in candidate order: { id, indices, shield }.
+-- indexOfForm maps a form id to its stance-bar index. "No form" is one more
+-- state unless every bar form cannot be left (allFixed). A kick is left out
+-- when unknown, a later rank of a kick taken, without a form on the bar, a
+-- shield kick with no shield name, or when earlier clauses cover every
+-- index it casts in. Only a clause with no shield covers states, since a
+-- shield clause skips a missing shield. indices nil: no stance condition.
+function FM.ForeverKickClauses(candidates, isKnown, canonOf, indexOfForm, barSize, allFixed, hasShieldName)
+    local clauses, seen, covered = {}, {}, {}
+    local coveredAll = false
+    for i = 1, #candidates do
+        local c = candidates[i]
+        local canon = canonOf(c.id)
+        if not coveredAll and not seen[canon] and isKnown(c.id) and (hasShieldName or not c.shield) then
+            seen[canon] = true
+            local keep, indices = true, nil
+            if c.forms then
+                local own, uncovered = {}, {}
+                for j = 1, #c.forms do
+                    local index = indexOfForm[c.forms[j]]
+                    if index and not own[index] then
+                        own[index] = true
+                        if not covered[index] then uncovered[#uncovered + 1] = index end
+                    end
+                end
+                if #uncovered == 0 then
+                    keep = false
+                else
+                    table.sort(uncovered)
+                    indices = uncovered
+                    if allFixed then
+                        local all = true
+                        for k = 1, barSize do
+                            if not (own[k] or covered[k]) then
+                                all = false
+                                break
+                            end
+                        end
+                        if all then indices = nil end
+                    end
+                    if not c.shield then
+                        for index in pairs(own) do covered[index] = true end
+                    end
+                end
+            elseif not c.shield then
+                coveredAll = true
+            end
+            if keep then
+                clauses[#clauses + 1] = { id = c.id, indices = indices, shield = c.shield == true }
+            end
+        end
     end
-    local body = table_concat(lines, "\n")
-    if #body > MACRO_BODY_MAX then return nil end
-    return body
+    return clauses
+end
+
+-- One /cast line of the clauses, joined with "; ". Each clause's condition
+-- joins its stance indices and, for a shield clause, the client's shield
+-- subclass name.
+function FM.BuildForeverKickBody(clauses, names, shieldName, db, markerIdx)
+    if not clauses or #clauses == 0 then return nil end
+    local lines = { "#showtooltip" }
+    if db.KickStopCasting then
+        lines[#lines + 1] = "/stopcasting"
+    end
+    local parts = {}
+    for i = 1, #clauses do
+        local clause, name = clauses[i], names[i]
+        if not name or name == "" then return nil end
+        local cond = {}
+        if clause.indices then cond[#cond + 1] = "stance:" .. table_concat(clause.indices, "/") end
+        if clause.shield then cond[#cond + 1] = "equipped:" .. shieldName end
+        local bare = table_concat(cond, ",")
+        local tail = bare ~= "" and ("," .. bare) or ""
+        local text = "[@focus,harm,nodead" .. tail .. "]"
+        if db.KickMouseover then
+            text = text .. "[@mouseover,harm,nodead" .. tail .. "]"
+        end
+        if db.KickTargetFallback then
+            text = text .. "[" .. bare .. "]"
+        end
+        parts[i] = text .. " " .. name
+    end
+    lines[#lines + 1] = "/cast " .. table_concat(parts, "; ")
+    return FinishKickBody(lines, db, markerIdx)
 end
 
 -- Returns state, spellID, body, specName, spellName. Only "ready" carries a body.
@@ -296,6 +387,7 @@ function FM:ComputeKick()
     if not specID or specID == 0 then
         return "nospec"
     end
+    if KE.IS_FOREVER then return self:ComputeForeverKick(specID, specName) end
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
     local trackerKick = not candidates and KE:GetTrackedKickForSpec(specID) or nil
     local spellID = FM.PickKickSpell(candidates, trackerKick, IsKickKnown)
@@ -311,6 +403,64 @@ function FM:ComputeKick()
         return "toolong", spellID, nil, specName, spellName
     end
     return "ready", spellID, body, specName, spellName
+end
+
+local GetNumShapeshiftForms = GetNumShapeshiftForms
+local GetShapeshiftFormInfo = GetShapeshiftFormInfo
+local C_Item = C_Item
+
+-- The stance bar: each form's bar index, the bar's size, and whether every
+-- form on it cannot be left. A bar spell with no form row counts as one
+-- that can be left.
+local function ReadStanceBar()
+    local indexOfForm, allFixed = {}, true
+    if not (GetNumShapeshiftForms and GetShapeshiftFormInfo) then return indexOfForm, 0, allFixed end
+    local size = GetNumShapeshiftForms() or 0
+    for i = 1, size do
+        local form, fixed = KE:GetShapeshiftFormOfSpell(select(4, GetShapeshiftFormInfo(i)))
+        if form and not indexOfForm[form] then indexOfForm[form] = i end
+        if not fixed then allFixed = false end
+    end
+    return indexOfForm, size, allFixed
+end
+
+local function CanonicalKick(id)
+    return KE:GetCanonicalKickSpell(id)
+end
+
+-- Forever: one clause per kick the player knows, each held to the stance or
+-- form it needs and, for a shield kick, a shield (FM.ForeverKickClauses).
+-- The clauses are kept for the page preview. Returns ComputeKick's values,
+-- with the clause names joined as the spell name.
+function FM:ComputeForeverKick(specID, specName)
+    self.foreverClauses, self.foreverNames, self.foreverShield = nil, nil, nil
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return "nokick", nil, nil, specName end
+    local indexOfForm, barSize, allFixed = ReadStanceBar()
+    local shieldName = C_Item and C_Item.GetItemSubClassInfo and C_Item.GetItemSubClassInfo(4, 6) or nil
+    if type(shieldName) ~= "string" or shieldName == "" then shieldName = nil end
+    local clauses = FM.ForeverKickClauses(candidates, IsKickKnown, CanonicalKick, indexOfForm, barSize, allFixed,
+        shieldName ~= nil)
+    if #clauses == 0 then return "nokick", nil, nil, specName end
+    local names = {}
+    for i = 1, #clauses do
+        local name = C_Spell.GetSpellName(clauses[i].id)
+        if not name then return "loading", clauses[i].id, nil, specName end
+        names[i] = name
+    end
+    self.foreverClauses, self.foreverNames, self.foreverShield = clauses, names, shieldName
+    local label = table_concat(names, " / ")
+    local body = FM.BuildForeverKickBody(clauses, names, shieldName, self.db, NAME_TO_INDEX[self:GetEffectiveMarker()] or 0)
+    if not body then return "toolong", clauses[1].id, nil, specName, label end
+    return "ready", clauses[1].id, body, specName, label
+end
+
+-- The page preview's body for db: retail's one-kick body, or on Forever the
+-- clauses the last ComputeKick kept.
+function FM:PreviewKickBody(db, markerIdx, spellName)
+    if not KE.IS_FOREVER then return FM.BuildKickBody(spellName, db, markerIdx) end
+    if not self.foreverClauses then return nil end
+    return FM.BuildForeverKickBody(self.foreverClauses, self.foreverNames, self.foreverShield, db, markerIdx)
 end
 
 -- The macro's current body, so a player's hand edit is seen and written over.
@@ -441,6 +591,19 @@ function FM:OnKickSpellsChanged()
     self:QueueKickRefresh()
 end
 
+-- On Forever a spec whose kicks need a stance or form rewrites when the
+-- stance bar changes; a spec not read yet is heard too, since nothing asks
+-- again once it loads.
+local function SpecNeedsForms(specID)
+    if not specID or specID == 0 then return true end
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return false end
+    for i = 1, #candidates do
+        if candidates[i].forms then return true end
+    end
+    return false
+end
+
 -- The enabled check matters: the settings page calls ApplySettings on a
 -- disabled module too, and AceEvent would register on it.
 function FM:UpdateKickEvents()
@@ -451,11 +614,15 @@ function FM:UpdateKickEvents()
         if self:GetPlayerClass() == "WARLOCK" then
             self:RegisterEvent("UNIT_PET", "OnKickUnitEvent")
         end
+        if KE.IS_FOREVER and SpecNeedsForms(KE:GetPlayerSpecId()) then
+            self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "OnKickSpellsChanged")
+        end
         self:QueueKickRefresh()
     else
         self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
         self:UnregisterEvent("SPELLS_CHANGED")
         self:UnregisterEvent("UNIT_PET")
+        self:UnregisterEvent("UPDATE_SHAPESHIFT_FORMS")
         self:UnregisterEvent("SPELL_DATA_LOAD_RESULT")
         self.pendingKick = false
         self.pendingSpellID = nil

@@ -6,13 +6,16 @@
 --   lua dev/scripts/derive-forever-kicks.lua <dir> --check Core/Interrupts.lua
 --
 -- <dir> holds ChrSpecialization, SkillLineAbility, SpellName, SpellEffect,
--- SpellCooldowns, SpellShapeshift, SpellMisc, SpellLevels and
--- SpellEquippedItems as <Table>.csv.
--- The first form prints FOREVER_INTERRUPTS and FOREVER_KICK_ALIASES, to be
--- pasted into Core/Interrupts.lua as printed. --check exits 0 when the file
--- holds that text exactly; otherwise it prints the text and exits 1. A
--- missing table or column, a kick with no cooldown row, or a kick whose form
--- or item data the castbar selector cannot express, exits 1 naming it.
+-- SpellCooldowns, SpellShapeshift, SpellShapeshiftForm, SpellMisc,
+-- SpellLevels, SpellEquippedItems and TraitDefinition as <Table>.csv.
+-- The first form prints FOREVER_INTERRUPTS, FOREVER_KICK_ALIASES and
+-- FOREVER_FORMS, to be pasted into Core/Interrupts.lua as printed. --check
+-- exits 0 when the file holds that text exactly; otherwise it prints the
+-- text and exits 1. A missing table or column, a kick with no cooldown row,
+-- a kick whose form or item data the castbar selector cannot express, a
+-- kick form no spell of its class gives, or a form with no
+-- SpellShapeshiftForm row, exits 1 naming it. Rules 9 and 10 choose and
+-- refuse through _forever_kicks_rules.lua, which has a spec.
 --
 -- Rules:
 --   1. A class's spells are the SkillLineAbility rows whose ClassMask has the
@@ -42,10 +45,24 @@
 --      class 4 with subclass mask exactly 64 (a shield) and no inventory
 --      types prints `shield = true`; any other row fails the run, because
 --      the selector models only the shield.
+--   8. Talent kicks: a kick whose id is a TraitDefinition SpellID prints
+--      `talent = true` on its row, after `shield`.
+--   9. Tracked kick: the first kick in row order whose rank 1 a trainer
+--      grants (a SkillLineAbility row with AcquireMethod other than 3) or
+--      that rule 8 marks prints as the row's `tracked` id when it is not
+--      the first kick, or is the first and has ranks. With no such kick,
+--      rule 6 decides.
+--  10. Forms: a class spell (rule 1) with a DifficultyID 0 SpellEffect row
+--      of EffectAura 36 gives the form in its EffectMiscValue_0. Each such
+--      spell prints in FOREVER_FORMS by spell id, with `fixed = true` when
+--      the form's SpellShapeshiftForm Flags has bit 0x2: a form that cannot
+--      be left, only swapped. A kick form that no spell of its class gives,
+--      or a form with no SpellShapeshiftForm row, fails the run.
 
 local _script = (arg[0] or ""):gsub("/", "\\")
 local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
 local CSV = dofile(_dir .. "_db2_csv.lua")
+local Rules = dofile(_dir .. "_forever_kicks_rules.lua")
 
 local dir, checkPath = arg[1], nil
 if arg[2] == "--check" then checkPath = arg[3] end
@@ -105,12 +122,13 @@ for _, r in ipairs(loadTable("SpellName", { "ID", "Name_lang" })) do
 end
 
 local effectsOf = {}
-for _, r in ipairs(loadTable("SpellEffect", { "SpellID", "DifficultyID", "Effect", "EffectAura", "EffectTriggerSpell" })) do
+for _, r in ipairs(loadTable("SpellEffect", { "SpellID", "DifficultyID", "Effect", "EffectAura", "EffectTriggerSpell", "EffectMiscValue_0" })) do
     if num(r.DifficultyID) == 0 then
         local id = num(r.SpellID)
         local list = effectsOf[id] or {}
         effectsOf[id] = list
-        list[#list + 1] = { effect = num(r.Effect), aura = num(r.EffectAura), trigger = num(r.EffectTriggerSpell) }
+        list[#list + 1] = { effect = num(r.Effect), aura = num(r.EffectAura), trigger = num(r.EffectTriggerSpell),
+            misc = num(r.EffectMiscValue_0) }
     end
 end
 
@@ -165,9 +183,23 @@ for _, r in ipairs(loadTable("SpellEquippedItems", { "SpellID", "EquippedItemCla
     end
 end
 
--- Rules 1 and 2.
-local kicksOfClass = {}
-for _, r in ipairs(loadTable("SkillLineAbility", { "SkillLine", "Spell", "ClassMask", "SupercedesSpell", "RaceMasks_0" })) do
+-- Rule 8.
+local talentSpell = {}
+for _, r in ipairs(loadTable("TraitDefinition", { "SpellID" })) do
+    talentSpell[num(r.SpellID)] = true
+end
+
+-- Rule 10: Flags bit 1 (0x2) marks a form that cannot be left.
+local formKnown, formFixed = {}, {}
+for _, r in ipairs(loadTable("SpellShapeshiftForm", { "ID", "Flags" })) do
+    local form = num(r.ID)
+    formKnown[form] = true
+    formFixed[form] = hasBit(num(r.Flags), 1)
+end
+
+-- Rules 1, 2, 9 and 10.
+local kicksOfClass, formsOfClass, formSpells = {}, {}, {}
+for _, r in ipairs(loadTable("SkillLineAbility", { "SkillLine", "Spell", "ClassMask", "SupercedesSpell", "AcquireMethod", "RaceMasks_0" })) do
     local skill, id, mask = num(r.SkillLine), num(r.Spell), num(r.ClassMask)
     local classes = {}
     if num(r.RaceMasks_0) == 0 then
@@ -179,17 +211,26 @@ for _, r in ipairs(loadTable("SkillLineAbility", { "SkillLine", "Spell", "ClassM
             end
         end
     end
-    local isKick, extra = false, nil
+    local isKick, extra, form = false, nil, nil
     for _, e in ipairs(effectsOf[id] or {}) do
         if e.effect == 68 or e.aura == 27 then isKick = true end
         if e.trigger > 0 and hasInterruptEffect(e.trigger) then isKick, extra = true, e.trigger end
+        if e.aura == 36 then form = e.misc end
     end
-    if isKick then
-        for _, classID in ipairs(classes) do
-            if wantedClass[classID] then
+    for _, classID in ipairs(classes) do
+        if wantedClass[classID] then
+            if isKick then
                 local kicks = kicksOfClass[classID] or {}
                 kicksOfClass[classID] = kicks
                 kicks[id] = kicks[id] or { id = id, skill = skill, supersedes = num(r.SupercedesSpell), extra = extra }
+                -- Rule 9: AcquireMethod 3 is no trainer.
+                if num(r.AcquireMethod) ~= 3 then kicks[id].trained = true end
+            end
+            if form then
+                local given = formsOfClass[classID] or {}
+                formsOfClass[classID] = given
+                given[form] = true
+                formSpells[id] = form
             end
         end
     end
@@ -239,6 +280,12 @@ local function familiesOf(classID)
             if unmodeledItems[kick.id] then
                 fail(("SpellEquippedItems row of %d %s needs an item other than a shield"):format(kick.id, nameOf[kick.id] or "?"))
             end
+            -- Rule 10.
+            local missing = Rules.MissingForm(formsOf[kick.id], formsOfClass[classID])
+            if missing then
+                fail(("no %s spell gives form %d, which %d %s needs"):format(CLASS_NAMES[classID], missing,
+                    kick.id, nameOf[kick.id] or "?"))
+            end
         end
         table.sort(family.ranks, function(a, b)
             if a.depth ~= b.depth then return a.depth < b.depth end
@@ -247,6 +294,8 @@ local function familiesOf(classID)
         end)
         family.canon = family.ranks[1].id
         family.cd = family.ranks[1].cd
+        family.trained = family.ranks[1].trained == true
+        family.talent = talentSpell[family.canon] == true
     end
     table.sort(families, function(a, b)
         if a.cd ~= b.cd then return a.cd < b.cd end
@@ -276,9 +325,10 @@ for _, specID in ipairs(FOREVER_SPECS) do
         for _, family in ipairs(families) do
             for i = #family.ranks, 1, -1 do
                 local kick = family.ranks[i]
-                add(("            { id = %d, cd = %s%s%s },  -- %s"):format(
+                add(("            { id = %d, cd = %s%s%s%s },  -- %s"):format(
                     kick.id, ("%g"):format(kick.cd), formsText(formsOf[kick.id]),
-                    shieldKick[kick.id] and ", shield = true" or "", nameOf[kick.id] or "?"))
+                    shieldKick[kick.id] and ", shield = true" or "",
+                    talentSpell[kick.id] and ", talent = true" or "", nameOf[kick.id] or "?"))
                 if kick.id ~= family.canon then
                     aliases[#aliases + 1] = { id = kick.id, canon = family.canon }
                 end
@@ -289,8 +339,10 @@ for _, specID in ipairs(FOREVER_SPECS) do
             end
         end
         add("        },")
-        if #families[1].ranks > 1 then
-            add(("        tracked = %d,"):format(families[1].canon))
+        -- Rules 9 and 6.
+        local trackedAt = Rules.TrackedIndex(families)
+        if trackedAt then
+            add(("        tracked = %d,"):format(families[trackedAt].canon))
         end
         if #extras > 0 then
             table.sort(extras)
@@ -306,6 +358,19 @@ add("local FOREVER_KICK_ALIASES = {")
 table.sort(aliases, function(a, b) return a.id < b.id end)
 for _, alias in ipairs(aliases) do
     add(("    [%d] = %d,  -- %s"):format(alias.id, alias.canon, nameOf[alias.id] or "?"))
+end
+add("}")
+
+-- Rule 10.
+add("local FOREVER_FORMS = {")
+local formRows, unknownAt = Rules.FormRows(formSpells, formKnown, formFixed)
+if not formRows then
+    fail(("SpellShapeshiftForm has no row for form %d of %d %s"):format(formSpells[unknownAt], unknownAt,
+        nameOf[unknownAt] or "?"))
+end
+for _, row in ipairs(formRows) do
+    add(("    [%d] = { form = %d%s },  -- %s"):format(row.id, row.form, row.fixed and ", fixed = true" or "",
+        nameOf[row.id] or "?"))
 end
 add("}")
 
