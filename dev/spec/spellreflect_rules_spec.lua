@@ -120,7 +120,7 @@ describe("spell reflect rules", function()
         -- text mode: word, not ready, label, timer, small line
         local lines = {
             { false, false, Rules.TEXT_LABEL, "2.4", "Void Blast" },
-            { true, false, Rules.TEXT_LABEL_NOW, Rules.NOW_WORD, "Void Blast" },
+            { true, false, Rules.TEXT_LABEL, Rules.NOW_WORD, "Void Blast" },
             { false, true, Rules.NOT_READY, "", "Void Blast  2.4" },
             { true, true, Rules.NOT_READY, "", "Void Blast  " .. Rules.NOW_WORD },
         }

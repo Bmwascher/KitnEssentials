@@ -53,7 +53,6 @@ Rules.TEST_LEAD = 6
 
 Rules.NOW_WORD = "NOW"
 Rules.TEXT_LABEL = "REFLECT \194\187"
-Rules.TEXT_LABEL_NOW = "REFLECT"
 Rules.NOT_READY = "NO REFLECT"
 
 function Rules.ModeOf(modes, spellId)
@@ -280,7 +279,6 @@ end
 function Rules.TextLines(word, notReady, count, name)
     local timer = word and Rules.NOW_WORD or count
     if notReady then return Rules.NOT_READY, "", name .. "  " .. timer end
-    if word then return Rules.TEXT_LABEL_NOW, timer, name end
     return Rules.TEXT_LABEL, timer, name
 end
 
