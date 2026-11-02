@@ -32,9 +32,9 @@ for _, spell in ipairs(Rules.SPELLS) do DEFAULT_MODE[spell.id] = spell.mode end
 
 local MODES = { ALWAYS = true, READY = true, OFF = true }
 
--- Spell Reflection lasts 5 s, so a press this long before the hit is still up
--- when it lands.
-Rules.REFLECT_LASTS = 5
+Rules.REFLECT_LASTS = 5 -- seconds Spell Reflection lasts
+-- The window opens this long before the hit, so a press at its start is still
+-- up when the hit lands.
 Rules.WINDOW = 4.5
 
 -- Window offsets from the cast start in seconds, negative before it, for the

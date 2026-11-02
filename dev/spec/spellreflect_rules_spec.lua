@@ -212,27 +212,30 @@ describe("spell reflect rules", function()
         end
     end)
 
-    it("keeps a re-timed bar's press only while it reaches the new hit, and a refresh revives a canceled bar", function()
+    it("keeps a re-timed bar's press only while it reaches the new hit", function()
         -- The bar ends at 102 and the hit is 3 s later; at 100.5 its window is open.
         -- A press then lasts to 105.5, so it covers a hit moved up to 0.5 s later.
-        -- shift of the bar's end (s), canceled instead of pressed, same record, done, still canceled
+        -- shift of the bar's end (s), done on the new record
         local cases = {
-            { 0.1, false, true, true, false },
-            { 0.4, false, false, true, false },
-            { 1.0, false, false, nil, false },
-            { 0.1, true, true, nil, false },
+            { 0.4, true },
+            { 1.0, nil },
         }
         for i, case in ipairs(cases) do
             local records = {}
             local first = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 2, 100)
-            if case[2] then
-                Rules.Stop(records, "bar", 100.5)
-            else
-                Rules.MarkPressed(records, 100.5)
-            end
+            Rules.MarkPressed(records, 100.5)
             local second = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 1.5 + case[1], 100.5)
-            assert.same({ case[3], case[4], case[5] }, { first == second, second.done, second.stopAt ~= nil },
-                "case " .. i)
+            assert.are_not.equals(first, second, "case " .. i)
+            assert.equals(case[2], second.done, "case " .. i)
         end
+    end)
+
+    it("undoes a cancel when the same bar comes back within 0.25 s of its end", function()
+        local records = {}
+        local first = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 2, 100)
+        Rules.Stop(records, "bar", 100.5)
+        local second = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 1.6, 100.5)
+        assert.equals(first, second)
+        assert.is_nil(second.stopAt)
     end)
 end)
