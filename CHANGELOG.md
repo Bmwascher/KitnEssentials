@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.4
+
+Settings tab rows show in full on every open, and Ready Check Announce's
+detail moves into its tooltip.
+
+### WoW Forever (Beta)
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+- Settings pages with a row of tabs now show every tab when they open,
+  where sometimes only the first tab showed until the page refreshed
+- Focus Marker's Ready Check Announce text fits its card again; the note
+  about other addons being told your marker is in its tooltip
+
+### Retail
+
+Everything below is for Retail.
+
+#### Settings
+
+- Settings pages with a row of tabs now show every tab when they open,
+  where sometimes only the first tab showed until the page refreshed
+
+#### Focus Marker
+
+- The Ready Check Announce text fits its card again; the note about other
+  addons being told your marker is in its tooltip
+
+---
+
 ## v4.16.3
 
 Spell Reflect, a new Warrior module, counts down to the boss casts Spell
