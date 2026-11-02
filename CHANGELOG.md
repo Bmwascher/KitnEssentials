@@ -1,5 +1,48 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.5
+
+The AGGRO warning waits a moment before it shows, Combat Potion Ready gains
+an icon mode and a Recklessness stat line, and Advanced Debuffs now shows
+debuffs other players put on you.
+
+### WoW Forever (Beta)
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+- Combat Texts: the AGGRO line and its sound now show once a mob has
+  attacked you for the new Show After time (0.5 s by default, 0 shows it
+  at once as before)
+- Advanced Debuffs hides only the debuffs you or your pet cast; debuffs
+  other players put on you now show
+
+### Retail
+
+Everything below is for Retail.
+
+#### Combat Texts
+
+- The AGGRO line and its sound now show once a mob has attacked you for
+  the new Show After time (0.5 s by default, 0 shows it at once as before)
+
+#### Combat Potion Ready
+
+- New Display Mode: Icon shows the potion with a count and a cooldown
+  swipe, with an Only While Ready option
+- New optional Recklessness Stat line ("Reck: Haste") names the stat a
+  Potion of Recklessness would raise, with its own prefix, colors,
+  position and size, and a per-specialization selector; it works in keys
+  while ratings are hidden
+
+#### Advanced Debuffs
+
+- Hides only the debuffs you or your pet cast; debuffs other players put
+  on you now show
+
+---
+
 ## v4.16.4
 
 Settings tab rows show in full on every open, and Ready Check Announce's
