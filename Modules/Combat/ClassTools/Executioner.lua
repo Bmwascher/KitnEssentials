@@ -86,6 +86,7 @@ local function DeferredEvaluate()
 end
 
 local function RunQueuedCheck()
+    EX.checkTimer = nil
     EX:RunCheck()
 end
 
@@ -833,13 +834,18 @@ function EX:OnCooldownPing(_, spellID)
 end
 
 function EX:OnAura()
-    if self.checkQueued or KE:IsAuraHiddenForSpell(Rules.BUFF) then return end
-    self.checkQueued = true
-    C_Timer.After(Rules.CHECK_DELAY, RunQueuedCheck)
+    if self.checkTimer or KE:IsAuraHiddenForSpell(Rules.BUFF) then return end
+    self.checkTimer = C_Timer.NewTimer(Rules.CHECK_DELAY, RunQueuedCheck)
+end
+
+function EX:CancelCheck()
+    if self.checkTimer then
+        self.checkTimer:Cancel()
+        self.checkTimer = nil
+    end
 end
 
 function EX:RunCheck()
-    self.checkQueued = false
     if not self.live then return end
     local now = GetTime()
     local state = self.state
@@ -981,6 +987,7 @@ function EX:SetLive(on)
             self:UnregisterEvent("CHALLENGE_MODE_START")
             Rules.Wipe(self.state)
             self:ArmExpiry()
+            self:CancelCheck()
         end
     end
     self:SyncOptionalEvents()
@@ -1073,6 +1080,7 @@ function EX:OnDisable()
         self.evalTimer:Cancel()
         self.evalTimer = nil
     end
+    self:CancelCheck()
     for _, timer in ipairs(self.testTimers) do timer:Cancel() end
     wipe(self.testTimers)
     self.testUntil = nil

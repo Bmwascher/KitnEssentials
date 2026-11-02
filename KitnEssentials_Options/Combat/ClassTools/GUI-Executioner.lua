@@ -41,9 +41,21 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     local cue = db.Cue
 
     local EX = GetModule()
+    local mode = db.DisplayMode or "BARS"
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("glow", function() return cue.GlowEnabled == true end)
     manager:SetCondition("cueText", function() return cue.ShowText == true end)
+    -- Tracker controls, grayed where nothing draws them; not gated on the
+    -- Cancel icon. The mode dropdown rebuilds the page, so `mode` is fixed.
+    local display = GUIFrame:CreateWidgetStateManager()
+    display:SetCondition("stackColor", function() return mode == "BARS" or mode == "PIPS" end)
+    display:SetCondition("hiddenColor", function() return mode ~= "CUE_ONLY" and db.ShowHidden ~= false end)
+    display:SetCondition("fontSize", function() return mode ~= "CUE_ONLY" end)
+
+    local function Regray()
+        manager:UpdateAll(cue.Enabled == true)
+        display:UpdateAll(true)
+    end
 
     local function ApplySettings()
         if EX then EX:ApplySettings() end
@@ -61,7 +73,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
             callback = function(v)
                 target[key] = v
                 ApplySettings()
-                if regray then manager:UpdateAll(cue.Enabled == true) end
+                if regray then Regray() end
             end,
         })
         row:AddWidget(box, width)
@@ -121,8 +133,6 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     card1:AddRow(combatRow, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
-    local mode = db.DisplayMode or "BARS"
-
     ----------------------------------------------------------------
     -- Card 2: Reading the Display (none in Cancel Icon Only)
     ----------------------------------------------------------------
@@ -135,12 +145,12 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
             card2:AddLabel("|cff" .. hidden .. "hidden [17]|r  A hidden timer: a smaller mark in the row under "
                 .. "the segments, with its seconds inside. When it runs out it takes away a stack.")
         elseif mode == "ICON" then
-            card2:AddLabel("|cff" .. stack .. "3|r |cff" .. hidden .. "+2|r  The count is your stacks; the "
-                .. "center seconds and the dark swipe are the next stack's drop; the red \"+2\" is how many "
-                .. "hidden timers run. Their times are not shown in this mode.")
+            card2:AddLabel("3 |cff" .. hidden .. "+2|r  The count is your stacks; the center seconds and the "
+                .. "dark swipe are the next stack's drop; the \"+2\" badge is how many hidden timers run. Their "
+                .. "times are not shown in this mode.")
         else
-            card2:AddLabel("|cff" .. stack .. "1   12|r  A stack. Its bar ends when you lose that stack; the top "
-                .. "bar is the next to drop.")
+            card2:AddLabel("|cff" .. stack .. "1   12|r  A stack. Its bar ends when you lose that stack; the "
+                .. "first bar, where the bars start growing, is the next to drop.")
             card2:AddLabel("|cff" .. hidden .. "hidden   17|r  A hidden timer from a proc at 5 stacks. When it "
                 .. "runs out it takes away a stack, so it eats the stacks your next procs give.")
         end
@@ -207,7 +217,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
 
     if mode == "BARS" then
         local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34)
+        AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34, true)
         AddCheckbox(r1, "Show Labels", db, "ShowLabels", 0.33)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.33)
         card4:AddRow(r1, Theme.rowHeight)
@@ -225,7 +235,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         card4:AddRow(r3, Theme.rowHeightLast, 0)
     elseif mode == "PIPS" then
         local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34)
+        AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34, true)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.33)
         AddCheckbox(r1, "Show Stack Count", db, "ShowStackCount", 0.33)
         card4:AddRow(r1, Theme.rowHeight)
@@ -240,7 +250,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
             .. "oldest first, each with its seconds inside.")
     elseif mode == "ICON" then
         local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        AddCheckbox(r1, "Show Hidden Count", db, "ShowHidden", 0.5)
+        AddCheckbox(r1, "Show Hidden Count", db, "ShowHidden", 0.5, true)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.5)
         card4:AddRow(r1, Theme.rowHeight)
         local r2 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
@@ -289,7 +299,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 7: Font Settings
     ----------------------------------------------------------------
-    local _, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+    local _, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font Settings",
         db = db,
         dbKeys = {
@@ -300,6 +310,15 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         fontSizeRange = { 6, 24 },
         onChangeCallback = ApplySettings,
     })
+    -- Font, Outline, then Font Size. The "Cancel" text has a fixed size, and
+    -- in Cancel Icon Only it is the only text drawn.
+    if fontWidgets then
+        display:Register(fontWidgets[3], "fontSize")
+        if mode == "CUE_ONLY" then
+            manager:Register(fontWidgets[1], "cueText")
+            manager:Register(fontWidgets[2], "cueText")
+        end
+    end
     yOffset = fontOffset
 
     ----------------------------------------------------------------
@@ -307,14 +326,18 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card8 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     local colorRow = GUIFrame:CreateRow(card8.content, 46)
-    colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Stack Color", {
+    local stackColor = GUIFrame:CreateColorPicker(colorRow, "Stack Color", {
         color = db.StackColor,
         callback = function(r, g, b, a) db.StackColor = { r, g, b, a }; ApplyAndRedraw() end,
-    }), 0.34)
-    colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Hidden Timer Color", {
+    })
+    colorRow:AddWidget(stackColor, 0.34)
+    display:Register(stackColor, "stackColor")
+    local hiddenColor = GUIFrame:CreateColorPicker(colorRow, "Hidden Timer Color", {
         color = db.HiddenColor,
         callback = function(r, g, b, a) db.HiddenColor = { r, g, b, a }; ApplyAndRedraw() end,
-    }), 0.33)
+    })
+    colorRow:AddWidget(hiddenColor, 0.33)
+    display:Register(hiddenColor, "hiddenColor")
     local cueTextColor = GUIFrame:CreateColorPicker(colorRow, "Cancel Text Color", {
         color = cue.TextColor,
         callback = function(r, g, b, a) cue.TextColor = { r, g, b, a }; ApplySettings() end,
@@ -363,6 +386,6 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     card10:AddRow(soundRow, Theme.rowHeightLast, 0)
     yOffset = card10:GetNextOffset()
 
-    manager:UpdateAll(cue.Enabled == true)
+    Regray()
     return yOffset
 end)
