@@ -67,6 +67,7 @@ local STEP = 0.05
 local TALENT_EVAL_DELAY = 2
 local NAME_GAP = 3
 local ICON_GAP, COUNT_GAP = 2, 5
+local FADE_IN = 0.15
 -- The widest strings a count shows: tenths up to Lead's 15 s, and the cast word.
 local SLOT_SAMPLES = { "88.8", Rules.NOW_WORD }
 local TEST_KEY = "__test"
@@ -277,6 +278,13 @@ function SR:CreateFrame_()
     textBox.iconFrame = small
     textBox:Hide()
     frame.textBox = textBox
+
+    local fade = frame:CreateAnimationGroup()
+    local alpha = fade:CreateAnimation("Alpha")
+    alpha:SetFromAlpha(0)
+    alpha:SetToAlpha(1)
+    alpha:SetDuration(FADE_IN)
+    frame.fade = fade
 
     self.frame = frame
     self.driver = CreateFrame("Frame")
@@ -530,6 +538,10 @@ function SR:Paint(rec, now, ready, silent)
     local count = word and Rules.NOW_WORD or KE.FormatSplitTimer((Rules.Countdown(rec, now)))
     local changed = rec ~= self.shownRec or phase ~= self.shownPhase or ready ~= self.shownReady
     if changed then
+        if Rules.CameBack(self.shownRec, self.shownReady, rec, ready) then
+            frame.fade:Stop()
+            frame.fade:Play()
+        end
         self.shownRec, self.shownPhase, self.shownReady = rec, phase, ready
         self.lastCount, self.lastLine, self.lastLineTimer = nil, nil, nil
     end
@@ -571,6 +583,7 @@ end
 function SR:HideCue()
     if not self.frame then return end
     self:StopGlow()
+    self.frame.fade:Stop()
     self.frame:Hide()
     self.shownRec, self.shownPhase, self.shownReady = nil, nil, nil
     self.lastCount, self.lastLine, self.lastLineTimer = nil, nil, nil

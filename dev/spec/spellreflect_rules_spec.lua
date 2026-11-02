@@ -261,6 +261,22 @@ describe("spell reflect rules", function()
         assert.is_nil(second.stopAt)
     end)
 
+    it("fades in only when Reflect comes back while the same record stays shown", function()
+        local a, b = {}, {}
+        -- shown record, its ready state, record now, ready now, fades
+        local cases = {
+            { a, false, a, true, true },
+            { a, true, a, true, false },
+            { a, false, a, false, false },
+            { a, true, a, false, false },
+            { a, false, b, true, false },
+            { nil, nil, a, true, false },
+        }
+        for i, case in ipairs(cases) do
+            assert.equals(case[5], Rules.CameBack(case[1], case[2], case[3], case[4]), "case " .. i)
+        end
+    end)
+
     it("starts a line's text where the whole group, lead and tail included, is centered", function()
         -- lead, text, tail, the text's left edge from the center
         local cases = {

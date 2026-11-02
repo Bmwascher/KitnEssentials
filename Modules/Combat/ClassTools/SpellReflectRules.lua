@@ -287,6 +287,12 @@ function Rules.TextLines(word, notReady, count, name, showName)
     return Rules.TEXT_LABEL, timer, showName and name or "", ""
 end
 
+-- Spell Reflection came back while the same record stayed on screen: the one
+-- change the cue fades in for.
+function Rules.CameBack(shownRec, shownReady, rec, ready)
+    return rec == shownRec and shownReady == false and ready == true
+end
+
 -- Text mode centers each line as one group: what sits left of its text
 -- (lead), the text, and what sits right (tail). Returns the text's left edge
 -- from the center.
