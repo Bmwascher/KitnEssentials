@@ -100,7 +100,7 @@ if KE.LSM then
     local sounds = {
         "Add", "Add Frontal", "Adds", "Aggro", "AoE", "Aoe And Dance", "Aoe And Knockback",
         "Bait", "Blade", "Bleed", "Bleeds", "Block Line", "Boss Buffed", "Boss Shielded", "Boss Immune",
-        "Bouncer", "CC", "Check Map", "Clear", "Clear Bomb", "Cleaner", "Dance", "Debuffed", "Defensive",
+        "Bouncer", "Cancel", "CC", "Check Map", "Clear", "Clear Bomb", "Cleaner", "Dance", "Debuffed", "Defensive",
         "Dispel", "Dmg Amp", "Dmg Amp Over", "Dodge", "Done", "Drop", "Drops", "Entertainer", "Feet",
         "Fixate Incoming", "Fixated", "Frontal", "Frontals", "GGEZ", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Kick 1", "Kick 2", "Kick 3", "Kick Add", "Kicks Inc",
