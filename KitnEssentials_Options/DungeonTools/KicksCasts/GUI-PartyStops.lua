@@ -165,9 +165,9 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
     local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    row2:AddWidget(GUIFrame:CreateCheckbox(row2, "Only in a Party", {
+    row2:AddWidget(GUIFrame:CreateCheckbox(row2, "Hide While Solo", {
         value = db.OnlyInParty ~= false,
-        tooltip = "Hides the icons while you are solo. They never show in a raid.",
+        tooltip = "Solo, only your own stops can show, and only with Include Yourself ticked. Never shows in a raid.",
         callback = function(checked)
             db.OnlyInParty = checked
             ApplySettings()
