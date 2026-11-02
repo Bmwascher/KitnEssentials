@@ -1,5 +1,31 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.8
+
+Better Friendlist marks friends in your zone more clearly, and the AddOn
+List and other skinned windows look more at home.
+
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+#### Addon Skins
+
+- Better Friendlist: a friend in your zone gets a small accent-colored dot
+  right after their zone, instead of a recolored zone line
+
+### Retail only
+
+#### Dark Theme
+
+- The AddOn List's dropdown, search box, buttons and "Load out of date
+  AddOns" checkbox now match the theme
+- Skinned windows show their titles centered
+
+---
+
 ## v4.16.7
 
 The Interrupt Tracker and Focus Macros' Focus Kick come to WoW Forever.
