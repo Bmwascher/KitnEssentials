@@ -1037,7 +1037,7 @@ local Defaults = {
             Glow = true,
             GlowColor = { 0.25, 1, 0.35, 1 },
             ReadySound = "Spell Reflect",
-            NotReadySound = "Not Safe",
+            NotReadySound = "No Reflect",
             PressSoundEnabled = true,
             -- A BigWigs sound, not one this addon ships: without BigWigs it
             -- never plays.
