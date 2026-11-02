@@ -232,6 +232,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
 ---@field PlayerAbsorbsFormat { Format: fun(amount:any, abbreviate:boolean, hideWhenZero:boolean):string }
+---@field RatingCompare table # Modules/Combat/StatusTexts/RatingCompare.lua (retail only)
 ---@field DungeonTimerDungeons KE.DungeonTimerEntry[] # Modules/DungeonTools/DungeonTimers/DungeonRegistry.lua
 ---@field IS_FOREVER boolean # Core/Client.lua: true on the Forever client, decided once from the interface version
 ---@field BASELINE_LOAD boolean? # Core/BaselineLoad.lua: true only when the TOC loaded the baseline lists

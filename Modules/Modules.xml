@@ -12,6 +12,7 @@
     <Script file="Combat\ClassTools\TimeSpiral.lua" />
     <Script file="Combat\ClassTools\Recuperate.lua" />
     <Script file="QoL\GroupTools\WorldMarkerCycler.lua" />
+    <Script file="Combat\StatusTexts\RatingCompare.lua" />
     <Script file="Combat\StatusTexts\PotionReady.lua" />
     <Script file="QoL\GroupTools\ReadyCheckConsumables.lua" />
     <Script file="Combat\StatusTexts\PlayerAbsorbsFormat.lua" />

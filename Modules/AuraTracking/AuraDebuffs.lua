@@ -195,7 +195,6 @@ local DECLARATION = {
             end,
             buildCandidates = function(settings)
                 return {
-                    isFromPlayerOrPlayerPet = false,
                     excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(settings.Blocklist),
                 }
             end,

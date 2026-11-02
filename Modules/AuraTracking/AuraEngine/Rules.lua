@@ -35,7 +35,8 @@ local NEGATABLE_FILTERS = {
 function Rules.BuildDebuffFilter(filters)
     filters = filters or {}
 
-    local parts = { "HARMFUL" }
+    -- Debuffs you or your pet cast are always hidden.
+    local parts = { "HARMFUL", "!PLAYER" }
 
     for i = 1, #NEGATABLE_FILTERS do
         local key = NEGATABLE_FILTERS[i]

@@ -155,7 +155,7 @@ function M.reset()
         "IsMounted", "UnitOnTaxi", "UnitInVehicle", "UnitHasVehicleUI",
         "UnitIsDeadOrGhost", "PetHasActionBar", "GetPetActionInfo",
         "C_SpellBook", "Enum", "strsplit", "KitnEssentials",
-        "UnitCanAttack",
+        "UnitCanAttack", "UnitThreatSituation",
     }) do
         _G[k] = nil
     end

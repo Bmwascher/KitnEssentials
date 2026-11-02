@@ -3148,11 +3148,21 @@ function L.loadCombatTexts(overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.C_Spell = {}
-    -- Captured at load, so it is installed first.
+    -- Captured at load, so they are installed first.
     _G.PlaySoundFile = overrides and overrides.PlaySoundFile
+    _G.UnitThreatSituation = overrides and overrides.UnitThreatSituation
     local KE = { Print = function() end }
     helpers.loadModule("Modules/Combat/CombatTexts.lua", KE)
     return modules["CombatTexts"], KE
+end
+
+-- Modules/Combat/StatusTexts/RatingCompare.lua, for its plain pick and its
+-- alpha fold. Nothing creates a frame at load. Returns KE.RatingCompare, KE.
+function L.loadRatingCompare(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local KE = {}
+    helpers.loadModule("Modules/Combat/StatusTexts/RatingCompare.lua", KE)
+    return KE.RatingCompare, KE
 end
 
 -- Modules/Combat/CombatRes.lua, for its pure listening rule. Nothing creates a
