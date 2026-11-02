@@ -1,5 +1,33 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.3
+
+Spell Reflect, a new Warrior module, counts down to the boss casts Spell
+Reflection can catch.
+
+### Spell Reflect
+
+- **NEW:** Spell Reflect, on a new Warrior tab under Class Tools (off by
+  default). With BigWigs or LittleWigs, it counts down to this season's 8
+  dungeon boss casts that Spell Reflection can reflect, and names the spell
+- The cue turns green with a "Spell Reflect" callout while a press would
+  still be up when the hit lands, reads NOW at the cast, and hides once you
+  press Spell Reflection in time
+- While Spell Reflection is on cooldown the cue hides by default; a spell
+  set to Always shows a red NO REFLECT instead, with a "No Reflect" callout
+- When Spell Reflection comes back during a countdown, the cue fades back in
+- Text display by default, centered, with the count kept in place so
+  nothing shifts while it runs; an icon display with a glow is the other
+  choice
+- Settings: a mode per spell (each listed with its icon and dungeon), text
+  and icon sizes, spell name size (16 by default), spell name and its icons
+  on or off, colors, glow, sounds, and a Press Sound that plays when you
+  cast Spell Reflection
+- Test runs a 6 second Thornspike countdown; the settings preview and Edit
+  Mode show a Thornspike sample
+
+---
+
 ## v4.16.2
 
 Interrupt Tracker's settings page gets tabs and a Show In card.
