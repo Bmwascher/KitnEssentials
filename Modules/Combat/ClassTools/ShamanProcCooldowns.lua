@@ -280,6 +280,11 @@ function SPC:GetSlot(index)
     return slot
 end
 
+-- NoMovementAlert.lua loads first; without it the separator goes unescaped.
+---@type NoMovementAlert
+local NMA = KitnEssentials:GetModule("NoMovementAlert", true)
+local EscapePipes = NMA and NMA.EscapePipes or tostring
+
 -- Runs on settings changes only: the cached line prefixes keep the per-tick
 -- text work to one format and one concatenation per line.
 function SPC:ApplyStyle()
@@ -287,6 +292,8 @@ function SPC:ApplyStyle()
     local db = self.db
     local sep = db.Separator
     if sep == nil or sep == "" then sep = "-" end
+    -- A format argument, so its pipes need escaping and a % does not.
+    sep = EscapePipes(sep)
     local nameHex, sepHex = HexOf(db.TextColor), HexOf(db.SeparatorColor)
     local timeHex, readyHex = HexOf(db.TimerColor), HexOf(db.ReadyColor)
     for _, tracker in ipairs(Rules.TRACKERS) do
