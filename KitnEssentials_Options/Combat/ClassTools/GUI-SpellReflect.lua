@@ -137,7 +137,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     }), 0.5)
     card3:AddRow(modeRow, Theme.rowHeight)
 
-    -- Icon mode only: grayed out in text mode.
+    -- Icon Size is icon mode only: grayed out in text mode.
     local sizeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local iconSize = GUIFrame:CreateSlider(sizeRow, "Icon Size", {
         min = 24, max = 120, step = 1, value = db.IconSize or 56,
@@ -150,7 +150,6 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
         callback = function(v) db.NameFontSize = v; ApplySettings() end,
     })
     sizeRow:AddWidget(nameSize, 0.5)
-    manager:Register(nameSize, "iconMode")
     card3:AddRow(sizeRow, Theme.rowHeight)
 
     local nameRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
@@ -159,13 +158,11 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
         callback = function(v) db.ShowSpellName = v; ApplySettings() end,
     })
     nameRow:AddWidget(showName, 0.5)
-    manager:Register(showName, "iconMode")
     local nameIcons = GUIFrame:CreateCheckbox(nameRow, "Spell Icons Beside Name", {
         value = db.ShowNameIcons ~= false,
         callback = function(v) db.ShowNameIcons = v; ApplySettings() end,
     })
     nameRow:AddWidget(nameIcons, 0.5)
-    manager:Register(nameIcons, "iconMode")
     card3:AddRow(nameRow, Theme.rowHeightLast, 0)
     yOffset = card3:GetNextOffset()
 

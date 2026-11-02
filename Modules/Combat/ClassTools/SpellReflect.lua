@@ -53,7 +53,7 @@ local PlaySoundFile = PlaySoundFile
 local UnitClass = UnitClass
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local pairs, pcall, tostring, type = pairs, pcall, tostring, type
-local math_floor, math_max = math.floor, math.max
+local math_max = math.max
 local wipe = wipe
 
 -- Flip to true, /reload, repro, read the log.
@@ -155,6 +155,30 @@ local function SampleEntry()
     return { id = SAMPLE_ID, name = SAMPLE_NAME, open = open, close = close }
 end
 
+-- The boss spell's icon on each side of a name line, in either mode.
+local function NewNameSides(parent, nameLine)
+    local sides = {}
+    for i = 1, 2 do
+        local side = CreateFrame("Frame", nil, parent)
+        side.icon = side:CreateTexture(nil, "ARTWORK")
+        side.icon:SetAllPoints(side)
+        KE:ApplyIconZoom(side.icon)
+        KE:AddIconBorders(side, { 0, 0, 0, 1 })
+        sides[i] = side
+    end
+    sides[1]:SetPoint("RIGHT", nameLine, "LEFT", -NAME_GAP, 0)
+    sides[2]:SetPoint("LEFT", nameLine, "RIGHT", NAME_GAP, 0)
+    return sides
+end
+
+local function PaintSides(sides, shown, spellId)
+    local texture = shown and SpellIcon(spellId) or nil
+    for i = 1, 2 do
+        sides[i]:SetShown(shown)
+        if texture then sides[i].icon:SetTexture(texture) end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Setup
 ---------------------------------------------------------------------------------
@@ -198,17 +222,7 @@ function SR:CreateFrame_()
     iconBox.count:SetPoint("CENTER")
     iconBox.name = textLayer:CreateFontString(nil, "OVERLAY")
     iconBox.name:SetPoint("TOP", iconBox, "BOTTOM", 0, -NAME_GAP)
-    iconBox.sides = {}
-    for i = 1, 2 do
-        local side = CreateFrame("Frame", nil, textLayer)
-        side.icon = side:CreateTexture(nil, "ARTWORK")
-        side.icon:SetAllPoints(side)
-        KE:ApplyIconZoom(side.icon)
-        KE:AddIconBorders(side, { 0, 0, 0, 1 })
-        iconBox.sides[i] = side
-    end
-    iconBox.sides[1]:SetPoint("RIGHT", iconBox.name, "LEFT", -NAME_GAP, 0)
-    iconBox.sides[2]:SetPoint("LEFT", iconBox.name, "RIGHT", NAME_GAP, 0)
+    iconBox.sides = NewNameSides(textLayer, iconBox.name)
     frame.iconBox = iconBox
 
     local textBox = CreateFrame("Frame", nil, frame)
@@ -217,6 +231,7 @@ function SR:CreateFrame_()
     textBox.timer = textBox:CreateFontString(nil, "OVERLAY")
     textBox.line = textBox:CreateFontString(nil, "OVERLAY")
     textBox.line:SetPoint("TOP", textBox, "BOTTOM", 0, -2)
+    textBox.sides = NewNameSides(textBox, textBox.line)
     local small = CreateFrame("Frame", nil, textBox)
     small.icon = small:CreateTexture(nil, "ARTWORK")
     small.icon:SetAllPoints(small)
@@ -298,19 +313,20 @@ function SR:ApplyStyle()
     local face, outline = db.FontFace, db.FontOutline
     local iconBox, textBox = frame.iconBox, frame.textBox
     self:StopGlow()
+    local nameSize = db.NameFontSize or 14
     if self:TextMode() then
         local size = db.TextSize or 30
         frame:SetSize(size * 8, size + 4)
         KE:ApplyFontToText(textBox.label, face, size, outline)
         KE:ApplyFontToText(textBox.timer, face, size, outline)
-        KE:ApplyFontToText(textBox.line, face, math_max(10, math_floor(size / 2)), outline)
+        KE:ApplyFontToText(textBox.line, face, nameSize, outline)
+        for i = 1, 2 do textBox.sides[i]:SetSize(nameSize, nameSize) end
         textBox.iconFrame:SetSize(size, size)
         KE.ApplySplitTextLayout(textBox, textBox.label, textBox.timer, textBox.iconFrame, true, "CENTER")
         iconBox:Hide()
         textBox:Show()
     else
         local size = db.IconSize or 56
-        local nameSize = db.NameFontSize or 14
         frame:SetSize(size, size)
         KE:ApplyFontToText(iconBox.count, face, db.FontSize or 26, outline)
         KE:ApplyFontToText(iconBox.name, face, nameSize, outline)
@@ -413,23 +429,19 @@ function SR:PaintIconState(rec, colorKey, notReady, glow)
         box.name:SetText(notReady and Rules.NOT_READY or (rec.name or ""))
         SetColor(box.name, notReady and RED or db.TextColor)
     end
-    local sides = showName and not notReady and db.ShowNameIcons ~= false
-    local texture = sides and SpellIcon(rec.id) or nil
-    for i = 1, 2 do
-        box.sides[i]:SetShown(sides)
-        if texture then box.sides[i].icon:SetTexture(texture) end
-    end
+    PaintSides(box.sides, showName and not notReady and db.ShowNameIcons ~= false, rec.id)
     box.cooldown:SetShown(notReady)
     if glow and db.Glow ~= false then self:StartGlow() else self:StopGlow() end
 end
 
-function SR:PaintTextState(label, colorKey, notReady)
+function SR:PaintTextState(rec, label, colorKey, notReady)
     local db, box = self.db, self.frame.textBox
     local color = notReady and RED or ColorFor(db, colorKey)
     box.label:SetText(label)
     SetColor(box.label, color)
     SetColor(box.timer, color)
     SetColor(box.line, notReady and GRAY or db.TextColor)
+    PaintSides(box.sides, not notReady and db.ShowSpellName ~= false and db.ShowNameIcons ~= false, rec.id)
 end
 
 -- State parts are set only when the record, its phase or the ready state
@@ -446,8 +458,8 @@ function SR:Paint(rec, now, ready, silent)
     end
     if self:TextMode() then
         local box = frame.textBox
-        local label, timer, line = Rules.TextLines(word, notReady, count, rec.name or "")
-        if changed then self:PaintTextState(label, colorKey, notReady) end
+        local label, timer, line = Rules.TextLines(word, notReady, count, rec.name or "", db.ShowSpellName ~= false)
+        if changed then self:PaintTextState(rec, label, colorKey, notReady) end
         if timer ~= self.lastCount then
             box.timer:SetText(timer)
             self.lastCount = timer

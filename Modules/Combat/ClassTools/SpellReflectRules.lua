@@ -278,11 +278,12 @@ function Rules.Look(phase, ready)
 end
 
 -- Text mode's big-line label and timer and the small line. Not ready, the
--- count moves to the small line.
-function Rules.TextLines(word, notReady, count, name)
+-- count moves to the small line beside the name, whatever showName says;
+-- ready, the small line is the name, or empty when showName is false.
+function Rules.TextLines(word, notReady, count, name, showName)
     local timer = word and Rules.NOW_WORD or count
     if notReady then return Rules.NOT_READY, "", name .. "  " .. timer end
-    return Rules.TEXT_LABEL, timer, name
+    return Rules.TEXT_LABEL, timer, showName and name or ""
 end
 
 -- "READY", "NOT_READY" or nil; each plays at most once per record.
