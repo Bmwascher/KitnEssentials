@@ -177,12 +177,20 @@ local function NewNameSides(parent, nameLine)
     return sides
 end
 
+-- A string's width is secret while its anchoring is (the cue may be anchored
+-- to a frame that is), so nil stands for a width no arithmetic may touch.
+local function TextWidth(fontString)
+    local width = fontString:GetUnboundedStringWidth()
+    if IsSecret(width) then return nil end
+    return width
+end
+
 local function SlotWidth(measure, face, size, outline)
     KE:ApplyFontToText(measure, face, size, outline)
     local widest = 0
     for _, sample in ipairs(SLOT_SAMPLES) do
         measure:SetText(sample)
-        widest = math_max(widest, measure:GetUnboundedStringWidth())
+        widest = math_max(widest, TextWidth(measure) or 0)
     end
     return widest
 end
@@ -487,9 +495,14 @@ end
 function SR:LayoutText(notReady)
     local box = self.frame.textBox
     local tail = notReady and 0 or COUNT_GAP + box.bigSlot
-    local x = Rules.LineStart(box.iconSize + ICON_GAP, box.label:GetUnboundedStringWidth(), tail)
+    local width = TextWidth(box.label)
     box.label:ClearAllPoints()
-    box.label:SetPoint("LEFT", box, "LEFT", KE:PixelSnap(box.width / 2 + x), 0)
+    if width then
+        local x = Rules.LineStart(box.iconSize + ICON_GAP, width, tail)
+        box.label:SetPoint("LEFT", box, "LEFT", KE:PixelSnap(box.width / 2 + x), 0)
+    else
+        box.label:SetPoint("CENTER", box, "CENTER", 0, 0)
+    end
 
     local side = box.nameSize + NAME_GAP
     local lead = box.sides[1]:IsShown() and side or 0
@@ -498,9 +511,14 @@ function SR:LayoutText(notReady)
     else
         tail = box.sides[2]:IsShown() and side or 0
     end
-    x = Rules.LineStart(lead, box.line:GetUnboundedStringWidth(), tail)
+    width = TextWidth(box.line)
     box.line:ClearAllPoints()
-    box.line:SetPoint("TOPLEFT", box, "BOTTOMLEFT", KE:PixelSnap(box.width / 2 + x), -2)
+    if width then
+        local x = Rules.LineStart(lead, width, tail)
+        box.line:SetPoint("TOPLEFT", box, "BOTTOMLEFT", KE:PixelSnap(box.width / 2 + x), -2)
+    else
+        box.line:SetPoint("TOP", box, "BOTTOM", 0, -2)
+    end
 end
 
 -- State parts are set only when the record, its phase or the ready state
