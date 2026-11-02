@@ -29,9 +29,14 @@ local SPELL_MODES = {
     { key = "OFF",    text = "Off" },
 }
 
+-- The Test row is the button's height, so the card ends just under it.
+local TEST_BUTTON_HEIGHT = 26
+
 local function SpellLabel(data, spellId)
-    if not data then return "Spell " .. spellId .. "  |cff808080(no boss data)|r" end
-    return (data.name or "?") .. " - " .. (data.boss or "?")
+    local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId)
+    local icon = GUIFrame.IconText(texture)
+    if not data then return icon .. "Spell " .. spellId .. "  |cff808080(no boss data)|r" end
+    return icon .. (data.name or "?") .. " - " .. (data.boss or "?")
 end
 
 GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
@@ -69,20 +74,21 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
         "Needs " .. KE:Gold("BigWigs") .. " with its dungeon modules (" .. KE:Gold("LittleWigs") ..
         ") in its default timer mode.")
     if not BigWigsLoader then
-        card1:AddNote(KE:Gold("BigWigs") .. " is not loaded, so no cue will show.")
+        local red = Theme.error
+        card1:AddNote(KE:WrapColor("BigWigs is not loaded, so no cue will show.", red[1], red[2], red[3]))
     end
     if db.Enabled ~= true then return card1:GetNextOffset() end
 
-    local testRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local testRow = GUIFrame:CreateRow(card1.content, TEST_BUTTON_HEIGHT)
     testRow:AddWidget(GUIFrame:CreateButton(testRow, "Test", {
         width = 160,
-        height = 26,
+        height = TEST_BUTTON_HEIGHT,
         tooltip = "Runs a 6 second Void Blast countdown. Press Spell Reflection while it is green to see it hide.",
         callback = function()
             if SR then SR:Test() end
         end,
     }), 1)
-    card1:AddRow(testRow, Theme.rowHeightLast, 0)
+    card1:AddRow(testRow, TEST_BUTTON_HEIGHT, 0)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
