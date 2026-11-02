@@ -1964,7 +1964,10 @@ function KT:ApplySettings()
         self:ShowPreview()
     end
     -- Show Bars and Nameplate Icons both off deactivates the tracker.
+    local wasActive = self.isActive
     self:CheckActivation()
     self:SyncPlates()
+    -- A stop releases every bar and plate icon, the preview's samples too.
+    if self.isPreview and wasActive and not self.isActive then self:ShowPreview() end
     if self.platesOn then self:PlatesRestyle() end
 end
