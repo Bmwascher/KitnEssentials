@@ -188,27 +188,31 @@ describe("spell reflect rules", function()
     end)
 
     it("steps every frame for a running near record or a canceled one, else wakes at Lead or the age limit", function()
-        local function make(duration, paused, canceled)
+        local function make(duration, paused, canceled, pressed)
             local records = {}
             local rec = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", duration, 100)
+            if pressed then Rules.MarkPressed(records, 100) end
             if paused then Rules.Pause(records, "bar", 100, true) end
             if canceled then Rules.Stop(records, "bar", 100) end
             return rec
         end
         local age = Rules.MAX_AGE
-        -- seconds to the cast, paused, canceled, near, ticks, seconds to the wake (Lead 5)
+        -- Row 7: pressed at 100 with the hit at 104, so the reach is 105; paused with
+        -- 1 s left, the hit (now + 1 + 3) passes 105 one second later.
+        -- seconds to the cast, paused, canceled, pressed, near, ticks, seconds to the wake (Lead 5)
         local cases = {
-            { 8, false, false, false, false, 3 },
-            { 4, false, false, true, true, nil },
-            { 4, true, false, true, false, age },
-            { 8, true, false, false, false, age },
-            { 4, false, true, true, true, nil },
-            { 4, true, true, true, true, nil },
+            { 8, false, false, false, false, false, 3 },
+            { 4, false, false, false, true, true, nil },
+            { 4, true, false, false, true, false, age },
+            { 8, true, false, false, false, false, age },
+            { 4, false, true, false, true, true, nil },
+            { 4, true, true, false, true, true, nil },
+            { 1, true, false, true, true, false, 1 + Rules.COVER_PAST },
         }
         for i, case in ipairs(cases) do
-            local rec = make(case[1], case[2], case[3])
+            local rec = make(case[1], case[2], case[3], case[4])
             local near, ticks, due = Rules.Schedule(rec, Rules.Phase(rec, 100), 100, 5)
-            assert.same({ case[4], case[5], case[6] }, { near, ticks, due }, "case " .. i)
+            assert.same({ case[5], case[6], case[7] }, { near, ticks, due }, "case " .. i)
         end
     end)
 
