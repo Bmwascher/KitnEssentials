@@ -560,7 +560,9 @@ function SR:Step()
     end
     if best then
         self:Paint(best, now, self.ready, false)
-    elseif self.isPreview then
+    elseif self.isPreview and not records[TEST_KEY] then
+        -- A test run holds the sample off until it ends, so a press that
+        -- covers it hides the cue as it would with the settings closed.
         self:PaintSample()
     else
         self:HideCue()
@@ -808,7 +810,7 @@ function SR:ShowPreview()
     self.isPreview = true
     self:ApplyPosition()
     self:ApplyStyle()
-    self:PaintSample()
+    if self.records[TEST_KEY] then self:Step() else self:PaintSample() end
     self:RegisterAnchor()
 end
 
