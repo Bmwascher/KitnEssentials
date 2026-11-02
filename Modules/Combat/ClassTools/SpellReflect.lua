@@ -6,7 +6,7 @@
 -- ║  Note: Warrior only. Needs BigWigs boss timers.          ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Dungeon Timers' boss data, split text layout and countdown string load later
+-- Dungeon Timers' boss data and countdown string load later
 -- in Modules.xml, so they are read when used, never at file scope.
 
 ---@class KE
@@ -356,7 +356,7 @@ function SR:ApplyStyle()
         KE:ApplyFontToText(textBox.lineTimer, face, nameSize, outline)
         for i = 1, 2 do textBox.sides[i]:SetSize(nameSize, nameSize) end
         textBox.iconFrame:SetSize(size, size)
-        textBox.iconSize, textBox.nameSize = size, nameSize
+        textBox.width, textBox.iconSize, textBox.nameSize = size * 8, size, nameSize
         textBox.bigSlot = SlotWidth(textBox.measure, face, size, outline)
         textBox.smallSlot = SlotWidth(textBox.measure, face, nameSize, outline)
         iconBox:Hide()
@@ -492,7 +492,7 @@ function SR:LayoutText(notReady)
     local tail = notReady and 0 or COUNT_GAP + box.bigSlot
     local x = Rules.LineStart(box.iconSize + ICON_GAP, box.label:GetUnboundedStringWidth(), tail)
     box.label:ClearAllPoints()
-    box.label:SetPoint("LEFT", box, "CENTER", Snap(x), 0)
+    box.label:SetPoint("LEFT", box, "LEFT", Snap(box.width / 2 + x), 0)
 
     local side = box.nameSize + NAME_GAP
     local lead = box.sides[1]:IsShown() and side or 0
@@ -503,7 +503,7 @@ function SR:LayoutText(notReady)
     end
     x = Rules.LineStart(lead, box.line:GetUnboundedStringWidth(), tail)
     box.line:ClearAllPoints()
-    box.line:SetPoint("TOPLEFT", box, "BOTTOM", Snap(x), -2)
+    box.line:SetPoint("TOPLEFT", box, "BOTTOMLEFT", Snap(box.width / 2 + x), -2)
 end
 
 -- State parts are set only when the record, its phase or the ready state
