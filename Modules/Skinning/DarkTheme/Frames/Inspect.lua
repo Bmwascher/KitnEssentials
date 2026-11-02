@@ -16,12 +16,9 @@ local function DressPvpTalents(slot)
     end
 end
 
--- S.Frame only fades the portrait, so the title keeps its portrait-mode
--- anchors (centered 17 px right of the window) and the level line stays below
--- the stripped title bar. Center the name and hang the level line under it.
+-- The level line stays below the stripped title bar. Hang it under the name.
 local function CenterHeader(frame)
     if KE.IS_FOREVER then return end
-    if frame.SetTitleOffsets then frame:SetTitleOffsets(24, -24) end
     local title = frame.GetTitleText and frame:GetTitleText()
     local container = frame.TitleContainer
     local level = _G.InspectPaperDollFrame and _G.InspectPaperDollFrame.LevelTextWrapper
@@ -39,7 +36,8 @@ local function Skin()
     local frame = _G.InspectFrame
     if not frame then return S.Skip("InspectFrame missing") end
     S.Frame(frame)
-    CenterHeader(frame)
+    -- Nothing is written to a title in combat.
+    KE:RunAfterCombat(function() CenterHeader(frame) end)
     if _G.InspectPaperDollFrame and _G.InspectPaperDollFrame.ViewButton then
         local view = _G.InspectPaperDollFrame.ViewButton
         S.Button(view)

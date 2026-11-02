@@ -1503,6 +1503,27 @@ describe("SkinAPI _IsCheckDecoration", function()
     end)
 end)
 
+-- The Forever gate, the combat gate and the once-only latch in front of the
+-- title write, lifted into a pure predicate so no frame double is needed.
+describe("SkinAPI _TitleStep", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    it("skips Forever, ineligible and latched windows; centers out of combat; queues in combat", function()
+        -- name, Forever, has SetTitleOffsets, latch state, in combat, step
+        for _, row in ipairs({
+            { "Forever", true, true, nil, false, "skip" },
+            { "no SetTitleOffsets", false, false, nil, false, "skip" },
+            { "centered or kept", false, true, "done", false, "skip" },
+            { "already queued", false, true, "queued", true, "skip" },
+            { "out of combat", false, true, nil, false, "center" },
+            { "in combat", false, true, nil, true, "queue" },
+        }) do
+            assert.equal(row[6], S._TitleStep(row[2], row[3], row[4], row[5]), row[1])
+        end
+    end)
+end)
+
 describe("SkinAPI IconBorder", function()
     local S
 

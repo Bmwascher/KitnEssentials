@@ -1210,6 +1210,8 @@ local function Skin()
     S.data(frame).bflSkinned = true
 
     S.CloseButton(frame.CloseButton, BFL_CLOSE_SIZE)
+    -- The addon anchors this title itself and hangs its BattleTag bar off it.
+    S.KeepTitle(frame)
     S.Frame(frame)
     StripPanelShell(frame)
 
