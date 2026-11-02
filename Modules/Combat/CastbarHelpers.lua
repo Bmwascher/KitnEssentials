@@ -336,6 +336,16 @@ function H.CreateFrame(self, opts)
     spark:SetPoint("CENTER", castBar:GetStatusBarTexture(), "RIGHT", 0, 0)
     spark:Hide()
 
+    -- Transparent: kickCooldownBar hangs off its fill edge, which
+    -- H.SetupKickCooldownBar sets to the cast's elapsed time.
+    local positioner = CreateFrame("StatusBar", nil, castBar)
+    positioner:SetAllPoints(castBar)
+    positioner:SetStatusBarTexture([[Interface\Buttons\WHITE8x8]])
+    positioner:GetStatusBarTexture():SetAlpha(0)
+    positioner:SetMinMaxValues(0, 1)
+    positioner:SetValue(0)
+    positioner:SetFrameLevel(castBar:GetFrameLevel() + 1)
+
     local kickCooldownBar = CreateFrame("StatusBar", nil, castBar)
     kickCooldownBar:SetAllPoints(castBar)
     kickCooldownBar:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
@@ -402,7 +412,7 @@ function H.CreateFrame(self, opts)
     self._glowSig = nil
 
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
-    self.castBar, self.spark = castBar, spark
+    self.castBar, self.spark, self.positioner = castBar, spark, positioner
     self.kickCooldownBar, self.kickTick = kickCooldownBar, kickTick
     self.text, self.time = text, time
     self.targetMarker = targetMarker
@@ -638,18 +648,43 @@ function H.SetupKickCooldownBar(self)
         return
     end
 
-    local _, height = self.castBar:GetSize()
     local isChannel = self.channeling or false
+    local total = duration:GetTotalDuration()
+    -- Assigned through an if: the elapsed time can be secret, so it is never
+    -- truth-tested.
+    local elapsed
+    if duration.GetElapsedDuration then
+        elapsed = duration:GetElapsedDuration()
+    end
+    local width = self.castBar:GetWidth()
 
-    -- kickCooldownBar is a full-width overlay on castBar
-    -- (not chain-anchored to positioner). Value is set ONCE here to the
-    -- current kick CD remaining; the tick anchored to the bar's fill edge
-    -- then stays pinned for the life of the cast. SetValue accepts the
-    -- secret Duration return natively — no arithmetic or laundering needed.
+    -- The tick belongs at elapsed + kick remaining, both possibly secret, so
+    -- the layout adds them: kickCooldownBar starts at the positioner's fill
+    -- edge and its own fill edge marks the kick's return. Elapsed grows as the
+    -- cooldown shrinks, so one snapshot holds for the cast. Without a usable
+    -- elapsed time or width the overlay covers the castbar and counts from
+    -- cast start.
     self.kickCooldownBar:ClearAllPoints()
-    self.kickCooldownBar:SetAllPoints(self.castBar)
     self.kickCooldownBar:SetReverseFill(isChannel)
-    self.kickCooldownBar:SetMinMaxValues(0, duration:GetTotalDuration())
+    self.kickCooldownBar:SetMinMaxValues(0, total)
+    if H.ShouldOffsetKickBar(elapsed, width) then
+        ---@cast elapsed number
+        local positioner = self.positioner
+        positioner:SetReverseFill(isChannel)
+        positioner:SetMinMaxValues(0, total)
+        positioner:SetValue(elapsed)
+        local edge = positioner:GetStatusBarTexture()
+        if isChannel then
+            self.kickCooldownBar:SetPoint("TOPRIGHT", edge, "TOPLEFT")
+            self.kickCooldownBar:SetPoint("BOTTOMRIGHT", edge, "BOTTOMLEFT")
+        else
+            self.kickCooldownBar:SetPoint("TOPLEFT", edge, "TOPRIGHT")
+            self.kickCooldownBar:SetPoint("BOTTOMLEFT", edge, "BOTTOMRIGHT")
+        end
+        self.kickCooldownBar:SetWidth(width)
+    else
+        self.kickCooldownBar:SetAllPoints(self.castBar)
+    end
     local cooldown = H.ReadKickCooldown(self.interruptId)
     if cooldown then
         self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
@@ -657,12 +692,17 @@ function H.SetupKickCooldownBar(self)
         self.kickCooldownBar:SetValue(0)
     end
 
+    -- Top and bottom follow the kick bar's fill, so no height is read: under a
+    -- secret anchor chain the castbar's size is secret and SetSize rejects it.
+    local fill = self.kickCooldownBar:GetStatusBarTexture()
     self.kickTick:ClearAllPoints()
-    self.kickTick:SetSize(2, height)
+    self.kickTick:SetWidth(2)
     if isChannel then
-        self.kickTick:SetPoint("RIGHT", self.kickCooldownBar:GetStatusBarTexture(), "LEFT")
+        self.kickTick:SetPoint("TOPRIGHT", fill, "TOPLEFT")
+        self.kickTick:SetPoint("BOTTOMRIGHT", fill, "BOTTOMLEFT")
     else
-        self.kickTick:SetPoint("LEFT", self.kickCooldownBar:GetStatusBarTexture(), "RIGHT")
+        self.kickTick:SetPoint("TOPLEFT", fill, "TOPRIGHT")
+        self.kickTick:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
     end
     self.tickKickId = self.interruptId
 
@@ -1140,6 +1180,19 @@ end
 function H.ShouldResyncOnEnd(isChannelStop, wasInterrupted, hasLiveCast)
     if isChannelStop or wasInterrupted then return false end
     return hasLiveCast == true
+end
+
+-- Pre-layout frames measure 0 or 1; an overlay that narrow would put the
+-- kick tick at the cast's elapsed point.
+local MIN_KICK_OFFSET_WIDTH = 2
+
+-- The kick bar starts at the cast's elapsed edge only when that edge and a
+-- readable castbar width exist; otherwise it covers the castbar. The elapsed
+-- time can be secret, so it is only compared with nil.
+function H.ShouldOffsetKickBar(elapsed, width)
+    if elapsed == nil or width == nil then return false end
+    if issecretvalue and issecretvalue(width) then return false end
+    return width >= MIN_KICK_OFFSET_WIDTH
 end
 
 function H.OnCastEvent(self, event, unit, ...)
