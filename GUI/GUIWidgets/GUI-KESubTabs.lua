@@ -94,7 +94,6 @@ local function SizeTabToText(btn)
     return width
 end
 
--- A fill tab's x: the widths of the tabs before it plus one gap per tab.
 function GUIFrame.SubTabOffset(widths, index, spacing)
     local x = 0
     for i = 1, index - 1 do
