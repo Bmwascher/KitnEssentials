@@ -650,8 +650,7 @@ function H.SetupKickCooldownBar(self)
 
     local isChannel = self.channeling or false
     local total = duration:GetTotalDuration()
-    -- Assigned through an if: the elapsed time can be secret, so it is never
-    -- truth-tested.
+    -- A Duration without the method leaves elapsed nil, which takes the fallback.
     local elapsed
     if duration.GetElapsedDuration then
         elapsed = duration:GetElapsedDuration()
@@ -1186,9 +1185,7 @@ end
 -- kick tick at the cast's elapsed point.
 local MIN_KICK_OFFSET_WIDTH = 2
 
--- The kick bar starts at the cast's elapsed edge only when that edge and a
--- readable castbar width exist; otherwise it covers the castbar. The elapsed
--- time can be secret, so it is only compared with nil.
+-- The elapsed time can be secret, so it is only compared with nil.
 function H.ShouldOffsetKickBar(elapsed, width)
     if elapsed == nil or width == nil then return false end
     if issecretvalue and issecretvalue(width) then return false end
