@@ -85,7 +85,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     testRow:AddWidget(GUIFrame:CreateButton(testRow, "Test", {
         width = 160,
         height = TEST_BUTTON_HEIGHT,
-        tooltip = "Runs a 6 second Void Blast countdown. Press Spell Reflection while it is green to see it hide.",
+        tooltip = "Runs a 6 second Thornspike countdown. Press Spell Reflection while it is green to see it hide.",
         callback = function()
             if SR then SR:Test() end
         end,

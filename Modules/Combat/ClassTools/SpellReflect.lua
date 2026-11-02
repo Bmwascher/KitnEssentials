@@ -66,7 +66,9 @@ local STEP = 0.05
 local TALENT_EVAL_DELAY = 2
 local NAME_GAP = 3
 local TEST_KEY = "__test"
-local SAMPLE_ID, SAMPLE_NAME, SAMPLE_LEFT = 1297017, "Void Blast", 1.6
+-- The sample's cast length matches its boss data; SAMPLE_LEFT puts the
+-- placement sample inside its window, which opens 1.5 s before the bar's zero.
+local SAMPLE_ID, SAMPLE_NAME, SAMPLE_CAST, SAMPLE_LEFT = 1247685, "Thornspike", 3, 1.0
 local GRAY = { 0.6, 0.6, 0.6, 1 }
 local RED = { 1, 0.3, 0.3, 1 }
 
@@ -151,7 +153,7 @@ end
 local function SampleEntry()
     local entry = SR.entries[SAMPLE_ID]
     if entry then return entry end
-    local open, close = Rules.Window(SAMPLE_ID, 0)
+    local open, close = Rules.Window(SAMPLE_ID, SAMPLE_CAST)
     return { id = SAMPLE_ID, name = SAMPLE_NAME, open = open, close = close }
 end
 
@@ -799,7 +801,7 @@ end
 ---------------------------------------------------------------------------------
 -- Preview (PreviewManager contract)
 ---------------------------------------------------------------------------------
--- A placement sample in the current display mode: a Void Blast in its window.
+-- A placement sample in the current display mode: a Thornspike in its window.
 function SR:ShowPreview()
     self:UpdateDB()
     self:CreateFrame_()
