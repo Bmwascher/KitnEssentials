@@ -146,7 +146,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     sizeRow:AddWidget(iconSize, 0.5)
     manager:Register(iconSize, "iconMode")
     local nameSize = GUIFrame:CreateSlider(sizeRow, "Spell Name Size", {
-        min = 8, max = 32, step = 1, value = db.NameFontSize or 14,
+        min = 8, max = 32, step = 1, value = db.NameFontSize or 16,
         callback = function(v) db.NameFontSize = v; ApplySettings() end,
     })
     sizeRow:AddWidget(nameSize, 0.5)

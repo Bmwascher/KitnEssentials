@@ -322,7 +322,7 @@ function SR:ApplyStyle()
     local face, outline = db.FontFace, db.FontOutline
     local iconBox, textBox = frame.iconBox, frame.textBox
     self:StopGlow()
-    local nameSize = db.NameFontSize or 14
+    local nameSize = db.NameFontSize or 16
     if self:TextMode() then
         local size = db.TextSize or 30
         frame:SetSize(size * 8, size + 4)
