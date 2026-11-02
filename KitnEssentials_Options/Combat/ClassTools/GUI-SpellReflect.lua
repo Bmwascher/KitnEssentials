@@ -50,6 +50,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
         GUIFrame:RefreshContent()
     end
     manager:SetCondition("iconMode", function() return db.DisplayMode ~= "TEXT" end)
+    manager:SetCondition("pressSound", function() return db.PressSoundEnabled == true end)
 
     ----------------------------------------------------------------
     -- Card 1: Enable
@@ -245,6 +246,31 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     }), 0.5)
     card8:AddRow(soundRow, Theme.rowHeightLast, 0)
     yOffset = card8:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 9: Press Sound
+    ----------------------------------------------------------------
+    local card9 = GUIFrame:CreateCard(scrollChild, "Press Sound", yOffset)
+    local pressRow = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+    pressRow:AddWidget(GUIFrame:CreateCheckbox(pressRow, "Play When You Press Reflect", {
+        value = db.PressSoundEnabled == true,
+        callback = function(v)
+            db.PressSoundEnabled = v
+            ApplySettings()
+            manager:UpdateAll(true)
+        end,
+    }), 0.5)
+    local pressSound = GUIFrame:CreateDropdown(pressRow, "Sound", {
+        options = GUIFrame.BuildSoundOptions(),
+        searchable = true,
+        value = db.PressSoundName or "None",
+        tooltip = "Plays each time you cast Spell Reflection. The default is a BigWigs sound, which does not play without BigWigs.",
+        callback = function(key) db.PressSoundName = key end,
+    })
+    pressRow:AddWidget(pressSound, 0.5)
+    manager:Register(pressSound, "pressSound")
+    card9:AddRow(pressRow, Theme.rowHeightLast, 0)
+    yOffset = card9:GetNextOffset()
 
     -- Past the off-state return, so the module is on.
     manager:UpdateAll(true)

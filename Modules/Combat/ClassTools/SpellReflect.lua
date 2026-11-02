@@ -36,6 +36,8 @@ if not KitnEssentials then return end
 ---@field evalPending boolean? a deferred loadout check is scheduled
 ---@field editModeRegistered boolean? true while the Edit Mode element is registered
 ---@field editModeFrame table? the frame the Edit Mode element was registered with
+---@field castFrame table? listens for the player's casts while the press sound is on
+---@field pressListening boolean the press-sound cast event is registered
 local SR = KitnEssentials:NewModule("SpellReflect", "AceEvent-3.0")
 -- Gates the preview manager.
 SR.classRestriction = "WARRIOR"
@@ -119,6 +121,16 @@ local function ModeOf(spellId)
     return Rules.ModeOf(SR.db and SR.db.Modes, spellId)
 end
 
+-- The press sound's one check: the player's own Spell Reflection cast. A
+-- secret spell id is never compared.
+local function IsReflectCast(spellID)
+    return not IsSecret(spellID) and spellID == REFLECT_ID
+end
+
+local function OnCastEvent(_, _, _, _, spellID)
+    if IsReflectCast(spellID) then SR:PlaySound(SR.db.PressSoundName) end
+end
+
 local function OnDriverUpdate(driver, elapsed)
     driver.acc = driver.acc + elapsed
     if driver.acc < STEP then return end
@@ -155,6 +167,7 @@ function SR:OnInitialize()
     self.records, self.entries = {}, {}
     self.live, self.watching, self.bigWigsHooked, self.driving = false, false, false, false
     self.ready, self.isPreview, self.glowing = true, false, false
+    self.pressListening = false
     self:SetEnabledState(false)
 end
 
@@ -653,6 +666,23 @@ function SR:SetLive(on)
         self:SetDriving(false)
         self:SyncWatch(false)
     end
+    self:SyncPressSound()
+end
+
+-- The press sound listens only while the module is live and its switch is on.
+function SR:SyncPressSound()
+    local on = self.live and self.db.PressSoundEnabled == true
+    if on == self.pressListening then return end
+    self.pressListening = on
+    if on then
+        if not self.castFrame then
+            self.castFrame = CreateFrame("Frame")
+            self.castFrame:SetScript("OnEvent", OnCastEvent)
+        end
+        self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    elseif self.castFrame then
+        self.castFrame:UnregisterAllEvents()
+    end
 end
 
 function SR:Evaluate()
@@ -702,6 +732,7 @@ function SR:ApplySettings()
         else
             self:Evaluate()
         end
+        self:SyncPressSound()
     elseif self:IsEnabled() then
         KitnEssentials:DisableModule("SpellReflect")
     end
@@ -744,6 +775,7 @@ function SR:OnDisable()
     self.watching = false
     self:HookBigWigs(false)
     self.live = false
+    self:SyncPressSound()
     Rules.Clear(self.records, nil)
     self:ScheduleWake(nil)
     self:SetDriving(false)

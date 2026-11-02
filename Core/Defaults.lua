@@ -1038,6 +1038,10 @@ local Defaults = {
             GlowColor = { 0.25, 1, 0.35, 1 },
             ReadySound = "Spell Reflect",
             NotReadySound = "Not Safe",
+            PressSoundEnabled = true,
+            -- A BigWigs sound, not one this addon ships: without BigWigs it
+            -- never plays.
+            PressSoundName = "BigWigs: Info",
             Modes = {}, -- spell id -> ALWAYS | READY | OFF, only where it differs
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
