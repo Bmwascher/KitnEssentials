@@ -119,14 +119,9 @@ function Rules.Start(records, entry, owner, text, duration, now)
         owner = owner, ends = ends, born = now,
     }
     -- A retimed bar for a cast neither started nor canceled is the same cast:
-    -- it keeps the sounds already played, and a press only while Spell
-    -- Reflection, pressed then, still lasts to the new window's close.
+    -- it keeps the sounds already played and a press's reach (Rules.Covered).
     if old and not old.start and not old.stopAt then
-        rec.readySounded, rec.notReadySounded = old.readySounded, old.notReadySounded
-        local pressedAt = old.done and old.pressedAt
-        if pressedAt and pressedAt + Rules.REFLECT_LASTS >= rec.ends + rec.close then
-            rec.done, rec.pressedAt = true, pressedAt
-        end
+        rec.readySounded, rec.notReadySounded, rec.reach = old.readySounded, old.notReadySounded, old.reach
     end
     records[text] = rec
     return rec
@@ -226,6 +221,19 @@ function Rules.Schedule(rec, phase, now, lead)
     return near, false, due
 end
 
+-- The hit: the window's close, counted from the cast start once heard, else
+-- from the bar's zero, or from now plus the time left while paused.
+local function Hit(rec, now)
+    local start = rec.start or (rec.left and now + rec.left) or rec.ends
+    return start + rec.close
+end
+
+-- A press covers a record while the hit, wherever it has moved since, is
+-- still within the press's reach.
+function Rules.Covered(rec, now)
+    return rec.reach ~= nil and Hit(rec, now) <= rec.reach
+end
+
 function Rules.Allowed(mode, ready)
     if mode == "OFF" then return false end
     if mode == "READY" then return ready == true end
@@ -239,7 +247,7 @@ local SHOWN = { WAIT = true, GO = true, NOW = true }
 function Rules.Pick(records, now, lead, modeOf, ready, dead)
     local best, bestLeft
     for _, rec in pairs(records) do
-        if not rec.done and (rec.test or not dead) and SHOWN[Rules.Phase(rec, now)] then
+        if (rec.test or not dead) and SHOWN[Rules.Phase(rec, now)] and not Rules.Covered(rec, now) then
             local toStart = Rules.Countdown(rec, now)
             local within = toStart <= (rec.test and Rules.TEST_LEAD or lead)
             if within and (rec.test or Rules.Allowed(modeOf(rec.id), ready)) then
@@ -292,13 +300,15 @@ function Rules.IsPress(wasReady, isActive, isOnGCD)
     return wasReady == true and not Rules.IsReady(isActive, isOnGCD)
 end
 
--- A press marks every record whose window is open as done.
+-- A press covers every record whose window is open. Its reach is the later of
+-- the hit and the time Spell Reflection, pressed now, stays up, so a window
+-- longer than Reflection is still covered while its hit does not move.
 function Rules.MarkPressed(records, now)
     local count = 0
     for _, rec in pairs(records) do
         local phase = Rules.Phase(rec, now)
-        if not rec.done and (phase == "GO" or phase == "NOW") then
-            rec.done, rec.pressedAt = true, now
+        if (phase == "GO" or phase == "NOW") and not Rules.Covered(rec, now) then
+            rec.reach = math_max(Hit(rec, now), now + Rules.REFLECT_LASTS)
             count = count + 1
         end
     end

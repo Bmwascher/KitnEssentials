@@ -167,9 +167,9 @@ describe("spell reflect rules", function()
         local casting = Rules.Start(records, E(1222795, -1.5, 3), "boss", "c", 1, 100)
         Rules.Said(records, "c", 100)
         assert.equals(2, Rules.MarkPressed(records, 100))
-        assert.is_nil(waiting.done)
-        assert.is_true(open.done)
-        assert.is_true(casting.done)
+        assert.is_false(Rules.Covered(waiting, 100))
+        assert.is_true(Rules.Covered(open, 100))
+        assert.is_true(Rules.Covered(casting, 100))
         assert.equals(waiting, Rules.Pick(records, 100, 5, always, true, false))
     end)
 
@@ -212,21 +212,35 @@ describe("spell reflect rules", function()
         end
     end)
 
-    it("keeps a re-timed bar's press only while it reaches the new hit", function()
-        -- The bar ends at 102 and the hit is 3 s later; at 100.5 its window is open.
-        -- A press then lasts to 105.5, so it covers a hit moved up to 0.5 s later.
-        -- shift of the bar's end (s), done on the new record
+    it("hides a pressed cast only while the press still reaches the hit, however the hit moves", function()
+        local RULE, LONG = E(1247685, -1.5, 3), E(1234233, 0, 6)
+        local function bar(records, duration, now) Rules.Start(records, RULE, "boss", "bar", duration, now) end
+        -- The bar runs from 100 to 102 and the hit is 3 s after it. A press at 100.5
+        -- lasts to 105.5, 0.5 s past the hit at 105.
+        -- label, entry, press time, how the hit moves, time read, cue shown
         local cases = {
-            { 0.4, true },
-            { 1.0, nil },
+            { "no move", RULE, 100.5, function() end, 100.5, false },
+            { "re-time +0.4", RULE, 100.5, function(r) bar(r, 1.9, 100.5) end, 100.5, false },
+            { "re-time +1.0", RULE, 100.5, function(r) bar(r, 2.5, 100.5) end, 100.5, true },
+            { "re-time +0.4, refresh +0.2", RULE, 100.5, function(r)
+                bar(r, 1.9, 100.5)
+                bar(r, 2.1, 100.5)
+            end, 100.5, true },
+            { "paused 1 s", RULE, 100.5, function(r)
+                Rules.Pause(r, "bar", 100.5, true)
+                Rules.Pause(r, "bar", 101.5, false)
+            end, 101.5, true },
+            { "cast start heard 1 s late", RULE, 100.5, function(r) Rules.Said(r, "bar", 103) end, 103, true },
+            { "bar stopped 0.8 s after zero", RULE, 100.5, function(r) Rules.Stop(r, "bar", 102.8) end, 102.8, true },
+            { "window longer than Reflection, no move", LONG, 102, function() end, 102.5, false },
         }
-        for i, case in ipairs(cases) do
+        for _, case in ipairs(cases) do
             local records = {}
-            local first = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 2, 100)
-            Rules.MarkPressed(records, 100.5)
-            local second = Rules.Start(records, E(1247685, -1.5, 3), "boss", "bar", 1.5 + case[1], 100.5)
-            assert.are_not.equals(first, second, "case " .. i)
-            assert.equals(case[2], second.done, "case " .. i)
+            Rules.Start(records, case[2], "boss", "bar", 2, 100)
+            Rules.MarkPressed(records, case[3])
+            case[4](records)
+            local shown = Rules.Pick(records, case[5], 5, always, true, false) ~= nil
+            assert.equals(case[6], shown, case[1])
         end
     end)
 
