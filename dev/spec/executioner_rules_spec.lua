@@ -1,9 +1,9 @@
 -- Modules/Combat/ClassTools/ExecutionerRules.lua -- the refusal and guard
 -- rules a later edit breaks silently: which signals are refused, when the
 -- real buff may correct the count, when the cancel cue waits, which cancels
--- clear the count, what Create Macro may do, how often the cue sound plays,
--- and when Only in Combat hides the display. Secret flags, times and
--- readings are passed in, so no Blizzard fake is needed.
+-- clear the count, what Create Macro may do and how often the cue sound
+-- plays. Secret flags, times and readings are passed in, so no Blizzard
+-- fake is needed.
 local L = require("dev.spec._ke_loader")
 
 describe("executioner rules", function()
@@ -170,19 +170,6 @@ describe("executioner rules", function()
         }
         for i, case in ipairs(cases) do
             assert.equals(case[3], Rules.SoundDue(case[1], case[2]), "case " .. i)
-        end
-    end)
-
-    it("lets Only in Combat hide the display out of combat unless a test run plays", function()
-        -- only in combat, fighting, testing, expected
-        local cases = {
-            { false, false, false, true },
-            { true, false, false, false },
-            { true, true, false, true },
-            { true, false, true, true },
-        }
-        for i, case in ipairs(cases) do
-            assert.equals(case[4], Rules.CombatAllows(case[1], case[2], case[3]), "case " .. i)
         end
     end)
 end)

@@ -29,7 +29,6 @@ local C_Timer = C_Timer
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
 local UnitClass = UnitClass
-local UnitAffectingCombat = UnitAffectingCombat
 local GetMacroIndexByName = GetMacroIndexByName
 local GetNumMacros = GetNumMacros
 local CreateMacro = CreateMacro
@@ -187,7 +186,7 @@ function EX:OnInitialize()
     self:UpdateDB()
     self.state = Rules.New()
     self.live, self.isPreview, self.resumePreview = false, false, false
-    self.combatEvents, self.glowEvents, self.fighting = false, false, false
+    self.glowEvents = false
     self.driving, self.cueShown, self.cueGlow, self.cueHeld = false, false, false, false
     self.bars, self.textEls, self.testTimers = {}, {}, {}
     self.pinnedPos = {}
@@ -728,13 +727,8 @@ function EX:Testing()
     return self.testUntil ~= nil and GetTime() < self.testUntil
 end
 
-function EX:CombatAllows()
-    return Rules.CombatAllows(self.db.OnlyInCombat == true, self.fighting == true, self:Testing())
-end
-
 function EX:TrackerVisible(mode)
-    return mode ~= "CUE_ONLY" and (self.live or self:Testing())
-        and #self.state.timers > 0 and self:CombatAllows()
+    return mode ~= "CUE_ONLY" and (self.live or self:Testing()) and #self.state.timers > 0
 end
 
 function EX:Refresh()
@@ -796,7 +790,7 @@ function EX:UpdateCue(now)
     local shown, held = false, false
     if self.isPreview then
         shown = c.Enabled == true
-    elseif c.Enabled and (self.live or self:Testing()) and self:CombatAllows() then
+    elseif c.Enabled and (self.live or self:Testing()) then
         local state = self.state
         local wanted = Rules.CueWanted(state.stacks, Rules.Hidden(state))
         local waitSD = c.WaitSuddenDeath == true
@@ -910,11 +904,6 @@ function EX:OnKeyStart()
     self:Clear("key")
 end
 
-function EX:OnCombatChange(event)
-    self.fighting = event == "PLAYER_REGEN_DISABLED"
-    self:Refresh()
-end
-
 function EX:OnGlowChange()
     if #self.state.timers > 0 then self:Refresh() end
 end
@@ -958,20 +947,7 @@ end
 -- Activation
 ---------------------------------------------------------------------------------
 function EX:SyncOptionalEvents()
-    local db = self.db
-    local wantCombat = self.live and db.OnlyInCombat == true
-    if wantCombat ~= self.combatEvents then
-        self.combatEvents = wantCombat
-        if wantCombat then
-            self.fighting = Ask(UnitAffectingCombat, "player") == true
-            self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatChange")
-            self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatChange")
-        else
-            self:UnregisterEvent("PLAYER_REGEN_DISABLED")
-            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        end
-    end
-    local c = db.Cue
+    local c = self.db.Cue
     local wantGlow = self.live and c.Enabled == true and c.WaitSuddenDeath == true
     if wantGlow ~= self.glowEvents then
         self.glowEvents = wantGlow
@@ -1091,7 +1067,7 @@ end
 function EX:OnDisable()
     self:UnregisterAllEvents()
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
-    self.live, self.combatEvents, self.glowEvents = false, false, false
+    self.live, self.glowEvents = false, false
     if self.expiryTimer then
         self.expiryTimer:Cancel()
         self.expiryTimer = nil
@@ -1129,7 +1105,7 @@ function EX:PreviewState(now)
     return state
 end
 
--- A placement sample: it ignores the talent, the count and Only in Combat.
+-- A placement sample: it ignores the talent and the count.
 function EX:ShowPreview()
     self:UpdateDB()
     self:CreateFrames()

@@ -30,6 +30,8 @@ local GROW_DIRECTIONS = {
 
 -- U+00B7, the middle dot, kept out of the source as raw bytes.
 local DOT = " \194\183 "
+-- The Test Run row is the button's height, so the card ends just under it.
+local TEST_BUTTON_HEIGHT = 26
 
 local function Hex(color)
     return KE:RGBAToHex(color and color[1], color and color[2], color and color[3])
@@ -123,73 +125,44 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
             red[1], red[2], red[3]))
     end
 
-    local testRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    card1:AddSeparator()
+    local testRow = GUIFrame:CreateRow(card1.content, TEST_BUTTON_HEIGHT)
     testRow:AddWidget(GUIFrame:CreateButton(testRow, "Test Run", {
+        width = 160,
+        height = TEST_BUTTON_HEIGHT,
+        tooltip = "Plays 11 sample procs over 22 s on screen, on any class.",
         callback = function() if EX then EX:Test() end end,
-    }), 0.3)
-    card1:AddRow(testRow, Theme.rowHeight)
-    card1:AddNote("Plays 11 sample procs over 22 s on screen, on any class.")
-
-    local combatRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    AddCheckbox(combatRow, "Only in Combat", db, "OnlyInCombat", 0.5)
-    card1:AddRow(combatRow, Theme.rowHeightLast, 0)
+    }), 1)
+    card1:AddRow(testRow, TEST_BUTTON_HEIGHT, 0)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Reading the Display (none in Cancel Icon Only)
-    ----------------------------------------------------------------
-    if mode ~= "CUE_ONLY" then
-        local stack, hidden = Hex(db.StackColor), Hex(db.HiddenColor)
-        local card2 = GUIFrame:CreateCard(scrollChild, "Reading the Display", yOffset)
-        if mode == "PIPS" then
-            card2:AddLabel("|cff" .. stack .. "[ 12 ]|r  A stack segment, with that stack's seconds inside. "
-                .. "The leftmost drops next; up to five.")
-            local sample = db.ShowHiddenLabel ~= false and "hidden [17]" or "[17]"
-            card2:AddLabel("|cff" .. hidden .. sample .. "|r  A hidden timer: a mark in the row under the "
-                .. "segments, with its seconds inside. When it runs out it takes away a stack.")
-        elseif mode == "ICON" then
-            card2:AddLabel("3 |cff" .. hidden .. "+2|r  The count is your stacks; the center seconds and the "
-                .. "dark swipe are the next stack's drop; the \"+2\" badge is how many hidden timers run. Their "
-                .. "times are not shown in this mode.")
-        else
-            card2:AddLabel("|cff" .. stack .. "1   12|r  A stack. Its bar ends when you lose that stack; the "
-                .. "first bar, where the bars start growing, is the next to drop.")
-            card2:AddLabel("|cff" .. hidden .. "hidden   17|r  A hidden timer from a proc at 5 stacks. When it "
-                .. "runs out it takes away a stack, so it eats the stacks your next procs give.")
-        end
-        yOffset = card2:GetNextOffset()
-    end
-
-    ----------------------------------------------------------------
-    -- Card 3: Cancel Icon. The macro button and text box stay usable
+    -- Card 2: Cancel Icon. The macro button and text box stay usable
     -- while the icon is off: the macro works without it.
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Cancel Icon", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Cancel Icon", yOffset)
     -- The header widget rebuilds the page after this callback.
-    card3:AddHeaderToggle(cue.Enabled == true, function(checked)
+    card2:AddHeaderToggle(cue.Enabled == true, function(checked)
         cue.Enabled = checked
         ApplySettings()
     end)
-    card3:AddLabel("Canceling the buff wipes your stacks and every hidden timer, so your next procs build real "
+    card2:AddLabel("Canceling the buff wipes your stacks and every hidden timer, so your next procs build real "
         .. "stacks again. The icon shows when that gains damage: at least one hidden timer, and hidden timers at "
         .. "least your stacks minus one (3 stacks + 2 hidden, 5 + 4). Spend Sudden Death first, then press the macro.")
+    card2:AddSeparator()
 
-    local waitRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local waitRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     manager:Register(AddCheckbox(waitRow, "Wait While Sudden Death Is Up", cue, "WaitSuddenDeath", 1), "cue")
-    card3:AddRow(waitRow, Theme.rowHeight)
+    card2:AddRow(waitRow, Theme.rowHeight)
 
-    local macroRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    macroRow:AddWidget(GUIFrame:CreateButton(macroRow, "Create Macro", {
-        callback = function()
-            if not EX then return end
-            local _, message = EX:CreateCancelMacro()
-            KE:Print(Rules.LABEL .. ": " .. message)
-        end,
-    }), 0.4)
-    card3:AddRow(macroRow, Theme.rowHeight)
-    card3:AddNote("Makes " .. KE:Gold(Rules.MACRO_NAME) .. " and puts it on your cursor. Not in combat.")
+    local cueSizeRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    manager:Register(AddSlider(cueSizeRow, "Cancel Icon Size", cue, "Size", { 16, 120 }, 0.5), "cue")
+    manager:Register(AddCheckbox(cueSizeRow, "Show \"Cancel\" Text", cue, "ShowText", 0.5, true), "cue")
+    card2:AddRow(cueSizeRow, Theme.rowHeight)
 
-    local textRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    -- Above the button, so the button's note ends the card with no
+    -- control under it.
+    local textRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local textBox
     textBox = GUIFrame:CreateEditBox(textRow, "Macro Text (click it, Ctrl+A, then Ctrl+C)", {
         value = Rules.MACRO_BODY,
@@ -198,63 +171,90 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         end,
     })
     textRow:AddWidget(textBox, 1)
-    card3:AddRow(textRow, Theme.rowHeight)
+    card2:AddRow(textRow, Theme.rowHeight)
 
-    local cueSizeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    manager:Register(AddSlider(cueSizeRow, "Cancel Icon Size", cue, "Size", { 16, 120 }, 0.5), "cue")
-    manager:Register(AddCheckbox(cueSizeRow, "Show \"Cancel\" Text", cue, "ShowText", 0.5, true), "cue")
-    card3:AddRow(cueSizeRow, Theme.rowHeightLast, 0)
-    yOffset = card3:GetNextOffset()
+    local macroRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    macroRow:AddWidget(GUIFrame:CreateButton(macroRow, "Create Macro", {
+        callback = function()
+            if not EX then return end
+            local _, message = EX:CreateCancelMacro()
+            KE:Print(Rules.LABEL .. ": " .. message)
+        end,
+    }), 0.4)
+    card2:AddRow(macroRow, Theme.rowHeight)
+    card2:AddNote("Makes " .. KE:Gold(Rules.MACRO_NAME) .. " and puts it on your cursor. Not in combat.")
+    yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Display Settings (only the chosen mode's options)
+    -- Card 3: Display Settings: the chosen mode's legend (none in
+    -- Cancel Icon Only), then only that mode's options
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    local modeRow = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    if mode ~= "CUE_ONLY" then
+        local stack, hidden = Hex(db.StackColor), Hex(db.HiddenColor)
+        if mode == "PIPS" then
+            card3:AddLabel("|cff" .. stack .. "[ 12 ]|r  A stack segment, with that stack's seconds inside. "
+                .. "The leftmost drops next; up to five.")
+            local sample = db.ShowHiddenLabel ~= false and "hidden [17]" or "[17]"
+            card3:AddLabel("|cff" .. hidden .. sample .. "|r  A hidden timer: a mark in the row under the "
+                .. "segments, with its seconds inside. When it runs out it takes away a stack.")
+        elseif mode == "ICON" then
+            card3:AddLabel("3 |cff" .. hidden .. "+2|r  The count is your stacks; the center seconds and the "
+                .. "dark swipe are the next stack's drop; the \"+2\" badge is how many hidden timers run. Their "
+                .. "times are not shown in this mode.")
+        else
+            card3:AddLabel("|cff" .. stack .. "1   12|r  A stack. Its bar ends when you lose that stack; the "
+                .. "first bar, where the bars start growing, is the next to drop.")
+            card3:AddLabel("|cff" .. hidden .. "hidden   17|r  A hidden timer from a proc at 5 stacks. When it "
+                .. "runs out it takes away a stack, so it eats the stacks your next procs give.")
+        end
+        card3:AddSeparator()
+    end
+    local modeRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     modeRow:AddWidget(GUIFrame:CreateDropdown(modeRow, "Display Mode", {
         options = MODES,
         value = mode,
         callback = function(key) db.DisplayMode = key; ApplyAndRedraw() end,
     }), 0.5)
-    card4:AddRow(modeRow, Theme.rowHeight)
+    card3:AddRow(modeRow, Theme.rowHeight)
 
     if mode == "BARS" then
-        local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        local r1 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34, true)
         AddCheckbox(r1, "Show Labels", db, "ShowLabels", 0.33)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.33)
-        card4:AddRow(r1, Theme.rowHeight)
-        local r2 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        card3:AddRow(r1, Theme.rowHeight)
+        local r2 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         r2:AddWidget(GUIFrame:CreateDropdown(r2, "Growth Direction", {
             options = GROW_DIRECTIONS,
             value = db.GrowDirection or "DOWN",
             callback = function(key) db.GrowDirection = key; ApplySettings() end,
         }), 0.5)
         AddSlider(r2, "Spacing", db, "Spacing", { 0, 10 }, 0.5)
-        card4:AddRow(r2, Theme.rowHeight)
-        local r3 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+        card3:AddRow(r2, Theme.rowHeight)
+        local r3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
         AddSlider(r3, "Bar Width", db, "BarWidth", { 60, 400 }, 0.5)
         AddSlider(r3, "Bar Height", db, "BarHeight", { 6, 40 }, 0.5)
-        card4:AddRow(r3, Theme.rowHeightLast, 0)
+        card3:AddRow(r3, Theme.rowHeightLast, 0)
     elseif mode == "PIPS" then
-        local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        local r1 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34, true)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.33)
         AddCheckbox(r1, "Show Stack Count", db, "ShowStackCount", 0.33, true)
-        card4:AddRow(r1, Theme.rowHeight)
-        local r2 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        card3:AddRow(r1, Theme.rowHeight)
+        local r2 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddSlider(r2, "Pip Width", db, "PipWidth", { 16, 80 }, 0.5)
         AddSlider(r2, "Pip Height", db, "PipHeight", { 8, 40 }, 0.5)
-        card4:AddRow(r2, Theme.rowHeight)
-        local r3 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        card3:AddRow(r2, Theme.rowHeight)
+        local r3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddSlider(r3, "Spacing", db, "PipSpacing", { 0, 10 }, 0.5)
         display:Register(AddSlider(r3, "Stack Count Size", db, "StackCountSize", { 12, 48 }, 0.5), "countSize")
-        card4:AddRow(r3, Theme.rowHeight)
-        local r4 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        card3:AddRow(r3, Theme.rowHeight)
+        local r4 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         display:Register(AddSlider(r4, "Hidden Mark Width", db, "HiddenMarkWidth", { 16, 80 }, 0.5), "hiddenMarks")
         display:Register(AddSlider(r4, "Hidden Mark Height", db, "HiddenMarkHeight", { 8, 40 }, 0.5), "hiddenMarks")
-        card4:AddRow(r4, Theme.rowHeight)
-        local r5 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        card3:AddRow(r4, Theme.rowHeight)
+        local r5 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         -- Redraws: the legend's sample follows the switch.
         local labelBox = GUIFrame:CreateCheckbox(r5, "Show \"hidden\" Label", {
             value = db.ShowHiddenLabel == true,
@@ -262,27 +262,27 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         })
         r5:AddWidget(labelBox, 0.5)
         display:Register(labelBox, "hiddenMarks")
-        card4:AddRow(r5, Theme.rowHeight)
-        card4:AddNote("Hidden timers sit in a row under the segments, one mark each (up to seven), "
+        card3:AddRow(r5, Theme.rowHeight)
+        card3:AddNote("Hidden timers sit in a row under the segments, one mark each (up to seven), "
             .. "oldest first, each with its seconds inside.")
     elseif mode == "ICON" then
-        local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        local r1 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddCheckbox(r1, "Show Hidden Count", db, "ShowHidden", 0.5, true)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.5)
-        card4:AddRow(r1, Theme.rowHeight)
-        local r2 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        card3:AddRow(r1, Theme.rowHeight)
+        local r2 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddSlider(r2, "Icon Size", db, "IconSize", { 24, 120 }, 0.5)
-        card4:AddRow(r2, Theme.rowHeight)
-        card4:AddNote("The icon shows only the next stack's drop and how many hidden timers run, not each "
+        card3:AddRow(r2, Theme.rowHeight)
+        card3:AddNote("The icon shows only the next stack's drop and how many hidden timers run, not each "
             .. "timer's time.")
     else
-        card4:AddNote("Cancel Icon Only: nothing but the cancel icon shows. Stacks and hidden timers are still "
+        card3:AddNote("Cancel Icon Only: nothing but the cancel icon shows. Stacks and hidden timers are still "
             .. "counted for it.")
     end
-    yOffset = card4:GetNextOffset()
+    yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Cards 5 and 6: positions
+    -- Cards 4 and 5: positions
     ----------------------------------------------------------------
     local positionKeys = {
         selfPoint   = "AnchorFrom",
@@ -314,7 +314,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 7: Font Settings
+    -- Card 6: Font Settings
     ----------------------------------------------------------------
     local _, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font Settings",
@@ -339,10 +339,10 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     yOffset = fontOffset
 
     ----------------------------------------------------------------
-    -- Card 8: Colors. The stack and hidden colors redraw the legend.
+    -- Card 7: Colors. The stack and hidden colors redraw the legend.
     ----------------------------------------------------------------
-    local card8 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    local colorRow = GUIFrame:CreateRow(card8.content, 46)
+    local card7 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    local colorRow = GUIFrame:CreateRow(card7.content, 46)
     local stackColor = GUIFrame:CreateColorPicker(colorRow, "Stack Color", {
         color = db.StackColor,
         callback = function(r, g, b, a) db.StackColor = { r, g, b, a }; ApplyAndRedraw() end,
@@ -361,14 +361,14 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     })
     colorRow:AddWidget(cueTextColor, 0.33)
     manager:Register(cueTextColor, "cueText")
-    card8:AddRow(colorRow, 46, 0)
-    yOffset = card8:GetNextOffset()
+    card7:AddRow(colorRow, 46, 0)
+    yOffset = card7:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 9: Glow (cancel icon)
+    -- Card 8: Glow (cancel icon)
     ----------------------------------------------------------------
-    local card9 = GUIFrame:CreateCard(scrollChild, "Glow", yOffset)
-    local g1 = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
+    local card8 = GUIFrame:CreateCard(scrollChild, "Glow", yOffset)
+    local g1 = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
     manager:Register(AddCheckbox(g1, "Enable Glow", cue, "GlowEnabled", 0.5, true), "cue")
     local glowColor = GUIFrame:CreateColorPicker(g1, "Glow Color", {
         color = cue.GlowColor,
@@ -376,22 +376,22 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     })
     g1:AddWidget(glowColor, 0.5)
     manager:Register(glowColor, "glow")
-    card9:AddRow(g1, Theme.rowHeight)
-    local g2 = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
+    card8:AddRow(g1, Theme.rowHeight)
+    local g2 = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
     manager:Register(AddSlider(g2, "Lines", cue, "GlowLines", { 1, 16 }, 0.5), "glow")
     manager:Register(AddSlider(g2, "Length", cue, "GlowLength", { 1, 20 }, 0.5), "glow")
-    card9:AddRow(g2, Theme.rowHeight)
-    local g3 = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+    card8:AddRow(g2, Theme.rowHeight)
+    local g3 = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
     manager:Register(AddSlider(g3, "Speed", cue, "GlowFrequency", { 0.05, 1, 0.05 }, 0.5), "glow")
     manager:Register(AddSlider(g3, "Thickness", cue, "GlowThickness", { 1, 5 }, 0.5), "glow")
-    card9:AddRow(g3, Theme.rowHeightLast, 0)
-    yOffset = card9:GetNextOffset()
+    card8:AddRow(g3, Theme.rowHeightLast, 0)
+    yOffset = card8:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 10: Sound (cancel icon)
+    -- Card 9: Sound (cancel icon)
     ----------------------------------------------------------------
-    local card10 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
-    local soundRow = GUIFrame:CreateRow(card10.content, Theme.rowHeightLast)
+    local card9 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
+    local soundRow = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
     local soundDropdown = GUIFrame:CreateDropdown(soundRow, "Sound", {
         options = GUIFrame.BuildSoundOptions(),
         searchable = true,
@@ -400,8 +400,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     })
     soundRow:AddWidget(soundDropdown, 0.5)
     manager:Register(soundDropdown, "cue")
-    card10:AddRow(soundRow, Theme.rowHeightLast, 0)
-    yOffset = card10:GetNextOffset()
+    card9:AddRow(soundRow, Theme.rowHeightLast, 0)
+    yOffset = card9:GetNextOffset()
 
     Regray()
     return yOffset

@@ -1052,7 +1052,6 @@ local Defaults = {
         Executioner = {
             Enabled = false,
             DisplayMode = "BARS", -- BARS | PIPS | ICON | CUE_ONLY
-            OnlyInCombat = false,
             -- Shared by every mode.
             ShowHidden = true,
             ShowSeconds = true,

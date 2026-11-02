@@ -178,11 +178,6 @@ function Rules.IsBuffCancel(spell, spellSecret, buffNameLower)
     return spell:lower() == buffNameLower
 end
 
--- A test run shows on screen whatever Only in Combat says.
-function Rules.CombatAllows(onlyInCombat, fighting, testing)
-    return (not onlyInCombat or fighting or testing) and true or false
-end
-
 function Rules.SoundDue(lastAt, now)
     return lastAt == nil or now - lastAt >= Rules.CUE_QUIET
 end
