@@ -17,14 +17,14 @@ Rules.REFLECT_ID = 23920
 
 -- Display order; `mode` applies until the player picks another.
 Rules.SPELLS = {
-    { id = 1247685, mode = "ALWAYS" }, -- Thornspike
-    { id = 1297017, mode = "ALWAYS" }, -- Void Blast
-    { id = 1222795, mode = "ALWAYS" }, -- Envenom
-    { id = 1234233, mode = "ALWAYS" }, -- Spoiled Supplies
-    { id = 1296220, mode = "ALWAYS" }, -- Triple Shot
-    { id = 1299154, mode = "ALWAYS" }, -- Synchronized Venom
-    { id = 1290797, mode = "ALWAYS" }, -- Lightning Bite
-    { id = 1305810, mode = "READY" },  -- Arc Lightning
+    { id = 1247685, mode = "READY" }, -- Thornspike
+    { id = 1297017, mode = "READY" }, -- Void Blast
+    { id = 1222795, mode = "READY" }, -- Envenom
+    { id = 1234233, mode = "READY" }, -- Spoiled Supplies
+    { id = 1296220, mode = "READY" }, -- Triple Shot
+    { id = 1299154, mode = "READY" }, -- Synchronized Venom
+    { id = 1290797, mode = "READY" }, -- Lightning Bite
+    { id = 1305810, mode = "READY" }, -- Arc Lightning
 }
 
 local DEFAULT_MODE = {}

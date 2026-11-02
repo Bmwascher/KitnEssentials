@@ -64,8 +64,8 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
         end
     end)
     card1:AddLabel(KE:Gold("Warrior only.") .. " Counts down to the boss casts this season that Spell " ..
-        "Reflection can catch, turns green while a press would still be up when the hit lands, and turns " ..
-        "red with NO REFLECT while Spell Reflection is on cooldown.\n\n" ..
+        "Reflection can catch, and turns green while a press would still be up when the hit lands. A spell " ..
+        "set to Always also shows while Spell Reflection is on cooldown, in red with NO REFLECT.\n\n" ..
         "Needs " .. KE:Gold("BigWigs") .. " with its dungeon modules (" .. KE:Gold("LittleWigs") ..
         ") in its default timer mode.")
     if not BigWigsLoader then

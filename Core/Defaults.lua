@@ -1023,7 +1023,7 @@ local Defaults = {
 
         SpellReflect = {
             Enabled = false,
-            DisplayMode = "ICON", -- ICON | TEXT
+            DisplayMode = "TEXT", -- ICON | TEXT
             Lead = 5, -- seconds before the cast start the cue appears
             IconSize = 56,
             FontSize = 26, -- icon mode count
