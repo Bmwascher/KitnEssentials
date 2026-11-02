@@ -1078,6 +1078,16 @@ local function KeystoneShortName(mapID)
     return entry[2]
 end
 
+-- Dungeon key (the first column, also KE.EncounterData's `dungeon`) -> one of
+-- its map IDs. Keys listed under two map IDs share one short name.
+local KEYSTONE_MAP_BY_KEY = {}
+for mapID, entry in pairs(KEYSTONE_SHORT) do KEYSTONE_MAP_BY_KEY[entry[1]] = mapID end
+
+-- Short name for a dungeon key, or nil when the key is not listed.
+function KE:GetDungeonShortName(dungeonKey)
+    return KeystoneShortName(dungeonKey and KEYSTONE_MAP_BY_KEY[dungeonKey])
+end
+
 -- Name -> challenge-mode map ID, built from the client's own map table so a
 -- caller that only has the name reaches the same row. Keys are lowercased to
 -- match the teleport table's folding. An index that found no names is not

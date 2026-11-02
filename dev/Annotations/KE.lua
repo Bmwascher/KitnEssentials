@@ -1357,6 +1357,10 @@ function KE:AbbreviateDungeonName(name, mapID) end
 ---@return number?
 function KE:GetChallengeMapIDByName(name) end
 
+---@param dungeonKey string?
+---@return string?
+function KE:GetDungeonShortName(dungeonKey) end
+
 ---@param itemId string?
 ---@return string? sectionId
 function KE:GetSectionForItem(itemId) end

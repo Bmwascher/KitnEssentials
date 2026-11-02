@@ -36,7 +36,9 @@ local function SpellLabel(data, spellId)
     local texture = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId)
     local icon = GUIFrame.IconText(texture)
     if not data then return icon .. "Spell " .. spellId .. "  |cff808080(no boss data)|r" end
-    return icon .. (data.name or "?") .. " - " .. (data.boss or "?")
+    local short = data.dungeon and KE:GetDungeonShortName(data.dungeon)
+    local where = short and (" (" .. short .. ")") or ""
+    return icon .. (data.name or "?") .. " - " .. (data.boss or "?") .. where
 end
 
 GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)

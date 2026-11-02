@@ -46,7 +46,7 @@ describe("spell reflect rules", function()
 
     it("indexes a tracked spell's cast length, name and boss only when its row has a cast length", function()
         local data = {
-            [10] = { name = "Boss A", spells = {
+            [10] = { name = "Boss A", dungeon = "MurderRow", spells = {
                 [1247685] = { name = "Thornspike", castDuration = 3 },
                 [999] = { name = "Other", castDuration = 1 },
             } },
@@ -55,7 +55,7 @@ describe("spell reflect rules", function()
             } },
         }
         local index = Rules.Index(data)
-        assert.same({ castLength = 3, name = "Thornspike", boss = "Boss A" }, index[1247685])
+        assert.same({ castLength = 3, name = "Thornspike", boss = "Boss A", dungeon = "MurderRow" }, index[1247685])
         assert.is_nil(index[999])
         assert.is_nil(index[1297017])
         assert.is_nil(index[1222795])

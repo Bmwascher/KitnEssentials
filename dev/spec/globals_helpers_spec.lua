@@ -753,6 +753,22 @@ describe("KE:AbbreviateDungeonName", function()
     end)
 end)
 
+describe("KE:GetDungeonShortName", function()
+    it("gives a listed dungeon key's short form, and nil for an unlisted or missing key", function()
+        local KE = L.loadGlobals()
+        _G.BigWigsAPI = nil
+        -- key, short form
+        local cases = {
+            { "MurderRow", "MURDER" },
+            { "NoSuchDungeon", nil },
+            { nil, nil },
+        }
+        for i, c in ipairs(cases) do
+            assert.equals(c[2], KE:GetDungeonShortName(c[1]), "row " .. i)
+        end
+    end)
+end)
+
 -- The lookup the LFG Reminder row uses to find a dungeon's art. Callers spell
 -- names as the LFG activity does, so case must not decide a match, and the
 -- client's map table can be empty before its data loads.

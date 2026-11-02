@@ -71,8 +71,8 @@ function Rules.SetMode(modes, spellId, mode)
     end
 end
 
--- { [spellId] = { castLength, name, boss } } for the tracked spells whose boss
--- data row has a cast length.
+-- { [spellId] = { castLength, name, boss, dungeon } } for the tracked spells
+-- whose boss data row has a cast length; dungeon is the encounter's key.
 function Rules.Index(encounterData)
     local out = {}
     if type(encounterData) ~= "table" then return out end
@@ -82,7 +82,10 @@ function Rules.Index(encounterData)
             for _, spell in ipairs(Rules.SPELLS) do
                 local row = spells[spell.id]
                 if type(row) == "table" and type(row.castDuration) == "number" then
-                    out[spell.id] = { castLength = row.castDuration, name = row.name, boss = encounter.name }
+                    out[spell.id] = {
+                        castLength = row.castDuration, name = row.name, boss = encounter.name,
+                        dungeon = encounter.dungeon,
+                    }
                 end
             end
         end
