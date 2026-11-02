@@ -117,19 +117,20 @@ describe("spell reflect rules", function()
             local word, color, notReady, glow = Rules.Look(case[1], case[2])
             assert.same({ case[3], case[4], case[5], case[6] }, { word, color, notReady, glow }, "case " .. i)
         end
-        -- text mode: word, not ready, show name, label, timer, small line. Not
-        -- ready, the name shows even with Show Spell Name off.
+        -- text mode: word, not ready, show name, label, timer, small line, small
+        -- line timer. Not ready, the name shows even with Show Spell Name off.
+        local marked = "Void Blast 9487"
         local lines = {
-            { false, false, true, Rules.TEXT_LABEL, "2.4", "Void Blast" },
-            { true, false, true, Rules.TEXT_LABEL, Rules.NOW_WORD, "Void Blast" },
-            { false, false, false, Rules.TEXT_LABEL, "2.4", "" },
-            { false, true, true, Rules.NOT_READY, "", "Void Blast  2.4" },
-            { true, true, true, Rules.NOT_READY, "", "Void Blast  " .. Rules.NOW_WORD },
-            { false, true, false, Rules.NOT_READY, "", "Void Blast  2.4" },
+            { false, false, true, Rules.TEXT_LABEL, "2.4", "Void Blast", "" },
+            { true, false, true, Rules.TEXT_LABEL, Rules.NOW_WORD, "Void Blast", "" },
+            { false, false, false, Rules.TEXT_LABEL, "2.4", "", "" },
+            { false, true, true, Rules.NOT_READY, "", marked, "2.4" },
+            { true, true, true, Rules.NOT_READY, "", marked, Rules.NOW_WORD },
+            { false, true, false, Rules.NOT_READY, "", marked, "2.4" },
         }
         for i, case in ipairs(lines) do
-            local label, timer, line = Rules.TextLines(case[1], case[2], "2.4", "Void Blast", case[3])
-            assert.same({ case[4], case[5], case[6] }, { label, timer, line }, "text case " .. i)
+            local label, timer, line, lineTimer = Rules.TextLines(case[1], case[2], "2.4", "Void Blast", case[3])
+            assert.same({ case[4], case[5], case[6], case[7] }, { label, timer, line, lineTimer }, "text case " .. i)
         end
     end)
 

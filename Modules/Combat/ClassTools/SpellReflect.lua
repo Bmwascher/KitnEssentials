@@ -32,6 +32,7 @@ if not KitnEssentials then return end
 ---@field shownReady boolean?
 ---@field lastCount string?
 ---@field lastLine string?
+---@field lastLineTimer string?
 ---@field wakeTimer table? runs a step when the next record reaches Lead
 ---@field evalPending boolean? a deferred loadout check is scheduled
 ---@field editModeRegistered boolean? true while the Edit Mode element is registered
@@ -173,11 +174,13 @@ local function NewNameSides(parent, nameLine)
     return sides
 end
 
-local function PaintSides(sides, shown, spellId)
-    local texture = shown and SpellIcon(spellId) or nil
-    for i = 1, 2 do
-        sides[i]:SetShown(shown)
-        if texture then sides[i].icon:SetTexture(texture) end
+local function PaintSides(sides, left, right, spellId)
+    local texture = (left or right) and SpellIcon(spellId) or nil
+    sides[1]:SetShown(left)
+    sides[2]:SetShown(right)
+    if texture then
+        sides[1].icon:SetTexture(texture)
+        sides[2].icon:SetTexture(texture)
     end
 end
 
@@ -233,6 +236,10 @@ function SR:CreateFrame_()
     textBox.timer = textBox:CreateFontString(nil, "OVERLAY")
     textBox.line = textBox:CreateFontString(nil, "OVERLAY")
     textBox.line:SetPoint("TOP", textBox, "BOTTOM", 0, -2)
+    -- Not ready, the count sits right of the name, so its digits never move it.
+    textBox.lineTimer = textBox:CreateFontString(nil, "OVERLAY")
+    textBox.lineTimer:SetJustifyH("LEFT")
+    textBox.lineTimer:SetPoint("LEFT", textBox.line, "RIGHT", 5, 0)
     textBox.sides = NewNameSides(textBox, textBox.line)
     local small = CreateFrame("Frame", nil, textBox)
     small.icon = small:CreateTexture(nil, "ARTWORK")
@@ -322,6 +329,7 @@ function SR:ApplyStyle()
         KE:ApplyFontToText(textBox.label, face, size, outline)
         KE:ApplyFontToText(textBox.timer, face, size, outline)
         KE:ApplyFontToText(textBox.line, face, nameSize, outline)
+        KE:ApplyFontToText(textBox.lineTimer, face, nameSize, outline)
         for i = 1, 2 do textBox.sides[i]:SetSize(nameSize, nameSize) end
         textBox.iconFrame:SetSize(size, size)
         KE.ApplySplitTextLayout(textBox, textBox.label, textBox.timer, textBox.iconFrame, true, "CENTER")
@@ -336,7 +344,8 @@ function SR:ApplyStyle()
         textBox:Hide()
         iconBox:Show()
     end
-    self.shownRec, self.shownPhase, self.shownReady, self.lastCount, self.lastLine = nil, nil, nil, nil, nil
+    self.shownRec, self.shownPhase, self.shownReady = nil, nil, nil
+    self.lastCount, self.lastLine, self.lastLineTimer = nil, nil, nil
 end
 
 function SR:StartGlow()
@@ -431,7 +440,8 @@ function SR:PaintIconState(rec, colorKey, notReady, glow)
         box.name:SetText(notReady and Rules.NOT_READY or (rec.name or ""))
         SetColor(box.name, notReady and RED or db.TextColor)
     end
-    PaintSides(box.sides, showName and not notReady and db.ShowNameIcons ~= false, rec.id)
+    local sides = showName and not notReady and db.ShowNameIcons ~= false
+    PaintSides(box.sides, sides, sides, rec.id)
     box.cooldown:SetShown(notReady)
     if glow and db.Glow ~= false then self:StartGlow() else self:StopGlow() end
 end
@@ -443,7 +453,10 @@ function SR:PaintTextState(rec, label, colorKey, notReady)
     SetColor(box.label, color)
     SetColor(box.timer, color)
     SetColor(box.line, notReady and GRAY or db.TextColor)
-    PaintSides(box.sides, not notReady and db.ShowSpellName ~= false and db.ShowNameIcons ~= false, rec.id)
+    SetColor(box.lineTimer, GRAY)
+    local icons = db.ShowNameIcons ~= false
+    local named = icons and not notReady and db.ShowSpellName ~= false
+    PaintSides(box.sides, named or (icons and notReady), named, rec.id)
 end
 
 -- State parts are set only when the record, its phase or the ready state
@@ -456,11 +469,11 @@ function SR:Paint(rec, now, ready, silent)
     local changed = rec ~= self.shownRec or phase ~= self.shownPhase or ready ~= self.shownReady
     if changed then
         self.shownRec, self.shownPhase, self.shownReady = rec, phase, ready
-        self.lastCount, self.lastLine = nil, nil
+        self.lastCount, self.lastLine, self.lastLineTimer = nil, nil, nil
     end
     if self:TextMode() then
         local box = frame.textBox
-        local label, timer, line = Rules.TextLines(word, notReady, count, rec.name or "", db.ShowSpellName ~= false)
+        local label, timer, line, lineTimer = Rules.TextLines(word, notReady, count, rec.name or "", db.ShowSpellName ~= false)
         if changed then self:PaintTextState(rec, label, colorKey, notReady) end
         if timer ~= self.lastCount then
             box.timer:SetText(timer)
@@ -469,6 +482,10 @@ function SR:Paint(rec, now, ready, silent)
         if line ~= self.lastLine then
             box.line:SetText(line)
             self.lastLine = line
+        end
+        if lineTimer ~= self.lastLineTimer then
+            box.lineTimer:SetText(lineTimer)
+            self.lastLineTimer = lineTimer
         end
     else
         if changed then self:PaintIconState(rec, colorKey, notReady, glow) end
@@ -492,7 +509,8 @@ function SR:HideCue()
     if not self.frame then return end
     self:StopGlow()
     self.frame:Hide()
-    self.shownRec, self.shownPhase, self.shownReady, self.lastCount, self.lastLine = nil, nil, nil, nil, nil
+    self.shownRec, self.shownPhase, self.shownReady = nil, nil, nil
+    self.lastCount, self.lastLine, self.lastLineTimer = nil, nil, nil
 end
 
 function SR:PaintSample()
