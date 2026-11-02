@@ -466,6 +466,10 @@ function H.ApplySettings(self, opts)
 
     self:ApplyPosition()
     H.UpdateBarColor(self)
+    -- After the font loop above: a FontString with no font throws on SetText.
+    if self.isPreview then
+        H.UpdateTargetNames(self)
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -861,8 +865,24 @@ function H.UpdateTargetNames(self)
     end
 
     local targetText = self.targetNames[1]
-    if not targetSettings.Enabled or self.isPreview then
+    if not targetSettings.Enabled then
         targetText:SetAlpha(0)
+        return
+    end
+
+    -- No caster targets anyone in the preview, so it shows the player's own
+    -- name in the live single-name style.
+    if self.isPreview then
+        local classToken = select(2, UnitClass("player"))
+        local color = classToken and C_ClassColor.GetClassColor(classToken)
+        if color then
+            targetText:SetTextColor(color.r, color.g, color.b, color.a or 1)
+        else
+            local tr, tg, tb, ta = KE:ResolveColor(self.db.TextColor, { 1, 1, 1, 1 })
+            targetText:SetTextColor(tr, tg, tb, ta)
+        end
+        targetText:SetText(UnitName("player") or "")
+        targetText:SetAlpha(1)
         return
     end
 
@@ -1352,27 +1372,6 @@ function H.ShowPreview(self, opts)
     H.StartPreviewTimer(self)
     H.EnsureOnUpdate(self)
     self.frame:Show()
-
-    if self.targetNames then
-        -- Preview mirrors the live single-target-name pattern: one slot,
-        -- class-colored via SetTextColor, others hidden. Uses the player's
-        -- own name/class since there's no real caster targeting anyone.
-        local targetText = self.targetNames[1]
-        local name = UnitName("player")
-        local classToken = select(2, UnitClass("player"))
-        targetText:SetText(name or "")
-        local color = classToken and C_ClassColor.GetClassColor(classToken)
-        if color then
-            targetText:SetTextColor(color.r, color.g, color.b, color.a or 1)
-        else
-            local tr, tg, tb, ta = KE:ResolveColor(self.db.TextColor, { 1, 1, 1, 1 })
-            targetText:SetTextColor(tr, tg, tb, ta)
-        end
-        targetText:SetAlpha(1)
-        for i = 2, MAX_TARGET_NAMES do
-            self.targetNames[i]:SetAlpha(0)
-        end
-    end
 
     -- Preview shows a random raid icon (1-8) when the marker is enabled, so
     -- users can position/size visually without needing a marked focus target.
