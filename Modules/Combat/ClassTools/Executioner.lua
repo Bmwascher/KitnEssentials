@@ -48,7 +48,7 @@ local DEBUG_EXE = false
 local TALENT_EVAL_DELAY = 2
 local STEP = 0.05
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local MARK_WIDTH, MARK_HEIGHT, MARK_GAP = 26, 13, 3
+local MARK_GAP = 3
 local ROW_GAP = 4
 local HIDDEN_LABEL_WIDTH = 34
 local CUE_TEXT_SIZE = 13
@@ -432,18 +432,20 @@ function EX:LayoutPips()
     self:CreatePips()
     local db, pips, root = self.db, self.pips, self.pipsRoot
     local pw, ph, gap = db.PipWidth or 34, db.PipHeight or 18, db.PipSpacing or 3
+    local mw, mh = db.HiddenMarkWidth or 26, db.HiddenMarkHeight or 13
+    local countSize = db.StackCountSize or 26
     local size = db.FontSize or 11
     local markSize = math_max(6, size - 1)
     local showHidden = db.ShowHidden ~= false
-    local countW = db.ShowStackCount ~= false and (ph + 8) or 0
+    local countW = db.ShowStackCount ~= false and countSize or 0
     local segX = countW > 0 and countW + 6 or 0
     local segRow = segX + Rules.CAP * pw + (Rules.CAP - 1) * gap
-    local hiddenRow = segX + HIDDEN_LABEL_WIDTH + Rules.MAX_MARKS * MARK_WIDTH + (Rules.MAX_MARKS - 1) * MARK_GAP
+    local hiddenRow = segX + HIDDEN_LABEL_WIDTH + Rules.MAX_MARKS * mw + (Rules.MAX_MARKS - 1) * MARK_GAP
     local width = showHidden and math_max(segRow, hiddenRow) or segRow
-    local height = showHidden and (ph + ROW_GAP + MARK_HEIGHT) or ph
+    local height = showHidden and (ph + ROW_GAP + mh) or ph
     self.frame:SetSize(width, height)
 
-    KE:ApplyFontToText(pips.count, db.FontFace, ph + 8, db.FontOutline)
+    KE:ApplyFontToText(pips.count, db.FontFace, countSize, db.FontOutline)
     pips.count:ClearAllPoints()
     pips.count:SetPoint("CENTER", root, "TOPLEFT", countW / 2, -ph / 2)
     pips.count:SetShown(countW > 0)
@@ -461,15 +463,15 @@ function EX:LayoutPips()
 
     KE:ApplyFontToText(pips.hiddenLabel, db.FontFace, markSize, db.FontOutline)
     pips.hiddenLabel:ClearAllPoints()
-    pips.hiddenLabel:SetPoint("LEFT", root, "TOPLEFT", segX, -(ph + ROW_GAP + MARK_HEIGHT / 2))
+    pips.hiddenLabel:SetPoint("LEFT", root, "TOPLEFT", segX, -(ph + ROW_GAP + mh / 2))
     pips.hiddenLabel:SetText("hidden")
     pips.hiddenLabel:Hide()
     local hr, hg, hb, ha = KE:ResolveColor(db.HiddenColor, HIDDEN_COLOR)
     for j, el in ipairs(pips.marks) do
-        el:SetSize(MARK_WIDTH, MARK_HEIGHT)
+        el:SetSize(mw, mh)
         el:ClearAllPoints()
         el:SetPoint("TOPLEFT", root, "TOPLEFT",
-            segX + HIDDEN_LABEL_WIDTH + (j - 1) * (MARK_WIDTH + MARK_GAP), -(ph + ROW_GAP))
+            segX + HIDDEN_LABEL_WIDTH + (j - 1) * (mw + MARK_GAP), -(ph + ROW_GAP))
         self:StyleCentered(el, markSize)
         el.sb:SetStatusBarColor(hr, hg, hb, ha)
         el:Hide()

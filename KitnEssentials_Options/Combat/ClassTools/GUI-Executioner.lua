@@ -51,6 +51,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     display:SetCondition("stackColor", function() return mode == "BARS" or mode == "PIPS" end)
     display:SetCondition("hiddenColor", function() return mode ~= "CUE_ONLY" and db.ShowHidden ~= false end)
     display:SetCondition("fontSize", function() return mode ~= "CUE_ONLY" end)
+    display:SetCondition("hiddenMarks", function() return db.ShowHidden ~= false end)
+    display:SetCondition("countSize", function() return db.ShowStackCount ~= false end)
 
     local function Regray()
         manager:UpdateAll(cue.Enabled == true)
@@ -142,8 +144,8 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         if mode == "PIPS" then
             card2:AddLabel("|cff" .. stack .. "[ 12 ]|r  A stack segment, with that stack's seconds inside. "
                 .. "The leftmost drops next; up to five.")
-            card2:AddLabel("|cff" .. hidden .. "hidden [17]|r  A hidden timer: a smaller mark in the row under "
-                .. "the segments, with its seconds inside. When it runs out it takes away a stack.")
+            card2:AddLabel("|cff" .. hidden .. "hidden [17]|r  A hidden timer: a mark in the row under the "
+                .. "segments, with its seconds inside. When it runs out it takes away a stack.")
         elseif mode == "ICON" then
             card2:AddLabel("3 |cff" .. hidden .. "+2|r  The count is your stacks; the center seconds and the "
                 .. "dark swipe are the next stack's drop; the \"+2\" badge is how many hidden timers run. Their "
@@ -237,7 +239,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
         AddCheckbox(r1, "Show Hidden Timers", db, "ShowHidden", 0.34, true)
         AddCheckbox(r1, "Show Seconds", db, "ShowSeconds", 0.33)
-        AddCheckbox(r1, "Show Stack Count", db, "ShowStackCount", 0.33)
+        AddCheckbox(r1, "Show Stack Count", db, "ShowStackCount", 0.33, true)
         card4:AddRow(r1, Theme.rowHeight)
         local r2 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
         AddSlider(r2, "Pip Width", db, "PipWidth", { 16, 80 }, 0.5)
@@ -245,8 +247,13 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         card4:AddRow(r2, Theme.rowHeight)
         local r3 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
         AddSlider(r3, "Spacing", db, "PipSpacing", { 0, 10 }, 0.5)
+        display:Register(AddSlider(r3, "Stack Count Size", db, "StackCountSize", { 12, 48 }, 0.5), "countSize")
         card4:AddRow(r3, Theme.rowHeight)
-        card4:AddNote("Hidden timers sit in a row under the segments, one smaller mark each (up to seven), "
+        local r4 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        display:Register(AddSlider(r4, "Hidden Mark Width", db, "HiddenMarkWidth", { 16, 80 }, 0.5), "hiddenMarks")
+        display:Register(AddSlider(r4, "Hidden Mark Height", db, "HiddenMarkHeight", { 8, 40 }, 0.5), "hiddenMarks")
+        card4:AddRow(r4, Theme.rowHeight)
+        card4:AddNote("Hidden timers sit in a row under the segments, one mark each (up to seven), "
             .. "oldest first, each with its seconds inside.")
     elseif mode == "ICON" then
         local r1 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)

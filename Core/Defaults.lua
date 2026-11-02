@@ -1067,6 +1067,9 @@ local Defaults = {
             PipWidth = 34,
             PipHeight = 18,
             PipSpacing = 3,
+            HiddenMarkWidth = 26,
+            HiddenMarkHeight = 13,
+            StackCountSize = 26,
 
             IconSize = 46,
 
