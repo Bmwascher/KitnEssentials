@@ -899,8 +899,6 @@ local Defaults = {
             IncludeSelf = true,
             OnlyInParty = true,
             OnlyInDungeons = false,
-            EnemiesWatched = 10,
-            EnemiesWatchedArea = 4,
             -- Switched-off stops only. The tracked order is saved once the
             -- Spells card moves a stop: an array here would refill on load.
             SpellOff = {},

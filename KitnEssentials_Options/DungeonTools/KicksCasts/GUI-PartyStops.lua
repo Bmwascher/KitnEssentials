@@ -64,9 +64,9 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     card1:AddLabel("Shows each party member's crowd-control stops (stuns, fears, knockbacks and grips) as " ..
         "icons that count down their cooldowns. A teammate's stop is seen from its debuff on an enemy " ..
         "nameplate, so two teammates of one class both start and a resisted stop shows nothing. Your own " ..
-        "stops start from your cast. Works with Party Cooldowns off. Each watched enemy costs one sensor " ..
-        "per tracked stop a teammate can have; an area stop watches only as many as Enemies Watched, " ..
-        "Area Stops allows.")
+        "stops start from your cast. Works with Party Cooldowns off. A single-target stop, like Blind, " ..
+        "watches up to " .. Rules.Reach(false) .. " enemies; an area stop, like Shockwave, lands on several " ..
+        "at once and watches up to " .. Rules.Reach(true) .. ".")
     yOffset = card1:GetNextOffset()
 
     -- A disabled module shows only this card: its switch and description.
@@ -110,30 +110,6 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
         end,
     }), 0.5)
     card3:AddRow(row3, Theme.rowHeight)
-
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched", {
-        min = 4, max = 20, step = 1,
-        value = Rules.Watched(db.EnemiesWatched),
-        tooltip = "How many enemies a single-target stop, like Blind or Hammer of Justice, is read on: enemies in " ..
-            "combat, and for Blind also enemies not yet in combat while a slot is free.",
-        callback = function(value)
-            db.EnemiesWatched = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    row3b:AddWidget(GUIFrame:CreateSlider(row3b, "Enemies Watched, Area Stops", {
-        min = 1, max = 20, step = 1,
-        value = Rules.WatchedArea(db.EnemiesWatchedArea),
-        tooltip = "How many enemies an area stop, like Shockwave or Chaos Nova, is read on. It lands on " ..
-            "several at once, so a few are enough, and each one watched costs frame time in big pulls. " ..
-            "Never more than Enemies Watched.",
-        callback = function(value)
-            db.EnemiesWatchedArea = value
-            ApplySettings()
-        end,
-    }), 0.5)
-    card3:AddRow(row3b, Theme.rowHeight)
     card3:AddSeparator()
 
     -- The spell rows are released by each redraw, so they have a manager of

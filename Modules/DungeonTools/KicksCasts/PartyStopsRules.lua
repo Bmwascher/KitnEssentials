@@ -156,16 +156,19 @@ local function Clamp(value, low, high, default)
     return math_max(low, math_min(high, math_floor(value)))
 end
 
-function Rules.Watched(value) return Clamp(value, 4, 20, 10) end
+-- Enemies a single-target stop is read on, and the plate slot cap. Only three
+-- stops are single target, so 10 costs at most 30 sensors.
+local WATCHED = 10
+-- An area stop lands on several enemies at once, so 4 are enough: the 17 area
+-- stops at 4 cost at most 68 sensors.
+local WATCHED_AREA = 4
 
--- How many watched enemies a stop's sensors cover: an area stop lands on
--- several at once, so it reads fewer.
-function Rules.WatchedArea(value) return Clamp(value, 1, 20, 4) end
+function Rules.Watched() return WATCHED end
 
-function Rules.Reach(aoe, watched, area)
-    local cap = Rules.Watched(watched)
-    if not aoe then return cap end
-    return math_min(cap, Rules.WatchedArea(area))
+-- How many watched enemies a stop's sensors cover.
+function Rules.Reach(aoe)
+    if aoe then return WATCHED_AREA end
+    return WATCHED
 end
 
 function Rules.PerRow(value) return Clamp(value, 1, 20, 8) end
