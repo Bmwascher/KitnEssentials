@@ -125,20 +125,24 @@ describe("Better Friendlist skin: zone dot", function()
     end)
 end)
 
-describe("Better Friendlist skin: zone dot size", function()
-    it("fits the gap between the class icon and the text, or draws nothing", function()
+describe("Better Friendlist skin: zone dot offset", function()
+    it("sits the gap after the text, stops at the box edge, or draws nothing", function()
         local S = loadSkin()
-        -- name, text inset, icon size, dot size
+        local secret = { __secret = true }
+        -- name, text width, box width, dot x offset
         local cases = {
-            { "Modern gap of 6", 38, 28, 4 },
-            { "wider gap, capped", 44, 28, 4 },
-            { "gap of 5 shrinks", 37, 28, 3 },
-            { "gap of 4 shrinks to the floor", 36, 28, 2 },
-            { "gap of 3 draws nothing", 35, 28, nil },
-            { "no inset yet", nil, 28, nil },
+            { "short text: its width plus the gap", 40, 200, 43 },
+            { "text near the box edge clamps", 195, 200, 194 },
+            { "text wider than the box clamps", 260, 200, 194 },
+            { "zero text width", 0, 200, nil },
+            { "no text width", nil, 200, nil },
+            { "secret text width", secret, 200, nil },
+            { "zero box width", 40, 0, nil },
+            { "no box width", 40, nil, nil },
+            { "secret box width", 40, secret, nil },
         }
         for _, c in ipairs(cases) do
-            assert.are.equal(c[4], S._BFLZoneDotSize(c[2], c[3]), c[1])
+            assert.are.equal(c[4], S._BFLZoneDotOffset(c[2], c[3]), c[1])
         end
     end)
 end)
