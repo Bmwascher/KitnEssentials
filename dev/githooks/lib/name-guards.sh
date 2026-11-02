@@ -218,7 +218,8 @@ ng_scan_text() {
     # Compat names are addons the project legitimately talks about — it
     # detects them, skins them, or stands modules down under them — so naming
     # one is a leak only next to provenance vocabulary or a date.
-    if printf '%s\n' "$text" | grep -qiE "$provenance|$ng_dates"; then
+    # A here-string, not a pipe: see the stub check in pre-commit.
+    if grep -qiE "$provenance|$ng_dates" <<<"$text"; then
         chit="$(printf '%s\n' "$text" | grep -ioE "$compat" | sort -u | tr '\n' ' ' || true)"
         if [ -n "$chit" ]; then
             echo "[$tag] BLOCKED: $noun — addon(s) named next to provenance vocabulary: $chit" >&2

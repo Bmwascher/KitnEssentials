@@ -107,7 +107,9 @@ if [ -n "$new_methods" ]; then
     fi
     unstubbed=""
     for m in $new_methods; do
-        if ! printf '%s\n' "$stubs" | grep -qE "function KE[:.]$m\s*\(|@field\s+$m\b"; then
+        # A here-string, not a pipe: under pipefail, grep -q exiting at the
+        # first match kills a writer still feeding a large file (status 141).
+        if ! grep -qE "function KE[:.]$m\s*\(|@field\s+$m\b" <<<"$stubs"; then
             unstubbed="$unstubbed $m"
         fi
     done
