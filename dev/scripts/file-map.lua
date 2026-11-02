@@ -29,9 +29,9 @@
 --     registeredContent[<var>].
 -- A parent or tab id may be a string or a file-level string constant. Page
 -- files register one of those ids. A settings file that registers through a
--- variable, or registers nothing, is a page for each id it quotes; one that
--- registers nothing is also a page of each row whose pages read the
--- `KE.Name` table it defines. Module files name an id in guiPath or guiTab.
+-- variable, or registers nothing, is a page for each id it quotes, and of
+-- each row whose pages read a `KE.Name` table it defines. Module files name
+-- an id in guiPath or guiTab.
 --
 -- Under each row, "Tabs and cards" lists the row's own cards (its header,
 -- above every tab, or the whole page when it has no tabs), then each tab with
@@ -1108,10 +1108,14 @@ end
 
 -- Of those, one that defines a column-0 `KE.Name = <local>` table is also a
 -- page of every row whose pages read `KE.Name`.
+local NOT_A_TABLE = { KE = true, ["nil"] = true, ["function"] = true, ["true"] = true, ["false"] = true }
 local helperNames = {}
 for path in pairs(quotesIds) do
-    for name, value in ("\n" .. sources[path]):gmatch("\nKE%.([%a_][%w_]*)%s*=%s*([%a_][%w_]*)") do
-        if value ~= "KE" then helperNames[path] = name end
+    for name, value in ("\n" .. codeOf[path]):gmatch("\nKE%.([%a_][%w_]*)%s*=%s*([%a_][%w_]*)") do
+        if not NOT_A_TABLE[value] then
+            helperNames[path] = helperNames[path] or {}
+            table.insert(helperNames[path], name)
+        end
     end
 end
 
@@ -1153,9 +1157,11 @@ for _, section in ipairs(sections) do
             end
         end
         local helpers = {}
-        for path, name in pairs(helperNames) do
+        for path, names in pairs(helperNames) do
             for page in pairs(pages) do
-                if sources[page]:find("KE%." .. name .. "[^%w_]") then helpers[path] = true end
+                for _, name in ipairs(names) do
+                    if codeOf[page]:find("KE%." .. name .. "[^%w_]") then helpers[path] = true end
+                end
             end
         end
         for path in pairs(helpers) do pages[path] = true end
