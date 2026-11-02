@@ -756,16 +756,21 @@ end)
 describe("KE:GetDungeonShortName", function()
     it("gives a listed dungeon key's short form, and nil for an unlisted or missing key", function()
         local KE = L.loadGlobals()
-        _G.BigWigsAPI = nil
+        -- A locale name for every key, so a listed key is told from an
+        -- unlisted one without pinning the table's own short forms.
+        _G.BigWigsAPI = { GetLocale = function()
+            return { keystoneShortName_MurderRow = "SHORT-A", keystoneShortName_NoSuchDungeon = "SHORT-B" }
+        end }
         -- key, short form
         local cases = {
-            { "MurderRow", "MURDER" },
+            { "MurderRow", "SHORT-A" },
             { "NoSuchDungeon", nil },
             { nil, nil },
         }
         for i, c in ipairs(cases) do
             assert.equals(c[2], KE:GetDungeonShortName(c[1]), "row " .. i)
         end
+        _G.BigWigsAPI = nil
     end)
 end)
 
