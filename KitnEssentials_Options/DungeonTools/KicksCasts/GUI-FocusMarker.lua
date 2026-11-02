@@ -389,7 +389,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         { key = "NoOverwrite", label = "No Overwrite",
           desc = "Skip marking targets that are already marked.", default = true },
         { key = "AnnounceReadyCheck", label = "Ready Check Announce",
-          desc = "Announce your marker in party chat on ready check. In a dungeon before the key, " ..
+          desc = "Announce your marker in party chat on ready check.",
+          tooltip = "Announce your marker in party chat on ready check. In a dungeon before the key, " ..
               "EllesmereUI and MDT users' addons are told your marker too.", default = true },
     }
 
@@ -402,6 +403,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         local row = GUIFrame:CreateRow(card3.content, rowHeight)
         local checkbox = GUIFrame:CreateCheckbox(row, label, {
             value = checked,
+            tooltip = def.tooltip,
             callback = function(val) db[def.key] = val; ApplySettings(); RefreshSoon() end,
         })
         row:AddWidget(checkbox, 1)

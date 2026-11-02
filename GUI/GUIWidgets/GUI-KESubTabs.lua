@@ -89,16 +89,33 @@ end
 -- A fill strip sizes each tab to its label and leaves the row's remaining
 -- width empty.
 local function SizeTabToText(btn)
-    btn:SetWidth((btn.label:GetStringWidth() or 0) + Theme.paddingLarge * 2)
+    local width = (btn.label:GetStringWidth() or 0) + Theme.paddingLarge * 2
+    btn:SetWidth(width)
+    return width
+end
+
+function GUIFrame.SubTabOffset(widths, index, spacing)
+    local x = 0
+    for i = 1, index - 1 do
+        x = x + widths[i] + spacing
+    end
+    return x
 end
 
 -- Re-measured at layout time: a FontString can report short before its first
 -- layout pass, and there is no distributed slack to absorb a bad measurement.
-local function SizeTabsToText(strip)
+-- Each tab anchors to the strip, not to the tab before it, so one tab without
+-- a resolved position cannot leave the tabs after it undrawn; every pass
+-- re-places them from the widths it has just set.
+local function PlaceFillTabs(strip)
     if not strip._fill then return end
-    local tabs = strip._tabButtons
-    for i = 1, strip._count do
-        SizeTabToText(tabs[i])
+    local tabs, widths, spacing = strip._tabButtons, strip._tabWidths, strip._spacing
+    local count = strip._count
+    for i = 1, count do
+        widths[i] = SizeTabToText(tabs[i])
+    end
+    for i = 1, count do
+        tabs[i]:SetPoint("TOPLEFT", strip, "TOPLEFT", GUIFrame.SubTabOffset(widths, i, spacing), 0)
     end
 end
 
@@ -129,9 +146,10 @@ end
 local function ConstructSubTabs(parent)
     local strip = CreateFrame("Frame", nil, parent)
     strip._tabButtons = {}
+    strip._tabWidths = {}
     strip.buttons = {}
     strip._count = 0
-    strip:SetScript("OnSizeChanged", SizeTabsToText)
+    strip:SetScript("OnSizeChanged", PlaceFillTabs)
     strip._keOwned = { strip }
     return strip
 end
@@ -183,6 +201,7 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     strip._activeId = activeId
     strip._onSwitch = config.onSwitch
     strip._fill = fill
+    strip._spacing = spacing
 
     local buttons = strip.buttons
     wipe(buttons)
@@ -193,24 +212,14 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
         btn:ClearAllPoints()
         btn:SetHeight(tabHeight)
 
-        if fill then
-            -- TOPLEFT chains left to right; each width comes from that tab's
-            -- own label.
-            if i == 1 then
-                btn:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, 0)
-            else
-                btn:SetPoint("TOPLEFT", btnList[i - 1], "TOPRIGHT", spacing, 0)
-            end
-        else
+        -- A fill tab is sized and placed after the loop, once every label is set.
+        if not fill then
             btn:SetSize(tabWidth, tabHeight)
             btn:SetPoint("TOPLEFT", strip, "TOPLEFT", (i - 1) * (tabWidth + spacing), 0)
         end
 
         KE:ApplyThemeFont(btn.label, "normal")
         btn.label:SetText(def.label or def.id)
-        -- Sized now as well as after layout, so a new strip never draws a
-        -- frame of zero-width tabs.
-        if fill then SizeTabToText(btn) end
         btn.tabId = def.id
         PaintTab(btn, def.id == activeId)
         btn:Show()
@@ -226,7 +235,10 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     strip._count = #tabs
 
     if fill and #tabs > 0 then
-        C_Timer.After(0, function() SizeTabsToText(strip) end)
+        -- Placed now as well as after layout, so a new strip never draws a
+        -- frame of zero-width or unplaced tabs.
+        PlaceFillTabs(strip)
+        C_Timer.After(0, function() PlaceFillTabs(strip) end)
     end
 
     return strip, yOffset + tabHeight + T.paddingSmall
