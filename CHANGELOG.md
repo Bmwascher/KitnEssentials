@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.0
+
+The Raid Cooldowns box wraps into rows and can sit on top of Healer Mana.
+
+### Party Cooldowns
+
+- **NEW:** Icons Per Row for the Raid Cooldowns box (default 4); icons past
+  that start a new row
+- **NEW:** Healer Mana Below (on by default): while the box keeps its default
+  place on Healer Mana, the box takes Healer Mana's spot and Healer Mana sits
+  under it. Move both together from Healer Mana's Party position or in Edit
+  Mode
+
+---
+
 ## v4.15.13
 
 Party Cooldowns fixes and three new cooldowns.
