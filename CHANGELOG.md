@@ -1,5 +1,44 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.6
+
+The Focus Castbar's kick mark lands where your kick really comes back after
+a focus swap, and its preview keeps your name.
+
+### WoW Forever (Beta)
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+- Focus Castbar: when you focus a mob part way through its cast, the kick
+  mark now stands where your kick comes back, where it used to sit too early
+- Focus Castbar: the settings preview keeps your name above the bar while
+  Show Target Names is on, and the checkbox shows or hides it at once
+
+### Retail
+
+Everything below is for Retail.
+
+#### Focus Castbar
+
+- When you focus a mob part way through its cast, or the bar refreshes
+  mid-cast, the kick mark now stands where your kick comes back, where it
+  used to sit too early
+- The bar switches to the Kick Not Ready color when your kick goes away
+  mid-cast, such as a dismissed pet
+- A kick that changes mid-cast hides the mark until the next cast, rather
+  than leaving one in the wrong place
+- The settings preview keeps your name above the bar while Show Target
+  Names is on, and the checkbox shows or hides it at once
+
+#### Shaman Proc Cooldowns
+
+- A single pipe as the separator shows as one pipe, without a stray letter
+  after it
+
+---
+
 ## v4.16.5
 
 The AGGRO warning waits a moment before it shows, Combat Potion Ready gains
