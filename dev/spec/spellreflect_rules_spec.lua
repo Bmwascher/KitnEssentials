@@ -260,4 +260,16 @@ describe("spell reflect rules", function()
         assert.equals(first, second)
         assert.is_nil(second.stopAt)
     end)
+
+    it("starts a line's text where the whole group, lead and tail included, is centered", function()
+        -- lead, text, tail, the text's left edge from the center
+        local cases = {
+            { 0, 40, 0, -20 },
+            { 10, 40, 10, -20 },
+            { 12, 40, 30, -29 },
+        }
+        for i, case in ipairs(cases) do
+            assert.equals(case[4], Rules.LineStart(case[1], case[2], case[3]), "case " .. i)
+        end
+    end)
 end)

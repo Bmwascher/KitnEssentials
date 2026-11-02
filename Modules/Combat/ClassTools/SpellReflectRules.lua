@@ -287,6 +287,13 @@ function Rules.TextLines(word, notReady, count, name, showName)
     return Rules.TEXT_LABEL, timer, showName and name or "", ""
 end
 
+-- Text mode centers each line as one group: what sits left of its text
+-- (lead), the text, and what sits right (tail). Returns the text's left edge
+-- from the center.
+function Rules.LineStart(lead, text, tail)
+    return lead - (lead + text + tail) / 2
+end
+
 -- "READY", "NOT_READY" or nil; each plays at most once per record.
 function Rules.SoundFor(rec, phase, ready)
     if phase ~= "GO" and phase ~= "NOW" then return nil end

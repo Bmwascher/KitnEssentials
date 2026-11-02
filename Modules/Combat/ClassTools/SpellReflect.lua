@@ -53,8 +53,8 @@ local GetTime = GetTime
 local PlaySoundFile = PlaySoundFile
 local UnitClass = UnitClass
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
-local pairs, pcall, tostring, type = pairs, pcall, tostring, type
-local math_max = math.max
+local ipairs, pairs, pcall, tostring, type = ipairs, pairs, pcall, tostring, type
+local math_floor, math_max = math.floor, math.max
 local wipe = wipe
 
 -- Flip to true, /reload, repro, read the log.
@@ -66,6 +66,9 @@ local STEP = 0.05
 -- Talent state is not reliable on the frame a talent event fires.
 local TALENT_EVAL_DELAY = 2
 local NAME_GAP = 3
+local ICON_GAP, COUNT_GAP = 2, 5
+-- The widest strings a count shows: tenths up to Lead's 15 s, and the cast word.
+local SLOT_SAMPLES = { "88.8", Rules.NOW_WORD }
 local TEST_KEY = "__test"
 -- The sample's cast length matches its boss data; SAMPLE_LEFT puts the
 -- placement sample inside its window, which opens 1.5 s before the bar's zero.
@@ -174,6 +177,21 @@ local function NewNameSides(parent, nameLine)
     return sides
 end
 
+local function SlotWidth(measure, face, size, outline)
+    KE:ApplyFontToText(measure, face, size, outline)
+    local widest = 0
+    for _, sample in ipairs(SLOT_SAMPLES) do
+        measure:SetText(sample)
+        widest = math_max(widest, measure:GetUnboundedStringWidth())
+    end
+    return widest
+end
+
+local function Snap(x)
+    local px = KE:GetPixelSize()
+    return math_floor(x / px + 0.5) * px
+end
+
 local function PaintSides(sides, left, right, spellId)
     local texture = (left or right) and SpellIcon(spellId) or nil
     sides[1]:SetShown(left)
@@ -233,21 +251,26 @@ function SR:CreateFrame_()
 
     local textBox = CreateFrame("Frame", nil, frame)
     textBox:SetAllPoints(frame)
+    -- Each line hangs off its text, which SR:LayoutText places so the line is
+    -- centered with room for the widest count.
     textBox.label = textBox:CreateFontString(nil, "OVERLAY")
     textBox.timer = textBox:CreateFontString(nil, "OVERLAY")
+    textBox.timer:SetJustifyH("LEFT")
+    textBox.timer:SetPoint("LEFT", textBox.label, "RIGHT", COUNT_GAP, 0)
     textBox.line = textBox:CreateFontString(nil, "OVERLAY")
-    textBox.line:SetPoint("TOP", textBox, "BOTTOM", 0, -2)
-    -- Not ready, the count sits right of the name, so its digits never move it.
     textBox.lineTimer = textBox:CreateFontString(nil, "OVERLAY")
     textBox.lineTimer:SetJustifyH("LEFT")
-    textBox.lineTimer:SetPoint("LEFT", textBox.line, "RIGHT", 5, 0)
+    textBox.lineTimer:SetPoint("LEFT", textBox.line, "RIGHT", COUNT_GAP, 0)
     textBox.sides = NewNameSides(textBox, textBox.line)
+    textBox.measure = textBox:CreateFontString(nil, "OVERLAY")
+    textBox.measure:Hide()
     local small = CreateFrame("Frame", nil, textBox)
     small.icon = small:CreateTexture(nil, "ARTWORK")
     small.icon:SetAllPoints(small)
     small.icon:SetTexture(SpellIcon(REFLECT_ID))
     KE:ApplyIconZoom(small.icon)
     KE:AddIconBorders(small, { 0, 0, 0, 1 })
+    small:SetPoint("RIGHT", textBox.label, "LEFT", -ICON_GAP, 0)
     textBox.iconFrame = small
     textBox:Hide()
     frame.textBox = textBox
@@ -333,7 +356,9 @@ function SR:ApplyStyle()
         KE:ApplyFontToText(textBox.lineTimer, face, nameSize, outline)
         for i = 1, 2 do textBox.sides[i]:SetSize(nameSize, nameSize) end
         textBox.iconFrame:SetSize(size, size)
-        KE.ApplySplitTextLayout(textBox, textBox.label, textBox.timer, textBox.iconFrame, true, "CENTER")
+        textBox.iconSize, textBox.nameSize = size, nameSize
+        textBox.bigSlot = SlotWidth(textBox.measure, face, size, outline)
+        textBox.smallSlot = SlotWidth(textBox.measure, face, nameSize, outline)
         iconBox:Hide()
         textBox:Show()
     else
@@ -460,6 +485,27 @@ function SR:PaintTextState(rec, label, colorKey, notReady)
     PaintSides(box.sides, named or (icons and notReady), named, rec.id)
 end
 
+-- Runs when a line's text or icons change, never while only a count runs:
+-- the count's slot is sized for its widest string, so nothing moves.
+function SR:LayoutText(notReady)
+    local box = self.frame.textBox
+    local tail = notReady and 0 or COUNT_GAP + box.bigSlot
+    local x = Rules.LineStart(box.iconSize + ICON_GAP, box.label:GetUnboundedStringWidth(), tail)
+    box.label:ClearAllPoints()
+    box.label:SetPoint("LEFT", box, "CENTER", Snap(x), 0)
+
+    local side = box.nameSize + NAME_GAP
+    local lead = box.sides[1]:IsShown() and side or 0
+    if notReady then
+        tail = COUNT_GAP + box.smallSlot
+    else
+        tail = box.sides[2]:IsShown() and side or 0
+    end
+    x = Rules.LineStart(lead, box.line:GetUnboundedStringWidth(), tail)
+    box.line:ClearAllPoints()
+    box.line:SetPoint("TOPLEFT", box, "BOTTOM", Snap(x), -2)
+end
+
 -- State parts are set only when the record, its phase or the ready state
 -- changes; the count and the small line only when their string changes.
 function SR:Paint(rec, now, ready, silent)
@@ -488,6 +534,7 @@ function SR:Paint(rec, now, ready, silent)
             box.lineTimer:SetText(lineTimer)
             self.lastLineTimer = lineTimer
         end
+        if changed then self:LayoutText(notReady) end
     else
         if changed then self:PaintIconState(rec, colorKey, notReady, glow) end
         if count ~= self.lastCount then
