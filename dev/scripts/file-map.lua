@@ -29,8 +29,9 @@
 --     registeredContent[<var>].
 -- A parent or tab id may be a string or a file-level string constant. Page
 -- files register one of those ids. A settings file that registers through a
--- variable, or registers nothing, is a page for each id it quotes. Module
--- files name an id in guiPath or guiTab.
+-- variable, or registers nothing, is a page for each id it quotes; one that
+-- registers nothing is also a page of each row whose pages read the
+-- `KE.Name` table it defines. Module files name an id in guiPath or guiTab.
 --
 -- Under each row, "Tabs and cards" lists the row's own cards (its header,
 -- above every tab, or the whole page when it has no tabs), then each tab with
@@ -1105,6 +1106,15 @@ for path, text in pairs(sources) do
     end
 end
 
+-- Of those, one that defines a column-0 `KE.Name = <local>` table is also a
+-- page of every row whose pages read `KE.Name`.
+local helperNames = {}
+for path in pairs(quotesIds) do
+    for name, value in ("\n" .. sources[path]):gmatch("\nKE%.([%a_][%w_]*)%s*=%s*([%a_][%w_]*)") do
+        if value ~= "KE" then helperNames[path] = name end
+    end
+end
+
 local function isPageFor(path, text, id)
     if not underAny(path, PAGE_ROOTS) then return false end
     if text:find('Register%w*%(%s*"' .. escapePattern(id) .. '"') then return true end
@@ -1142,6 +1152,13 @@ for _, section in ipairs(sections) do
                 if isModuleFor(path, text, id) then modules[path] = true end
             end
         end
+        local helpers = {}
+        for path, name in pairs(helperNames) do
+            for page in pairs(pages) do
+                if sources[page]:find("KE%." .. name .. "[^%w_]") then helpers[path] = true end
+            end
+        end
+        for path in pairs(helpers) do pages[path] = true end
         local pageList, moduleList = sortedKeys(pages), sortedKeys(modules)
         if #pageList == 0 then fail("sidebar row has no page file: " .. row.id) end
         add("### " .. row.text .. " (`" .. row.id .. "`)")
