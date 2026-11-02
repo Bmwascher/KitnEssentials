@@ -1,5 +1,47 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.1
+
+Party Stops and CC Tracker list their spells one row per class.
+
+### WoW Forever (Beta)
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+- CC Tracker's Tracked Crowd Control card lists every class as one row, its
+  crowd control beside it with a count of how many are ticked, in place of
+  the class dropdown
+- **NEW:** Kitn Defaults button on CC Tracker's Tracked Crowd Control card:
+  it resets the list to the default picks and keeps the spell IDs you added
+
+### Retail
+
+Everything below is for Retail.
+
+#### Party Stops
+
+- The Spells card lists every class as one row, its stops beside it with a
+  count of how many are ticked
+- **NEW:** Set the icon order from a row of icons: click one, then Move Left
+  or Move Right
+- The two Enemies Watched sliders are gone: single-target stops watch 10
+  enemies and area stops 4. If you had changed either slider, it is back to
+  these values
+- "Only in a Party" is now "Hide While Solo", and its tooltip says what can
+  still show while you are solo
+
+#### CC Tracker
+
+- The Tracked Crowd Control card lists every class as one row, its crowd
+  control beside it with a count of how many are ticked, in place of the
+  class dropdown
+- **NEW:** Kitn Defaults button on the Tracked Crowd Control card: it resets
+  the list to the default picks and keeps the spell IDs you added
+
+---
+
 ## v4.16.0
 
 The Raid Cooldowns box wraps into rows and can sit on top of Healer Mana.
