@@ -219,6 +219,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field PlateSlots table
 ---@field DoTTrackerRules table
 ---@field ShamanProcRules table
+---@field ExecutionerRules table
 ---@field SpellReflectRules table
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table

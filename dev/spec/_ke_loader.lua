@@ -3616,6 +3616,13 @@ function L.loadShamanProcRules(overrides)
     return helpers.loadModule("Modules/Combat/ClassTools/ShamanProcRules.lua", {})
 end
 
+-- Modules/Combat/ClassTools/ExecutionerRules.lua. Pure logic: nothing to stub.
+-- Returns KE.
+function L.loadExecutionerRules(overrides)
+    installMock(overrides, {})
+    return helpers.loadModule("Modules/Combat/ClassTools/ExecutionerRules.lua", {})
+end
+
 -- Modules/Combat/ClassTools/SpellReflectRules.lua. Pure logic: nothing to
 -- stub. Returns KE.
 function L.loadSpellReflectRules(overrides)
