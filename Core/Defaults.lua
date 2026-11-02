@@ -222,6 +222,7 @@ local Defaults = {
             AggroSoundEnabled = true,
             AggroSoundFile = "Aggro",
             AggroSoundChannel = "Master",
+            AggroHoldTime = 0.5,
             Backdrop = DefaultBackdrop(),
         },
 

@@ -316,6 +316,21 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     manager:Register(aggroPulseCheck, "aggro")
     cardAggro:AddRow(rowAggroB, Theme.rowHeight)
 
+    -- Retail only: Forever keeps the instant warning.
+    if not KE.IS_FOREVER then
+        local rowAggroHold = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
+        local aggroHoldSlider = GUIFrame:CreateSlider(rowAggroHold, "Show After (seconds)", {
+            min = 0, max = 3, step = 0.1,
+            value = db.AggroHoldTime or 0.5,
+            tooltip = "Wait this long with aggro before the warning and its sound appear, so a "
+                .. "split-second blip at the pull does not set them off. 0 shows them at once.",
+            callback = function(val) db.AggroHoldTime = val; ApplySettings() end,
+        })
+        rowAggroHold:AddWidget(aggroHoldSlider, 1)
+        manager:Register(aggroHoldSlider, "aggro")
+        cardAggro:AddRow(rowAggroHold, Theme.rowHeight)
+    end
+
     local rowAggroSep2 = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeightSeparator)
     local sepAggroB = GUIFrame:CreateSeparator(rowAggroSep2)
     rowAggroSep2:AddWidget(sepAggroB, 1)
@@ -373,7 +388,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     local rowAggroNote = GUIFrame:CreateRow(cardAggro.content, Theme.rowHeight)
     local aggroNote = GUIFrame:CreateText(rowAggroNote,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows while a mob is attacking you in combat. Never shown on a tank specialization.",
+        KE:ColorTextByTheme("-") .. (KE.IS_FOREVER
+            and " Shows while a mob is attacking you in combat. Never shown on a tank specialization."
+            or " Shows once a mob has attacked you for the Show After time. Never shown on a tank specialization."),
         Theme.rowHeight, "hide")
     rowAggroNote:AddWidget(aggroNote, 1)
     manager:Register(aggroNote, "aggro")

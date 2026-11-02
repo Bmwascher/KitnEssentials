@@ -47,6 +47,7 @@ local AGGRO_MIN_STATUS = 2
 local AGGRO_SOUND_GAP = 2
 local AGGRO_PULSE_ALPHA = 0.35
 local AGGRO_PULSE_DURATION = 0.45
+local AGGRO_HOLD_MAX = 3
 
 local MESSAGE_TYPES = {
     "enterCombat",
@@ -99,6 +100,10 @@ CM.aggroEventFrame = nil
 CM.aggroEventsRegistered = false
 CM.aggroSoundBlocked = false
 CM.aggroPulse = nil
+-- When the gate first passed for the current hold, and the hold timer's guard.
+CM.aggroSince = nil
+CM.aggroHoldGeneration = 0
+CM.aggroHoldArmed = false
 CM.attachedFrames = {}
 CM.attachedInsets = {}
 CM.arrangedShown = {}
@@ -687,6 +692,22 @@ function CM.ShouldShowAggro(db, inCombat, isTank, inInstance, threat, threatSecr
     return type(threat) == "number" and threat >= AGGRO_MIN_STATUS
 end
 
+-- Pure, so the hold is spec-covered. Seconds left before a line whose gate
+-- has passed since `since` may show; 0 means show now.
+function CM.AggroHoldRemaining(since, now, hold)
+    if type(hold) ~= "number" or hold <= 0 then return 0 end
+    if hold > AGGRO_HOLD_MAX then hold = AGGRO_HOLD_MAX end
+    if since == nil then return hold end
+    return math_max(0, since + hold - now)
+end
+
+-- A pending hold timer checks the generation, so a canceled hold never shows.
+function CM:CancelAggroHold()
+    self.aggroSince = nil
+    self.aggroHoldArmed = false
+    self.aggroHoldGeneration = self.aggroHoldGeneration + 1
+end
+
 -- Built on first use, so a player who never turns Pulse on never gets one.
 -- Held on the module, not the frame: spec mock frames answer every field.
 local function SetAggroPulse(frame, on)
@@ -742,14 +763,33 @@ function CM:CheckAggro()
     local frame = self.messageFrames.aggro
     if CM.ShouldShowAggro(self.db, self.inCombat, KE:IsPlayerTankSpec(), inInstance, threat, threatSecret) then
         if not (frame and IsShownOr(frame, false)) then
+            if self.aggroSince == nil then self.aggroSince = GetTime() end
+            -- Retail only: Forever keeps the instant line.
+            local hold = not KE.IS_FOREVER and self.db.AggroHoldTime or 0
+            local remaining = CM.AggroHoldRemaining(self.aggroSince, GetTime(), hold)
+            if remaining > 0 then
+                if not self.aggroHoldArmed then
+                    self.aggroHoldArmed = true
+                    local myGeneration = self.aggroHoldGeneration
+                    self:DelayWhileEnabled(remaining, function()
+                        if self.aggroHoldGeneration ~= myGeneration then return end
+                        self.aggroHoldArmed = false
+                        self:CheckAggro()
+                    end)
+                end
+                return
+            end
             self:ShowPersistentMessage("aggro")
             frame = self.messageFrames.aggro
             if frame and IsShownOr(frame, false) then self:PlayAggroSound() end
         end
         SetAggroPulse(frame, self.db.AggroPulse == true)
-    elseif frame and IsShownOr(frame, true) then
-        self:HidePersistentMessage("aggro")
-        SetAggroPulse(frame, false)
+    else
+        self:CancelAggroHold()
+        if frame and IsShownOr(frame, true) then
+            self:HidePersistentMessage("aggro")
+            SetAggroPulse(frame, false)
+        end
     end
 end
 
@@ -938,6 +978,7 @@ function CM:ShowPreview()
     end
     self:RegWithEditMode()
 
+    self:CancelAggroHold()
     self.isPreview = true
 
     for _, msgType in ipairs(MESSAGE_TYPES) do
@@ -1297,6 +1338,7 @@ function CM:OnDisable()
     self.attachChangePending = false
     self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
     self.enableGeneration = self.enableGeneration + 1
+    self:CancelAggroHold()
     SetAggroPulse(self.messageFrames.aggro, false)
     self:UpdateAggroEventRegistration(true)
     self:UpdateInterruptEventRegistration(true)
