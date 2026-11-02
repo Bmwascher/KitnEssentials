@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.2
+
+Interrupt Tracker's settings page gets tabs and a Show In card.
+
+### Interrupt Tracker
+
+- **NEW:** Show In card with Only in Dungeons, on by default. Turn it off
+  and the tracker also runs in any party outside a raid: open world,
+  delves and arenas
+- The settings are split into two tabs, Bars and Nameplate Icons
+- Show Bars and Nameplate Icons are now switches in each tab's card title
+  bar, and print On or Off in chat
+
+---
+
 ## v4.16.1
 
 Party Stops and CC Tracker list their spells one row per class.
