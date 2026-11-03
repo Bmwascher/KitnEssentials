@@ -96,15 +96,90 @@ local function kitWrite(kit, key, val)
     end
 end
 
+local MAIN_DEFAULTS = { selfPoint = "CENTER", anchorPoint = "CENTER", xOffset = 0, yOffset = 0 }
+local FALLBACK_FIELDS = { selfPoint = "AnchorFrom", anchorPoint = "AnchorTo", xOffset = "XOffset", yOffset = "YOffset" }
+
+-- A main point value as the card shows it, page default included.
+local function kitMainValue(kit, role)
+    local defaults = kit._config and kit._config.defaults or {}
+    local default = defaults[role]
+    if default == nil then default = MAIN_DEFAULTS[role] end
+    return kitGetValue(kit, kit._keys[role], default)
+end
+
+-- The fallback point set. While it is unset it shows the main set; the first
+-- write copies the main set and then applies the change.
+local function kitFallbackGet(kit, role)
+    local set = kit._db[kit._fallback.positionKey]
+    local value = set and set[FALLBACK_FIELDS[role]]
+    if value ~= nil then return value end
+    return kitMainValue(kit, role)
+end
+
+local function kitShowFallbackPoints(kit)
+    kit.fallbackSelfDropdown:SetValue(kitFallbackGet(kit, "selfPoint"), true)
+    kit.fallbackToDropdown:SetValue(kitFallbackGet(kit, "anchorPoint"), true)
+    kit.fallbackXSlider:SetValue(kitFallbackGet(kit, "xOffset"), true)
+    kit.fallbackYSlider:SetValue(kitFallbackGet(kit, "yOffset"), true)
+end
+
+-- An unset fallback set shows the main points, so a main write redraws it.
+local function kitRefreshInheritedFallback(kit)
+    local db, fallback = kit._db, kit._fallback
+    if not (db and fallback and kit._keys) or db[fallback.positionKey] ~= nil then return end
+    kitShowFallbackPoints(kit)
+end
+
 local function kitSetValue(kit, key, val)
     if not kit._db then return end
     kitWrite(kit, key, val)
     if kit._onChange then kit._onChange() end
+    kitRefreshInheritedFallback(kit)
 end
 
 -- Re-render so rows that depend on a value appear or disappear.
 local function Rerender()
     if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
+end
+
+-- A name is anything but commas and spaces.
+local function HasName(text)
+    return type(text) == "string" and text:find("[^,%s]") ~= nil
+end
+
+local function kitFallbackSet(kit, role, val)
+    local db, fallback = kit._db, kit._fallback
+    if not (db and fallback and kit._keys) then return end
+    local set = db[fallback.positionKey]
+    if not set then
+        set = {
+            AnchorFrom = kitMainValue(kit, "selfPoint"),
+            AnchorTo = kitMainValue(kit, "anchorPoint"),
+            XOffset = kitMainValue(kit, "xOffset"),
+            YOffset = kitMainValue(kit, "yOffset"),
+        }
+        db[fallback.positionKey] = set
+    end
+    set[FALLBACK_FIELDS[role]] = val
+    if kit._onChange then kit._onChange() end
+end
+
+-- Trimmed of outer spaces and commas; text with no name stores nil, which
+-- turns the fallback off. The box then shows what was stored. A change
+-- between no name and a name re-renders, so the fallback point rows follow.
+local function kitSetFallbackFrames(kit, text)
+    local db, fallback = kit._db, kit._fallback
+    if not (db and fallback) then return end
+    if HasName(text) then
+        text = text:match("^[%s,]*(.-)[%s,]*$")
+    else
+        text = nil
+    end
+    local had = HasName(db[fallback.framesKey])
+    db[fallback.framesKey] = text
+    kit.fallbackInput:SetValue(text or "")
+    if kit._onChange then kit._onChange() end
+    if had ~= (text ~= nil) then C_Timer.After(0.25, Rerender) end
 end
 
 local function CreatePositionCardKit(holder)
@@ -248,6 +323,75 @@ local function CreatePositionCardKit(holder)
     kit.xSlider = xSlider
     kit.ySlider = ySlider
 
+    -- Fallback block (a page that passes config.fallback, with Select Frame):
+    -- the frames tried while the Frame above is unusable, and their points.
+    local fallbackFrameRow = GUIFrame:CreateRow(card.content, 36)
+    local fallbackInput = GUIFrame:CreateEditBox(fallbackFrameRow, "Fallback Frame", {
+        value = "",
+        callback = function(val) kitSetFallbackFrames(kit, val) end,
+    })
+    fallbackFrameRow:AddWidget(fallbackInput, 0.5)
+    local fallbackSelectBtn = GUIFrame:CreateButton(fallbackFrameRow, "Select Frame", {
+        width = 110,
+        height = 24,
+        callback = function()
+            if not (kit._db and kit._fallback) or not KE.FrameChooser then return end
+            -- No initial value: a cancel then hands back nil and changes nothing.
+            KE.FrameChooser:Start(function(frameName, isPreview)
+                if isPreview or type(frameName) ~= "string" or frameName == "" then return end
+                local current = kit._db[kit._fallback.framesKey]
+                local text = current and (current .. ", " .. frameName) or frameName
+                kitSetFallbackFrames(kit, text)
+            end)
+        end,
+    })
+    fallbackFrameRow:AddWidget(fallbackSelectBtn, 0.5, nil, 0, -14)
+    card:AddRow(fallbackFrameRow, 36)
+    kit.fallbackFrameRow = fallbackFrameRow
+    kit.fallbackInput = fallbackInput
+
+    local fallbackHelpRow = GUIFrame:CreateRow(card.content, 40)
+    local fallbackHelp = GUIFrame:CreateText(fallbackHelpRow, nil,
+        "Frame names, tried in order while the Frame above is hidden or has no position. "
+            .. "None shown: screen center. Empty: no fallback.", 40, "hide", true)
+    fallbackHelpRow:AddWidget(fallbackHelp, 1)
+    card:AddRow(fallbackHelpRow, 40)
+    kit.fallbackHelpRow = fallbackHelpRow
+
+    local fallbackPointRow = GUIFrame:CreateRow(card.content, 36)
+    local fallbackSelfDropdown = GUIFrame:CreateDropdown(fallbackPointRow, "Fallback Anchor From", {
+        options = ANCHOR_POINT_OPTIONS,
+        value = "CENTER",
+        callback = function(key) kitFallbackSet(kit, "selfPoint", key) end,
+    })
+    fallbackPointRow:AddWidget(fallbackSelfDropdown, 0.5)
+    local fallbackToDropdown = GUIFrame:CreateDropdown(fallbackPointRow, "Fallback To Frame's", {
+        options = ANCHOR_POINT_OPTIONS,
+        value = "CENTER",
+        callback = function(key) kitFallbackSet(kit, "anchorPoint", key) end,
+    })
+    fallbackPointRow:AddWidget(fallbackToDropdown, 0.5)
+    card:AddRow(fallbackPointRow, 36)
+    kit.fallbackPointRow = fallbackPointRow
+    kit.fallbackSelfDropdown = fallbackSelfDropdown
+    kit.fallbackToDropdown = fallbackToDropdown
+
+    local fallbackOffsetRow = GUIFrame:CreateRow(card.content, 36)
+    local fallbackXSlider = GUIFrame:CreateSlider(fallbackOffsetRow, "Fallback X Offset", {
+        min = -1000, max = 1000, step = 1, value = 0,
+        callback = function(val) kitFallbackSet(kit, "xOffset", val) end,
+    })
+    fallbackOffsetRow:AddWidget(fallbackXSlider, 0.5)
+    local fallbackYSlider = GUIFrame:CreateSlider(fallbackOffsetRow, "Fallback Y Offset", {
+        min = -1000, max = 1000, step = 1, value = 0,
+        callback = function(val) kitFallbackSet(kit, "yOffset", val) end,
+    })
+    fallbackOffsetRow:AddWidget(fallbackYSlider, 0.5)
+    card:AddRow(fallbackOffsetRow, 36)
+    kit.fallbackOffsetRow = fallbackOffsetRow
+    kit.fallbackXSlider = fallbackXSlider
+    kit.fallbackYSlider = fallbackYSlider
+
     -- Bottom row: strata dropdown (shown when showStrata = true).
     local strataOnlyRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local strataOnlyDropdown = GUIFrame:CreateDropdown(strataOnlyRow, "Strata", {
@@ -276,6 +420,8 @@ local function CreatePositionCardKit(holder)
         selfPointDropdown, anchorPointDropdown, anchorPointOnlyDropdown,
         xSlider, ySlider,
         strataOnlyDropdown,
+        fallbackInput, fallbackSelectBtn, fallbackHelp,
+        fallbackSelfDropdown, fallbackToDropdown, fallbackXSlider, fallbackYSlider,
     }
 
     -- Override card:SetEnabled to also walk the kit's widgets. Default
@@ -364,6 +510,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit._onChange = onChange
     kit._config = config
     kit._positionKey = config.positionKey or "Position"
+    kit._fallback = config.fallback
 
     -- Re-anchor card to the scrollChild + yOffset. FramePool.Acquire already
     -- reparented kit.row (the card) to scrollChild but the SetPoint anchors
@@ -420,10 +567,22 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     local currentStrata = kitGetValue(kit, keys.strata, defaults.strata or "HIGH")
     kit.strataOnlyDropdown:SetValue(currentStrata, true)
 
+    -- The fallback block: its list, and its points or the main ones while unset.
+    local fallback = config.fallback
+    local fallbackFrames = fallback and db and db[fallback.framesKey]
+    kit.fallbackInput:SetValue(fallbackFrames or "")
+    if fallback and db then
+        kit.fallbackXSlider:SetMinMaxValues(sliderRange[1], sliderRange[2], true)
+        kit.fallbackYSlider:SetMinMaxValues(sliderRange[1], sliderRange[2], true)
+        kitShowFallbackPoints(kit)
+    end
+
     -- Decide which rows are visible for this configuration.
     local showAnchorTypeRow = showAnchorFrameType
     local showSelectFrameRow = showAnchorFrameType and currentType == "SELECTFRAME"
     local showStrataRow = showStrata
+    local showFallbackRows = showSelectFrameRow and fallback ~= nil and db ~= nil
+    local showFallbackPoints = showFallbackRows and HasName(fallbackFrames)
 
     -- Re-anchor visible rows in order, accumulating currentY. Hide invisible
     -- rows. Skip card:Reset (it would orphan the kit's persistent rows).
@@ -458,6 +617,20 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
         showRow(kit.anchorPointOnlyRow, 36)
     end
     showRow(kit.offsetRow, 36)
+    if showFallbackRows then
+        showRow(kit.fallbackFrameRow, 36)
+        showRow(kit.fallbackHelpRow, 40)
+    else
+        kit.fallbackFrameRow:Hide()
+        kit.fallbackHelpRow:Hide()
+    end
+    if showFallbackPoints then
+        showRow(kit.fallbackPointRow, 36)
+        showRow(kit.fallbackOffsetRow, 36)
+    else
+        kit.fallbackPointRow:Hide()
+        kit.fallbackOffsetRow:Hide()
+    end
     if showStrataRow then
         showRow(kit.strataOnlyRow, T.rowHeightLast)
     else
