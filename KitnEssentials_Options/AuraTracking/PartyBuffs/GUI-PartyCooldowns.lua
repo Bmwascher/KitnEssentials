@@ -234,7 +234,7 @@ GUIFrame:RegisterContent("PartyBuffsCooldowns", function(scrollChild, yOffset)
         ApplySettings()
     end)
     cardTracked:AddLabel("Cooldown and active buff icons beside each party frame. "
-        .. "Potion bars and Raid Cooldowns work with this off.")
+        .. "Potion bars, Raid Cooldowns and Skip bars work with this off.")
     AddPicks(cardTracked, {
         { "Class Cooldowns", "TrackBurst",
             "Each party member's offensive and personal defensive cooldowns, by spec.", RefreshStates },
