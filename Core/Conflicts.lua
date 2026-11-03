@@ -275,7 +275,8 @@ local CONFLICTS = {
         resolvers = {
             EllesmereUIMythicTimer = {
                 label  = "EllesmereUI's Kick Tracker nameplate icons",
-                -- The addon's list name reads as a timer on a kick icons prompt.
+                -- ADDON_LABELS names this addon by its timer, which misreads
+                -- on a kick icons prompt.
                 button = "EllesmereUI Kick Tracker",
                 manual = "untick Show on Nameplates at /eui > Secondary Addons > Mythic+ Tools > Kick Tracker",
                 -- Per EllesmereUI profile: a profile switch can turn it back
