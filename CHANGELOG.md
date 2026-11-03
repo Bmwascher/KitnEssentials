@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.15
+
+Settings pages with a row of tabs now draw every tab on every open.
+
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+#### Settings
+
+- A page with a row of tabs, such as Kicks & Casts, no longer opens with
+  only its first tab drawn until the window is moved or scrolled. That
+  includes reopening the window and resizing it
+
+---
+
 ## v4.16.14
 
 The Raid Cooldowns spell list is redone, sets the order of the box's icons,
