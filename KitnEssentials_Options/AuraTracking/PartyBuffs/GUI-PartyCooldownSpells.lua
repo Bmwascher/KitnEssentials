@@ -8,6 +8,7 @@
 ---@class KE
 local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
+local Theme = KE.Theme
 
 local C_CreatureInfo = C_CreatureInfo
 local C_Spell = C_Spell
@@ -17,6 +18,7 @@ local ipairs = ipairs
 local math_pi = math.pi
 local pairs = pairs
 local pcall = pcall
+local table_concat = table.concat
 local table_sort = table.sort
 local type = type
 
@@ -55,30 +57,40 @@ local function RacialLabel(spellID, raceID)
     return SpellLabel(spellID, name)
 end
 
-local function ChargeText(entry, specID)
-    if (entry.charges or 1) >= 2 then return " (2 charges)" end
+local function ChargePhrase(entry, specID)
+    if (entry.charges or 1) >= 2 then return "2 charges" end
     for _, mod in ipairs(entry.spell and entry.spell.mods or {}) do
         if mod.charges and mod[1] and not (mod.spec and mod.spec ~= specID) then
             local talent = C_Spell.GetSpellName(mod[1])
             if type(talent) ~= "string" or talent == "" then talent = "a talent" end
-            return " (2 charges with " .. talent .. ")"
+            return "2 charges with " .. talent
         end
     end
+    return nil
+end
+
+local function ChargeText(entry, specID)
+    local phrase = ChargePhrase(entry, specID)
+    if phrase then return " (" .. phrase .. ")" end
     return ""
+end
+
+local function WriteSwitch(db, entry, checked)
+    if not checked then
+        db.CooldownOff[entry.key] = true
+    elseif entry.spell and entry.spell.off then
+        -- false keeps a row that starts switched off on.
+        db.CooldownOff[entry.key] = false
+    else
+        db.CooldownOff[entry.key] = nil
+    end
 end
 
 local function AddToggle(row, label, entry, db, apply, width)
     local check = GUIFrame:CreateCompactCheckbox(row, label, {
         value = not entry.off,
         callback = function(checked)
-            if not checked then
-                db.CooldownOff[entry.key] = true
-            elseif entry.spell and entry.spell.off then
-                -- false keeps a row that starts switched off on.
-                db.CooldownOff[entry.key] = false
-            else
-                db.CooldownOff[entry.key] = nil
-            end
+            WriteSwitch(db, entry, checked)
             apply()
         end,
     })
@@ -252,80 +264,237 @@ function Page.RacialsCard(scrollChild, yOffset, ctx)
     return card, card:GetNextOffset()
 end
 
--- A box row's owner as its label names it: the spec with one spec, else the
--- class.
-local function BoxRowOwner(row)
+-- The spec of a box row with exactly one, else nil.
+local function BoxRowSpec(row)
     local only, count = nil, 0
     for specID in pairs(row.specs) do
         only, count = specID, count + 1
     end
-    if count == 1 then
-        local _, specName = GetSpecializationInfoForSpecID(only)
-        if type(specName) == "string" and specName ~= "" then return specName end
-    end
-    local names = _G.LOCALIZED_CLASS_NAMES_MALE
-    return (names and names[row.class]) or row.class
+    if count == 1 then return only end
+    return nil
 end
 
+local function SpecSentence(specID)
+    local _, name = GetSpecializationInfoForSpecID(specID)
+    if type(name) == "string" and name ~= "" then return name .. "." end
+    return nil
+end
+
+-- The hover text a label no longer carries: the owner spec, a healer
+-- external's charge talent, a box row's talent swap.
+local function SpellTooltip(entry, specID, boxRow)
+    local parts = {}
+    if boxRow then
+        local only = BoxRowSpec(boxRow)
+        if only then
+            parts[#parts + 1] = SpecSentence(only)
+        else
+            parts[#parts + 1] = "Any spec."
+        end
+        local swap = entry.spell.swap
+        if swap then
+            parts[#parts + 1] = "Shows " .. (C_Spell.GetSpellName(swap.id) or ("Spell " .. swap.id)) .. " with that talent."
+        end
+    else
+        parts[#parts + 1] = SpecSentence(specID)
+        local charges = ChargePhrase(entry, specID)
+        if charges then parts[#parts + 1] = charges .. "." end
+    end
+    if #parts == 0 then return nil end
+    return table_concat(parts, " ")
+end
+
+local STRIP_KIND = "raidcd:orderstrip"
+-- 24 icons at the strip's default 30 px overrun the card at the narrowest
+-- window; 28 still keeps the pick ring clear of the next icon.
+local STRIP_PITCH = 28
+
 -- ctx: { db, apply }. The caller registers the card under the Raid
--- Cooldowns condition. One row per healer spec's external, by spec ID (the
--- data is keyed by spec), then one per box row in table order.
+-- Cooldowns condition. The class rows list each class's spells as
+-- CastOrder ships them; the strip under them sets the box's icon order.
 function Page.ExternalsCard(scrollChild, yOffset, ctx)
     local db, apply = ctx.db, ctx.apply
     db.CooldownOff = db.CooldownOff or {}
     local HXRules = KE.HealerExternalsRules
+    local data = KE.PartyCooldownsData
+    local MoveStop = KE.PartyStopsRules.MoveStop
+    local Rows = KE.ClassSpellRows
     local card = GUIFrame:CreateCard(scrollChild, "Spells", yOffset)
     card:AddLabel("The time counts from the moment the buff appears, for the caster's cooldown with their talents once they are read.")
-    local manager = GUIFrame:CreateWidgetStateManager()
-    local function AddSpell(entry, name)
-        local row = GUIFrame:CreateRow(card.content, ROW_HEIGHT)
-        manager:Register(AddToggle(row, SpellLabel(entry.id, name), entry, db, apply, 1), "all")
-        card:AddRow(row, ROW_HEIGHT)
+
+    -- Two managers: the class rows outlive a strip redraw, the strip rows do
+    -- not.
+    local rowManager = GUIFrame:CreateWidgetStateManager()
+    local stripManager = GUIFrame:CreateWidgetStateManager()
+    -- The pick lives for this build of the page and is never saved.
+    local picked, lastEnabled, stripMark, DrawStrip, left, right
+    local casts = {}
+
+    local function OffSet()
+        local off = {}
+        for id, entry in pairs(casts) do
+            if Rules.IsOff(db.CooldownOff, entry.key, entry.spell) then off[id] = true end
+        end
+        return off
+    end
+
+    local function Ticked(full, off)
+        local ids = {}
+        for _, id in ipairs(full) do
+            if casts[id] and not off[id] then ids[#ids + 1] = id end
+        end
+        return ids
+    end
+
+    local function MoveState()
+        if not (left and right) then return end
+        local full, off = HXRules.CastOrder(db.HealerExtOrder), OffSet()
+        local on = lastEnabled ~= false
+        left:SetEnabled(on and MoveStop(full, off, picked, -1) ~= nil)
+        right:SetEnabled(on and MoveStop(full, off, picked, 1) ~= nil)
+    end
+
+    local function RedrawStrip()
+        local oldHeight = card:GetContentHeight()
+        card:TruncateBody(stripMark)
+        DrawStrip()
+        GUIFrame:ResizeCardInPlace(card, oldHeight)
+    end
+
+    -- A clicked icon or a pressed button is released by the redraw, so the
+    -- redraw waits a frame.
+    local function Pick(id)
+        picked = id
+        C_Timer.After(0, RedrawStrip)
+    end
+
+    local function Move(step)
+        local list = MoveStop(HXRules.CastOrder(db.HealerExtOrder), OffSet(), picked, step)
+        if list then
+            db.HealerExtOrder = list
+            apply()
+        end
+        C_Timer.After(0, RedrawStrip)
+    end
+
+    local function StatusLabel(row)
+        local label = row:GetLabel("normal")
+        label:SetJustifyH("LEFT")
+        label:SetWordWrap(false)
+        label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        return label
+    end
+
+    -- Every row here has a fixed height, so a strip redraw never moves the
+    -- cards below.
+    DrawStrip = function()
+        stripManager:Clear()
+        local full, off = HXRules.CastOrder(db.HealerExtOrder), OffSet()
+        local ids = Ticked(full, off)
+        local rowHeight = Rows.STRIP_ROW_HEIGHT
+        local stripRow = GUIFrame:CreateRow(card.content, rowHeight)
+        if #ids > 0 then
+            local strip = Rows.AcquireOrderStrip(STRIP_KIND, #HXRules.CastOrder(nil), stripRow, STRIP_PITCH)
+            strip:ClearAllPoints()
+            strip:SetPoint("LEFT", stripRow, "LEFT", 0, 0)
+            strip:Configure(ids, picked, Pick)
+        else
+            local note = StatusLabel(stripRow)
+            note:SetPoint("LEFT", stripRow, "LEFT", 0, 0)
+            note:SetPoint("RIGHT", stripRow, "RIGHT", 0, 0)
+            note:SetText("Nothing is ticked, so the box shows no icons. Tick a spell, or press Kitn Defaults.")
+        end
+        card:AddRow(stripRow, rowHeight)
+
+        local moveRow = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
+        left = GUIFrame:CreateButton(moveRow, "Move Left", { callback = function() Move(-1) end })
+        moveRow:AddWidget(left, 0.2)
+        right = GUIFrame:CreateButton(moveRow, "Move Right", { callback = function() Move(1) end })
+        moveRow:AddWidget(right, 0.2)
+        local status = StatusLabel(moveRow)
+        status:SetPoint("LEFT", right, "RIGHT", 8, 0)
+        status:SetPoint("RIGHT", moveRow, "RIGHT", 0, 0)
+        local place = 0
+        for i, id in ipairs(ids) do
+            if id == picked then place = i end
+        end
+        if place > 0 then
+            local name = C_Spell.GetSpellName(picked) or ("Spell " .. picked)
+            status:SetText("Picked: " .. name .. " (" .. place .. " of " .. #ids .. ")")
+        elseif #ids > 0 and type(db.HealerExtOrder) == "table" then
+            status:SetText("No icon picked.")
+        elseif #ids > 0 then
+            status:SetText("Shipped order: your own first, then each party member.")
+        end
+        card:AddRow(moveRow, FOOTER_HEIGHT)
+
+        local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
+        local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
+            tooltip = "Tracks every spell again, in the shipped order.",
+            callback = function()
+                for key in pairs(db.CooldownOff) do
+                    if type(key) == "string" and (key:sub(1, 7) == "healer:" or key:sub(1, 4) == "box:") then
+                        db.CooldownOff[key] = nil
+                    end
+                end
+                -- false keeps a spell that ships off ticked.
+                for _, entry in pairs(casts) do
+                    if entry.spell.off then db.CooldownOff[entry.key] = false end
+                end
+                db.HealerExtOrder = nil
+                picked = nil
+                apply()
+                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+            end,
+        })
+        footer:AddWidget(defaults, 0.3)
+        stripManager:Register(defaults, "all")
+        card:AddRow(footer, FOOTER_HEIGHT, 0)
+        if lastEnabled ~= nil then stripManager:UpdateAll(lastEnabled) end
+        MoveState()
+    end
+
+    local picks = {}
+    local function AddPick(entry, class, specID, boxRow)
+        casts[entry.id] = entry
+        picks[#picks + 1] = {
+            class = class,
+            label = SpellLabel(entry.id),
+            value = not entry.off,
+            tooltip = SpellTooltip(entry, specID, boxRow),
+            onChange = function(checked)
+                WriteSwitch(db, entry, checked)
+                if not checked and picked == entry.id then picked = nil end
+                apply()
+                RedrawStrip()
+            end,
+        }
     end
     local specs = {}
-    for specID in pairs(KE.PartyCooldownsData.HEALER_SPECS) do specs[#specs + 1] = specID end
+    for specID in pairs(data.HEALER_SPECS) do specs[#specs + 1] = specID end
     table_sort(specs)
     for _, specID in ipairs(specs) do
-        local _, specName = GetSpecializationInfoForSpecID(specID)
         for _, entry in ipairs(HXRules.Entries(specID, db, true)) do
-            local name = C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)
-            name = name .. ChargeText(entry, specID)
-            if type(specName) == "string" and specName ~= "" then name = name .. " (" .. specName .. ")" end
-            AddSpell(entry, name)
+            AddPick(entry, data.HEALER_SPECS[specID].class, specID, nil)
         end
     end
-    for _, boxRow in ipairs(KE.PartyCooldownsData.BOX_ROWS) do
+    for _, boxRow in ipairs(data.BOX_ROWS) do
         local entry = HXRules.BoxEntry(boxRow, nil, db, true)
-        if entry then
-            local name = (C_Spell.GetSpellName(entry.id) or ("Spell " .. entry.id)) .. " (" .. BoxRowOwner(boxRow) .. ")"
-            local swap = entry.spell.swap
-            if swap then
-                name = name .. " (" .. (C_Spell.GetSpellName(swap.id) or ("Spell " .. swap.id)) .. " with that talent)"
-            end
-            AddSpell(entry, name)
-        end
+        if entry then AddPick(entry, boxRow.class, nil, boxRow) end
     end
-    local footer = GUIFrame:CreateRow(card.content, FOOTER_HEIGHT)
-    local defaults = GUIFrame:CreateButton(footer, "Kitn Defaults", {
-        tooltip = "Restores every spell: switched on.",
-        callback = function()
-            for key in pairs(db.CooldownOff) do
-                if type(key) == "string" and (key:sub(1, 7) == "healer:" or key:sub(1, 4) == "box:") then
-                    db.CooldownOff[key] = nil
-                end
-            end
-            apply()
-            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
-        end,
-    })
-    footer:AddWidget(defaults, 0.3)
-    manager:Register(defaults, "all")
-    card:AddRow(footer, FOOTER_HEIGHT, 0)
+    rowManager:RegisterGroup(Rows.Add(card, picks).widgets, "all")
+    card:AddSeparator()
+    card:AddLabel("Icon order, left to right as the icons show. Click an icon, then move it.")
+    stripMark = card:MarkBody()
+    DrawStrip()
 
     local baseSetEnabled = card.SetEnabled
     function card:SetEnabled(enabled)
         if baseSetEnabled then baseSetEnabled(self, enabled) end
-        manager:UpdateAll(enabled)
+        lastEnabled = enabled
+        rowManager:UpdateAll(enabled)
+        stripManager:UpdateAll(enabled)
+        MoveState()
     end
 
     return card, card:GetNextOffset()

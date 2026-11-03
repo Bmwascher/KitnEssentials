@@ -1444,7 +1444,7 @@ function PB:ApplySettings()
     -- Off, only the raid cooldowns box still needs specs read.
     local icons = IconsOn()
     Spec.SetTracked(icons and self.db.TrackBurst == true, icons and self.db.TrackTrinket == true,
-        icons and self.db.ShowRacials == true, self.db.HealerExternals == true)
+        icons and self.db.ShowRacials == true, self.db.HealerExternals == true, self.db)
     Pot.ApplySettings()
     HX.ApplySettings()
     KE.PartySkips.ApplySettings()

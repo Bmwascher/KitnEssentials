@@ -123,9 +123,10 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     if Sensor and Sensor.door and not Sensor.DoorOpen() then
         cardMain:AddNote("Raid Cooldowns timers are unavailable on this client.")
     end
-    cardMain:AddLabel("One icon per cooldown: your party's single-target spells first, then raid " ..
-        "cooldowns. Your own come first in each group, whether or not " .. KE:Gold("Include Yourself") ..
-        " on the " .. KE:Gold("Cooldowns") .. " tab is on." ..
+    cardMain:AddLabel("One icon per cooldown, in the order the " .. KE:Gold("Spells") .. " card sets. Until " ..
+        "you move an icon there, your party's single-target spells come first, then raid cooldowns, your own " ..
+        "first in each group. Your own show whether or not " .. KE:Gold("Include Yourself") .. " on the " ..
+        KE:Gold("Cooldowns") .. " tab is on, and come before a party member's copy of the same spell." ..
         "\n\nAn icon is full color when ready. Once the buff appears it turns gray and counts down: " ..
         "on anyone in your party for a single-target spell, on the caster for a raid cooldown. " ..
         "Another player casting the same spell starts it too, such as a Retribution Paladin's " ..
@@ -201,6 +202,15 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     manager:Register(below, "on")
     cardMain:AddRow(rowM2, Theme.rowHeightLast, 0)
     yOffset = cardMain:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Spells
+    ----------------------------------------------------------------
+    local listCard, listOffset = KE.PartyCooldownsPage.ExternalsCard(scrollChild, yOffset, {
+        db = db, apply = ApplySettings,
+    })
+    manager:Register(listCard, "on")
+    yOffset = listOffset
 
     ----------------------------------------------------------------
     -- Card: Display Settings
@@ -286,15 +296,6 @@ GUIFrame:RegisterContent("PartyBuffsHealerExternals", function(scrollChild, yOff
     -- The card's own SetEnabled drives its widgets.
     manager:Register(posCard, healerView and "healerOn" or "freeOn")
     yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card: Spells
-    ----------------------------------------------------------------
-    local listCard, listOffset = KE.PartyCooldownsPage.ExternalsCard(scrollChild, yOffset, {
-        db = db, apply = ApplySettings,
-    })
-    manager:Register(listCard, "on")
-    yOffset = listOffset
 
     RefreshStates()
     return yOffset

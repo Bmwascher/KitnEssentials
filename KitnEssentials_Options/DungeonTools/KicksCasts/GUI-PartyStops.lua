@@ -10,11 +10,8 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local C_Spell = C_Spell
 local C_Timer = C_Timer
-local CreateFrame = CreateFrame
-local GameTooltip = GameTooltip
-local ipairs, pcall, type = ipairs, pcall, type
+local ipairs = ipairs
 
 local function GetModule()
     if KitnEssentials then
@@ -24,104 +21,6 @@ local function GetModule()
 end
 
 local FOOTER_HEIGHT = 28
--- A 24 px icon, its pick ring 1 px outside it and 2 px thick, then 3 px clear
--- of the next icon: 20 icons take 600 px.
-local STRIP_ICON = 24
-local STRIP_PITCH = 30
-local STRIP_INSET = 3
-local STRIP_ROW_HEIGHT = 30
-local NO_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
-local EDGE = "Interface\\Buttons\\WHITE8X8"
-
-local function SpellName(id)
-    local ok, name = pcall(C_Spell.GetSpellName, id)
-    if ok and type(name) == "string" then return name end
-    return "Spell " .. id
-end
-
-local function SpellIcon(id)
-    local ok, icon = pcall(C_Spell.GetSpellTexture, id)
-    if ok then return icon end
-    return nil
-end
-
--- One slot per shipped stop, all made here: a pooled object that grows parts
--- after it is built fails its release check.
-local function ConstructOrderStrip(parent)
-    local strip = CreateFrame("Frame", nil, parent)
-    local count = #KE.PartyStopsData.ORDER
-    strip:SetSize(2 * STRIP_INSET + count * STRIP_PITCH - (STRIP_PITCH - STRIP_ICON), STRIP_ROW_HEIGHT)
-    local slots, owned = {}, { strip }
-
-    for i = 1, count do
-        local slot = CreateFrame("Button", nil, strip)
-        slot:SetSize(STRIP_ICON, STRIP_ICON)
-        slot:SetPoint("TOPLEFT", strip, "TOPLEFT", STRIP_INSET + (i - 1) * STRIP_PITCH, -STRIP_INSET)
-
-        local edge = slot:CreateTexture(nil, "BACKGROUND")
-        edge:SetAllPoints(slot)
-        edge:SetColorTexture(0, 0, 0, 1)
-
-        local icon = slot:CreateTexture(nil, "ARTWORK")
-        icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 1, -1)
-        icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        slot.icon = icon
-
-        local highlight = slot:CreateTexture(nil, "HIGHLIGHT")
-        highlight:SetAllPoints(icon)
-        slot.highlight = highlight
-
-        local ring = CreateFrame("Frame", nil, slot, "BackdropTemplate")
-        ring:SetPoint("TOPLEFT", slot, "TOPLEFT", -STRIP_INSET, STRIP_INSET)
-        ring:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", STRIP_INSET, -STRIP_INSET)
-        ring:SetBackdrop({ edgeFile = EDGE, edgeSize = 2 })
-        ring:EnableMouse(false)
-        ring:Hide()
-        slot.ring = ring
-
-        slot:SetScript("OnClick", function(self)
-            local onPick = strip._onPick
-            if onPick and self.id then onPick(self.id) end
-        end)
-        slot:SetScript("OnEnter", function(self)
-            if not self.id then return end
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(SpellName(self.id), 1, 1, 1, 1, true)
-            GameTooltip:Show()
-        end)
-        slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        slots[i] = slot
-        owned[#owned + 1] = slot
-    end
-
-    -- ids in on-screen order; picked gets the ring; onPick(id) on a click.
-    function strip:Configure(ids, picked, onPick)
-        self._onPick = onPick
-        local accent = Theme.accent
-        for i, slot in ipairs(slots) do
-            local id = ids[i]
-            slot.id = id
-            if id then
-                slot.icon:SetTexture(SpellIcon(id) or NO_ICON)
-                slot.highlight:SetColorTexture(accent[1], accent[2], accent[3], 0.3)
-                slot.ring:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
-                slot.ring:SetShown(id == picked)
-                slot:Show()
-            else
-                slot:Hide()
-            end
-        end
-    end
-
-    strip._keOwned = owned
-    return strip
-end
-
-GUIFrame:NewWidgetPool("partystops:orderstrip", ConstructOrderStrip, function(strip)
-    strip._onPick = nil
-end)
 
 GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.PartyStops
@@ -254,9 +153,10 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
     -- cards below.
     DrawStrip = function()
         local ids = Ticked()
-        local stripRow = GUIFrame:CreateRow(card3.content, STRIP_ROW_HEIGHT)
+        local rowHeight = KE.ClassSpellRows.STRIP_ROW_HEIGHT
+        local stripRow = GUIFrame:CreateRow(card3.content, rowHeight)
         if #ids > 0 then
-            local strip = GUIFrame:AcquirePooled("partystops:orderstrip", stripRow)
+            local strip = KE.ClassSpellRows.AcquireOrderStrip("partystops:orderstrip", #Data.ORDER, stripRow)
             strip:ClearAllPoints()
             strip:SetPoint("LEFT", stripRow, "LEFT", 0, 0)
             strip:Configure(ids, picked, Pick)
@@ -266,7 +166,7 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
             note:SetPoint("RIGHT", stripRow, "RIGHT", 0, 0)
             note:SetText("Nothing is ticked, so Party Stops shows no icons. Tick a stop, or press Kitn Defaults.")
         end
-        card3:AddRow(stripRow, STRIP_ROW_HEIGHT)
+        card3:AddRow(stripRow, rowHeight)
 
         local moveRow = GUIFrame:CreateRow(card3.content, FOOTER_HEIGHT)
         local left = GUIFrame:CreateButton(moveRow, "Move Left", { callback = function() Move(-1) end })
@@ -284,7 +184,7 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
             if id == picked then place = i end
         end
         if place > 0 then
-            status:SetText("Picked: " .. SpellName(picked) .. " (" .. place .. " of " .. #ids .. ")")
+            status:SetText("Picked: " .. KE.ClassSpellRows.SpellName(picked) .. " (" .. place .. " of " .. #ids .. ")")
         elseif #ids > 0 then
             status:SetText("No icon picked.")
         end
@@ -311,7 +211,7 @@ GUIFrame:RegisterContent("PartyStops", function(scrollChild, yOffset)
         for _, id in ipairs(Data.ORDER) do
             picks[#picks + 1] = {
                 class = Data.STOPS[id].class,
-                label = GUIFrame.IconText(SpellIcon(id)) .. SpellName(id),
+                label = GUIFrame.IconText(KE.ClassSpellRows.SpellIcon(id)) .. KE.ClassSpellRows.SpellName(id),
                 value = db.SpellOff[id] ~= true,
                 onChange = function(checked)
                     db.SpellOff[id] = (not checked) or nil

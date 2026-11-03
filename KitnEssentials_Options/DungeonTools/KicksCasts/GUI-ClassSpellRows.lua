@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-ClassSpellRows.lua                                  ║
 -- ║  Purpose: One row per class, its name and ticked count   ║
--- ║           beside its spells, three checkboxes a line.    ║
+-- ║           beside its spells, three checkboxes a line;    ║
+-- ║           and the click-then-move icon order strip.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -9,10 +10,14 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+local C_Spell = C_Spell
 local CreateFrame = CreateFrame
+local GameTooltip = GameTooltip
 local ipairs = ipairs
 local math_min = math.min
+local pcall = pcall
 local table_sort = table.sort
+local type = type
 
 local Rows = {}
 KE.ClassSpellRows = Rows
@@ -64,9 +69,9 @@ local function NameText(group)
     return KE:ColorTextByClass(group.name, group.class) .. "  " .. ticked .. "/" .. #group.cells
 end
 
--- picks: { class, label, value, onChange } each, in the order a class lists
--- its spells. Classes run by name. Returns every widget, for the caller's
--- state manager.
+-- picks: { class, label, value, onChange, tooltip } each, in the order a
+-- class lists its spells; tooltip is optional. Classes run by name. Returns
+-- every widget, for the caller's state manager.
 function Rows.Add(card, picks)
     local groups, byClass = {}, {}
     for _, pick in ipairs(picks) do
@@ -96,6 +101,7 @@ function Rows.Add(card, picks)
                 local pick = group.picks[i]
                 local check = GUIFrame:CreateCompactCheckbox(row, pick.label, {
                     value = pick.value,
+                    tooltip = pick.tooltip,
                     callback = function(checked)
                         nameCell._text:SetText(NameText(group))
                         pick.onChange(checked)
@@ -110,4 +116,119 @@ function Rows.Add(card, picks)
         nameCell._text:SetText(NameText(group))
     end
     return { widgets = widgets }
+end
+
+-- The icon order strip. A 24 px icon, its pick ring 1 px outside it and 2 px
+-- thick; the pitch leaves the ring clear of the next icon.
+local STRIP_ICON = 24
+local STRIP_PITCH = 30
+local STRIP_INSET = 3
+local NO_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+local EDGE = "Interface\\Buttons\\WHITE8X8"
+
+Rows.STRIP_ROW_HEIGHT = 30
+
+local function SpellName(id)
+    local ok, name = pcall(C_Spell.GetSpellName, id)
+    if ok and type(name) == "string" then return name end
+    return "Spell " .. id
+end
+
+local function SpellIcon(id)
+    local ok, icon = pcall(C_Spell.GetSpellTexture, id)
+    if ok then return icon end
+    return nil
+end
+
+Rows.SpellName, Rows.SpellIcon = SpellName, SpellIcon
+
+-- One slot per listed spell, all made here: a pooled object that grows parts
+-- after it is built fails its release check.
+local function ConstructOrderStrip(parent, count, pitch)
+    local strip = CreateFrame("Frame", nil, parent)
+    strip:SetSize(2 * STRIP_INSET + count * pitch - (pitch - STRIP_ICON), Rows.STRIP_ROW_HEIGHT)
+    local slots, owned = {}, { strip }
+
+    for i = 1, count do
+        local slot = CreateFrame("Button", nil, strip)
+        slot:SetSize(STRIP_ICON, STRIP_ICON)
+        slot:SetPoint("TOPLEFT", strip, "TOPLEFT", STRIP_INSET + (i - 1) * pitch, -STRIP_INSET)
+
+        local edge = slot:CreateTexture(nil, "BACKGROUND")
+        edge:SetAllPoints(slot)
+        edge:SetColorTexture(0, 0, 0, 1)
+
+        local icon = slot:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", slot, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        slot.icon = icon
+
+        local highlight = slot:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints(icon)
+        slot.highlight = highlight
+
+        local ring = CreateFrame("Frame", nil, slot, "BackdropTemplate")
+        ring:SetPoint("TOPLEFT", slot, "TOPLEFT", -STRIP_INSET, STRIP_INSET)
+        ring:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", STRIP_INSET, -STRIP_INSET)
+        ring:SetBackdrop({ edgeFile = EDGE, edgeSize = 2 })
+        ring:EnableMouse(false)
+        ring:Hide()
+        slot.ring = ring
+
+        slot:SetScript("OnClick", function(self)
+            local onPick = strip._onPick
+            if onPick and self.id then onPick(self.id) end
+        end)
+        slot:SetScript("OnEnter", function(self)
+            if not self.id then return end
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(SpellName(self.id), 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        slots[i] = slot
+        owned[#owned + 1] = slot
+    end
+
+    -- ids in on-screen order; picked gets the ring; onPick(id) on a click.
+    function strip:Configure(ids, picked, onPick)
+        self._onPick = onPick
+        local accent = Theme.accent
+        for i, slot in ipairs(slots) do
+            local id = ids[i]
+            slot.id = id
+            if id then
+                slot.icon:SetTexture(SpellIcon(id) or NO_ICON)
+                slot.highlight:SetColorTexture(accent[1], accent[2], accent[3], 0.3)
+                slot.ring:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
+                slot.ring:SetShown(id == picked)
+                slot:Show()
+            else
+                slot:Hide()
+            end
+        end
+    end
+
+    strip._keOwned = owned
+    return strip
+end
+
+local function ResetOrderStrip(strip)
+    strip._onPick = nil
+end
+
+local stripPools = {}
+
+-- The pool is made on the first call for kind, so a page file loaded before
+-- this one can use it; count and pitch are fixed from then on.
+function Rows.AcquireOrderStrip(kind, count, parent, pitch)
+    if not stripPools[kind] then
+        local step = pitch or STRIP_PITCH
+        GUIFrame:NewWidgetPool(kind, function(holder) return ConstructOrderStrip(holder, count, step) end,
+            ResetOrderStrip)
+        stripPools[kind] = true
+    end
+    return GUIFrame:AcquirePooled(kind, parent)
 end

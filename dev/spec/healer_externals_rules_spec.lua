@@ -13,7 +13,8 @@ local L = require("dev.spec._ke_loader")
 -- target row whose icon swaps to talent 80; cast 5 for any Warrior, an owner
 -- row with no talent rule; cast 6 for spec 20 (healer role), an owner row
 -- needing likely talent 60; cast 7 for spec 50 (tank role), a target row
--- needing unlikely talent 70.
+-- needing unlikely talent 70; cast 9 for any Rogue, an owner row that ships
+-- off.
 local DATA = {
     SPELLS = {
         [1] = { kind = "external", cd = 180, buffs = { 1 } },
@@ -25,6 +26,7 @@ local DATA = {
         [7] = { kind = "external", cd = 120, buffs = { 7 }, needs = { talents = { [70] = true }, likely = false } },
         [8] = { kind = "external", cd = 300, buffs = { 8, 80 },
                 swap = { id = 80, talents = { [80] = true }, likely = false } },
+        [9] = { kind = "external", cd = 60, buffs = { 9 }, off = true },
     },
     SPECS = {},
     HEALER_SPECS = {
@@ -38,6 +40,7 @@ local DATA = {
         { id = 5, class = "WARRIOR", specs = { [40] = true, [41] = true }, anySpec = true, watch = "owner" },
         { id = 6, class = "DRUID", specs = { [20] = true }, roles = { HEALER = true }, watch = "owner" },
         { id = 7, class = "SHAMAN", specs = { [50] = true }, roles = { TANK = true }, watch = "target" },
+        { id = 9, class = "ROGUE", specs = { [60] = true }, anySpec = true, watch = "owner" },
     },
 }
 
@@ -46,6 +49,20 @@ local function loadRules() return L.loadHealerExternalsRules(DATA) end
 local function ids(list)
     local out = {}
     for i, e in ipairs(list) do out[i] = e.id end
+    return out
+end
+
+local MEMBERS = {
+    { token = "player", guid = "P", class = "WARRIOR", spec = 40 },
+    { token = "party1", guid = "A", class = "WARRIOR", spec = 40 },
+    { token = "party2", guid = "B", class = "PALADIN", spec = 30 },
+    { token = "party3", guid = "C", class = "DRUID", spec = 20 },
+    { token = "party4", guid = "D", class = "MAGE" },
+}
+
+local function cells(list)
+    local out = {}
+    for i, e in ipairs(list) do out[i] = { e.id, e.owner, e.units and e.units[1] or "all", e.quiet or 0 } end
     return out
 end
 
@@ -129,26 +146,42 @@ end)
 describe("HealerExternalsRules.Sources and Order", function()
     it("lists target cells member by member, you included, before owner cells, an owner cell watching its owner alone", function()
         local R = loadRules()
-        local members = {
-            { token = "player", guid = "P", class = "WARRIOR", spec = 40 },
-            { token = "party1", guid = "A", class = "WARRIOR", spec = 40 },
-            { token = "party2", guid = "B", class = "PALADIN", spec = 30 },
-            { token = "party3", guid = "C", class = "DRUID", spec = 20 },
-            { token = "party4", guid = "D", class = "MAGE" },
-        }
-        local sources = R.Sources(members, {})
-        local who = {}
-        for i, s in ipairs(sources) do who[i] = s.member.token end
-        assert.are.same({ "player", "party1", "party2", "party3" }, who, "you first, never a member with nothing")
-        local cells = {}
-        for i, e in ipairs(R.Order(sources)) do
-            cells[i] = { e.id, e.owner, e.units and e.units[1] or "all", e.quiet or 0 }
+        local q = R.RAID_QUIET
+        for _, case in ipairs({ { name = "no saved order" }, { name = "a non-table value", saved = "x" } }) do
+            local sources = R.Sources(MEMBERS, {})
+            local who = {}
+            for i, s in ipairs(sources) do who[i] = s.member.token end
+            assert.are.same({ "player", "party1", "party2", "party3" }, who, "you first, never a member with nothing")
+            assert.are.same({
+                { 2, "B", "all", 0 }, { 8, "B", "all", 0 }, { 3, "C", "all", 0 },
+                { 5, "P", "player", q }, { 5, "A", "party1", q }, { 6, "C", "party3", q },
+            }, cells(R.Order(sources, case.saved)), case.name)
         end
+    end)
+
+    it("with a saved order, sorts every cell by its cast's place across both groups, a shared cast yours first", function()
+        local R = loadRules()
         local q = R.RAID_QUIET
         assert.are.same({
-            { 2, "B", "all", 0 }, { 8, "B", "all", 0 }, { 3, "C", "all", 0 },
-            { 5, "P", "player", q }, { 5, "A", "party1", q }, { 6, "C", "party3", q },
-        }, cells, "target cells, then owner cells")
+            { 6, "C", "party3", q }, { 5, "P", "player", q }, { 5, "A", "party1", q },
+            { 2, "B", "all", 0 }, { 3, "C", "all", 0 }, { 8, "B", "all", 0 },
+        }, cells(R.Order(R.Sources(MEMBERS, {}), { 6, 5 })))
+    end)
+end)
+
+describe("HealerExternalsRules.CastOrder", function()
+    it("lists every cast in shipped order, a saved order's known casts first, each once", function()
+        local R = loadRules()
+        local shipped = { 1, 4, 2, 3, 8, 5, 6, 7, 9 }
+        local cases = {
+            { name = "no saved order", want = shipped },
+            { name = "a non-table value", saved = "x", want = shipped },
+            { name = "a repeat, an unknown ID and missing casts", saved = { 7, 99, 3, 7, "a" },
+              want = { 7, 3, 1, 4, 2, 8, 5, 6, 9 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.CastOrder(case.saved), case.name)
+        end
     end)
 end)
 
@@ -170,6 +203,40 @@ describe("HealerExternalsRules.Candidate", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.Candidate(case.class, case.role), case.name)
+        end
+    end)
+
+    it("counts only switched-on rows, so a class with every row off is not inspected for the box", function()
+        local R = loadRules()
+        local function db(off) return { CooldownOff = off } end
+        local cases = {
+            { name = "every row off by a saved switch", class = "WARRIOR", role = "TANK",
+              db = db({ ["box:5"] = true }), want = false },
+            { name = "one row of two on", class = "PALADIN", db = db({ ["box:8"] = true }), want = true },
+            { name = "its only row ships off", class = "ROGUE", db = db({}), want = false },
+            { name = "a shipped-off row ticked", class = "ROGUE", db = db({ ["box:9"] = false }), want = true },
+            { name = "healer class, every external off", class = "PRIEST", role = "HEALER",
+              db = db({ ["healer:10:1"] = true, ["healer:10:4"] = true, ["healer:11:2"] = true }), want = false },
+            { name = "healer class, one external on", class = "PRIEST", role = "HEALER",
+              db = db({ ["healer:10:1"] = true }), want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.Candidate(case.class, case.role, case.db), case.name)
+        end
+    end)
+end)
+
+describe("HealerExternalsRules.WantsMember", function()
+    it("wants a member's spec and talents only while the box is on and a row of their class is", function()
+        local R = loadRules()
+        local cases = {
+            { name = "box off, a row on", box = false, class = "WARRIOR", db = {}, want = false },
+            { name = "box on, its only row ships off", box = true, class = "ROGUE", db = {}, want = false },
+            { name = "box on, that row ticked", box = true, class = "ROGUE",
+              db = { CooldownOff = { ["box:9"] = false } }, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.WantsMember(case.box, case.class, nil, case.db), case.name)
         end
     end)
 end)
