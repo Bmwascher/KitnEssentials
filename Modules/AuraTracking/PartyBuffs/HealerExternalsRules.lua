@@ -22,7 +22,7 @@ KE.HealerExternalsRules = Rules
 -- evaluations per watched unit, a charge cell's two more plus five a second
 -- from its tick, so the door bound needs Unit(cd) <= 2, which holds up to 508
 -- seconds. Never raise this above 508.
-Rules.CD_MAX = 300
+Rules.CD_MAX = 360
 
 -- Seconds after a raid cooldown's plain start in which a rise only records,
 -- so a caster stepping out of their zone and back in does not restart it:

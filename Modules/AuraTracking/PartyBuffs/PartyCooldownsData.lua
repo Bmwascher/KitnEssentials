@@ -175,6 +175,11 @@ Data.SPELLS = {
     [98008]   = { kind = "external", cd = 180, buffs = { 325174 },
                   needs = { talents = { [98008] = true }, likely = true } },
     [359816]  = { kind = "external", cd = 120, buffs = { 359816, 362361 } },
+    -- Off until ticked. Shroud of Concealment watches 114018 alone, the buff
+    -- its caster carries; the caster does not carry 115834.
+    [114018]  = { kind = "external", cd = 360, off = true },
+    [414664]  = { kind = "external", cd = 300, off = true,
+                  needs = { talents = { [414664] = true }, likely = true } },
 
     -- Racials, in no spec list: RACIALS picks one by race.
     [20594]   = { kind = "defensive", cd = 120, buffs = { 65116 } },
@@ -246,6 +251,7 @@ local MODS = {
     [196718]  = { { 389783, add = -120 } },
     [51052]   = { { 374383, add = -60 } },
     [363534]  = { { 381922, add = -60 } },
+    [114018]  = { { 423662, pct = -50 } },
 }
 for castID, mods in pairs(MODS) do Data.SPELLS[castID].mods = mods end
 
@@ -364,6 +370,10 @@ Data.BOX_ROWS = {
     { id = 15286,  class = "PRIEST",      specs = { [258] = true },  roles = { DAMAGER = true }, watch = "owner" },
     { id = 98008,  class = "SHAMAN",      specs = { [264] = true },  roles = { HEALER = true }, watch = "owner" },
     { id = 359816, class = "EVOKER",      specs = { [1468] = true }, roles = { HEALER = true }, watch = "owner" },
+    { id = 114018, class = "ROGUE",       specs = { [259] = true, [260] = true, [261] = true },
+      anySpec = true, watch = "owner" },
+    { id = 414664, class = "MAGE",        specs = { [62] = true, [63] = true, [64] = true },
+      anySpec = true, watch = "owner" },
 }
 
 -- Race token to racial, in editor order; raceID names the race on the
