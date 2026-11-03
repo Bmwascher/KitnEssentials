@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.10
+
+KitnEssentials now asks which one to keep when EllesmereUI's Group Finder or
+its nameplate kick icons do the same job as KitnEssentials'.
+
+### Retail only
+
+#### Conflicts
+
+- **NEW:** while the Group Finder Panel and EllesmereUI's Group Finder are
+  both on, you are asked which to keep. Choosing KitnEssentials switches off
+  only EllesmereUI's Group Finder; its signup helpers and settings page stay
+- **NEW:** while the Interrupt Tracker's nameplate icons and EllesmereUI's
+  Kick Tracker nameplate icons are both on, you are asked which to keep.
+  Either choice turns off only the other's nameplate icons; both trackers'
+  bars stay, and closing the prompt changes nothing
+
+---
+
 ## v4.16.9
 
 Slayer warriors get Executioner Stacks, a tracker for Executioner stacks and
