@@ -72,4 +72,56 @@ describe("HealerMana fallback anchor", function()
             assert.are.equal(c.want, HM.ChoiceDiffers(c.held, c.heldName, c.kind, c.pick), c.name)
         end
     end)
+
+    it("writes the held set, main as given and fallback as a copy, or leaves both", function()
+        local HM = L.loadHealerMana()
+        local function copy(t)
+            return { AnchorFrom = t.AnchorFrom, AnchorTo = t.AnchorTo, XOffset = t.XOffset, YOffset = t.YOffset }
+        end
+        local MAIN = { AnchorFrom = "TOPLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -1 }
+        local MOVED = { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 7, YOffset = -5 }
+        local cases = {
+            { name = "main", kind = nil, pos = "moved", wrote = true, stored = "Position" },
+            { name = "fallback", kind = "FALLBACK", pos = "moved", wrote = true, stored = "FallbackPosition" },
+            { name = "unset fallback handed the main table", kind = "FALLBACK", pos = "main", wrote = true },
+            { name = "unset fallback handed the main values", kind = "FALLBACK", pos = "mainValues", wrote = true },
+            { name = "screen center", kind = "SCREEN", pos = "moved", wrote = false },
+            { name = "held frame lost its rect", kind = "FALLBACK", pos = "moved", wrote = false,
+                unmeasurable = true },
+        }
+        for _, c in ipairs(cases) do
+            HM.db.Position = copy(MAIN)
+            HM.db.FallbackPosition = nil
+            HM.partyAnchorKind = c.kind
+            -- The rect read is a frame read; the case covers the refusal it feeds.
+            HM.HeldFrameMeasurable = function() return not c.unmeasurable end
+            local pos = (c.pos == "main" and HM.db.Position)
+                or (c.pos == "mainValues" and copy(MAIN)) or copy(MOVED)
+            assert.are.equal(c.wrote, HM:WritePartyPosition(pos), c.name)
+            assert.are.same(c.stored == "Position" and MOVED or MAIN, HM.db.Position, c.name)
+            if c.stored == "FallbackPosition" then
+                assert.are.same(MOVED, HM.db.FallbackPosition, c.name)
+                assert.is_false(rawequal(HM.db.FallbackPosition, pos), c.name)
+            else
+                assert.is_nil(HM.db.FallbackPosition, c.name)
+            end
+        end
+    end)
+
+    it("holds a new frame back in combat and nothing else", function()
+        local HM = L.loadHealerMana()
+        local cases = {
+            { name = "new frame in combat", held = "FALLBACK", heldName = "B3", kind = "FALLBACK", pick = "B2",
+                combat = true, want = true },
+            { name = "new frame out of combat", held = "FALLBACK", heldName = "B3", kind = "FALLBACK", pick = "B2",
+                combat = false, want = false },
+            { name = "same frame in combat", held = "FALLBACK", heldName = "B3", kind = "FALLBACK", pick = "B3",
+                combat = true, want = false },
+            { name = "main renamed in combat", held = "MAIN", heldName = "B4", kind = "MAIN", pick = "B1",
+                combat = true, want = false },
+        }
+        for _, c in ipairs(cases) do
+            assert.are.equal(c.want, HM.DefersChoice(c.held, c.heldName, c.kind, c.pick, c.combat), c.name)
+        end
+    end)
 end)

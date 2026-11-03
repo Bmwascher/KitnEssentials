@@ -76,6 +76,14 @@ local SPOT_NAME = "KitnEssentialsHealerManaSpot"
 -- The container's and the spot's anchor gate; defined with the placement code.
 local MovesWithStack
 
+-- The Party place when a fallback is set and no listed frame is usable.
+local CENTER_SET = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 }
+-- Configs for a fallback frame and for the screen, refilled before each use.
+-- The chooser never picks a name whose root is missing, so no anchor wait
+-- keeps a reference to them.
+local fallbackConfig = { anchorFrameType = "SELECTFRAME" }
+local screenConfig = { anchorFrameType = "SCREEN" }
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
@@ -89,6 +97,10 @@ HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
 HM.isPreview = false
 HM.libSpecCache = {}  -- [name, or name-realm for another realm] = specID, fed by LibSpec.RegisterGroup callback
 HM.libRoleCache = {}  -- Forever: [name] = the role the library last reported, any role
+HM.fallbackNames = {}     -- the parsed Fallback Frame names; FallbackNames refreshes it
+HM.partyAnchorKind = nil  -- "MAIN" | "FALLBACK" | "SCREEN"; only PlaceContainer writes it
+HM.partyAnchorName = nil  -- the frame name held with it
+HM.choiceDeferred = false -- a new frame held back until combat ends
 
 ---------------------------------------------------------------------------------
 -- Helpers
@@ -216,6 +228,8 @@ function HM:UpdateDB()
         local db = KE.db.profile.Dungeons and KE.db.profile.Dungeons.HealerMana
         local changed = db ~= self.db
         self.db = db
+        -- The held anchor belongs to the profile it was chosen under.
+        if changed then self.partyAnchorKind, self.partyAnchorName = nil, nil end
         -- Edit Mode's Revert snapshot holds the position read from the old
         -- profile, and the setter would write it into this one.
         local EM = KE.EditMode
@@ -350,16 +364,18 @@ function HM:SeedRaidLook()
     end
 end
 
--- Active position table, resolved via GetActivePositionKey.
+-- Active position table, resolved via GetActivePositionKey. Party's is the set
+-- for the frame the chooser holds.
 function HM:GetActivePosition()
     if not self.db then return nil end
-    return self.db[self:GetActivePositionKey()] or self.db.Position
+    if self:GetActivePositionKey() == "Position" then return self:PartyPosition() end
+    return self.db.RaidPosition or self.db.Position
 end
 
 -- Anchor config (anchorFrameType / ParentFrame) for the active context. Raid
 -- has its own root keys so it can anchor to a different frame than Dungeon;
 -- Strata is shared. Returns a table shaped for KE:ApplyFramePosition's Config
--- arg. Dungeon returns self.db directly (its keys live at the root).
+-- arg. Dungeon returns the held frame's config: self.db itself on the main frame.
 function HM:GetActiveAnchorConfig()
     if not self.db then return {} end
     if self:GetActivePositionKey() == "RaidPosition" then
@@ -369,7 +385,7 @@ function HM:GetActiveAnchorConfig()
             Strata = self.db.Strata,
         }
     end
-    return self.db
+    return self:PartyAnchorConfig()
 end
 
 -- Fallback Frame text to names: commas or spaces separate them, order kept.
@@ -403,6 +419,147 @@ end
 function HM.ChoiceDiffers(heldKind, heldName, kind, name)
     if kind ~= (heldKind or "MAIN") then return true end
     return kind == "FALLBACK" and name ~= heldName
+end
+
+-- A new frame is never taken in combat: the frame Healer Mana would move onto
+-- may be a secure one, and the gate reads only the frames being moved. The
+-- replay after combat chooses again; an unchanged choice places as today.
+function HM.DefersChoice(heldKind, heldName, kind, name, inCombat)
+    return inCombat == true and HM.ChoiceDiffers(heldKind, heldName, kind, name)
+end
+
+-- The Fallback Frame names, parsed again only when the text changes.
+function HM:FallbackNames()
+    local text = self.db and self.db.FallbackFrame
+    if text ~= self.fallbackText then
+        self.fallbackText = text
+        self.fallbackNames = HM.ParseFrameList(text)
+    end
+    return self.fallbackNames
+end
+
+-- Only Select Frame has a fallback; with no names saved this returns at once.
+function HM:FallbackActive()
+    local db = self.db
+    if not (db and db.FallbackFrame and db.anchorFrameType == "SELECTFRAME") then return false end
+    return #self:FallbackNames() > 0
+end
+
+-- Resolved under the same safety rules as placement, for both frames placed
+-- on it (the container and the stack spot), then read.
+function HM:UsableAnchor(name)
+    local region = KE:ResolveSelectFrame(name, self.containerFrame)
+    if region == nil then return false end
+    local spot = self.spot
+    if spot and KE:ResolveSelectFrame(name, spot) == nil then return false end
+    return HM.AnchorReadsUsable(region:IsVisible(), region:GetNumPoints())
+end
+
+local function Usable(name) return HM:UsableAnchor(name) end
+
+-- The frame the Party position hangs from. Moves nothing, stores nothing.
+function HM:ChoosePartyAnchor()
+    local db = self.db
+    if not self:FallbackActive() then return "MAIN", db and db.ParentFrame end
+    return HM.PickAnchor(db.ParentFrame, self:FallbackNames(), Usable)
+end
+
+-- Readers of the held choice. Nil reads as the main frame.
+function HM:PartyAnchorConfig()
+    local db, kind = self.db, self.partyAnchorKind
+    if kind == "FALLBACK" then
+        fallbackConfig.ParentFrame, fallbackConfig.Strata = self.partyAnchorName, db.Strata
+        return fallbackConfig
+    elseif kind == "SCREEN" then
+        screenConfig.Strata = db.Strata
+        return screenConfig
+    end
+    return db
+end
+
+-- An unset fallback set reads the main set.
+function HM:PartyPosition()
+    local kind = self.partyAnchorKind
+    if kind == "SCREEN" then return CENTER_SET end
+    if kind == "FALLBACK" then return self.db.FallbackPosition or self.db.Position end
+    return self.db.Position
+end
+
+function HM:PartyPositionKey()
+    local kind = self.partyAnchorKind
+    if kind == "SCREEN" then return nil end
+    if kind == "FALLBACK" then return "FallbackPosition" end
+    return "Position"
+end
+
+-- Edit Mode measures a drag against the screen when its parent has no
+-- readable rect, as a held frame that just lost its place has; a write then
+-- would store screen offsets in the set. An empty fallback writes as before;
+-- a choice not yet held reads as the main frame, as every reader does.
+function HM:HeldFrameMeasurable()
+    if not self:FallbackActive() then return true end
+    local name = self.partyAnchorName
+    if self.partyAnchorKind == nil then name = self.db.ParentFrame end
+    local region = name and KE:ResolveSelectFrame(name, self.containerFrame)
+    if not region then return false end
+    local left = region:GetRect()
+    -- GetRect answers secret while the anchoring is secret: test that first.
+    return not KE:IsSecretValue(left) and left ~= nil
+end
+
+local function SamePoints(a, b)
+    return a.AnchorFrom == b.AnchorFrom and a.AnchorTo == b.AnchorTo
+        and a.XOffset == b.XOffset and a.YOffset == b.YOffset
+end
+
+-- Stored as a copy on the fallback key: while that set is unset, the table
+-- handed back is the main set itself, and the two keys would share it. An
+-- unset set handed the main values back (a canceled drag's reapply, a Revert
+-- with nothing moved) stays unset, so it keeps following the main set. A
+-- refused write leaves the caller's re-place to choose again.
+function HM:WritePartyPosition(pos)
+    local key = self:PartyPositionKey()
+    if not key or not self:HeldFrameMeasurable() then return false end
+    if key == "FallbackPosition" then
+        if self.db.FallbackPosition == nil and SamePoints(pos, self.db.Position) then return true end
+        pos = { AnchorFrom = pos.AnchorFrom, AnchorTo = pos.AnchorTo, XOffset = pos.XOffset, YOffset = pos.YOffset }
+    end
+    self.db[key] = pos
+    return true
+end
+
+-- At the screen center there is no saved set for an Edit Mode drag to write.
+function HM:AtScreenCenter()
+    return self.partyAnchorKind == "SCREEN"
+end
+
+-- Only a drag of Healer Mana's own boxes measures against the held frame; a
+-- drag of any other box must not hold the choice, since its drop never
+-- re-places Healer Mana.
+function HM:OwnDragInFlight()
+    local EM = KE.EditMode
+    local overlays = EM and EM.overlayFrames
+    if not overlays then return false end
+    local box, stack = overlays.HealerMana, overlays.HealerManaStack
+    return (box ~= nil and box.isDragging == true) or (stack ~= nil and stack.isDragging == true)
+end
+
+-- Edit Mode's Revert snapshot holds the set the frame left, and the setter
+-- now writes the other one; the screen center also changes which boxes show.
+-- The ordinary box reads the Raid set while Raid has its own settings, and a
+-- Party change must not replace that snapshot.
+function HM:AnchorMoved()
+    local EM = KE.EditMode
+    if not EM then return end
+    if EM.SnapshotElementPosition then
+        if self:GetActivePositionKey() == "Position" then
+            EM:SnapshotElementPosition("HealerMana")
+        end
+        EM:SnapshotElementPosition("HealerManaStack")
+    end
+    local selected = EM.selectedElementKey
+    if selected == "HealerMana" or selected == "HealerManaStack" then EM:UpdateNudgeFrameInfo() end
+    EM:RefreshLiveState()
 end
 
 -- EditMode overlay label. When split is on, name the mode being edited so the
@@ -590,7 +747,10 @@ local hangConfig = { anchorFrameType = "SELECTFRAME" }
 
 -- The one place the container and the spot are anchored. A refusal moves
 -- neither, nor the box, until combat ends. The spot sits at the Party
--- position, the only one the stack forms at, whatever mode was last drawn.
+-- position, the only one the stack forms at, whatever mode was last drawn,
+-- on the frame the chooser holds. A drag of a Healer Mana box measures
+-- against the frame it started on, so the choice holds until the drop's own
+-- placement.
 function HM:PlaceContainer()
     local frame, db = self.containerFrame, self.db
     if not (frame and db) then return false end
@@ -598,10 +758,21 @@ function HM:PlaceContainer()
         self:DeferContainerPlacement()
         return false
     end
+    local moved = false
+    if not self:OwnDragInFlight() then
+        local kind, name = self:ChoosePartyAnchor()
+        if HM.DefersChoice(self.partyAnchorKind, self.partyAnchorName, kind, name, InCombatLockdown()) then
+            self.choiceDeferred = true
+            self:DeferContainerPlacement()
+            return false
+        end
+        moved = HM.ChoiceDiffers(self.partyAnchorKind, self.partyAnchorName, kind, name)
+        self.partyAnchorKind, self.partyAnchorName = kind, name
+    end
     local spot = self.spot
     if spot then
         spot:SetSize(db.FrameWidth, db.IconSize)
-        KE:ApplyFramePosition(spot, db.Position, db)
+        KE:ApplyFramePosition(spot, self:PartyPosition(), self:PartyAnchorConfig())
     end
     if self.stackBox then
         -- Under the box, on the edge the box shares with the spot.
@@ -612,6 +783,7 @@ function HM:PlaceContainer()
     else
         KE:ApplyFramePosition(frame, self:ContainerPlacement(), self:GetActiveAnchorConfig())
     end
+    if moved then self:AnchorMoved() end
     return true
 end
 
@@ -619,14 +791,44 @@ function HM:ApplyContainerPosition()
     if self:PlaceContainer() then self:SyncStackSpot() end
 end
 
--- One replay after combat, however many placements combat refused.
+-- One replay after combat, however many placements combat refused. A frame
+-- change held back in combat may have left the Raid Cooldowns box off its
+-- spot, so the box places itself again after the replay.
 function HM:DeferContainerPlacement()
     if self.placePending then return end
     self.placePending = true
     KE:RunAfterCombat(function()
         HM.placePending = false
+        local stackWaits = HM.choiceDeferred
+        HM.choiceDeferred = false
         HM:ApplyContainerPosition()
+        local HX = KE.HealerExternals
+        if stackWaits and HX and HX.ApplyPosition then HX.ApplyPosition() end
     end)
+end
+
+-- The party frames' own roster pass can show or hide a listed frame a frame
+-- after the event, so the choice is checked on the next two frames, one timer
+-- at a time. A changed choice re-places through the gate above, which holds
+-- it until combat ends. During a drag of Healer Mana's own box the drop's
+-- placement chooses instead.
+local recheckLeft = 0
+local function Recheck()
+    recheckLeft = recheckLeft - 1
+    if recheckLeft > 0 then C_Timer.After(0, Recheck) end
+    if not (HM:IsEnabled() and HM.containerFrame and HM.db) then return end
+    if HM:OwnDragInFlight() then return end
+    local kind, name = HM:ChoosePartyAnchor()
+    if HM.ChoiceDiffers(HM.partyAnchorKind, HM.partyAnchorName, kind, name) then
+        HM:ApplyContainerPosition()
+    end
+end
+
+function HM:ArmRecheck()
+    if not self:FallbackActive() then return end
+    local idle = recheckLeft <= 0
+    recheckLeft = 2
+    if idle then C_Timer.After(0, Recheck) end
 end
 
 ---------------------------------------------------------------------------------
@@ -657,13 +859,18 @@ function HM:SyncStackSpot()
     if HX and HX.ApplyPosition then HX.ApplyPosition() end
 end
 
--- Whether a spot at the Party position would depend on frame. A parent that
--- does not resolve is no such dependency: the spot then sits on the screen
--- like the container, and the late-anchor pass moves both once it is built.
+-- Whether a spot at the Party position would depend on frame, on the frame
+-- the placement that follows will use: the held one during a drag or in
+-- combat, which never changes it. A parent that does not resolve is no such
+-- dependency: the spot then sits on the screen like the container, and the
+-- late-anchor pass moves both once it is built.
 function HM:SpotRefuses(frame)
     local db = self.db
-    if not (db and db.anchorFrameType == "SELECTFRAME" and db.ParentFrame) then return false end
-    local parent = KE:ResolveSelectFrame(db.ParentFrame)
+    if not (db and db.anchorFrameType == "SELECTFRAME") then return false end
+    local name = self.partyAnchorName
+    if not (self:OwnDragInFlight() or InCombatLockdown()) then name = select(2, self:ChoosePartyAnchor()) end
+    if not name then return false end
+    local parent = KE:ResolveSelectFrame(name)
     return parent ~= nil and KE:IsUnsafeAnchor(frame, parent)
 end
 
@@ -679,8 +886,13 @@ function HM:StackSpot(box)
         self:RegStackWithEditMode()
     end
     -- Placed on every call, so each placement of the box resolves the
-    -- spot's parent again, with or without a Healer Mana row drawn.
-    if not self:PlaceContainer() then return nil end
+    -- spot's parent again, with or without a Healer Mana row drawn. A frame
+    -- change held back in combat keeps a formed stack on the spot as it
+    -- stands; a stack not yet formed waits for the replay after combat.
+    if not self:PlaceContainer() then
+        if self.choiceDeferred and self.stackBox ~= nil then return self.spot end
+        return nil
+    end
     return self.spot
 end
 
@@ -1042,7 +1254,11 @@ function HM:RegWithEditMode()
             getPosition = function() return self:GetActivePosition() end,
             setPosition = function(pos)
                 -- Write to the SAME table getPosition reads (no get/set drift).
-                self.db[self:GetActivePositionKey()] = pos
+                if self:GetActivePositionKey() == "RaidPosition" then
+                    self.db.RaidPosition = pos
+                else
+                    self:WritePartyPosition(pos)
+                end
                 self:ApplyContainerPosition()
             end,
             getAnchorFrom = function() return self:GetActiveAnchorFrom() end,
@@ -1051,7 +1267,10 @@ function HM:RegWithEditMode()
                 return KE:ResolveAnchorFrame(cfg.anchorFrameType, cfg.ParentFrame)
             end,
             -- Under the Raid Cooldowns box the stack's own box moves it.
-            isEligible = function() return self.stackBox == nil end,
+            isEligible = function()
+                return self.stackBox == nil
+                    and not (self:AtScreenCenter() and self:GetActivePositionKey() == "Position")
+            end,
             guiPath = "StatusTexts",
             guiTab = "HealerMana",
         })
@@ -1060,18 +1279,19 @@ function HM:RegWithEditMode()
 end
 
 -- The stack's box reads and writes the Party position, the only one the
--- stack forms at, whatever mode was last drawn.
-local function StackPosition() return HM.db.Position end
+-- stack forms at, whatever mode was last drawn, for the frame in use.
+local function StackPosition() return HM:PartyPosition() end
 
 local function StackSetPosition(pos)
-    HM.db.Position = pos
+    HM:WritePartyPosition(pos)
     HM:ApplyContainerPosition()
 end
 
-local function StackAnchorFrom() return HM.db.Position.AnchorFrom end
+local function StackAnchorFrom() return HM:PartyPosition().AnchorFrom end
 
 local function StackParentFrame()
-    return KE:ResolveAnchorFrame(HM.db.anchorFrameType, HM.db.ParentFrame)
+    local cfg = HM:PartyAnchorConfig()
+    return KE:ResolveAnchorFrame(cfg.anchorFrameType, cfg.ParentFrame)
 end
 
 local function StackInset()
@@ -1092,7 +1312,7 @@ function HM:RegStackWithEditMode()
         getAnchorFrom = StackAnchorFrom,
         getParentFrame = StackParentFrame,
         getOverlayInset = StackInset,
-        isEligible = function() return HM.stackBox ~= nil end,
+        isEligible = function() return HM.stackBox ~= nil and not HM:AtScreenCenter() end,
         guiPath = "StatusTexts",
         -- The Auras category previews Raid Cooldowns and forms the stack too.
         alsoGuiPath = "PartyBuffs",
@@ -1217,6 +1437,7 @@ function HM:OnGroupChanged()
     -- frame this change exists to remove.
     self:FindHealers()
     self:SyncStackSpot()
+    self:ArmRecheck()
 end
 
 function HM:OnEnable()
