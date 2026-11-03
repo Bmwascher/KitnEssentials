@@ -683,6 +683,21 @@ describe("Core/Conflicts.lua one-feature rows in the prompt queue", function()
         assert.is_truthy(printed[1]:find("Show on Nameplates", 1, true))
         assert.equals(1, #prompts)
     end)
+
+    -- Both rows ask about the same addon. Choosing KE on the first disables
+    -- it, so the second would offer a choice about an addon already off.
+    it("skips a queued prompt whose rival an earlier answer turned off", function()
+        _G._EMT_AceDB = plates()
+        loginWith({
+            MythicPlusTimer = { Enabled = true },
+            KickTracker = { Enabled = true, PlateIcons = true },
+        }, { "EllesmereUIMythicTimer" })
+        assert.equals("Mythic+ Timer Conflict", prompts[1].title)
+        prompts[1].onAccept()
+        assert.equals(2, #prompts)
+        assert.is_true(prompts[2].reload)
+        assert.same({ "EllesmereUIMythicTimer" }, disabled)
+    end)
 end)
 
 -- The /kes dispatcher lives in Core/Globals.lua and registers into

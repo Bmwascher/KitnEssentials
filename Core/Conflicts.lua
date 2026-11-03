@@ -451,7 +451,13 @@ local pendingReload = false
 -- `local function` puts the name in scope inside its own body, so no forward
 -- declaration is needed.
 local function ShowNextPrompt()
+    -- An earlier answer can turn a later item's rival off: choosing KE on the
+    -- Mythic+ Timer row disables the addon the nameplate icons row asks about.
+    local env = LiveEnv()
     local item = table.remove(promptQueue, 1)
+    while item and env and not env.isLoaded(item.source, item.resolver) do
+        item = table.remove(promptQueue, 1)
+    end
     if not item then
         promptActive = false
         if pendingReload then
