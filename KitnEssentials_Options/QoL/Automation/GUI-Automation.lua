@@ -222,7 +222,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
             local rowGround = GUIFrame:CreateRow(cardDruid.content, Theme.rowHeight)
             local groundCheck = GUIFrame:CreateCheckbox(rowGround, "Leave Ground Travel Form Where You Can Fly", {
                 value = db.DruidLeaveGroundTravelForm == true,
-                tooltip = "Out of combat and outside instances, when you stand outdoors in ground Travel Form somewhere you can fly, you leave the form, so your next Travel Form is the flying one.\n\nIf your character cannot fly yet, leave this off: it would take you out of ground Travel Form after each fight.",
+                tooltip = "Out of combat and outside instances, when you stand outdoors in ground Travel Form somewhere you can fly, you leave the form, and the game switches you into the flying Travel Form.\n\nIf your character cannot fly yet, leave this off: it would take you out of ground Travel Form after each fight.",
                 callback = function(checked) db.DruidLeaveGroundTravelForm = checked; ApplySettings() end,
             })
             rowGround:AddWidget(groundCheck, 1)
