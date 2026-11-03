@@ -100,6 +100,8 @@ local function BuildContextCards(scrollChild, yOffset, db, manager, isRaidCtx, g
         },
         showAnchorFrameType = true,
         showStrata = true,
+        -- Party only: the Raid tab keeps one anchor.
+        fallback = (not isRaidCtx) and { framesKey = "FallbackFrame", positionKey = "FallbackPosition" } or nil,
         onChangeCallback = ApplySettings,
     })
     if posCard.positionWidgets then
