@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.13
+
+Party Cooldowns gets countdown bars for the group's stealth skips.
+
+### Party Cooldowns
+
+- **NEW:** Party Cooldowns > Skips, off by default: countdown bars for Shroud
+  of Concealment, Mass Invisibility and your Invisibility Potion, so you know
+  how long the stealth has left
+- Shroud's bar reads the party's rogue, so it shows a timer for everyone in the
+  group; Mass Invisibility and the potion show your own
+- The bars sit in their own box with an Edit Mode mover, show the spell's
+  icon, and count in tenths under 10 seconds
+- Follows Party Cooldowns' on/off switch and Show In setting
+
+---
+
 ## v4.16.12
 
 Druids get three opt-in helpers for Travel Form and for staying in form while
