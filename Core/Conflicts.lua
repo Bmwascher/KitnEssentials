@@ -198,13 +198,44 @@ local CONFLICTS = {
             },
         },
     },
-    -- Neither row below carries a resolver, and that is deliberate.
+    {
+        module = "GroupFinderPanel",
+        label  = "Group Finder Panel",
+        dbPath = { "GroupFinderPanel" },
+        -- Not skinGated: the module runs whether or not ElvUI owns skinning.
+        addons = { "EllesmereUIGroupFinder" },
+        resolvers = {
+            EllesmereUIGroupFinder = {
+                label = "EllesmereUI's Group Finder",
+                -- It loads with its switch off, so the loaded test alone would
+                -- prompt every EllesmereUI player with this module on. The
+                -- switch keeps the addon's signup helpers and settings page.
+                apply = function()
+                    if type(_G.EllesmereUIDB) ~= "table" then return false end
+                    if type(_G.EllesmereUIDB.groupFinder) ~= "table" then
+                        _G.EllesmereUIDB.groupFinder = {}
+                    end
+                    _G.EllesmereUIDB.groupFinder.enabled = false
+                    return true
+                end,
+                -- Stateless companion to apply(). Absent means OFF here, the
+                -- opposite of the tooltip and teleport switches.
+                isActive = function()
+                    local db = _G.EllesmereUIDB
+                    return type(db) == "table" and type(db.groupFinder) == "table"
+                        and db.groupFinder.enabled == true
+                end,
+            },
+        },
+    },
+    -- The next two rows carry no resolver, and that is deliberate.
     -- EllesmereUI ships each of these as its own single-purpose addon --
     -- own .toc, own SavedVariables, one feature -- so the whole-addon
     -- disable takes out exactly the conflicting feature and nothing else.
-    -- That is why EllesmereUIChat has no resolver either. The EllesmereUI
-    -- resolvers above exist only because EllesmereUIBlizzardSkin and
-    -- EllesmereUIQoL bundle unrelated features a user did not ask to lose.
+    -- That is why EllesmereUIChat has no resolver either. An EllesmereUI
+    -- rival gets a resolver only where the whole-addon disable is wrong:
+    -- EllesmereUIBlizzardSkin and EllesmereUIQoL bundle unrelated
+    -- features, and EllesmereUIGroupFinder loads with its switch off.
     --
     -- Neither is skinGated, for the same reason as LFGReminder: both
     -- modules run whether or not ElvUI owns skinning, so the gate would
@@ -351,6 +382,7 @@ local ADDON_LABELS = {
     ["EllesmereUIBlizzardSkin"] = "EllesmereUI BlizzUI Enhanced",
     ["EllesmereUIChat"] = "EllesmereUI Chat",
     ["EllesmereUIDamageMeters"] = "EllesmereUI Damage Meters",
+    ["EllesmereUIGroupFinder"] = "EllesmereUI Group Finder",
     ["EllesmereUIMythicTimer"] = "EllesmereUI Mythic+ Timer",
     ["Prat-3.0"] = "Prat",
     ["BasicChatMods"] = "Basic Chat Mods",

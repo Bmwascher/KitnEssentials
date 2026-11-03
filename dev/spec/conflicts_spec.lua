@@ -298,6 +298,69 @@ describe("Core/Conflicts.lua decision layer", function()
             end)
         end
     end)
+
+    describe("GroupFinderPanel conflict entry", function()
+        -- Consults the resolver, as LiveEnv does, so the rival's switch
+        -- decides whether the row queues.
+        local function gfEnv(enabled)
+            return {
+                profile = { GroupFinderPanel = { Enabled = enabled } },
+                isLoaded = function(name, resolver)
+                    if name ~= "EllesmereUIGroupFinder" then return false end
+                    return resolver.isActive()
+                end,
+                shouldNotLoad = false,
+            }
+        end
+
+        -- Ignores the resolver, so apply is reachable whatever the switch.
+        local function gfResolver()
+            return KE:BuildConflictQueue({
+                profile = { GroupFinderPanel = { Enabled = true } },
+                isLoaded = function(name) return name == "EllesmereUIGroupFinder" end,
+                shouldNotLoad = false,
+            })[1].resolver
+        end
+
+        -- _G is shared across the whole run, so every case that seeds the
+        -- rival's saved variable must put it back.
+        after_each(function() _G.EllesmereUIDB = nil end)
+
+        -- Absent means OFF for this switch, the opposite of the tooltip and
+        -- teleport switches, so only a literal true may prompt.
+        it("queues only while the module is on and the rival's switch is true", function()
+            for _, case in ipairs({
+                { name = "both on",                    enabled = true,  db = { groupFinder = { enabled = true } },  n = 1 },
+                { name = "switch unset",               enabled = true,  db = { groupFinder = {} },                  n = 0 },
+                { name = "switch false",               enabled = true,  db = { groupFinder = { enabled = false } }, n = 0 },
+                { name = "groupFinder absent",         enabled = true,  db = {},                                    n = 0 },
+                { name = "saved variable not a table", enabled = true,  db = "corrupt",                             n = 0 },
+                { name = "module off",                 enabled = false, db = { groupFinder = { enabled = true } },  n = 0 },
+            }) do
+                _G.EllesmereUIDB = case.db
+                assert.equals(case.n, #KE:BuildConflictQueue(gfEnv(case.enabled)), case.name)
+            end
+        end)
+
+        -- `after` is a separate literal: comparing the saved variable
+        -- against the table it IS would pass any write.
+        it("apply turns the switch off, creating a missing table, and refuses a non-table saved variable", function()
+            for _, case in ipairs({
+                { name = "switch on",                  db = { groupFinder = { enabled = true } }, ok = true,
+                  after = { groupFinder = { enabled = false } } },
+                { name = "groupFinder absent",         db = {},                                   ok = true,
+                  after = { groupFinder = { enabled = false } } },
+                { name = "saved variable not a table", db = "corrupt",                            ok = false,
+                  after = "corrupt" },
+                { name = "saved variable absent",      db = nil,                                  ok = false,
+                  after = nil },
+            }) do
+                _G.EllesmereUIDB = case.db
+                assert.equals(case.ok, gfResolver().apply(), case.name)
+                assert.same(case.after, _G.EllesmereUIDB, case.name)
+            end
+        end)
+    end)
 end)
 
 describe("Core/Conflicts.lua prompt queue", function()
