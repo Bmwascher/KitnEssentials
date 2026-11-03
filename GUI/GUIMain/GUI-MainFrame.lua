@@ -50,7 +50,7 @@ GUIFrame.sidebarConfig = {
                     TimeSpiral = { "time spiral" },
                     AlterTime = { "alter time" },
                     ShamanProcCooldowns = { "nature's guardian", "natures guardian", "thunderous paws", "ghost wolf" },
-                    ClassToolsWarrior = { "spell reflect", "spell reflection", "reflect", "protection", "arms", "fury", "executioner", "executioner stacks", "slayer", "slayer's dominance", "slayers dominance", "sudden death", "cancel exec", "cancelaura", "hidden timers", "stacks" },
+                    ClassToolsWarrior = { "spell reflect", "spell reflection", "reflect", "protection", "arms", "fury", "executioner", "executioner stacks", "slayer", "slayer's dominance", "slayers dominance", "sudden death", "cancel exec", "cancelaura", "hidden timers", "stacks", "imminent demise", "imminent demise counter", "demise", "sudden demise", "slayer's strike", "slayers strike" },
                 } },
             { id = "CombatRes",     text = "Combat Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },

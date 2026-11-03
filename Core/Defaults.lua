@@ -1103,6 +1103,37 @@ local Defaults = {
             },
         },
 
+        ImminentDemise = {
+            Enabled = false,
+            DisplayMode = "ICON", -- ICON | PIPS | TEXT
+            HideAtZero = false,
+
+            IconSize = 40,
+            CountPosition = "CENTER",
+            CountX = 0,
+            CountY = 0,
+
+            PipWidth = 34,
+            PipHeight = 18,
+            PipSpacing = 3,
+            ShowCount = true,
+
+            AttachToCDM = false,
+            IconPosition = "ABOVE",
+            IconX = 0,
+            IconY = 2,
+
+            FontSize = 20,
+            FontOutline = "OUTLINE",
+            Color0 = { 0.6, 0.6, 0.6, 1 },
+            Color1 = { 1, 1, 1, 1 },
+            Color2 = { 1, 0.82, 0.2, 1 },
+
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -100),
+        },
+
         DoTTracker = {
             Enabled = false,
             OnlyInCombat = true,
