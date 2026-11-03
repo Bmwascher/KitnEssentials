@@ -69,9 +69,9 @@ local POTION = { key = "potion", name = "Invisibility Potion", onKey = "SkipPoti
     colorKey = "SkipPotionColor", ids = { [1236551] = true }, icon = 1236551 }
 local SPELLS = { SHROUD, INVIS, POTION }
 
--- Shroud is read on the rogue who cast it: the copy the rest of the party
--- gets has no duration, so it has no time to show. A spell's place in its
--- container's list is its group's layoutIndex.
+-- Shroud is read on the party's first rogue, or on you on a rogue: the copy
+-- the rest of the party gets has no duration, so it has no time to show. A
+-- spell's place in its container's list is its group's layoutIndex.
 Skip.rogue = { key = "rogue", name = "KitnEssentialsPartySkipsShroud", spells = { SHROUD }, groups = {}, pin = {} }
 Skip.mine = { key = "mine", name = "KitnEssentialsPartySkipsContainer", spells = { INVIS, POTION },
     groups = {}, pin = {} }
