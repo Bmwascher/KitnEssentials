@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.14
+
+The Raid Cooldowns spell list is redone, sets the order of the box's icons,
+and can track Shroud of Concealment and Mass Invisibility.
+
+### Party Cooldowns
+
+- **NEW:** the Raid Cooldowns tab's Spells card now sits second and lists
+  every class as one row; each spell's spec, charges and talent swap show in
+  its hover tooltip
+- **NEW:** an icon strip under the rows, with Move Left and Move Right, sets
+  the Raid Cooldowns box's icon order spell by spell; until you move an icon
+  the box keeps its usual order, and Kitn Defaults puts it back
+- **NEW:** Shroud of Concealment and Mass Invisibility can be tracked in the
+  Raid Cooldowns box, off by default; Shroud counts 3 minutes for a rogue with
+  Stillshroud
+- A party member is no longer inspected for the box while every Raid
+  Cooldowns spell of their class is off
+
+---
+
 ## v4.16.13
 
 Party Cooldowns gets countdown bars for the group's stealth skips.
