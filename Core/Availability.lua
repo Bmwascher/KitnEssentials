@@ -167,15 +167,17 @@ local FOREVER_ALLOWED = {
     HealerManaRaid = true,
     NoMovementAlert = true,
     -- Automation: the module and page with its General, Interface, Quests &
-    -- Social and Vendors & Bags tabs, Combat Logger and Merchant Pages.
-    -- Vantus Rune, the Auction House Filter, the housing dashboard fix, Bonus
-    -- Roll, and the Group Finder, keystone, housing roll, Voidcores, pet
-    -- battle and full Combat Logger content options stay withheld.
+    -- Social and Vendors & Bags tabs, Combat Logger, Merchant Pages and the
+    -- druid Stay in Form When Casting choice. Vantus Rune, the Auction House
+    -- Filter, the housing dashboard fix, Bonus Roll, and the Group Finder,
+    -- keystone, housing roll, Voidcores, pet battle, full Combat Logger
+    -- content, druid Travel Form and Guardian options stay withheld.
     Automation = true,
     AutomationGeneral = true,
     AutomationInterface = true,
     AutomationQuests = true,
     AutomationVendors = true,
+    AutomationDruidStayInForm = true,
     CombatLogger = true,
     MerchantPages = true,
 }
