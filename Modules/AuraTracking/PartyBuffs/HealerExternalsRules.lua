@@ -249,6 +249,13 @@ function Rules.Candidate(class, role, db)
     return false
 end
 
+-- Whether the box wants a member's spec and talents read. The inspect's spec
+-- test and its talent test both ask this, so a row that ships off costs
+-- neither.
+function Rules.WantsMember(boxOn, class, role, db)
+    return boxOn == true and Rules.Candidate(class, role, db)
+end
+
 -- A party only: KE counts an arena team as a raid group.
 function Rules.On(db, active, inRaid)
     return Table(db).HealerExternals == true and active == true and inRaid ~= true

@@ -226,6 +226,21 @@ describe("HealerExternalsRules.Candidate", function()
     end)
 end)
 
+describe("HealerExternalsRules.WantsMember", function()
+    it("wants a member's spec and talents only while the box is on and a row of their class is", function()
+        local R = loadRules()
+        local cases = {
+            { name = "box off, a row on", box = false, class = "WARRIOR", db = {}, want = false },
+            { name = "box on, its only row ships off", box = true, class = "ROGUE", db = {}, want = false },
+            { name = "box on, that row ticked", box = true, class = "ROGUE",
+              db = { CooldownOff = { ["box:9"] = false } }, want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.WantsMember(case.box, case.class, nil, case.db), case.name)
+        end
+    end)
+end)
+
 describe("HealerExternalsRules.On", function()
     it("is on only with the switch on, the module active and not in a raid group", function()
         local R = loadRules()

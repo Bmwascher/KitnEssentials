@@ -169,7 +169,7 @@ end
 local function Done(m)
     if m.isPlayer then return true end
     local rules = KE.PartyCooldownsRules
-    local healer = Spec.trackHealers == true and KE.HealerExternalsRules.Candidate(m.class, m.role, Spec.boxDB)
+    local healer = KE.HealerExternalsRules.WantsMember(Spec.trackHealers, m.class, m.role, Spec.boxDB)
     if not rules.SpecWanted(Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials, m.race, healer) then
         return true
     end
@@ -180,10 +180,13 @@ local function Done(m)
     return true
 end
 
--- Whether the member's talents count for a switched-on cell.
+-- Whether the member's talents count for a switched-on cell. The box counts
+-- only while a row of the member's class is on: the spec's talent list names
+-- every box row's talents, ticked or not.
 local function TalentsWanted(m)
     local rules = KE.PartyCooldownsRules
-    return rules.TalentsWanted(rules.TalentsFor(m.spec), Spec.trackClass, Spec.trackHealers)
+    local box = KE.HealerExternalsRules.WantsMember(Spec.trackHealers, m.class, m.role, Spec.boxDB)
+    return rules.TalentsWanted(rules.TalentsFor(m.spec), Spec.trackClass, box)
 end
 
 -- Every answer the member is still wanted for is in hand and only marked
