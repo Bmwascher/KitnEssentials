@@ -20,6 +20,11 @@ local CreateFrame = CreateFrame
 local UnitExists, UnitIsUnit = UnitExists, UnitIsUnit
 local InCombatLockdown = InCombatLockdown
 local unpack = unpack
+local max = math.max
+
+-- Fastest update period. The Update Throttle slider reaches 0, and a
+-- zero-second ticker has no defined rate.
+local MIN_TICK = 0.05
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -90,6 +95,10 @@ function RC:CreateFrame()
     frame:EnableMouse(false)
     frame:SetMouseClickEnabled(false)
     frame:Hide()
+    -- Bound to actual visibility, so a hidden anchor or a hidden UI stops
+    -- the ticker as well as the text hiding itself.
+    frame:SetScript("OnShow", function() RC:StartTicker() end)
+    frame:SetScript("OnHide", function() RC:StopTicker() end)
 
     local text = frame:CreateFontString(nil, "OVERLAY")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
@@ -112,6 +121,10 @@ function RC:ApplySettings()
     -- Invalidate cached text dimensions — font/size may have changed.
     self.lastSizedText = nil
     self:ApplyPosition()
+    if self.ticker and RC._TickPeriod(self.db.UpdateThrottle) ~= self.tickerPeriod then
+        self:StopTicker()
+        self:StartTicker()
+    end
 end
 
 function RC:ApplyPosition()
@@ -184,12 +197,25 @@ function RC:UpdateRange()
     self.frame:Show()
 end
 
-local updateElapsed = 0
-function RC:OnUpdate(elapsed)
-    updateElapsed = updateElapsed + elapsed
-    if updateElapsed < (self.db.UpdateThrottle or 0.1) then return end
-    updateElapsed = 0
-    self:UpdateRange()
+function RC._TickPeriod(throttle)
+    return max(throttle or 0.1, MIN_TICK)
+end
+
+local function Tick()
+    RC:UpdateRange()
+end
+
+function RC:StartTicker()
+    if self.ticker then return end
+    self.tickerPeriod = RC._TickPeriod(self.db.UpdateThrottle)
+    self.ticker = C_Timer.NewTicker(self.tickerPeriod, Tick)
+end
+
+function RC:StopTicker()
+    if self.ticker then
+        self.ticker:Cancel()
+        self.ticker = nil
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -242,13 +268,12 @@ function RC:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED", function() self:UpdateRange() end)
     self:RegisterEvent("PLAYER_REGEN_ENABLED", function() self:UpdateRange() end)
 
-    self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
     self:UpdateRange()
 end
 
 function RC:OnDisable()
+    self:StopTicker()
     if self.frame then
-        self.frame:SetScript("OnUpdate", nil)
         self.frame:Hide()
     end
     self.isPreview = false
