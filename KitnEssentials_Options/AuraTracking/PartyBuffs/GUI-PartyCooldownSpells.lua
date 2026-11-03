@@ -346,7 +346,6 @@ function Page.ExternalsCard(scrollChild, yOffset, ctx)
         return ids
     end
 
-    -- A move button is enabled only where the move rule allows the move.
     local function MoveState()
         if not (left and right) then return end
         local full, off = HXRules.CastOrder(db.HealerExtOrder), OffSet()
