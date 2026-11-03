@@ -55,6 +55,7 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     display:SetCondition("fontSize", function() return mode ~= "CUE_ONLY" end)
     display:SetCondition("hiddenMarks", function() return db.ShowHidden ~= false end)
     display:SetCondition("countSize", function() return db.ShowStackCount ~= false end)
+    display:SetCondition("iconSwipe", function() return db.IconSwipe ~= false end)
 
     local function Regray()
         manager:UpdateAll(cue.Enabled == true)
@@ -272,6 +273,10 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
         local r2 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
         AddSlider(r2, "Icon Size", db, "IconSize", { 24, 120 }, 0.5)
         card3:AddRow(r2, Theme.rowHeight)
+        local r3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+        AddCheckbox(r3, "Enable Swipe", db, "IconSwipe", 0.5, true)
+        display:Register(AddCheckbox(r3, "Reverse Swipe", db, "IconReverse", 0.5), "iconSwipe")
+        card3:AddRow(r3, Theme.rowHeight)
         card3:AddNote("The icon shows only the next stack's drop and how many hidden timers run, not each "
             .. "timer's time.")
     else

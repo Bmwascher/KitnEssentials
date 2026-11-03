@@ -1072,6 +1072,8 @@ local Defaults = {
             ShowHiddenLabel = true,
 
             IconSize = 46,
+            IconSwipe = true,
+            IconReverse = false,
 
             FontSize = 11,
             FontOutline = "OUTLINE",

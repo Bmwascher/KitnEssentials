@@ -505,7 +505,6 @@ function EX:CreateIcon()
     ic.cooldown = CreateFrame("Cooldown", nil, ic, "CooldownFrameTemplate")
     ic.cooldown:SetAllPoints(ic)
     ic.cooldown:SetDrawEdge(false)
-    ic.cooldown:SetDrawSwipe(true)
     ic.cooldown:SetDrawBling(false)
     ic.cooldown:SetCountdownMillisecondsThreshold(3)
     -- Above the swipe, so the count and badge are never darkened.
@@ -529,6 +528,9 @@ function EX:LayoutIcon()
     local db, ic = self.db, self.iconEl
     local size, font = db.IconSize or 46, db.FontSize or 11
     self.frame:SetSize(size, size)
+    ic.cooldown:SetDrawSwipe(db.IconSwipe ~= false)
+    ic.cooldown:SetReverse(db.IconReverse == true)
+    -- The numbers draw with the swipe off; only this hides them.
     ic.cooldown:SetHideCountdownNumbers(db.ShowSeconds == false)
     KE:ApplyCooldownTextStyle(ic.cooldown, db.FontFace, font + 3, db.FontOutline)
     KE:ApplyFontToText(ic.count, db.FontFace, font + 7, db.FontOutline)
