@@ -21,6 +21,7 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
+local Rules = KE.PositionCardRules
 
 local ipairs = ipairs
 
@@ -79,7 +80,7 @@ end
 -- silently fall back to the db root, which can clobber unrelated root keys.
 -- Root keys (anchorFrameType/ParentFrame/Strata) are unaffected — they always
 -- live at the db root regardless of positionKey.
-local function kitSetValue(kit, key, val)
+local function kitWrite(kit, key, val)
     local db = kit._db
     local rootKeys = kit._rootKeys
     if not db then return end
@@ -93,7 +94,17 @@ local function kitSetValue(kit, key, val)
             db[key] = val
         end
     end
+end
+
+local function kitSetValue(kit, key, val)
+    if not kit._db then return end
+    kitWrite(kit, key, val)
     if kit._onChange then kit._onChange() end
+end
+
+-- Re-render so rows that depend on a value appear or disappear.
+local function Rerender()
+    if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
 end
 
 local function CreatePositionCardKit(holder)
@@ -115,12 +126,22 @@ local function CreatePositionCardKit(holder)
         labelWidth = 70,
         callback = function(key)
             if not kit._db or not kit._keys then return end
-            kitSetValue(kit, kit._keys.anchorFrameType, key)
-            -- Re-render so the SELECTFRAME conditional row appears/disappears.
+            local keys = kit._keys
+            local defaults = kit._config and kit._config.defaults or {}
+            local old = kitGetValue(kit, keys.anchorFrameType, defaults.anchorFrameType or "SCREEN")
+            -- Points saved for a frame, read against the screen or the reverse,
+            -- can put the display off screen. Written before the type, so the
+            -- page's change callback runs once with all five values in place.
+            if Rules.CrossesKind(old, key) then
+                kitWrite(kit, keys.selfPoint, "CENTER")
+                kitWrite(kit, keys.anchorPoint, "CENTER")
+                kitWrite(kit, keys.xOffset, 0)
+                kitWrite(kit, keys.yOffset, 0)
+            end
+            kitSetValue(kit, keys.anchorFrameType, key)
+            -- Re-render so the SELECTFRAME conditional rows appear/disappear.
             -- The 0.25s delay matches the original behavior.
-            C_Timer.After(0.25, function()
-                if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
-            end)
+            C_Timer.After(0.25, Rerender)
         end,
     })
     anchorTypeRow:AddWidget(anchorTypeDropdown, 1)

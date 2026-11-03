@@ -3649,6 +3649,14 @@ function L.loadSpellReflectRules(overrides)
     return helpers.loadModule("Modules/Combat/ClassTools/SpellReflectRules.lua", {})
 end
 
+-- GUI/GUIWidgets/GUI-PositionCardRules.lua. Pure logic: nothing to stub.
+-- Returns KE.PositionCardRules, KE.
+function L.loadPositionCardRules()
+    installMock(nil, {})
+    local KE = helpers.loadModule("GUI/GUIWidgets/GUI-PositionCardRules.lua", {})
+    return KE.PositionCardRules, KE
+end
+
 -- Modules/Combat/ClassTools/CustomCooldownsRules.lua. Pure logic: nothing to
 -- stub. Returns KE.
 function L.loadCustomCooldownsRules(overrides)

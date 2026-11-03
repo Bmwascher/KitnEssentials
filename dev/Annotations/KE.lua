@@ -222,6 +222,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field ExecutionerRules table
 ---@field ImminentDemiseRules table
 ---@field SpellReflectRules table
+---@field PositionCardRules table
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table
 ---@field CombatState KE.CombatState
