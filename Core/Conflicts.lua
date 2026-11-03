@@ -23,6 +23,14 @@ local KE = select(2, ...)
 --     happening.
 ---------------------------------------------------------------------------------
 
+-- Read on each call: an EllesmereUI profile switch can replace the table.
+local function EUIKickTrackerConfig()
+    local db = _G._EMT_AceDB
+    local cfg = type(db) == "table" and type(db.profile) == "table" and db.profile.kickTracker
+    if type(cfg) ~= "table" then return nil end
+    return cfg
+end
+
 local CONFLICTS = {
     {
         module = "SkinTooltips",
@@ -207,6 +215,7 @@ local CONFLICTS = {
         resolvers = {
             EllesmereUIGroupFinder = {
                 label = "EllesmereUI's Group Finder",
+                manual = "untick Enable Group Finder at /eui > UI Enhancements > Group Finder",
                 -- It loads with its switch off, so the loaded test alone would
                 -- prompt every EllesmereUI player with this module on. The
                 -- switch keeps the addon's signup helpers and settings page.
@@ -235,7 +244,8 @@ local CONFLICTS = {
     -- That is why EllesmereUIChat has no resolver either. An EllesmereUI
     -- rival gets a resolver only where the whole-addon disable is wrong:
     -- EllesmereUIBlizzardSkin and EllesmereUIQoL bundle unrelated
-    -- features, and EllesmereUIGroupFinder loads with its switch off.
+    -- features, EllesmereUIGroupFinder loads with its switch off, and the
+    -- last row's conflict is one feature of EllesmereUIMythicTimer.
     --
     -- Neither is skinGated, for the same reason as LFGReminder: both
     -- modules run whether or not ElvUI owns skinning, so the gate would
@@ -251,6 +261,39 @@ local CONFLICTS = {
         label  = "Mythic+ Timer",
         dbPath = { "MythicPlusTimer" },
         addons = { "EllesmereUIMythicTimer" },
+    },
+    -- One feature of EllesmereUIMythicTimer, so the whole-addon case stays
+    -- with the row above, which must come first: choosing KE there disables
+    -- the addon this row asks about. setting is that feature's own key. Not
+    -- skinGated: the module runs whether or not ElvUI owns skinning.
+    {
+        module  = "KickTracker",
+        label   = "Interrupt Tracker Nameplate Icons",
+        dbPath  = { "KickTracker" },
+        setting = "PlateIcons",
+        addons  = { "EllesmereUIMythicTimer" },
+        resolvers = {
+            EllesmereUIMythicTimer = {
+                label  = "EllesmereUI's Kick Tracker nameplate icons",
+                manual = "untick Show on Nameplates at /eui > Secondary Addons > Mythic+ Tools > Kick Tracker",
+                -- Per EllesmereUI profile: a profile switch can turn it back
+                -- on, and the next scan asks again. Its database owns every
+                -- level, so a missing one is a refusal, not a repair.
+                apply = function()
+                    local cfg = EUIKickTrackerConfig()
+                    if not cfg then return false end
+                    cfg.showPlates = false
+                    return true
+                end,
+                -- Stateless companion to apply(). Unreadable reads as off, as
+                -- EUI reads it, so the prompt never offers a choice it cannot
+                -- carry out.
+                isActive = function()
+                    local cfg = EUIKickTrackerConfig()
+                    return cfg ~= nil and cfg.enabled == true and cfg.showPlates ~= false
+                end,
+            },
+        },
     },
 }
 
@@ -271,6 +314,11 @@ local function ResolveDB(profile, dbPath)
     end
     if type(node) ~= "table" then return nil end
     return node
+end
+
+local function KESideOn(conflict, moduleDB)
+    if not moduleDB.Enabled then return false end
+    return conflict.setting == nil or moduleDB[conflict.setting] == true
 end
 
 -- The live environment the in-game paths run against. Returns nil before the
@@ -309,7 +357,7 @@ end
 --- env.profile        the AceDB profile table
 --- env.isLoaded       function(addonName) -> boolean
 --- env.shouldNotLoad  true when ElvUI owns skinning
----@return table queue array of { module, label, dbPath, source }; never nil
+---@return table queue array of { module, label, dbPath, source, resolver, setting }; never nil
 function KE:BuildConflictQueue(env)
     local queue = {}
     if type(env) ~= "table" then return queue end
@@ -323,7 +371,7 @@ function KE:BuildConflictQueue(env)
         if not (conflict.skinGated and env.shouldNotLoad)
             and KE:IsFeatureAvailable(conflict.module) then
             local moduleDB = ResolveDB(env.profile, conflict.dbPath)
-            if moduleDB and moduleDB.Enabled then
+            if moduleDB and KESideOn(conflict, moduleDB) then
                 for _, addonName in ipairs(conflict.addons) do
                     local resolver = conflict.resolvers and conflict.resolvers[addonName]
                     if env.isLoaded(addonName, resolver) then
@@ -333,6 +381,7 @@ function KE:BuildConflictQueue(env)
                             dbPath   = conflict.dbPath,
                             source   = addonName,
                             resolver = resolver,
+                            setting  = conflict.setting,
                         }
                     end
                 end
@@ -358,10 +407,10 @@ function KE:GetModuleConflict(moduleName, env)
             local moduleDB = ResolveDB(env.profile, conflict.dbPath)
             -- `not moduleDB` matters: an unreadable DB means the module's
             -- state is UNKNOWN, not off. BuildConflictQueue's `moduleDB and
-            -- moduleDB.Enabled` fails closed for the same nil, but here the
+            -- KESideOn(...)` fails closed for the same nil, but here the
             -- polarity is inverted, so the same expression would fail OPEN and
             -- report a conflict for a module we could not read.
-            if not moduleDB or moduleDB.Enabled then return nil end
+            if not moduleDB or KESideOn(conflict, moduleDB) then return nil end
             for _, addonName in ipairs(conflict.addons) do
                 local resolver = conflict.resolvers and conflict.resolvers[addonName]
                 if env.isLoaded(addonName, resolver) then return addonName end
@@ -414,39 +463,57 @@ local function ShowNextPrompt()
     promptActive = true
 
     local friendly = ADDON_LABELS[item.source] or item.source
+    local resolver = item.resolver
+
+    -- A one-feature row names that feature on both sides; "module" would
+    -- name the whole KE module the player keeps.
+    local subject
+    if item.setting then
+        subject = (resolver and resolver.label or friendly) ..
+            " and the KitnEssentials " .. item.label
+    else
+        subject = friendly .. " and the KitnEssentials " .. item.label .. " module"
+    end
 
     KE:CreatePrompt(
         item.label .. " Conflict",
-        friendly .. " and the KitnEssentials " .. item.label ..
-            " module are both enabled - running both will cause visual and" ..
+        subject .. " are both enabled - running both will cause visual and" ..
             " functional conflicts.\n\nWhich would you like to use?",
         false, nil, false, nil, nil, nil, nil,
         function()
             -- Prefer the rival's own switch where it has one, so choosing KE
             -- over a tooltip clash does not also take out the eight unrelated
-            -- features that ship in the same addon. Falling back to the
-            -- whole-addon disable when apply() cannot run still resolves the
-            -- conflict, which is the outcome the user asked for.
-            local resolver = item.resolver
+            -- features that ship in the same addon. Where a manual path exists
+            -- the whole-addon disable would take more than asked; elsewhere
+            -- it still resolves the conflict, the outcome the user asked for.
             if resolver and resolver.apply and resolver.apply() then
                 KE:Print(resolver.label .. " disabled - reload to apply.")
+                pendingReload = true
+            elseif resolver and resolver.manual then
+                KE:Print("Could not switch off " .. resolver.label .. " - " .. resolver.manual .. ".")
             else
                 if C_AddOns and C_AddOns.DisableAddOn then
                     C_AddOns.DisableAddOn(item.source)
                 end
                 KE:Print(friendly .. " disabled - reload to apply.")
+                pendingReload = true
             end
-            pendingReload = true
             ShowNextPrompt()
         end,
-        -- Escape and the close button reach THIS callback too, an accepted
-        -- risk. The chat line is the mitigation: an accidental dismissal
-        -- announces what it did instead of changing state silently.
+        -- On a whole-module row Escape and the close button reach THIS
+        -- callback too, an accepted risk. The chat line is the mitigation: an
+        -- accidental dismissal announces what it did instead of changing
+        -- state silently.
         function()
             local moduleDB = ResolveDB(KE.db and KE.db.profile, item.dbPath)
-            if moduleDB then moduleDB.Enabled = false end
+            if item.setting then
+                if moduleDB then moduleDB[item.setting] = false end
+                KE:Print("KitnEssentials " .. item.label .. " disabled - reload to apply.")
+            else
+                if moduleDB then moduleDB.Enabled = false end
+                KE:Print("KitnEssentials " .. item.label .. " module disabled - reload to apply.")
+            end
             pendingReload = true
-            KE:Print("KitnEssentials " .. item.label .. " module disabled - reload to apply.")
             ShowNextPrompt()
         end,
         -- Green marks the recommended choice at a glance; the label is a
@@ -454,7 +521,12 @@ local function ShowNextPrompt()
         -- the choice is symmetric -- "Keep" implied the other option was the
         -- destructive one.
         "|cff00ff00Use KitnEssentials|r",
-        "Use " .. friendly
+        "Use " .. friendly,
+        nil, nil,
+        -- On a one-feature row Escape and the close button run neither
+        -- callback: only a click may turn off part of a module the player
+        -- kept on. The next scan reclaims the stalled queue.
+        item.setting and { closeIsNeutral = true } or nil
     )
 end
 

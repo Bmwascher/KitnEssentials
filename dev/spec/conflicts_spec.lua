@@ -361,6 +361,84 @@ describe("Core/Conflicts.lua decision layer", function()
             end
         end)
     end)
+
+    describe("KickTracker nameplate icons conflict entry", function()
+        -- Ignores the resolver, so these cases test the KE side alone and
+        -- reach apply/isActive whatever the rival's state.
+        local function ktEnv(db)
+            return {
+                profile = { KickTracker = db },
+                isLoaded = function(name) return name == "EllesmereUIMythicTimer" end,
+                shouldNotLoad = false,
+            }
+        end
+        local function ktResolver()
+            return KE:BuildConflictQueue(ktEnv({ Enabled = true, PlateIcons = true }))[1].resolver
+        end
+
+        -- _G is shared across the whole run, so every case that seeds the
+        -- rival's saved variable must put it back.
+        after_each(function() _G._EMT_AceDB = nil end)
+
+        -- The tracker draws icons only while PlateIcons is exactly true, so
+        -- an unset key must not prompt.
+        it("queues only while the tracker is on and its nameplate icons are exactly true", function()
+            for _, case in ipairs({
+                { name = "both on",     db = { Enabled = true,  PlateIcons = true },  n = 1 },
+                { name = "icons off",   db = { Enabled = true,  PlateIcons = false }, n = 0 },
+                { name = "icons unset", db = { Enabled = true },                      n = 0 },
+                { name = "tracker off", db = { Enabled = false, PlateIcons = true },  n = 0 },
+            }) do
+                assert.equals(case.n, #KE:BuildConflictQueue(ktEnv(case.db)), case.name)
+            end
+        end)
+
+        it("isActive is true only while the rival's tracker and its nameplate icons are on", function()
+            for _, case in ipairs({
+                { name = "on, icons unset",    db = { profile = { kickTracker = { enabled = true } } },                     active = true },
+                { name = "on, icons on",       db = { profile = { kickTracker = { enabled = true, showPlates = true } } },  active = true },
+                { name = "icons off",          db = { profile = { kickTracker = { enabled = true, showPlates = false } } }, active = false },
+                { name = "tracker unset",      db = { profile = { kickTracker = {} } },                                     active = false },
+                { name = "kickTracker absent", db = { profile = {} },                                                       active = false },
+                { name = "profile absent",     db = {},                                                                     active = false },
+                { name = "handle absent",      db = nil,                                                                    active = false },
+            }) do
+                _G._EMT_AceDB = case.db
+                assert.equals(case.active, ktResolver().isActive(), case.name)
+            end
+        end)
+
+        -- `after` is a separate literal: comparing the saved variable
+        -- against the table it IS would pass any write.
+        it("apply turns the icons off in the table the rival holds and refuses a missing level", function()
+            local held = { enabled = true, showPlates = true }
+            _G._EMT_AceDB = { profile = { kickTracker = held } }
+            assert.is_true(ktResolver().apply())
+            assert.equals(held, _G._EMT_AceDB.profile.kickTracker)
+            assert.same({ enabled = true, showPlates = false }, held)
+
+            for _, case in ipairs({
+                { name = "kickTracker absent", db = { profile = {} }, after = { profile = {} } },
+                { name = "profile absent",     db = {},               after = {} },
+                { name = "handle absent",      db = nil,              after = nil },
+            }) do
+                _G._EMT_AceDB = case.db
+                assert.is_false(ktResolver().apply(), case.name)
+                assert.same(case.after, _G._EMT_AceDB, case.name)
+            end
+        end)
+
+        it("GetModuleConflict reads the KE side as off once its feature key is off", function()
+            for _, case in ipairs({
+                { name = "icons off, tracker on", plateIcons = false, rival = "EllesmereUIMythicTimer" },
+                { name = "icons on",              plateIcons = true,  rival = nil },
+            }) do
+                assert.equals(case.rival, KE:GetModuleConflict("KickTracker", ktEnv({
+                    Enabled = true, PlateIcons = case.plateIcons,
+                })), case.name)
+            end
+        end)
+    end)
 end)
 
 describe("Core/Conflicts.lua prompt queue", function()
@@ -553,6 +631,57 @@ describe("Core/Conflicts.lua prompt queue", function()
         local answered = #prompts
         KE:ScanAddonConflicts()
         assert.equals(answered, #prompts)
+    end)
+end)
+
+describe("Core/Conflicts.lua one-feature rows in the prompt queue", function()
+    local KE, prompts, disabled, printed
+
+    -- login() above, with a chosen profile in place of the tooltip one.
+    local function loginWith(profile, loadedNames)
+        KE, prompts, disabled, printed = L.loadConflicts()
+        KE.db.profile = profile
+        local loaded = {}
+        for _, name in ipairs(loadedNames) do loaded[name] = true end
+        _G.C_AddOns.IsAddOnLoaded = function(name) return loaded[name] == true end
+        _G.frames[1]:Fire("PLAYER_ENTERING_WORLD")
+    end
+
+    local function plates() return { profile = { kickTracker = { enabled = true } } } end
+
+    -- _G is shared across the whole run, so every case that seeds the
+    -- rival's saved variable must put it back.
+    after_each(function() _G._EMT_AceDB = nil end)
+
+    it("choosing the rival turns off only the nameplate icons", function()
+        _G._EMT_AceDB = plates()
+        loginWith({ KickTracker = { Enabled = true, PlateIcons = true, ShowBars = false } },
+            { "EllesmereUIMythicTimer" })
+        prompts[1].onCancel()
+        assert.same({ Enabled = true, PlateIcons = false, ShowBars = false }, KE.db.profile.KickTracker)
+        assert.same({}, disabled)
+    end)
+
+    it("names the feature, not a module, in the prompt and in chat", function()
+        _G._EMT_AceDB = plates()
+        loginWith({ KickTracker = { Enabled = true, PlateIcons = true } }, { "EllesmereUIMythicTimer" })
+        assert.is_truthy(prompts[1].text:find("Kick Tracker nameplate icons", 1, true))
+        assert.is_falsy(prompts[1].text:find("module", 1, true))
+        prompts[1].onCancel()
+        assert.is_falsy(printed[1]:find("module", 1, true))
+    end)
+
+    -- The switch became unreachable after the prompt showed. Disabling the
+    -- addon instead would take its timer and kick bars with it, and nothing
+    -- changed, so no reload is owed.
+    it("names the manual path and disables nothing when the rival's switch cannot be written", function()
+        _G._EMT_AceDB = plates()
+        loginWith({ KickTracker = { Enabled = true, PlateIcons = true } }, { "EllesmereUIMythicTimer" })
+        _G._EMT_AceDB = nil
+        prompts[1].onAccept()
+        assert.same({}, disabled)
+        assert.is_truthy(printed[1]:find("Show on Nameplates", 1, true))
+        assert.equals(1, #prompts)
     end)
 end)
 
