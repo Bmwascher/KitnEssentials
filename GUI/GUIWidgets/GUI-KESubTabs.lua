@@ -102,8 +102,8 @@ function GUIFrame.SubTabOffset(widths, index, spacing)
     return x
 end
 
--- Re-measured a frame after layout: a FontString can report short before its
--- first layout pass, and there is no distributed slack to absorb a bad
+-- Run at build and again a frame later: a FontString can report short before
+-- its first layout pass, and there is no distributed slack to absorb a bad
 -- measurement. Each pass clears before it anchors, because setting the same
 -- point again does not give back a position the client has dropped.
 local function PlaceFillTabs(strip)
@@ -120,9 +120,8 @@ local function PlaceFillTabs(strip)
     end
 end
 
--- OnSizeChanged runs inside the client's layout, where a moved tab can be
--- left with no position, so a resize, a show and a build only queue one pass
--- for the next frame.
+-- OnSizeChanged runs inside the client's layout, so a resize or a show moves
+-- no tab there; like the build, it queues one pass for the next frame.
 local function QueuePlaceFillTabs(strip)
     if strip._placeQueued then return end
     strip._placeQueued = true
