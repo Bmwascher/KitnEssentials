@@ -39,6 +39,8 @@ return {
         ERR_ALREADY_PICKPOCKETED = "GlobalStrings.lua constant, not in the UI-source export (same class as ROLL_DISENCHANT); nil-guarded by the `if msg then` filter in Modules/QoL/Automation/Automation.lua, BuildErrKeepList",
         ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S = "GlobalStrings.lua format-string constant, not in the UI-source export; nil-guarded in Modules/QoL/Automation/Automation.lua, IsBootNotEligible, and its string.format is pcall-wrapped",
         issecurevariable = "undocumented C-side taint check, absent from the API docs and the UI-source scan; nil-guarded in Modules/Core/Diagnostics/Profiler.lua, MarkSharedHandlerRows",
+        SPELL_FAILED_PACIFIED = "GlobalStrings.lua constant, not in the UI-source export (same class as ROLL_DISENCHANT); a nil value never matches a string message in Modules/QoL/Automation/Automation.lua, AU.DruidLeaveOnError",
+        ERR_ATTACK_PACIFIED = "GlobalStrings.lua constant, not in the UI-source export (same class as ROLL_DISENCHANT); a nil value never matches a string message in Modules/QoL/Automation/Automation.lua, AU.DruidLeaveOnError",
     },
     unused_ok = {
         canaccesstable = "declared for symmetry with the secret-intrinsics family",
