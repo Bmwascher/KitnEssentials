@@ -366,12 +366,13 @@ end
 ---------------------------------------------------------------------------------
 -- A profile switch calls UpdateDB on every module, enabled or not, but
 -- ApplySettings only on a module enabled before and after it, so the
--- master-independent zone text hide and helptip suppression follow the
--- profile from here.
+-- master-independent zone text hide, helptip suppression and druid
+-- autoUnshift restore run from here.
 function AU:UpdateDB()
     self.db = KE.db.profile.Automation
     ApplyHideZoneText()
     ApplyHideHelptips()
+    self:CheckDruidUnshift()
 end
 
 function AU:OnInitialize()
@@ -3058,6 +3059,306 @@ function AU:SetHideTransformItem(key, enabled)
     ApplyHideTransforms()
 end
 
+-- Druid Forms --
+-- Travel Form is the one form addon code may leave, in or out of combat. The
+-- autoUnshift CVar is account-wide, so the player's own value is kept in the
+-- account table and given back on any character whose choice does not want
+-- KE's value.
+
+-- A function scope, not only a block: a do block's locals still count toward
+-- the main chunk's 200-local ceiling, which this file is near, while a
+-- function has a ceiling of its own.
+do
+local function DefineDruidForms()
+
+local CancelShapeshiftForm = CancelShapeshiftForm
+local GetShapeshiftFormID = GetShapeshiftFormID
+local IsFlying = IsFlying
+local IsSubmerged = IsSubmerged
+local IsFlyableArea = IsFlyableArea
+local IsOutdoors = IsOutdoors
+local IsInInstance = IsInInstance
+local InCombatLockdown = InCombatLockdown
+local UnitClass = UnitClass
+
+local TRAVEL_FORMS = { [3] = true, [27] = true }
+local GROUND_TRAVEL_FORM = 3
+local DRUID_FLY_COOLDOWN = 5
+local DRUID_REGEN_SETTLE = 0.2
+local GUARDIAN_SPEC = 3
+local UNSHIFT_CVAR = "autoUnshift"
+local UNSHIFT_STAY = "0"
+local UNSHIFT_RECORD = "DruidAutoUnshift"
+local KNOWN_MODES = { NEVER = true, ALWAYS = true, COMBAT = true, COMBAT_GUARDIAN = true }
+local COMBAT_MODES = { COMBAT = true, COMBAT_GUARDIAN = true }
+
+-- isDruid is true only for a class read as DRUID; nil (not read yet) counts
+-- as another class.
+function AU.DruidFormsEffective(db, moduleOn, isDruid, travelAdmitted, stayAdmitted, guardianAdmitted)
+    if not (moduleOn and db and db.Enabled and isDruid == true) then
+        return false, false, "NEVER"
+    end
+    local leaveOnBlock = travelAdmitted == true and db.DruidLeaveTravelForm == true
+    local leaveGround = travelAdmitted == true and db.DruidLeaveGroundTravelForm == true
+    local mode = db.DruidStayInForm
+    if stayAdmitted ~= true or not KNOWN_MODES[mode] then mode = "NEVER" end
+    if mode == "COMBAT_GUARDIAN" and guardianAdmitted ~= true then mode = "NEVER" end
+    return leaveOnBlock, leaveGround, mode
+end
+
+-- One answer per event: UI_ERROR_MESSAGE, MOUNT_JOURNAL_USABILITY_CHANGED,
+-- PLAYER_REGEN_DISABLED, PLAYER_REGEN_ENABLED. World entry has no listener:
+-- every enabled module is applied at PLAYER_ENTERING_WORLD, and the apply runs
+-- the ground check itself.
+function AU.DruidFormsListens(leaveOnBlock, leaveGround, combatMode, unshiftPending)
+    local ground = leaveGround == true
+    local pull = combatMode == true
+    return leaveOnBlock == true, ground, pull, ground or pull or unshiftPending == true
+end
+
+-- A secret is refused before a comparison could throw on it.
+function AU.DruidLeaveOnError(message, formID, flying)
+    if issecretvalue and (issecretvalue(message) or issecretvalue(formID)) then return false end
+    if type(message) ~= "string" then return false end
+    if message ~= SPELL_FAILED_PACIFIED and message ~= ERR_ATTACK_PACIFIED then return false end
+    if not TRAVEL_FORMS[formID] then return false end
+    return flying ~= true
+end
+
+-- IsFlyableArea answers for the zone, IsOutdoors for where the player stands;
+-- flight form needs both.
+function AU.DruidLeaveGroundTravel(inCombat, inKey, inInstance, flyable, outdoors, formID, flying, submerged)
+    if inCombat == true or inKey == true or inInstance == true then return false end
+    if flyable ~= true or outdoors ~= true then return false end
+    if issecretvalue and issecretvalue(formID) then return false end
+    if formID ~= GROUND_TRAVEL_FORM then return false end
+    return flying ~= true and submerged ~= true
+end
+
+-- "0" keeps the player in form; nil means the player's own value.
+function AU.DruidUnshiftWanted(mode, inCombat, specIndex)
+    if mode == "ALWAYS" then return UNSHIFT_STAY end
+    if mode == "COMBAT" and inCombat == true then return UNSHIFT_STAY end
+    if mode == "COMBAT_GUARDIAN" and inCombat == true and specIndex == GUARDIAN_SPEC then
+        return UNSHIFT_STAY
+    end
+    return nil
+end
+
+-- Asked before the module enables at login, so the profile's switch stands in
+-- for the module's state. Out of combat, every choice but Always wants the
+-- player's own value.
+function AU.DruidUnshiftRestoreDue(db, automationAdmitted, isDruid, stayAdmitted, guardianAdmitted)
+    local mode = select(3, AU.DruidFormsEffective(db, automationAdmitted, isDruid, false,
+        stayAdmitted, guardianAdmitted))
+    return AU.DruidUnshiftWanted(mode, false, nil) == nil
+end
+
+-- The record { own, wrote } exists only while KE owns the CVar. A value that
+-- no longer matches KE's last write was set by the player, so a restore leaves
+-- it alone. Lockdown blocks the write, so a locked call only defers.
+function AU.DruidUnshiftRun(record, current, wanted, locked, trySet)
+    if type(record) ~= "table" or type(record.own) ~= "string" or type(record.wrote) ~= "string" then
+        record = nil
+    end
+    if locked then return record, true end
+    if type(current) ~= "string" then return record, false end
+    if record and current ~= record.wrote then record = nil end
+    if wanted == nil then
+        if not record or current == record.own then return nil, false end
+        if trySet(record.own) then return nil, false end
+        return record, false
+    end
+    if current == wanted then return record, false end
+    if trySet(wanted) then
+        return { own = record and record.own or current, wrote = wanted }, false
+    end
+    return record, false
+end
+
+local druidFormsFrame
+local druidClassRead, playerIsDruid = false, false
+local curLeaveOnBlock, curLeaveGround, curMode = false, false, "NEVER"
+local flyTimer, flyRecheck = nil, false
+local flyChecks = 0
+local regenSettlePending = false
+local unshiftPending = false
+
+-- Cached only once the class reads as a string.
+local function IsDruid()
+    if druidClassRead then return playerIsDruid end
+    if not UnitClass then return nil end
+    local _, classFile = UnitClass("player")
+    if type(classFile) ~= "string" then return nil end
+    druidClassRead, playerIsDruid = true, classFile == "DRUID"
+    return playerIsDruid
+end
+
+local function Effective()
+    return AU.DruidFormsEffective(AU.db, AU:IsEnabled(), IsDruid(),
+        Admitted("AutomationDruidTravelForm"), Admitted("AutomationDruidStayInForm"),
+        Admitted("AutomationDruidGuardian"))
+end
+
+local function UnshiftStore()
+    return KE.db and KE.db.global
+end
+
+-- Only a true return means the write landed.
+local function TrySetUnshift(value)
+    local ok, set = pcall(C_CVar.SetCVar, UNSHIFT_CVAR, value)
+    return ok and set == true
+end
+
+local function ReadSpec()
+    local info = C_SpecializationInfo
+    if not (info and info.GetSpecialization) then return nil end
+    local ok, index = pcall(info.GetSpecialization)
+    if ok then return index end
+    return nil
+end
+
+local OnDruidEvent
+
+local function SyncDruidEvents()
+    curLeaveOnBlock, curLeaveGround, curMode = Effective()
+    local errorOn, mountOn, pullOn, regenOn = AU.DruidFormsListens(
+        curLeaveOnBlock, curLeaveGround, COMBAT_MODES[curMode] == true, unshiftPending)
+    if not druidFormsFrame then
+        if not (errorOn or mountOn or pullOn or regenOn) then return end
+        druidFormsFrame = CreateFrame("Frame")
+        druidFormsFrame:SetScript("OnEvent", OnDruidEvent)
+        -- Reachable from the module so an in-game probe can read its events.
+        AU.druidFormsFrame = druidFormsFrame
+    end
+    SetRepairReportEvent(druidFormsFrame, "UI_ERROR_MESSAGE", errorOn)
+    SetRepairReportEvent(druidFormsFrame, "MOUNT_JOURNAL_USABILITY_CHANGED", mountOn)
+    SetRepairReportEvent(druidFormsFrame, "PLAYER_REGEN_DISABLED", pullOn)
+    SetRepairReportEvent(druidFormsFrame, "PLAYER_REGEN_ENABLED", regenOn)
+end
+
+local function RunUnshift(wanted)
+    local store = UnshiftStore()
+    if not store then return end
+    local ok, current = pcall(C_CVar.GetCVar, UNSHIFT_CVAR)
+    if not ok then current = nil end
+    local locked = InCombatLockdown ~= nil and InCombatLockdown() == true
+    local record, pending = AU.DruidUnshiftRun(store[UNSHIFT_RECORD], current, wanted, locked, TrySetUnshift)
+    store[UNSHIFT_RECORD] = record
+    if pending ~= unshiftPending then
+        unshiftPending = pending
+        SyncDruidEvents()
+    end
+end
+
+-- inCombat is true only at combat start, the one moment the spec is read.
+local function StepUnshift(inCombat)
+    local store = UnshiftStore()
+    if not store then return end
+    local mode = select(3, Effective())
+    local spec = (inCombat and mode == "COMBAT_GUARDIAN") and ReadSpec() or nil
+    local wanted = AU.DruidUnshiftWanted(mode, inCombat, spec)
+    if wanted == nil and store[UNSHIFT_RECORD] == nil and not unshiftPending then return end
+    RunUnshift(wanted)
+end
+
+local function CancelFlyTimer()
+    if flyTimer then flyTimer:Cancel() end
+    flyTimer, flyRecheck = nil, false
+end
+
+-- At most one leave per DRUID_FLY_COOLDOWN; a trigger inside it is checked
+-- once when the cooldown ends.
+local function TryLeaveGroundTravel()
+    if flyTimer then
+        flyRecheck = true
+        return
+    end
+    flyChecks = flyChecks + 1
+    if not CancelShapeshiftForm then return end
+    local challenge = C_ChallengeMode
+    local inKey = challenge and challenge.IsChallengeModeActive and challenge.IsChallengeModeActive()
+    if not AU.DruidLeaveGroundTravel(UnitAffectingCombat("player"), inKey,
+            IsInInstance and IsInInstance(), IsFlyableArea and IsFlyableArea(),
+            IsOutdoors and IsOutdoors(), GetShapeshiftFormID and GetShapeshiftFormID(),
+            IsFlying and IsFlying(), IsSubmerged and IsSubmerged()) then
+        return
+    end
+    CancelShapeshiftForm()
+    local mine
+    mine = C_Timer.NewTimer(DRUID_FLY_COOLDOWN, function()
+        if flyTimer ~= mine then return end
+        flyTimer = nil
+        if flyRecheck then
+            flyRecheck = false
+            TryLeaveGroundTravel()
+        end
+    end)
+    flyTimer = mine
+end
+
+function OnDruidEvent(_, event, _, message)
+    if event == "UI_ERROR_MESSAGE" then
+        if not curLeaveOnBlock or not CancelShapeshiftForm then return end
+        local formID = GetShapeshiftFormID and GetShapeshiftFormID()
+        if AU.DruidLeaveOnError(message, formID, IsFlying and IsFlying()) then
+            CancelShapeshiftForm()
+        end
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        -- Lockdown starts after this event, so the write still lands here.
+        StepUnshift(true)
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        StepUnshift(false)
+        if curLeaveGround and not regenSettlePending then
+            regenSettlePending = true
+            C_Timer.After(DRUID_REGEN_SETTLE, function()
+                regenSettlePending = false
+                if curLeaveGround then TryLeaveGroundTravel() end
+            end)
+        end
+    elseif curLeaveGround then
+        TryLeaveGroundTravel()
+    end
+end
+
+function AU:ApplyDruidForms()
+    SyncDruidEvents()
+    -- Each apply starts from an event or a setting the listeners missed (world
+    -- entry above all), so the ground check runs here once.
+    if curLeaveGround then TryLeaveGroundTravel() else CancelFlyTimer() end
+    StepUnshift(false)
+end
+
+-- Read by an in-game probe: whether the leave cooldown runs, whether a
+-- trigger inside it is waiting for the recheck, and how many checks have run
+-- past the cooldown gate this session.
+function AU:DruidFlyCooling()
+    return flyTimer ~= nil, flyRecheck == true, flyChecks
+end
+
+-- Runs from UpdateDB, so it reaches every character with Automation on or
+-- off. Without a record it reads one field and stops.
+function AU:CheckDruidUnshift()
+    local store = UnshiftStore()
+    if not (store and store[UNSHIFT_RECORD] ~= nil) then return end
+    local function restore()
+        if AU.DruidUnshiftRestoreDue(AU.db, Admitted("Automation"), IsDruid(),
+                Admitted("AutomationDruidStayInForm"), Admitted("AutomationDruidGuardian")) then
+            RunUnshift(nil)
+        end
+    end
+    -- The saved value is not readable until the client has loaded its CVars.
+    if EventUtil and EventUtil.ContinueOnVariablesLoaded then
+        EventUtil.ContinueOnVariablesLoaded(restore)
+    else
+        restore()
+    end
+end
+
+end
+DefineDruidForms()
+end
+
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
@@ -3091,6 +3392,7 @@ function AU:ApplySettings()
     SetupHideScreenshotStatus()
     ApplyHideErrorMessages()
     ApplyHideTransforms()
+    self:ApplyDruidForms()
     SetupOmniumButton()
     SetupTrainAllButton()
 end
@@ -3133,6 +3435,7 @@ function AU:TeardownPorts()
     SetupFastLoot()
     SetupAutoFillDelete()
     SetupPersistSignupNote()
+    self:ApplyDruidForms()
 end
 
 function AU:OnDisable()

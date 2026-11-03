@@ -31,6 +31,8 @@
 --     restores on its own route only.
 --   * Hide Helptips' tutorial restore, which never undoes a write that did
 --     not land.
+--   * Druid Forms: who may act, when, the autoUnshift ownership rule, and the
+--     restore on any character whose choice no longer wants KE's value.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -2251,5 +2253,162 @@ describe("Automation Hide Helptips tutorial restore", function()
             AU:ApplySettings()
             assert.same(row.writes, writes, row.name)
         end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Druid Forms. Every rule is a pure function on AU, so no frame or event is
+-- driven here; the game side is smoke steps 14.1-14.11F.
+---------------------------------------------------------------------------------
+describe("Automation druid forms", function()
+    local AU
+    before_each(function() AU = newFixture().AU end)
+
+    it("reads every option off for the master off, the module off or a non-druid, and drops only what a load withholds", function()
+        local ON = { Enabled = true, DruidLeaveTravelForm = true, DruidLeaveGroundTravelForm = true, DruidStayInForm = "COMBAT_GUARDIAN" }
+        local MASTER_OFF = { Enabled = false, DruidLeaveTravelForm = true, DruidLeaveGroundTravelForm = true, DruidStayInForm = "ALWAYS" }
+        local OFF = { false, false, "NEVER" }
+        for _, row in ipairs({
+            { name = "master off",        db = MASTER_OFF, module = true,  druid = true,  travel = true,  stay = true,  guardian = true,  want = OFF },
+            { name = "module off",        db = ON,         module = false, druid = true,  travel = true,  stay = true,  guardian = true,  want = OFF },
+            { name = "non-druid",         db = ON,         module = true,  druid = false, travel = true,  stay = true,  guardian = true,  want = OFF },
+            { name = "class not read",    db = ON,         module = true,  druid = nil,   travel = true,  stay = true,  guardian = true,  want = OFF },
+            { name = "all admitted",      db = ON,         module = true,  druid = true,  travel = true,  stay = true,  guardian = true,  want = { true, true, "COMBAT_GUARDIAN" } },
+            { name = "travel withheld",   db = ON,         module = true,  druid = true,  travel = false, stay = true,  guardian = true,  want = { false, false, "COMBAT_GUARDIAN" } },
+            { name = "stay withheld",     db = ON,         module = true,  druid = true,  travel = true,  stay = false, guardian = true,  want = { true, true, "NEVER" } },
+            { name = "guardian withheld", db = ON,         module = true,  druid = true,  travel = true,  stay = true,  guardian = false, want = { true, true, "NEVER" } },
+            { name = "unknown mode",      db = { Enabled = true, DruidStayInForm = "SOMETIMES" }, module = true, druid = true, travel = true, stay = true, guardian = true, want = OFF },
+        }) do
+            assert.same(row.want, { AU.DruidFormsEffective(row.db, row.module, row.druid, row.travel, row.stay, row.guardian) }, row.name)
+        end
+    end)
+
+    it("registers nothing with every option off, and exactly each option's events otherwise", function()
+        -- Answers in order: error, mount, combat start, combat end.
+        for _, row in ipairs({
+            { name = "all off",         block = false, ground = false, combat = false, pending = false, want = { false, false, false, false } },
+            { name = "leave on block",  block = true,  ground = false, combat = false, pending = false, want = { true, false, false, false } },
+            { name = "leave on ground", block = false, ground = true,  combat = false, pending = false, want = { false, true, false, true } },
+            { name = "combat choice",   block = false, ground = false, combat = true,  pending = false, want = { false, false, true, true } },
+            { name = "restore pending", block = false, ground = false, combat = false, pending = true,  want = { false, false, false, true } },
+        }) do
+            assert.same(row.want, { AU.DruidFormsListens(row.block, row.ground, row.combat, row.pending) }, row.name)
+        end
+    end)
+
+    it("leaves only on the two pacified messages in Travel Form on the ground, and never on a secret", function()
+        _G.SPELL_FAILED_PACIFIED = "Can't use that ability while pacified"
+        _G.ERR_ATTACK_PACIFIED = "Can't attack while pacified."
+        -- The secret rows mark an input that would otherwise match, so only the
+        -- secrecy guard can refuse them.
+        for _, row in ipairs({
+            { name = "spell, flying form on the ground", msg = _G.SPELL_FAILED_PACIFIED, form = 27, flying = false, want = true },
+            { name = "attack, ground form",              msg = _G.ERR_ATTACK_PACIFIED,   form = 3,  flying = false, want = true },
+            { name = "another message",                  msg = "Interrupted",            form = 27, flying = false, want = false },
+            { name = "Cat Form",                         msg = _G.SPELL_FAILED_PACIFIED, form = 1,  flying = false, want = false },
+            { name = "in the air",                       msg = _G.SPELL_FAILED_PACIFIED, form = 27, flying = true,  want = false },
+            { name = "secret message",                   msg = _G.SPELL_FAILED_PACIFIED, form = 27, flying = false, secret = "msg",  want = false },
+            { name = "secret form",                      msg = _G.SPELL_FAILED_PACIFIED, form = 27, flying = false, secret = "form", want = false },
+        }) do
+            _G.issecretvalue = function(v)
+                if row.secret == "msg" then return v == row.msg end
+                if row.secret == "form" then return v == row.form end
+                return false
+            end
+            assert.equals(row.want, AU.DruidLeaveOnError(row.msg, row.form, row.flying), row.name)
+        end
+        _G.SPELL_FAILED_PACIFIED, _G.ERR_ATTACK_PACIFIED = nil, nil
+    end)
+
+    it("leaves ground Travel Form only out of combat, keys and instances, outdoors where flying is allowed, on the ground and dry", function()
+        local CLEAR = { false, false, false, true, true, 3, false, false }
+        local function leave(a)
+            return AU.DruidLeaveGroundTravel(a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8])
+        end
+        assert.is_true(leave(CLEAR), "all clear")
+        for i, flip in ipairs({
+            { name = "in combat",            value = true },
+            { name = "in a key",             value = true },
+            { name = "in an instance",       value = true },
+            { name = "no flying allowed",    value = false },
+            { name = "indoors",              value = false },
+            { name = "flying Travel Form",   value = 27 },
+            { name = "in the air",           value = true },
+            { name = "underwater",           value = true },
+        }) do
+            local args = { CLEAR[1], CLEAR[2], CLEAR[3], CLEAR[4], CLEAR[5], CLEAR[6], CLEAR[7], CLEAR[8] }
+            args[i] = flip.value
+            assert.is_false(leave(args), flip.name)
+        end
+        -- The ground form ID itself, marked secret: only the secrecy guard refuses it.
+        _G.issecretvalue = function(v) return v == CLEAR[6] end
+        assert.is_false(leave(CLEAR), "secret form")
+    end)
+
+    it("wants autoUnshift 0 for Always, for In Combat in a fight, and for Guardian only in a fight in spec 3", function()
+        for _, row in ipairs({
+            { mode = "NEVER",           combat = false, spec = 3, want = nil },
+            { mode = "NEVER",           combat = true,  spec = 3, want = nil },
+            { mode = "ALWAYS",          combat = false, spec = 1, want = "0" },
+            { mode = "ALWAYS",          combat = true,  spec = 1, want = "0" },
+            { mode = "COMBAT",          combat = false, spec = 1, want = nil },
+            { mode = "COMBAT",          combat = true,  spec = 1, want = "0" },
+            { mode = "COMBAT_GUARDIAN", combat = true,  spec = 3, want = "0" },
+            { mode = "COMBAT_GUARDIAN", combat = true,  spec = 2, want = nil },
+            { mode = "COMBAT_GUARDIAN", combat = false, spec = 3, want = nil },
+        }) do
+            assert.equals(row.want, AU.DruidUnshiftWanted(row.mode, row.combat, row.spec),
+                row.mode .. " " .. tostring(row.combat) .. " " .. row.spec)
+        end
+    end)
+
+    it("gives the player's value back on a non-druid, an unread class, the master off or a choice that wants it, and leaves a druid's Always alone", function()
+        for _, row in ipairs({
+            { name = "non-druid with Always in its profile", db = { Enabled = true,  DruidStayInForm = "ALWAYS" }, druid = false, due = true },
+            { name = "class not read yet",                   db = { Enabled = true,  DruidStayInForm = "ALWAYS" }, druid = nil,   due = true },
+            { name = "druid, master off",                    db = { Enabled = false, DruidStayInForm = "ALWAYS" }, druid = true,  due = true },
+            { name = "druid, Never",                         db = { Enabled = true,  DruidStayInForm = "NEVER" },  druid = true,  due = true },
+            { name = "druid, In Combat out of a fight",      db = { Enabled = true,  DruidStayInForm = "COMBAT" }, druid = true,  due = true },
+            { name = "druid, Always",                        db = { Enabled = true,  DruidStayInForm = "ALWAYS" }, druid = true,  due = false },
+        }) do
+            assert.equals(row.due, AU.DruidUnshiftRestoreDue(row.db, true, row.druid, true, true), row.name)
+        end
+    end)
+
+    it("owns autoUnshift only after a landed write, gives back only what it wrote, and never writes in lockdown", function()
+        local OWNED = { own = "1", wrote = "0" }
+        for _, row in ipairs({
+            { name = "nothing owned, own value wanted",  record = nil,   current = "1", wanted = nil, want = nil,   writes = {} },
+            { name = "already the player's 0",           record = nil,   current = "0", wanted = "0", want = nil,   writes = {} },
+            { name = "first write lands",                record = nil,   current = "1", wanted = "0", want = OWNED, writes = { "0" } },
+            { name = "first write refused",              record = nil,   current = "1", wanted = "0", refuse = true, want = nil, writes = {} },
+            { name = "owned and held",                   record = OWNED, current = "0", wanted = "0", want = OWNED, writes = {} },
+            { name = "restore lands",                    record = OWNED, current = "0", wanted = nil, want = nil,   writes = { "1" } },
+            { name = "restore refused keeps the record", record = OWNED, current = "0", wanted = nil, refuse = true, want = OWNED, writes = {} },
+            { name = "player set their own value back",  record = OWNED, current = "1", wanted = nil, want = nil,   writes = {} },
+            -- "2" stands for any value KE did not write, so the change guard
+            -- alone decides these two rows.
+            { name = "player changed it, own wanted",    record = OWNED, current = "2", wanted = nil, want = nil,   writes = {} },
+            { name = "player changed it, 0 wanted",      record = OWNED, current = "2", wanted = "0", want = { own = "2", wrote = "0" }, writes = { "0" } },
+            { name = "malformed record dropped unwritten", record = { own = 1, wrote = "0" }, current = "0", wanted = nil, want = nil, writes = {} },
+            { name = "unreadable value",                 record = OWNED, current = nil, wanted = nil, want = OWNED, writes = {} },
+        }) do
+            local writes = {}
+            local function trySet(value)
+                if row.refuse then return false end
+                writes[#writes + 1] = value
+                return true
+            end
+            local record, pending = AU.DruidUnshiftRun(row.record, row.current, row.wanted, false, trySet)
+            assert.same(row.want, record, row.name)
+            assert.same(row.writes, writes, row.name)
+            assert.is_false(pending, row.name)
+        end
+
+        local called = false
+        local record, pending = AU.DruidUnshiftRun(OWNED, "0", nil, true, function() called = true return true end)
+        assert.same(OWNED, record, "locked keeps the record")
+        assert.is_true(pending, "locked defers")
+        assert.is_false(called, "locked never writes")
     end)
 end)
