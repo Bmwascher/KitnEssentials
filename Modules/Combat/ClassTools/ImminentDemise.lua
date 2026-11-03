@@ -256,7 +256,9 @@ function ID:LayoutPips()
     local showCount = db.ShowCount ~= false
     local rowW = Rules.TOTAL * pw + (Rules.TOTAL - 1) * gap
     local width = showCount and rowW + COUNT_GAP + size * 2 or rowW
-    self.anchor:SetSize(width, math_max(ph, size * 1.2))
+    -- Without the count the box is the segments alone: Font Size is grayed then.
+    local height = showCount and math_max(ph, size * 1.2) or ph
+    self.anchor:SetSize(width, height)
     for i, seg in ipairs(pips.segs) do
         seg:SetSize(pw, ph)
         seg:ClearAllPoints()

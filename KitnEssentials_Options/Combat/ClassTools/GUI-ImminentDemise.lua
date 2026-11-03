@@ -22,18 +22,6 @@ local MODES = {
     { key = "TEXT", text = "Text" },
 }
 
-local COUNT_POSITIONS = {
-    { key = "CENTER",      text = "Center" },
-    { key = "TOP",         text = "Top" },
-    { key = "BOTTOM",      text = "Bottom" },
-    { key = "TOPLEFT",     text = "Top Left" },
-    { key = "TOPRIGHT",    text = "Top Right" },
-    { key = "BOTTOMLEFT",  text = "Bottom Left" },
-    { key = "BOTTOMRIGHT", text = "Bottom Right" },
-    { key = "ABOVE",       text = "Above" },
-    { key = "BELOW",       text = "Below" },
-}
-
 local LEGEND = {
     [0] = "No strike counted since the last Sudden Death.",
     [1] = "One strike counted.",
@@ -189,7 +177,7 @@ GUIFrame:RegisterContent("ImminentDemise", function(scrollChild, yOffset)
     else
         local r1 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
         AddSlider(r1, "Icon Size", "IconSize", { 20, 96 }, 0.5)
-        AddDropdown(r1, "Count Position", "CountPosition", COUNT_POSITIONS, 0.5)
+        AddDropdown(r1, "Count Position", "CountPosition", Rules.SPOT_OPTIONS, 0.5)
         card2:AddRow(r1, Theme.rowHeight)
         local r2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
         AddSlider(r2, "Count Offset X", "CountX", { -40, 40 }, 0.5)

@@ -8,12 +8,14 @@
 ---@class KE
 local KE = select(2, ...)
 
+local ipairs = ipairs
 local string_format = string.format
 
 local Rules = {}
 KE.ImminentDemiseRules = Rules
 
--- Every name the player sees comes from here.
+-- The Edit Mode name. The sub-tab label and the page's first card title
+-- repeat it as literals, because dev/scripts/file-map.lua reads only literals.
 Rules.LABEL = "Imminent Demise Counter"
 
 Rules.TALENT = 444769
@@ -31,18 +33,23 @@ Rules.GLOW_IDS = { [163201] = true, [281000] = true, [330334] = true, [5308] = t
 -- Execute ranks before Condemn on the Cooldown Manager.
 Rules.CDM_IDS = { [163201] = 1, [281000] = 1, [5308] = 1, [280735] = 1, [330334] = 2 }
 
--- Icon mode count spots: point, relative point, x, y.
-Rules.SPOTS = {
-    TOP         = { "TOP", "TOP", 0, -2 },
-    CENTER      = { "CENTER", "CENTER", 0, 0 },
-    BOTTOM      = { "BOTTOM", "BOTTOM", 0, 2 },
-    TOPLEFT     = { "TOPLEFT", "TOPLEFT", 2, -2 },
-    TOPRIGHT    = { "TOPRIGHT", "TOPRIGHT", -2, -2 },
-    BOTTOMLEFT  = { "BOTTOMLEFT", "BOTTOMLEFT", 2, 2 },
-    BOTTOMRIGHT = { "BOTTOMRIGHT", "BOTTOMRIGHT", -2, 2 },
-    ABOVE       = { "BOTTOM", "TOP", 0, 2 },
-    BELOW       = { "TOP", "BOTTOM", 0, -2 },
+-- Icon mode count spots in the page's order; spot = point, relative point,
+-- x, y. The page lists this table and SPOTS is built from it, so a key
+-- cannot be offered without a spot.
+Rules.SPOT_OPTIONS = {
+    { key = "CENTER",      text = "Center",       spot = { "CENTER", "CENTER", 0, 0 } },
+    { key = "TOP",         text = "Top",          spot = { "TOP", "TOP", 0, -2 } },
+    { key = "BOTTOM",      text = "Bottom",       spot = { "BOTTOM", "BOTTOM", 0, 2 } },
+    { key = "TOPLEFT",     text = "Top Left",     spot = { "TOPLEFT", "TOPLEFT", 2, -2 } },
+    { key = "TOPRIGHT",    text = "Top Right",    spot = { "TOPRIGHT", "TOPRIGHT", -2, -2 } },
+    { key = "BOTTOMLEFT",  text = "Bottom Left",  spot = { "BOTTOMLEFT", "BOTTOMLEFT", 2, 2 } },
+    { key = "BOTTOMRIGHT", text = "Bottom Right", spot = { "BOTTOMRIGHT", "BOTTOMRIGHT", -2, 2 } },
+    { key = "ABOVE",       text = "Above",        spot = { "BOTTOM", "TOP", 0, 2 } },
+    { key = "BELOW",       text = "Below",        spot = { "TOP", "BOTTOM", 0, -2 } },
 }
+---@type table<string, table>
+Rules.SPOTS = {}
+for _, option in ipairs(Rules.SPOT_OPTIONS) do Rules.SPOTS[option.key] = option.spot end
 
 Rules.COLOR_KEYS = { [0] = "Color0", [1] = "Color1", [2] = "Color2" }
 Rules.COLORS = {
