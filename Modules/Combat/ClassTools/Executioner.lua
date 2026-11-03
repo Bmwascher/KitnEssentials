@@ -774,12 +774,27 @@ function EX:SetCueGlow(on)
     end
 end
 
-function EX:PlayCueSound(now)
+-- The cue sound's file, or nil for None or a name no longer registered:
+-- Fetch would return another addon's global override for that name.
+function EX:CueSoundPath()
     local sound = self.db.Cue.Sound
-    if not sound or sound == "None" or not KE.LSM then return end
-    if not Rules.SoundDue(self.cueSoundAt, now) then return end
+    local LSM = KE.LSM
+    if not sound or sound == "None" or not LSM or not LSM:IsValid("sound", sound) then return nil end
+    return LSM:Fetch("sound", sound, true)
+end
+
+function EX:PlayCueSound(now)
+    local path = self:CueSoundPath()
+    if not path or not Rules.SoundDue(self.cueSoundAt, now) then return end
     self.cueSoundAt = now
-    local path = KE.LSM:Fetch("sound", sound, true)
+    pcall(PlaySoundFile, path, "Master")
+end
+
+-- The page's Test button. It leaves the quiet window alone, so a test
+-- never silences the next cue.
+function EX:TestCueSound()
+    self:UpdateDB()
+    local path = self:CueSoundPath()
     if path then pcall(PlaySoundFile, path, "Master") end
 end
 

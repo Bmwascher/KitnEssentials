@@ -400,6 +400,13 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     })
     soundRow:AddWidget(soundDropdown, 0.5)
     manager:Register(soundDropdown, "cue")
+    -- y = -12 centers the 28 px button on the dropdown's bar.
+    local soundTestBtn = GUIFrame:CreateButton(soundRow, "Test", {
+        height = 28,
+        callback = function() if EX then EX:TestCueSound() end end,
+    })
+    soundRow:AddWidget(soundTestBtn, 0.5, nil, 0, -12)
+    manager:Register(soundTestBtn, "cue")
     card9:AddRow(soundRow, Theme.rowHeightLast, 0)
     yOffset = card9:GetNextOffset()
 
