@@ -102,11 +102,10 @@ function GUIFrame.SubTabOffset(widths, index, spacing)
     return x
 end
 
--- Re-measured at layout time: a FontString can report short before its first
--- layout pass, and there is no distributed slack to absorb a bad measurement.
--- Each tab anchors to the strip, not to the tab before it, so one tab without
--- a resolved position cannot leave the tabs after it undrawn; every pass
--- re-places them from the widths it has just set.
+-- Run at build and again a frame later: a FontString can report short before
+-- its first layout pass, and there is no distributed slack to absorb a bad
+-- measurement. Each pass clears before it anchors, because setting the same
+-- point again does not give back a position the client has dropped.
 local function PlaceFillTabs(strip)
     if not strip._fill then return end
     local tabs, widths, spacing = strip._tabButtons, strip._tabWidths, strip._spacing
@@ -115,8 +114,18 @@ local function PlaceFillTabs(strip)
         widths[i] = SizeTabToText(tabs[i])
     end
     for i = 1, count do
-        tabs[i]:SetPoint("TOPLEFT", strip, "TOPLEFT", GUIFrame.SubTabOffset(widths, i, spacing), 0)
+        local tab = tabs[i]
+        tab:ClearAllPoints()
+        tab:SetPoint("TOPLEFT", strip, "TOPLEFT", GUIFrame.SubTabOffset(widths, i, spacing), 0)
     end
+end
+
+-- OnSizeChanged runs inside the client's layout, so a resize or a show moves
+-- no tab there; like the build, it queues one pass for the next frame.
+local function QueuePlaceFillTabs(strip)
+    if strip._placeQueued then return end
+    strip._placeQueued = true
+    C_Timer.After(0, strip._placeNext)
 end
 
 -- Tab buttons are made as a page first needs them and kept; a strip reused by
@@ -149,7 +158,15 @@ local function ConstructSubTabs(parent)
     strip._tabWidths = {}
     strip.buttons = {}
     strip._count = 0
-    strip:SetScript("OnSizeChanged", PlaceFillTabs)
+    -- Made once per strip, so a resize drag allocates nothing per frame.
+    strip._placeQueued = false
+    strip._placeNext = function()
+        strip._placeQueued = false
+        PlaceFillTabs(strip)
+    end
+    strip:SetScript("OnSizeChanged", QueuePlaceFillTabs)
+    -- A reopen shows the old page without a build.
+    strip:SetScript("OnShow", QueuePlaceFillTabs)
     strip._keOwned = { strip }
     return strip
 end
@@ -230,15 +247,13 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     for i = #tabs + 1, #btnList do
         btnList[i]:Hide()
     end
-    -- Set once every tab exists: painting a tab can resize the strip, and
-    -- the sizing pass must not reach a tab not made yet.
     strip._count = #tabs
 
     if fill and #tabs > 0 then
         -- Placed now as well as after layout, so a new strip never draws a
         -- frame of zero-width or unplaced tabs.
         PlaceFillTabs(strip)
-        C_Timer.After(0, function() PlaceFillTabs(strip) end)
+        QueuePlaceFillTabs(strip)
     end
 
     return strip, yOffset + tabHeight + T.paddingSmall
