@@ -3623,6 +3623,16 @@ function L.loadExecutionerRules(overrides)
     return helpers.loadModule("Modules/Combat/ClassTools/ExecutionerRules.lua", {})
 end
 
+-- Modules/Combat/ClassTools/ImminentDemiseRules.lua on top of
+-- ExecutionerRules.lua, in one KE table. Pure logic: nothing to stub.
+-- Returns KE.
+function L.loadImminentDemiseRules(overrides)
+    installMock(overrides, {})
+    local KE = helpers.loadModule("Modules/Combat/ClassTools/ExecutionerRules.lua", {})
+    helpers.loadModule("Modules/Combat/ClassTools/ImminentDemiseRules.lua", KE)
+    return KE
+end
+
 -- Modules/Combat/ClassTools/SpellReflectRules.lua. Pure logic: nothing to
 -- stub. Returns KE.
 function L.loadSpellReflectRules(overrides)

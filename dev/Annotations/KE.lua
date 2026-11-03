@@ -220,6 +220,7 @@ function KE_Context:UnsubscribeSpec(key) end
 ---@field DoTTrackerRules table
 ---@field ShamanProcRules table
 ---@field ExecutionerRules table
+---@field ImminentDemiseRules table
 ---@field SpellReflectRules table
 ---@field DOT_TRACKER_SEEDS table
 ---@field CDMIcons table
