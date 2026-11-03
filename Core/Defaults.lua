@@ -1867,14 +1867,17 @@ local Defaults = {
             PotionPosition    = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 127 },
             PotionAnchorFrameType = "UIPARENT",
             PotionStrata      = "MEDIUM",
-            -- Skip bars (Skips tab): Shroud of Concealment and Mass
-            -- Invisibility on the player. The position card writes
-            -- SkipParentFrame, which has no default.
+            -- Skip bars (Skips tab): Shroud of Concealment from the party's
+            -- rogue, Mass Invisibility and the Invisibility Potion on the
+            -- player. The position card writes SkipParentFrame, which has no
+            -- default.
             SkipBars          = false,
             SkipShroud        = true,
             SkipMassInvis     = true,
+            SkipPotion        = true,
             SkipShroudColor   = { 0.58, 0.36, 0.86, 1 },
             SkipMassInvisColor = { 0.25, 0.78, 0.92, 1 },
+            SkipPotionColor   = { 0.42, 0.14, 0.66, 1 },
             SkipWidth         = 225,
             SkipHeight        = 23,
             SkipSpacing       = 0,
@@ -1883,7 +1886,6 @@ local Defaults = {
             SkipShowIcon      = true,
             SkipShowName      = true,
             SkipShowTimer     = true,
-            SkipShowCaster    = false,
             SkipPosition      = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 70 },
             SkipAnchorFrameType = "UIPARENT",
             SkipStrata        = "MEDIUM",

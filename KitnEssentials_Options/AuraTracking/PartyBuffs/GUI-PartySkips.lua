@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PartySkips.lua                                      ║
 -- ║  GUI: Party Cooldowns, Skips tab                         ║
--- ║  Purpose: Shroud and Mass Invisibility countdown bars.   ║
+-- ║  Purpose: Shroud, Mass Invisibility and Invisibility     ║
+-- ║           Potion countdown bars.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -9,11 +10,19 @@ local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 
+local C_Spell = C_Spell
 local C_Timer = C_Timer
 
 local GROW_OPTIONS = GUIFrame.GrowVerticalOptions
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("PartyBuffs", true) end
+
+-- A 16 px icon before the name, as on the Cooldowns tab's spell rows.
+local function SpellLabel(spellID, name)
+    local icon = C_Spell.GetSpellTexture(spellID)
+    if icon then return "|T" .. icon .. ":16:16:0:0:64:64:5:59:5:59|t " .. name end
+    return name
+end
 
 GUIFrame:RegisterContent("PartyBuffsSkips", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.PartyBuffs
@@ -94,10 +103,11 @@ GUIFrame:RegisterContent("PartyBuffsSkips", function(scrollChild, yOffset)
         ApplySettings()
         RefreshStates()
     end)
-    cardBars:AddLabel("Countdown bars for Shroud of Concealment and Mass Invisibility on you, whoever cast them. "
+    cardBars:AddLabel("Countdown bars for Shroud of Concealment, Mass Invisibility and your Invisibility Potion. "
+        .. "Shroud follows the first rogue in your party, or you on a rogue; the others follow your own buffs. "
         .. "The game draws the time left, so it stays exact in combat and in keys. Where they show is set by the "
         .. KE:Gold("Show In") .. " card on the " .. KE:Gold("General") .. " tab.")
-    if db.SkipShroud ~= true and db.SkipMassInvis ~= true then
+    if db.SkipShroud ~= true and db.SkipMassInvis ~= true and db.SkipPotion ~= true then
         cardBars:AddNote("No spell is switched on, so no bar can show.")
     end
     yOffset = cardBars:GetNextOffset()
@@ -107,13 +117,20 @@ GUIFrame:RegisterContent("PartyBuffsSkips", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardSpells = GUIFrame:CreateCard(scrollChild, "Tracked Spells", yOffset)
     local rowS1 = GUIFrame:CreateRow(cardSpells.content, Theme.rowHeight)
-    AddCheck(rowS1, "Shroud of Concealment", "SkipShroud", nil, RebuildPage)
+    AddCheck(rowS1, SpellLabel(114018, "Shroud of Concealment"), "SkipShroud",
+        "Read from the first rogue in your party, or from you on a rogue, so a second rogue's Shroud does not show.",
+        RebuildPage)
     AddColor(rowS1, "Color", "SkipShroudColor")
     cardSpells:AddRow(rowS1, Theme.rowHeight)
-    local rowS2 = GUIFrame:CreateRow(cardSpells.content, Theme.rowHeightLast)
-    AddCheck(rowS2, "Mass Invisibility", "SkipMassInvis", nil, RebuildPage)
+    local rowS2 = GUIFrame:CreateRow(cardSpells.content, Theme.rowHeight)
+    AddCheck(rowS2, SpellLabel(414664, "Mass Invisibility"), "SkipMassInvis", nil, RebuildPage)
     AddColor(rowS2, "Color", "SkipMassInvisColor")
-    cardSpells:AddRow(rowS2, Theme.rowHeightLast, 0)
+    cardSpells:AddRow(rowS2, Theme.rowHeight)
+    local rowS3 = GUIFrame:CreateRow(cardSpells.content, Theme.rowHeightLast)
+    AddCheck(rowS3, SpellLabel(1236551, "Invisibility Potion"), "SkipPotion",
+        "Your own Void-Shrouded Tincture, either rank.", RebuildPage)
+    AddColor(rowS3, "Color", "SkipPotionColor")
+    cardSpells:AddRow(rowS3, Theme.rowHeightLast, 0)
     yOffset = cardSpells:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -138,14 +155,10 @@ GUIFrame:RegisterContent("PartyBuffsSkips", function(scrollChild, yOffset)
     manager:Register(grow, "skipsOn")
     AddCheck(rowD3, "Show Icon", "SkipShowIcon")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
-    local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
+    local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
     AddCheck(rowD4, "Show Name", "SkipShowName")
-    AddCheck(rowD4, "Show Seconds", "SkipShowTimer")
-    cardDisplay:AddRow(rowD4, Theme.rowHeight)
-    local rowD5 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
-    AddCheck(rowD5, "Show Caster Name", "SkipShowCaster",
-        "Writes the name of the player who cast the spell, in their class color, right of the spell name.")
-    cardDisplay:AddRow(rowD5, Theme.rowHeightLast, 0)
+    AddCheck(rowD4, "Show Seconds", "SkipShowTimer", "Tenths under 10 seconds, whole seconds from 10 up.")
+    cardDisplay:AddRow(rowD4, Theme.rowHeightLast, 0)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------

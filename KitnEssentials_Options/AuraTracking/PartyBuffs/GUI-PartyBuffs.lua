@@ -19,7 +19,8 @@ local DESCRIPTION = "Shows the cooldowns that matter to your group beside each p
     " card and the font. The " .. KE:Gold("Potions") ..
     " tab shows each member's potion cooldown as a bar. The " .. KE:Gold("Raid Cooldowns") ..
     " tab shows your party's externals and raid cooldowns in a box you can move. The " .. KE:Gold("Skips") ..
-    " tab shows Shroud of Concealment and Mass Invisibility on you as countdown bars in a box you can move." ..
+    " tab shows Shroud of Concealment, Mass Invisibility and your Invisibility Potion as countdown bars" ..
+    " in a box you can move." ..
     "\n\nWorks on Blizzard's party frames and " .. KE:Gold("EllesmereUI") .. " frames. Not shown in raids."
 
 GUIFrame:RegisterTabbedContent("PartyBuffs", {

@@ -1,14 +1,15 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  PartySkips.lua                                          ║
--- ║  Purpose: Shroud and Mass Invisibility countdown bars    ║
--- ║           in one movable box.                            ║
+-- ║  Purpose: Shroud, Mass Invisibility and Invisibility     ║
+-- ║           Potion countdown bars in one movable box.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Nothing here reads an aura. One Blizzard aura container watches the
--- player, with one group per spell: the game draws each bar's icon, fill,
--- seconds and caster, and KE only dresses the buttons. The buttons deny
--- tainted access while auras are secret, so every touch of the container or
--- a button after creation is a pcall.
+-- Nothing here reads an aura. Blizzard aura containers draw each bar's icon,
+-- fill and seconds, and KE only dresses the buttons. A container watches one
+-- unit, so there are two: one on the party's rogue for Shroud, one on the
+-- player for the rest. The buttons deny tainted access while auras are
+-- secret, so every touch of a container or a button after creation is a
+-- pcall.
 
 ---@class KE
 local KE = select(2, ...)
@@ -17,6 +18,7 @@ local AnchorUtil = AnchorUtil
 local C_Spell = C_Spell
 local CreateFrame = CreateFrame
 local UIParent = UIParent
+local UnitClass = UnitClass
 local ipairs = ipairs
 local math_max = math.max
 local pairs = pairs
@@ -27,8 +29,9 @@ local type = type
 local Cell = KE.PartyCooldownsCell
 local PBRules = KE.PartyBuffsRules
 local HXRules = KE.HealerExternalsRules
+local Rules = KE.PartySkipsRules
 
-local Skip = { style = { colors = {} }, samples = {}, groups = {}, pin = {} }
+local Skip = { style = { colors = {} }, samples = {} }
 KE.PartySkips = Skip
 
 Skip.QUEUE_KEY = "partySkips"
@@ -51,22 +54,28 @@ local BAR_OPTIONS = {
     interpolation = Enum.StatusBarInterpolation.Immediate,
     direction = Enum.StatusBarTimerDirection.RemainingTime,
 }
-local CASTER_OPTIONS = { useClassColors = true, showRealmName = false }
--- Whole seconds at every length.
-local TIMER_SETTINGS = { DecimalThreshold = 0 }
+-- Tenths under ten seconds, whole seconds from ten up.
+local TIMER_SETTINGS = { DecimalThreshold = 10 }
 local SAMPLE_FILL = 0.6
-local SAMPLE_SECONDS = "9"
+local SAMPLE_SECONDS = "9.4"
 
--- Box order from the top (from the bottom when growing up); the position is
--- each group's layoutIndex.
-local SPELLS = {
-    { key = "shroud", name = "Shroud of Concealment", onKey = "SkipShroud", colorKey = "SkipShroudColor",
-      ids = { [114018] = true, [115834] = true }, icon = 114018,
-      sampleCaster = "Shadowstep", sampleClass = "ROGUE" },
-    { key = "invis", name = "Mass Invisibility", onKey = "SkipMassInvis", colorKey = "SkipMassInvisColor",
-      ids = { [414664] = true }, icon = 414664,
-      sampleCaster = "Frostmage", sampleClass = "MAGE" },
-}
+-- Box order from the top (from the bottom when growing up). The potion's buff
+-- shares its ID with no long aura, so it takes no duration limit.
+local SHROUD = { key = "shroud", name = "Shroud of Concealment", onKey = "SkipShroud",
+    colorKey = "SkipShroudColor", ids = { [114018] = true }, icon = 114018, maxDuration = MAX_DURATION }
+local INVIS = { key = "invis", name = "Mass Invisibility", onKey = "SkipMassInvis",
+    colorKey = "SkipMassInvisColor", ids = { [414664] = true }, icon = 414664, maxDuration = MAX_DURATION }
+local POTION = { key = "potion", name = "Invisibility Potion", onKey = "SkipPotion",
+    colorKey = "SkipPotionColor", ids = { [1236551] = true }, icon = 1236551 }
+local SPELLS = { SHROUD, INVIS, POTION }
+
+-- Shroud is read on the rogue who cast it: the copy the rest of the party
+-- gets has no duration, so it has no time to show. A spell's place in its
+-- container's list is its group's layoutIndex.
+Skip.rogue = { key = "rogue", name = "KitnEssentialsPartySkipsShroud", spells = { SHROUD }, groups = {}, pin = {} }
+Skip.mine = { key = "mine", name = "KitnEssentialsPartySkipsContainer", spells = { INVIS, POTION },
+    groups = {}, pin = {} }
+local HOLDERS = { Skip.rogue, Skip.mine }
 
 local EDIT_MODE_ELEMENT = {
     key = "PartySkips",
@@ -89,6 +98,13 @@ local function Count(db)
     return n
 end
 
+local function HolderOn(db, holder)
+    for _, spell in ipairs(holder.spells) do
+        if SpellOn(db, spell) then return true end
+    end
+    return false
+end
+
 local function Texture(id)
     local texture = C_Spell.GetSpellTexture(id)
     if texture == nil or KE:IsSecretValue(texture) then return PLACEHOLDER_ICON end
@@ -100,10 +116,29 @@ local function Corner()
     return Skip.style.up and "BOTTOMLEFT" or "TOPLEFT"
 end
 
--- The watched unit: the player's own stealth buff is the one the bars count
--- down, whoever cast it.
-local function UnitFor()
-    return "player"
+-- While Shroud is on it keeps the first place, rogue or not, so the player's
+-- bars start one place further along the growth.
+local function RowOffset(holder, db)
+    if holder ~= Skip.mine or not SpellOn(db, SHROUD) then return 0 end
+    local s = Skip.style
+    return (s.height + s.gap) * (s.up and 1 or -1)
+end
+
+-- A class the game hides counts as unknown.
+local function PlainClass(token)
+    local ok, _, class = pcall(UnitClass, token)
+    if ok and not KE:IsSecretValue(class) and type(class) == "string" then return class end
+    return false
+end
+
+local partyClasses = {}
+
+-- The unit a container reads: the rogue's for Shroud, nil when the party has
+-- none; the player's for the rest.
+local function UnitFor(holder)
+    if holder ~= Skip.rogue then return "player" end
+    for i, token in ipairs(Rules.TOKENS) do partyClasses[i] = PlainClass(token) end
+    return Rules.RogueToken(PlainClass("player"), partyClasses)
 end
 
 ---------------------------------------------------------------------------------
@@ -147,17 +182,12 @@ local function MakeRegions(frame)
     r.timer = r.top:CreateFontString(nil, "OVERLAY")
     r.timer:SetJustifyH("RIGHT")
     r.timer:SetTextColor(1, 1, 1, 1)
-    r.caster = r.top:CreateFontString(nil, "OVERLAY")
-    r.caster:SetJustifyH("RIGHT")
-    r.caster:SetWordWrap(false)
-    r.caster:Hide()
     frame.ksRegions = r
 end
 
 -- Size, frame, icon, fill and text places at the style. Every text gets its
--- font here, before anything writes to it. The seconds keep room for two
--- digits; with the caster name on, the name and the caster each take half of
--- the text space between the icon and the seconds.
+-- font here, before anything writes to it. The seconds keep room for "0.0",
+-- their widest under a minute.
 local function Lay(frame, spell, s)
     local px = KE:GetPixelSize()
     local r = frame.ksRegions
@@ -178,19 +208,14 @@ local function Lay(frame, spell, s)
     r.bar:SetStatusBarColor(color[1], color[2], color[3], color[4] or 1)
     KE:ApplyFontToText(r.name, s.fontName, s.textSize, s.outline)
     KE:ApplyFontToText(r.timer, s.fontName, s.textSize, s.outline)
-    KE:ApplyFontToText(r.caster, s.fontName, s.textSize, s.outline)
     r.name:SetTextColor(1, 1, 1, 1)
-    local reserve = s.showTimer and Cell.TextWidth(s.fontName, s.textSize, s.outline, "00") + TEXT_PAD or 0
+    local reserve = s.showTimer and Cell.TextWidth(s.fontName, s.textSize, s.outline, "0.0") + TEXT_PAD or 0
     local textLeft = left + TEXT_PAD
     local textRight = s.width - px - TEXT_PAD - reserve
-    local space = math_max(0, textRight - textLeft)
     r.name:ClearAllPoints()
     r.name:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
-    r.name:SetWidth(s.showCaster and space / 2 or space)
+    r.name:SetWidth(math_max(0, textRight - textLeft))
     r.name:SetShown(s.showName)
-    r.caster:ClearAllPoints()
-    r.caster:SetPoint("RIGHT", frame, "LEFT", textRight, 0)
-    r.caster:SetWidth(space / 2)
     r.timer:ClearAllPoints()
     r.timer:SetPoint("RIGHT", frame, "RIGHT", -px - TEXT_PAD, 0)
 end
@@ -204,8 +229,7 @@ local function TimerOptions()
 end
 
 -- Each registration pairs with a clear, so every switch can be turned back
--- off; off, the string is emptied so nothing lingers. Once registered, the
--- game shows and hides the caster name itself.
+-- off; off, the string is emptied so nothing lingers.
 local function RegisterRegions(button, s)
     local r = button.ksRegions
     if s.showIcon then
@@ -220,13 +244,6 @@ local function RegisterRegions(button, s)
         button:ClearDurationText()
         r.timer:SetText("")
         r.timer:Hide()
-    end
-    if s.showCaster then
-        button:SetCasterName(r.caster, CASTER_OPTIONS)
-    else
-        button:ClearCasterName()
-        r.caster:SetText("")
-        r.caster:Hide()
     end
 end
 
@@ -312,7 +329,7 @@ local function Restyle(db)
     s.up = db.SkipGrowth == "UP"
     s.fontName, s.outline, s.textSize = db.FontFace, db.FontOutline, db.SkipTextSize
     s.showIcon, s.showName = db.SkipShowIcon == true, db.SkipShowName == true
-    s.showTimer, s.showCaster = db.SkipShowTimer == true, db.SkipShowCaster == true
+    s.showTimer = db.SkipShowTimer == true
     for _, spell in ipairs(SPELLS) do s.colors[spell.key] = db[spell.colorKey] end
     Place(db)
 end
@@ -364,7 +381,7 @@ local function Show()
 end
 
 ---------------------------------------------------------------------------------
--- The container
+-- The containers
 ---------------------------------------------------------------------------------
 local function GroupLayout(index)
     local s = Skip.style
@@ -385,29 +402,29 @@ local function LineSize()
     return 2 * s.height + s.gap + s.height / 2
 end
 
-local function Pin(container, corner)
+local function Pin(container, corner, y)
     container:ClearAllPoints()
-    container:SetPoint(corner, Skip.live, corner, 0, 0)
+    container:SetPoint(corner, Skip.live, corner, 0, y)
 end
 
 -- A refused setter is issued again at the next drain, which runs this again.
-local function ApplyLayout()
-    local c, s, db = Skip.container, Skip.style, Skip.pb.db
+local function ApplyLayout(holder, db)
+    local c, s = holder.container, Skip.style
     local flow = AnchorUtil.FlowDirection
     pcall(c.SetFlowLayoutGrowthDirection, c, flow.Right, s.up and flow.Up or flow.Down)
     -- The axis first: the anchor point and the line size are read against it.
     pcall(c.SetFlowLayoutAxis, c, AnchorUtil.FlowLayoutAxis.Vertical)
-    local corner = Corner()
+    local corner, y = Corner(), RowOffset(holder, db)
     pcall(c.SetFlowLayoutAnchorPoint, c, corner)
     pcall(c.SetFlowLayoutMaximumLineSize, c, LineSize())
-    if PBRules.NeedsPin(Skip.pin, corner, 0, 0) then
-        PBRules.RecordPin(Skip.pin, pcall(Pin, c, corner), corner, 0, 0)
+    if PBRules.NeedsPin(holder.pin, corner, 0, y) then
+        PBRules.RecordPin(holder.pin, pcall(Pin, c, corner, y), corner, 0, y)
     end
     -- Groups are add-only, so a spell switched off keeps its group at no bars.
-    for i, spell in ipairs(SPELLS) do
-        if Skip.groups[spell.key] then
+    for i, spell in ipairs(holder.spells) do
+        if holder.groups[spell.key] then
             pcall(c.SetAuraGroupLayout, c, spell.key, GroupLayout(i))
-            pcall(c.SetAuraGroupMaxFrameCount, c, spell.key, SpellOn(db, spell) and 1 or 0)
+            pcall(c.SetAuraGroupMaxFrameCount, c, spell.key, (holder.watching and SpellOn(db, spell)) and 1 or 0)
         end
     end
 end
@@ -415,63 +432,75 @@ end
 -- Returns false when a touch was refused or the buttons cannot be touched
 -- now; the drain tries again.
 local function RestyleButtons()
-    local c = Skip.container
-    if not c then return true end
-    if KE:AreAuraIdentitiesHidden() then return false end
+    if KE:AreAuraIdentitiesHidden() then
+        for _, holder in ipairs(HOLDERS) do
+            if holder.container then return false end
+        end
+        return true
+    end
     local clean = true
-    for _, spell in ipairs(SPELLS) do
-        if Skip.groups[spell.key] then
-            local okCount, count = pcall(c.GetAuraGroupFrameCount, c, spell.key)
-            if okCount and type(count) == "number" then
-                for i = 1, count do
-                    local okFrame, button = pcall(c.GetAuraGroupFrame, c, spell.key, i)
-                    if not okFrame then
-                        clean = false
-                    elseif button and button.ksRegions then
-                        if not pcall(Lay, button, spell, Skip.style) then clean = false end
-                        if not pcall(RegisterRegions, button, Skip.style) then clean = false end
+    for _, holder in ipairs(HOLDERS) do
+        local c = holder.container
+        for _, spell in ipairs(holder.spells) do
+            if c and holder.groups[spell.key] then
+                local okCount, count = pcall(c.GetAuraGroupFrameCount, c, spell.key)
+                if okCount and type(count) == "number" then
+                    for i = 1, count do
+                        local okFrame, button = pcall(c.GetAuraGroupFrame, c, spell.key, i)
+                        if not okFrame then
+                            clean = false
+                        elseif button and button.ksRegions then
+                            if not pcall(Lay, button, spell, Skip.style) then clean = false end
+                            if not pcall(RegisterRegions, button, Skip.style) then clean = false end
+                        end
                     end
+                else
+                    clean = false
                 end
-            else
-                clean = false
             end
         end
     end
     return clean
 end
 
-local function Missing()
-    if not Skip.container then return true end
-    local db = Skip.pb.db
-    for _, spell in ipairs(SPELLS) do
-        if SpellOn(db, spell) and not Skip.groups[spell.key] then return true end
+local function Missing(holder, db)
+    if not HolderOn(db, holder) then return false end
+    if not holder.container then return true end
+    for _, spell in ipairs(holder.spells) do
+        if SpellOn(db, spell) and not holder.groups[spell.key] then return true end
+    end
+    return false
+end
+
+local function AnyMissing(db)
+    for _, holder in ipairs(HOLDERS) do
+        if Missing(holder, db) then return true end
     end
     return false
 end
 
 -- Pinned before any group exists, when a pin is certainly allowed; a refused
 -- pin records nothing, so the layout pass pins it again.
-local function Create()
-    local ok, c = pcall(CreateFrame, "AuraContainer", "KitnEssentialsPartySkipsContainer", Skip.live,
-        "CustomAuraContainerTemplate")
+local function Create(holder)
+    local ok, c = pcall(CreateFrame, "AuraContainer", holder.name, Skip.live, "CustomAuraContainerTemplate")
     if not (ok and c) then
-        Debug("container failed")
+        Debug("%s: container failed", holder.key)
         return false
     end
-    local corner = Corner()
-    PBRules.RecordPin(Skip.pin, pcall(c.SetPoint, c, corner, Skip.live, corner, 0, 0), corner, 0, 0)
+    local corner, y = Corner(), RowOffset(holder, Skip.pb.db)
+    PBRules.RecordPin(holder.pin, pcall(c.SetPoint, c, corner, Skip.live, corner, 0, y), corner, 0, y)
     pcall(c.EnableMouse, c, false)
     pcall(c.SetEnabled, c, false)
-    Skip.container = c
+    holder.container = c
     return true
 end
 
 -- The group is registered before the call's last steps, so a late failure
 -- leaves it in place; adding it again would assert.
-local function AddGroup(index, spell)
-    local c = Skip.container
+local function AddGroup(holder, index, spell)
+    local c = holder.container
     local ok = pcall(c.AddAuraGroup, c, spell.key, "HELPFUL", {
-        candidateFilters = { includeSpellIDs = spell.ids, maxDuration = MAX_DURATION },
+        candidateFilters = { includeSpellIDs = spell.ids, maxDuration = spell.maxDuration },
         maxFrameCount = 1,
         sortMethod = AuraContainerSortMethod.AuraInstanceIDOnly,
         sortDirection = AuraContainerSortDirection.Normal,
@@ -482,64 +511,85 @@ local function AddGroup(index, spell)
         local okHas, has = pcall(c.HasAuraGroup, c, spell.key)
         ok = okHas and has == true
     end
-    if ok then Skip.groups[spell.key] = true end
+    if ok then holder.groups[spell.key] = true end
     return ok
 end
 
--- Queues what is missing, then binds the container: its layout, its unit and
--- its enable. A refused call is tried again at the drain (Skip.OnRelease).
-function Skip.Resolve()
-    if not (Skip.on and Skip.active) then return end
-    if Missing() then Skip.pb:Enqueue(Skip.QUEUE_KEY) end
-    local c = Skip.container
+-- Lays one container out, points it at its unit and switches it on. With no
+-- unit (no rogue in the party, or its spells all off) it is switched off and
+-- keeps its last unit: a container on "none" can match a buff on any group
+-- member. A refused call is tried again at the drain (Skip.OnRelease).
+local function Bind(holder, db)
+    local c = holder.container
     if not c then return end
-    ApplyLayout()
-    local unit = UnitFor()
-    if Skip.unit ~= unit then
-        if not pcall(c.SetUnit, c, unit) then
-            -- The container may already hold the new unit; nothing is assumed.
-            Skip.unit = nil
-            Debug("SetUnit %s refused", unit)
-            return
-        end
-        Skip.unit = unit
-    end
-    pcall(c.SetFrameStrata, c, Skip.pb.db.SkipStrata or "MEDIUM")
-    if not pcall(c.SetEnabled, c, true) then
-        Debug("enable refused")
+    local unit = HolderOn(db, holder) and UnitFor(holder) or nil
+    holder.watching = unit ~= nil
+    ApplyLayout(holder, db)
+    if not unit then
+        pcall(c.SetEnabled, c, false)
         return
     end
-    if not pcall(c.UpdateAllAuras, c) then Debug("refresh refused") end
+    if holder.unit ~= unit then
+        if not pcall(c.SetUnit, c, unit) then
+            -- The container may already hold the new unit; nothing is assumed.
+            holder.unit = nil
+            Debug("%s: SetUnit %s refused", holder.key, unit)
+            return
+        end
+        holder.unit = unit
+    end
+    pcall(c.SetFrameStrata, c, db.SkipStrata or "MEDIUM")
+    if not pcall(c.SetEnabled, c, true) then
+        Debug("%s: enable refused", holder.key)
+        return
+    end
+    if not pcall(c.UpdateAllAuras, c) then Debug("%s: refresh refused", holder.key) end
 end
 
--- The build queue's call for Skip.QUEUE_KEY: the container first, then one
+-- Queues what is missing, then binds each container. Every drain runs this,
+-- the roster settle's included, so the rogue is looked up again whenever the
+-- party changes.
+function Skip.Resolve()
+    if not (Skip.on and Skip.active) then return end
+    local db = Skip.pb.db
+    if AnyMissing(db) then Skip.pb:Enqueue(Skip.QUEUE_KEY) end
+    for _, holder in ipairs(HOLDERS) do Bind(holder, db) end
+end
+
+-- The build queue's call for Skip.QUEUE_KEY: each container first, then one
 -- group per frame. Returns true when nothing is left to build; a build
 -- refused, or skipped because the aura container code cannot load, waits for
 -- the drain.
 function Skip.BuildNext()
-    if not (Skip.on and Skip.active) or not Missing() then return true end
+    if not (Skip.on and Skip.active) then return true end
+    local db = Skip.pb.db
+    if not AnyMissing(db) then return true end
     if not KE:AuraContainersAvailable() then
         Debug("aura containers unavailable")
         return true
     end
-    if not Skip.container then return not Create() end
-    local db = Skip.pb.db
-    for i, spell in ipairs(SPELLS) do
-        if SpellOn(db, spell) and not Skip.groups[spell.key] then
-            if not AddGroup(i, spell) then
-                Debug("group %s refused", spell.key)
-                return true
+    for _, holder in ipairs(HOLDERS) do
+        if Missing(holder, db) then
+            if not holder.container then return not Create(holder) end
+            for i, spell in ipairs(holder.spells) do
+                if SpellOn(db, spell) and not holder.groups[spell.key] then
+                    if not AddGroup(holder, i, spell) then
+                        Debug("group %s refused", spell.key)
+                        return true
+                    end
+                    break
+                end
             end
             break
         end
     end
-    if Missing() then return false end
+    if AnyMissing(db) then return false end
     Skip.Resolve()
     return true
 end
 
 -- Drains what a refusal left: the place, the restyle, and through
--- Skip.Resolve the builds, the layout and the bind.
+-- Skip.Resolve the builds, the layout, the units and the bind.
 function Skip.OnRelease()
     if not Skip.on then return end
     if Skip.placePending and Skip.box then Place(Skip.pb.db) end
@@ -570,8 +620,6 @@ local function DrawSamples()
             r.name:SetText(spell.name)
             r.timer:SetText(SAMPLE_SECONDS)
             r.timer:SetShown(s.showTimer)
-            r.caster:SetText(KE:ColorTextByClass(spell.sampleCaster, spell.sampleClass))
-            r.caster:SetShown(s.showCaster)
             f:ClearAllPoints()
             f:SetPoint(corner, Skip.sampleLayer, corner, 0, placed * step)
             f:Show()
@@ -601,8 +649,10 @@ end
 -- A disabled container registers no UNIT_AURA. Frames cannot be destroyed,
 -- so they wait hidden until /reload.
 local function Release()
-    local c = Skip.container
-    if c then pcall(c.SetEnabled, c, false) end
+    for _, holder in ipairs(HOLDERS) do
+        local c = holder.container
+        if c then pcall(c.SetEnabled, c, false) end
+    end
 end
 
 -- Off: no container runs, nothing is drawn, and the mover is gone.
@@ -633,7 +683,7 @@ function Skip.ApplySettings()
     Skip.on = true
     MakeBox()
     Restyle(db)
-    if Skip.container then Skip.restylePending = not RestyleButtons() end
+    Skip.restylePending = not RestyleButtons()
     Register()
     Show()
 end
