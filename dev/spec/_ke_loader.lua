@@ -764,6 +764,15 @@ function L.loadHealerExternalsRules(data)
     return KE.HealerExternalsRules, KE
 end
 
+-- Modules/AuraTracking/PartyBuffs/PartySkipsRules.lua, alone. Returns
+-- KE.PartySkipsRules, KE.
+function L.loadPartySkipsRules()
+    installMock(nil, {})
+    local KE = {}
+    helpers.loadModule("Modules/AuraTracking/PartyBuffs/PartySkipsRules.lua", KE)
+    return KE.PartySkipsRules, KE
+end
+
 -- Modules/AuraTracking/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns

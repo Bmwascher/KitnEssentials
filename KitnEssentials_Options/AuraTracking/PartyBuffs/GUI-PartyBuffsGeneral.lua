@@ -65,7 +65,7 @@ GUIFrame:RegisterContent("PartyBuffsGeneral", function(scrollChild, yOffset)
     -- Card: Show In
     ----------------------------------------------------------------
     local cardShow = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
-    cardShow:AddLabel("Where the party frame icons, Potion bars and Raid Cooldowns show. All three use the font and outline on the "
+    cardShow:AddLabel("Where the party frame icons, Potion bars, Raid Cooldowns and Skip bars show. All four use the font and outline on the "
         .. KE:Gold("Font Settings") .. " card; the party frame icons and Raid Cooldowns use the "
         .. KE:Gold("Colors") .. " card."
         .. "\n\nNot shown in raids, battlegrounds or other raid groups.")

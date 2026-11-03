@@ -15,9 +15,12 @@ local DESCRIPTION = "Shows the cooldowns that matter to your group beside each p
     "Until it is known, that member shows no cooldown icons. Externals and potions your party members " ..
     "receive still show while active, after the cooldown icons." ..
     "\n\nWith it on, the " .. KE:Gold("General") .. " tab holds the " .. KE:Gold("Show In") .. " card, the font and the colors, " ..
-    "which the party frame icons, Potion bars and Raid Cooldowns share. The " .. KE:Gold("Potions") ..
+    "which the party frame icons, Potion bars and Raid Cooldowns share. The Skip bars use the " .. KE:Gold("Show In") ..
+    " card and the font. The " .. KE:Gold("Potions") ..
     " tab shows each member's potion cooldown as a bar. The " .. KE:Gold("Raid Cooldowns") ..
-    " tab shows your party's externals and raid cooldowns in a box you can move." ..
+    " tab shows your party's externals and raid cooldowns in a box you can move. The " .. KE:Gold("Skips") ..
+    " tab shows Shroud of Concealment, Mass Invisibility and your Invisibility Potion as countdown bars" ..
+    " in a box you can move." ..
     "\n\nWorks on Blizzard's party frames and " .. KE:Gold("EllesmereUI") .. " frames. Not shown in raids."
 
 GUIFrame:RegisterTabbedContent("PartyBuffs", {
@@ -25,6 +28,7 @@ GUIFrame:RegisterTabbedContent("PartyBuffs", {
     { id = "PartyBuffsCooldowns",       label = "Cooldowns" },
     { id = "PartyBuffsPotions",         label = "Potions" },
     { id = "PartyBuffsHealerExternals", label = "Raid Cooldowns" },
+    { id = "PartyBuffsSkips",           label = "Skips" },
 }, {
     headerBuilder = function(scrollChild, yOffset)
         local db = KE.db and KE.db.profile.PartyBuffs

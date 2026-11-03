@@ -212,6 +212,7 @@ function PB:Activate()
         Track.ShowSensors()
         Pot.Activate()
         HX.Activate()
+        KE.PartySkips.Activate()
         -- The restriction event is not heard while inactive, so an end missed
         -- then would leave a check failed on hidden answers for the session.
         if ReadsUnhidden() then Track.RearmHiddenCheck() end
@@ -244,6 +245,7 @@ function PB:Deactivate()
     Track.HideSensors()
     Pot.Deactivate()
     HX.Deactivate()
+    KE.PartySkips.Deactivate()
     if not self.active then return end
     self.active = false
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
@@ -426,11 +428,13 @@ end
 -- finished, so its teammate shows before the next slot starts. pumping stays
 -- set while BuildSlot runs, so an Enqueue from inside it schedules nothing and
 -- only this function schedules the next pump.
--- HX.QUEUE_KEY is the raid cooldowns box's key, any other string a
--- potion row's unit token, a number a party slot's.
+-- HX.QUEUE_KEY is the raid cooldowns box's key, KE.PartySkips.QUEUE_KEY the
+-- skip bars', any other string a potion row's unit token, a number a party
+-- slot's.
 local function BuildHead()
     local k = PB.queue[1]
     if k == HX.QUEUE_KEY then return HX.BuildNext() end
+    if k == KE.PartySkips.QUEUE_KEY then return KE.PartySkips.BuildNext() end
     if type(k) == "string" then return Pot.BuildNext(k) end
     return PB:BuildSlot(k)
 end
@@ -483,9 +487,10 @@ end
 -- frame's previous occupant, so a slot stays dropped until the settle timer
 -- resolves unless PB:KeepRosterRows kept it.
 function PB:ResolveAll()
-    -- Off, no row is built and no frame is searched; the potion rows and the
-    -- externals box bind on their own and share the build queue, so it is
-    -- not cleared. The watcher holds their reads after the interface shows.
+    -- Off, no row is built and no frame is searched; the potion rows, the
+    -- externals box and the skip bars bind on their own and share the build
+    -- queue, so it is not cleared. The watcher holds the potion and externals
+    -- reads after the interface shows.
     if not IconsOn() then
         self:EnsureUIWatcher()
         if not UIParent:IsShown() then self.interfaceHidden = true end
@@ -1257,6 +1262,7 @@ function PB:OnRelease()
     Track.Settle()
     Pot.OnRelease()
     HX.OnRelease()
+    KE.PartySkips.OnRelease()
     if self.buildPending then self:ResolveAll() end
     if self.reconfigurePending then self:ReconfigureAll() end
     if self.restylePending then self:Restyle() end
@@ -1441,6 +1447,7 @@ function PB:ApplySettings()
         icons and self.db.ShowRacials == true, self.db.HealerExternals == true)
     Pot.ApplySettings()
     HX.ApplySettings()
+    KE.PartySkips.ApplySettings()
     self:EvaluateGate()
     self:ReconfigureAll()
     self:Restyle()
@@ -1786,6 +1793,7 @@ local function OnInterfaceHidden()
     PB:HidePreviewFrames()
     Pot.HidePreview()
     HX.HidePreview(true)
+    KE.PartySkips.HidePreview()
 end
 
 local function OnInterfaceShown()
@@ -1822,6 +1830,7 @@ function PB:ShowPreview()
     -- roster settle does not hold them back.
     Pot.ShowPreview()
     HX.ShowPreview()
+    KE.PartySkips.ShowPreview()
     if not IconsOn() then
         self:HidePreviewFrames()
         return
@@ -1899,6 +1908,7 @@ function PB:HidePreview()
     self:HidePreviewFrames()
     Pot.HidePreview()
     HX.HidePreview()
+    KE.PartySkips.HidePreview()
 end
 
 ---------------------------------------------------------------------------------
@@ -1919,6 +1929,7 @@ function PB:OnEnable()
     Track.Enable()
     Pot.Enable(self)
     HX.Enable(self)
+    KE.PartySkips.Enable(self)
     self:ApplySettings()
 end
 
@@ -1932,4 +1943,5 @@ function PB:OnDisable()
     Track.Disable()
     Pot.Disable()
     HX.Disable()
+    KE.PartySkips.Disable()
 end
