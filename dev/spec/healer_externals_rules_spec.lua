@@ -52,6 +52,20 @@ local function ids(list)
     return out
 end
 
+local MEMBERS = {
+    { token = "player", guid = "P", class = "WARRIOR", spec = 40 },
+    { token = "party1", guid = "A", class = "WARRIOR", spec = 40 },
+    { token = "party2", guid = "B", class = "PALADIN", spec = 30 },
+    { token = "party3", guid = "C", class = "DRUID", spec = 20 },
+    { token = "party4", guid = "D", class = "MAGE" },
+}
+
+local function cells(list)
+    local out = {}
+    for i, e in ipairs(list) do out[i] = { e.id, e.owner, e.units and e.units[1] or "all", e.quiet or 0 } end
+    return out
+end
+
 describe("HealerExternalsRules.Entries", function()
     it("lists a spec's externals in table order under healer keys, with clamped lengths", function()
         local R, KE = loadRules()
@@ -132,26 +146,42 @@ end)
 describe("HealerExternalsRules.Sources and Order", function()
     it("lists target cells member by member, you included, before owner cells, an owner cell watching its owner alone", function()
         local R = loadRules()
-        local members = {
-            { token = "player", guid = "P", class = "WARRIOR", spec = 40 },
-            { token = "party1", guid = "A", class = "WARRIOR", spec = 40 },
-            { token = "party2", guid = "B", class = "PALADIN", spec = 30 },
-            { token = "party3", guid = "C", class = "DRUID", spec = 20 },
-            { token = "party4", guid = "D", class = "MAGE" },
-        }
-        local sources = R.Sources(members, {})
-        local who = {}
-        for i, s in ipairs(sources) do who[i] = s.member.token end
-        assert.are.same({ "player", "party1", "party2", "party3" }, who, "you first, never a member with nothing")
-        local cells = {}
-        for i, e in ipairs(R.Order(sources)) do
-            cells[i] = { e.id, e.owner, e.units and e.units[1] or "all", e.quiet or 0 }
+        local q = R.RAID_QUIET
+        for _, case in ipairs({ { name = "no saved order" }, { name = "a non-table value", saved = "x" } }) do
+            local sources = R.Sources(MEMBERS, {})
+            local who = {}
+            for i, s in ipairs(sources) do who[i] = s.member.token end
+            assert.are.same({ "player", "party1", "party2", "party3" }, who, "you first, never a member with nothing")
+            assert.are.same({
+                { 2, "B", "all", 0 }, { 8, "B", "all", 0 }, { 3, "C", "all", 0 },
+                { 5, "P", "player", q }, { 5, "A", "party1", q }, { 6, "C", "party3", q },
+            }, cells(R.Order(sources, case.saved)), case.name)
         end
+    end)
+
+    it("with a saved order, sorts every cell by its cast's place across both groups, a shared cast yours first", function()
+        local R = loadRules()
         local q = R.RAID_QUIET
         assert.are.same({
-            { 2, "B", "all", 0 }, { 8, "B", "all", 0 }, { 3, "C", "all", 0 },
-            { 5, "P", "player", q }, { 5, "A", "party1", q }, { 6, "C", "party3", q },
-        }, cells, "target cells, then owner cells")
+            { 6, "C", "party3", q }, { 5, "P", "player", q }, { 5, "A", "party1", q },
+            { 2, "B", "all", 0 }, { 3, "C", "all", 0 }, { 8, "B", "all", 0 },
+        }, cells(R.Order(R.Sources(MEMBERS, {}), { 6, 5 })))
+    end)
+end)
+
+describe("HealerExternalsRules.CastOrder", function()
+    it("lists every cast in shipped order, a saved order's known casts first, each once", function()
+        local R = loadRules()
+        local shipped = { 1, 4, 2, 3, 8, 5, 6, 7, 9 }
+        local cases = {
+            { name = "no saved order", want = shipped },
+            { name = "a non-table value", saved = "x", want = shipped },
+            { name = "a repeat, an unknown ID and missing casts", saved = { 7, 99, 3, 7, "a" },
+              want = { 7, 3, 1, 4, 2, 8, 5, 6, 9 } },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.same(case.want, R.CastOrder(case.saved), case.name)
+        end
     end)
 end)
 

@@ -563,7 +563,7 @@ function HX.Resolve()
     HX.pb:SyncMembers()
     local sources, guids = Rules.Sources(party, HX.pb.db), {}
     for i, source in ipairs(sources) do guids[i] = source.member.guid end
-    local entries = Rules.Order(sources)
+    local entries = Rules.Order(sources, HX.pb.db.HealerExtOrder)
     for _, e in ipairs(entries) do e.texture = C_Spell.GetSpellTexture(e.show or e.id) end
     if HX.rosterPending and not Rules.KeepOnRoster(HX.guids, guids, issecretvalue) then Track.Reset(HX.st) end
     HX.rosterPending, HX.guids = false, guids

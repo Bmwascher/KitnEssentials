@@ -9,10 +9,12 @@ local KE = select(2, ...)
 local ipairs = ipairs
 local math_ceil = math.ceil
 local math_floor = math.floor
+local math_huge = math.huge
 local math_max = math.max
 local math_min = math.min
 local pairs = pairs
 local string_find = string.find
+local table_sort = table.sort
 local type = type
 
 local Rules = {}
@@ -33,6 +35,7 @@ Rules.RAID_QUIET = 15
 local ASSIGNED = { DAMAGER = true, TANK = true, HEALER = true }
 local HEALER_ROLE = { HEALER = true }
 local GROUPS = { "target", "owner" }
+local IN_GROUP = { target = true, owner = true }
 
 local function Table(value)
     if type(value) == "table" then return value end
@@ -143,23 +146,75 @@ function Rules.Sources(members, db)
     return out
 end
 
--- The box's cells: every target entry, source by source, then every owner
--- entry the same way. Each keeps its owner's GUID, so a count follows its
--- owner when the list shifts; an owner entry watches its owner's unit alone.
-function Rules.Order(sources)
+-- Every cast the box can show, in shipped order: the healer externals by
+-- spec ID, then the box rows. A saved order's known casts come first, each
+-- once, then any it lacks in shipped order, so a spell added in an update
+-- still has a place. Anything but a table reads as the shipped order.
+function Rules.CastOrder(saved)
+    local data = KE.PartyCooldownsData
+    local shipped, known, specs = {}, {}, {}
+    for specID in pairs(Table(data.HEALER_SPECS)) do specs[#specs + 1] = specID end
+    table_sort(specs)
+    for _, specID in ipairs(specs) do
+        for _, castID in ipairs(data.HEALER_SPECS[specID].casts) do
+            if not known[castID] then shipped[#shipped + 1], known[castID] = castID, true end
+        end
+    end
+    for _, row in ipairs(Table(data.BOX_ROWS)) do
+        if not known[row.id] then shipped[#shipped + 1], known[row.id] = row.id, true end
+    end
+    if type(saved) ~= "table" then return shipped end
+    local out, seen = {}, {}
+    for _, id in ipairs(saved) do
+        if known[id] and not seen[id] then out[#out + 1], seen[id] = id, true end
+    end
+    for _, id in ipairs(shipped) do
+        if not seen[id] then out[#out + 1] = id end
+    end
+    return out
+end
+
+-- The box's cells. With no saved order: every target entry, source by
+-- source, then every owner entry the same way. With one: every entry by its
+-- cast's place in CastOrder, then by source and entry, so a cast two members
+-- share shows yours first; table.sort is not stable, so the tie-break is
+-- explicit. Each keeps its owner's GUID, so a count follows its owner when
+-- the list shifts; an owner entry watches its owner's unit alone.
+function Rules.Order(sources, saved)
     local out = {}
-    for _, group in ipairs(GROUPS) do
-        for _, source in ipairs(sources) do
-            local m = source.member
-            for _, e in ipairs(source.entries) do
-                if e.group == group then
-                    e.owner = m.guid
-                    if group == "owner" then e.units = { m.token } end
-                    out[#out + 1] = e
+    if type(saved) ~= "table" then
+        for _, group in ipairs(GROUPS) do
+            for _, source in ipairs(sources) do
+                local m = source.member
+                for _, e in ipairs(source.entries) do
+                    if e.group == group then
+                        e.owner = m.guid
+                        if group == "owner" then e.units = { m.token } end
+                        out[#out + 1] = e
+                    end
                 end
             end
         end
+        return out
     end
+    local rank, seq = {}, {}
+    for i, id in ipairs(Rules.CastOrder(saved)) do rank[id] = i end
+    for _, source in ipairs(sources) do
+        local m = source.member
+        for _, e in ipairs(source.entries) do
+            if IN_GROUP[e.group] then
+                e.owner = m.guid
+                if e.group == "owner" then e.units = { m.token } end
+                out[#out + 1] = e
+                seq[e] = #out
+            end
+        end
+    end
+    table_sort(out, function(a, b)
+        local ra, rb = rank[a.id] or math_huge, rank[b.id] or math_huge
+        if ra ~= rb then return ra < rb end
+        return seq[a] < seq[b]
+    end)
     return out
 end
 

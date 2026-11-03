@@ -1843,7 +1843,9 @@ local Defaults = {
             -- Keyed "<specID>:<castID>"; a racial "race:<castID>", a
             -- healer's external "healer:<specID>:<castID>" and a Raid
             -- Cooldowns box row "box:<castID>". CooldownOrder holds a cast
-            -- list per spec.
+            -- list per spec. The Raid Cooldowns icon order, HealerExtOrder,
+            -- is saved once its Spells card moves an icon: an array here
+            -- would refill on load.
             CooldownOff       = {},
             CooldownOrder     = {},
             -- Potion bars (Potions tab). They read ListPotions, which the
