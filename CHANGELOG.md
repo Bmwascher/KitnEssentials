@@ -1,5 +1,36 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.9
+
+Slayer warriors get Executioner Stacks, a tracker for Executioner stacks and
+their hidden timers, with a cue for when canceling the buff gains damage.
+
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+#### Sounds
+
+- **NEW:** a "Cancel" voice callout in every sound dropdown
+
+### Retail only
+
+#### Executioner Stacks
+
+- **NEW:** Class Tools > Warrior > Executioner Stacks, off by default: shows
+  each Executioner stack and each hidden timer (from procs at 5 stacks) with
+  its seconds left, for any warrior with Slayer's Dominance
+- Four layouts: Bars, Pips, Icon, or only the Cancel icon, each with its own
+  sizing options
+- A Cancel icon with glow and the "Cancel" sound lights when canceling the
+  buff gains damage, and can wait while Sudden Death is up
+- A Create Macro button makes a "Cancel Exec" macro that cancels the buff
+- Test Run, a page preview and Edit Mode movers for the tracker and the icon
+
+---
+
 ## v4.16.8
 
 Better Friendlist marks friends in your zone more clearly, and the AddOn
