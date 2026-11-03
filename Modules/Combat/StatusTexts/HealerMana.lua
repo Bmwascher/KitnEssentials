@@ -372,6 +372,39 @@ function HM:GetActiveAnchorConfig()
     return self.db
 end
 
+-- Fallback Frame text to names: commas or spaces separate them, order kept.
+function HM.ParseFrameList(text)
+    local names = {}
+    if type(text) ~= "string" then return names end
+    for name in text:gmatch("[^,%s]+") do names[#names + 1] = name end
+    return names
+end
+
+-- Shown with at least one point. A read that answers secret counts as usable:
+-- the anchor is then used as it is today, and nothing secret is compared.
+function HM.AnchorReadsUsable(visible, numPoints)
+    if KE:IsSecretValue(visible) then return true end
+    if KE:IsSecretValue(numPoints) then return true end
+    return visible == true and type(numPoints) == "number" and numPoints > 0
+end
+
+-- The main frame when usable, else the first usable listed name, else the screen.
+function HM.PickAnchor(mainName, names, usable)
+    if mainName ~= nil and usable(mainName) then return "MAIN", mainName end
+    for i = 1, #names do
+        if usable(names[i]) then return "FALLBACK", names[i] end
+    end
+    return "SCREEN", nil
+end
+
+-- Whether a fresh choice differs from the held one. Nil reads as the main
+-- frame, and a main-frame name change is no move, so an empty fallback never
+-- moves anything.
+function HM.ChoiceDiffers(heldKind, heldName, kind, name)
+    if kind ~= (heldKind or "MAIN") then return true end
+    return kind == "FALLBACK" and name ~= heldName
+end
+
 -- EditMode overlay label. When split is on, name the mode being edited so the
 -- overlay makes it obvious which position table a drag will write to.
 function HM:GetEditModeLabel()
