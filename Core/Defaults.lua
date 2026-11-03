@@ -1049,6 +1049,60 @@ local Defaults = {
             Position = DefaultPosition(0, 160),
         },
 
+        Executioner = {
+            Enabled = false,
+            DisplayMode = "BARS", -- BARS | PIPS | ICON | CUE_ONLY
+            -- Shared by every mode.
+            ShowHidden = true,
+            ShowSeconds = true,
+
+            ShowLabels = true,
+            GrowDirection = "DOWN",
+            Spacing = 2,
+            BarWidth = 180,
+            BarHeight = 14,
+
+            ShowStackCount = true,
+            PipWidth = 34,
+            PipHeight = 18,
+            PipSpacing = 3,
+            HiddenMarkWidth = 26,
+            HiddenMarkHeight = 13,
+            StackCountSize = 26,
+            ShowHiddenLabel = true,
+
+            IconSize = 46,
+            IconSwipe = true,
+            IconReverse = false,
+
+            FontSize = 11,
+            FontOutline = "OUTLINE",
+            StackColor = { 0.94, 0.62, 0.15, 1 },
+            HiddenColor = { 0.89, 0.29, 0.29, 1 },
+
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -200),
+
+            Cue = {
+                Enabled = true,
+                WaitSuddenDeath = true,
+                Size = 44,
+                ShowText = true,
+                TextColor = { 1, 0.82, 0.2, 1 },
+                GlowEnabled = true,
+                GlowColor = { 1, 0.82, 0.2, 1 },
+                GlowLines = 8,
+                GlowLength = 8,
+                GlowFrequency = 0.25,
+                GlowThickness = 2,
+                Sound = "Cancel",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Position = DefaultPosition(0, -150),
+            },
+        },
+
         DoTTracker = {
             Enabled = false,
             OnlyInCombat = true,

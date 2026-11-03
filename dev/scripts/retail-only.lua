@@ -5,6 +5,7 @@
 return {
     "KitnEssentials_Options/Combat/ClassTools/GUI-DisintegrateTicks.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-DivineArbiter.lua",
+    "KitnEssentials_Options/Combat/ClassTools/GUI-Executioner.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-HavocTracker.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-SpellReflect.lua",
     "KitnEssentials_Options/Combat/ClassTools/GUI-StasisTracker.lua",
@@ -25,6 +26,8 @@ return {
     "KitnEssentials_Options/Skinning/GUI-MythicPlusTimer.lua",
     "Modules/Combat/ClassTools/DisintegrateTicks.lua",
     "Modules/Combat/ClassTools/DivineArbiter.lua",
+    "Modules/Combat/ClassTools/Executioner.lua",
+    "Modules/Combat/ClassTools/ExecutionerRules.lua",
     "Modules/Combat/ClassTools/HavocTracker.lua",
     "Modules/Combat/ClassTools/SpellReflect.lua",
     "Modules/Combat/ClassTools/SpellReflectRules.lua",
