@@ -232,20 +232,27 @@ end
 
 -- The game applies a button's restrictions only after initializeFrame
 -- returns, so the plain writes here are allowed; a failure is a defect, and
--- the log names it. The button is a Button and would stop a click meant for
--- whatever sits under it.
+-- the log names it.
 local function DressButton(button, spell)
     MakeRegions(button)
     Lay(button, spell, Skip.style)
     button.ksRegions.name:SetText(spell.name)
     button:SetDurationBar(button.ksRegions.bar, BAR_OPTIONS)
     RegisterRegions(button, Skip.style)
-    button:SetMouseClickEnabled(false)
-    button:SetMouseMotionEnabled(false)
+end
+
+-- The button is a Button and would stop a click meant for whatever sits under
+-- it, so this runs first and on its own: a button whose dressing fails still
+-- lets clicks through.
+function Skip.ClickThrough(button)
+    local click = pcall(button.SetMouseClickEnabled, button, false)
+    local motion = pcall(button.SetMouseMotionEnabled, button, false)
+    return click and motion
 end
 
 for _, spell in ipairs(SPELLS) do
     spell.dress = function(button)
+        if not Skip.ClickThrough(button) then Debug("%s: click-through failed", spell.key) end
         if not pcall(DressButton, button, spell) then Debug("%s: button dressing failed", spell.key) end
     end
 end
