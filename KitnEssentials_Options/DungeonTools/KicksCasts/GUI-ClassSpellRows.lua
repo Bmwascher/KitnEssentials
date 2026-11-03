@@ -64,9 +64,9 @@ local function NameText(group)
     return KE:ColorTextByClass(group.name, group.class) .. "  " .. ticked .. "/" .. #group.cells
 end
 
--- picks: { class, label, value, onChange } each, in the order a class lists
--- its spells. Classes run by name. Returns every widget, for the caller's
--- state manager.
+-- picks: { class, label, value, onChange, tooltip } each, in the order a
+-- class lists its spells; tooltip is optional. Classes run by name. Returns
+-- every widget, for the caller's state manager.
 function Rows.Add(card, picks)
     local groups, byClass = {}, {}
     for _, pick in ipairs(picks) do
@@ -96,6 +96,7 @@ function Rows.Add(card, picks)
                 local pick = group.picks[i]
                 local check = GUIFrame:CreateCompactCheckbox(row, pick.label, {
                     value = pick.value,
+                    tooltip = pick.tooltip,
                     callback = function(checked)
                         nameCell._text:SetText(NameText(group))
                         pick.onChange(checked)
