@@ -1320,7 +1320,7 @@ function KE:ColorGradient(Min, Max, ...) end
 -- Core/Conflicts.lua
 --- Builds the ordered list of conflict prompts to raise.
 ---@param env table # { profile: table, isLoaded: fun(addonName: string, resolver: table?): boolean, shouldNotLoad: boolean? }
----@return table queue array of { module, label, dbPath, source, resolver }; never nil
+---@return table queue array of { module, label, dbPath, source, resolver, setting }; never nil
 function KE:BuildConflictQueue(env) end
 
 ---@param moduleName string

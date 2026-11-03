@@ -355,7 +355,7 @@ end
 
 --- Builds the ordered list of conflict prompts to raise.
 --- env.profile        the AceDB profile table
---- env.isLoaded       function(addonName) -> boolean
+--- env.isLoaded       function(addonName, resolver?) -> boolean
 --- env.shouldNotLoad  true when ElvUI owns skinning
 ---@return table queue array of { module, label, dbPath, source, resolver, setting }; never nil
 function KE:BuildConflictQueue(env)
