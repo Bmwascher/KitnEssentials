@@ -128,7 +128,6 @@ GUIFrame:RegisterContent("Executioner", function(scrollChild, yOffset)
     card1:AddSeparator()
     local testRow = GUIFrame:CreateRow(card1.content, TEST_BUTTON_HEIGHT)
     testRow:AddWidget(GUIFrame:CreateButton(testRow, "Test Run", {
-        width = 160,
         height = TEST_BUTTON_HEIGHT,
         tooltip = "Plays 11 sample procs over 22 s on screen, on any class.",
         callback = function() if EX then EX:Test() end end,

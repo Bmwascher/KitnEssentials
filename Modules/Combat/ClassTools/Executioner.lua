@@ -680,11 +680,12 @@ function EX:DrawIcon(state)
     local hidden = Rules.Hidden(state)
     if db.ShowHidden ~= false and hidden > 0 then
         if ic.lastHidden ~= hidden then
-            ic.lastHidden = hidden
             ic.badgeText:SetText("+" .. hidden)
-            -- A two-digit count outgrows the default badge.
+            -- A two-digit count outgrows the default badge. An unreadable
+            -- width is measured again on the next draw.
             local w = TextWidth(ic.badgeText)
             ic.badge:SetWidth(math_max(ic.badgeMin, w and w + 6 or 0))
+            if w then ic.lastHidden = hidden end
         end
         ic.badge:Show()
     else
