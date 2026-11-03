@@ -552,7 +552,7 @@ function HX.Resolve()
             end
             records[m], byToken[token] = true, m
             -- members is the box's inspect list, and you are never inspected.
-            if not m.isPlayer and Rules.Candidate(m.class, m.role) then members[#members + 1] = m end
+            if not m.isPlayer and Rules.Candidate(m.class, m.role, HX.pb.db) then members[#members + 1] = m end
             party[#party + 1] = {
                 token = token, guid = m.guid, spec = m.spec, class = m.class, talents = m.talents,
             }

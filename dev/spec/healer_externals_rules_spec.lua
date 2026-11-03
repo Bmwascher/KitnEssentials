@@ -13,7 +13,8 @@ local L = require("dev.spec._ke_loader")
 -- target row whose icon swaps to talent 80; cast 5 for any Warrior, an owner
 -- row with no talent rule; cast 6 for spec 20 (healer role), an owner row
 -- needing likely talent 60; cast 7 for spec 50 (tank role), a target row
--- needing unlikely talent 70.
+-- needing unlikely talent 70; cast 9 for any Rogue, an owner row that ships
+-- off.
 local DATA = {
     SPELLS = {
         [1] = { kind = "external", cd = 180, buffs = { 1 } },
@@ -25,6 +26,7 @@ local DATA = {
         [7] = { kind = "external", cd = 120, buffs = { 7 }, needs = { talents = { [70] = true }, likely = false } },
         [8] = { kind = "external", cd = 300, buffs = { 8, 80 },
                 swap = { id = 80, talents = { [80] = true }, likely = false } },
+        [9] = { kind = "external", cd = 60, buffs = { 9 }, off = true },
     },
     SPECS = {},
     HEALER_SPECS = {
@@ -38,6 +40,7 @@ local DATA = {
         { id = 5, class = "WARRIOR", specs = { [40] = true, [41] = true }, anySpec = true, watch = "owner" },
         { id = 6, class = "DRUID", specs = { [20] = true }, roles = { HEALER = true }, watch = "owner" },
         { id = 7, class = "SHAMAN", specs = { [50] = true }, roles = { TANK = true }, watch = "target" },
+        { id = 9, class = "ROGUE", specs = { [60] = true }, anySpec = true, watch = "owner" },
     },
 }
 
@@ -170,6 +173,25 @@ describe("HealerExternalsRules.Candidate", function()
         }
         for _, case in ipairs(cases) do
             assert.are.equal(case.want, R.Candidate(case.class, case.role), case.name)
+        end
+    end)
+
+    it("counts only switched-on rows, so a class with every row off is not inspected for the box", function()
+        local R = loadRules()
+        local function db(off) return { CooldownOff = off } end
+        local cases = {
+            { name = "every row off by a saved switch", class = "WARRIOR", role = "TANK",
+              db = db({ ["box:5"] = true }), want = false },
+            { name = "one row of two on", class = "PALADIN", db = db({ ["box:8"] = true }), want = true },
+            { name = "its only row ships off", class = "ROGUE", db = db({}), want = false },
+            { name = "a shipped-off row ticked", class = "ROGUE", db = db({ ["box:9"] = false }), want = true },
+            { name = "healer class, every external off", class = "PRIEST", role = "HEALER",
+              db = db({ ["healer:10:1"] = true, ["healer:10:4"] = true, ["healer:11:2"] = true }), want = false },
+            { name = "healer class, one external on", class = "PRIEST", role = "HEALER",
+              db = db({ ["healer:10:1"] = true }), want = true },
+        }
+        for _, case in ipairs(cases) do
+            assert.are.equal(case.want, R.Candidate(case.class, case.role, case.db), case.name)
         end
     end)
 end)

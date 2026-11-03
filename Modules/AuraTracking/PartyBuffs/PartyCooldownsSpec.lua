@@ -169,7 +169,7 @@ end
 local function Done(m)
     if m.isPlayer then return true end
     local rules = KE.PartyCooldownsRules
-    local healer = Spec.trackHealers == true and KE.HealerExternalsRules.Candidate(m.class, m.role)
+    local healer = Spec.trackHealers == true and KE.HealerExternalsRules.Candidate(m.class, m.role, Spec.boxDB)
     if not rules.SpecWanted(Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials, m.race, healer) then
         return true
     end
@@ -368,9 +368,11 @@ end
 -- cells cannot show stops hearing its events and drops what it stored; with
 -- all four off, nobody is inspected. Racials and the box start no reader: a
 -- racial needs only the spec and the race, the box the spec and the talents
--- its rows name.
-function Spec.SetTracked(class, trinkets, racials, healers)
+-- its rows name. boxDB is the module's profile, read for the box's spell
+-- switches.
+function Spec.SetTracked(class, trinkets, racials, healers, boxDB)
     local boxChanged = Spec.trackHealers ~= healers
+    Spec.boxDB = boxDB
     Spec.trackClass, Spec.trackTrinkets, Spec.trackRacials = class, trinkets, racials
     Spec.trackHealers = healers
     if not Spec.active then return end

@@ -170,16 +170,26 @@ local function RoleFits(roles, role)
 end
 
 -- Whether a member is worth an inspect for the box: a class with a
--- class-wide row in any role, or one with a healer external or a spec row in
--- a role those specs could fill.
-function Rules.Candidate(class, role)
+-- switched-on class-wide row in any role, or a switched-on healer external or
+-- spec row in a role those specs could fill. A class whose rows are all off
+-- has nothing in the box, so no inspect is spent on it.
+function Rules.Candidate(class, role, db)
     if type(class) ~= "string" then return false end
     local data = KE.PartyCooldownsData
+    local cdRules = KE.PartyCooldownsRules
+    local off = Table(Table(db).CooldownOff)
     for _, row in ipairs(Table(data.BOX_ROWS)) do
-        if row.class == class and (row.anySpec == true or RoleFits(Table(row.roles), role)) then return true end
+        if row.class == class and (row.anySpec == true or RoleFits(Table(row.roles), role))
+            and not cdRules.IsOff(off, Rules.BoxKey(row.id), data.SPELLS[row.id]) then
+            return true
+        end
     end
-    for _, row in pairs(Table(data.HEALER_SPECS)) do
-        if row.class == class and RoleFits(HEALER_ROLE, role) then return true end
+    for specID, row in pairs(Table(data.HEALER_SPECS)) do
+        if row.class == class and RoleFits(HEALER_ROLE, role) then
+            for _, castID in ipairs(row.casts) do
+                if not cdRules.IsOff(off, Rules.Key(specID, castID), data.SPELLS[castID]) then return true end
+            end
+        end
     end
     return false
 end
