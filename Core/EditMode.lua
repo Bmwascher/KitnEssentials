@@ -1592,7 +1592,8 @@ end
 -- is the next chance to see it.
 local function OnDeselectMouseUp(frame, _, button)
     OnShiftModifierChanged()
-    if button ~= "LeftButton" or not EditMode.isActive then return end
+    -- A hidden UI (Alt-Z) would hold the one-shot until it shows again.
+    if button ~= "LeftButton" or not EditMode.isActive or not frame:IsVisible() then return end
     frame:SetScript("OnUpdate", RunDeselectOnce)
 end
 
