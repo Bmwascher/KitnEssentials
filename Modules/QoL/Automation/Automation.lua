@@ -3184,7 +3184,6 @@ local flyChecks = 0
 local regenSettlePending = false
 local unshiftPending = false
 
--- Cached only once the class reads as a string.
 local function IsDruid()
     if druidClassRead then return playerIsDruid end
     if not UnitClass then return nil end
@@ -3204,7 +3203,6 @@ local function UnshiftStore()
     return KE.db and KE.db.global
 end
 
--- Only a true return means the write landed.
 local function TrySetUnshift(value)
     local ok, set = pcall(C_CVar.SetCVar, UNSHIFT_CVAR, value)
     return ok and set == true

@@ -2258,7 +2258,7 @@ end)
 
 ---------------------------------------------------------------------------------
 -- Druid Forms. Every rule is a pure function on AU, so no frame or event is
--- driven here; the game side is smoke steps 14.1-14.11F.
+-- driven here; the frame and events are checked in game.
 ---------------------------------------------------------------------------------
 describe("Automation druid forms", function()
     local AU

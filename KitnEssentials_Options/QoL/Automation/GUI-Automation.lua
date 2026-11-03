@@ -199,7 +199,6 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         yOffset = cardHousing:GetNextOffset()
     end
 
-    -- Master-gated like Housing, and drawn only for a druid.
     if db.Enabled ~= false and IS_DRUID and DRUID_STAY then
         ----------------------------------------------------------------
         -- Druid Forms
