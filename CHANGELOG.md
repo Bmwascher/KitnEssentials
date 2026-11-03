@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.12
+
+Druids get three opt-in helpers for Travel Form and for staying in form while
+casting.
+
+### Druid Forms
+
+- **NEW:** Automation > General > Druid Forms, for druids only, everything off
+  by default
+- Leave Travel Form When an Action Is Blocked: when the game refuses an item or
+  action because you are in Travel Form, you leave the form, so the next press
+  works; never in the air
+- Leave Ground Travel Form Where You Can Fly: after a fight outdoors where you
+  can fly, you leave ground Travel Form and the game puts you in the flying one;
+  never in instances or Mythic+
+- Stay in Form When Casting: Never, Always, In Combat or In Combat (Guardian
+  only) keeps you in form when you cast a spell the form blocks; back on Never,
+  or on another character, your own game setting returns
+
+---
+
 ## v4.16.11
 
 Slayer warriors with Imminent Demise get a counter of their Slayer's Strikes
