@@ -395,7 +395,8 @@ function KE:BuildConflictQueue(env)
     return queue
 end
 
---- Live lookup: "is this module off WHILE another addon does its job".
+--- Live lookup: "is this module (or a setting row's feature) off WHILE
+--- another addon does its job".
 --- Stateless on purpose, so it self-corrects when the rival is uninstalled --
 --- there is no stored "disabled by a conflict" flag to go stale. Pass env to
 --- drive it headlessly; omit it in game.
