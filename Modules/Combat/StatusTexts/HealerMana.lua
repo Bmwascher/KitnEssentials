@@ -494,8 +494,7 @@ end
 
 -- Edit Mode measures a drag against the screen when its parent has no
 -- readable rect, as a held frame that just lost its place has; a write then
--- would store screen offsets in the set. An empty fallback writes as before;
--- a choice not yet held reads as the main frame, as every reader does.
+-- would store screen offsets in the set.
 function HM:HeldFrameMeasurable()
     if not self:FallbackActive() then return true end
     local name = self.partyAnchorName
@@ -515,8 +514,7 @@ end
 -- Stored as a copy on the fallback key: while that set is unset, the table
 -- handed back is the main set itself, and the two keys would share it. An
 -- unset set handed the main values back (a canceled drag's reapply, a Revert
--- with nothing moved) stays unset, so it keeps following the main set. A
--- refused write leaves the caller's re-place to choose again.
+-- with nothing moved) stays unset, so it keeps following the main set.
 function HM:WritePartyPosition(pos)
     local key = self:PartyPositionKey()
     if not key or not self:HeldFrameMeasurable() then return false end
@@ -809,9 +807,8 @@ end
 
 -- The party frames' own roster pass can show or hide a listed frame a frame
 -- after the event, so the choice is checked on the next two frames, one timer
--- at a time. A changed choice re-places through the gate above, which holds
--- it until combat ends. During a drag of Healer Mana's own box the drop's
--- placement chooses instead.
+-- at a time. During a drag of Healer Mana's own box the drop's placement
+-- chooses instead.
 local recheckLeft = 0
 local function Recheck()
     recheckLeft = recheckLeft - 1
