@@ -329,6 +329,7 @@ read_globals = {
     "ERR_PET_SPELL_DEAD", "ERR_PLAYER_DEAD",
     "SPELL_FAILED_TARGET_NO_POCKETS", "ERR_ALREADY_PICKPOCKETED",
     "ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S",
+    "SPELL_FAILED_PACIFIED", "ERR_ATTACK_PACIFIED",
 
     -- Context menus (Blizzard_Menu, 11.0+ taint-safe menu API)
     "MenuUtil",
@@ -380,6 +381,8 @@ read_globals = {
 
     -- Shapeshifting / Stance
     "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo", "GetShapeshiftFormID",
+    "CancelShapeshiftForm",
+    "IsFlyableArea", "IsOutdoors", "IsFlying", "IsSubmerged",
 
     -- Loot / Spec
     "GetLootSpecialization", "GetAverageItemLevel",

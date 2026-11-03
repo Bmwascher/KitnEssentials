@@ -32,6 +32,12 @@ local VOIDCORES = Admitted("AutomationVoidcores")
 local PET_DUELS = Admitted("AutomationPetBattleDuels")
 local VANTUS = Admitted("VantusRune")
 local AH_FILTER = Admitted("AuctionHouseFilter")
+local DRUID_TRAVEL = Admitted("AutomationDruidTravelForm")
+local DRUID_STAY = Admitted("AutomationDruidStayInForm")
+local DRUID_GUARDIAN = Admitted("AutomationDruidGuardian")
+-- This addon loads after login, so the class reads here; a headless load
+-- without UnitClass reads as another class.
+local IS_DRUID = select(3, pcall(UnitClass, "player")) == "DRUID"
 -- Text that names features only a retail load has follows the same answer
 -- that picks the Hide Transforms list.
 local BASELINE = KE.IsBaselineLoad ~= nil and KE:IsBaselineLoad() == true
@@ -94,12 +100,13 @@ local function BuildHeader(scrollChild, yOffset)
 end
 
 ----------------------------------------------------------------
--- General: Convenience, Housing Item Auto-Roll, Vantus Rune Withdrawer
+-- General: Convenience, Housing Item Auto-Roll, Druid Forms, Vantus Rune
+-- Withdrawer
 ----------------------------------------------------------------
 -- Survives master-off because Vantus Rune Withdrawer is an independent module
--- and this is its only route. Convenience and Housing Item Auto-Roll gate on
--- the master; Vantus Rune always renders, even when db (the Automation table
--- itself) is missing entirely.
+-- and this is its only route. Convenience, Housing Item Auto-Roll and Druid
+-- Forms gate on the master, Druid Forms on the class too; Vantus Rune always
+-- renders, even when db (the Automation table itself) is missing entirely.
 GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     local db = GetDB()
     if not db then return yOffset end
@@ -190,6 +197,76 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         })
 
         yOffset = cardHousing:GetNextOffset()
+    end
+
+    if db.Enabled ~= false and IS_DRUID and DRUID_STAY then
+        ----------------------------------------------------------------
+        -- Druid Forms
+        ----------------------------------------------------------------
+        local cardDruid = GUIFrame:CreateCard(scrollChild, "Druid Forms", yOffset)
+        manager:Register(cardDruid, "all")
+
+        if DRUID_TRAVEL then
+            cardDruid:AddLabel("Ways out of a form that is in your way. Each is off until you turn it on, and nothing runs while it is off. Leaving a form from here works for Travel Form only: the game lets an addon leave no other form.")
+
+            local rowBlocked = GUIFrame:CreateRow(cardDruid.content, Theme.rowHeight)
+            local blockedCheck = GUIFrame:CreateCheckbox(rowBlocked, "Leave Travel Form When an Action Is Blocked", {
+                value = db.DruidLeaveTravelForm == true,
+                tooltip = "When the game refuses an action because you are in Travel Form, you leave the form. Press the action again.\n\nNever while you are in the air.",
+                callback = function(checked) db.DruidLeaveTravelForm = checked; ApplySettings() end,
+            })
+            rowBlocked:AddWidget(blockedCheck, 1)
+            manager:Register(blockedCheck, "all")
+            cardDruid:AddRow(rowBlocked, Theme.rowHeight)
+
+            local rowGround = GUIFrame:CreateRow(cardDruid.content, Theme.rowHeight)
+            local groundCheck = GUIFrame:CreateCheckbox(rowGround, "Leave Ground Travel Form Where You Can Fly", {
+                value = db.DruidLeaveGroundTravelForm == true,
+                tooltip = "Out of combat and outside instances, when you stand outdoors in ground Travel Form somewhere you can fly, you leave the form, and the game switches you into the flying Travel Form.\n\nIf your character cannot fly yet, leave this off: it would take you out of ground Travel Form after each fight.",
+                callback = function(checked) db.DruidLeaveGroundTravelForm = checked; ApplySettings() end,
+            })
+            rowGround:AddWidget(groundCheck, 1)
+            manager:Register(groundCheck, "all")
+            cardDruid:AddRow(rowGround, Theme.rowHeight)
+
+            local sepRow = GUIFrame:CreateRow(cardDruid.content, Theme.rowHeightSeparator)
+            local sep = GUIFrame:CreateSeparator(sepRow)
+            sepRow:AddWidget(sep, 1)
+            manager:Register(sep, "all")
+            cardDruid:AddRow(sepRow, Theme.rowHeightSeparator)
+        else
+            cardDruid:AddLabel("Whether the game takes you out of your form when you cast a spell the form blocks. Nothing changes until you pick a choice other than Never.")
+        end
+
+        local stayOptions = {
+            { key = "NEVER",  text = "Never (game default)" },
+            { key = "ALWAYS", text = "Always" },
+            { key = "COMBAT", text = "In Combat" },
+        }
+        if DRUID_GUARDIAN then
+            stayOptions[#stayOptions + 1] = { key = "COMBAT_GUARDIAN", text = "In Combat (Guardian only)" }
+        end
+        -- A saved choice this client does not offer shows as Never; the saved
+        -- value stays until the player picks.
+        local stayValue = "NEVER"
+        for _, option in ipairs(stayOptions) do
+            if option.key == db.DruidStayInForm then stayValue = option.key end
+        end
+
+        local rowStay = GUIFrame:CreateRow(cardDruid.content, Theme.rowHeightLast)
+        local stayDropdown = GUIFrame:CreateDropdown(rowStay, "Stay in Form When Casting", {
+            options = stayOptions,
+            value = stayValue,
+            tooltip = DRUID_GUARDIAN
+                and "Never = your own game setting, which by default leaves your form when you cast a spell the form blocks. Always, In Combat and In Combat (Guardian only) keep you in form instead.\n\nBack on Never, your own setting returns."
+                or "Never = your own game setting, which by default leaves your form when you cast a spell the form blocks. Always and In Combat keep you in form instead.\n\nBack on Never, your own setting returns.",
+            callback = function(val) db.DruidStayInForm = val; ApplySettings() end,
+        })
+        rowStay:AddWidget(stayDropdown, 0.5)
+        manager:Register(stayDropdown, "all")
+        cardDruid:AddRow(rowStay, Theme.rowHeightLast, 0)
+
+        yOffset = cardDruid:GetNextOffset()
     end
 
     manager:UpdateAll(true)

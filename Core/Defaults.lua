@@ -690,6 +690,9 @@ local Defaults = {
             HideErrorMessages = false,
             HideTransforms = false,
             HideTransformItems = {},
+            DruidLeaveTravelForm = false,       -- Leave Travel Form on a pacified error
+            DruidLeaveGroundTravelForm = false, -- Leave ground Travel Form where flying is allowed
+            DruidStayInForm = "NEVER",          -- "NEVER", "ALWAYS", "COMBAT" or "COMBAT_GUARDIAN"
             -- CVars (merged) - boolean
             CVarsEnabled = true,
             enableFloatingCombatText = nil,
