@@ -275,6 +275,8 @@ local CONFLICTS = {
         resolvers = {
             EllesmereUIMythicTimer = {
                 label  = "EllesmereUI's Kick Tracker nameplate icons",
+                -- The addon's list name reads as a timer on a kick icons prompt.
+                button = "EllesmereUI Kick Tracker",
                 manual = "untick Show on Nameplates at /eui > Secondary Addons > Mythic+ Tools > Kick Tracker",
                 -- Per EllesmereUI profile: a profile switch can turn it back
                 -- on, and the next scan asks again. Its database owns every
@@ -527,7 +529,7 @@ local function ShowNextPrompt()
         -- the choice is symmetric -- "Keep" implied the other option was the
         -- destructive one.
         "|cff00ff00Use KitnEssentials|r",
-        "Use " .. friendly,
+        "Use " .. (resolver and resolver.button or friendly),
         nil, nil,
         -- On a one-feature row Escape and the close button run neither
         -- callback: only a click may turn off part of a module the player
