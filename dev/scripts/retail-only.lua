@@ -29,6 +29,8 @@ return {
     "Modules/Combat/ClassTools/Executioner.lua",
     "Modules/Combat/ClassTools/ExecutionerRules.lua",
     "Modules/Combat/ClassTools/HavocTracker.lua",
+    "Modules/Combat/ClassTools/ImminentDemise.lua",
+    "Modules/Combat/ClassTools/ImminentDemiseRules.lua",
     "Modules/Combat/ClassTools/SpellReflect.lua",
     "Modules/Combat/ClassTools/SpellReflectRules.lua",
     "Modules/Combat/ClassTools/StasisTracker.lua",

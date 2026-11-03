@@ -40,6 +40,8 @@
     <Script file="Combat\ClassTools\SpellReflect.lua" />
     <Script file="Combat\ClassTools\ExecutionerRules.lua" />
     <Script file="Combat\ClassTools\Executioner.lua" />
+    <Script file="Combat\ClassTools\ImminentDemiseRules.lua" />
+    <Script file="Combat\ClassTools\ImminentDemise.lua" />
     <Script file="Combat\CombatTimer.lua" />
     <Script file="Combat\CombatCross.lua" />
     <Script file="Combat\CombatRes.lua" />

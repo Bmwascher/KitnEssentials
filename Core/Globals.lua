@@ -1171,6 +1171,7 @@ local PREVIEW_MODULES = {
     "CustomCooldowns",
     "DivineArbiter",
     "Executioner",
+    "ImminentDemise",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -1186,7 +1187,7 @@ local SECTION_PREVIEW_MODULES = {
         "DisintegrateTicks", "StasisTracker",
         "Recuperate", "TimeSpiral", "PIAssist", "DoTTracker", "AlterTime",
         "ShamanProcCooldowns", "CustomCooldowns", "DivineArbiter", "SpellReflect",
-        "Executioner",
+        "Executioner", "ImminentDemise",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",
