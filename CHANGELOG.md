@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.11
+
+Slayer warriors with Imminent Demise get a counter of their Slayer's Strikes
+toward the next Sudden Death.
+
+### Imminent Demise Counter
+
+- **NEW:** Class Tools > Warrior > Imminent Demise Counter, off by default:
+  shows 0/3, 1/3 or 2/3 Slayer's Strikes toward the Sudden Death that
+  Imminent Demise grants on every third, for any warrior with the talent
+- When Execute lights up with a strike, the count sets itself right
+- Three layouts: Icon, Pips or Text; Text can sit on Execute's icon in the
+  Cooldown Manager
+- Hide at 0/3, Test Run, Reset Count, a page preview and an Edit Mode mover
+
+---
+
 ## v4.16.10
 
 KitnEssentials now asks which one to keep when EllesmereUI's Group Finder or
