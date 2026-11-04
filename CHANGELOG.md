@@ -1,5 +1,43 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.17
+
+The cursor trail, Edit Mode, the Range Checker and the Inspect Talents panel now
+do less work while you play.
+
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+#### Cursor Effects
+
+- The cursor trail stops running while the mouse is still and its dots have
+  faded, and starts again on your next move
+
+#### Edit Mode
+
+- Holding Shift to fade the selected box and clicking away to deselect no
+  longer check on every frame while Edit Mode is open
+
+#### Range Checker
+
+- The range text updates at your Update Throttle setting, and only while the
+  text is showing
+
+### Retail only
+
+#### Inspect Talents
+
+- The panel beside the inspect window now reads over several frames instead of
+  one, which spreads out its work on each inspect, and shows the tree only once
+  the read is complete. "Waiting for talent data..." can stay a blink longer
+- If another addon's inspect answer arrives during a first read, the panel can
+  stay on "Waiting for talent data..." until you close and reopen the window
+
+---
+
 ## v4.16.16
 
 Healer Mana can now move to other frames while its party anchor is hidden, and
