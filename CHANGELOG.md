@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.1
+
+### WoW Forever only
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+- The settings window shows an infinity mark beside its title and the word
+  Forever beside the version number, both in your theme color
+
+---
+
 ## v4.16.0
 
 New Warrior tools, Druid Forms and stealth skip bars on Retail, a redone Raid
