@@ -270,7 +270,7 @@ local function MakeBar(parent, db)
     -- (RenderBar) reads/writes; declared here so the factory documents the live
     -- bar state and the fields exist on a fresh row before first paint.
     --   _cachedColorClass -- class driving the fill SetStatusBarColor (NEVER secret)
-    --   _cachedIconID     -- specIconID driving the icon SetTexture (NEVER secret);
+    --   _cachedIconID     -- plain spec icon or class token driving the icon;
     --                        keyed on the SPEC icon, not class, so two same-class
     --                        different-spec sources don't share a stale icon
     --   _cachedNameColorClass / _cachedNameColorOn -- name-tint dirty key
@@ -1837,7 +1837,7 @@ end
 -- (the API already sorted descending by amount -- never re-sort). Every field
 -- that can be secret in combat (totalAmount, amountPerSecond, maxAmount, the
 -- formatted value string, the name) is handled on the secret contract; the
--- non-secret fields (classFilename, specIconID) drive the dirty caches.
+-- non-secret fields (classFilename, a plain specIconID) drive the dirty caches.
 -- W carries the per-window render state RenderWindow stashed this tick
 -- (W._isDeaths / W._isOverall), read below to switch the bar fill + value to the
 -- deaths treatment; a later phase (detail breakdown / sticky-player row) reads it too.
@@ -1857,8 +1857,9 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     bar._sourceCreatureID = src.sourceCreatureID
     bar._deathRecapID = src.deathRecapID
     bar._classFilename = src.classFilename
-    -- specIconID is NeverSecret and is the tie-break for the in-combat ally-row
-    -- join. bar._cachedIconID cannot serve: it is a repaint SIGNATURE that holds
+    -- specIconID is the tie-break for the in-combat ally-row join, stored raw
+    -- because it is secret on Forever; DM.KnownSpec tests it before any compare.
+    -- bar._cachedIconID cannot serve: it is a repaint SIGNATURE that holds
     -- the class token whenever the spec is unresolved, so it is a string in the
     -- one case the tie-break needs a spec.
     bar._specIconID = src.specIconID
@@ -1957,9 +1958,10 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     end
 
     -- Spec icon, resolved in tiers with a class-icon FALLBACK:
-    --   1. src.specIconID -- the API's own spec icon (NEVER secret). The client leaves
-    --      it nil (the doc claims non-nilable, but it lies) for any player whose spec it
-    --      hasn't resolved -- usually EVERYONE in a pug / cross-realm raid.
+    --   1. src.specIconID -- the API's own spec icon: plain on retail, always secret on
+    --      Forever, so Forever skips this tier. The client leaves it nil (the doc claims
+    --      non-nilable, but it lies) for any player whose spec it hasn't resolved --
+    --      usually EVERYONE in a pug / cross-realm raid.
     --   2. DM.specIconByGUID[sourceGUID] -- a spec icon shared over addon comms by
     --      LibSpecialization (Core.lua's Spec icon resolution section). A player's
     --      sourceGUID is plain at runtime; the read is issecretvalue-guarded so a creature
@@ -1969,13 +1971,13 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- atlas fills the frame edge-to-edge so the shared 1px iconFrame border reads crisp. A
     -- class-less source (enemy mob reports classFilename "") shows NO icon and the layout
     -- drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy mobs are
-    -- exactly the classFilename-empty sources). classFilename/specIconID are NeverSecret, so
-    -- no guard there (matching the bar-color block above). Dirty-cached on a signature so a
-    -- stable icon does NO per-tick texture call; bar._iconShown gates Show/Hide.
+    -- exactly the classFilename-empty sources). classFilename is NeverSecret, so no guard
+    -- there (matching the bar-color block above). Dirty-cached on a signature so a stable
+    -- icon does NO per-tick texture call; bar._iconShown gates Show/Hide.
     local showIcon = db.ShowIcon
     local iconID = src.specIconID
     -- classFile (src.classFilename) is already resolved above in the bar-color block.
-    local validSpec = type(iconID) == "number" and iconID ~= 0
+    local validSpec = DM.KnownSpec(iconID)
     -- Tier 2: when the API didn't resolve the spec, try the LibSpec GUID cache before the
     -- class fallback. Only unresolved bars pay this lookup; a tier-1 spec skips it. When the
     -- comms land mid-fight the signature below flips class-token -> spec fileID and repaints.

@@ -846,10 +846,10 @@ function DM:RenderEnemyBreakdown(W, src)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
             row:SetHeight(m.rowH)
 
-            -- Class/spec icon (specIconID is NeverSecret); hidden frame on absence.
+            -- Spec icon (secret on Forever); hidden frame on absence.
             local iconShown = false
             local specIcon = p.specIcon
-            if specIcon and type(specIcon) == "number" and specIcon ~= 0 then
+            if DM.KnownSpec(specIcon) then
                 row.icon:SetTexture(specIcon)
                 KE:ApplyIconZoom(row.icon)
                 row.iconFrame:SetSize(barH, barH)
@@ -1911,10 +1911,10 @@ function DM:PopulateHoverTip(W, bar, isInitial)
                 row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
                 row:SetHeight(barH)
 
-                -- Class/spec icon (specIconID NeverSecret); hidden frame on absence.
+                -- Spec icon (secret on Forever); hidden frame on absence.
                 local iconShown = false
                 local specIcon = p.specIcon
-                if specIcon and type(specIcon) == "number" and specIcon ~= 0 then
+                if DM.KnownSpec(specIcon) then
                     row.icon:SetTexture(specIcon)
                     KE:ApplyIconZoom(row.icon)
                     row.iconFrame:SetSize(barH, barH)
