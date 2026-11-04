@@ -19,6 +19,7 @@
     <Script file="GUIWidgets\GUI-KEColorPicker.lua" />
     <Script file="GUIWidgets\GUI-KEEditBox.lua" />
     <Script file="GUIWidgets\GUI-KEText.lua" />
+    <Script file="GUIWidgets\GUI-PositionCardRules.lua" />
     <Script file="GUIWidgets\GUI-PositionCard.lua" />
     <Script file="GUIWidgets\GUI-FontSettingsCard.lua" />
     <Script file="GUIWidgets\GUI-GlowSettingsCard.lua" />
