@@ -1,9 +1,11 @@
 -- Tier: rules KE invented for the inspect talent panel (tiered test policy):
 -- the open gate with the shared shown predicate, the node keep rule, the hero
 -- subtree pick, the compare gate, the hero compare gate, the difference rule,
--- the chip order, the header line width and the window hooks installing
--- once. C_Traits reads, layout, tooltips and event timing are smoke-tested,
--- not here.
+-- the chip order, the header line width, the window hooks installing once,
+-- and the staged read's guards: the stage guard, the answer rule and the
+-- read chain, run with a schedule the case pumps by hand. C_Traits reads,
+-- layout, tooltips, timer delivery and event timing are smoke-tested, not
+-- here.
 --
 -- The window hook case uses a stub frame that counts HookScript calls: the
 -- rule is a call count across a disable and enable, and a predicate lifted
@@ -200,6 +202,102 @@ describe("Inspect talents: the header line width", function()
         }
         for _, c in ipairs(cases) do
             assert.equals(c.want, width(c.widths, c.n, 3), c.name)
+        end
+    end)
+end)
+
+-- Stands in for the next-frame timer: schedule queues, pump runs what was
+-- queued before it, as one frame would, and returns how many it ran.
+local function manualSchedule()
+    local due = {}
+    local function schedule(fn) due[#due + 1] = fn end
+    local function pump()
+        local now = due
+        due = {}
+        for _, fn in ipairs(now) do fn() end
+        return #now
+    end
+    return schedule, pump
+end
+
+describe("Inspect talents: the stage guard", function()
+    it("runs a stage only for the live job, the module on, the window open, the job's player and no foreign answer", function()
+        local allowed = loadIT()._StageAllowed
+        local cases = {
+            { name = "all matching", gen = 3, job = "Player-1", window = "Player-1", enabled = true, shown = true, foreign = false, want = true },
+            { name = "stale generation", gen = 2, job = "Player-1", window = "Player-1", enabled = true, shown = true, foreign = false, want = false },
+            { name = "window closed", gen = 3, job = "Player-1", window = "Player-1", enabled = true, shown = false, foreign = false, want = false },
+            { name = "module disabled", gen = 3, job = "Player-1", window = "Player-1", enabled = false, shown = true, foreign = false, want = false },
+            { name = "foreign answer pending", gen = 3, job = "Player-1", window = "Player-1", enabled = true, shown = true, foreign = true, want = false },
+            { name = "another player in the window", gen = 3, job = "Player-1", window = "Player-2", enabled = true, shown = true, foreign = false, want = false },
+            { name = "no readable GUID on either side: still reads", gen = 3, enabled = true, shown = true, foreign = false, want = true },
+            { name = "the window's GUID became readable mid-read", gen = 3, window = "Player-1", enabled = true, shown = true, foreign = false, want = false },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, allowed(c.gen, 3, c.job, c.window, c.enabled, c.shown, c.foreign), c.name)
+        end
+    end)
+end)
+
+describe("Inspect talents: the answer rule", function()
+    it("re-reads once only for the same player once the read is past its first stage", function()
+        local action = loadIT()._ReadAction
+        local cases = {
+            { name = "no read running", running = false, index = 3, job = "Player-1", guid = "Player-1", want = "start" },
+            { name = "first stage not run yet: joins the queued read", running = true, index = 1, job = "Player-1", guid = "Player-1", want = "start" },
+            { name = "past the first stage, same player", running = true, index = 3, job = "Player-1", guid = "Player-1", want = "rerun" },
+            { name = "past the first stage, another player", running = true, index = 3, job = "Player-1", guid = "Player-2", want = "start" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, action(c.running, c.index, c.job, c.guid), c.name)
+        end
+    end)
+end)
+
+describe("Inspect talents: the read chain", function()
+    it("shares one queued call among starts, and a new job replaces the old one", function()
+        local NewChain = loadIT()._NewChain
+        local schedule, pump = manualSchedule()
+        local ran = {}
+        local function stage(tag) return function() ran[#ran + 1] = tag end end
+        local chain = NewChain(schedule, function() return true end)
+        local old = { stage("old1"), stage("old2"), stage("old3") }
+        chain:Start(old, "Player-1")
+        chain:Start(old, "Player-1")
+        chain:Start(old, "Player-1")
+        assert.equals(1, pump())
+        assert.same({ "old1" }, ran)
+        pump()
+        chain:Start({ stage("new1"), stage("new2") }, "Player-1")
+        for _ = 1, 10 do
+            if pump() == 0 then break end
+        end
+        assert.same({ "old1", "old2", "new1", "new2" }, ran)
+    end)
+
+    it("runs the last stage once, after all the others, and never after an invalidate or a refusal", function()
+        local NewChain = loadIT()._NewChain
+        local cases = {
+            { name = "straight through", want = { 1, 2, 3 } },
+            { name = "invalidated after the second stage", invalidateAfter = 2, want = { 1, 2 } },
+            { name = "refused at the second stage", refuseAt = 2, want = { 1 } },
+        }
+        for _, c in ipairs(cases) do
+            local schedule, pump = manualSchedule()
+            local ran, checks = {}, 0
+            local chain = NewChain(schedule, function()
+                checks = checks + 1
+                return checks ~= c.refuseAt
+            end)
+            local stages = {}
+            for i = 1, 3 do stages[i] = function() ran[#ran + 1] = i end end
+            chain:Start(stages, "Player-1")
+            local frames = 0
+            while frames < 10 and pump() > 0 do
+                frames = frames + 1
+                if frames == c.invalidateAfter then chain:Invalidate() end
+            end
+            assert.same(c.want, ran, c.name)
         end
     end)
 end)
