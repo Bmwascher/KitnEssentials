@@ -1943,7 +1943,7 @@ local Defaults = {
             HealerExtParentFrame = "KitnEssentialsHealerMana",
             HealerExtStrata   = "MEDIUM",
             HealerExtAttachSide = "TOP",
-            HealerExtHealerManaBelow = true,
+            HealerExtHealerManaBelow = false,
             -- The position used in a healer spec while UseHealerExtPosition is
             -- on. It starts on the screen at HX.DEFAULT_POSITION, clear of the
             -- Healer Mana display a healer often has off.
