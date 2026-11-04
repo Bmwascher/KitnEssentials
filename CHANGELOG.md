@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.1-beta1
+
+> **Beta:** Season 2 Dungeon Trash is ready for in-game testing on the v4.16.0 base. Expect bugs and please report incorrect or missing alerts.
+
+### Dungeon Trash
+
+- **NEW:** Trash timers and cast alerts for all eight Season 2 dungeons
+- Removed the obsolete Lindormi's Guidance warning
+- Existing custom settings are preserved
+- Additional dungeon helpers, including the Harsh Winds timer and Living Venom panel, remain separate follow-up work
+
+---
+
 ## v4.16.0
 
 New Warrior tools, Druid Forms and stealth skip bars on Retail, a redone Raid
