@@ -1,7 +1,8 @@
 -- Tier 1: refusal rules for the client availability policy
 -- (Core/Availability.lua) and the consumers that must apply it. A withheld
 -- feature has to stay off whatever its saved flag or a profile says, and a
--- broken gate shows nothing on retail, where every id is admitted.
+-- broken gate shows nothing on retail, where every id but a Forever-only one
+-- is admitted.
 local helpers = require("dev.spec._helpers")
 local L = require("dev.spec._ke_loader")
 
@@ -110,6 +111,13 @@ describe("Forever availability: admission", function()
             { load = "retail",              seed = RETAIL,               id = "MythicPlusTimer",  want = true },
             { load = "retail",              seed = RETAIL,               id = "NotAFeature",      want = true },
             { load = "retail, Forever iface", seed = RETAIL_FOREVER_IFACE, id = "MythicPlusTimer", want = true },
+            -- ForeverOnlyProbe stands for any Forever-only feature: the lists
+            -- the TOC loaded decide, so a Forever interface on the retail lists
+            -- refuses it too. A nil id stays admitted on retail.
+            { load = "retail",              seed = RETAIL,               id = "ForeverOnlyProbe", want = false },
+            { load = "retail, Forever iface", seed = RETAIL_FOREVER_IFACE, id = "ForeverOnlyProbe", want = false },
+            { load = "retail",              seed = RETAIL,               id = nil,                want = true },
+            { load = "baseline",            seed = BASELINE,             id = "ForeverOnlyProbe", want = true },
         }) do
             local seed = { BASELINE_LOAD = row.seed.BASELINE_LOAD, IS_FOREVER = row.seed.IS_FOREVER }
             local KE = helpers.loadModule("Core/Availability.lua", seed)

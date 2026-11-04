@@ -2,11 +2,11 @@
 -- ProfileManager.FilterForClient). It judges each block through the real
 -- availability policy, loaded as a baseline or a retail load: a block the
 -- client does not run is dropped and named when it was on, retail drops
--- nothing, and a malformed block is refused on both. The payload and the
--- defaults are synthetic; the ids are real (DamageMeter, KeystoneHelper, the
--- CVars owner of the Automation block and the Dungeons sub-blocks
--- EnemyCounter and DungeonCasts admitted; PartyBuffs and HuntersMark, the
--- top-level block that was on by default, withheld).
+-- nothing but Forever-only blocks, and a malformed block is refused on both.
+-- The payload and the defaults are synthetic; the ids are real (DamageMeter,
+-- KeystoneHelper, the CVars owner of the Automation block and the Dungeons
+-- sub-blocks EnemyCounter and DungeonCasts admitted; PartyBuffs and
+-- HuntersMark, the top-level block that was on by default, withheld).
 -- VantusRune is the withheld block that was off: its runes are retail items,
 -- so Forever never admits it. Dungeons.DungeonTimers is a made-up sub-block
 -- under a real id that Forever never admits, so the nested drop holds
@@ -69,12 +69,29 @@ describe("ProfileManager.FilterForClient", function()
         assert.same({ "Dungeon Timers", "Hunters Mark", "Party Buffs" }, dropped)
     end)
 
-    it("drops nothing on a retail load", function()
+    it("drops nothing but Forever-only blocks on a retail load", function()
         local PM = load(false)
         local profile = payload()
         local dropped = PM.FilterForClient(profile, DEFAULTS)
         assert.same(payload(), profile)
         assert.same({}, dropped)
+    end)
+
+    -- ForeverOnlyProbe stands for any Forever-only feature's block, at the top
+    -- level and as a sub-block of the nested container.
+    it("drops a Forever-only block on a retail load, names it when it was on, and keeps the rest", function()
+        local PM = load(false)
+        for _, row in ipairs({
+            { name = "on",  enabled = true,  want = { "Forever Only Probe", "Forever Only Probe" } },
+            { name = "off", enabled = false, want = {} },
+        }) do
+            local profile = payload()
+            profile.ForeverOnlyProbe = { Enabled = row.enabled }
+            profile.Dungeons.ForeverOnlyProbe = { Enabled = row.enabled }
+            local dropped = PM.FilterForClient(profile, DEFAULTS)
+            assert.same(row.want, dropped, row.name)
+            assert.same(payload(), profile, row.name)
+        end
     end)
 
     it("refuses a block keyed by anything but a name, or whose type is not its default's, on either load, without error", function()

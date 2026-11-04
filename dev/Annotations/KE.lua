@@ -1370,9 +1370,9 @@ function KE:GetDungeonShortName(dungeonKey) end
 function KE:GetSectionForItem(itemId) end
 
 --- Whether this load runs a feature: a module, sidebar row, sub-tab or
---- optional integration id. A retail load admits every id; a baseline load
---- (KE.BASELINE_LOAD) only the baseline. Decided once per session; saved
---- flags never change it.
+--- optional integration id. A retail load admits every id but a Forever-only
+--- one; a baseline load (KE.BASELINE_LOAD) only the baseline. Decided once per
+--- session; saved flags never change it.
 ---@param featureId string?
 ---@return boolean available
 ---@return string? reason

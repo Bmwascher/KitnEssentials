@@ -9,7 +9,8 @@ local KE = select(2, ...)
 
 -- The policy follows the lists the TOC loaded, never the interface version:
 -- after a baseline load (Core/BaselineLoad.lua) only the baseline runs, after
--- a retail load everything does, so policy and loaded files cannot disagree.
+-- a retail load everything but the Forever-only features does, so policy and
+-- loaded files cannot disagree.
 local RETAIL = KE.BASELINE_LOAD ~= true
 
 -- The only features of a baseline load until each category is admitted. A
@@ -180,15 +181,28 @@ local FOREVER_ALLOWED = {
     AutomationDruidStayInForm = true,
     CombatLogger = true,
     MerchantPages = true,
+    -- The Forever-only check id; see FOREVER_ONLY.
+    ForeverOnlyProbe = true,
+}
+
+-- Refused on retail. A feature also needs a FOREVER_ALLOWED entry, load lines
+-- only in the two camelot lists, and a row in its matching section. The check
+-- id ForeverOnlyProbe has no module, page or row.
+local FOREVER_ONLY = {
+    ForeverOnlyProbe = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.
--- A retail load admits every id; a baseline load refuses any id not above.
+-- A retail load refuses only FOREVER_ONLY ids; a baseline load refuses any id
+-- not in FOREVER_ALLOWED.
 ---@param featureId string?
 ---@return boolean available
 ---@return string? reason
 function KE:IsFeatureAvailable(featureId)
-    if RETAIL then return true end
+    if RETAIL then
+        if featureId and FOREVER_ONLY[featureId] then return false, "withheld on this client" end
+        return true
+    end
     if featureId and FOREVER_ALLOWED[featureId] then return true end
     return false, "withheld on this client"
 end
