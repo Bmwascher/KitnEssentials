@@ -1,5 +1,5 @@
 -- Tier 2: the settings window's bottom bar text in GUI/GUIMain/GUI-Core.lua.
--- The word FOREVER is a client gate on a line every retail player sees.
+-- The word Forever is a client gate on a line every retail player sees.
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-Core RefreshVersionText", function()
