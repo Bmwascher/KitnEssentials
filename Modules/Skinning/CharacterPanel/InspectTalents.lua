@@ -720,7 +720,6 @@ function Reader.CommitStats(set)
     end
 end
 
--- The second batch of gear slots, then the totals into the given set.
 function Reader.FinishStats(set)
     Reader.ScanBatch(STATS_BATCH + 1, #STAT_SLOTS)
     Reader.CommitStats(set)
