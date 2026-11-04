@@ -417,7 +417,7 @@ function DM:OpenDetail(bar, button)
     end
 
     local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
-    -- Ally row: join the row's NeverSecret class and spec against the LIVE
+    -- Ally row: join the row's class and, when plain, its spec against the LIVE
     -- roster. Gated on both conditions so nothing that works today pays for it --
     -- the own row keeps its own substitution, and out of combat the gate below
     -- short-circuits to true before any of this matters. The memo is dropped
