@@ -18,7 +18,6 @@ local IsShiftKeyDown = IsShiftKeyDown
 local IsControlKeyDown = IsControlKeyDown
 local IsAltKeyDown = IsAltKeyDown
 local tonumber = tonumber
-local IsMouseButtonDown = IsMouseButtonDown
 local STANDARD_TEXT_FONT = STANDARD_TEXT_FONT
 local UIParent = UIParent
 
@@ -1433,31 +1432,37 @@ end
 -- Shift-Fade Effect
 ---------------------------------------------------------------------------------
 
+local shiftWasDown = false
+
+-- IsShiftKeyDown rather than the event payload: either Shift key counts, and
+-- releasing one while the other is held is not a release. While Shift is
+-- held this also runs every frame: a release while the game is unfocused
+-- may send no event, and the box would stay faded.
+local function OnShiftModifierChanged()
+    if not EditMode.isActive then return end
+    local isShiftDown = IsShiftKeyDown() and true or false
+    if isShiftDown == shiftWasDown then return end
+    shiftWasDown = isShiftDown
+    EditMode:ApplyShiftFade(isShiftDown)
+    EditMode.shiftFrame:SetScript("OnUpdate", isShiftDown and OnShiftModifierChanged or nil)
+end
+
 function EditMode:SetupShiftHandler()
-    -- Frame is a create-once singleton (same leak shape as escapeFrame);
-    -- the OnUpdate is re-wired per Enter so wasShiftDown starts fresh.
+    -- Frame and handler are create-once (same leak shape as escapeFrame);
+    -- each Enter re-registers and takes the Shift state as it is now.
     if not self.shiftFrame then
         self.shiftFrame = CreateFrame("Frame", "KE_EditModeShift", UIParent)
+        self.shiftFrame:SetScript("OnEvent", OnShiftModifierChanged)
     end
-    local wasShiftDown = false
-    self.shiftFrame:SetScript("OnUpdate", function()
-        if not EditMode.isActive then return end
-        local isShiftDown = IsShiftKeyDown()
-
-        -- Detect state change
-        if isShiftDown and not wasShiftDown then
-            EditMode:ApplyShiftFade(true)
-        elseif not isShiftDown and wasShiftDown then
-            EditMode:ApplyShiftFade(false)
-        end
-
-        wasShiftDown = isShiftDown
-    end)
+    self.shiftFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
+    shiftWasDown = false
+    OnShiftModifierChanged()
     self.shiftFrame:Show()
 end
 
 function EditMode:RemoveShiftHandler()
     if self.shiftFrame then
+        self.shiftFrame:UnregisterEvent("MODIFIER_STATE_CHANGED")
         self.shiftFrame:SetScript("OnUpdate", nil)
         self.shiftFrame:Hide()
     end
@@ -1513,86 +1518,97 @@ end
 -- Deselect Checker
 ---------------------------------------------------------------------------------
 
+-- Runs once, in the OnUpdate pass after a left-button release: after the
+-- clicked control's OnClick and before any C_Timer.After(0) that OnClick
+-- scheduled. The category list entry closes the list on such a timer and
+-- relies on this test seeing the list still open.
+local function RunDeselectOnce(frame)
+    frame:SetScript("OnUpdate", nil)
+    if not EditMode.isActive then return end
+
+    -- Check if mouse is over any overlay or the nudge frame
+    local overAny = false
+
+    if EditMode.nudgeFrame and EditMode.nudgeFrame:IsMouseOver() then
+        overAny = true
+    end
+
+    -- The category selector is a child of the nudge frame but sits
+    -- ABOVE it, and its open list hangs below across the tool. Neither
+    -- falls inside the parent's rect, so without this every click on
+    -- them reads as a click on empty space and clears the selection the
+    -- filter exists to narrow.
+    local nudge = EditMode.nudgeFrame
+    local overSelector = nudge and nudge.categorySelector
+        and nudge.categorySelector:IsMouseOver()
+    local overList = nudge and nudge.categoryList
+        and nudge.categoryList:IsShown()
+        and nudge.categoryList:IsMouseOver()
+
+    if not overAny and (overSelector or overList) then
+        overAny = true
+    end
+
+    -- A click anywhere else dismisses an open dropdown, the way every
+    -- other dropdown in the addon behaves. Two of them now, tested
+    -- separately: only one is ever open, but which one is not known
+    -- here, and a shared test would close the one being clicked.
+    if not overSelector and not overList then
+        EditMode:CloseCategoryList()
+    end
+
+    local overChevron = nudge and nudge.guidesChevron
+        and nudge.guidesChevron:IsMouseOver()
+    local overFlyout = nudge and nudge.guidesFlyout
+        and nudge.guidesFlyout:IsShown()
+        and nudge.guidesFlyout:IsMouseOver()
+
+    if not overChevron and not overFlyout then
+        EditMode:CloseGuidesFlyout()
+    end
+
+    -- Ignore clicks on the GUI main frame
+    if not overAny and KE.GUIFrame and KE.GUIFrame.mainFrame
+        and KE.GUIFrame.mainFrame:IsShown()
+        and KE.GUIFrame.mainFrame:IsMouseOver() then
+        overAny = true
+    end
+
+    if not overAny then
+        for _, overlay in pairs(EditMode.overlayFrames) do
+            if overlay:IsShown() and overlay:IsMouseOver() then
+                overAny = true
+                break
+            end
+        end
+    end
+
+    if not overAny then
+        EditMode:SelectElement(nil)
+    end
+end
+
+-- A Shift press made while the game is unfocused may send no event; a click
+-- is the next chance to see it.
+local function OnDeselectMouseUp(frame, _, button)
+    OnShiftModifierChanged()
+    -- A hidden UI (Alt-Z) would hold the one-shot until it shows again.
+    if button ~= "LeftButton" or not EditMode.isActive or not frame:IsVisible() then return end
+    frame:SetScript("OnUpdate", RunDeselectOnce)
+end
+
 function EditMode:StartDeselectChecker()
     if not self.deselectChecker then
         self.deselectChecker = CreateFrame("Frame", nil, UIParent)
+        self.deselectChecker:SetScript("OnEvent", OnDeselectMouseUp)
     end
-
-    local wasMouseDown = false
-    self.deselectChecker:SetScript("OnUpdate", function()
-        if not EditMode.isActive then return end
-
-        local isDown = IsMouseButtonDown("LeftButton")
-        if wasMouseDown and not isDown then
-            -- Check if mouse is over any overlay or the nudge frame
-            local overAny = false
-
-            if EditMode.nudgeFrame and EditMode.nudgeFrame:IsMouseOver() then
-                overAny = true
-            end
-
-            -- The category selector is a child of the nudge frame but sits
-            -- ABOVE it, and its open list hangs below across the tool. Neither
-            -- falls inside the parent's rect, so without this every click on
-            -- them reads as a click on empty space and clears the selection the
-            -- filter exists to narrow.
-            local nudge = EditMode.nudgeFrame
-            local overSelector = nudge and nudge.categorySelector
-                and nudge.categorySelector:IsMouseOver()
-            local overList = nudge and nudge.categoryList
-                and nudge.categoryList:IsShown()
-                and nudge.categoryList:IsMouseOver()
-
-            if not overAny and (overSelector or overList) then
-                overAny = true
-            end
-
-            -- A click anywhere else dismisses an open dropdown, the way every
-            -- other dropdown in the addon behaves. Two of them now, tested
-            -- separately: only one is ever open, but which one is not known
-            -- here, and a shared test would close the one being clicked.
-            if not overSelector and not overList then
-                EditMode:CloseCategoryList()
-            end
-
-            local overChevron = nudge and nudge.guidesChevron
-                and nudge.guidesChevron:IsMouseOver()
-            local overFlyout = nudge and nudge.guidesFlyout
-                and nudge.guidesFlyout:IsShown()
-                and nudge.guidesFlyout:IsMouseOver()
-
-            if not overChevron and not overFlyout then
-                EditMode:CloseGuidesFlyout()
-            end
-
-            -- Ignore clicks on the GUI main frame
-            if not overAny and KE.GUIFrame and KE.GUIFrame.mainFrame
-                and KE.GUIFrame.mainFrame:IsShown()
-                and KE.GUIFrame.mainFrame:IsMouseOver() then
-                overAny = true
-            end
-
-            if not overAny then
-                for _, overlay in pairs(EditMode.overlayFrames) do
-                    if overlay:IsShown() and overlay:IsMouseOver() then
-                        overAny = true
-                        break
-                    end
-                end
-            end
-
-            if not overAny then
-                EditMode:SelectElement(nil)
-            end
-        end
-
-        wasMouseDown = isDown
-    end)
+    self.deselectChecker:RegisterEvent("GLOBAL_MOUSE_UP")
     self.deselectChecker:Show()
 end
 
 function EditMode:StopDeselectChecker()
     if self.deselectChecker then
+        self.deselectChecker:UnregisterEvent("GLOBAL_MOUSE_UP")
         self.deselectChecker:SetScript("OnUpdate", nil)
         self.deselectChecker:Hide()
     end

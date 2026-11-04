@@ -91,6 +91,9 @@ local LEGEND = {
 }
 local STATS_RETRY_DELAY = 0.6
 local STATS_MAX_RETRIES = 4
+-- Gear tooltips scanned per frame: all sixteen in one frame can take longer
+-- than the 5 ms frame budget.
+local STATS_BATCH = 8
 local SEPARATOR = "\194\183"
 
 local NodeType = Enum and Enum.TraitNodeType
@@ -245,25 +248,112 @@ local function LineWidth(widths, n, gap)
 end
 IT._LineWidth = LineWidth
 
+-- A read stage runs only for the current job, while the module is on, the
+-- window is shown, no other inspect has replaced the data, and the window
+-- still shows the job's player. A GUID that reads nil on both sides counts
+-- as the same player, so a window whose GUID is unreadable still reads.
+local function StageAllowed(jobGen, liveGen, jobGUID, windowGUID, enabled, windowShown, foreign)
+    if not enabled or not windowShown or foreign then return false end
+    if jobGen ~= liveGen then return false end
+    return jobGUID == windowGUID
+end
+IT._StageAllowed = StageAllowed
+
+-- A repeat answer for the job's player, once the read has begun, is served
+-- by one more read after this one publishes.
+local function ReadAction(readRunning, stageIndex, jobGUID, guid)
+    if readRunning and stageIndex > 1 and jobGUID == guid then
+        return "rerun"
+    end
+    return "start"
+end
+IT._ReadAction = ReadAction
+
+-- Runs a list of stages, one per scheduled call. A start replaces the job
+-- and shares the call already queued, so a burst of starts runs one stage
+-- per frame; a stage that starts or invalidates a job ends the old one.
+local function NewChain(schedule, allowed)
+    local chain = { gen = 0, stages = nil, index = 1, guid = nil, queued = false }
+    local function run()
+        chain.queued = false
+        local stages = chain.stages
+        if not stages then return end
+        local gen = chain.gen
+        if not allowed(gen, chain.guid) then
+            chain:Invalidate()
+            return
+        end
+        stages[chain.index]()
+        if chain.gen ~= gen then return end
+        if chain.index < #stages then
+            chain.index = chain.index + 1
+            chain.queued = true
+            schedule(run)
+        else
+            chain.stages = nil
+        end
+    end
+    function chain:Start(stages, guid)
+        self.gen = self.gen + 1
+        self.stages, self.index, self.guid = stages, 1, guid
+        if not self.queued then
+            self.queued = true
+            schedule(run)
+        end
+    end
+    function chain:Invalidate()
+        self.gen = self.gen + 1
+        self.stages, self.guid = nil, nil
+    end
+    -- A stage that raised queued nothing: the chain reads as idle, so the next
+    -- answer starts a new read instead of waiting on this one.
+    function chain:Running(stages)
+        return self.queued and self.stages == stages
+    end
+    return chain
+end
+IT._NewChain = NewChain
+
 ---------------------------------------------------------------------------------
 -- State
 ---------------------------------------------------------------------------------
 local panel, arrow
 local nodePool, edgePool = {}, {}
 local numNodes, numEdges = 0, 0
-local records, byID, numRecords = {}, {}, 0
 local entryCache, subInfoCache = {}, {}
-local heroList, heroByID = {}, {}
 local BL, BR, BH = {}, {}, {}
 local rowMin, rowMax, heroShift = {}, {}, {}
-local stats, chipOrder, sublinePieces = {}, {}, {}
-local wanted, foreign, readPending = false, false, false
-local readValid, readResult, readGUID = false, nil, nil
-local specName, specIcon, theirSpecRaw
-local heroSub, heroName, heroIcon
-local compareState, yourSpecName = "none", nil
-local statsShown, statTries, statTimer = false, 0, nil
+local chipOrder, sublinePieces = {}, {}
+local wanted, foreign = false, false
+local statTries, statTimer = 0, nil
 local Apply
+
+-- The staged reader's state and stages live in one table: the file's
+-- top-level locals must stay under Lua 5.1's limit of 200.
+local Reader = { pendingStats = {}, rerunPending = false, statGen = 0 }
+
+-- Everything one read produces and drawing consumes. A read fills the
+-- staged set over several frames; drawing and hover tooltips read only the
+-- shown set, which a read replaces whole once it is complete.
+function Reader.NewReadSet()
+    return { records = {}, byID = {}, numRecords = 0, heroList = {}, heroByID = {},
+        stats = {}, statsShown = false, compareState = "none", readValid = false }
+end
+
+function Reader.ClearReadSet(set)
+    set.numRecords = 0
+    for i = 1, #set.records do wipe(set.records[i]) end
+    wipe(set.byID)
+    wipe(set.heroList)
+    wipe(set.heroByID)
+    wipe(set.stats)
+    set.heroSub, set.heroName, set.heroIcon = nil, nil, nil
+    set.specName, set.specIcon, set.theirSpecRaw = nil, nil, nil
+    set.compareState, set.yourSpecName, set.statsShown = "none", nil, false
+    set.readValid, set.readResult, set.guid = false, nil, nil
+end
+
+local shown, staged = Reader.NewReadSet(), Reader.NewReadSet()
 
 local function DB() return CP and CP.db end
 
@@ -275,8 +365,8 @@ local function Call(fn, ...)
 end
 
 local function WindowShown()
-    local shown = IP and IP.InspectFrameShown
-    return shown ~= nil and shown(_G.InspectFrame) == true
+    local isShown = IP and IP.InspectFrameShown
+    return isShown ~= nil and isShown(_G.InspectFrame) == true
 end
 
 local function WindowGUID()
@@ -284,6 +374,15 @@ local function WindowGUID()
     if not guid then return nil end
     return guid()
 end
+
+-- One read job at a time, one stage per frame; every stage first checks
+-- that the job is current and the window still shows its player.
+local chain
+function Reader.AllowedNow(gen, guid)
+    return StageAllowed(gen, chain.gen, guid, WindowGUID(), IT:IsEnabled(), WindowShown(), foreign)
+end
+chain = NewChain(function(fn) C_Timer.After(0, fn) end, Reader.AllowedNow)
+IT.chain = chain
 
 ---------------------------------------------------------------------------------
 -- Reading the inspected tree
@@ -355,20 +454,21 @@ end
 local function GridX(v) return floor(v / GRID_UNIT + 0.5) * 0.5 end
 local function GridY(v) return -floor(-v / GRID_UNIT + 0.5) * 0.5 end
 
-local function AcquireRecord()
-    numRecords = numRecords + 1
-    local rec = records[numRecords]
+local function AcquireRecord(set)
+    local n = set.numRecords + 1
+    set.numRecords = n
+    local rec = set.records[n]
     if rec then
         wipe(rec)
     else
         rec = {}
-        records[numRecords] = rec
+        set.records[n] = rec
     end
     return rec
 end
 
 -- KeepNode has already refused a secret position, type, subtree or rank.
-local function FillRecord(rec, nodeID, info)
+local function FillRecord(set, rec, nodeID, info)
     local sub = info.subTreeID
     local posX, posY = info.posX, info.posY
     if type(posX) ~= "number" then posX = 0 end
@@ -419,32 +519,32 @@ local function FillRecord(rec, nodeID, info)
     local edges = info.visibleEdges
     if not issecretvalue(edges) and type(edges) == "table" then rec.edges = edges end
     if sub then
-        local summary = heroByID[sub]
+        local summary = set.heroByID[sub]
         if not summary then
             local si = InspectSubTree(sub)
             local isActive = si and si.isActive
             summary = { id = sub, flagged = false, ranks = 0,
                 infoActive = not issecretvalue(isActive) and isActive == true }
-            heroByID[sub] = summary
-            heroList[#heroList + 1] = summary
+            set.heroByID[sub] = summary
+            set.heroList[#set.heroList + 1] = summary
         end
         if info.subTreeActive == true then summary.flagged = true end
         summary.ranks = summary.ranks + rank
     end
 end
 
-local function ReadTree()
-    numRecords = 0
-    wipe(byID)
-    -- Entries keep across reads: one window session is one player, and
+local function ReadTree(set)
+    set.numRecords = 0
+    wipe(set.byID)
+    -- Entries keep across reads: an entry ref never changes, and
     -- ResetWindowState clears them. A subtree's active flag can change.
     wipe(subInfoCache)
-    wipe(heroList)
-    wipe(heroByID)
-    heroSub, heroName, heroIcon, readResult = nil, nil, nil, nil
+    wipe(set.heroList)
+    wipe(set.heroByID)
+    set.heroSub, set.heroName, set.heroIcon, set.readResult = nil, nil, nil, nil
     local valid = Call(C_Traits.HasValidInspectData)
-    readValid = not issecretvalue(valid) and valid == true
-    if not readValid then return end
+    set.readValid = not issecretvalue(valid) and valid == true
+    if not set.readValid then return end
     local config = Call(C_Traits.GetConfigInfo, INSPECT_CONFIG_ID)
     local trees = type(config) == "table" and config.treeIDs or nil
     local treeID = type(trees) == "table" and trees[1] or nil
@@ -456,48 +556,49 @@ local function ReadTree()
             local info = Call(C_Traits.GetNodeInfo, INSPECT_CONFIG_ID, nodeID)
             local verdict = KeepNode(info)
             if verdict == "secret" then
-                numRecords = 0
-                readResult = "secret"
+                set.numRecords = 0
+                set.readResult = "secret"
                 return
             elseif verdict == "keep" then
-                FillRecord(AcquireRecord(), nodeID, info)
+                FillRecord(set, AcquireRecord(set), nodeID, info)
             end
         end
     end
     -- Only the active hero tree is drawn; the swap keeps every pooled record.
-    heroSub = PickHeroSubTree(heroList)
+    local records, heroSub = set.records, PickHeroSubTree(set.heroList)
+    set.heroSub = heroSub
     local kept = 0
-    for i = 1, numRecords do
+    for i = 1, set.numRecords do
         local rec = records[i]
         if not rec.sub or rec.sub == heroSub then
             kept = kept + 1
             records[i], records[kept] = records[kept], rec
-            byID[rec.id] = rec
+            set.byID[rec.id] = rec
         end
     end
-    numRecords = kept
+    set.numRecords = kept
     if heroSub then
         local si = InspectSubTree(heroSub)
         local name, atlas = si and si.name, si and si.iconElementID
-        if not issecretvalue(name) and type(name) == "string" and name ~= "" then heroName = name end
+        if not issecretvalue(name) and type(name) == "string" and name ~= "" then set.heroName = name end
         if not issecretvalue(atlas) and type(atlas) == "string" and atlas ~= ""
             and C_Texture and Call(C_Texture.GetAtlasInfo, atlas) then
-            heroIcon = atlas
+            set.heroIcon = atlas
         end
     end
-    readResult = numRecords > 0 and "ready" or "empty"
+    set.readResult = kept > 0 and "ready" or "empty"
 end
 
-local function ReadIdentity(unit)
-    specName, specIcon, theirSpecRaw = nil, nil, nil
+local function ReadIdentity(set, unit)
+    set.specName, set.specIcon, set.theirSpecRaw = nil, nil, nil
     if not unit then return end
     local id
     if C_SpecializationInfo then id = Call(C_SpecializationInfo.GetInspectSpecialization, unit) end
-    theirSpecRaw = id
+    set.theirSpecRaw = id
     if issecretvalue(id) or type(id) ~= "number" or id == 0 then return end
     local _, sName, _, sIcon = Call(GetSpecializationInfoForSpecID, id)
-    if not issecretvalue(sName) and type(sName) == "string" and sName ~= "" then specName = sName end
-    if not issecretvalue(sIcon) and sIcon then specIcon = sIcon end
+    if not issecretvalue(sName) and type(sName) == "string" and sName ~= "" then set.specName = sName end
+    if not issecretvalue(sIcon) and sIcon then set.specIcon = sIcon end
 end
 
 ---------------------------------------------------------------------------------
@@ -514,16 +615,17 @@ end
 
 -- Two different hero trees share no talents, so the hero column compares
 -- only when your active hero tree is the one drawn.
-local function ReadYours(settingOn)
+local function ReadYours(set, settingOn)
+    local records, numRecords = set.records, set.numRecords
     for i = 1, numRecords do records[i].diff = nil end
     local yourSpec, name
     if settingOn then yourSpec, name = YourSpec() end
-    yourSpecName = name
-    compareState = CompareGate(settingOn, theirSpecRaw, yourSpec)
-    if compareState ~= "on" or readResult ~= "ready" then return end
+    set.yourSpecName = name
+    set.compareState = CompareGate(settingOn, set.theirSpecRaw, yourSpec)
+    if set.compareState ~= "on" or set.readResult ~= "ready" then return end
     local configID = C_ClassTalents and Call(C_ClassTalents.GetActiveConfigID) or nil
     if issecretvalue(configID) or type(configID) ~= "number" then
-        compareState = "unknown"
+        set.compareState = "unknown"
         return
     end
     local sawActive, sawOther = false, false
@@ -544,9 +646,9 @@ local function ReadYours(settingOn)
         end
         rec.diff = DiffCategory(rec.entryRaw, rec.rank, yourEntry, yourRank)
     end
-    if not heroSub then return end
+    if not set.heroSub then return end
     local infoActive
-    local si = Call(C_Traits.GetSubTreeInfo, configID, heroSub)
+    local si = Call(C_Traits.GetSubTreeInfo, configID, set.heroSub)
     if type(si) == "table" then infoActive = si.isActive end
     if not HeroCompareOn(sawActive, sawOther, infoActive) then
         for i = 1, numRecords do
@@ -571,7 +673,7 @@ local function StripColors(text)
     return (text:gsub("|cn.-:", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
-local function ScanSlot(unit, slot)
+local function ScanSlot(unit, slot, into)
     local data = Call(C_TooltipInfo.GetInventoryItem, unit, slot)
     if issecretvalue(data) or type(data) ~= "table" then return end
     local lines = data.lines
@@ -585,7 +687,7 @@ local function ScanSlot(unit, slot)
                 for _, p in ipairs(STAT_PATTERNS) do
                     local digits, tail = text:match(p.pat)
                     if digits and TailOK(tail) then
-                        stats[p.key] = (stats[p.key] or 0) + ToRating(digits)
+                        into[p.key] = (into[p.key] or 0) + ToRating(digits)
                     end
                 end
             end
@@ -600,30 +702,39 @@ local function CancelStatsRetry()
     statTimer = nil
 end
 
--- Gear tooltips can read empty until the item data lands; a few spaced
--- retries cover that without an event to wait on.
-local function ReadStats(unit)
-    wipe(stats)
-    statsShown = false
+function Reader.ScanBatch(first, last)
     local db = DB()
+    local frame = _G.InspectFrame
+    local unit = frame and frame.unit
     if not (db and db.InspectTalentsShowStats ~= false and unit) then return end
-    for _, slot in ipairs(STAT_SLOTS) do ScanSlot(unit, slot) end
-    for _, def in ipairs(STAT_ORDER) do
-        if (stats[def.key] or 0) > 0 then statsShown = true end
-    end
-    if statsShown or foreign or statTries >= STATS_MAX_RETRIES then return end
-    statTries = statTries + 1
-    CancelStatsRetry()
-    statTimer = C_Timer.NewTimer(STATS_RETRY_DELAY, RetryStats)
+    for i = first, last do ScanSlot(unit, STAT_SLOTS[i], Reader.pendingStats) end
 end
 
-RetryStats = function()
-    statTimer = nil
-    if not IT:IsEnabled() or foreign or not WindowShown() then return end
-    if readGUID == nil or readGUID ~= WindowGUID() then return end
-    local frame = _G.InspectFrame
-    ReadStats(frame and frame.unit)
-    IT:RepaintChips()
+function Reader.CommitStats(set)
+    wipe(set.stats)
+    set.statsShown = false
+    for _, def in ipairs(STAT_ORDER) do
+        local value = Reader.pendingStats[def.key]
+        if value then set.stats[def.key] = value end
+        if (value or 0) > 0 then set.statsShown = true end
+    end
+end
+
+function Reader.FinishStats(set)
+    Reader.ScanBatch(STATS_BATCH + 1, #STAT_SLOTS)
+    Reader.CommitStats(set)
+end
+
+-- Gear tooltips can read empty until the item data lands; a few spaced
+-- retries cover that without an event to wait on.
+function Reader.ScheduleStatsRetry()
+    local db = DB()
+    if not (db and db.InspectTalentsShowStats ~= false) then return end
+    if shown.statsShown or foreign or statTries >= STATS_MAX_RETRIES then return end
+    statTries = statTries + 1
+    Reader.statGen = chain.gen
+    CancelStatsRetry()
+    statTimer = C_Timer.NewTimer(STATS_RETRY_DELAY, RetryStats)
 end
 
 ---------------------------------------------------------------------------------
@@ -996,6 +1107,7 @@ local function PaintHeader(tree)
     panel.heroText:Hide()
     if not tree then return end
     wipe(sublinePieces)
+    local specName, specIcon, heroName, heroIcon = shown.specName, shown.specIcon, shown.heroName, shown.heroIcon
     if specName then
         if specIcon then
             panel.specFrame.icon:SetTexture(specIcon)
@@ -1058,6 +1170,7 @@ IT._OrderChips = OrderChips
 
 local function PaintChips(show)
     local T = KE.Theme
+    local stats = shown.stats
     local count = 0
     if show then
         OrderChips(stats, chipOrder)
@@ -1097,7 +1210,7 @@ end
 
 local function PaintLegend(active)
     local T = KE.Theme
-    local state = active and compareState or "none"
+    local state = active and shown.compareState or "none"
     local px2 = KE:GetPixelSize() * RING_NARROW
     for _, swatch in ipairs(panel.swatches) do
         if state == "on" then
@@ -1119,7 +1232,7 @@ local function PaintLegend(active)
     if state == "differs" then
         Style(panel.legendNote, 10, MUTED)
         panel.legendNote:SetText(("Comparison off: you are %s, they are %s."):format(
-            yourSpecName or "another spec", specName or "another spec"))
+            shown.yourSpecName or "another spec", shown.specName or "another spec"))
         panel.legendNote:Show()
     else
         panel.legendNote:Hide()
@@ -1207,15 +1320,16 @@ local function DrawTree(db)
     ReleaseAll()
     panel.note:Hide()
     PaintHeader(true)
-    PaintChips(db.InspectTalentsShowStats ~= false and statsShown)
+    PaintChips(db.InspectTalentsShowStats ~= false and shown.statsShown)
     PaintCopy(true)
     PaintLegend(true)
 
     local T = KE.Theme
+    local records, byID, numRecords, heroName = shown.records, shown.byID, shown.numRecords, shown.heroName
     local size = db.InspectTalentsNodeSize or DEFAULT_NODE_SIZE
     local pitch = size + NODE_GAP
-    local compareOn = compareState == "on"
-    local legend = compareState == "on" or compareState == "differs"
+    local compareOn = shown.compareState == "on"
+    local legend = shown.compareState == "on" or shown.compareState == "differs"
     ResetBounds(BL)
     ResetBounds(BR)
     ResetBounds(BH)
@@ -1329,7 +1443,7 @@ Apply = function()
     local db = DB()
     local settingOn = db ~= nil and db.InspectTalentsEnabled ~= false
     local moduleOn = IT:IsEnabled() and CP ~= nil and CP:IsEnabled()
-    local state = OpenGate(settingOn, moduleOn, _G.InspectFrame, wanted, readValid, readResult)
+    local state = OpenGate(settingOn, moduleOn, _G.InspectFrame, wanted, shown.readValid, shown.readResult)
     if panel then panel.shownState = nil end
     if state == "hidden" then
         if arrow then arrow:Hide() end
@@ -1366,58 +1480,118 @@ function IT:RepaintChips()
         return
     end
     local db = DB()
-    PaintChips(db ~= nil and db.InspectTalentsShowStats ~= false and statsShown)
+    PaintChips(db ~= nil and db.InspectTalentsShowStats ~= false and shown.statsShown)
 end
 
 ---------------------------------------------------------------------------------
 -- Reads and window events
 ---------------------------------------------------------------------------------
 local function ResetWindowState()
-    wanted, foreign = false, false
-    readValid, readResult, readGUID = false, nil, nil
-    numRecords = 0
-    wipe(byID)
+    chain:Invalidate()
+    wanted, foreign, Reader.rerunPending = false, false, false
     -- The pooled records hold entry refs and Blizzard's edge tables; drop
-    -- them and the caches so a closed window keeps no player's data.
-    for i = 1, #records do wipe(records[i]) end
+    -- them and the caches so a closed window keeps no player's data. The
+    -- header, the legend and the compare gate read the sets too; a reopened
+    -- window must not use the last player's.
+    Reader.ClearReadSet(shown)
+    Reader.ClearReadSet(staged)
+    wipe(Reader.pendingStats)
     wipe(entryCache)
     wipe(subInfoCache)
-    wipe(heroList)
-    wipe(heroByID)
-    compareState, yourSpecName = "none", nil
     CancelStatsRetry()
-    wipe(stats)
-    statsShown, statTries = false, 0
-    -- The header, the legend and the compare gate read these; a reopened
-    -- window must not use the last player's.
-    specName, specIcon, theirSpecRaw = nil, nil, nil
-    heroSub, heroName, heroIcon = nil, nil, nil
+    statTries = 0
 end
 
 -- Reads run only on the window's own data (its show and its own inspect
--- reply): the inspect config holds whichever inspect answered last. A
--- foreign reply that lands before this deferred read has replaced it, so
--- the read waits for the window's next own reply.
-local function RunRead()
-    readPending = false
-    if not IT:IsEnabled() or not WindowShown() or foreign then return end
-    local frame = _G.InspectFrame
-    local unit = frame and frame.unit
-    readGUID = WindowGUID()
-    ReadTree()
-    ReadIdentity(unit)
-    local db = DB()
-    ReadYours(db ~= nil and db.InspectTalentsCompare ~= false)
+-- reply): the inspect config holds whichever inspect answered last, so every
+-- read of it stays inside this one stage. A foreign reply invalidates the
+-- read, which waits for the window's next own reply.
+function Reader.StageTheirs()
     CancelStatsRetry()
     statTries = 0
-    ReadStats(unit)
+    -- Another player in the window: the last one's tree must not stay up
+    -- under the new player's name while the read runs.
+    if shown.guid and shown.guid ~= chain.guid then
+        ReleaseAll()
+        Reader.ClearReadSet(shown)
+        Apply()
+    end
+    Reader.ClearReadSet(staged)
+    staged.guid = chain.guid
+    local frame = _G.InspectFrame
+    ReadTree(staged)
+    ReadIdentity(staged, frame and frame.unit)
+end
+
+function Reader.StageCompare()
+    local db = DB()
+    ReadYours(staged, db ~= nil and db.InspectTalentsCompare ~= false)
+end
+
+function Reader.StageStatsFirst()
+    wipe(Reader.pendingStats)
+    Reader.ScanBatch(1, STATS_BATCH)
+end
+
+function Reader.StageStatsSecond()
+    Reader.FinishStats(staged)
+end
+
+-- Shown buttons are released before the swap, so no button or tooltip
+-- holds a record of the set the next read rewrites.
+function Reader.StagePublish()
+    ReleaseAll()
+    shown, staged = staged, shown
+    Reader.ScheduleStatsRetry()
+    Apply()
+    if Reader.rerunPending then
+        Reader.rerunPending = false
+        chain:Start(Reader.READ_STAGES, WindowGUID())
+    end
+end
+
+Reader.READ_STAGES = { Reader.StageTheirs, Reader.StageCompare, Reader.StageStatsFirst,
+    Reader.StageStatsSecond, Reader.StagePublish }
+
+function Reader.StageRetryFinish()
+    Reader.FinishStats(shown)
+    Reader.ScheduleStatsRetry()
+    IT:RepaintChips()
+end
+
+function Reader.StageRequestFinish()
+    Reader.FinishStats(shown)
+    Reader.ScheduleStatsRetry()
     Apply()
 end
 
+Reader.RETRY_STAGES = { Reader.StageStatsFirst, Reader.StageRetryFinish }
+Reader.REQUEST_STAGES = { Reader.StageStatsFirst, Reader.StageRequestFinish }
+
+-- A retry needs the shown read's player: without a readable GUID it cannot
+-- tell whether the window still shows that player.
+RetryStats = function()
+    statTimer = nil
+    if shown.guid == nil or not Reader.AllowedNow(Reader.statGen, shown.guid) then return end
+    chain:Start(Reader.RETRY_STAGES, shown.guid)
+end
+
+-- An answer for the same player once the read has begun waits for it to
+-- publish, then reads once more: restarting on each answer would hold the
+-- display back for as long as answers keep arriving.
 local function ScheduleRead()
-    if readPending then return end
-    readPending = true
-    C_Timer.After(0, RunRead)
+    local guid = WindowGUID()
+    if ReadAction(chain:Running(Reader.READ_STAGES), chain.index, chain.guid, guid) == "rerun" then
+        Reader.rerunPending = true
+        return
+    end
+    Reader.rerunPending = false
+    chain:Start(Reader.READ_STAGES, guid)
+end
+
+function Reader.RestartRead()
+    Reader.rerunPending = false
+    chain:Start(Reader.READ_STAGES, chain.guid)
 end
 
 ---------------------------------------------------------------------------------
@@ -1506,6 +1680,8 @@ function IT:INSPECT_READY(event, guid)
     else
         foreign = true
         CancelStatsRetry()
+        chain:Invalidate()
+        Reader.rerunPending = false
     end
 end
 
@@ -1520,31 +1696,42 @@ function IT:OnThemeChanged()
     Apply()
 end
 
--- Reads only your own talents against the stored records.
+-- Reads only your own talents against the shown records. A read in progress
+-- restarts instead, so it publishes with the new setting.
 function IT:RequestCompare()
     if not self:IsEnabled() then return end
+    if chain:Running(Reader.READ_STAGES) then
+        Reader.RestartRead()
+        return
+    end
     local db = DB()
-    ReadYours(db ~= nil and db.InspectTalentsCompare ~= false)
+    ReadYours(shown, db ~= nil and db.InspectTalentsCompare ~= false)
     Apply()
 end
 
 function IT:RequestStats()
     if not self:IsEnabled() then return end
-    if not foreign and WindowShown() then
-        local frame = _G.InspectFrame
+    if chain:Running(Reader.READ_STAGES) then
+        Reader.RestartRead()
+    elseif not foreign and WindowShown() then
         CancelStatsRetry()
         statTries = 0
-        ReadStats(frame and frame.unit)
+        chain:Start(Reader.REQUEST_STAGES, shown.guid)
     end
     Apply()
 end
 
 -- The profile refresh calls this on a switch, copy, reset or import, with
--- no new inspect reply: re-derive what the settings change from the stored
--- read. Open Automatically applies at the next window opening.
+-- no new inspect reply: re-derive what the settings change from the shown
+-- read, or restart a read in progress. Open Automatically applies at the
+-- next window opening.
 function IT:ApplySettings()
     if not self:IsEnabled() then return end
+    if chain:Running(Reader.READ_STAGES) then
+        Reader.RestartRead()
+        return
+    end
     local db = DB()
-    ReadYours(db ~= nil and db.InspectTalentsCompare ~= false)
+    ReadYours(shown, db ~= nil and db.InspectTalentsCompare ~= false)
     self:RequestStats()
 end

@@ -169,6 +169,9 @@ end
 -- Cursor frame
 ---------------------------------------------------------------------------------
 local _lastX, _lastY = -1, -1
+-- Set when the trail script detaches with the mouse still; the next moved
+-- frame in _cursorOnUpdate re-attaches it.
+local _trailParked = false
 
 local _mouseHoldTime = 0  -- mouseDown mode hold timer
 
@@ -223,6 +226,10 @@ local function _cursorOnUpdate(f, elapsed)
     if x == _lastX and y == _lastY then return end
     _lastX, _lastY = x, y
     f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+    if _trailParked then
+        _trailParked = false
+        C:_SyncTrailScript()
+    end
 end
 
 -- Shared follow-cursor OnUpdate factory for detached satellites.
@@ -859,6 +866,12 @@ local function _trailOnUpdate(_, elapsed)
         _trailLastCX, _trailLastCY = cx, cy
     end
     _updateTrailDots(elapsed)
+    -- Mouse still and nothing fading: off until _cursorOnUpdate sees a move.
+    if movedSq < 0.25 and #_trailActive == 0 then
+        C.trailFrame:SetScript("OnUpdate", nil)
+        C._trailAttached = false
+        _trailParked = true
+    end
 end
 
 function C:CreateTrailSatellite()
@@ -887,8 +900,10 @@ function C:ApplyTrailSatellite()
 end
 
 -- The trail script runs only while the trail can draw or a dot is still
--- fading; once the last dot has faded it detaches itself.
+-- fading; it detaches itself once the last dot has faded, and while the
+-- mouse is still. Any decision made here replaces a park.
 function C:_SyncTrailScript()
+    _trailParked = false
     local tf = self.trailFrame
     if not tf then return end
     local want = (self.db.Trail.Enabled

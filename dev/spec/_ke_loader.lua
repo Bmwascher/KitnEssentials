@@ -369,6 +369,17 @@ function L.loadEnemyCounter(overrides)
     return modules["EnemyCounter"], KE
 end
 
+-- Modules/Combat/RangeChecker.lua update-period rule. Returns RC, KE.
+function L.loadRangeChecker(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Combat/RangeChecker.lua", KE)
+    return modules["RangeChecker"], KE
+end
+
 -- Core/ProfileManager.lua over a fake AceDB-shaped KE.db. Mirrors the AceDB
 -- semantics the manager depends on: SetProfile early-returns when already on
 -- that profile, and OnProfileChanged/OnProfileCopied/OnProfileReset fire
