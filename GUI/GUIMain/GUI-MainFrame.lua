@@ -459,7 +459,7 @@ function GUIFrame:CreateMainFrame()
     if KE.IS_FOREVER then
         local foreverMark = header:CreateTexture(nil, "OVERLAY")
         foreverMark:SetSize(32, 16)
-        foreverMark:SetPoint("LEFT", title, "RIGHT", 6, 0)
+        foreverMark:SetPoint("LEFT", title, "RIGHT", 0, 0)
         foreverMark:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\ForeverMark.png")
         foreverMark:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
         foreverMark:SetTexelSnappingBias(0)

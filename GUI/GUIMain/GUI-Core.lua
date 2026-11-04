@@ -526,7 +526,7 @@ function GUIFrame:RefreshVersionText()
     if not self.versionText then return end
     local text = "|cff888888v" .. (KE.Version or "?") .. "|r"
     if KE.IS_FOREVER then
-        text = text .. " " .. KE:ColorTextByTheme("FOREVER")
+        text = text .. " " .. KE:ColorTextByTheme("Forever")
     end
     local newer = KE.GetNewerVersion and KE:GetNewerVersion()
     if newer then

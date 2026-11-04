@@ -7,9 +7,9 @@ describe("GUI-Core RefreshVersionText", function()
         { name = "retail, current",   forever = false, newer = nil,      want = "|cff888888v4.16.0|r" },
         { name = "retail, outdated",  forever = false, newer = "v4.17.0",
           want = "|cff888888v4.16.0|r|cff888888, |r|cff7fff7fv4.17.0 available|r" },
-        { name = "Forever, current",  forever = true,  newer = nil,      want = "|cff888888v4.16.0|r <FOREVER>" },
+        { name = "Forever, current",  forever = true,  newer = nil,      want = "|cff888888v4.16.0|r <Forever>" },
         { name = "Forever, outdated", forever = true,  newer = "v4.17.0",
-          want = "|cff888888v4.16.0|r <FOREVER>|cff888888, |r|cff7fff7fv4.17.0 available|r" },
+          want = "|cff888888v4.16.0|r <Forever>|cff888888, |r|cff7fff7fv4.17.0 available|r" },
     }
 
     for _, case in ipairs(CASES) do
