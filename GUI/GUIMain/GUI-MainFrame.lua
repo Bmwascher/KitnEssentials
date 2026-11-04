@@ -456,6 +456,17 @@ function GUIFrame:CreateMainFrame()
     title:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
     GUIFrame.titleText = title
 
+    if KE.IS_FOREVER then
+        local foreverMark = header:CreateTexture(nil, "OVERLAY")
+        foreverMark:SetSize(32, 16)
+        foreverMark:SetPoint("LEFT", title, "RIGHT", 6, 0)
+        foreverMark:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\ForeverMark.png")
+        foreverMark:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        foreverMark:SetTexelSnappingBias(0)
+        foreverMark:SetSnapToPixelGrid(true)
+        GUIFrame.foreverMark = foreverMark
+    end
+
     -- Close button (custom cross texture)
     local closeBtn = CreateFrame("Button", nil, header)
     closeBtn:SetSize(22, 22)

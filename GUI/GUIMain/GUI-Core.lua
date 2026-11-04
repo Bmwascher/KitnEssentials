@@ -525,6 +525,9 @@ end
 function GUIFrame:RefreshVersionText()
     if not self.versionText then return end
     local text = "|cff888888v" .. (KE.Version or "?") .. "|r"
+    if KE.IS_FOREVER then
+        text = text .. " " .. KE:ColorTextByTheme("FOREVER")
+    end
     local newer = KE.GetNewerVersion and KE:GetNewerVersion()
     if newer then
         text = text .. "|cff888888, |r|cff7fff7f" .. newer .. " available|r"
@@ -571,6 +574,9 @@ function GUIFrame:ApplyThemeColors()
     -- Update title and version text with new accent color
     if self.titleText then
         self.titleText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
+    end
+    if self.foreverMark then
+        self.foreverMark:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
     end
     self:RefreshVersionText()
     if self.PaintEditModeButton then
