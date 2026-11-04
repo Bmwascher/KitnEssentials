@@ -262,7 +262,7 @@ IT._StageAllowed = StageAllowed
 -- A repeat answer for the job's player, once the read has begun, is served
 -- by one more read after this one publishes.
 local function ReadAction(readRunning, stageIndex, jobGUID, guid)
-    if readRunning and stageIndex > 1 and jobGUID ~= nil and jobGUID == guid then
+    if readRunning and stageIndex > 1 and jobGUID == guid then
         return "rerun"
     end
     return "start"
@@ -305,8 +305,10 @@ local function NewChain(schedule, allowed)
         self.gen = self.gen + 1
         self.stages, self.guid = nil, nil
     end
+    -- A stage that raised queued nothing: the chain reads as idle, so the next
+    -- answer starts a new read instead of waiting on this one.
     function chain:Running(stages)
-        return self.stages == stages
+        return self.queued and self.stages == stages
     end
     return chain
 end
@@ -534,7 +536,7 @@ end
 local function ReadTree(set)
     set.numRecords = 0
     wipe(set.byID)
-    -- Entries keep across reads: one window session is one player, and
+    -- Entries keep across reads: an entry ref never changes, and
     -- ResetWindowState clears them. A subtree's active flag can change.
     wipe(subInfoCache)
     wipe(set.heroList)

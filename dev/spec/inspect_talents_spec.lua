@@ -255,6 +255,21 @@ describe("Inspect talents: the answer rule", function()
 end)
 
 describe("Inspect talents: the read chain", function()
+    it("reads as idle after a stage raises, and the next start runs", function()
+        local queue, ran = {}, {}
+        local chain = loadIT()._NewChain(function(fn) queue[#queue + 1] = fn end, function() return true end)
+        local function step() table.remove(queue, 1)() end
+        local stages = { function() end, function() error("stage failed") end }
+        chain:Start(stages, "Player-1")
+        step()
+        assert.is_true(chain:Running(stages))
+        assert.has_error(step)
+        assert.is_false(chain:Running(stages))
+        chain:Start({ function() ran[#ran + 1] = "again" end }, "Player-1")
+        step()
+        assert.same({ "again" }, ran)
+    end)
+
     it("shares one queued call among starts, and a new job replaces the old one", function()
         local NewChain = loadIT()._NewChain
         local schedule, pump = manualSchedule()
