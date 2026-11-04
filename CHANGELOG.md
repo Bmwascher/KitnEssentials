@@ -1,5 +1,31 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.16
+
+Healer Mana can now move to other frames while its party anchor is hidden, and
+Position Settings resets its points when Anchored To changes kind.
+
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+#### Healer Mana
+
+- **NEW:** a Fallback Frame row on the Party tab, shown when Anchored To is
+  Select Frame. While the main frame is hidden, Healer Mana sits on the first
+  listed frame that is shown, with its own position values, or at the screen
+  center when none is; it goes back when the main frame shows again
+- With no Fallback Frame set, Healer Mana places exactly as before
+
+#### Position Settings
+
+- Switching Anchored To between a frame and the screen now resets the points
+  to Center, Center, 0, 0, on every module's Position Settings card
+
+---
+
 ## v4.16.15
 
 Settings pages with a row of tabs now draw every tab on every open.
