@@ -48,6 +48,7 @@ describe("DungeonTrash — trash sounds follow the Dungeon Timers sound settings
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashOutput.lua", KE)
         helpers.loadModule("Modules/DungeonTools/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
+        DTrash.monitoring = true
 
         DTrash.GetSpellDisabled = function() return false end
         DTrash.PlayerSeesTrashSpell = function() return true end
