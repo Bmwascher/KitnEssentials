@@ -250,11 +250,21 @@ function KE:ProfileBlockOwner(key)
 end
 
 -- Entries are { id = ... } tables: sidebar rows and sub-tabs. The same list
--- comes back when nothing is withheld.
+-- comes back when nothing is withheld; a retail load withholds only
+-- Forever-only entries.
 ---@param entries table[]
 ---@return table[]
 function KE:FilterAvailableEntries(entries)
-    if RETAIL then return entries end
+    if RETAIL then
+        local withheld = false
+        for i = 1, #entries do
+            if FOREVER_ONLY[entries[i].id] then
+                withheld = true
+                break
+            end
+        end
+        if not withheld then return entries end
+    end
     local kept = {}
     for i = 1, #entries do
         local entry = entries[i]

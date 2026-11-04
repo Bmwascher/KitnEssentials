@@ -141,6 +141,28 @@ describe("Forever availability: admission", function()
     end)
 end)
 
+describe("Forever availability: row and tab filter", function()
+    -- CVars and Chat stand for existing rows, ForeverOnlyProbe for a
+    -- Forever-only row and NotAFeature for an id on neither list. The list is
+    -- reused across loads, so a filter that edited it would fail the next row.
+    it("returns the same list on retail unless an entry is Forever-only, and follows the allow list on a baseline load", function()
+        local plain = { { id = "CVars" }, { id = "NotAFeature" } }
+        local RETAIL_KE = helpers.loadModule("Core/Availability.lua", {})
+        assert.equals(plain, RETAIL_KE:FilterAvailableEntries(plain))
+
+        local ENTRIES = { { id = "CVars" }, { id = "ForeverOnlyProbe" }, { id = "NotAFeature" }, { id = "Chat" } }
+        for _, row in ipairs({
+            { load = "retail",   seed = {},                       want = { "CVars", "NotAFeature", "Chat" } },
+            { load = "baseline", seed = { BASELINE_LOAD = true }, want = { "CVars", "ForeverOnlyProbe", "Chat" } },
+        }) do
+            local KE = helpers.loadModule("Core/Availability.lua", row.seed)
+            local ids = {}
+            for i, entry in ipairs(KE:FilterAvailableEntries(ENTRIES)) do ids[i] = entry.id end
+            assert.same(row.want, ids, row.load)
+        end
+    end)
+end)
+
 describe("Forever availability: refresh and previews", function()
     -- Two states a withheld module can be in: dormant with its flag on, and
     -- running under its own enable management. Neither may be enabled,

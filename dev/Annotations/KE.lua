@@ -1399,7 +1399,7 @@ function KE:ProfileBlockOwner(key) end
 function KE:EnhanceDualSpec(db) end
 
 --- The entries ({ id = ... }) this client admits; the same list when it
---- withholds nothing.
+--- withholds nothing. A retail load withholds only Forever-only entries.
 ---@param entries table[]
 ---@return table[]
 function KE:FilterAvailableEntries(entries) end
