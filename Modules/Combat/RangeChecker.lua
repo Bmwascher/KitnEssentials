@@ -167,8 +167,8 @@ function RC:UpdateRange()
     end
 
     local rangeText = self:FormatRangeText(minRange, maxRange)
-    -- Last-string gate: range text changes infrequently relative to the 10fps
-    -- poll. SetText invalidates FontString layout even when the rendered output
+    -- Last-string gate: range text changes infrequently relative to the
+    -- ticker. SetText invalidates FontString layout even when the rendered output
     -- is identical. Safe because rangeText derives from LibRangeCheck integers,
     -- not secret-tainted unit data. Same pattern as DungeonTimers timeStr gate.
     if rangeText ~= self.lastRangeText then
@@ -185,7 +185,7 @@ function RC:UpdateRange()
     end
 
     -- Only re-query frame size when the displayed text actually changes
-    -- (GetStringWidth/GetStringHeight are not cheap in the throttled poll).
+    -- (GetStringWidth/GetStringHeight are not cheap on every tick).
     if rangeText ~= self.lastSizedText then
         self.lastSizedText = rangeText
         local textWidth = self.text:GetStringWidth() or 50
