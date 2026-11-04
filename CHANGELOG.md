@@ -1,53 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.16.17
+## v4.16.0
 
-The cursor trail, Edit Mode, the Range Checker and the Inspect Talents panel now
-do less work while you play.
-
-### Both clients
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-#### Cursor Effects
-
-- The cursor trail stops running while the mouse is still and its dots have
-  faded, and starts again on your next move
-
-#### Edit Mode
-
-- Holding Shift to fade the selected box and clicking away to deselect no
-  longer check on every frame while Edit Mode is open
-
-#### Range Checker
-
-- The range text updates at your Update Throttle setting, and only while the
-  text is showing
-
-### Retail only
-
-#### Inspect Talents
-
-- The panel beside the inspect window now reads over several frames instead of
-  one, which spreads out its work on each inspect, and shows the tree only once
-  the read is complete. "Waiting for talent data..." can stay a blink longer
-- If another addon's inspect answer arrives during a first read, the panel can
-  stay on "Waiting for talent data..." until you close and reopen the window
-
----
-
-## v4.16.16
-
-Healer Mana can now move to other frames while its party anchor is hidden, and
-Position Settings resets its points when Anchored To changes kind.
+New Warrior tools, Druid Forms and stealth skip bars on Retail, a redone Raid
+Cooldowns list and Party Stops page, and on WoW Forever the Interrupt Tracker,
+Dungeon Tools, Class Tools, Combat Res and Ready Check Consumables.
 
 ### Both clients
 
 > **Beta:** WoW Forever support is new and has not been extensively tested
 > on the live Forever client yet. Expect bugs, and please report any you
 > find.
+
+#### Interrupt Tracker
+
+- **NEW:** Show In card with Only in Dungeons, on by default. Turn it off and
+  the tracker also runs in any party outside a raid: open world, delves and
+  arenas
+- The settings are split into two tabs, Bars and Nameplate Icons
+- Show Bars and Nameplate Icons are now switches in each tab's card title bar,
+  and print On or Off in chat
 
 #### Healer Mana
 
@@ -57,78 +29,117 @@ Position Settings resets its points when Anchored To changes kind.
   center when none is; it goes back when the main frame shows again
 - With no Fallback Frame set, Healer Mana places exactly as before
 
-#### Position Settings
+#### CC Tracker
 
-- Switching Anchored To between a frame and the screen now resets the points
-  to Center, Center, 0, 0, on every module's Position Settings card
+- The Tracked Crowd Control card lists every class as one row, its crowd
+  control beside it with a count of how many are ticked, in place of the class
+  dropdown
+- **NEW:** Kitn Defaults button on the Tracked Crowd Control card: it resets
+  the list to the default picks and keeps the spell IDs you added
 
----
+#### Combat Texts
 
-## v4.16.15
+- The AGGRO line and its sound now show once a mob has attacked you for the new
+  Show After time (0.5 s by default, 0 shows it at once as before)
 
-Settings pages with a row of tabs now draw every tab on every open.
+#### Sounds
 
-### Both clients
+- **NEW:** a "Cancel" voice callout in every sound dropdown
 
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
+#### Focus Castbar
+
+- When you focus a mob part way through its cast, or the bar refreshes mid-cast,
+  the kick mark now stands where your kick comes back, where it used to sit too
+  early
+- The settings preview keeps your name above the bar while Show Target Names is
+  on, and the checkbox shows or hides it at once
+
+#### Advanced Debuffs
+
+- Hides only the debuffs you or your pet cast; debuffs other players put on you
+  now show
+
+#### Focus Marker
+
+- The Ready Check Announce text fits its card again; the note about other addons
+  being told your marker is in its tooltip
+
+#### Addon Skins
+
+- Better Friendlist: a friend in your zone gets a small accent-colored dot right
+  after their zone, instead of a recolored zone line
 
 #### Settings
 
-- A page with a row of tabs, such as Kicks & Casts, no longer opens with
-  only its first tab drawn until the window is moved or scrolled. That
-  includes reopening the window and resizing it
+- A page with a row of tabs, such as Kicks & Casts, now shows every tab on every
+  open, including when you reopen or resize the window
+- Switching Anchored To between a frame and the screen now resets the points to
+  Center, Center, 0, 0, on every module's Position Settings card
 
----
+#### Performance
 
-## v4.16.14
+- The cursor trail stops running while the mouse is still and its dots have
+  faded, and starts again on your next move
+- Holding Shift to fade the selected box and clicking away to deselect no longer
+  check on every frame while Edit Mode is open
+- The Range Checker text updates at your Update Throttle setting, and only while
+  the text is showing
 
-The Raid Cooldowns spell list is redone, sets the order of the box's icons,
-and can track Shroud of Concealment and Mass Invisibility.
+#### Profiler
 
-### Party Cooldowns
+- `/kes profiler cpu` lists frames that run one of Blizzard's shared handlers
+  under their own heading. Those totals cover every addon using the handler, so
+  they no longer top KitnEssentials' own ranking
+- Every line of the report is reworded to read plainly: time used, calls, time
+  per call, and which frames share a row
 
-- **NEW:** the Raid Cooldowns tab's Spells card now sits second and lists
-  every class as one row; each spell's spec, charges and talent swap show in
-  its hover tooltip
-- **NEW:** an icon strip under the rows, with Move Left and Move Right, sets
-  the Raid Cooldowns box's icon order spell by spell; until you move an icon
-  the box keeps its usual order, and Kitn Defaults puts it back
-- **NEW:** Shroud of Concealment and Mass Invisibility can be tracked in the
-  Raid Cooldowns box, off by default; Shroud counts 3 minutes for a rogue with
-  Stillshroud
-- A party member is no longer inspected for the box while every Raid
-  Cooldowns spell of their class is off
+### Retail only
 
----
+#### Executioner Stacks
 
-## v4.16.13
+- **NEW:** Class Tools > Warrior > Executioner Stacks, off by default: shows each
+  Executioner stack and each hidden timer (from procs at 5 stacks) with its
+  seconds left, for any warrior with Slayer's Dominance
+- Four layouts: Bars, Pips, Icon, or only the Cancel icon, each with its own
+  sizing options
+- A Cancel icon with glow and the "Cancel" sound lights when canceling the buff
+  gains damage, and can wait while Sudden Death is up
+- A Create Macro button makes a "Cancel Exec" macro that cancels the buff
+- Test Run, a page preview and Edit Mode movers for the tracker and the icon
 
-Party Cooldowns gets countdown bars for the group's stealth skips.
+#### Imminent Demise Counter
 
-### Party Cooldowns
+- **NEW:** Class Tools > Warrior > Imminent Demise Counter, off by default: shows
+  0/3, 1/3 or 2/3 Slayer's Strikes toward the Sudden Death that Imminent Demise
+  grants on every third, for any warrior with the talent
+- When Execute lights up with a strike, the count sets itself right
+- Three layouts: Icon, Pips or Text; Text can sit on Execute's icon in the
+  Cooldown Manager
+- Hide at 0/3, Test Run, Reset Count, a page preview and an Edit Mode mover
 
-- **NEW:** Party Cooldowns > Skips, off by default: countdown bars for Shroud
-  of Concealment, Mass Invisibility and your Invisibility Potion, so you know
-  how long the stealth has left
-- Shroud's bar reads the party's rogue, so it shows a timer for everyone in the
-  group; Mass Invisibility and the potion show your own
-- The bars sit in their own box with an Edit Mode mover, show the spell's
-  icon, and count in tenths under 10 seconds
-- Follows Party Cooldowns' on/off switch and Show In setting
+#### Spell Reflect Timers
 
----
+- **NEW:** Spell Reflect Timers, on the Warrior tab under Class Tools (off by default).
+  With BigWigs or LittleWigs, it counts down to this season's 8 dungeon boss
+  casts that Spell Reflection can reflect, and names the spell
+- The cue turns green with a "Spell Reflect" callout while a press would still be
+  up when the hit lands, reads NOW at the cast, and hides once you press Spell
+  Reflection in time
+- While Spell Reflection is on cooldown the cue hides by default; a spell set to
+  Always shows a red NO REFLECT instead, with a "No Reflect" callout
+- When Spell Reflection comes back during a countdown, the cue fades back in
+- Text display by default, centered, with the count kept in place so nothing
+  shifts while it runs; an icon display with a glow is the other choice
+- Settings: a mode per spell (each listed with its icon and dungeon), text and
+  icon sizes, spell name size, spell name and its icons on or off, colors, glow,
+  sounds, and a Press Sound that plays when you cast Spell Reflection
+- Test runs a 6 second Thornspike countdown; the settings preview and Edit Mode
+  show a Thornspike sample
 
-## v4.16.12
+#### Druid Forms
 
-Druids get three opt-in helpers for Travel Form and for staying in form while
-casting.
-
-### Druid Forms
-
-- **NEW:** Automation > General > Druid Forms, for druids only, everything off
-  by default
+- **NEW:** Automation > General > Druid Forms, for druids only, everything off by
+  default
 - Leave Travel Form When an Action Is Blocked: when the game refuses an item or
   action because you are in Travel Form, you leave the form, so the next press
   works; never in the air
@@ -139,511 +150,199 @@ casting.
   only) keeps you in form when you cast a spell the form blocks; back on Never,
   or on another character, your own game setting returns
 
----
-
-## v4.16.11
-
-Slayer warriors with Imminent Demise get a counter of their Slayer's Strikes
-toward the next Sudden Death.
-
-### Imminent Demise Counter
-
-- **NEW:** Class Tools > Warrior > Imminent Demise Counter, off by default:
-  shows 0/3, 1/3 or 2/3 Slayer's Strikes toward the Sudden Death that
-  Imminent Demise grants on every third, for any warrior with the talent
-- When Execute lights up with a strike, the count sets itself right
-- Three layouts: Icon, Pips or Text; Text can sit on Execute's icon in the
-  Cooldown Manager
-- Hide at 0/3, Test Run, Reset Count, a page preview and an Edit Mode mover
-
----
-
-## v4.16.10
-
-KitnEssentials now asks which one to keep when EllesmereUI's Group Finder or
-its nameplate kick icons do the same job as KitnEssentials'.
-
-### Retail only
-
-#### Conflicts
-
-- **NEW:** while the Group Finder Panel and EllesmereUI's Group Finder are
-  both on, you are asked which to keep. Choosing KitnEssentials switches off
-  only EllesmereUI's Group Finder; its signup helpers and settings page stay
-- **NEW:** while the Interrupt Tracker's nameplate icons and EllesmereUI's
-  Kick Tracker nameplate icons are both on, you are asked which to keep.
-  Either choice turns off only the other's nameplate icons; both trackers'
-  bars stay, and closing the prompt changes nothing
-
----
-
-## v4.16.9
-
-Slayer warriors get Executioner Stacks, a tracker for Executioner stacks and
-their hidden timers, with a cue for when canceling the buff gains damage.
-
-### Both clients
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-#### Sounds
-
-- **NEW:** a "Cancel" voice callout in every sound dropdown
-
-### Retail only
-
-#### Executioner Stacks
-
-- **NEW:** Class Tools > Warrior > Executioner Stacks, off by default: shows
-  each Executioner stack and each hidden timer (from procs at 5 stacks) with
-  its seconds left, for any warrior with Slayer's Dominance
-- Four layouts: Bars, Pips, Icon, or only the Cancel icon, each with its own
-  sizing options
-- A Cancel icon with glow and the "Cancel" sound lights when canceling the
-  buff gains damage, and can wait while Sudden Death is up
-- A Create Macro button makes a "Cancel Exec" macro that cancels the buff
-- Test Run, a page preview and Edit Mode movers for the tracker and the icon
-
----
-
-## v4.16.8
-
-Better Friendlist marks friends in your zone more clearly, and the AddOn
-List and other skinned windows look more at home.
-
-### Both clients
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-#### Addon Skins
-
-- Better Friendlist: a friend in your zone gets a small accent-colored dot
-  right after their zone, instead of a recolored zone line
-
-### Retail only
-
-#### Dark Theme
-
-- The AddOn List's dropdown, search box, buttons and "Load out of date
-  AddOns" checkbox now match the theme
-- Skinned windows show their titles centered
-
----
-
-## v4.16.7
-
-The Interrupt Tracker and Focus Macros' Focus Kick come to WoW Forever.
-
-### WoW Forever only
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-#### Interrupt Tracker
-
-- **NEW:** The Interrupt Tracker, with its Bars and Nameplate Icons tabs,
-  can now be turned on (it starts off)
-- Teammates show their class kick, and Priest and Druid talent kicks once
-  they have been inspected
-- Your own row follows your stance, form and shield
-- Rows sort by the role each player reports
-
-#### Focus Macros
-
-- **NEW:** The Focus Kick tab can now be turned on (it starts off), and its
-  macro casts the kick that matches your stance or form
-
----
-
-## v4.16.6
-
-The Focus Castbar's kick mark lands where your kick really comes back after
-a focus swap, and its preview keeps your name.
-
-### WoW Forever (Beta)
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-- Focus Castbar: when you focus a mob part way through its cast, the kick
-  mark now stands where your kick comes back, where it used to sit too early
-- Focus Castbar: the settings preview keeps your name above the bar while
-  Show Target Names is on, and the checkbox shows or hides it at once
-
-### Retail
-
-Everything below is for Retail.
-
-#### Focus Castbar
-
-- When you focus a mob part way through its cast, or the bar refreshes
-  mid-cast, the kick mark now stands where your kick comes back, where it
-  used to sit too early
-- The bar switches to the Kick Not Ready color when your kick goes away
-  mid-cast, such as a dismissed pet
-- A kick that changes mid-cast hides the mark until the next cast, rather
-  than leaving one in the wrong place
-- The settings preview keeps your name above the bar while Show Target
-  Names is on, and the checkbox shows or hides it at once
-
-#### Shaman Proc Cooldowns
-
-- A single pipe as the separator shows as one pipe, without a stray letter
-  after it
-
----
-
-## v4.16.5
-
-The AGGRO warning waits a moment before it shows, Combat Potion Ready gains
-an icon mode and a Recklessness stat line, and Advanced Debuffs now shows
-debuffs other players put on you.
-
-### WoW Forever (Beta)
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-- Combat Texts: the AGGRO line and its sound now show once a mob has
-  attacked you for the new Show After time (0.5 s by default, 0 shows it
-  at once as before)
-- Advanced Debuffs hides only the debuffs you or your pet cast; debuffs
-  other players put on you now show
-
-### Retail
-
-Everything below is for Retail.
-
-#### Combat Texts
-
-- The AGGRO line and its sound now show once a mob has attacked you for
-  the new Show After time (0.5 s by default, 0 shows it at once as before)
-
-#### Combat Potion Ready
-
-- New Display Mode: Icon shows the potion with a count and a cooldown
-  swipe, with an Only While Ready option
-- New optional Recklessness Stat line ("Reck: Haste") names the stat a
-  Potion of Recklessness would raise, with its own prefix, colors,
-  position and size, and a per-specialization selector; it works in keys
-  while ratings are hidden
-
-#### Advanced Debuffs
-
-- Hides only the debuffs you or your pet cast; debuffs other players put
-  on you now show
-
----
-
-## v4.16.4
-
-Settings tab rows show in full on every open, and Ready Check Announce's
-detail moves into its tooltip.
-
-### WoW Forever (Beta)
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-- Settings pages with a row of tabs now show every tab when they open,
-  where sometimes only the first tab showed until the page refreshed
-- Focus Marker's Ready Check Announce text fits its card again; the note
-  about other addons being told your marker is in its tooltip
-
-### Retail
-
-Everything below is for Retail.
-
-#### Settings
-
-- Settings pages with a row of tabs now show every tab when they open,
-  where sometimes only the first tab showed until the page refreshed
-
-#### Focus Marker
-
-- The Ready Check Announce text fits its card again; the note about other
-  addons being told your marker is in its tooltip
-
----
-
-## v4.16.3
-
-Spell Reflect, a new Warrior module, counts down to the boss casts Spell
-Reflection can catch.
-
-### Spell Reflect
-
-- **NEW:** Spell Reflect, on a new Warrior tab under Class Tools (off by
-  default). With BigWigs or LittleWigs, it counts down to this season's 8
-  dungeon boss casts that Spell Reflection can reflect, and names the spell
-- The cue turns green with a "Spell Reflect" callout while a press would
-  still be up when the hit lands, reads NOW at the cast, and hides once you
-  press Spell Reflection in time
-- While Spell Reflection is on cooldown the cue hides by default; a spell
-  set to Always shows a red NO REFLECT instead, with a "No Reflect" callout
-- When Spell Reflection comes back during a countdown, the cue fades back in
-- Text display by default, centered, with the count kept in place so
-  nothing shifts while it runs; an icon display with a glow is the other
-  choice
-- Settings: a mode per spell (each listed with its icon and dungeon), text
-  and icon sizes, spell name size (16 by default), spell name and its icons
-  on or off, colors, glow, sounds, and a Press Sound that plays when you
-  cast Spell Reflection
-- Test runs a 6 second Thornspike countdown; the settings preview and Edit
-  Mode show a Thornspike sample
-
----
-
-## v4.16.2
-
-Interrupt Tracker's settings page gets tabs and a Show In card.
-
-### Interrupt Tracker
-
-- **NEW:** Show In card with Only in Dungeons, on by default. Turn it off
-  and the tracker also runs in any party outside a raid: open world,
-  delves and arenas
-- The settings are split into two tabs, Bars and Nameplate Icons
-- Show Bars and Nameplate Icons are now switches in each tab's card title
-  bar, and print On or Off in chat
-
----
-
-## v4.16.1
-
-Party Stops and CC Tracker list their spells one row per class.
-
-### WoW Forever (Beta)
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
-
-- CC Tracker's Tracked Crowd Control card lists every class as one row, its
-  crowd control beside it with a count of how many are ticked, in place of
-  the class dropdown
-- **NEW:** Kitn Defaults button on CC Tracker's Tracked Crowd Control card:
-  it resets the list to the default picks and keeps the spell IDs you added
-
-### Retail
-
-Everything below is for Retail.
-
-#### Party Stops
-
-- The Spells card lists every class as one row, its stops beside it with a
-  count of how many are ticked
-- **NEW:** Set the icon order from a row of icons: click one, then Move Left
-  or Move Right
-- The two Enemies Watched sliders are gone: single-target stops watch 10
-  enemies and area stops 4. If you had changed either slider, it is back to
-  these values
-- "Only in a Party" is now "Hide While Solo", and its tooltip says what can
-  still show while you are solo
-
-#### CC Tracker
-
-- The Tracked Crowd Control card lists every class as one row, its crowd
-  control beside it with a count of how many are ticked, in place of the
-  class dropdown
-- **NEW:** Kitn Defaults button on the Tracked Crowd Control card: it resets
-  the list to the default picks and keeps the spell IDs you added
-
----
-
-## v4.16.0
-
-The Raid Cooldowns box wraps into rows and can sit on top of Healer Mana.
-
-### Party Cooldowns
-
-- **NEW:** Icons Per Row for the Raid Cooldowns box (default 4); icons past
-  that start a new row
-- **NEW:** Healer Mana Below (on by default): while the box keeps its default
+#### Party Cooldowns
+
+- **NEW:** Party Cooldowns > Skips, off by default: countdown bars for Shroud of
+  Concealment, Mass Invisibility and your Invisibility Potion, so you know how
+  long the stealth has left. Shroud's bar reads the party's rogue, so it shows a
+  timer for everyone in the group; Mass Invisibility and the potion show your own
+- The Skips bars sit in their own box with an Edit Mode mover, show the spell's
+  icon, count in tenths under 10 seconds, and follow Party Cooldowns' on/off
+  switch and Show In setting
+- **NEW:** the Raid Cooldowns tab's Spells card now sits second and lists every
+  class as one row; each spell's spec, charges and talent swap show in its hover
+  tooltip
+- **NEW:** an icon strip under the rows, with Move Left and Move Right, sets the
+  Raid Cooldowns box's icon order spell by spell; until you move an icon the box
+  keeps its usual order, and Kitn Defaults puts it back
+- **NEW:** Shroud of Concealment and Mass Invisibility can be tracked in the Raid
+  Cooldowns box, off by default; Shroud counts 3 minutes for a rogue with
+  Stillshroud
+- **NEW:** Icons Per Row for the Raid Cooldowns box (default 4); icons past that
+  start a new row
+- **NEW:** Healer Mana Below (off by default): while the box keeps its default
   place on Healer Mana, the box takes Healer Mana's spot and Healer Mana sits
-  under it. Move both together from Healer Mana's Party position or in Edit
-  Mode
-
----
-
-## v4.15.13
-
-Party Cooldowns fixes and three new cooldowns.
-
-### Party Cooldowns
-
+  under it. Move both together from Healer Mana's Party position or in Edit Mode
+- A party member is no longer inspected for the box while every Raid Cooldowns
+  spell of their class is off
 - Call of the Righteous now shortens Avenging Wrath by 15 sec per rank
 - Elemental Shamans show Stormkeeper after Ascendance
-- A Holy Paladin who picks Avenging Crusader sees it, with its own cooldown,
-  in place of Avenging Wrath
+- A Holy Paladin who picks Avenging Crusader sees it, with its own cooldown, in
+  place of Avenging Wrath
 - The Raid Cooldowns box shows a Shadow Priest's Vampiric Embrace
-- Stack counts and charge counts now use the Timer Size. In the Raid
-  Cooldowns box, charge counts use that box's Text Size
+- Stack counts and charge counts now use the Timer Size. In the Raid Cooldowns
+  box, charge counts use that box's Text Size
 - The Icon Order card's Trinkets slot shows a trinket picture, and the card no
   longer has a Kitn Defaults button
 - An icon that fails to draw no longer stops its timers; the error is reported
   once
-- A broken saved position for the Raid Cooldowns or Potions box no longer
-  causes an error
+- A broken saved position for the Raid Cooldowns or Potions box no longer causes
+  an error
 
----
+#### Party Stops
 
-## v4.15.12
-
-Party Stops fixes for nicknames, Blind and Devourer Demon Hunters.
-
-### Party Stops
-
+- The Spells card lists every class as one row, its stops beside it with a count
+  of how many are ticked
+- **NEW:** Set the icon order from a row of icons: click one, then Move Left or
+  Move Right
+- The two Enemies Watched sliders are gone: single-target stops watch 10 enemies
+  and area stops 4. If you had changed either slider, it is back to these values
+- "Only in a Party" is now "Hide While Solo", and its tooltip says what can still
+  show while you are solo
 - Names update as soon as you change a nickname
-- Turning Blind tracking on while an enemy is already Blinded no longer starts
-  a cooldown
-- A rogue's Blind on an enemy not yet in combat now starts their cooldown. The
-  Enemies Watched tooltip says so
-- A Devourer Demon Hunter shows Void Nova in place of Chaos Nova once their
-  spec is known
+- Turning Blind tracking on while an enemy is already Blinded no longer starts a
+  cooldown
+- A rogue's Blind on an enemy not yet in combat now starts their cooldown
+- A Devourer Demon Hunter shows Void Nova in place of Chaos Nova once their spec
+  is known
 
----
+#### Interrupt Tracker
 
-## v4.15.11
+- When another addon keeps inspecting your group, teammates' talented kicks and
+  cooldowns now show after about 10 seconds instead of never (Party Cooldowns
+  too)
 
-Dungeon Timers fixes for The Hoardmonger, trash sounds and missed boss ends.
+#### Conflicts
 
-### Dungeon Timers
+- **NEW:** while the Group Finder Panel and EllesmereUI's Group Finder are both
+  on, you are asked which to keep. Choosing KitnEssentials switches off only
+  EllesmereUI's Group Finder; its signup helpers and settings page stay
+- **NEW:** while the Interrupt Tracker's nameplate icons and EllesmereUI's Kick
+  Tracker nameplate icons are both on, you are asked which to keep. Either choice
+  turns off only the other's nameplate icons; both trackers' bars stay, and
+  closing the prompt changes nothing
 
-- The Hoardmonger (Den of Nalorakk) shows Phase Transition bars before 90%,
-  70% and 40% boss health
+#### Combat Potion Ready
+
+- New Display Mode: Icon shows the potion with a count and a cooldown swipe, with
+  an Only While Ready option
+- New optional Recklessness Stat line ("Reck: Haste") names the stat a Potion of
+  Recklessness would raise, with its own prefix, colors, position and size, and a
+  per-specialization selector; it works in keys while ratings are hidden
+
+#### Focus Castbar
+
+- The bar switches to the Kick Not Ready color when your kick goes away mid-cast,
+  such as a dismissed pet
+- A kick that changes mid-cast hides the mark until the next cast, rather than
+  leaving one in the wrong place
+
+#### Dungeon Timers
+
+- The Hoardmonger (Den of Nalorakk) shows Phase Transition bars before 90%, 70%
+  and 40% boss health
 - Trash sounds follow "Mute all preset sounds" and "Sound channel", like boss
   sounds
 - When the game misses a boss's end, the next pull clears the old fight's
   leftover timers
 
----
+#### Inspect Talents
 
-## v4.15.10
+- The panel beside the inspect window now reads over several frames instead of
+  one, which spreads out its work on each inspect, and shows the tree only once
+  the read is complete. "Waiting for talent data..." can stay a blink longer
+- If another addon's inspect answer arrives during a first read, the panel can
+  stay on "Waiting for talent data..." until you close and reopen the window
 
-An easier-to-read `/kes profiler cpu` report.
+#### Character Panel
 
-### Profiler
+- The whole-number item level now matches Blizzard's when your equipped level is
+  below the game's minimum
 
-- `/kes profiler cpu` lists frames that run one of Blizzard's shared
-  handlers under their own heading. Those totals cover every addon using the
-  handler, so they no longer top KitnEssentials' own ranking
-- Every line of the report is reworded to read plainly: time used, calls,
-  time per call, and which frames share a row
+#### Dark Theme
 
----
+- The AddOn List's dropdown, search box, buttons and "Load out of date AddOns"
+  checkbox now match the theme
+- Skinned windows show their titles centered
 
-## v4.15.9
+#### Shaman Proc Cooldowns
 
-Class Tools, Combat Res and the rest of the Status Texts now run on WoW
-Forever.
-
-### WoW Forever (Beta)
-
-- Available on WoW Forever, each off until you turn it on: Custom Cooldowns,
-  DoT Tracker and Missing Forms (Class Tools), Combat Res, and the Status
-  Texts Combat Potion, Healer Mana and No Movement Alert
-- Custom Cooldowns tracks the highest rank you know of any spell you add, at
-  any rank
-- DoT Tracker counts every rank of each class DoT; Mage and Paladin have none
-- Missing Forms lets a Warrior pick a stance, a Paladin an aura (any aura to
-  start) and a Druid a form, and warns a Priest when Shadowform is learned and
-  not up
-- Combat Res shows your own battle res: Rebirth for a Druid, Reincarnation for
-  a Shaman, a Soulstone in your bags for a Warlock, as Ready or the time left
-- Combat Potion reminds you when a combat potion in your bags is ready
-- Healer Mana finds healers by their talents when they run an addon that
-  shares them, otherwise by the role they picked, and counts every raid group
-- No Movement Alert covers Charge, Intercept, Blink, Sprint, Dash and Feral
-  Charge at the highest rank you know
-- The class lists in these settings show the nine Forever classes
-
----
-
-## v4.15.8
-
-System Optimization shows the game's own setting names, and Revert All keeps
-any setting the game refuses to restore.
-
-### Retail
+- A single pipe as the separator shows as one pipe, without a stray letter after
+  it
 
 #### System Optimization
 
 - The Current column uses the same words as the game's Graphics menu (Outline
   Mode "Good", Spell Density "Reduced" or "Everything") instead of numbers or
   mismatched names
-- Revert All keeps any setting the game refuses to restore, warns you, and
-  tries it again next time
+- Revert All keeps any setting the game refuses to restore, warns you, and tries
+  it again next time
 - Apply All warns when it could not put your window mode back
-- Mythic+ Lower View Distance keeps trying to restore your view distance when
-  the game refuses it once
+- Mythic+ Lower View Distance keeps trying to restore your view distance when the
+  game refuses it once
 
 #### Automation
 
 - Hide Error Messages now also hides the red ping error text
 - Unticking Hide Helptips no longer turns tutorials on when the tick never
   managed to turn them off
-- Auto-Cancel Transforms removes the fishing outfit when Fishing is the only
-  item picked
+- Auto-Cancel Transforms removes the fishing outfit when Fishing is the only item
+  picked
 
----
+### WoW Forever only
 
-## v4.15.7
+#### Interrupt Tracker
 
-Dungeon Tools now runs on WoW Forever.
+- **NEW:** The Interrupt Tracker, with its Bars and Nameplate Icons tabs, can now
+  be turned on (it starts off)
+- Teammates show their class kick, and Priest and Druid talent kicks once they
+  have been inspected
+- Your own row follows your stance, form and shield
+- Rows sort by the role each player reports
 
-### WoW Forever (Beta)
+#### Dungeon Tools
 
-- Dungeon Tools is available on WoW Forever: Death Notifications, Enemy
-  Counter, Targeted Spells, Dungeon Casts, CC Tracker, Focus Macros (marker
-  macro) and Keystone Helper's Instance Reset announcer, each off until you
-  turn it on
+- **NEW:** Dungeon Tools is available: Death Notifications, Enemy Counter,
+  Targeted Spells, Dungeon Casts, CC Tracker, Focus Macros (marker macro) and
+  Keystone Helper's Instance Reset announcer, each off until you turn it on
 - CC Tracker tracks Forever's long crowd controls at every rank: Polymorph,
-  Repentance, Turn Undead, Freezing Trap, Scare Beast, Sap, Blind, Banish,
-  Fear, Seduction, Hibernate, Entangling Roots and Shackle Undead
+  Repentance, Turn Undead, Freezing Trap, Scare Beast, Sap, Blind, Banish, Fear,
+  Seduction, Hibernate, Entangling Roots and Shackle Undead
 - Dungeon Casts follows your kick through stance, form and shield changes
-- Focus Macros lists the nine Forever classes and announces your marker on a
-  ready check only when you know a kick
-- Settings and search show only the Dungeon Tools options that apply on
-  Forever
+- Focus Macros lists the nine Forever classes and announces your marker on a ready
+  check only when you know a kick
+- **NEW:** The Focus Kick tab can now be turned on (it starts off), and its macro
+  casts the kick that matches your stance or form
+- Settings and search show only the Dungeon Tools options that apply on Forever
 
----
+#### Class Tools, Combat Res and Status Texts
 
-## v4.15.6
+- **NEW:** Available, each off until you turn it on: Custom Cooldowns, DoT Tracker
+  and Missing Forms (Class Tools), Combat Res, and the Status Texts Combat Potion,
+  Healer Mana and No Movement Alert
+- Custom Cooldowns tracks the highest rank you know of any spell you add, at any
+  rank
+- DoT Tracker counts every rank of each class DoT; Mage and Paladin have none
+- Missing Forms lets a Warrior pick a stance, a Paladin an aura (any aura to
+  start) and a Druid a form, and warns a Priest when Shadowform is learned and not
+  up
+- Combat Res shows your own battle res: Rebirth for a Druid, Reincarnation for a
+  Shaman, a Soulstone in your bags for a Warlock, as Ready or the time left
+- Combat Potion reminds you when a combat potion in your bags is ready
+- Healer Mana finds healers by their talents when they run an addon that shares
+  them, otherwise by the role they picked, and counts every raid group
+- No Movement Alert covers Charge, Intercept, Blink, Sprint, Dash and Feral Charge
+  at the highest rank you know
+- The class lists in these settings show the nine Forever classes
 
-Teammate talents read even beside an addon that keeps inspecting, and the
-Character Panel item level matches Blizzard's.
+#### Ready Check Consumables
 
-### Retail
-
-- Interrupt Tracker and Party Cooldowns: when another addon keeps inspecting
-  your group, teammates' talented kicks and cooldowns now show after about
-  10 seconds instead of never
-- Character Panel: the whole-number item level now matches Blizzard's when
-  your equipped level is below the game's minimum
-
----
-
-## v4.15.5
-
-Ready Check Consumables now runs on WoW Forever.
-
-### WoW Forever (Beta)
-
-- Ready Check Consumables is available on WoW Forever: the ready check row
-  shows Food, Flask, Elixir, both weapon hands, Healthstone and, for
-  Warlocks, Soulstone, filled with Forever consumables
-- A click uses the item or casts the spell: Rogues apply poisons, Shamans
-  their main-hand imbue, other classes a stone or oil, and Warlocks create
-  a Healthstone or use or create a Soulstone
+- **NEW:** Ready Check Consumables is available: the ready check row shows Food,
+  Flask, Elixir, both weapon hands, Healthstone and, for Warlocks, Soulstone,
+  filled with Forever consumables
+- A click uses the item or casts the spell: Rogues apply poisons, Shamans their
+  main-hand imbue, other classes a stone or oil, and Warlocks create a Healthstone
+  or use or create a Soulstone
 - The settings page shows only the options that apply on Forever
 
 ---
