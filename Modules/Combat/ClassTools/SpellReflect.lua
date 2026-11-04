@@ -79,7 +79,7 @@ local RED = { 1, 0.3, 0.3, 1 }
 
 local EDIT_MODE_ELEMENT = {
     key = "SpellReflect",
-    displayName = "Spell Reflect",
+    displayName = "Spell Reflect Timers",
     guiPath = "ClassTools",
     guiTab = "SpellReflect",
 }
@@ -857,11 +857,11 @@ end
 function SR:Test()
     local _, class = UnitClass("player")
     if class ~= "WARRIOR" then
-        KE:Print("Spell Reflect is Warrior only.")
+        KE:Print("Spell Reflect Timers is Warrior only.")
         return
     end
     if not self.live then
-        KE:Print("Spell Reflect starts once Spell Reflection is learned.")
+        KE:Print("Spell Reflect Timers starts once Spell Reflection is learned.")
         return
     end
     self.records[TEST_KEY] = Rules.NewTest(SampleEntry(), GetTime())

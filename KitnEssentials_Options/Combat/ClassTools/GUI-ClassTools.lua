@@ -58,7 +58,7 @@ RegisterClassPage("ClassToolsPriest", {
 })
 
 RegisterClassPage("ClassToolsWarrior", {
-    { id = "SpellReflect", label = "Spell Reflect" },
+    { id = "SpellReflect", label = "Spell Reflect Timers" },
     { id = "Executioner",  label = "Executioner Stacks" },
     { id = "ImminentDemise", label = "Imminent Demise Counter" },
 })

@@ -1049,12 +1049,12 @@ local Defaults = {
             Modes = {}, -- spell id -> ALWAYS | READY | OFF, only where it differs
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 160),
+            Position = DefaultPosition(0, 275),
         },
 
         Executioner = {
             Enabled = false,
-            DisplayMode = "BARS", -- BARS | PIPS | ICON | CUE_ONLY
+            DisplayMode = "PIPS", -- BARS | PIPS | ICON | CUE_ONLY
             -- Shared by every mode.
             ShowHidden = true,
             ShowSeconds = true,
@@ -1066,11 +1066,11 @@ local Defaults = {
             BarHeight = 14,
 
             ShowStackCount = true,
-            PipWidth = 34,
+            PipWidth = 35,
             PipHeight = 18,
-            PipSpacing = 3,
-            HiddenMarkWidth = 26,
-            HiddenMarkHeight = 13,
+            PipSpacing = 1,
+            HiddenMarkWidth = 33,
+            HiddenMarkHeight = 15,
             StackCountSize = 26,
             ShowHiddenLabel = true,
 
@@ -1078,14 +1078,14 @@ local Defaults = {
             IconSwipe = true,
             IconReverse = false,
 
-            FontSize = 11,
+            FontSize = 14,
             FontOutline = "OUTLINE",
             StackColor = { 0.94, 0.62, 0.15, 1 },
             HiddenColor = { 0.89, 0.29, 0.29, 1 },
 
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -200),
+            Position = { AnchorFrom = "TOP", AnchorTo = "CENTER", XOffset = 40, YOffset = -385 },
 
             Cue = {
                 Enabled = true,
@@ -1102,13 +1102,13 @@ local Defaults = {
                 Sound = "Cancel",
                 anchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
-                Position = DefaultPosition(0, -150),
+                Position = DefaultPosition(-184, -13),
             },
         },
 
         ImminentDemise = {
             Enabled = false,
-            DisplayMode = "ICON", -- ICON | PIPS | TEXT
+            DisplayMode = "TEXT", -- ICON | PIPS | TEXT
             HideAtZero = false,
 
             IconSize = 40,
@@ -1121,10 +1121,10 @@ local Defaults = {
             PipSpacing = 3,
             ShowCount = true,
 
-            AttachToCDM = false,
-            IconPosition = "ABOVE",
+            AttachToCDM = true,
+            IconPosition = "CENTER",
             IconX = 0,
-            IconY = 2,
+            IconY = 0,
 
             FontSize = 20,
             FontOutline = "OUTLINE",
@@ -1914,15 +1914,15 @@ local Defaults = {
             SkipShroudColor   = { 0.58, 0.36, 0.86, 1 },
             SkipMassInvisColor = { 0.25, 0.78, 0.92, 1 },
             SkipPotionColor   = { 0.42, 0.14, 0.66, 1 },
-            SkipWidth         = 225,
-            SkipHeight        = 23,
+            SkipWidth         = 250,
+            SkipHeight        = 27,
             SkipSpacing       = 0,
-            SkipGrowth        = "DOWN",
+            SkipGrowth        = "UP",
             SkipTextSize      = 14,
             SkipShowIcon      = true,
             SkipShowName      = true,
             SkipShowTimer     = true,
-            SkipPosition      = { AnchorFrom = "TOPLEFT", AnchorTo = "LEFT", XOffset = 1, YOffset = 70 },
+            SkipPosition      = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 100 },
             SkipAnchorFrameType = "UIPARENT",
             SkipStrata        = "MEDIUM",
             -- Raid Cooldowns box (Raid Cooldowns tab), attached to the top of

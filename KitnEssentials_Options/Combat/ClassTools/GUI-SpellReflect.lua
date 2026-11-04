@@ -62,7 +62,7 @@ GUIFrame:RegisterContent("SpellReflect", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Spell Reflect", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Spell Reflect Timers", yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
         if SR then
