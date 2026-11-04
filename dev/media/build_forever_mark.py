@@ -2,7 +2,7 @@
 that the accent color tints at runtime.
 
 Language, in UI units at the display size:
-  display     32 x 16, ink 28 wide; the texture is 4x this
+  display     32 x 16, curve center line 28 wide; the texture is 4x this
   curve       x = cos t (1 + Q sin^2 t), y = sin 2t (1 + K cos 2t), aspect 2.4833
   stroke      1.9 at rest, thickening to 2.8 from 78 percent of the arc length,
               through the right extreme, to 5 percent, where it ends round

@@ -1,7 +1,6 @@
 -- Tier 2: the settings window's bottom bar text in GUI/GUIMain/GUI-Core.lua.
 -- The word FOREVER is a client gate on a line every retail player sees.
 local helpers = require("dev.spec._helpers")
-local mock = require("dev.spec._wow_mock")
 
 describe("GUI-Core RefreshVersionText", function()
     local CASES = {
@@ -15,9 +14,7 @@ describe("GUI-Core RefreshVersionText", function()
 
     for _, case in ipairs(CASES) do
         it("reads correctly on " .. case.name, function()
-            mock.install()
             local KE = { Theme = { headerHeight = 32, borderSize = 1 } }
-            helpers.loadModule("Core/Secret.lua", KE)
             helpers.loadModule("Core/Availability.lua", KE)
             helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
             KE.Version = "4.16.0"
