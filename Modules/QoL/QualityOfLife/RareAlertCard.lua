@@ -430,30 +430,19 @@ function RA:PaintBearing(rotation, yards)
     end
 end
 
--- The value may be secret: the bar takes it as it is, and the percent shows
--- only when it reads plain.
+-- The value may be secret: the bar and the percent take it as it is, and neither
+-- is read back. Only a plain nil hides them.
 function RA:PaintHealth(value)
     local parts = self.parts
     local bar, percent = parts.health, parts.percent
-    if not self.db.ShowHealth then
-        bar:Hide()
-        percent:Hide()
-        return
-    end
-    if KE:IsSecretValue(value) then
-        bar:SetValue(value)
-        bar:Show()
-        percent:Hide()
-        return
-    end
-    if not value then
+    if not self.db.ShowHealth or (not KE:IsSecretValue(value) and not value) then
         bar:Hide()
         percent:Hide()
         return
     end
     bar:SetValue(value)
     bar:Show()
-    percent:SetText(format("%d%%", floor(value + 0.5)))
+    percent:SetFormattedText("%.0f%%", value)
     percent:Show()
 end
 
