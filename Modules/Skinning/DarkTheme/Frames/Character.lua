@@ -14,17 +14,22 @@ local STAT_CATEGORIES = { "ItemLevelCategory", "AttributesCategory", "Enhancemen
 local ILVL_SIZE, HEADER_SIZE, ROW_SIZE = 20, 14, 12
 local HEADER_INSET = 6
 
--- The ammo slot draws an arrow overlay alone in an unnamed child frame. Found
--- by its atlas: the slot's own backdrop is a child frame too, and so is its
--- cooldown.
+-- The ammo slot's arrow overlay and the bronze divider between the panes each
+-- sit alone in an unnamed child frame. Found by atlas: their siblings are
+-- child frames too, such as the slot's backdrop and cooldown.
 local AMMO_ARROW_ATLAS = "UI-Character-Info-GearSlot-Arrow"
-local function HideAmmoArrow(button)
-    for _, child in ipairs({ button:GetChildren() }) do
+local PANE_DIVIDER_ATLAS = "common-framedivider"
+local function KillChildArt(parent, atlas)
+    for _, child in ipairs({ parent:GetChildren() }) do
         local region = child.GetRegions and child:GetRegions()
-        if region and region.GetAtlas and region:GetAtlas() == AMMO_ARROW_ATLAS then
+        if region and region.GetAtlas and region:GetAtlas() == atlas then
             S.KillTexture(region)
         end
     end
+end
+
+local function PointPaneToggle(frame)
+    S.ArrowDirection(frame.RightPaneToggleButton, frame:IsRightPaneCollapsed() and "right" or "left")
 end
 
 local ItemLocation = ItemLocation
@@ -676,7 +681,7 @@ local function Skin()
         if button then
             S.ItemButton(button)
             if button.BorderFrame then S.StripTextures(button.BorderFrame) end
-            if slot == "Ammo" then HideAmmoArrow(button) end
+            if slot == "Ammo" then KillChildArt(button, AMMO_ARROW_ATLAS) end
             if qualityBorders and button.IconBorder then
                 S.IconBorder(button.IconBorder, S.GetBackdrop(button))
             end
@@ -696,9 +701,18 @@ local function Skin()
     SkinSidebarTabs()
     if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
     if frame.LeftPaneHost then S.StripTextures(frame.LeftPaneHost) end
-    if frame.RightPaneHost then S.StripTextures(frame.RightPaneHost) end
+    if frame.RightPaneHost then
+        S.StripTextures(frame.RightPaneHost)
+        KillChildArt(frame.RightPaneHost, PANE_DIVIDER_ATLAS)
+    end
     local levelRow = _G.PaperDollFrame and _G.PaperDollFrame.TopBackgroundStripHost
     if levelRow then S.StripTextures(levelRow) end
+    local paneToggle = frame.RightPaneToggleButton
+    if paneToggle and not S.data(paneToggle).skinned then
+        S.ArrowButton(paneToggle, "left")
+        hooksecurefunc(frame, "UpdateRightPaneToggleButton", PointPaneToggle)
+        PointPaneToggle(frame)
+    end
 
     SkinTitlesPane()
     SkinEquipmentManagerPane()
