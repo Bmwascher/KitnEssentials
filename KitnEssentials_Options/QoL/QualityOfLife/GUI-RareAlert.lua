@@ -103,7 +103,7 @@ GUIFrame:RegisterContent("RareAlert", function(scrollChild, yOffset)
     -- Read once per build. Only a plain false proves the setting is off.
     local enemyPlates = C_CVar.GetCVarBool("nameplateShowEnemies")
     if not KE:IsSecretValue(enemyPlates) and enemyPlates == false then
-        card2:AddLabel("Enemy nameplates are off, so a rare with no minimap icon shows only when you " ..
+        card2:AddLabel("Enemy nameplates are off, so a rare with no minimap icon gives no alert unless you " ..
             "target or mouse over it.")
     end
     manager:RegisterGroup(card2:AddCheckboxGrid({
