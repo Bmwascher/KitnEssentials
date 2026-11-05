@@ -582,6 +582,7 @@ function ST:ClearUsed()
 end
 
 function ST:SeedState()
+    if PROOF.BLIZZARD_BUTTON then self:ReadBlizzard() end
     self:UpdateQueue()
     self:ReadSealAuras()
     local melee = C_Spell.IsCurrentSpell(AUTO_ATTACK_SPELL)
@@ -654,6 +655,7 @@ function ST:SyncEvents()
     self:SyncCastEvents()
     self:SyncGuideEvents()
     self:SyncColorEvents()
+    self:SyncCombatEvent()
     if db.RangeCheck or self:TargetEstimateOn() then
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
     else
@@ -1142,4 +1144,65 @@ function ST:SyncColorEvents()
         self.unitEvents:UnregisterEvent("UNIT_AURA")
         self:SetSeal(nil)
     end
+end
+
+---------------------------------------------------------------------------------
+-- Blizzard's bar
+---------------------------------------------------------------------------------
+local function BlizzardFlagStore()
+    return KE.db.global
+end
+
+-- Reading the setting on clears a stale flag.
+function ST:ReadBlizzard()
+    local cvarOn = BlizzardCVarOn()
+    local store = BlizzardFlagStore()
+    store.SwingTimerHidBlizzard = R.BlizzardFlag(cvarOn, store.SwingTimerHidBlizzard)
+    return cvarOn, store.SwingTimerHidBlizzard
+end
+
+-- Returns whether the page shows its card, and the button's action.
+function ST:BlizzardButtonState()
+    return R.BlizzardButton(self:ReadBlizzard())
+end
+
+function ST:ToggleBlizzardBar()
+    if not PROOF.BLIZZARD_BUTTON then return end
+    local cvarOn, flag = self:ReadBlizzard()
+    local inCombat = InCombatLockdown()
+    local value, newFlag = R.BlizzardClick(cvarOn, flag, inCombat)
+    if not value then
+        if inCombat then KE:Print("Blizzard's swing bar cannot be changed in combat.") end
+        return
+    end
+    C_CVar.SetCVar(BLIZZARD_CVAR, value)
+    BlizzardFlagStore().SwingTimerHidBlizzard = newFlag
+    -- The write clears the range flags, so they are turned back on.
+    if self:IsEnabled() and self.bars then self:CheckAllRanges() end
+end
+
+---------------------------------------------------------------------------------
+-- Parry haste
+---------------------------------------------------------------------------------
+-- The swing keeps its length and its start moves, so a second parry measures
+-- against the same swing. The next swing event corrects this.
+function ST:ShortenSwing(row)
+    local now = GetTime()
+    if not self:SwingRunning(row, now) then return end
+    row.ends = now + R.ParryHastened(row.ends - now, row.swingDuration)
+    row.starts = row.ends - row.swingDuration
+    self:RefreshBar(row)
+end
+
+function ST:SyncCombatEvent()
+    if PROOF.OWN_PARRY_HASTE then
+        self.unitEvents:RegisterUnitEvent("UNIT_COMBAT", "player")
+    else
+        self.unitEvents:UnregisterEvent("UNIT_COMBAT")
+    end
+end
+
+function ST:UNIT_COMBAT(_, unit, action)
+    if KE:IsSecretValue(unit) or KE:IsSecretValue(action) then return end
+    if PROOF.OWN_PARRY_HASTE and unit == "player" and action == "PARRY" then self:ShortenSwing(self.bars.MH) end
 end
