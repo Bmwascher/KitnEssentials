@@ -104,11 +104,30 @@ local function HideBlock()
     if block then block:Hide() end
 end
 
-local function ClearRecord()
+local function ForgetRecord()
     record.on = false
     record.immunity = nil
     wipe(record.ids)
+end
+
+local function ClearRecord()
+    ForgetRecord()
     HideBlock()
+end
+
+-- The next-frame draw handles a record with something to show; anything else
+-- leaves no block.
+local function SettleBlock()
+    if record.on and (#record.ids > 0 or record.immunity) then return end
+    HideBlock()
+end
+
+-- A shown unit tooltip is rebuilt about once a second: cleared, then the post
+-- call runs again in the same frame. Hiding at once would leave the block off
+-- screen until the next-frame draw, so the hide waits a frame as well.
+local function ForgetSoon()
+    ForgetRecord()
+    if block and block:IsShown() then C_Timer.After(0, SettleBlock) end
 end
 
 local function IsKeyHeld()
@@ -299,7 +318,7 @@ end
 local function OnUnit(tooltip, tooltipData)
     if not active then return end
     if tooltip ~= GameTooltip or not IsUsable(tooltip) then return end
-    ClearRecord()
+    ForgetSoon()
 
     if not scoutData or not ShownHere() then return end
 
@@ -336,9 +355,15 @@ local function OnUnit(tooltip, tooltipData)
     end
 end
 
--- On both scripts: a rebuild clears the lines without hiding the tooltip, and
--- a plain-text one never reaches a post call. Reads no tooltip data.
-local function OnTooltipGone()
+-- A rebuild clears the lines without hiding the tooltip, and a plain-text one
+-- never reaches a post call. Reads no tooltip data.
+local function OnTooltipCleared()
+    if not active then return end
+    linesOnTooltip = false
+    ForgetSoon()
+end
+
+local function OnTooltipHidden()
     if not active then return end
     linesOnTooltip = false
     ClearRecord()
@@ -435,8 +460,8 @@ function Scout:OnEnable()
     if not hooked then
         hooked = true
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, OnUnit)
-        GameTooltip:HookScript("OnTooltipCleared", OnTooltipGone)
-        GameTooltip:HookScript("OnHide", OnTooltipGone)
+        GameTooltip:HookScript("OnTooltipCleared", OnTooltipCleared)
+        GameTooltip:HookScript("OnHide", OnTooltipHidden)
     end
     local _, class = UnitClass("player")
     self.playerClass = PlainString(class)
