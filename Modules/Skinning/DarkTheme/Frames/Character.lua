@@ -18,13 +18,26 @@ local HEADER_INSET = 6
 -- sit alone in a child frame with no name or key, so only the atlas finds them.
 local AMMO_ARROW_ATLAS = "UI-Character-Info-GearSlot-Arrow"
 local PANE_DIVIDER_ATLAS = "common-framedivider"
+local PANE_LINE_ALPHA = 0.15
 local function KillChildArt(parent, atlas)
     for _, child in ipairs({ parent:GetChildren() }) do
         local region = child.GetRegions and child:GetRegions()
         if region and region.GetAtlas and region:GetAtlas() == atlas then
             S.KillTexture(region)
+            return child
         end
     end
+end
+
+-- Drawn on the divider's own frame, which Blizzard levels above the stats pane.
+local function AddPaneLine(host)
+    if S.data(host).paneLine then return end
+    local line = host:CreateTexture(nil, "OVERLAY")
+    line:SetColorTexture(1, 1, 1, PANE_LINE_ALPHA)
+    line:SetPoint("TOPLEFT")
+    line:SetPoint("BOTTOMLEFT")
+    line:SetWidth(KE:GetPixelSize())
+    S.data(host).paneLine = line
 end
 
 -- Blizzard writes its page art onto these textures on every show and toggle,
@@ -714,7 +727,8 @@ local function Skin()
     if frame.LeftPaneHost then S.StripTextures(frame.LeftPaneHost) end
     if frame.RightPaneHost then
         S.StripTextures(frame.RightPaneHost)
-        KillChildArt(frame.RightPaneHost, PANE_DIVIDER_ATLAS)
+        local dividerHost = KillChildArt(frame.RightPaneHost, PANE_DIVIDER_ATLAS)
+        if dividerHost then AddPaneLine(dividerHost) end
     end
     local levelRow = _G.PaperDollFrame and _G.PaperDollFrame.TopBackgroundStripHost
     if levelRow then S.StripTextures(levelRow) end
