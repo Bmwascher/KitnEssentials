@@ -785,7 +785,9 @@ end
 -- with no protected frame under it.
 local TARGET_NAME = "KE_RareAlertTarget"
 local TARGET_MACRO = "/targetexact %s"
-local SKULL_MACRO = "/cleartarget\n/targetexact %s\n/tm !8"
+-- Out of combat the clear keeps the skull off another target when the rare is out
+-- of reach. A macro cannot change in combat, so each line reads combat at the press.
+local SKULL_MACRO = "/cleartarget [nocombat]\n/targetexact %s\n/tm [nocombat] !8"
 local TARGET_LEVEL_ABOVE = 10
 
 function RA:CreateTarget()
