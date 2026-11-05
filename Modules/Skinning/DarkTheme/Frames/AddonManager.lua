@@ -31,9 +31,6 @@ local function Skin()
     local frame = _G.AddonList
     if not frame then return S.Skip("AddonList missing") end
     S.Frame(frame)
-    -- The Forever window has not been checked against these field names.
-    if KE.IS_FOREVER then return end
-
     if frame.Dropdown then SkinDropdown(frame.Dropdown, frame) end
     local search = frame.SearchBox
     if search then
