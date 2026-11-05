@@ -23,7 +23,6 @@ Rules.MAX_ABILITY_ROWS = 8
 
 Rules.SHOW_IN = {
     { key = "ShowInWorld", label = "Open World", state = "world" },
-    { key = "ShowInInstances", label = "Dungeons and Raids", state = "instance" },
     { key = "ShowInCombat", label = "In Combat", state = "combat" },
 }
 

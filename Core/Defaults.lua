@@ -3063,7 +3063,6 @@ if KE.BASELINE_LOAD then
     Defaults.profile.Scout = {
         Enabled = false,
         ShowInWorld = true,
-        ShowInInstances = true,
         ShowInCombat = false,
         Abilities = true,
         ControlWords = true,
