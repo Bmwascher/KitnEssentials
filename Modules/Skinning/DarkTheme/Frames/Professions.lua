@@ -552,12 +552,13 @@ local function DressBookSpell(button)
 end
 
 -- overrideWidth narrows the bar, track and mask but leaves Fill at the
--- template's 441, so the backdrop on Fill ran past the bar. The width is the
--- mask's span at 100%: it starts 1px into Fill and is width + offset long.
+-- template's 441, and the backdrop sits on Fill. Fill takes the mask's
+-- full-bar span (width + offset, starting 1px in) plus 1px each side, so a
+-- full bar leaves both border pixels clear.
 local function FitBookBarFill(bar)
     local fill, width = bar and bar.Fill, bar and bar.overrideWidth
     if not fill or not width then return end
-    fill:SetWidth(width + (bar.overrideMaskRightOffset or 0) + 1)
+    fill:SetWidth(width + (bar.overrideMaskRightOffset or 0) + 2)
 end
 
 -- Blizzard re-atlases each slot's Background per profession, so it is faded
@@ -573,6 +574,8 @@ local function SkinBookPage(page)
             S.Backdrop(slot)
             SkinRankBar(slot.StatusBar)
             FitBookBarFill(slot.StatusBar)
+            -- Gamepad mode re-runs OnLoad with a new overrideWidth.
+            if slot.StatusBar then hooksecurefunc(slot.StatusBar, "OnLoad", FitBookBarFill) end
             if slot.UnlearnButton then S.CloseButton(slot.UnlearnButton) end
             S.FontStrings(slot, nil, "OUTLINE")
             for i = 1, 4 do DressBookSpell(slot["SpellButton" .. i]) end
