@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.3
+
+### Both clients
+
+- Chat no longer leaves a wide gap before the names of new players. The Guide
+  and Newcomer tags now follow the game's own rule for who sees them
+
+---
+
 ## v4.16.2
 
 ### WoW Forever only
