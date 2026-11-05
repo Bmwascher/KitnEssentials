@@ -343,3 +343,12 @@ describe("Scout rules", function()
         end
     end)
 end)
+
+describe("Scout defaults", function()
+    it("adds a block on a baseline load only, switched off", function()
+        local retail = helpers.loadModule("Core/Defaults.lua")
+        assert.is_nil(retail:GetDefaultDB().profile.Scout)
+        local baseline = helpers.loadModule("Core/Defaults.lua", { BASELINE_LOAD = true })
+        assert.is_false(baseline:GetDefaultDB().profile.Scout.Enabled)
+    end)
+end)

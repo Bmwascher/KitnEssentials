@@ -3058,6 +3058,23 @@ if KE.IS_FOREVER then
     Defaults.profile.AuraMovement.Allowlist = FOREVER_MOVEMENT_ALLOWLIST
 end
 
+-- A Forever-only feature: a retail profile gains no key.
+if KE.BASELINE_LOAD then
+    Defaults.profile.Scout = {
+        Enabled = false,
+        ShowInWorld = true,
+        ShowInInstances = true,
+        ShowInCombat = false,
+        Abilities = true,
+        ControlWords = true,
+        Armor = true,
+        Immunities = true,
+        PetFamily = true,
+        KeyHint = true,
+        DetailsKey = "ctrl",
+    }
+end
+
 -- Copies, never aliases: each module saves its own list, and one shipped
 -- source keeps each ID in one place.
 local function CopyAllowlistRows(source)
