@@ -107,6 +107,16 @@ describe("swing timer bar rules", function()
             assert.equals(row.want, Rules.FrameShown(row.visibility, row.inCombat, row.live, row.preview))
         end
     end)
+
+    it("shares a stack height over its rows, counting no rows as one, never under the floor", function()
+        for _, row in ipairs({
+            { stack = 50, rows = 2, spacing = 2, want = 24 },
+            { stack = 16, rows = 0, spacing = 2, want = 16 },
+            { stack = 10, rows = 3, spacing = 2, want = 4 },
+        }) do
+            assert.equals(row.want, Rules.RowHeightFor(row.stack, row.rows, row.spacing, 4))
+        end
+    end)
 end)
 
 describe("swing timer ranged rules", function()

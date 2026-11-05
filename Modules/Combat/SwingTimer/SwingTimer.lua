@@ -32,6 +32,11 @@ local PREVIEW_TIME = "1.4"
 local TEXT_UPDATE_SECONDS = 0.05
 local POSITION_RETRY_SECONDS = 0.5
 local SPARK_WIDTH = 12
+-- Floors for a size another addon hands over; the page's sliders keep their own
+-- ranges.
+local MATCH_MIN_WIDTH = 20
+local MATCH_MIN_ROW_HEIGHT = 4
+local MATCH_TOLERANCE = 0.01
 local WHITE = { 1, 1, 1, 1 }
 local RANGE_RED = { 0.95, 0.20, 0.20, 1 }
 local EDITMODE_OPTS = { key = "SwingTimer", displayName = "Swing Timer", guiPath = "SwingTimer" }
@@ -222,6 +227,56 @@ end
 
 function ST:RegWithEditMode()
     H.RegWithEditMode(self, EDITMODE_OPTS)
+    self:RegWithUnlock()
+end
+
+-- EllesmereUI's unlock mode: its elements can anchor to the bars and match their
+-- size, and the bars can take their width or height from one of its elements.
+-- Never withdrawn, like every KE element there; isHidden reports a module that
+-- is off.
+function ST:RegWithUnlock()
+    if self.unlockRegistered or not KE.EUIUnlock then return end
+    self.unlockRegistered = true
+    KE.EUIUnlock:Register({
+        key = "SwingTimer",
+        displayName = "Swing Timer",
+        frame = self.frame,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos)
+            self.db.Position = pos
+            self:ApplyPosition()
+        end,
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+        end,
+    }, {
+        label = "Swing Timer",
+        order = 630,
+        isHidden = function()
+            return not (self.db and self.db.Enabled and self.frame and not self.apiMissing)
+        end,
+        setWidth = function(width) self:SetMatchedWidth(width) end,
+        setHeight = function(height) self:SetMatchedHeight(height) end,
+    })
+end
+
+-- A matched size writes the profile as the page's slider does. Returning early
+-- on an unchanged size ends the resize, match and resize loop.
+function ST:SetMatchedWidth(width)
+    local db = self.db
+    local value = KE:PixelSnap(math.max(width, MATCH_MIN_WIDTH))
+    if math.abs(value - (db.Width or 0)) < MATCH_TOLERANCE then return end
+    db.Width = value
+    self:ApplySettings()
+end
+
+-- A matched height is the whole stack's, shared over the rows laid out.
+function ST:SetMatchedHeight(height)
+    local db = self.db
+    local value = KE:PixelSnap(R.RowHeightFor(height, self.rowCount, db.Spacing, MATCH_MIN_ROW_HEIGHT))
+    if math.abs(value - (db.Height or 0)) < MATCH_TOLERANCE then return end
+    db.Height = value
+    self:ApplySettings()
 end
 
 function ST:ShowPreview()
@@ -574,8 +629,15 @@ function ST:LayoutBars()
         self:ApplyBarShown(row)
     end
     if PROOF.TARGET_BAR then rows = self:LayoutTarget(rows + 1) end
+    self.rowCount = rows
     self.frame:SetSize(db.Width, rows * db.Height + (rows - 1) * db.Spacing)
     self:UpdateHolder()
+    -- A matched height belongs to the whole stack, so a new row count or spacing
+    -- shares it out again; with nothing matched each pull is a table read.
+    if KE.EUIUnlock then
+        KE.EUIUnlock:PullMatch("SwingTimer", "height")
+        KE.EUIUnlock:PullMatch("SwingTimer", "width")
+    end
 end
 
 function ST:ClearUsed()

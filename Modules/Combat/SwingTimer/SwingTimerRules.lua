@@ -104,6 +104,12 @@ function Rules.FrameShown(visibility, inCombat, anyLive, isPreview)
     return inCombat == true
 end
 
+-- A height given for the whole stack, shared over its rows.
+function Rules.RowHeightFor(stackHeight, rows, spacing, minHeight)
+    local n = math.max(rows or 1, 1)
+    return math.max((stackHeight - (n - 1) * (spacing or 0)) / n, minHeight)
+end
+
 function Rules.MeleeState(attackOn, now, ends)
     if not attackOn then return "empty" end
     if ends and now < ends then return "running" end
