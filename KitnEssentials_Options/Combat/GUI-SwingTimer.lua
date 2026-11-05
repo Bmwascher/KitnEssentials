@@ -295,6 +295,14 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
     local displayCard = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(displayCard, "all")
 
+    -- Unlock mode pulls a matched axis straight back to its target, so that
+    -- slider would do nothing here.
+    local unlock = KE.EUIUnlock
+    local widthMatched = unlock ~= nil and unlock:MatchTarget("SwingTimer", "width") ~= nil
+    local heightMatched = unlock ~= nil and unlock:MatchTarget("SwingTimer", "height") ~= nil
+    manager:SetCondition("widthFree", function() return not widthMatched end)
+    manager:SetCondition("heightFree", function() return not heightMatched end)
+
     local sizeRow = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)
     local widthSlider = GUIFrame:CreateSlider(sizeRow, "Width", {
         min = 100, max = 600, step = 1,
@@ -305,7 +313,7 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
         end,
     })
     sizeRow:AddWidget(widthSlider, 0.5)
-    manager:Register(widthSlider, "all")
+    manager:Register(widthSlider, "widthFree")
     local heightSlider = GUIFrame:CreateSlider(sizeRow, "Height", {
         min = 8, max = 40, step = 1,
         value = db.Height or 16,
@@ -315,10 +323,12 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
         end,
     })
     sizeRow:AddWidget(heightSlider, 0.5)
-    manager:Register(heightSlider, "all")
+    manager:Register(heightSlider, "heightFree")
     displayCard:AddRow(sizeRow, Theme.rowHeight)
 
-    local lookRow = GUIFrame:CreateRow(displayCard.content, Theme.rowHeightLast)
+    local matchNote = widthMatched or heightMatched
+    local lookHeight = matchNote and Theme.rowHeight or Theme.rowHeightLast
+    local lookRow = GUIFrame:CreateRow(displayCard.content, lookHeight)
     local spacingSlider = GUIFrame:CreateSlider(lookRow, "Spacing", {
         min = 0, max = 20, step = 1,
         value = db.Spacing or 2,
@@ -340,7 +350,13 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
     })
     lookRow:AddWidget(textureDropdown, 0.5)
     manager:Register(textureDropdown, "all")
-    displayCard:AddRow(lookRow, Theme.rowHeightLast, 0)
+    displayCard:AddRow(lookRow, lookHeight, (not matchNote) and 0 or nil)
+    if matchNote then
+        local which = (widthMatched and heightMatched) and "Width and Height follow"
+            or (widthMatched and "Width follows" or "Height follows")
+        displayCard:AddNote(which .. " a size match in " .. KE:Gold("EllesmereUI's unlock mode") ..
+            ". Clear the match there to set it here.")
+    end
     yOffset = displayCard:GetNextOffset()
 
     ----------------------------------------------------------------
