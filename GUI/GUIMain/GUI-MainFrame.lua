@@ -66,6 +66,7 @@ GUIFrame.sidebarConfig = {
                     HealerMana = { "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party" },
                     NoMovementAlert = { "movement", "no movement alert", "movement alert", "alert", "cooldown" },
                 } },
+            { id = "SwingTimer",    text = "Swing Timer", keywords = { "swing", "swing timer", "auto attack", "auto shot", "melee", "hunter", "wand", "seal", "heroic strike", "cleave", "maul", "raptor strike", "target estimate", "parry" } },
         },
     },
     {
