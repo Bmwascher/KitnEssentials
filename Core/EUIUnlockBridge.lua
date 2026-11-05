@@ -90,12 +90,51 @@ local function ResolveFrame(config)
     return nil
 end
 
+-- Unlock mode pcalls a match child's setter, but its typed size boxes call it
+-- bare, so a raise is contained here and still reported. The settings page reads
+-- the profile when it is built, so an open one is rebuilt a frame later, once a
+-- cleared match has left unlock mode's store.
+local function ApplyMatchedSize(setter, size)
+    if type(size) ~= "number" or size ~= size or size <= 0 then return end
+    local ok, err = pcall(setter, size)
+    if not ok then geterrorhandler()(err) end
+    local gui = KE.GUIFrame
+    if gui and gui.mainFrame and gui.mainFrame:IsShown() then
+        C_Timer.After(0, function()
+            local refreshed, refreshErr = pcall(gui.RefreshContent, gui)
+            if not refreshed then geterrorhandler()(refreshErr) end
+        end)
+    end
+end
+
 local function BuildElement(config, opts)
     local eui = EUI()
     if not eui then return nil end
 
     local euiKey = KEY_PREFIX .. config.key
     local isHidden = opts and opts.isHidden
+
+    -- A registration that hands over size setters is a match child: unlock mode
+    -- shows its match buttons and calls the setters at login, on its target's
+    -- resize and in combat. Every other registration keeps its size on the
+    -- module's own sliders, which matchUnavailable says: it may be matched TO,
+    -- but never takes its own size from something else.
+    local setWidth = opts and opts.setWidth
+    local setHeight = opts and opts.setHeight
+    local matchUnavailable, matchedWidth, matchedHeight, positionHeld
+    if setWidth or setHeight then
+        if setWidth then matchedWidth = function(_, w) ApplyMatchedSize(setWidth, w) end end
+        if setHeight then matchedHeight = function(_, h) ApplyMatchedSize(setHeight, h) end end
+        -- After a match apply outside unlock mode, unlock mode re-places a child
+        -- whose position reads CENTER/CENTER against the screen, noInitHook or
+        -- not. Held while no unlock anchor places it, KE's own placement stands;
+        -- an anchored child still follows its anchor.
+        positionHeld = function() return not Bridge:IsAnchored(config.key) end
+    else
+        matchUnavailable = function()
+            return "Size is set in the KitnEssentials options."
+        end
+    end
 
     return eui.MakeUnlockElement({
         key   = euiKey,
@@ -114,13 +153,10 @@ local function BuildElement(config, opts)
         -- movers have no sizing grip, and the match apply reads a target
         -- through getSize without ever consulting it. What the flag does cost
         -- is the mover's X and Y position boxes, which work and are wanted.
-        --
-        -- Size still belongs to the module's own option sliders, which is what
-        -- matchUnavailable says: these elements may be matched TO, but they
-        -- never take their own size from something else.
-        matchUnavailable = function()
-            return "Size is set in the KitnEssentials options."
-        end,
+        matchUnavailable = matchUnavailable,
+        setWidth = matchedWidth,
+        setHeight = matchedHeight,
+        isPositionHeld = positionHeld,
 
         -- KE places and pixel-snaps its own frames, so unlock mode must not
         -- re-place them: its init pass would otherwise re-apply the position
@@ -272,6 +308,45 @@ local function ReapplyMatchesToUs()
 end
 Bridge.ReapplyMatchesToUs = ReapplyMatchesToUs
 
+-- The element key unlock mode holds as this element's width or height target,
+-- or nil. pcall because the store belongs to another addon.
+function Bridge:MatchTarget(key, axis)
+    local eui = EUI()
+    if not eui then return nil end
+    local get = (axis == "height") and eui.GetHeightMatchTarget or eui.GetWidthMatchTarget
+    if type(get) ~= "function" then return nil end
+    local ok, target = pcall(get, KEY_PREFIX .. key)
+    if ok and type(target) == "string" then return target end
+    return nil
+end
+
+-- A match whose CHILD is ours has no per-child apply to call; pushing from the
+-- child's target reaches it, along with that target's other children.
+function Bridge:PullMatch(key, axis)
+    local eui = EUI()
+    if not eui or not published[KEY_PREFIX .. key] then return end
+    local target = self:MatchTarget(key, axis)
+    if not target then return end
+    if axis == "height" then
+        if eui.PropagateHeightMatch then
+            KE:SafeCall("EllesmereUI height pull", eui.PropagateHeightMatch, target)
+        end
+    elseif eui.PropagateWidthMatch then
+        KE:SafeCall("EllesmereUI width pull", eui.PropagateWidthMatch, target)
+    end
+end
+
+-- Unlock mode applies every match at login, before KE publishes, so a KE child
+-- was never sized. Only the axes a registration gave a setter for are pulled.
+local function PullMatchesToUs()
+    for _, entry in ipairs(publishedConfigs) do
+        local opts = entry.opts
+        if opts and opts.setWidth then Bridge:PullMatch(entry.config.key, "width") end
+        if opts and opts.setHeight then Bridge:PullMatch(entry.config.key, "height") end
+    end
+end
+Bridge.PullMatchesToUs = PullMatchesToUs
+
 -- Reset when the ticker stops, not left latched: frames appear in waves, so a
 -- later batch publishes after this pass has already finished and its children
 -- need a pass of their own.
@@ -287,6 +362,7 @@ local function ScheduleReapply()
         if AllPublishedFramesLaidOut() then
             ReapplyAnchorsToUs()
             ReapplyMatchesToUs()
+            PullMatchesToUs()
             ticker:Cancel()
             reapplyScheduled = false
         elseif tries >= REAPPLY_MAX_TRIES then
