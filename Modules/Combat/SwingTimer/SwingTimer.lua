@@ -758,6 +758,8 @@ end
 function ST:PLAYER_REGEN_ENABLED()
     self.inCombat = false
     self:ClearUsed()
+    -- A weapon dropped in combat read secret, and no swing of its own corrects it.
+    if self:ReadWeapons() then self:LayoutBars() end
     self:SeedState()
     self:RefreshAll()
 end
