@@ -359,6 +359,13 @@ local function QuestDescriptionRevealEnded(parent)
     end
 end
 
+-- The writing-in cannot show, so the reveal ends on its first update instead
+-- of holding the Accept button for its full length. 1024 is the progress
+-- Blizzard's own instant quest text setting starts from.
+local function SkipQuestReveal(panel)
+    panel.fadingProgress = 1024
+end
+
 local function Skin()
     local frame = _G.QuestFrame
     if not frame then return S.Skip("QuestFrame missing") end
@@ -417,6 +424,9 @@ local function Skin()
         if KE.IS_FOREVER and _G.QuestInfo_ShowAlphaDependentText and _G.QuestInfo_FadeInAlphaDependentText then
             hooksecurefunc("QuestInfo_ShowAlphaDependentText", QuestDescriptionRevealEnded)
             hooksecurefunc("QuestInfo_FadeInAlphaDependentText", QuestDescriptionRevealEnded)
+            if _G.QuestFrameDetailPanel then
+                _G.QuestFrameDetailPanel:HookScript("OnShow", SkipQuestReveal)
+            end
         end
     end
 
