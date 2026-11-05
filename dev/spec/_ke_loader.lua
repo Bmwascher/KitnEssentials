@@ -3327,6 +3327,14 @@ function L.loadKickTrackerRules()
     return modules["KickTracker"]
 end
 
+-- Modules/QoL/QualityOfLife/RareAlertRules.lua alone: the alert's pure decisions call no WoW
+-- API, so only the module table the shim hands back is needed. Returns RA.
+function L.loadRareAlertRules()
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/QoL/QualityOfLife/RareAlertRules.lua", {})
+    return modules["RareAlert"]
+end
+
 -- Modules/DungeonTools/KicksCasts/FocusAnnounce.lua. Its parsers call no WoW API: nothing to
 -- stub (the sender checks do, and no case calls them). Returns KE.FocusAnnounce.
 function L.loadFocusAnnounce()
