@@ -1970,8 +1970,7 @@ local matchScratch = {}
 -- A spec icon that can discriminate. The client leaves specIconID nil for a
 -- player it has not resolved, which in a pug is commonly everyone, and reports 0
 -- for a mob. Both mean "unknown" and neither narrows anything. The field is
--- NeverSecret; the secrecy test makes a wrong annotation cost the match instead
--- of throwing on the compare.
+-- plain on retail and always secret on Forever, where it also reads as unknown.
 local function KnownSpec(v)
     if issecretvalue(v) then return false end
     return type(v) == "number" and v ~= 0
@@ -1979,7 +1978,7 @@ end
 DM.KnownSpec = KnownSpec
 
 -- Which group member does this row belong to? PURE over the roster index plus the
--- row's two NeverSecret fields, so the whole decision is testable without the
+-- row's class and spec fields, so the whole decision is testable without the
 -- meter. Returns a plain GUID, or nil and a reason.
 --
 -- Spec is a TIE-BREAK, never a requirement. Class is always plainly readable on
