@@ -1,6 +1,6 @@
 -- Modules/Skinning/Chat/ChatMessageHandler.lua: the player flag rule. CMH.PlayerFlag
--- reads no game state, so the cases call it directly; the last case covers the
--- saved setting through CMH:GetPFlag.
+-- reads no game state, so most cases call it directly; the saved setting and the
+-- mentor flags go through CMH:GetPFlag.
 local L = require("dev.spec._ke_loader")
 
 local BLIZZ = "|TInterface\\ChatFrame\\UI-ChatIcon-Blizz:12:20:0:0:32:16:4:28:0:16|t "
@@ -48,24 +48,31 @@ describe("ChatMessageHandler player flag", function()
     end)
 
     describe("mentor flags", function()
-        local saved, calls
+        local saved, calls, answer
 
         before_each(function()
             saved = _G.ChatFrameUtil
             calls = {}
+            answer = "TAG"
             _G.ChatFrameUtil = {
                 GetPFlag = function(flag, zoneChannelID)
                     calls[#calls + 1] = { flag, zoneChannelID }
-                    return flag == "GUIDE" and "TAG" or nil
+                    return answer
                 end,
             }
         end)
 
         after_each(function() _G.ChatFrameUtil = saved end)
 
-        it("takes the tag from Blizzard's rule, and nothing when it declines", function()
-            assert.are.equal("TAG", CMH:GetPFlag("GUIDE", 7))
-            assert.are.same({ "GUIDE", 7 }, calls[1])
+        it("takes each mentor tag from Blizzard's rule with the zone channel", function()
+            for i, flag in ipairs({ "GUIDE", "NEWCOMER" }) do
+                assert.are.equal("TAG", CMH:GetPFlag(flag, 7), flag)
+                assert.are.same({ flag, 7 }, calls[i])
+            end
+        end)
+
+        it("reads a nil answer from the rule as no tag", function()
+            answer = nil
             assert.are.equal("", CMH:GetPFlag("NEWCOMER", 7))
         end)
 
