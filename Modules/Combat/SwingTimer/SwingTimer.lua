@@ -251,7 +251,6 @@ function ST:RegWithUnlock()
         getParentFrame = function()
             return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
         end,
-        guiPath = "SwingTimer",
     }, {
         label = "Swing Timer",
         order = 630,

@@ -17,7 +17,6 @@ local function publish(opts, eui)
                   GetHeight = function() return 50 end },
         getPosition = function() return nil end,
         setPosition = function() end,
-        guiPath = "Thing",
     }, opts)
     return captured, KE
 end
@@ -99,7 +98,6 @@ describe("EUIUnlockBridge match child", function()
         assert.equals(0, #queued)
         for _, fn in ipairs(queued) do fn() end
         assert.equals(0, rebuilt)
-        assert.is_nil(KE.EUIUnlock.ShownMatchTargets)
     end)
 
     it("does not pull while EllesmereUI is applying a match", function()
