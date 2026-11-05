@@ -1424,11 +1424,6 @@ function S.ArrowButton(button, dir, size)
     S.data(button).skinned = true
 end
 
-function S.ArrowDirection(button, dir)
-    local arrow = button and S.data(button).arrow
-    if arrow then arrow:SetRotation(ARROW_ROT[dir] or 0) end
-end
-
 function S.SelectedFill(bu)
     local sel = bu and bu.SelectedTexture
     if not sel or not sel.SetColorTexture then return end

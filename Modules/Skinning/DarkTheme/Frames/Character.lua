@@ -15,8 +15,7 @@ local ILVL_SIZE, HEADER_SIZE, ROW_SIZE = 20, 14, 12
 local HEADER_INSET = 6
 
 -- The ammo slot's arrow overlay and the bronze divider between the panes each
--- sit alone in an unnamed child frame. Found by atlas: their siblings are
--- child frames too, such as the slot's backdrop and cooldown.
+-- sit alone in a child frame with no name or key, so only the atlas finds them.
 local AMMO_ARROW_ATLAS = "UI-Character-Info-GearSlot-Arrow"
 local PANE_DIVIDER_ATLAS = "common-framedivider"
 local function KillChildArt(parent, atlas)
@@ -28,8 +27,15 @@ local function KillChildArt(parent, atlas)
     end
 end
 
+-- Blizzard writes its page art onto these textures on every show and toggle,
+-- and the engine shows the normal texture after a click past any hide.
 local function PointPaneToggle(frame)
-    S.ArrowDirection(frame.RightPaneToggleButton, frame:IsRightPaneCollapsed() and "right" or "left")
+    local button = frame.RightPaneToggleButton
+    local normal, pushed = button:GetNormalTexture(), button:GetPushedTexture()
+    if normal then normal:SetTexture(S.ClearTexture) end
+    if pushed then pushed:SetTexture(S.ClearTexture) end
+    S.ArrowTexture(S.data(button).arrow, frame:IsRightPaneCollapsed() and "right" or "left")
+    S.ArrowHoverSync(button)
 end
 
 local ItemLocation = ItemLocation
@@ -681,7 +687,12 @@ local function Skin()
         if button then
             S.ItemButton(button)
             if button.BorderFrame then S.StripTextures(button.BorderFrame) end
-            if slot == "Ammo" then KillChildArt(button, AMMO_ARROW_ATLAS) end
+            if slot == "Ammo" then
+                KillChildArt(button, AMMO_ARROW_ATLAS)
+                -- Blizzard's count layer is below the raised icon, which would
+                -- leave only a long stack's leading digits showing.
+                if button.Count then button.Count:SetDrawLayer("OVERLAY") end
+            end
             if qualityBorders and button.IconBorder then
                 S.IconBorder(button.IconBorder, S.GetBackdrop(button))
             end
