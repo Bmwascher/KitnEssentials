@@ -94,6 +94,12 @@ local function PlainString(value)
     return value
 end
 
+-- A secret boolean errors on a truth test, so an unreadable flag counts as forbidden.
+local function IsUsable(frame)
+    local forbidden = frame:IsForbidden()
+    return not issecretvalue(forbidden) and not forbidden
+end
+
 local function HideBlock()
     if block then block:Hide() end
 end
@@ -167,7 +173,7 @@ end
 -- all come through here, and any of them can land after the state changed.
 local function CanShowDetails()
     if not active or not record.on or not IsKeyHeld() or not ShownHere() then return false end
-    if GameTooltip:IsForbidden() then return false end
+    if not IsUsable(GameTooltip) then return false end
     if not Rules.PlainTrue(GameTooltip:IsShown(), issecretvalue) then return false end
     return IsUnitData(GameTooltip:GetPrimaryTooltipData())
 end
@@ -289,7 +295,7 @@ end
 
 local function OnUnit(tooltip, tooltipData)
     if not active then return end
-    if tooltip ~= GameTooltip or tooltip:IsForbidden() then return end
+    if tooltip ~= GameTooltip or not IsUsable(tooltip) then return end
     ClearRecord()
 
     if not scoutData or not ShownHere() then return end
@@ -441,5 +447,5 @@ function Scout:OnDisable()
     ClearRecord()
     self:UnregisterAllEvents()
     -- The lines cannot be taken back out of a built tooltip.
-    if hadLines and not GameTooltip:IsForbidden() then GameTooltip:Hide() end
+    if hadLines and IsUsable(GameTooltip) then GameTooltip:Hide() end
 end
