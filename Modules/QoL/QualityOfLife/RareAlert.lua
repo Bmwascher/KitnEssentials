@@ -277,14 +277,10 @@ function RA:RefreshHealth(rare)
     end
 end
 
--- A held token that shows the creature is friendly or not a rare closes the card
--- with no sound. The stamp goes too, so a rare that was only briefly not
--- attackable can still alert by a unit, and the creature is remembered so its
--- vignette alone does not sound again. Classification is asked first and holds
--- alive or dead, so the card never says Rare on a creature known not to be one. For a rare,
--- death is asked next, so the Dead path keeps the card and its stamp in either
--- order of reading, and a corpse that reads as not attackable proves nothing. A
--- secret reading proves nothing. Returns true when the card closed.
+-- Closes silently on a friendly or non-rare creature. Clearing the stamp lets a
+-- rare that was briefly not attackable alert again by a unit; the proof holds back
+-- its vignette alone. Class is asked before death so a dead non-rare still closes,
+-- and death before attack because a corpse reads as not attackable.
 function RA:RefuteCard(rare)
     local class = Plain(UnitClassification(rare.unit))
     if not class or class == "rare" or class == "rareelite" then
@@ -754,7 +750,6 @@ function RA:PLAYER_REGEN_ENABLED()
     self:SettleTarget()
 end
 
--- The plate listener stays out of instances entirely.
 function RA:PLAYER_ENTERING_WORLD()
     self.listening = not IsInInstance()
     if not self.listening and self.rare then self:CloseCard() end
