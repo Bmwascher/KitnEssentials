@@ -29,6 +29,7 @@
     <Script file="Combat\Cursor.lua" />
     <Script file="Combat\CastbarHelpers.lua" />
     <Script file="Combat\FocusCastbar.lua" />
+    <Script file="Combat\SwingTimer\SwingTimerRules.lua" />
     <Script file="Combat\RangeChecker.lua" />
     <Include file="AuraTracking\AuraEngine\AuraEngine.xml" />
     <Script file="AuraTracking\AuraExternals.lua" />
