@@ -14,7 +14,7 @@ or `.github/`.
 | Layer | Tool | Catches |
 |-------|------|---------|
 | Static analysis | `luacheck` | typo'd/undefined globals, unused vars, shadowing (12.0 API contract lives in `.luacheckrc`) |
-| Compile smoke | `busted` → `dev/spec/smoke_spec.lua` | syntax errors in any shipped `Core/`, `Modules/`, `GUI/`, `KitnEssentials_Options/` file (one check per file) |
+| Compile smoke | `busted` → `dev/spec/smoke_spec.lua` | syntax errors in any shipped `Core/`, `Modules/`, `GUI/`, `KitnEssentials_Options/`, `KitnEssentials_Data/` file (one check per file; `dev/spec/data_build_spec.lua` builds each stored source) |
 | Unit specs | `busted` → `dev/spec/*_spec.lua` | logic in pure + API-adjacent code |
 
 ### The honesty boundary (read this before trusting a mock)
@@ -57,6 +57,30 @@ folder. From PowerShell:
 
 On a branch without the folder the junction dangles and the client lists
 nothing for it.
+
+### Third addon folder (Forever data tables)
+
+Forever's data tables ship as one load-on-demand addon, `KitnEssentials_Data/`
+at the repo root, whose only manifest is `KitnEssentials_Data_Forever.toc`. Each
+client's AddOns folder needs a junction to it, made once per machine with the
+game closed, and the client then needs a restart. Retail never loads the
+folder; its junction is there so the retail smoke can read how that client
+treats it. From PowerShell:
+
+    cmd /c mklink /J "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\KitnEssentials_Data" "$HOME\Documents\KitnDev\KitnEssentials\KitnEssentials_Data"
+
+    cmd /c mklink /J "C:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns\KitnEssentials_Data" "$HOME\Documents\KitnDev\KitnEssentials\KitnEssentials_Data"
+
+On a branch without the folder the junction dangles and the client lists
+nothing for it.
+
+A later table adds one generated file, written through
+`dev/scripts/_data_source.lua`, and one toc line with the file conditions. Its
+module loads it the way `Scout:LoadData` does, and these steps belong to the
+folder: out of combat only, deferring to `PLAYER_REGEN_ENABLED`;
+`C_AddOns.DoesAddOnExist` before `C_AddOns.LoadAddOn`; `KE.BuildData` with the
+table's name; the whole path timed; and on any failure one chat line with the
+reason, no error, and nothing added.
 
 ### Windows (hererocks — Lua 5.1.5, matching WoW and CI)
 
