@@ -205,7 +205,7 @@ ShowDetails = function()
     -- Uncached only: a cached spell's callback runs at once and would redraw
     -- from the top for a description that is really blank.
     for _, id in ipairs(record.ids) do
-        if not requested[id] and C_Spell.GetSpellName(id) and not DescriptionOf(id)
+        if not requested[id] and C_Spell.DoesSpellExist(id) and not DescriptionOf(id)
             and not C_Spell.IsSpellDataCached(id) then
             RequestDescription(id)
         end
