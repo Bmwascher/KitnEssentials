@@ -28,6 +28,7 @@
       "AuraContainerItemEnchantmentSlot",
       "GetNumClasses", "GetSpecializationInfoForClassID", "GetSpecializationInfoByID",
       "C_CreatureInfo",
+      "C_SwingTimer",
       "AbbreviateNumbers", "CreateAbbreviateConfig",
       "MenuUtil",
       "RAID_CLASS_COLORS",

@@ -161,6 +161,7 @@ read_globals = {
     "UnitPVPName", "UnitRealmRelationship", "UnitIsAFK", "UnitIsDND",
     "GetCreatureDifficultyColor",
     "UnitGUID", "UnitExists", "UnitIsDead", "UnitIsUnit", "UnitTokenFromGUID",
+    "UnitAttackSpeed", "IsPlayerMoving", "GetNetStats",
     "UnitGroupRolesAssigned",
     "UnitGetTotalAbsorbs",
     "AbbreviateNumbers", "AbbreviateLargeNumbers", "BreakUpLargeNumbers",
@@ -221,7 +222,7 @@ read_globals = {
 
     -- Secret Values (12.0)
     "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
-    "C_CurveUtil", "C_DurationUtil", "C_StringUtil",
+    "C_CurveUtil", "C_DurationUtil", "C_StringUtil", "C_SwingTimer",
     "C_Secrets", "C_RestrictedActions",
 
     -- Timer

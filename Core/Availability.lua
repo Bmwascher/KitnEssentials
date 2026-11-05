@@ -189,6 +189,7 @@ local FOREVER_ALLOWED = {
     Scout = true,
     -- The Forever-only check id; see FOREVER_ONLY.
     ForeverOnlyProbe = true,
+    SwingTimer = true,
 }
 
 -- Refused on retail. A feature also needs a FOREVER_ALLOWED entry, load lines
@@ -198,6 +199,7 @@ local FOREVER_ONLY = {
     ForeverOnlyProbe = true,
     Scout = true,
     RareAlert = true,
+    SwingTimer = true,
 }
 
 -- Ids are module names, sidebar rows, sub-tabs and optional integrations.

@@ -16,6 +16,7 @@
 -- the entry when the underlying rc line goes away.
 return {
     missing_ok = {
+        C_SwingTimer = "Forever-only system, absent from the retail API docs this check reads; /run-verified on the Forever client, and the file that calls it loads only from the Forever list (Modules/Combat/SwingTimer/SwingTimer.lua, ST:CheckRange)",
         GetMouseFocus = "removed API; deliberate nil-checked compat (GUI/GUIHelpers/GUI-FrameChooser.lua, OnUpdateHandler)",
         GetMacroIndexByName = "undocumented C-side macro API; works in 12.0.x (PIMacroBuilder/FocusMarker/GUI-TotemTracker)",
         IsWargame = "undocumented C-side; /run-verified function (type probe) 12.0.7 2026-07-05 (Modules/QoL/Automation/CombatLogger.lua, CL:CheckArenaLogging)",
