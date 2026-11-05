@@ -100,12 +100,14 @@ GUIFrame:RegisterContent("Scout", function(scrollChild, yOffset)
         BoxPick("Armor and Your Damage", "Armor"),
         BoxPick("Immunities and Resists", "Immunities"),
         BoxPick("Pet Family (Hunters)", "PetFamily", familyTip),
+        BoxPick("Divider Line", "Divider", "A thin line between the game's lines and Scout's."),
     }, { columns = 2, isLast = true })
     manager:Register(lineCells[1], "all")
     manager:Register(lineCells[2], "abilities")
     manager:Register(lineCells[3], "all")
     manager:Register(lineCells[4], "all")
     manager:Register(lineCells[5], "hunter")
+    manager:Register(lineCells[6], "all")
     yOffset = cardLines:GetNextOffset()
 
     ----------------------------------------------------------------

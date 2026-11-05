@@ -36,6 +36,7 @@ local debugprofilestop = debugprofilestop
 local ipairs = ipairs
 local issecretvalue = issecretvalue
 local pcall = pcall
+local tonumber = tonumber
 local type = type
 local wipe = wipe
 
@@ -44,6 +45,10 @@ local MOB_SOURCE = "ScoutMobs"
 local SPELL_SOURCE = "ScoutSpells"
 local DETAILS_MIN_WIDTH = 262
 local DETAILS_GAP = 2
+-- Half the tooltip's 2-unit line spacing, so the line sits in the gap above.
+local DIVIDER_RISE = 1
+local DIVIDER_HEIGHT = 1
+local DIVIDER_RIGHT_INSET = 9
 local NO_DESCRIPTION = "No description in the game's data."
 local INCOMPLETE_DATA = "a data file is missing"
 local MISSING_REASON = "MISSING"
@@ -78,6 +83,8 @@ local linesOnTooltip = false
 local loadFailureSaid = false
 local scoutData
 local block
+local divider
+local dividerOn = false
 local record = { on = false, ids = {}, immunity = nil }
 local requested = {}
 local opts = {}
@@ -105,6 +112,37 @@ end
 
 local function HideBlock()
     if block then block:Hide() end
+end
+
+-- No anchor stays on a tooltip line another caller fills next.
+local function HideDivider()
+    if not divider or not dividerOn then return end
+    dividerOn = false
+    divider:Hide()
+    divider:ClearAllPoints()
+end
+
+local function HexChannel(hex, first)
+    return tonumber(hex:sub(first, first + 1), 16) / 255
+end
+
+-- Height and left edge from Scout's first line, right edge from the tooltip, as
+-- the game anchors a tooltip status bar. Nothing is written onto the tooltip.
+local function ShowDivider(tooltip, index)
+    local line = tooltip:GetLeftLine(index)
+    if not line then return end
+    if not divider then
+        divider = tooltip:CreateTexture(nil, "ARTWORK")
+        divider:SetHeight(DIVIDER_HEIGHT)
+        local hex = PALETTE.muted
+        divider:SetColorTexture(HexChannel(hex, 1), HexChannel(hex, 3), HexChannel(hex, 5))
+        Scout.divider = divider
+    end
+    divider:ClearAllPoints()
+    divider:SetPoint("LEFT", line, "TOPLEFT", 0, DIVIDER_RISE)
+    divider:SetPoint("RIGHT", tooltip, "RIGHT", -DIVIDER_RIGHT_INSET, 0)
+    divider:Show()
+    dividerOn = true
 end
 
 local function ForgetRecord()
@@ -326,6 +364,7 @@ local function OnUnit(tooltip, tooltipData)
     if not active then return end
     if tooltip ~= GameTooltip or not IsUsable(tooltip) then return end
     ForgetSoon()
+    HideDivider()
 
     if not scoutData or not ShownHere() then return end
 
@@ -342,6 +381,7 @@ local function OnUnit(tooltip, tooltipData)
     FillOpts(db)
     local view = ReadView(unit, npcId, scoutData, db)
     local lines, fullImmunity = Rules.BuildLines(view, opts, Paint)
+    local first = PlainNumber(tooltip:NumLines())
     for _, line in ipairs(lines) do
         if line.right then
             tooltip:AddDoubleLine(line.left, line.right)
@@ -349,7 +389,10 @@ local function OnUnit(tooltip, tooltipData)
             tooltip:AddLine(line.left, nil, nil, nil, line.wrap)
         end
     end
-    if #lines > 0 then linesOnTooltip = true end
+    if #lines > 0 then
+        linesOnTooltip = true
+        if db.Divider and first then ShowDivider(tooltip, first + 1) end
+    end
 
     for i, ability in ipairs(view.abilities) do
         record.ids[i] = ability.id
@@ -367,12 +410,14 @@ end
 local function OnTooltipCleared()
     if not active then return end
     linesOnTooltip = false
+    HideDivider()
     ForgetSoon()
 end
 
 local function OnTooltipHidden()
     if not active then return end
     linesOnTooltip = false
+    HideDivider()
     ClearRecord()
 end
 
@@ -483,6 +528,7 @@ function Scout:OnDisable()
     local hadLines = linesOnTooltip
     linesOnTooltip = false
     ClearRecord()
+    HideDivider()
     self:UnregisterAllEvents()
     -- The lines cannot be taken back out of a built tooltip.
     if hadLines and IsUsable(GameTooltip) then GameTooltip:Hide() end

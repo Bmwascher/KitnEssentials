@@ -3069,6 +3069,7 @@ if KE.BASELINE_LOAD then
         Armor = true,
         Immunities = true,
         PetFamily = true,
+        Divider = true,
         KeyHint = true,
         DetailsKey = "ctrl",
         DetailsPosition = "below",
