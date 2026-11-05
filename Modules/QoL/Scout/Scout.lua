@@ -47,6 +47,9 @@ local DETAILS_GAP = 2
 local NO_DESCRIPTION = "No description in the game's data."
 local INCOMPLETE_DATA = "a data file is missing"
 local MISSING_REASON = "MISSING"
+-- The chat history replay lands just after login and would bury an earlier
+-- line; KE:Init's welcome line waits the same time.
+local FAILURE_PRINT_DELAY = 2
 local HUNTER = "HUNTER"
 
 local PALETTE = {
@@ -414,7 +417,9 @@ function Scout:LoadData()
             text = reason or "unknown"
         end
     end
-    KE:Print("Scout could not load its mob table: " .. text)
+    C_Timer.After(FAILURE_PRINT_DELAY, function()
+        KE:Print("Scout could not load its mob table: " .. text)
+    end)
 end
 
 function Scout:PLAYER_REGEN_ENABLED()
