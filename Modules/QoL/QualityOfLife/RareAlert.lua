@@ -269,10 +269,12 @@ end
 function RA:RefreshHealth(rare)
     if rare.unit then
         if self:TokenHolds(rare) then self:ReadUnitHealth(rare) end
-    elseif rare.vignetteGUID then
+    elseif rare.vignetteGUID and not rare.left then
         rare.lastHealth = nil
         self:UpdateVignetteHealth(rare)
     else
+        -- Cleared so the tick repaints when a vignette that left comes back.
+        rare.lastHealth = nil
         self:PaintHealth(nil)
     end
 end
@@ -387,6 +389,7 @@ function RA:VignetteGone(rare)
     end
     rare.left = true
     self:PaintState(rare)
+    if not rare.unit then self:RefreshHealth(rare) end
 end
 
 -- One read per vignette at card open, never on a tick. Returns the vignette to
