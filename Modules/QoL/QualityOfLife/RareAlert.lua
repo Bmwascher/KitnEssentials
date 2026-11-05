@@ -854,6 +854,9 @@ function RA:CoverCard()
         RegisterStateDriver(target, "combat", "[combat] hide; [nocombat] show")
         self.combatDriver = true
     end
+    -- The driver writes only on a change, so a "hide" left by the last combat would
+    -- swallow the next combat's hide and leave the button up through it.
+    target:SetAttribute("state-combat", "show")
     target:Show()
 end
 
