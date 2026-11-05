@@ -169,7 +169,7 @@ read_globals = {
     "UnitReaction", "UnitInPartyIsAI",
     "UnitIsBossMob", "UnitIsTapDenied", "UnitIsGroupLeader",
     "UnitHasVehicleUI", "UnitInVehicle", "UnitOnTaxi",
-    "UnitAffectingCombat", "UnitCanAssist", "UnitCanAttack",
+    "UnitAffectingCombat", "UnitCanAssist", "UnitCanAttack", "UnitCreatureFamily",
     "UnitThreatSituation", "UnitPlayerControlled",
     "UnitInParty", "UnitInRaid", "UnitIsVisible",
     "UnitFactionGroup", "UnitSpellHaste", "UnitStat",
@@ -215,7 +215,7 @@ read_globals = {
     "C_UnitAuras", "AuraUtil",
 
     -- Spell
-    "C_Spell", "C_SpellBook",
+    "C_Spell", "C_SpellBook", "Spell",
     "IsPlayerSpell", "IsSpellKnown", "IsSpellKnownOrOverridesKnown",
     "C_SpellActivationOverlay", "CancelSpellByName",
 
