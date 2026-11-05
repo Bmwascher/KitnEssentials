@@ -207,9 +207,9 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
     yOffset = barsCard:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Melee Aids
+    -- Melee Assists
     ----------------------------------------------------------------
-    local meleeCard = GUIFrame:CreateCard(scrollChild, "Melee Aids", yOffset)
+    local meleeCard = GUIFrame:CreateCard(scrollChild, "Melee Assists", yOffset)
     manager:Register(meleeCard, "all")
     AddSwitch(meleeCard, "Brighten the End of the Swing", "EndWindow", "all")
 
