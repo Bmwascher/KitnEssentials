@@ -1172,6 +1172,7 @@ local PREVIEW_MODULES = {
     "DivineArbiter",
     "Executioner",
     "ImminentDemise",
+    "RareAlert",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -1198,6 +1199,7 @@ local SECTION_PREVIEW_MODULES = {
         "GreatVaultAlert",
         "RaidNotifications", "ReadyCheckConsumables",
         "SecondaryStats",
+        "RareAlert",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its

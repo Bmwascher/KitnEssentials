@@ -248,6 +248,11 @@ read_globals = {
     -- Map / Waypoint
     "C_Map",
     "C_SuperTrack",
+    "C_VignetteInfo",
+    "FlashClientIcon",
+    "GetPlayerFacing",
+    "QuestDifficultyColors",
+    "GetDifficultyColor",
     "C_Texture",
     "UiMapPoint",
     "EventRegistry",
