@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.4
+
+### WoW Forever only
+
+- The Spellbook's category icons stay inside the window. They no longer move
+  past its left edge on some reloads
+
+---
+
 ## v4.16.3
 
 ### Both clients
