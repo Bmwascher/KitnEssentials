@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-QualityOfLife.lua                                   ║
 -- ║  GUI: Quality of Life                                    ║
--- ║  Purpose: One sidebar entry over five small, unrelated   ║
+-- ║  Purpose: One sidebar entry over six small, unrelated    ║
 -- ║           modules that each cost a row of their own.     ║
 -- ║           Every tab is an existing page, unchanged.      ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -18,4 +18,5 @@ GUIFrame:RegisterTabbedContent("QualityOfLife", {
     { id = "GreatVaultAlert", label = "Great Vault Alert" },
     { id = "CopyAnything",    label = "Copy Anything" },
     { id = "SlashCommands",   label = "Slash Commands" },
+    { id = "RareAlert",       label = "Rare Alert" },
 })
