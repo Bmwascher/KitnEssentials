@@ -406,7 +406,7 @@ end
 
 function ST:PaintRange(row)
     local db = self.db
-    local out = row.outOfRange and db.RangeCheck and not self.isPreview
+    local out = row.outOfRange and db.RangeCheck and row.state ~= "empty" and not self.isPreview
     row.frame:SetAlpha(out and R.OUT_OF_RANGE_ALPHA or 1)
     local r, g, b, a = KE:ResolveColor(out and RANGE_RED or db.TextColor, WHITE)
     row.label:SetTextColor(r, g, b, a)
