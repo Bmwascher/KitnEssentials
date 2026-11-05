@@ -106,7 +106,7 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
     if PROOF.BLIZZARD_BUTTON then
         if PROOF.EDIT_MODE_CHECKBOX then
             description = description .. "\n\nA Blizzard bar hidden from this page stays hidden, even with this " ..
-                "module off, until you bring it back here or Shift-click Swing Timer in " .. KE:Gold("Edit Mode") .. "."
+                "module off, until you bring it back here or Shift-click Swing Timer in " .. KE:Gold("Blizzard's Edit Mode") .. "."
         else
             description = description .. "\n\nA Blizzard bar hidden from this page stays hidden, even with this " ..
                 "module off, until you bring it back here."
@@ -178,14 +178,17 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
             blizzardCard:AddRow(buttonRow, Theme.rowHeight)
             if PROOF.EDIT_MODE_CHECKBOX then
                 blizzardCard:AddNote("This changes the game's own setting. It stays that way until you change it " ..
-                    "here or Shift-click Swing Timer in " .. KE:Gold("Edit Mode") .. ".")
+                    "here or Shift-click Swing Timer in " .. KE:Gold("Blizzard's Edit Mode") .. ".")
             else
                 blizzardCard:AddNote("This changes the game's own setting. It stays that way until you change it " ..
-                    "here. Swing Timer in " .. KE:Gold("Edit Mode") .. " is the game's own control for its bar.")
+                    "here. Swing Timer in " .. KE:Gold("Blizzard's Edit Mode") .. " is the game's own control for its bar.")
             end
-        else
+        elseif blizzardAction == "hide" then
             blizzardCard:AddNote("Blizzard's own swing bar is on, so both bars can show. Swing Timer in " ..
-                KE:Gold("Edit Mode") .. " is the game's own control for it.")
+                KE:Gold("Blizzard's Edit Mode") .. " is the game's own control for it.")
+        else
+            blizzardCard:AddNote("Blizzard's own swing bar is off. Swing Timer in " ..
+                KE:Gold("Blizzard's Edit Mode") .. " is the game's own control for it.")
         end
         yOffset = blizzardCard:GetNextOffset()
     end
