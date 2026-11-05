@@ -272,10 +272,6 @@ function CMH.PlayerFlag(specialFlag, showAFKDND)
     if not specialFlag or specialFlag == '' then return '' end
     if specialFlag == 'GM' or specialFlag == 'DEV' then
         return '|TInterface\\ChatFrame\\UI-ChatIcon-Blizz:12:20:0:0:32:16:4:28:0:16|t '
-    elseif specialFlag == 'GUIDE' then
-        return '|TInterface\\ChatFrame\\UI-ChatIcon-Guide:12:12:0:0|t '
-    elseif specialFlag == 'NEWCOMER' then
-        return '|TInterface\\ChatFrame\\UI-ChatIcon-Newcomer:12:12:0:0|t '
     elseif specialFlag == 'DISCORD' then
         return '|A:UI-ChatIcon-Discord:0:0:0:0|a '
     elseif specialFlag == 'AFK' then
@@ -286,7 +282,14 @@ function CMH.PlayerFlag(specialFlag, showAFKDND)
     return ''
 end
 
-function CMH:GetPFlag(specialFlag, _, _)
+-- Blizzard's rule decides who sees the two mentor tags, mostly a viewer who is
+-- a Guide, and supplies their art. zoneChannelID is never secret on a chat event.
+function CMH:GetPFlag(specialFlag, zoneChannelID)
+    if specialFlag == 'GUIDE' or specialFlag == 'NEWCOMER' then
+        local util = _G.ChatFrameUtil
+        if not (util and util.GetPFlag) or type(zoneChannelID) ~= 'number' then return '' end
+        return util.GetPFlag(specialFlag, zoneChannelID) or ''
+    end
     local db = KE.db and KE.db.profile.Skinning.Chat
     return CMH.PlayerFlag(specialFlag, not db or db.AFKDNDTags ~= false)
 end
@@ -1043,7 +1046,7 @@ end
 
 -- Message formatter, formats the message body
 function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, channelLength, coloredName, arg1, arg2, arg3,
-                              arg4, _, arg6, arg7, arg8, _, _, arg11, arg12, arg13, arg14, _, _, arg17)
+                              arg4, _, arg6, arg7, arg8, _, _, arg11, _, arg13, arg14, _, _, arg17)
     local body
 
     -- Only return early if message itself is nil
@@ -1101,7 +1104,7 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
     local isMobile = arg14 and GetMobileEmbeddedTexture and GetMobileEmbeddedTexture(info.r, info.g, info.b)
     local message = format('%s%s', isMobile or '', arg1 or '')
 
-    local pflag = self:GetPFlag(arg6, arg7, arg12) or ''
+    local pflag = self:GetPFlag(arg6, arg7) or ''
 
     -- lfgRoles injection point (pflag..icon..sender).
     -- playerName (arg2) can be a SECRET value in group content on
