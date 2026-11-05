@@ -90,21 +90,49 @@ local function ResolveFrame(config)
     return nil
 end
 
+-- A match child's targets as the settings page last saw them, per key. The page
+-- reads the match store when it is built, so it needs a rebuild only when a
+-- match appears or goes, never on a matched resize.
+local matchSeen = {}
+local checkPending = {}
+
+local function RecordMatchState(config)
+    local width = Bridge:MatchTarget(config.key, "width") or false
+    local height = Bridge:MatchTarget(config.key, "height") or false
+    local seen = matchSeen[config.key]
+    local changed = not seen or seen.width ~= width or seen.height ~= height
+    if not seen then
+        seen = {}
+        matchSeen[config.key] = seen
+    end
+    seen.width, seen.height = width, height
+    return changed
+end
+
+-- A frame later, once a cleared match has left unlock mode's store, and once
+-- for however many setter calls that frame brought.
+local function ScheduleMatchCheck(config)
+    local gui = KE.GUIFrame
+    if checkPending[config.key] or not (gui and gui.mainFrame and gui.mainFrame:IsShown()) then return end
+    checkPending[config.key] = true
+    C_Timer.After(0, function()
+        checkPending[config.key] = nil
+        if not RecordMatchState(config) then return end
+        if not (config.guiPath and gui.mainFrame:IsShown() and gui.selectedSidebarItem == config.guiPath) then
+            return
+        end
+        local ok, err = pcall(gui.RefreshContent, gui)
+        if not ok then geterrorhandler()(err) end
+    end)
+end
+
 -- Unlock mode pcalls a match child's setter, but its typed size boxes call it
--- bare, so a raise is contained here and still reported. The settings page reads
--- the profile when it is built, so an open one is rebuilt a frame later, once a
--- cleared match has left unlock mode's store.
-local function ApplyMatchedSize(setter, size)
+-- bare, so a raise is contained here and still reported.
+local function ApplyMatchedSize(config, setter, size)
     if type(size) ~= "number" or size ~= size or size <= 0 then return end
     local ok, err = pcall(setter, size)
     if not ok then geterrorhandler()(err) end
-    local gui = KE.GUIFrame
-    if gui and gui.mainFrame and gui.mainFrame:IsShown() then
-        C_Timer.After(0, function()
-            local refreshed, refreshErr = pcall(gui.RefreshContent, gui)
-            if not refreshed then geterrorhandler()(refreshErr) end
-        end)
-    end
+    ScheduleMatchCheck(config)
 end
 
 local function BuildElement(config, opts)
@@ -123,8 +151,8 @@ local function BuildElement(config, opts)
     local setHeight = opts and opts.setHeight
     local matchUnavailable, matchedWidth, matchedHeight, positionHeld
     if setWidth or setHeight then
-        if setWidth then matchedWidth = function(_, w) ApplyMatchedSize(setWidth, w) end end
-        if setHeight then matchedHeight = function(_, h) ApplyMatchedSize(setHeight, h) end end
+        if setWidth then matchedWidth = function(_, w) ApplyMatchedSize(config, setWidth, w) end end
+        if setHeight then matchedHeight = function(_, h) ApplyMatchedSize(config, setHeight, h) end end
         -- After a match apply outside unlock mode, unlock mode re-places a child
         -- whose position reads CENTER/CENTER against the screen, noInitHook or
         -- not. Held while no unlock anchor places it, KE's own placement stands;
@@ -390,6 +418,9 @@ local function PublishPending()
                     tinsert(batch, element)
                     published[euiKey] = true
                     tinsert(publishedConfigs, entry)
+                    if entry.opts and (entry.opts.setWidth or entry.opts.setHeight) then
+                        RecordMatchState(entry.config)
+                    end
                 end
             else
                 tinsert(stillPending, entry)

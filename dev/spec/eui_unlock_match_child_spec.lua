@@ -17,6 +17,7 @@ local function publish(opts, eui)
                   GetHeight = function() return 50 end },
         getPosition = function() return nil end,
         setPosition = function() end,
+        guiPath = "Thing",
     }, opts)
     return captured, KE
 end
@@ -81,5 +82,45 @@ describe("EUIUnlockBridge match child", function()
             KE.EUIUnlock.PullMatchesToUs()
             assert.same(row.want, pulled, row.name)
         end
+    end)
+
+    it("checks once a frame and rebuilds only its own open page, when a match appears or goes", function()
+        local target
+        local element, KE = publish({ setWidth = function() end }, {
+            GetWidthMatchTarget = function() return target end,
+        })
+        local queued, rebuilt = {}, 0
+        _G.C_Timer = { After = function(_, fn) queued[#queued + 1] = fn end }
+        KE.GUIFrame = {
+            mainFrame = { IsShown = function() return true end },
+            selectedSidebarItem = "Thing",
+            RefreshContent = function() rebuilt = rebuilt + 1 end,
+        }
+        local function settle()
+            local run = queued
+            queued = {}
+            for _, fn in ipairs(run) do fn() end
+        end
+
+        element.setWidth("KE_Thing", 240)
+        element.setWidth("KE_Thing", 240)
+        assert.equals(1, #queued)
+        settle()
+        assert.equals(0, rebuilt)
+
+        target = "ERB_Health"
+        element.setWidth("KE_Thing", 240)
+        settle()
+        assert.equals(1, rebuilt)
+
+        element.setWidth("KE_Thing", 240)
+        settle()
+        assert.equals(1, rebuilt)
+
+        KE.GUIFrame.selectedSidebarItem = "Other"
+        target = nil
+        element.setWidth("KE_Thing", 240)
+        settle()
+        assert.equals(1, rebuilt)
     end)
 end)
