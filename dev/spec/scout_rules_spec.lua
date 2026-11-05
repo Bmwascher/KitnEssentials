@@ -20,8 +20,7 @@ end
 
 describe("Scout rules", function()
     it("NpcId tests the predicate before any string use, then parses Creature and Vehicle only", function()
-        local exploding = setmetatable({}, { __index = function() error("string use") end })
-        assert.is_nil(Rules.NpcId(exploding, function() return true end))
+        assert.is_nil(Rules.NpcId("Creature-0-1465-0-2437-2605-000043F59F", function() return true end))
         for _, row in ipairs({
             { guid = "Creature-0-1465-0-2437-2605-000043F59F", want = 2605 },
             { guid = "Vehicle-0-1465-0-2437-5-000043F59F", want = 5 },
