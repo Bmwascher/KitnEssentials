@@ -30,7 +30,7 @@ local UnitClass = UnitClass
 local UnitClassification = UnitClassification
 local UnitCreatureFamily = UnitCreatureFamily
 local UnitEffectiveLevel = UnitEffectiveLevel
-local UnitExists = UnitExists
+local UnitGUID = UnitGUID
 local UnitLevel = UnitLevel
 local debugprofilestop = debugprofilestop
 local ipairs = ipairs
@@ -300,11 +300,12 @@ local function OnUnit(tooltip, tooltipData)
 
     if not scoutData or not ShownHere() then return end
 
-    local npcId = Rules.NpcId(tooltipData and tooltipData.guid, issecretvalue)
+    local guid = tooltipData and tooltipData.guid
+    local npcId = Rules.NpcId(guid, issecretvalue)
     if not npcId then return end
 
     local _, _, token = pcall(tooltip.GetUnit, tooltip)
-    local unit = Rules.PickUnit(token, issecretvalue, UnitExists("mouseover"))
+    local unit = Rules.PickUnit(token, issecretvalue, UnitGUID("mouseover"), guid)
     if not unit then return end
     if not Rules.PlainTrue(UnitCanAttack("player", unit), issecretvalue) then return end
 

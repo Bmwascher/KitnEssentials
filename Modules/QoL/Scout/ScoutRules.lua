@@ -100,10 +100,12 @@ function Rules.PlainTrue(value, isSecret)
     return value == true
 end
 
--- The predicate comes first: a secret token errors on a truth test.
-function Rules.PickUnit(token, isSecret, mouseoverExists)
+-- The predicate comes first: a secret token errors on a truth test. The mouseover
+-- stands in only for the mob the tooltip names, so an unreadable id refuses it.
+function Rules.PickUnit(token, isSecret, mouseoverGuid, guid)
     if not isSecret(token) and token then return token end
-    if Rules.PlainTrue(mouseoverExists, isSecret) then return "mouseover" end
+    if isSecret(mouseoverGuid) or isSecret(guid) then return nil end
+    if mouseoverGuid and mouseoverGuid == guid then return "mouseover" end
     return nil
 end
 

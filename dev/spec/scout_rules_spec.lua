@@ -37,14 +37,20 @@ describe("Scout rules", function()
 
     it("PickUnit and PlainTrue take only plain values", function()
         for _, row in ipairs({
-            { token = "target", mouseover = false, want = "target" },
-            { token = SECRET, mouseover = true, want = "mouseover" },
-            { token = SECRET, mouseover = false },
-            { token = SECRET, mouseover = SECRET },
-            { mouseover = true, want = "mouseover" },
-            { mouseover = false },
+            { token = "target", want = "target" },
+            { token = "target", mouseover = "other", guid = "mob", want = "target" },
+            { token = SECRET, mouseover = "mob", guid = "mob", want = "mouseover" },
+            { mouseover = "mob", guid = "mob", want = "mouseover" },
+            { token = SECRET, mouseover = "other", guid = "mob" },
+            { mouseover = "other", guid = "mob" },
+            { token = SECRET, mouseover = SECRET, guid = "mob" },
+            { mouseover = SECRET, guid = "mob" },
+            { mouseover = "mob", guid = SECRET },
+            { token = SECRET, guid = "mob" },
+            { mouseover = "mob" },
+            {},
         }) do
-            assert.equals(row.want, Rules.PickUnit(row.token, isSecret, row.mouseover))
+            assert.equals(row.want, Rules.PickUnit(row.token, isSecret, row.mouseover, row.guid))
         end
         assert.is_true(Rules.PlainTrue(true, isSecret))
         for _, value in ipairs({ false, SECRET }) do
