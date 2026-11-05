@@ -13,9 +13,10 @@ local ipairs, type = ipairs, type
 local Rules = {}
 KE.SwingTimerRules = Rules
 
--- The gap from a stop to the next shot has no Blizzard source. A zone slightly
--- too wide costs a slightly early stop; one too narrow costs a shot.
-Rules.AIM_SECONDS = 0.5
+-- The gap from a stop to the next shot has no Blizzard source, so this is the
+-- measured gap less the world latency, which each swing adds back. A zone
+-- slightly too wide costs a slightly early stop; one too narrow costs a shot.
+Rules.AIM_SECONDS = 0.66
 Rules.SEAL_SECONDS = 30
 Rules.OUT_OF_RANGE_ALPHA = 0.4
 Rules.INTERVAL_MIN = 0.50
