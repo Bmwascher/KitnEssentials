@@ -575,6 +575,7 @@ function ST:LayoutBars()
     end
     if PROOF.TARGET_BAR then rows = self:LayoutTarget(rows + 1) end
     self.frame:SetSize(db.Width, rows * db.Height + (rows - 1) * db.Spacing)
+    self:UpdateHolder()
 end
 
 function ST:ClearUsed()

@@ -138,7 +138,9 @@ function ST:OnTargetCombat(unit, action, school)
 end
 
 function ST:UNIT_FLAGS()
-    if self.targetBar then self:ApplyTargetShown(self.targetBar) end
+    if not self.targetBar then return end
+    self:ApplyTargetShown(self.targetBar)
+    self:UpdateHolder()
 end
 
 ST.UNIT_FACTION = ST.UNIT_FLAGS
