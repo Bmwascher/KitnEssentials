@@ -157,6 +157,11 @@ function ST:OnDisable()
 end
 
 function ST:ResetState()
+    if self.sealTimer then
+        self.sealTimer:Cancel()
+        self.sealTimer = nil
+    end
+    self.queued, self.seal = nil, nil
     self.movementOn, self.moving, self.lastStop = false, false, nil
     self.castEnd = nil
     self.isPreview = false
@@ -194,6 +199,9 @@ end
 function ST:ApplySettings()
     if not self.frame or self.apiMissing or not self:IsEnabled() then return end
     self:SyncEvents()
+    -- Switching a color back on sends no event, and the attack or seal may already be up.
+    self:UpdateQueue()
+    self:ReadSealAuras()
     self:CheckAllRanges()
     for _, row in ipairs(self.rows) do self:StyleBar(row) end
     self:LayoutBars()
@@ -389,8 +397,10 @@ function ST:SetFillColor(row, colorKey)
 end
 
 function ST:PaintIdentity(row)
-    self:SetLabel(row, row.name)
-    self:SetFillColor(row, row.baseColor)
+    local queued, seal = self.queued, self.seal
+    local name = row.isMelee and ((queued and queued.name) or (seal and seal.name)) or nil
+    self:SetLabel(row, name and (row.name .. "  " .. name) or row.name)
+    self:SetFillColor(row, R.BarColorKey(row.isMelee, queued and queued.colorKey, seal and seal.colorKey, row.baseColor))
 end
 
 function ST:PaintRange(row)
@@ -572,6 +582,8 @@ function ST:ClearUsed()
 end
 
 function ST:SeedState()
+    self:UpdateQueue()
+    self:ReadSealAuras()
     local melee = C_Spell.IsCurrentSpell(AUTO_ATTACK_SPELL)
     self.meleeOn = not KE:IsSecretValue(melee) and melee == true
     self.autoRepeatOn = false
@@ -641,6 +653,7 @@ function ST:SyncEvents()
     end
     self:SyncCastEvents()
     self:SyncGuideEvents()
+    self:SyncColorEvents()
     if db.RangeCheck or self:TargetEstimateOn() then
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
     else
@@ -993,4 +1006,140 @@ end
 
 function ST:PLAYER_STOPPED_MOVING()
     self:OnMovementChanged(false)
+end
+
+---------------------------------------------------------------------------------
+-- Queue and seal colors
+---------------------------------------------------------------------------------
+local MAX_AURAS = 40
+
+function ST:PaintMeleeIdentity()
+    if self.isPreview then return end
+    self:PaintIdentity(self.bars.MH)
+    self:PaintIdentity(self.bars.OH)
+end
+
+-- Names, so that every rank of a spell matches. Built once, for the classes
+-- that have them.
+function ST:BuildColorNames()
+    if self.colorNamesBuilt then return end
+    self.colorNamesBuilt = true
+    local spells = R.QUEUE_SPELLS[self.classFile]
+    if spells then
+        self.queueNames = {}
+        for _, entry in ipairs(spells) do
+            local name = C_Spell.GetSpellName(entry.id)
+            if not KE:IsSecretValue(name) and name then
+                self.queueNames[#self.queueNames + 1] = { name = name, colorKey = entry.colorKey }
+            end
+        end
+    end
+    if self.classFile == "PALADIN" then
+        self.sealByName = {}
+        for _, entry in ipairs(R.SEALS) do
+            local name = C_Spell.GetSpellName(entry.id)
+            if not KE:IsSecretValue(name) and name then
+                self.sealByName[name] = { name = name, colorKey = entry.colorKey }
+            end
+        end
+    end
+end
+
+function ST:SetQueued(entry)
+    if self.queued == entry then return end
+    self.queued = entry
+    self:PaintMeleeIdentity()
+end
+
+-- An unreadable answer counts as not queued: no color rather than a wrong one.
+function ST:UpdateQueue()
+    if not (self.queueNames and self.db.QueueColors) then return end
+    local queued
+    for _, entry in ipairs(self.queueNames) do
+        local current = C_Spell.IsCurrentSpell(entry.name)
+        if not KE:IsSecretValue(current) and current then
+            queued = entry
+            break
+        end
+    end
+    self:SetQueued(queued)
+end
+
+function ST:ACTIONBAR_UPDATE_STATE()
+    self:UpdateQueue()
+end
+
+function ST:SetSeal(seal, seconds)
+    if self.sealTimer then
+        self.sealTimer:Cancel()
+        self.sealTimer = nil
+    end
+    self.seal = seal
+    if seal and seconds then
+        self.sealTimer = C_Timer.NewTimer(seconds, function()
+            self.sealTimer = nil
+            self.seal = nil
+            self:PaintMeleeIdentity()
+        end)
+    end
+    self:PaintMeleeIdentity()
+end
+
+-- Out of combat with auras visible only, since no aura is read in combat.
+function ST:ReadSealAuras()
+    if not (self.sealByName and self.db.SealColors) then return end
+    if R.SealSource(KE:AreAuraIdentitiesHidden(), InCombatLockdown()) ~= "auras" then return end
+    for i = 1, MAX_AURAS do
+        local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+        if not aura then break end
+        local name = aura.name
+        local seal = not KE:IsSecretValue(name) and self.sealByName[name]
+        if seal then
+            local length, expires = aura.duration, aura.expirationTime
+            if KE:IsSecretValue(length) or KE:IsSecretValue(expires) then
+                self:SetSeal(seal, self.sealLength or R.SEAL_SECONDS)
+            else
+                self.sealLength = R.SealSeconds(true, length, self.sealLength)
+                local remaining = (expires or 0) - GetTime()
+                self:SetSeal(seal, remaining > 0 and remaining or self.sealLength)
+            end
+            return
+        end
+    end
+    self:SetSeal(nil)
+end
+
+-- An unreadable cast changes nothing, and neither does any other spell: the color
+-- stays on the last known seal until its counted end.
+function ST:UNIT_SPELLCAST_SUCCEEDED(_, _, _, spellID)
+    if not self.sealByName or KE:IsSecretValue(spellID) then return end
+    local name = C_Spell.GetSpellName(spellID)
+    if KE:IsSecretValue(name) then return end
+    local seal = R.SealFromCast(name, self.sealByName)
+    if not seal then return end
+    self:SetSeal(seal, R.SealSeconds(false, nil, self.sealLength))
+end
+
+function ST:UNIT_AURA(_, unit, updateInfo)
+    if KE:IsUnreadableAuraPayload(unit, updateInfo) then return end
+    self:ReadSealAuras()
+end
+
+function ST:SyncColorEvents()
+    local db = self.db
+    self:BuildColorNames()
+    if R.QueueEventWanted(self.classFile, db.QueueColors) then
+        self:RegisterEvent("ACTIONBAR_UPDATE_STATE")
+    else
+        self:UnregisterEvent("ACTIONBAR_UPDATE_STATE")
+        self:SetQueued(nil)
+    end
+    if self.classFile == "PALADIN" and db.SealColors then
+        self.unitEvents:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+        self.unitEvents:RegisterUnitEvent("UNIT_AURA", "player")
+    else
+        self.unitEvents:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        self.unitEvents:UnregisterEvent("UNIT_AURA")
+        self:SetSeal(nil)
+    end
 end
