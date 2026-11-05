@@ -137,6 +137,7 @@ function ST:CancelPositionTimer()
 end
 
 function ST:OnDisable()
+    if PROOF.TARGET_BAR then self:DisableTarget() end
     self:UnregisterAllEvents()
     if self.unitEvents then self.unitEvents:UnregisterAllEvents() end
     self:CancelPositionTimer()
@@ -506,7 +507,9 @@ function ST:RefreshBar(row)
     -- Above the preview's return: the listeners follow the state, not the painting.
     if row.key == "R" then self:SyncMovement() end
     if self.isPreview then return end
-    if self:IsGuided(row) then
+    if row.isTarget then
+        self:RefreshTarget(row)
+    elseif self:IsGuided(row) then
         self:RefreshGuide(row)
     else
         self:RefreshMelee(row)
@@ -570,6 +573,7 @@ function ST:LayoutBars()
         end
         self:ApplyBarShown(row)
     end
+    if PROOF.TARGET_BAR then rows = self:LayoutTarget(rows + 1) end
     self.frame:SetSize(db.Width, rows * db.Height + (rows - 1) * db.Spacing)
 end
 
@@ -655,6 +659,7 @@ function ST:SyncEvents()
     self:SyncCastEvents()
     self:SyncGuideEvents()
     self:SyncColorEvents()
+    if PROOF.TARGET_BAR then self:EnableTarget() end
     self:SyncCombatEvent()
     if db.RangeCheck or self:TargetEstimateOn() then
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -706,6 +711,7 @@ function ST:PLAYER_SWING_RANGE_UPDATE(_, swingType, isInRange, checksRange)
 end
 
 function ST:PLAYER_TARGET_CHANGED()
+    if PROOF.TARGET_BAR then self:OnTargetChanged() end
     for _, key in ipairs(WEAPON_KEYS) do
         local row = self.bars[key]
         self:CheckRange(row)
@@ -1195,14 +1201,17 @@ function ST:ShortenSwing(row)
 end
 
 function ST:SyncCombatEvent()
-    if PROOF.OWN_PARRY_HASTE then
+    if self:TargetEstimateOn() then
+        self.unitEvents:RegisterUnitEvent("UNIT_COMBAT", "player", "target")
+    elseif PROOF.OWN_PARRY_HASTE then
         self.unitEvents:RegisterUnitEvent("UNIT_COMBAT", "player")
     else
         self.unitEvents:UnregisterEvent("UNIT_COMBAT")
     end
 end
 
-function ST:UNIT_COMBAT(_, unit, action)
+function ST:UNIT_COMBAT(_, unit, action, _, _, school)
     if KE:IsSecretValue(unit) or KE:IsSecretValue(action) then return end
     if PROOF.OWN_PARRY_HASTE and unit == "player" and action == "PARRY" then self:ShortenSwing(self.bars.MH) end
+    if self:TargetEstimateOn() then self:OnTargetCombat(unit, action, school) end
 end
