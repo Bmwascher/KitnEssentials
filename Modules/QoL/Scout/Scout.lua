@@ -130,7 +130,9 @@ end
 -- screen until the next-frame draw, so the hide waits a frame as well.
 local function ForgetSoon()
     ForgetRecord()
-    if block and block:IsShown() then C_Timer.After(0, SettleBlock) end
+    if not block then return end
+    local shown = block:IsShown()
+    if issecretvalue(shown) or shown then C_Timer.After(0, SettleBlock) end
 end
 
 local function IsKeyHeld()
