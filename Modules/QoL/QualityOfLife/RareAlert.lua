@@ -836,14 +836,17 @@ end
 function RA:CoverCard()
     local card, target = self.card, self.target
     if not self.rare or not card or not target or InCombatLockdown() then return end
-    local left, bottom = card:GetLeft(), card:GetBottom()
+    -- These read secret with the card's anchor chain, and arithmetic on one raises
+    -- an error. A secret one leaves the card uncovered.
+    local left, bottom = Plain(card:GetLeft()), Plain(card:GetBottom())
+    local height = Plain(card:GetHeight())
     local pin = self.parts.pin
-    local right = pin:IsShown() and pin:GetLeft() or card:GetRight()
-    if not left or not bottom or not right then return end
+    local right = pin:IsShown() and Plain(pin:GetLeft()) or Plain(card:GetRight())
+    if not left or not bottom or not right or not height then return end
     local scale = card:GetEffectiveScale() / UIParent:GetEffectiveScale()
     target:ClearAllPoints()
     target:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * scale, bottom * scale)
-    target:SetSize((right - left) * scale, card:GetHeight() * scale)
+    target:SetSize((right - left) * scale, height * scale)
     target:SetFrameStrata(card:GetFrameStrata())
     target:SetFrameLevel(card:GetFrameLevel() + TARGET_LEVEL_ABOVE)
     -- The driver runs only while the button is up, so an idle button costs nothing.
@@ -870,7 +873,7 @@ function RA:SettleTarget()
     local card = self.card
     if not self.rare or not card or InCombatLockdown() then return end
     self:ArmTarget()
-    if card:IsMouseOver() then
+    if Known(card:IsMouseOver(), false) then
         self:CoverCard()
     else
         self:UncoverCard()
@@ -880,7 +883,7 @@ end
 -- The button covering the card takes the mouse from it, which is not a leave.
 function RA:OnCardLeave()
     local target = self.target
-    if target and target:IsShown() and target:IsMouseOver() then return end
+    if target and target:IsShown() and Known(target:IsMouseOver(), false) then return end
     self:UncoverCard()
 end
 

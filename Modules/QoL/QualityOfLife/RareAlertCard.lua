@@ -369,7 +369,9 @@ local function PaintThirdLine(card, parts, view)
 
     newTag:ClearAllPoints()
     if isNew then
-        local width = min(third:GetStringWidth(), TEXT_WIDTH - NEW_TAG_ROOM)
+        local room = TEXT_WIDTH - NEW_TAG_ROOM
+        local measured = third:GetStringWidth()
+        local width = KE:IsSecretValue(measured) and room or min(measured, room)
         newTag:SetPoint("LEFT", third, "LEFT", width + 4, 0)
     end
     newTag:SetShown(isNew)
