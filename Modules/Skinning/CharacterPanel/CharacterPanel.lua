@@ -115,11 +115,6 @@ local STRIP_LEFT_SLOTS = {
 local STRIP_TOP_SLOTS = {}
 if IS_FOREVER then STRIP_TOP_SLOTS[INVSLOT_OFFHAND] = true end
 
--- The ranged slot has the off hand's strip above it and, for ammo users, the
--- ammo slot beside it, so its strip sits centered below its icon.
-local STRIP_BOTTOM_SLOTS = {}
-if IS_FOREVER then STRIP_BOTTOM_SLOTS[INVSLOT_RANGED] = true end
-
 local STACKED_STRIP_HEIGHT = 30
 
 -- Enchantable slot buttons
@@ -2171,21 +2166,23 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     -- or bottom strip stacks item level over enchant beyond the icon instead.
     detail.enchantText:ClearAllPoints()
     detail.ilvlText:ClearAllPoints()
-    if STRIP_TOP_SLOTS[slotID] then
-        detail:SetPoint("BOTTOM", slotFrame, "TOP", 0, 0)
+    local stackAbove = STRIP_TOP_SLOTS[slotID]
+    -- The Character window's ranged slot has the off hand's strip above it and,
+    -- for ammo users, the ammo slot beside it. Inspect has no ammo slot and too
+    -- little room under the slot, so it keeps the side strip.
+    local stackBelow = IS_FOREVER and slotFrame == _G.CharacterRangedSlot
+    if stackAbove or stackBelow then
+        if stackAbove then
+            detail:SetPoint("BOTTOM", slotFrame, "TOP", 0, 0)
+        else
+            detail:SetPoint("TOP", slotFrame, "BOTTOM", 0, 0)
+        end
         detail:SetHeight(STACKED_STRIP_HEIGHT)
         detail.ilvlText:SetJustifyH("CENTER")
         detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
         detail.enchantText:SetJustifyH("CENTER")
         detail.enchantText:SetPoint("BOTTOM", detail, "BOTTOM", 0, 2)
         AnchorGemsRightOf(detail, detail.ilvlText)
-    elseif STRIP_BOTTOM_SLOTS[slotID] then
-        detail:SetPoint("TOP", slotFrame, "BOTTOM", 0, 0)
-        detail:SetHeight(STACKED_STRIP_HEIGHT)
-        detail.ilvlText:SetJustifyH("CENTER")
-        detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
-        detail.enchantText:SetJustifyH("CENTER")
-        detail.enchantText:SetPoint("BOTTOM", detail, "BOTTOM", 0, 2)
     elseif stripLeft then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
