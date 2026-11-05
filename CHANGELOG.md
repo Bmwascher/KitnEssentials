@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.16.2
+
+### WoW Forever only
+
+> **Beta:** WoW Forever support is new and has not been extensively tested
+> on the live Forever client yet. Expect bugs, and please report any you
+> find.
+
+- The Damage Meter no longer raises a Lua error on every repaint. Its bars show
+  class icons, because the game now hides spec icons from addons on Forever
+
+---
+
 ## v4.16.1
 
 ### WoW Forever only
