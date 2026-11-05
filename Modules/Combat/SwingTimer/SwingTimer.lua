@@ -147,6 +147,8 @@ function ST:OnDisable()
     if self.unitEvents then self.unitEvents:UnregisterAllEvents() end
     self:CancelPositionTimer()
     self:ResetState()
+    -- The first layout after an enable pulls a match made while the module was off.
+    self.pulledRows, self.pulledSpacing, self.pulledHeight, self.pulledWidth = nil, nil, nil, nil
     if self.frame and not self.apiMissing then
         self:ReleaseRange()
         for _, row in ipairs(self.rows) do
@@ -633,11 +635,20 @@ function ST:LayoutBars()
     self.rowCount = rows
     self.frame:SetSize(db.Width, rows * db.Height + (rows - 1) * db.Spacing)
     self:UpdateHolder()
-    -- A matched height belongs to the whole stack, so a new row count or spacing
-    -- shares it out again; with nothing matched each pull is a table read.
-    if KE.EUIUnlock then
-        KE.EUIUnlock:PullMatch("SwingTimer", "height")
-        KE.EUIUnlock:PullMatch("SwingTimer", "width")
+    -- A matched height belongs to the whole stack, so it is pulled again when the
+    -- rows, spacing or row height change, and a matched width when the width
+    -- does. Nothing else pulls: a pull re-applies the target's other children too.
+    local unlock = KE.EUIUnlock
+    if unlock then
+        if rows ~= self.pulledRows or db.Spacing ~= self.pulledSpacing or db.Height ~= self.pulledHeight then
+            self.pulledRows, self.pulledSpacing = rows, db.Spacing
+            unlock:PullMatch("SwingTimer", "height")
+            self.pulledHeight = db.Height
+        end
+        if db.Width ~= self.pulledWidth then
+            unlock:PullMatch("SwingTimer", "width")
+            self.pulledWidth = db.Width
+        end
     end
 end
 

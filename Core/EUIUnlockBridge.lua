@@ -349,10 +349,12 @@ function Bridge:MatchTarget(key, axis)
 end
 
 -- A match whose CHILD is ours has no per-child apply to call; pushing from the
--- child's target reaches it, along with that target's other children.
+-- child's target reaches it, along with that target's other children. Refused
+-- inside unlock mode's own apply, which is already sizing this child: a nested
+-- push would re-apply the siblings and clear its in-progress flag early.
 function Bridge:PullMatch(key, axis)
     local eui = EUI()
-    if not eui or not published[KEY_PREFIX .. key] then return end
+    if not eui or eui._propagatingMatch or not published[KEY_PREFIX .. key] then return end
     local target = self:MatchTarget(key, axis)
     if not target then return end
     if axis == "height" then

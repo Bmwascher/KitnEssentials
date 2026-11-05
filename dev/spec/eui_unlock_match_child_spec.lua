@@ -123,4 +123,20 @@ describe("EUIUnlockBridge match child", function()
         settle()
         assert.equals(1, rebuilt)
     end)
+
+    it("does not pull while EllesmereUI is applying a match", function()
+        for _, row in ipairs({
+            { name = "applying", applying = true, want = 0 },
+            { name = "idle", applying = false, want = 1 },
+        }) do
+            local pulls = 0
+            local _, KE = publish({ setWidth = function() end }, {
+                _propagatingMatch = row.applying,
+                GetWidthMatchTarget = function() return "ERB_Health" end,
+                PropagateWidthMatch = function() pulls = pulls + 1 end,
+            })
+            KE.EUIUnlock:PullMatch("Thing", "width")
+            assert.equals(row.want, pulls, row.name)
+        end
+    end)
 end)
