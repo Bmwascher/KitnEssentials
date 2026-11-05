@@ -114,13 +114,13 @@ local STRIP_LEFT_SLOTS = {
 -- off hand's strip sits centered above its icon instead.
 local STRIP_TOP_SLOTS = {}
 if IS_FOREVER then STRIP_TOP_SLOTS[INVSLOT_OFFHAND] = true end
-local TOP_STRIP_HEIGHT = 30
 
 -- The ranged slot has the off hand's strip above it and, for ammo users, the
--- ammo slot beside it. The window's edge leaves one line of room below it.
+-- ammo slot beside it, so its strip sits centered below its icon.
 local STRIP_BOTTOM_SLOTS = {}
 if IS_FOREVER then STRIP_BOTTOM_SLOTS[INVSLOT_RANGED] = true end
-local BOTTOM_STRIP_HEIGHT = 16
+
+local STACKED_STRIP_HEIGHT = 30
 
 -- Enchantable slot buttons
 local enchantSlotButtons = {
@@ -2167,12 +2167,13 @@ function CP:CreateSlotDetail(slotFrame, slotID)
 
     -- Static anchors per strip side: item level at the icon's top edge, enchant
     -- at its bottom edge, gem icons inline beside the item level. The warning in
-    -- CreateSlotText uses the enchant's offsets, so the two share a line.
+    -- CreateSlotText uses the enchant's offsets, so the two share a line. A top
+    -- or bottom strip stacks item level over enchant beyond the icon instead.
     detail.enchantText:ClearAllPoints()
     detail.ilvlText:ClearAllPoints()
     if STRIP_TOP_SLOTS[slotID] then
         detail:SetPoint("BOTTOM", slotFrame, "TOP", 0, 0)
-        detail:SetHeight(TOP_STRIP_HEIGHT)
+        detail:SetHeight(STACKED_STRIP_HEIGHT)
         detail.ilvlText:SetJustifyH("CENTER")
         detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
         detail.enchantText:SetJustifyH("CENTER")
@@ -2180,12 +2181,11 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         AnchorGemsRightOf(detail, detail.ilvlText)
     elseif STRIP_BOTTOM_SLOTS[slotID] then
         detail:SetPoint("TOP", slotFrame, "BOTTOM", 0, 0)
-        detail:SetHeight(BOTTOM_STRIP_HEIGHT)
+        detail:SetHeight(STACKED_STRIP_HEIGHT)
         detail.ilvlText:SetJustifyH("CENTER")
         detail.ilvlText:SetPoint("TOP", detail, "TOP", 0, -2)
-        detail.enchantText:SetJustifyH("LEFT")
-        detail.enchantText:SetPoint("LEFT", detail.ilvlText, "RIGHT", 4, 0)
-        AnchorGemsLeftOf(detail, detail.ilvlText)
+        detail.enchantText:SetJustifyH("CENTER")
+        detail.enchantText:SetPoint("BOTTOM", detail, "BOTTOM", 0, 2)
     elseif stripLeft then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
