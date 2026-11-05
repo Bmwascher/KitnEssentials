@@ -4,31 +4,23 @@
 
 ### Both clients
 
-- Chat no longer leaves a wide gap before the names of new players. The Guide
-  and Newcomer tags now follow the game's own rule for who sees them
-
----
-
-## v4.16.2
-
-### WoW Forever only
-
 > **Beta:** WoW Forever support is new and has not been extensively tested
 > on the live Forever client yet. Expect bugs, and please report any you
 > find.
+
+#### Chat
+
+- Chat no longer leaves a wide gap before the names of new players. The Guide
+  and Newcomer tags now follow the game's own rule for who sees them
+
+### WoW Forever only
+
+#### Damage Meter
 
 - The Damage Meter no longer raises a Lua error on every repaint. Its bars show
   class icons, because the game now hides spec icons from addons on Forever
 
----
-
-## v4.16.1
-
-### WoW Forever only
-
-> **Beta:** WoW Forever support is new and has not been extensively tested
-> on the live Forever client yet. Expect bugs, and please report any you
-> find.
+#### Settings Window
 
 - The settings window shows an infinity mark beside its title and the word
   Forever beside the version number, both in your theme color
