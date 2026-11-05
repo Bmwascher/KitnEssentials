@@ -84,18 +84,23 @@ describe("EUIUnlockBridge match child", function()
         end
     end)
 
-    it("checks once a frame and rebuilds only its own open page, when a match appears or goes", function()
+    it("checks once a frame and rebuilds its own open page only when the match differs from the one it shows", function()
         local target
         local element, KE = publish({ setWidth = function() end }, {
             GetWidthMatchTarget = function() return target end,
         })
         local queued, rebuilt = {}, 0
         _G.C_Timer = { After = function(_, fn) queued[#queued + 1] = fn end }
+        local function build() KE.EUIUnlock:ShownMatchTargets("Thing") end
         KE.GUIFrame = {
             mainFrame = { IsShown = function() return true end },
             selectedSidebarItem = "Thing",
-            RefreshContent = function() rebuilt = rebuilt + 1 end,
+            RefreshContent = function()
+                rebuilt = rebuilt + 1
+                build()
+            end,
         }
+        build()
         local function settle()
             local run = queued
             queued = {}
@@ -117,11 +122,20 @@ describe("EUIUnlockBridge match child", function()
         settle()
         assert.equals(1, rebuilt)
 
-        KE.GUIFrame.selectedSidebarItem = "Other"
+        -- Made with the window closed, so no check ran; the page then opens on
+        -- it, and the match is cleared under the open page.
+        target = "ERB_Power"
+        build()
         target = nil
         element.setWidth("KE_Thing", 240)
         settle()
-        assert.equals(1, rebuilt)
+        assert.equals(2, rebuilt)
+
+        KE.GUIFrame.selectedSidebarItem = "Other"
+        target = "ERB_Health"
+        element.setWidth("KE_Thing", 240)
+        settle()
+        assert.equals(2, rebuilt)
     end)
 
     it("does not pull while EllesmereUI is applying a match", function()

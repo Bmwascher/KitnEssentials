@@ -90,23 +90,18 @@ local function ResolveFrame(config)
     return nil
 end
 
--- A match child's targets as the settings page last saw them, per key. The page
--- reads the match store when it is built, so it needs a rebuild only when a
--- match appears or goes, never on a matched resize.
-local matchSeen = {}
+-- A match child's targets as its settings page shows them, per key, recorded by
+-- the page through ShownMatchTargets as it is built. The page needs a rebuild
+-- only when the live targets differ from those, never on a matched resize.
+local matchShown = {}
 local checkPending = {}
 
-local function RecordMatchState(config)
-    local width = Bridge:MatchTarget(config.key, "width") or false
-    local height = Bridge:MatchTarget(config.key, "height") or false
-    local seen = matchSeen[config.key]
-    local changed = not seen or seen.width ~= width or seen.height ~= height
-    if not seen then
-        seen = {}
-        matchSeen[config.key] = seen
-    end
-    seen.width, seen.height = width, height
-    return changed
+local function ShownDiffers(key)
+    local shown = matchShown[key]
+    if not shown then return false end
+    local width = Bridge:MatchTarget(key, "width") or false
+    local height = Bridge:MatchTarget(key, "height") or false
+    return shown.width ~= width or shown.height ~= height
 end
 
 -- A frame later, once a cleared match has left unlock mode's store, and once
@@ -117,10 +112,10 @@ local function ScheduleMatchCheck(config)
     checkPending[config.key] = true
     C_Timer.After(0, function()
         checkPending[config.key] = nil
-        if not RecordMatchState(config) then return end
         if not (config.guiPath and gui.mainFrame:IsShown() and gui.selectedSidebarItem == config.guiPath) then
             return
         end
+        if not ShownDiffers(config.key) then return end
         local ok, err = pcall(gui.RefreshContent, gui)
         if not ok then geterrorhandler()(err) end
     end)
@@ -355,6 +350,19 @@ function Bridge:MatchTarget(key, axis)
     return nil
 end
 
+-- The live targets for a settings page as it is built, recorded as the ones it
+-- shows, so the page check compares with what is on screen.
+function Bridge:ShownMatchTargets(key)
+    local width, height = self:MatchTarget(key, "width"), self:MatchTarget(key, "height")
+    local shown = matchShown[key]
+    if not shown then
+        shown = {}
+        matchShown[key] = shown
+    end
+    shown.width, shown.height = width or false, height or false
+    return width, height
+end
+
 -- Pulls refused inside an apply of another axis, per key and axis, made a frame
 -- later unless a pull of that axis runs first.
 local deferredPulls = {}
@@ -456,9 +464,6 @@ local function PublishPending()
                     tinsert(batch, element)
                     published[euiKey] = true
                     tinsert(publishedConfigs, entry)
-                    if entry.opts and (entry.opts.setWidth or entry.opts.setHeight) then
-                        RecordMatchState(entry.config)
-                    end
                 end
             else
                 tinsert(stillPending, entry)

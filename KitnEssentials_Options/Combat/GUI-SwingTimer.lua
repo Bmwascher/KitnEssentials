@@ -297,9 +297,9 @@ GUIFrame:RegisterContent("SwingTimer", function(scrollChild, yOffset)
 
     -- Unlock mode pulls a matched axis straight back to its target, so that
     -- slider would do nothing here.
-    local unlock = KE.EUIUnlock
-    local widthMatched = unlock ~= nil and unlock:MatchTarget("SwingTimer", "width") ~= nil
-    local heightMatched = unlock ~= nil and unlock:MatchTarget("SwingTimer", "height") ~= nil
+    local widthTarget, heightTarget
+    if KE.EUIUnlock then widthTarget, heightTarget = KE.EUIUnlock:ShownMatchTargets("SwingTimer") end
+    local widthMatched, heightMatched = widthTarget ~= nil, heightTarget ~= nil
     manager:SetCondition("widthFree", function() return not widthMatched end)
     manager:SetCondition("heightFree", function() return not heightMatched end)
 
