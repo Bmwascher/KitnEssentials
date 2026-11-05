@@ -92,6 +92,10 @@ local function SkinSpellBook(frame, book)
         book.HelpPlateButton.Ring:Hide()
     end
     if book.CategoryTabSystem then
+        -- Forever rebuilds these tabs on every spell update and the pool reuses
+        -- its buttons in no fixed order, so the first child can hold any slot.
+        -- Flushing the row by that child's edge would move it off the window.
+        if KE.IS_FOREVER then S.data(book.CategoryTabSystem).keepRowAnchor = true end
         for _, tab in ipairs({ book.CategoryTabSystem:GetChildren() }) do
             S.Tab(tab)
         end

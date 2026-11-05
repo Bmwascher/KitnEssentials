@@ -2019,7 +2019,7 @@ function S.Tab(tab)
                         local sd2 = S.data(s2)
                         if sd2.flushDone then return end
                         C_Timer.After(0, function()
-                            if sd2.flushDone or not s2:IsVisible() then return end
+                            if sd2.flushDone or sd2.keepRowAnchor or not s2:IsVisible() then return end
                             -- The measured edge is the first child's, and
                             -- Blizzard lets one tab hide while its system
                             -- stays shown. Neither refusal latches; the next
@@ -2105,6 +2105,7 @@ function S.Tab(tab)
                         end
                         if sys0.MarkDirty then sys0:MarkDirty() end
                         C_Timer.After(0, function()
+                            if sd0.keepRowAnchor then return end
                             local first = select(1, sys0:GetChildren())
                             local bd = first and S.GetBackdrop(first)
                             local owner = sys0:GetParent()
