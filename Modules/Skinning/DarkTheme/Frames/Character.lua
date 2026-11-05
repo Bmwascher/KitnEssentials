@@ -697,6 +697,8 @@ local function Skin()
     if frame.ModeTabs then S.SideTabsInPlace(frame.ModeTabs.Tabs) end
     if frame.LeftPaneHost then S.StripTextures(frame.LeftPaneHost) end
     if frame.RightPaneHost then S.StripTextures(frame.RightPaneHost) end
+    local levelRow = _G.PaperDollFrame and _G.PaperDollFrame.TopBackgroundStripHost
+    if levelRow then S.StripTextures(levelRow) end
 
     SkinTitlesPane()
     SkinEquipmentManagerPane()
