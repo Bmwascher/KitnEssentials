@@ -173,3 +173,93 @@ describe("swing timer ranged rules", function()
         assert.is_nil((Rules.TickFraction(false, 105, 100, 10)))
     end)
 end)
+
+describe("swing timer color and refusal rules", function()
+    local Rules
+
+    before_each(function()
+        Rules = L.loadSwingTimerRules().SwingTimerRules
+    end)
+
+    it("matches a seal by name, chooses the aura path only out of combat with auras visible", function()
+        local seal = { colorKey = "TestColor" }
+        local byName = { ["Test Seal"] = seal }
+        assert.equals(seal, Rules.SealFromCast("Test Seal", byName))
+        assert.is_nil(Rules.SealFromCast("Other Spell", byName))
+        assert.is_nil(Rules.SealFromCast(nil, byName))
+        assert.equals("auras", Rules.SealSource(false, false))
+        assert.equals("cast", Rules.SealSource(false, true))
+        assert.equals("cast", Rules.SealSource(true, false))
+        assert.equals(34, Rules.SealSeconds(true, 34, 30))
+        assert.equals(34, Rules.SealSeconds(false, 30, 34))
+        assert.equals(Rules.SEAL_SECONDS, Rules.SealSeconds(false, nil, nil))
+    end)
+
+    it("colors a melee bar queue over seal over base, and any other bar by its base", function()
+        assert.equals("Q", Rules.BarColorKey(true, "Q", "S", "B"))
+        assert.equals("S", Rules.BarColorKey(true, nil, "S", "B"))
+        assert.equals("B", Rules.BarColorKey(true, nil, nil, "B"))
+        assert.equals("B", Rules.BarColorKey(false, "Q", "S", "B"))
+    end)
+
+    it("wants the queue event only for a class with a queued attack and the color on", function()
+        for _, row in ipairs({
+            { classFile = "WARRIOR", on = true, want = true },
+            { classFile = "MAGE", on = true, want = false },
+            { classFile = "WARRIOR", on = false, want = false },
+        }) do
+            assert.equals(row.want, Rules.QueueEventWanted(row.classFile, row.on))
+        end
+    end)
+
+    it("shows the Blizzard button by CVar and flag, with a missing CVar as off", function()
+        for _, row in ipairs({
+            { cvar = true, flag = false, shown = true, action = "hide" },
+            { cvar = true, flag = true, shown = true, action = "hide" },
+            { cvar = false, flag = true, shown = true, action = "show" },
+            { cvar = false, flag = false, shown = false, action = nil },
+            { cvar = nil, flag = false, shown = false, action = nil },
+            { cvar = nil, flag = true, shown = true, action = "show" },
+        }) do
+            local shown, action = Rules.BlizzardButton(row.cvar, row.flag)
+            assert.equals(row.shown, shown)
+            assert.equals(row.action, action)
+        end
+        assert.is_false(Rules.BlizzardFlag(true, true))
+        assert.is_true(Rules.BlizzardFlag(false, true))
+        assert.is_false(Rules.BlizzardFlag(false, false))
+    end)
+
+    it("refuses a Blizzard click in combat, and otherwise writes off and sets the flag, or on and clears it", function()
+        assert.is_nil((Rules.BlizzardClick(true, false, true)))
+        assert.is_nil((Rules.BlizzardClick(false, true, true)))
+        assert.is_nil((Rules.BlizzardClick(false, false, false)))
+        local value, flag = Rules.BlizzardClick(true, false, false)
+        assert.equals("0", value)
+        assert.is_true(flag)
+        value, flag = Rules.BlizzardClick(false, true, false)
+        assert.equals("1", value)
+        assert.is_false(flag)
+        assert.is_true(Rules.ReleaseRangeFlag(false))
+        assert.is_false(Rules.ReleaseRangeFlag(true))
+    end)
+
+    it("counts a physical melee outcome unless a readable answer says it was not on the player", function()
+        for _, row in ipairs({
+            { action = "WOUND", school = 1, readable = true, onMe = true, want = true },
+            { action = "PARRY", school = 1, readable = false, onMe = false, want = true },
+            { action = "DODGE", school = 1, readable = true, onMe = false, want = false },
+            { action = "WOUND", school = 4, readable = true, onMe = true, want = false },
+            { action = "HEAL", school = 1, readable = true, onMe = true, want = false },
+        }) do
+            assert.equals(row.want, Rules.TargetHitCounts(row.action, row.school, row.readable, row.onMe))
+        end
+    end)
+
+    it("learns an in-range interval and keeps the last good one otherwise", function()
+        assert.near(2.4, Rules.LearnInterval(10, 12.4, 3.0), 1e-9)
+        assert.equals(3.0, Rules.LearnInterval(10, 10.1, 3.0))
+        assert.equals(3.0, Rules.LearnInterval(10, 16, 3.0))
+        assert.is_nil(Rules.LearnInterval(nil, 12, nil))
+    end)
+end)

@@ -166,3 +166,97 @@ function Rules.TickFraction(readable, castEnd, swingStart, duration)
     if fraction > 1 then return 1, true end
     return math_max(0, fraction), false
 end
+
+Rules.QUEUE_SPELLS = {
+    WARRIOR = { { id = 78, colorKey = "ColorQueue" }, { id = 845, colorKey = "ColorCleave" } },
+    DRUID = { { id = 6807, colorKey = "ColorQueue" } },
+    HUNTER = { { id = 2973, colorKey = "ColorQueue" } },
+}
+
+Rules.SEALS = {
+    { id = 20154, colorKey = "ColorSealRighteousness", label = "Righteousness" },
+    { id = 21082, colorKey = "ColorSealCrusader", label = "Crusader" },
+    { id = 20375, colorKey = "ColorSealCommand", label = "Command" },
+    { id = 20164, colorKey = "ColorSealJustice", label = "Justice" },
+    { id = 20165, colorKey = "ColorSealLight", label = "Light" },
+    { id = 20166, colorKey = "ColorSealWisdom", label = "Wisdom" },
+    { id = 1311649, colorKey = "ColorSealFury", label = "Fury" },
+    { id = 407798, colorKey = "ColorSealMartyrdom", label = "Martyrdom" },
+}
+
+local PHYSICAL_SCHOOL = 1
+local SWING_ACTIONS = {
+    WOUND = true, MISS = true, DODGE = true, PARRY = true, BLOCK = true,
+    DEFLECT = true, ABSORB = true, IMMUNE = true, EVADE = true,
+}
+
+function Rules.QueueEventWanted(classFile, colorOn)
+    return colorOn == true and Rules.QUEUE_SPELLS[classFile] ~= nil
+end
+
+function Rules.SealFromCast(name, sealByName)
+    if type(name) ~= "string" then return nil end
+    return sealByName[name]
+end
+
+function Rules.SealSeconds(readable, auraLength, known)
+    if readable and Rules.ValidDuration(auraLength) then return auraLength end
+    return known or Rules.SEAL_SECONDS
+end
+
+function Rules.SealSource(aurasHidden, inCombat)
+    if aurasHidden or inCombat then return "cast" end
+    return "auras"
+end
+
+function Rules.BarColorKey(isMelee, queueKey, sealKey, baseKey)
+    if not isMelee then return baseKey end
+    return queueKey or sealKey or baseKey
+end
+
+-- Reading the setting on clears a stale flag, so a re-enable from outside the
+-- addon needs no event.
+function Rules.BlizzardFlag(cvarOn, flag)
+    if cvarOn then return false end
+    return flag == true
+end
+
+-- Returns whether the button shows and what it does.
+function Rules.BlizzardButton(cvarOn, flag)
+    if cvarOn then return true, "hide" end
+    if flag then return true, "show" end
+    return false, nil
+end
+
+-- Returns the setting's value to write and the new flag, or nil when refused.
+function Rules.BlizzardClick(cvarOn, flag, inCombat)
+    if inCombat then return nil end
+    if cvarOn then return "0", true end
+    if flag then return "1", false end
+    return nil
+end
+
+-- The flag is shared with Blizzard's bar, so it is released only while that bar
+-- is off.
+function Rules.ReleaseRangeFlag(cvarOn)
+    return not cvarOn
+end
+
+function Rules.ParryHastened(remaining, duration)
+    if remaining > 0.6 * duration then return remaining - 0.4 * duration end
+    if remaining > 0.2 * duration then return 0.2 * duration end
+    return remaining
+end
+
+-- An unreadable "not on me" passes, since the bar is labeled an estimate.
+function Rules.TargetHitCounts(action, school, onMeReadable, onMe)
+    if not SWING_ACTIONS[action] or school ~= PHYSICAL_SCHOOL then return false end
+    return not (onMeReadable and onMe == false)
+end
+
+function Rules.LearnInterval(previousHit, now, lastGood)
+    if not previousHit then return lastGood end
+    local sample = now - previousHit
+    if sample < Rules.INTERVAL_MIN or sample > Rules.INTERVAL_MAX then return lastGood end
+    return sample
+end
