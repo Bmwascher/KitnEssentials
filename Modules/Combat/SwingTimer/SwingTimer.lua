@@ -155,6 +155,7 @@ function ST:OnDisable()
 end
 
 function ST:ResetState()
+    self.castEnd = nil
     self.isPreview = false
     self.meleeOn = false
     self.autoRepeatOn = false
@@ -491,6 +492,7 @@ end
 function ST:RefreshBar(row)
     if self.isPreview then return end
     self:RefreshMelee(row)
+    self:PlaceTick(row)
     self:UpdateHolder()
 end
 
@@ -628,6 +630,7 @@ function ST:SyncEvents()
         self:UnregisterEvent(RANGE_EVENT)
         self:ReleaseRange()
     end
+    self:SyncCastEvents()
     if db.RangeCheck or self:TargetEstimateOn() then
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
     else
@@ -749,3 +752,74 @@ function ST:STOP_AUTOREPEAT_SPELL()
     self.autoRepeatOn = false
     self:RefreshBar(self.bars.R)
 end
+
+---------------------------------------------------------------------------------
+-- Cast tick
+---------------------------------------------------------------------------------
+local CAST_EVENTS = {
+    "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_DELAYED", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED",
+    "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_CHANNEL_UPDATE",
+    "UNIT_SPELLCAST_CHANNEL_STOP",
+}
+
+-- The player's cast end in seconds. Nil with no cast, with an unreadable one,
+-- and for Auto Shot and Shoot, so those never count as casting.
+local function ReadCastEnd()
+    local _, _, _, _, endMS, _, _, _, spellID = UnitCastingInfo("player")
+    if KE:IsSecretValue(endMS) or KE:IsSecretValue(spellID) then return nil end
+    if not endMS then
+        _, _, _, _, endMS, _, _, spellID = UnitChannelInfo("player")
+        if KE:IsSecretValue(endMS) or KE:IsSecretValue(spellID) then return nil end
+    end
+    if not endMS or R.TickIgnored(spellID) then return nil end
+    return endMS / 1000
+end
+
+function ST:SyncCastEvents()
+    local db = self.db
+    local want = db.CastTickMelee or db.CastTickRanged or self:GuideOn()
+    for _, event in ipairs(CAST_EVENTS) do
+        if want then
+            self.unitEvents:RegisterUnitEvent(event, "player")
+        else
+            self.unitEvents:UnregisterEvent(event)
+        end
+    end
+    -- A cast already running sends no start event.
+    self.castEnd = want and ReadCastEnd() or nil
+end
+
+function ST:TickAllowed(row)
+    local db = self.db
+    if row.isMelee then return db.CastTickMelee end
+    if row.key ~= "R" or not db.CastTickRanged then return false end
+    return not (self:IsGuided(row) and db.HunterStyle == "windup")
+end
+
+function ST:PlaceTick(row)
+    local fraction, clipped
+    if self.castEnd and row.state == "running" and row.phase ~= "aim" and self:TickAllowed(row) then
+        fraction, clipped = R.TickFraction(true, self.castEnd, row.starts, row.swingDuration)
+    end
+    if not fraction then
+        row.tick:Hide()
+        return
+    end
+    local x = R.Mirror(fraction, self.db.Deplete) * self:BarWidth()
+    local px = KE:GetPixelSize()
+    row.tick:ClearAllPoints()
+    row.tick:SetPoint("TOP", row.overlay, "TOPLEFT", x, 0)
+    row.tick:SetPoint("BOTTOM", row.overlay, "BOTTOMLEFT", x, 0)
+    row.tick:SetWidth(2 * px)
+    local color = clipped and RANGE_RED or WHITE
+    row.tick:SetColorTexture(color[1], color[2], color[3], color[4])
+    row.tick:Show()
+end
+
+function ST:OnCastChanged()
+    self.castEnd = ReadCastEnd()
+    if self.isPreview then return end
+    for _, key in ipairs(WEAPON_KEYS) do self:PlaceTick(self.bars[key]) end
+end
+
+for _, event in ipairs(CAST_EVENTS) do ST[event] = ST.OnCastChanged end
